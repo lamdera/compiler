@@ -1,4 +1,4 @@
-module Generate.JavaScript (generate) where
+module Generate.Haskell (generate) where
 
 import qualified Control.Monad.State as State
 import qualified Data.Text.Lazy as LazyText
@@ -13,7 +13,12 @@ import qualified Generate.JavaScript.Expression as JS
 import qualified Generate.JavaScript.Helpers as JS
 import qualified Generate.JavaScript.Variable as Var
 
+--
 
+import qualified Language.Haskell.Exts as HS
+import qualified Language.Haskell.Exts.Pretty as HPretty
+import qualified Debug.Trace as Debug
+import qualified Language.Haskell.Exts.Syntax as HSyntax
 
 -- GENERATE JAVASCRIPT
 
@@ -26,11 +31,16 @@ generate (Module.Module moduleName _ info) =
           let managerStmts = generateEffectManager moduleName (Module.effects info)
           return (concat (defsList ++ [managerStmts]))
 
-    body =
+    jsBody =
       State.evalState genBody 0
-  in
-    Builder.stmtsToText body
 
+    hsBody =
+      HSyntax.Ident () "test"
+  in
+    Debug.trace (show (Builder.stmtsToText jsBody))
+      (Debug.trace (HPretty.prettyPrint hsBody)
+        (Builder.stmtsToText jsBody))
+-- TODO: next up, import haskell ast and stdout show it, along with the corresponding js
 
 
 -- GENERATE EFFECT MANAGER

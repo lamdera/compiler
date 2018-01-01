@@ -85,7 +85,8 @@ Library
         Elm.Compiler.Imports,
         Elm.Compiler.Type.Extract,
         Elm.Compiler.Version,
-        Generate.JavaScript,
+        Generate.Haskell,
+        Generate.JavaScriptAsd,
         Generate.JavaScript.Builder,
         Generate.JavaScript.BuiltIn,
         Generate.JavaScript.Expression,
@@ -158,7 +159,8 @@ Library
         pretty >= 1.0 && < 2.0,
         process,
         text >= 1 && < 2,
-        union-find >= 0.2 && < 0.3
+        union-find >= 0.2 && < 0.3,
+        haskell-src-exts >= 1.20
 
 
 Executable elm

@@ -23,7 +23,7 @@ import qualified Elm.Compiler.Module as PublicModule
 import qualified Elm.Compiler.Version
 import qualified Elm.Docs as Docs
 import qualified Elm.Package as Package
-import qualified Generate.JavaScript as JS
+-- import qualified Generate.JavaScript as JS
 import qualified Parse.Module as Parse
 import qualified Parse.Parse as Parse
 import qualified Reporting.Annotation as A
@@ -34,6 +34,7 @@ import qualified Reporting.Report as Report
 import qualified Reporting.Result as Result
 import qualified Reporting.Warning as Warning
 
+import qualified Generate.Haskell as HS
 
 
 -- VERSION
@@ -108,9 +109,9 @@ compile context source interfaces =
           docs <- Result.format Error.Docs (docsGen isExposed modul)
 
           let interface = Module.toInterface packageName modul
-          let javascript = JS.generate modul
+          let haskell = HS.generate modul
 
-          return (Result docs interface javascript)
+          return (Result docs interface haskell)
   in
     ( Result.oneToValue dummyLocalizer Localizer oneLocalizer
     , Bag.toList Warning warnings
