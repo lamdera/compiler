@@ -21,6 +21,7 @@ data Pattern' ann var
     | Var String
     | Anything
     | Literal L.Literal
+    deriving (Show)
 
 
 type Raw =

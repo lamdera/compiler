@@ -19,7 +19,7 @@ import qualified Generate.JavaScript.Literal as Literal
 import qualified Generate.JavaScript.Variable as Var
 import qualified Optimize.DecisionTree as DT
 
-
+import qualified Debug.Trace (trace)
 
 -- CODE CHUNKS
 
@@ -27,20 +27,24 @@ import qualified Optimize.DecisionTree as DT
 data Code
     = JsExpr (Expression ())
     | JsBlock [Statement ()]
+    deriving (Show)
 
 
 jsExpr :: Expression () -> State Int Code
 jsExpr exp =
+    Debug.Trace.trace ("jsExpr" ++ show  exp) $
   return (JsExpr exp)
 
 
 jsBlock :: [Statement ()] -> State Int Code
 jsBlock exp =
+    Debug.Trace.trace ("jsBlock" ++ show  exp) $
   return (JsBlock exp)
 
 
 isBlock :: Code -> Bool
 isBlock code =
+    Debug.Trace.trace ("isBlock" ++ show  code) $
   case code of
     JsBlock _ -> True
     JsExpr _ -> False
@@ -48,6 +52,7 @@ isBlock code =
 
 toStatementList :: Code -> [Statement ()]
 toStatementList code =
+    Debug.Trace.trace ("toStatementList" ++ show  code) $
   case code of
     JsExpr expr ->
         [ ReturnStmt () (Just expr) ]
@@ -58,6 +63,7 @@ toStatementList code =
 
 toStatement :: Code -> Statement ()
 toStatement code =
+    Debug.Trace.trace ("toStatement" ++ show  code) $
   case code of
     JsExpr expr ->
         ReturnStmt () (Just expr)
@@ -71,6 +77,7 @@ toStatement code =
 
 toExpr :: Code -> Expression ()
 toExpr code =
+    Debug.Trace.trace ("toExpr" ++ show code) $
   case code of
     JsExpr expr ->
         expr
@@ -85,6 +92,8 @@ toExpr code =
 
 generateDef :: Opt.Def -> State Int [Statement ()]
 generateDef def =
+    Debug.Trace.trace ("generateDef" ++ show  def) $
+  Debug.Trace.trace ("generateDef" ++ show def) $
   do  (home, name, jsBody) <-
           case def of
             Opt.TailDef (Opt.Facts home) name argNames body ->
@@ -102,11 +111,13 @@ generateDef def =
 
 generateJsExpr :: Opt.Expr -> State Int (Expression ())
 generateJsExpr optExpr =
+    Debug.Trace.trace ("generateJsExpr" ++ show  optExpr) $
   toExpr <$> generateCode optExpr
 
 
 generateCode :: Opt.Expr -> State Int Code
 generateCode expr =
+    Debug.Trace.trace ("generateCode" ++ show  expr) $
     case expr of
       Var var ->
           jsExpr $ Var.canonical var
@@ -218,6 +229,7 @@ generateCode expr =
 
 generateProgram :: Expr.Main Type.Canonical -> Opt.Expr -> State Int Code
 generateProgram kind body =
+    Debug.Trace.trace ("generateProgram" ++ show kind ++ " " ++ show body) $
   case kind of
     Expr.VDom ->
       do  html <- generateJsExpr body
@@ -239,12 +251,14 @@ generateProgram kind body =
 
 generateFunction :: [String] -> Opt.Expr -> State Int Code
 generateFunction args body =
+    Debug.Trace.trace ("generateFunction" ++ show  args  ++ " " ++ show body) $
   do  code <- generateCode body
       jsExpr (generateFunctionWithArity args code)
 
 
 generateTailFunction :: String -> [String] -> Opt.Expr -> State Int (Expression ())
 generateTailFunction name args body =
+    Debug.Trace.trace ("generateTailFunction" ++ show  name  ++ " " ++ show args  ++ " " ++ show body) $
   do  code <- generateCode body
       return $ generateFunctionWithArity args $ JsBlock $ (:[]) $
           LabelledStmt ()
@@ -254,6 +268,7 @@ generateTailFunction name args body =
 
 generateFunctionWithArity :: [String] -> Code -> Expression ()
 generateFunctionWithArity rawArgs code =
+    Debug.Trace.trace ("generateFunctionWithArity" ++ show  rawArgs  ++ " " ++ show code) $
     let
         args = map Var.safe rawArgs
         arity = length args
@@ -277,6 +292,7 @@ generateFunctionWithArity rawArgs code =
 
 generateCall :: Opt.Expr -> [Opt.Expr] -> State Int Code
 generateCall func args =
+    Debug.Trace.trace ("generateCall" ++ show  func  ++ " " ++ show args) $
   case (func, args) of
     (Opt.Var var, [arg]) ->
       case getUnaryOp var of
@@ -303,6 +319,7 @@ generateCall func args =
 
 generateCallHelp :: Opt.Expr -> [Opt.Expr] -> State Int Code
 generateCallHelp func args =
+    Debug.Trace.trace ("generateCallHelp" ++ show  func  ++ " " ++ show args) $
   let
     arity = length args
     aN = "A" ++ show arity
@@ -318,6 +335,7 @@ generateCallHelp func args =
 
 getUnaryOp :: Var.Canonical -> Maybe PrefixOp
 getUnaryOp var =
+    Debug.Trace.trace ("getUnaryOp" ++ show var) $
   if var == bitwiseComplement then
     Just PrefixBNot
 
@@ -330,6 +348,7 @@ getUnaryOp var =
 
 getBinaryOp :: Var.Canonical -> Opt.Expr -> Opt.Expr -> Maybe (InfixOp, Opt.Expr, Opt.Expr)
 getBinaryOp (Var.Canonical home name) left right =
+    Debug.Trace.trace ("getBinaryOp" ++ show  (Var.Canonical home name)  ++ " " ++ show left  ++ " " ++ show right) $
   if home /= bitwise then
     Nothing
 
@@ -346,16 +365,19 @@ getBinaryOp (Var.Canonical home name) left right =
 
 bitwiseComplement :: Var.Canonical
 bitwiseComplement =
+    Debug.Trace.trace ("bitwiseComplement") $
   Var.inCore ["Bitwise"] "complement"
 
 
 basicsNot :: Var.Canonical
 basicsNot =
+    Debug.Trace.trace ("basicsNot") $
   Var.inCore ["Basics"] "not"
 
 
 bitwise :: Var.Home
 bitwise =
+    Debug.Trace.trace ("bitwise") $
   Var.Module (ModuleName.inCore ["Bitwise"])
 
 
@@ -365,6 +387,7 @@ bitwise =
 
 generateIf :: [(Opt.Expr, Opt.Expr)] -> Opt.Expr -> State Int Code
 generateIf givenBranches givenFinally =
+    Debug.Trace.trace ("generateIf" ++ show givenBranches ++ " " ++ show givenFinally) $
   let
     (branches, finally) =
         crushIfs givenBranches givenFinally
@@ -393,6 +416,7 @@ crushIfs
     -> Opt.Expr
     -> ([(Opt.Expr, Opt.Expr)], Opt.Expr)
 crushIfs branches finally =
+  Debug.Trace.trace ("crushIfs" ++ show branches ++ " " ++ show finally) $
   crushIfsHelp [] branches finally
 
 
@@ -402,6 +426,7 @@ crushIfsHelp
     -> Opt.Expr
     -> ([(Opt.Expr, Opt.Expr)], Opt.Expr)
 crushIfsHelp visitedBranches unvisitedBranches finally =
+  Debug.Trace.trace ("crushIfsHelp" ++ show visitedBranches ++ " " ++ show unvisitedBranches ++ " " ++ show finally) $
   case unvisitedBranches of
     [] ->
         case finally of
@@ -428,6 +453,7 @@ generateCase
     -> [(Int, Opt.Expr)]
     -> State Int [Statement ()]
 generateCase exprName decider jumps =
+  Debug.Trace.trace ("generateCase" ++ show exprName ++ " " ++ show decider ++ " " ++ show jumps) $
   do  labelRoot <- Var.fresh
       decider <- generateDecider exprName labelRoot decider
       foldM (goto labelRoot) decider jumps
@@ -439,6 +465,7 @@ generateCase exprName decider jumps =
 
 goto :: String -> [Statement ()] -> (Int, Opt.Expr) -> State Int [Statement ()]
 goto labelRoot deciderStmts (target, branch) =
+  Debug.Trace.trace ("goto" ++ show labelRoot ++ " " ++ show deciderStmts  ++ " " ++ show (target, branch)) $
   let
     labeledDeciderStmt =
       LabelledStmt ()
@@ -451,6 +478,7 @@ goto labelRoot deciderStmts (target, branch) =
 
 toLabel :: String -> Int -> Id ()
 toLabel root target =
+  Debug.Trace.trace ("toLabel" ++ show  root  ++ " " ++ show target) $
   Id () (root ++ "_" ++ show target)
 
 
@@ -464,6 +492,7 @@ generateDecider
     -> Opt.Decider Opt.Choice
     -> State Int [Statement ()]
 generateDecider exprName labelRoot decisionTree =
+  Debug.Trace.trace ("generateDecider" ++ show exprName ++ " " ++ show labelRoot ++ " " ++ show decisionTree) $
   case decisionTree of
     Opt.Leaf (Opt.Inline branch) ->
         toStatementList <$> generateCode branch
@@ -496,11 +525,13 @@ edgeToCaseClause
     -> (DT.Test, Opt.Decider Opt.Choice)
     -> State Int (CaseClause ())
 edgeToCaseClause exprName labelRoot (test, subTree) =
+  Debug.Trace.trace ("edgeToCaseClause" ++ show exprName ++ " " ++ show labelRoot ++ " " ++ show (test, subTree)) $
   CaseClause () (testToExpr test) <$> generateDecider exprName labelRoot subTree
 
 
 testToExpr :: DT.Test -> Expression ()
 testToExpr test =
+  Debug.Trace.trace ("testToExpr" ++ show  test) $
   case test of
     DT.Constructor (Var.Canonical _ tag) ->
         StringLit () tag
@@ -518,6 +549,7 @@ testToExpr test =
 
 pathToTestableExpr :: String -> DT.Path -> DT.Test -> State Int (Expression ())
 pathToTestableExpr root path exampleTest =
+  Debug.Trace.trace ("pathToTestableExpr" ++ show  root ++ " " ++ show  path  ++ " " ++ show exampleTest) $
   do  accessExpr <- generateJsExpr (pathToExpr root path)
       case exampleTest of
         DT.Constructor _ ->
@@ -532,6 +564,7 @@ pathToTestableExpr root path exampleTest =
 
 pathToExpr :: String -> DT.Path -> Opt.Expr
 pathToExpr root fullPath =
+  Debug.Trace.trace ("pathToExpr" ++ show  root  ++ " " ++ show fullPath) $
     go (Opt.Var (Var.local root)) fullPath
   where
     go expr path =
@@ -559,6 +592,7 @@ binop
     -> Opt.Expr
     -> State Int Code
 binop func left right =
+  Debug.Trace.trace ("binOp" ++ show func ++ " " ++ show left ++ " " ++ show right) $
     do  jsLeft <- generateJsExpr left
         jsRight <- generateJsExpr right
         jsExpr (binopHelp func jsLeft jsRight)
@@ -570,6 +604,7 @@ binop func left right =
 
 binopHelp :: Var.Canonical -> Expression () -> Expression () -> Expression ()
 binopHelp qualifiedOp@(Var.Canonical home op) leftExpr rightExpr =
+  Debug.Trace.trace ("binopHelp" ++ show qualifiedOp ++ " " ++ show leftExpr ++ " " ++ show rightExpr) $
     let
         simpleMake left right =
             ref "A2" `call` [ Var.canonical qualifiedOp, left, right ]
@@ -586,26 +621,31 @@ binopHelp qualifiedOp@(Var.Canonical home op) leftExpr rightExpr =
 
 listModule :: Var.Home
 listModule =
+  Debug.Trace.trace ("listModule") $
   Var.Module (ModuleName.inCore ["List"])
 
 
 listModuleInternals :: Var.Home
 listModuleInternals =
+    Debug.Trace.trace ("listModuleInternals") $
   Var.TopLevel (ModuleName.inCore ["List"])
 
 
 basicsModule :: Var.Home
 basicsModule =
+  Debug.Trace.trace ("basicsModule") $
   Var.Module (ModuleName.inCore ["Basics"])
 
 
 basicOps :: Map.Map String (Expression () -> Expression () -> Expression ())
 basicOps =
+  Debug.Trace.trace ("basicOps") $
     Map.fromList (infixOps ++ specialOps)
 
 
 infixOps :: [(String, Expression () -> Expression () -> Expression ())]
 infixOps =
+  Debug.Trace.trace ("infixOps") $
     let
         infixOp str op =
             (str, InfixExpr () op)
@@ -621,6 +661,7 @@ infixOps =
 
 specialOps :: [(String, Expression () -> Expression () -> Expression ())]
 specialOps =
+  Debug.Trace.trace ("specialOps") $
     [ (,) "^"  $ \a b -> obj ["Math","pow"] `call` [a,b]
     , (,) "==" $ \a b -> BuiltIn.eq a b
     , (,) "/=" $ \a b -> PrefixExpr () PrefixLNot (BuiltIn.eq a b)
@@ -634,4 +675,5 @@ specialOps =
 
 cmp :: InfixOp -> Int -> Expression () -> Expression () -> Expression ()
 cmp op n a b =
+  Debug.Trace.trace ("cmp" ++ show op ++ " " ++ show n ++ " " ++ show a ++ " " ++ show b) $
     InfixExpr () op (BuiltIn.cmp a b) (IntLit () n)

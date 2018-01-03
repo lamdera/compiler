@@ -21,6 +21,7 @@ type Source =
 data CommentOr a
   = Comment (A.Located String)
   | Whatever a
+  deriving (Show)
 
 
 data Raw
@@ -29,6 +30,7 @@ data Raw
   | Alias (Alias Type.Raw)
   | Fixity Infix
   | Port String Type.Raw
+  deriving (Show)
 
 
 
@@ -42,6 +44,7 @@ data Decls def tipe =
     , _aliases :: [A.Commented (Alias tipe)]
     , _infixes :: [Infix]
     }
+    deriving (Show)
 
 
 type Valid =
@@ -82,6 +85,7 @@ data Type body =
     , _args :: [String]
     , _body :: body
     }
+    deriving (Show)
 
 
 type Union tipe =
@@ -102,10 +106,11 @@ data Infix =
     , _associativity :: Assoc
     , _precedence :: Int
     }
+    deriving (Show)
 
 
 data Assoc = L | N | R
-    deriving (Eq)
+    deriving (Eq, Show)
 
 
 assocToString :: Assoc -> String

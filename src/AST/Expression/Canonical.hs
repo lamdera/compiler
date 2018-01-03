@@ -27,7 +27,7 @@ type Expr' =
 
 data Def
     = Def R.Region Pattern.Canonical Expr (Maybe (A.Located Type.Canonical))
-
+    deriving (Show)
 
 
 -- SORTED DEFS
@@ -36,6 +36,7 @@ data Def
 data SortedDefs
   = NoMain [Def]
   | YesMain [Def] Def [Def]
+  deriving (Show)
 
 
 toSortedDefs :: Expr -> SortedDefs

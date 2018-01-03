@@ -63,12 +63,13 @@ data Expr' ann def var typ
     | Program (Main typ) (Expr ann def var typ)
     | SaveEnv ModuleName.Canonical Effects.Canonical
     | GLShader String String Literal.GLShaderTipe
-
+    deriving (Show)
 
 data Main typ
   = VDom
   | NoFlags
   | Flags typ
+  deriving (Show)
 
 
 

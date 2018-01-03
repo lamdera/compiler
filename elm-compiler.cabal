@@ -160,7 +160,9 @@ Library
         process,
         text >= 1 && < 2,
         union-find >= 0.2 && < 0.3,
-        haskell-src-exts >= 1.20
+        haskell-src-exts >= 1.20,
+        haskell-src-exts-simple >= 1.20,
+        tostring >= 0.2
 
 
 Executable elm

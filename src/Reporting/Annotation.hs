@@ -10,6 +10,7 @@ import qualified Reporting.Region as R
 
 data Annotated annotation a
     = A annotation a
+    deriving (Show)
 
 
 type Located a =

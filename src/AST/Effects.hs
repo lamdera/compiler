@@ -14,6 +14,7 @@ data Effects pkg ports
   = None
   | Manager pkg Info
   | Port ports
+  deriving (Show)
 
 
 type Raw =
@@ -36,12 +37,14 @@ data Info =
     , _onSelfMsg :: R.Region
     , _managerType :: ManagerType
     }
+    deriving (Show)
 
 
 data ManagerType
   = CmdManager (A.Located String)
   | SubManager (A.Located String)
   | FxManager (A.Located String) (A.Located String)
+  deriving (Show)
 
 
 
@@ -53,6 +56,7 @@ data PortRaw =
     { _rawName :: String
     , _rawType :: Type.Raw
     }
+    deriving (Show)
 
 
 data PortCanonical =
@@ -61,8 +65,10 @@ data PortCanonical =
     , _kind :: Kind
     , _type :: Type.Canonical
     }
+    deriving (Show)
 
 
 data Kind
   = Outgoing Type.Canonical
   | Incoming Type.Canonical
+  deriving (Show)

@@ -16,7 +16,6 @@ they are parsed.
 type Expr =
   General.Expr R.Region Def Var.Raw Type.Raw
 
-
 type Expr' =
   General.Expr' R.Region Def Var.Raw Type.Raw
 
@@ -28,4 +27,5 @@ type Def =
 data Def'
     = Definition Pattern.Raw Expr
     | Annotation String Type.Raw
+    deriving (Show)
 

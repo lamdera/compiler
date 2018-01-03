@@ -20,11 +20,12 @@ import qualified Reporting.Region as R
 data Def
     = Def Facts String Expr
     | TailDef Facts String [String] Expr
-
+    deriving (Show)
 
 data Facts = Facts
     { home :: Maybe ModuleName.Canonical
     }
+    deriving (Show)
 
 
 dummyFacts :: Facts
@@ -57,6 +58,7 @@ data Expr
     | Program (Expr.Main Type.Canonical) Expr
     | GLShader String String Literal.GLShaderTipe
     | Crash ModuleName.Canonical R.Region (Maybe Expr)
+    deriving (Show)
 
 
 data Decider a
@@ -71,9 +73,10 @@ data Decider a
         , _tests :: [(DT.Test, Decider a)]
         , _fallback :: Decider a
         }
-    deriving (Eq)
+    deriving (Eq, Show)
 
 
 data Choice
     = Inline Expr
     | Jump Int
+    deriving (Show)

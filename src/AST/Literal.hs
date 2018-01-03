@@ -10,7 +10,7 @@ data Literal
     | Chr Char
     | Str String
     | Boolean Bool
-    deriving (Eq, Ord)
+    deriving (Eq, Ord, Show)
 
 
 toString :: Literal -> String
@@ -31,7 +31,7 @@ data GLTipe
     | V4
     | M4
     | Texture
-    deriving (Eq)
+    deriving (Eq, Show)
 
 
 glTipeName :: GLTipe -> String
@@ -51,4 +51,4 @@ data GLShaderTipe = GLShaderTipe
     , uniform :: Map.Map String GLTipe
     , varying :: Map.Map String GLTipe
     }
-    deriving (Eq)
+    deriving (Eq, Show)

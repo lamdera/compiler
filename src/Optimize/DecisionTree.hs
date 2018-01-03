@@ -73,13 +73,13 @@ data DecisionTree
         , _edges :: [(Test, DecisionTree)]
         , _default :: Maybe DecisionTree
         }
-    deriving (Eq)
+    deriving (Eq, Show)
 
 
 data Test
     = Constructor Var.Canonical
     | Literal L.Literal
-    deriving (Eq, Ord)
+    deriving (Eq, Ord, Show)
 
 
 data Path
@@ -87,7 +87,7 @@ data Path
     | Field String Path
     | Empty
     | Alias
-    deriving (Eq)
+    deriving (Eq, Show)
 
 
 -- PATH HELPERS
@@ -123,6 +123,7 @@ data Branch =
     { _goal :: Int
     , _patterns :: [(Path, CPattern)]
     }
+    deriving (Show)
 
 
 toDecisionTree :: VariantDict -> [Branch] -> DecisionTree

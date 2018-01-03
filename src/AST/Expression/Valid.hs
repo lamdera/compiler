@@ -22,7 +22,7 @@ type Expr' =
 
 data Def =
   Def R.Region Pattern.Raw Expr (Maybe Type.Raw)
-
+  deriving (Show)
 
 getPattern :: Def -> Pattern.Raw
 getPattern (Def _ pattern _ _) =
