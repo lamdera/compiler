@@ -34,7 +34,7 @@ Flag dev {
 }
 
 
-Executable elm
+Executable elmx
     if flag(dev)
         ghc-options: -O0 -Wall -Werror
     else
@@ -263,4 +263,5 @@ Executable elm
         unordered-containers,
         utf8-string,
         vector,
-        zip-archive
+        zip-archive,
+        show-prettyprint
