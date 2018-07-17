@@ -29,7 +29,7 @@ data Error
   | Main L.Localizer Main.Error
   | Pattern [Pattern.Error]
   | Docs Docs.Error
-
+  deriving (Show)
 
 
 -- TO REPORT

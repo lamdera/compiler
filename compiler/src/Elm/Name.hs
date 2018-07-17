@@ -53,7 +53,7 @@ import Foreign.ForeignPtr (ForeignPtr)
 
 
 newtype Name = Name { _name :: Text.Text }
-  deriving (Eq, Ord)
+  deriving (Eq, Ord, Show)
 
 
 length :: Name -> Int

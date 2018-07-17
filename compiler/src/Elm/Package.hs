@@ -54,7 +54,7 @@ data Name =
     { _author :: !Text
     , _project :: !Text
     }
-    deriving (Eq, Ord)
+    deriving (Eq, Ord, Show)
 
 
 data Package =
@@ -62,7 +62,7 @@ data Package =
     { _name :: !Name
     , _version :: !Version
     }
-    deriving (Eq, Ord)
+    deriving (Eq, Ord, Show)
 
 
 
@@ -263,7 +263,7 @@ data Version =
     , _minor :: {-# UNPACK #-} !Word16
     , _patch :: {-# UNPACK #-} !Word16
     }
-    deriving (Eq, Ord)
+    deriving (Eq, Ord, Show)
 
 
 initialVersion :: Version

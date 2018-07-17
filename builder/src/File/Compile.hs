@@ -52,6 +52,7 @@ data Answer
   = Blocked
   | Bad FilePath Time.UTCTime BS.ByteString [Compiler.Error]
   | Good Compiler.Artifacts
+  deriving (Show)
 
 
 type Dict a = Map.Map Module.Raw a

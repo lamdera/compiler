@@ -33,13 +33,14 @@ data Error
     | TypeWithBadDefinition R.Region N.Name N.Name
     | TypeWithoutDefinition R.Region N.Name
     | Parse R.Region (Maybe R.Region) Problem
+    deriving (Show)
 
 
 
 -- PARSE ERRORS
 
 
-data ParseError = ParseError !Int !Int !Problem
+data ParseError = ParseError !Int !Int !Problem deriving (Show)
 
 
 data Problem
@@ -63,6 +64,7 @@ data Problem
   | BadUnderscore Int
   | BadOp BadOp ContextStack
   | Theories ContextStack [Theory]
+  deriving (Show)
 
 
 data EscapeProblem
@@ -70,9 +72,10 @@ data EscapeProblem
   | UnicodeSyntax
   | UnicodeRange
   | UnicodeLength Int String
+  deriving (Show)
 
 
-data BadOp = HasType | Equals | Arrow | Pipe | Dot
+data BadOp = HasType | Equals | Arrow | Pipe | Dot deriving (Show)
 
 
 data Theory
@@ -84,7 +87,7 @@ data Theory
   | InfixOp
   | Digit
   | BadSpace
-  deriving (Eq, Ord)
+  deriving (Eq, Ord, Show)
 
 
 data Next
@@ -97,7 +100,7 @@ data Next
   | Type
   | Listing
   | Exposing
-  deriving (Eq, Ord)
+  deriving (Eq, Ord, Show)
 
 
 type ContextStack = [(Context, R.Position)]
@@ -128,7 +131,7 @@ data Context
   | TypeAlias
   | Infix
   | Port
-  deriving (Eq, Ord)
+  deriving (Eq, Ord, Show)
 
 
 

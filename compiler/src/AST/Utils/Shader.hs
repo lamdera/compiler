@@ -20,6 +20,7 @@ data Shader =
     , _uniform :: Map.Map N.Name Type
     , _varying :: Map.Map N.Name Type
     }
+    deriving (Show)
 
 
 
@@ -34,3 +35,4 @@ data Type
   | V4
   | M4
   | Texture
+  deriving (Show)

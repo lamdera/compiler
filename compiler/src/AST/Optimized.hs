@@ -66,10 +66,11 @@ data Expr
   | Unit
   | Tuple Expr Expr (Maybe Expr)
   | Shader Text
+  deriving (Show)
 
 
 data Global = Global ModuleName.Canonical N.Name
-  deriving (Eq, Ord)
+  deriving (Eq, Ord, Show)
 
 
 -- Provide "List" not "Elm.Kernel.List"
@@ -86,10 +87,12 @@ kernel home =
 data Def
   = Def N.Name Expr
   | TailDef N.Name [N.Name] Expr
+  deriving (Show)
 
 
 data Destructor =
   Destructor N.Name Path
+  deriving (Show)
 
 
 data Path
@@ -97,6 +100,7 @@ data Path
   | Field N.Name Path
   | Unbox Path
   | Root N.Name
+  deriving (Show)
 
 
 
@@ -115,12 +119,13 @@ data Decider a
       , _tests :: [(DT.Test, Decider a)]
       , _fallback :: Decider a
       }
-  deriving (Eq)
+  deriving (Eq, Show)
 
 
 data Choice
   = Inline Expr
   | Jump Int
+  deriving (Show)
 
 
 
@@ -133,6 +138,7 @@ data Graph =
     , _nodes :: Map.Map Global Node
     , _fields :: Map.Map N.Name Int
     }
+    deriving (Show)
 
 
 data Main
@@ -141,6 +147,7 @@ data Main
       { _message :: Can.Type
       , _decoder :: Expr
       }
+      deriving (Show)
 
 
 data Node
@@ -155,13 +162,14 @@ data Node
   | Kernel KContent (Maybe KContent)
   | PortIncoming Expr (Set.Set Global)
   | PortOutgoing Expr (Set.Set Global)
+  deriving (Show)
 
 
-data EffectsType = Cmd | Sub | Fx
+data EffectsType = Cmd | Sub | Fx deriving (Show)
 
 
 data KContent =
-  KContent [KChunk] (Set.Set Global)
+  KContent [KChunk] (Set.Set Global) deriving (Show)
 
 
 data KChunk
@@ -173,6 +181,7 @@ data KChunk
   | JsEnum Int
   | Debug
   | Prod
+  deriving (Show)
 
 
 

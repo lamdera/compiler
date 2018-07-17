@@ -48,7 +48,7 @@ data Artifacts =
     { _elmi :: I.Interface
     , _elmo :: Opt.Graph
     , _docs :: Maybe Docs.Module
-    }
+    } deriving (Show)
 
 
 compile :: DocsFlag -> Pkg.Name -> ImportDict -> I.Interfaces -> BS.ByteString -> Result i Artifacts

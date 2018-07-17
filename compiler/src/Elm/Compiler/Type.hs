@@ -42,6 +42,7 @@ data Type
   | Record [(N.Name, Type)] (Maybe N.Name)
   | Unit
   | Tuple Type Type [Type]
+  deriving (Show)
 
 
 data DebugMetadata =
@@ -50,10 +51,11 @@ data DebugMetadata =
     , _aliases :: [Alias]
     , _unions :: [Union]
     }
+    deriving (Show)
 
 
-data Alias = Alias N.Name [N.Name] Type
-data Union = Union N.Name [N.Name] [(N.Name, [Type])]
+data Alias = Alias N.Name [N.Name] Type deriving (Show)
+data Union = Union N.Name [N.Name] [(N.Name, [Type])] deriving (Show)
 
 
 

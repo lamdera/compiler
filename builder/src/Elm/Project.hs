@@ -30,6 +30,7 @@ import qualified Generate.Output as Output
 import qualified Reporting.Render.Type.Localizer as L
 import qualified Reporting.Task as Task
 import qualified Stuff.Paths as Path
+import Control.Monad.Trans (liftIO)
 
 
 
@@ -61,10 +62,23 @@ compile
 compile mode target maybeOutput docs summary@(Summary.Summary root project _ _ _) paths =
   do  Project.check project
       args <- Args.fromPaths summary paths
+      liftIO $ print "-------------------------------------------------------------------args"
+      liftIO $ print args
       graph <- Crawl.crawl summary args
+      liftIO $ print "-------------------------------------------------------------------graph"
+      liftIO $ print graph
       (dirty, ifaces) <- Plan.plan docs summary graph
+      liftIO $ print "-------------------------------------------------------------------dirty"
+      liftIO $ print dirty
+      liftIO $ print "-------------------------------------------------------------------ifaces"
+      liftIO $ print ifaces
       answers <- Compile.compile project docs ifaces dirty
+      liftIO $ print "-------------------------------------------------------------------answers"
+      liftIO $ print answers
       results <- Artifacts.write root answers
+      liftIO $ print "-------------------------------------------------------------------results"
+      liftIO $ print results
+
       _ <- traverse (Artifacts.writeDocs results) docs
       Output.generate mode target maybeOutput summary graph results
 

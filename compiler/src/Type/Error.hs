@@ -46,6 +46,7 @@ data Type
   | Unit
   | Tuple Type Type (Maybe Type)
   | Alias ModuleName.Canonical N.Name [(N.Name, Type)] Type
+  deriving (Show)
 
 
 data Super
@@ -53,13 +54,14 @@ data Super
   | Comparable
   | Appendable
   | CompAppend
-  deriving (Eq)
+  deriving (Eq, Show)
 
 
 data Extension
   = Closed
   | FlexOpen N.Name
   | RigidOpen N.Name
+  deriving (Show)
 
 
 iteratedDealias :: Type -> Type
@@ -159,11 +161,13 @@ extToDoc ext =
 
 data Diff a =
   Diff a a Status
+  deriving (Show)
 
 
 data Status
   = Similar
   | Different (Bag.Bag Problem)
+  deriving (Show)
 
 
 data Problem
@@ -182,6 +186,7 @@ data Problem
   | BadRigidSuper Super N.Name Type
   | FieldTypo N.Name [N.Name]
   | FieldsMissing [N.Name]
+  deriving (Show)
 
 
 instance Functor Diff where

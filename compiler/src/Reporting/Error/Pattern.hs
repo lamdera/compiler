@@ -105,7 +105,7 @@ data Context
   = Arg
   | Head
   | Unambiguous
-  deriving (Eq)
+  deriving (Eq, Show)
 
 
 patternToDoc :: Context -> P.Pattern -> D.Doc
@@ -174,6 +174,7 @@ data Structure
   = FiniteList [P.Pattern]
   | Conses [P.Pattern] P.Pattern
   | NonList P.Pattern
+  deriving (Show)
 
 
 delist :: P.Pattern -> [P.Pattern] -> Structure

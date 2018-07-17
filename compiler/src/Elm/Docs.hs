@@ -80,15 +80,16 @@ data Module =
     , _values :: Map.Map N.Name Value
     , _binops :: Map.Map N.Name Binop
     }
+    deriving (Show)
 
 
 type Comment = Text.Text
 
 
-data Alias = Alias Comment [N.Name] Type.Type
-data Union = Union Comment [N.Name] [(N.Name, [Type.Type])]
-data Value = Value Comment Type.Type
-data Binop = Binop Comment Type.Type Binop.Associativity Binop.Precedence
+data Alias = Alias Comment [N.Name] Type.Type deriving (Show)
+data Union = Union Comment [N.Name] [(N.Name, [Type.Type])] deriving (Show)
+data Value = Value Comment Type.Type deriving (Show)
+data Binop = Binop Comment Type.Type Binop.Associativity Binop.Precedence deriving (Show)
 
 
 
@@ -111,6 +112,7 @@ data Error
   = BadAssociativity Text.Text
   | BadName
   | BadType
+  deriving (Show)
 
 
 decoder :: D.Decoder Error Module
@@ -427,6 +429,7 @@ data Info =
     , _iBinops   :: Map.Map N.Name Can.Binop
     , _iEffects  :: Can.Effects
     }
+    deriving (Show)
 
 
 checkExport :: Info -> N.Name -> A.Located Can.Export -> Result i w (Module -> Module)

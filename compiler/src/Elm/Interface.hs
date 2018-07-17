@@ -45,18 +45,20 @@ data Interface =
     , _unions  :: Map.Map N.Name Union
     , _aliases :: Map.Map N.Name Alias
     , _binops  :: Map.Map N.Name Binop
-    }
+    } deriving (Show)
 
 
 data Union
   = OpenUnion Can.Union
   | ClosedUnion Can.Union
   | PrivateUnion Can.Union
+  deriving (Show)
 
 
 data Alias
   = PublicAlias Can.Alias
   | PrivateAlias Can.Alias
+  deriving (Show)
 
 
 data Binop =
@@ -66,6 +68,7 @@ data Binop =
     , _op_associativity :: Binop.Associativity
     , _op_precedence :: Binop.Precedence
     }
+    deriving (Show)
 
 
 
@@ -223,4 +226,3 @@ instance Binary Binop where
 
   put (Binop a b c d) =
     put a >> put b >> put c >> put d
-

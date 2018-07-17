@@ -20,6 +20,7 @@ import qualified Reporting.Region as R
 
 data Located a =
   At R.Region a
+  deriving (Show)
 
 
 

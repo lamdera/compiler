@@ -24,6 +24,7 @@ data Error
   | OnlyInExports N.Name R.Region
   | NoComment N.Name R.Region
   | NoAnnotation N.Name R.Region
+  deriving (Show)
 
 
 

@@ -18,6 +18,7 @@ import qualified Reporting.Task as Task
 data Args root
   = Pkg [Module.Raw]
   | Roots root [root]
+  deriving (Show)
 
 
 fromPaths :: Summary.Summary -> [FilePath] -> Task.Task (Args FilePath)

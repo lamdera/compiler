@@ -44,6 +44,7 @@ data Graph kernel problems =
     , _foreigns :: Map.Map Module.Raw Pkg.Package
     , _problems :: problems
     }
+    deriving (Show)
 
 
 type Result =
@@ -294,4 +295,3 @@ toImportDict (Summary _ project exposed _ _) locals =
       Map.insertWith (++) name localPkg dict
   in
   Map.foldrWithKey addLocal (Map.map (map Pkg._name) exposed) locals
-
