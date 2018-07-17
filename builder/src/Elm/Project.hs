@@ -31,7 +31,7 @@ import qualified Reporting.Render.Type.Localizer as L
 import qualified Reporting.Task as Task
 import qualified Stuff.Paths as Path
 import Control.Monad.Trans (liftIO)
-import Text.Show.Prettyprint (prettyPrint)
+import Text.Show.Prettyprint
 
 
 -- GET ROOT
@@ -63,21 +63,21 @@ compile mode target maybeOutput docs summary@(Summary.Summary root project _ _ _
   do  Project.check project
       args <- Args.fromPaths summary paths
       liftIO $ print "-------------------------------------------------------------------args"
-      liftIO $ prettyPrint args
+      liftIO $ writeFile "args.txt" $ prettyShow args
       graph <- Crawl.crawl summary args
       liftIO $ print "-------------------------------------------------------------------graph"
-      liftIO $ prettyPrint graph
+      liftIO $ writeFile "graph.txt" $ prettyShow graph
       (dirty, ifaces) <- Plan.plan docs summary graph
       liftIO $ print "-------------------------------------------------------------------dirty"
-      liftIO $ prettyPrint dirty
+      liftIO $ writeFile "dirty.txt" $ prettyShow dirty
       liftIO $ print "-------------------------------------------------------------------ifaces"
-      liftIO $ prettyPrint ifaces
+      liftIO $ writeFile "ifaces.txt" $ prettyShow ifaces
       answers <- Compile.compile project docs ifaces dirty
       liftIO $ print "-------------------------------------------------------------------answers"
-      liftIO $ prettyPrint answers
+      liftIO $ writeFile "answers.txt" $ prettyShow answers
       results <- Artifacts.write root answers
       liftIO $ print "-------------------------------------------------------------------results"
-      liftIO $ prettyPrint results
+      liftIO $ writeFile "results.txt" $ prettyShow results
 
       _ <- traverse (Artifacts.writeDocs results) docs
       Output.generate mode target maybeOutput summary graph results
