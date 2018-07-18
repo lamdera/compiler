@@ -30,7 +30,9 @@ import qualified Type.Solve as Type
 
 import System.IO.Unsafe (unsafePerformIO)
 
-
+import Control.Monad.Trans (liftIO)
+import Text.Show.Prettyprint
+import qualified Wire
 
 -- COMPILE
 
@@ -57,22 +59,39 @@ compile flag pkg importDict interfaces source =
       valid <- Result.mapError Error.Syntax $
         Parse.program pkg source
 
+      x_ "--> valid" valid
+
+      let valid_ = Wire.modify valid
+
       canonical <- Result.mapError Error.Canonicalize $
-        Canonicalize.canonicalize pkg importDict interfaces valid
+        Canonicalize.canonicalize pkg importDict interfaces valid_
+
+      -- x_ "--> canonical" canonical
 
       let localizer = L.fromModule valid -- TODO should this be strict for GC?
+
+      -- x_ "--> localizer" localizer
 
       annotations <-
         runTypeInference localizer canonical
 
+      -- x_ "--> annotations" annotations
+
+
       () <-
         exhaustivenessCheck canonical
+
+      -- x_ "--> exhaustivenessCheck" exhaustivenessCheck
 
       graph <- Result.mapError (Error.Main localizer) $
         Optimize.optimize annotations canonical
 
+      -- x_ "--> graph" graph
+
       documentation <-
         genarateDocs flag canonical
+
+      -- x_ "--> documentation" documentation
 
       Result.ok $
         Artifacts
@@ -80,6 +99,13 @@ compile flag pkg importDict interfaces source =
           , _elmo = graph
           , _docs = documentation
           }
+
+
+x_ s a =
+  unsafePerformIO $ do
+    putStrLn s
+    writeFile ("ccc-" ++ s ++ ".txt") $ prettyShow a
+    return (Result.ok Nothing)
 
 
 
@@ -114,7 +140,7 @@ exhaustivenessCheck canonical =
 -- DOCUMENTATION
 
 
-data DocsFlag = YesDocs | NoDocs
+data DocsFlag = YesDocs | NoDocs deriving (Show)
 
 
 genarateDocs :: DocsFlag -> Can.Module -> Result.Result i w Error.Error (Maybe Docs.Module)

@@ -22,6 +22,7 @@ import qualified Reporting.Progress as Progress
 import qualified Reporting.Task as Task
 
 
+import Text.Show.Prettyprint
 
 -- COMPILE
 
@@ -81,11 +82,19 @@ compileModule tell project maybeDocsPath answersMVar ifacesMVar name info =
               then putMVar mvar Blocked
               else
                 do  tell (Progress.CompileFileStart name)
+                    liftIO $ putStrLn $ "compileModule:" ++ show name
                     let pkg = Project.getName project
                     let docs = toDocsFlag name project maybeDocsPath
                     let imports = makeImports project info
                     ifaces <- readMVar ifacesMVar
                     let source = Plan._src info
+
+                    debugTo "c-pkg.txt" pkg
+                    debugTo "c-docs.txt" docs
+                    debugTo "c-imports.txt" imports
+                    debugTo "c-ifaces.txt" ifaces
+                    debugTo "c-sources.txt" source
+
                     case Compiler.compile docs pkg imports ifaces source of
                       (_warnings, Left errors) ->
                         do  tell (Progress.CompileFileEnd name Progress.Bad)
@@ -102,6 +111,10 @@ compileModule tell project maybeDocsPath answersMVar ifacesMVar name info =
 
       return mvar
 
+
+debugTo fname a = do
+  liftIO $ print $ "-------------------------------------------------------------------" ++ fname
+  liftIO $ writeFile fname $ prettyShow a
 
 
 -- TO DOCS FLAG

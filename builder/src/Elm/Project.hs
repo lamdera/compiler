@@ -62,26 +62,24 @@ compile
 compile mode target maybeOutput docs summary@(Summary.Summary root project _ _ _) paths =
   do  Project.check project
       args <- Args.fromPaths summary paths
-      liftIO $ print "-------------------------------------------------------------------args"
-      liftIO $ writeFile "args.txt" $ prettyShow args
+      debugTo "args.txt" args
       graph <- Crawl.crawl summary args
-      liftIO $ print "-------------------------------------------------------------------graph"
-      liftIO $ writeFile "graph.txt" $ prettyShow graph
+      debugTo "graph.txt" graph
       (dirty, ifaces) <- Plan.plan docs summary graph
-      liftIO $ print "-------------------------------------------------------------------dirty"
-      liftIO $ writeFile "dirty.txt" $ prettyShow dirty
-      liftIO $ print "-------------------------------------------------------------------ifaces"
-      liftIO $ writeFile "ifaces.txt" $ prettyShow ifaces
+      debugTo "dirty.txt" dirty
+      debugTo "ifaces.txt" ifaces
       answers <- Compile.compile project docs ifaces dirty
-      liftIO $ print "-------------------------------------------------------------------answers"
-      liftIO $ writeFile "answers.txt" $ prettyShow answers
+      debugTo "answers.txt" answers
       results <- Artifacts.write root answers
-      liftIO $ print "-------------------------------------------------------------------results"
-      liftIO $ writeFile "results.txt" $ prettyShow results
+      debugTo "results.txt" results
 
       _ <- traverse (Artifacts.writeDocs results) docs
       Output.generate mode target maybeOutput summary graph results
 
+
+debugTo fname a = do
+  liftIO $ print $ "-------------------------------------------------------------------" ++ fname
+  liftIO $ writeFile fname $ prettyShow a
 
 
 -- COMPILE FOR REPL
