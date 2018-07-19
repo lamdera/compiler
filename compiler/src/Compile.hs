@@ -61,10 +61,12 @@ compile flag pkg importDict interfaces source =
 
       x_ "--> valid" valid
 
-      let valid_ = Wire.modify valid
-
+      -- let valid_ = Wire.modify valid
+      --
+      -- canonical <- Result.mapError Error.Canonicalize $
+      --   Canonicalize.canonicalize pkg importDict interfaces valid_
       canonical <- Result.mapError Error.Canonicalize $
-        Canonicalize.canonicalize pkg importDict interfaces valid_
+        Canonicalize.canonicalize pkg importDict interfaces valid
 
       -- x_ "--> canonical" canonical
 
