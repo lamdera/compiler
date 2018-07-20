@@ -43,17 +43,13 @@ evg_e_AllTypes evg_p0 =
 
 evg_d_AllTypes : D.Decoder AllTypes
 evg_d_AllTypes =
-    D.list D.value
-        |> D.andThen
-            (\v ->
-                D.succeed AllTypes
-                    |> EG.atIndex 0 D.int
-                    |> EG.atIndex 1 D.float
-                    |> EG.atIndex 2 D.bool
-                    |> EG.atIndex 3 EG.d_Char
-                    |> EG.atIndex 4 D.string
-                    |> EG.atIndex 5 (D.list D.int)
-                    |> EG.atIndex 6 (EG.d_set D.float)
-                    |> EG.atIndex 7 (D.array D.string)
-                    |> EG.atIndex 8 EG.d_Order
-            )
+    D.succeed AllTypes
+        |> EG.atIndex 0 D.int
+        |> EG.atIndex 1 D.float
+        |> EG.atIndex 2 D.bool
+        |> EG.atIndex 3 EG.d_Char
+        |> EG.atIndex 4 D.string
+        |> EG.atIndex 5 (D.list D.int)
+        |> EG.atIndex 6 (EG.d_set D.float)
+        |> EG.atIndex 7 (D.array D.string)
+        |> EG.atIndex 8 EG.d_Order

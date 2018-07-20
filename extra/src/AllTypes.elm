@@ -21,10 +21,5 @@ type alias AllTypes =
     , listInt : List Int
     , setFloat : Set Float
     , arrayString : Array String
-
-    -- , dictIntString : Dict Int String
     , order : Order
-
-    -- , union : RecursiveUnion
-    -- , time : Time.Posix
     }
