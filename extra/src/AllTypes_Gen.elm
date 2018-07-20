@@ -37,67 +37,35 @@ evg_e_AllTypes evg_p0 =
         , E.list E.int evg_p0.listInt
         , E.set E.float evg_p0.setFloat
         , E.array E.string evg_p0.arrayString
-        , E.dict String.fromInt E.string evg_p0.dictIntString
+
+        -- , E.dict String.fromInt E.string evg_p0.dictIntString
         , evg_e_Order evg_p0.order
 
         -- , evg_e_RecursiveUnion evg_p0.union
         ]
 
 
+evg_d_AllTypes : D.Decoder AllTypes
+evg_d_AllTypes =
+    D.list D.value
+        |> D.andThen
+            (\v ->
+                D.succeed AllTypes
+                    |> evg_atIndex 1 D.int
+                    |> evg_atIndex 2 D.float
+                    |> evg_atIndex 3 D.bool
+                    |> evg_atIndex 4 evg_d_Char
+                    |> evg_atIndex 5 D.string
+                    |> evg_atIndex 6 (D.list D.int)
+                    |> evg_atIndex 7 (D.list D.float |> D.andThen (\evg_v0 -> D.succeed <| Set.fromList evg_v0))
+                    |> evg_atIndex 8 (D.array D.string)
+                    -- Dicts are kinda tricky... how do we rep non-string keys? In 0.19 any type will be Dict Keyable...
+                    -- |> evg_atIndex 9 (D.dict D.string |> D.andThen (\evg_v0 ->  ))
+                    |> evg_atIndex 10 evg_d_Order
+            )
 
---
--- haskelm_wire_decoder_AllTypes : D.Decoder AllTypes
--- haskelm_wire_decoder_AllTypes =
---     D.list D.value
---         |> D.andThen
---             (\v ->
---                 D.oneOf
---                     [ let
---                         d_c =
---                             D.decodeValue (D.index 0 D.string) v
---
---                         d_a0 =
---                             D.decodeValue (D.index 1 D.int) v
---
---                         d_a1 =
---                             D.decodeValue (D.index 2 D.float) v
---
---                         d_a2 =
---                             D.decodeValue (D.index 3 D.bool) v
---
---                         d_a3 =
---                             D.decodeValue (D.index 4 evg_d_Char) v
---
---                         d_a4 =
---                             D.decodeValue (D.index 5 D.string) v
---
---                         d_a5 =
---                             D.decodeValue (D.index 6 (D.list D.int)) v
---
---                         d_a6 =
---                             D.decodeValue (D.index 7 (D.list D.float |> D.andThen (\evg_v0 -> Set.fromList evg_v0))) v
---
---                         d_a7 =
---                             D.decodeValue (D.index 8 (D.array D.string)) v
---
---                         d_a8 =
---                             D.decodeValue (D.index 9 (D.dict D.string)) v
---
---                         d_a9 =
---                             D.decodeValue (D.index 10 evg_d_Order) v
---
---                         -- d_a10 =
---                         --     D.decodeValue (D.index 11 haskelm_wire_decoder_RecursiveUnion) v
---                       in
---                       case ( evg_c, evg_a0, evg_a1, evg_a2, evg_a3, evg_a4, evg_a5, evg_a6, evg_a7, evg_a8, evg_a9 ) of
---                         ( Ok "", Ok evg_x0, Ok evg_x1, Ok evg_x2, Ok evg_x3, Ok evg_x4, Ok evg_x5, Ok evg_x6, Ok evg_x7, Ok evg_x8, Ok evg_x9 ) ->
---                             D.succeed
---                                 { int = evg_x0, float = evg_x1, bool = evg_x2, char = evg_x3, string = evg_x4, listInt = evg_x5, setFloat = evg_x6, arrayString = evg_x7, dictIntStirng = evg_x8, order = evg_x9 }
---
---                         partialDecodes ->
---                             D.fail "evergreen wire decode failed on partialDecodes"
---                     ]
---             )
+
+
 -- Move elsewhere later
 
 
@@ -166,3 +134,16 @@ eqPosStr1 idx str subDecoder constructor =
                 else
                     D.fail "evergreen wire decode failed for union type"
             )
+
+
+evg_atIndex idx decoder =
+    evg_custom (D.index idx decoder)
+
+
+
+-- Trick from json-decode-pipeline
+
+
+evg_custom : D.Decoder a -> D.Decoder (a -> b) -> D.Decoder b
+evg_custom =
+    D.map2 (|>)
