@@ -33,6 +33,7 @@ import System.IO.Unsafe (unsafePerformIO)
 import Control.Monad.Trans (liftIO)
 import Text.Show.Prettyprint
 import qualified Wire
+import qualified AST.Valid as AS (Module(..))
 
 -- COMPILE
 
@@ -59,7 +60,18 @@ compile flag pkg importDict interfaces source =
       valid <- Result.mapError Error.Syntax $
         Parse.program pkg source
 
-      x_ "--> valid" valid
+      _ <- case valid of
+        AS.Module n _ _ _ _ _ _ _ _ _ ->
+          x_ ("-" ++ show n) valid
+        _ ->
+          pure Nothing
+
+      _ <- unsafePerformIO $ do
+        putStrLn "Okay---------------"
+        pure (Result.ok Nothing)
+      -- Module {_name = Name {_name = "AllTypes_Check"}
+
+
 
       -- let valid_ = Wire.modify valid
       --
@@ -105,9 +117,9 @@ compile flag pkg importDict interfaces source =
 
 x_ s a =
   unsafePerformIO $ do
-    putStrLn s
+    putStrLn ("ccc-" ++ s ++ ".txt")
     writeFile ("ccc-" ++ s ++ ".txt") $ prettyShow a
-    return (Result.ok Nothing)
+    pure (Result.ok Nothing)
 
 
 
