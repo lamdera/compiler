@@ -56,9 +56,8 @@ view model =
     in
     { title = "Hello"
     , body =
-        [ Html.text "hello"
-        , Html.div [] [ Html.text encoded ]
-        , Html.div [] [ Html.text <| Debug.toString decoded ]
+        [ Html.div [] [ Html.text <| "Encoded: " ++ encoded ]
+        , Html.div [] [ Html.text <| "Decoded: " ++ Debug.toString decoded ]
         , Html.div [] [ Html.text <| "Equality to original? " ++ Debug.toString (Ok allTypesMock == decoded) ]
         ]
     }

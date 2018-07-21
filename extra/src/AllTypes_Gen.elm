@@ -7,6 +7,12 @@ import Json.Encode as E
 import Set
 
 
+{- WARNING WARNING WARNING WARNING  WARNING  WARNING  WARNING  WARNING  WARNING  WARNING  WARNING  WARNING
+
+   This file is special, if you're using elmx anything you write here will be overwritten on the fly
+   during compilation!
+
+-}
 -- Causes Elm to complain about recursive values...
 -- evg_e_RecursiveUnion : RecursiveUnion -> E.Value
 -- evg_e_RecursiveUnion evg_p0 =
@@ -24,6 +30,8 @@ import Set
 --         [ eqPosStr 0 "Node" Node
 --         , eqPosStr1 0 "Leaf" evg_d_RecursiveUnion Leaf
 --         ]
+-- These functions are here for reference, as they're what's implemented in the AST but they
+-- can be deleted and everything should still compile as they're being replaced by the compiler
 
 
 evg_e_AllTypes : AllTypes -> E.Value

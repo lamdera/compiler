@@ -30,10 +30,8 @@ import qualified Type.Solve as Type
 
 import System.IO.Unsafe (unsafePerformIO)
 
-import Control.Monad.Trans (liftIO)
-import Text.Show.Prettyprint
 import qualified Wire
-import qualified AST.Valid as AS (Module(..))
+
 
 -- COMPILE
 
@@ -60,52 +58,24 @@ compile flag pkg importDict interfaces source =
       valid <- Result.mapError Error.Syntax $
         Parse.program pkg source
 
-      _ <- case valid of
-        AS.Module n _ _ _ _ _ _ _ _ _ ->
-          x_ ("-" ++ show n) valid
-        _ ->
-          pure Nothing
+      let valid_ = Wire.modify valid
 
-      _ <- unsafePerformIO $ do
-        putStrLn "Okay---------------"
-        pure (Result.ok Nothing)
-      -- Module {_name = Name {_name = "AllTypes_Check"}
-
-
-
-      -- let valid_ = Wire.modify valid
-      --
-      -- canonical <- Result.mapError Error.Canonicalize $
-      --   Canonicalize.canonicalize pkg importDict interfaces valid_
       canonical <- Result.mapError Error.Canonicalize $
-        Canonicalize.canonicalize pkg importDict interfaces valid
-
-      -- x_ "--> canonical" canonical
+        Canonicalize.canonicalize pkg importDict interfaces valid_
 
       let localizer = L.fromModule valid -- TODO should this be strict for GC?
-
-      -- x_ "--> localizer" localizer
 
       annotations <-
         runTypeInference localizer canonical
 
-      -- x_ "--> annotations" annotations
-
-
       () <-
         exhaustivenessCheck canonical
-
-      -- x_ "--> exhaustivenessCheck" exhaustivenessCheck
 
       graph <- Result.mapError (Error.Main localizer) $
         Optimize.optimize annotations canonical
 
-      -- x_ "--> graph" graph
-
       documentation <-
         genarateDocs flag canonical
-
-      -- x_ "--> documentation" documentation
 
       Result.ok $
         Artifacts
@@ -113,14 +83,6 @@ compile flag pkg importDict interfaces source =
           , _elmo = graph
           , _docs = documentation
           }
-
-
-x_ s a =
-  unsafePerformIO $ do
-    putStrLn ("ccc-" ++ s ++ ".txt")
-    writeFile ("ccc-" ++ s ++ ".txt") $ prettyShow a
-    pure (Result.ok Nothing)
-
 
 
 -- TYPE INFERENCE

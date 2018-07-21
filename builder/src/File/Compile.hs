@@ -89,11 +89,11 @@ compileModule tell project maybeDocsPath answersMVar ifacesMVar name info =
                     ifaces <- readMVar ifacesMVar
                     let source = Plan._src info
 
-                    debugTo ("c-pkg-" ++ show name ++ ".txt") pkg
-                    debugTo ("c-docs-" ++ show name ++ ".txt") docs
-                    debugTo ("c-imports-" ++ show name ++ ".txt") imports
-                    debugTo ("c-ifaces-" ++ show name ++ ".txt") ifaces
-                    debugTo ("c-sources-" ++ show name ++ ".txt") source
+                    -- debugTo ("c-pkg-" ++ show name ++ ".txt") pkg
+                    -- debugTo ("c-docs-" ++ show name ++ ".txt") docs
+                    -- debugTo ("c-imports-" ++ show name ++ ".txt") imports
+                    -- debugTo ("c-ifaces-" ++ show name ++ ".txt") ifaces
+                    -- debugTo ("c-sources-" ++ show name ++ ".txt") source
 
                     case Compiler.compile docs pkg imports ifaces source of
                       (_warnings, Left errors) ->
