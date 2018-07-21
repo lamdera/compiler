@@ -82,7 +82,7 @@ compileModule tell project maybeDocsPath answersMVar ifacesMVar name info =
               then putMVar mvar Blocked
               else
                 do  tell (Progress.CompileFileStart name)
-                    liftIO $ putStrLn $ "compileModule:" ++ show name
+                    -- liftIO $ putStrLn $ "compileModule:" ++ show name
                     let pkg = Project.getName project
                     let docs = toDocsFlag name project maybeDocsPath
                     let imports = makeImports project info
@@ -112,9 +112,9 @@ compileModule tell project maybeDocsPath answersMVar ifacesMVar name info =
       return mvar
 
 
-debugTo fname a = do
-  liftIO $ print $ "-------------------------------------------------------------------" ++ fname
-  liftIO $ writeFile fname $ prettyShow a
+-- debugTo fname a = do
+--   liftIO $ print $ "-------------------------------------------------------------------" ++ fname
+--   liftIO $ writeFile fname $ prettyShow a
 
 
 -- TO DOCS FLAG
