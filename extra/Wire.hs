@@ -8,17 +8,10 @@ import qualified Elm.Name as N
 
 
 fr =
-    Region
-      { _start = Position
-        { _line   = 12354678
-        , _column = 12354678
-        }
-      , _end   = Position
-        { _line   = 12354678
-        , _column = 12354678
-        }
-      }
-
+  Region
+    { _start = Position { _line   = 12354678 , _column = 12354678 }
+    , _end   = Position { _line   = 12354678 , _column = 12354678 }
+    }
 
 at = At fr
 
@@ -30,13 +23,23 @@ named n = at (name n)
 
 qval q n = at (VarQual Value (name q) (name n))
 
-ctor n = at (Var Ctor (name "AllTypes"))
+ctor n = at (Var Ctor (name n))
+
+var n = at (Var Value (name n))
 
 call f args = at (Call (f) args)
 
 decl n srcPat expr mSig = at (Decl (named n) srcPat expr mSig)
 
 binops exprs expr = at (Binops exprs expr)
+
+list exprs = at (List exprs)
+
+field r f = at (Access (var r) (named f))
+
+typ n rest = at (TType fr (name n) rest)
+
+qtyp q n rest = at (TTypeQual fr (name q) (name n) rest)
 
 
 derp =
@@ -54,4 +57,25 @@ derp =
       ]
       (call (qval "EG" "atIndex") [ int 8 , qval "EG" "d_Order" ])
     )
-    (Just (at (TTypeQual fr (name "D") (name "Decoder") [ at (TType fr (name "AllTypes") []) ])))
+    (Just (qtyp "D" "Decoder" [typ "AllTypes" []]))
+
+
+derp2 =
+  decl "evg_e_AllTypes" []
+    (call
+      (qval "E" "list")
+      [ var "identity"
+      , list
+          [ call (qval "E" "int") [ field "evg_p0" "int" ]
+          , call (qval "E" "float") [ field "evg_p0" "float" ]
+          , call (qval "E" "bool") [ field "evg_p0" "bool" ]
+          , call (qval "EG" "e_Char") [ field "evg_p0" "char" ]
+          , call (qval "E" "string") [ field "evg_p0" "string" ]
+          , call (qval "E" "list") [ call (qval "E" "int") [ field "evg_p0" "listInt" ] ]
+          , call (qval "E" "set") [ call (qval "E" "float") [ field "evg_p0" "setFloat" ] ]
+          , call (qval "E" "array") [ call (qval "E" "string") [ field "evg_p0" "arrayString" ] ]
+          , call (qval "EG" "e_Order") [ field "evg_p0" "order" ]
+          ]
+      ]
+    )
+    (Just (typ "AllTypes" [qtyp "E" "Value" []]))
