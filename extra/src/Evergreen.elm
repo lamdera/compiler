@@ -53,27 +53,27 @@ d_set decoder =
     D.list decoder |> D.map Set.fromList
 
 
-eqPosStr : Int -> String -> a -> D.Decoder a
-eqPosStr idx str final =
-    D.index idx D.string
+union : String -> a -> D.Decoder a
+union str final =
+    D.index 0 D.string
         |> D.andThen
             (\s ->
                 if s == str then
                     D.succeed final
                 else
-                    D.fail <| "expected '" ++ str ++ "' but saw '" ++ s ++ "' at index " ++ String.fromInt idx
+                    D.fail <| "expected '" ++ str ++ "' but saw '" ++ s
             )
 
 
-eqPosStr1 : Int -> String -> D.Decoder a -> (a -> b) -> D.Decoder b
-eqPosStr1 idx str subDecoder constructor =
-    D.index idx D.string
+union1 : String -> D.Decoder a -> (a -> b) -> D.Decoder b
+union1 str decoder constructor =
+    D.index 0 D.string
         |> D.andThen
             (\s ->
                 if s == str then
-                    subDecoder |> D.andThen (\v1 -> D.succeed <| constructor v1)
+                    D.index 1 decoder |> D.map constructor
                 else
-                    D.fail <| "expected '" ++ str ++ "' but saw '" ++ s ++ "' at index " ++ String.fromInt idx
+                    D.fail <| "expected '" ++ str ++ "' but saw '" ++ s
             )
 
 

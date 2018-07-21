@@ -1,5 +1,6 @@
 module AllTypes_Check exposing (..)
 
+import AllTypes exposing (..)
 import AllTypes_Gen
 import Array
 import Browser exposing (Document)
@@ -7,6 +8,7 @@ import Debug
 import Html
 import Json.Decode as D
 import Json.Encode as E
+import MVCE
 import Result exposing (Result(..))
 import Set
 
@@ -46,6 +48,15 @@ allTypesMock =
     }
 
 
+unionMocks =
+    [ Leaf
+    , Recursive (Recursive (Recursive (DeeplyValued [ True, False ])))
+    , Valued 123
+    , DeeplyValued [ False, False, False ]
+    , Leaf
+    ]
+
+
 view model =
     let
         encoded =
@@ -53,12 +64,20 @@ view model =
 
         decoded =
             D.decodeString AllTypes_Gen.evg_d_AllTypes encoded
+
+        e2 =
+            E.encode 0 (E.list AllTypes_Gen.evg_e_Union unionMocks)
+
+        d2 =
+            D.decodeString (D.list AllTypes_Gen.evg_d_Union) e2
     in
     { title = "Hello"
     , body =
-        [ Html.div [] [ Html.text <| "Encoded: " ++ encoded ]
-        , Html.div [] [ Html.text <| "Decoded: " ++ Debug.toString decoded ]
+        [ Html.div [] [ Html.text <| "Encoded AllTypes: " ++ encoded ]
+        , Html.div [] [ Html.text <| "Decoded AllTypes: " ++ Debug.toString decoded ]
         , Html.div [] [ Html.text <| "Equality to original? " ++ Debug.toString (Ok allTypesMock == decoded) ]
+        , Html.div [] [ Html.text <| "Encoded Unions: " ++ e2 ]
+        , Html.div [] [ Html.text <| "Decoded Unions: " ++ Debug.toString d2 ]
         ]
     }
 

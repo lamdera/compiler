@@ -12,26 +12,36 @@ import Set
    This file is special, if you're using elmx anything you write here will be overwritten on the fly
    during compilation!
 
+   These functions are here for reference, as they're what's implemented in the AST but they
+   can be deleted and everything should still compile as they're being replaced by the compiler
+
 -}
--- Causes Elm to complain about recursive values...
--- evg_e_RecursiveUnion : RecursiveUnion -> E.Value
--- evg_e_RecursiveUnion evg_p0 =
---     case evg_p0 of
---         Node evg_v0 ->
---             E.list [ E.string "Node", evg_e_RecursiveUnion evg_v0 ]
---
---         Leaf ->
---             E.list [ E.string "Leaf" ]
---
---
--- evg_d_RecursiveUnion : D.Decoder RecursiveUnion
--- evg_d_RecursiveUnion =
---     D.oneOf
---         [ eqPosStr 0 "Node" Node
---         , eqPosStr1 0 "Leaf" evg_d_RecursiveUnion Leaf
---         ]
--- These functions are here for reference, as they're what's implemented in the AST but they
--- can be deleted and everything should still compile as they're being replaced by the compiler
+
+
+evg_e_Union : Union -> E.Value
+evg_e_Union evg_p0 =
+    case evg_p0 of
+        Recursive evg_v0 ->
+            E.list identity [ E.string "Recursive", evg_e_Union evg_v0 ]
+
+        Valued evg_v0 ->
+            E.list identity [ E.string "Valued", E.int evg_v0 ]
+
+        DeeplyValued evg_v0 ->
+            E.list identity [ E.string "DeeplyValued", E.list E.bool evg_v0 ]
+
+        Leaf ->
+            E.list identity [ E.string "Leaf" ]
+
+
+evg_d_Union : D.Decoder Union
+evg_d_Union =
+    D.oneOf
+        [ EG.union1 "Recursive" (D.lazy (\_ -> evg_d_Union)) Recursive
+        , EG.union1 "Valued" D.int Valued
+        , EG.union1 "DeeplyValued" (D.list D.bool) DeeplyValued
+        , EG.union "Leaf" Leaf
+        ]
 
 
 evg_e_AllTypes : AllTypes -> E.Value

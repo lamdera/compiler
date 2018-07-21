@@ -7,9 +7,11 @@ import Set exposing (Set)
 import Time
 
 
--- type RecursiveUnion
---     = Node RecursiveUnion
---     | Leaf
+type Union
+    = Recursive Union
+    | Valued Int
+    | DeeplyValued (List Bool)
+    | Leaf
 
 
 type alias AllTypes =
