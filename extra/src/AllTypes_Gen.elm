@@ -55,7 +55,10 @@ evg_e_AllTypes evg_p0 =
         , E.list E.int evg_p0.listInt
         , E.set E.float evg_p0.setFloat
         , E.array E.string evg_p0.arrayString
+        , EG.e_dict E.string (E.list E.int) evg_p0.dict
+        , EG.e_time evg_p0.time
         , EG.e_Order evg_p0.order
+        , evg_e_Union evg_p0.union
         ]
 
 
@@ -70,4 +73,7 @@ evg_d_AllTypes =
         |> EG.atIndex 5 (D.list D.int)
         |> EG.atIndex 6 (EG.d_set D.float)
         |> EG.atIndex 7 (D.array D.string)
-        |> EG.atIndex 8 EG.d_Order
+        |> EG.atIndex 8 (EG.d_dict D.string (D.list D.int))
+        |> EG.atIndex 9 EG.d_time
+        |> EG.atIndex 10 EG.d_Order
+        |> EG.atIndex 11 evg_d_Union

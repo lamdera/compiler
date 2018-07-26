@@ -1,7 +1,6 @@
 module AllTypes exposing (..)
 
 import Array exposing (Array)
-import Char
 import Dict exposing (Dict)
 import Set exposing (Set)
 import Time
@@ -23,5 +22,8 @@ type alias AllTypes =
     , listInt : List Int
     , setFloat : Set Float
     , arrayString : Array String
+    , dict : Dict String (List Int)
+    , time : Time.Posix
     , order : Order
+    , union : Union
     }

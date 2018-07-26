@@ -5,12 +5,14 @@ import AllTypes_Gen
 import Array
 import Browser exposing (Document)
 import Debug
+import Dict
 import Html
 import Json.Decode as D
 import Json.Encode as E
 import MVCE
 import Result exposing (Result(..))
 import Set
+import Time
 
 
 main =
@@ -44,7 +46,10 @@ allTypesMock =
     , listInt = [ 3, 2, 1 ]
     , setFloat = Set.fromList [ 1.2, 2.3, 3.4 ]
     , arrayString = Array.fromList [ "herp", "derp" ]
+    , dict = Dict.fromList [ ( "Nice", [ 1, 2, 3 ] ), ( "Twice", [ 3, 2, 1 ] ) ]
+    , time = Time.millisToPosix 1000000000
     , order = LT
+    , union = Recursive Leaf
     }
 
 

@@ -1,8 +1,11 @@
 module Evergreen exposing (..)
 
+import Char
+import Dict exposing (Dict)
 import Json.Decode as D
 import Json.Encode as E
 import Set exposing (Set)
+import Time
 
 
 e_Char : Char -> E.Value
@@ -51,6 +54,45 @@ d_Order =
 d_set : D.Decoder comparable -> D.Decoder (Set comparable)
 d_set decoder =
     D.list decoder |> D.map Set.fromList
+
+
+e_time : Time.Posix -> E.Value
+e_time t =
+    E.int <| Time.posixToMillis t
+
+
+d_time : D.Decoder Time.Posix
+d_time =
+    D.int |> D.map (\t -> Time.millisToPosix t)
+
+
+e_dict : (comparable -> E.Value) -> (v -> E.Value) -> Dict comparable v -> E.Value
+e_dict k_encode v_encode dict =
+    dict
+        |> Dict.toList
+        |> List.map (\t -> e_tuple k_encode v_encode t)
+        |> E.list identity
+
+
+d_dict : D.Decoder comparable -> D.Decoder v -> D.Decoder (Dict comparable v)
+d_dict k_decode v_decode =
+    D.list (d_tuple k_decode v_decode)
+        |> D.map Dict.fromList
+
+
+e_tuple : (a -> E.Value) -> (b -> E.Value) -> ( a, b ) -> E.Value
+e_tuple a_encode b_encode ( a, b ) =
+    E.list identity [ a_encode a, b_encode b ]
+
+
+d_tuple : D.Decoder a -> D.Decoder b -> D.Decoder ( a, b )
+d_tuple a b =
+    D.index 0 a
+        |> D.andThen
+            (\aVal ->
+                D.index 1 b
+                    |> D.andThen (\bVal -> D.succeed ( aVal, bVal ))
+            )
 
 
 union : String -> a -> D.Decoder a
