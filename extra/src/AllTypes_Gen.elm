@@ -59,6 +59,7 @@ evg_e_AllTypes evg_p0 =
         , EG.e_time evg_p0.time
         , EG.e_Order evg_p0.order
         , evg_e_Union evg_p0.union
+        , E.null
         ]
 
 
@@ -77,3 +78,4 @@ evg_d_AllTypes =
         |> EG.atIndex 9 EG.d_time
         |> EG.atIndex 10 EG.d_Order
         |> EG.atIndex 11 evg_d_Union
+        |> EG.atIndex 12 (D.null ())

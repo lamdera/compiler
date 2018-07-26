@@ -50,6 +50,7 @@ allTypesMock =
     , time = Time.millisToPosix 1000000000
     , order = LT
     , union = Recursive Leaf
+    , unit = ()
     }
 
 

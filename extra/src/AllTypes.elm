@@ -26,4 +26,5 @@ type alias AllTypes =
     , time : Time.Posix
     , order : Order
     , union : Union
+    , unit : ()
     }
