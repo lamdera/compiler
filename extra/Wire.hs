@@ -51,6 +51,10 @@ at = At fr
 int x = at (Int x)
 
 
+-- Unit () literal
+at Unit
+
+
 -- A symbol name
 name = N.fromString
 
@@ -111,13 +115,18 @@ decoder =
       , (call (qval "EG" "atIndex") [ int 0 , qval "D" "int" ] , named "|>" )
       , (call (qval "EG" "atIndex") [ int 1 , qval "D" "float" ] , named "|>" )
       , (call (qval "EG" "atIndex") [ int 2 , qval "D" "bool" ] , named "|>" )
-      , (call (qval "EG" "atIndex") [ int 3 , qval "EG" "d_Char" ] , named "|>" )
+      , (call (qval "EG" "atIndex") [ int 3 , qval "EG" "d_char" ] , named "|>" )
       , (call (qval "EG" "atIndex") [ int 4 , qval "D" "string" ] , named "|>" )
       , (call (qval "EG" "atIndex") [ int 5 , call (qval "D" "list") [ qval "D" "int" ] ] , named "|>" )
       , (call (qval "EG" "atIndex") [ int 6 , call (qval "EG" "d_set") [ qval "D" "float" ] ] , named "|>" )
       , (call (qval "EG" "atIndex") [ int 7 , call (qval "D" "array") [ qval "D" "string" ] ] , named "|>" )
+      , (call (qval "EG" "atIndex") [ int 8 , call (qval "EG" "d_dict") [ qval "D" "string" , call (qval "D" "list") [ qval "D" "int" ] ] ] , name "|>" )
+      , (call (qval "EG" "atIndex") [ int 9 , qval "EG" "d_time" ] , named "|>" )
+      , (call (qval "EG" "atIndex") [ int 10 , qval "EG" "d_order" ] , named "|>" )
+      , (call (qval "EG" "atIndex") [ int 11 , val "evg_d_Union" ] , named "|>" ) -- continue numbers here
       ]
-      (call (qval "EG" "atIndex") [ int 8 , qval "EG" "d_Order" ])
+      (call (qval "EG" "atIndex") [ int 12 , call (qval "D" "null") [ unit ] ])
+      ()
     )
     (Just (qtyp "D" "Decoder" [typ "AllTypes" []]))
 
@@ -131,12 +140,16 @@ encoder =
           [ call (qval "E" "int") [ field "evg_p0" "int" ]
           , call (qval "E" "float") [ field "evg_p0" "float" ]
           , call (qval "E" "bool") [ field "evg_p0" "bool" ]
-          , call (qval "EG" "e_Char") [ field "evg_p0" "char" ]
+          , call (qval "EG" "e_char") [ field "evg_p0" "char" ]
           , call (qval "E" "string") [ field "evg_p0" "string" ]
           , call (qval "E" "list") [ qval "E" "int" , field "evg_p0" "listInt" ]
           , call (qval "E" "set") [ qval "E" "float" , field "evg_p0" "setFloat" ]
           , call (qval "E" "array") [ qval "E" "string" , field "evg_p0" "arrayString" ]
-          , call (qval "EG" "e_Order") [ field "evg_p0" "order" ]
+          , call (qval "EG" "e_dict") [ qval "E" "string" , call (qval "E" "list") [qval "E" "int"] , field "evg_p0" "dict" ]
+          , call (qval "EG" "e_time") [ field "evg_p0" "time" ]
+          , call (qval "EG" "e_order") [ field "evg_p0" "order" ]
+          , call (val "evg_e_Union") [ field "evg_p0" "union" ]
+          , qval "E" "null"
           ]
       ]
     )

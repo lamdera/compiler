@@ -50,14 +50,14 @@ evg_e_AllTypes evg_p0 =
         [ E.int evg_p0.int
         , E.float evg_p0.float
         , E.bool evg_p0.bool
-        , EG.e_Char evg_p0.char
+        , EG.e_char evg_p0.char
         , E.string evg_p0.string
         , E.list E.int evg_p0.listInt
         , E.set E.float evg_p0.setFloat
         , E.array E.string evg_p0.arrayString
         , EG.e_dict E.string (E.list E.int) evg_p0.dict
         , EG.e_time evg_p0.time
-        , EG.e_Order evg_p0.order
+        , EG.e_order evg_p0.order
         , evg_e_Union evg_p0.union
         , E.null
         ]
@@ -69,13 +69,13 @@ evg_d_AllTypes =
         |> EG.atIndex 0 D.int
         |> EG.atIndex 1 D.float
         |> EG.atIndex 2 D.bool
-        |> EG.atIndex 3 EG.d_Char
+        |> EG.atIndex 3 EG.d_char
         |> EG.atIndex 4 D.string
         |> EG.atIndex 5 (D.list D.int)
         |> EG.atIndex 6 (EG.d_set D.float)
         |> EG.atIndex 7 (D.array D.string)
         |> EG.atIndex 8 (EG.d_dict D.string (D.list D.int))
         |> EG.atIndex 9 EG.d_time
-        |> EG.atIndex 10 EG.d_Order
+        |> EG.atIndex 10 EG.d_order
         |> EG.atIndex 11 evg_d_Union
         |> EG.atIndex 12 (D.null ())

@@ -8,18 +8,18 @@ import Set exposing (Set)
 import Time
 
 
-e_Char : Char -> E.Value
-e_Char evg_p0 =
+e_char : Char -> E.Value
+e_char evg_p0 =
     E.int (Char.toCode evg_p0)
 
 
-d_Char : D.Decoder Char
-d_Char =
+d_char : D.Decoder Char
+d_char =
     D.int |> D.map Char.fromCode
 
 
-e_Order : Order -> E.Value
-e_Order evg_p0 =
+e_order : Order -> E.Value
+e_order evg_p0 =
     case evg_p0 of
         LT ->
             E.string "LT"
@@ -31,8 +31,8 @@ e_Order evg_p0 =
             E.string "GT"
 
 
-d_Order : D.Decoder Order
-d_Order =
+d_order : D.Decoder Order
+d_order =
     D.string
         |> D.andThen
             (\s ->
