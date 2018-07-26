@@ -21,8 +21,12 @@ modify valid =
     AS.Module n _ _ _ _ _ _ _ _ _ ->
       if N.toString n == "AllTypes_Gen" then
 
-        debugAst_ ("-" ++ N.toString n) (valid { _decls = [ encoder, decoder] })
-        -- x_ ("-" ++ show n) valid
+        -- debugAst_ ("-" ++ N.toString n) valid
+        debugAst_ ("-" ++ N.toString n) (valid { _decls = [ encoder, decoder, evg_e_Union, evg_d_Union ] })
+
+      else if N.toString n == "AllTypes" then
+
+        debugAst_ ("-" ++ N.toString n) valid
 
       else
         valid
@@ -37,22 +41,26 @@ debugAst_ n a =
 
 
 -- Helpers for the At/Region prefixes
-fr =
+region =
   Region
     { _start = Position { _line   = 10 , _column = 10 }
     , _end   = Position { _line   = 10 , _column = 10 }
     }
 
 
-at = At fr
+at = At region
 
 
--- Am integer literal
+-- An Int literal
 int x = at (Int x)
 
 
+-- A String literal
+str x = at (Str x)
+
+
 -- Unit () literal
-at Unit
+unit = at Unit
 
 
 -- A symbol name
@@ -64,7 +72,7 @@ named n = at (name n)
 
 
 -- A qualified value
-qval q n = at (VarQual Value (name q) (name n))
+qvar q n = at (VarQual Value (name q) (name n))
 
 
 -- A constructor
@@ -83,6 +91,14 @@ call f args = at (Call (f) args)
 decl n srcPat expr mSig = at (Decl (named n) srcPat expr mSig)
 
 
+-- A lambda
+lambda params expr = at (Lambda params expr)
+
+
+-- An anything match, i.e. \_ ->
+anything = at PAnything
+
+
 -- A list of expressions joined by operators, such as |>
 binops exprs expr = at (Binops exprs expr)
 
@@ -96,37 +112,45 @@ field r f = at (Access (var r) (named f))
 
 
 -- Type signature type
-typ n rest = at (TType fr (name n) rest)
+typ n rest = at (TType region (name n) rest)
 
 
 -- Type signature qualified type
-qtyp q n rest = at (TTypeQual fr (name q) (name n) rest)
+qtyp q n rest = at (TTypeQual region (name q) (name n) rest)
 
 
 -- Function definition paramater variable
 pvar n = at (PVar (name n))
 
 
+-- Case statement
+case_ expr patterns = at (Case expr patterns)
+
+
+-- Pattern match constructor in case statement
+pctor n vars = at (PCtor region (name n) vars)
+
+
+
 -- This is a POC AST implementation of the AllTypes encoder & decoder
 decoder =
   decl "evg_d_AllTypes" []
     (binops
-      [ (call (qval "D" "succeed") [ ctor "AllTypes" ] , named "|>" )
-      , (call (qval "EG" "atIndex") [ int 0 , qval "D" "int" ] , named "|>" )
-      , (call (qval "EG" "atIndex") [ int 1 , qval "D" "float" ] , named "|>" )
-      , (call (qval "EG" "atIndex") [ int 2 , qval "D" "bool" ] , named "|>" )
-      , (call (qval "EG" "atIndex") [ int 3 , qval "EG" "d_char" ] , named "|>" )
-      , (call (qval "EG" "atIndex") [ int 4 , qval "D" "string" ] , named "|>" )
-      , (call (qval "EG" "atIndex") [ int 5 , call (qval "D" "list") [ qval "D" "int" ] ] , named "|>" )
-      , (call (qval "EG" "atIndex") [ int 6 , call (qval "EG" "d_set") [ qval "D" "float" ] ] , named "|>" )
-      , (call (qval "EG" "atIndex") [ int 7 , call (qval "D" "array") [ qval "D" "string" ] ] , named "|>" )
-      , (call (qval "EG" "atIndex") [ int 8 , call (qval "EG" "d_dict") [ qval "D" "string" , call (qval "D" "list") [ qval "D" "int" ] ] ] , name "|>" )
-      , (call (qval "EG" "atIndex") [ int 9 , qval "EG" "d_time" ] , named "|>" )
-      , (call (qval "EG" "atIndex") [ int 10 , qval "EG" "d_order" ] , named "|>" )
-      , (call (qval "EG" "atIndex") [ int 11 , val "evg_d_Union" ] , named "|>" ) -- continue numbers here
+      [ (call (qvar "D" "succeed") [ ctor "AllTypes" ] , named "|>" )
+      , (call (qvar "EG" "atIndex") [ int 0 , qvar "D" "int" ] , named "|>" )
+      , (call (qvar "EG" "atIndex") [ int 1 , qvar "D" "float" ] , named "|>" )
+      , (call (qvar "EG" "atIndex") [ int 2 , qvar "D" "bool" ] , named "|>" )
+      , (call (qvar "EG" "atIndex") [ int 3 , qvar "EG" "d_char" ] , named "|>" )
+      , (call (qvar "EG" "atIndex") [ int 4 , qvar "D" "string" ] , named "|>" )
+      , (call (qvar "EG" "atIndex") [ int 5 , call (qvar "D" "list") [ qvar "D" "int" ] ] , named "|>" )
+      , (call (qvar "EG" "atIndex") [ int 6 , call (qvar "EG" "d_set") [ qvar "D" "float" ] ] , named "|>" )
+      , (call (qvar "EG" "atIndex") [ int 7 , call (qvar "D" "array") [ qvar "D" "string" ] ] , named "|>" )
+      , (call (qvar "EG" "atIndex") [ int 8 , call (qvar "EG" "d_dict") [ qvar "D" "string" , call (qvar "D" "list") [ qvar "D" "int" ] ] ] , named "|>" )
+      , (call (qvar "EG" "atIndex") [ int 9 , qvar "EG" "d_time" ] , named "|>" )
+      , (call (qvar "EG" "atIndex") [ int 10 , qvar "EG" "d_order" ] , named "|>" )
+      , (call (qvar "EG" "atIndex") [ int 11 , var "evg_d_Union" ] , named "|>" ) -- continue numbers here
       ]
-      (call (qval "EG" "atIndex") [ int 12 , call (qval "D" "null") [ unit ] ])
-      ()
+      (call (qvar "EG" "atIndex") [ int 12 , call (qvar "D" "null") [ unit ] ])
     )
     (Just (qtyp "D" "Decoder" [typ "AllTypes" []]))
 
@@ -134,24 +158,62 @@ decoder =
 encoder =
   decl "evg_e_AllTypes" [pvar "evg_p0"]
     (call
-      (qval "E" "list")
+      (qvar "E" "list")
       [ var "identity"
       , list
-          [ call (qval "E" "int") [ field "evg_p0" "int" ]
-          , call (qval "E" "float") [ field "evg_p0" "float" ]
-          , call (qval "E" "bool") [ field "evg_p0" "bool" ]
-          , call (qval "EG" "e_char") [ field "evg_p0" "char" ]
-          , call (qval "E" "string") [ field "evg_p0" "string" ]
-          , call (qval "E" "list") [ qval "E" "int" , field "evg_p0" "listInt" ]
-          , call (qval "E" "set") [ qval "E" "float" , field "evg_p0" "setFloat" ]
-          , call (qval "E" "array") [ qval "E" "string" , field "evg_p0" "arrayString" ]
-          , call (qval "EG" "e_dict") [ qval "E" "string" , call (qval "E" "list") [qval "E" "int"] , field "evg_p0" "dict" ]
-          , call (qval "EG" "e_time") [ field "evg_p0" "time" ]
-          , call (qval "EG" "e_order") [ field "evg_p0" "order" ]
-          , call (val "evg_e_Union") [ field "evg_p0" "union" ]
-          , qval "E" "null"
+          [ call (qvar "E" "int") [ field "evg_p0" "int" ]
+          , call (qvar "E" "float") [ field "evg_p0" "float" ]
+          , call (qvar "E" "bool") [ field "evg_p0" "bool" ]
+          , call (qvar "EG" "e_char") [ field "evg_p0" "char" ]
+          , call (qvar "E" "string") [ field "evg_p0" "string" ]
+          , call (qvar "E" "list") [ qvar "E" "int" , field "evg_p0" "listInt" ]
+          , call (qvar "E" "set") [ qvar "E" "float" , field "evg_p0" "setFloat" ]
+          , call (qvar "E" "array") [ qvar "E" "string" , field "evg_p0" "arrayString" ]
+          , call (qvar "EG" "e_dict") [ qvar "E" "string" , call (qvar "E" "list") [qvar "E" "int"] , field "evg_p0" "dict" ]
+          , call (qvar "EG" "e_time") [ field "evg_p0" "time" ]
+          , call (qvar "EG" "e_order") [ field "evg_p0" "order" ]
+          , call (var "evg_e_Union") [ field "evg_p0" "union" ]
+          , qvar "E" "null"
           ]
       ]
     )
     -- Not sure why this type signature has a different form from the decoder, but that's what the diffs told us...
     (Just (at (TLambda (typ "AllTypes" []) (qtyp "E" "Value" []))))
+
+
+evg_e_Union =
+  decl "evg_e_Union" [pvar "evg_p0"]
+      (case_ (var "evg_p0")
+        [ ( pctor "Recursive" [pvar "evg_v0"]
+          , call (qvar "E" "list")
+            [ var "identity" , list [ call (qvar "E" "string") [ str "Recursive"] , call (var "evg_e_Union") [var "evg_v0"] ] ]
+          )
+        , ( pctor "Valued" [pvar "evg_v0"]
+          , call (qvar "E" "list")
+            [ var "identity" , list [ call (qvar "E" "string") [ str "Valued"] , call (qvar "E" "int") [ var "evg_v0" ] ] ]
+          )
+        , ( pctor "DeeplyValued" [pvar "evg_v0"]
+          , call (qvar "E" "list")
+            [ var "identity" , list [ call (qvar "E" "string") [ str "DeeplyValued"] , call (qvar "E" "list") [ qvar "E" "bool" , var "evg_v0" ] ] ]
+          )
+        , ( pctor "Leaf" []
+          , call (qvar "E" "list")
+            [ var "identity" , list [ call (qvar "E" "string") [ str "Leaf" ] ] ]
+          )
+        ]
+      )
+      (Just (at (TLambda (typ "Union" []) (qtyp "E" "Value" []))))
+
+
+evg_d_Union =
+  decl "evg_d_Union" []
+    (call (qvar "D" "oneOf")
+      [list
+        [ call (qvar "EG" "union1") [ str "Recursive" , call (qvar "D" "lazy") [ lambda [ anything ] (var "evg_d_Union") ] , ctor "Recursive" ]
+        , call (qvar "EG" "union1") [ str "Valued" , qvar "D" "int" , ctor "Valued" ]
+        , call (qvar "EG" "union1") [ str "DeeplyValued" , call (qvar "D" "list") [qvar "D" "bool"] , ctor "DeeplyValued" ]
+        , call (qvar "EG" "union") [ str "Leaf" ,ctor "Leaf" ]
+        ]
+      ]
+    )
+    (Just (qtyp "D" "Decoder" [typ "Union" [] ]))
