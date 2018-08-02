@@ -82,18 +82,11 @@ compileModule tell project maybeDocsPath answersMVar ifacesMVar name info =
               then putMVar mvar Blocked
               else
                 do  tell (Progress.CompileFileStart name)
-                    -- liftIO $ putStrLn $ "compileModule:" ++ show name
                     let pkg = Project.getName project
                     let docs = toDocsFlag name project maybeDocsPath
                     let imports = makeImports project info
                     ifaces <- readMVar ifacesMVar
                     let source = Plan._src info
-
-                    -- debugTo ("c-pkg-" ++ show name ++ ".txt") pkg
-                    -- debugTo ("c-docs-" ++ show name ++ ".txt") docs
-                    -- debugTo ("c-imports-" ++ show name ++ ".txt") imports
-                    -- debugTo ("c-ifaces-" ++ show name ++ ".txt") ifaces
-                    -- debugTo ("c-sources-" ++ show name ++ ".txt") source
 
                     case Compiler.compile docs pkg imports ifaces source of
                       (_warnings, Left errors) ->
@@ -110,11 +103,6 @@ compileModule tell project maybeDocsPath answersMVar ifacesMVar name info =
                             putMVar mvar (Good result)
 
       return mvar
-
-
--- debugTo fname a = do
---   liftIO $ print $ "-------------------------------------------------------------------" ++ fname
---   liftIO $ writeFile fname $ prettyShow a
 
 
 -- TO DOCS FLAG
