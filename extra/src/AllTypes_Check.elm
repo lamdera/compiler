@@ -1,7 +1,6 @@
 module AllTypes_Check exposing (..)
 
 import AllTypes exposing (..)
-import AllTypes_Gen
 import Array
 import Browser exposing (Document)
 import Debug
@@ -66,16 +65,16 @@ unionMocks =
 view model =
     let
         encoded =
-            E.encode 0 (AllTypes_Gen.evg_e_AllTypes allTypesMock)
+            E.encode 0 (AllTypes.evg_e_AllTypes allTypesMock)
 
         decoded =
-            D.decodeString AllTypes_Gen.evg_d_AllTypes encoded
+            D.decodeString AllTypes.evg_d_AllTypes encoded
 
         e2 =
-            E.encode 0 (E.list AllTypes_Gen.evg_e_Union unionMocks)
+            E.encode 0 (E.list AllTypes.evg_e_Union unionMocks)
 
         d2 =
-            D.decodeString (D.list AllTypes_Gen.evg_d_Union) e2
+            D.decodeString (D.list AllTypes.evg_d_Union) e2
     in
     { title = "Hello"
     , body =
@@ -84,6 +83,7 @@ view model =
         , Html.div [] [ Html.text <| "Equality to original? " ++ Debug.toString (Ok allTypesMock == decoded) ]
         , Html.div [] [ Html.text <| "Encoded Unions: " ++ e2 ]
         , Html.div [] [ Html.text <| "Decoded Unions: " ++ Debug.toString d2 ]
+        , Html.div [] [ Html.text <| "Shadow value not existent in code: " ++ Debug.toString AllTypes.evg ]
         ]
     }
 
