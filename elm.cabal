@@ -230,6 +230,9 @@ Executable elmx
         Validate
         Paths_elm
 
+        -- Evergreen
+        WireTest
+
     Build-depends:
         ansi-terminal >= 0.8 && < 0.9,
         ansi-wl-pprint >= 0.6.8 && < 0.7,
