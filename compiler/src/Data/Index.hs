@@ -1,5 +1,5 @@
 module Data.Index
-  ( ZeroBased
+  ( ZeroBased(..)
   , first
   , second
   , third
