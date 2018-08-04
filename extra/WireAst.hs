@@ -21,14 +21,14 @@ modify valid flag pkg importDict interfaces source =
   case valid of
     AS.Module n _ _ _ _ _ _ _ _ _ ->
       if N.toString n == "AllTypes_Gen" then
-
+        valid
         -- tracef ("-" ++ N.toString n) valid
-        tracef ("-" ++ N.toString n) (valid { _decls = [ encoder, decoder, evg_e_Union, evg_d_Union, staticX ] })
+        -- tracef ("-" ++ N.toString n) (valid { _decls = [ encoder, decoder, evg_e_Union, evg_d_Union, staticX ] })
 
       else if N.toString n == "AllTypes" then
-
-        tracef ("-" ++ N.toString n) (valid { _decls = [ encoder, decoder, evg_e_Union, evg_d_Union, staticX ] })
-        -- tracef ("-" ++ N.toString n) (valid { _decls = [ staticX ] })
+        -- valid
+        -- tracef ("-" ++ N.toString n) (valid { _decls = [ encoder, decoder, evg_e_Union, evg_d_Union, staticX ] })
+        tracef ("-" ++ N.toString n) (valid { _decls = _decls valid ++ [ staticX ] })
         -- tracef ("-" ++ N.toString n) valid
 
       else
