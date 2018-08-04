@@ -40,24 +40,221 @@ modify canonical flag pkg importDict interfaces source =
             -- tracef ("-" ++ N.toString n) canonical
 
 
-            tracef ("-" ++ N.toString n) (canonical { _decls =
-              case _decls canonical of
-                DeclareRec d x ->
+            tracef ("-" ++ N.toString n) (canonical { _decls = funtimes })
 
-                  -- Use this one when we want to see the original schema
-                  -- DeclareRec (d ++ [ staticX ]) x
-
-                  -- Use this one otherwise
-                  funtimes
-
-                  -- Canary test
-                  -- DeclareRec [] x
-
-                d -> d
-            })
+            -- tracef ("-" ++ N.toString n) (canonical { _decls =
+            --   case _decls canonical of
+            --     DeclareRec d x ->
+            --
+            --       -- Use this one when we want to see the original schema
+            --       -- DeclareRec (d ++ [ staticX ]) x
+            --
+            --       -- Use this one otherwise
+            --       funtimes
+            --
+            --       -- Canary test
+            --       -- DeclareRec [] x
+            --
+            --     d -> d
+            -- })
 
           else
             canonical
+
+
+static__Union =
+  (name "Union"
+      ,Union {_u_vars = []
+             ,_u_alts =
+               [Ctor (name "Recursive")
+                     (ZeroBased 0)
+                     1 [qtyp "author" "project" "AllTypes" "Union" []]
+               ,Ctor (name "Valued")
+                     (ZeroBased 1)
+                     1 [qtyp "elm" "core" "Basics" "Int" []]
+               ,Ctor (name "DeeplyValued")
+                     (ZeroBased 2)
+                     1 [qtyp "elm" "core" "List" "List"
+                              [qtyp "elm" "core" "Basics" "Bool" []]]
+               ,Ctor (name "Leaf")
+                     (ZeroBased 3)
+                     0 []]
+             ,_u_numAlts = 4
+             ,_u_opts = Normal})
+
+
+unionToEncoder (n_, union) = do
+
+  let
+
+    -- Mocks
+
+    __ctorRecursive = Ctor (name "Recursive") (ZeroBased 0) 1 [qtyp "author" "project" "AllTypes" "Union" []]
+
+    __ctorValued = Ctor (name "Valued") (ZeroBased 1) 1 [qtyp "elm" "core" "Basics" "Int" []]
+
+    __ctorDeeplyValued = Ctor (name "DeeplyValued") (ZeroBased 2) 1
+        [qtyp "elm" "core" "List" "List"
+            [qtyp "elm" "core" "Basics" "Bool" []]]
+
+    __ctorLeaf = Ctor (name "Leaf") (ZeroBased 3) 0 []
+
+
+    -- Real
+    _typeName = N.toString n_
+
+    _encoderName = "evg_e_" ++ _typeName
+
+    _genUnion0 _index ctor =
+      case ctor of
+        Ctor n index numParams params ->
+          let _tagNameT = N.toText n
+              _tagNameS = N.toString n
+          in
+          branch union _index _tagNameS
+            ([])
+            (call jsonEncodeList
+              [ coreBasicsIdentity
+              , list [ call jsonEncodeString [str _tagNameT]]
+              ]
+            )
+
+    _genUnion1 _index ctor =
+      case ctor of
+        Ctor n index numParams pTypes ->
+          let _tagNameT = N.toText n
+              _tagNameS = N.toString n
+              _pType = head pTypes
+          in
+          branch union _index _tagNameS
+            ([PatternCtorArg {_index = ZeroBased 0
+                                       ,_type = _pType
+                                       ,_arg = at (PVar (name "evg_v0"))}])
+             (call jsonEncodeList
+               [coreBasicsIdentity
+               ,list [call jsonEncodeString [str _tagNameT]
+                     ,encodeParamType _pType (vlocal "evg_v0")
+                     ]
+               ]
+             )
+
+
+    encodeParamType pType vlocal1 =
+      case pType of
+        TType (Canonical (Name "elm" "core") "Basics") typeName next ->
+          case N.toString typeName of
+            "Int" ->  call jsonEncodeInt [vlocal1]
+
+        TType (Canonical (Name "elm" "core") "List") typeName next ->
+          case N.toString typeName of
+
+            "List" -> call jsonEncodeList (encodeListType (head next) vlocal1)
+
+        TType (Canonical (Name "author" "project") _) typeName next ->
+          -- Any types from user, must have encoder ref in this file
+          let _encoderName = "evg_e_" ++ N.toString typeName
+
+          in
+          call (at (VarTopLevel (canonical "author" "project" "AllTypes")
+                                     (name _encoderName))) [vlocal "evg_v0"]
+
+        _ -> undefined
+
+
+    encodeListType pType vlocal1 =
+      case pType of
+        TType (Canonical {_package = Name {_author = "elm" ,_project = "core"} ,_module = "Basics"}) name [] ->
+          case N.toString name of
+            "Bool" -> [jsonEncodeBool, vlocal1]
+
+        _ -> undefined
+
+
+  TypedDef (named _encoderName)
+           (Map.fromList [])
+           [(at (PVar (name "evg_p0"))
+           ,qtyp "author" "project" "AllTypes" "Union" [])]
+           (at (Case (vlocal "evg_p0")
+             [ _genUnion1 0 __ctorRecursive
+             , _genUnion1 1 __ctorValued
+             , _genUnion1 2 __ctorDeeplyValued
+             , _genUnion0 3 __ctorLeaf
+
+           ]))
+
+           (qtyp "elm" "json" "Json.Encode" "Value" [])
+
+
+
+
+branch union index unionLabel unionArgs expr =
+  CaseBranch (at (PCtor {_p_home = canonical "author" "project" "AllTypes"
+                         ,_p_type = name "Union"
+                         ,_p_union = union
+                         ,_p_name = name unionLabel
+                         ,_p_index = ZeroBased index
+                         ,_p_args = unionArgs}))
+              expr
+
+
+
+
+---- Deprecated in a second, will no longer be used
+
+_u_alts_ =
+   [Ctor (name "Recursive")
+         (ZeroBased 0)
+         1 [qtyp "author" "project" "AllTypes" "Union" []]
+   ,Ctor (name "Valued")
+         (ZeroBased 1)
+         1 [qtyp "elm" "core" "Basics" "Int" []]
+   ,Ctor (name "DeeplyValued")
+         (ZeroBased 2)
+         1 [qtyp "elm" "core" "List" "List" [qtyp "elm" "core" "Basics" "Bool" []]]
+   ,Ctor (name "Leaf")
+         (ZeroBased 3)
+         0 []]
+
+
+_p_union_ =
+   Union {_u_vars = []
+         ,_u_alts = _u_alts_
+         ,_u_numAlts = 4
+         ,_u_opts = Normal}
+
+
+_ucasebranch_ index unionLabel unionArgs expr =
+   CaseBranch (at (PCtor {_p_home = canonical "author" "project" "AllTypes"
+                          ,_p_type = name "Union"
+                          ,_p_union = _p_union_
+                          ,_p_name = name unionLabel
+                          ,_p_index = ZeroBased index
+                          ,_p_args = unionArgs}))
+               expr
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -75,6 +272,12 @@ tracef n a =
     putStrLn ("can-" ++ n ++ ".txt")
     writeFile ("can-" ++ n ++ ".txt") $ prettyShow a
     pure a
+
+
+tracer a b =
+  unsafePerformIO $ do
+    print a
+    pure b
 
 
 
@@ -135,6 +338,13 @@ tlam a b = TLambda a b
 -- A function call
 call f args = at (Call (f) args)
 
+
+-- A list literal
+list exprs = at (List exprs)
+
+
+-- A local variable
+vlocal n = at (VarLocal (name n))
 
 -- Helpful shortcut definitions for Evergreen derivations
 
@@ -261,101 +471,11 @@ evergreenEncodeDict =
                                        (qtyp "elm" "json" "Json.Encode" "Value" [])))))))
 
 
--- unionCase matches WIP breakouts
-
-
-
-_u_alts_ =
-  [Ctor (name "Recursive")
-        (ZeroBased 0)
-        1 [qtyp "author" "project" "AllTypes" "Union" []]
-  ,Ctor (name "Valued")
-        (ZeroBased 1)
-        1 [qtyp "elm" "core" "Basics" "Int" []]
-  ,Ctor (name "DeeplyValued")
-        (ZeroBased 2)
-        1 [qtyp "elm" "core" "List" "List" [qtyp "elm" "core" "Basics" "Bool" []]]
-  ,Ctor (name "Leaf")
-        (ZeroBased 3)
-        0 []]
-
-
-_p_union_ =
-  Union {_u_vars = []
-        ,_u_alts = _u_alts_
-        ,_u_numAlts = 4
-        ,_u_opts = Normal}
-
-
-_ucasebranch_ index unionLabel unionArgs expr =
-  CaseBranch (at (PCtor {_p_home = canonical "author" "project" "AllTypes"
-                         ,_p_type = name "Union"
-                         ,_p_union = _p_union_
-                         ,_p_name = name unionLabel
-                         ,_p_index = ZeroBased index
-                         ,_p_args = unionArgs}))
-              expr
 
 
 funtimes =
-    DeclareRec [TypedDef (named "evg_e_Union")
-             (Map.fromList [])
-             [(at (PVar (name "evg_p0"))
-             ,qtyp "author" "project" "AllTypes" "Union" [])]
-             (at (Case (at
-                       (VarLocal (name "evg_p0")))
-                   [
-
-                    _ucasebranch_ 0 "Recursive"
-                      ([PatternCtorArg {_index = ZeroBased 0
-                                                 ,_type = qtyp "author" "project" "AllTypes" "Union" []
-                                                 ,_arg = at (PVar (name "evg_v0"))}])
-                      (at (Call jsonEncodeList
-                                 [coreBasicsIdentity
-                                 ,at (List [call jsonEncodeString [str "Recursive"]
-                                           ,call (at (VarTopLevel (canonical "author" "project" "AllTypes")
-                                                                      (name "evg_e_Union")))
-                                                     [at (VarLocal (name "evg_v0"))]])]))
-
-                   ,_ucasebranch_ 1 "Valued"
-                   ([PatternCtorArg {_index = ZeroBased 0
-                                              ,_type = qtyp "elm" "core" "Basics" "Int" []
-                                              ,_arg = at (PVar (name "evg_v0"))}])
-                    (at
-                        (Call jsonEncodeList
-                              [coreBasicsIdentity
-                              ,at (List [at (Call jsonEncodeString [str "Valued"])
-                                        ,at (Call jsonEncodeInt
-                                                  [at (VarLocal (name "evg_v0"))])])]))
-
-                   ,_ucasebranch_ 2 "DeeplyValued"
-                    ([PatternCtorArg {_index = ZeroBased 0
-                                              ,_type = qtyp "elm" "core" "List" "List"
-                                                             [qtyp "elm" "core" "Basics" "Bool"
-                                                                    []]
-                                              ,_arg = at
-                     (PVar (name "evg_v0"))}])
-                     (at
-                         (Call jsonEncodeList
-                               [coreBasicsIdentity
-                               ,at (List [at (Call jsonEncodeString [str "DeeplyValued"])
-                                         ,at
-                                             (Call jsonEncodeList
-                                                   [jsonEncodeBool
-                                                   ,at (VarLocal (name "evg_v0"))])])]))
-
-                   ,_ucasebranch_ 3 "Leaf"
-                   ([])
-                   (at
-                       (Call jsonEncodeList
-                             [coreBasicsIdentity
-                             ,at (List [at (Call jsonEncodeString [str "Leaf"])])]))
-
-             ]))
-
-             (qtyp "elm" "json" "Json.Encode" "Value" [])
-
-    ,Def (named "evg") [] (int 123)]
+    DeclareRec
+    [unionToEncoder static__Union]
     (Declare (TypedDef (named "evg_e_AllTypes")
                       (Map.fromList [])
                       [(at (PVar (name "evg_p0"))
