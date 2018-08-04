@@ -199,65 +199,6 @@ branch union index unionLabel unionArgs expr =
 
 
 
----- Deprecated in a second, will no longer be used
-
-_u_alts_ =
-   [Ctor (name "Recursive")
-         (ZeroBased 0)
-         1 [qtyp "author" "project" "AllTypes" "Union" []]
-   ,Ctor (name "Valued")
-         (ZeroBased 1)
-         1 [qtyp "elm" "core" "Basics" "Int" []]
-   ,Ctor (name "DeeplyValued")
-         (ZeroBased 2)
-         1 [qtyp "elm" "core" "List" "List" [qtyp "elm" "core" "Basics" "Bool" []]]
-   ,Ctor (name "Leaf")
-         (ZeroBased 3)
-         0 []]
-
-
-_p_union_ =
-   Union {_u_vars = []
-         ,_u_alts = _u_alts_
-         ,_u_numAlts = 4
-         ,_u_opts = Normal}
-
-
-_ucasebranch_ index unionLabel unionArgs expr =
-   CaseBranch (at (PCtor {_p_home = canonical "author" "project" "AllTypes"
-                          ,_p_type = name "Union"
-                          ,_p_union = _p_union_
-                          ,_p_name = name unionLabel
-                          ,_p_index = ZeroBased index
-                          ,_p_args = unionArgs}))
-               expr
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 staticX =
   (Def (at
