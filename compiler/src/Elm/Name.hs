@@ -53,8 +53,10 @@ import Foreign.ForeignPtr (ForeignPtr)
 
 
 newtype Name = Name { _name :: Text.Text }
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord)
 
+instance Show Name where
+  show n = Text.unpack $ toText n
 
 length :: Name -> Int
 length (Name name) =

@@ -31,7 +31,9 @@ import qualified Reporting.Doc as D
 import qualified Reporting.Render.Type as RT
 import qualified Reporting.Render.Type.Localizer as L
 
-
+import qualified Debug.Trace
+import qualified Elm.Package as Pkg
+import Data.Function ((&))
 
 -- GENERATE MAINS
 
@@ -42,11 +44,18 @@ data Output
 
 
 generate :: Mode.Mode -> Opt.Graph -> [ModuleName.Canonical] -> Output
-generate mode (Opt.Graph mains graph _fields) roots =
+generate mode optgraph@(Opt.Graph mains graph _fields) roots =
   let
     rootSet = Set.fromList roots
     rootMap = Map.restrictKeys mains rootSet
   in
+  Debug.Trace.trace (show ("generate", "mode", mode)) $
+  Debug.Trace.trace (show ("generate", "rootSet", rootSet)) $
+  Debug.Trace.trace (show ("generate", "roots", roots)) $
+  Debug.Trace.trace (show ("generate", "mains", mains)) $
+  -- Debug.Trace.trace (show ("generate", "_fields", _fields)) $ -- global? count of how many times each field name is used in a record anywhere
+  Debug.Trace.trace (show ("generate", "names", map ModuleName._module (Map.keys rootMap))) $
+  Debug.Trace.trace (show ("generate", "graph") ++ "\n" ++ (graph & Map.toList & take 10 & fmap show & List.intercalate "\n")) $
   case map ModuleName._module (Map.keys rootMap) of
     [] ->
       None

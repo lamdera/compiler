@@ -27,9 +27,10 @@ import qualified Generate.JavaScript.Name as Name
 data Mode
   = Dev Target (Maybe I.Interfaces)
   | Prod Target ShortFieldNames
+  deriving (Show)
 
 
-data Target = Client | Server
+data Target = Client | Server deriving (Show)
 
 
 debug :: Target -> I.Interfaces -> Mode

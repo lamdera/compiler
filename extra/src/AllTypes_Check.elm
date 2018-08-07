@@ -9,7 +9,6 @@ import Dict
 import Html
 import Json.Decode as D
 import Json.Encode as E
-import MVCE
 import Result exposing (Result(..))
 import Set
 import Time
