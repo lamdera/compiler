@@ -58,7 +58,7 @@ data Expr
   | If [(Expr, Expr)] Expr
   | Let Def Expr
   | Destruct Destructor Expr
-  | Case N.Name N.Name (Decider Choice) [(Int, Expr)]
+  | Case N.Name N.Name (Decider Choice) [(Int, Expr)] -- is each branch optimized down to an int?
   | Accessor N.Name
   | Access Expr N.Name
   | Update Expr (Map.Map N.Name Expr)
@@ -68,10 +68,13 @@ data Expr
   | Shader Text (Set.Set N.Name) (Set.Set N.Name)
   deriving (Show)
 
+-- TODO: how do we represent boxing/unboxing?
 
 data Global = Global ModuleName.Canonical N.Name
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord)
 
+instance Show Global where
+  show (Global can name) = show can ++ "." ++ show name
 
 -- Provide "List" not "Elm.Kernel.List"
 --
@@ -91,6 +94,7 @@ data Def
 
 
 data Destructor =
+  -- let varname = this thing over at this path
   Destructor N.Name Path
   deriving (Show)
 
@@ -124,7 +128,7 @@ data Decider a
 
 data Choice
   = Inline Expr
-  | Jump Int
+  | Jump Int -- what does this int mean?
   deriving (Show)
 
 
@@ -149,19 +153,22 @@ data Main
       }
       deriving (Show)
 
+type GlobalDeps
+  -- Set.Set Global is the set of things referenced in the Expr(s), with `elm/kernel~Utils.$` being function application
+  = (Set.Set Global)
 
 data Node
-  = Define Expr (Set.Set Global)
-  | DefineTailFunc [N.Name] Expr (Set.Set Global)
+  = Define Expr GlobalDeps
+  | DefineTailFunc [N.Name] Expr GlobalDeps
   | Ctor Index.ZeroBased Int
   | Enum Index.ZeroBased
   | Box
   | Link Global
-  | Cycle [N.Name] [(N.Name, Expr)] [Def] (Set.Set Global)
+  | Cycle [N.Name] [(N.Name, Expr)] [Def] GlobalDeps
   | Manager EffectsType
   | Kernel KContent (Maybe KContent)
-  | PortIncoming Expr (Set.Set Global)
-  | PortOutgoing Expr (Set.Set Global)
+  | PortIncoming Expr GlobalDeps
+  | PortOutgoing Expr GlobalDeps
   deriving (Show)
 
 

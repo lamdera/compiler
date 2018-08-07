@@ -9,7 +9,6 @@ import Element exposing (..)
 import Element.Background as Background
 import Json.Decode as D
 import Json.Encode as E
-import MVCE
 import Result exposing (Result(..))
 import Set
 import Time
