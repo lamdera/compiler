@@ -20,6 +20,8 @@ import System.IO.Unsafe (unsafePerformIO)
 import Text.Show.Prettyprint
 
 
+imap f l = zipWith f [0..] l
+
 -- modify canonical flag pkg importDict interfaces source =
 --   canonical
 
@@ -170,18 +172,25 @@ unionToEncoder (n_, union) = do
         _ -> undefined
 
 
+    _branches =
+      case union of
+        Union _u_vars _u_alts _u_numAlts _u_opts ->
+          imap (\i ctor ->
+            case ctor of
+              Ctor n index numParams params ->
+                case numParams of
+                  0 -> _genUnion0 i ctor
+                  1 -> _genUnion1 i ctor
+                  -- @TODO need to add support for more depths of union types
+                  _ -> undefined "unimplemented union parsing for that many params"
+          ) _u_alts
+
+
   TypedDef (named _encoderName)
            (Map.fromList [])
            [(at (PVar (name "evg_p0"))
            ,qtyp "author" "project" "AllTypes" "Union" [])]
-           (at (Case (vlocal "evg_p0")
-             [ _genUnion1 0 __ctorRecursive
-             , _genUnion1 1 __ctorValued
-             , _genUnion1 2 __ctorDeeplyValued
-             , _genUnion0 3 __ctorLeaf
-
-           ]))
-
+           (at (Case (vlocal "evg_p0") _branches))
            (qtyp "elm" "json" "Json.Encode" "Value" [])
 
 
