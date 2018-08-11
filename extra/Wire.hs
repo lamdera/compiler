@@ -22,8 +22,6 @@ import Text.Show.Prettyprint
 
 imap f l = zipWith f [0..] l
 
--- modify canonical flag pkg importDict interfaces source =
---   canonical
 
 -- Our injection point POC for AllTypes. Search for `Wire.modify`
 modify canonical flag pkg importDict interfaces source =
@@ -85,27 +83,10 @@ static__Union =
              ,_u_opts = Normal})
 
 
-unionToEncoder (n_, union) = do
+unionToEncoder (unionName_, union_) = do
 
   let
-
-    -- Mocks
-
-    __ctorRecursive = Ctor (name "Recursive") (ZeroBased 0) 1 [qtyp "author" "project" "AllTypes" "Union" []]
-
-    __ctorValued = Ctor (name "Valued") (ZeroBased 1) 1 [qtyp "elm" "core" "Basics" "Int" []]
-
-    __ctorDeeplyValued = Ctor (name "DeeplyValued") (ZeroBased 2) 1
-        [qtyp "elm" "core" "List" "List"
-            [qtyp "elm" "core" "Basics" "Bool" []]]
-
-    __ctorLeaf = Ctor (name "Leaf") (ZeroBased 3) 0 []
-
-
-    -- Real
-    _typeName = N.toString n_
-
-    _encoderName = "evg_e_" ++ _typeName
+    _encoderName = "evg_e_" ++ N.toString unionName_
 
     _genUnion0 _index ctor =
       case ctor of
@@ -113,11 +94,11 @@ unionToEncoder (n_, union) = do
           let _tagNameT = N.toText n
               _tagNameS = N.toString n
           in
-          branch union _index _tagNameS
+          unionCaseBranch unionName_ union_ _index _tagNameS
             ([])
             (call jsonEncodeList
               [ coreBasicsIdentity
-              , list [ call jsonEncodeString [str _tagNameT]]
+              , list [ call jsonEncodeString [ str _tagNameT ] ]
               ]
             )
 
@@ -128,15 +109,19 @@ unionToEncoder (n_, union) = do
               _tagNameS = N.toString n
               _pType = head pTypes
           in
-          branch union _index _tagNameS
-            ([PatternCtorArg {_index = ZeroBased 0
-                                       ,_type = _pType
-                                       ,_arg = at (PVar (name "evg_v0"))}])
+          unionCaseBranch unionName_ union_ _index _tagNameS
+            [ PatternCtorArg
+                { _index = ZeroBased 0
+                , _type = _pType
+                , _arg = at (PVar (name "evg_v0"))
+                }
+            ]
              (call jsonEncodeList
-               [coreBasicsIdentity
-               ,list [call jsonEncodeString [str _tagNameT]
-                     ,encodeParamType _pType (vlocal "evg_v0")
-                     ]
+               [ coreBasicsIdentity
+               , list
+                  [ call jsonEncodeString [str _tagNameT]
+                  , encodeParamType _pType (vlocal "evg_v0")
+                  ]
                ]
              )
 
@@ -154,13 +139,13 @@ unionToEncoder (n_, union) = do
 
         TType (Canonical (Name "author" "project") _) typeName next ->
           -- Any types from user, must have encoder ref in this file
-          let _encoderName = "evg_e_" ++ N.toString typeName
+          let _targetEncoderName = "evg_e_" ++ N.toString typeName
 
           in
           call (at (VarTopLevel (canonical "author" "project" "AllTypes")
-                                     (name _encoderName))) [vlocal "evg_v0"]
+                                     (name _targetEncoderName))) [vlocal "evg_v0"]
 
-        _ -> undefined
+        _ -> error $ "encodeParamType didn't match any existing implementations: " ++ show pType
 
 
     encodeListType pType vlocal1 =
@@ -169,11 +154,11 @@ unionToEncoder (n_, union) = do
           case N.toString name of
             "Bool" -> [jsonEncodeBool, vlocal1]
 
-        _ -> undefined
+        _ -> error $ "encodeListType didn't match any existing implementations: " ++ show pType
 
 
-    _branches =
-      case union of
+    _unionBranches =
+      case union_ of
         Union _u_vars _u_alts _u_numAlts _u_opts ->
           imap (\i ctor ->
             case ctor of
@@ -185,28 +170,31 @@ unionToEncoder (n_, union) = do
                   _ -> undefined "unimplemented union parsing for that many params"
           ) _u_alts
 
+    _unionNameString = N.toString unionName_
 
-  TypedDef (named _encoderName)
-           (Map.fromList [])
-           [(at (PVar (name "evg_p0"))
-           ,qtyp "author" "project" "AllTypes" "Union" [])]
-           (at (Case (vlocal "evg_p0") _branches))
-           (qtyp "elm" "json" "Json.Encode" "Value" [])
-
-
-
-
-branch union index unionLabel unionArgs expr =
-  CaseBranch (at (PCtor {_p_home = canonical "author" "project" "AllTypes"
-                         ,_p_type = name "Union"
-                         ,_p_union = union
-                         ,_p_name = name unionLabel
-                         ,_p_index = ZeroBased index
-                         ,_p_args = unionArgs}))
-              expr
+  TypedDef
+    (named _encoderName)
+    (Map.fromList [])
+    [ (at (PVar (name "evg_p0"))
+    , qtyp "author" "project" "AllTypes" _unionNameString [])
+    ]
+    (at (Case (vlocal "evg_p0") _unionBranches))
+    (qtyp "elm" "json" "Json.Encode" "Value" [])
 
 
-
+unionCaseBranch unionName union index unionLabel unionArgs expr =
+  -- @TODO AllTypes needs to be something else eventually
+  CaseBranch
+    (at (PCtor { _p_home = canonical "author" "project" "AllTypes"
+               , _p_type = unionName
+               , _p_union = union
+               , _p_name = name unionLabel
+               , _p_index = ZeroBased index
+               , _p_args = unionArgs
+               }
+        )
+    )
+    expr
 
 
 staticX =
@@ -215,6 +203,7 @@ staticX =
        []
        (at
            (Int 123)))
+
 
 -- AST to file debugger
 tracef n a =
@@ -296,8 +285,9 @@ list exprs = at (List exprs)
 -- A local variable
 vlocal n = at (VarLocal (name n))
 
--- Helpful shortcut definitions for Evergreen derivations
 
+
+-- Helpful shortcut definitions for Evergreen derivations
 
 -- JSON.Encode
 
