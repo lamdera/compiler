@@ -52,21 +52,43 @@ data Expr
   | VarDebug N.Name ModuleName.Canonical R.Region (Maybe N.Name)
   | VarKernel N.Name N.Name
   | List [Expr]
-  | Function [N.Name] Expr
-  | Call Expr [Expr]
+  | Function [N.Name] Expr -- single-argument functions, returning functions(closures are native)
+  | Call Expr [Expr] -- just call a function, nothing special
   | TailCall N.Name [(N.Name, Expr)]
   | If [(Expr, Expr)] Expr
   | Let Def Expr
   | Destruct Destructor Expr
   | Case N.Name N.Name (Decider Choice) [(Int, Expr)] -- is each branch optimized down to an int?
-  | Accessor N.Name
-  | Access Expr N.Name
-  | Update Expr (Map.Map N.Name Expr)
-  | Record (Map.Map N.Name Expr)
+  | Accessor N.Name -- lambda
+  | Access Expr N.Name -- interface with getter function?
+  | Update Expr (Map.Map N.Name Expr) -- interface with setter function?
+  | Record (Map.Map N.Name Expr) -- struct
   | Unit
   | Tuple Expr Expr (Maybe Expr)
   | Shader Text (Set.Set N.Name) (Set.Set N.Name)
   deriving (Show)
+
+{-
+- union types
+- functions/lambdas (closures)
+- pattern matching (destructors) js: thing.fieldname1[2].fieldname2
+- tuples (1, "happy", True)
+- records {x=2, y=3}
+- persistent lists, dicts, sets, others
+- accessor functions (.field)
+- accessing fields (record.field)
+- record update
+- extensible records {r | x : Int, y : Int}
+  - interfaces whenever we use extensible records, otherwise use structs with names derived from the types it holds, with fields sorted by name. Gather up all types used anywhere, and generate all those structs somewhere else.
+  - always fetch fieldnames using functions. If they're interfaces or pure structs doesn't matter.
+    - always use interfaces, otherwise we might not know when to pass pointers or not around.
+
+golang:
+- adt <-> interfaces
+  - https://blog.merovius.de/2018/02/25/persistent_datastructures_with_go.html
+
+-}
+
 
 -- TODO: how do we represent boxing/unboxing?
 
