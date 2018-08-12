@@ -1,5 +1,9 @@
 module Simple exposing (..)
 
+import Browser
+import Html
+import Dict
+
 -- ### changes in 0.19 ###
 -- cannot expose specific constructors anymore; it's all `T(..)` or nothing `T`
 -- no more variable shadowing, anywhere
@@ -26,35 +30,57 @@ otherFuncWithArgs arg1 =
 
 
 sum x =
-  Cycle
-    [sum]
-    []
-  [Def
-    sum
-    (Function
-      [x]
-      (If
-        [(Call (VarGlobal elm/core~Basics.eq) [VarLocal x,Int 0],Int 0)]
-        (Call (VarGlobal elm/core~Basics.add)
-          [VarLocal x,Call (VarGlobal author/project~Simple.sum) [Call (VarGlobal elm/core~Basics.sub) [VarLocal x,Int 1]]]
-        )
-      )
-    )
-  ]
-  (fromList
-    [author/project~Simple.sum
-    ,elm/core~Basics.add
-    ,elm/core~Basics.eq
-    ,elm/core~Basics.sub
-    ]
-  ))
-
+  --Cycle
+  --  [sum]
+  --  []
+  --[Def
+  --  sum
+  --  (Function
+  --    [x]
+  --    (If
+  --      [(Call (VarGlobal elm/core~Basics.eq) [VarLocal x,Int 0],Int 0)]
+  --      (Call (VarGlobal elm/core~Basics.add)
+  --        [VarLocal x,Call (VarGlobal author/project~Simple.sum) [Call (VarGlobal elm/core~Basics.sub) [VarLocal x,Int 1]]]
+  --      )
+  --    )
+  --  )
+  --]
+  --(fromList
+  --  [author/project~Simple.sum
+  --  ,elm/core~Basics.add
+  --  ,elm/core~Basics.eq
+  --  ,elm/core~Basics.sub
+  --  ]
+  --))
   if x == 0 then
     0
 
   else
     x + sum (x - 1)
 
+main = Browser.sandbox
+  { init = ()
+  , view = \() -> Html.text ("hi" ++ String.fromInt (trec 3 1))
+  , update = \m mod ->
+    let
+      a = tailCallFn
+      b = unitconstant
+      c = floatconstant
+      d = funcWithArgs
+      e = otherFuncWithArgs
+      f = sum
+      g = tailCallFn
+      h = tailCallFnNested
+      i = Dict.union Dict.empty Dict.empty
+    in mod
+  }
+
+trec n cum =
+  if n == 0 then
+    cum
+
+  else
+    trec (n - 1) (n * cum)
 
 
 tailCallFn lst =
@@ -83,11 +109,18 @@ tailCallFn lst =
     [] ->
       3
 
+-- type ADT a = Leaf a | Branch (ADT a) (ADT a) | Empty
+
+
+
 
 -- Link does what?
 -- (author/project~Simple.tailCallFn,Link author/project~Simple.$tailCallFn) when a tail-call optimized fn references itself?
 
-type T = T (List T)
+
+type T
+  = T (List T)
+
 
 tailCallFnNested lst =
   -- Cycle
@@ -120,11 +153,9 @@ tailCallFnNested lst =
   --     )
   --   ]
   --   (fromList [author/project~Simple.T,elm/core~Basics.identity]))
-
   case lst of
     T (x :: xs) ->
       tailCallFnNested (T xs)
 
     T [] ->
       3
-

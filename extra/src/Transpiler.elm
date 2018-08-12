@@ -25,7 +25,7 @@ testuniontype { recordfield } =
 testuniontype2 { recordfield } =
     recordfield
 
-
+tailrec
 
 -- {a} = x -- TODO: this was removed in 19; intentional or not? waiting for evan to answer
 
