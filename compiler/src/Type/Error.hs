@@ -7,6 +7,7 @@ module Type.Error
   , iteratedDealias
   , toDoc
   , Problem(..)
+  , Direction(..)
   , toComparison
   , isInt
   , isFloat
@@ -181,12 +182,15 @@ data Problem
   | AnythingToList
   | MissingArgs Int
   | ReturnMismatch
-  | BadFlexSuper Super N.Name Type
+  | BadFlexSuper Direction Super N.Name Type
   | BadRigidVar N.Name Type
   | BadRigidSuper Super N.Name Type
   | FieldTypo N.Name [N.Name]
   | FieldsMissing [N.Name]
   deriving (Show)
+
+
+data Direction = Have | Need
 
 
 instance Functor Diff where
@@ -347,10 +351,10 @@ toDiff localizer ctx tipe1 tipe2 =
       different doc1 doc2 $
         case pair of
           (RigidVar     x, other) -> Bag.one $ BadRigidVar x other
-          (FlexSuper  s x, other) -> Bag.one $ BadFlexSuper s x other
+          (FlexSuper  s x, other) -> Bag.one $ BadFlexSuper Have s x other
           (RigidSuper s x, other) -> Bag.one $ BadRigidSuper s x other
           (other, RigidVar     x) -> Bag.one $ BadRigidVar x other
-          (other, FlexSuper  s x) -> Bag.one $ BadFlexSuper s x other
+          (other, FlexSuper  s x) -> Bag.one $ BadFlexSuper Need s x other
           (other, RigidSuper s x) -> Bag.one $ BadRigidSuper s x other
 
           (Type home1 name1 [], Type home2 name2 [])
