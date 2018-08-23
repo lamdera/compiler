@@ -236,6 +236,12 @@ Executable elmx
         WireTest
         WireHelpers
 
+        -- EAST
+        East.Conversion
+        East.Multiplate
+        East.V0_18
+        East.V0_19
+
     Build-depends:
         ansi-terminal >= 0.8 && < 0.9,
         ansi-wl-pprint >= 0.6.8 && < 0.7,
@@ -271,4 +277,6 @@ Executable elmx
         utf8-string,
         vector,
         zip-archive,
-        show-prettyprint
+        show-prettyprint,
+        -- EAST
+        transformers >= 0.5.2
