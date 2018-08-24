@@ -32,7 +32,13 @@ import System.IO.Unsafe (unsafePerformIO)
 
 import qualified WireValid
 import qualified Wire
--- import qualified AST.Valid as AS (Module(..))
+import qualified East.Conversion as East
+
+import qualified Debug.Trace as DT
+import Text.Pretty.Simple (pShow)
+import qualified Data.Text.Lazy as T
+
+
 
 -- COMPILE
 
@@ -131,7 +137,16 @@ compile flag pkg importDict interfaces source =
       documentation <-
         genarateDocs flag canonical_
 
+      haskAst <-
+        East.transpile canonical
+
       Result.ok $
+        let
+          (Can.Module _name _docs _exports _decls _unions _aliases _binops _effects) = haskAst
+        in
+        DT.trace ("asd") $ -- _decls loops
+        -- DT.trace (T.unpack $ pShow $ haskAst) $
+        DT.trace ("asd2") $
         Artifacts
           { _elmi = I.fromModule annotations canonical_
           , _elmo = graph
