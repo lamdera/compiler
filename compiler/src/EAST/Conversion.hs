@@ -1,6 +1,232 @@
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE PartialTypeSignatures #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module East.Conversion where
+
+import qualified Debug.Trace as DT
+import Text.Pretty.Simple (pShow)
+import qualified Data.Text.Lazy as T
+import qualified Data.Text as Text
+
+import qualified AST.Canonical as C
+import qualified East.V0_19 as E
+import qualified Reporting.Annotation as A
+import qualified Elm.Name as N
+import qualified Elm.Package as Pkg
+import qualified AST.Module.Name as ModuleName
+import Data.List (intercalate)
+
+import qualified Data.Map.Strict as Map
+import Data.Function ((&))
+import Data.Monoid ((<>))
+
+
+import qualified Language.Haskell.Exts.Simple.Syntax as Hs
+import qualified Language.Haskell.Exts.Simple.Pretty as HsPretty
+
+type List a = [a]
+
+sShow a = T.unpack $ pShow a
+
+-- transpile :: C.Module
+transpile
+  a@(C.Module
+    _name    -- :: ModuleName.Canonical
+    _docs    -- :: Docs
+    _exports -- :: Exports
+    _decls   -- :: Decls
+    _unions  -- :: Map.Map N.Name Union
+    _aliases -- :: Map.Map N.Name Alias
+    _binops  -- :: Map.Map N.Name Binop
+    _effects -- :: Effects
+  ) =
+  let
+    v = concatMap tDecls $ declsToList _decls
+  in
+  DT.trace (intercalate "\n\n" (fmap (\x -> sShow x <> "\n" <> HsPretty.prettyPrint x) v)) $
+   pure a
+
+declsToList d = declsToList' 4 d
+declsToList' n _ | n <= 0 = []
+declsToList' n (C.Declare def decls) = [def] : declsToList' (n-1) decls
+declsToList' n (C.DeclareRec defs decls) = defs : declsToList' (n-1) decls
+declsToList' n (C.SaveTheEnvironment) = []
+
+tDecls :: List C.Def -> List _
+tDecls [def] = tDef def
+tDecls defs = tRecDef defs
+
+tDef (C.Def (A.At _ name) pats e) = [Hs.FunBind [Hs.Match (ident name) (tPattern <$> pats) (Hs.UnGuardedRhs (tExpr e)) Nothing]]
+tDef (C.TypedDef (A.At _ name) freeVars patTypeTuples e t) = []
+
+tPattern (A.At _ p) = case p of
+  (C.PAnything) -> Hs.PWildCard
+  (C.PUnit) -> Hs.PApp (Hs.Special Hs.UnitCon) []
+  (C.PVar name) -> Hs.PVar (ident name)
+  (C.PChr text) -> Hs.PLit Hs.Signless (Hs.String $ Text.unpack text) -- TODO: treating chars as strings
+  (C.PStr text) -> Hs.PLit Hs.Signless (Hs.String $ Text.unpack text)
+  (C.PInt int) -> Hs.PParen $ Hs.PLit Hs.Signless (Hs.Frac $ toRational int) -- TODO: signless?
+  -- notimpl
+  (C.PRecord names) -> error (sShow p)
+  (C.PBool union bool) -> error (sShow p) -- Hs.PApp (Hs.UnQual (Hs.Ident (if boolean then "True" else "False"))) []
+  -- recursive
+  (C.PAlias pattern name) -> Hs.PAsPat (ident name) (tPattern pattern)
+  (C.PTuple p1 p2 Nothing) -> Hs.PTuple Hs.Boxed $ [tPattern p1, tPattern p2]
+  (C.PTuple p1 p2 (Just p3)) -> Hs.PTuple Hs.Boxed $ [tPattern p1, tPattern p2, tPattern p3]
+  (C.PList pats) -> Hs.PList $ tPattern <$> pats
+  (C.PCons p1 p2) ->
+    error "Hs.PInfixApp a (Hs.Special (Hs.Cons)) st"
+
+    -- PInfixApp (PVar (Ident "a")) (Special (Cons)) (PVar (Ident "b"))
+
+--     -- [PParen (PInfixApp (PVar (Ident "a")) (Special (Cons)) (PList []))]
+--     let first    = tPattern p1
+--         patterns = fmap (tPattern . (\(_, _, pat, _) -> pat)) p2
+--         folder a st = Hs.PInfixApp a (Hs.Special (Hs.Cons)) st
+--     in  foldr1 folder (first : patterns)
+  (C.PCtor
+    _p_home -- :: ModuleName.Canonical
+    _p_type -- :: N.Name
+    _p_union -- :: Union
+    _p_name -- :: N.Name
+    _p_index -- :: Index.ZeroBased
+    _p_args -- :: [PatternCtorArg]
+    ) -> error (sShow p) -- Hs.PApp (tModuleName _p_home) -- (fmap (tPat . snd) argPatterns)
+
+ident name = Hs.Ident (rawIdent name)
+rawIdent name = Text.unpack $ N.toText name
+
+tFieldUpdate (C.FieldUpdate _ e) = e
+
+{-
+tPat :: Pattern.Pattern -> Hs.Pat
+tPat (Ann.A n pat) = tPat' pat
+
+-- data Pattern'
+--   = Anything
+--   | UnitPattern Comments
+--   | Literal Literal
+--   | VarPattern LowercaseIdentifier
+--   | OpPattern SymbolIdentifier
+--   | Data [UppercaseIdentifier] [(Comments, Pattern)]
+--   | PatternParens (Commented Pattern)
+--   | Tuple [Commented Pattern]
+--   | EmptyListPattern Comments
+--   | List [Commented Pattern]
+--   | ConsPattern
+--       { first :: (Pattern, Maybe String)
+--       , rest :: [(Comments, Comments, Pattern, Maybe String)]
+--       }
+--   | Record [Commented LowercaseIdentifier]
+--   | Alias (Pattern, Comments) (Comments, LowercaseIdentifier)
+
+
+tPat' :: Pattern.Pattern' -> Hs.Pat
+tPat' p = case p of
+  Pattern.Record strList               -> error "record destructoring in argument; not implemented yet"
+
+  Pattern.Alias (pat, _) (_, name)     -> Hs.PAsPat (Hs.Ident $ tLcIdent name) (tPat pat)
+
+  Pattern.Literal (A.Boolean boolean)  -> Hs.PApp (Hs.UnQual (Hs.Ident (if boolean then "True" else "False"))) []
+  Pattern.Literal lit                  -> Hs.PLit Hs.Signless (tLit lit) -- TODO: signless?
+
+  Pattern.Anything                     -> Hs.PWildCard
+
+  Pattern.UnitPattern _                -> Hs.PApp (Hs.Special Hs.UnitCon) []
+
+  Pattern.VarPattern  lcIdent          -> Hs.PVar (Hs.Ident $ tLcIdent lcIdent)
+
+  Pattern.OpPattern   symbolIdentifier -> error "notimpl; I think this is a function bind, (+) a b = add a b, but not sure"
+
+  Pattern.Data uciList argPatterns ->
+    -- ADT
+    Hs.PApp (tQname uciList) (fmap (tPat . snd) argPatterns)
+
+  Pattern.PatternParens    commentedPattern     -> Hs.PParen $ tPat $ rc commentedPattern
+
+  Pattern.Tuple            commentedPatternList -> Hs.PTuple Hs.Boxed $ fmap (tPat . rc) commentedPatternList
+
+  Pattern.EmptyListPattern _                    -> Hs.PList []
+
+  Pattern.List             commentedPatternList -> Hs.PList $ fmap (tPat . rc) commentedPatternList
+
+  Pattern.ConsPattern firstPattern restPatterns ->
+    -- [PParen (PInfixApp (PVar (Ident "a")) (Special (Cons)) (PList []))]
+    let first    = tPat $ fst firstPattern
+        patterns = fmap (tPat . (\(_, _, pat, _) -> pat)) restPatterns
+        folder a st = Hs.PInfixApp a (Hs.Special (Hs.Cons)) st
+    in  foldr1 folder (first : patterns)
+
+-}
+
+tRecDef a = error (sShow a)
+
+tat (A.At _ v) = v
+
+tExpr (A.At _ e) = tExpr' e
+
+tExpr' e = case e of
+  (C.VarLocal name) -> Hs.Var (Hs.UnQual $ ident name)
+  (C.VarTopLevel moduleName name) -> Hs.Var (qual moduleName name)
+  (C.VarKernel n1 n2) -> Hs.Var (Hs.Qual (Hs.ModuleName ("Lamdera.Haskelm.Kernel." ++ Text.unpack (N.toText n1))) (ident n2))
+  (C.VarForeign moduleName name _) -> error (sShow e)
+  (C.VarCtor ctorOpts moduleName name zeroBasedIndex _) -> error (sShow e)
+  (C.VarDebug moduleName name _) -> error (sShow e)
+  (C.VarOperator name1 moduleName name2 _) -> error (sShow e)
+  (C.Chr text) -> Hs.Lit (Hs.String (Text.unpack text))
+  (C.Str text) -> Hs.Lit (Hs.String (Text.unpack text))
+  (C.Int int) -> Hs.Lit (Hs.Frac (toRational int))
+  (C.Float double) -> Hs.Lit (Hs.Frac (toRational double))
+  (C.List exprs) -> Hs.List (tExpr <$> exprs)
+  (C.Negate e) -> Hs.NegApp (tExpr e)
+  (C.Binop name1 moduleName name2 _ e1 e2) -> error (sShow e)
+  (C.Lambda pats e) -> Hs.Lambda (tPattern <$> pats) (tExpr e)
+  (C.Call expr exprs) -> foldl Hs.App (tExpr expr) (tExpr <$> exprs)
+  (C.If exprPairs _else) ->
+      let
+        tIf [(cond, _then)] = Hs.If (tExpr cond) (tExpr _then) (tExpr _else)
+        tIf ((cond, _then):rest) = Hs.If (tExpr cond) (tExpr _then) (tIf rest)
+      in tIf exprPairs
+  (C.Let def e1) -> error (sShow e)
+  (C.LetRec defs e1) -> error (sShow e)
+  (C.LetDestruct p e1 e2) -> error (sShow e)
+  (C.Case e caseBranches) ->
+    Hs.Case (tExpr e) ((\(C.CaseBranch pat expr) -> Hs.Alt (tPattern pat) (Hs.UnGuardedRhs (tExpr expr)) Nothing) <$> caseBranches)
+  (C.Accessor name) -> Hs.App (Hs.Var (Hs.UnQual (Hs.Ident "Lamdera.Haskelm.Core.get"))) (Hs.Var (Hs.UnQual (ident name)))
+  (C.Access record (A.At _ fieldName)) ->
+    let get       = Hs.Var (Hs.Qual (Hs.ModuleName "Lamdera.Haskelm.Core") (Hs.Ident "get"))
+        fieldAst  = Hs.OverloadedLabel $ rawIdent fieldName
+    in  Hs.Paren $ Hs.App (Hs.App get fieldAst) $ Hs.Paren (tExpr record)
+  (C.Update base e nameFieldUpdateMap) ->
+    let ast fieldName model value = Hs.App (Hs.App (Hs.App (Hs.Var (Hs.Qual (Hs.ModuleName "Haskelm.Core") (Hs.Ident "set"))) (Hs.OverloadedLabel $ rawIdent fieldName)) (Hs.Paren $ tExpr value)) (Hs.Paren model)
+
+        fieldsAst =
+          nameFieldUpdateMap
+            & Map.toList
+            & reverse
+
+        folder model (fieldName, fieldUpdate) = ast fieldName model (tFieldUpdate fieldUpdate)
+    in Hs.Paren $ foldl folder (Hs.Var $ Hs.UnQual $ ident base) fieldsAst
+
+  (C.Record fieldNameValueMap) ->
+    -- E.Record Nothing fields trailingComments forceMultiline ->
+    fieldNameValueMap
+      & Map.toList
+      & reverse
+      & fmap (\(field, expr) -> Hs.InfixApp (Hs.OverloadedLabel $ rawIdent field) (Hs.QConOp (Hs.Qual (Hs.ModuleName "Lamdera.Haskelm.Core") (Hs.Symbol ":="))) (Hs.Paren (tExpr expr)))
+      & foldl (\assignment state -> Hs.InfixApp (Hs.Paren state) (Hs.QVarOp (Hs.Qual (Hs.ModuleName "Lamdera.Haskelm.Core") (Hs.Symbol "&"))) assignment)
+              (Hs.Var (Hs.Qual (Hs.ModuleName "Lamdera.Haskelm.Core") (Hs.Ident "rnil")))
+
+  (C.Unit) -> Hs.Con (Hs.Special Hs.UnitCon)
+  (C.Tuple e1 e2 Nothing) -> Hs.Tuple Hs.Boxed $ [tExpr e1, tExpr e2]
+  (C.Tuple e1 e2 (Just e3)) -> Hs.Tuple Hs.Boxed $ [tExpr e1, tExpr e2, tExpr e3]
+  (C.Shader text1 text2 _) -> error "shader not implemented on backend"
+
+qual :: ModuleName.Canonical -> N.Name -> Hs.QName
+qual (ModuleName.Canonical pkg modu) name =
+  Hs.Qual (Hs.ModuleName (Text.unpack ("Lamdera.Package." <> Pkg.toText pkg <> ".Module." <> N.toText modu))) (ident name)
+
 {-
 import qualified AST.Declaration as A
 import qualified AST.Expression as A
