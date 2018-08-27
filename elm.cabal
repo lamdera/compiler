@@ -241,6 +241,7 @@ Executable elmx
         East.Multiplate
         East.V0_18
         East.V0_19
+        East.Rewrite
 
     Build-depends:
         ansi-terminal >= 0.8 && < 0.9,

@@ -1,15 +1,18 @@
 module Simple exposing (..)
 
+import Bitwise
 import Browser
-import Html
 import Dict
+import Html
+
+
 
 -- ### changes in 0.19 ###
 -- cannot expose specific constructors anymore; it's all `T(..)` or nothing `T`
 -- no more variable shadowing, anywhere
 -- top-level record destructoring removed; intentional or not?
 
-
+{-
 unitconstant =
   -- Define Unit (fromList [elm/kernel~Utils.$]
   ()
@@ -29,58 +32,80 @@ otherFuncWithArgs arg1 =
   funcWithArgs arg1 ()
 
 
-sum x =
-  --Cycle
-  --  [sum]
-  --  []
-  --[Def
-  --  sum
-  --  (Function
-  --    [x]
-  --    (If
-  --      [(Call (VarGlobal elm/core~Basics.eq) [VarLocal x,Int 0],Int 0)]
-  --      (Call (VarGlobal elm/core~Basics.add)
-  --        [VarLocal x,Call (VarGlobal author/project~Simple.sum) [Call (VarGlobal elm/core~Basics.sub) [VarLocal x,Int 1]]]
-  --      )
-  --    )
-  --  )
-  --]
-  --(fromList
-  --  [author/project~Simple.sum
-  --  ,elm/core~Basics.add
-  --  ,elm/core~Basics.eq
-  --  ,elm/core~Basics.sub
-  --  ]
-  --))
+recSum x =
   if x == 0 then
     0
 
   else
-    x + sum (x - 1)
+    x + recSum (x - 1)
+-}
 
-main = Browser.sandbox
-  { init = ()
-  , view = \() -> Html.text ("hi" ++ String.fromInt (trec 3 1))
-  , update = \m mod ->
-    let
-      a = tailCallFn
-      b = unitconstant
-      c = floatconstant
-      d = funcWithArgs
-      e = otherFuncWithArgs
-      f = sum
-      g = tailCallFn
-      h = tailCallFnNested
-      i = Dict.union Dict.empty Dict.empty
-    in mod
-  }
+main =
+  Browser.sandbox
+    { init = ()
+    , view = \() -> Html.text ("hi")
+    , update =
+        \m mod ->
+          let
+          {-
+            a1 =
+              unitconstant
 
-trec n cum =
+            a2 =
+              floatconstant
+
+            a3 =
+              funcWithArgs
+
+            a4 =
+              otherFuncWithArgs
+
+            a5 =
+              recSum
+
+            a7 =
+              trec
+
+            a8 =
+              tailCallFn
+
+            a9 =
+              tailCallFnNested
+
+            a10 =
+              varOp
+
+            a11 =
+              both
+
+            -- a12 = debugVar
+            a13 =
+              letexpr
+
+            -- a14 = letrec
+            a15 =
+              boolPattern
+
+            -- a16 = recDef1
+            -- a17 = recDef2
+            -- a18 = letdestruct
+            -}
+            a19 =
+              recordPatternArg
+            a20 =
+              complexRecordPatternArg
+          in
+          mod
+    }
+
+{-
+
+trec n accumulator =
   if n == 0 then
-    cum
+    accumulator
 
   else
-    trec (n - 1) (n * cum)
+    trec (n - 1) (n * accumulator)
 
 
 tailCallFn lst =
@@ -109,17 +134,15 @@ tailCallFn lst =
     [] ->
       3
 
+
+
 -- type ADT a = Leaf a | Branch (ADT a) (ADT a) | Empty
-
-
-
-
 -- Link does what?
 -- (author/project~Simple.tailCallFn,Link author/project~Simple.$tailCallFn) when a tail-call optimized fn references itself?
 
 
 type T
-  = T (List T)
+  = TC (List T)
 
 
 tailCallFnNested lst =
@@ -154,8 +177,90 @@ tailCallFnNested lst =
   --   ]
   --   (fromList [author/project~Simple.T,elm/core~Basics.identity]))
   case lst of
-    T (x :: xs) ->
-      tailCallFnNested (T xs)
+    TC (x :: xs) ->
+      tailCallFnNested (TC xs)
 
-    T [] ->
+    TC [] ->
       3
+
+
+varOp =
+  1 + 2
+
+
+both =
+  Bitwise.and 3 4
+
+
+
+-- debugVar =
+--   Debug.log "log something" 42
+
+
+letexpr =
+  let
+    a =
+      3
+
+    fn x =
+      x
+  in
+  fn a
+
+
+
+
+   letrec =
+     let
+       sum a =
+         if a < 0 then
+           0
+
+         else
+           a + sum (a - 1)
+     in
+     sum 5
+
+
+   recDef1 a =
+     recDef2 a
+
+
+   recDef2 a =
+     if a < 3 then
+       3
+
+     else
+       recDef1 (a - 1)
+
+
+
+boolPattern e =
+  case e of
+    True ->
+      1
+
+    False ->
+      3
+
+
+-}
+recordPatternArg { a, b } =
+  a + b
+
+
+complexRecordPatternArg ( _, ( { x, y, z }, { a, b } ) ) =
+  x + y + z
+
+{-
+
+letdestruct = 3
+  let
+    { a, b } =
+      { a = 3, b = 5 }
+
+    { c } =
+      { a = 3, b = 5, c = 7 }
+  in
+  a + b
+-}
