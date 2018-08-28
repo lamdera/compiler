@@ -81,7 +81,7 @@ declsToList' n (C.Declare def decls) = [def] : declsToList' (n-1) decls
 declsToList' n (C.DeclareRec defs decls) = defs : declsToList' (n-1) decls
 declsToList' n (C.SaveTheEnvironment) = []
 
-tDecls :: List C.Def -> List _
+tDecls :: List C.Def -> List Hs.Decl
 tDecls [def] = tDef def
 tDecls defs = tRecDef defs
 
