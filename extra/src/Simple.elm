@@ -294,7 +294,7 @@ record =
 
 letWithcomplexRecordPatternArg rec =
   let
-    ( _, ( { x, y, z }, { a, b } ) ) =
+    ( _, ( { x, y, z }, { a, b } ) ) = -- TODO: type annotations for let exprs
       rec
   in
   x + y + z
@@ -302,3 +302,37 @@ letWithcomplexRecordPatternArg rec =
 
 reservedWords data class hiding foreign qualified family =
   123
+
+
+type alias TypeAlias =
+  Int
+
+
+typeAnnot : TypeAlias -> ()
+typeAnnot a =
+  ()
+
+
+type T3 a b c
+  = A a (T3 a b c)
+  | B b (T3 a b c)
+  | C c (T3 a b c)
+  | Done
+
+t3fn : T3 a b c -> Float
+t3fn t =
+  case t of
+    A a _ ->
+      1
+
+    _ ->
+      2
+
+aaazzzzfn a b =
+  (a < b, a ++ b)
+
+aaaaacomplexRecordPatternArg ( _, ( { x, y, z }, { a, b } ) ) =
+  (x++y, x < y)
+
+type TX a b =
+  TX (a -> b)

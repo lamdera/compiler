@@ -84,7 +84,7 @@ compile flag pkg importDict interfaces source =
         genarateDocs flag canonical
 
       haskAst <-
-        East.transpile canonical
+        East.transpile canonical annotations
 
       Result.ok $
         let
