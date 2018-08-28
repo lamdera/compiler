@@ -75,7 +75,7 @@ transpile
     v = unionTypeDecls <> instDecls <> _decls'
   in
   --DT.trace (sShow ("module", _name, _docs, _exports, _unions, _aliases, _binops, _effects)) $!
-  DT.trace (T.unpack $ T.intercalate "\n\n" (fmap (\x -> tShow x <> "\n" <> T.pack (HsPretty.prettyPrint x)) v)) $!
+  DT.trace (T.unpack $ T.intercalate "\n\n" (fmap (\x -> {-tShow x <> "\n" <>-} T.pack (HsPretty.prettyPrint x)) v)) $!
   DT.trace (sShow ("annotations", annotations)) $!
    pure a
 
@@ -264,6 +264,7 @@ ident name =
 symIdent name =
   Hs.Symbol $
     case rawIdent name of
+      "++"           -> "<>"
       "::"           -> ":"
       ":"            -> "::"
       (':':rest)     -> '+' : ':' : rest
