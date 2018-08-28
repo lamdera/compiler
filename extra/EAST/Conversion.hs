@@ -24,6 +24,7 @@ import Data.Monoid ((<>))
 import qualified East.Rewrite as Rewrite
 import qualified Transpile.Instances
 import qualified Transpile.Imports
+import qualified Transpile.Deriving
 
 import qualified Language.Haskell.Exts.Simple.Syntax as Hs
 import qualified Language.Haskell.Exts.Simple.Pretty as HsPretty
@@ -62,17 +63,42 @@ transpile
     _aliases -- :: Map.Map N.Name Alias
     _binops  -- :: Map.Map N.Name Binop
     _effects -- :: Effects
-  ) =
+  ) annotations =
   let
     moduName = _tModuleName _name
-    _decls' = concatMap tDecls $ declsToList _decls
-    _declsGADTandInstances =
-      (fmap (Transpile.Instances.tDataToGADT moduName) _decls')
-      <> (concatMap (Transpile.Instances.tDataToInstDecl moduName) _decls')
-    v = _declsGADTandInstances
+    unions = _unions & tUnions
+    unionTypeDecls = unions & fmap (Transpile.Instances.tDataToGADT moduName)
+    instDecls = unions & concatMap (Transpile.Instances.tDataToInstDecl moduName)
   in
-  DT.trace (T.unpack $ T.intercalate "\n\n" (fmap (\x -> {-tShow x <> "\n" <> -}T.pack (HsPretty.prettyPrint x)) v)) $!
+  let
+    _decls' = concatMap (tDecls annotations) $ declsToList _decls
+    v = unionTypeDecls <> instDecls <> _decls'
+  in
+  --DT.trace (sShow ("module", _name, _docs, _exports, _unions, _aliases, _binops, _effects)) $!
+  DT.trace (T.unpack $ T.intercalate "\n\n" (fmap (\x -> tShow x <> "\n" <> T.pack (HsPretty.prettyPrint x)) v)) $!
+  DT.trace (sShow ("annotations", annotations)) $!
    pure a
+
+-- UNIONS
+
+tUnions u =
+  u & Map.toList & concatMap tUnion
+
+tUnion (name, (C.Union tvars ctors _ _)) =
+-- C.Ctor N.Name Index.ZeroBased _ [Type]
+  let
+    tCtor (C.Ctor name _ _ args) = Hs.ConDecl (ident name) (tType <$> args)
+    dataCases = tCtor <$> ctors
+  in
+  [Hs.DataDecl
+    Hs.DataType
+    Nothing
+    (foldl Hs.DHApp (Hs.DHead $ ident name) (Hs.UnkindedVar <$> ident <$> tvars))
+    ((Hs.QualConDecl Nothing Nothing) <$> dataCases)
+    []
+  ]
+
+-- DECLS
 
 declsToList d = declsToList' 50 d
 
@@ -81,9 +107,36 @@ declsToList' n (C.Declare def decls) = [def] : declsToList' (n-1) decls
 declsToList' n (C.DeclareRec defs decls) = defs : declsToList' (n-1) decls
 declsToList' n (C.SaveTheEnvironment) = []
 
-tDecls :: List C.Def -> List Hs.Decl
-tDecls [def] = tDef def
-tDecls defs = tRecDef defs
+tDecls :: Map.Map N.Name C.Annotation -> List C.Def -> List Hs.Decl
+tDecls annotations [def@(C.Def (A.At _ name) _ _)] = tAnnot name (Map.lookup name annotations) ++ tDef def
+tDecls annotations defs = tRecDef defs
+
+tAnnot :: N.Name -> Maybe C.Annotation -> [Hs.Decl]
+tAnnot _ Nothing = []
+tAnnot name (Just (C.Forall freeVars_ tipe)) =
+  let
+    freeVars = N.toText <$> Map.keys freeVars_
+    hsType = tType tipe
+  in
+  [Hs.TypeSig [ident name] (Transpile.Deriving.addTypeConstraintsForType tipe $ tType tipe)]
+
+tType t = case t of
+  (C.TLambda t1 t2) -> Hs.TyFun (tType t1) (tType t2)
+  (C.TVar name) | "number" `Text.isPrefixOf` N.toText name ->
+    Hs.TyCon (Hs.Qual (Hs.ModuleName "Haskelm.Core") (Hs.Ident "Double"))
+  (C.TVar name) -> Hs.TyVar (ident name)
+  (C.TType moduleName name types) -> Hs.TyCon (qual moduleName name) -- TODO: ?????? list constructor for cons mentions this type
+  (C.TRecord mapNameToFieldType mName) ->
+    let recordField (name, t) =
+          Hs.TyInfix (Hs.TyPromoted (Hs.PromotedString (rawIdent name) (rawIdent name))) (Hs.PromotedName (Hs.Qual (Hs.ModuleName "Haskelm.Core") (Hs.Symbol ":="))) (Hs.TyParen (tType $ t))
+    in  Hs.TyParen $ Hs.TyApp (Hs.TyCon (Hs.Qual (Hs.ModuleName "Haskelm.Core") (Hs.Ident "Record'"))) (Hs.TyPromoted (Hs.PromotedList True (fmap recordField $ Map.toList $ fmap tFieldType $ mapNameToFieldType)))
+  (C.TUnit) -> Hs.TyCon (Hs.Special (Hs.UnitCon))
+  (C.TTuple t1 t2 Nothing) -> Hs.TyTuple Hs.Boxed [tType t1, tType t2]
+  (C.TTuple t1 t2 (Just t3)) -> Hs.TyTuple Hs.Boxed [tType t1, tType t2, tType t3]
+  (C.TAlias moduleName name nameTypePairs aliasType) -> error (sShow t)
+
+tFieldType (C.FieldType w16 t) = t
+
 
 tDef (C.Def (A.At _ name) pats e) =
   let
@@ -91,30 +144,12 @@ tDef (C.Def (A.At _ name) pats e) =
   in
   DT.trace (sShow ("tDef", npats, ne, e)) $
   [Hs.FunBind [Hs.Match (ident name) (tPattern <$> npats) (Hs.UnGuardedRhs (tExpr ne)) Nothing]]
-tDef (C.TypedDef (A.At _ name) freeVars patTypeTuples e t) = [] -- TODO: impl
+tDef td@(C.TypedDef name freeVars patTypeTuples e t) = tDef (C.Def name (fmap fst patTypeTuples) e) -- note: throwing away type information, relying on type inference to have picked it up for us
 
 tRecDef a =
-  -- is this correct?
-  concat $ tDef <$> a
-  --error (sShow a)
+  concat $ tDef <$> a -- is this correct?
 
-tExpr expr@(A.At meta e) =
-  tExpr' $! case e of
-    --(C.Lambda pats e1) -> e -- C.Lambda (Rewrite.recordPat <$> pats) (Rewrite.recordArgToLet pats <$> e1) -- TODO: don't drop original exprs
-    ---- (C.LetDestruct pat e1 restExpr) -> e
-    ----   let
-    ----     (np, ne1) = Rewrite.recordArgToLet pat e1
-    ----   in C.Let (C.Def np [] ne1) $ tLetDest <$> restExpr
-    --(C.Case e1 branches) ->
-    --  let
-    --    newBranches = branches -- (\(C.CaseBranch pat expr) -> C.CaseBranch (Rewrite.recordPat pat) (Rewrite.recordArgToLet [pat] <$> expr)) <$> branches -- TODO: rewrite pattern as well
-    --  in
-    --    C.Case e1 newBranches
-    e -> e
-    -- (C.Def) ->
-    -- (C.TypedDef) ->
-
-tExpr' e = case e of
+tExpr (A.At meta e) = case e of
   (C.VarLocal name) -> Hs.Var (Hs.UnQual $ ident name)
   (C.VarTopLevel moduleName name) -> Hs.Var (qual moduleName name)
   (C.VarKernel n1 n2) -> Hs.Var (Hs.Qual (Hs.ModuleName ("Lamdera.Haskelm.Kernel." ++ Text.unpack (N.toText n1))) (ident n2))

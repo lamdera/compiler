@@ -48,7 +48,7 @@ tDataToGADT moduName (Hs.DataDecl dataOrNew mContext declHead qualConDecls deriv
       Hs.GadtDecl name Nothing (ctx (dedup $ concatMap dTypeVars types) $ foldr1 Hs.TyFun (types ++ [dHeadToType moduName declHead]))
     conDeclToGadtDecl a = error ("expected ConDecl: " ++ show a)
   in
-    Hs.GDataDecl dataOrNew mContext declHead Nothing (qualConDecls2) []
+    Hs.GDataDecl dataOrNew mContext declHead Nothing (qualConDecls2) derive
 tDataToGADT moduName a = a
 -- ##############################################
 
