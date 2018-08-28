@@ -12,7 +12,7 @@ import Html
 -- no more variable shadowing, anywhere
 -- top-level record destructoring removed; intentional or not?
 
-{-
+
 unitconstant =
   -- Define Unit (fromList [elm/kernel~Utils.$]
   ()
@@ -38,67 +38,69 @@ recSum x =
 
   else
     x + recSum (x - 1)
--}
 
-main =
-  Browser.sandbox
-    { init = ()
-    , view = \() -> Html.text ("hi")
-    , update =
-        \m mod ->
-          let
-          {-
-            a1 =
-              unitconstant
 
-            a2 =
-              floatconstant
-
-            a3 =
-              funcWithArgs
-
-            a4 =
-              otherFuncWithArgs
-
-            a5 =
-              recSum
-
-            a7 =
-              trec
-
-            a8 =
-              tailCallFn
-
-            a9 =
-              tailCallFnNested
-
-            a10 =
-              varOp
-
-            a11 =
-              both
-
-            -- a12 = debugVar
-            a13 =
-              letexpr
-
-            -- a14 = letrec
-            a15 =
-              boolPattern
-
-            -- a16 = recDef1
-            -- a17 = recDef2
-            -- a18 = letdestruct
-            -}
-            a19 =
-              recordPatternArg
-            a20 =
-              complexRecordPatternArg
-          in
-          mod
-    }
 
 {-
+   main =
+     Browser.sandbox
+       { init = ()
+       , view = \() -> Html.text ("hi")
+       , update =
+           \m mod ->
+             let
+             {-
+               a1 =
+                 unitconstant
+
+               a2 =
+                 floatconstant
+
+               a3 =
+                 funcWithArgs
+
+               a4 =
+                 otherFuncWithArgs
+
+               a5 =
+                 recSum
+
+               a7 =
+                 trec
+
+               a8 =
+                 tailCallFn
+
+               a9 =
+                 tailCallFnNested
+
+               a10 =
+                 varOp
+
+               a11 =
+                 both
+
+               -- a12 = debugVar
+               a13 =
+                 letexpr
+
+               -- a14 = letrec
+               a15 =
+                 boolPattern
+
+               -- a16 = recDef1
+               -- a17 = recDef2
+               -- a18 = letdestruct
+               -}
+               a19 =
+                 recordPatternArg
+               a20 =
+                 complexRecordPatternArg
+             in
+             mod
+       }
+-}
+
 
 trec n accumulator =
   if n == 0 then
@@ -208,31 +210,28 @@ letexpr =
   fn a
 
 
+letrec =
+  let
+    sum a =
+      if a < 0 then
+        0
+
+      else
+        a + sum (a - 1)
+  in
+  sum 5
 
 
-   letrec =
-     let
-       sum a =
-         if a < 0 then
-           0
-
-         else
-           a + sum (a - 1)
-     in
-     sum 5
+recDef1 a =
+  recDef2 a
 
 
-   recDef1 a =
-     recDef2 a
+recDef2 a =
+  if a < 3 then
+    3
 
-
-   recDef2 a =
-     if a < 3 then
-       3
-
-     else
-       recDef1 (a - 1)
-
+  else
+    recDef1 (a - 1)
 
 
 boolPattern e =
@@ -244,18 +243,15 @@ boolPattern e =
       3
 
 
--}
-recordPatternArg { a, b } =
-  a + b
-
-
 complexRecordPatternArg ( _, ( { x, y, z }, { a, b } ) ) =
   x + y + z
 
-{-
 
-letdestruct = 3
+letdestruct =
   let
+    ( x, y, z ) =
+      ( 1, 2, 3 )
+
     { a, b } =
       { a = 3, b = 5 }
 
@@ -263,4 +259,46 @@ letdestruct = 3
       { a = 3, b = 5, c = 7 }
   in
   a + b
--}
+
+
+recordPatternArg { a, b } ( x, { c, d }, ( y, z ) ) =
+  -- nested record destructurings are not allowed
+  a + c
+
+
+smallLetDestr =
+  let
+    { a, b } =
+      { a = 1, b = 2 }
+  in
+  a + b
+
+
+letDestr =
+  let
+    { a, b, c } =
+      { a = 1, b = 2, c = 3 }
+
+    { d, e, f } =
+      { d = 4, e = 5, f = 6 }
+
+    { x, y, z } =
+      { x = 7, y = 8, z = 9 }
+  in
+  c + e + x
+
+
+record =
+  { a = 1, b = 3 }
+
+
+letWithcomplexRecordPatternArg rec =
+  let
+    ( _, ( { x, y, z }, { a, b } ) ) =
+      rec
+  in
+  x + y + z
+
+
+reservedWords data class hiding foreign qualified family =
+  123

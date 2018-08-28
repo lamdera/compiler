@@ -3,7 +3,6 @@ module East.Rewrite where
 
 
 import qualified Debug.Trace as DT
-import Text.Pretty.Simple (pShow)
 import qualified Data.Text.Lazy as T
 import qualified Data.Text as Text
 
@@ -30,35 +29,51 @@ not confident enough in this approach
 
 -}
 
-sShow a = T.unpack $ pShow a
+sShow a = pformat 0 $! show a -- T.unpack $! pShow a
+tShow a = T.pack $ sShow a
 
-recordLets :: List C.Pattern -> C.Expr -> (List C.Pattern, C.Expr)
-recordLets [] e = ([], e)
-recordLets (pat:pats) e =
+pformat ident x =
   let
-    (np, ne) = recordLet pat e
-    (rpats, re) = recordLets pats ne
+    ind = repeat ' ' & take (ident*2)
+    indl = repeat ' ' & take ((ident-1)*2)
+  in
+  case x of
+    '\n':rest -> "\n" ++ ind ++ pformat ident rest
+    '(':')':rest -> "()" ++ pformat ident rest
+    '[':']':rest -> "[]" ++ pformat ident rest
+    '(':rest -> "\n" ++ ind ++ "(" ++ pformat (ident+1) rest
+    '[':rest -> "\n" ++ ind ++ "[" ++ pformat (ident+1) rest
+    ')':rest -> ")\n" ++ indl ++ pformat (ident-1) rest
+    ']':rest -> "]\n" ++ indl ++ pformat (ident-1) rest
+    x:rest -> x : pformat ident rest
+    [] -> ""
+
+
+-- RECORD ARGUMENTS TO LET EXPR
+
+recordArgsToLet :: List C.Pattern -> C.Expr -> (List C.Pattern, C.Expr)
+recordArgsToLet [] e = ([], e)
+recordArgsToLet (pat:pats) e =
+  let
+    (np, ne) = recordArgToLet pat e
+    (rpats, re) = recordArgsToLet pats ne
   in (np : rpats, re)
 
-recordLet :: C.Pattern -> C.Expr -> (C.Pattern, C.Expr)
-recordLet pat expr@(A.At meta e) =
+recordArgToLet :: C.Pattern -> C.Expr -> (C.Pattern, C.Expr) -- TODO: we're replacing records in record replacements as well, so we never construct the record anywhere :(
+recordArgToLet pat expr@(A.At meta e) =
   let
     at x = (A.At meta x)
     (np, recordChanges) = recordPatNames pat
     recordChangeMap = concat $ fmap (\(recName, fields) -> fmap (\f -> (recName, f)) fields) recordChanges
   in
-  DT.trace (if recordChanges == [] ||True then "" else sShow ("recordLet", pat, "split", np, recordChanges, e)) $ -- TODO: do something TODO: find inf loop :(
+  --DT.trace (if recordChanges == [] then "" else sShow ("recordArgToLet", pat, "split", np, recordChanges, e)) $
   ( np
-  , foldr
-      (\(recVar, fieldName) e ->
-       (at $ C.Let
-         (C.Def (A.At meta fieldName) [] (at $ C.Access (at $ C.VarLocal recVar) (at fieldName)))
-       e))
+  , at $ C.LetRec
+      ((\(recVar, fieldName) ->
+          (C.Def (A.At meta fieldName) [] (at $ C.Access (at $ C.VarLocal recVar) (at fieldName)))
+      ) <$> recordChangeMap)
       expr
-      recordChangeMap
   )
-  -- (pat, A.At meta e)
-
   -- TODO: THIS: {- wrap e in a let expr that destructures any records in pat, if there are any, otherwise do nothing -}
 
 removeDuplicates = foldr (\x seen -> if x `elem` seen then seen else x : seen) []
@@ -83,10 +98,10 @@ recordPatNames p =
     pRecFetchRecordFields p = case p of
       (C.PRecord names) -> [(patVarFromRecordNames names, names)]
       _ -> []
-    recordFieldsInPattern = removeDuplicates $ fPattern pRecFetchRecordFields (++) p
-    patternWithReplacedRecordFields = rPattern recordPat p
+    recordFieldsInPattern = removeDuplicates $! fPattern pRecFetchRecordFields (++) p
+    patternWithReplacedRecordFields = rPattern recordPat $! p
   in
-    DT.trace (sShow ("recordPatNames", p, "into", patternWithReplacedRecordFields, recordFieldsInPattern)) $
+    -- DT.trace (sShow ("recordPatNames", p, "into", patternWithReplacedRecordFields, recordFieldsInPattern)) $
     (patternWithReplacedRecordFields, recordFieldsInPattern)
 
 
@@ -97,7 +112,8 @@ rPattern f (A.At m p) = A.At m (rPattern' f (f p))
 
 rPattern' :: (C.Pattern_ -> C.Pattern_) -> C.Pattern_ -> C.Pattern_
 rPattern' f p =
-  f $ case p of
+  DT.trace (sShow ("rPattern'", p)) $
+  case p of
     (C.PAnything) -> (C.PAnything)
     (C.PUnit) -> (C.PUnit)
     (C.PVar name) -> (C.PVar name)
@@ -133,6 +149,7 @@ rPatternCtorArg f (C.PatternCtorArg idx tipe arg) = (C.PatternCtorArg idx tipe (
 -- foldPattern, uses a `merge :: a -> a -> a` and a `map f -> a` function
 fPattern :: (C.Pattern_ -> a) -> (a -> a -> a) -> C.Pattern -> a
 fPattern f m (A.At _ p) =
+  DT.trace (sShow ("fPattern'", p)) $
   let
     fm things = (f <$> tat <$> things) ++ (fPattern f m <$> things)
   in

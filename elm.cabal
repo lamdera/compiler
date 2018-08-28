@@ -234,12 +234,16 @@ Executable elmx
         WireTest
         Wire
 
-        -- EAST
+        -- Haskelm
         East.Conversion
         East.Multiplate
         East.V0_18
         East.V0_19
         East.Rewrite
+        Transpile.Deriving
+        Transpile.Imports
+        Transpile.Instances
+
 
     Build-depends:
         ansi-terminal >= 0.8 && < 0.9,

@@ -137,10 +137,10 @@ data Decls -- behaves as a linked list? possibly cyclic? not sure.
   = Declare Def Decls
   | DeclareRec [Def] Decls
   | SaveTheEnvironment
---  deriving (Show)
+  deriving (Show)
 
-instance Show Decls where
-  show d = Debug.Trace.trace ("show Decls") $ showDecl 3 d -- limit show by depth for now
+-- instance Show Decls where
+--   show d = Debug.Trace.trace ("show Decls") $ showDecl 3 d -- limit show by depth for now
 
 showDecl n d = Debug.Trace.trace ("showDecl " ++ show n ++ ": ") $ showDecl' n d
 

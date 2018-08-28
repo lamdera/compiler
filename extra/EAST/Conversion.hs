@@ -22,13 +22,34 @@ import Data.Function ((&))
 import Data.Monoid ((<>))
 
 import qualified East.Rewrite as Rewrite
+import qualified Transpile.Instances
+import qualified Transpile.Imports
 
 import qualified Language.Haskell.Exts.Simple.Syntax as Hs
 import qualified Language.Haskell.Exts.Simple.Pretty as HsPretty
 
 type List a = [a]
 
-sShow a = T.unpack $ pShow a
+sShow a = pformat 0 $! show a -- T.unpack $! pShow a
+tShow a = T.pack $ sShow a
+
+pformat ident x =
+  let
+    ind = repeat ' ' & take (ident*2)
+    indl = repeat ' ' & take ((ident-1)*2)
+  in
+  case x of
+    '\n':rest -> "\n" ++ ind ++ pformat ident rest
+    ',':rest -> "\n" ++ indl ++ "," ++ pformat ident rest
+    '(':')':rest -> "()" ++ pformat ident rest
+    '[':']':rest -> "[]" ++ pformat ident rest
+    '(':rest -> "\n" ++ ind ++ "(" ++ pformat (ident+1) rest
+    '[':rest -> "\n" ++ ind ++ "[" ++ pformat (ident+1) rest
+    ')':rest -> ")\n" ++ indl ++ pformat (ident-1) rest
+    ']':rest -> "]\n" ++ indl ++ pformat (ident-1) rest
+    x:rest -> x : pformat ident rest
+    [] -> ""
+
 
 -- transpile :: C.Module
 transpile
@@ -43,12 +64,18 @@ transpile
     _effects -- :: Effects
   ) =
   let
-    v = concatMap tDecls $ declsToList _decls
+    moduName = _tModuleName _name
+    _decls' = concatMap tDecls $ declsToList _decls
+    _declsGADTandInstances =
+      (fmap (Transpile.Instances.tDataToGADT moduName) _decls')
+      <> (concatMap (Transpile.Instances.tDataToInstDecl moduName) _decls')
+    v = _declsGADTandInstances
   in
-  DT.trace (intercalate "\n\n" (fmap (\x -> sShow x <> "\n" <> HsPretty.prettyPrint x) v)) $
+  DT.trace (T.unpack $ T.intercalate "\n\n" (fmap (\x -> {-tShow x <> "\n" <> -}T.pack (HsPretty.prettyPrint x)) v)) $!
    pure a
 
 declsToList d = declsToList' 50 d
+
 declsToList' n _ | n <= 0 = []
 declsToList' n (C.Declare def decls) = [def] : declsToList' (n-1) decls
 declsToList' n (C.DeclareRec defs decls) = defs : declsToList' (n-1) decls
@@ -60,29 +87,29 @@ tDecls defs = tRecDef defs
 
 tDef (C.Def (A.At _ name) pats e) =
   let
-    (npats, ne) = Rewrite.recordLets pats e
+    (npats, ne) = Rewrite.recordArgsToLet pats e
   in
-  DT.trace (sShow ("tDef", npats, ne)) $
+  DT.trace (sShow ("tDef", npats, ne, e)) $
   [Hs.FunBind [Hs.Match (ident name) (tPattern <$> npats) (Hs.UnGuardedRhs (tExpr ne)) Nothing]]
 tDef (C.TypedDef (A.At _ name) freeVars patTypeTuples e t) = [] -- TODO: impl
 
-tRecDef a = error (sShow a)
-
---tLetDest (C.LetDestruct pat e1 restExpr) =
---  let
---    (np, ne1) = Rewrite.recordLet [pat] <$> e1
---  in C.Let (C.Def np [] ne1) $ tLetDest <$> restExpr
-tLetDest a = a
+tRecDef a =
+  -- is this correct?
+  concat $ tDef <$> a
+  --error (sShow a)
 
 tExpr expr@(A.At meta e) =
-  tExpr' $ case e of
-    (C.Lambda pats e1) -> e -- C.Lambda (Rewrite.recordPat <$> pats) (Rewrite.recordLet pats <$> e1) -- TODO: don't drop original exprs
-    (C.LetDestruct pat e1 restExpr) -> tLetDest e
-    (C.Case e1 branches) ->
-      let
-        newBranches = branches -- (\(C.CaseBranch pat expr) -> C.CaseBranch (Rewrite.recordPat pat) (Rewrite.recordLet [pat] <$> expr)) <$> branches -- TODO: rewrite pattern as well
-      in
-        C.Case e1 newBranches
+  tExpr' $! case e of
+    --(C.Lambda pats e1) -> e -- C.Lambda (Rewrite.recordPat <$> pats) (Rewrite.recordArgToLet pats <$> e1) -- TODO: don't drop original exprs
+    ---- (C.LetDestruct pat e1 restExpr) -> e
+    ----   let
+    ----     (np, ne1) = Rewrite.recordArgToLet pat e1
+    ----   in C.Let (C.Def np [] ne1) $ tLetDest <$> restExpr
+    --(C.Case e1 branches) ->
+    --  let
+    --    newBranches = branches -- (\(C.CaseBranch pat expr) -> C.CaseBranch (Rewrite.recordPat pat) (Rewrite.recordArgToLet [pat] <$> expr)) <$> branches -- TODO: rewrite pattern as well
+    --  in
+    --    C.Case e1 newBranches
     e -> e
     -- (C.Def) ->
     -- (C.TypedDef) ->
@@ -109,9 +136,23 @@ tExpr' e = case e of
         tIf [(cond, _then)] = Hs.If (tExpr cond) (tExpr _then) (tExpr _else)
         tIf ((cond, _then):rest) = Hs.If (tExpr cond) (tExpr _then) (tIf rest)
       in tIf exprPairs
-  (C.Let def e1) -> Hs.Let (Hs.BDecls $ tDef def) (tExpr e1)
-  (C.LetRec defs e1) -> Hs.Let (Hs.BDecls $ concat $ tDef <$> defs) (tExpr e1)
-  (C.LetDestruct p e1 e2) -> error (sShow ("should be unreachable", e))
+
+  (C.Let def restExpr) -> Hs.Let (Hs.BDecls $ tDef def) (tExpr restExpr)
+  (C.LetRec [] restExpr) -> tExpr restExpr -- for prettier output
+  (C.LetRec defs restExpr) -> Hs.Let (Hs.BDecls $ concat $ tDef <$> defs) (tExpr restExpr)
+
+  (C.LetDestruct pat e1 restExpr) ->
+    let
+      (np, ne1@(A.At meta (C.LetRec lrDefs lrExpr))) = Rewrite.recordArgToLet pat restExpr
+      recNames = Rewrite.recordPatNames pat & snd & fmap fst
+    in
+    DT.trace (sShow ("letDest", "pat", pat, "e1", e1, "np", np, "restExpr", restExpr)) $
+    DT.trace (sShow ("letDestLetRec", "pat", pat, "lrDefs", lrDefs, "lrExpr", lrExpr)) $
+    Hs.Let (Hs.BDecls
+      (((\recName -> Hs.FunBind [Hs.Match (ident recName) [] (Hs.UnGuardedRhs (tExpr e1)) Nothing]) <$> recNames)
+      ++ (concat $ tDef <$> lrDefs)
+      )) (tExpr restExpr)
+
   (C.Case e caseBranches) ->
     Hs.Case (tExpr e) ((\(C.CaseBranch pat expr) -> Hs.Alt (tPattern pat) (Hs.UnGuardedRhs (tExpr expr)) Nothing) <$> caseBranches)
   (C.Accessor name) -> Hs.App (Hs.Var (Hs.UnQual (Hs.Ident "Lamdera.Haskelm.Core.get"))) (Hs.Var (Hs.UnQual (ident name)))
@@ -145,9 +186,11 @@ tExpr' e = case e of
   (C.Shader text1 text2 _) -> error "shader not implemented on backend"
 
 qual :: ModuleName.Canonical -> N.Name -> Hs.QName
-qual (ModuleName.Canonical pkg modu) name =
-  Hs.Qual (Hs.ModuleName (Text.unpack ("Lamdera.Package." <> Pkg.toText pkg <> ".Module." <> N.toText modu))) (ident name)
+qual moduleName name =
+  Hs.Qual (Hs.ModuleName (_tModuleName moduleName)) (ident name)
 
+_tModuleName (ModuleName.Canonical pkg modu) =
+  Text.unpack ("Lamdera.Package." <> Pkg.toText pkg <> ".Module." <> N.toText modu)
 
 tPattern (A.At _ p) = case p of
   (C.PAnything) -> Hs.PWildCard
@@ -176,8 +219,21 @@ tPattern (A.At _ p) = case p of
     ) -> --error (sShow p)
       Hs.PApp (qual _p_home_moduleName _p_constructor_name) (tPattern <$> tCtorArg <$> _p_args)
 
-ident name = Hs.Ident (rawIdent name)
-symIdent name = Hs.Symbol (rawIdent name)
+ident name =
+  let
+    l = (rawIdent name)
+  in
+  Hs.Ident $
+    if elem l Transpile.Imports.reservedWords then "l'" <> l else l
+
+symIdent name =
+  Hs.Symbol $
+    case rawIdent name of
+      "::"           -> ":"
+      ":"            -> "::"
+      (':':rest)     -> '+' : ':' : rest
+      ('+':':':rest) -> '+' : ':' : ':' : rest
+      a              -> a
 rawIdent name = Text.unpack $ N.toText name
 
 tFieldUpdate (C.FieldUpdate _ e) = e
@@ -186,3 +242,39 @@ tCtorArg (C.PatternCtorArg _ _ arg) = arg
 
 
 tat (A.At _ v) = v
+
+{-
+letdestruct
+  = let (x, y, z) = (1.0, 2.0, 3.0)
+    in
+      let
+        rec'c =
+          let
+            c = (Lamdera.Haskelm.Core.get #c (rec'c))
+          in
+            (#a Lamdera.Haskelm.Core.:= (3.0)) Lamdera.Haskelm.Core.&
+              (#b Lamdera.Haskelm.Core.:= (5.0)) Lamdera.Haskelm.Core.&
+                (#c Lamdera.Haskelm.Core.:= (7.0)) Lamdera.Haskelm.Core.&
+                  Lamdera.Haskelm.Core.rnil
+      in
+        let b = (Lamdera.Haskelm.Core.get #b (rec'b'a)) in
+          let rec'b'a =
+                  let a = (Lamdera.Haskelm.Core.get #a (rec'b'a)) in
+                    (#a Lamdera.Haskelm.Core.:= (3.0)) Lamdera.Haskelm.Core.&
+                      (#b Lamdera.Haskelm.Core.:= (5.0)) Lamdera.Haskelm.Core.&
+                        Lamdera.Haskelm.Core.rnil
+          in a + b
+
+
+letdestruct =
+  let
+    (x,y,z) = (1,2,3)
+    { a, b } =
+      { a = 3, b = 5 }
+
+    { c } =
+      { a = 3, b = 5, c = 7 }
+  in
+  a + b
+
+-}
