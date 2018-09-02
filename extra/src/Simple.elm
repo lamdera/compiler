@@ -1,17 +1,21 @@
 module Simple exposing (..)
 
-import Bitwise
+import Bitwise exposing (..)
 import Browser
 import Dict
 import Html
 
-
+import SimpleTwo
+import SubDir.AnotherSubDir.SimpleDeep
 
 -- ### changes in 0.19 ###
 -- cannot expose specific constructors anymore; it's all `T(..)` or nothing `T`
 -- no more variable shadowing, anywhere
 -- top-level record destructoring removed; intentional or not?
 
+or a b = a + b -- shadow Bitwise import
+
+useOr = or
 
 unitconstant =
   -- Define Unit (fromList [elm/kernel~Utils.$]
@@ -304,14 +308,17 @@ reservedWords data class hiding foreign qualified family =
   123
 
 
-type alias TypeAlias =
-  Int
+type alias TypeAlias a =
+  (a, Int)
 
+type alias ComplexType a b c = a -> (a -> b, b -> c) -> (a, b, c)
 
-typeAnnot : TypeAlias -> ()
+typeAnnot : TypeAlias a -> ()
 typeAnnot a =
   ()
 
+typeAnnotCmplx : ComplexType a b c -> Int
+typeAnnotCmplx c = 3
 
 type T3 a b c
   = A a (T3 a b c)
@@ -336,3 +343,5 @@ aaaaacomplexRecordPatternArg ( _, ( { x, y, z }, { a, b } ) ) =
 
 type TX a b =
   TX (a -> b)
+
+nameCollisionTest = SimpleTwo.nameCollisionTest + SubDir.AnotherSubDir.SimpleDeep.nameCollisionTest + 17

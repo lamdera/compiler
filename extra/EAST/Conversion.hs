@@ -15,44 +15,34 @@ import qualified Reporting.Annotation as A
 import qualified Elm.Name as N
 import qualified Elm.Package as Pkg
 import qualified AST.Module.Name as ModuleName
+import qualified AST.Utils.Binop as Binop
+
 import Data.List (intercalate)
 
 import qualified Data.Map.Strict as Map
 import Data.Function ((&))
 import Data.Monoid ((<>))
+import qualified Data.Char as Char
 
 import qualified East.Rewrite as Rewrite
 import qualified Transpile.Instances
-import qualified Transpile.Imports
+import qualified Transpile.Reserved
 import qualified Transpile.Deriving
+import Transpile.PrettyPrint
 
 import qualified Language.Haskell.Exts.Simple.Syntax as Hs
 import qualified Language.Haskell.Exts.Simple.Pretty as HsPretty
 
 type List a = [a]
 
-sShow a = pformat 0 $! show a -- T.unpack $! pShow a
-tShow a = T.pack $ sShow a
+{-
+TODO: list of possible issues
+- elm allows shadowing of imported things
+  - import Bitwise exposing (or), then define `or` locally, the use `or`. Will fail in haskell due to ambiguity, but not in elm.
+  - probably not an issue; references to top-level things seem to be fully qualified
+-}
 
-pformat ident x =
-  let
-    ind = repeat ' ' & take (ident*2)
-    indl = repeat ' ' & take ((ident-1)*2)
-  in
-  case x of
-    '\n':rest -> "\n" ++ ind ++ pformat ident rest
-    ',':rest -> "\n" ++ indl ++ "," ++ pformat ident rest
-    '(':')':rest -> "()" ++ pformat ident rest
-    '[':']':rest -> "[]" ++ pformat ident rest
-    '(':rest -> "\n" ++ ind ++ "(" ++ pformat (ident+1) rest
-    '[':rest -> "\n" ++ ind ++ "[" ++ pformat (ident+1) rest
-    ')':rest -> ")\n" ++ indl ++ pformat (ident-1) rest
-    ']':rest -> "]\n" ++ indl ++ pformat (ident-1) rest
-    x:rest -> x : pformat ident rest
-    [] -> ""
-
-
--- transpile :: C.Module
+-- transpile :: C.Module -> Map.Map N.Name C.Annotation -> Map.Map N.Name ModuleName.Canonical -> _
 transpile
   a@(C.Module
     _name    -- :: ModuleName.Canonical
@@ -63,21 +53,76 @@ transpile
     _aliases -- :: Map.Map N.Name Alias
     _binops  -- :: Map.Map N.Name Binop
     _effects -- :: Effects
-  ) annotations =
+  ) annotations importDict =
   let
     moduName = _tModuleName _name
     unions = _unions & tUnions
     unionTypeDecls = unions & fmap (Transpile.Instances.tDataToGADT moduName)
     instDecls = unions & concatMap (Transpile.Instances.tDataToInstDecl moduName)
-  in
-  let
+
     _decls' = concatMap (tDecls annotations) $ declsToList _decls
-    v = unionTypeDecls <> instDecls <> _decls'
+    decls = unionTypeDecls <> instDecls <> _decls'
+
+    imports = importDict & Map.toList & fmap tImport
+
+    -- binops = tBinops _binops
+    moduleHead = Hs.ModuleHead (Hs.ModuleName moduName) Nothing (tExport _exports)
+    module_ = Hs.Module (Just moduleHead) [{-ModulePragma-}] (haskelmImports ++ imports) decls
   in
   --DT.trace (sShow ("module", _name, _docs, _exports, _unions, _aliases, _binops, _effects)) $!
-  DT.trace (T.unpack $ T.intercalate "\n\n" (fmap (\x -> {-tShow x <> "\n" <>-} T.pack (HsPretty.prettyPrint x)) v)) $!
-  DT.trace (sShow ("annotations", annotations)) $!
-   pure a
+  DT.trace ("module:\n" ++ HsPretty.prettyPrint module_) $!
+  --DT.trace (T.unpack $ T.intercalate "\n\n" (fmap (\x -> {-tShow x <> "\n" <>-} T.pack (HsPretty.prettyPrint x)) decls)) $!
+  --DT.trace (sShow ("annotations", annotations)) $!
+  --
+
+  pure module_
+
+
+-- IMPORTS
+
+tImport (name, moduName) =
+  Hs.ImportDecl
+    (Hs.ModuleName $ _tModuleName moduName)
+    True -- imported qualified?
+    False -- imported with {-# SOURCE #-}?
+    False -- import safe?
+    Nothing -- imported with explicit package name
+    (Just (Hs.ModuleName (rawIdent name))) -- optional alias name in an as clause.
+    Nothing -- optional list of import specifications
+
+haskelmImports =
+  [Hs.ImportDecl (Hs.ModuleName "Haskelm.Core") True False False Nothing Nothing Nothing]
+
+-- EXPORTS
+
+tExport (C.ExportEverything region) = Nothing -- TODO: maybe walk over ast and explicitly export things that should be?
+tExport (C.Export (nameExportMap)) =
+  nameExportMap
+  & Map.toList
+  & fmap (mapSnd tat)
+  & fmap tExportInner
+  & Hs.ExportSpecList
+  & Just
+
+tExportInner (name, C.ExportValue) = Hs.EVar (Hs.UnQual (ident name))
+tExportInner (name, C.ExportBinop) = Hs.EVar (Hs.UnQual (symIdent name))
+tExportInner (name, C.ExportAlias) = Hs.EAbs (Hs.NoNamespace) (Hs.UnQual (ident name))
+tExportInner (name, C.ExportUnionOpen) = Hs.EThingWith (Hs.EWildcard 0) (Hs.UnQual (ident name)) []
+tExportInner (name, C.ExportUnionClosed) = Hs.EThingWith (Hs.NoWildcard) (Hs.UnQual (ident name)) []
+tExportInner (name, C.ExportPort) = error "ports are not available server-side"
+
+mapSnd fn (a,b) = (a, fn b)
+
+-- BINOPS (not used, the list of allowed binops is hard-coded)
+--tBinops b =
+--  b & Map.toList & fmap tBinop
+--
+--tBinop (name, C.Binop_ associativity (Binop.Precedence precedence) n2) =
+--  Hs.InfixDecl (tAssoc associativity) (Just precedence) [Hs.VarOp (symIdent name)]
+--
+--tAssoc (Binop.Left) = Hs.AssocLeft
+--tAssoc (Binop.Non) = Hs.AssocNone
+--tAssoc (Binop.Right) = Hs.AssocRight
 
 -- UNIONS
 
@@ -109,10 +154,10 @@ declsToList' n (C.SaveTheEnvironment) = []
 
 tDecls :: Map.Map N.Name C.Annotation -> List C.Def -> List Hs.Decl
 tDecls annotations [def@(C.Def (A.At _ name) _ _)] = tAnnot name (Map.lookup name annotations) ++ tDef def
-tDecls annotations defs = tRecDef defs
+tDecls annotations defs = concat $ tDef <$> defs
 
 tAnnot :: N.Name -> Maybe C.Annotation -> [Hs.Decl]
-tAnnot _ Nothing = []
+tAnnot _ Nothing = error "missing type annotation"
 tAnnot name (Just (C.Forall freeVars_ tipe)) =
   let
     freeVars = N.toText <$> Map.keys freeVars_
@@ -133,7 +178,25 @@ tType t = case t of
   (C.TUnit) -> Hs.TyCon (Hs.Special (Hs.UnitCon))
   (C.TTuple t1 t2 Nothing) -> Hs.TyTuple Hs.Boxed [tType t1, tType t2]
   (C.TTuple t1 t2 (Just t3)) -> Hs.TyTuple Hs.Boxed [tType t1, tType t2, tType t3]
-  (C.TAlias moduleName name nameTypePairs aliasType) -> error (sShow t)
+  (C.TAlias moduleName name nameTypePairs aliasType) ->
+    let
+      conv t =
+        -- transpile type alias
+        --tType t
+        -- or unpack it
+        foldl
+          Hs.TyApp
+          (Hs.TyCon (qual moduleName name))
+          (nameTypePairs & fmap fst & fmap ident & fmap Hs.TyVar)
+    in
+    case aliasType of
+      C.Holey t ->
+        conv t
+        -- error (sShow t)
+
+      C.Filled t ->
+        conv t
+
 
 tFieldType (C.FieldType w16 t) = t
 
@@ -142,12 +205,14 @@ tDef (C.Def (A.At _ name) pats e) =
   let
     (npats, ne) = Rewrite.recordArgsToLet pats e
   in
-  DT.trace (sShow ("tDef", npats, ne, e)) $
   [Hs.FunBind [Hs.Match (ident name) (tPattern <$> npats) (Hs.UnGuardedRhs (tExpr ne)) Nothing]]
-tDef td@(C.TypedDef name freeVars patTypeTuples e t) = tDef (C.Def name (fmap fst patTypeTuples) e) -- note: throwing away type information, relying on type inference to have picked it up for us
-
-tRecDef a =
-  concat $ tDef <$> a -- is this correct?
+tDef td@(C.TypedDef name freeVars patTypeTuples e t) =
+  tAnnot (tat name) (Just $ C.Forall freeVars
+    ( ((patTypeTuples & fmap snd) ++ [t])
+      & foldl1 C.TLambda
+    )
+  ) ++
+  tDef (C.Def name (fmap fst patTypeTuples) e)
 
 tExpr (A.At meta e) = case e of
   (C.VarLocal name) -> Hs.Var (Hs.UnQual $ ident name)
@@ -181,8 +246,6 @@ tExpr (A.At meta e) = case e of
       (np, ne1@(A.At meta (C.LetRec lrDefs lrExpr))) = Rewrite.recordArgToLet pat restExpr
       recNames = Rewrite.recordPatNames pat & snd & fmap fst
     in
-    DT.trace (sShow ("letDest", "pat", pat, "e1", e1, "np", np, "restExpr", restExpr)) $
-    DT.trace (sShow ("letDestLetRec", "pat", pat, "lrDefs", lrDefs, "lrExpr", lrExpr)) $
     Hs.Let (Hs.BDecls
       (((\recName -> Hs.FunBind [Hs.Match (ident recName) [] (Hs.UnGuardedRhs (tExpr e1)) Nothing]) <$> recNames)
       ++ (concat $ tDef <$> lrDefs)
@@ -207,7 +270,6 @@ tExpr (A.At meta e) = case e of
     in Hs.Paren $ foldl folder (Hs.Var $ Hs.UnQual $ ident base) fieldsAst
 
   (C.Record fieldNameValueMap) ->
-    -- E.Record Nothing fields trailingComments forceMultiline ->
     fieldNameValueMap
       & Map.toList
       & reverse
@@ -225,7 +287,15 @@ qual moduleName name =
   Hs.Qual (Hs.ModuleName (_tModuleName moduleName)) (ident name)
 
 _tModuleName (ModuleName.Canonical pkg modu) =
-  Text.unpack ("Lamdera.Package." <> Pkg.toText pkg <> ".Module." <> N.toText modu)
+  let
+    (author, project) = Pkg.unpack pkg
+    capitalize t =
+      t
+      & Text.unpack
+      & (\(x:xs) -> Char.toUpper x : xs)
+      & Text.pack
+  in
+  Text.unpack ("Lamdera.UserCode.Author." <> capitalize author <> ".Project." <> capitalize project <> ".Module." <> N.toText modu)
 
 tPattern (A.At _ p) = case p of
   (C.PAnything) -> Hs.PWildCard
@@ -259,7 +329,7 @@ ident name =
     l = (rawIdent name)
   in
   Hs.Ident $
-    if elem l Transpile.Imports.reservedWords then "l'" <> l else l
+    if elem l Transpile.Reserved.reservedWords then "l'" <> l else l
 
 symIdent name =
   Hs.Symbol $
@@ -278,39 +348,3 @@ tCtorArg (C.PatternCtorArg _ _ arg) = arg
 
 
 tat (A.At _ v) = v
-
-{-
-letdestruct
-  = let (x, y, z) = (1.0, 2.0, 3.0)
-    in
-      let
-        rec'c =
-          let
-            c = (Lamdera.Haskelm.Core.get #c (rec'c))
-          in
-            (#a Lamdera.Haskelm.Core.:= (3.0)) Lamdera.Haskelm.Core.&
-              (#b Lamdera.Haskelm.Core.:= (5.0)) Lamdera.Haskelm.Core.&
-                (#c Lamdera.Haskelm.Core.:= (7.0)) Lamdera.Haskelm.Core.&
-                  Lamdera.Haskelm.Core.rnil
-      in
-        let b = (Lamdera.Haskelm.Core.get #b (rec'b'a)) in
-          let rec'b'a =
-                  let a = (Lamdera.Haskelm.Core.get #a (rec'b'a)) in
-                    (#a Lamdera.Haskelm.Core.:= (3.0)) Lamdera.Haskelm.Core.&
-                      (#b Lamdera.Haskelm.Core.:= (5.0)) Lamdera.Haskelm.Core.&
-                        Lamdera.Haskelm.Core.rnil
-          in a + b
-
-
-letdestruct =
-  let
-    (x,y,z) = (1,2,3)
-    { a, b } =
-      { a = 3, b = 5 }
-
-    { c } =
-      { a = 3, b = 5, c = 7 }
-  in
-  a + b
-
--}

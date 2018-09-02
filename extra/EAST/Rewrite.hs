@@ -18,36 +18,9 @@ import qualified Data.Map.Strict as Map
 import Data.Function ((&))
 import Data.Monoid ((<>))
 
+import Transpile.PrettyPrint
+
 type List a = [a]
-
-{-
-record rewrite plan:
-1. replace record patterns, e.g. `{f1, f2, f3}` with `rec'f1'f2'f3`
-2. show ast, look for things matching `\~rec'(.*)`, then generate let expressions accordingly at each expr
-
-not confident enough in this approach
-
--}
-
-sShow a = pformat 0 $! show a -- T.unpack $! pShow a
-tShow a = T.pack $ sShow a
-
-pformat ident x =
-  let
-    ind = repeat ' ' & take (ident*2)
-    indl = repeat ' ' & take ((ident-1)*2)
-  in
-  case x of
-    '\n':rest -> "\n" ++ ind ++ pformat ident rest
-    '(':')':rest -> "()" ++ pformat ident rest
-    '[':']':rest -> "[]" ++ pformat ident rest
-    '(':rest -> "\n" ++ ind ++ "(" ++ pformat (ident+1) rest
-    '[':rest -> "\n" ++ ind ++ "[" ++ pformat (ident+1) rest
-    ')':rest -> ")\n" ++ indl ++ pformat (ident-1) rest
-    ']':rest -> "]\n" ++ indl ++ pformat (ident-1) rest
-    x:rest -> x : pformat ident rest
-    [] -> ""
-
 
 -- RECORD ARGUMENTS TO LET EXPR
 
@@ -66,7 +39,6 @@ recordArgToLet pat expr@(A.At meta e) =
     (np, recordChanges) = recordPatNames pat
     recordChangeMap = concat $ fmap (\(recName, fields) -> fmap (\f -> (recName, f)) fields) recordChanges
   in
-  --DT.trace (if recordChanges == [] then "" else sShow ("recordArgToLet", pat, "split", np, recordChanges, e)) $
   ( np
   , at $ C.LetRec
       ((\(recVar, fieldName) ->
@@ -74,7 +46,6 @@ recordArgToLet pat expr@(A.At meta e) =
       ) <$> recordChangeMap)
       expr
   )
-  -- TODO: THIS: {- wrap e in a let expr that destructures any records in pat, if there are any, otherwise do nothing -}
 
 removeDuplicates = foldr (\x seen -> if x `elem` seen then seen else x : seen) []
 
@@ -112,7 +83,6 @@ rPattern f (A.At m p) = A.At m (rPattern' f (f p))
 
 rPattern' :: (C.Pattern_ -> C.Pattern_) -> C.Pattern_ -> C.Pattern_
 rPattern' f p =
-  DT.trace (sShow ("rPattern'", p)) $
   case p of
     (C.PAnything) -> (C.PAnything)
     (C.PUnit) -> (C.PUnit)
@@ -149,7 +119,6 @@ rPatternCtorArg f (C.PatternCtorArg idx tipe arg) = (C.PatternCtorArg idx tipe (
 -- foldPattern, uses a `merge :: a -> a -> a` and a `map f -> a` function
 fPattern :: (C.Pattern_ -> a) -> (a -> a -> a) -> C.Pattern -> a
 fPattern f m (A.At _ p) =
-  DT.trace (sShow ("fPattern'", p)) $
   let
     fm things = (f <$> tat <$> things) ++ (fPattern f m <$> things)
   in

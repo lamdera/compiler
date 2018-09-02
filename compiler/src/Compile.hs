@@ -108,6 +108,7 @@ compile flag pkg importDict interfaces source =
 
 
       canonical <- Result.mapError Error.Canonicalize $
+        DT.trace (show ("importDict", importDict)) $!
         Canonicalize.canonicalize pkg importDict interfaces validStubbed_
 
       -- {- EVERGREEN
@@ -138,15 +139,12 @@ compile flag pkg importDict interfaces source =
         genarateDocs flag canonical_
 
       haskAst <-
-        East.transpile canonical annotations
+        East.transpile canonical annotations importDict
 
       Result.ok $
         let
-          (Can.Module _name _docs _exports _decls _unions _aliases _binops _effects) = haskAst
+          _ = haskAst
         in
-        DT.trace ("asd") $ -- _decls loops
-        -- DT.trace (T.unpack $ pShow $ haskAst) $
-        DT.trace ("asd2") $
         Artifacts
           { _elmi = I.fromModule annotations canonical_
           , _elmo = graph

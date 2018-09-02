@@ -10,7 +10,7 @@ import qualified Language.Haskell.Exts.Simple.Pretty as HsPretty
 import qualified Data.Maybe as Maybe
 import qualified Data.Map.Strict as Map
 import Data.Map.Strict (Map)
-import qualified Transpile.Imports as Imports
+import qualified Transpile.Reserved as Reserved
 import qualified Reporting.Region as RR
 import qualified Data.Set as Set
 import qualified AST.Canonical as C
@@ -22,20 +22,6 @@ import Data.Monoid
 import Data.Function ((&))
 
 type List a = [a]
-
--- replaced by generating instances manually
---addDeriving :: [Hs.Decl] -> [Hs.Decl]
---addDeriving =
---  let
---    f (dataDecl@(Hs.DataDecl a b declHead tags derives)) | containsFns dataDecl == True =
---      Hs.DataDecl a b declHead tags [derivingStmt ["Haskelm.Core.Show", "Haskelm.Core.Eq", "ElmVal'"]]
---    f (dataDecl@(Hs.DataDecl a b declHead tags derives)) | containsFns dataDecl == False =
---      Hs.DataDecl a b declHead tags [derivingStmt ["Haskelm.Core.Show", "Haskelm.Core.Eq", "ElmVal'"]]
---    f decl = decl
---
---    derivingStmt things = Hs.Deriving Nothing (fmap (\x -> Hs.IRule Nothing Nothing (Hs.IHCon (Hs.UnQual (Hs.Ident x)))) things)
---  in
---    fmap f
 
 -- if the adt contains a single function, we cannot derive Eq, so let's look for functions:
 containsFns :: Hs.Decl -> Bool
