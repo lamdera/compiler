@@ -20,6 +20,7 @@ module Elm.Package
   , encode
   , versionDecoder
   , encodeVersion
+  , unpack
   )
   where
 
@@ -82,6 +83,11 @@ toString name =
 toText :: Name -> Text
 toText (Name author project) =
     author <> "/" <> project
+
+unpack :: Name -> (Text, Text)
+unpack (Name author project) =
+    (author, project)
+
 
 
 toUrl :: Name -> String

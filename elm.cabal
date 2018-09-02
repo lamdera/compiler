@@ -241,7 +241,7 @@ Executable elmx
         East.V0_19
         East.Rewrite
         Transpile.Deriving
-        Transpile.Imports
+        Transpile.Reserved
         Transpile.Instances
 
 

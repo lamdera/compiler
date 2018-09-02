@@ -67,6 +67,7 @@ compile flag pkg importDict interfaces source =
       let valid_ = Wire.modify valid
 
       canonical <- Result.mapError Error.Canonicalize $
+        DT.trace (show ("importDict", importDict)) $!
         Canonicalize.canonicalize pkg importDict interfaces valid_
 
       let localizer = L.fromModule valid -- TODO should this be strict for GC?
@@ -84,15 +85,12 @@ compile flag pkg importDict interfaces source =
         genarateDocs flag canonical
 
       haskAst <-
-        East.transpile canonical annotations
+        East.transpile canonical annotations importDict
 
       Result.ok $
         let
-          (Can.Module _name _docs _exports _decls _unions _aliases _binops _effects) = haskAst
+          _ = haskAst
         in
-        DT.trace ("asd") $ -- _decls loops
-        -- DT.trace (T.unpack $ pShow $ haskAst) $
-        DT.trace ("asd2") $
         Artifacts
           { _elmi = I.fromModule annotations canonical
           , _elmo = graph
