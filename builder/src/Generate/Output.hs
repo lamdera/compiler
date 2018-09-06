@@ -45,7 +45,7 @@ import qualified Reporting.Task as Task
 import qualified Stuff.Paths as Paths
 import Terminal.Args (Parser(..))
 
-
+import qualified Debug.Trace as DT
 
 -- GENERATE
 
@@ -75,7 +75,7 @@ generate mode target maybeOutput summary graph@(Crawl.Graph args locals _ _ _) a
                 do  interfaces <- getInterfaces summary locals artifacts
                     return $ Mode.debug target interfaces
 
-              Dev ->
+              Dev -> -- NOTE: Only supporting Dev mode in Lamdera compilations
                 return $ Mode.dev target
 
               Prod ->
@@ -95,7 +95,7 @@ getInterfaces (Summary.Summary root project _ interfaces _) locals artifacts =
     pkg =
       Project.getName project
 
-    addArtifact home (Compiler.Artifacts elmi _ _) ifaces =
+    addArtifact home (Compiler.Artifacts elmi _ _ _) ifaces =
       (ModuleName.Canonical pkg home, elmi) : ifaces
 
     addInterface home iface ifaces =
@@ -124,7 +124,7 @@ generateMonolith
 generateMonolith mode maybeOutput (Summary.Summary _ project _ _ _) graph rootNames =
   do  let pkg = Project.getName project
       let roots = map (Module.Canonical pkg) rootNames
-      case Obj.generate mode graph roots of
+      case Obj.generate mode graph roots of -- this is where js is generated
         Obj.None ->
           return ()
 

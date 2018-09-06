@@ -6,6 +6,7 @@ module Stuff.Paths
   , removeStuff
   , elmi
   , elmo
+  , haskelmo
   , moduleDocs
   , temp
   )
@@ -72,6 +73,11 @@ elmi root name =
 elmo :: FilePath -> Module.Raw -> FilePath
 elmo root name =
   toArtifactPath root name "elmo"
+
+haskelmo :: FilePath -> Module.Raw -> FilePath
+haskelmo root name =
+  toArtifactPath root name "haskelmo"
+  --root </> stuff </> Module.nameToSlashPath name <.> "haskelmo"
 
 
 moduleDocs :: FilePath -> Module.Raw -> FilePath

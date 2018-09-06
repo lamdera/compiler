@@ -95,7 +95,7 @@ compileModule tell project maybeDocsPath answersMVar ifacesMVar name info =
                             let path = Plan._path info
                             putMVar mvar (Bad path time source errors)
 
-                      (_warnings, Right result@(Compiler.Artifacts elmi _ _)) ->
+                      (_warnings, Right result@(Compiler.Artifacts elmi _ _ _)) ->
                         do  tell (Progress.CompileFileEnd name Progress.Good)
                             let canonicalName = Module.Canonical pkg name
                             lock <- takeMVar ifacesMVar
