@@ -17,6 +17,10 @@ import qualified Elm.Package as Pkg
 import qualified AST.Module.Name as ModuleName
 import qualified AST.Utils.Binop as Binop
 
+import qualified Reporting.Error as Error
+import qualified Reporting.Result as Result
+import qualified Reporting.Warning as Warning
+
 import Data.List (intercalate)
 
 import qualified Data.Map.Strict as Map
@@ -42,7 +46,11 @@ TODO: list of possible issues
   - probably not an issue; references to top-level things seem to be fully qualified
 -}
 
--- transpile :: C.Module -> Map.Map N.Name C.Annotation -> Map.Map N.Name ModuleName.Canonical -> _
+transpile
+  :: C.Module
+  -> Map.Map N.Name C.Annotation
+  -> Map.Map N.Name ModuleName.Canonical
+  -> Result.Result i [Warning.Warning] Error.Error Hs.Module
 transpile
   a@(C.Module
     _name    -- :: ModuleName.Canonical
@@ -221,7 +229,7 @@ tExpr (A.At meta e) = case e of
   (C.VarForeign moduleName name typeAnnotation) -> Hs.Var (qual moduleName name)
   (C.VarCtor _ moduleName name zeroBasedIndex typeAnnotation) -> Hs.Con (qual moduleName name)
   (C.VarDebug moduleName name typeAnnotation) -> error (sShow e)
-  (C.VarOperator name1 moduleName name2 typeAnnotation) -> error (sShow e)
+  (C.VarOperator op moduleName symbolName typeAnnotation) -> Hs.Var (Hs.UnQual (symIdent op))
   (C.Chr text) -> Hs.Lit (Hs.String (Text.unpack text))
   (C.Str text) -> Hs.Lit (Hs.String (Text.unpack text))
   (C.Int int) -> Hs.Lit (Hs.Frac (toRational int))
@@ -229,7 +237,11 @@ tExpr (A.At meta e) = case e of
   (C.List exprs) -> Hs.List (tExpr <$> exprs)
   (C.Negate e) -> Hs.NegApp (tExpr e)
   (C.Binop infixOp opModuleName textName typeAnnotation larg rarg) -> Hs.InfixApp (tExpr larg) (Hs.QVarOp $ Hs.UnQual $ symIdent infixOp) (tExpr rarg)
-  (C.Lambda pats e) -> Hs.Lambda (tPattern <$> pats) (tExpr e)
+  (C.Lambda pats e) ->
+    let
+      (npats, ne) = Rewrite.recordArgsToLet pats e
+    in
+    Hs.Lambda (tPattern <$> npats) (tExpr ne)
   (C.Call expr exprs) -> foldl Hs.App (tExpr expr) (tExpr <$> exprs)
   (C.If exprPairs _else) ->
       let
@@ -252,7 +264,14 @@ tExpr (A.At meta e) = case e of
       )) (tExpr restExpr)
 
   (C.Case e caseBranches) ->
-    Hs.Case (tExpr e) ((\(C.CaseBranch pat expr) -> Hs.Alt (tPattern pat) (Hs.UnGuardedRhs (tExpr expr)) Nothing) <$> caseBranches)
+    let
+      newCaseBranches = rewrite <$> caseBranches
+      rewrite (C.CaseBranch pat expr) =
+        let
+          (npat, nexpr) = Rewrite.recordArgToLet pat expr
+        in C.CaseBranch npat nexpr
+    in
+    Hs.Case (tExpr e) ((\(C.CaseBranch pat expr) -> Hs.Alt (tPattern pat) (Hs.UnGuardedRhs (tExpr expr)) Nothing) <$> newCaseBranches)
   (C.Accessor name) -> Hs.App (Hs.Var (Hs.UnQual (Hs.Ident "Lamdera.Haskelm.Core.get"))) (Hs.Var (Hs.UnQual (ident name)))
   (C.Access record (A.At _ fieldName)) ->
     let get       = Hs.Var (Hs.Qual (Hs.ModuleName "Lamdera.Haskelm.Core") (Hs.Ident "get"))

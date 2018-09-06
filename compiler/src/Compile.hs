@@ -38,6 +38,7 @@ import qualified Debug.Trace as DT
 import Text.Pretty.Simple (pShow)
 import qualified Data.Text.Lazy as T
 
+import qualified Language.Haskell.Exts.Simple.Syntax as Hs
 
 
 -- COMPILE
@@ -55,6 +56,7 @@ data Artifacts =
   Artifacts
     { _elmi :: I.Interface
     , _elmo :: Opt.Graph
+    , _haskelmo :: Hs.Module
     , _docs :: Maybe Docs.Module
     } deriving (Show)
 
@@ -148,6 +150,7 @@ compile flag pkg importDict interfaces source =
         Artifacts
           { _elmi = I.fromModule annotations canonical_
           , _elmo = graph
+          , _haskelmo = haskAst
           , _docs = documentation
           }
 

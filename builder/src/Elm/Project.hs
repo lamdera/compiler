@@ -70,7 +70,7 @@ compile mode target maybeOutput docs summary@(Summary.Summary root project _ _ _
       -- debugTo "ifaces.txt" ifaces
       answers <- Compile.compile project docs ifaces dirty
       -- debugTo "answers.txt" answers
-      results <- Artifacts.write root answers
+      results <- Artifacts.write root answers -- results : Map ModuleName Artifacts, where Artifacts = {elmInterface, elmOutput (graph), docs}
       -- debugTo "results.txt" results
 
       _ <- traverse (Artifacts.writeDocs results) docs
@@ -93,7 +93,7 @@ compileForRepl noColors localizer source maybeName =
       (dirty, ifaces) <- Plan.plan Nothing summary graph
       answers <- Compile.compile project Nothing ifaces dirty
       results <- Artifacts.write root answers
-      let (Compiler.Artifacts elmi _ _) = results ! N.replModule
+      let (Compiler.Artifacts elmi _ _ _) = results ! N.replModule
       traverse (Output.generateReplFile noColors localizer summary graph elmi) maybeName
 
 
