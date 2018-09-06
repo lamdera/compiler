@@ -14,7 +14,9 @@ import qualified Data.Map.Merge.Strict as Map
 import Data.Map (Map)
 import Data.Set (Set)
 import System.Directory (doesDirectoryExist)
-import System.FilePath ((</>))
+import System.FilePath ((</>), (<.>))
+import System.Directory (createDirectoryIfMissing)
+import System.FilePath (takeDirectory)
 
 import qualified Elm.Compiler.Module as Module
 import qualified Elm.Compiler.Objects as Obj
@@ -44,6 +46,7 @@ import qualified Reporting.Progress as Progress
 import qualified Reporting.Task as Task
 import qualified Stuff.Paths as Paths
 
+import qualified Language.Haskell.Exts.Simple.Pretty as HsPretty
 
 
 -- VERIFY
@@ -348,6 +351,13 @@ updateCache root name info solution graph results =
 
               IO.writeBinary (root </> "objs.dat") $
                 Map.foldr addGraph (objGraphFromKernels graph) results
+
+
+              liftIO $ mapM_ (\(name, hs) -> do
+                let path = (root </> "haskelmo" </> Module.nameToSlashPath name <.> "hs")
+                createDirectoryIfMissing True (takeDirectory path)
+                writeFile path (HsPretty.prettyPrint hs)) $ Map.toList $ Compiler._haskelmo <$> results
+
 
               liftIO $ Encode.write (root </> "documentation.json") $
                 Encode.list Docs.encode $
