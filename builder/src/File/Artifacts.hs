@@ -27,6 +27,9 @@ import qualified Reporting.Exit as Exit
 import qualified Reporting.Task as Task
 import qualified Stuff.Paths as Path
 
+import System.FilePath ((</>), (<.>))
+import System.Directory (createDirectoryIfMissing)
+import System.FilePath (takeDirectory)
 import qualified Language.Haskell.Exts.Simple.Pretty as HsPretty
 
 -- IGNORE
@@ -53,7 +56,11 @@ write root answers =
           void $ forkIO $
             do  Binary.encodeFile (Path.elmi root name) elmi
                 Binary.encodeFile (Path.elmo root name) elmo
-                writeFile (Path.haskelmo root name) (HsPretty.prettyPrint haskelmo)
+
+                let path = Path.haskelmo root name
+                createDirectoryIfMissing True (takeDirectory path)
+                writeFile path (HsPretty.prettyPrint haskelmo)
+
                 putMVar mvar result
           return mvar
   in

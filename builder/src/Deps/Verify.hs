@@ -354,7 +354,7 @@ updateCache root name info solution graph results =
 
 
               liftIO $ mapM_ (\(name, hs) -> do
-                let path = (root </> "haskelmo" </> Module.nameToSlashPath name <.> "hs")
+                let path = Paths.haskelmoWithoutStuff root name
                 createDirectoryIfMissing True (takeDirectory path)
                 writeFile path (HsPretty.prettyPrint hs)) $ Map.toList $ Compiler._haskelmo <$> results
 
