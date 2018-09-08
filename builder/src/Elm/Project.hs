@@ -12,7 +12,7 @@ module Elm.Project
 
 import qualified Data.ByteString as BS
 import Data.Map ((!))
-import System.FilePath ((</>))
+import System.FilePath ((</>), makeRelative)
 
 import qualified Elm.Compiler as Compiler
 import qualified Elm.Docs as Docs
@@ -33,6 +33,18 @@ import qualified Stuff.Paths as Path
 import Control.Monad.Trans (liftIO)
 import Text.Show.Prettyprint
 
+import qualified Elm.PerUserCache as PerUserCache
+import Data.Text
+import Data.Monoid ((<>))
+import Data.Aeson.Types as Aeson
+import qualified Elm.Package as Pkg
+import qualified Data.Map as Map
+import Data.Function ((&))
+import Data.Yaml
+
+import qualified Debug.Trace as DT
+
+type List a = [a]
 
 -- GET ROOT
 
@@ -64,10 +76,15 @@ compile mode target maybeOutput docs summary@(Summary.Summary root project _ _ _
       args <- Args.fromPaths summary paths
       -- debugTo "args.txt" args
       graph <- Crawl.crawl summary args
-      -- debugTo "graph.txt" graph
+      debugTo "graph.txt" graph
       (dirty, ifaces) <- Plan.plan docs summary graph
       -- debugTo "dirty.txt" dirty
       -- debugTo "ifaces.txt" ifaces
+
+      -- write stack.yaml
+      stackFileContents <- stackYaml root graph
+      liftIO $ encodeFile (root </> "stack.yaml") stackFileContents
+
       answers <- Compile.compile project docs ifaces dirty
       -- debugTo "answers.txt" answers
       results <- Artifacts.write root answers -- results : Map ModuleName Artifacts, where Artifacts = {elmInterface, elmOutput (graph), docs}
@@ -77,9 +94,80 @@ compile mode target maybeOutput docs summary@(Summary.Summary root project _ _ _
       Output.generate mode target maybeOutput summary graph results
 
 
--- debugTo fname a = do
---   liftIO $ print $ "-------------------------------------------------------------------" ++ fname
---   liftIO $ writeFile fname $ prettyShow a
+debugTo fname a = do
+  liftIO $ print $ "-------------------------------------------------------------------" ++ fname
+  liftIO $ writeFile fname $ prettyShow a
+
+
+-- GENERATE STACK.YAML
+
+stackYaml :: FilePath -> Crawl.Graph a b -> Task.Task StackYaml
+stackYaml
+  root
+  (Crawl.Graph
+  _args
+  _locals
+  _kernels
+  _foreigns
+  _problems) =
+    let
+      pkgs =
+        _foreigns
+        & Map.elems
+        & removeDuplicates
+        & mapM (\(Pkg.Package name version) ->
+          do
+            cacheDir <- Task.getPackageCacheDirFor name version
+            let absPath = (cacheDir </> "haskelm")
+            let relPath = makeRelative root absPath
+            --DT.trace (show ("abs", absPath, "rel", relPath, "root", root)) $
+            pure $ pack relPath
+          )
+    in
+      StackYaml <$> pkgs
+
+removeDuplicates = Prelude.foldr (\x seen -> if x `elem` seen then seen else x : seen) []
+
+-- data Graph kernel problems =
+--   Graph
+--     { _args :: Args.Args Module.Raw
+--     , _locals :: Map.Map Module.Raw Header.Info
+--     , _kernels :: Map.Map Module.Raw kernel
+--     , _foreigns :: Map.Map Module.Raw Pkg.Package
+--     , _problems :: problems
+--     }
+--     deriving (Show)
+
+-- ( Bitwise
+-- , Package
+--     { name =
+--         Name
+--           { author = "elm", project = "core" }
+--     , version =
+--         Version
+--           { major = 1, minor = 0, patch = 0 }
+--     }
+-- )
+
+
+data StackYaml =
+  StackYaml
+  { packages :: List Text
+  }
+
+
+instance ToJSON StackYaml where
+  toJSON (StackYaml pkgs) =
+    object
+    [ "packages" .= array (Aeson.String <$> pkgs)
+    -- hard-coded values
+    , "resolver" .= Aeson.String "lts-11.9"
+    , "require-stack-version" .= Aeson.String ">= 1.4.0"
+    --, "extra-deps" .= array (Aeson.String <$> )
+    --, "flags" .= array ()
+    --, "extra-package-dbs" .= array ()
+    ]
+
 
 
 -- COMPILE FOR REPL

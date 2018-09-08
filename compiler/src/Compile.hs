@@ -69,7 +69,6 @@ compile flag pkg importDict interfaces source =
       let valid_ = Wire.modify valid
 
       canonical <- Result.mapError Error.Canonicalize $
-        DT.trace (show ("importDict", importDict)) $!
         Canonicalize.canonicalize pkg importDict interfaces valid_
 
       let localizer = L.fromModule valid -- TODO should this be strict for GC?
