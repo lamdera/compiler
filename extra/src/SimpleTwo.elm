@@ -1,5 +1,7 @@
 module SimpleTwo exposing (..)
 
+import Json.Decode.Exploration exposing (decodeString)
+
 nameCollisionTest = 42
 
 recordCase a =
@@ -12,3 +14,6 @@ recordLambda =
 
 normalLambda =
   \a b -> a
+
+
+decStr = decodeString

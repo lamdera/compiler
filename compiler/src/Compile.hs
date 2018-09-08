@@ -110,7 +110,6 @@ compile flag pkg importDict interfaces source =
 
 
       canonical <- Result.mapError Error.Canonicalize $
-        DT.trace (show ("importDict", importDict)) $!
         Canonicalize.canonicalize pkg importDict interfaces validStubbed_
 
       -- {- EVERGREEN

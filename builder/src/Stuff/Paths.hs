@@ -1,4 +1,5 @@
 {-# OPTIONS_GHC -Wall #-}
+{-# LANGUAGE OverloadedStrings #-}
 module Stuff.Paths
   ( docs
   , summary
@@ -9,6 +10,7 @@ module Stuff.Paths
   , haskelmo
   , haskelmoWithoutStuff
   , haskellPackageYaml
+  , cabalNameOfPackage
   , moduleDocs
   , temp
   )
@@ -23,7 +25,7 @@ import qualified Elm.Compiler as Compiler
 import qualified Elm.Compiler.Module as Module
 import qualified Elm.Package as Pkg
 import qualified Reporting.Task as Task
-
+import Data.Monoid ((<>))
 
 
 -- PATHS
@@ -88,6 +90,9 @@ haskelmoWithoutStuff root name =
 haskellPackageYaml :: FilePath -> FilePath
 haskellPackageYaml root =
   root </> "haskelm" </> "package" <.> "yaml"
+
+cabalNameOfPackage (Pkg.Name author project) =
+  author <> "---" <> project
 
 moduleDocs :: FilePath -> Module.Raw -> FilePath
 moduleDocs root name =

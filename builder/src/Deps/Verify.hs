@@ -52,10 +52,11 @@ import qualified Elm.Package as Pkg
 import qualified Language.Haskell.Exts.Simple.Pretty as HsPretty
 
 import Elm.Project.Licenses (License(License))
-import Data.Yaml
 import qualified Elm.Project.Constraint as Con
 import qualified Elm.Name as N
 import qualified Elm.Project.Json as ElmJson
+
+import Data.Yaml
 import Data.Text
 import Data.Monoid ((<>))
 import Data.Aeson.Types as Aeson
@@ -470,7 +471,7 @@ instance ToJSON HPackYaml where
 packageYamlFromPkgInfo :: PkgInfo -> HPackYaml
 packageYamlFromPkgInfo
   info@(PkgInfo
-  _name
+  package
   _summary
   (License _ code)
   _version
@@ -479,13 +480,13 @@ packageYamlFromPkgInfo
   _test_deps
   _elm_version) =
   let
-    name = Pkg.toText _name
+    name = Paths.cabalNameOfPackage package
     synopsis = _summary
     license = code
     version = Pkg.versionToText _version
     exposedModules = N.toText <$> ElmJson.getExposed info
     dependencies =
-      fmap (\(fqname, constraint) -> Pkg.toText fqname  <> " " <> constraint)
+      fmap (\(fqname, constraint) -> Paths.cabalNameOfPackage fqname <> " " <> constraint)
       $ Map.toList
       $ convertConstraints
         <$> _deps
