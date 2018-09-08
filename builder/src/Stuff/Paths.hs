@@ -8,6 +8,7 @@ module Stuff.Paths
   , elmo
   , haskelmo
   , haskelmoWithoutStuff
+  , haskellPackageYaml
   , moduleDocs
   , temp
   )
@@ -82,9 +83,11 @@ haskelmo root name =
 
 haskelmoWithoutStuff :: FilePath -> Module.Raw -> FilePath
 haskelmoWithoutStuff root name =
-  root </> "haskelm" </> Module.nameToSlashPath name <.> "hs"
+  root </> "haskelm" </> "src" </> Module.nameToSlashPath name <.> "hs"
 
-
+haskellPackageYaml :: FilePath -> FilePath
+haskellPackageYaml root =
+  root </> "haskelm" </> "package" <.> "yaml"
 
 moduleDocs :: FilePath -> Module.Raw -> FilePath
 moduleDocs root name =

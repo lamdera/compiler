@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Deps.Verify
   ( verify
   )
@@ -46,8 +48,20 @@ import qualified Reporting.Progress as Progress
 import qualified Reporting.Task as Task
 import qualified Stuff.Paths as Paths
 
+import qualified Elm.Package as Pkg
 import qualified Language.Haskell.Exts.Simple.Pretty as HsPretty
 
+import Elm.Project.Licenses (License(License))
+import Data.Yaml
+import qualified Elm.Project.Constraint as Con
+import qualified Elm.Name as N
+import qualified Elm.Project.Json as ElmJson
+import Data.Text
+import Data.Monoid ((<>))
+import Data.Aeson.Types as Aeson
+import qualified Elm.Package as EP
+
+type List a = [a]
 
 -- VERIFY
 
@@ -352,7 +366,6 @@ updateCache root name info solution graph results =
               IO.writeBinary (root </> "objs.dat") $
                 Map.foldr addGraph (objGraphFromKernels graph) results
 
-
               liftIO $ mapM_ (\(name, hs) -> do
                 let path = Paths.haskelmoWithoutStuff root name
                 createDirectoryIfMissing True (takeDirectory path)
@@ -363,7 +376,145 @@ updateCache root name info solution graph results =
                 Encode.list Docs.encode $
                   Map.foldr addDocs [] results
 
+              -- generate package.yaml from PkgInfo (a.k.a. package-verison of elm.json)
+              liftIO $ encodeFile (Paths.haskellPackageYaml root) (packageYamlFromPkgInfo info)
+
+
       return elmi
+
+
+-- HASKELM PROJECT FILE GENERATION
+
+{-
+data PkgInfo =
+  PkgInfo
+    { _pkg_name :: Name
+    , _pkg_summary :: Text
+    , _pkg_license :: Licenses.License
+    , _pkg_version :: Version
+    , _pkg_exposed :: Exposed
+    , _pkg_deps :: Map Name Con.Constraint
+    , _pkg_test_deps :: Map Name Con.Constraint
+    , _pkg_elm_version :: Con.Constraint
+    }
+-}
+
+data HPackYaml =
+  HPackYaml
+  { name :: Text
+  , synopsis :: Text
+  , license :: Text
+  , version :: Text
+  , exposedModules :: List Text
+  , dependencies :: List Text
+  }
+
+
+instance ToJSON HPackYaml where
+  toJSON (HPackYaml
+    name
+    synopsis
+    license
+    version
+    exposedModules
+    dependencies)
+    = object
+      [ "name" .= name
+      , "synopsis" .= synopsis
+      , "license" .= license
+      , "version" .= version
+      , "dependencies" .= array (Aeson.String <$> dependencies)
+      -- hard-coded values
+      , "default-extensions" .= array (Aeson.String <$>
+        [ "ConstraintKinds"
+        , "TypeFamilies"
+        , "TypeOperators"
+        , "OverloadedStrings"
+        , "OverloadedLabels"
+        , "DataKinds"
+        , "NoImplicitPrelude"
+        , "DeriveAnyClass"
+        , "NoMonomorphismRestriction"
+        , "GADTs"
+        , "StandaloneDeriving"
+        , "FlexibleContexts" -- This prevents issues with SuperRecord when it's used kinda anonymously (i.e. passed around a lot between function calls in a single function body)
+        ])
+      , "ghc-options" .= Aeson.String "-Wall -Werror"
+      , "library" .= object
+        [ "exposed-modules" .= array (Aeson.String <$> exposedModules)
+        , "source-dirs" .= array [Aeson.String "src"]
+        ]
+      ]
+
+
+{-
+    "type": "package",
+    "name": "elm/url",
+    "summary": "Create and parse URLs. Use for HTTP and \"routing\" in single-page apps (SPAs)",
+    "license": "BSD-3-Clause",
+    "version": "1.0.0",
+    "exposed-modules": [
+        "Url",
+        "Url.Builder",
+        "Url.Parser",
+        "Url.Parser.Query"
+    ],
+    "elm-version": "0.19.0 <= v < 0.20.0",
+    "dependencies": {
+        "elm/core": "1.0.0 <= v < 2.0.0"
+    },
+    "test-dependencies": {
+    }
+-}
+
+packageYamlFromPkgInfo :: PkgInfo -> HPackYaml
+packageYamlFromPkgInfo
+  info@(PkgInfo
+  _name
+  _summary
+  (License _ code)
+  _version
+  _exposed
+  _deps
+  _test_deps
+  _elm_version) =
+  let
+    name = Pkg.toText _name
+    synopsis = _summary
+    license = code
+    version = Pkg.versionToText _version
+    exposedModules = N.toText <$> ElmJson.getExposed info
+    dependencies =
+      fmap (\(fqname, constraint) -> Pkg.toText fqname  <> " " <> constraint)
+      $ Map.toList
+      $ convertConstraints
+        <$> _deps
+  in
+  HPackYaml
+    name
+    synopsis
+    license
+    version
+    exposedModules
+    dependencies
+
+convertConstraints :: Con.Constraint -> Text
+convertConstraints (Con.Range vlower op1 op2 vupper) =
+  -- vlower op1 "v" op2 vupper
+  -- 1.2.3  <=   v   <  1.3.1
+  let
+    opToStr (Con.Less) = "<"
+    opToStr (Con.LessOrEqual) = "<="
+    revOpToStr (Con.Less) = ">"
+    revOpToStr (Con.LessOrEqual) = ">="
+  in
+    revOpToStr op1
+      <> " "
+      <> Pkg.versionToText vlower
+      <> " && "
+      <> opToStr op2
+      <> " "
+      <> Pkg.versionToText vupper
 
 
 
