@@ -314,7 +314,8 @@ _tModuleName (ModuleName.Canonical pkg modu) =
       & (\(x:xs) -> Char.toUpper x : xs)
       & Text.pack
   in
-  Text.unpack ("Lamdera.UserCode.Author." <> capitalize author <> ".Project." <> capitalize project <> ".Module." <> N.toText modu)
+  -- Text.unpack ("Lamdera.UserCode.Author." <> capitalize author <> ".Project." <> capitalize project <> ".Module." <> N.toText modu)
+  Text.unpack (N.toText modu)
 
 tPattern (A.At _ p) = case p of
   (C.PAnything) -> Hs.PWildCard

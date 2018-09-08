@@ -1,0 +1,86 @@
+name: lamdera-haskelm
+version: '0.0.0.1'
+synopsis: A handy scaffold for using Haskelm transpiled code
+description: Please see README.md
+default-extensions:
+- OverloadedStrings
+- RecordWildCards
+- NoMonomorphismRestriction
+dependencies:
+- text
+
+library:
+  source-dirs:
+  - src
+  - elm-core
+  exposed-modules:
+  - ElmHaskellExamples
+  - Haskelm.Core
+  - Array
+  - Basics
+  - Bitwise
+  - Char
+  - Color
+  - Date
+  - Debug
+  - Dict
+  - Json.Decode
+  - Json.Encode
+  - List
+  - Maybe
+  - Platform
+  - Platform.Cmd
+  - Platform.Sub
+  - Process
+  - Random
+  - Regex
+  - Result
+  - Set
+  - String
+  - Task
+  - Time
+  - Tuple
+  # Dragged in temporarily?
+  - Html
+  - VirtualDom
+  # Our core
+  - Runtime
+  - Lamdera.Core.Backend
+
+  dependencies:
+  - acid-state
+  - aeson
+  - base >=4.7 && <5
+  - bytestring
+  - hashable
+  - hilt
+  - hspec
+  - ilist
+  - lamdera-shared
+  - managed
+  - mtl
+  - regexpr
+  - safe
+  - safecopy
+  - scientific
+  - slave-thread
+  - stm
+  - superrecord
+  - time
+  - timeit
+  - unagi-chan
+  - unordered-containers
+  - vector
+
+tests:
+  test:
+    main: Main.hs
+    source-dirs: test/
+    ghc-options: -Wall
+    dependencies:
+    - base
+    - haskelm
+    - hspec
+    - mtl
+    - superrecord
+    - timeit

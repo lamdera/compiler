@@ -71,7 +71,7 @@ verify :: FilePath -> Project -> Task.Task Summary.Summary
 verify root project =
   do  solution <-
         case project of
-          Project.App info -> verifyApp info
+          Project.App info -> verifyApp root info
           Project.Pkg info -> verifyPkg info
 
       (RawInfo infos ifaces) <- verifyArtifacts solution
@@ -87,8 +87,8 @@ throw exit =
 -- VERIFY APP
 
 
-verifyApp :: AppInfo -> Task.Task (Map Name Version)
-verifyApp info =
+verifyApp :: FilePath -> AppInfo -> Task.Task (Map Name Version)
+verifyApp root info =
   if _app_elm_version info /= Compiler.version then
     throw (E.AppBadElm (_app_elm_version info))
 
@@ -103,7 +103,9 @@ verifyApp info =
 
           Just newSolution ->
             if Map.size oldSolution == Map.size newSolution then
-              return newSolution
+              do
+                liftIO $ encodeFile (Paths.haskellAppPackageYaml root) (packageYamlFromAppInfo info)
+                return newSolution
             else
               throw (E.AppMissingTrans (Map.toList (Map.difference newSolution oldSolution)))
 
@@ -377,7 +379,7 @@ updateCache root name info solution graph results =
                 Encode.list Docs.encode $
                   Map.foldr addDocs [] results
 
-              -- generate package.yaml from PkgInfo (a.k.a. package-verison of elm.json)
+              -- generate package.yaml from PkgInfo (a.k.a. package-version of elm.json)
               liftIO $ encodeFile (Paths.haskellPackageYaml root) (packageYamlFromPkgInfo info)
 
 
@@ -406,6 +408,7 @@ data HPackYaml =
   , synopsis :: Text
   , license :: Text
   , version :: Text
+  , sourceDirs :: List Text
   , exposedModules :: List Text
   , dependencies :: List Text
   }
@@ -417,6 +420,7 @@ instance ToJSON HPackYaml where
     synopsis
     license
     version
+    sourceDirs
     exposedModules
     dependencies)
     = object
@@ -424,7 +428,7 @@ instance ToJSON HPackYaml where
       , "synopsis" .= synopsis
       , "license" .= license
       , "version" .= version
-      , "dependencies" .= array (Aeson.String <$> dependencies)
+      , "dependencies" .= array (Aeson.String <$> ("lamdera-haskelm" : dependencies))
       -- hard-coded values
       , "default-extensions" .= array (Aeson.String <$>
         [ "ConstraintKinds"
@@ -443,7 +447,7 @@ instance ToJSON HPackYaml where
       , "ghc-options" .= Aeson.String "-Wall -Werror"
       , "library" .= object
         [ "exposed-modules" .= array (Aeson.String <$> exposedModules)
-        , "source-dirs" .= array [Aeson.String "src"]
+        , "source-dirs" .= array (Aeson.String <$> sourceDirs)
         ]
       ]
 
@@ -496,8 +500,51 @@ packageYamlFromPkgInfo
     synopsis
     license
     version
+    ["src"]
     exposedModules
     dependencies
+
+packageYamlFromAppInfo :: AppInfo -> HPackYaml
+packageYamlFromAppInfo
+  info@(AppInfo
+  _elm_version
+  _source_dirs
+  _deps_direct
+  _deps_trans
+  _test_direct
+  _test_trans
+  ) =
+  let
+    name = "lamdera-elm-main"
+    synopsis = "lamdera elm main entrypoint"
+    license = "notApplicable"
+    version = "0.0.1"
+    exposedModules = []
+    dependencies =
+      fmap (\(fqname, _) -> Paths.cabalNameOfPackage fqname)
+      $ Map.toList
+      $ (_deps_direct `Map.union` _deps_trans)
+  in
+  HPackYaml
+    name
+    synopsis
+    license
+    version
+    (pack <$> _source_dirs)
+    exposedModules
+    dependencies
+
+
+-- data AppInfo =
+--   AppInfo
+--     { _app_elm_version :: Version
+--     , _app_source_dirs :: [FilePath]
+--     , _app_deps_direct :: Map Name Version
+--     , _app_deps_trans :: Map Name Version
+--     , _app_test_direct :: Map Name Version
+--     , _app_test_trans :: Map Name Version
+--     }
+
 
 convertConstraints :: Con.Constraint -> Text
 convertConstraints (Con.Range vlower op1 op2 vupper) =

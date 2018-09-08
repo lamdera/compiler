@@ -12,7 +12,7 @@ module Elm.Project
 
 import qualified Data.ByteString as BS
 import Data.Map ((!))
-import System.FilePath ((</>), makeRelative)
+import System.FilePath ((</>), makeRelative, splitPath, joinPath)
 
 import qualified Elm.Compiler as Compiler
 import qualified Elm.Docs as Docs
@@ -35,12 +35,17 @@ import Text.Show.Prettyprint
 
 import qualified Elm.PerUserCache as PerUserCache
 import Data.Text
+import qualified Data.Text as Text
 import Data.Monoid ((<>))
 import Data.Aeson.Types as Aeson
 import qualified Elm.Package as Pkg
 import qualified Data.Map as Map
 import Data.Function ((&))
 import Data.Yaml
+
+import Control.Monad (filterM)
+import System.Directory (doesDirectoryExist, listDirectory)
+import System.FilePath ((</>))
 
 import qualified Debug.Trace as DT
 
@@ -123,8 +128,30 @@ stackYaml
             --DT.trace (show ("abs", absPath, "rel", relPath, "root", root)) $
             pure $ pack relPath
           )
-    in
-      StackYaml <$> pkgs
+      extDeps =
+        let
+          getSubdirs :: FilePath -> IO [FilePath]
+          getSubdirs d =
+            do
+              contents <- listDirectory d
+              let contentPaths = (d </>) <$> contents
+              subDirs <- filterM (doesDirectoryExist) contentPaths
+              pure subDirs
+        in
+        do
+          cacheDir <- Task.getPackageCacheDir
+          sub1 <- liftIO $ getSubdirs cacheDir
+          sub2 <- liftIO $ getSubdirs `mapM` sub1
+          sub3 <- liftIO $ getSubdirs `mapM` (Prelude.concat sub2)
+
+          let parentOfCacheDir = cacheDir & splitPath & Prelude.reverse & Prelude.drop 1 & Prelude.reverse & joinPath
+          let haskelm = parentOfCacheDir </> "lamdera" </> "haskelm"
+          let dirs = (</> "haskelm") <$> Prelude.concat sub3
+          pure $ pack <$> (haskelm : dirs)
+    in do
+      p <- pkgs
+      e <- extDeps
+      pure $ StackYaml p e
 
 removeDuplicates = Prelude.foldr (\x seen -> if x `elem` seen then seen else x : seen) []
 
@@ -153,17 +180,18 @@ removeDuplicates = Prelude.foldr (\x seen -> if x `elem` seen then seen else x :
 data StackYaml =
   StackYaml
   { packages :: List Text
+  , extDeps :: List Text
   }
 
 
 instance ToJSON StackYaml where
-  toJSON (StackYaml pkgs) =
+  toJSON (StackYaml pkgs extDeps) =
     object
-    [ "packages" .= array (Aeson.String <$> pkgs)
+    [ "packages" .= array (Aeson.String <$> ["."])
+    , "extra-deps" .= array (Aeson.String <$> extDeps)
     -- hard-coded values
     , "resolver" .= Aeson.String "lts-11.9"
     , "require-stack-version" .= Aeson.String ">= 1.4.0"
-    --, "extra-deps" .= array (Aeson.String <$> )
     --, "flags" .= array ()
     --, "extra-package-dbs" .= array ()
     ]
