@@ -1,7 +1,8 @@
 {-# OPTIONS_GHC -Wall #-}
 {-# LANGUAGE OverloadedStrings #-}
 module Elm.Project.Constraint
-  ( Constraint
+  ( Constraint(Range)
+  , Op(Less, LessOrEqual)
   , exactly
   , anything
   , fromText
