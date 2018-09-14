@@ -232,7 +232,7 @@ Executable elmx
 
         -- Evergreen
         Wire
-        WireAst
+        WireValid
         WireTest
 
     Build-depends:

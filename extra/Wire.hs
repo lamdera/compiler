@@ -29,58 +29,39 @@ modify canonical flag pkg importDict interfaces source =
     Module name docs exports decls unions aliases binops effects ->
       case name of
         Canonical pkg n ->
-          if N.toString n == "AllTypes_Gen" then
+          case N.toString n of
+            "AllTypes_Gen" ->
 
-            -- tracef ("-" ++ N.toString n) valid
-            -- tracef ("-" ++ N.toString n) (canonical { _decls = [ encoder, decoder, evg_e_Union, evg_d_Union ] })
-            tracef ("-" ++ N.toString n) canonical
+              -- tracef ("-" ++ N.toString n) valid
+              -- tracef ("-" ++ N.toString n) (canonical { _decls = [ encoder, decoder, evg_e_Union, evg_d_Union ] })
+              tracef ("-" ++ N.toString n) canonical
 
-          else if N.toString n == "AllTypes" then
+            "AllTypes" -> do
 
-            -- tracef ("-" ++ N.toString n) canonical
+              -- tracef ("-" ++ N.toString n) canonical
 
+              let unionDecls = fmap unionToEncoder $ Map.toList unions
 
-            tracef ("-" ++ N.toString n) (canonical { _decls = funtimes })
+              tracef ("-" ++ N.toString n) (canonical { _decls = funtimes unionDecls })
 
-            -- tracef ("-" ++ N.toString n) (canonical { _decls =
-            --   case _decls canonical of
-            --     DeclareRec d x ->
-            --
-            --       -- Use this one when we want to see the original schema
-            --       -- DeclareRec (d ++ [ staticX ]) x
-            --
-            --       -- Use this one otherwise
-            --       funtimes
-            --
-            --       -- Canary test
-            --       -- DeclareRec [] x
-            --
-            --     d -> d
-            -- })
+              -- tracef ("-" ++ N.toString n) (canonical { _decls =
+              --   case _decls canonical of
+              --     DeclareRec d x ->
+              --
+              --       -- Use this one when we want to see the original schema
+              --       -- DeclareRec (d ++ [ staticX ]) x
+              --
+              --       -- Use this one otherwise
+              --       funtimes
+              --
+              --       -- Canary test
+              --       -- DeclareRec [] x
+              --
+              --     d -> d
+              -- })
 
-          else
-            canonical
-
-
-static__Union =
-  (name "Union"
-      ,Union {_u_vars = []
-             ,_u_alts =
-               [Ctor (name "Recursive")
-                     (ZeroBased 0)
-                     1 [qtyp "author" "project" "AllTypes" "Union" []]
-               ,Ctor (name "Valued")
-                     (ZeroBased 1)
-                     1 [qtyp "elm" "core" "Basics" "Int" []]
-               ,Ctor (name "DeeplyValued")
-                     (ZeroBased 2)
-                     1 [qtyp "elm" "core" "List" "List"
-                              [qtyp "elm" "core" "Basics" "Bool" []]]
-               ,Ctor (name "Leaf")
-                     (ZeroBased 3)
-                     0 []]
-             ,_u_numAlts = 4
-             ,_u_opts = Normal})
+            _ ->
+              canonical
 
 
 unionToEncoder (unionName_, union_) = do
@@ -413,9 +394,9 @@ evergreenEncodeDict =
 
 
 
-funtimes =
+funtimes additionalEncoders =
     DeclareRec
-    [unionToEncoder static__Union]
+    additionalEncoders
     (Declare (TypedDef (named "evg_e_AllTypes")
                       (Map.fromList [])
                       [(at (PVar (name "evg_p0"))

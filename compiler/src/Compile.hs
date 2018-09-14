@@ -30,7 +30,7 @@ import qualified Type.Solve as Type
 
 import System.IO.Unsafe (unsafePerformIO)
 
-import qualified WireAst
+import qualified WireValid
 import qualified Wire
 -- import qualified AST.Valid as AS (Module(..))
 
@@ -95,68 +95,45 @@ compile flag pkg importDict interfaces source =
       valid <- Result.mapError Error.Syntax $
         Parse.program pkg source
 
-      -- _ <- unsafePerformIO $ do
-      --   case valid of
-      --     AS.Module n _ _ _ _ _ _ _ _ _ -> do
-      --       putStrLn $ "For " ++ N.toString n
-      --       pure (Result.ok "blah")
+      -- {- EVERGREEN
+      -- Generate stubbed data calls for the functions that will be generated
+      let validStubbed_ = WireValid.stub valid flag pkg importDict interfaces source
+      -- EVERGREEN -}
 
-      let valid_ = WireAst.modify valid flag pkg importDict interfaces source
-
-      -- _ <- unsafePerformIO $ do
-      --   putStrLn "Did validation"
-      --   pure (Result.ok "blah")
 
       canonical <- Result.mapError Error.Canonicalize $
-        Canonicalize.canonicalize pkg importDict interfaces valid_
-      -- canonical <- Result.mapError Error.Canonicalize $
-      --   case valid of
-      --     AS.Module n _ _ _ _ _ _ _ _ _ -> do
-      --       Canonicalize.canonicalize
-      --         (Wire.tracef ("pkg" ++ N.toString n) pkg)
-      --         (Wire.tracef ("importDict" ++ N.toString n) importDict)
-      --         (Wire.tracef ("interfaces" ++ N.toString n) interfaces)
-      --         valid_
+        Canonicalize.canonicalize pkg importDict interfaces validStubbed_
 
+      -- {- EVERGREEN
+      -- Generate and inject Evergreen functions for all types & unions
       let canonical_ = Wire.modify canonical flag pkg importDict interfaces source
 
-      -- _ <- unsafePerformIO $ do
-      --   putStrLn "Did canonicalization"
-      --   pure (Result.ok "blah")
+
+      -- Backfill generated valid AST for generated functions as well
+      let valid_ = WireValid.modify valid flag pkg importDict interfaces source canonical_
+      -- EVERGREEN -}
 
 
-      let localizer = L.fromModule valid -- TODO should this be strict for GC?
-
-      -- _ <- unsafePerformIO $ do
-      --   putStrLn "Did localizer"
-      --   pure (Result.ok "blah")
+      let localizer = L.fromModule valid_ -- TODO should this be strict for GC?
 
 
       annotations <-
         runTypeInference localizer canonical_
 
-      -- _ <- unsafePerformIO $ do
-      --   putStrLn "Did annotations/type inference"
-      --   pure (Result.ok "blah")
-
 
       () <-
-        exhaustivenessCheck canonical
-
-      -- _ <- unsafePerformIO $ do
-      --   putStrLn "Did exhaustivenessCheck"
-      --   pure (Result.ok "blah")
+        exhaustivenessCheck canonical_
 
 
       graph <- Result.mapError (Error.Main localizer) $
-        Optimize.optimize annotations canonical
+        Optimize.optimize annotations canonical_
 
       documentation <-
-        genarateDocs flag canonical
+        genarateDocs flag canonical_
 
       Result.ok $
         Artifacts
-          { _elmi = I.fromModule annotations canonical
+          { _elmi = I.fromModule annotations canonical_
           , _elmo = graph
           , _docs = documentation
           }

@@ -16,6 +16,12 @@ type Union
     | Leaf
 
 
+
+-- type Another
+--     = Test
+--     | Best
+
+
 type alias AllTypes =
     { int : Int
     , float : Float
@@ -33,20 +39,21 @@ type alias AllTypes =
     }
 
 
-evg_e_Union : Union -> E.Value
-evg_e_Union evg_p0 =
-    case evg_p0 of
-        Recursive evg_v0 ->
-            E.list identity [ E.string "Recursive", evg_e_Union evg_v0 ]
 
-        Valued evg_v0 ->
-            E.list identity [ E.string "Valued", E.int evg_v0 ]
-
-        DeeplyValued evg_v0 ->
-            E.list identity [ E.string "DeeplyValued", E.list E.bool evg_v0 ]
-
-        Leaf ->
-            E.list identity [ E.string "Leaf" ]
+-- evg_e_Union : Union -> E.Value
+-- evg_e_Union evg_p0 =
+--     case evg_p0 of
+--         Recursive evg_v0 ->
+--             E.list identity [ E.string "Recursive", evg_e_Union evg_v0 ]
+--
+--         Valued evg_v0 ->
+--             E.list identity [ E.string "Valued", E.int evg_v0 ]
+--
+--         DeeplyValued evg_v0 ->
+--             E.list identity [ E.string "DeeplyValued", E.list E.bool evg_v0 ]
+--
+--         Leaf ->
+--             E.list identity [ E.string "Leaf" ]
 
 
 evg_d_Union : D.Decoder Union

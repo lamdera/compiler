@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleContexts #-}
 
-module WireAst where
+module WireValid where
 
 import AST.Source (VarType(..), Type_(..), Pattern_(..))
 import AST.Valid
@@ -15,9 +15,28 @@ import System.IO.Unsafe (unsafePerformIO)
 import Text.Show.Prettyprint
 
 
+stub valid flag pkg importDict interfaces source =
+  case valid of
+    AS.Module n _ _ _ _ _ _ _ _ _ ->
+      if N.toString n == "AllTypes" then
+
+        tracef
+          ("-" ++ N.toString n)
+          (valid { _decls =
+            [ encoder
+            , decoder
+            , evg_e_Union_stubbed
+            , evg_d_Union
+            , staticX
+            ] })
+
+      else
+        valid
+
+
 
 -- Our injection point POC for AllTypes. Search for `Wire.modify`
-modify valid flag pkg importDict interfaces source =
+modify valid flag pkg importDict interfaces source canonical =
   case valid of
     AS.Module n _ _ _ _ _ _ _ _ _ ->
       if N.toString n == "AllTypes_Gen" then
@@ -27,8 +46,16 @@ modify valid flag pkg importDict interfaces source =
 
       else if N.toString n == "AllTypes" then
         -- valid
-        -- tracef ("-" ++ N.toString n) (valid { _decls = [ encoder, decoder, evg_e_Union, evg_d_Union, staticX ] })
-        tracef ("-" ++ N.toString n) (valid { _decls = _decls valid ++ [ staticX ] })
+        tracef
+          ("-" ++ N.toString n)
+          (valid { _decls =
+            [ encoder
+            , decoder
+            , evg_e_Union
+            , evg_d_Union
+            , staticX
+            ] })
+        -- tracef ("-" ++ N.toString n) (valid { _decls = _decls valid ++ [ staticX ] })
         -- tracef ("-" ++ N.toString n) valid
 
       else
@@ -187,6 +214,12 @@ encoder =
     )
     -- Not sure why this type signature has a different form from the decoder, but that's what the diffs told us...
     (Just (at (TLambda (typ "AllTypes" []) (qtyp "E" "Value" []))))
+
+
+evg_e_Union_stubbed =
+  decl "evg_e_Union" [pvar "evg_p0"]
+  (qvar "Debug" "todo")
+  (Just (at (TLambda (typ "Union" []) (qtyp "E" "Value" []))))
 
 
 evg_e_Union =

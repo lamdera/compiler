@@ -62,6 +62,11 @@ unionMocks =
     ]
 
 
+
+-- anotherMocks =
+--     [ Test, Best ]
+
+
 view model =
     let
         encoded =
@@ -75,6 +80,11 @@ view model =
 
         d2 =
             D.decodeString (D.list AllTypes.evg_d_Union) e2
+
+        -- e3 =
+        --     E.encode 0 (E.list AllTypes.evg_e_Another anotherMocks)
+        -- d3 =
+        --     D.decodeString (D.list AllTypes.evg_d_Another) e2
     in
     { title = "Hello"
     , body =
@@ -83,6 +93,8 @@ view model =
         , Html.div [] [ Html.text <| "Equality to original? " ++ Debug.toString (Ok allTypesMock == decoded) ]
         , Html.div [] [ Html.text <| "Encoded Unions: " ++ e2 ]
         , Html.div [] [ Html.text <| "Decoded Unions: " ++ Debug.toString d2 ]
+
+        -- , Html.div [] [ Html.text <| "Encoded Another: " ++ e3 ]
         , Html.div [] [ Html.text <| "Shadow value not existent in code: " ++ Debug.toString AllTypes.evg ]
         ]
     }
