@@ -188,7 +188,7 @@ instance ToJSON StackYaml where
   toJSON (StackYaml pkgs extDeps) =
     object
     [ "packages" .= array (Aeson.String <$> ["."])
-    , "extra-deps" .= array (Aeson.String <$> extDeps)
+    , "extra-deps" .= array (Aeson.String <$> (extDeps ++ lamderaDeps))
     -- hard-coded values
     , "resolver" .= Aeson.String "lts-11.9"
     , "require-stack-version" .= Aeson.String ">= 1.4.0"
@@ -196,6 +196,13 @@ instance ToJSON StackYaml where
     --, "extra-package-dbs" .= array ()
     ]
 
+lamderaDeps =
+  [ "acid-state-0.14.3"
+  , "regexpr-0.5.4"
+  , "superrecord-0.5.0.1"
+  , "unagi-chan-0.4.1.0"
+  , "mtlparse-0.1.4.0"
+  ]
 
 
 -- COMPILE FOR REPL
