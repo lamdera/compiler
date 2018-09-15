@@ -245,6 +245,7 @@ Executable elmx
         Transpile.Deriving
         Transpile.Reserved
         Transpile.Instances
+        Transpile.PrettyPrint
 
 
     Build-depends:
