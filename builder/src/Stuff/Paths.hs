@@ -8,6 +8,8 @@ module Stuff.Paths
   , elmi
   , elmo
   , haskelmo
+  , stuff
+  , haskelmoRoot
   , haskelmoWithoutStuff
   , haskellPackageYaml
   , cabalNameOfPackage
@@ -82,6 +84,10 @@ haskelmo :: FilePath -> Module.Raw -> FilePath
 haskelmo root name =
   --toArtifactPath root name "hs"
   haskelmoWithoutStuff (root </> stuff) name
+
+haskelmoRoot :: FilePath -> FilePath
+haskelmoRoot root =
+  root </> stuff </> "haskelm"
 
 haskelmoWithoutStuff :: FilePath -> Module.Raw -> FilePath
 haskelmoWithoutStuff root name =

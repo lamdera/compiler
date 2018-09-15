@@ -2,6 +2,7 @@
 
 module Deps.Verify
   ( verify
+  , HPackYaml(..)
   )
   where
 
