@@ -2,6 +2,7 @@
 
 module Deps.Verify
   ( verify
+  , HPackYaml(..)
   )
   where
 
@@ -103,9 +104,7 @@ verifyApp root info =
 
           Just newSolution ->
             if Map.size oldSolution == Map.size newSolution then
-              do
-                liftIO $ encodeFile (Paths.haskellAppPackageYaml root) (packageYamlFromAppInfo info)
-                return newSolution
+              pure newSolution
             else
               throw (E.AppMissingTrans (Map.toList (Map.difference newSolution oldSolution)))
 
@@ -503,47 +502,6 @@ packageYamlFromPkgInfo
     ["src"]
     exposedModules
     dependencies
-
-packageYamlFromAppInfo :: AppInfo -> HPackYaml
-packageYamlFromAppInfo
-  info@(AppInfo
-  _elm_version
-  _source_dirs
-  _deps_direct
-  _deps_trans
-  _test_direct
-  _test_trans
-  ) =
-  let
-    name = "lamdera-elm-main"
-    synopsis = "lamdera elm main entrypoint"
-    license = "notApplicable"
-    version = "0.0.1"
-    exposedModules = []
-    dependencies =
-      fmap (\(fqname, _) -> Paths.cabalNameOfPackage fqname)
-      $ Map.toList
-      $ (_deps_direct `Map.union` _deps_trans)
-  in
-  HPackYaml
-    name
-    synopsis
-    license
-    version
-    (pack <$> _source_dirs)
-    exposedModules
-    dependencies
-
-
--- data AppInfo =
---   AppInfo
---     { _app_elm_version :: Version
---     , _app_source_dirs :: [FilePath]
---     , _app_deps_direct :: Map Name Version
---     , _app_deps_trans :: Map Name Version
---     , _app_test_direct :: Map Name Version
---     , _app_test_trans :: Map Name Version
---     }
 
 
 convertConstraints :: Con.Constraint -> Text

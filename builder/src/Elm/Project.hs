@@ -42,6 +42,8 @@ import qualified Elm.Package as Pkg
 import qualified Data.Map as Map
 import Data.Function ((&))
 import Data.Yaml
+import qualified System.Directory as Dir
+import qualified Deps.Verify as Verify
 
 import Control.Monad (filterM)
 import System.Directory (doesDirectoryExist, listDirectory)
@@ -81,7 +83,7 @@ compile mode target maybeOutput docs summary@(Summary.Summary root project _ _ _
       args <- Args.fromPaths summary paths
       -- debugTo "args.txt" args
       graph <- Crawl.crawl summary args
-      debugTo "graph.txt" graph
+      -- debugTo "graph.txt" graph
       (dirty, ifaces) <- Plan.plan docs summary graph
       -- debugTo "dirty.txt" dirty
       -- debugTo "ifaces.txt" ifaces
@@ -89,6 +91,15 @@ compile mode target maybeOutput docs summary@(Summary.Summary root project _ _ _
       -- write stack.yaml
       stackFileContents <- stackYaml root graph
       liftIO $ encodeFile (root </> "stack.yaml") stackFileContents
+
+      -- write package.yaml
+      case project of
+        Project.App info -> liftIO $ do
+          let appdir = root -- Path.haskelmoRoot root
+          Dir.createDirectoryIfMissing True appdir
+          encodeFile (Path.haskellAppPackageYaml appdir) (packageYamlFromAppInfo root info)
+        Project.Pkg _ ->
+          pure ()
 
       answers <- Compile.compile project docs ifaces dirty
       -- debugTo "answers.txt" answers
@@ -102,6 +113,54 @@ compile mode target maybeOutput docs summary@(Summary.Summary root project _ _ _
 debugTo fname a = do
   liftIO $ print $ "-------------------------------------------------------------------" ++ fname
   liftIO $ writeFile fname $ prettyShow a
+
+
+
+
+-- GENERATE PACKAGE.YAML
+
+packageYamlFromAppInfo :: FilePath -> Project.AppInfo -> Verify.HPackYaml
+packageYamlFromAppInfo
+  root
+  info@(Project.AppInfo
+  _elm_version
+  _source_dirs
+  _deps_direct
+  _deps_trans
+  _test_direct
+  _test_trans
+  ) =
+  let
+    name = "lamdera-elm-main"
+    synopsis = "lamdera elm main entrypoint"
+    license = "notApplicable"
+    version = "0.0.1"
+    exposedModules = []
+    dependencies =
+      fmap (\(fqname, _) -> Path.cabalNameOfPackage fqname)
+      $ Map.toList
+      $ (_deps_direct `Map.union` _deps_trans)
+  in
+  Verify.HPackYaml
+    name
+    synopsis
+    license
+    version
+    (pack <$> (\v -> makeRelative root $ Path.haskelmoRoot root </> v) <$> _source_dirs)
+    exposedModules
+    dependencies
+
+
+-- data AppInfo =
+--   AppInfo
+--     { _app_elm_version :: Version
+--     , _app_source_dirs :: [FilePath]
+--     , _app_deps_direct :: Map Name Version
+--     , _app_deps_trans :: Map Name Version
+--     , _app_test_direct :: Map Name Version
+--     , _app_test_trans :: Map Name Version
+--     }
+
 
 
 -- GENERATE STACK.YAML
@@ -125,7 +184,6 @@ stackYaml
             cacheDir <- Task.getPackageCacheDirFor name version
             let absPath = (cacheDir </> "haskelm")
             let relPath = makeRelative root absPath
-            --DT.trace (show ("abs", absPath, "rel", relPath, "root", root)) $
             pure $ pack relPath
           )
       extDeps =
@@ -144,10 +202,9 @@ stackYaml
           sub2 <- liftIO $ getSubdirs `mapM` sub1
           sub3 <- liftIO $ getSubdirs `mapM` (Prelude.concat sub2)
 
-          let parentOfCacheDir = cacheDir & splitPath & Prelude.reverse & Prelude.drop 1 & Prelude.reverse & joinPath
-          let haskelm = parentOfCacheDir </> "lamdera" </> "haskelm"
           let dirs = (</> "haskelm") <$> Prelude.concat sub3
-          pure $ pack <$> (haskelm : dirs)
+          -- let appdir = makeRelative root $ Path.haskelmoRoot root
+          pure $ pack <$> (dirs)
     in do
       p <- pkgs
       e <- extDeps
