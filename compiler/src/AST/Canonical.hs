@@ -67,8 +67,6 @@ import qualified Elm.Name as N
 import qualified Reporting.Annotation as A
 import qualified Reporting.Region as R
 
-import qualified Debug.Trace
-
 -- EXPRESSIONS
 
 
@@ -133,21 +131,11 @@ data Def
 -- DECLARATIONS
 
 
-data Decls -- behaves as a linked list? possibly cyclic? not sure.
+data Decls -- behaves as a linked list
   = Declare Def Decls
   | DeclareRec [Def] Decls
   | SaveTheEnvironment
   deriving (Show)
-
--- instance Show Decls where
---   show d = Debug.Trace.trace ("show Decls") $ showDecl 3 d -- limit show by depth for now
-
-showDecl n d = Debug.Trace.trace ("showDecl " ++ show n ++ ": ") $ showDecl' n d
-
-showDecl' n d | n <= 0 = "<cutoff>"
-showDecl' n (Declare def decls) = "Declare " ++ show def ++ " " ++ showDecl (n-1) decls
-showDecl' n (DeclareRec defs decls) = "DeclareRec " ++ show defs ++ " " ++ showDecl (n-1) decls
-showDecl' n (SaveTheEnvironment) = "SaveTheEnvironment"
 
 -- PATTERNS
 

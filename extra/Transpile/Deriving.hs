@@ -6,18 +6,11 @@ module Transpile.Deriving where
 
 import qualified Data.Text as Text
 import qualified Language.Haskell.Exts.Simple.Syntax as Hs
-import qualified Language.Haskell.Exts.Simple.Pretty as HsPretty
-import qualified Data.Maybe as Maybe
 import qualified Data.Map.Strict as Map
-import Data.Map.Strict (Map)
-import qualified Transpile.Reserved as Reserved
-import qualified Reporting.Region as RR
 import qualified Data.Set as Set
 import qualified AST.Canonical as C
 import qualified Elm.Name as N
 
-import Data.Text (pack)
-import Data.List (intercalate, isPrefixOf)
 import Data.Monoid
 import Data.Function ((&))
 
@@ -122,52 +115,22 @@ typeVariables t =
 
 tConstraint :: Text.Text -> [Hs.Asst]
 tConstraint n =
-  [(Hs.ClassA
-      (Hs.UnQual
-        (Hs.Ident "ElmVal'")
+  let
+    classA n tc =
+      (Hs.ClassA
+        (Hs.Qual
+          (Hs.ModuleName "Haskelm.Core")
+          (Hs.Ident tc)
+        )
+        [ Hs.TyVar
+          (Hs.Ident (Text.unpack n))
+        ]
       )
-      [ Hs.TyVar
-        (Hs.Ident (Text.unpack n))
-      ]
-  )]
-  <>
-    if Text.isPrefixOf "compappend" n then
-      [(Hs.ClassA
-        (Hs.Qual
-          (Hs.ModuleName "Haskelm.Core")
-          (Hs.Ident "Ord")
-        )
-        [ Hs.TyVar
-            (Hs.Ident (Text.unpack n))
-        ]
-      ), (Hs.ClassA
-        (Hs.Qual
-          (Hs.ModuleName "Haskelm.Core")
-          (Hs.Ident "Monoid")
-        )
-        [ Hs.TyVar
-            (Hs.Ident (Text.unpack n))
-        ]
-      )]
-    else if Text.isPrefixOf "comparable" n then
-      [(Hs.ClassA
-        (Hs.Qual
-          (Hs.ModuleName "Haskelm.Core")
-          (Hs.Ident "Ord")
-        )
-        [ Hs.TyVar
-            (Hs.Ident (Text.unpack n))
-        ]
-      )]
-    else if Text.isPrefixOf "appendable" n then
-      [(Hs.ClassA
-        (Hs.Qual
-          (Hs.ModuleName "Haskelm.Core")
-          (Hs.Ident "Monoid")
-        )
-        [ Hs.TyVar
-            (Hs.Ident (Text.unpack n))
-        ]
-      )]
-    else
-      []
+    tcs n =
+      if Text.isPrefixOf "compappend" n ||
+         Text.isPrefixOf "comparable" n then ["Ord"] else []
+      ++
+      if Text.isPrefixOf "compappend" n ||
+         Text.isPrefixOf "appendable" n then ["Monoid"] else []
+  in
+    classA n <$> ("ElmVal'" : tcs n)
