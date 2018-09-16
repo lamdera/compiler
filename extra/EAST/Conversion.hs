@@ -228,7 +228,7 @@ tExpr (A.At meta e) = case e of
   (C.VarKernel n1 n2) -> Hs.Var (Hs.Qual (Hs.ModuleName ("Lamdera.Haskelm.Kernel." ++ Text.unpack (N.toText n1))) (ident n2))
   (C.VarForeign moduleName name typeAnnotation) -> Hs.Var (qual moduleName name)
   (C.VarCtor _ moduleName name zeroBasedIndex typeAnnotation) -> Hs.Con (qual moduleName name)
-  (C.VarDebug moduleName name typeAnnotation) -> error (sShow e)
+  (C.VarDebug moduleName name typeAnnotation) -> Hs.Var (qual moduleName name) -- error (sShow e) -- TODO: don't allow debug vars
   (C.VarOperator op moduleName symbolName typeAnnotation) -> Hs.Var (Hs.UnQual (symIdent op))
   (C.Chr text) -> Hs.Lit (Hs.String (Text.unpack text))
   (C.Str text) -> Hs.Lit (Hs.String (Text.unpack text))
