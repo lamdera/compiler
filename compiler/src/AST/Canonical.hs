@@ -67,6 +67,8 @@ import qualified Elm.Name as N
 import qualified Reporting.Annotation as A
 import qualified Reporting.Region as R
 
+
+
 -- EXPRESSIONS
 
 
@@ -136,6 +138,8 @@ data Decls -- behaves as a linked list
   | DeclareRec [Def] Decls
   | SaveTheEnvironment
   deriving (Show)
+
+
 
 -- PATTERNS
 
