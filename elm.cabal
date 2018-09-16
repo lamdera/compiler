@@ -242,6 +242,7 @@ Executable elmx
         East.V0_18
         East.V0_19
         East.Rewrite
+        Haskelm.Output
         Transpile.Deriving
         Transpile.Reserved
         Transpile.Instances
