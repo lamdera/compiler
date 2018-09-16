@@ -323,8 +323,7 @@ tPattern (A.At _ p) = case p of
   (C.PChr text) -> Hs.PLit Hs.Signless (Hs.String $ Text.unpack text) -- TODO: treating chars as strings
   (C.PStr text) -> Hs.PLit Hs.Signless (Hs.String $ Text.unpack text)
   (C.PInt int) -> Hs.PParen $ Hs.PLit Hs.Signless (Hs.Frac $ toRational int) -- TODO: signless?
-  -- notimpl
-  (C.PRecord names) -> error (sShow p)
+  (C.PRecord names) -> error (show "C.PRecord got through Rewrite: " ++ sShow p)
   (C.PBool union bool) -> Hs.PApp (Hs.UnQual (Hs.Ident (if bool then "True" else "False"))) []
   -- recursive
   (C.PAlias pattern name) -> Hs.PAsPat (ident name) (tPattern pattern)
