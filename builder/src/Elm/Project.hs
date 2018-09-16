@@ -44,6 +44,29 @@ import Data.Yaml
 import qualified System.Directory as Dir
 import qualified Deps.Verify as Verify
 
+import Control.Monad (filterM)
+import System.Directory (doesDirectoryExist, listDirectory)
+import System.FilePath ((</>))
+import qualified Elm.Project.Constraint as Con
+import Elm.Project.Json (Project(..), AppInfo(..), PkgInfo(..))
+import Elm.Project.Licenses (License(License))
+import qualified Elm.Project.Json as ElmJson
+
+import qualified Elm.Package as Pkg
+import qualified Language.Haskell.Exts.Simple.Pretty as HsPretty
+import Elm.Project.Licenses (License(License))
+import qualified Elm.Project.Constraint as Con
+import qualified Elm.Name as N
+import qualified Elm.Project.Json as ElmJson
+import Data.Yaml
+import Data.Text
+import Data.Monoid ((<>))
+import Data.Aeson.Types as Aeson
+import qualified Elm.Package as EP
+import System.FilePath ((</>), (<.>))
+import System.Directory (createDirectoryIfMissing)
+import System.FilePath (takeDirectory)
+
 import qualified Debug.Trace as DT
 
 type List a = [a]
@@ -83,23 +106,31 @@ compile mode target maybeOutput docs summary@(Summary.Summary root project _ _ _
       -- debugTo "dirty.txt" dirty
       -- debugTo "ifaces.txt" ifaces
 
+      answers <- Compile.compile project docs ifaces dirty
+      -- debugTo "answers.txt" answers
+      results <- Artifacts.write root answers -- results : Map ModuleName Artifacts, where Artifacts = {elmInterface, elmOutput (graph), docs}
+      -- debugTo "results.txt" results
+
       -- write stack.yaml
       stackFileContents <- stackYaml root graph
       liftIO $ encodeFile (root </> "stack.yaml") stackFileContents
 
-      -- write package.yaml
+      -- write package.yaml + hs source files
       case project of
         Project.App info -> liftIO $ do
           let appdir = root -- Path.haskelmoRoot root
           Dir.createDirectoryIfMissing True appdir
           encodeFile (Path.haskellAppPackageYaml appdir) (packageYamlFromAppInfo root info)
-        Project.Pkg _ ->
-          pure ()
 
-      answers <- Compile.compile project docs ifaces dirty
-      -- debugTo "answers.txt" answers
-      results <- Artifacts.write root answers -- results : Map ModuleName Artifacts, where Artifacts = {elmInterface, elmOutput (graph), docs}
-      -- debugTo "results.txt" results
+        Project.Pkg info -> liftIO $ do
+          mapM_ (\(name, hs) -> do
+              let path = Path.haskelmoWithoutStuff root name
+              createDirectoryIfMissing True (takeDirectory path)
+              writeFile path (HsPretty.prettyPrint hs)
+            ) $ Map.toList $ Compiler._haskelmo <$> results
+
+          -- generate package.yaml from PkgInfo (a.k.a. package-version of elm.json)
+          encodeFile (Path.haskellPackageYaml root) (packageYamlFromPkgInfo info)
 
       _ <- traverse (Artifacts.writeDocs results) docs
       Output.generate mode target maybeOutput summary graph results
@@ -112,9 +143,150 @@ debugTo fname a = do
 
 
 
+-- HASKELM PROJECT FILE GENERATION
+
+{-
+data PkgInfo =
+  PkgInfo
+    { _pkg_name :: Name
+    , _pkg_summary :: Text
+    , _pkg_license :: Licenses.License
+    , _pkg_version :: Version
+    , _pkg_exposed :: Exposed
+    , _pkg_deps :: Map Name Con.Constraint
+    , _pkg_test_deps :: Map Name Con.Constraint
+    , _pkg_elm_version :: Con.Constraint
+    }
+-}
+
+data HPackYaml =
+  HPackYaml
+  { name :: Text
+  , synopsis :: Text
+  , license :: Text
+  , version :: Text
+  , sourceDirs :: List Text
+  , exposedModules :: List Text
+  , dependencies :: List Text
+  }
+
+
+instance ToJSON HPackYaml where
+  toJSON (HPackYaml
+    name
+    synopsis
+    license
+    version
+    sourceDirs
+    exposedModules
+    dependencies)
+    = object
+      [ "name" .= name
+      , "synopsis" .= synopsis
+      , "license" .= license
+      , "version" .= version
+      , "dependencies" .= array (Aeson.String <$> ("lamdera-haskelm" : dependencies))
+      -- hard-coded values
+      , "default-extensions" .= array (Aeson.String <$>
+        [ "ConstraintKinds"
+        , "TypeFamilies"
+        , "TypeOperators"
+        , "OverloadedStrings"
+        , "OverloadedLabels"
+        , "DataKinds"
+        , "NoImplicitPrelude"
+        , "DeriveAnyClass"
+        , "NoMonomorphismRestriction"
+        , "GADTs"
+        , "StandaloneDeriving"
+        , "FlexibleContexts" -- This prevents issues with SuperRecord when it's used kinda anonymously (i.e. passed around a lot between function calls in a single function body)
+        ])
+      , "ghc-options" .= Aeson.String "-Wall -Werror"
+      , "library" .= object
+        [ "exposed-modules" .= array (Aeson.String <$> exposedModules)
+        , "source-dirs" .= array (Aeson.String <$> sourceDirs)
+        ]
+      ]
+
+
+{-
+    "type": "package",
+    "name": "elm/url",
+    "summary": "Create and parse URLs. Use for HTTP and \"routing\" in single-page apps (SPAs)",
+    "license": "BSD-3-Clause",
+    "version": "1.0.0",
+    "exposed-modules": [
+        "Url",
+        "Url.Builder",
+        "Url.Parser",
+        "Url.Parser.Query"
+    ],
+    "elm-version": "0.19.0 <= v < 0.20.0",
+    "dependencies": {
+        "elm/core": "1.0.0 <= v < 2.0.0"
+    },
+    "test-dependencies": {
+    }
+-}
+
+packageYamlFromPkgInfo :: PkgInfo -> HPackYaml
+packageYamlFromPkgInfo
+  info@(PkgInfo
+  package
+  _summary
+  (License _ code)
+  _version
+  _exposed
+  _deps
+  _test_deps
+  _elm_version) =
+  let
+    name = Path.cabalNameOfPackage package
+    synopsis = _summary
+    license = code
+    version = Pkg.versionToText _version
+    exposedModules = N.toText <$> ElmJson.getExposed info
+    dependencies =
+      fmap (\(fqname, constraint) -> Path.cabalNameOfPackage fqname <> " " <> constraint)
+      $ Map.toList
+      $ convertConstraints
+        <$> _deps
+  in
+  HPackYaml
+    name
+    synopsis
+    license
+    version
+    ["src"]
+    exposedModules
+    dependencies
+
+
+convertConstraints :: Con.Constraint -> Text
+convertConstraints (Con.Range vlower op1 op2 vupper) =
+  -- vlower op1 "v" op2 vupper
+  -- 1.2.3  <=   v   <  1.3.1
+  let
+    opToStr (Con.Less) = "<"
+    opToStr (Con.LessOrEqual) = "<="
+    revOpToStr (Con.Less) = ">"
+    revOpToStr (Con.LessOrEqual) = ">="
+  in
+    revOpToStr op1
+      <> " "
+      <> Pkg.versionToText vlower
+      <> " && "
+      <> opToStr op2
+      <> " "
+      <> Pkg.versionToText vupper
+
+
+
+
+
 -- GENERATE PACKAGE.YAML
 
-packageYamlFromAppInfo :: FilePath -> Project.AppInfo -> Verify.HPackYaml
+packageYamlFromAppInfo :: FilePath -> Project.AppInfo -> HPackYaml
 packageYamlFromAppInfo
   root
   info@(Project.AppInfo
@@ -136,7 +308,7 @@ packageYamlFromAppInfo
       $ Map.toList
       $ (_deps_direct `Map.union` _deps_trans)
   in
-  Verify.HPackYaml
+  HPackYaml
     name
     synopsis
     license
