@@ -12,7 +12,7 @@ module Elm.Project
 
 import qualified Data.ByteString as BS
 import Data.Map ((!))
-import System.FilePath ((</>), makeRelative, splitPath, joinPath)
+import System.FilePath ((</>))
 
 import qualified Elm.Compiler as Compiler
 import qualified Elm.Docs as Docs
@@ -30,46 +30,13 @@ import qualified Generate.Output as Output
 import qualified Reporting.Render.Type.Localizer as L
 import qualified Reporting.Task as Task
 import qualified Stuff.Paths as Path
-import Control.Monad.Trans (liftIO)
-import Text.Show.Prettyprint
 
-import qualified Elm.PerUserCache as PerUserCache
-import Data.Text
-import qualified Data.Text as Text
-import Data.Monoid ((<>))
-import Data.Aeson.Types as Aeson
-import qualified Elm.Package as Pkg
-import qualified Data.Map as Map
-import Data.Function ((&))
-import Data.Yaml
-import qualified System.Directory as Dir
-import qualified Deps.Verify as Verify
-
-import Control.Monad (filterM)
-import System.Directory (doesDirectoryExist, listDirectory)
-import System.FilePath ((</>))
-import qualified Elm.Project.Constraint as Con
-import Elm.Project.Json (Project(..), AppInfo(..), PkgInfo(..))
-import Elm.Project.Licenses (License(License))
-import qualified Elm.Project.Json as ElmJson
-
-import qualified Elm.Package as Pkg
-import qualified Language.Haskell.Exts.Simple.Pretty as HsPretty
-import Elm.Project.Licenses (License(License))
-import qualified Elm.Project.Constraint as Con
-import qualified Elm.Name as N
-import qualified Elm.Project.Json as ElmJson
-import Data.Monoid ((<>))
-import qualified Elm.Package as EP
-import System.FilePath ((</>), (<.>))
-import System.Directory (createDirectoryIfMissing)
-import System.FilePath (takeDirectory)
-import qualified Elm.Compiler.Module
 import qualified Haskelm.Output
 
-import qualified Debug.Trace as DT
+-- import Control.Monad.Trans (liftIO)
+-- import Text.Show.Prettyprint
+-- import qualified Debug.Trace as DT
 
-type List a = [a]
 
 -- GET ROOT
 
@@ -105,21 +72,18 @@ compile mode target maybeOutput docs summary@(Summary.Summary root project _ _ _
       (dirty, ifaces) <- Plan.plan docs summary graph
       -- debugTo "dirty.txt" dirty
       -- debugTo "ifaces.txt" ifaces
-
       answers <- Compile.compile project docs ifaces dirty
       -- debugTo "answers.txt" answers
       results <- Artifacts.write root answers -- results : Map ModuleName Artifacts, where Artifacts = {elmInterface, elmOutput (graph), docs}
       -- debugTo "results.txt" results
-
-      _ <- Haskelm.Output.generateHaskellCodeAndYamlFiles root project graph results
-
+      _ <- Haskelm.Output.generateHaskellYamlFiles root project graph results
       _ <- traverse (Artifacts.writeDocs results) docs
       Output.generate mode target maybeOutput summary graph results
 
 
-debugTo fname a = do
-  liftIO $ print $ "-------------------------------------------------------------------" ++ fname
-  liftIO $ writeFile fname $ prettyShow a
+-- debugTo fname a = do
+--   liftIO $ print $ "-------------------------------------------------------------------" ++ fname
+--   liftIO $ writeFile fname $ prettyShow a
 
 
 -- COMPILE FOR REPL

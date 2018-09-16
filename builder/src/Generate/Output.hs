@@ -45,7 +45,6 @@ import qualified Reporting.Task as Task
 import qualified Stuff.Paths as Paths
 import Terminal.Args (Parser(..))
 
-import qualified Debug.Trace as DT
 
 -- GENERATE
 
@@ -75,7 +74,7 @@ generate mode target maybeOutput summary graph@(Crawl.Graph args locals _ _ _) a
                 do  interfaces <- getInterfaces summary locals artifacts
                     return $ Mode.debug target interfaces
 
-              Dev -> -- NOTE: Only supporting Dev mode in Lamdera compilations
+              Dev ->
                 return $ Mode.dev target
 
               Prod ->

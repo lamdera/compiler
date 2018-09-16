@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Haskelm.Output
-  (generateHaskellCodeAndYamlFiles
+  (generateHaskellYamlFiles
   )
   where
 
@@ -31,18 +31,18 @@ import Data.Monoid ((<>))
 type List a = [a]
 
 
-generateHaskellCodeAndYamlFiles
+generateHaskellYamlFiles
   :: FilePath
   -> Project
   -> Crawl.Graph a b
   -> Map.Map Elm.Compiler.Module.Raw Compiler.Artifacts
   -> Task.Task ()
-generateHaskellCodeAndYamlFiles root project graph results = do
+generateHaskellYamlFiles root project graph results = do
   -- write stack.yaml
   stackFileContents <- stackYaml root graph
   liftIO $ encodeFile (root </> "stack.yaml") stackFileContents
 
-  -- write package.yaml + hs source files
+  -- write package.yaml files
   case project of
     Project.App info -> liftIO $ do
       let appdir = root -- Paths.haskelmoRoot root
@@ -56,8 +56,8 @@ generateHaskellCodeAndYamlFiles root project graph results = do
           writeFile path (HsPretty.prettyPrint hs)
         ) $ Map.toList $ Compiler._haskelmo <$> results
 
-      -- generate package.yaml from PkgInfo (a.k.a. package-version of elm.json)
-      encodeFile (Paths.haskellPackageYaml root) (packageYamlFromPkgInfo info)
+      -- generate package.yaml
+      encodeFile (Paths.haskellPkgPackageYaml root) (packageYamlFromPkgInfo info)
 
 
 
