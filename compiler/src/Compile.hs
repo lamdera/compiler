@@ -30,6 +30,7 @@ import qualified Type.Solve as Type
 
 import System.IO.Unsafe (unsafePerformIO)
 
+import qualified WireValid
 import qualified Wire
 import qualified East.Conversion as East
 
@@ -62,28 +63,81 @@ data Artifacts =
 
 compile :: DocsFlag -> Pkg.Name -> ImportDict -> I.Interfaces -> BS.ByteString -> Result i Artifacts
 compile flag pkg importDict interfaces source =
+  {-
+
+  pkg: Name {_author = "elm",_project = "browser"}
+       The local author+project names of the package this file belongs to
+
+  importDict: fromList [(Name {_name = "AllTypes"}
+                ,Canonical {_package = Name {_author = "author",_project = "project"}
+                           ,_module = Name {_name = "AllTypes"}})
+                ,(Name {_name = "Basics"}
+                ,Canonical {_package = Name {_author = "elm",_project = "core"}
+                           ,_module = Name {_name = "Basics"}})
+                , ...
+                ]
+       The set of packages imported by this file
+
+  interfaces: _types, _unions and _aliases for all imported modules
+
+
+  The problem here is that AST.Valid doesn't contain canonicalised information.
+
+  As a result, we can't accurately generate Evergreen for non-standard types
+  included from external modules as we don't yet have the canonical paths to
+  know where those types come from.
+
+  However, we can't just modify the AST.Canonical version either - the original
+  AST.Valid value is still used elsewhere and if they disagree it causes probelms.
+
+  So it seems we'll need to:
+
+  1. Inject dummy declarations into `value`
+  2. Inject proper implementations into `canonical`
+  3. Backfill proper implementations into `value`
+
+  Because type-inference doesn't come till a later stage, we should be ok with this funny business.
+
+  -}
   do
       valid <- Result.mapError Error.Syntax $
         Parse.program pkg source
 
-      let valid_ = Wire.modify valid
+      -- {- EVERGREEN
+      -- Generate stubbed data calls for the functions that will be generated
+      let validStubbed_ = WireValid.stub valid flag pkg importDict interfaces source
+      -- EVERGREEN -}
+
 
       canonical <- Result.mapError Error.Canonicalize $
-        Canonicalize.canonicalize pkg importDict interfaces valid_
+        Canonicalize.canonicalize pkg importDict interfaces validStubbed_
 
-      let localizer = L.fromModule valid -- TODO should this be strict for GC?
+      -- {- EVERGREEN
+      -- Generate and inject Evergreen functions for all types & unions
+      let canonical_ = Wire.modify canonical flag pkg importDict interfaces source
+
+
+      -- Backfill generated valid AST for generated functions as well
+      let valid_ = WireValid.modify valid flag pkg importDict interfaces source canonical_
+      -- EVERGREEN -}
+
+
+      let localizer = L.fromModule valid_ -- TODO should this be strict for GC?
+
 
       annotations <-
-        runTypeInference localizer canonical
+        runTypeInference localizer canonical_
+
 
       () <-
-        exhaustivenessCheck canonical
+        exhaustivenessCheck canonical_
+
 
       graph <- Result.mapError (Error.Main localizer) $
-        Optimize.optimize annotations canonical
+        Optimize.optimize annotations canonical_
 
       documentation <-
-        genarateDocs flag canonical
+        genarateDocs flag canonical_
 
       haskAst <-
         East.transpile canonical annotations importDict
@@ -93,7 +147,7 @@ compile flag pkg importDict interfaces source =
           _ = haskAst
         in
         Artifacts
-          { _elmi = I.fromModule annotations canonical
+          { _elmi = I.fromModule annotations canonical_
           , _elmo = graph
           , _haskelmo = haskAst
           , _docs = documentation
