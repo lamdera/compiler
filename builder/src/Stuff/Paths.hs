@@ -11,7 +11,8 @@ module Stuff.Paths
   , stuff
   , haskelmoRoot
   , haskelmoWithoutStuff
-  , haskellPackageYaml
+  , haskellPkgPackageYaml
+  , haskellAppPackageYaml
   , cabalNameOfPackage
   , moduleDocs
   , temp
@@ -93,8 +94,8 @@ haskelmoWithoutStuff :: FilePath -> Module.Raw -> FilePath
 haskelmoWithoutStuff root name =
   root </> "haskelm" </> "src" </> Module.nameToSlashPath name <.> "hs"
 
-haskellPackageYaml :: FilePath -> FilePath
-haskellPackageYaml root =
+haskellPkgPackageYaml :: FilePath -> FilePath
+haskellPkgPackageYaml root =
   root </> "haskelm" </> "package" <.> "yaml"
 
 cabalNameOfPackage (Pkg.Name author project) =
