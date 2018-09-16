@@ -34,10 +34,6 @@ import qualified WireValid
 import qualified Wire
 import qualified East.Conversion as East
 
-import qualified Debug.Trace as DT
-import Text.Pretty.Simple (pShow)
-import qualified Data.Text.Lazy as T
-
 import qualified Language.Haskell.Exts.Simple.Syntax as Hs
 
 
@@ -143,9 +139,6 @@ compile flag pkg importDict interfaces source =
         East.transpile canonical annotations importDict
 
       Result.ok $
-        let
-          _ = haskAst
-        in
         Artifacts
           { _elmi = I.fromModule annotations canonical_
           , _elmo = graph

@@ -238,9 +238,6 @@ Executable elmx
 
         -- Haskelm
         East.Conversion
-        East.Multiplate
-        East.V0_18
-        East.V0_19
         East.Rewrite
         Haskelm.Output
         Transpile.Deriving

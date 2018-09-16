@@ -7,7 +7,6 @@ import qualified Data.Text.Lazy as T
 import qualified Data.Text as Text
 
 import qualified AST.Canonical as C
-import qualified East.V0_19 as E
 import qualified Reporting.Annotation as A
 import qualified Elm.Name as N
 import qualified Elm.Package as Pkg

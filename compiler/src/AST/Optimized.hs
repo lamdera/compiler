@@ -150,7 +150,7 @@ data Decider a
 
 data Choice
   = Inline Expr
-  | Jump Int -- what does this int mean?
+  | Jump Int -- TODO: what does this int mean?
   deriving (Show)
 
 
