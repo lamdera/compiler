@@ -77,7 +77,8 @@ transpile
     module_ = Hs.Module (Just moduleHead) [{-ModulePragma-}] (haskelmImports ++ imports) decls
   in
   --DT.trace (sShow ("module", _name, _docs, _exports, _unions, _aliases, _binops, _effects)) $!
-  DT.trace ("module:\n" ++ HsPretty.prettyPrint module_) $!
+  -- DT.trace ("module:\n" ++ show moduName) $!
+  -- DT.trace ("module:\n" ++ HsPretty.prettyPrint module_) $!
   --DT.trace (T.unpack $ T.intercalate "\n\n" (fmap (\x -> {-tShow x <> "\n" <>-} T.pack (HsPretty.prettyPrint x)) decls)) $!
   --DT.trace (sShow ("annotations", annotations)) $!
   --

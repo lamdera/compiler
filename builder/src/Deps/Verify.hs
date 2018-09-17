@@ -44,6 +44,8 @@ import qualified Reporting.Progress as Progress
 import qualified Reporting.Task as Task
 import qualified Stuff.Paths as Paths
 
+import qualified Haskelm.Yaml
+
 
 
 -- VERIFY
@@ -287,6 +289,8 @@ getIface name version info infos depIfaces =
               answers <- Compile.compile (Pkg info) (Just docsPath) cachedIfaces dirty
               results <- Artifacts.ignore answers
               _ <- Artifacts.writeDocs results docsPath
+
+              _ <- Haskelm.Yaml.generatePkgYamlFiles root results info
 
               Paths.removeStuff root
 

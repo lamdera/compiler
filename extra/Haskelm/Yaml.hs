@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Haskelm.Yaml
-  (generateHaskellYamlFiles
+  ( generateHaskellYamlFiles
+  , generatePkgYamlFiles
   )
   where
 
@@ -50,16 +51,20 @@ generateHaskellYamlFiles root project graph results = do
       Dir.createDirectoryIfMissing True appdir
       encodeFile (Paths.haskellAppPackageYaml appdir) (packageYamlFromAppInfo root info)
 
-    Project.Pkg info -> liftIO $ do
-      mapM_ (\(name, hs) -> do
-          let path = Paths.haskelmoWithoutStuff root name
-          Dir.createDirectoryIfMissing True (takeDirectory path)
-          writeFile path (HsPretty.prettyPrint hs)
-        ) $ Map.toList $ Compiler._haskelmo <$> results
+    Project.Pkg info ->
+      -- NOTE: this branch is probably unused; generatePkgYamlFiles is also called through the .elm/ cache mechanism
+      generatePkgYamlFiles root results info
 
-      -- generate package.yaml
-      encodeFile (Paths.haskellPkgPackageYaml root) (packageYamlFromPkgInfo info)
+generatePkgYamlFiles root results info =
+  liftIO $ do
+    mapM_ (\(name, hs) -> do
+        let path = Paths.haskelmoWithoutStuff root name
+        Dir.createDirectoryIfMissing True (takeDirectory path)
+        writeFile path (HsPretty.prettyPrint hs)
+      ) $ Map.toList $ Compiler._haskelmo <$> results
 
+    -- generate package.yaml
+    encodeFile (Paths.haskellPkgPackageYaml root) (packageYamlFromPkgInfo info)
 
 
 -- HASKELM PROJECT FILE GENERATION
