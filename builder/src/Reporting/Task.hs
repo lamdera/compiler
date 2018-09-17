@@ -63,7 +63,7 @@ data Env =
 try :: Progress.Reporter -> Task a -> IO (Maybe a)
 try (Progress.Reporter tell ask end) task =
   do  root <- PerUserCache.getPackageRoot
-      pool <- initPool 4
+      pool <- initPool 16 -- number of threads when compiling
       httpManager <- Http.newManager Http.tlsManagerSettings
       let env = Env root pool httpManager tell ask
       result <- R.runReaderT (runExceptT task) env
