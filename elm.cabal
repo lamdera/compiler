@@ -239,7 +239,7 @@ Executable elmx
         -- Haskelm
         East.Conversion
         East.Rewrite
-        Haskelm.Output
+        Haskelm.Yaml
         Transpile.Deriving
         Transpile.Reserved
         Transpile.Instances
