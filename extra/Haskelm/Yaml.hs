@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Haskelm.Output
+module Haskelm.Yaml
   (generateHaskellYamlFiles
   )
   where
@@ -23,10 +23,11 @@ import qualified Language.Haskell.Exts.Simple.Pretty as HsPretty
 import qualified System.Directory as Dir
 import qualified Elm.Compiler as Compiler
 import Control.Monad.Trans (liftIO)
-import System.FilePath ((</>), makeRelative, takeDirectory)
+import System.FilePath ((</>), makeRelative, takeDirectory, pathSeparator)
 import Control.Monad (filterM)
 import Data.Function ((&))
 import Data.Monoid ((<>))
+import qualified Data.Text as T
 
 type List a = [a]
 
@@ -288,8 +289,19 @@ stackYaml
           sub3 <- liftIO $ getSubdirs `mapM` (Prelude.concat sub2)
 
           let dirs = (</> "haskelm") <$> Prelude.concat sub3
+          d2 <-
+            mapM (\p -> if "elm/core" `isInfixOf` p then
+              do
+                let versionString = T.takeWhile (/= pathSeparator) $ T.drop (Prelude.length cacheDir + T.length "/elm/core/") p
+                homeDir <- liftIO $ Dir.getHomeDirectory
+                let absPath = homeDir </> "lamdera" </> "haskelm" </> "runtime" </> T.unpack versionString
+                let relPath = makeRelative root absPath
+                pure $ pack relPath
+              else
+                pure p
+            ) (pack <$> dirs)
           -- let appdir = makeRelative root $ Paths.haskelmoRoot root
-          pure $ pack <$> (dirs)
+          pure $ d2
     in do
       p <- pkgs
       e <- extDeps
@@ -330,8 +342,15 @@ instance ToJSON StackYaml where
   toJSON (StackYaml pkgs extDeps) =
     object
     [ "packages" .= array (Aeson.String <$> ["."])
-    , "extra-deps" .= array (Aeson.String <$> (extDeps ++ lamderaDeps))
-    -- hard-coded values
+    , "extra-deps" .=
+      array
+        ((Aeson.String <$> (extDeps ++ lamderaDeps)) <>
+          [object
+            [ "git" .= Aeson.String "https://github.com/supermario/hilt.git"
+            , "commit" .= Aeson.String "f59eff3a1b4d2d897ddd1ce94c8f7e9a6b4eefea"
+            ]
+          ]
+        )
     , "resolver" .= Aeson.String "lts-11.9"
     , "require-stack-version" .= Aeson.String ">= 1.4.0"
     --, "flags" .= array ()

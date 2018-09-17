@@ -31,7 +31,7 @@ import qualified Reporting.Render.Type.Localizer as L
 import qualified Reporting.Task as Task
 import qualified Stuff.Paths as Path
 
-import qualified Haskelm.Output
+import qualified Haskelm.Yaml
 
 -- import Control.Monad.Trans (liftIO)
 -- import Text.Show.Prettyprint
@@ -76,7 +76,7 @@ compile mode target maybeOutput docs summary@(Summary.Summary root project _ _ _
       -- debugTo "answers.txt" answers
       results <- Artifacts.write root answers -- results : Map ModuleName Artifacts, where Artifacts = {elmInterface, elmOutput (graph), docs}
       -- debugTo "results.txt" results
-      _ <- Haskelm.Output.generateHaskellYamlFiles root project graph results
+      _ <- Haskelm.Yaml.generateHaskellYamlFiles root project graph results
       _ <- traverse (Artifacts.writeDocs results) docs
       Output.generate mode target maybeOutput summary graph results
 
