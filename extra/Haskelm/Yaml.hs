@@ -109,7 +109,7 @@ instance ToJSON HPackYaml where
       , "synopsis" .= synopsis
       , "license" .= license
       , "version" .= version
-      , "dependencies" .= array (Aeson.String <$> ("lamdera-haskelm" : dependencies))
+      , "dependencies" .= array (Aeson.String <$> dependencies)
       -- hard-coded values
       , "default-extensions" .= array (Aeson.String <$>
         [ "ConstraintKinds"
@@ -125,7 +125,7 @@ instance ToJSON HPackYaml where
         , "StandaloneDeriving"
         , "FlexibleContexts" -- This prevents issues with SuperRecord when it's used kinda anonymously (i.e. passed around a lot between function calls in a single function body)
         ])
-      , "ghc-options" .= Aeson.String "-Wall -Werror"
+      , "ghc-options" .= Aeson.String "-Wall -Werror -Wno-unused-imports -Wno-unused-matches -Wno-unused-local-binds -Wno-type-defaults -Wno-name-shadowing -Wno-missing-signatures"
       , "library" .= object
         [ "exposed-modules" .= array (Aeson.String <$> exposedModules)
         , "source-dirs" .= array (Aeson.String <$> sourceDirs)
@@ -228,9 +228,10 @@ packageYamlFromAppInfo
     version = "0.0.1"
     exposedModules = []
     dependencies =
-      fmap (\(fqname, _) -> Paths.cabalNameOfPackage fqname)
+      haskelm_deps ++
+      (fmap (\(fqname, _) -> Paths.cabalNameOfPackage fqname)
       $ Map.toList
-      $ (_deps_direct `Map.union` _deps_trans)
+      $ (_deps_direct `Map.union` _deps_trans))
   in
   HPackYaml
     name
@@ -241,6 +242,7 @@ packageYamlFromAppInfo
     exposedModules
     dependencies
 
+haskelm_deps = ["lamdera-haskelm-runtime", "base >=4.7 && <5"]
 
 -- data AppInfo =
 --   AppInfo
@@ -293,26 +295,41 @@ stackYaml
           sub2 <- liftIO $ getSubdirs `mapM` sub1
           sub3 <- liftIO $ getSubdirs `mapM` (Prelude.concat sub2)
 
-          let dirs = (</> "haskelm") <$> Prelude.concat sub3
-          d2 <-
-            mapM (\p -> if "elm/core" `isInfixOf` p then
-              do
-                let versionString = T.takeWhile (/= pathSeparator) $ T.drop (Prelude.length cacheDir + T.length "/elm/core/") p
-                homeDir <- liftIO $ Dir.getHomeDirectory
-                let absPath = homeDir </> "lamdera" </> "haskelm" </> "runtime" </> T.unpack versionString
-                let relPath = makeRelative root absPath
-                pure $ pack relPath
-              else
-                pure p
-            ) (pack <$> dirs)
+          homeDir <- liftIO $ Dir.getHomeDirectory
+
+          let dirs = Prelude.concat sub3
+          let d2 =
+                (matchElmPkg
+                  (\fqPkgName ->
+                    let
+                      absPath = homeDir </> "lamdera" </> "haskelm" </> "stdlib" </> T.unpack fqPkgName
+                      relPath = makeRelative root absPath
+                    in
+                      pack relPath
+                )) <$> pack <$> dirs
           -- let appdir = makeRelative root $ Paths.haskelmoRoot root
           pure $ d2
     in do
       p <- pkgs
       e <- extDeps
-      pure $ StackYaml p e
+      homedir <- liftIO $ Dir.getHomeDirectory
+      pure $ StackYaml homedir p e
 
 removeDuplicates = Prelude.foldr (\x seen -> if x `elem` seen then seen else x : seen) []
+
+matchElmPkg onMatch pkgPath =
+  if "/package/elm/" `isInfixOf` pkgPath || "/package/elm-explorations" `isInfixOf` pkgPath then
+    let
+      withoutPrefix =
+        pkgPath
+        & T.splitOn "/package/"
+        & Prelude.drop 1
+        & T.intercalate "/package/"
+        & T.replace "/haskelm" ""
+    in onMatch withoutPrefix
+  else
+    T.pack $ T.unpack pkgPath </> "haskelm"
+
 
 -- data Graph kernel problems =
 --   Graph
@@ -338,13 +355,14 @@ removeDuplicates = Prelude.foldr (\x seen -> if x `elem` seen then seen else x :
 
 data StackYaml =
   StackYaml
-  { packages :: List Text
+  { homeDir :: String
+  , packages :: List Text
   , extDeps :: List Text
   }
 
 
 instance ToJSON StackYaml where
-  toJSON (StackYaml pkgs extDeps) =
+  toJSON (StackYaml homeDir kgs extDeps) =
     object
     [ "packages" .= array (Aeson.String <$> ["."])
     , "extra-deps" .=
@@ -354,6 +372,8 @@ instance ToJSON StackYaml where
             [ "git" .= Aeson.String "https://github.com/supermario/hilt.git"
             , "commit" .= Aeson.String "f59eff3a1b4d2d897ddd1ce94c8f7e9a6b4eefea"
             ]
+          , Aeson.String (T.pack $ homeDir </> "lamdera" </> "shared")
+          , Aeson.String (T.pack $ homeDir </> "lamdera" </> "haskelm" </> "runtime")
           ]
         )
     , "resolver" .= Aeson.String "lts-11.9"

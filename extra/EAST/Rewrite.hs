@@ -29,7 +29,8 @@ recordArgsToLet (pat:pats) e =
   let
     (np, ne) = recordArgToLet pat e
     (rpats, re) = recordArgsToLet pats ne
-  in (np : rpats, re)
+  in
+  (np : rpats, re)
 
 recordArgToLet :: C.Pattern -> C.Expr -> (C.Pattern, C.Expr) -- TODO: we're replacing records in record replacements as well, so we never construct the record anywhere :(
 recordArgToLet pat expr@(A.At meta e) =
