@@ -191,6 +191,7 @@ data Problem
 
 
 data Direction = Have | Need
+  deriving (Show)
 
 
 instance Functor Diff where

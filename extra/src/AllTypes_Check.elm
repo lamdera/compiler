@@ -1,4 +1,4 @@
-module AllTypes_Check exposing (..)
+module AllTypes_Check exposing (Model, Msg(..), allTypesMock, init, main, subscriptions, unionMocks, update, view)
 
 import AllTypes exposing (..)
 import Array

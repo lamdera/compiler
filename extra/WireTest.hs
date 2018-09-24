@@ -37,7 +37,7 @@ Last line is optional, but it's cool! Lambda prompt!
 3. λ: WireTest.compile
    Success!
 
-4. If you've made changes, use `:r` to reload:
+4. If you've made Haskell code changes, use `:r` to reload:
 
    λ: :r
    [169 of 169] Compiling WireTest         ( /Users/mario/dev/projects/elm-compiler/extra/WireTest.hs, /Users/mario/dev/projects/elm-compiler/.stack-work/odir/WireTest.o )

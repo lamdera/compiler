@@ -24,7 +24,7 @@ imap f l = zipWith f [0..] l
 
 
 -- Our injection point POC for AllTypes. Search for `Wire.modify`
-modify canonical flag pkg importDict interfaces source =
+modifyCanonical canonical flag pkg importDict interfaces source =
   case canonical of
     Module name docs exports decls unions aliases binops effects ->
       case name of
