@@ -119,7 +119,7 @@ tConstraint n =
     classA n tc =
       (Hs.ClassA
         (Hs.Qual
-          (Hs.ModuleName "Haskelm.Core")
+          (Hs.ModuleName "Lamdera.Haskelm.Core")
           (Hs.Ident tc)
         )
         [ Hs.TyVar
@@ -127,10 +127,10 @@ tConstraint n =
         ]
       )
     tcs n =
-      if Text.isPrefixOf "compappend" n ||
-         Text.isPrefixOf "comparable" n then ["Ord"] else []
+      (if Text.isPrefixOf "compappend" n ||
+         Text.isPrefixOf "comparable" n then ["Ord"] else [])
       ++
-      if Text.isPrefixOf "compappend" n ||
-         Text.isPrefixOf "appendable" n then ["Monoid"] else []
+      (if Text.isPrefixOf "compappend" n ||
+         Text.isPrefixOf "appendable" n then ["Monoid"] else [])
   in
     classA n <$> ("ElmVal'" : tcs n)

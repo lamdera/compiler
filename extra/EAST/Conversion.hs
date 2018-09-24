@@ -67,8 +67,10 @@ transpile
     unionTypeDecls = unions & fmap (Transpile.Instances.tDataToGADT moduName)
     instDecls = unions & concatMap (Transpile.Instances.tDataToInstDecl moduName)
 
+    aliasDecls = _aliases & Map.toList & fmap tAlias
+
     _decls' = concatMap (tDecls annotations) $ declsToList _decls
-    decls = unionTypeDecls <> instDecls <> _decls'
+    decls = unionTypeDecls <> aliasDecls <> instDecls <> _decls'
 
     imports = importDict & Map.toList & fmap tImport
 
@@ -76,14 +78,12 @@ transpile
     moduleHead = Hs.ModuleHead (Hs.ModuleName moduName) Nothing (tExport _exports)
     module_ = Hs.Module (Just moduleHead) [{-ModulePragma-}] (haskelmImports ++ imports) decls
   in
-  --DT.trace (sShow ("module", _name, _docs, _exports, _unions, _aliases, _binops, _effects)) $!
-  -- DT.trace ("module:\n" ++ show moduName) $!
-  -- DT.trace ("module:\n" ++ HsPretty.prettyPrint module_) $!
-  --DT.trace (T.unpack $ T.intercalate "\n\n" (fmap (\x -> {-tShow x <> "\n" <>-} T.pack (HsPretty.prettyPrint x)) decls)) $!
-  --DT.trace (sShow ("annotations", annotations)) $!
-  --
-
   pure module_
+
+tAlias (aliasName, C.Alias tvars t) =
+  Hs.TypeDecl
+    (foldl Hs.DHApp (Hs.DHead $ ident aliasName) (Hs.UnkindedVar <$> ident <$> tvars))
+    (tType t)
 
 
 -- IMPORTS
@@ -99,7 +99,11 @@ tImport (name, moduName) =
     Nothing -- optional list of import specifications
 
 haskelmImports =
-  [Hs.ImportDecl (Hs.ModuleName "Haskelm.Core") True False False Nothing Nothing Nothing]
+  [ Hs.ImportDecl (Hs.ModuleName "Lamdera.Haskelm.Core") True False False Nothing Nothing Nothing
+  , Hs.ImportDecl (Hs.ModuleName "Lamdera.Haskelm.Core") False False False Nothing Nothing
+    (Just (Hs.ImportSpecList False (Hs.IVar <$> ((Hs.Ident <$> []) <> (Hs.Symbol <$> ["<>"])))))
+  , Hs.ImportDecl (Hs.ModuleName "Basics") False False False Nothing Nothing Nothing
+  ]
 
 -- EXPORTS
 
@@ -135,7 +139,7 @@ mapSnd fn (a,b) = (a, fn b)
 -- UNIONS
 
 tUnions u =
-  u & Map.toList & concatMap tUnion
+  u & Map.toList & fmap tUnion
 
 tUnion (name, (C.Union tvars ctors _ _)) =
 -- C.Ctor N.Name Index.ZeroBased _ [Type]
@@ -143,13 +147,12 @@ tUnion (name, (C.Union tvars ctors _ _)) =
     tCtor (C.Ctor name _ _ args) = Hs.ConDecl (ident name) (tType <$> args)
     dataCases = tCtor <$> ctors
   in
-  [Hs.DataDecl
+  Hs.DataDecl
     Hs.DataType
     Nothing
     (foldl Hs.DHApp (Hs.DHead $ ident name) (Hs.UnkindedVar <$> ident <$> tvars))
     ((Hs.QualConDecl Nothing Nothing) <$> dataCases)
-    []
-  ]
+    [] -- deriving nothing
 
 -- DECLS
 
@@ -176,13 +179,13 @@ tAnnot name (Just (C.Forall freeVars_ tipe)) =
 tType t = case t of
   (C.TLambda t1 t2) -> Hs.TyFun (tType t1) (tType t2)
   (C.TVar name) | "number" `Text.isPrefixOf` N.toText name ->
-    Hs.TyCon (Hs.Qual (Hs.ModuleName "Haskelm.Core") (Hs.Ident "Double"))
+    Hs.TyCon (Hs.Qual (Hs.ModuleName "Lamdera.Haskelm.Core") (Hs.Ident "Double"))
   (C.TVar name) -> Hs.TyVar (ident name)
-  (C.TType moduleName name types) -> Hs.TyCon (qual moduleName name) -- TODO: ?????? list constructor for cons mentions this type
+  (C.TType moduleName name types) -> foldl Hs.TyApp (Hs.TyCon (qual moduleName name)) (tType <$> types)
   (C.TRecord mapNameToFieldType mName) ->
     let recordField (name, t) =
-          Hs.TyInfix (Hs.TyPromoted (Hs.PromotedString (rawIdent name) (rawIdent name))) (Hs.PromotedName (Hs.Qual (Hs.ModuleName "Haskelm.Core") (Hs.Symbol ":="))) (Hs.TyParen (tType $ t))
-    in  Hs.TyParen $ Hs.TyApp (Hs.TyCon (Hs.Qual (Hs.ModuleName "Haskelm.Core") (Hs.Ident "Record'"))) (Hs.TyPromoted (Hs.PromotedList True (fmap recordField $ Map.toList $ fmap tFieldType $ mapNameToFieldType)))
+          Hs.TyInfix (Hs.TyPromoted (Hs.PromotedString (rawIdent name) (rawIdent name))) (Hs.UnpromotedName (Hs.Qual (Hs.ModuleName "Lamdera.Haskelm.Core") (Hs.Symbol ":="))) (Hs.TyParen (tType $ t))
+    in  Hs.TyParen $ Hs.TyApp (Hs.TyCon (Hs.Qual (Hs.ModuleName "Lamdera.Haskelm.Core") (Hs.Ident "Record'"))) (Hs.TyPromoted (Hs.PromotedList True (fmap recordField $ Map.toList $ fmap tFieldType $ mapNameToFieldType)))
   (C.TUnit) -> Hs.TyCon (Hs.Special (Hs.UnitCon))
   (C.TTuple t1 t2 Nothing) -> Hs.TyTuple Hs.Boxed [tType t1, tType t2]
   (C.TTuple t1 t2 (Just t3)) -> Hs.TyTuple Hs.Boxed [tType t1, tType t2, tType t3]
@@ -192,13 +195,14 @@ tType t = case t of
         -- transpile type alias
         --tType t
         -- or unpack it
-        foldl
+        foldl -- T a b instead of a b T
           Hs.TyApp
           (Hs.TyCon (qual moduleName name))
           (nameTypePairs & fmap fst & fmap ident & fmap Hs.TyVar)
     in
     case aliasType of
       C.Holey t ->
+        -- DT.trace (sShow ("t", t, "tType", tType t, "conv t", conv t)) $
         conv t
         -- error (sShow t)
 
@@ -211,13 +215,13 @@ tFieldType (C.FieldType w16 t) = t
 
 tDef (C.Def (A.At _ name) pats e) =
   let
-    (npats, ne) = Rewrite.recordArgsToLet pats e
+    (npats, ne1) = Rewrite.recordArgsToLet pats e
   in
-  [Hs.FunBind [Hs.Match (ident name) (tPattern <$> npats) (Hs.UnGuardedRhs (tExpr ne)) Nothing]]
+  [Hs.FunBind [Hs.Match (ident name) (tPattern <$> npats) (Hs.UnGuardedRhs (tExpr ne1)) Nothing]]
 tDef td@(C.TypedDef name freeVars patTypeTuples e t) =
   tAnnot (tat name) (Just $ C.Forall freeVars
     ( ((patTypeTuples & fmap snd) ++ [t])
-      & foldl1 C.TLambda
+      & foldr1 C.TLambda -- (a -> b) -> c vs a -> b -> c
     )
   ) ++
   tDef (C.Def name (fmap fst patTypeTuples) e)
@@ -258,10 +262,13 @@ tExpr (A.At meta e) = case e of
       (np, ne1@(A.At meta (C.LetRec lrDefs lrExpr))) = Rewrite.recordArgToLet pat restExpr
       recNames = Rewrite.recordPatNames pat & snd & fmap fst
     in
-    Hs.Let (Hs.BDecls
-      (((\recName -> Hs.FunBind [Hs.Match (ident recName) [] (Hs.UnGuardedRhs (tExpr e1)) Nothing]) <$> recNames)
-      ++ (concat $ tDef <$> lrDefs)
-      )) (tExpr restExpr)
+    Hs.Let
+      (Hs.BDecls
+        ((Hs.PatBind (tPattern np) (Hs.UnGuardedRhs (tExpr e1)) Nothing)
+        : (concat $ tDef <$> lrDefs)
+        )
+      )
+      (tExpr lrExpr) -- TODO: or restExpr?
 
   (C.Case e caseBranches) ->
     let
@@ -278,7 +285,7 @@ tExpr (A.At meta e) = case e of
         fieldAst  = Hs.OverloadedLabel $ rawIdent fieldName
     in  Hs.Paren $ Hs.App (Hs.App get fieldAst) $ Hs.Paren (tExpr record)
   (C.Update base e nameFieldUpdateMap) ->
-    let ast fieldName model value = Hs.App (Hs.App (Hs.App (Hs.Var (Hs.Qual (Hs.ModuleName "Haskelm.Core") (Hs.Ident "set"))) (Hs.OverloadedLabel $ rawIdent fieldName)) (Hs.Paren $ tExpr value)) (Hs.Paren model)
+    let ast fieldName model value = Hs.App (Hs.App (Hs.App (Hs.Var (Hs.Qual (Hs.ModuleName "Lamdera.Haskelm.Core") (Hs.Ident "set"))) (Hs.OverloadedLabel $ rawIdent fieldName)) (Hs.Paren $ tExpr value)) (Hs.Paren model)
 
         fieldsAst =
           nameFieldUpdateMap

@@ -43,7 +43,7 @@ tDataToGADT moduName (Hs.DataDecl dataOrNew mContext declHead qualConDecls deriv
   let
     qConUnwrap (Hs.QualConDecl Nothing Nothing conDecl) = conDecl
     qualConDecls2 = qualConDecls & fmap qConUnwrap & fmap conDeclToGadtDecl
-    ctx vars = Hs.TyForall Nothing (Just (Hs.CxTuple (fmap (\ident -> Hs.ClassA (Hs.UnQual (Hs.Ident "ElmVal'")) [Hs.TyVar ident]) vars)))
+    ctx vars = Hs.TyForall Nothing (Just (Hs.CxTuple (fmap (\ident -> Hs.ClassA (haskelmCoreIdent "ElmVal'") [Hs.TyVar ident]) vars)))
     conDeclToGadtDecl (Hs.ConDecl name types) =
       Hs.GadtDecl name Nothing (ctx (dedup $ concatMap dTypeVars types) $ foldr1 Hs.TyFun (types ++ [dHeadToType moduName declHead]))
     conDeclToGadtDecl a = error ("expected ConDecl: " ++ show a)
@@ -58,14 +58,14 @@ tDataToInstDecl moduName (Hs.DataDecl dataOrNew mContext declHead qualConDecls d
     qConUnwrap (Hs.QualConDecl Nothing Nothing conDecl) = conDecl
     conDeclToInstDecl (Hs.ConDecl name types) = Hs.GadtDecl name Nothing (ctx (dHeadVars declHead) $ foldr1 Hs.TyFun (types ++ [dHeadToType moduName declHead]))
     conDeclToInstDecl a = error ("missing ConDecl: " ++ show a)
-    ctx vars = Hs.TyForall Nothing (Just (Hs.CxTuple (fmap (\ident -> Hs.ClassA (Hs.UnQual (Hs.Ident "ElmVal'")) [Hs.TyVar ident]) vars)))
+    ctx vars = Hs.TyForall Nothing (Just (Hs.CxTuple (fmap (\ident -> Hs.ClassA (haskelmCoreIdent "ElmVal'") [Hs.TyVar ident]) vars)))
     --
     dh = instDecl (declHead & dHeadVars) (declHead & dHeadToType moduName)
     instDecl names t =
       (Hs.IRule Nothing
         (Nothing)
         (Hs.IHApp
-          (Hs.IHCon (Hs.UnQual (Hs.Ident "ElmVal'")))
+          (Hs.IHCon (haskelmCoreIdent "ElmVal'"))
           (Hs.TyParen t)
         )
       )
@@ -81,7 +81,7 @@ tDataToInstDecl moduName (Hs.DataDecl dataOrNew mContext declHead qualConDecls d
               (Hs.UnGuardedRhs
                 (Hs.App (Hs.App (Hs.Var (Hs.Qual (Hs.ModuleName "String") (Hs.Ident "join"))) (Hs.Lit (Hs.String " "))) (Hs.List $
                   (Hs.Lit (Hs.String (rawName name))) :
-                  fmap (\ident -> Hs.App (Hs.Var (Hs.UnQual (Hs.Ident "toString"))) (Hs.Var (Hs.UnQual ident))) vars
+                  fmap (\ident -> Hs.App (Hs.Var (haskelmCoreIdent "toString")) (Hs.Var (Hs.UnQual ident))) vars
               )))
               Nothing
           ]
@@ -106,9 +106,7 @@ tDataToInstDecl moduName (Hs.DataDecl dataOrNew mContext declHead qualConDecls d
                           (Hs.App
                             (Hs.App
                               (Hs.Var
-                                (Hs.UnQual
-                                  (Hs.Ident "equals")
-                                )
+                                (haskelmCoreIdent "equals")
                               )
                               (Hs.Var
                                 (Hs.UnQual
@@ -151,6 +149,7 @@ tDataToInstDecl moduName (Hs.DataDecl dataOrNew mContext declHead qualConDecls d
 
 tDataToInstDecl _ _ = []
 
+haskelmCoreIdent i = Hs.Qual (Hs.ModuleName "Lamdera.Haskelm.Core") (Hs.Ident i)
 -- ##############################################
 
 dHeadToType :: String -> Hs.DeclHead -> Hs.Type
@@ -201,7 +200,7 @@ dedup (x:xs) = x : filter (/= x) (dedup xs)
   data LazyListView a
     = Nil
     | Cons a (Lazy.List.LazyList a)
-    deriving (Haskelm.Core.Show, Haskelm.Core.Eq, ElmVal')
+    deriving (Lamdera.Haskelm.Core.Show, Lamdera.Haskelm.Core.Eq, ElmVal')
 
   data LazyListView a where
     Nil :: ElmVal' a => LazyListView a
