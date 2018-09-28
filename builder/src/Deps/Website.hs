@@ -31,7 +31,7 @@ import qualified Network.HTTP.Types as Http
 import qualified System.Directory as Dir
 import System.FilePath ((</>), splitFileName)
 
-import Elm.Package (Name, Version)
+import Elm.Package (Name(Name), Version(Version))
 import qualified Elm.Package as Pkg
 import qualified Json.Decode as D
 
@@ -42,15 +42,21 @@ import qualified Reporting.Task as Task
 import qualified Reporting.Task.Http as Http
 import qualified Stuff.Paths as Path
 
-
+import qualified Debug.Trace as DT
+import Transpile.PrettyPrint
 
 -- GET PACKAGE INFO
 
 
 getElmJson :: Name -> Version -> Task.Task BS.ByteString
 getElmJson name version =
-  Http.run $ fetchByteString $
-    "packages/" ++ Pkg.toUrl name ++ "/" ++ Pkg.versionToString version ++ "/elm.json"
+  (\v -> DT.trace (sShow ("getElmJson", name, version, "v", v)) v) <$>
+  case name of
+    (Name "lamdera" _) ->
+      pure $ BS.pack "wuhu"
+    _ ->
+      Http.run $ fetchByteString $
+        "packages/" ++ Pkg.toUrl name ++ "/" ++ Pkg.versionToString version ++ "/elm.json"
 
 
 getDocs :: Name -> Version -> Task.Task BS.ByteString
@@ -65,6 +71,7 @@ getDocs name version =
 
 getNewPackages :: Int -> Task.Task [(Name, Version)]
 getNewPackages index =
+  DT.trace ("getNewPackages! What did you do? Tell Filip what you did!") $ -- this runs when version solver tries to upgrade a dependency
   Http.run $ fetchJson "packages" E.badJsonToDocs (D.list newPkgDecoder) ("all-packages/since/" ++ show index)
 
 
@@ -93,9 +100,16 @@ newPkgDecoder =
 -- ALL PACKAGES
 
 
+lamderaPackages :: Map.Map Name [Version]
+lamderaPackages = Map.fromList
+  [ (Name "lamdera" "core", [Version 1 0 0])
+  ]
+
+
 getAllPackages :: Task.Task (Map.Map Name [Version])
 getAllPackages =
-  Http.run $ fetchJson "packages" E.badJsonToDocs allPkgsDecoder "all-packages"
+  Map.union lamderaPackages <$>
+  (Http.run $ fetchJson "packages" E.badJsonToDocs allPkgsDecoder "all-packages")
 
 
 allPkgsDecoder :: D.Decoder E.BadJson (Map.Map Name [Version])
@@ -131,6 +145,7 @@ fetchByteString path =
 
 fetchJson :: String -> (e -> [D.Doc]) -> D.Decoder e a -> String -> Http.Fetch a
 fetchJson rootName errorToDocs decoder path =
+  DT.trace (sShow ("fetchJson", rootName, path)) $
   Http.package path [] $ \request manager ->
     do  response <- Client.httpLbs request manager
         let bytes = LBS.toStrict (Client.responseBody response)
