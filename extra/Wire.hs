@@ -40,9 +40,10 @@ modifyCanonical canonical flag pkg importDict interfaces source =
 
               -- tracef ("-" ++ N.toString n) canonical
 
-              let unionDecls = fmap unionToEncoder $ Map.toList unions
+              let unionEncoders = fmap unionToEncoder $ Map.toList unions
+              let unionDecoders = fmap unionToDecoder $ Map.toList unions
 
-              tracef ("-" ++ N.toString n) (canonical { _decls = funtimes unionDecls })
+              tracef ("-" ++ N.toString n) (canonical { _decls = funtimes (unionEncoders ++ unionDecoders) })
 
               -- tracef ("-" ++ N.toString n) (canonical { _decls =
               --   case _decls canonical of
@@ -178,6 +179,194 @@ unionCaseBranch unionName union index unionLabel unionArgs expr =
     expr
 
 
+{-
+
+This function is responsible for generating the Elm decoder code for a given custom type
+It needs to be generic across any possible custom type users are able to define
+Right now here we've got the hardcoded desired AST representing the decoders we would want
+to generate for the custom type called "Union" from extra/src/AllTypes.elm
+We still need to
+
+- Generalise it to work on any type of custom type value
+- Generalise it to work for any number of custom type paramaters, i.e type Blah = Derp Int Int Int Int Int Int (q: how many is max?)
+- Generalise it to remove reference to AllTypes explicitly and work generically across any module anywhere in the user's codebase, including core libs?
+
+Once this is done, every single SomeModule that defines some CustomType will have a SomeModule.evg_d_CustomType automatically available.
+
+We will be able to leverage this in our wrapper program as well by detecting the type the user is using for their SomeModel, and injecting evg_d_SomeModel
+into the core runtime Elm code so it dynamically "write" the write boilerplate at compile time for us.
+
+-}
+unionToDecoder (unionName_, union_) = do
+  let
+    _unionName = N.toString unionName_
+
+    _decoderName = "evg_d_" ++ N.toString unionName_
+
+    _genUnion0 _index ctor =
+      case ctor of
+        Ctor n index numParams params ->
+          let _tagNameT = N.toText n
+              _tagNameS = N.toString n
+          in
+          at (Call evergreenUnion
+            [str _tagNameT
+            ,at (VarCtor Normal (canonical "author" "project" "AllTypes")
+                  (name _tagNameS)
+                  (ZeroBased _index)
+                  (Forall (Map.fromList [])
+                      (qtyp "author" "project" "AllTypes" _unionName [])))])
+
+    _genUnion1 _index ctor =
+      case ctor of
+        Ctor n index numParams pTypes ->
+          let _tagNameT = N.toText n
+              _tagNameS = N.toString n
+              _pType = head pTypes
+          in
+          case _tagNameS of
+            "Recursive" ->
+              at (Call evergreenUnion1
+                  ( [str "Recursive"] ++
+                    (fmap decodeParamType pTypes) ++
+                    [generateConstructor "Recursive" (index) pTypes]
+                  )
+
+                    -- [str "Recursive"
+                    --
+                    -- ,at (Call ((qvar "elm" "json" "Json.Decode" "lazy"
+                    --                           (Forall (Map.fromList [(name "a"
+                    --                                             ,())])
+                    --                                   (tlam (tlam TUnit (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "a"]))
+                    --                                            (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "a"])))))
+                    --           [at (Lambda [at PAnything]
+                    --                       (at (VarTopLevel (canonical "author" "project" "AllTypes")
+                    --                                        (name "evg_d_Union"))))])
+                    -- ,generateConstructor "Recursive" (index) pTypes
+                    -- ]
+                )
+            "Valued" ->
+              at (Call evergreenUnion1
+                   ( [str "Valued"] ++
+                     (fmap decodeParamType pTypes) ++
+                     [generateConstructor "Valued" (index) pTypes]
+                   )
+                 )
+            "DeeplyValued" ->
+              at (Call evergreenUnion1
+              ( [str "DeeplyValued"] ++
+                (fmap decodeParamType pTypes) ++
+                [generateConstructor "DeeplyValued" (index) pTypes]
+              ))
+
+
+
+    -- @TODO only partially implemented, needs to be extended for all possible types
+    decodeParamType pType =
+       case pType of
+         TType (Canonical (Name "elm" "core") "Basics") typeName next ->
+           case N.toString typeName of
+             "Int" ->  jsonDecodeInt
+             "Bool" -> jsonDecodeBool
+
+         TType (Canonical (Name "elm" "core") "List") typeName next ->
+           case N.toString typeName of
+             "List" -> jsonDecodeList (decodeParamType (head next))
+
+         TType (Canonical (Name "author" "project") _) typeName next ->
+           let _targetDecoderName = "evg_d_" ++ N.toString typeName
+               _targetDecoder = at (VarTopLevel (canonical "author" "project" "AllTypes") (name _targetDecoderName))
+           in
+           if _unionName == N.toString typeName then
+
+             {- This must be a recursive custom type.
+
+             i.e. if we're dealing with a type like this:
+
+               type Union = Recursive Union
+
+             The branch decoder we'd be generating is:
+
+             EG.union1 "Recursive" (D.lazy (\_ -> evg_d_Union)) Recursive
+             -}
+             -- @TODO can probably "clean" this up into some helper functions
+             at (Call ((qvar "elm" "json" "Json.Decode" "lazy"
+                                       (Forall (Map.fromList [(name "a"
+                                                         ,())])
+                                               (tlam (tlam TUnit (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "a"]))
+                                                        (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "a"])))))
+                       [at (Lambda [at PAnything]
+                                   _targetDecoder)])
+
+          else
+           -- Any types from user, must have encoder ref in this file
+           -- @TODO we'll need to extend this to be able to call custom types from anywhere in the project
+           -- Question: how do we bubble-up the need for additional imports? Do we just transitively make sure we inject explicit
+           -- imports of all evergreen wire functions whenever a type is imported into a file? Note (..) will work fine,
+           -- just `exposing (SomeModel)` will need special treatment.
+
+           _targetDecoder
+
+         _ -> error $ "decodeParamType didn't match any existing implementations: " ++ show pType
+
+
+    _unionBranches =
+      case union_ of
+        Union _u_vars _u_alts _u_numAlts _u_opts ->
+          imap (\i ctor ->
+            case ctor of
+              Ctor n index numParams params ->
+                case numParams of
+                  0 -> _genUnion0 i ctor
+                  1 -> _genUnion1 i ctor
+                  -- @TODO need to add support for more depths of union types
+                  x -> undefined $ "Union parsing for " ++ show x ++ " params has not yet been implemented"
+          ) _u_alts
+
+
+  TypedDef (named _decoderName)
+                        (Map.fromList [])
+                        []
+                        (at (Call ((qvar "elm" "json" "Json.Decode" "oneOf"
+                                                  (Forall (Map.fromList [(name "a"
+                                                                    ,())])
+                                                          (tlam (qtyp "elm" "core" "List" "List" [qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "a"]])
+                                                                   (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "a"])))))
+                                  [at (List _unionBranches)]))
+                        (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "author" "project" "AllTypes" "Union" []])
+
+
+
+-- Generate a custom type constructor value function, i.e hilighted here:
+--
+-- type Blah = Derp Int
+--
+-- x = Derp 1
+--     ^^^^
+--
+generateConstructor :: String -> ZeroBased -> [Type] -> Located Expr_
+generateConstructor name_ index paramTypes =
+  at (VarCtor Normal
+    (canonical "author" "project" "AllTypes")
+    (name name_)
+    (index)
+    (generateConstructorAnnotation paramTypes (qtyp "author" "project" "AllTypes" "Union" []))
+  )
+
+-- For a given list of [Type] of params for a custom type constructor, creates the signature for that constructor
+-- ending in the actual type of the custom type itself
+generateConstructorAnnotation :: [Type] -> Type -> Annotation
+generateConstructorAnnotation pTypes customType =
+  let typeSignatures pTypes_ =
+        case pTypes_ of
+          [] -> customType
+          x:[] -> tlam x customType
+          x:xs -> tlam x (typeSignatures xs)
+  in
+  Forall (Map.fromList []) (typeSignatures pTypes)
+
+
+
 staticX =
   (Def (at
            (N.fromString "evg"))
@@ -274,13 +463,20 @@ vlocal n = at (VarLocal (name n))
 
 jsonEncodeList =
   ((qvar "elm" "json" "Json.Encode" "list"
-      (Forall (Map.fromList [(name "a"
-                        ,())])
+      (Forall (Map.fromList [(name "a" ,())])
               (tlam (tlam (tvar "a")
                           (qtyp "elm" "json" "Json.Encode" "Value" []))
                     (tlam (qtyp "elm" "core" "List" "List" [tvar "a"])
                           (qtyp "elm" "json" "Json.Encode" "Value" [])))
       )))
+
+
+jsonDecodeList decoder =
+  at (Call ((qvar "elm" "json" "Json.Decode" "list"
+                            (Forall (Map.fromList [(name "a" ,())])
+                                    (tlam (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "a"])
+                                             (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "elm" "core" "List" "List" [tvar "a"]])))))
+            [decoder])
 
 
 jsonEncodeString =
@@ -303,6 +499,11 @@ jsonDecodeInt =
     (Forall (Map.fromList [])
             (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "elm" "core" "Basics" "Int" []])))
 
+
+jsonDecodeBool =
+  (qvar "elm" "json" "Json.Decode" "bool"
+    (Forall (Map.fromList [])
+      (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "elm" "core" "Basics" "Bool" []])))
 
 
 -- Core.Basics
@@ -394,9 +595,9 @@ evergreenEncodeDict =
 
 
 
-funtimes additionalEncoders =
+funtimes additionalGenerated =
     DeclareRec
-    additionalEncoders
+    additionalGenerated
     (Declare (TypedDef (named "evg_e_AllTypes")
                       (Map.fromList [])
                       [(at (PVar (name "evg_p0"))
@@ -489,66 +690,40 @@ funtimes additionalEncoders =
                                                           (Forall (Map.fromList [])
                                                                   (qtyp "elm" "json" "Json.Encode" "Value" [])))])]))
                       (qtyp "elm" "json" "Json.Encode" "Value" []))
-            (DeclareRec [TypedDef (named "evg_d_Union")
-                                  (Map.fromList [])
-                                  []
-                                  (at (Call ((qvar "elm" "json" "Json.Decode" "oneOf"
-                                                            (Forall (Map.fromList [(name "a"
-                                                                              ,())])
-                                                                    (tlam (qtyp "elm" "core" "List" "List" [qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "a"]])
-                                                                             (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "a"])))))
-                                            [at (List [at (Call evergreenUnion1
-                                                                [str "Recursive"
-                                                                ,at (Call ((qvar "elm" "json" "Json.Decode" "lazy"
-                                                                                          (Forall (Map.fromList [(name "a"
-                                                                                                            ,())])
-                                                                                                  (tlam (tlam TUnit (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "a"]))
-                                                                                                           (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "a"])))))
-                                                                          [at (Lambda [at PAnything]
-                                                                                      (at (VarTopLevel (canonical "author" "project" "AllTypes")
-                                                                                                       (name "evg_d_Union"))))])
-                                                                ,at (VarCtor Normal (canonical "author" "project" "AllTypes")
-                                                                                    (name "Recursive")
-                                                                                    (ZeroBased 0)
-                                                                                    (Forall (Map.fromList [])
-                                                                                            (tlam (qtyp "author" "project" "AllTypes" "Union" [])
-                                                                                                     (qtyp "author" "project" "AllTypes" "Union" []))))])
-                                                      ,at (Call evergreenUnion1
-                                                                [str "Valued"
-                                                                ,jsonDecodeInt
-                                                                ,at (VarCtor Normal (canonical "author" "project" "AllTypes")
-                                                                                    (name "Valued")
-                                                                                    (ZeroBased 1)
-                                                                                    (Forall (Map.fromList [])
-                                                                                            (tlam (qtyp "elm" "core" "Basics" "Int" [])
-                                                                                                     (qtyp "author" "project" "AllTypes" "Union" []))))])
-                                                      ,at (Call evergreenUnion1
-                                                                [str "DeeplyValued"
-                                                                ,at (Call ((qvar "elm" "json" "Json.Decode" "list"
-                                                                                          (Forall (Map.fromList [(name "a"
-                                                                                                            ,())])
-                                                                                                  (tlam (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "a"])
-                                                                                                           (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "elm" "core" "List" "List" [tvar "a"]])))))
-                                                                          [(qvar "elm" "json" "Json.Decode" "bool"
-                                                                                          (Forall (Map.fromList [])
-                                                                                                  (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "elm" "core" "Basics" "Bool" []])))])
-                                                                ,at (VarCtor Normal (canonical "author" "project" "AllTypes")
-                                                                                    (name "DeeplyValued")
-                                                                                    (ZeroBased 2)
-                                                                                    (Forall (Map.fromList [])
-                                                                                            (tlam (qtyp "elm" "core" "List" "List" [qtyp "elm" "core" "Basics" "Bool" []])
-                                                                                                     (qtyp "author" "project" "AllTypes" "Union" []))))])
-                                                      ,at (Call evergreenUnion
-                                                                [str "Leaf"
-                                                                ,at (VarCtor Normal (canonical "author" "project" "AllTypes")
-                                                                                    (name "Leaf")
-                                                                                    (ZeroBased 3)
-                                                                                    (Forall (Map.fromList [])
-                                                                                            (qtyp "author" "project" "AllTypes" "Union" [])))])])]))
-                                  (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "author" "project" "AllTypes" "Union" []])]
-                        (Declare (TypedDef (named "evg_d_AllTypes")
-                                           (Map.fromList [])
-                                           []
+            evg_d_Union)
+
+-- @TODO this is legacy as it was an intermediary before
+-- need to remove this bloock & place  evg_d_AllTypes directly in it's spot
+evg_d_Union =
+  (DeclareRec []
+              evg_d_AllTypes)
+
+evg_d_AllTypes =
+  (Declare (TypedDef (named "evg_d_AllTypes")
+                     (Map.fromList [])
+                     []
+                     (at (Binop (name "|>")
+                                (canonical "elm" "core" "Basics")
+                                (name "apR")
+                                (Forall (Map.fromList [(name "a"
+                                                  ,())
+                                                  ,(name "b"
+                                                  ,())])
+                                        (tlam (tvar "a")
+                                                 (tlam (tlam (tvar "a")
+                                                                   (tvar "b"))
+                                                          (tvar "b"))))
+                                (at (Binop (name "|>")
+                                           (canonical "elm" "core" "Basics")
+                                           (name "apR")
+                                           (Forall (Map.fromList [(name "a"
+                                                             ,())
+                                                             ,(name "b"
+                                                             ,())])
+                                                   (tlam (tvar "a")
+                                                            (tlam (tlam (tvar "a")
+                                                                              (tvar "b"))
+                                                                     (tvar "b"))))
                                            (at (Binop (name "|>")
                                                       (canonical "elm" "core" "Basics")
                                                       (name "apR")
@@ -670,109 +845,59 @@ funtimes additionalEncoders =
                                                                                                                                                                                      (tlam (tlam (tvar "a")
                                                                                                                                                                                                        (tvar "b"))
                                                                                                                                                                                               (tvar "b"))))
-                                                                                                                                                                    (at (Binop (name "|>")
-                                                                                                                                                                               (canonical "elm" "core" "Basics")
-                                                                                                                                                                               (name "apR")
-                                                                                                                                                                               (Forall (Map.fromList [(name "a"
-                                                                                                                                                                                                 ,())
-                                                                                                                                                                                                 ,(name "b"
-                                                                                                                                                                                                 ,())])
-                                                                                                                                                                                       (tlam (tvar "a")
-                                                                                                                                                                                                (tlam (tlam (tvar "a")
-                                                                                                                                                                                                                  (tvar "b"))
-                                                                                                                                                                                                         (tvar "b"))))
-                                                                                                                                                                               (at (Binop (name "|>")
-                                                                                                                                                                                          (canonical "elm" "core" "Basics")
-                                                                                                                                                                                          (name "apR")
-                                                                                                                                                                                          (Forall (Map.fromList [(name "a"
-                                                                                                                                                                                                            ,())
-                                                                                                                                                                                                            ,(name "b"
-                                                                                                                                                                                                            ,())])
-                                                                                                                                                                                                  (tlam (tvar "a")
-                                                                                                                                                                                                           (tlam (tlam (tvar "a")
-                                                                                                                                                                                                                             (tvar "b"))
-                                                                                                                                                                                                                    (tvar "b"))))
-                                                                                                                                                                                          (at (Call ((qvar "elm" "json" "Json.Decode" "succeed"
-                                                                                                                                                                                                                    (Forall (Map.fromList [(name "a"
-                                                                                                                                                                                                                                      ,())])
-                                                                                                                                                                                                                            (tlam (tvar "a")
-                                                                                                                                                                                                                                     (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "a"])))))
-                                                                                                                                                                                                    [at (VarCtor Normal (canonical "author" "project" "AllTypes")
-                                                                                                                                                                                                                        (name "AllTypes")
-                                                                                                                                                                                                                        (ZeroBased 0)
-                                                                                                                                                                                                                        (Forall (Map.fromList [])
-                                                                                                                                                                                                                                (tlam (qtyp "elm" "core" "Basics" "Int" [])
-                                                                                                                                                                                                                                         (tlam (qtyp "elm" "core" "Basics" "Float" [])
-                                                                                                                                                                                                                                                  (tlam (qtyp "elm" "core" "Basics" "Bool" [])
-                                                                                                                                                                                                                                                           (tlam (qtyp "elm" "core" "Char" "Char" [])
-                                                                                                                                                                                                                                                                    (tlam (qtyp "elm" "core" "String" "String" [])
-                                                                                                                                                                                                                                                                             (tlam (qtyp "elm" "core" "List" "List" [qtyp "elm" "core" "Basics" "Int" []])
-                                                                                                                                                                                                                                                                                      (tlam (qtyp "elm" "core" "Set" "Set" [qtyp "elm" "core" "Basics" "Float" []])
-                                                                                                                                                                                                                                                                                               (tlam (qtyp "elm" "core" "Array" "Array" [qtyp "elm" "core" "String" "String" []])
-                                                                                                                                                                                                                                                                                                        (tlam (qtyp "elm" "core" "Dict" "Dict" [qtyp "elm" "core" "String" "String" []
-                                                                                                                                                                                                                                                                                                                        ,qtyp "elm" "core" "List" "List" [qtyp "elm" "core" "Basics" "Int" []]])
-                                                                                                                                                                                                                                                                                                                 (tlam (qtyp "elm" "time" "Time" "Posix" [])
-                                                                                                                                                                                                                                                                                                                          (tlam (qtyp "elm" "core" "Basics" "Order" [])
-                                                                                                                                                                                                                                                                                                                                   (tlam (qtyp "author" "project" "AllTypes" "Union" [])
-                                                                                                                                                                                                                                                                                                                                            (tlam TUnit (TAlias (canonical "author" "project" "AllTypes")
-                                                                                                                                                                                                                                                                                                                                                                   (name "AllTypes")
-                                                                                                                                                                                                                                                                                                                                                                   []
-                                                                                                                                                                                                                                                                                                                                                                   (Filled (TRecord (Map.fromList [(name "arrayString"
-                                                                                                                                                                                                                                                                                                                                                                                              ,FieldType 7 (qtyp "elm" "core" "Array" "Array" [qtyp "elm" "core" "String" "String" []]))
-                                                                                                                                                                                                                                                                                                                                                                                              ,(name "bool"
-                                                                                                                                                                                                                                                                                                                                                                                              ,FieldType 2 (qtyp "elm" "core" "Basics" "Bool" []))
-                                                                                                                                                                                                                                                                                                                                                                                              ,(name "char"
-                                                                                                                                                                                                                                                                                                                                                                                              ,FieldType 3 (qtyp "elm" "core" "Char" "Char" []))
-                                                                                                                                                                                                                                                                                                                                                                                              ,(name "dict"
-                                                                                                                                                                                                                                                                                                                                                                                              ,FieldType 8 (qtyp "elm" "core" "Dict" "Dict" [qtyp "elm" "core" "String" "String" []
-                                                                                                                                                                                                                                                                                                                                                                                                                  ,qtyp "elm" "core" "List" "List" [qtyp "elm" "core" "Basics" "Int" []]]))
-                                                                                                                                                                                                                                                                                                                                                                                              ,(name "float"
-                                                                                                                                                                                                                                                                                                                                                                                              ,FieldType 1 (qtyp "elm" "core" "Basics" "Float" []))
-                                                                                                                                                                                                                                                                                                                                                                                              ,(name "int"
-                                                                                                                                                                                                                                                                                                                                                                                              ,FieldType 0 (qtyp "elm" "core" "Basics" "Int" []))
-                                                                                                                                                                                                                                                                                                                                                                                              ,(name "listInt"
-                                                                                                                                                                                                                                                                                                                                                                                              ,FieldType 5 (qtyp "elm" "core" "List" "List" [qtyp "elm" "core" "Basics" "Int" []]))
-                                                                                                                                                                                                                                                                                                                                                                                              ,(name "order"
-                                                                                                                                                                                                                                                                                                                                                                                              ,FieldType 10 (qtyp "elm" "core" "Basics" "Order" []))
-                                                                                                                                                                                                                                                                                                                                                                                              ,(name "setFloat"
-                                                                                                                                                                                                                                                                                                                                                                                              ,FieldType 6 (qtyp "elm" "core" "Set" "Set" [qtyp "elm" "core" "Basics" "Float" []]))
-                                                                                                                                                                                                                                                                                                                                                                                              ,(name "string"
-                                                                                                                                                                                                                                                                                                                                                                                              ,FieldType 4 (qtyp "elm" "core" "String" "String" []))
-                                                                                                                                                                                                                                                                                                                                                                                              ,(name "time"
-                                                                                                                                                                                                                                                                                                                                                                                              ,FieldType 9 (qtyp "elm" "time" "Time" "Posix" []))
-                                                                                                                                                                                                                                                                                                                                                                                              ,(name "union"
-                                                                                                                                                                                                                                                                                                                                                                                              ,FieldType 11 (qtyp "author" "project" "AllTypes" "Union" []))
-                                                                                                                                                                                                                                                                                                                                                                                              ,(name "unit"
-                                                                                                                                                                                                                                                                                                                                                                                              ,FieldType 12 TUnit)])
-                                                                                                                                                                                                                                                                                                                                                                                    Nothing))))))))))))))))))]))
-                                                                                                                                                                                          (at (Call ((qvar "author" "project" "Evergreen" "atIndex"
-                                                                                                                                                                                                                    (Forall (Map.fromList [(name "a"
-                                                                                                                                                                                                                                      ,())
-                                                                                                                                                                                                                                      ,(name "b"
-                                                                                                                                                                                                                                      ,())])
-                                                                                                                                                                                                                            (tlam (qtyp "elm" "core" "Basics" "Int" [])
-                                                                                                                                                                                                                                     (tlam (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "a"])
-                                                                                                                                                                                                                                              (tlam (qtyp "elm" "json" "Json.Decode" "Decoder" [tlam (tvar "a")
-                                                                                                                                                                                                                                                                       (tvar "b")])
-                                                                                                                                                                                                                                                       (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "b"])))))))
-                                                                                                                                                                                                    [int 0
-                                                                                                                                                                                                    ,(qvar "elm" "json" "Json.Decode" "int"
-                                                                                                                                                                                                                    (Forall (Map.fromList [])
-                                                                                                                                                                                                                            (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "elm" "core" "Basics" "Int" []])))]))))
-                                                                                                                                                                               (at (Call ((qvar "author" "project" "Evergreen" "atIndex"
-                                                                                                                                                                                                         (Forall (Map.fromList [(name "a"
-                                                                                                                                                                                                                           ,())
-                                                                                                                                                                                                                           ,(name "b"
-                                                                                                                                                                                                                           ,())])
-                                                                                                                                                                                                                 (tlam (qtyp "elm" "core" "Basics" "Int" [])
-                                                                                                                                                                                                                          (tlam (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "a"])
-                                                                                                                                                                                                                                   (tlam (qtyp "elm" "json" "Json.Decode" "Decoder" [tlam (tvar "a")
-                                                                                                                                                                                                                                                            (tvar "b")])
-                                                                                                                                                                                                                                            (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "b"])))))))
-                                                                                                                                                                                         [int 1
-                                                                                                                                                                                         ,(qvar "elm" "json" "Json.Decode" "float"
-                                                                                                                                                                                                         (Forall (Map.fromList [])
-                                                                                                                                                                                                                 (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "elm" "core" "Basics" "Float" []])))]))))
+                                                                                                                                                                    (at (Call ((qvar "elm" "json" "Json.Decode" "succeed"
+                                                                                                                                                                                              (Forall (Map.fromList [(name "a"
+                                                                                                                                                                                                                ,())])
+                                                                                                                                                                                                      (tlam (tvar "a")
+                                                                                                                                                                                                               (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "a"])))))
+                                                                                                                                                                              [at (VarCtor Normal (canonical "author" "project" "AllTypes")
+                                                                                                                                                                                                  (name "AllTypes")
+                                                                                                                                                                                                  (ZeroBased 0)
+                                                                                                                                                                                                  (Forall (Map.fromList [])
+                                                                                                                                                                                                          (tlam (qtyp "elm" "core" "Basics" "Int" [])
+                                                                                                                                                                                                                   (tlam (qtyp "elm" "core" "Basics" "Float" [])
+                                                                                                                                                                                                                            (tlam (qtyp "elm" "core" "Basics" "Bool" [])
+                                                                                                                                                                                                                                     (tlam (qtyp "elm" "core" "Char" "Char" [])
+                                                                                                                                                                                                                                              (tlam (qtyp "elm" "core" "String" "String" [])
+                                                                                                                                                                                                                                                       (tlam (qtyp "elm" "core" "List" "List" [qtyp "elm" "core" "Basics" "Int" []])
+                                                                                                                                                                                                                                                                (tlam (qtyp "elm" "core" "Set" "Set" [qtyp "elm" "core" "Basics" "Float" []])
+                                                                                                                                                                                                                                                                         (tlam (qtyp "elm" "core" "Array" "Array" [qtyp "elm" "core" "String" "String" []])
+                                                                                                                                                                                                                                                                                  (tlam (qtyp "elm" "core" "Dict" "Dict" [qtyp "elm" "core" "String" "String" []
+                                                                                                                                                                                                                                                                                                  ,qtyp "elm" "core" "List" "List" [qtyp "elm" "core" "Basics" "Int" []]])
+                                                                                                                                                                                                                                                                                           (tlam (qtyp "elm" "time" "Time" "Posix" [])
+                                                                                                                                                                                                                                                                                                    (tlam (qtyp "elm" "core" "Basics" "Order" [])
+                                                                                                                                                                                                                                                                                                             (tlam (qtyp "author" "project" "AllTypes" "Union" [])
+                                                                                                                                                                                                                                                                                                                      (tlam TUnit (TAlias (canonical "author" "project" "AllTypes")
+                                                                                                                                                                                                                                                                                                                                             (name "AllTypes")
+                                                                                                                                                                                                                                                                                                                                             []
+                                                                                                                                                                                                                                                                                                                                             (Filled (TRecord (Map.fromList [(name "arrayString"
+                                                                                                                                                                                                                                                                                                                                                                        ,FieldType 7 (qtyp "elm" "core" "Array" "Array" [qtyp "elm" "core" "String" "String" []]))
+                                                                                                                                                                                                                                                                                                                                                                        ,(name "bool"
+                                                                                                                                                                                                                                                                                                                                                                        ,FieldType 2 (qtyp "elm" "core" "Basics" "Bool" []))
+                                                                                                                                                                                                                                                                                                                                                                        ,(name "char"
+                                                                                                                                                                                                                                                                                                                                                                        ,FieldType 3 (qtyp "elm" "core" "Char" "Char" []))
+                                                                                                                                                                                                                                                                                                                                                                        ,(name "dict"
+                                                                                                                                                                                                                                                                                                                                                                        ,FieldType 8 (qtyp "elm" "core" "Dict" "Dict" [qtyp "elm" "core" "String" "String" []
+                                                                                                                                                                                                                                                                                                                                                                                            ,qtyp "elm" "core" "List" "List" [qtyp "elm" "core" "Basics" "Int" []]]))
+                                                                                                                                                                                                                                                                                                                                                                        ,(name "float"
+                                                                                                                                                                                                                                                                                                                                                                        ,FieldType 1 (qtyp "elm" "core" "Basics" "Float" []))
+                                                                                                                                                                                                                                                                                                                                                                        ,(name "int"
+                                                                                                                                                                                                                                                                                                                                                                        ,FieldType 0 (qtyp "elm" "core" "Basics" "Int" []))
+                                                                                                                                                                                                                                                                                                                                                                        ,(name "listInt"
+                                                                                                                                                                                                                                                                                                                                                                        ,FieldType 5 (qtyp "elm" "core" "List" "List" [qtyp "elm" "core" "Basics" "Int" []]))
+                                                                                                                                                                                                                                                                                                                                                                        ,(name "order"
+                                                                                                                                                                                                                                                                                                                                                                        ,FieldType 10 (qtyp "elm" "core" "Basics" "Order" []))
+                                                                                                                                                                                                                                                                                                                                                                        ,(name "setFloat"
+                                                                                                                                                                                                                                                                                                                                                                        ,FieldType 6 (qtyp "elm" "core" "Set" "Set" [qtyp "elm" "core" "Basics" "Float" []]))
+                                                                                                                                                                                                                                                                                                                                                                        ,(name "string"
+                                                                                                                                                                                                                                                                                                                                                                        ,FieldType 4 (qtyp "elm" "core" "String" "String" []))
+                                                                                                                                                                                                                                                                                                                                                                        ,(name "time"
+                                                                                                                                                                                                                                                                                                                                                                        ,FieldType 9 (qtyp "elm" "time" "Time" "Posix" []))
+                                                                                                                                                                                                                                                                                                                                                                        ,(name "union"
+                                                                                                                                                                                                                                                                                                                                                                        ,FieldType 11 (qtyp "author" "project" "AllTypes" "Union" []))
+                                                                                                                                                                                                                                                                                                                                                                        ,(name "unit"
+                                                                                                                                                                                                                                                                                                                                                                        ,FieldType 12 TUnit)])
+                                                                                                                                                                                                                                                                                                                                                              Nothing))))))))))))))))))]))
                                                                                                                                                                     (at (Call ((qvar "author" "project" "Evergreen" "atIndex"
                                                                                                                                                                                               (Forall (Map.fromList [(name "a"
                                                                                                                                                                                                                 ,())
@@ -783,10 +908,10 @@ funtimes additionalEncoders =
                                                                                                                                                                                                                         (tlam (qtyp "elm" "json" "Json.Decode" "Decoder" [tlam (tvar "a")
                                                                                                                                                                                                                                                  (tvar "b")])
                                                                                                                                                                                                                                  (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "b"])))))))
-                                                                                                                                                                              [int 2
-                                                                                                                                                                              ,(qvar "elm" "json" "Json.Decode" "bool"
+                                                                                                                                                                              [int 0
+                                                                                                                                                                              ,(qvar "elm" "json" "Json.Decode" "int"
                                                                                                                                                                                               (Forall (Map.fromList [])
-                                                                                                                                                                                                      (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "elm" "core" "Basics" "Bool" []])))]))))
+                                                                                                                                                                                                      (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "elm" "core" "Basics" "Int" []])))]))))
                                                                                                                                                          (at (Call ((qvar "author" "project" "Evergreen" "atIndex"
                                                                                                                                                                                    (Forall (Map.fromList [(name "a"
                                                                                                                                                                                                      ,())
@@ -797,10 +922,10 @@ funtimes additionalEncoders =
                                                                                                                                                                                                              (tlam (qtyp "elm" "json" "Json.Decode" "Decoder" [tlam (tvar "a")
                                                                                                                                                                                                                                       (tvar "b")])
                                                                                                                                                                                                                       (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "b"])))))))
-                                                                                                                                                                   [int 3
-                                                                                                                                                                   ,(qvar "author" "project" "Evergreen" "d_char"
+                                                                                                                                                                   [int 1
+                                                                                                                                                                   ,(qvar "elm" "json" "Json.Decode" "float"
                                                                                                                                                                                    (Forall (Map.fromList [])
-                                                                                                                                                                                           (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "elm" "core" "Char" "Char" []])))]))))
+                                                                                                                                                                                           (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "elm" "core" "Basics" "Float" []])))]))))
                                                                                                                                               (at (Call ((qvar "author" "project" "Evergreen" "atIndex"
                                                                                                                                                                         (Forall (Map.fromList [(name "a"
                                                                                                                                                                                           ,())
@@ -811,10 +936,10 @@ funtimes additionalEncoders =
                                                                                                                                                                                                   (tlam (qtyp "elm" "json" "Json.Decode" "Decoder" [tlam (tvar "a")
                                                                                                                                                                                                                            (tvar "b")])
                                                                                                                                                                                                            (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "b"])))))))
-                                                                                                                                                        [int 4
-                                                                                                                                                        ,(qvar "elm" "json" "Json.Decode" "string"
+                                                                                                                                                        [int 2
+                                                                                                                                                        ,(qvar "elm" "json" "Json.Decode" "bool"
                                                                                                                                                                         (Forall (Map.fromList [])
-                                                                                                                                                                                (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "elm" "core" "String" "String" []])))]))))
+                                                                                                                                                                                (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "elm" "core" "Basics" "Bool" []])))]))))
                                                                                                                                    (at (Call ((qvar "author" "project" "Evergreen" "atIndex"
                                                                                                                                                              (Forall (Map.fromList [(name "a"
                                                                                                                                                                                ,())
@@ -825,15 +950,10 @@ funtimes additionalEncoders =
                                                                                                                                                                                        (tlam (qtyp "elm" "json" "Json.Decode" "Decoder" [tlam (tvar "a")
                                                                                                                                                                                                                 (tvar "b")])
                                                                                                                                                                                                 (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "b"])))))))
-                                                                                                                                             [int 5
-                                                                                                                                             ,at (Call ((qvar "elm" "json" "Json.Decode" "list"
-                                                                                                                                                                       (Forall (Map.fromList [(name "a"
-                                                                                                                                                                                         ,())])
-                                                                                                                                                                               (tlam (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "a"])
-                                                                                                                                                                                        (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "elm" "core" "List" "List" [tvar "a"]])))))
-                                                                                                                                                       [(qvar "elm" "json" "Json.Decode" "int"
-                                                                                                                                                                       (Forall (Map.fromList [])
-                                                                                                                                                                               (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "elm" "core" "Basics" "Int" []])))])]))))
+                                                                                                                                             [int 3
+                                                                                                                                             ,(qvar "author" "project" "Evergreen" "d_char"
+                                                                                                                                                             (Forall (Map.fromList [])
+                                                                                                                                                                     (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "elm" "core" "Char" "Char" []])))]))))
                                                                                                                         (at (Call ((qvar "author" "project" "Evergreen" "atIndex"
                                                                                                                                                   (Forall (Map.fromList [(name "a"
                                                                                                                                                                     ,())
@@ -844,15 +964,10 @@ funtimes additionalEncoders =
                                                                                                                                                                             (tlam (qtyp "elm" "json" "Json.Decode" "Decoder" [tlam (tvar "a")
                                                                                                                                                                                                      (tvar "b")])
                                                                                                                                                                                      (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "b"])))))))
-                                                                                                                                  [int 6
-                                                                                                                                  ,at (Call ((qvar "author" "project" "Evergreen" "d_set"
-                                                                                                                                                            (Forall (Map.fromList [(name "comparable"
-                                                                                                                                                                              ,())])
-                                                                                                                                                                    (tlam (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "comparable"])
-                                                                                                                                                                             (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "elm" "core" "Set" "Set" [tvar "comparable"]])))))
-                                                                                                                                            [(qvar "elm" "json" "Json.Decode" "float"
-                                                                                                                                                            (Forall (Map.fromList [])
-                                                                                                                                                                    (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "elm" "core" "Basics" "Float" []])))])]))))
+                                                                                                                                  [int 4
+                                                                                                                                  ,(qvar "elm" "json" "Json.Decode" "string"
+                                                                                                                                                  (Forall (Map.fromList [])
+                                                                                                                                                          (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "elm" "core" "String" "String" []])))]))))
                                                                                                              (at (Call ((qvar "author" "project" "Evergreen" "atIndex"
                                                                                                                                        (Forall (Map.fromList [(name "a"
                                                                                                                                                          ,())
@@ -863,15 +978,15 @@ funtimes additionalEncoders =
                                                                                                                                                                  (tlam (qtyp "elm" "json" "Json.Decode" "Decoder" [tlam (tvar "a")
                                                                                                                                                                                           (tvar "b")])
                                                                                                                                                                           (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "b"])))))))
-                                                                                                                       [int 7
-                                                                                                                       ,at (Call ((qvar "elm" "json" "Json.Decode" "array"
+                                                                                                                       [int 5
+                                                                                                                       ,at (Call ((qvar "elm" "json" "Json.Decode" "list"
                                                                                                                                                  (Forall (Map.fromList [(name "a"
                                                                                                                                                                    ,())])
                                                                                                                                                          (tlam (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "a"])
-                                                                                                                                                                  (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "elm" "core" "Array" "Array" [tvar "a"]])))))
-                                                                                                                                 [(qvar "elm" "json" "Json.Decode" "string"
+                                                                                                                                                                  (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "elm" "core" "List" "List" [tvar "a"]])))))
+                                                                                                                                 [(qvar "elm" "json" "Json.Decode" "int"
                                                                                                                                                  (Forall (Map.fromList [])
-                                                                                                                                                         (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "elm" "core" "String" "String" []])))])]))))
+                                                                                                                                                         (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "elm" "core" "Basics" "Int" []])))])]))))
                                                                                                   (at (Call ((qvar "author" "project" "Evergreen" "atIndex"
                                                                                                                             (Forall (Map.fromList [(name "a"
                                                                                                                                               ,())
@@ -882,27 +997,15 @@ funtimes additionalEncoders =
                                                                                                                                                       (tlam (qtyp "elm" "json" "Json.Decode" "Decoder" [tlam (tvar "a")
                                                                                                                                                                                (tvar "b")])
                                                                                                                                                                (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "b"])))))))
-                                                                                                            [int 8
-                                                                                                            ,at (Call ((qvar "author" "project" "Evergreen" "d_dict"
+                                                                                                            [int 6
+                                                                                                            ,at (Call ((qvar "author" "project" "Evergreen" "d_set"
                                                                                                                                       (Forall (Map.fromList [(name "comparable"
-                                                                                                                                                        ,())
-                                                                                                                                                        ,(name "v"
                                                                                                                                                         ,())])
                                                                                                                                               (tlam (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "comparable"])
-                                                                                                                                                       (tlam (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "v"])
-                                                                                                                                                                (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "elm" "core" "Dict" "Dict" [tvar "comparable"
-                                                                                                                                                                              ,tvar "v"]]))))))
-                                                                                                                      [(qvar "elm" "json" "Json.Decode" "string"
+                                                                                                                                                       (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "elm" "core" "Set" "Set" [tvar "comparable"]])))))
+                                                                                                                      [(qvar "elm" "json" "Json.Decode" "float"
                                                                                                                                       (Forall (Map.fromList [])
-                                                                                                                                              (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "elm" "core" "String" "String" []])))
-                                                                                                                      ,at (Call ((qvar "elm" "json" "Json.Decode" "list"
-                                                                                                                                                (Forall (Map.fromList [(name "a"
-                                                                                                                                                                  ,())])
-                                                                                                                                                        (tlam (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "a"])
-                                                                                                                                                                 (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "elm" "core" "List" "List" [tvar "a"]])))))
-                                                                                                                                [(qvar "elm" "json" "Json.Decode" "int"
-                                                                                                                                                (Forall (Map.fromList [])
-                                                                                                                                                        (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "elm" "core" "Basics" "Int" []])))])])]))))
+                                                                                                                                              (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "elm" "core" "Basics" "Float" []])))])]))))
                                                                                        (at (Call ((qvar "author" "project" "Evergreen" "atIndex"
                                                                                                                  (Forall (Map.fromList [(name "a"
                                                                                                                                    ,())
@@ -913,10 +1016,15 @@ funtimes additionalEncoders =
                                                                                                                                            (tlam (qtyp "elm" "json" "Json.Decode" "Decoder" [tlam (tvar "a")
                                                                                                                                                                     (tvar "b")])
                                                                                                                                                     (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "b"])))))))
-                                                                                                 [int 9
-                                                                                                 ,(qvar "author" "project" "Evergreen" "d_time"
-                                                                                                                 (Forall (Map.fromList [])
-                                                                                                                         (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "elm" "time" "Time" "Posix" []])))]))))
+                                                                                                 [int 7
+                                                                                                 ,at (Call ((qvar "elm" "json" "Json.Decode" "array"
+                                                                                                                           (Forall (Map.fromList [(name "a"
+                                                                                                                                             ,())])
+                                                                                                                                   (tlam (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "a"])
+                                                                                                                                            (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "elm" "core" "Array" "Array" [tvar "a"]])))))
+                                                                                                           [(qvar "elm" "json" "Json.Decode" "string"
+                                                                                                                           (Forall (Map.fromList [])
+                                                                                                                                   (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "elm" "core" "String" "String" []])))])]))))
                                                                             (at (Call ((qvar "author" "project" "Evergreen" "atIndex"
                                                                                                       (Forall (Map.fromList [(name "a"
                                                                                                                         ,())
@@ -927,10 +1035,27 @@ funtimes additionalEncoders =
                                                                                                                                 (tlam (qtyp "elm" "json" "Json.Decode" "Decoder" [tlam (tvar "a")
                                                                                                                                                          (tvar "b")])
                                                                                                                                          (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "b"])))))))
-                                                                                      [int 10
-                                                                                      ,(qvar "author" "project" "Evergreen" "d_order"
-                                                                                                      (Forall (Map.fromList [])
-                                                                                                              (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "elm" "core" "Basics" "Order" []])))]))))
+                                                                                      [int 8
+                                                                                      ,at (Call ((qvar "author" "project" "Evergreen" "d_dict"
+                                                                                                                (Forall (Map.fromList [(name "comparable"
+                                                                                                                                  ,())
+                                                                                                                                  ,(name "v"
+                                                                                                                                  ,())])
+                                                                                                                        (tlam (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "comparable"])
+                                                                                                                                 (tlam (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "v"])
+                                                                                                                                          (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "elm" "core" "Dict" "Dict" [tvar "comparable"
+                                                                                                                                                        ,tvar "v"]]))))))
+                                                                                                [(qvar "elm" "json" "Json.Decode" "string"
+                                                                                                                (Forall (Map.fromList [])
+                                                                                                                        (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "elm" "core" "String" "String" []])))
+                                                                                                ,at (Call ((qvar "elm" "json" "Json.Decode" "list"
+                                                                                                                          (Forall (Map.fromList [(name "a"
+                                                                                                                                            ,())])
+                                                                                                                                  (tlam (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "a"])
+                                                                                                                                           (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "elm" "core" "List" "List" [tvar "a"]])))))
+                                                                                                          [(qvar "elm" "json" "Json.Decode" "int"
+                                                                                                                          (Forall (Map.fromList [])
+                                                                                                                                  (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "elm" "core" "Basics" "Int" []])))])])]))))
                                                                  (at (Call ((qvar "author" "project" "Evergreen" "atIndex"
                                                                                            (Forall (Map.fromList [(name "a"
                                                                                                              ,())
@@ -941,9 +1066,10 @@ funtimes additionalEncoders =
                                                                                                                      (tlam (qtyp "elm" "json" "Json.Decode" "Decoder" [tlam (tvar "a")
                                                                                                                                               (tvar "b")])
                                                                                                                               (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "b"])))))))
-                                                                           [int 11
-                                                                           ,at (VarTopLevel (canonical "author" "project" "AllTypes")
-                                                                                            (name "evg_d_Union"))]))))
+                                                                           [int 9
+                                                                           ,(qvar "author" "project" "Evergreen" "d_time"
+                                                                                           (Forall (Map.fromList [])
+                                                                                                   (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "elm" "time" "Time" "Posix" []])))]))))
                                                       (at (Call ((qvar "author" "project" "Evergreen" "atIndex"
                                                                                 (Forall (Map.fromList [(name "a"
                                                                                                   ,())
@@ -954,45 +1080,72 @@ funtimes additionalEncoders =
                                                                                                           (tlam (qtyp "elm" "json" "Json.Decode" "Decoder" [tlam (tvar "a")
                                                                                                                                    (tvar "b")])
                                                                                                                    (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "b"])))))))
-                                                                [int 12
-                                                                ,at (Call ((qvar "elm" "json" "Json.Decode" "null"
-                                                                                          (Forall (Map.fromList [(name "a"
-                                                                                                            ,())])
-                                                                                                  (tlam (tvar "a")
-                                                                                                           (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "a"])))))
-                                                                          [at Unit])]))))
-                                           (qtyp "elm" "json" "Json.Decode" "Decoder" [TAlias (canonical "author" "project" "AllTypes")
-                                                          (name "AllTypes")
-                                                          []
-                                                          (Holey (TRecord (Map.fromList [(name "arrayString"
-                                                                                    ,FieldType 7 (qtyp "elm" "core" "Array" "Array" [qtyp "elm" "core" "String" "String" []]))
-                                                                                    ,(name "bool"
-                                                                                    ,FieldType 2 (qtyp "elm" "core" "Basics" "Bool" []))
-                                                                                    ,(name "char"
-                                                                                    ,FieldType 3 (qtyp "elm" "core" "Char" "Char" []))
-                                                                                    ,(name "dict"
-                                                                                    ,FieldType 8 (qtyp "elm" "core" "Dict" "Dict" [qtyp "elm" "core" "String" "String" []
-                                                                                                        ,qtyp "elm" "core" "List" "List" [qtyp "elm" "core" "Basics" "Int" []]]))
-                                                                                    ,(name "float"
-                                                                                    ,FieldType 1 (qtyp "elm" "core" "Basics" "Float" []))
-                                                                                    ,(name "int"
-                                                                                    ,FieldType 0 (qtyp "elm" "core" "Basics" "Int" []))
-                                                                                    ,(name "listInt"
-                                                                                    ,FieldType 5 (qtyp "elm" "core" "List" "List" [qtyp "elm" "core" "Basics" "Int" []]))
-                                                                                    ,(name "order"
-                                                                                    ,FieldType 10 (qtyp "elm" "core" "Basics" "Order" []))
-                                                                                    ,(name "setFloat"
-                                                                                    ,FieldType 6 (qtyp "elm" "core" "Set" "Set" [qtyp "elm" "core" "Basics" "Float" []]))
-                                                                                    ,(name "string"
-                                                                                    ,FieldType 4 (qtyp "elm" "core" "String" "String" []))
-                                                                                    ,(name "time"
-                                                                                    ,FieldType 9 (qtyp "elm" "time" "Time" "Posix" []))
-                                                                                    ,(name "union"
-                                                                                    ,FieldType 11 (qtyp "author" "project" "AllTypes" "Union" []))
-                                                                                    ,(name "unit"
-                                                                                    ,FieldType 12 TUnit)])
-                                                                          Nothing))]))
-                                 (Declare (Def (named "evg")
-                                               []
-                                               (int 123))
-                                          SaveTheEnvironment))))
+                                                                [int 10
+                                                                ,(qvar "author" "project" "Evergreen" "d_order"
+                                                                                (Forall (Map.fromList [])
+                                                                                        (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "elm" "core" "Basics" "Order" []])))]))))
+                                           (at (Call ((qvar "author" "project" "Evergreen" "atIndex"
+                                                                     (Forall (Map.fromList [(name "a"
+                                                                                       ,())
+                                                                                       ,(name "b"
+                                                                                       ,())])
+                                                                             (tlam (qtyp "elm" "core" "Basics" "Int" [])
+                                                                                      (tlam (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "a"])
+                                                                                               (tlam (qtyp "elm" "json" "Json.Decode" "Decoder" [tlam (tvar "a")
+                                                                                                                        (tvar "b")])
+                                                                                                        (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "b"])))))))
+                                                     [int 11
+                                                     ,at (VarTopLevel (canonical "author" "project" "AllTypes")
+                                                                      (name "evg_d_Union"))]))))
+                                (at (Call ((qvar "author" "project" "Evergreen" "atIndex"
+                                                          (Forall (Map.fromList [(name "a"
+                                                                            ,())
+                                                                            ,(name "b"
+                                                                            ,())])
+                                                                  (tlam (qtyp "elm" "core" "Basics" "Int" [])
+                                                                           (tlam (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "a"])
+                                                                                    (tlam (qtyp "elm" "json" "Json.Decode" "Decoder" [tlam (tvar "a")
+                                                                                                             (tvar "b")])
+                                                                                             (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "b"])))))))
+                                          [int 12
+                                          ,at (Call ((qvar "elm" "json" "Json.Decode" "null"
+                                                                    (Forall (Map.fromList [(name "a"
+                                                                                      ,())])
+                                                                            (tlam (tvar "a")
+                                                                                     (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "a"])))))
+                                                    [at Unit])]))))
+                     (qtyp "elm" "json" "Json.Decode" "Decoder" [TAlias (canonical "author" "project" "AllTypes")
+                                    (name "AllTypes")
+                                    []
+                                    (Holey (TRecord (Map.fromList [(name "arrayString"
+                                                              ,FieldType 7 (qtyp "elm" "core" "Array" "Array" [qtyp "elm" "core" "String" "String" []]))
+                                                              ,(name "bool"
+                                                              ,FieldType 2 (qtyp "elm" "core" "Basics" "Bool" []))
+                                                              ,(name "char"
+                                                              ,FieldType 3 (qtyp "elm" "core" "Char" "Char" []))
+                                                              ,(name "dict"
+                                                              ,FieldType 8 (qtyp "elm" "core" "Dict" "Dict" [qtyp "elm" "core" "String" "String" []
+                                                                                  ,qtyp "elm" "core" "List" "List" [qtyp "elm" "core" "Basics" "Int" []]]))
+                                                              ,(name "float"
+                                                              ,FieldType 1 (qtyp "elm" "core" "Basics" "Float" []))
+                                                              ,(name "int"
+                                                              ,FieldType 0 (qtyp "elm" "core" "Basics" "Int" []))
+                                                              ,(name "listInt"
+                                                              ,FieldType 5 (qtyp "elm" "core" "List" "List" [qtyp "elm" "core" "Basics" "Int" []]))
+                                                              ,(name "order"
+                                                              ,FieldType 10 (qtyp "elm" "core" "Basics" "Order" []))
+                                                              ,(name "setFloat"
+                                                              ,FieldType 6 (qtyp "elm" "core" "Set" "Set" [qtyp "elm" "core" "Basics" "Float" []]))
+                                                              ,(name "string"
+                                                              ,FieldType 4 (qtyp "elm" "core" "String" "String" []))
+                                                              ,(name "time"
+                                                              ,FieldType 9 (qtyp "elm" "time" "Time" "Posix" []))
+                                                              ,(name "union"
+                                                              ,FieldType 11 (qtyp "author" "project" "AllTypes" "Union" []))
+                                                              ,(name "unit"
+                                                              ,FieldType 12 TUnit)])
+                                                    Nothing))]))
+           (Declare (Def (named "evg")
+                         []
+                         (int 123))
+                    SaveTheEnvironment))

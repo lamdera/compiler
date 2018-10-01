@@ -23,8 +23,8 @@ stubValid valid flag pkg importDict interfaces source =
         tracef
           ("-" ++ N.toString n)
           (valid { _decls =
-            [ evg_e_AllTypes
-            , evg_d_AllTypes
+            [ evg_e_AllTypes_stubbed
+            , evg_d_AllTypes_stubbed
             , evg_e_Union_stubbed
             , evg_d_Union_stubbed
             , staticX
@@ -190,6 +190,12 @@ evg_d_AllTypes =
     (Just (qtyp "D" "Decoder" [typ "AllTypes" []]))
 
 
+evg_d_AllTypes_stubbed =
+  decl "evg_d_AllTypes" []
+  (qvar "Debug" "todo")
+  (Just (qtyp "D" "Decoder" [typ "AllTypes" []]))
+
+
 evg_e_AllTypes =
   decl "evg_e_AllTypes" [pvar "evg_p0"]
     (call
@@ -214,6 +220,12 @@ evg_e_AllTypes =
     )
     -- Not sure why this type signature has a different form from the decoder, but that's what the diffs told us...
     (Just (at (TLambda (typ "AllTypes" []) (qtyp "E" "Value" []))))
+
+
+evg_e_AllTypes_stubbed =
+  decl "evg_e_AllTypes" [pvar "evg_p0"]
+  (qvar "Debug" "todo")
+  (Just (at (TLambda (typ "AllTypes" []) (qtyp "E" "Value" []))))
 
 
 evg_e_Union_stubbed =
