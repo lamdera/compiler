@@ -16,12 +16,6 @@ type Union
     | Leaf
 
 
-
--- type Another
---     = Test
---     | Best
-
-
 type alias AllTypes =
     { int : Int
     , float : Float
@@ -54,16 +48,14 @@ type alias AllTypes =
 --
 --         Leaf ->
 --             E.list identity [ E.string "Leaf" ]
-
-
-evg_d_Union : D.Decoder Union
-evg_d_Union =
-    D.oneOf
-        [ EG.union1 "Recursive" (D.lazy (\_ -> evg_d_Union)) Recursive
-        , EG.union1 "Valued" D.int Valued
-        , EG.union1 "DeeplyValued" (D.list D.bool) DeeplyValued
-        , EG.union "Leaf" Leaf
-        ]
+-- evg_d_Union : D.Decoder Union
+-- evg_d_Union =
+--     D.oneOf
+--         [ EG.union1 "Recursive" (D.lazy (\_ -> evg_d_Union)) Recursive
+--         , EG.union1 "Valued" D.int Valued
+--         , EG.union1 "DeeplyValued" (D.list D.bool) DeeplyValued
+--         , EG.union "Leaf" Leaf
+--         ]
 
 
 evg_e_AllTypes : AllTypes -> E.Value

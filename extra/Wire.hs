@@ -3,12 +3,10 @@
 
 module Wire where
 
--- import AST.Source (VarType(..), Type_(..), Pattern_(..))
--- import AST.Valid
 import Reporting.Annotation (Located(..))
 import Reporting.Region
 import qualified Elm.Name as N
--- import qualified AST.Valid as AS (Module(..))
+
 import AST.Canonical
 import AST.Module.Name (Canonical(..))
 import Elm.Package (Name(..))
@@ -26,7 +24,7 @@ imap f l = zipWith f [0..] l
 -- Our injection point POC for AllTypes. Search for `Wire.modify`
 modifyCanonical canonical flag pkg importDict interfaces source =
   case canonical of
-    Module name docs exports decls unions aliases binops effects ->
+    Module name docs exports decls customTypes aliases binops effects ->
       case name of
         Canonical pkg n ->
           case N.toString n of
@@ -40,10 +38,10 @@ modifyCanonical canonical flag pkg importDict interfaces source =
 
               -- tracef ("-" ++ N.toString n) canonical
 
-              let unionEncoders = fmap unionToEncoder $ Map.toList unions
-              let unionDecoders = fmap unionToDecoder $ Map.toList unions
+              let customTypeEncoders = fmap customTypeToEncoder $ Map.toList customTypes
+              let customTypeDecoders = fmap customTypeToDecoder $ Map.toList customTypes
 
-              tracef ("-" ++ N.toString n) (canonical { _decls = funtimes (unionEncoders ++ unionDecoders) })
+              tracef ("-" ++ N.toString n) (canonical { _decls = funtimes (customTypeEncoders ++ customTypeDecoders) })
 
               -- tracef ("-" ++ N.toString n) (canonical { _decls =
               --   case _decls canonical of
@@ -65,18 +63,18 @@ modifyCanonical canonical flag pkg importDict interfaces source =
               canonical
 
 
-unionToEncoder (unionName_, union_) = do
+customTypeToEncoder (customTypeName_, customType_) = do
 
   let
-    _encoderName = "evg_e_" ++ N.toString unionName_
+    _encoderName = "evg_e_" ++ N.toString customTypeName_
 
-    _genUnion0 _index ctor =
+    _genCustomType0 _index ctor =
       case ctor of
         Ctor n index numParams params ->
           let _tagNameT = N.toText n
               _tagNameS = N.toString n
           in
-          unionCaseBranch unionName_ union_ _index _tagNameS
+          customTypeCaseBranch customTypeName_ customType_ _index _tagNameS
             ([])
             (call jsonEncodeList
               [ coreBasicsIdentity
@@ -84,14 +82,14 @@ unionToEncoder (unionName_, union_) = do
               ]
             )
 
-    _genUnion1 _index ctor =
+    _genCustomType1 _index ctor =
       case ctor of
         Ctor n index numParams pTypes ->
           let _tagNameT = N.toText n
               _tagNameS = N.toString n
               _pType = head pTypes
           in
-          unionCaseBranch unionName_ union_ _index _tagNameS
+          customTypeCaseBranch customTypeName_ customType_ _index _tagNameS
             [ PatternCtorArg
                 { _index = ZeroBased 0
                 , _type = _pType
@@ -139,40 +137,40 @@ unionToEncoder (unionName_, union_) = do
         _ -> error $ "encodeListType didn't match any existing implementations: " ++ show pType
 
 
-    _unionBranches =
-      case union_ of
+    _customTypeBranches =
+      case customType_ of
         Union _u_vars _u_alts _u_numAlts _u_opts ->
           imap (\i ctor ->
             case ctor of
               Ctor n index numParams params ->
                 case numParams of
-                  0 -> _genUnion0 i ctor
-                  1 -> _genUnion1 i ctor
-                  -- @TODO need to add support for more depths of union types
-                  _ -> undefined "unimplemented union parsing for that many params"
+                  0 -> _genCustomType0 i ctor
+                  1 -> _genCustomType1 i ctor
+                  -- @TODO need to add support for more depths of custom types
+                  x -> undefined $ "Encoder: Custom Type parsing for " ++ show x ++ " params has not yet been implemented"
           ) _u_alts
 
-    _unionNameString = N.toString unionName_
+    _customTypeNameS = N.toString customTypeName_
 
   TypedDef
     (named _encoderName)
     (Map.fromList [])
     [ (at (PVar (name "evg_p0"))
-    , qtyp "author" "project" "AllTypes" _unionNameString [])
+    , qtyp "author" "project" "AllTypes" _customTypeNameS [])
     ]
-    (at (Case (vlocal "evg_p0") _unionBranches))
+    (at (Case (vlocal "evg_p0") _customTypeBranches))
     (qtyp "elm" "json" "Json.Encode" "Value" [])
 
 
-unionCaseBranch unionName union index unionLabel unionArgs expr =
+customTypeCaseBranch customTypeName customType index customTypeLabel customTypeArgs expr =
   -- @TODO AllTypes needs to be something else eventually
   CaseBranch
     (at (PCtor { _p_home = canonical "author" "project" "AllTypes"
-               , _p_type = unionName
-               , _p_union = union
-               , _p_name = name unionLabel
+               , _p_type = customTypeName
+               , _p_union = customType
+               , _p_name = name customTypeLabel
                , _p_index = ZeroBased index
-               , _p_args = unionArgs
+               , _p_args = customTypeArgs
                }
         )
     )
@@ -197,68 +195,35 @@ We will be able to leverage this in our wrapper program as well by detecting the
 into the core runtime Elm code so it dynamically "write" the write boilerplate at compile time for us.
 
 -}
-unionToDecoder (unionName_, union_) = do
+customTypeToDecoder (customTypeName_, customType_) = do
   let
-    _unionName = N.toString unionName_
+    _customTypeName = N.toString customTypeName_
 
-    _decoderName = "evg_d_" ++ N.toString unionName_
+    _decoderName = "evg_d_" ++ N.toString customTypeName_
 
-    _genUnion0 _index ctor =
+    _genCustomType0 _index ctor =
       case ctor of
         Ctor n index numParams params ->
           let _tagNameT = N.toText n
               _tagNameS = N.toString n
           in
           at (Call evergreenUnion
-            [str _tagNameT
-            ,at (VarCtor Normal (canonical "author" "project" "AllTypes")
-                  (name _tagNameS)
-                  (ZeroBased _index)
-                  (Forall (Map.fromList [])
-                      (qtyp "author" "project" "AllTypes" _unionName [])))])
+            [ str _tagNameT
+            , at (VarCtor Normal (canonical "author" "project" "AllTypes")
+                (name _tagNameS)
+                (ZeroBased _index)
+                (Forall (Map.fromList []) (qtyp "author" "project" "AllTypes" _customTypeName []))
+              )
+            ]
+          )
 
-    _genUnion1 _index ctor =
+    _genCustomType1 _index ctor =
       case ctor of
         Ctor n index numParams pTypes ->
           let _tagNameT = N.toText n
               _tagNameS = N.toString n
-              _pType = head pTypes
           in
-          case _tagNameS of
-            "Recursive" ->
-              at (Call evergreenUnion1
-                  ( [str "Recursive"] ++
-                    (fmap decodeParamType pTypes) ++
-                    [generateConstructor "Recursive" (index) pTypes]
-                  )
-
-                    -- [str "Recursive"
-                    --
-                    -- ,at (Call ((qvar "elm" "json" "Json.Decode" "lazy"
-                    --                           (Forall (Map.fromList [(name "a"
-                    --                                             ,())])
-                    --                                   (tlam (tlam TUnit (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "a"]))
-                    --                                            (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "a"])))))
-                    --           [at (Lambda [at PAnything]
-                    --                       (at (VarTopLevel (canonical "author" "project" "AllTypes")
-                    --                                        (name "evg_d_Union"))))])
-                    -- ,generateConstructor "Recursive" (index) pTypes
-                    -- ]
-                )
-            "Valued" ->
-              at (Call evergreenUnion1
-                   ( [str "Valued"] ++
-                     (fmap decodeParamType pTypes) ++
-                     [generateConstructor "Valued" (index) pTypes]
-                   )
-                 )
-            "DeeplyValued" ->
-              at (Call evergreenUnion1
-              ( [str "DeeplyValued"] ++
-                (fmap decodeParamType pTypes) ++
-                [generateConstructor "DeeplyValued" (index) pTypes]
-              ))
-
+          at (Call evergreenUnion1 ( [str _tagNameT] ++ (fmap decodeParamType pTypes) ++ [generateConstructor _tagNameS _customTypeName (index) pTypes] ) )
 
 
     -- @TODO only partially implemented, needs to be extended for all possible types
@@ -277,9 +242,9 @@ unionToDecoder (unionName_, union_) = do
            let _targetDecoderName = "evg_d_" ++ N.toString typeName
                _targetDecoder = at (VarTopLevel (canonical "author" "project" "AllTypes") (name _targetDecoderName))
            in
-           if _unionName == N.toString typeName then
+           if _customTypeName == N.toString typeName then
 
-             {- This must be a recursive custom type.
+             {- The parameter type is equal to the custom type, so this is a recursive custom type.
 
              i.e. if we're dealing with a type like this:
 
@@ -288,18 +253,16 @@ unionToDecoder (unionName_, union_) = do
              The branch decoder we'd be generating is:
 
              EG.union1 "Recursive" (D.lazy (\_ -> evg_d_Union)) Recursive
+
+             So this function will return AST for:
+
+             (D.lazy (\_ -> evg_d_Union))
              -}
-             -- @TODO can probably "clean" this up into some helper functions
-             at (Call ((qvar "elm" "json" "Json.Decode" "lazy"
-                                       (Forall (Map.fromList [(name "a"
-                                                         ,())])
-                                               (tlam (tlam TUnit (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "a"]))
-                                                        (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "a"])))))
-                       [at (Lambda [at PAnything]
-                                   _targetDecoder)])
+
+             jsonDecodeLazy1Ignore _targetDecoder
 
           else
-           -- Any types from user, must have encoder ref in this file
+           -- Currently, any types from user, must have encoder ref in this file
            -- @TODO we'll need to extend this to be able to call custom types from anywhere in the project
            -- Question: how do we bubble-up the need for additional imports? Do we just transitively make sure we inject explicit
            -- imports of all evergreen wire functions whenever a type is imported into a file? Note (..) will work fine,
@@ -307,33 +270,33 @@ unionToDecoder (unionName_, union_) = do
 
            _targetDecoder
 
-         _ -> error $ "decodeParamType didn't match any existing implementations: " ++ show pType
+         _ -> error $ "decodeParamType didn't match any existing implementations for: " ++ show pType
 
 
-    _unionBranches =
-      case union_ of
+    _customTypeBranches =
+      case customType_ of
         Union _u_vars _u_alts _u_numAlts _u_opts ->
           imap (\i ctor ->
             case ctor of
               Ctor n index numParams params ->
                 case numParams of
-                  0 -> _genUnion0 i ctor
-                  1 -> _genUnion1 i ctor
+                  0 -> _genCustomType0 i ctor
+                  1 -> _genCustomType1 i ctor
                   -- @TODO need to add support for more depths of union types
-                  x -> undefined $ "Union parsing for " ++ show x ++ " params has not yet been implemented"
+                  x -> undefined $ "Decoder: Custom Type parsing for " ++ show x ++ " params has not yet been implemented"
           ) _u_alts
 
 
-  TypedDef (named _decoderName)
-                        (Map.fromList [])
-                        []
-                        (at (Call ((qvar "elm" "json" "Json.Decode" "oneOf"
-                                                  (Forall (Map.fromList [(name "a"
-                                                                    ,())])
-                                                          (tlam (qtyp "elm" "core" "List" "List" [qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "a"]])
-                                                                   (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "a"])))))
-                                  [at (List _unionBranches)]))
-                        (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "author" "project" "AllTypes" "Union" []])
+  TypedDef
+    (named _decoderName)
+    (Map.fromList [])
+    []
+    (at (Call ((qvar "elm" "json" "Json.Decode" "oneOf"
+                              (Forall (Map.fromList [(name "a", ())])
+                                      (tlam (qtyp "elm" "core" "List" "List" [qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "a"]])
+                                               (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "a"])))))
+              [at (List _customTypeBranches)]))
+    (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "author" "project" "AllTypes" _customTypeName []])
 
 
 
@@ -344,13 +307,13 @@ unionToDecoder (unionName_, union_) = do
 -- x = Derp 1
 --     ^^^^
 --
-generateConstructor :: String -> ZeroBased -> [Type] -> Located Expr_
-generateConstructor name_ index paramTypes =
+generateConstructor :: String -> String -> ZeroBased -> [Type] -> Located Expr_
+generateConstructor name_ customTypeName index paramTypes =
   at (VarCtor Normal
     (canonical "author" "project" "AllTypes")
     (name name_)
     (index)
-    (generateConstructorAnnotation paramTypes (qtyp "author" "project" "AllTypes" "Union" []))
+    (generateConstructorAnnotation paramTypes (qtyp "author" "project" "AllTypes" customTypeName []))
   )
 
 -- For a given list of [Type] of params for a custom type constructor, creates the signature for that constructor
@@ -504,6 +467,16 @@ jsonDecodeBool =
   (qvar "elm" "json" "Json.Decode" "bool"
     (Forall (Map.fromList [])
       (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "elm" "core" "Basics" "Bool" []])))
+
+
+jsonDecodeLazy1Ignore decoder =
+  at (Call ((qvar "elm" "json" "Json.Decode" "lazy"
+                            (Forall (Map.fromList [(name "a"
+                                              ,())])
+                                    (tlam (tlam TUnit (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "a"]))
+                                             (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "a"])))))
+            [at (Lambda [at PAnything]
+                        decoder)])
 
 
 -- Core.Basics
