@@ -95,7 +95,7 @@ view model =
         , Html.div [] [ Html.text <| "Decoded Unions: " ++ Debug.toString d2 ]
 
         -- , Html.div [] [ Html.text <| "Encoded Another: " ++ e3 ]
-        , Html.div [] [ Html.text <| "Shadow value not existent in code: " ++ Debug.toString AllTypes.evg ]
+        -- , Html.div [] [ Html.text <| "Shadow value not existent in code: " ++ Debug.toString AllTypes.evg ]
         ]
     }
 

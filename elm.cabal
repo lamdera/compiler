@@ -234,6 +234,7 @@ Executable elmx
         Wire
         WireValid
         WireTest
+        WireHelpers
 
     Build-depends:
         ansi-terminal >= 0.8 && < 0.9,

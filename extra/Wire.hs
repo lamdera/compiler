@@ -41,15 +41,23 @@ modifyCanonical canonical flag pkg importDict interfaces source =
 
               let customTypeEncoders = fmap customTypeToEncoder $ Map.toList customTypes
               let customTypeDecoders = fmap customTypeToDecoder $ Map.toList customTypes
+              -- let recordEncoders = evg_e_AllTypes
 
-              tracef ("-" ++ N.toString n) (canonical { _decls = funtimes (customTypeEncoders ++ customTypeDecoders) })
+              tracef ("-" ++ N.toString n) (canonical {
+                _decls =
+                  -- @TODO make a helper that lets us deal with this recursive type more generically, i.e.
+                  -- by being able to just pass it a list of ASTs & not caring about how it's transformed
+                  DeclareRec
+                    (customTypeEncoders ++ customTypeDecoders ++ evg_e_AllTypes)
+                    (Declare evg_d_AllTypes SaveTheEnvironment)
+              })
 
               -- tracef ("-" ++ N.toString n) (canonical { _decls =
               --   case _decls canonical of
               --     DeclareRec d x ->
               --
               --       -- Use this one when we want to see the original schema
-              --       -- DeclareRec (d ++ [ staticX ]) x
+              --       -- DeclareRec d x
               --
               --       -- Use this one otherwise
               --       funtimes
@@ -329,15 +337,6 @@ generateConstructorAnnotation pTypes customType =
   Forall (Map.fromList []) (typeSignatures pTypes)
 
 
-
-staticX =
-  (Def (at
-           (N.fromString "evg"))
-       []
-       (at
-           (Int 123)))
-
-
 -- AST to file debugger
 tracef n a =
   unsafePerformIO $ do
@@ -355,112 +354,104 @@ tracer a b =
 
 
 
+evg_e_AllTypes =
+  [(TypedDef (named "evg_e_AllTypes")
+                    (Map.fromList [])
+                    [(at (PVar (name "evg_p0"))
+                    ,TAlias (canonical "author" "project" "AllTypes")
+                            (name "AllTypes")
+                            []
+                            (Holey (TRecord (Map.fromList [(name "arrayString"
+                                                      ,FieldType 7 (qtyp "elm" "core" "Array" "Array" [qtyp "elm" "core" "String" "String" []]))
+                                                      ,(name "bool"
+                                                      ,FieldType 2 (qtyp "elm" "core" "Basics" "Bool" []))
+                                                      ,(name "char"
+                                                      ,FieldType 3 (qtyp "elm" "core" "Char" "Char" []))
+                                                      ,(name "dict"
+                                                      ,FieldType 8 (qtyp "elm" "core" "Dict" "Dict" [qtyp "elm" "core" "String" "String" []
+                                                                          ,qtyp "elm" "core" "List" "List" [qtyp "elm" "core" "Basics" "Int" []]]))
+                                                      ,(name "float"
+                                                      ,FieldType 1 (qtyp "elm" "core" "Basics" "Float" []))
+                                                      ,(name "int"
+                                                      ,FieldType 0 (qtyp "elm" "core" "Basics" "Int" []))
+                                                      ,(name "listInt"
+                                                      ,FieldType 5 (qtyp "elm" "core" "List" "List" [qtyp "elm" "core" "Basics" "Int" []]))
+                                                      ,(name "order"
+                                                      ,FieldType 10 (qtyp "elm" "core" "Basics" "Order" []))
+                                                      ,(name "setFloat"
+                                                      ,FieldType 6 (qtyp "elm" "core" "Set" "Set" [qtyp "elm" "core" "Basics" "Float" []]))
+                                                      ,(name "string"
+                                                      ,FieldType 4 (qtyp "elm" "core" "String" "String" []))
+                                                      ,(name "time"
+                                                      ,FieldType 9 (qtyp "elm" "time" "Time" "Posix" []))
+                                                      ,(name "union"
+                                                      ,FieldType 11 (qtyp "author" "project" "AllTypes" "Union" []))
+                                                      ,(name "unit"
+                                                      ,FieldType 12 TUnit)])
+                                            Nothing)))]
+                    (at (Call jsonEncodeList
+                              [coreBasicsIdentity
+                              ,at (List [at (Call jsonEncodeInt
+                                                  [at (Access (at (VarLocal (name "evg_p0")))
+                                                              (named "int"))])
+                                        ,at (Call jsonEncodeFloat
+                                                  [at (Access (at (VarLocal (name "evg_p0")))
+                                                              (named "float"))])
+                                        ,at (Call jsonEncodeBool
+                                                  [at (Access (at (VarLocal (name "evg_p0")))
+                                                              (named "bool"))])
+                                        ,at (Call evergreenEncodeChar
+                                                  [at (Access (at (VarLocal (name "evg_p0")))
+                                                              (named "char"))])
+                                        ,at (Call jsonEncodeString
+                                                  [at (Access (at (VarLocal (name "evg_p0")))
+                                                              (named "string"))])
+                                        ,at (Call jsonEncodeList
+                                                  [jsonEncodeInt
+                                                  ,at (Access (at (VarLocal (name "evg_p0")))
+                                                              (named "listInt"))])
+                                        ,at (Call jsonEncodeSet
+                                                  [jsonEncodeFloat
+                                                  ,at (Access (at (VarLocal (name "evg_p0")))
+                                                              (named "setFloat"))])
+                                        ,at (Call jsonEncodeArray
+                                                  [jsonEncodeString
+                                                  ,at (Access (at (VarLocal (name "evg_p0")))
+                                                              (named "arrayString"))])
+                                        ,at (Call evergreenEncodeDict
+                                                  [jsonEncodeString
+                                                  ,at (Call jsonEncodeList
+                                                            [(qvar "elm" "json" "Json.Encode" "int"
+                                                                            (Forall (Map.fromList [])
+                                                                                    (tlam (qtyp "elm" "core" "Basics" "Int" [])
+                                                                                             (qtyp "elm" "json" "Json.Encode" "Value" []))))])
+                                                  ,at (Access (at (VarLocal (name "evg_p0")))
+                                                              (named "dict"))])
+                                        ,at (Call ((qvar "author" "project" "Evergreen" "e_time"
+                                                                  (Forall (Map.fromList [])
+                                                                          (tlam (qtyp "elm" "time" "Time" "Posix" [])
+                                                                                   (qtyp "elm" "json" "Json.Encode" "Value" [])))))
+                                                  [at (Access (at (VarLocal (name "evg_p0")))
+                                                              (named "time"))])
+                                        ,at (Call ((qvar "author" "project" "Evergreen" "e_order"
+                                                                  (Forall (Map.fromList [])
+                                                                          (tlam (qtyp "elm" "core" "Basics" "Order" [])
+                                                                                   (qtyp "elm" "json" "Json.Encode" "Value" [])))))
+                                                  [at (Access (at (VarLocal (name "evg_p0")))
+                                                              (named "order"))])
+                                        ,at (Call (at (VarTopLevel (canonical "author" "project" "AllTypes")
+                                                                   (name "evg_e_Union")))
+                                                  [at (Access (at (VarLocal (name "evg_p0")))
+                                                              (named "union"))])
+                                        ,(qvar "elm" "json" "Json.Encode" "null"
+                                                        (Forall (Map.fromList [])
+                                                                (qtyp "elm" "json" "Json.Encode" "Value" [])))])]))
+                    (qtyp "elm" "json" "Json.Encode" "Value" []))]
 
-funtimes additionalGenerated =
-    DeclareRec
-    additionalGenerated
-    (Declare (TypedDef (named "evg_e_AllTypes")
-                      (Map.fromList [])
-                      [(at (PVar (name "evg_p0"))
-                      ,TAlias (canonical "author" "project" "AllTypes")
-                              (name "AllTypes")
-                              []
-                              (Holey (TRecord (Map.fromList [(name "arrayString"
-                                                        ,FieldType 7 (qtyp "elm" "core" "Array" "Array" [qtyp "elm" "core" "String" "String" []]))
-                                                        ,(name "bool"
-                                                        ,FieldType 2 (qtyp "elm" "core" "Basics" "Bool" []))
-                                                        ,(name "char"
-                                                        ,FieldType 3 (qtyp "elm" "core" "Char" "Char" []))
-                                                        ,(name "dict"
-                                                        ,FieldType 8 (qtyp "elm" "core" "Dict" "Dict" [qtyp "elm" "core" "String" "String" []
-                                                                            ,qtyp "elm" "core" "List" "List" [qtyp "elm" "core" "Basics" "Int" []]]))
-                                                        ,(name "float"
-                                                        ,FieldType 1 (qtyp "elm" "core" "Basics" "Float" []))
-                                                        ,(name "int"
-                                                        ,FieldType 0 (qtyp "elm" "core" "Basics" "Int" []))
-                                                        ,(name "listInt"
-                                                        ,FieldType 5 (qtyp "elm" "core" "List" "List" [qtyp "elm" "core" "Basics" "Int" []]))
-                                                        ,(name "order"
-                                                        ,FieldType 10 (qtyp "elm" "core" "Basics" "Order" []))
-                                                        ,(name "setFloat"
-                                                        ,FieldType 6 (qtyp "elm" "core" "Set" "Set" [qtyp "elm" "core" "Basics" "Float" []]))
-                                                        ,(name "string"
-                                                        ,FieldType 4 (qtyp "elm" "core" "String" "String" []))
-                                                        ,(name "time"
-                                                        ,FieldType 9 (qtyp "elm" "time" "Time" "Posix" []))
-                                                        ,(name "union"
-                                                        ,FieldType 11 (qtyp "author" "project" "AllTypes" "Union" []))
-                                                        ,(name "unit"
-                                                        ,FieldType 12 TUnit)])
-                                              Nothing)))]
-                      (at (Call jsonEncodeList
-                                [coreBasicsIdentity
-                                ,at (List [at (Call jsonEncodeInt
-                                                    [at (Access (at (VarLocal (name "evg_p0")))
-                                                                (named "int"))])
-                                          ,at (Call jsonEncodeFloat
-                                                    [at (Access (at (VarLocal (name "evg_p0")))
-                                                                (named "float"))])
-                                          ,at (Call jsonEncodeBool
-                                                    [at (Access (at (VarLocal (name "evg_p0")))
-                                                                (named "bool"))])
-                                          ,at (Call evergreenEncodeChar
-                                                    [at (Access (at (VarLocal (name "evg_p0")))
-                                                                (named "char"))])
-                                          ,at (Call jsonEncodeString
-                                                    [at (Access (at (VarLocal (name "evg_p0")))
-                                                                (named "string"))])
-                                          ,at (Call jsonEncodeList
-                                                    [jsonEncodeInt
-                                                    ,at (Access (at (VarLocal (name "evg_p0")))
-                                                                (named "listInt"))])
-                                          ,at (Call jsonEncodeSet
-                                                    [jsonEncodeFloat
-                                                    ,at (Access (at (VarLocal (name "evg_p0")))
-                                                                (named "setFloat"))])
-                                          ,at (Call jsonEncodeArray
-                                                    [jsonEncodeString
-                                                    ,at (Access (at (VarLocal (name "evg_p0")))
-                                                                (named "arrayString"))])
-                                          ,at (Call evergreenEncodeDict
-                                                    [jsonEncodeString
-                                                    ,at (Call jsonEncodeList
-                                                              [(qvar "elm" "json" "Json.Encode" "int"
-                                                                              (Forall (Map.fromList [])
-                                                                                      (tlam (qtyp "elm" "core" "Basics" "Int" [])
-                                                                                               (qtyp "elm" "json" "Json.Encode" "Value" []))))])
-                                                    ,at (Access (at (VarLocal (name "evg_p0")))
-                                                                (named "dict"))])
-                                          ,at (Call ((qvar "author" "project" "Evergreen" "e_time"
-                                                                    (Forall (Map.fromList [])
-                                                                            (tlam (qtyp "elm" "time" "Time" "Posix" [])
-                                                                                     (qtyp "elm" "json" "Json.Encode" "Value" [])))))
-                                                    [at (Access (at (VarLocal (name "evg_p0")))
-                                                                (named "time"))])
-                                          ,at (Call ((qvar "author" "project" "Evergreen" "e_order"
-                                                                    (Forall (Map.fromList [])
-                                                                            (tlam (qtyp "elm" "core" "Basics" "Order" [])
-                                                                                     (qtyp "elm" "json" "Json.Encode" "Value" [])))))
-                                                    [at (Access (at (VarLocal (name "evg_p0")))
-                                                                (named "order"))])
-                                          ,at (Call (at (VarTopLevel (canonical "author" "project" "AllTypes")
-                                                                     (name "evg_e_Union")))
-                                                    [at (Access (at (VarLocal (name "evg_p0")))
-                                                                (named "union"))])
-                                          ,(qvar "elm" "json" "Json.Encode" "null"
-                                                          (Forall (Map.fromList [])
-                                                                  (qtyp "elm" "json" "Json.Encode" "Value" [])))])]))
-                      (qtyp "elm" "json" "Json.Encode" "Value" []))
-            evg_d_Union)
 
--- @TODO this is legacy as it was an intermediary before
--- need to remove this bloock & place  evg_d_AllTypes directly in it's spot
-evg_d_Union =
-  (DeclareRec []
-              evg_d_AllTypes)
 
 evg_d_AllTypes =
-  (Declare (TypedDef (named "evg_d_AllTypes")
+  (TypedDef (named "evg_d_AllTypes")
                      (Map.fromList [])
                      []
                      (at (Binop (name "|>")
@@ -906,7 +897,3 @@ evg_d_AllTypes =
                                                               ,(name "unit"
                                                               ,FieldType 12 TUnit)])
                                                     Nothing))]))
-           (Declare (Def (named "evg")
-                         []
-                         (int 123))
-                    SaveTheEnvironment))
