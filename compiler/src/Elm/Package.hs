@@ -72,7 +72,7 @@ data Package =
 
 isKernel :: Name -> Bool
 isKernel (Name author _) =
-  author == "elm" || author == "elm-explorations"
+  author == "elm" || author == "elm-explorations" || author == "Lamdera"
 
 
 toString :: Name -> String

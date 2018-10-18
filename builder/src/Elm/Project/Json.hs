@@ -114,7 +114,7 @@ isPlatformPackage project =
         (Pkg.Name author _) =
           _pkg_name info
       in
-      author == "elm" || author == "elm-explorations"
+      author == "elm" || author == "elm-explorations" || author == "Lamdera"
 
 
 getName :: Project -> Name

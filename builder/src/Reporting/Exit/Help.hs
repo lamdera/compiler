@@ -35,6 +35,7 @@ data Report
       , _path :: Maybe FilePath
       , _message :: D.Doc
       }
+      deriving (Show)
 
 
 report :: String -> Maybe FilePath -> String -> [D.Doc] -> Report
