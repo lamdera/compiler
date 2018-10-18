@@ -36,13 +36,13 @@ import Elm.Package (Version(..))
 
 data Constraint
     = Range Version Op Op Version
-    deriving (Eq)
+    deriving (Eq, Show)
 
 
 data Op
   = Less
   | LessOrEqual
-  deriving (Eq)
+  deriving (Eq, Show)
 
 
 

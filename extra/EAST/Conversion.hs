@@ -26,6 +26,7 @@ import qualified Data.Map.Strict as Map
 import Data.Function ((&))
 import Data.Monoid ((<>))
 import qualified Data.Char as Char
+import qualified Data.Maybe as Maybe
 
 import qualified East.Rewrite as Rewrite
 import qualified Transpile.Instances
@@ -78,12 +79,13 @@ transpile
     moduleHead = Hs.ModuleHead (Hs.ModuleName moduName) Nothing (tExport _exports)
     module_ = Hs.Module (Just moduleHead) [{-ModulePragma-}] (haskelmImports ++ imports) decls
   in
+  DT.trace (sShow (moduName, imports, importDict)) $
   pure module_
 
 tAlias (aliasName, C.Alias tvars t) =
   Hs.TypeDecl
     (foldl Hs.DHApp (Hs.DHead $ ident aliasName) (Hs.UnkindedVar <$> ident <$> tvars))
-    (tType t)
+    (tType Map.empty t)
 
 
 -- IMPORTS
@@ -144,7 +146,7 @@ tUnions u =
 tUnion (name, (C.Union tvars ctors _ _)) =
 -- C.Ctor N.Name Index.ZeroBased _ [Type]
   let
-    tCtor (C.Ctor name _ _ args) = Hs.ConDecl (ident name) (tType <$> args)
+    tCtor (C.Ctor name _ _ args) = Hs.ConDecl (ident name) (tType Map.empty <$> args)
     dataCases = tCtor <$> ctors
   in
   Hs.DataDecl
@@ -156,12 +158,9 @@ tUnion (name, (C.Union tvars ctors _ _)) =
 
 -- DECLS
 
-declsToList d = declsToList' 50 d
-
-declsToList' n _ | n <= 0 = []
-declsToList' n (C.Declare def decls) = [def] : declsToList' (n-1) decls
-declsToList' n (C.DeclareRec defs decls) = defs : declsToList' (n-1) decls
-declsToList' n (C.SaveTheEnvironment) = []
+declsToList (C.Declare def decls) = [def] : declsToList decls
+declsToList (C.DeclareRec defs decls) = defs : declsToList decls
+declsToList (C.SaveTheEnvironment) = []
 
 tDecls :: Map.Map N.Name C.Annotation -> List C.Def -> List Hs.Decl
 tDecls annotations [def@(C.Def (A.At _ name) _ _)] = tAnnot name (Map.lookup name annotations) ++ tDef def
@@ -172,41 +171,57 @@ tAnnot _ Nothing = error "missing type annotation"
 tAnnot name (Just (C.Forall freeVars_ tipe)) =
   let
     freeVars = N.toText <$> Map.keys freeVars_
-    hsType = tType tipe
+    hsType = tType Map.empty tipe
   in
-  [Hs.TypeSig [ident name] (Transpile.Deriving.addTypeConstraintsForType tipe $ tType tipe)]
+  [Hs.TypeSig [ident name] (Transpile.Deriving.addTypeConstraintsForType tipe $ tType Map.empty tipe)]
 
-tType t = case t of
-  (C.TLambda t1 t2) -> Hs.TyFun (tType t1) (tType t2)
+tType translation t = case t of
   (C.TVar name) | "number" `Text.isPrefixOf` N.toText name ->
     Hs.TyCon (Hs.Qual (Hs.ModuleName "Lamdera.Haskelm.Core") (Hs.Ident "Double"))
-  (C.TVar name) -> Hs.TyVar (ident name)
-  (C.TType moduleName name types) -> foldl Hs.TyApp (Hs.TyCon (qual moduleName name)) (tType <$> types)
+  (C.TVar name) ->
+      case Map.lookup name translation of
+        Just replacement ->
+          Hs.TyVar (ident replacement)
+        Nothing ->
+          Hs.TyVar (ident name)
+  (C.TLambda t1 t2) -> Hs.TyFun (tType translation t1) (tType translation t2)
+  (C.TType moduleName name types) -> foldl Hs.TyApp (Hs.TyCon (qual moduleName name)) (tType translation <$> types)
   (C.TRecord mapNameToFieldType mName) ->
     let recordField (name, t) =
-          Hs.TyInfix (Hs.TyPromoted (Hs.PromotedString (rawIdent name) (rawIdent name))) (Hs.UnpromotedName (Hs.Qual (Hs.ModuleName "Lamdera.Haskelm.Core") (Hs.Symbol ":="))) (Hs.TyParen (tType $ t))
+          Hs.TyInfix (Hs.TyPromoted (Hs.PromotedString (rawIdent name) (rawIdent name))) (Hs.UnpromotedName (Hs.Qual (Hs.ModuleName "Lamdera.Haskelm.Core") (Hs.Symbol ":="))) (Hs.TyParen (tType translation $ t))
     in  Hs.TyParen $ Hs.TyApp (Hs.TyCon (Hs.Qual (Hs.ModuleName "Lamdera.Haskelm.Core") (Hs.Ident "Record'"))) (Hs.TyPromoted (Hs.PromotedList True (fmap recordField $ Map.toList $ fmap tFieldType $ mapNameToFieldType)))
   (C.TUnit) -> Hs.TyCon (Hs.Special (Hs.UnitCon))
-  (C.TTuple t1 t2 Nothing) -> Hs.TyTuple Hs.Boxed [tType t1, tType t2]
-  (C.TTuple t1 t2 (Just t3)) -> Hs.TyTuple Hs.Boxed [tType t1, tType t2, tType t3]
+  (C.TTuple t1 t2 Nothing) -> Hs.TyTuple Hs.Boxed [tType translation t1, tType translation t2]
+  (C.TTuple t1 t2 (Just t3)) -> Hs.TyTuple Hs.Boxed [tType translation t1, tType translation t2, tType translation t3]
   (C.TAlias moduleName name nameTypePairs aliasType) ->
     let
+      mapper (tAliasName, C.TVar originalVar) = Just (tAliasName, originalVar)
+      mapper _ = Nothing
+
+      newPairs =
+        nameTypePairs
+        -- TODO: are we really sure that type alias variables always represent type variables and not other types? Nope. It's not.
+        & Maybe.mapMaybe mapper
+        & Map.fromList
+
       conv t =
         -- transpile type alias
-        --tType t
+        tType (translation `Map.union` newPairs) t
+        --tType (translation) t
         -- or unpack it
-        foldl -- T a b instead of a b T
-          Hs.TyApp
-          (Hs.TyCon (qual moduleName name))
-          (nameTypePairs & fmap fst & fmap ident & fmap Hs.TyVar)
+        --foldl -- T a b instead of a b T
+        --  Hs.TyApp
+        --  (Hs.TyCon (qual moduleName name))
+        --  (nameTypePairs & fmap fst & fmap ident & fmap Hs.TyVar)
     in
     case aliasType of
       C.Holey t ->
-        -- DT.trace (sShow ("t", t, "tType", tType t, "conv t", conv t)) $
+        DT.trace (sShow ("HOLEY:", name, "aliasType", t, "nameTypePairs", nameTypePairs, "tType", tType Map.empty t, "conv t", conv t)) $
         conv t
         -- error (sShow t)
 
       C.Filled t ->
+        DT.trace (sShow ("FILLED:", name, "aliasType", t, "nameTypePairs", nameTypePairs, "tType", tType Map.empty t, "conv t", conv t)) $
         conv t
 
 

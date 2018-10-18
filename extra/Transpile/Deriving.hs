@@ -98,7 +98,7 @@ typeVariables t =
     (C.TUnit) -> []
     (C.TVar name) | "number" `Text.isPrefixOf` N.toText name -> []
     (C.TVar name) -> [name]
-    (C.TType moduleName name types) -> []
+    (C.TType moduleName name types) -> concatMap typeVariables types
     (C.TRecord nameFieldTypeMap mName) ->
       nameFieldTypeMap
       & Map.elems
@@ -109,8 +109,8 @@ typeVariables t =
     (C.TTuple t1 t2 (Just t3)) -> concatMap typeVariables [t1, t2, t3]
     (C.TAlias moduleName name nameTypeList aliasType) ->
       case aliasType of
-        C.Holey t1 -> typeVariables t1
-        C.Filled t1 -> typeVariables t1
+        C.Holey t1 -> nameTypeList & fmap snd & concatMap typeVariables
+        C.Filled t1 -> nameTypeList & fmap snd & concatMap typeVariables
 
 
 tConstraint :: Text.Text -> [Hs.Asst]

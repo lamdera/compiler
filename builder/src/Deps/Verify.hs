@@ -46,6 +46,8 @@ import qualified Stuff.Paths as Paths
 
 import qualified Haskelm.Yaml
 
+import qualified Debug.Trace as DT
+import Transpile.PrettyPrint (sShow)
 
 
 -- VERIFY
@@ -201,7 +203,8 @@ verifyBuild pkgInfoMVar ifacesMVar name version =
 
             answer <- ifNotBlocked depAnswers $ \infos ->
               do  ifacesBefore <- readMVar ifacesMVar
-                  result <- runner (getIface name version info infos ifacesBefore)
+                  result <-
+                    runner (getIface name version info infos ifacesBefore)
                   case result of
                     Right ifaces ->
                       do  ifacesNow <- takeMVar ifacesMVar

@@ -125,7 +125,7 @@ instance ToJSON HPackYaml where
         , "StandaloneDeriving"
         , "FlexibleContexts" -- This prevents issues with SuperRecord when it's used kinda anonymously (i.e. passed around a lot between function calls in a single function body)
         ])
-      , "ghc-options" .= Aeson.String "-Wall -Werror -Wno-unused-imports -Wno-unused-matches -Wno-unused-local-binds -Wno-type-defaults -Wno-name-shadowing -Wno-missing-signatures"
+      , "ghc-options" .= Aeson.String "-Wall -Werror -Wno-unused-imports -Wno-unused-matches -Wno-unused-local-binds -Wno-type-defaults -Wno-name-shadowing -Wno-missing-signatures -Wno-unused-top-binds"
       , "library" .= object
         [ "exposed-modules" .= array (Aeson.String <$> exposedModules)
         , "source-dirs" .= array (Aeson.String <$> sourceDirs)
@@ -171,10 +171,11 @@ packageYamlFromPkgInfo
     version = Pkg.versionToText _version
     exposedModules = N.toText <$> ElmJson.getExposed info
     dependencies =
-      fmap (\(fqname, constraint) -> Paths.cabalNameOfPackage fqname <> " " <> constraint)
+      haskelm_deps ++
+      (fmap (\(fqname, constraint) -> Paths.cabalNameOfPackage fqname <> " " <> constraint)
       $ Map.toList
       $ convertConstraints
-        <$> _deps
+        <$> _deps)
   in
   HPackYaml
     name
@@ -318,7 +319,9 @@ stackYaml
 removeDuplicates = Prelude.foldr (\x seen -> if x `elem` seen then seen else x : seen) []
 
 matchElmPkg onMatch pkgPath =
-  if "/package/elm/" `isInfixOf` pkgPath || "/package/elm-explorations" `isInfixOf` pkgPath then
+  if "/package/elm/" `isInfixOf` pkgPath
+  || "/package/elm-explorations" `isInfixOf` pkgPath
+  || "/package/lamdera" `isInfixOf` pkgPath then
     let
       withoutPrefix =
         pkgPath

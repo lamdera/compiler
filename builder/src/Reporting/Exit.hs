@@ -43,6 +43,7 @@ data Exit
   | Install Install.Exit
   | Publish Publish.Exit
   | BadHttp String Http.Exit
+  deriving (Show)
 
 
 

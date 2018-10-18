@@ -26,6 +26,7 @@ data Exit
   | CorruptElmJson Pkg.Name Pkg.Version
   | CorruptDocumentation Pkg.Name Pkg.Version
   | CorruptBinary FilePath FilePath
+  deriving (Show)
 
 
 
@@ -38,6 +39,7 @@ data ElmJsonProblem
   | NoPkgCore
   | NoAppCore
   | NoAppJson
+  deriving (Show)
 
 
 

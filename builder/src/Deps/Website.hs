@@ -1,5 +1,6 @@
 {-# OPTIONS_GHC -Wall #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE QuasiQuotes #-}
 module Deps.Website
   ( getElmJson
   , getDocs
@@ -45,15 +46,37 @@ import qualified Stuff.Paths as Path
 import qualified Debug.Trace as DT
 import Transpile.PrettyPrint
 
+import Text.RawString.QQ (r)
+
 -- GET PACKAGE INFO
 
 
 getElmJson :: Name -> Version -> Task.Task BS.ByteString
 getElmJson name version =
-  (\v -> DT.trace (sShow ("getElmJson", name, version, "v", v)) v) <$>
   case name of
-    (Name "lamdera" _) ->
-      pure $ BS.pack "wuhu"
+    (Name "Lamdera" "core") ->
+      pure $ BS.pack [r|{
+    "type": "package",
+    "name": "Lamdera/core",
+    "summary": "Lamdera core elm library",
+    "license": "BSD-3-Clause",
+    "version": "1.0.0",
+    "exposed-modules": [
+        "Lamdera.Backend",
+        "Lamdera.Frontend",
+        "Lamdera.Effect",
+        "Lamdera.Types"
+    ],
+    "elm-version": "0.19.0 <= v < 0.20.0",
+    "dependencies": {
+        "elm/browser": "1.0.0 <= v < 2.0.0",
+        "elm/core": "1.0.0 <= v < 2.0.0",
+        "elm/html": "1.0.0 <= v < 2.0.0",
+        "elm/json": "1.0.0 <= v < 2.0.0",
+        "elm/url": "1.0.0 <= v < 2.0.0"
+    },
+    "test-dependencies": {}
+}|]
     _ ->
       Http.run $ fetchByteString $
         "packages/" ++ Pkg.toUrl name ++ "/" ++ Pkg.versionToString version ++ "/elm.json"
@@ -102,7 +125,7 @@ newPkgDecoder =
 
 lamderaPackages :: Map.Map Name [Version]
 lamderaPackages = Map.fromList
-  [ (Name "lamdera" "core", [Version 1 0 0])
+  [ (Name "Lamdera" "core", [Version 1 0 0])
   ]
 
 
@@ -145,7 +168,6 @@ fetchByteString path =
 
 fetchJson :: String -> (e -> [D.Doc]) -> D.Decoder e a -> String -> Http.Fetch a
 fetchJson rootName errorToDocs decoder path =
-  DT.trace (sShow ("fetchJson", rootName, path)) $
   Http.package path [] $ \request manager ->
     do  response <- Client.httpLbs request manager
         let bytes = LBS.toStrict (Client.responseBody response)
@@ -183,14 +205,18 @@ downloadHelp cache (name, version) =
     endpointUrl =
       "packages/" ++ Pkg.toUrl name ++ "/" ++ Pkg.versionToString version ++ "/endpoint.json"
   in
-    Http.andThen (fetchJson "version" id endpointDecoder endpointUrl) $ \(endpoint, hash) ->
-      let
-        start = Progress.DownloadPkgStart name version
-        toEnd = Progress.DownloadPkgEnd name version
-      in
-        Http.report start toEnd $
-          Http.anything endpoint $ \request manager ->
-            Client.withResponse request manager (downloadArchive cache name version hash)
+    (case name of
+      (Name "Lamdera" "core") -> Http.self ("https://github.com/lamdera/core/zipball/1.0.0/","ignored")
+      _ ->
+        fetchJson "version" id endpointDecoder endpointUrl
+        ) `Http.andThen` \(endpoint, hash) ->
+          let
+            start = Progress.DownloadPkgStart name version
+            toEnd = Progress.DownloadPkgEnd name version
+          in
+            Http.report start toEnd $
+              Http.anything endpoint $ \request manager ->
+                Client.withResponse request manager (downloadArchive cache name version hash)
 
 
 endpointDecoder :: D.Decoder e (String, String)
@@ -212,7 +238,7 @@ downloadArchive cache name version expectedHash response =
           return (Left msg)
 
         Right (sha, archive) ->
-          if expectedHash == SHA.showDigest sha then
+          if expectedHash == "ignored" || expectedHash == SHA.showDigest sha then
             Right <$> writeArchive archive (cache </> Pkg.toFilePath name) (Pkg.versionToString version)
           else
             return $ Left $ E.BadZipSha expectedHash (SHA.showDigest sha)

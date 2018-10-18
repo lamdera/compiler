@@ -19,6 +19,7 @@ import qualified Elm.Package as Pkg
 data Exit
   = NoSolution [Pkg.Name]
   | AlreadyStarted
+  deriving (Show)
 
 
 

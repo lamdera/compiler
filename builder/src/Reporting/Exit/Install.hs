@@ -19,7 +19,7 @@ import qualified Reporting.Exit.Help as Help
 data Exit
   = NoArgs FilePath
   | NoSolution [Pkg.Name]
-
+  deriving (Show)
 
 
 -- TO REPORT

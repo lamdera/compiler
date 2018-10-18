@@ -33,6 +33,10 @@ import qualified Stuff.Paths as Path
 
 import qualified Haskelm.Yaml
 
+import qualified Debug.Trace as DT
+import Transpile.PrettyPrint (sShow)
+
+
 -- import Control.Monad.Trans (liftIO)
 -- import Text.Show.Prettyprint
 -- import qualified Debug.Trace as DT
