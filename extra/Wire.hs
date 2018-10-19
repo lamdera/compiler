@@ -21,6 +21,19 @@ import WireHelpers
 
 imap f l = zipWith f [0..] l
 
+{-
+
+The main AST dynamic injection logic for Evergreen wire.
+
+Overall todo items remaining∷
+
+- Handle module `exposing (blah)` issues preventing auto-generated definitions from being imported by other modules
+- Generic Encoder for records
+- Generic Decoder for records
+- Remove all references to AllTypes & make the module name dynamic based on context
+
+-}
+
 
 -- Our injection point POC for AllTypes. Search for `Wire.modify`
 modifyCanonical canonical flag pkg importDict interfaces source =
