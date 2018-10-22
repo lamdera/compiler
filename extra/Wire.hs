@@ -49,6 +49,9 @@ modifyCanonical canonical flag pkg importDict interfaces source =
               tracef ("-" ++ N.toString n) canonical
 
             "AllTypes" -> do
+              -- Keeping this branch for the moment as the test tracking file AllTypes.elm
+              -- eventually when everything is done this will be removed and we'll not need to pattern match
+
 
               -- tracef ("-" ++ N.toString n) canonical
 
@@ -81,8 +84,15 @@ modifyCanonical canonical flag pkg importDict interfaces source =
               --     d -> d
               -- })
 
-            _ ->
-              canonical
+            _ -> do
+              -- This will be the final implementation as we converge to it
+              let customTypeEncoders = fmap customTypeToEncoder $ Map.toList customTypes
+              let customTypeDecoders = fmap customTypeToDecoder $ Map.toList customTypes
+              let existingDecls = _decls canonical
+
+              -- Add declarations for our generated encoders/decoders in addition to any existing declarations
+              canonical { _decls = DeclareRec (customTypeEncoders ++ customTypeDecoders) existingDecls }
+
 
 
 customTypeToEncoder (customTypeName_, customType_) = do
