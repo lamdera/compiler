@@ -54,13 +54,23 @@ allTypesMock =
     }
 
 
+aliasedInt : IntAlias
+aliasedInt =
+    444
+
+
 unionMocks =
-    [ Leaf
-    , Recursive (Recursive (Recursive (DeeplyValued [ True, False ])))
-    , Valued 123
-    , DeeplyValued [ False, False, False ]
-    , Leaf
-    , Aliased 3
+    [ ValueInt 123
+    , ValueFloat 8.9
+    , ValueBool True
+    , ValueChar 'C'
+    , ValueString "Stringy!"
+    , ValueListBool [ False, False, False ]
+    , ValueSetFloat (Set.fromList [ 6.1, 7.4, 8.9 ])
+    , ValueArrayString (Array.fromList [ "Hello", "Yellow" ])
+    , ValueOrder GT
+    , Aliased aliasedInt
+    , Recursive (Recursive (Recursive (ValueListBool [ True, False ])))
     ]
 
 
@@ -77,7 +87,7 @@ view model =
         decoded =
             D.decodeString AllTypes.evg_d_AllTypes encoded
 
-        allTypesMatching =
+        recordsMatching =
             Ok allTypesMock == decoded
 
         e2 =
@@ -85,6 +95,9 @@ view model =
 
         d2 =
             D.decodeString (D.list AllTypes.evg_d_Union) e2
+
+        customTypesMatching =
+            Ok unionMocks == d2
 
         -- e3 =
         --     E.encode 0 (E.list AllTypes.evg_e_Another anotherMocks)
@@ -97,13 +110,18 @@ view model =
             column [ spacing 10, padding 10 ]
                 [ row [ padding 10 ] [ paragraph [] [ text <| "Encoded AllTypes: " ++ encoded ] ]
                 , row [ padding 10 ] [ paragraph [] [ text <| "Decoded AllTypes: " ++ Debug.toString decoded ] ]
-                , if allTypesMatching then
-                    row [ padding 10, Background.color (rgb255 186 255 188) ] [ paragraph [] [ text <| "Equality to original? " ++ Debug.toString allTypesMatching ] ]
+                , if recordsMatching then
+                    row [ padding 10, Background.color (rgb255 186 255 188) ] [ paragraph [] [ text <| "Record equal to original? " ++ Debug.toString recordsMatching ] ]
 
                   else
-                    row [ padding 10, Background.color (rgb255 255 179 186) ] [ paragraph [] [ text <| "Equality to original? " ++ Debug.toString allTypesMatching ] ]
+                    row [ padding 10, Background.color (rgb255 255 179 186) ] [ paragraph [] [ text <| "Record equal to original? " ++ Debug.toString recordsMatching ] ]
                 , row [ padding 10 ] [ paragraph [] [ text <| "Encoded Unions: " ++ e2 ] ]
                 , row [ padding 10 ] [ paragraph [] [ text <| "Decoded Unions: " ++ Debug.toString d2 ] ]
+                , if customTypesMatching then
+                    row [ padding 10, Background.color (rgb255 186 255 188) ] [ paragraph [] [ text <| "Custom type equal to original? " ++ Debug.toString customTypesMatching ] ]
+
+                  else
+                    row [ padding 10, Background.color (rgb255 255 179 186) ] [ paragraph [] [ text <| "Custom type equal to original? " ++ Debug.toString customTypesMatching ] ]
 
                 -- , row [] [ Html.text <| "Encoded Another: " ++ e3 ]
                 -- , row [] [ Html.text <| "Shadow value not existent in code: " ++ Debug.toString AllTypes.evg ]

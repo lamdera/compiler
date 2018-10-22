@@ -1,4 +1,4 @@
-module AllTypes exposing (AllTypes, Union(..), evg, evg_d_AllTypes, evg_d_Union, evg_e_AllTypes, evg_e_Union)
+module AllTypes exposing (AllTypes, IntAlias, Union(..), evg, evg_d_AllTypes, evg_d_Union, evg_e_AllTypes, evg_e_Union)
 
 import Array exposing (Array)
 import Dict exposing (Dict)
@@ -14,11 +14,21 @@ type alias IntAlias =
 
 
 type Union
-    = Recursive Union
-    | Valued Int
-    | DeeplyValued (List Bool)
-    | Leaf
+    = Leaf
+    | ValueInt Int
+    | ValueFloat Float
+    | ValueBool Bool
+    | ValueChar Char
+    | ValueString String
+    | ValueListBool (List Bool)
+    | ValueSetFloat (Set Float)
+    | ValueArrayString (Array String)
+      -- | ValueDict (Dict String (List Int))
+      -- | ValueTime Time.Posix
+    | ValueOrder Order
+      -- | ValueUnit ()
     | Aliased IntAlias
+    | Recursive Union
 
 
 type alias AllTypes =

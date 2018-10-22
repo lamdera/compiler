@@ -84,14 +84,88 @@ vlocal n = at (VarLocal (name n))
 
 -- JSON.Encode
 
+jsonEncodeInt =
+  ((qvar "elm" "json" "Json.Encode" "int"
+    (Forall (Map.fromList [])
+            (tlam (qtyp "elm" "core" "Basics" "Int" [])
+                     (qtyp "elm" "json" "Json.Encode" "Value" [])))))
+
+
+jsonEncodeFloat =
+  ((qvar "elm" "json" "Json.Encode" "float"
+    (Forall (Map.fromList [])
+            (tlam (qtyp "elm" "core" "Basics" "Float" [])
+                     (qtyp "elm" "json" "Json.Encode" "Value" [])))))
+
+
+jsonEncodeBool =
+  ((qvar "elm" "json" "Json.Encode" "bool"
+    (Forall (Map.fromList [])
+            (tlam (qtyp "elm" "core" "Basics" "Bool" [])
+                     (qtyp "elm" "json" "Json.Encode" "Value" [])))))
+
+
+jsonEncodeString =
+  ((qvar "elm" "json" "Json.Encode" "string"
+      (Forall (Map.fromList [])
+              (tlam (qtyp "elm" "core" "String" "String" [])
+                    (qtyp "elm" "json" "Json.Encode" "Value" [])))))
+
+
 jsonEncodeList =
-  ((qvar "elm" "json" "Json.Encode" "list"
-      (Forall (Map.fromList [(name "a" ,())])
-              (tlam (tlam (tvar "a")
-                          (qtyp "elm" "json" "Json.Encode" "Value" []))
-                    (tlam (qtyp "elm" "core" "List" "List" [tvar "a"])
-                          (qtyp "elm" "json" "Json.Encode" "Value" [])))
-      )))
+   ((qvar "elm" "json" "Json.Encode" "list"
+       (Forall (Map.fromList [(name "a" ,())])
+               (tlam (tlam (tvar "a")
+                           (qtyp "elm" "json" "Json.Encode" "Value" []))
+                     (tlam (qtyp "elm" "core" "List" "List" [tvar "a"])
+                           (qtyp "elm" "json" "Json.Encode" "Value" [])))
+       )))
+
+
+jsonEncodeArray =
+   ((qvar "elm" "json" "Json.Encode" "array"
+       (Forall (Map.fromList [(name "a" ,())])
+               (tlam (tlam (tvar "a")
+                           (qtyp "elm" "json" "Json.Encode" "Value" []))
+                     (tlam (qtyp "elm" "core" "Array" "Array" [tvar "a"])
+                           (qtyp "elm" "json" "Json.Encode" "Value" [])))
+       )))
+
+
+jsonEncodeSet =
+   ((qvar "elm" "json" "Json.Encode" "set"
+       (Forall (Map.fromList [(name "a" ,())])
+               (tlam (tlam (tvar "a")
+                           (qtyp "elm" "json" "Json.Encode" "Value" []))
+                     (tlam (qtyp "elm" "core" "Set" "Set" [tvar "a"])
+                           (qtyp "elm" "json" "Json.Encode" "Value" [])))
+       )))
+
+
+-- JSON.Decode
+
+jsonDecodeInt =
+  (qvar "elm" "json" "Json.Decode" "int"
+    (Forall (Map.fromList [])
+            (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "elm" "core" "Basics" "Int" []])))
+
+
+jsonDecodeFloat =
+  (qvar "elm" "json" "Json.Decode" "float"
+    (Forall (Map.fromList [])
+            (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "elm" "core" "Basics" "Float" []])))
+
+
+jsonDecodeBool =
+  (qvar "elm" "json" "Json.Decode" "bool"
+    (Forall (Map.fromList [])
+      (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "elm" "core" "Basics" "Bool" []])))
+
+
+jsonDecodeString =
+  (qvar "elm" "json" "Json.Decode" "string"
+    (Forall (Map.fromList [])
+            (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "elm" "core" "String" "String" []])))
 
 
 jsonDecodeList decoder =
@@ -102,31 +176,12 @@ jsonDecodeList decoder =
             [decoder])
 
 
-jsonEncodeString =
-  ((qvar "elm" "json" "Json.Encode" "string"
-      (Forall (Map.fromList [])
-              (tlam (qtyp "elm" "core" "String" "String" [])
-                    (qtyp "elm" "json" "Json.Encode" "Value" [])))))
-
-
-jsonEncodeInt =
-  ((qvar "elm" "json" "Json.Encode" "int"
-    (Forall (Map.fromList [])
-            (tlam (qtyp "elm" "core" "Basics" "Int" [])
-                     (qtyp "elm" "json" "Json.Encode" "Value" [])))))
-
--- JSON.Decode
-
-jsonDecodeInt =
-  (qvar "elm" "json" "Json.Decode" "int"
-    (Forall (Map.fromList [])
-            (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "elm" "core" "Basics" "Int" []])))
-
-
-jsonDecodeBool =
-  (qvar "elm" "json" "Json.Decode" "bool"
-    (Forall (Map.fromList [])
-      (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "elm" "core" "Basics" "Bool" []])))
+jsonDecodeArray decoder =
+  at (Call ((qvar "elm" "json" "Json.Decode" "array"
+                            (Forall (Map.fromList [(name "a" ,())])
+                                    (tlam (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "a"])
+                                             (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "elm" "core" "Array" "Array" [tvar "a"]])))))
+            [decoder])
 
 
 jsonDecodeLazy1Ignore decoder =
@@ -149,8 +204,9 @@ coreBasicsIdentity =
                                 (tvar "a"))))
 
 
--- Evergreen
+-- Evergreen Encoders
 
+-- @TODO should be evergreenDecodeUnion?
 evergreenUnion =
   ((qvar "author" "project" "Evergreen" "union"
     (Forall (Map.fromList [(name "a"
@@ -160,6 +216,7 @@ evergreenUnion =
                               (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "a"]))))))
 
 
+-- @TODO should be evergreenDecodeUnion?
 evergreenUnion1 =
   ((qvar "author" "project" "Evergreen" "union1"
     (Forall (Map.fromList [(name "a"
@@ -173,42 +230,11 @@ evergreenUnion1 =
                                        (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "b"])))))))
 
 
-jsonEncodeFloat =
-  ((qvar "elm" "json" "Json.Encode" "float"
-    (Forall (Map.fromList [])
-            (tlam (qtyp "elm" "core" "Basics" "Float" [])
-                     (qtyp "elm" "json" "Json.Encode" "Value" [])))))
-
-jsonEncodeBool =
-  ((qvar "elm" "json" "Json.Encode" "bool"
-    (Forall (Map.fromList [])
-            (tlam (qtyp "elm" "core" "Basics" "Bool" [])
-                     (qtyp "elm" "json" "Json.Encode" "Value" [])))))
-
 evergreenEncodeChar =
   ((qvar "author" "project" "Evergreen" "e_char"
                             (Forall (Map.fromList [])
                                     (tlam (qtyp "elm" "core" "Char" "Char" [])
                                              (qtyp "elm" "json" "Json.Encode" "Value" [])))))
-
-jsonEncodeSet =
-  ((qvar "elm" "json" "Json.Encode" "set"
-    (Forall (Map.fromList [(name "a"
-                      ,())])
-            (tlam (tlam (tvar "a")
-                              (qtyp "elm" "json" "Json.Encode" "Value" []))
-                     (tlam (qtyp "elm" "core" "Set" "Set" [tvar "a"])
-                              (qtyp "elm" "json" "Json.Encode" "Value" []))))))
-
-
-jsonEncodeArray =
-  ((qvar "elm" "json" "Json.Encode" "array"
-    (Forall (Map.fromList [(name "a"
-                      ,())])
-            (tlam (tlam (tvar "a")
-                              (qtyp "elm" "json" "Json.Encode" "Value" []))
-                     (tlam (qtyp "elm" "core" "Array" "Array" [tvar "a"])
-                              (qtyp "elm" "json" "Json.Encode" "Value" []))))))
 
 
 evergreenEncodeDict =
@@ -224,3 +250,72 @@ evergreenEncodeDict =
                               (tlam (qtyp "elm" "core" "Dict" "Dict" [tvar "comparable"
                                               ,tvar "v"])
                                        (qtyp "elm" "json" "Json.Encode" "Value" [])))))))
+
+
+evergreenEncodeTime =
+  ((qvar "author" "project" "Evergreen" "e_time"
+          (Forall (Map.fromList [])
+                  (tlam (qtyp "elm" "time" "Time" "Posix" [])
+                           (qtyp "elm" "json" "Json.Encode" "Value" [])))))
+
+
+evergreenEncodeOrder =
+  ((qvar "author" "project" "Evergreen" "e_order"
+          (Forall (Map.fromList [])
+                  (tlam (qtyp "elm" "core" "Basics" "Order" [])
+                           (qtyp "elm" "json" "Json.Encode" "Value" [])))))
+
+
+evergreenEncodeUnit =
+  ((qvar "elm" "json" "Json.Encode" "null"
+    (Forall (Map.fromList [])
+            (TUnit))))
+
+
+-- Evergreen Decoders
+
+
+evergreenDecodeChar =
+  (qvar "author" "project" "Evergreen" "d_char"
+    (Forall (Map.fromList [])
+            (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "elm" "core" "Char" "Char" []])))
+
+
+evergreenDecodeOrder =
+  (qvar "author" "project" "Evergreen" "d_order"
+    (Forall (Map.fromList [])
+            (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "elm" "core" "Basics" "Order" []])))
+
+
+evergreenDecodeSet decoder =
+  at (Call ((qvar "author" "project" "Evergreen" "d_set"
+                            (Forall (Map.fromList [(name "comparable"
+                                              ,())])
+                                    (tlam (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "comparable"])
+                                             (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "elm" "core" "Set" "Set" [tvar "comparable"]])))))
+            [decoder])
+
+
+evergreenDecodeDict keyDecoder valueDecoder =
+  at (Call ((qvar "author" "project" "Evergreen" "d_dict"
+                            (Forall (Map.fromList [(name "comparable"
+                                              ,())
+                                              ,(name "v"
+                                              ,())])
+                                    (tlam (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "comparable"])
+                                             (tlam (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "v"])
+                                                      (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "elm" "core" "Dict" "Dict" [tvar "comparable"
+                                                                    ,tvar "v"]]))))))
+            [keyDecoder, valueDecoder])
+
+
+evergreenDecodeTime =
+  (qvar "author" "project" "Evergreen" "d_time"
+    (Forall (Map.fromList [])
+            (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "elm" "core" "Time" "Posix" []])))
+
+
+evergreenDecodeUnit =
+  call (qvar "elm" "json" "Json.Decode" "null"
+    (Forall (Map.fromList [])
+      (qtyp "elm" "json" "Json.Decode" "Decoder" [TUnit]))) []
