@@ -9,11 +9,16 @@ import Set exposing (Set)
 import Time
 
 
+type alias IntAlias =
+    Int
+
+
 type Union
     = Recursive Union
     | Valued Int
     | DeeplyValued (List Bool)
     | Leaf
+    | Aliased IntAlias
 
 
 type alias AllTypes =

@@ -134,6 +134,9 @@ customTypeToEncoder (customTypeName_, customType_) = do
           case N.toString typeName of
             "Int" ->  call jsonEncodeInt [vlocal1]
 
+        TType (Canonical (Name "elm" "core") "String") typeName next ->
+          call jsonEncodeString [vlocal1]
+
         TType (Canonical (Name "elm" "core") "List") typeName next ->
           case N.toString typeName of
 
@@ -146,6 +149,10 @@ customTypeToEncoder (customTypeName_, customType_) = do
           in
           call (at (VarTopLevel (canonical "author" "project" "AllTypes")
                                      (name _targetEncoderName))) [vlocal "evg_v0"]
+
+
+        TAlias (Canonical (Name "author" "project") _) typeName [] (Holey realType) ->
+          encodeParamType realType vlocal1
 
         _ -> error $ "encodeParamType didn't match any existing implementations: " ++ show pType
 
@@ -290,6 +297,9 @@ customTypeToDecoder (customTypeName_, customType_) = do
            -- just `exposing (SomeModel)` will need special treatment.
 
            _targetDecoder
+
+         TAlias (Canonical (Name "author" "project") _) typeName [] (Holey realType) ->
+           decodeParamType realType
 
          _ -> error $ "decodeParamType didn't match any existing implementations for: " ++ show pType
 
