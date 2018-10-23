@@ -267,9 +267,9 @@ evergreenEncodeOrder =
 
 
 evergreenEncodeUnit =
-  ((qvar "elm" "json" "Json.Encode" "null"
-    (Forall (Map.fromList [])
-            (TUnit))))
+  ((qvar "author" "project" "Evergreen" "e_unit"
+          (Forall (Map.fromList [])
+                  (qtyp "elm" "json" "Json.Encode" "Value" []))))
 
 
 -- Evergreen Decoders
@@ -316,6 +316,6 @@ evergreenDecodeTime =
 
 
 evergreenDecodeUnit =
-  call (qvar "elm" "json" "Json.Decode" "null"
-    (Forall (Map.fromList [])
-      (qtyp "elm" "json" "Json.Decode" "Decoder" [TUnit]))) []
+  (qvar "author" "project" "Evergreen" "d_unit"
+          (Forall (Map.fromList [])
+                  (qtyp "elm" "json" "Json.Decode" "Decoder" [TUnit])))

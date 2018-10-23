@@ -175,8 +175,8 @@ customTypeToEncoder (customTypeName_, customType_) = do
         --
         --     _ -> error $ "encoderForType Time type didn't match any existing implementations: " ++ show pType
         --
-        -- TUnit ->
-        --   evergreenEncodeUnit
+        TUnit ->
+          evergreenEncodeUnit
 
         TType (Canonical (Name "author" "project") _) typeName next ->
           -- Any types from user, must have encoder ref in this file
@@ -230,8 +230,8 @@ customTypeToEncoder (customTypeName_, customType_) = do
         --
         --     _ -> error $ "encodeParamType Time type didn't match any existing implementations: " ++ show pType
         --
-        -- TUnit ->
-        --   call evergreenEncodeUnit []
+        TUnit ->
+          call evergreenEncodeUnit []
 
         TType (Canonical (Name "author" "project") _) typeName next ->
           -- Any types from user, must have encoder ref in this file
@@ -418,8 +418,8 @@ customTypeToDecoder (customTypeName_, customType_) = do
          --     first:second:rest ->
          --       evergreenDecodeDict (decodeParamType first) (decodeParamType second)
          --
-         -- TUnit ->
-         --   evergreenDecodeUnit
+         TUnit ->
+           evergreenDecodeUnit
 
          TType (Canonical (Name "author" "project") _) typeName next ->
            let _targetDecoderName = "evg_d_" ++ N.toString typeName

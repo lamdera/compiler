@@ -1,4 +1,4 @@
-module Evergreen exposing (..)
+module Evergreen exposing (atIndex, custom, d_char, d_dict, d_order, d_set, d_time, d_tuple, d_unit, e_char, e_dict, e_order, e_time, e_tuple, e_unit, union, union1)
 
 import Char
 import Dict exposing (Dict)
@@ -95,6 +95,16 @@ d_tuple a b =
             )
 
 
+e_unit : E.Value
+e_unit =
+    E.null
+
+
+d_unit : D.Decoder ()
+d_unit =
+    D.null ()
+
+
 union : String -> a -> D.Decoder a
 union str final =
     D.index 0 D.string
@@ -102,6 +112,7 @@ union str final =
             (\s ->
                 if s == str then
                     D.succeed final
+
                 else
                     D.fail <| "expected '" ++ str ++ "' but saw '" ++ s
             )
@@ -114,6 +125,7 @@ union1 str decoder constructor =
             (\s ->
                 if s == str then
                     D.index 1 decoder |> D.map constructor
+
                 else
                     D.fail <| "expected '" ++ str ++ "' but saw '" ++ s
             )

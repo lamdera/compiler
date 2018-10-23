@@ -71,6 +71,7 @@ unionMocks =
     , ValueOrder GT
     , Aliased aliasedInt
     , Recursive (Recursive (Recursive (ValueListBool [ True, False ])))
+    , ValueUnit ()
     ]
 
 

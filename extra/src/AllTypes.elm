@@ -26,7 +26,7 @@ type Union
       -- | ValueDict (Dict String (List Int))
       -- | ValueTime Time.Posix
     | ValueOrder Order
-      -- | ValueUnit ()
+    | ValueUnit ()
     | Aliased IntAlias
     | Recursive Union
 
