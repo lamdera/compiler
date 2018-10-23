@@ -23,7 +23,8 @@ type Union
     | ValueListBool (List Bool)
     | ValueSetFloat (Set Float)
     | ValueArrayString (Array String)
-      -- | ValueDict (Dict String (List Int))
+      -- | ValueDict (Dict String (List Int)) -- this seemed to cause problems with the nested type...
+    | ValueDict (Dict String Int)
       -- | ValueTime Time.Posix
     | ValueOrder Order
     | ValueUnit ()

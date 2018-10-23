@@ -298,14 +298,12 @@ evergreenDecodeSet decoder =
 
 evergreenDecodeDict keyDecoder valueDecoder =
   at (Call ((qvar "author" "project" "Evergreen" "d_dict"
-                            (Forall (Map.fromList [(name "comparable"
-                                              ,())
-                                              ,(name "v"
-                                              ,())])
-                                    (tlam (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "comparable"])
-                                             (tlam (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "v"])
-                                                      (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "elm" "core" "Dict" "Dict" [tvar "comparable"
-                                                                    ,tvar "v"]]))))))
+            (Forall (Map.fromList [(name "comparable" ,())
+                              ,(name "v" ,())])
+                    (tlam (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "comparable"])
+                             (tlam (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "v"])
+                                      (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "elm" "core" "Dict" "Dict" [tvar "comparable"
+                                                    ,tvar "v"]]))))))
             [keyDecoder, valueDecoder])
 
 

@@ -60,7 +60,8 @@ aliasedInt =
 
 
 unionMocks =
-    [ ValueInt 123
+    [ Leaf
+    , ValueInt 123
     , ValueFloat 8.9
     , ValueBool True
     , ValueChar 'C'
@@ -68,10 +69,11 @@ unionMocks =
     , ValueListBool [ False, False, False ]
     , ValueSetFloat (Set.fromList [ 6.1, 7.4, 8.9 ])
     , ValueArrayString (Array.fromList [ "Hello", "Yellow" ])
+    , ValueDict (Dict.fromList [ ( "first", 23 ), ( "second", 58 ) ])
     , ValueOrder GT
+    , ValueUnit ()
     , Aliased aliasedInt
     , Recursive (Recursive (Recursive (ValueListBool [ True, False ])))
-    , ValueUnit ()
     ]
 
 

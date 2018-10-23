@@ -167,14 +167,14 @@ customTypeToEncoder (customTypeName_, customType_) = do
         -- @TODO These are broken & need to be carefully reworked & fixed
         -- TType (Canonical (Name "elm" "core") "Dict") typeName next ->
         --   evergreenEncodeDict
-        --
-        -- TType (Canonical (Name "elm" "time") "Time") typeName next ->
-        --   case N.toString typeName of
-        --     "Posix" ->
-        --       evergreenEncodeTime
-        --
-        --     _ -> error $ "encoderForType Time type didn't match any existing implementations: " ++ show pType
-        --
+
+        TType (Canonical (Name "elm" "time") "Time") typeName next ->
+          case N.toString typeName of
+            "Posix" ->
+              evergreenEncodeTime
+
+            _ -> error $ "encoderForType Time type didn't match any existing implementations: " ++ show pType
+
         TUnit ->
           evergreenEncodeUnit
 
@@ -217,19 +217,18 @@ customTypeToEncoder (customTypeName_, customType_) = do
         TType (Canonical (Name "elm" "core") "Set") typeName next ->
           call jsonEncodeSet (encodeListType (head next) vlocal1)
 
-        -- @TODO These are broken & need to be carefully reworked & fixed
-        -- TType (Canonical (Name "elm" "core") "Dict") typeName next ->
-        --   case next of
-        --     first:second:rest ->
-        --       call evergreenEncodeDict [encoderForType first, encoderForType second, at (VarLocal (name "evg_v0"))]
-        --
-        -- TType (Canonical (Name "elm" "time") "Time") typeName next ->
-        --   case N.toString typeName of
-        --     "Posix" ->
-        --       call evergreenEncodeTime [vlocal1]
-        --
-        --     _ -> error $ "encodeParamType Time type didn't match any existing implementations: " ++ show pType
-        --
+        TType (Canonical (Name "elm" "core") "Dict") typeName next ->
+          case next of
+            first:second:rest ->
+              call evergreenEncodeDict [tracef "dictEncFirst" $ encoderForType first, tracef "dictEncSecond" $ encoderForType second, vlocal1]
+
+        TType (Canonical (Name "elm" "time") "Time") typeName next ->
+          case N.toString typeName of
+            "Posix" ->
+              call evergreenEncodeTime [vlocal1]
+
+            _ -> error $ "encodeParamType Time type didn't match any existing implementations: " ++ show pType
+
         TUnit ->
           call evergreenEncodeUnit []
 
@@ -367,13 +366,28 @@ customTypeToDecoder (customTypeName_, customType_) = do
             ]
           )
 
+
+    {--
+
+      Generates the following kind of code;
+
+      EG.union1 "ValueInt" D.int ValueInt
+
+      This is then used in the D.oneOf to allow us to decode custom types
+
+    --}
     _genCustomType1 _index ctor =
       case ctor of
         Ctor n index numParams pTypes ->
           let _tagNameT = N.toText n
               _tagNameS = N.toString n
+              constructor = generateConstructor _tagNameS _customTypeName (index) pTypes
           in
-          at (Call evergreenUnion1 ( [str _tagNameT] ++ (fmap decodeParamType pTypes) ++ [generateConstructor _tagNameS _customTypeName (index) pTypes] ) )
+          call evergreenUnion1 (
+            [str _tagNameT] ++ -- The tag name string to parse, i.e. "ValueInt"
+            (fmap decodeParamType pTypes) ++ -- The decoder/s to be used (@TODO this sets us up for >1 param custom types?)
+            [constructor] -- The constructor, i.e. ValueInt : Int -> Union
+          )
 
 
     -- @TODO only partially implemented, needs to be extended for all possible types
@@ -412,12 +426,11 @@ customTypeToDecoder (customTypeName_, customType_) = do
          TType (Canonical (Name "elm" "core") "Set") typeName next ->
            evergreenDecodeSet (decodeParamType (head next))
 
-          -- @TODO These are broken & need to be carefully reworked & fixed
-         -- TType (Canonical (Name "elm" "core") "Dict") typeName next ->
-         --   case next of
-         --     first:second:rest ->
-         --       evergreenDecodeDict (decodeParamType first) (decodeParamType second)
-         --
+         TType (Canonical (Name "elm" "core") "Dict") typeName next ->
+           case next of
+             first:second:rest ->
+               evergreenDecodeDict (decodeParamType first) (decodeParamType second)
+
          TUnit ->
            evergreenDecodeUnit
 
