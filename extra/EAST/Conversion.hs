@@ -181,7 +181,8 @@ tType translation t = case t of
   (C.TVar name) ->
       case Map.lookup name translation of
         Just replacement ->
-          Hs.TyVar (ident replacement)
+          -- Map.empty since replacement lives in another context; we can't replace type variables defined in other module
+          tType Map.empty replacement
         Nothing ->
           Hs.TyVar (ident name)
   (C.TLambda t1 t2) -> Hs.TyFun (tType translation t1) (tType translation t2)
@@ -195,19 +196,20 @@ tType translation t = case t of
   (C.TTuple t1 t2 (Just t3)) -> Hs.TyTuple Hs.Boxed [tType translation t1, tType translation t2, tType translation t3]
   (C.TAlias moduleName name nameTypePairs aliasType) ->
     let
-      mapper (tAliasName, C.TVar originalVar) = Just (tAliasName, originalVar)
-      mapper _ = Nothing
+      mapper (tAliasName, C.TVar original) | tAliasName == original = Nothing -- don't replace TVars with themselves; causes inf loop
+      mapper (tAliasName, original) =
+        -- DT.trace (sShow ("tAliasName, Original", tAliasName, original)) $
+        Just (tAliasName, original)
 
       newPairs =
         nameTypePairs
-        -- TODO: are we really sure that type alias variables always represent type variables and not other types? Nope. It's not.
         & Maybe.mapMaybe mapper
         & Map.fromList
 
       conv t =
         -- transpile type alias
         tType (translation `Map.union` newPairs) t
-        --tType (translation) t
+        -- tType (translation) t
         -- or unpack it
         --foldl -- T a b instead of a b T
         --  Hs.TyApp
@@ -216,12 +218,11 @@ tType translation t = case t of
     in
     case aliasType of
       C.Holey t ->
-        DT.trace (sShow ("HOLEY:", name, "aliasType", t, "nameTypePairs", nameTypePairs, "tType", tType Map.empty t, "conv t", conv t)) $
+        --DT.trace (sShow ("HOLEY:", name, "aliasType", t, "nameTypePairs", nameTypePairs, "tType", tType Map.empty t, "conv t", conv t)) $
         conv t
-        -- error (sShow t)
 
       C.Filled t ->
-        DT.trace (sShow ("FILLED:", name, "aliasType", t, "nameTypePairs", nameTypePairs, "tType", tType Map.empty t, "conv t", conv t)) $
+        --DT.trace (sShow ("FILLED:", name, "aliasType", t, "nameTypePairs", nameTypePairs, "tType", tType Map.empty t, "conv t", conv t)) $
         conv t
 
 
