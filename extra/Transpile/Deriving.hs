@@ -11,6 +11,8 @@ import qualified Data.Set as Set
 import qualified AST.Canonical as C
 import qualified Elm.Name as N
 
+import Transpile.Reserved (ident, symIdent, avoidReservedWord)
+
 import Data.Monoid
 import Data.Function ((&))
 
@@ -120,10 +122,10 @@ tConstraint n =
       (Hs.ClassA
         (Hs.Qual
           (Hs.ModuleName "Lamdera.Haskelm.Core")
-          (Hs.Ident tc)
+          (ident (N.fromText tc))
         )
         [ Hs.TyVar
-          (Hs.Ident (Text.unpack n))
+          (ident (N.fromText n))
         ]
       )
     tcs n =
