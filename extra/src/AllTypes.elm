@@ -64,6 +64,7 @@ type alias AllTypes =
 --
 --         Leaf ->
 --             E.list identity [ E.string "Leaf" ]
+--
 -- evg_d_Union : D.Decoder Union
 -- evg_d_Union =
 --     D.oneOf
@@ -72,25 +73,24 @@ type alias AllTypes =
 --         , EG.union1 "DeeplyValued" (D.list D.bool) DeeplyValued
 --         , EG.union "Leaf" Leaf
 --         ]
-
-
-evg_e_AllTypes : AllTypes -> E.Value
-evg_e_AllTypes evg_p0 =
-    E.list identity
-        [ E.int evg_p0.int
-        , E.float evg_p0.float
-        , E.bool evg_p0.bool
-        , EG.e_char evg_p0.char
-        , E.string evg_p0.string
-        , E.list E.int evg_p0.listInt
-        , E.set E.float evg_p0.setFloat
-        , E.array E.string evg_p0.arrayString
-        , EG.e_dict E.string (E.list E.int) evg_p0.dict
-        , EG.e_time evg_p0.time
-        , EG.e_order evg_p0.order
-        , evg_e_Union evg_p0.union
-        , E.null
-        ]
+--
+-- evg_e_AllTypes : AllTypes -> E.Value
+-- evg_e_AllTypes evg_p0 =
+--     E.list identity
+--         [ E.int evg_p0.int
+--         , E.float evg_p0.float
+--         , E.bool evg_p0.bool
+--         , EG.e_char evg_p0.char
+--         , E.string evg_p0.string
+--         , E.list E.int evg_p0.listInt
+--         , E.set E.float evg_p0.setFloat
+--         , E.array E.string evg_p0.arrayString
+--         , EG.e_dict E.string (E.list E.int) evg_p0.dict
+--         , EG.e_time evg_p0.time
+--         , EG.e_order evg_p0.order
+--         , evg_e_Union evg_p0.union
+--         , E.null
+--         ]
 
 
 evg_d_AllTypes : D.Decoder AllTypes

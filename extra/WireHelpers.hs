@@ -79,6 +79,9 @@ list exprs = at (List exprs)
 vlocal n = at (VarLocal (name n))
 
 
+-- Local record field access
+rfield r f = at (Access (at (VarLocal (name r))) (named f))
+
 
 -- Helpful shortcut definitions for Evergreen derivations
 

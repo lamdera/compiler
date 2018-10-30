@@ -12,6 +12,7 @@ import AST.Module.Name (Canonical(..))
 import Elm.Package (Name(..))
 import qualified Data.Map as Map
 import Data.Index
+import qualified Data.List as List
 
 import Control.Monad.Trans (liftIO)
 import System.IO.Unsafe (unsafePerformIO)
@@ -21,6 +22,8 @@ import WireHelpers
 
 imap f l = zipWith f [0..] l
 
+justs xs = [ x | Just x <- xs ]
+
 {-
 
 The main AST dynamic injection logic for Evergreen wire.
@@ -28,9 +31,10 @@ The main AST dynamic injection logic for Evergreen wire.
 Overall todo items remaining∷
 
 - Handle module `exposing (blah)` issues preventing auto-generated definitions from being imported by other modules
-- Generic Encoder for records
+- Generic Encoder for records [WIP]
 - Generic Decoder for records
 - Remove all references to AllTypes & make the module name dynamic based on context
+- Support more than 1 type param in custom types
 
 -}
 
@@ -49,24 +53,24 @@ modifyCanonical canonical flag pkg importDict interfaces source =
               tracef ("-" ++ N.toString n) canonical
 
             "AllTypes" -> do
-              -- Keeping this branch for the moment as the test tracking file AllTypes.elm
+              -- Keeping this branch for the moment as the test tracks file AllTypes.elm
               -- eventually when everything is done this will be removed and we'll not need to pattern match
 
 
-              -- tracef ("-" ++ N.toString n) canonical
-
               let customTypeEncoders = fmap customTypeToEncoder $ Map.toList customTypes
-              let customTypeDecoders = fmap customTypeToDecoder $ Map.toList customTypes
-              -- let recordEncoders = evg_e_AllTypes
+                  customTypeDecoders = fmap customTypeToDecoder $ Map.toList customTypes
+                  recordEncoders = justs $ fmap aliasToEncoder $ Map.toList aliases
 
-              tracef ("-" ++ N.toString n) (canonical {
-                _decls =
-                  -- @TODO make a helper that lets us deal with this recursive type more generically, i.e.
-                  -- by being able to just pass it a list of ASTs & not caring about how it's transformed
-                  DeclareRec
-                    (customTypeEncoders ++ customTypeDecoders ++ evg_e_AllTypes)
-                    (Declare evg_d_AllTypes SaveTheEnvironment)
-              })
+              tracef ("-" ++ N.toString n) (canonical
+                { _decls =
+                    -- @TODO make a helper that lets us deal with this recursive type more generically, i.e.
+                    -- by being able to just pass it a list of ASTs & not caring about how it's transformed
+                    DeclareRec
+                      (customTypeEncoders ++ customTypeDecoders ++ recordEncoders)
+                      (Declare evg_d_AllTypes SaveTheEnvironment)
+                , _aliases = tracef ("-aliases-" ++ N.toString n) aliases
+                }
+                )
 
               -- tracef ("-" ++ N.toString n) (canonical { _decls =
               --   case _decls canonical of
@@ -542,103 +546,150 @@ tracer a b =
     pure b
 
 
+aliasToEncoder alias =
+  case alias of
+    (typeName, Alias [] (TType (Canonical _ _) (_) [])) ->
+      Nothing
+
+    (typeName, Alias [] (TRecord fields Nothing)) ->
+      Just $ recordTypeToEncoder alias fields
 
 
+recordTypeToEncoder record fields =
+  case record of
+    (typeName, Alias [] (TRecord fields Nothing)) -> do
 
-evg_e_AllTypes =
-  [(TypedDef (named "evg_e_AllTypes")
-                    (Map.fromList [])
-                    [(at (PVar (name "evg_p0"))
-                    ,TAlias (canonical "author" "project" "AllTypes")
-                            (name "AllTypes")
-                            []
-                            (Holey (TRecord (Map.fromList [(name "arrayString"
-                                                      ,FieldType 7 (qtyp "elm" "core" "Array" "Array" [qtyp "elm" "core" "String" "String" []]))
-                                                      ,(name "bool"
-                                                      ,FieldType 2 (qtyp "elm" "core" "Basics" "Bool" []))
-                                                      ,(name "char"
-                                                      ,FieldType 3 (qtyp "elm" "core" "Char" "Char" []))
-                                                      ,(name "dict"
-                                                      ,FieldType 8 (qtyp "elm" "core" "Dict" "Dict" [qtyp "elm" "core" "String" "String" []
-                                                                          ,qtyp "elm" "core" "List" "List" [qtyp "elm" "core" "Basics" "Int" []]]))
-                                                      ,(name "float"
-                                                      ,FieldType 1 (qtyp "elm" "core" "Basics" "Float" []))
-                                                      ,(name "int"
-                                                      ,FieldType 0 (qtyp "elm" "core" "Basics" "Int" []))
-                                                      ,(name "listInt"
-                                                      ,FieldType 5 (qtyp "elm" "core" "List" "List" [qtyp "elm" "core" "Basics" "Int" []]))
-                                                      ,(name "order"
-                                                      ,FieldType 10 (qtyp "elm" "core" "Basics" "Order" []))
-                                                      ,(name "setFloat"
-                                                      ,FieldType 6 (qtyp "elm" "core" "Set" "Set" [qtyp "elm" "core" "Basics" "Float" []]))
-                                                      ,(name "string"
-                                                      ,FieldType 4 (qtyp "elm" "core" "String" "String" []))
-                                                      ,(name "time"
-                                                      ,FieldType 9 (qtyp "elm" "time" "Time" "Posix" []))
-                                                      ,(name "union"
-                                                      ,FieldType 11 (qtyp "author" "project" "AllTypes" "Union" []))
-                                                      ,(name "unit"
-                                                      ,FieldType 12 TUnit)])
-                                            Nothing)))]
-                    (at (Call jsonEncodeList
-                              [coreBasicsIdentity
-                              ,at (List [at (Call jsonEncodeInt
-                                                  [at (Access (at (VarLocal (name "evg_p0")))
-                                                              (named "int"))])
-                                        ,at (Call jsonEncodeFloat
-                                                  [at (Access (at (VarLocal (name "evg_p0")))
-                                                              (named "float"))])
-                                        ,at (Call jsonEncodeBool
-                                                  [at (Access (at (VarLocal (name "evg_p0")))
-                                                              (named "bool"))])
-                                        ,at (Call evergreenEncodeChar
-                                                  [at (Access (at (VarLocal (name "evg_p0")))
-                                                              (named "char"))])
-                                        ,at (Call jsonEncodeString
-                                                  [at (Access (at (VarLocal (name "evg_p0")))
-                                                              (named "string"))])
-                                        ,at (Call jsonEncodeList
-                                                  [jsonEncodeInt
-                                                  ,at (Access (at (VarLocal (name "evg_p0")))
-                                                              (named "listInt"))])
-                                        ,at (Call jsonEncodeSet
-                                                  [jsonEncodeFloat
-                                                  ,at (Access (at (VarLocal (name "evg_p0")))
-                                                              (named "setFloat"))])
-                                        ,at (Call jsonEncodeArray
-                                                  [jsonEncodeString
-                                                  ,at (Access (at (VarLocal (name "evg_p0")))
-                                                              (named "arrayString"))])
-                                        ,at (Call evergreenEncodeDict
-                                                  [jsonEncodeString
-                                                  ,at (Call jsonEncodeList
-                                                            [(qvar "elm" "json" "Json.Encode" "int"
-                                                                            (Forall (Map.fromList [])
-                                                                                    (tlam (qtyp "elm" "core" "Basics" "Int" [])
-                                                                                             (qtyp "elm" "json" "Json.Encode" "Value" []))))])
-                                                  ,at (Access (at (VarLocal (name "evg_p0")))
-                                                              (named "dict"))])
-                                        ,at (Call ((qvar "author" "project" "Evergreen" "e_time"
-                                                                  (Forall (Map.fromList [])
-                                                                          (tlam (qtyp "elm" "time" "Time" "Posix" [])
-                                                                                   (qtyp "elm" "json" "Json.Encode" "Value" [])))))
-                                                  [at (Access (at (VarLocal (name "evg_p0")))
-                                                              (named "time"))])
-                                        ,at (Call ((qvar "author" "project" "Evergreen" "e_order"
-                                                                  (Forall (Map.fromList [])
-                                                                          (tlam (qtyp "elm" "core" "Basics" "Order" [])
-                                                                                   (qtyp "elm" "json" "Json.Encode" "Value" [])))))
-                                                  [at (Access (at (VarLocal (name "evg_p0")))
-                                                              (named "order"))])
-                                        ,at (Call (at (VarTopLevel (canonical "author" "project" "AllTypes")
-                                                                   (name "evg_e_Union")))
-                                                  [at (Access (at (VarLocal (name "evg_p0")))
-                                                              (named "union"))])
-                                        ,(qvar "elm" "json" "Json.Encode" "null"
-                                                        (Forall (Map.fromList [])
-                                                                (qtyp "elm" "json" "Json.Encode" "Value" [])))])]))
-                    (qtyp "elm" "json" "Json.Encode" "Value" []))]
+      let recordTypeName = N.toString typeName
 
+      (TypedDef (named $ "evg_e_" ++ recordTypeName)
+                        (Map.fromList [])
+                        [ (at (PVar (name "evg_p0"))
+                        , TAlias (canonical "author" "project" "AllTypes")
+                                 (name recordTypeName)
+                                 []
+                                 (Holey (TRecord fields Nothing))
+                        )
+                        ]
+                        (call jsonEncodeList
+                                  [coreBasicsIdentity
+                                  ,at (List $ encodeRecordFields fields)])
+                        (qtyp "elm" "json" "Json.Encode" "Value" []))
+    _ -> error $ "recordTypeToEncoder: received non-record type, which should be impossible! : " ++ show record
+
+
+encodeRecordFields fields = do
+  let sortedFields = List.sortOn (\(_, FieldType index _) -> (fromIntegral index) :: Int) (Map.toList fields)
+
+  fmap encodeRecordField sortedFields
+
+  -- [    call jsonEncodeInt [rfield "evg_p0" "int"]
+  --     ,call jsonEncodeFloat [rfield "evg_p0" "float"]
+  --     ,call jsonEncodeBool [rfield "evg_p0" "bool"]
+  --     ,call evergreenEncodeChar [rfield "evg_p0" "char"]
+  --     ,call jsonEncodeString [rfield "evg_p0" "string"]
+  --     ,call jsonEncodeList [jsonEncodeInt ,rfield "evg_p0" "listInt"]
+  --     ,call jsonEncodeSet [jsonEncodeFloat ,rfield "evg_p0" "setFloat"]
+  --     ,call jsonEncodeArray [jsonEncodeString ,rfield "evg_p0" "arrayString"]
+  --     ,call evergreenEncodeDict [jsonEncodeString ,call jsonEncodeList [(qvar "elm" "json" "Json.Encode" "int"
+  --                                         (Forall (Map.fromList [])
+  --                                                 (tlam (qtyp "elm" "core" "Basics" "Int" [])
+  --                                                          (qtyp "elm" "json" "Json.Encode" "Value" []))))]
+  --               ,rfield "evg_p0" "dict"]
+  --     ,call ((qvar "author" "project" "Evergreen" "e_time"
+  --                               (Forall (Map.fromList [])
+  --                                       (tlam (qtyp "elm" "time" "Time" "Posix" [])
+  --                                                (qtyp "elm" "json" "Json.Encode" "Value" [])))))
+  --               [rfield "evg_p0" "time"]
+  --     ,call ((qvar "author" "project" "Evergreen" "e_order"
+  --                               (Forall (Map.fromList [])
+  --                                       (tlam (qtyp "elm" "core" "Basics" "Order" [])
+  --                                                (qtyp "elm" "json" "Json.Encode" "Value" [])))))
+  --               [rfield "evg_p0" "order"]
+  --     ,call (at (VarTopLevel (canonical "author" "project" "AllTypes")
+  --                                (name "evg_e_Union")))
+  --               [rfield "evg_p0" "union"]
+  --     ,(qvar "elm" "json" "Json.Encode" "null"
+  --                     (Forall (Map.fromList [])
+  --                             (qtyp "elm" "json" "Json.Encode" "Value" [])))]
+
+
+encodeRecordField field =
+  case field of
+    (fieldName , FieldType index fieldType) ->
+      case fieldType of
+        TType (Canonical (Name "elm" "core") "Basics") typeName next ->
+          case N.toString typeName of
+            "Int" ->  call jsonEncodeInt [rfield "evg_p0" (N.toString fieldName)]
+            "Float" ->  call jsonEncodeFloat [rfield "evg_p0" (N.toString fieldName)]
+            "Bool" ->  call jsonEncodeBool [rfield "evg_p0" (N.toString fieldName)]
+            "Order" -> call ((qvar "author" "project" "Evergreen" "e_order"
+                                      (Forall (Map.fromList [])
+                                              (tlam (qtyp "elm" "core" "Basics" "Order" [])
+                                                       (qtyp "elm" "json" "Json.Encode" "Value" [])))))
+                                                       [rfield "evg_p0" "order"]
+
+            _ -> error $ "encodeParamType Basics type didn't match any existing implementations: " ++ show field
+
+        TType (Canonical (Name "elm" "core") "Char") typeName next ->
+          call evergreenEncodeChar [rfield "evg_p0" (N.toString fieldName)]
+
+        TType (Canonical (Name "elm" "core") "String") typeName next ->
+          call jsonEncodeString [rfield "evg_p0" (N.toString fieldName)]
+
+        TType (Canonical (Name "elm" "core") "List") typeName next ->
+          -- call jsonEncodeList (encodeListType (head next) vlocal1)
+          call jsonEncodeList [jsonEncodeInt ,rfield "evg_p0" "listInt"]
+
+        TType (Canonical (Name "elm" "core") "Array") typeName next ->
+          -- call jsonEncodeArray (encodeListType (head next) vlocal1)
+          call jsonEncodeArray [jsonEncodeString ,rfield "evg_p0" "arrayString"]
+
+        TType (Canonical (Name "elm" "core") "Set") typeName next ->
+          -- call jsonEncodeSet (encodeListType (head next) vlocal1)
+          call jsonEncodeSet [jsonEncodeFloat ,rfield "evg_p0" "setFloat"]
+
+        TType (Canonical (Name "elm" "core") "Dict") typeName next ->
+          -- case next of
+          --   first:second:rest ->
+          --     call evergreenEncodeDict [tracef "dictEncFirst" $ encoderForType first, tracef "dictEncSecond" $ encoderForType second, vlocal1]
+
+          call evergreenEncodeDict [jsonEncodeString ,call jsonEncodeList [(qvar "elm" "json" "Json.Encode" "int"
+                                              (Forall (Map.fromList [])
+                                                      (tlam (qtyp "elm" "core" "Basics" "Int" [])
+                                                               (qtyp "elm" "json" "Json.Encode" "Value" []))))]
+                    ,rfield "evg_p0" "dict"]
+
+        TType (Canonical (Name "elm" "time") "Time") typeName next ->
+          -- case N.toString typeName of
+          --   "Posix" ->
+          --     call evergreenEncodeTime [vlocal1]
+          --
+          --   _ -> error $ "encodeParamType Time type didn't match any existing implementations: " ++ show field
+          call ((qvar "author" "project" "Evergreen" "e_time"
+                                    (Forall (Map.fromList [])
+                                            (tlam (qtyp "elm" "time" "Time" "Posix" [])
+                                                     (qtyp "elm" "json" "Json.Encode" "Value" [])))))
+                    [rfield "evg_p0" "time"]
+
+        TUnit ->
+          call evergreenEncodeUnit []
+
+        TType (Canonical (Name "author" "project") _) typeName next ->
+          -- -- Any types from user, must have encoder ref in this file
+          -- let _targetEncoderName = "evg_e_" ++ N.toString typeName
+          --
+          -- in
+          -- call (at (VarTopLevel (canonical "author" "project" "AllTypes")
+          --                            (name _targetEncoderName))) [vlocal "evg_v0"]
+          call (at (VarTopLevel (canonical "author" "project" "AllTypes")
+                                     (name "evg_e_Union")))
+                    [rfield "evg_p0" "union"]
+
+
+        -- TAlias (Canonical (Name "author" "project") _) typeName [] (Holey realType) ->
+          -- encodeParamType realType vlocal1
+
+        _ -> error $ "encodeRecordField didn't match any existing implementations: " ++ show field
 
 
 evg_d_AllTypes =
