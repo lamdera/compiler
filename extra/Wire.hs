@@ -31,7 +31,7 @@ The main AST dynamic injection logic for Evergreen wire.
 Overall todo items remaining∷
 
 - Handle module `exposing (blah)` issues preventing auto-generated definitions from being imported by other modules
-- Generic Encoder for records [WIP]
+- Generic Encoder for records [DONE]
 - Generic Decoder for records
 - Remove all references to AllTypes & make the module name dynamic based on context
 - Support more than 1 type param in custom types
@@ -136,160 +136,10 @@ customTypeToEncoder (customTypeName_, customType_) = do
                [ coreBasicsIdentity
                , list
                   [ call jsonEncodeString [str _tagNameT]
-                  , encodeParamType _pType (vlocal "evg_v0")
+                  , encodeForTypeValue _pType (vlocal "evg_v0")
                   ]
                ]
              )
-
-
-    encoderForType pType =
-      case pType of
-        TType (Canonical (Name "elm" "core") "Basics") typeName next ->
-          case N.toString typeName of
-            "Int" ->  jsonEncodeInt
-            "Float" -> jsonEncodeFloat
-            "Bool" -> jsonEncodeBool
-            "Order" -> evergreenEncodeOrder
-
-            _ -> error $ "encoderForType Basics type didn't match any existing implementations: " ++ show pType
-
-        TType (Canonical (Name "elm" "core") "Char") typeName next ->
-          evergreenEncodeChar
-
-        TType (Canonical (Name "elm" "core") "String") typeName next ->
-          jsonEncodeString
-
-        TType (Canonical (Name "elm" "core") "List") typeName next ->
-          jsonEncodeList
-
-        TType (Canonical (Name "elm" "core") "Array") typeName next ->
-          jsonEncodeArray
-
-        TType (Canonical (Name "elm" "core") "Set") typeName next ->
-          jsonEncodeSet
-
-        -- @TODO These are broken & need to be carefully reworked & fixed
-        -- TType (Canonical (Name "elm" "core") "Dict") typeName next ->
-        --   evergreenEncodeDict
-
-        TType (Canonical (Name "elm" "time") "Time") typeName next ->
-          case N.toString typeName of
-            "Posix" ->
-              evergreenEncodeTime
-
-            _ -> error $ "encoderForType Time type didn't match any existing implementations: " ++ show pType
-
-        TUnit ->
-          evergreenEncodeUnit
-
-        TType (Canonical (Name "author" "project") _) typeName next ->
-          -- Any types from user, must have encoder ref in this file
-          let _targetEncoderName = "evg_e_" ++ N.toString typeName
-          in
-          at (VarTopLevel (canonical "author" "project" "AllTypes") (name _targetEncoderName))
-
-        TAlias (Canonical (Name "author" "project") _) typeName [] (Holey realType) ->
-          encoderForType realType
-
-        _ -> error $ "encoderForType didn't match any existing implementations: " ++ show pType
-
-
-
-    encodeParamType pType vlocal1 =
-      case pType of
-        TType (Canonical (Name "elm" "core") "Basics") typeName next ->
-          case N.toString typeName of
-            "Int" ->  call jsonEncodeInt [vlocal1]
-            "Float" -> call jsonEncodeFloat [vlocal1]
-            "Bool" -> call jsonEncodeBool [vlocal1]
-            "Order" -> call evergreenEncodeOrder [vlocal1]
-
-            _ -> error $ "encodeParamType Basics type didn't match any existing implementations: " ++ show pType
-
-        TType (Canonical (Name "elm" "core") "Char") typeName next ->
-          call evergreenEncodeChar [vlocal1]
-
-        TType (Canonical (Name "elm" "core") "String") typeName next ->
-          call jsonEncodeString [vlocal1]
-
-        TType (Canonical (Name "elm" "core") "List") typeName next ->
-          call jsonEncodeList (encodeListType (head next) vlocal1)
-
-        TType (Canonical (Name "elm" "core") "Array") typeName next ->
-          call jsonEncodeArray (encodeListType (head next) vlocal1)
-
-        TType (Canonical (Name "elm" "core") "Set") typeName next ->
-          call jsonEncodeSet (encodeListType (head next) vlocal1)
-
-        TType (Canonical (Name "elm" "core") "Dict") typeName next ->
-          case next of
-            first:second:rest ->
-              call evergreenEncodeDict [tracef "dictEncFirst" $ encoderForType first, tracef "dictEncSecond" $ encoderForType second, vlocal1]
-
-        TType (Canonical (Name "elm" "time") "Time") typeName next ->
-          case N.toString typeName of
-            "Posix" ->
-              call evergreenEncodeTime [vlocal1]
-
-            _ -> error $ "encodeParamType Time type didn't match any existing implementations: " ++ show pType
-
-        TUnit ->
-          call evergreenEncodeUnit []
-
-        TType (Canonical (Name "author" "project") _) typeName next ->
-          -- Any types from user, must have encoder ref in this file
-          let _targetEncoderName = "evg_e_" ++ N.toString typeName
-
-          in
-          call (at (VarTopLevel (canonical "author" "project" "AllTypes")
-                                     (name _targetEncoderName))) [vlocal "evg_v0"]
-
-
-        TAlias (Canonical (Name "author" "project") _) typeName [] (Holey realType) ->
-          encodeParamType realType vlocal1
-
-        _ -> error $ "encodeParamType didn't match any existing implementations: " ++ show pType
-
-
-    encodeListType pType vlocal1 =
-      case pType of
-        TType (Canonical {_package = Name {_author = "elm" ,_project = "core"} ,_module = "Basics"}) name next ->
-          case N.toString name of
-            "Int" -> [jsonEncodeInt, vlocal1]
-            "Float" -> [jsonEncodeFloat, vlocal1]
-            "Bool" -> [jsonEncodeBool, vlocal1]
-
-            _ -> error $ "encodeListType Basics type didn't match any existing implementations: " ++ show pType
-
-        TType (Canonical (Name "elm" "core") "Char") typeName next ->
-          [evergreenEncodeChar, vlocal1]
-
-        TType (Canonical (Name "elm" "core") "String") typeName next ->
-          [jsonEncodeString, vlocal1]
-
-        -- TType (Canonical (Name "elm" "core") "List") typeName next ->
-        --   [jsonEncodeList, encodeListType (head next) vlocal1]
-        --
-        -- TType (Canonical (Name "elm" "core") "Array") typeName next ->
-        --   [jsonEncodeArray, encodeListType (head next) vlocal1]
-        --
-        -- TType (Canonical (Name "elm" "core") "Set") typeName next ->
-        --   [jsonEncodeSet, encodeListType (head next) vlocal1]
-
-        -- TType (Canonical (Name "author" "project") _) typeName next ->
-        --   -- Any types from user, must have encoder ref in this file
-        --   let _targetEncoderName = "evg_e_" ++ N.toString typeName
-        --
-        --   in
-        --   call (at (VarTopLevel (canonical "author" "project" "AllTypes") (name _targetEncoderName))) [vlocal "evg_v0"]
-
-
-        TAlias (Canonical (Name "author" "project") _) typeName [] (Holey realType) ->
-          [encodeParamType realType vlocal1, vlocal1]
-
-
-        _ -> error $ "encodeListType didn't match any existing implementations: " ++ show pType
-
 
     _customTypeBranches =
       case customType_ of
@@ -417,7 +267,7 @@ customTypeToDecoder (customTypeName_, customType_) = do
              "Posix" ->
                evergreenDecodeTime
 
-             _ -> error $ "encodeParamType Time type didn't match any existing implementations: " ++ show pType
+             _ -> error $ "decodeParamType Time type didn't match any existing implementations: " ++ show pType
 
          TType (Canonical (Name "elm" "core") "List") typeName next ->
            -- @TODO do we really need to do this? Can we just destructure inline above instead? How many other types does List expose?
@@ -557,139 +407,159 @@ aliasToEncoder alias =
 
 recordTypeToEncoder record fields =
   case record of
-    (typeName, Alias [] (TRecord fields Nothing)) -> do
+    (typeName, Alias [] (TRecord fields Nothing)) ->
+      let
+        recordTypeName = N.toString typeName
 
-      let recordTypeName = N.toString typeName
-
+      in
       (TypedDef (named $ "evg_e_" ++ recordTypeName)
-                        (Map.fromList [])
-                        [ (at (PVar (name "evg_p0"))
-                        , TAlias (canonical "author" "project" "AllTypes")
-                                 (name recordTypeName)
-                                 []
-                                 (Holey (TRecord fields Nothing))
-                        )
-                        ]
-                        (call jsonEncodeList
-                                  [coreBasicsIdentity
-                                  ,at (List $ encodeRecordFields fields)])
-                        (qtyp "elm" "json" "Json.Encode" "Value" []))
+                (Map.fromList [])
+                [ (at (PVar (name "evg_p0"))
+                , TAlias (canonical "author" "project" "AllTypes")
+                         (name recordTypeName)
+                         []
+                         (Holey (TRecord fields Nothing))
+                )
+                ]
+                (call jsonEncodeList [coreBasicsIdentity, at (List $ encodeRecordFields fields)])
+                (qtyp "elm" "json" "Json.Encode" "Value" []))
+
     _ -> error $ "recordTypeToEncoder: received non-record type, which should be impossible! : " ++ show record
 
 
-encodeRecordFields fields = do
-  let sortedFields = List.sortOn (\(_, FieldType index _) -> (fromIntegral index) :: Int) (Map.toList fields)
+encodeRecordFields fields =
+  let
+    sortedFields = List.sortOn (\(_, FieldType index _) -> (fromIntegral index) :: Int) (Map.toList fields)
 
-  fmap encodeRecordField sortedFields
-
-  -- [    call jsonEncodeInt [rfield "evg_p0" "int"]
-  --     ,call jsonEncodeFloat [rfield "evg_p0" "float"]
-  --     ,call jsonEncodeBool [rfield "evg_p0" "bool"]
-  --     ,call evergreenEncodeChar [rfield "evg_p0" "char"]
-  --     ,call jsonEncodeString [rfield "evg_p0" "string"]
-  --     ,call jsonEncodeList [jsonEncodeInt ,rfield "evg_p0" "listInt"]
-  --     ,call jsonEncodeSet [jsonEncodeFloat ,rfield "evg_p0" "setFloat"]
-  --     ,call jsonEncodeArray [jsonEncodeString ,rfield "evg_p0" "arrayString"]
-  --     ,call evergreenEncodeDict [jsonEncodeString ,call jsonEncodeList [(qvar "elm" "json" "Json.Encode" "int"
-  --                                         (Forall (Map.fromList [])
-  --                                                 (tlam (qtyp "elm" "core" "Basics" "Int" [])
-  --                                                          (qtyp "elm" "json" "Json.Encode" "Value" []))))]
-  --               ,rfield "evg_p0" "dict"]
-  --     ,call ((qvar "author" "project" "Evergreen" "e_time"
-  --                               (Forall (Map.fromList [])
-  --                                       (tlam (qtyp "elm" "time" "Time" "Posix" [])
-  --                                                (qtyp "elm" "json" "Json.Encode" "Value" [])))))
-  --               [rfield "evg_p0" "time"]
-  --     ,call ((qvar "author" "project" "Evergreen" "e_order"
-  --                               (Forall (Map.fromList [])
-  --                                       (tlam (qtyp "elm" "core" "Basics" "Order" [])
-  --                                                (qtyp "elm" "json" "Json.Encode" "Value" [])))))
-  --               [rfield "evg_p0" "order"]
-  --     ,call (at (VarTopLevel (canonical "author" "project" "AllTypes")
-  --                                (name "evg_e_Union")))
-  --               [rfield "evg_p0" "union"]
-  --     ,(qvar "elm" "json" "Json.Encode" "null"
-  --                     (Forall (Map.fromList [])
-  --                             (qtyp "elm" "json" "Json.Encode" "Value" [])))]
+  in fmap encodeRecordField sortedFields
 
 
 encodeRecordField field =
   case field of
     (fieldName , FieldType index fieldType) ->
-      case fieldType of
-        TType (Canonical (Name "elm" "core") "Basics") typeName next ->
-          case N.toString typeName of
-            "Int" ->  call jsonEncodeInt [rfield "evg_p0" (N.toString fieldName)]
-            "Float" ->  call jsonEncodeFloat [rfield "evg_p0" (N.toString fieldName)]
-            "Bool" ->  call jsonEncodeBool [rfield "evg_p0" (N.toString fieldName)]
-            "Order" -> call ((qvar "author" "project" "Evergreen" "e_order"
-                                      (Forall (Map.fromList [])
-                                              (tlam (qtyp "elm" "core" "Basics" "Order" [])
-                                                       (qtyp "elm" "json" "Json.Encode" "Value" [])))))
-                                                       [rfield "evg_p0" "order"]
-
-            _ -> error $ "encodeParamType Basics type didn't match any existing implementations: " ++ show field
-
-        TType (Canonical (Name "elm" "core") "Char") typeName next ->
-          call evergreenEncodeChar [rfield "evg_p0" (N.toString fieldName)]
-
-        TType (Canonical (Name "elm" "core") "String") typeName next ->
-          call jsonEncodeString [rfield "evg_p0" (N.toString fieldName)]
-
-        TType (Canonical (Name "elm" "core") "List") typeName next ->
-          -- call jsonEncodeList (encodeListType (head next) vlocal1)
-          call jsonEncodeList [jsonEncodeInt ,rfield "evg_p0" "listInt"]
-
-        TType (Canonical (Name "elm" "core") "Array") typeName next ->
-          -- call jsonEncodeArray (encodeListType (head next) vlocal1)
-          call jsonEncodeArray [jsonEncodeString ,rfield "evg_p0" "arrayString"]
-
-        TType (Canonical (Name "elm" "core") "Set") typeName next ->
-          -- call jsonEncodeSet (encodeListType (head next) vlocal1)
-          call jsonEncodeSet [jsonEncodeFloat ,rfield "evg_p0" "setFloat"]
-
-        TType (Canonical (Name "elm" "core") "Dict") typeName next ->
-          -- case next of
-          --   first:second:rest ->
-          --     call evergreenEncodeDict [tracef "dictEncFirst" $ encoderForType first, tracef "dictEncSecond" $ encoderForType second, vlocal1]
-
-          call evergreenEncodeDict [jsonEncodeString ,call jsonEncodeList [(qvar "elm" "json" "Json.Encode" "int"
-                                              (Forall (Map.fromList [])
-                                                      (tlam (qtyp "elm" "core" "Basics" "Int" [])
-                                                               (qtyp "elm" "json" "Json.Encode" "Value" []))))]
-                    ,rfield "evg_p0" "dict"]
-
-        TType (Canonical (Name "elm" "time") "Time") typeName next ->
-          -- case N.toString typeName of
-          --   "Posix" ->
-          --     call evergreenEncodeTime [vlocal1]
-          --
-          --   _ -> error $ "encodeParamType Time type didn't match any existing implementations: " ++ show field
-          call ((qvar "author" "project" "Evergreen" "e_time"
-                                    (Forall (Map.fromList [])
-                                            (tlam (qtyp "elm" "time" "Time" "Posix" [])
-                                                     (qtyp "elm" "json" "Json.Encode" "Value" [])))))
-                    [rfield "evg_p0" "time"]
-
-        TUnit ->
-          call evergreenEncodeUnit []
-
-        TType (Canonical (Name "author" "project") _) typeName next ->
-          -- -- Any types from user, must have encoder ref in this file
-          -- let _targetEncoderName = "evg_e_" ++ N.toString typeName
-          --
-          -- in
-          -- call (at (VarTopLevel (canonical "author" "project" "AllTypes")
-          --                            (name _targetEncoderName))) [vlocal "evg_v0"]
-          call (at (VarTopLevel (canonical "author" "project" "AllTypes")
-                                     (name "evg_e_Union")))
-                    [rfield "evg_p0" "union"]
+      encodeForTypeValue fieldType (rfield "evg_p0" (N.toString fieldName))
 
 
-        -- TAlias (Canonical (Name "author" "project") _) typeName [] (Holey realType) ->
-          -- encodeParamType realType vlocal1
+encodeForTypeValue typ value =
+  case typ of
+    TType (Canonical (Name "elm" "core") "Basics") typeName next ->
+      case N.toString typeName of
+        "Int" ->
+          call jsonEncodeInt [value]
 
-        _ -> error $ "encodeRecordField didn't match any existing implementations: " ++ show field
+        "Float" ->
+          call jsonEncodeFloat [value]
+
+        "Bool" ->
+          call jsonEncodeBool [value]
+
+        "Order" ->
+          call evergreenEncodeOrder [value]
+
+        _ -> error $ "encodeForTypeValue Basics type didn't match any existing implementations: " ++ show typ
+
+    TType (Canonical (Name "elm" "core") "Char") typeName next ->
+      call evergreenEncodeChar [value]
+
+    TType (Canonical (Name "elm" "core") "String") typeName next ->
+      call jsonEncodeString [value]
+
+    TType (Canonical (Name "elm" "core") "List") typeName next ->
+      call jsonEncodeList [encoderForType (head next), value]
+
+    TType (Canonical (Name "elm" "core") "Array") typeName next ->
+      call jsonEncodeArray [encoderForType (head next), value]
+
+    TType (Canonical (Name "elm" "core") "Set") typeName next ->
+      call jsonEncodeSet [encoderForType (head next), value]
+
+    TType (Canonical (Name "elm" "core") "Dict") typeName next ->
+      case next of
+        first:second:rest ->
+          call evergreenEncodeDict [encoderForType first, encoderForType second, value]
+
+    TType (Canonical (Name "elm" "time") "Time") typeName next ->
+      case N.toString typeName of
+        "Posix" ->
+          call evergreenEncodeTime [value]
+
+        _ -> error $ "encodeForTypeValue Time type didn't match any existing implementations: " ++ show typ
+
+    TUnit ->
+      call evergreenEncodeUnit []
+
+    TType (Canonical (Name "author" "project") _) typeName next ->
+      -- Any types from user, must have encoder ref in this file
+      let _targetEncoderName = "evg_e_" ++ N.toString typeName
+
+      in
+      call (at (VarTopLevel (canonical "author" "project" "AllTypes")
+                                 (name _targetEncoderName))) [value]
+
+    TAlias (Canonical (Name "author" "project") _) typeName [] (Holey realType) ->
+      encodeForTypeValue realType value
+
+    _ -> error $ "encodeForTypeValue didn't match any existing implementations: " ++ show typ
+
+
+encoderForType pType =
+  case pType of
+    TType (Canonical (Name "elm" "core") "Basics") typeName next ->
+      case N.toString typeName of
+        "Int" ->
+          jsonEncodeInt
+
+        "Float" ->
+          jsonEncodeFloat
+
+        "Bool" ->
+          jsonEncodeBool
+
+        "Order" ->
+          evergreenEncodeOrder
+
+        _ -> error $ "encoderForType Basics type didn't match any existing implementations: " ++ show pType
+
+    TType (Canonical (Name "elm" "core") "Char") typeName next ->
+      evergreenEncodeChar
+
+    TType (Canonical (Name "elm" "core") "String") typeName next ->
+      jsonEncodeString
+
+    TType (Canonical (Name "elm" "core") "List") typeName next ->
+      call jsonEncodeList [encoderForType (head next)]
+
+    TType (Canonical (Name "elm" "core") "Array") typeName next ->
+      call jsonEncodeArray [encoderForType (head next)]
+
+    TType (Canonical (Name "elm" "core") "Set") typeName next ->
+      call jsonEncodeSet [encoderForType (head next)]
+
+    TType (Canonical (Name "elm" "core") "Dict") typeName next ->
+      case next of
+        first:second:rest ->
+          call evergreenEncodeDict [encoderForType first, encoderForType second]
+
+    TType (Canonical (Name "elm" "time") "Time") typeName next ->
+      case N.toString typeName of
+        "Posix" ->
+          evergreenEncodeTime
+
+        _ -> error $ "encoderForType Time type didn't match any existing implementations: " ++ show pType
+
+    TUnit ->
+      evergreenEncodeUnit
+
+    TType (Canonical (Name "author" "project") _) typeName next ->
+      -- Any types from user, must have encoder ref in this file
+      let _targetEncoderName = "evg_e_" ++ N.toString typeName
+      in
+      at (VarTopLevel (canonical "author" "project" "AllTypes") (name _targetEncoderName))
+
+    TAlias (Canonical (Name "author" "project") _) typeName [] (Holey realType) ->
+      encoderForType realType
+
+    _ -> error $ "encoderForType didn't match any existing implementations: " ++ show pType
 
 
 evg_d_AllTypes =
