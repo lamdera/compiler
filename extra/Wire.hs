@@ -32,7 +32,7 @@ Overall todo items remaining:
 
 - Handle module `exposing (blah)` issues preventing auto-generated definitions from being imported by other modules
 - Generic Encoder for records [DONE]
-- Generic Decoder for records [WIP]
+- Generic Decoder for records [DONE]
 - Remove all references to AllTypes & make the module name dynamic based on context
 - Support more than 1 type param in custom types
 
@@ -56,37 +56,19 @@ modifyCanonical canonical flag pkg importDict interfaces source =
               -- Keeping this branch for the moment as the test tracks file AllTypes.elm
               -- eventually when everything is done this will be removed and we'll not need to pattern match
 
-
               let customTypeEncoders = fmap customTypeToEncoder $ Map.toList customTypes
                   customTypeDecoders = fmap customTypeToDecoder $ Map.toList customTypes
                   recordEncoders = justs $ fmap aliasToEncoder $ Map.toList aliases
                   recordDecoders = justs $ fmap aliasToDecoder $ Map.toList aliases
+                  existingDecls = _decls canonical
 
               tracef ("-" ++ N.toString n) (canonical
                 { _decls =
-                    -- @TODO make a helper that lets us deal with this recursive type more generically, i.e.
-                    -- by being able to just pass it a list of ASTs & not caring about how it's transformed
                     DeclareRec (customTypeEncoders ++ customTypeDecoders ++ recordEncoders ++ recordDecoders) SaveTheEnvironment
-
-                , _aliases = tracef ("-aliases-" ++ N.toString n) aliases
+                , _aliases =
+                    tracef ("-aliases-" ++ N.toString n) aliases
                 }
                 )
-
-              -- tracef ("-" ++ N.toString n) (canonical { _decls =
-              --   case _decls canonical of
-              --     DeclareRec d x ->
-              --
-              --       -- Use this one when we want to see the original schema
-              --       -- DeclareRec d x
-              --
-              --       -- Use this one otherwise
-              --       funtimes
-              --
-              --       -- Canary test
-              --       -- DeclareRec [] x
-              --
-              --     d -> d
-              -- })
 
             _ -> do
               -- This will be the final implementation as we converge to it
@@ -98,9 +80,7 @@ modifyCanonical canonical flag pkg importDict interfaces source =
               canonical { _decls = DeclareRec (customTypeEncoders ++ customTypeDecoders) existingDecls }
 
 
-
 customTypeToEncoder (customTypeName_, customType_) = do
-
   let
     _encoderName = "evg_e_" ++ N.toString customTypeName_
 
@@ -674,24 +654,22 @@ recordTypeToDecoder typeName fields =
 
 
 recordConstructor typeName fields =
+  let
+    sortedFields = List.sortOn (\(_, FieldType index _) -> (fromIntegral index) :: Int) (Map.toList fields)
+
+    getFieldType field =
+      case field of
+        (fieldName , FieldType index fieldType) ->
+          fieldType
+
+    constructorTypeSig = foldr (\fieldType accumulator -> tlam fieldType accumulator) finalSigPart (fmap getFieldType sortedFields)
+
+    finalSigPart = (TAlias (canonical "author" "project" "AllTypes")
+                     (name (N.toString typeName))
+                     []
+                     (Filled (TRecord fields Nothing)))
+  in
   at (VarCtor Normal (canonical "author" "project" "AllTypes")
       (name (N.toString typeName))
       (ZeroBased 0)
-      (Forall (Map.fromList [])
-      (tlam (qtyp "elm" "core" "Basics" "Int" [])
-      (tlam (qtyp "elm" "core" "Basics" "Float" [])
-      (tlam (qtyp "elm" "core" "Basics" "Bool" [])
-      (tlam (qtyp "elm" "core" "Char" "Char" [])
-      (tlam (qtyp "elm" "core" "String" "String" [])
-      (tlam (qtyp "elm" "core" "List" "List" [qtyp "elm" "core" "Basics" "Int" []])
-      (tlam (qtyp "elm" "core" "Set" "Set" [qtyp "elm" "core" "Basics" "Float" []])
-      (tlam (qtyp "elm" "core" "Array" "Array" [qtyp "elm" "core" "String" "String" []])
-      (tlam (qtyp "elm" "core" "Dict" "Dict" [qtyp "elm" "core" "String" "String" []
-      ,qtyp "elm" "core" "List" "List" [qtyp "elm" "core" "Basics" "Int" []]])
-      (tlam (qtyp "elm" "time" "Time" "Posix" [])
-      (tlam (qtyp "elm" "core" "Basics" "Order" [])
-      (tlam (qtyp "author" "project" "AllTypes" "Union" [])
-              (tlam TUnit (TAlias (canonical "author" "project" "AllTypes")
-                 (name (N.toString typeName))
-                 []
-                 (Filled (TRecord fields Nothing))))))))))))))))))
+      (Forall (Map.fromList []) constructorTypeSig))

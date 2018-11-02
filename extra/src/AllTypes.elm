@@ -91,21 +91,19 @@ type alias AllTypes =
 --         , evg_e_Union evg_p0.union
 --         , E.null
 --         ]
-
-
-evg_d_AllTypes : D.Decoder AllTypes
-evg_d_AllTypes =
-    D.succeed AllTypes
-        |> EG.atIndex 0 D.int
-        |> EG.atIndex 1 D.float
-        |> EG.atIndex 2 D.bool
-        |> EG.atIndex 3 EG.d_char
-        |> EG.atIndex 4 D.string
-        |> EG.atIndex 5 (D.list D.int)
-        |> EG.atIndex 6 (EG.d_set D.float)
-        |> EG.atIndex 7 (D.array D.string)
-        |> EG.atIndex 8 (EG.d_dict D.string (D.list D.int))
-        |> EG.atIndex 9 EG.d_time
-        |> EG.atIndex 10 EG.d_order
-        |> EG.atIndex 11 evg_d_Union
-        |> EG.atIndex 12 EG.d_unit
+-- evg_d_AllTypes : D.Decoder AllTypes
+-- evg_d_AllTypes =
+--     D.succeed AllTypes
+--         |> EG.atIndex 0 D.int
+--         |> EG.atIndex 1 D.float
+--         |> EG.atIndex 2 D.bool
+--         |> EG.atIndex 3 EG.d_char
+--         |> EG.atIndex 4 D.string
+--         |> EG.atIndex 5 (D.list D.int)
+--         |> EG.atIndex 6 (EG.d_set D.float)
+--         |> EG.atIndex 7 (D.array D.string)
+--         |> EG.atIndex 8 (EG.d_dict D.string (D.list D.int))
+--         |> EG.atIndex 9 EG.d_time
+--         |> EG.atIndex 10 EG.d_order
+--         |> EG.atIndex 11 evg_d_Union
+--         |> EG.atIndex 12 EG.d_unit
