@@ -28,7 +28,7 @@ justs xs = [ x | Just x <- xs ]
 
 The main AST dynamic injection logic for Evergreen wire.
 
-Overall todo items remaining∷
+Overall todo items remaining:
 
 - Handle module `exposing (blah)` issues preventing auto-generated definitions from being imported by other modules
 - Generic Encoder for records [DONE]
@@ -353,6 +353,70 @@ customTypeToDecoder (customTypeName_, customType_) = do
 
 
 
+
+-- @TODO only partially implemented, needs to be extended for all possible types
+decoderForType pType =
+   case pType of
+     TType (Canonical (Name "elm" "core") "Basics") typeName next ->
+       case N.toString typeName of
+         "Int" ->  jsonDecodeInt
+         "Float" -> jsonDecodeFloat
+         "Bool" -> jsonDecodeBool
+         "Order" -> evergreenDecodeOrder
+
+         _ -> error $ "decoderForType Basics type didn't match any existing implementations: " ++ show pType
+
+     TType (Canonical (Name "elm" "core") "Char") typeName next ->
+       evergreenDecodeChar
+
+     TType (Canonical (Name "elm" "core") "String") typeName next ->
+       jsonDecodeString
+
+     TType (Canonical (Name "elm" "time") "Time") typeName next ->
+       case N.toString typeName of
+         "Posix" ->
+           evergreenDecodeTime
+
+         _ -> error $ "decoderForType Time type didn't match any existing implementations: " ++ show pType
+
+     TType (Canonical (Name "elm" "core") "List") typeName next ->
+       -- @TODO do we really need to do this? Can we just destructure inline above instead? How many other types does List expose?
+       case N.toString typeName of
+         "List" -> jsonDecodeList (decoderForType (head next))
+
+     TType (Canonical (Name "elm" "core") "Array") typeName next ->
+       jsonDecodeArray (decoderForType (head next))
+
+     TType (Canonical (Name "elm" "core") "Set") typeName next ->
+       evergreenDecodeSet (decoderForType (head next))
+
+     TType (Canonical (Name "elm" "core") "Dict") typeName next ->
+       case next of
+         first:second:rest ->
+           evergreenDecodeDict (decoderForType first) (decoderForType second)
+
+     TUnit ->
+       evergreenDecodeUnit
+
+     TType (Canonical (Name "author" "project") _) typeName next ->
+       let _targetDecoderName = "evg_d_" ++ N.toString typeName
+           _targetDecoder = at (VarTopLevel (canonical "author" "project" "AllTypes") (name _targetDecoderName))
+       in
+       -- Currently, any types from user, must have encoder ref in this file
+       -- @TODO we'll need to extend this to be able to call custom types from anywhere in the project
+       -- Question: how do we bubble-up the need for additional imports? Do we just transitively make sure we inject explicit
+       -- imports of all evergreen wire functions whenever a type is imported into a file? Note (..) will work fine,
+       -- just `exposing (SomeModel)` will need special treatment.
+
+       _targetDecoder
+
+     TAlias (Canonical (Name "author" "project") _) typeName [] (Holey realType) ->
+       decoderForType realType
+
+     _ -> error $ "decoderForType didn't match any existing implementations for: " ++ show pType
+
+
+
 -- Generate a custom type constructor value function, i.e hilighted here:
 --
 -- type Blah = Derp Int
@@ -562,11 +626,6 @@ encoderForType pType =
     _ -> error $ "encoderForType didn't match any existing implementations: " ++ show pType
 
 
-
-
-
-
-
 aliasToDecoder alias =
   case alias of
     (typeName, Alias [] (TType (Canonical _ _) (_) [])) ->
@@ -576,83 +635,63 @@ aliasToDecoder alias =
       Just $ recordTypeToDecoder typeName fields
 
 
-rightpipe = Binop (name "|>")
+rightpipe first second = at (Binop (name "|>")
            (canonical "elm" "core" "Basics")
            (name "apR")
            (Forall (Map.fromList [(name "a" ,()) ,(name "b" ,())])
                    (tlam (tvar "a")
                             (tlam (tlam (tvar "a")
                                               (tvar "b"))
-                                     (tvar "b"))))
+                                     (tvar "b")))) first second)
+
 
 recordTypeToDecoder typeName fields =
-  (TypedDef (named "evg_d_AllTypes")
+  let
+    sortedFields = List.sortOn (\(_, FieldType index _) -> (fromIntegral index) :: Int) (Map.toList fields)
+
+    fieldDecoders = fmap decodeRecordField sortedFields
+
+    recordDecoder = foldl rightpipe recordDecoderTop fieldDecoders
+
+    recordDecoderTop = call jsonDecodeSucceed [recordConstructor typeName fields]
+
+    decodeRecordField field =
+      case field of
+        (fieldName , FieldType index fieldType) ->
+          call evergreenAtIndex [int ((fromIntegral index) :: Int) , decoderForType fieldType]
+
+    decoderName = "evg_d_" ++ N.toString typeName
+
+  in
+  (TypedDef (named decoderName)
      (Map.fromList [])
      []
-      (at (rightpipe
-      (at (rightpipe
-      (at (rightpipe
-      (at (rightpipe
-      (at (rightpipe
-      (at (rightpipe
-      (at (rightpipe
-      (at (rightpipe
-      (at (rightpipe
-      (at (rightpipe
-      (at (rightpipe
-      (at (rightpipe
-      (at (rightpipe
-          (at (Call (jsonDecodeSucceed)
-              [at (VarCtor Normal (canonical "author" "project" "AllTypes")
-                  (name (N.toString typeName))
-                  (ZeroBased 0)
-                  (Forall (Map.fromList [])
-                  (tlam (qtyp "elm" "core" "Basics" "Int" [])
-                  (tlam (qtyp "elm" "core" "Basics" "Float" [])
-                  (tlam (qtyp "elm" "core" "Basics" "Bool" [])
-                  (tlam (qtyp "elm" "core" "Char" "Char" [])
-                  (tlam (qtyp "elm" "core" "String" "String" [])
-                  (tlam (qtyp "elm" "core" "List" "List" [qtyp "elm" "core" "Basics" "Int" []])
-                  (tlam (qtyp "elm" "core" "Set" "Set" [qtyp "elm" "core" "Basics" "Float" []])
-                  (tlam (qtyp "elm" "core" "Array" "Array" [qtyp "elm" "core" "String" "String" []])
-                  (tlam (qtyp "elm" "core" "Dict" "Dict" [qtyp "elm" "core" "String" "String" []
-                  ,qtyp "elm" "core" "List" "List" [qtyp "elm" "core" "Basics" "Int" []]])
-                  (tlam (qtyp "elm" "time" "Time" "Posix" [])
-                  (tlam (qtyp "elm" "core" "Basics" "Order" [])
-                  (tlam (qtyp "author" "project" "AllTypes" "Union" [])
-                          (tlam TUnit (TAlias (canonical "author" "project" "AllTypes")
-                             (name "AllTypes")
-                             []
-                             (Filled (TRecord (Map.fromList [(name "arrayString" ,FieldType 7 (qtyp "elm" "core" "Array" "Array" [qtyp "elm" "core" "String" "String" []]))
-                                        ,(name "bool" ,FieldType 2 (qtyp "elm" "core" "Basics" "Bool" []))
-                                        ,(name "char" ,FieldType 3 (qtyp "elm" "core" "Char" "Char" []))
-                                        ,(name "dict" ,FieldType 8 (qtyp "elm" "core" "Dict" "Dict" [qtyp "elm" "core" "String" "String" []
-                                                            ,qtyp "elm" "core" "List" "List" [qtyp "elm" "core" "Basics" "Int" []]]))
-                                        ,(name "float" ,FieldType 1 (qtyp "elm" "core" "Basics" "Float" []))
-                                        ,(name "int" ,FieldType 0 (qtyp "elm" "core" "Basics" "Int" []))
-                                        ,(name "listInt" ,FieldType 5 (qtyp "elm" "core" "List" "List" [qtyp "elm" "core" "Basics" "Int" []]))
-                                        ,(name "order" ,FieldType 10 (qtyp "elm" "core" "Basics" "Order" []))
-                                        ,(name "setFloat" ,FieldType 6 (qtyp "elm" "core" "Set" "Set" [qtyp "elm" "core" "Basics" "Float" []]))
-                                        ,(name "string" ,FieldType 4 (qtyp "elm" "core" "String" "String" []))
-                                        ,(name "time" ,FieldType 9 (qtyp "elm" "time" "Time" "Posix" []))
-                                        ,(name "union" ,FieldType 11 (qtyp "author" "project" "AllTypes" "Union" []))
-                                        ,(name "unit" ,FieldType 12 TUnit)])
-                              Nothing))))))))))))))))))]))
-                                (at (Call (evergreenAtIndex) [int 0 ,jsonDecodeInt]))))
-                                (at (Call (evergreenAtIndex) [int 1 ,jsonDecodeFloat]))))
-                                (at (Call (evergreenAtIndex) [int 2 ,jsonDecodeBool]))))
-                                (at (Call (evergreenAtIndex) [int 3 ,evergreenDecodeChar]))))
-                                (at (Call (evergreenAtIndex) [int 4 ,jsonDecodeString]))))
-                                (at (Call (evergreenAtIndex) [int 5 ,jsonDecodeList jsonDecodeInt]))))
-                                (at (Call (evergreenAtIndex) [int 6 ,evergreenDecodeSet jsonDecodeFloat]))))
-                                (at (Call (evergreenAtIndex) [int 7 ,jsonDecodeArray jsonDecodeString]))))
-                                (at (Call (evergreenAtIndex) [int 8 ,evergreenDecodeDict jsonDecodeString (jsonDecodeList jsonDecodeInt) ]))))
-                                (at (Call (evergreenAtIndex) [int 9 ,evergreenDecodeTime]))))
-                                (at (Call (evergreenAtIndex) [int 10 ,evergreenDecodeOrder]))))
-                                (at (Call (evergreenAtIndex) [int 11 ,at (VarTopLevel (canonical "author" "project" "AllTypes") (name "evg_d_Union"))]))))
-                                (at (Call (evergreenAtIndex) [int 12 ,evergreenDecodeUnit]))))
+      recordDecoder
+      (qtyp "elm" "json" "Json.Decode" "Decoder" [TAlias (canonical "author" "project" "AllTypes")
+        (name (N.toString typeName))
+        []
+        (Holey (TRecord fields Nothing))]))
 
-           (qtyp "elm" "json" "Json.Decode" "Decoder" [TAlias (canonical "author" "project" "AllTypes")
-                          (name "AllTypes")
-                          []
-                          (Holey (TRecord fields Nothing))]))
+
+recordConstructor typeName fields =
+  at (VarCtor Normal (canonical "author" "project" "AllTypes")
+      (name (N.toString typeName))
+      (ZeroBased 0)
+      (Forall (Map.fromList [])
+      (tlam (qtyp "elm" "core" "Basics" "Int" [])
+      (tlam (qtyp "elm" "core" "Basics" "Float" [])
+      (tlam (qtyp "elm" "core" "Basics" "Bool" [])
+      (tlam (qtyp "elm" "core" "Char" "Char" [])
+      (tlam (qtyp "elm" "core" "String" "String" [])
+      (tlam (qtyp "elm" "core" "List" "List" [qtyp "elm" "core" "Basics" "Int" []])
+      (tlam (qtyp "elm" "core" "Set" "Set" [qtyp "elm" "core" "Basics" "Float" []])
+      (tlam (qtyp "elm" "core" "Array" "Array" [qtyp "elm" "core" "String" "String" []])
+      (tlam (qtyp "elm" "core" "Dict" "Dict" [qtyp "elm" "core" "String" "String" []
+      ,qtyp "elm" "core" "List" "List" [qtyp "elm" "core" "Basics" "Int" []]])
+      (tlam (qtyp "elm" "time" "Time" "Posix" [])
+      (tlam (qtyp "elm" "core" "Basics" "Order" [])
+      (tlam (qtyp "author" "project" "AllTypes" "Union" [])
+              (tlam TUnit (TAlias (canonical "author" "project" "AllTypes")
+                 (name (N.toString typeName))
+                 []
+                 (Filled (TRecord fields Nothing))))))))))))))))))
