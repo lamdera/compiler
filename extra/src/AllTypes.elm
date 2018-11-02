@@ -108,4 +108,4 @@ evg_d_AllTypes =
         |> EG.atIndex 9 EG.d_time
         |> EG.atIndex 10 EG.d_order
         |> EG.atIndex 11 evg_d_Union
-        |> EG.atIndex 12 (D.null ())
+        |> EG.atIndex 12 EG.d_unit

@@ -1,7 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 module WireTest where
 
-
 import qualified Data.ByteString as BS
 import qualified System.Directory as Dir
 import System.FilePath ((</>))
