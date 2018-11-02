@@ -23,9 +23,8 @@ type Union
     | ValueListBool (List Bool)
     | ValueSetFloat (Set Float)
     | ValueArrayString (Array String)
-    | ValueDict (Dict String Int)
-      -- | ValueDict (Dict String (List Int)) -- this seemed to cause problems with the nested type...
-      -- | ValueTime Time.Posix -- this causes a strange type error... need to dig deeper & check generation from scratch
+    | ValueDict (Dict String (List Int))
+    | ValueTime Time.Posix
     | ValueOrder Order
     | ValueUnit ()
     | Aliased IntAlias

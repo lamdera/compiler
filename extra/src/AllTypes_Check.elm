@@ -69,7 +69,7 @@ unionMocks =
     , ValueListBool [ False, False, False ]
     , ValueSetFloat (Set.fromList [ 6.1, 7.4, 8.9 ])
     , ValueArrayString (Array.fromList [ "Hello", "Yellow" ])
-    , ValueDict (Dict.fromList [ ( "first", 23 ), ( "second", 58 ) ])
+    , ValueDict (Dict.fromList [ ( "first", [ 23, 24, 25 ] ), ( "second", [ 58, 12, 98 ] ) ])
     , ValueOrder GT
     , ValueUnit ()
     , Aliased aliasedInt
