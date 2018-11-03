@@ -98,6 +98,10 @@ haskellPkgPackageYaml :: FilePath -> FilePath
 haskellPkgPackageYaml root =
   root </> "haskelm" </> "package" <.> "yaml"
 
+haskellAppPackageYaml :: FilePath -> FilePath
+haskellAppPackageYaml root =
+  root </> "package" <.> "yaml"
+
 cabalNameOfPackage (Pkg.Name author project) =
   author <> "---" <> project
 
