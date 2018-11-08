@@ -1,4 +1,4 @@
-module AllTypes exposing (AllTypes, IntAlias, Union(..), evg, evg_d_AllTypes, evg_d_Union, evg_e_AllTypes, evg_e_Union)
+module AllTypes exposing (AllTypes, IntAlias, Union(..), evg_d_AllTypes, evg_d_Union, evg_e_AllTypes, evg_e_Union)
 
 import Array exposing (Array)
 import Dict exposing (Dict)

@@ -62,12 +62,13 @@ modifyCanonical canonical flag pkg importDict interfaces source =
                   recordDecoders = justs $ fmap aliasToDecoder $ Map.toList aliases
                   existingDecls = _decls canonical
 
-              tracef ("-" ++ N.toString n) (canonical
-                { _decls =
-                    DeclareRec (customTypeEncoders ++ customTypeDecoders ++ recordEncoders ++ recordDecoders) SaveTheEnvironment
-                , _aliases =
-                    tracef ("-aliases-" ++ N.toString n) aliases
-                }
+              tracef ("-" ++ N.toString n)
+                (canonical
+                  { _decls =
+                      DeclareRec (customTypeEncoders ++ customTypeDecoders ++ recordEncoders ++ recordDecoders) SaveTheEnvironment
+                  , _aliases =
+                      tracef ("-aliases-" ++ N.toString n) aliases
+                  }
                 )
 
             _ -> do
