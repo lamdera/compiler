@@ -234,7 +234,7 @@ Executable elmx
         Wire
         WireValid
         WireTest
-        Wire
+        WireHelpers
 
         -- Haskelm
         East.Conversion
