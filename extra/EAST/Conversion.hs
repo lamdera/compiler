@@ -11,6 +11,7 @@ import qualified Data.Text as Text
 
 import qualified AST.Canonical as C
 import qualified Reporting.Annotation as A
+import qualified Reporting.Region as R
 import qualified Elm.Name as N
 import qualified Elm.Package as Pkg
 import qualified AST.Module.Name as ModuleName
@@ -27,6 +28,7 @@ import Data.Function ((&))
 import Data.Monoid ((<>))
 import qualified Data.Char as Char
 import qualified Data.Maybe as Maybe
+import qualified Data.List as List
 
 import qualified East.Rewrite as Rewrite
 import qualified Transpile.Instances
@@ -69,25 +71,26 @@ transpile
     unionTypeDecls = unions & fmap (Transpile.Instances.tDataToGADT moduName)
     instDecls = unions & concatMap (Transpile.Instances.tDataToInstDecl moduName)
 
-    aliasDecls = _aliases & Map.toList & fmap tAlias
+    aliasDecls = _aliases & Map.toList & concatMap tAlias
 
     _decls' = concatMap (tDecls annotations) $ declsToList _decls
     decls = unionTypeDecls <> aliasDecls <> instDecls <> _decls'
 
     imports = importDict & Map.toList & fmap tImport
 
+    constructorFunctionsToExport = unions & concatMap (\v ->
+      case v of
+        (Hs.PatBind (Hs.PVar (Hs.Ident name)) _ _) | "constructor'" `List.isPrefixOf` name
+          -> [name]
+        _ -> []
+      )
+
     -- binops = tBinops _binops
-    moduleHead = Hs.ModuleHead (Hs.ModuleName moduName) Nothing (tExport _exports)
+    moduleHead = Hs.ModuleHead (Hs.ModuleName moduName) Nothing (tExport _exports constructorFunctionsToExport)
     module_ = Hs.Module (Just moduleHead) [{-ModulePragma-}] (haskelmImports ++ imports) decls
   in
   -- DT.trace (sShow (moduName, imports, importDict)) $
   pure module_
-
-tAlias (aliasName, C.Alias tvars t) =
-  Hs.TypeDecl
-    (foldl Hs.DHApp (Hs.DHead $ ident aliasName) (Hs.UnkindedVar <$> ident <$> tvars))
-    (tType t)
-
 
 -- IMPORTS
 
@@ -110,21 +113,24 @@ haskelmImports =
 
 -- EXPORTS
 
-tExport (C.ExportEverything region) = Nothing -- TODO: maybe walk over ast and explicitly export things that should be?
-tExport (C.Export (nameExportMap)) =
+tExport (C.ExportEverything region) _ = Nothing -- TODO: maybe walk over ast and explicitly export things that should be?
+tExport (C.Export (nameExportMap)) constructorFunctionsToExport =
   nameExportMap
   & Map.toList
   & fmap (mapSnd tat)
-  & fmap tExportInner
-  & Hs.ExportSpecList
+  & concatMap tExportInner
+  & (\v -> Hs.ExportSpecList (v ++ fmap (\c -> Hs.EVar (Hs.UnQual (Hs.Ident c))) constructorFunctionsToExport))
   & Just
 
-tExportInner (name, C.ExportValue) = Hs.EVar (Hs.UnQual (ident name))
-tExportInner (name, C.ExportBinop) = Hs.EVar (Hs.UnQual (symIdent name))
-tExportInner (name, C.ExportAlias) = Hs.EAbs (Hs.NoNamespace) (Hs.UnQual (ident name))
-tExportInner (name, C.ExportUnionOpen) = Hs.EThingWith (Hs.EWildcard 0) (Hs.UnQual (ident name)) []
-tExportInner (name, C.ExportUnionClosed) = Hs.EThingWith (Hs.NoWildcard) (Hs.UnQual (ident name)) []
-tExportInner (name, C.ExportPort) = error "ports are not available server-side"
+tExportInner (name, C.ExportValue) = [Hs.EVar (Hs.UnQual (ident name))]
+tExportInner (name, C.ExportBinop) = [Hs.EVar (Hs.UnQual (symIdent name))]
+tExportInner (name, C.ExportAlias) = [Hs.EAbs (Hs.NoNamespace) (Hs.UnQual (ident name))
+                                     -- type alias constructors are always exported
+                                     ,Hs.EAbs (Hs.NoNamespace) (Hs.UnQual (ident $ toConstructorName name))
+                                     ]
+tExportInner (name, C.ExportUnionOpen) = [Hs.EThingWith (Hs.EWildcard 0) (Hs.UnQual (ident name)) []]
+tExportInner (name, C.ExportUnionClosed) = [Hs.EThingWith (Hs.NoWildcard) (Hs.UnQual (ident name)) []]
+tExportInner (name, C.ExportPort) = [error "ports are not available server-side"]
 
 mapSnd fn (a,b) = (a, fn b)
 
@@ -142,7 +148,7 @@ mapSnd fn (a,b) = (a, fn b)
 -- UNIONS
 
 tUnions u =
-  u & Map.toList & fmap tUnion
+  u & Map.toList & concatMap tUnion
 
 tUnion (name, (C.Union tvars ctors _ _)) =
 -- C.Ctor N.Name Index.ZeroBased _ [Type]
@@ -150,12 +156,48 @@ tUnion (name, (C.Union tvars ctors _ _)) =
     tCtor (C.Ctor name _ _ args) = Hs.ConDecl (ident name) (tType <$> args)
     dataCases = tCtor <$> ctors
   in
-  Hs.DataDecl
-    Hs.DataType
-    Nothing
-    (foldl Hs.DHApp (Hs.DHead $ ident name) (Hs.UnkindedVar <$> ident <$> tvars))
-    ((Hs.QualConDecl Nothing Nothing) <$> dataCases)
-    [] -- deriving nothing
+  [ Hs.DataDecl
+      Hs.DataType
+      Nothing
+      (foldl Hs.DHApp (Hs.DHead $ ident name) (Hs.UnkindedVar <$> ident <$> tvars))
+      ((Hs.QualConDecl Nothing Nothing) <$> dataCases)
+      [] -- deriving nothing
+  ] ++ ((\(C.Ctor name _ _ _) -> Hs.PatBind (Hs.PVar (ident $ toConstructorName name)) (Hs.UnGuardedRhs (Hs.Con (Hs.UnQual (ident name)))) Nothing)
+    <$> ctors)
+
+-- TYPE ALIASES
+
+tAlias (aliasName, C.Alias tvars t) =
+  DT.trace (sShow ("tAlias", aliasName, "tvars", tvars, "t", t)) $
+  [ Hs.TypeDecl
+      (foldl Hs.DHApp (Hs.DHead $ ident aliasName) (Hs.UnkindedVar <$> ident <$> tvars))
+      (tType t)
+  ] ++ (
+  case t of
+    (C.TRecord mapNameToFieldType maybeExtendedRecordName) ->
+      let
+        fields = Map.toList $ fmap tFieldType $ mapNameToFieldType
+      in
+      [ Hs.FunBind
+        [ Hs.Match
+          (ident $ toConstructorName aliasName)
+          (fields
+           & fmap fst
+           & fmap (\n -> Hs.PVar (ident n))
+          )
+
+          (Hs.UnGuardedRhs $
+            fields
+            & fmap fst
+            & fmap (\fieldName -> Hs.InfixApp (Hs.OverloadedLabel $ rawIdent fieldName) (Hs.QConOp (Hs.Qual (Hs.ModuleName "Lamdera.Haskelm.Core") (Hs.Symbol ":="))) (Hs.Paren (Hs.Var (Hs.UnQual (ident fieldName)))))
+            & foldl (\assignment state -> Hs.InfixApp (Hs.Paren state) (Hs.QVarOp (Hs.Qual (Hs.ModuleName "Lamdera.Haskelm.Core") (Hs.Symbol "&"))) assignment)
+                    (Hs.Var (Hs.Qual (Hs.ModuleName "Lamdera.Haskelm.Core") (Hs.Ident "rnil"))))
+          Nothing
+        ]
+      ]
+
+    _ -> []
+  )
 
 -- DECLS
 
@@ -183,7 +225,7 @@ tType t = case t of
     Hs.TyVar (ident name)
   (C.TLambda t1 t2) -> Hs.TyFun (tType t1) (tType t2)
   (C.TType moduleName name types) -> foldl Hs.TyApp (Hs.TyCon (qual moduleName name)) (tType <$> types)
-  (C.TRecord mapNameToFieldType mName) ->
+  (C.TRecord mapNameToFieldType maybeExtendedRecordName) ->
     let recordField (name, t) =
           Hs.TyInfix (Hs.TyPromoted (Hs.PromotedString (rawIdent name) (rawIdent name))) (Hs.UnpromotedName (Hs.Qual (Hs.ModuleName "Lamdera.Haskelm.Core") (Hs.Symbol ":="))) (Hs.TyParen (tType $ t))
     in  Hs.TyParen $ Hs.TyApp (Hs.TyCon (Hs.Qual (Hs.ModuleName "Lamdera.Haskelm.Core") (Hs.Ident "Record'"))) (Hs.TyPromoted (Hs.PromotedList True (fmap recordField $ Map.toList $ fmap tFieldType $ mapNameToFieldType)))
@@ -230,7 +272,8 @@ tExpr (A.At meta e) = case e of
   (C.VarTopLevel moduleName name) -> Hs.Var (qual moduleName name)
   (C.VarKernel n1 n2) -> Hs.Var (Hs.Qual (Hs.ModuleName ("Lamdera.Haskelm.Kernel." ++ Text.unpack (N.toText n1))) (ident n2))
   (C.VarForeign moduleName name typeAnnotation) -> Hs.Var (qual moduleName name)
-  (C.VarCtor _ moduleName name zeroBasedIndex typeAnnotation) -> Hs.Con (qual moduleName name)
+  (C.VarCtor _ moduleName name zeroBasedIndex typeAnnotation) ->
+    Hs.Con (qual moduleName (toConstructorName name))
   (C.VarDebug moduleName name typeAnnotation) -> Hs.Var (qual moduleName name) -- error (sShow e) -- TODO: don't allow debug vars
   (C.VarOperator op moduleName symbolName typeAnnotation) -> Hs.Var (Hs.UnQual (symIdent op))
   (C.Chr text) -> Hs.Lit (Hs.String (Text.unpack text))
@@ -356,3 +399,7 @@ tCtorArg (C.PatternCtorArg _ _ arg) = arg
 
 
 tat (A.At _ v) = v
+at = A.At R.zero
+
+toConstructorName name = N.fromText ("constructor'" <> (N.toText name))
+
