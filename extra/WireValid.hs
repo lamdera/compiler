@@ -27,12 +27,10 @@ stubValid valid flag pkg importDict interfaces source =
             , evg_d_AllTypes_stubbed
             , evg_e_Union_stubbed
             , evg_d_Union_stubbed
-            , staticX
             ] })
 
       else
         valid
-
 
 
 -- Our injection point POC for AllTypes. Search for `Wire.modify`
@@ -42,7 +40,7 @@ modify valid flag pkg importDict interfaces source canonical =
       if N.toString n == "AllTypes_Gen" then
         valid
         -- tracef ("-" ++ N.toString n) valid
-        -- tracef ("-" ++ N.toString n) (valid { _decls = [ encoder, decoder, evg_e_Union, evg_d_Union, staticX ] })
+        -- tracef ("-" ++ N.toString n) (valid { _decls = [ encoder, decoder, evg_e_Union, evg_d_Union ] })
 
       else if N.toString n == "AllTypes" then
         -- valid
@@ -53,18 +51,12 @@ modify valid flag pkg importDict interfaces source canonical =
             , evg_d_AllTypes
             , evg_e_Union
             , evg_d_Union
-            , staticX
             ] })
-        -- tracef ("-" ++ N.toString n) (valid { _decls = _decls valid ++ [ staticX ] })
+        -- tracef ("-" ++ N.toString n) (valid { _decls = _decls valid })
         -- tracef ("-" ++ N.toString n) valid
 
       else
         valid
-
-
-staticX =
-  decl "evg" [] (int 123) Nothing
-
 
 
 -- AST to file debugger

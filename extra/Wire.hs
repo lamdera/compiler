@@ -55,7 +55,6 @@ modifyCanonical canonical flag pkg importDict interfaces source =
             "AllTypes" ->
               -- Keeping this branch for the moment as the test tracks file AllTypes.elm
               -- eventually when everything is done this will be removed and we'll not need to pattern match
-
               modifyCanonicalApplied canonical n customTypes aliases
 
             "Msg" -> modifyCanonicalApplied canonical n customTypes aliases
@@ -83,7 +82,7 @@ modifyCanonicalApplied canonical n customTypes aliases = do
 
   tracef ("-" ++ N.toString n) (canonical
     { _decls =
-        DeclareRec (customTypeEncoders ++ customTypeDecoders ++ recordEncoders ++ recordDecoders) SaveTheEnvironment
+        DeclareRec (customTypeEncoders ++ customTypeDecoders ++ recordEncoders ++ recordDecoders) existingDecls
     , _aliases =
         tracef ("-aliases-" ++ N.toString n) aliases
     }
