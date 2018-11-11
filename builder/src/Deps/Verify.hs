@@ -211,7 +211,8 @@ verifyBuild pkgInfoMVar ifacesMVar name version =
                           putMVar ifacesMVar (Map.union ifacesNow ifaces)
                           return (Ok info)
 
-                    Left _ ->
+                    Left v ->
+                      DT.trace (sShow ("verifyBuild", "Err", name, version, v)) $
                       return (Err name version)
 
             report Progress.BuildDepsProgress
