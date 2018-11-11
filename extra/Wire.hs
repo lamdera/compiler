@@ -48,6 +48,9 @@ modifyCanonical canonical flag pkg importDict interfaces source =
       case name of
         Canonical pkg n ->
           case N.toString n of
+            "Evergreen" ->
+              tracef ("-" ++ N.toString n) canonical
+
             "AllTypes_Gen" ->
 
               -- tracef ("-" ++ N.toString n) valid
@@ -60,6 +63,7 @@ modifyCanonical canonical flag pkg importDict interfaces source =
               modifyCanonicalApplied canonical n customTypes aliases
 
             "Msg" -> modifyCanonicalApplied canonical n customTypes aliases
+            "Lamdera.Types" -> modifyCanonicalApplied canonical n customTypes aliases
 
             _ -> do
               -- -- This will be the final implementation as we converge to it
@@ -242,47 +246,6 @@ customTypeToDecoder moduleName (customTypeName_, customType_) = do
     -- @TODO only partially implemented, needs to be extended for all possible types
     decodeParamType pType =
        case pType of
-         TType (Canonical (Name "elm" "core") "Basics") typeName next ->
-           case N.toString typeName of
-             "Int" ->  jsonDecodeInt
-             "Float" -> jsonDecodeFloat
-             "Bool" -> jsonDecodeBool
-             "Order" -> evergreenDecodeOrder
-
-             _ -> error $ "decodeParamType Basics type didn't match any existing implementations: " ++ show pType
-
-         TType (Canonical (Name "elm" "core") "Char") typeName next ->
-           evergreenDecodeChar
-
-         TType (Canonical (Name "elm" "core") "String") typeName next ->
-           jsonDecodeString
-
-         TType (Canonical (Name "elm" "time") "Time") typeName next ->
-           case N.toString typeName of
-             "Posix" ->
-               evergreenDecodeTime
-
-             _ -> error $ "decodeParamType Time type didn't match any existing implementations: " ++ show pType
-
-         TType (Canonical (Name "elm" "core") "List") typeName next ->
-           -- @TODO do we really need to do this? Can we just destructure inline above instead? How many other types does List expose?
-           case N.toString typeName of
-             "List" -> jsonDecodeList (decodeParamType (head next))
-
-         TType (Canonical (Name "elm" "core") "Array") typeName next ->
-           jsonDecodeArray (decodeParamType (head next))
-
-         TType (Canonical (Name "elm" "core") "Set") typeName next ->
-           evergreenDecodeSet (decodeParamType (head next))
-
-         TType (Canonical (Name "elm" "core") "Dict") typeName next ->
-           case next of
-             first:second:rest ->
-               evergreenDecodeDict (decodeParamType first) (decodeParamType second)
-
-         TUnit ->
-           evergreenDecodeUnit
-
          TType (Canonical (Name "author" "project") _) typeName next ->
            let _targetDecoderName = "evg_d_" ++ N.toString typeName
                _targetDecoder = at (VarTopLevel (canonical "author" "project" "AllTypes") (name _targetDecoderName))
@@ -315,11 +278,7 @@ customTypeToDecoder moduleName (customTypeName_, customType_) = do
 
            _targetDecoder
 
-         TAlias (Canonical (Name "author" "project") _) typeName [] (Holey realType) ->
-           decodeParamType realType
-
-         _ -> error $ "decodeParamType didn't match any existing implementations for: " ++ show pType
-
+         _ -> decoderForType pType
 
     _customTypeBranches =
       case customType_ of
@@ -386,6 +345,9 @@ decoderForType pType =
      TType (Canonical (Name "elm" "core") "Set") typeName next ->
        evergreenDecodeSet (decoderForType (head next))
 
+     TType (Canonical (Name "elm" "core") "Result") "Result" next ->
+       evergreenDecodeResult -- @TODO actually implement
+
      TType (Canonical (Name "elm" "core") "Dict") typeName next ->
        case next of
          first:second:rest ->
@@ -393,6 +355,9 @@ decoderForType pType =
 
      TUnit ->
        evergreenDecodeUnit
+
+     TTuple first second _ ->
+       evergreenDecodeTuple (decoderForType first) (decoderForType second)
 
      TType (Canonical (Name "author" "project") _) typeName next ->
        let _targetDecoderName = "evg_d_" ++ N.toString typeName
@@ -538,6 +503,9 @@ encodeForTypeValue typ value =
     TType (Canonical (Name "elm" "core") "Set") typeName next ->
       call jsonEncodeSet [encoderForType (head next), value]
 
+    TType (Canonical (Name "elm" "core") "Result") "Result" next ->
+      call evergreenEncodeResult [] -- @TODO actually implement
+
     TType (Canonical (Name "elm" "core") "Dict") typeName next ->
       case next of
         first:second:rest ->
@@ -553,6 +521,9 @@ encodeForTypeValue typ value =
     TUnit ->
       call evergreenEncodeUnit []
 
+    TTuple first second _ ->
+      call evergreenEncodeTuple [encoderForType first, encoderForType second, value]
+
     TType (Canonical (Name "author" "project") _) typeName next ->
       -- Any types from user, must have encoder ref in this file
       let _targetEncoderName = "evg_e_" ++ N.toString typeName
@@ -563,6 +534,16 @@ encodeForTypeValue typ value =
 
     TAlias (Canonical (Name "author" "project") _) typeName [] (Holey realType) ->
       encodeForTypeValue realType value
+
+
+    TType (Canonical (Name "Lamdera" "core") _) typeName next ->
+      -- Any types from user, must have encoder ref in this file
+      let _targetEncoderName = "evg_e_" ++ N.toString typeName
+
+      in
+      call (at (VarTopLevel (canonical "Lamdera" "core" "Lamdera.Types")
+                                 (name _targetEncoderName))) [value]
+
 
     _ -> error $ "encodeForTypeValue didn't match any existing implementations: " ++ show typ
 
@@ -614,6 +595,9 @@ encoderForType pType =
 
     TUnit ->
       evergreenEncodeUnit
+
+    TTuple first second _ ->
+      call evergreenEncodeTuple [encoderForType first, encoderForType second]
 
     TType (Canonical (Name "author" "project") _) typeName next ->
       -- Any types from user, must have encoder ref in this file

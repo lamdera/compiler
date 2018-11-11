@@ -105,6 +105,16 @@ d_unit =
     D.null ()
 
 
+e_result : E.Value
+e_result =
+    E.null
+
+
+d_result : D.Decoder (Result err a)
+d_result =
+    Debug.todo "Result types not implemented yet"
+
+
 union : String -> a -> D.Decoder a
 union str final =
     D.index 0 D.string

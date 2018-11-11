@@ -32,6 +32,11 @@ type Union
     | ValueTwoParams Bool Char
 
 
+
+-- | ValueTuple ( Int, String )
+-- | ValueResult (Result String Int)
+
+
 type alias AllTypes =
     { int : Int
     , float : Float
