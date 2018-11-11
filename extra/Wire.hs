@@ -52,72 +52,77 @@ modifyCanonical canonical flag pkg importDict interfaces source =
               -- tracef ("-" ++ N.toString n) (canonical { _decls = [ encoder, decoder, evg_e_Union, evg_d_Union ] })
               tracef ("-" ++ N.toString n) canonical
 
-            "AllTypes" -> do
+            "AllTypes" ->
               -- Keeping this branch for the moment as the test tracks file AllTypes.elm
               -- eventually when everything is done this will be removed and we'll not need to pattern match
 
-              let customTypeEncoders = fmap customTypeToEncoder $ Map.toList customTypes
-                  customTypeDecoders = fmap customTypeToDecoder $ Map.toList customTypes
-                  recordEncoders = justs $ fmap aliasToEncoder $ Map.toList aliases
-                  recordDecoders = justs $ fmap aliasToDecoder $ Map.toList aliases
-                  existingDecls = _decls canonical
+              modifyCanonicalApplied canonical n customTypes aliases
 
-              tracef ("-" ++ N.toString n) (canonical
-                { _decls =
-                    DeclareRec (customTypeEncoders ++ customTypeDecoders ++ recordEncoders ++ recordDecoders) SaveTheEnvironment
-                , _aliases =
-                    tracef ("-aliases-" ++ N.toString n) aliases
-                }
-                )
+            "Msg" -> modifyCanonicalApplied canonical n customTypes aliases
 
             _ -> do
-              -- This will be the final implementation as we converge to it
-              let customTypeEncoders = fmap customTypeToEncoder $ Map.toList customTypes
-              let customTypeDecoders = fmap customTypeToDecoder $ Map.toList customTypes
-              let existingDecls = _decls canonical
+              -- -- This will be the final implementation as we converge to it
+              -- let customTypeEncoders = fmap customTypeToEncoder $ Map.toList customTypes
+              -- let customTypeDecoders = fmap customTypeToDecoder $ Map.toList customTypes
+              -- let existingDecls = _decls canonical
+              --
+              -- -- Add declarations for our generated encoders/decoders in addition to any existing declarations
+              -- canonical { _decls = DeclareRec (customTypeEncoders ++ customTypeDecoders) existingDecls }
+              canonical
 
-              -- Add declarations for our generated encoders/decoders in addition to any existing declarations
-              canonical { _decls = DeclareRec (customTypeEncoders ++ customTypeDecoders) existingDecls }
 
 
-customTypeToEncoder (customTypeName_, customType_) = do
+modifyCanonicalApplied canonical n customTypes aliases = do
   let
-    _encoderName = "evg_e_" ++ N.toString customTypeName_
+      moduleName = N.toString n
+      customTypeEncoders = fmap (customTypeToEncoder moduleName) $ Map.toList customTypes
+      customTypeDecoders = fmap (customTypeToDecoder moduleName) $ Map.toList customTypes
+      recordEncoders = justs $ fmap (aliasToEncoder moduleName) $ Map.toList aliases
+      recordDecoders = justs $ fmap (aliasToDecoder moduleName) $ Map.toList aliases
+      existingDecls = _decls canonical
 
-    _genCustomType0 _index ctor =
-      case ctor of
-        Ctor n index numParams params ->
-          let _tagNameT = N.toText n
-              _tagNameS = N.toString n
-          in
-          customTypeCaseBranch customTypeName_ customType_ _index _tagNameS
-            ([])
-            (call jsonEncodeList
-              [ coreBasicsIdentity
-              , list [ call jsonEncodeString [ str _tagNameT ] ]
-              ]
-            )
+  tracef ("-" ++ N.toString n) (canonical
+    { _decls =
+        DeclareRec (customTypeEncoders ++ customTypeDecoders ++ recordEncoders ++ recordDecoders) SaveTheEnvironment
+    , _aliases =
+        tracef ("-aliases-" ++ N.toString n) aliases
+    }
+    )
 
-    _genCustomType1 _index ctor =
+
+customTypeToEncoder moduleName (customTypeName_, customType_) = do
+  let
+    encoderName = "evg_e_" ++ N.toString customTypeName_
+
+    customTypeBranch _index ctor =
       case ctor of
         Ctor n index numParams pTypes ->
           let _tagNameT = N.toText n
               _tagNameS = N.toString n
-              _pType = head pTypes
+
+              patternCtorArgs =
+                imap (\i pType ->
+                  PatternCtorArg
+                      { _index = ZeroBased i
+                      , _type = pType
+                      , _arg = at (PVar (name $ "evg_v" ++ show i))
+                      }
+                ) pTypes
+
+              encoders =
+                imap (\i pType ->
+                  encodeForTypeValue pType (vlocal $ "evg_v" ++ show i)
+                ) pTypes
           in
+          -- Encodes custom types, i.e.
+          --   ValueTwoParams Bool Char
+          -- becomes the following case statement branch:
+          --   ValueTwoParams evg_v0 evg_v1 -> E.list identity [ E.string "ValueTwo", E.bool evg_v0, EG.e_char evg_v1 ]
           customTypeCaseBranch customTypeName_ customType_ _index _tagNameS
-            [ PatternCtorArg
-                { _index = ZeroBased 0
-                , _type = _pType
-                , _arg = at (PVar (name "evg_v0"))
-                }
-            ]
+            patternCtorArgs
              (call jsonEncodeList
                [ coreBasicsIdentity
-               , list
-                  [ call jsonEncodeString [str _tagNameT]
-                  , encodeForTypeValue _pType (vlocal "evg_v0")
-                  ]
+               , list $ [ call jsonEncodeString [str _tagNameT]] ++ encoders
                ]
              )
 
@@ -127,17 +132,13 @@ customTypeToEncoder (customTypeName_, customType_) = do
           imap (\i ctor ->
             case ctor of
               Ctor n index numParams params ->
-                case numParams of
-                  0 -> _genCustomType0 i ctor
-                  1 -> _genCustomType1 i ctor
-                  -- @TODO need to add support for more depths of custom types
-                  x -> undefined $ "Encoder: Custom Type parsing for " ++ show x ++ " params has not yet been implemented"
+                customTypeBranch i ctor
           ) _u_alts
 
     _customTypeNameS = N.toString customTypeName_
 
   TypedDef
-    (named _encoderName)
+    (named encoderName)
     (Map.fromList [])
     [ (at (PVar (name "evg_p0"))
     , qtyp "author" "project" "AllTypes" _customTypeNameS [])
@@ -178,13 +179,13 @@ We will be able to leverage this in our wrapper program as well by detecting the
 into the core runtime Elm code so it dynamically "write" the write boilerplate at compile time for us.
 
 -}
-customTypeToDecoder (customTypeName_, customType_) = do
+customTypeToDecoder moduleName (customTypeName_, customType_) = do
   let
     _customTypeName = N.toString customTypeName_
 
     _decoderName = "evg_d_" ++ N.toString customTypeName_
 
-    _genCustomType0 _index ctor =
+    genCustomType0 _index ctor =
       case ctor of
         Ctor n index numParams params ->
           let _tagNameT = N.toText n
@@ -210,14 +211,27 @@ customTypeToDecoder (customTypeName_, customType_) = do
       This is then used in the D.oneOf to allow us to decode custom types
 
     --}
-    _genCustomType1 _index ctor =
+    genCustomType1 _index ctor =
       case ctor of
         Ctor n index numParams pTypes ->
           let _tagNameT = N.toText n
               _tagNameS = N.toString n
-              constructor = generateConstructor _tagNameS _customTypeName (index) pTypes
+              constructor = generateConstructor moduleName _tagNameS _customTypeName (index) pTypes
           in
-          call evergreenUnion1 (
+          call evergreenDecodeUnion1 (
+            [str _tagNameT] ++ -- The tag name string to parse, i.e. "ValueInt"
+            (fmap decodeParamType pTypes) ++ -- The decoder/s to be used (@TODO this sets us up for >1 param custom types?)
+            [constructor] -- The constructor, i.e. ValueInt : Int -> Union
+          )
+
+    genCustomType2 _index ctor =
+      case ctor of
+        Ctor n index numParams pTypes ->
+          let _tagNameT = N.toText n
+              _tagNameS = N.toString n
+              constructor = generateConstructor moduleName _tagNameS _customTypeName (index) pTypes
+          in
+          call evergreenDecodeUnion2 (
             [str _tagNameT] ++ -- The tag name string to parse, i.e. "ValueInt"
             (fmap decodeParamType pTypes) ++ -- The decoder/s to be used (@TODO this sets us up for >1 param custom types?)
             [constructor] -- The constructor, i.e. ValueInt : Int -> Union
@@ -313,8 +327,9 @@ customTypeToDecoder (customTypeName_, customType_) = do
             case ctor of
               Ctor n index numParams params ->
                 case numParams of
-                  0 -> _genCustomType0 i ctor
-                  1 -> _genCustomType1 i ctor
+                  0 -> genCustomType0 i ctor
+                  1 -> genCustomType1 i ctor
+                  2 -> genCustomType2 i ctor
                   -- @TODO need to add support for more depths of union types
                   x -> undefined $ "Decoder: Custom Type parsing for " ++ show x ++ " params has not yet been implemented"
           ) _u_alts
@@ -397,20 +412,20 @@ decoderForType pType =
 
 
 
--- Generate a custom type constructor value function, i.e hilighted here:
+-- Generates a custom type constructor value function, i.e hilighted here:
 --
 -- type Blah = Derp Int
 --
 -- x = Derp 1
 --     ^^^^
 --
-generateConstructor :: String -> String -> ZeroBased -> [Type] -> Located Expr_
-generateConstructor name_ customTypeName index paramTypes =
+generateConstructor :: String -> String -> String -> ZeroBased -> [Type] -> Located Expr_
+generateConstructor moduleName name_ customTypeName index paramTypes =
   at (VarCtor Normal
-    (canonical "author" "project" "AllTypes")
+    (canonical "author" "project" moduleName)
     (name name_)
     (index)
-    (generateConstructorAnnotation paramTypes (qtyp "author" "project" "AllTypes" customTypeName []))
+    (generateConstructorAnnotation paramTypes (qtyp "author" "project" moduleName customTypeName []))
   )
 
 -- For a given list of [Type] of params for a custom type constructor, creates the signature for that constructor
@@ -439,17 +454,22 @@ tracer a b =
     print a
     pure b
 
+trace a b =
+  unsafePerformIO $ do
+    print a
+    print b
+    pure b
 
-aliasToEncoder alias =
+aliasToEncoder moduleName alias =
   case alias of
     (typeName, Alias [] (TType (Canonical _ _) (_) [])) ->
       Nothing
 
     (typeName, Alias [] (TRecord fields Nothing)) ->
-      Just $ recordTypeToEncoder alias fields
+      Just $ recordTypeToEncoder moduleName alias fields
 
 
-recordTypeToEncoder record fields =
+recordTypeToEncoder moduleName record fields =
   case record of
     (typeName, Alias [] (TRecord fields Nothing)) ->
       let
@@ -459,7 +479,7 @@ recordTypeToEncoder record fields =
       (TypedDef (named $ "evg_e_" ++ recordTypeName)
                 (Map.fromList [])
                 [ (at (PVar (name "evg_p0"))
-                , TAlias (canonical "author" "project" "AllTypes")
+                , TAlias (canonical "author" "project" moduleName)
                          (name recordTypeName)
                          []
                          (Holey (TRecord fields Nothing))
@@ -606,13 +626,13 @@ encoderForType pType =
     _ -> error $ "encoderForType didn't match any existing implementations: " ++ show pType
 
 
-aliasToDecoder alias =
+aliasToDecoder moduleName alias =
   case alias of
     (typeName, Alias [] (TType (Canonical _ _) (_) [])) ->
       Nothing
 
     (typeName, Alias [] (TRecord fields Nothing)) ->
-      Just $ recordTypeToDecoder typeName fields
+      Just $ recordTypeToDecoder moduleName typeName fields
 
 
 rightpipe first second = at (Binop (name "|>")
@@ -625,7 +645,7 @@ rightpipe first second = at (Binop (name "|>")
                                      (tvar "b")))) first second)
 
 
-recordTypeToDecoder typeName fields =
+recordTypeToDecoder moduleName typeName fields =
   let
     sortedFields = List.sortOn (\(_, FieldType index _) -> (fromIntegral index) :: Int) (Map.toList fields)
 
@@ -633,7 +653,7 @@ recordTypeToDecoder typeName fields =
 
     recordDecoder = foldl rightpipe recordDecoderTop fieldDecoders
 
-    recordDecoderTop = call jsonDecodeSucceed [recordConstructor typeName fields]
+    recordDecoderTop = call jsonDecodeSucceed [recordConstructor moduleName typeName fields]
 
     decodeRecordField field =
       case field of
@@ -647,13 +667,13 @@ recordTypeToDecoder typeName fields =
      (Map.fromList [])
      []
       recordDecoder
-      (qtyp "elm" "json" "Json.Decode" "Decoder" [TAlias (canonical "author" "project" "AllTypes")
+      (qtyp "elm" "json" "Json.Decode" "Decoder" [TAlias (canonical "author" "project" moduleName)
         (name (N.toString typeName))
         []
         (Holey (TRecord fields Nothing))]))
 
 
-recordConstructor typeName fields =
+recordConstructor moduleName typeName fields =
   let
     sortedFields = List.sortOn (\(_, FieldType index _) -> (fromIntegral index) :: Int) (Map.toList fields)
 
@@ -664,12 +684,12 @@ recordConstructor typeName fields =
 
     constructorTypeSig = foldr (\fieldType accumulator -> tlam fieldType accumulator) finalSigPart (fmap getFieldType sortedFields)
 
-    finalSigPart = (TAlias (canonical "author" "project" "AllTypes")
+    finalSigPart = (TAlias (canonical "author" "project" moduleName)
                      (name (N.toString typeName))
                      []
                      (Filled (TRecord fields Nothing)))
   in
-  at (VarCtor Normal (canonical "author" "project" "AllTypes")
+  at (VarCtor Normal (canonical "author" "project" moduleName)
       (name (N.toString typeName))
       (ZeroBased 0)
       (Forall (Map.fromList []) constructorTypeSig))

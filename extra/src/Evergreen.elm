@@ -131,6 +131,22 @@ union1 str decoder constructor =
             )
 
 
+union2 : String -> D.Decoder a -> D.Decoder b -> (a -> b -> c) -> D.Decoder c
+union2 str decoder1 decoder2 constructor =
+    D.index 0 D.string
+        |> D.andThen
+            (\s ->
+                if s == str then
+                    D.map2 constructor
+                        (D.index 1 decoder1)
+                        (D.index 2 decoder2)
+
+                else
+                    D.fail <| "expected '" ++ str ++ "' but saw '" ++ s
+            )
+
+
+atIndex : Int -> D.Decoder a -> (D.Decoder (a -> b) -> D.Decoder b)
 atIndex idx decoder =
     custom (D.index idx decoder)
 
