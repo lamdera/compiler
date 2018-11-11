@@ -6,6 +6,7 @@ module Reporting.Task.Http
   , run
   , package
   , anything
+  , self
   , andThen
   , parallel
   , report
@@ -41,6 +42,7 @@ data Fetch a where
   AndThen :: Fetch a -> (a -> Fetch b) -> Fetch b
   Parallel :: [Fetch a] -> Fetch [a]
   Report :: Progress.Progress -> (Progress.Outcome -> Progress.Progress) -> Fetch a -> Fetch a
+  Self :: a -> Fetch a
 
 
 type Handler a =
@@ -55,6 +57,11 @@ package =
 anything :: String -> Handler a -> Fetch a
 anything =
   Anything
+
+
+self :: a -> Fetch a
+self =
+  Self
 
 
 andThen :: Fetch a -> (a -> Fetch b) -> Fetch b
@@ -80,7 +87,7 @@ run :: Fetch a -> Task.Task a
 run fetch =
   Task.runHttp $ \manager tell ->
     do  chan <- newChan
-        replicateM_ 4 $ forkIO $ forever $ join (readChan chan)
+        replicateM_ 64 $ forkIO $ forever $ join (readChan chan) -- number of threads when fetching dependencies from elm-package
         readMVar =<< runHelp chan manager tell fetch
 
 
@@ -96,6 +103,12 @@ runHelp chan manager tell fetch =
     Anything url handler ->
       do  mvar <- newEmptyMVar
           writeChan chan $ putMVar mvar =<< fetchSafe url manager handler
+          return mvar
+
+    -- Lamdera added
+    Self contents ->
+      do  mvar <- newEmptyMVar
+          writeChan chan $ putMVar mvar (Right contents)
           return mvar
 
     AndThen subFetch callback ->

@@ -29,6 +29,7 @@ type Union
     | ValueUnit ()
     | Aliased IntAlias
     | Recursive Union
+    | ValueTwoParams Bool Char
 
 
 type alias AllTypes =

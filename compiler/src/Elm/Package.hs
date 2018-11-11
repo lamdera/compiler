@@ -20,6 +20,7 @@ module Elm.Package
   , encode
   , versionDecoder
   , encodeVersion
+  , unpack
   )
   where
 
@@ -71,7 +72,7 @@ data Package =
 
 isKernel :: Name -> Bool
 isKernel (Name author _) =
-  author == "elm" || author == "elm-explorations"
+  author == "elm" || author == "elm-explorations" || author == "Lamdera"
 
 
 toString :: Name -> String
@@ -82,6 +83,11 @@ toString name =
 toText :: Name -> Text
 toText (Name author project) =
     author <> "/" <> project
+
+unpack :: Name -> (Text, Text)
+unpack (Name author project) =
+    (author, project)
+
 
 
 toUrl :: Name -> String

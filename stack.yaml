@@ -3,3 +3,6 @@ flags: {}
 packages:
 - '.'
 extra-deps:
+- haskell-src-exts-simple-1.20.0.0
+- yaml-0.10.1.1
+- aeson-1.4.0.0

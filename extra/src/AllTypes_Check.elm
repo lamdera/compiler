@@ -7,9 +7,9 @@ import Debug
 import Dict
 import Element exposing (..)
 import Element.Background as Background
+import Html
 import Json.Decode as D
 import Json.Encode as E
-import MVCE
 import Result exposing (Result(..))
 import Set
 import Time
@@ -74,6 +74,7 @@ unionMocks =
     , ValueUnit ()
     , Aliased aliasedInt
     , Recursive (Recursive (Recursive (ValueListBool [ True, False ])))
+    , ValueTwoParams False 'c'
     ]
 
 
@@ -82,6 +83,7 @@ unionMocks =
 --     [ Test, Best ]
 
 
+view : Model -> { body : List (Html.Html msg), title : String }
 view model =
     let
         encoded =
@@ -133,9 +135,11 @@ view model =
     }
 
 
+update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     ( model, Cmd.none )
 
 
+subscriptions : Model -> Sub Msg
 subscriptions model =
     Sub.none

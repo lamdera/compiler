@@ -236,6 +236,16 @@ Executable elmx
         WireTest
         WireHelpers
 
+        -- Haskelm
+        East.Conversion
+        East.Rewrite
+        Haskelm.Yaml
+        Transpile.Deriving
+        Transpile.Reserved
+        Transpile.Instances
+        Transpile.PrettyPrint
+
+
     Build-depends:
         ansi-terminal >= 0.8 && < 0.9,
         ansi-wl-pprint >= 0.6.8 && < 0.7,
@@ -252,6 +262,7 @@ Executable elmx
         HTTP >= 4000.2.5 && < 4000.4,
         http-client >= 0.5 && < 0.6,
         http-client-tls >= 0.3 && < 0.4,
+        connection >= 0.2.8,
         http-types >= 0.9 && < 1.0,
         language-glsl >= 0.0.2 && < 0.3,
         logict,
@@ -271,4 +282,10 @@ Executable elmx
         utf8-string,
         vector,
         zip-archive,
-        show-prettyprint
+        show-prettyprint,
+        -- EAST
+        pretty-simple >= 2.1.0.0,
+        haskell-src-exts-simple >= 1.20,
+        transformers >= 0.5.2,
+        yaml >= 0.10.1.1,
+        aeson >= 1.4.0.0

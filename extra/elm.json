@@ -14,8 +14,10 @@
             "mdgriffith/elm-ui": "1.1.0"
         },
         "indirect": {
+            "elm/random": "1.0.0",
             "elm/url": "1.0.0",
-            "elm/virtual-dom": "1.0.0"
+            "elm/virtual-dom": "1.0.0",
+            "mgold/elm-nonempty-list": "4.0.0"
         }
     },
     "test-dependencies": {

@@ -302,7 +302,7 @@ data Magnitude
   = PATCH
   | MINOR
   | MAJOR
-  deriving (Eq, Ord)
+  deriving (Eq, Ord, Show)
 
 
 magnitudeToString :: Magnitude -> String

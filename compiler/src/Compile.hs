@@ -32,7 +32,10 @@ import System.IO.Unsafe (unsafePerformIO)
 
 import qualified WireValid
 import qualified Wire
--- import qualified AST.Valid as AS (Module(..))
+import qualified East.Conversion as East
+
+import qualified Language.Haskell.Exts.Simple.Syntax as Hs
+
 
 -- COMPILE
 
@@ -49,6 +52,7 @@ data Artifacts =
   Artifacts
     { _elmi :: I.Interface
     , _elmo :: Opt.Graph
+    , _haskelmo :: Hs.Module
     , _docs :: Maybe Docs.Module
     } deriving (Show)
 
@@ -131,10 +135,14 @@ compile flag pkg importDict interfaces source =
       documentation <-
         genarateDocs flag canonical_
 
+      haskAst <-
+        East.transpile canonical annotations importDict
+
       Result.ok $
         Artifacts
           { _elmi = I.fromModule annotations canonical_
           , _elmo = graph
+          , _haskelmo = haskAst
           , _docs = documentation
           }
 

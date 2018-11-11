@@ -226,8 +226,7 @@ evergreenUnion =
                               (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "a"]))))))
 
 
--- @TODO should be evergreenDecodeUnion?
-evergreenUnion1 =
+evergreenDecodeUnion1 =
   ((qvar "author" "project" "Evergreen" "union1"
     (Forall (Map.fromList [(name "a"
                       ,())
@@ -238,6 +237,19 @@ evergreenUnion1 =
                               (tlam (tlam (tvar "a")
                                                 (tvar "b"))
                                        (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "b"])))))))
+
+
+evergreenDecodeUnion2 =
+  ((qvar "author" "project" "Evergreen" "union2"
+    (Forall (Map.fromList [(name "a" ,())
+                          ,(name "b" ,())
+                          ,(name "c" ,())]
+                          )
+            (tlam (qtyp "elm" "core" "String" "String" [])
+                (tlam (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "a"])
+                        (tlam (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "b"])
+                              (tlam (tlam (tvar "a") (tlam (tvar "b") (tvar "c")))
+                                       (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "c"]))))))))
 
 
 evergreenEncodeChar =

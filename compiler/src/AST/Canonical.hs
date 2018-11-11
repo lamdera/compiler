@@ -133,7 +133,7 @@ data Def
 -- DECLARATIONS
 
 
-data Decls
+data Decls -- behaves as a linked list
   = Declare Def Decls
   | DeclareRec [Def] Decls
   | SaveTheEnvironment

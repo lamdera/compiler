@@ -31,7 +31,7 @@ data Exit
   | MissingTag Pkg.Version
   | NoGit
   | LocalChanges Pkg.Version
-
+  deriving (Show)
 
 
 -- TO REPORT

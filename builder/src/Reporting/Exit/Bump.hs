@@ -19,6 +19,7 @@ import qualified Reporting.Exit.Help as Help
 data Exit
   = Application
   | Unbumpable Pkg.Version [Pkg.Version]
+  deriving (Show)
 
 
 

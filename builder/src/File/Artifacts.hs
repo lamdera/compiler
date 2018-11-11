@@ -27,7 +27,10 @@ import qualified Reporting.Exit as Exit
 import qualified Reporting.Task as Task
 import qualified Stuff.Paths as Path
 
-
+import System.FilePath ((</>), (<.>))
+import System.Directory (createDirectoryIfMissing)
+import System.FilePath (takeDirectory)
+import qualified Language.Haskell.Exts.Simple.Pretty as HsPretty
 
 -- IGNORE
 
@@ -48,11 +51,16 @@ ignore answers =
 write :: FilePath -> Map Module.Raw Answer -> Task.Task (Map Module.Raw Compiler.Artifacts)
 write root answers =
   let
-    writer name result@(Compiler.Artifacts elmi elmo _) =
+    writer name result@(Compiler.Artifacts elmi elmo haskelmo _) =
       do  mvar <- newEmptyMVar
           void $ forkIO $
             do  Binary.encodeFile (Path.elmi root name) elmi
                 Binary.encodeFile (Path.elmo root name) elmo
+
+                let path = Path.haskelmo root name
+                createDirectoryIfMissing True (takeDirectory path)
+                writeFile path (HsPretty.prettyPrint haskelmo)
+
                 putMVar mvar result
           return mvar
   in
@@ -63,7 +71,7 @@ write root answers =
 writeDocs :: Map Module.Raw Compiler.Artifacts -> FilePath -> Task.Task Docs.Documentation
 writeDocs results path =
   let
-    getDocs (Compiler.Artifacts _ _ docs) =
+    getDocs (Compiler.Artifacts _ _ _ docs) =
       docs
   in
     case Maybe.mapMaybe getDocs (Map.elems results) of
