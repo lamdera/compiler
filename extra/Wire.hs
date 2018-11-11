@@ -33,8 +33,10 @@ Overall todo items remaining:
 - Handle module `exposing (blah)` issues preventing auto-generated definitions from being imported by other modules
 - Generic Encoder for records [DONE]
 - Generic Decoder for records [DONE]
-- Remove all references to AllTypes & make the module name dynamic based on context
-- Support more than 1 type param in custom types
+- Remove all references to AllTypes & make the module name dynamic based on context [WIP]
+- Support more than 1 type param in custom types [DONE]
+- Support more than 2 type param in custom types [WIP] - encoders support N, but decoders need more work
+- Retain existing declarations in a file we gen into, instead of clobbering
 
 -}
 
@@ -82,7 +84,7 @@ modifyCanonicalApplied canonical n customTypes aliases = do
 
   tracef ("-" ++ N.toString n) (canonical
     { _decls =
-        DeclareRec (customTypeEncoders ++ customTypeDecoders ++ recordEncoders ++ recordDecoders) existingDecls
+        DeclareRec (customTypeEncoders ++ customTypeDecoders ++ recordEncoders ++ recordDecoders) SaveTheEnvironment
     , _aliases =
         tracef ("-aliases-" ++ N.toString n) aliases
     }
