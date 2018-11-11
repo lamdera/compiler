@@ -10,6 +10,7 @@ import qualified Generate.Output as Output
 import qualified Reporting.Task as Task
 import qualified Reporting.Progress.Terminal as Terminal
 
+import System.Process (callCommand)
 
 {-
 
@@ -51,7 +52,10 @@ Last line is optional, but it's cool! Lambda prompt!
 
 
 compile :: IO ()
-compile =
+compile = do
+  -- Bust Elm's caching with this one weird trick!
+  touch "extra/src/AllTypes.elm"
+
   Dir.withCurrentDirectory ("extra") $
     do  reporter <- Terminal.create
         Task.run reporter $
@@ -73,3 +77,7 @@ rootPaths :: [FilePath]
 rootPaths =
   [ "src" </> "AllTypes_Check.elm"
   ]
+
+
+touch :: String -> IO ()
+touch path = callCommand $ "touch " ++ path
