@@ -376,6 +376,15 @@ decoderForType pType =
      TAlias (Canonical (Name "author" "project") _) typeName [] (Holey realType) ->
        decoderForType realType
 
+
+     -- @TODO temporary
+     TType (Canonical (Name "Lamdera" "core") _) typeName next ->
+       let _targetDecoderName = "evg_d_" ++ N.toString typeName
+           _targetDecoder = at (VarTopLevel (canonical "Lamdera" "core" "Lamdera.Types") (name _targetDecoderName))
+       in
+       _targetDecoder
+
+
      _ -> error $ "decoderForType didn't match any existing implementations for: " ++ show pType
 
 
@@ -435,6 +444,8 @@ aliasToEncoder moduleName alias =
 
     (typeName, Alias [] (TRecord fields Nothing)) ->
       Just $ recordTypeToEncoder moduleName alias fields
+
+    _ -> error $ "aliasToEncoder: didn't match any existing implementations: " ++ show alias
 
 
 recordTypeToEncoder moduleName record fields =
@@ -539,7 +550,7 @@ encodeForTypeValue typ value =
     TAlias (Canonical (Name "author" "project") _) typeName [] (Holey realType) ->
       encodeForTypeValue realType value
 
-
+    -- @TODO temporary
     TType (Canonical (Name "Lamdera" "core") _) typeName next ->
       -- Any types from user, must have encoder ref in this file
       let _targetEncoderName = "evg_e_" ++ N.toString typeName
@@ -611,6 +622,15 @@ encoderForType pType =
 
     TAlias (Canonical (Name "author" "project") _) typeName [] (Holey realType) ->
       encoderForType realType
+
+    -- @TODO temporary
+    TType (Canonical (Name "Lamdera" "core") _) typeName next ->
+      -- Any types from user, must have encoder ref in this file
+      let _targetEncoderName = "evg_e_" ++ N.toString typeName
+
+      in
+      at (VarTopLevel (canonical "Lamdera" "core" "Lamdera.Types") (name _targetEncoderName))
+
 
     _ -> error $ "encoderForType didn't match any existing implementations: " ++ show pType
 
