@@ -30,11 +30,8 @@ type Union
     | Aliased IntAlias
     | Recursive Union
     | ValueTwoParams Bool Char
-
-
-
--- | ValueTuple ( Int, String )
--- | ValueResult (Result String Int)
+    | ValueTuple ( Int, String )
+    | ValueResult (Result String Int)
 
 
 type alias AllTypes =

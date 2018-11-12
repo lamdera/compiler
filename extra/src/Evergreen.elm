@@ -66,6 +66,24 @@ d_time =
     D.int |> D.map (\t -> Time.millisToPosix t)
 
 
+e_result : (err -> E.Value) -> (a -> E.Value) -> Result err a -> E.Value
+e_result err_encode a_encode result =
+    case result of
+        Ok a ->
+            E.list identity [ E.string "Ok", a_encode a ]
+
+        Err err ->
+            E.list identity [ E.string "Err", err_encode err ]
+
+
+d_result : D.Decoder err -> D.Decoder a -> D.Decoder (Result err a)
+d_result err_decode a_decode =
+    D.oneOf
+        [ union1 "Ok" a_decode Ok
+        , union1 "Err" err_decode Err
+        ]
+
+
 e_dict : (comparable -> E.Value) -> (v -> E.Value) -> Dict comparable v -> E.Value
 e_dict k_encode v_encode dict =
     dict
@@ -103,16 +121,6 @@ e_unit =
 d_unit : D.Decoder ()
 d_unit =
     D.null ()
-
-
-e_result : E.Value
-e_result =
-    E.null
-
-
-d_result : D.Decoder (Result err a)
-d_result =
-    Debug.todo "Result types not implemented yet"
 
 
 union : String -> a -> D.Decoder a

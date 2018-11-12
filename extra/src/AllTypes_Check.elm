@@ -75,6 +75,9 @@ unionMocks =
     , Aliased aliasedInt
     , Recursive (Recursive (Recursive (ValueListBool [ True, False ])))
     , ValueTwoParams False 'c'
+    , ValueTuple ( 312, "Testing" )
+    , ValueResult (Ok 42)
+    , ValueResult (Err "Oops!")
     ]
 
 

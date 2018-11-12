@@ -346,7 +346,9 @@ decoderForType pType =
        evergreenDecodeSet (decoderForType (head next))
 
      TType (Canonical (Name "elm" "core") "Result") "Result" next ->
-       evergreenDecodeResult -- @TODO actually implement
+       case next of
+         first:second:rest ->
+           evergreenDecodeResult (decoderForType first) (decoderForType second)
 
      TType (Canonical (Name "elm" "core") "Dict") typeName next ->
        case next of
@@ -504,7 +506,9 @@ encodeForTypeValue typ value =
       call jsonEncodeSet [encoderForType (head next), value]
 
     TType (Canonical (Name "elm" "core") "Result") "Result" next ->
-      call evergreenEncodeResult [] -- @TODO actually implement
+      case next of
+        first:second:rest ->
+          call evergreenEncodeResult [encoderForType first, encoderForType second, value]
 
     TType (Canonical (Name "elm" "core") "Dict") typeName next ->
       case next of

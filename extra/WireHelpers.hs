@@ -259,18 +259,21 @@ evergreenEncodeChar =
                                              (qtyp "elm" "json" "Json.Encode" "Value" [])))))
 
 
+evergreenEncodeResult =
+   ((qvar "author" "project" "Evergreen" "e_result"
+     (Forall (Map.fromList [(name "err" ,()) ,(name "a" ,())])
+             (tlam (tlam (tvar "err") (qtyp "elm" "json" "Json.Encode" "Value" []))
+                      (tlam (tlam (tvar "a") (qtyp "elm" "json" "Json.Encode" "Value" []))
+                               (tlam (qtyp "elm" "core" "Result" "Result" [tvar "err" ,tvar "a"])
+                                        (qtyp "elm" "json" "Json.Encode" "Value" [])))))))
+
+
 evergreenEncodeDict =
   ((qvar "author" "project" "Evergreen" "e_dict"
-    (Forall (Map.fromList [(name "comparable"
-                      ,())
-                      ,(name "v"
-                      ,())])
-            (tlam (tlam (tvar "comparable")
-                              (qtyp "elm" "json" "Json.Encode" "Value" []))
-                     (tlam (tlam (tvar "v")
-                                       (qtyp "elm" "json" "Json.Encode" "Value" []))
-                              (tlam (qtyp "elm" "core" "Dict" "Dict" [tvar "comparable"
-                                              ,tvar "v"])
+    (Forall (Map.fromList [(name "comparable" ,()) ,(name "v" ,())])
+            (tlam (tlam (tvar "comparable") (qtyp "elm" "json" "Json.Encode" "Value" []))
+                     (tlam (tlam (tvar "v") (qtyp "elm" "json" "Json.Encode" "Value" []))
+                              (tlam (qtyp "elm" "core" "Dict" "Dict" [tvar "comparable" ,tvar "v"])
                                        (qtyp "elm" "json" "Json.Encode" "Value" [])))))))
 
 
@@ -303,12 +306,6 @@ evergreenEncodeTuple =
                                        (qtyp "elm" "json" "Json.Encode" "Value" [])))))))
 
 
-evergreenEncodeResult =
-  ((qvar "author" "project" "Evergreen" "e_result"
-          (Forall (Map.fromList [])
-                  (qtyp "elm" "json" "Json.Encode" "Value" []))))
-
-
 -- Evergreen Decoders
 
 
@@ -326,28 +323,30 @@ evergreenDecodeOrder =
 
 evergreenDecodeSet decoder =
   at (Call ((qvar "author" "project" "Evergreen" "d_set"
-                            (Forall (Map.fromList [(name "comparable"
-                                              ,())])
-                                    (tlam (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "comparable"])
-                                             (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "elm" "core" "Set" "Set" [tvar "comparable"]])))))
+            (Forall (Map.fromList [(name "comparable"
+                              ,())])
+                    (tlam (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "comparable"])
+                             (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "elm" "core" "Set" "Set" [tvar "comparable"]])))))
             [decoder])
+
+
+evergreenDecodeResult errDecoder valueDecoder =
+  call ((qvar "author" "project" "Evergreen" "d_result"
+      (Forall (Map.fromList [(name "err" ,()) ,(name "a" ,())])
+          (tlam (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "err"])
+               (tlam (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "a"])
+                    (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "elm" "core" "Result" "Result" [tvar "err" ,tvar "a"]]))))))
+      [errDecoder, valueDecoder]
 
 
 evergreenDecodeDict keyDecoder valueDecoder =
   at (Call ((qvar "author" "project" "Evergreen" "d_dict"
-            (Forall (Map.fromList [(name "comparable" ,())
-                              ,(name "v" ,())])
+            (Forall (Map.fromList [(name "comparable" ,()) ,(name "v" ,())])
                     (tlam (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "comparable"])
                              (tlam (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "v"])
                                       (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "elm" "core" "Dict" "Dict" [tvar "comparable"
                                                     ,tvar "v"]]))))))
             [keyDecoder, valueDecoder])
-
-
-evergreenDecodeResult =
-  (qvar "author" "project" "Evergreen" "d_result"
-          (Forall (Map.fromList [])
-                  (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "elm" "core" "Result" "Result" [tvar "err", tvar "a"]])))
 
 
 evergreenDecodeTime =
@@ -364,7 +363,7 @@ evergreenDecodeUnit =
 
 evergreenDecodeTuple d1 d2 =
   call (qvar "author" "project" "Evergreen" "d_tuple"
-          (Forall (Map.fromList [])
+          (Forall (Map.fromList [(name "a" ,()) ,(name "b" ,())])
           (tlam (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "a"])
                    (tlam (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "b"])
                             (qtyp "elm" "json" "Json.Decode" "Decoder" [TTuple (tvar "a") (tvar "b") Nothing])))))
