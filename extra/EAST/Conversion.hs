@@ -168,7 +168,7 @@ tUnion (name, (C.Union tvars ctors _ _)) =
 -- TYPE ALIASES
 
 tAlias (aliasName, C.Alias tvars t) =
-  DT.trace (sShow ("tAlias", aliasName, "tvars", tvars, "t", t)) $
+  --DT.trace (sShow ("tAlias", aliasName, "tvars", tvars, "t", t)) $
   [ Hs.TypeDecl
       (foldl Hs.DHApp (Hs.DHead $ ident aliasName) (Hs.UnkindedVar <$> ident <$> tvars))
       (tType t)

@@ -36,6 +36,9 @@ import qualified East.Conversion as East
 
 import qualified Language.Haskell.Exts.Simple.Syntax as Hs
 
+import qualified Debug.Trace as DT
+import CanSer.CanSer
+import qualified Data.Text as T
 
 -- COMPILE
 
@@ -139,6 +142,7 @@ compile flag pkg importDict interfaces source =
         East.transpile canonical annotations importDict
 
       Result.ok $
+        DT.trace (T.unpack $ ppElm canonical) $
         Artifacts
           { _elmi = I.fromModule annotations canonical_
           , _elmo = graph

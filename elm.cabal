@@ -236,6 +236,9 @@ Executable elmx
         Wire.Test
         Wire.Helpers
 
+        -- Debug helpers
+        CanSer.CanSer
+
         -- Haskelm
         East.Conversion
         East.Rewrite
