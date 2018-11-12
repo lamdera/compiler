@@ -46,7 +46,6 @@ import qualified Stuff.Paths as Paths
 import Terminal.Args (Parser(..))
 
 
-
 -- GENERATE
 
 
@@ -95,7 +94,7 @@ getInterfaces (Summary.Summary root project _ interfaces _) locals artifacts =
     pkg =
       Project.getName project
 
-    addArtifact home (Compiler.Artifacts elmi _ _) ifaces =
+    addArtifact home (Compiler.Artifacts elmi _ _ _) ifaces =
       (ModuleName.Canonical pkg home, elmi) : ifaces
 
     addInterface home iface ifaces =
@@ -124,7 +123,7 @@ generateMonolith
 generateMonolith mode maybeOutput (Summary.Summary _ project _ _ _) graph rootNames =
   do  let pkg = Project.getName project
       let roots = map (Module.Canonical pkg) rootNames
-      case Obj.generate mode graph roots of
+      case Obj.generate mode graph roots of -- this is where js is generated
         Obj.None ->
           return ()
 

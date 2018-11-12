@@ -32,7 +32,10 @@ import System.IO.Unsafe (unsafePerformIO)
 
 import qualified WireValid
 import qualified Wire
--- import qualified AST.Valid as AS (Module(..))
+import qualified East.Conversion as East
+
+import qualified Language.Haskell.Exts.Simple.Syntax as Hs
+
 
 -- COMPILE
 
@@ -49,6 +52,7 @@ data Artifacts =
   Artifacts
     { _elmi :: I.Interface
     , _elmo :: Opt.Graph
+    , _haskelmo :: Hs.Module
     , _docs :: Maybe Docs.Module
     } deriving (Show)
 
@@ -84,9 +88,9 @@ compile flag pkg importDict interfaces source =
 
   So it seems we'll need to:
 
-  1. Inject dummy declarations into `value`
+  1. Inject dummy declarations into `valid`
   2. Inject proper implementations into `canonical`
-  3. Backfill proper implementations into `value`
+  3. Backfill proper implementations into `valid`
 
   Because type-inference doesn't come till a later stage, we should be ok with this funny business.
 
@@ -97,7 +101,7 @@ compile flag pkg importDict interfaces source =
 
       -- {- EVERGREEN
       -- Generate stubbed data calls for the functions that will be generated
-      let validStubbed_ = WireValid.stub valid flag pkg importDict interfaces source
+      let validStubbed_ = WireValid.stubValid valid flag pkg importDict interfaces source
       -- EVERGREEN -}
 
 
@@ -106,11 +110,11 @@ compile flag pkg importDict interfaces source =
 
       -- {- EVERGREEN
       -- Generate and inject Evergreen functions for all types & unions
-      let canonical_ = Wire.modify canonical flag pkg importDict interfaces source
+      let canonical_ = Wire.modifyCanonical canonical flag pkg importDict interfaces source
 
 
       -- Backfill generated valid AST for generated functions as well
-      let valid_ = WireValid.modify valid flag pkg importDict interfaces source canonical_
+      let valid_ = WireValid.modify validStubbed_ flag pkg importDict interfaces source canonical_
       -- EVERGREEN -}
 
 
@@ -131,10 +135,14 @@ compile flag pkg importDict interfaces source =
       documentation <-
         genarateDocs flag canonical_
 
+      haskAst <-
+        East.transpile canonical annotations importDict
+
       Result.ok $
         Artifacts
           { _elmi = I.fromModule annotations canonical_
           , _elmo = graph
+          , _haskelmo = haskAst
           , _docs = documentation
           }
 

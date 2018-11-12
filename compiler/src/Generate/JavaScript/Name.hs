@@ -40,6 +40,8 @@ import qualified Elm.Package as Pkg
 newtype Name =
   Name { toBuilder :: B.Builder }
 
+instance Show Name where
+  show (Name toBuilder) = "Name<" ++ show (B.toLazyByteString toBuilder) ++ ">"
 
 
 -- CONSTRUCTORS
@@ -226,6 +228,7 @@ toByte n
 
 newtype BadFields =
   BadFields { _renamings :: Renamings }
+  deriving (Show, Eq, Ord)
 
 
 type Renamings =

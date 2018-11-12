@@ -1,4 +1,5 @@
 {-# OPTIONS_GHC -Wall #-}
+{-# LANGUAGE OverloadedStrings #-}
 module Stuff.Paths
   ( docs
   , summary
@@ -6,6 +7,13 @@ module Stuff.Paths
   , removeStuff
   , elmi
   , elmo
+  , haskelmo
+  , stuff
+  , haskelmoRoot
+  , haskelmoWithoutStuff
+  , haskellPkgPackageYaml
+  , haskellAppPackageYaml
+  , cabalNameOfPackage
   , moduleDocs
   , temp
   )
@@ -20,7 +28,7 @@ import qualified Elm.Compiler as Compiler
 import qualified Elm.Compiler.Module as Module
 import qualified Elm.Package as Pkg
 import qualified Reporting.Task as Task
-
+import Data.Monoid ((<>))
 
 
 -- PATHS
@@ -73,6 +81,29 @@ elmo :: FilePath -> Module.Raw -> FilePath
 elmo root name =
   toArtifactPath root name "elmo"
 
+haskelmo :: FilePath -> Module.Raw -> FilePath
+haskelmo root name =
+  --toArtifactPath root name "hs"
+  haskelmoWithoutStuff (root </> stuff) name
+
+haskelmoRoot :: FilePath -> FilePath
+haskelmoRoot root =
+  root </> stuff </> "haskelm"
+
+haskelmoWithoutStuff :: FilePath -> Module.Raw -> FilePath
+haskelmoWithoutStuff root name =
+  root </> "haskelm" </> "src" </> Module.nameToSlashPath name <.> "hs"
+
+haskellPkgPackageYaml :: FilePath -> FilePath
+haskellPkgPackageYaml root =
+  root </> "haskelm" </> "package" <.> "yaml"
+
+haskellAppPackageYaml :: FilePath -> FilePath
+haskellAppPackageYaml root =
+  root </> "package" <.> "yaml"
+
+cabalNameOfPackage (Pkg.Name author project) =
+  author <> "-delim-" <> project
 
 moduleDocs :: FilePath -> Module.Raw -> FilePath
 moduleDocs root name =

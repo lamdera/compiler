@@ -1,7 +1,8 @@
 {-# OPTIONS_GHC -Wall #-}
 {-# LANGUAGE OverloadedStrings #-}
 module Elm.Project.Constraint
-  ( Constraint
+  ( Constraint(Range)
+  , Op(Less, LessOrEqual)
   , exactly
   , anything
   , fromText
@@ -35,13 +36,13 @@ import Elm.Package (Version(..))
 
 data Constraint
     = Range Version Op Op Version
-    deriving (Eq)
+    deriving (Eq, Show)
 
 
 data Op
   = Less
   | LessOrEqual
-  deriving (Eq)
+  deriving (Eq, Show)
 
 
 

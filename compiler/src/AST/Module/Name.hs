@@ -19,6 +19,8 @@ import Data.Binary
 
 import qualified Elm.Name as N
 import qualified Elm.Package as Pkg
+import Data.Monoid ((<>))
+import qualified Data.Text as Text
 
 
 
@@ -30,8 +32,10 @@ data Canonical =
     { _package :: !Pkg.Name
     , _module :: !N.Name
     }
-    deriving (Ord, Show)
+    deriving (Ord)
 
+instance Show Canonical where
+  show (Canonical pkg modu) = Text.unpack $ Pkg.toText pkg <> "~" <> N.toText modu
 
 instance Eq Canonical where
   (==) (Canonical pkg home) (Canonical pkg' home') =

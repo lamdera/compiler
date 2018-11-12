@@ -15,7 +15,7 @@ import System.IO.Unsafe (unsafePerformIO)
 import Text.Show.Prettyprint
 
 
-stub valid flag pkg importDict interfaces source =
+stubValid valid flag pkg importDict interfaces source =
   case valid of
     AS.Module n _ _ _ _ _ _ _ _ _ ->
       if N.toString n == "AllTypes" then
@@ -23,16 +23,14 @@ stub valid flag pkg importDict interfaces source =
         tracef
           ("-" ++ N.toString n)
           (valid { _decls =
-            [ encoder
-            , decoder
+            [ evg_e_AllTypes_stubbed
+            , evg_d_AllTypes_stubbed
             , evg_e_Union_stubbed
-            , evg_d_Union
-            , staticX
+            , evg_d_Union_stubbed
             ] })
 
       else
         valid
-
 
 
 -- Our injection point POC for AllTypes. Search for `Wire.modify`
@@ -42,29 +40,23 @@ modify valid flag pkg importDict interfaces source canonical =
       if N.toString n == "AllTypes_Gen" then
         valid
         -- tracef ("-" ++ N.toString n) valid
-        -- tracef ("-" ++ N.toString n) (valid { _decls = [ encoder, decoder, evg_e_Union, evg_d_Union, staticX ] })
+        -- tracef ("-" ++ N.toString n) (valid { _decls = [ encoder, decoder, evg_e_Union, evg_d_Union ] })
 
       else if N.toString n == "AllTypes" then
         -- valid
         tracef
           ("-" ++ N.toString n)
           (valid { _decls =
-            [ encoder
-            , decoder
+            [ evg_e_AllTypes
+            , evg_d_AllTypes
             , evg_e_Union
             , evg_d_Union
-            , staticX
             ] })
-        -- tracef ("-" ++ N.toString n) (valid { _decls = _decls valid ++ [ staticX ] })
+        -- tracef ("-" ++ N.toString n) (valid { _decls = _decls valid })
         -- tracef ("-" ++ N.toString n) valid
 
       else
         valid
-
-
-staticX =
-  decl "evg" [] (int 123) Nothing
-
 
 
 -- AST to file debugger
@@ -168,7 +160,7 @@ pctor n vars = at (PCtor region (name n) vars)
 
 
 -- This is a POC AST implementation of the AllTypes encoder & decoder
-decoder =
+evg_d_AllTypes =
   decl "evg_d_AllTypes" []
     (binops
       [ (call (qvar "D" "succeed") [ ctor "AllTypes" ] , named "|>" )
@@ -190,7 +182,13 @@ decoder =
     (Just (qtyp "D" "Decoder" [typ "AllTypes" []]))
 
 
-encoder =
+evg_d_AllTypes_stubbed =
+  decl "evg_d_AllTypes" []
+  (qvar "Debug" "todo")
+  (Just (qtyp "D" "Decoder" [typ "AllTypes" []]))
+
+
+evg_e_AllTypes =
   decl "evg_e_AllTypes" [pvar "evg_p0"]
     (call
       (qvar "E" "list")
@@ -216,11 +214,16 @@ encoder =
     (Just (at (TLambda (typ "AllTypes" []) (qtyp "E" "Value" []))))
 
 
+evg_e_AllTypes_stubbed =
+  decl "evg_e_AllTypes" [pvar "evg_p0"]
+  (qvar "Debug" "todo")
+  (Just (at (TLambda (typ "AllTypes" []) (qtyp "E" "Value" []))))
+
+
 evg_e_Union_stubbed =
   decl "evg_e_Union" [pvar "evg_p0"]
   (qvar "Debug" "todo")
   (Just (at (TLambda (typ "Union" []) (qtyp "E" "Value" []))))
-
 
 evg_e_Union =
   decl "evg_e_Union" [pvar "evg_p0"]
@@ -258,3 +261,9 @@ evg_d_Union =
       ]
     )
     (Just (qtyp "D" "Decoder" [typ "Union" [] ]))
+
+
+evg_d_Union_stubbed =
+  decl "evg_d_Union" []
+  (qvar "Debug" "todo")
+  (Just (qtyp "D" "Decoder" [typ "Union" [] ]))

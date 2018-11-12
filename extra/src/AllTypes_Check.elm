@@ -1,14 +1,15 @@
-module AllTypes_Check exposing (..)
+module AllTypes_Check exposing (Model, Msg(..), allTypesMock, init, main, subscriptions, unionMocks, update, view)
 
 import AllTypes exposing (..)
 import Array
 import Browser exposing (Document)
 import Debug
 import Dict
+import Element exposing (..)
+import Element.Background as Background
 import Html
 import Json.Decode as D
 import Json.Encode as E
-import MVCE
 import Result exposing (Result(..))
 import Set
 import Time
@@ -53,12 +54,30 @@ allTypesMock =
     }
 
 
+aliasedInt : IntAlias
+aliasedInt =
+    444
+
+
 unionMocks =
     [ Leaf
-    , Recursive (Recursive (Recursive (DeeplyValued [ True, False ])))
-    , Valued 123
-    , DeeplyValued [ False, False, False ]
-    , Leaf
+    , ValueInt 123
+    , ValueFloat 8.9
+    , ValueBool True
+    , ValueChar 'C'
+    , ValueString "Stringy!"
+    , ValueListBool [ False, False, False ]
+    , ValueSetFloat (Set.fromList [ 6.1, 7.4, 8.9 ])
+    , ValueArrayString (Array.fromList [ "Hello", "Yellow" ])
+    , ValueDict (Dict.fromList [ ( "first", [ 23, 24, 25 ] ), ( "second", [ 58, 12, 98 ] ) ])
+    , ValueOrder GT
+    , ValueUnit ()
+    , Aliased aliasedInt
+    , Recursive (Recursive (Recursive (ValueListBool [ True, False ])))
+    , ValueTwoParams False 'c'
+    , ValueTuple ( 312, "Testing" )
+    , ValueResult (Ok 42)
+    , ValueResult (Err "Oops!")
     ]
 
 
@@ -67,6 +86,7 @@ unionMocks =
 --     [ Test, Best ]
 
 
+view : Model -> { body : List (Html.Html msg), title : String }
 view model =
     let
         encoded =
@@ -75,11 +95,17 @@ view model =
         decoded =
             D.decodeString AllTypes.evg_d_AllTypes encoded
 
+        recordsMatching =
+            Ok allTypesMock == decoded
+
         e2 =
             E.encode 0 (E.list AllTypes.evg_e_Union unionMocks)
 
         d2 =
             D.decodeString (D.list AllTypes.evg_d_Union) e2
+
+        customTypesMatching =
+            Ok unionMocks == d2
 
         -- e3 =
         --     E.encode 0 (E.list AllTypes.evg_e_Another anotherMocks)
@@ -88,21 +114,35 @@ view model =
     in
     { title = "Hello"
     , body =
-        [ Html.div [] [ Html.text <| "Encoded AllTypes: " ++ encoded ]
-        , Html.div [] [ Html.text <| "Decoded AllTypes: " ++ Debug.toString decoded ]
-        , Html.div [] [ Html.text <| "Equality to original? " ++ Debug.toString (Ok allTypesMock == decoded) ]
-        , Html.div [] [ Html.text <| "Encoded Unions: " ++ e2 ]
-        , Html.div [] [ Html.text <| "Decoded Unions: " ++ Debug.toString d2 ]
+        [ layout [] <|
+            column [ spacing 10, padding 10 ]
+                [ row [ padding 10 ] [ paragraph [] [ text <| "Encoded AllTypes: " ++ encoded ] ]
+                , row [ padding 10 ] [ paragraph [] [ text <| "Decoded AllTypes: " ++ Debug.toString decoded ] ]
+                , if recordsMatching then
+                    row [ padding 10, Background.color (rgb255 186 255 188) ] [ paragraph [] [ text <| "Record equal to original? " ++ Debug.toString recordsMatching ] ]
 
-        -- , Html.div [] [ Html.text <| "Encoded Another: " ++ e3 ]
-        , Html.div [] [ Html.text <| "Shadow value not existent in code: " ++ Debug.toString AllTypes.evg ]
+                  else
+                    row [ padding 10, Background.color (rgb255 255 179 186) ] [ paragraph [] [ text <| "Record equal to original? " ++ Debug.toString recordsMatching ] ]
+                , row [ padding 10 ] [ paragraph [] [ text <| "Encoded Unions: " ++ e2 ] ]
+                , row [ padding 10 ] [ paragraph [] [ text <| "Decoded Unions: " ++ Debug.toString d2 ] ]
+                , if customTypesMatching then
+                    row [ padding 10, Background.color (rgb255 186 255 188) ] [ paragraph [] [ text <| "Custom type equal to original? " ++ Debug.toString customTypesMatching ] ]
+
+                  else
+                    row [ padding 10, Background.color (rgb255 255 179 186) ] [ paragraph [] [ text <| "Custom type equal to original? " ++ Debug.toString customTypesMatching ] ]
+
+                -- , row [] [ Html.text <| "Encoded Another: " ++ e3 ]
+                -- , row [] [ Html.text <| "Shadow value not existent in code: " ++ Debug.toString AllTypes.evg ]
+                ]
         ]
     }
 
 
+update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     ( model, Cmd.none )
 
 
+subscriptions : Model -> Sub Msg
 subscriptions model =
     Sub.none

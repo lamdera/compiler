@@ -44,6 +44,10 @@ import qualified Reporting.Progress as Progress
 import qualified Reporting.Task as Task
 import qualified Stuff.Paths as Paths
 
+import qualified Haskelm.Yaml
+
+import qualified Debug.Trace as DT
+import Transpile.PrettyPrint (sShow)
 
 
 -- VERIFY
@@ -199,14 +203,16 @@ verifyBuild pkgInfoMVar ifacesMVar name version =
 
             answer <- ifNotBlocked depAnswers $ \infos ->
               do  ifacesBefore <- readMVar ifacesMVar
-                  result <- runner (getIface name version info infos ifacesBefore)
+                  result <-
+                    runner (getIface name version info infos ifacesBefore)
                   case result of
                     Right ifaces ->
                       do  ifacesNow <- takeMVar ifacesMVar
                           putMVar ifacesMVar (Map.union ifacesNow ifaces)
                           return (Ok info)
 
-                    Left _ ->
+                    Left v ->
+                      DT.trace (sShow ("verifyBuild", "Err", name, version, v)) $
                       return (Err name version)
 
             report Progress.BuildDepsProgress
@@ -287,6 +293,8 @@ getIface name version info infos depIfaces =
               answers <- Compile.compile (Pkg info) (Just docsPath) cachedIfaces dirty
               results <- Artifacts.ignore answers
               _ <- Artifacts.writeDocs results docsPath
+
+              _ <- Haskelm.Yaml.generatePkgYamlFiles root results info
 
               Paths.removeStuff root
 
@@ -371,7 +379,7 @@ crush pkg info results =
 
 
 crushHelp :: Set Module.Raw -> Module.Raw -> Compiler.Artifacts -> Maybe Module.Interface
-crushHelp exposed name (Compiler.Artifacts elmi _ _) =
+crushHelp exposed name (Compiler.Artifacts elmi _ _ _) =
   if Set.member name exposed then
     Just elmi
 
@@ -384,7 +392,7 @@ crushHelp exposed name (Compiler.Artifacts elmi _ _) =
 
 
 addDocs :: Compiler.Artifacts -> [Docs.Module] -> [Docs.Module]
-addDocs (Compiler.Artifacts _ _ maybeDocs) docsList =
+addDocs (Compiler.Artifacts _ _ _ maybeDocs) docsList =
   case maybeDocs of
     Nothing ->
       docsList
@@ -398,7 +406,7 @@ addDocs (Compiler.Artifacts _ _ maybeDocs) docsList =
 
 
 addGraph :: Compiler.Artifacts -> Obj.Graph -> Obj.Graph
-addGraph (Compiler.Artifacts _ elmo _) graph =
+addGraph (Compiler.Artifacts _ elmo _ _) graph =
   Obj.union elmo graph
 
 
