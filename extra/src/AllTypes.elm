@@ -1,4 +1,4 @@
-module AllTypes exposing (AllTypes, IntAlias, Union(..), evg_d_AllTypes, evg_d_Union, evg_e_AllTypes, evg_e_Union)
+module AllTypes exposing (AliasInt, AllTypes, Union(..), evg_d_AllTypes, evg_d_Union, evg_e_AllTypes, evg_e_Union)
 
 import Array exposing (Array)
 import Dict exposing (Dict)
@@ -9,8 +9,12 @@ import Set exposing (Set)
 import Time
 
 
-type alias IntAlias =
+type alias AliasInt =
     Int
+
+
+type alias AliasTuple =
+    ( Float, Bool )
 
 
 type Union
@@ -27,7 +31,7 @@ type Union
     | ValueTime Time.Posix
     | ValueOrder Order
     | ValueUnit ()
-    | Aliased IntAlias
+    | Aliased AliasInt
     | Recursive Union
     | ValueTwoParams Bool Char
     | ValueTuple ( Int, String )

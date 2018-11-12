@@ -73,6 +73,7 @@ modifyCanonical canonical flag pkg importDict interfaces source =
               --
               -- -- Add declarations for our generated encoders/decoders in addition to any existing declarations
               -- canonical { _decls = DeclareRec (customTypeEncoders ++ customTypeDecoders) existingDecls }
+              -- modifyCanonicalApplied canonical n customTypes aliases
               canonical
 
 
@@ -445,6 +446,18 @@ aliasToEncoder moduleName alias =
     (typeName, Alias [] (TRecord fields Nothing)) ->
       Just $ recordTypeToEncoder moduleName alias fields
 
+    (typeName, Alias [] typ) ->
+      let
+        aliasName = N.toString typeName
+
+      in
+      Just $
+        (TypedDef (named $ "evg_e_" ++ aliasName)
+                  (Map.fromList [])
+                  [ (at (PVar (name "evg_p0")) , typ ) ]
+                  (call (encoderForType typ) [vlocal "evg_p0"])
+                  (qtyp "elm" "json" "Json.Encode" "Value" []))
+
     _ -> error $ "aliasToEncoder: didn't match any existing implementations: " ++ show alias
 
 
@@ -642,6 +655,20 @@ aliasToDecoder moduleName alias =
 
     (typeName, Alias [] (TRecord fields Nothing)) ->
       Just $ recordTypeToDecoder moduleName typeName fields
+
+    (typeName, Alias [] typ) ->
+      let
+        aliasName = N.toString typeName
+
+      in
+      Just $
+        (TypedDef (named $ "evg_d_" ++ aliasName)
+                  (Map.fromList [])
+                  []
+                  (decoderForType typ)
+                  (qtyp "elm" "json" "Json.Decode" "Decoder" [typ]))
+
+    _ -> error $ "aliasToDecoder didn't match any existing implementations: " ++ show alias
 
 
 rightpipe first second = at (Binop (name "|>")

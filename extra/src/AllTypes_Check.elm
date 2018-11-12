@@ -54,7 +54,7 @@ allTypesMock =
     }
 
 
-aliasedInt : IntAlias
+aliasedInt : AliasInt
 aliasedInt =
     444
 
