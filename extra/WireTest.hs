@@ -38,8 +38,8 @@ Last line is optional, but it's cool! Lambda prompt!
 
   - Make changes to Haskell Wire code
   - Run `:r` to typecheck + recompile & fix any issues
-  - Touch `extra/src/AllTypes_Check.elm` to skip Elm's compiler cache - I just re-save the file
   - Run `WireTest.compile`
+    - Executes shell `touch` on `extra/src/AllTypes.elm` to bust Elm compiler's cache
     - Compiles `extra/src/AllTypes_Check.elm`
     - Generates `extra/src/wire.html`
   - Refresh `wire.html` in your browser – you should see big green boxes
