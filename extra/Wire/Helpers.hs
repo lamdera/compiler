@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleContexts #-}
 
-module WireHelpers where
+module Wire.Helpers where
 
 import Reporting.Annotation (Located(..))
 import Reporting.Region

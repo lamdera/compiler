@@ -30,8 +30,8 @@ import qualified Type.Solve as Type
 
 import System.IO.Unsafe (unsafePerformIO)
 
-import qualified WireValid
-import qualified Wire
+import qualified Wire.Valid
+import qualified Wire.Base
 import qualified East.Conversion as East
 
 import qualified Language.Haskell.Exts.Simple.Syntax as Hs
@@ -101,7 +101,7 @@ compile flag pkg importDict interfaces source =
 
       -- {- EVERGREEN
       -- Generate stubbed data calls for the functions that will be generated
-      let validStubbed_ = WireValid.stubValid valid flag pkg importDict interfaces source
+      let validStubbed_ = Wire.Valid.stubValid valid flag pkg importDict interfaces source
       -- EVERGREEN -}
 
 
@@ -110,11 +110,11 @@ compile flag pkg importDict interfaces source =
 
       -- {- EVERGREEN
       -- Generate and inject Evergreen functions for all types & unions
-      let canonical_ = Wire.modifyCanonical canonical flag pkg importDict interfaces source
+      let canonical_ = Wire.Base.modifyCanonical canonical flag pkg importDict interfaces source
 
 
       -- Backfill generated valid AST for generated functions as well
-      let valid_ = WireValid.modify validStubbed_ flag pkg importDict interfaces source canonical_
+      let valid_ = Wire.Valid.modify validStubbed_ flag pkg importDict interfaces source canonical_
       -- EVERGREEN -}
 
 

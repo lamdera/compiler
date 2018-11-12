@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-module WireTest where
+module Wire.Test where
 
 import qualified Data.ByteString as BS
 import qualified System.Directory as Dir
@@ -54,9 +54,9 @@ Last line is optional, but it's cool! Lambda prompt!
 compile :: IO ()
 compile = do
   -- Bust Elm's caching with this one weird trick!
-  touch "extra/src/AllTypes.elm"
+  touch "extra/Wire/src/AllTypes.elm"
 
-  Dir.withCurrentDirectory ("extra") $
+  Dir.withCurrentDirectory ("extra/Wire") $
     do  reporter <- Terminal.create
         Task.run reporter $
           do  summary <- Project.getRoot

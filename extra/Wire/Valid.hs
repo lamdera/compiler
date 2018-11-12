@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleContexts #-}
 
-module WireValid where
+module Wire.Valid where
 
 import AST.Source (VarType(..), Type_(..), Pattern_(..))
 import AST.Valid

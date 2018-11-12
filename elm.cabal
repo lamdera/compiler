@@ -230,11 +230,11 @@ Executable elmx
         Validate
         Paths_elm
 
-        -- Evergreen
-        Wire
-        WireValid
-        WireTest
-        WireHelpers
+        -- Wire
+        Wire.Base
+        Wire.Valid
+        Wire.Test
+        Wire.Helpers
 
         -- Haskelm
         East.Conversion

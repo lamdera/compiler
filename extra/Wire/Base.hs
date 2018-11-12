@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleContexts #-}
 
-module Wire where
+module Wire.Base where
 
 import Reporting.Annotation (Located(..))
 import Reporting.Region
@@ -17,7 +17,7 @@ import qualified Data.List as List
 import Control.Monad.Trans (liftIO)
 import System.IO.Unsafe (unsafePerformIO)
 import Text.Show.Prettyprint
-import WireHelpers
+import Wire.Helpers
 
 
 imap f l = zipWith f [0..] l
