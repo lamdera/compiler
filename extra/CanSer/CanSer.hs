@@ -2,7 +2,7 @@
 module CanSer.CanSer where
 
 import qualified Data.Text as T
-import Data.Text (Text, intercalate)
+import Data.Text (Text)
 import qualified AST.Canonical as C
 import qualified Elm.Name as N
 import Control.Monad.State.Lazy
@@ -11,6 +11,8 @@ import qualified Data.Map as Map
 import qualified Reporting.Annotation as A
 import qualified AST.Module.Name as ModuleName
 import qualified AST.Utils.Binop as Binop
+import Data.String (IsString)
+import GHC.Exts(IsString(..))
 
 {-|
 Canonical ast serialization.
@@ -23,20 +25,43 @@ This is an attempt at serializing the canoncal ast back into elm code, so we can
 
 -}
 
-ppElm a = T.pack (pprint 0 (T.unpack (toElm a)))
+ppElm :: ToElm a => a -> Text
+ppElm a = pprint 0 (toList (toElm a))
 
-pprint i (';':'+':s) = "\n" <> rep (i+1) "  " <> pprint (i+1) s
-pprint i (';':'-':s) = "\n" <> rep (i-1) "  " <> pprint (i-1) s
-pprint i (';':'0':s) = "\n" <> pprint 0 s
-pprint i (';':s) = "\n" <> rep i "  " <> pprint i s
-pprint i (c:s) = c : pprint i s
+pprint :: Int -> [Block] -> Text
+pprint i (Lit s:rest) = T.replace "\n" ("\n" <> rep i "  ") s <> pprint i rest
+pprint i (Indent:rest) = pprint (i+1) (Lit "\n" : rest)
+pprint i (Dedent:rest) = pprint (i-1) (Lit "\n" : rest)
+pprint i (Nodent:rest) = pprint 0 rest
 pprint i [] = ""
 
-rep i s | i < 0 = ""
+rep i s | i <= 0 = ""
 rep i s = rep (i-1) s <> s
 
+intercalate sep [] = Lit ""
+intercalate sep [a] = a
+intercalate sep (a:rest) = Join (Join a sep) (intercalate sep rest)
+
+toList (Join a b) = toList a <> toList b
+toList a = [a]
+
+data Block
+  = Lit Text
+  | Join Block Block
+  | Indent
+  | Dedent
+  | Nodent
+  deriving (Show)
+
+instance Semigroup Block where
+  (<>) = Join
+
+instance IsString Block where
+    fromString s = Lit (T.pack s)
+
+
 class ToElm a where
-  toElm :: a -> Text
+  toElm :: a -> Block
 
 infixr 6 <.>
 a <.> b = a <> "." <> b
@@ -45,14 +70,14 @@ sp x = " " <> x <> " "
 p x = "(" <> x <> ")"
 
 instance ToElm N.Name where
-  toElm = N.toText
+  toElm x = Lit $ N.toText x
 
 instance ToElm Double where
-  toElm x = T.pack $ show x
+  toElm x = Lit $ T.pack $ show x
 
 
 instance ToElm Int where
-  toElm x = T.pack $ show x
+  toElm x = Lit $ T.pack $ show x
 
 instance ToElm ModuleName.Canonical where
   toElm (ModuleName.Canonical pkg modu) = toElm modu
@@ -79,11 +104,11 @@ instance ToElm C.Expr_ where
       C.VarDebug moduName name annot ->
         toElm moduName <.> toElm name
       C.VarOperator op moduName name annot ->
-        toElm op
+        "(" <> toElm op <> ")"
       C.Chr text ->
-        "'" <> text <> "'"
+        "'" <> Lit text <> "'"
       C.Str text ->
-        "\"" <> text <> "\""
+        "\"" <> Lit text <> "\""
       C.Int i ->
         toElm i
       C.Float d ->
@@ -91,31 +116,31 @@ instance ToElm C.Expr_ where
       C.List [] ->
         "[]"
       C.List exprs ->
-        "[" <> (intercalate ",;" (toElm <$> exprs)) <> ";]"
+        "[" <> (intercalate ",\n" (toElm <$> exprs)) <> "\n]"
       C.Negate expr ->
         "-" <> toElm expr
       C.Binop op _ _ annotation leftExpr rightExpr ->
         toElm leftExpr <> sp (toElm op) <> toElm rightExpr
       C.Lambda pats expr ->
-        "(\\" <> (intercalate " " (toElm <$> pats)) <> " -> " <> (intercalate " " (toElm <$> pats)) <> ")"
+        "(\\" <> (intercalate " " (toElm <$> pats)) <> " -> " <> (toElm expr) <> ")"
       C.Call expr argExprs ->
-        p (toElm expr <> (leftPad " " (toElm <$> argExprs)))
+        p (toElm expr <> Indent <> (leftPad "\n" (toElm <$> argExprs)) <> Dedent)
       C.If thisThenExprs expr ->
         let
-          f (pred, action) = "if " <> toElm pred <> ";then " <> toElm action <> ";else "
+          f (pred, action) = "if " <> toElm pred <> "\nthen " <> toElm action <> "\nelse "
         in
           p (intercalate "" (f <$> thisThenExprs) <> toElm expr)
       C.Let def expr ->
-        "let " <> toElm def <> " in " <> toElm expr
+        "let" <> Indent <> toElm def <> Dedent <> "in\n" <> Indent <> toElm expr <> Dedent
       C.LetRec defs expr ->
-        "let " <> (intercalate "; " (toElm <$> defs)) <> " in " <> toElm expr
+        "let" <> Indent <> (intercalate "\n" (toElm <$> defs)) <> Dedent <> "\nin " <> Indent <> toElm expr <> Dedent
       C.LetDestruct pat expr exprBody ->
-        "let " <> toElm pat <> " = " <> toElm expr <> " in " <> toElm exprBody
+        "let" <> Indent <> toElm pat <> " = " <> Indent <> toElm expr <> Dedent <> Dedent <> "\nin " <> Indent <> toElm exprBody <> Dedent
       C.Case expr caseBranches ->
         let
-          f (C.CaseBranch pat expr) = toElm pat <> " -> " <> toElm expr
+          f (C.CaseBranch pat expr) = toElm pat <> " ->" <> Indent <> toElm expr <> Dedent
         in
-        "case " <> toElm expr <> " of;+" <> intercalate ";" (f <$> caseBranches) <> ";-"
+        "case " <> toElm expr <> " of" <> Indent <> intercalate "\n" (f <$> caseBranches) <> Dedent
       C.Accessor name ->
         "." <> toElm name
       C.Access expr (A.At _ name) ->
@@ -130,7 +155,7 @@ instance ToElm C.Expr_ where
       C.Tuple e1 e2 Nothing -> p (intercalate ", " (toElm <$> [e1, e2]))
       C.Tuple e1 e2 (Just e3) -> p (intercalate ", " (toElm <$> [e1, e2, e3]))
       C.Shader uid src gltype ->
-        "Shader " <> uid <> " " <> src <> " ??? "
+        "Shader " <> Lit uid <> " " <> Lit src <> " ??? "
 
 
 tFieldUpdate (C.FieldUpdate _ e) = e
@@ -150,10 +175,10 @@ instance ToElm C.Pattern_ where
       C.PTuple p1 p2 (Just p3) -> p (intercalate ", " (toElm <$> [p1, p2, p3]))
       C.PList [] -> "[]"
       C.PList pats -> "[" <> (intercalate "," (toElm <$> pats)) <> "]"
-      C.PCons p1 p2 -> toElm p1 <> " : " <> toElm p2
+      C.PCons p1 p2 -> toElm p1 <> " :: " <> toElm p2
       C.PBool _ bool -> if bool then "True" else "False"
-      C.PChr text -> "'" <> text <> "'"
-      C.PStr text -> "\"" <> text <> "\""
+      C.PChr text -> "'" <> Lit text <> "'"
+      C.PStr text -> "\"" <> Lit text <> "\""
       C.PInt i -> toElm i
       C.PCtor _home _type _union _name _index _args ->
         -- { _p_home :: ModuleName.Canonical
@@ -175,10 +200,10 @@ instance ToElm C.Def where
   toElm def =
     case def of
       C.Def name pats expr ->
-        toElm name <> leftPad " " (toElm <$> pats) <> " =;+ " <> toElm expr <> ";-"
+        toElm name <> leftPad " " (toElm <$> pats) <> " =" <> Indent <> toElm expr <> Dedent
       C.TypedDef name freeVars patTypes expr tipe ->
-        toElm name <> " : " <> toElm tipe <> ";" <>
-        toElm name <> leftPad " " (toElm <$> (fst <$> patTypes)) <> " =;+ " <> toElm expr <> ";-"
+        toElm name <> " : " <> toElm tipe <> "\n" <>
+        toElm name <> leftPad " " (toElm <$> (fst <$> patTypes)) <> " =" <> Indent <> toElm expr <> Dedent
 
 
 -- TYPES
@@ -221,21 +246,21 @@ instance ToElm C.Module where
     -- , _binops  :: Map.Map N.Name Binop
     -- , _effects :: Effects
     -- }
-    "module " <> toElm name <> " exposing " <> toElm exports <> ";"
-      <> "-- NOTE: effects and docs are not serialized;"
-      <> intercalate ";" ((\(name, union) -> "type " <> toElm name <> toElm union <> ";") <$> (Map.toList unions)) <> ";"
-      <> intercalate ";" ((\(name, alias) -> "type alias " <> toElm name <> toElm alias <> ";") <$> (Map.toList aliases)) <> ";"
-      <> intercalate ";" ((\(name, (C.Binop_ assoc precedence op)) ->
-        "infix " <> toElm assoc <> " " <> toElm precedence <> " " <> p (toElm op) <> " = " <> toElm name <> ";") <$> (Map.toList binops)) <> ";"
-      <> toElm decls <> ";"
+    "module " <> toElm name <> " exposing " <> toElm exports <> "\n"
+      <> "-- NOTE: effects and docs are not serialized\n"
+      <> intercalate "\n" ((\(name, union) -> "type " <> toElm name <> toElm union <> "\n") <$> (Map.toList unions)) <> "\n"
+      <> intercalate "\n" ((\(name, alias) -> "type alias " <> toElm name <> toElm alias <> "\n") <$> (Map.toList aliases)) <> "\n"
+      <> intercalate "\n" ((\(op, (C.Binop_ assoc precedence name)) ->
+        "infix " <> toElm assoc <> " " <> toElm precedence <> " " <> p (toElm op) <> " = " <> toElm name <> "\n") <$> (Map.toList binops)) <> "\n"
+      <> toElm decls <> "\n"
 
 instance ToElm C.Decls where
   toElm decls =
     case decls of
       C.Declare def decls ->
-        toElm def <> ";" <> toElm decls
+        toElm def <> "\n" <> toElm decls
       C.DeclareRec defs decls ->
-        intercalate ";" (toElm <$> defs) <> toElm decls
+        intercalate "\n" (toElm <$> defs) <> toElm decls
       C.SaveTheEnvironment ->
         "-- SaveTheEnvironment"
 
@@ -243,19 +268,14 @@ instance ToElm C.Decls where
 
 instance ToElm C.Exports where
   toElm exports =
+    let
+      f (name, C.ExportBinop) = p (toElm name)
+      f (name, C.ExportUnionOpen) = p (toElm name) <> "(..)"
+      f (name, exp) = toElm name
+    in
     case exports of
       C.ExportEverything _ -> "(..)"
-      C.Export nameToExportMap -> "(" <> intercalate ", " ((\(name, exp) -> toElm name <> toElm exp) <$> Map.toList nameToExportMap) <> ")"
-
-instance ToElm C.Export where
-  toElm exp =
-    case exp of
-      C.ExportValue -> ""
-      C.ExportBinop -> ""
-      C.ExportAlias -> ""
-      C.ExportUnionOpen -> "(..)"
-      C.ExportUnionClosed -> ""
-      C.ExportPort -> ""
+      C.Export nameToExportMap -> "(" <> intercalate ", " (f <$> Map.toList ((\(A.At _ a) -> a) <$> nameToExportMap)) <> ")"
 
 -- UNION
 
