@@ -113,8 +113,8 @@ d_tuple a b =
             )
 
 
-e_unit : E.Value
-e_unit =
+e_unit : a -> E.Value
+e_unit a =
     E.null
 
 

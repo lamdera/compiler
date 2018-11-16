@@ -575,7 +575,7 @@ encodeForTypeValue typ value =
         _ -> error $ "encodeForTypeValue Time type didn't match any existing implementations: " ++ show typ
 
     TUnit ->
-      call evergreenEncodeUnit []
+      call evergreenEncodeUnit [value]
 
     TTuple first second _ ->
       call evergreenEncodeTuple [encoderForType first, encoderForType second, value]
@@ -637,6 +637,11 @@ encoderForType pType =
     TType (Canonical (Name "elm" "core") "Set") typeName next ->
       call jsonEncodeSet [encoderForType (head next)]
 
+    TType (Canonical (Name "elm" "core") "Result") "Result" next ->
+      case next of
+        first:second:rest ->
+          call evergreenEncodeResult [encoderForType first, encoderForType second]
+
     TType (Canonical (Name "elm" "core") "Dict") typeName next ->
       case next of
         first:second:rest ->
@@ -650,7 +655,7 @@ encoderForType pType =
         _ -> error $ "encoderForType Time type didn't match any existing implementations: " ++ show pType
 
     TUnit ->
-      evergreenEncodeUnit
+      call evergreenEncodeUnit []
 
     TTuple first second _ ->
       call evergreenEncodeTuple [encoderForType first, encoderForType second]

@@ -293,8 +293,8 @@ evergreenEncodeOrder =
 
 evergreenEncodeUnit =
   ((qvar "author" "project" "Evergreen" "e_unit"
-          (Forall (Map.fromList [])
-                  (qtyp "elm" "json" "Json.Encode" "Value" []))))
+          (Forall (Map.fromList [(name "a" ,())])
+                  (tlam (tvar "a") (qtyp "elm" "json" "Json.Encode" "Value" [])))))
 
 
 evergreenEncodeTuple =
