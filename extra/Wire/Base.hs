@@ -36,7 +36,7 @@ Overall todo items remaining:
 - Remove all references to AllTypes & make the module name dynamic based on context [WIP]
 - Support more than 1 type param in custom types [DONE]
 - Support more than 2 type param in custom types [WIP] - encoders support N, but decoders need more work
-- Retain existing declarations in a file we gen into, instead of clobbering
+- Retain existing declarations in a file we gen into, instead of clobbering [DONE]
 
 -}
 
@@ -48,22 +48,16 @@ modifyCanonical canonical flag pkg importDict interfaces source =
       case name of
         Canonical pkg n ->
           case N.toString n of
-            "Evergreen" ->
-              tracef ("-" ++ N.toString n) canonical
-
-            "AllTypes_Gen" ->
-
-              -- tracef ("-" ++ N.toString n) valid
-              -- tracef ("-" ++ N.toString n) (canonical { _decls = [ encoder, decoder, evg_e_Union, evg_d_Union ] })
-              tracef ("-" ++ N.toString n) canonical
+            -- "Evergreen" ->
+            --   tracef ("can-" ++ N.toString n) canonical
 
             "AllTypes" ->
               -- Keeping this branch for the moment as the test tracks file AllTypes.elm
               -- eventually when everything is done this will be removed and we'll not need to pattern match
-              modifyCanonicalApplied canonical n customTypes aliases
+              modifyCanonicalApplied (tracef "canprev-AllTypes" canonical) n customTypes aliases
 
             "Msg" -> modifyCanonicalApplied canonical n customTypes aliases
-            "Lamdera.Types" -> modifyCanonicalApplied canonical n customTypes aliases
+            -- "Lamdera.Types" -> modifyCanonicalApplied canonical n customTypes aliases
 
             _ -> do
               -- -- This will be the final implementation as we converge to it
@@ -77,7 +71,7 @@ modifyCanonical canonical flag pkg importDict interfaces source =
               canonical
 
 
-
+-- @TODO this definition is temporary, and once all cases are covered will become the body of `modifyCanonical`
 modifyCanonicalApplied canonical n customTypes aliases = do
   let
       moduleName = N.toString n
@@ -85,15 +79,49 @@ modifyCanonicalApplied canonical n customTypes aliases = do
       customTypeDecoders = fmap (customTypeToDecoder moduleName) $ Map.toList customTypes
       recordEncoders = justs $ fmap (aliasToEncoder moduleName) $ Map.toList aliases
       recordDecoders = justs $ fmap (aliasToDecoder moduleName) $ Map.toList aliases
-      existingDecls = _decls canonical
 
-  tracef ("-" ++ N.toString n) (canonical
-    { _decls =
-        DeclareRec (customTypeEncoders ++ customTypeDecoders ++ recordEncoders ++ recordDecoders) SaveTheEnvironment
-    , _aliases =
-        tracef ("-aliases-" ++ N.toString n) aliases
-    }
+      cleanCanonical = canonical { _decls = canonicalRemoveWireDef $ _decls canonical }
+      existingDecls = _decls cleanCanonical
+
+  tracef ("can-" ++ N.toString n)
+    (cleanCanonical
+      { _decls = DeclareRec (customTypeEncoders ++ customTypeDecoders ++ recordEncoders ++ recordDecoders) existingDecls
+      }
     )
+
+
+-- Removes any existing `evg_` prefixed functions.
+-- We use this to remove the stub `evg_` functions from the Valid stage and
+-- insert the new fully-fledged `evg_` functions from the canonicalisation stage.
+canonicalRemoveWireDef decls =
+  case decls of
+    Declare def declsNext ->
+      if isWireDef def then
+        DeclareRec [] (canonicalRemoveWireDef declsNext)
+      else
+        Declare def (canonicalRemoveWireDef declsNext)
+
+    DeclareRec defList declsNext ->
+      DeclareRec (filter isWireDef defList) (canonicalRemoveWireDef declsNext)
+
+    SaveTheEnvironment ->
+      SaveTheEnvironment
+
+
+isWireDef def =
+  let
+    check n =
+      if List.isPrefixOf "evg_" $ N.toString n then
+        True
+      else
+        False
+  in
+  case def of
+    TypedDef (At _ name) _ _ _ _ ->
+      check name
+
+    Def (At _ name) _ _ ->
+      check name
 
 
 customTypeToEncoder moduleName (customTypeName_, customType_) = do
@@ -422,8 +450,8 @@ generateConstructorAnnotation pTypes customType =
 -- AST to file debugger
 tracef n a =
   unsafePerformIO $ do
-    putStrLn ("can-" ++ n ++ ".txt")
-    writeFile ("can-" ++ n ++ ".txt") $ prettyShow a
+    putStrLn ("trace-" ++ n ++ ".txt")
+    writeFile ("trace-" ++ n ++ ".txt") $ prettyShow a
     pure a
 
 
