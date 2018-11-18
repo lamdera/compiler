@@ -145,14 +145,14 @@ customTypeToEncoder moduleName (customTypeName_, customType_) = do
 
               encoders =
                 imap (\i pType ->
-                  encodeForTypeValue pType (vlocal $ "evg_v" ++ show i)
+                  encodeForTypeValue moduleName pType (vlocal $ "evg_v" ++ show i)
                 ) pTypes
           in
           -- Encodes custom types, i.e.
           --   ValueTwoParams Bool Char
           -- becomes the following case statement branch:
           --   ValueTwoParams evg_v0 evg_v1 -> E.list identity [ E.string "ValueTwo", E.bool evg_v0, EG.e_char evg_v1 ]
-          customTypeCaseBranch customTypeName_ customType_ _index _tagNameS
+          customTypeCaseBranch moduleName customTypeName_ customType_ _index _tagNameS
             patternCtorArgs
              (call jsonEncodeList
                [ coreBasicsIdentity
@@ -175,15 +175,15 @@ customTypeToEncoder moduleName (customTypeName_, customType_) = do
     (named encoderName)
     (Map.fromList [])
     [ (at (PVar (name "evg_p0"))
-    , qtyp "author" "project" "AllTypes" _customTypeNameS [])
+    , qtyp "author" "project" moduleName _customTypeNameS [])
     ]
     (at (Case (vlocal "evg_p0") _customTypeBranches))
     (qtyp "elm" "json" "Json.Encode" "Value" [])
 
 
-customTypeCaseBranch customTypeName customType index customTypeLabel customTypeArgs expr =
+customTypeCaseBranch moduleName customTypeName customType index customTypeLabel customTypeArgs expr =
   CaseBranch
-    (at (PCtor { _p_home = canonical "author" "project" "AllTypes"
+    (at (PCtor { _p_home = canonical "author" "project" moduleName
                , _p_type = customTypeName
                , _p_union = customType
                , _p_name = name customTypeLabel
@@ -227,10 +227,10 @@ customTypeToDecoder moduleName (customTypeName_, customType_) = do
           in
           at (Call evergreenUnion
             [ str _tagNameT
-            , at (VarCtor Normal (canonical "author" "project" "AllTypes")
+            , at (VarCtor Normal (canonical "author" "project" moduleName)
                 (name _tagNameS)
                 (ZeroBased _index)
-                (Forall (Map.fromList []) (qtyp "author" "project" "AllTypes" _customTypeName []))
+                (Forall (Map.fromList []) (qtyp "author" "project" moduleName _customTypeName []))
               )
             ]
           )
@@ -277,7 +277,7 @@ customTypeToDecoder moduleName (customTypeName_, customType_) = do
        case pType of
          TType (Canonical (Name "author" "project") _) typeName next ->
            let _targetDecoderName = "evg_d_" ++ N.toString typeName
-               _targetDecoder = at (VarTopLevel (canonical "author" "project" "AllTypes") (name _targetDecoderName))
+               _targetDecoder = at (VarTopLevel (canonical "author" "project" moduleName) (name _targetDecoderName))
            in
            if _customTypeName == N.toString typeName then
 
@@ -307,7 +307,7 @@ customTypeToDecoder moduleName (customTypeName_, customType_) = do
 
            _targetDecoder
 
-         _ -> decoderForType pType
+         _ -> decoderForType moduleName pType
 
     _customTypeBranches =
       case customType_ of
@@ -333,13 +333,13 @@ customTypeToDecoder moduleName (customTypeName_, customType_) = do
                                       (tlam (qtyp "elm" "core" "List" "List" [qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "a"]])
                                                (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "a"])))))
               [at (List _customTypeBranches)]))
-    (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "author" "project" "AllTypes" _customTypeName []])
+    (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "author" "project" moduleName _customTypeName []])
 
 
 
 
 -- @TODO only partially implemented, needs to be extended for all possible types
-decoderForType pType =
+decoderForType moduleName pType =
    case pType of
      TType (Canonical (Name "elm" "core") "Basics") typeName next ->
        case N.toString typeName of
@@ -366,33 +366,33 @@ decoderForType pType =
      TType (Canonical (Name "elm" "core") "List") typeName next ->
        -- @TODO do we really need to do this? Can we just destructure inline above instead? How many other types does List expose?
        case N.toString typeName of
-         "List" -> jsonDecodeList (decoderForType (head next))
+         "List" -> jsonDecodeList (decoderForType moduleName (head next))
 
      TType (Canonical (Name "elm" "core") "Array") typeName next ->
-       jsonDecodeArray (decoderForType (head next))
+       jsonDecodeArray (decoderForType moduleName (head next))
 
      TType (Canonical (Name "elm" "core") "Set") typeName next ->
-       evergreenDecodeSet (decoderForType (head next))
+       evergreenDecodeSet (decoderForType moduleName (head next))
 
      TType (Canonical (Name "elm" "core") "Result") "Result" next ->
        case next of
          first:second:rest ->
-           evergreenDecodeResult (decoderForType first) (decoderForType second)
+           evergreenDecodeResult (decoderForType moduleName first) (decoderForType moduleName second)
 
      TType (Canonical (Name "elm" "core") "Dict") typeName next ->
        case next of
          first:second:rest ->
-           evergreenDecodeDict (decoderForType first) (decoderForType second)
+           evergreenDecodeDict (decoderForType moduleName first) (decoderForType moduleName second)
 
      TUnit ->
        evergreenDecodeUnit
 
      TTuple first second _ ->
-       evergreenDecodeTuple (decoderForType first) (decoderForType second)
+       evergreenDecodeTuple (decoderForType moduleName first) (decoderForType moduleName second)
 
      TType (Canonical (Name "author" "project") _) typeName next ->
        let _targetDecoderName = "evg_d_" ++ N.toString typeName
-           _targetDecoder = at (VarTopLevel (canonical "author" "project" "AllTypes") (name _targetDecoderName))
+           _targetDecoder = at (VarTopLevel (canonical "author" "project" moduleName) (name _targetDecoderName))
        in
        -- Currently, any types from user, must have encoder ref in this file
        -- @TODO we'll need to extend this to be able to call custom types from anywhere in the project
@@ -403,7 +403,7 @@ decoderForType pType =
        _targetDecoder
 
      TAlias (Canonical (Name "author" "project") _) typeName [] (Holey realType) ->
-       decoderForType realType
+       decoderForType moduleName realType
 
 
      -- @TODO temporary
@@ -483,7 +483,7 @@ aliasToEncoder moduleName alias =
         (TypedDef (named $ "evg_e_" ++ aliasName)
                   (Map.fromList [])
                   [ (at (PVar (name "evg_p0")) , typ ) ]
-                  (call (encoderForType typ) [vlocal "evg_p0"])
+                  (call (encoderForType moduleName typ) [vlocal "evg_p0"])
                   (qtyp "elm" "json" "Json.Encode" "Value" []))
 
     _ -> error $ "aliasToEncoder: didn't match any existing implementations: " ++ show alias
@@ -505,26 +505,26 @@ recordTypeToEncoder moduleName record fields =
                          (Holey (TRecord fields Nothing))
                 )
                 ]
-                (call jsonEncodeList [coreBasicsIdentity, at (List $ encodeRecordFields fields)])
+                (call jsonEncodeList [coreBasicsIdentity, at (List $ encodeRecordFields moduleName fields)])
                 (qtyp "elm" "json" "Json.Encode" "Value" []))
 
     _ -> error $ "recordTypeToEncoder: received non-record type, which should be impossible! : " ++ show record
 
 
-encodeRecordFields fields =
+encodeRecordFields moduleName fields =
   let
     sortedFields = List.sortOn (\(_, FieldType index _) -> (fromIntegral index) :: Int) (Map.toList fields)
 
-  in fmap encodeRecordField sortedFields
+  in fmap (encodeRecordField moduleName) sortedFields
 
 
-encodeRecordField field =
+encodeRecordField moduleName field =
   case field of
     (fieldName , FieldType index fieldType) ->
-      encodeForTypeValue fieldType (rfield "evg_p0" (N.toString fieldName))
+      encodeForTypeValue moduleName fieldType (rfield "evg_p0" (N.toString fieldName))
 
 
-encodeForTypeValue typ value =
+encodeForTypeValue moduleName typ value =
   case typ of
     TType (Canonical (Name "elm" "core") "Basics") typeName next ->
       case N.toString typeName of
@@ -549,23 +549,23 @@ encodeForTypeValue typ value =
       call jsonEncodeString [value]
 
     TType (Canonical (Name "elm" "core") "List") typeName next ->
-      call jsonEncodeList [encoderForType (head next), value]
+      call jsonEncodeList [encoderForType moduleName (head next), value]
 
     TType (Canonical (Name "elm" "core") "Array") typeName next ->
-      call jsonEncodeArray [encoderForType (head next), value]
+      call jsonEncodeArray [encoderForType moduleName (head next), value]
 
     TType (Canonical (Name "elm" "core") "Set") typeName next ->
-      call jsonEncodeSet [encoderForType (head next), value]
+      call jsonEncodeSet [encoderForType moduleName (head next), value]
 
     TType (Canonical (Name "elm" "core") "Result") "Result" next ->
       case next of
         first:second:rest ->
-          call evergreenEncodeResult [encoderForType first, encoderForType second, value]
+          call evergreenEncodeResult [encoderForType moduleName first, encoderForType moduleName second, value]
 
     TType (Canonical (Name "elm" "core") "Dict") typeName next ->
       case next of
         first:second:rest ->
-          call evergreenEncodeDict [encoderForType first, encoderForType second, value]
+          call evergreenEncodeDict [encoderForType moduleName first, encoderForType moduleName second, value]
 
     TType (Canonical (Name "elm" "time") "Time") typeName next ->
       case N.toString typeName of
@@ -578,18 +578,18 @@ encodeForTypeValue typ value =
       call evergreenEncodeUnit [value]
 
     TTuple first second _ ->
-      call evergreenEncodeTuple [encoderForType first, encoderForType second, value]
+      call evergreenEncodeTuple [encoderForType moduleName first, encoderForType moduleName second, value]
 
     TType (Canonical (Name "author" "project") _) typeName next ->
       -- Any types from user, must have encoder ref in this file
       let _targetEncoderName = "evg_e_" ++ N.toString typeName
 
       in
-      call (at (VarTopLevel (canonical "author" "project" "AllTypes")
+      call (at (VarTopLevel (canonical "author" "project" moduleName)
                                  (name _targetEncoderName))) [value]
 
     TAlias (Canonical (Name "author" "project") _) typeName [] (Holey realType) ->
-      encodeForTypeValue realType value
+      encodeForTypeValue moduleName realType value
 
     -- @TODO temporary
     TType (Canonical (Name "Lamdera" "core") _) typeName next ->
@@ -604,7 +604,7 @@ encodeForTypeValue typ value =
     _ -> error $ "encodeForTypeValue didn't match any existing implementations: " ++ show typ
 
 
-encoderForType pType =
+encoderForType moduleName pType =
   case pType of
     TType (Canonical (Name "elm" "core") "Basics") typeName next ->
       case N.toString typeName of
@@ -629,23 +629,23 @@ encoderForType pType =
       jsonEncodeString
 
     TType (Canonical (Name "elm" "core") "List") typeName next ->
-      call jsonEncodeList [encoderForType (head next)]
+      call jsonEncodeList [encoderForType moduleName (head next)]
 
     TType (Canonical (Name "elm" "core") "Array") typeName next ->
-      call jsonEncodeArray [encoderForType (head next)]
+      call jsonEncodeArray [encoderForType moduleName (head next)]
 
     TType (Canonical (Name "elm" "core") "Set") typeName next ->
-      call jsonEncodeSet [encoderForType (head next)]
+      call jsonEncodeSet [encoderForType moduleName (head next)]
 
     TType (Canonical (Name "elm" "core") "Result") "Result" next ->
       case next of
         first:second:rest ->
-          call evergreenEncodeResult [encoderForType first, encoderForType second]
+          call evergreenEncodeResult [encoderForType moduleName first, encoderForType moduleName second]
 
     TType (Canonical (Name "elm" "core") "Dict") typeName next ->
       case next of
         first:second:rest ->
-          call evergreenEncodeDict [encoderForType first, encoderForType second]
+          call evergreenEncodeDict [encoderForType moduleName first, encoderForType moduleName second]
 
     TType (Canonical (Name "elm" "time") "Time") typeName next ->
       case N.toString typeName of
@@ -658,16 +658,16 @@ encoderForType pType =
       call evergreenEncodeUnit []
 
     TTuple first second _ ->
-      call evergreenEncodeTuple [encoderForType first, encoderForType second]
+      call evergreenEncodeTuple [encoderForType moduleName first, encoderForType moduleName second]
 
     TType (Canonical (Name "author" "project") _) typeName next ->
       -- Any types from user, must have encoder ref in this file
       let _targetEncoderName = "evg_e_" ++ N.toString typeName
       in
-      at (VarTopLevel (canonical "author" "project" "AllTypes") (name _targetEncoderName))
+      at (VarTopLevel (canonical "author" "project" moduleName) (name _targetEncoderName))
 
     TAlias (Canonical (Name "author" "project") _) typeName [] (Holey realType) ->
-      encoderForType realType
+      encoderForType moduleName realType
 
     -- @TODO temporary
     TType (Canonical (Name "Lamdera" "core") _) typeName next ->
@@ -698,7 +698,7 @@ aliasToDecoder moduleName alias =
         (TypedDef (named $ "evg_d_" ++ aliasName)
                   (Map.fromList [])
                   []
-                  (decoderForType typ)
+                  (decoderForType moduleName typ)
                   (qtyp "elm" "json" "Json.Decode" "Decoder" [typ]))
 
     _ -> error $ "aliasToDecoder didn't match any existing implementations: " ++ show alias
@@ -727,7 +727,7 @@ recordTypeToDecoder moduleName typeName fields =
     decodeRecordField field =
       case field of
         (fieldName , FieldType index fieldType) ->
-          call evergreenAtIndex [int ((fromIntegral index) :: Int) , decoderForType fieldType]
+          call evergreenAtIndex [int ((fromIntegral index) :: Int) , decoderForType moduleName fieldType]
 
     decoderName = "evg_d_" ++ N.toString typeName
 
