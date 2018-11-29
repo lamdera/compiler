@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleContexts #-}
 
-module Wire.Base where
+module Wire.Canonical where
 
 import Reporting.Annotation (Located(..))
 import Reporting.Region
@@ -18,11 +18,38 @@ import Control.Monad.Trans (liftIO)
 import System.IO.Unsafe (unsafePerformIO)
 import Text.Show.Prettyprint
 import Wire.Helpers
+import CanSer.CanSer
+import qualified Data.Text as Text
 
 
 imap f l = zipWith f [0..] l
 
 justs xs = [ x | Just x <- xs ]
+
+-- AST to file debugger
+tracef n a =
+  unsafePerformIO $ do
+    putStrLn ("trace-" ++ n ++ ".txt")
+    writeFile ("trace-" ++ n ++ ".txt") $ prettyShow a
+    pure a
+
+
+tracer a b =
+  unsafePerformIO $ do
+    print a
+    pure b
+
+trace a b =
+  unsafePerformIO $ do
+    print $ show a ++ ": " ++ show b
+    pure b
+
+
+prettytracer a ast =
+  unsafePerformIO $ do
+    print $ show a
+    putStrLn $ (Text.unpack $ ppElm ast)
+    pure ast
 
 {-
 
@@ -33,10 +60,11 @@ Overall todo items remaining:
 - Handle module `exposing (blah)` issues preventing auto-generated definitions from being imported by other modules
 - Generic Encoder for records [DONE]
 - Generic Decoder for records [DONE]
-- Remove all references to AllTypes & make the module name dynamic based on context [WIP]
+- Remove all references to AllTypes & make the module name dynamic based on context [DONE]
 - Support more than 1 type param in custom types [DONE]
 - Support more than 2 type param in custom types [WIP] - encoders support N, but decoders need more work
 - Retain existing declarations in a file we gen into, instead of clobbering [DONE]
+- Fix cross-file type references [WIP]
 
 -}
 
@@ -54,9 +82,11 @@ modifyCanonical canonical flag pkg importDict interfaces source =
             "AllTypes" ->
               -- Keeping this branch for the moment as the test tracks file AllTypes.elm
               -- eventually when everything is done this will be removed and we'll not need to pattern match
-              modifyCanonicalApplied (tracef "canprev-AllTypes" canonical) n customTypes aliases
+              modifyCanonicalApplied canonical n customTypes aliases
 
-            "Msg" -> modifyCanonicalApplied canonical n customTypes aliases
+            "Msg" ->
+              -- modifyCanonicalApplied canonical n customTypes aliases
+              canonical
             -- "Lamdera.Types" -> modifyCanonicalApplied canonical n customTypes aliases
 
             _ -> do
@@ -72,22 +102,28 @@ modifyCanonical canonical flag pkg importDict interfaces source =
 
 
 -- @TODO this definition is temporary, and once all cases are covered will become the body of `modifyCanonical`
-modifyCanonicalApplied canonical n customTypes aliases = do
+modifyCanonicalApplied canonical n customTypes aliases =
   let
       moduleName = N.toString n
-      customTypeEncoders = fmap (customTypeToEncoder moduleName) $ Map.toList customTypes
-      customTypeDecoders = fmap (customTypeToDecoder moduleName) $ Map.toList customTypes
+      customTypeEncoders = justs $ fmap (customTypeToEncoder moduleName) $ Map.toList customTypes
+      customTypeDecoders = justs $ fmap (customTypeToDecoder moduleName) $ Map.toList customTypes
       recordEncoders = justs $ fmap (aliasToEncoder moduleName) $ Map.toList aliases
       recordDecoders = justs $ fmap (aliasToDecoder moduleName) $ Map.toList aliases
 
       cleanCanonical = canonical { _decls = canonicalRemoveWireDef $ _decls canonical }
       existingDecls = _decls cleanCanonical
 
-  tracef ("can-" ++ N.toString n)
-    (cleanCanonical
-      { _decls = DeclareRec (customTypeEncoders ++ customTypeDecoders ++ recordEncoders ++ recordDecoders) existingDecls
+  in
+  -- tracer ("can-" ++ N.toString n) $
+    cleanCanonical
+      { _decls = DeclareRec (
+        tracer "customTypeEncoders" customTypeEncoders) existingDecls
+        -- tracer "customTypeEncoders" customTypeEncoders ++
+        -- tracer "customTypeDecoders" customTypeDecoders ++
+        -- tracer "recordEncoders" recordEncoders ++
+        -- tracer "recordDecoders" recordDecoders) existingDecls
       }
-    )
+
 
 
 -- Removes any existing `evg_` prefixed functions.
@@ -124,7 +160,7 @@ isWireDef def =
       check name
 
 
-customTypeToEncoder moduleName (customTypeName_, customType_) = do
+customTypeToEncoder moduleName (customTypeName_, customType_) =
   let
     encoderName = "evg_e_" ++ N.toString customTypeName_
 
@@ -171,14 +207,22 @@ customTypeToEncoder moduleName (customTypeName_, customType_) = do
 
     _customTypeNameS = N.toString customTypeName_
 
-  TypedDef
-    (named encoderName)
-    (Map.fromList [])
-    [ (at (PVar (name "evg_p0"))
-    , qtyp "author" "project" moduleName _customTypeNameS [])
-    ]
-    (at (Case (vlocal "evg_p0") _customTypeBranches))
-    (qtyp "elm" "json" "Json.Encode" "Value" [])
+  in
+  -- @TODO temporary while we figure out what to do with polymorphic types
+  if customTypeName_ == "FrontendMetaMsg" then
+    Nothing
+  else
+    Just $
+    -- prettytracer moduleName $
+    TypedDef
+      (named encoderName)
+      (Map.fromList [])
+      [ (at (PVar (name "evg_p0"))
+      , qtyp "author" "project" moduleName _customTypeNameS [])
+      ]
+      (at (Case (vlocal "evg_p0") _customTypeBranches))
+      (qtyp "elm" "json" "Json.Encode" "Value" [])
+      -- (tlam (qtyp "author" "project" moduleName _customTypeNameS []) (qtyp "elm" "json" "Json.Encode" "Value" []))
 
 
 customTypeCaseBranch moduleName customTypeName customType index customTypeLabel customTypeArgs expr =
@@ -213,7 +257,7 @@ We will be able to leverage this in our wrapper program as well by detecting the
 into the core runtime Elm code so it dynamically "write" the write boilerplate at compile time for us.
 
 -}
-customTypeToDecoder moduleName (customTypeName_, customType_) = do
+customTypeToDecoder moduleName (customTypeName_, customType_) =
   let
     _customTypeName = N.toString customTypeName_
 
@@ -323,17 +367,22 @@ customTypeToDecoder moduleName (customTypeName_, customType_) = do
                   x -> undefined $ "Decoder: Custom Type parsing for " ++ show x ++ " params has not yet been implemented"
           ) _u_alts
 
-
-  TypedDef
-    (named _decoderName)
-    (Map.fromList [])
-    []
-    (at (Call ((qvar "elm" "json" "Json.Decode" "oneOf"
-                              (Forall (Map.fromList [(name "a", ())])
-                                      (tlam (qtyp "elm" "core" "List" "List" [qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "a"]])
-                                               (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "a"])))))
-              [at (List _customTypeBranches)]))
-    (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "author" "project" moduleName _customTypeName []])
+  in
+  -- @TODO temporary while we figure out what to do with polymorphic types
+  if customTypeName_ == "FrontendMetaMsg" then
+    Nothing
+  else
+    Just $
+    TypedDef
+      (named _decoderName)
+      (Map.fromList [])
+      []
+      (at (Call ((qvar "elm" "json" "Json.Decode" "oneOf"
+                  (Forall (Map.fromList [(name "a", ())])
+                          (tlam (qtyp "elm" "core" "List" "List" [qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "a"]])
+                                   (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "a"])))))
+                [at (List _customTypeBranches)]))
+      (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "author" "project" moduleName _customTypeName []])
 
 
 
@@ -447,24 +496,6 @@ generateConstructorAnnotation pTypes customType =
   Forall (Map.fromList []) (typeSignatures pTypes)
 
 
--- AST to file debugger
-tracef n a =
-  unsafePerformIO $ do
-    putStrLn ("trace-" ++ n ++ ".txt")
-    writeFile ("trace-" ++ n ++ ".txt") $ prettyShow a
-    pure a
-
-
-tracer a b =
-  unsafePerformIO $ do
-    print a
-    pure b
-
-trace a b =
-  unsafePerformIO $ do
-    print a
-    print b
-    pure b
 
 aliasToEncoder moduleName alias =
   case alias of
@@ -525,6 +556,7 @@ encodeRecordField moduleName field =
 
 
 encodeForTypeValue moduleName typ value =
+  -- case trace "encodeForTypeValue" typ of
   case typ of
     TType (Canonical (Name "elm" "core") "Basics") typeName next ->
       case N.toString typeName of
@@ -580,25 +612,35 @@ encodeForTypeValue moduleName typ value =
     TTuple first second _ ->
       call evergreenEncodeTuple [encoderForType moduleName first, encoderForType moduleName second, value]
 
-    TType (Canonical (Name "author" "project") _) typeName next ->
+    TType (Canonical (Name "author" "project") moduleNameLocal) typeName next ->
       -- Any types from user, must have encoder ref in this file
-      let _targetEncoderName = "evg_e_" ++ N.toString typeName
+      let targetEncoderName = "evg_e_" ++ N.toString typeName
+
 
       in
-      call (at (VarTopLevel (canonical "author" "project" moduleName)
-                                 (name _targetEncoderName))) [value]
+      -- prettytracer ("NEXTTYPE:"++ show typ) $
+        call (at (VarTopLevel (canonical "author" "project" (N.toString moduleNameLocal))
+                                 (name targetEncoderName))) [value]
 
-    TAlias (Canonical (Name "author" "project") _) typeName [] (Holey realType) ->
-      encodeForTypeValue moduleName realType value
+    TAlias (Canonical (Name "author" "project") moduleNameLocal) typeName [] (Holey realType) ->
+      encodeForTypeValue (N.toString moduleNameLocal) realType value
 
     -- @TODO temporary
-    TType (Canonical (Name "Lamdera" "core") _) typeName next ->
+    TType (Canonical (Name "Lamdera" "core") moduleNameLocal) typeName next ->
       -- Any types from user, must have encoder ref in this file
-      let _targetEncoderName = "evg_e_" ++ N.toString typeName
+      let
+        targetEncoderName = "evg_e_" ++ N.toString typeName
 
       in
-      call (at (VarTopLevel (canonical "Lamdera" "core" "Lamdera.Types")
-                                 (name _targetEncoderName))) [value]
+      trace "LamderaCoreMatched" $
+        call ((qvar "Lamdera" "core" (N.toString moduleNameLocal) targetEncoderName
+          (Forall (Map.fromList []) (TUnit)))) [value]
+          -- @TODO needs a real type signature defined here instead of TUnit...
+
+
+
+
+
 
 
     _ -> error $ "encodeForTypeValue didn't match any existing implementations: " ++ show typ

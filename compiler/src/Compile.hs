@@ -31,7 +31,7 @@ import qualified Type.Solve as Type
 import System.IO.Unsafe (unsafePerformIO)
 
 import qualified Wire.Valid
-import qualified Wire.Base
+import qualified Wire.Canonical
 import qualified East.Conversion as East
 
 import qualified Language.Haskell.Exts.Simple.Syntax as Hs
@@ -113,7 +113,7 @@ compile flag pkg importDict interfaces source =
 
       -- {- EVERGREEN
       -- Generate and inject Evergreen functions for all types & unions
-      let canonical_ = Wire.Base.modifyCanonical canonical flag pkg importDict interfaces source
+      let canonical_ = Wire.Canonical.modifyCanonical canonical flag pkg importDict interfaces source
 
 
       -- Backfill generated valid AST for generated functions as well

@@ -231,10 +231,11 @@ Executable elmx
         Paths_elm
 
         -- Wire
-        Wire.Base
         Wire.Valid
         Wire.Test
         Wire.Helpers
+        Wire.Canonical
+        Wire.Interfaces
 
         -- Debug helpers
         CanSer.CanSer

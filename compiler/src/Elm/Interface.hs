@@ -2,8 +2,8 @@
 module Elm.Interface
   ( Interfaces
   , Interface(..)
-  , Union
-  , Alias
+  , Union(..)
+  , Alias(..)
   , Binop(..)
   , fromModule
   , toPublicUnion
