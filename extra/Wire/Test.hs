@@ -55,8 +55,10 @@ compile :: IO ()
 compile = do
   -- Bust Elm's caching with this one weird trick!
   touch "extra/Wire/src/AllTypes.elm"
+  touch "extra/Wire/src/Msg.elm"
 
   Dir.withCurrentDirectory ("extra/Wire") $
+  -- Dir.withCurrentDirectory ("/Users/mario/dev/projects/lamdera/frontend/elm") $
     do  reporter <- Terminal.create
         Task.run reporter $
           do  summary <- Project.getRoot
@@ -76,6 +78,7 @@ tempFileName =
 rootPaths :: [FilePath]
 rootPaths =
   [ "src" </> "AllTypes_Check.elm"
+  -- [ "src" </> "Frontend.elm"
   ]
 
 

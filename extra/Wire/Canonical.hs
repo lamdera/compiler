@@ -85,8 +85,8 @@ modifyCanonical canonical flag pkg importDict interfaces source =
               modifyCanonicalApplied canonical n customTypes aliases
 
             "Msg" ->
-              -- modifyCanonicalApplied canonical n customTypes aliases
-              canonical
+              modifyCanonicalApplied canonical n customTypes aliases
+              -- canonical
             -- "Lamdera.Types" -> modifyCanonicalApplied canonical n customTypes aliases
 
             _ -> do
@@ -117,11 +117,11 @@ modifyCanonicalApplied canonical n customTypes aliases =
   -- tracer ("can-" ++ N.toString n) $
     cleanCanonical
       { _decls = DeclareRec (
-        tracer "customTypeEncoders" customTypeEncoders) existingDecls
-        -- tracer "customTypeEncoders" customTypeEncoders ++
-        -- tracer "customTypeDecoders" customTypeDecoders ++
-        -- tracer "recordEncoders" recordEncoders ++
-        -- tracer "recordDecoders" recordDecoders) existingDecls
+        -- tracer "customTypeEncoders" customTypeEncoders) existingDecls
+        tracer "customTypeEncoders" customTypeEncoders ++
+        tracer "customTypeDecoders" customTypeDecoders ++
+        tracer "recordEncoders" recordEncoders ++
+        tracer "recordDecoders" recordDecoders) existingDecls
       }
 
 

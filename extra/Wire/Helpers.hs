@@ -13,6 +13,12 @@ import Elm.Package (Name(..))
 
 import qualified Data.Map as Map
 
+
+imap f l = zipWith f [0..] l
+
+justs xs = [ x | Just x <- xs ]
+
+
 -- Helpers for the At/Region prefixes
 region =
   Region
@@ -53,10 +59,21 @@ qvar author package module_ n defs =
   at (VarForeign (canonical author package module_) (name n) defs)
 
 
+-- A qualified type where the canonicalised module is already known
+qvarc canonicalModule n defs =
+  at (VarForeign canonicalModule (name n) defs)
+
+
 -- A qualified canonicalized type in a signature,
 -- i.e. elm/core List module's `List` type in `Int -> List a`
 -- would be `qtyp "elm" "core" "List" "List"`
-qtyp author project module_ n = TType (canonical author project module_) (name n)
+qtyp author project module_ n =
+  TType (canonical author project module_) (name n)
+
+
+-- A qualified type where the canonicalised module is already known
+qtypc canonicalModule n =
+  TType canonicalModule (name n)
 
 
 -- A type variable in a signature, i.e. the `a` within `List a -> a`
@@ -196,8 +213,7 @@ jsonDecodeArray decoder =
 
 jsonDecodeLazy1Ignore decoder =
   at (Call ((qvar "elm" "json" "Json.Decode" "lazy"
-                            (Forall (Map.fromList [(name "a"
-                                              ,())])
+                            (Forall (Map.fromList [(name "a" ,())])
                                     (tlam (tlam TUnit (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "a"]))
                                              (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "a"])))))
             [at (Lambda [at PAnything]
@@ -208,8 +224,7 @@ jsonDecodeLazy1Ignore decoder =
 
 coreBasicsIdentity =
   (qvar "elm" "core" "Basics" "identity"
-                  (Forall (Map.fromList [(name "a"
-                                    ,())])
+                  (Forall (Map.fromList [(name "a" ,())])
                           (tlam (tvar "a")
                                 (tvar "a"))))
 
@@ -219,8 +234,7 @@ coreBasicsIdentity =
 -- @TODO should be evergreenDecodeUnion?
 evergreenUnion =
   ((qvar "author" "project" "Evergreen" "union"
-    (Forall (Map.fromList [(name "a"
-                      ,())])
+    (Forall (Map.fromList [(name "a" ,())])
             (tlam (qtyp "elm" "core" "String" "String" [])
                      (tlam (tvar "a")
                               (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "a"]))))))
@@ -228,10 +242,7 @@ evergreenUnion =
 
 evergreenDecodeUnion1 =
   ((qvar "author" "project" "Evergreen" "union1"
-    (Forall (Map.fromList [(name "a"
-                      ,())
-                      ,(name "b"
-                      ,())])
+    (Forall (Map.fromList [(name "a" ,()) ,(name "b" ,())])
             (tlam (qtyp "elm" "core" "String" "String" [])
                      (tlam (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "a"])
                               (tlam (tlam (tvar "a")
@@ -241,10 +252,7 @@ evergreenDecodeUnion1 =
 
 evergreenDecodeUnion2 =
   ((qvar "author" "project" "Evergreen" "union2"
-    (Forall (Map.fromList [(name "a" ,())
-                          ,(name "b" ,())
-                          ,(name "c" ,())]
-                          )
+    (Forall (Map.fromList [(name "a" ,()) ,(name "b" ,()) ,(name "c" ,())] )
             (tlam (qtyp "elm" "core" "String" "String" [])
                 (tlam (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "a"])
                         (tlam (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "b"])
@@ -323,8 +331,7 @@ evergreenDecodeOrder =
 
 evergreenDecodeSet decoder =
   at (Call ((qvar "author" "project" "Evergreen" "d_set"
-            (Forall (Map.fromList [(name "comparable"
-                              ,())])
+            (Forall (Map.fromList [(name "comparable" ,())])
                     (tlam (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "comparable"])
                              (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "elm" "core" "Set" "Set" [tvar "comparable"]])))))
             [decoder])
