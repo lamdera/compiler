@@ -43,11 +43,11 @@ stubValid valid flag pkg importDict interfaces source =
               , evg_d_Union_stubbed
               ] })
 
-        "Msg" ->
-          valid { _decls =
-            [ evg_e_Herp_stubbed
-            , evg_d_Herp_stubbed
-            ] }
+        -- "Msg" ->
+        --   valid { _decls =
+        --     [ evg_e_Herp_stubbed
+        --     , evg_d_Herp_stubbed
+        --     ] }
 
         _ ->
           valid
@@ -210,7 +210,7 @@ evg_d_AllTypes =
 
 evg_d_AllTypes_stubbed =
   decl "evg_d_AllTypes" []
-  (qvar "Debug" "todo")
+  (call (qvar "Debug" "todo") [str "evg_e_Herp_stubbed_todo"])
   (Just (qtyp "D" "Decoder" [typ "AllTypes" []]))
 
 
@@ -242,13 +242,13 @@ evg_e_AllTypes =
 
 evg_e_AllTypes_stubbed =
   decl "evg_e_AllTypes" [pvar "evg_p0"]
-  (qvar "Debug" "todo")
+  (call (qvar "Debug" "todo") [str "evg_e_Herp_stubbed_todo"])
   (Just (at (TLambda (typ "AllTypes" []) (qtyp "E" "Value" []))))
 
 
 evg_e_Union_stubbed =
   decl "evg_e_Union" [pvar "evg_p0"]
-  (qvar "Debug" "todo")
+  (call (qvar "Debug" "todo") [str "evg_e_Herp_stubbed_todo"])
   (Just (at (TLambda (typ "Union" []) (qtyp "E" "Value" []))))
 
 evg_e_Union =
@@ -291,14 +291,14 @@ evg_d_Union =
 
 evg_d_Union_stubbed =
   decl "evg_d_Union" []
-  (qvar "Debug" "todo")
+  (call (qvar "Debug" "todo") [str "evg_e_Herp_stubbed_todo"])
   (Just (qtyp "D" "Decoder" [typ "Union" [] ]))
 
 
 evg_e_Herp_stubbed =
   decl "evg_e_Herp" [pvar "evg_p0"]
-  -- (call (qvar "Debug" "todo") [str "evg_e_Herp_stubbed_todo"])
-  (qvar "Debug" "todo")
+  (call (qvar "Debug" "todo") [str "evg_e_Herp_stubbed_todo"])
+  -- (qvar "Debug" "todo")
   (Just (at (TLambda (typ "Herp" []) (qtyp "E" "Value" []))))
 
 
@@ -328,7 +328,7 @@ evg_d_Herp =
 
 evg_d_Herp_stubbed =
   decl "evg_d_Herp" []
-  (qvar "Debug" "todo")
+  (call (qvar "Debug" "todo") [str "evg_e_Herp_stubbed_todo"])
   -- This is the correct one needed if you screw up canonoical later, but is it needed overall?
   -- (call (qvar "Debug" "todo") [str "evg_d_Herp_stubbed_todo"])
   (Just (qtyp "D" "Decoder" [typ "Herp" [] ]))

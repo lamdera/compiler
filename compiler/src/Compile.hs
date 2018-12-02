@@ -1,4 +1,5 @@
 {-# OPTIONS_GHC -Wall -fno-warn-unused-do-bind #-}
+{-# LANGUAGE OverloadedStrings #-}
 module Compile
   ( DocsFlag(..)
   , compile
@@ -30,8 +31,10 @@ import qualified Type.Solve as Type
 
 import System.IO.Unsafe (unsafePerformIO)
 
+import qualified Wire.Interfaces
 import qualified Wire.Valid
 import qualified Wire.Canonical
+import qualified Wire.Helpers
 import qualified East.Conversion as East
 
 import qualified Language.Haskell.Exts.Simple.Syntax as Hs
@@ -39,6 +42,24 @@ import qualified Language.Haskell.Exts.Simple.Syntax as Hs
 import qualified Debug.Trace as DT
 import CanSer.CanSer
 import qualified Data.Text as T
+-- import AST.Canonical (Module(..))
+import AST.Canonical
+import AST.Module.Name (Canonical(..))
+import Elm.Package (Name(..))
+import Wire.Helpers
+import System.IO.Unsafe (unsafePerformIO)
+
+
+
+
+debugPrint t =
+  unsafePerformIO $ do
+    putStrLn t
+    pure $ Result.ok ()
+
+
+
+
 
 -- COMPILE
 
@@ -107,48 +128,99 @@ compile flag pkg importDict interfaces source =
       let validStubbed_ = Wire.Valid.stubValid valid flag pkg importDict interfaces source
       -- EVERGREEN -}
 
+      -- debugPrint "Got validstubbed"
 
       canonical <- Result.mapError Error.Canonicalize $
         Canonicalize.canonicalize pkg importDict interfaces validStubbed_
+
+      -- debugPrint "Got canonical"
 
       -- {- EVERGREEN
       -- Generate and inject Evergreen functions for all types & unions
       let canonical_ = Wire.Canonical.modifyCanonical canonical flag pkg importDict interfaces source
 
 
+      -- debugPrint "Got canonical modified"
+
       -- Backfill generated valid AST for generated functions as well
       let valid_ = Wire.Valid.modify validStubbed_ flag pkg importDict interfaces source canonical_
       -- EVERGREEN -}
 
 
+      -- debugPrint "Got valid modified"
+
       let localizer = L.fromModule valid_ -- TODO should this be strict for GC?
 
+      -- debugPrint "Got localizer"
 
       annotations <-
         runTypeInference localizer canonical_
 
+      -- debugPrint "Got annotations"
 
       () <-
         exhaustivenessCheck canonical_
 
+      -- debugPrint "Got exhaustiveness"
 
       graph <- Result.mapError (Error.Main localizer) $
         Optimize.optimize annotations canonical_
 
+      -- debugPrint "Got graph"
+
       documentation <-
         genarateDocs flag canonical_
+
+      -- debugPrint "Got docs"
 
       haskAst <-
         East.transpile canonical annotations importDict
 
-      Result.ok $
-        DT.trace (T.unpack $ ppElm canonical) $
-        Artifacts
-          { _elmi = I.fromModule annotations canonical_
-          , _elmo = graph
-          , _haskelmo = haskAst
-          , _docs = documentation
-          }
+      case canonical of
+        Module name docs exports decls customTypes aliases binops effects ->
+          case name of
+            -- Canonical (Name "author" "project") "Msg" ->
+            --
+            -- -- @NEXT modify the elmi here by hand to include the type signature for evg_e_Herp
+            -- -- then see if that stops our map error and if it does generalise the whole thing
+            --
+            --   let
+            --     elmi = I.fromModule annotations canonical_
+            --
+            --     encoderName = "evg_e_Herp"
+            --
+            --     encoderType =
+            --       Forall (Map.fromList [])
+            --         (tlam (qtyp "author" "project" "Msg" "Herp" [])
+            --           (qtyp "elm" "json" "Json.Encode" "Value" []))
+            --
+            --     elmiInjected = elmi
+            --       { I._types = Map.fromList $ Map.toList (I._types elmi) ++ [(N.fromString encoderName, encoderType)]
+            --       }
+            --
+            --   in
+            --   Result.ok $
+            --     -- DT.trace (T.unpack $ ppElm canonical_) $
+            --     Wire.Canonical.tracef ("artifacts-msg") $
+            --     Artifacts
+            --       -- { _elmi = I.fromModule annotations canonical_
+            --       { _elmi = elmiInjected
+            --       , _elmo = graph
+            --       , _haskelmo = haskAst
+            --       , Compile._docs = documentation
+            --       }
+
+            _ ->
+
+              Result.ok $
+                -- DT.trace (T.unpack $ ppElm canonical_) $
+                -- Wire.Canonical.tracef ("artifacts" ++ show pkg) $
+                Artifacts
+                  { _elmi = I.fromModule annotations canonical_
+                  , _elmo = graph
+                  , _haskelmo = haskAst
+                  , Compile._docs = documentation
+                  }
 
 
 -- TYPE INFERENCE
@@ -188,8 +260,8 @@ data DocsFlag = YesDocs | NoDocs deriving (Show)
 genarateDocs :: DocsFlag -> Can.Module -> Result.Result i w Error.Error (Maybe Docs.Module)
 genarateDocs flag modul =
   case flag of
-    NoDocs ->
+    Compile.NoDocs ->
       Result.ok Nothing
 
-    YesDocs ->
+    Compile.YesDocs ->
       Just <$> Docs.fromModule modul

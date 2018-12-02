@@ -43,9 +43,6 @@ import qualified Reporting.Task as Task
 import qualified Reporting.Task.Http as Http
 import qualified Stuff.Paths as Path
 
-import qualified Debug.Trace as DT
-import Transpile.PrettyPrint
-
 import Text.RawString.QQ (r)
 
 -- GET PACKAGE INFO

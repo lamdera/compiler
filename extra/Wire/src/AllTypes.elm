@@ -10,11 +10,16 @@ import Set exposing (Set)
 import Time
 
 
--- This seems to work... at least it doesn't cause crashes
+
+-- @TODO get aliases of remote types working
 -- type alias AliasRemote = Herp
--- After checking everything, including simplifying the import, this is def a problem.
--- type Referenced
---     = Wrapped Msg.Herp
+-- After checking everything, including simplifying the import, this is def a problem:
+type Referenced
+    = Wrapped Herp
+
+-- @TODO check this next after custom type is working
+-- type alias Referenced =
+--     { wrapped : Herp }
 
 
 

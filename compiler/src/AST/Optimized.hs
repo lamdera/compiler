@@ -93,10 +93,10 @@ golang:
 -- TODO: how do we represent boxing/unboxing?
 
 data Global = Global ModuleName.Canonical N.Name
-  deriving (Eq, Ord)
+  deriving (Eq, Ord, Show)
 
-instance Show Global where
-  show (Global can name) = show can ++ "." ++ show name
+-- instance Show Global where
+--   show (Global can name) = show can ++ "." ++ show name
 
 -- Provide "List" not "Elm.Kernel.List"
 --

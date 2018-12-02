@@ -82,8 +82,13 @@ unionMocks =
     ]
 
 
+herpMocks : List Herp
 herpMocks =
     [ Derp, Derp ]
+
+-- aliasRemoteMocks : List AliasRemote
+-- aliasRemoteMocks =
+--     [ Derp, Derp ]
 
 
 view : Model -> { body : List (Html.Html msg), title : String }
@@ -115,6 +120,13 @@ view model =
 
         d3 =
             D.decodeString (D.list Msg.evg_d_Herp) e3
+
+        -- @TODO get aliases of remote types working
+        -- eRemoteAlias =
+        --     E.encode 0 (E.list AllTypes.evg_e_AliasRemote aliasRemoteMocks)
+        --
+        -- dRemoteAlias =
+        --     D.decodeString (D.list AllTypes.evg_d_AliasRemote) eRemoteAlias
     in
     { title = "Hello"
     , body =
