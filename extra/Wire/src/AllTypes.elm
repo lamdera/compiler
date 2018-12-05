@@ -1,12 +1,26 @@
-module AllTypes exposing (AliasInt, AllTypes, Union(..), evg_d_AllTypes, evg_d_Union, evg_e_AllTypes, evg_e_Union)
+module AllTypes exposing (..)
 
 import Array exposing (Array)
 import Dict exposing (Dict)
 import Evergreen as EG
 import Json.Decode as D
 import Json.Encode as E
+import Msg exposing (..)
 import Set exposing (Set)
 import Time
+
+
+
+-- @TODO get aliases of remote types working
+-- type alias AliasRemote = Herp
+-- After checking everything, including simplifying the import, this is def a problem:
+type Referenced
+    = Wrapped Herp
+
+-- @TODO check this next after custom type is working
+-- type alias Referenced =
+--     { wrapped : Herp }
+
 
 
 type alias AliasInt =

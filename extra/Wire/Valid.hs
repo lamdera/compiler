@@ -15,56 +15,82 @@ import System.IO.Unsafe (unsafePerformIO)
 import Text.Show.Prettyprint
 
 
-stubValid valid flag pkg importDict interfaces source =
-  case valid of
-    AS.Module n _ _ _ _ _ _ _ _ _ ->
-      if N.toString n == "AllTypes" then
-
-        tracef
-          ("-" ++ N.toString n)
-          (valid { _decls =
-            [ evg_e_AllTypes_stubbed
-            , evg_d_AllTypes_stubbed
-            , evg_e_Union_stubbed
-            , evg_d_Union_stubbed
-            ] })
-
-      else
-        valid
-
-
--- Our injection point POC for AllTypes. Search for `Wire.modify`
-modify valid flag pkg importDict interfaces source canonical =
-  case valid of
-    AS.Module n _ _ _ _ _ _ _ _ _ ->
-      if N.toString n == "AllTypes_Gen" then
-        valid
-        -- tracef ("-" ++ N.toString n) valid
-        -- tracef ("-" ++ N.toString n) (valid { _decls = [ encoder, decoder, evg_e_Union, evg_d_Union ] })
-
-      else if N.toString n == "AllTypes" then
-        -- valid
-        tracef
-          ("-" ++ N.toString n)
-          (valid { _decls =
-            [ evg_e_AllTypes
-            , evg_d_AllTypes
-            , evg_e_Union
-            , evg_d_Union
-            ] })
-        -- tracef ("-" ++ N.toString n) (valid { _decls = _decls valid })
-        -- tracef ("-" ++ N.toString n) valid
-
-      else
-        valid
-
-
 -- AST to file debugger
 tracef n a =
   unsafePerformIO $ do
     putStrLn ("ast-" ++ n ++ ".txt")
     writeFile ("ast-" ++ n ++ ".txt") $ prettyShow a
     pure a
+
+traceUnrelated n a b =
+  unsafePerformIO $ do
+    putStrLn ("traceUnrelated-" ++ n ++ ".txt")
+    writeFile ("traceUnrelated-" ++ n ++ ".txt") $ prettyShow a
+    pure b
+
+
+stubValid valid flag pkg importDict interfaces source =
+  case valid of
+    AS.Module n _ _ _ _ _ _ _ _ _ ->
+      case N.toString n of
+        "AllTypes" ->
+          tracef
+            ("-" ++ N.toString n)
+            (valid { _decls =
+              [ evg_e_AllTypes_stubbed
+              , evg_d_AllTypes_stubbed
+              , evg_e_Union_stubbed
+              , evg_d_Union_stubbed
+              ] })
+
+        -- "Msg" ->
+        --   valid { _decls =
+        --     [ evg_e_Herp_stubbed
+        --     , evg_d_Herp_stubbed
+        --     ] }
+
+        _ ->
+          valid
+
+
+-- Our injection point POC for AllTypes. Search for `Wire.modify`
+-- @NOTE: it seems after checking this more carefully, that elmc doesn't actually
+-- care if the real definitions are present. Perhaps this only seemed the case
+-- in the earlier stages where we were still causing many more errors due to the
+-- canonicalized stage not yet being implemented...
+-- Leaving here for reference now but will clean this up later if proves true.
+modify valid flag pkg importDict interfaces source canonical =
+  case valid of
+    AS.Module n _ _ _ _ _ _ _ _ _ ->
+      case N.toString n of
+        "AllTypes_Gen" ->
+          valid
+          -- tracef ("-" ++ N.toString n) valid
+          -- tracef ("-" ++ N.toString n) (valid { _decls = [ encoder, decoder, evg_e_Union, evg_d_Union ] })
+
+        "AllTypes" ->
+          valid
+          -- tracef
+          --   ("-" ++ N.toString n)
+          --   (valid { _decls =
+          --     [ evg_e_AllTypes
+          --     , evg_d_AllTypes
+          --     , evg_e_Union
+          --     , evg_d_Union
+          --     ] })
+          -- tracef ("-" ++ N.toString n) (valid { _decls = _decls valid })
+          -- tracef ("-" ++ N.toString n) valid
+
+        "Msg" ->
+          valid
+          -- valid { _decls =
+          --   [ evg_e_Herp
+          --   , evg_d_Herp
+          --   ] }
+
+
+        _ ->
+          valid
 
 
 -- Helpers for the At/Region prefixes
@@ -184,7 +210,7 @@ evg_d_AllTypes =
 
 evg_d_AllTypes_stubbed =
   decl "evg_d_AllTypes" []
-  (qvar "Debug" "todo")
+  (call (qvar "Debug" "todo") [str "evg_e_Herp_stubbed_todo"])
   (Just (qtyp "D" "Decoder" [typ "AllTypes" []]))
 
 
@@ -216,13 +242,13 @@ evg_e_AllTypes =
 
 evg_e_AllTypes_stubbed =
   decl "evg_e_AllTypes" [pvar "evg_p0"]
-  (qvar "Debug" "todo")
+  (call (qvar "Debug" "todo") [str "evg_e_Herp_stubbed_todo"])
   (Just (at (TLambda (typ "AllTypes" []) (qtyp "E" "Value" []))))
 
 
 evg_e_Union_stubbed =
   decl "evg_e_Union" [pvar "evg_p0"]
-  (qvar "Debug" "todo")
+  (call (qvar "Debug" "todo") [str "evg_e_Herp_stubbed_todo"])
   (Just (at (TLambda (typ "Union" []) (qtyp "E" "Value" []))))
 
 evg_e_Union =
@@ -265,5 +291,44 @@ evg_d_Union =
 
 evg_d_Union_stubbed =
   decl "evg_d_Union" []
-  (qvar "Debug" "todo")
+  (call (qvar "Debug" "todo") [str "evg_e_Herp_stubbed_todo"])
   (Just (qtyp "D" "Decoder" [typ "Union" [] ]))
+
+
+evg_e_Herp_stubbed =
+  decl "evg_e_Herp" [pvar "evg_p0"]
+  (call (qvar "Debug" "todo") [str "evg_e_Herp_stubbed_todo"])
+  -- (qvar "Debug" "todo")
+  (Just (at (TLambda (typ "Herp" []) (qtyp "E" "Value" []))))
+
+
+
+evg_e_Herp =
+  decl "evg_e_Herp" [pvar "evg_p0"]
+      (case_ (var "evg_p0")
+        [ ( pctor "Derp" []
+          , call (qvar "E" "list")
+            [ var "identity" , list [ call (qvar "E" "string") [ str "Derp" ] ] ]
+          )
+        ]
+      )
+      (Just (at (TLambda (typ "Herp" []) (qtyp "E" "Value" []))))
+
+
+evg_d_Herp =
+  decl "evg_d_Herp" []
+    (call (qvar "D" "oneOf")
+      [list
+        [ call (qvar "EG" "union") [ str "Derp", ctor "Derp" ]
+        ]
+      ]
+    )
+    (Just (qtyp "D" "Decoder" [typ "Herp" [] ]))
+
+
+evg_d_Herp_stubbed =
+  decl "evg_d_Herp" []
+  (call (qvar "Debug" "todo") [str "evg_e_Herp_stubbed_todo"])
+  -- This is the correct one needed if you screw up canonoical later, but is it needed overall?
+  -- (call (qvar "Debug" "todo") [str "evg_d_Herp_stubbed_todo"])
+  (Just (qtyp "D" "Decoder" [typ "Herp" [] ]))

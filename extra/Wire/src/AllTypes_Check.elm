@@ -10,6 +10,7 @@ import Element.Background as Background
 import Html
 import Json.Decode as D
 import Json.Encode as E
+import Msg exposing (..)
 import Result exposing (Result(..))
 import Set
 import Time
@@ -81,14 +82,21 @@ unionMocks =
     ]
 
 
+herpMocks : List Herp
+herpMocks =
+    [ Derp, Derp ]
 
--- anotherMocks =
---     [ Test, Best ]
+-- aliasRemoteMocks : List AliasRemote
+-- aliasRemoteMocks =
+--     [ Derp, Derp ]
 
 
 view : Model -> { body : List (Html.Html msg), title : String }
 view model =
     let
+        a =
+            1
+
         encoded =
             E.encode 0 (AllTypes.evg_e_AllTypes allTypesMock)
 
@@ -107,13 +115,22 @@ view model =
         customTypesMatching =
             Ok unionMocks == d2
 
-        -- e3 =
-        --     E.encode 0 (E.list AllTypes.evg_e_Another anotherMocks)
-        -- d3 =
-        --     D.decodeString (D.list AllTypes.evg_d_Another) e2
+        e3 =
+            E.encode 0 (E.list Msg.evg_e_Herp herpMocks)
+
+        d3 =
+            D.decodeString (D.list Msg.evg_d_Herp) e3
+
+        -- @TODO get aliases of remote types working
+        -- eRemoteAlias =
+        --     E.encode 0 (E.list AllTypes.evg_e_AliasRemote aliasRemoteMocks)
+        --
+        -- dRemoteAlias =
+        --     D.decodeString (D.list AllTypes.evg_d_AliasRemote) eRemoteAlias
     in
     { title = "Hello"
     , body =
+        -- [ layout [] <| text "you disabled me" ]
         [ layout [] <|
             column [ spacing 10, padding 10 ]
                 [ row [ padding 10 ] [ paragraph [] [ text <| "Encoded AllTypes: " ++ encoded ] ]
@@ -131,7 +148,8 @@ view model =
                   else
                     row [ padding 10, Background.color (rgb255 255 179 186) ] [ paragraph [] [ text <| "Custom type equal to original? " ++ Debug.toString customTypesMatching ] ]
 
-                -- , row [] [ Html.text <| "Encoded Another: " ++ e3 ]
+                , row [] [ text <| "Encoded Another: " ++ e3 ]
+                , row [] [ text <| "Decoded Another: " ++ Debug.toString d3 ]
                 -- , row [] [ Html.text <| "Shadow value not existent in code: " ++ Debug.toString AllTypes.evg ]
                 ]
         ]

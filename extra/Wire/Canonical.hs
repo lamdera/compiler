@@ -22,10 +22,6 @@ import CanSer.CanSer
 import qualified Data.Text as Text
 
 
-imap f l = zipWith f [0..] l
-
-justs xs = [ x | Just x <- xs ]
-
 -- AST to file debugger
 tracef n a =
   unsafePerformIO $ do
@@ -41,13 +37,13 @@ tracer a b =
 
 trace a b =
   unsafePerformIO $ do
-    print $ show a ++ ": " ++ show b
+    putStrLn $ show a ++ ": " ++ show b
     pure b
 
 
 prettytracer a ast =
   unsafePerformIO $ do
-    print $ show a
+    putStrLn a
     putStrLn $ (Text.unpack $ ppElm ast)
     pure ast
 
@@ -83,6 +79,7 @@ modifyCanonical canonical flag pkg importDict interfaces source =
               -- Keeping this branch for the moment as the test tracks file AllTypes.elm
               -- eventually when everything is done this will be removed and we'll not need to pattern match
               modifyCanonicalApplied canonical n customTypes aliases
+              -- canonical
 
             "Msg" ->
               -- modifyCanonicalApplied canonical n customTypes aliases
@@ -160,9 +157,11 @@ isWireDef def =
       check name
 
 
-customTypeToEncoder moduleName (customTypeName_, customType_) =
+customTypeToEncoder moduleName (customTypeName, customType_) =
   let
-    encoderName = "evg_e_" ++ N.toString customTypeName_
+    encoderName = "evg_e_" ++ N.toString customTypeName
+
+    customTypeNameS = N.toString customTypeName
 
     customTypeBranch _index ctor =
       case ctor of
@@ -188,7 +187,7 @@ customTypeToEncoder moduleName (customTypeName_, customType_) =
           --   ValueTwoParams Bool Char
           -- becomes the following case statement branch:
           --   ValueTwoParams evg_v0 evg_v1 -> E.list identity [ E.string "ValueTwo", E.bool evg_v0, EG.e_char evg_v1 ]
-          customTypeCaseBranch moduleName customTypeName_ customType_ _index _tagNameS
+          customTypeCaseBranch moduleName customTypeName customType_ _index _tagNameS
             patternCtorArgs
              (call jsonEncodeList
                [ coreBasicsIdentity
@@ -196,7 +195,7 @@ customTypeToEncoder moduleName (customTypeName_, customType_) =
                ]
              )
 
-    _customTypeBranches =
+    customTypeBranches =
       case customType_ of
         Union _u_vars _u_alts _u_numAlts _u_opts ->
           imap (\i ctor ->
@@ -205,11 +204,9 @@ customTypeToEncoder moduleName (customTypeName_, customType_) =
                 customTypeBranch i ctor
           ) _u_alts
 
-    _customTypeNameS = N.toString customTypeName_
-
   in
   -- @TODO temporary while we figure out what to do with polymorphic types
-  if customTypeName_ == "FrontendMetaMsg" then
+  if customTypeName == "FrontendMetaMsg" then
     Nothing
   else
     Just $
@@ -218,11 +215,12 @@ customTypeToEncoder moduleName (customTypeName_, customType_) =
       (named encoderName)
       (Map.fromList [])
       [ (at (PVar (name "evg_p0"))
-      , qtyp "author" "project" moduleName _customTypeNameS [])
+      , qtyp "author" "project" moduleName customTypeNameS [])
       ]
-      (at (Case (vlocal "evg_p0") _customTypeBranches))
+      (at (Case (vlocal "evg_p0") customTypeBranches))
       (qtyp "elm" "json" "Json.Encode" "Value" [])
-      -- (tlam (qtyp "author" "project" moduleName _customTypeNameS []) (qtyp "elm" "json" "Json.Encode" "Value" []))
+
+      -- (tlam (qtyp "author" "project" moduleName customTypeNameS []) (qtyp "elm" "json" "Json.Encode" "Value" []))
 
 
 customTypeCaseBranch moduleName customTypeName customType index customTypeLabel customTypeArgs expr =
@@ -614,11 +612,11 @@ encodeForTypeValue moduleName typ value =
 
     TType (Canonical (Name "author" "project") moduleNameLocal) typeName next ->
       -- Any types from user, must have encoder ref in this file
-      let targetEncoderName = "evg_e_" ++ N.toString typeName
-
+      let
+        targetEncoderName = "evg_e_" ++ N.toString typeName
 
       in
-      -- prettytracer ("NEXTTYPE:"++ show typ) $
+      prettytracer ("➡️  Generating encoder for:"++ show typ) $
         call (at (VarTopLevel (canonical "author" "project" (N.toString moduleNameLocal))
                                  (name targetEncoderName))) [value]
 

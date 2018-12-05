@@ -35,10 +35,10 @@ import qualified Haskelm.Yaml
 
 import qualified Debug.Trace as DT
 import Transpile.PrettyPrint (sShow)
+import qualified Wire.Interfaces
 
-
--- import Control.Monad.Trans (liftIO)
--- import Text.Show.Prettyprint
+import Control.Monad.Trans (liftIO)
+import Text.Show.Prettyprint
 -- import qualified Debug.Trace as DT
 
 
@@ -75,19 +75,37 @@ compile mode target maybeOutput docs summary@(Summary.Summary root project _ _ _
       -- debugTo "graph.txt" graph
       (dirty, ifaces) <- Plan.plan docs summary graph
       -- debugTo "dirty.txt" dirty
-      -- debugTo "ifaces.txt" ifaces
+
+      -- let ifaces_ = Wire.Interfaces.modifyInterfaces ifaces
+
+      -- debugTo "ifaces.txt" ifaces_
+
+      -- @TODO here we need to hijack ifaces and add generations for all types...
+
+      -- liftIO $ putStrLn "Got dirty & ifaces"
+
       answers <- Compile.compile project docs ifaces dirty
+
+      -- liftIO $ putStrLn "Got answers"
       -- debugTo "answers.txt" answers
       results <- Artifacts.write root answers -- results : Map ModuleName Artifacts, where Artifacts = {elmInterface, elmOutput (graph), docs}
+
+      -- liftIO $ putStrLn "Got results"
       -- debugTo "results.txt" results
       _ <- Haskelm.Yaml.generateHaskellYamlFiles root project graph results
+
+      -- liftIO $ putStrLn "Did generation"
+
       _ <- traverse (Artifacts.writeDocs results) docs
+
+      -- liftIO $ putStrLn "Did artefacts"
+
       Output.generate mode target maybeOutput summary graph results
 
 
--- debugTo fname a = do
---   liftIO $ print $ "-------------------------------------------------------------------" ++ fname
---   liftIO $ writeFile fname $ prettyShow a
+debugTo fname a = do
+  liftIO $ print $ "-------------------------------------------------------------------" ++ fname
+  liftIO $ writeFile fname $ prettyShow a
 
 
 -- COMPILE FOR REPL
