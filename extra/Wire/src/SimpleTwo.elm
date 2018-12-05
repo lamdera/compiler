@@ -1,6 +1,6 @@
 module SimpleTwo exposing (..)
 
-import Json.Decode.Exploration exposing (decodeString)
+-- import Json.Decode.Exploration exposing (decodeString)
 
 nameCollisionTest = 42
 
@@ -16,4 +16,4 @@ normalLambda =
   \a b -> a
 
 
-decStr = decodeString
+-- decStr = decodeString
