@@ -10,17 +10,16 @@ import Set exposing (Set)
 import Time
 
 
-
 -- @TODO get aliases of remote types working
 -- type alias AliasRemote = Herp
 -- After checking everything, including simplifying the import, this is def a problem:
 type Referenced
-    = Wrapped Herp
+    = Root
+    | Wrapped Herp
 
 -- @TODO check this next after custom type is working
 -- type alias Referenced =
 --     { wrapped : Herp }
-
 
 
 type alias AliasInt =

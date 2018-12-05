@@ -26,7 +26,7 @@ data License =
     { _name :: Text.Text
     , _code :: Text.Text
     }
-  deriving (Eq, Ord)
+  deriving (Eq, Ord, Show)
 
 
 bsd3 :: License

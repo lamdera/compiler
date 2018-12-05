@@ -9,9 +9,12 @@ type Herp
     = Derp
 
 
-evg_e_Herp = Debug.todo "todo"
+evg_e_Herp evg_p0 =
+    Debug.todo "evg_e_Herp"
 
-evg_d_Herp = Debug.todo "todo"
+
+evg_d_Herp =
+    Debug.todo "evg_d_Herp"
 
 
 -- --------------
