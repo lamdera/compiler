@@ -1,11 +1,11 @@
-module AllTypes exposing (..)
+module AllTypes exposing (AliasInt, AliasTuple, AllTypes, Referenced(..), ReferencedRecord, Union(..))
 
 import Array exposing (Array)
 import Dict exposing (Dict)
 import Evergreen as EG
 import Json.Decode as D
 import Json.Encode as E
-import Msg exposing (..)
+import Msg
 import Set exposing (Set)
 import Time
 
@@ -56,12 +56,14 @@ type alias AllTypes =
     }
 
 
+
 -- Checking wrapped usages of remote user types from Msg.elm
+
 
 type Referenced
     = Root
-    | Wrapped Herp
+    | Wrapped Msg.Herp
 
 
 type alias ReferencedRecord =
-    { wrapped : Herp }
+    { wrapped : Msg.Herp }

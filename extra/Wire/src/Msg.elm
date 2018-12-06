@@ -1,4 +1,4 @@
-module Msg exposing (..)
+module Msg exposing (Herp(..))
 
 import Json.Encode as E
 import Evergreen as EG

@@ -114,6 +114,7 @@ modifyCanonicalApplied canonical n customTypes aliases interfaces =
       recordEncoders = justs $ fmap (aliasToEncoder interfaces moduleName) $ Map.toList aliases
       recordDecoders = justs $ fmap (aliasToDecoder interfaces moduleName) $ Map.toList aliases
 
+      -- @TODO check if we still need this given right now we have no valid stubs and things seem to be fine...?
       cleanCanonical = canonical { _decls = canonicalRemoveWireDef $ _decls canonical }
       existingDecls = _decls cleanCanonical
 
@@ -127,6 +128,18 @@ modifyCanonicalApplied canonical n customTypes aliases interfaces =
       --   tracer "recordEncoders" recordEncoders ++
       --   tracer "recordDecoders" recordDecoders) existingDecls
       -- }
+
+
+-- The final stage of module compilation runs Interface.fromModule to generate interfaces based on
+-- the exposing(?) header of the file. This function re-injects the wire interfaces after that's
+-- done, ensuring that wire functions are always "exported" from a module regardless of what scope
+-- the user has set for their own code.
+reinjectWireInterfaces annotations canonical elmi =
+  let
+    wireAnnotations = Map.filterWithKey (\n v -> List.isPrefixOf "evg_" $ N.toString n ) annotations
+
+  in
+  elmi { Interface._types = Map.union (Interface._types elmi) wireAnnotations }
 
 
 
