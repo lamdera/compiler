@@ -31,7 +31,7 @@ import qualified Reporting.Exit as Exit
 import qualified Reporting.Exit.Crawl as E
 import qualified Reporting.Task as Task
 
-
+import qualified Elm.Name as N
 
 -- GRAPH
 
@@ -108,8 +108,15 @@ depthFirstSearch :: Summary -> [Unvisited] -> WorkGraph -> Task.Task Result
 depthFirstSearch summary unvisited startGraph =
   do  chan <- liftIO newChan
 
+      -- @WIRE inject additional import ref to Evergreen for Wire encoder/decoder helpers
+      let
+        unvisited_ = unvisited ++
+          [case head unvisited of
+            Unvisited origin name ->
+              Unvisited origin $ N.fromString "Evergreen"]
+
       (Graph args locals kernelPaths foreigns problems) <-
-        dfs summary chan 0 Set.empty unvisited startGraph
+        dfs summary chan 0 Set.empty unvisited_ startGraph
 
       case problems of
         [] ->

@@ -1,4 +1,4 @@
-module AllTypes_Check exposing (..)
+module AllTypes_Check exposing (Model, Msg(..), aliasedInt, allTypesMocks, encodeDecodeCheck, init, main, subscriptions, unionMocks, update, view)
 
 import AllTypes exposing (..)
 import Array
@@ -39,20 +39,21 @@ init flags =
 
 
 allTypesMocks =
-    [{ int = 1
-    , float = 1.3
-    , bool = True
-    , char = 'c'
-    , string = "test"
-    , listInt = [ 3, 2, 1 ]
-    , setFloat = Set.fromList [ 1.2, 2.3, 3.4 ]
-    , arrayString = Array.fromList [ "herp", "derp" ]
-    , dict = Dict.fromList [ ( "Nice", [ 1, 2, 3 ] ), ( "Twice", [ 3, 2, 1 ] ) ]
-    , time = Time.millisToPosix 1000000000
-    , order = LT
-    , union = Recursive Leaf
-    , unit = ()
-    }]
+    [ { int = 1
+      , float = 1.3
+      , bool = True
+      , char = 'c'
+      , string = "test"
+      , listInt = [ 3, 2, 1 ]
+      , setFloat = Set.fromList [ 1.2, 2.3, 3.4 ]
+      , arrayString = Array.fromList [ "herp", "derp" ]
+      , dict = Dict.fromList [ ( "Nice", [ 1, 2, 3 ] ), ( "Twice", [ 3, 2, 1 ] ) ]
+      , time = Time.millisToPosix 1000000000
+      , order = LT
+      , union = Recursive Leaf
+      , unit = ()
+      }
+    ]
 
 
 aliasedInt : AliasInt
@@ -99,25 +100,25 @@ view model =
 
 
 encodeDecodeCheck label mock encoder decoder =
-  let
-    roundtripMatches = Ok mock == decoded
+    let
+        roundtripMatches =
+            Ok mock == decoded
 
-    encoded =
-        E.encode 0 (E.list encoder mock)
+        encoded =
+            E.encode 0 (E.list encoder mock)
 
-    decoded =
-        D.decodeString (D.list decoder) encoded
+        decoded =
+            D.decodeString (D.list decoder) encoded
+    in
+    column []
+        [ row [ padding 10 ] [ paragraph [] [ text <| "Encoded " ++ label ++ ": " ++ encoded ] ]
+        , row [ padding 10 ] [ paragraph [] [ text <| "Decoded " ++ label ++ ": " ++ Debug.toString decoded ] ]
+        , if roundtripMatches then
+            row [ padding 10, Background.color (rgb255 186 255 188) ] [ paragraph [] [ text <| label ++ " equal to original? " ++ Debug.toString roundtripMatches ] ]
 
-  in
-  column []
-    [ row [ padding 10 ] [ paragraph [] [ text <| "Encoded " ++ label ++ ": " ++ encoded ] ]
-    , row [ padding 10 ] [ paragraph [] [ text <| "Decoded " ++ label ++ ": " ++ Debug.toString decoded ] ]
-    , if roundtripMatches then
-        row [ padding 10, Background.color (rgb255 186 255 188) ] [ paragraph [] [ text <| label ++ " equal to original? " ++ Debug.toString roundtripMatches ] ]
-
-      else
-        row [ padding 10, Background.color (rgb255 255 179 186) ] [ paragraph [] [ text <| label ++ " equal to original? " ++ Debug.toString roundtripMatches ] ]
-    ]
+          else
+            row [ padding 10, Background.color (rgb255 255 179 186) ] [ paragraph [] [ text <| label ++ " equal to original? " ++ Debug.toString roundtripMatches ] ]
+        ]
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
