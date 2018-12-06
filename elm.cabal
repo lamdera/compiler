@@ -239,6 +239,8 @@ Executable elmx
 
         -- Debug helpers
         CanSer.CanSer
+        Sanity
+
 
         -- Haskelm
         East.Conversion

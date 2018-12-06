@@ -9,14 +9,6 @@ type Herp
     = Derp
 
 
-evg_e_Herp evg_p0 =
-    Debug.todo "evg_e_Herp"
-
-
-evg_d_Herp =
-    Debug.todo "evg_d_Herp"
-
-
 -- --------------
 -- -- import Lamdera.Types exposing (ClientId, WsError)
 --

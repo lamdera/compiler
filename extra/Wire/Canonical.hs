@@ -10,6 +10,7 @@ import qualified Elm.Name as N
 import AST.Canonical
 import AST.Module.Name (Canonical(..))
 import Elm.Package (Name(..))
+import qualified Elm.Interface as Interface
 import qualified Data.Map as Map
 import Data.Index
 import qualified Data.List as List
@@ -20,7 +21,7 @@ import Text.Show.Prettyprint
 import Wire.Helpers
 import CanSer.CanSer
 import qualified Data.Text as Text
-
+import Sanity ((!)) -- import Data.Map ((!))
 
 -- AST to file debugger
 tracef n a =

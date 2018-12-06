@@ -92,7 +92,7 @@ view model =
                 , encodeDecodeCheck "Unions" unionMocks AllTypes.evg_e_Union AllTypes.evg_d_Union
                 , encodeDecodeCheck "Herp" [ Derp ] Msg.evg_e_Herp Msg.evg_d_Herp
                 , encodeDecodeCheck "Referenced" [ Root, Wrapped Derp ] AllTypes.evg_e_Referenced AllTypes.evg_d_Referenced
-                -- , row [] [ Html.text <| "Shadow value not existent in code: " ++ Debug.toString AllTypes.evg ]
+                , encodeDecodeCheck "ReferencedRecord" [ { wrapped = Derp } ] AllTypes.evg_e_ReferencedRecord AllTypes.evg_d_ReferencedRecord
                 ]
         ]
     }
