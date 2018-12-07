@@ -91,14 +91,15 @@ view model =
             column [ spacing 10, padding 10 ]
                 [ encodeDecodeCheck "AllTypes" allTypesMocks AllTypes.evg_e_AllTypes AllTypes.evg_d_AllTypes
                 , encodeDecodeCheck "Unions" unionMocks AllTypes.evg_e_Union AllTypes.evg_d_Union
-                , encodeDecodeCheck "Herp" [ Derp ] Msg.evg_e_Herp Msg.evg_d_Herp
-                , encodeDecodeCheck "Referenced" [ Root, Wrapped Derp ] AllTypes.evg_e_Referenced AllTypes.evg_d_Referenced
-                , encodeDecodeCheck "ReferencedRecord" [ { wrapped = Derp } ] AllTypes.evg_e_ReferencedRecord AllTypes.evg_d_ReferencedRecord
+                , encodeDecodeCheck "Herp" [ Derp "arg1" "arg2" ] Msg.evg_e_Herp Msg.evg_d_Herp
+                , encodeDecodeCheck "Referenced" [ Root, Wrapped (Derp "test" "best") ] AllTypes.evg_e_Referenced AllTypes.evg_d_Referenced
+                , encodeDecodeCheck "ReferencedRecord" [ { wrapped = Derp "test" "nest" } ] AllTypes.evg_e_ReferencedRecord AllTypes.evg_d_ReferencedRecord
                 ]
         ]
     }
 
 
+encodeDecodeCheck : String -> List a -> (a -> E.Value) -> D.Decoder a -> Element msg
 encodeDecodeCheck label mock encoder decoder =
     let
         roundtripMatches =

@@ -56,6 +56,7 @@ compile = do
   -- Bust Elm's caching with this one weird trick!
   touch "extra/Wire/src/AllTypes.elm"
   touch "extra/Wire/src/Msg.elm"
+  -- touch "/Users/mario/dev/projects/lamdera/frontend/elm/src/Frontend.elm"
 
   Dir.withCurrentDirectory ("extra/Wire") $
   -- Dir.withCurrentDirectory ("/Users/mario/dev/projects/lamdera/frontend/elm") $

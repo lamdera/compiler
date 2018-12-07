@@ -111,9 +111,18 @@ depthFirstSearch summary unvisited startGraph =
       -- @WIRE inject additional import ref to Evergreen for Wire encoder/decoder helpers
       let
         unvisited_ = unvisited ++
-          [case head unvisited of
+          (case head unvisited of
             Unvisited origin name ->
-              Unvisited origin $ N.fromString "Evergreen"]
+              case origin of
+                E.ElmJson ->
+                  []
+
+                E.File filePath ->
+                  [Unvisited origin $ N.fromString "Evergreen"]
+
+                E.Module filePath moduleRaw ->
+                  [Unvisited origin $ N.fromString "Evergreen"]
+          )
 
       (Graph args locals kernelPaths foreigns problems) <-
         dfs summary chan 0 Set.empty unvisited_ startGraph
@@ -222,6 +231,7 @@ data Unvisited =
     { _origin :: E.Origin
     , _name :: Module.Raw
     }
+    deriving (Show)
 
 
 data Asset
