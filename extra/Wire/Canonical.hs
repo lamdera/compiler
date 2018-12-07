@@ -51,6 +51,7 @@ trace a b =
 prettytracer a ast =
   unsafePerformIO $ do
     putStrLn a
+    -- putStrLn $ (prettyShow ast)
     putStrLn $ (Text.unpack $ ppElm ast)
     pure ast
 
@@ -102,7 +103,7 @@ modifyCanonicalApplied canonical pkg moduleName customTypes aliases interfaces =
   let
       moduleNameString = N.toString moduleName
       customTypeEncoders = justs $ fmap (customTypeToEncoder pkg interfaces moduleNameString) $ Map.toList customTypes
-      customTypeDecoders = justs $ fmap (customTypeToDecoder interfaces moduleNameString) $ Map.toList customTypes
+      customTypeDecoders = justs $ fmap (customTypeToDecoder pkg interfaces moduleNameString) $ Map.toList customTypes
       recordEncoders = justs $ fmap (aliasToEncoder interfaces moduleNameString) $ Map.toList aliases
       recordDecoders = justs $ fmap (aliasToDecoder interfaces moduleNameString) $ Map.toList aliases
 
@@ -111,16 +112,10 @@ modifyCanonicalApplied canonical pkg moduleName customTypes aliases interfaces =
       existingDecls = _decls cleanCanonical
 
   in
-  -- tracer ("can-" ++ N.toString n) $
     cleanCanonical
       -- { _decls = DeclareRec (fmap (prettytracer $ "-------------------------- " ++ moduleNameString) $ customTypeEncoders ++ customTypeDecoders ++ recordEncoders ++ recordDecoders) existingDecls }
       { _decls = DeclareRec (customTypeEncoders ++ customTypeDecoders ++ recordEncoders ++ recordDecoders) existingDecls }
-        -- tracer "customTypeEncoders" customTypeEncoders) existingDecls
-      --   tracer "customTypeEncoders" customTypeEncoders ++
-      --   tracer "customTypeDecoders" customTypeDecoders ++
-      --   tracer "recordEncoders" recordEncoders ++
-      --   tracer "recordDecoders" recordDecoders) existingDecls
-      -- }
+
 
 
 -- The final stage of module compilation runs Interface.fromModule to generate interfaces based on
@@ -170,7 +165,7 @@ isWireDef def =
       check name
 
 
-customTypeToEncoder pkg interfaces moduleName (customTypeName, customType_) =
+customTypeToEncoder pkg@(Name author project) interfaces moduleName (customTypeName, customType_) =
   let
     encoderName = "evg_e_" ++ N.toString customTypeName
 
@@ -200,7 +195,7 @@ customTypeToEncoder pkg interfaces moduleName (customTypeName, customType_) =
           --   ValueTwoParams Bool Char
           -- becomes the following case statement branch:
           --   ValueTwoParams evg_v0 evg_v1 -> E.list identity [ E.string "ValueTwo", E.bool evg_v0, EG.e_char evg_v1 ]
-          customTypeCaseBranch moduleName customTypeName customType_ _index _tagNameS
+          customTypeCaseBranch pkg moduleName customTypeName customType_ _index _tagNameS
             patternCtorArgs
              (call jsonEncodeList
                [ coreBasicsIdentity
@@ -228,15 +223,15 @@ customTypeToEncoder pkg interfaces moduleName (customTypeName, customType_) =
       (named encoderName)
       (Map.fromList [])
       [ (at (PVar (name "evg_p0"))
-      , qtyp "author" "project" moduleName customTypeNameS [])
+      , qtyp author project moduleName customTypeNameS [])
       ]
       (at (Case (vlocal "evg_p0") customTypeBranches))
       (qtyp "elm" "json" "Json.Encode" "Value" [])
 
 
-customTypeCaseBranch moduleName customTypeName customType index customTypeLabel customTypeArgs expr =
+customTypeCaseBranch (Name author project) moduleName customTypeName customType index customTypeLabel customTypeArgs expr =
   CaseBranch
-    (at (PCtor { _p_home = canonical "author" "project" moduleName
+    (at (PCtor { _p_home = canonical author project moduleName
                , _p_type = customTypeName
                , _p_union = customType
                , _p_name = name customTypeLabel
@@ -266,7 +261,7 @@ We will be able to leverage this in our wrapper program as well by detecting the
 into the core runtime Elm code so it dynamically "write" the write boilerplate at compile time for us.
 
 -}
-customTypeToDecoder interfaces moduleName (customTypeName_, customType_) =
+customTypeToDecoder pkg@(Name author project) interfaces moduleName (customTypeName_, customType_) =
   let
     _customTypeName = N.toString customTypeName_
 
@@ -278,10 +273,10 @@ customTypeToDecoder interfaces moduleName (customTypeName_, customType_) =
           in
           at (Call evergreenUnion
             [ str _tagNameT
-            , at (VarCtor Normal (canonical "author" "project" moduleName)
+            , at (VarCtor Normal (canonical author project moduleName)
                 (name _tagNameS)
                 (ZeroBased _index)
-                (Forall (Map.fromList []) (qtyp "author" "project" moduleName _customTypeName []))
+                (Forall (Map.fromList []) (qtyp author project moduleName _customTypeName []))
               )
             ]
           )
@@ -301,7 +296,7 @@ customTypeToDecoder interfaces moduleName (customTypeName_, customType_) =
         Ctor n index numParams pTypes ->
           let _tagNameT = N.toText n
               _tagNameS = N.toString n
-              constructor = generateConstructor moduleName _tagNameS _customTypeName (index) pTypes
+              constructor = generateConstructor pkg moduleName _tagNameS _customTypeName (index) pTypes
           in
           call evergreenDecodeUnion1 (
             [str _tagNameT] ++ -- The tag name string to parse, i.e. "ValueInt"
@@ -314,7 +309,7 @@ customTypeToDecoder interfaces moduleName (customTypeName_, customType_) =
         Ctor n index numParams pTypes ->
           let _tagNameT = N.toText n
               _tagNameS = N.toString n
-              constructor = generateConstructor moduleName _tagNameS _customTypeName (index) pTypes
+              constructor = generateConstructor pkg moduleName _tagNameS _customTypeName (index) pTypes
           in
           call evergreenDecodeUnion2 (
             [str _tagNameT] ++ -- The tag name string to parse, i.e. "ValueInt"
@@ -326,7 +321,7 @@ customTypeToDecoder interfaces moduleName (customTypeName_, customType_) =
     -- @TODO only partially implemented, needs to be extended for all possible types
     decodeParamType interfaces pType =
        case pType of
-         TType (Canonical (Name author project) moduleNameLocal) typeName next ->
+         TType (Canonical (Name author_ project_) moduleNameLocal) typeName next ->
            if _customTypeName == N.toString typeName then
 
              {- The parameter type is equal to the custom type, so this is a recursive custom type.
@@ -344,7 +339,7 @@ customTypeToDecoder interfaces moduleName (customTypeName_, customType_) =
              (D.lazy (\_ -> evg_d_Union))
              -}
              let targetDecoderName = "evg_d_" ++ N.toString typeName
-                 targetDecoder = at (VarTopLevel (canonical author project moduleName) (name targetDecoderName))
+                 targetDecoder = at (VarTopLevel (canonical author_ project_ moduleName) (name targetDecoderName))
              in
              jsonDecodeLazy1Ignore targetDecoder
 
@@ -385,7 +380,7 @@ customTypeToDecoder interfaces moduleName (customTypeName_, customType_) =
                           (tlam (qtyp "elm" "core" "List" "List" [qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "a"]])
                                    (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "a"])))))
                 [at (List _customTypeBranches)]))
-      (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "author" "project" moduleName _customTypeName []])
+      (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp author project moduleName _customTypeName []])
 
 
 
@@ -460,7 +455,7 @@ decoderForType interfaces moduleName pType =
            at (VarForeign canModule (name targetDecoderName) (typeAnnotation))
 
 
-     TAlias (Canonical (Name "author" "project") _) typeName [] (Holey realType) ->
+     TAlias (Canonical (Name author project) _) typeName [] (Holey realType) ->
        decoderForType interfaces moduleName realType
 
 
@@ -475,13 +470,13 @@ decoderForType interfaces moduleName pType =
 -- x = Derp 1
 --     ^^^^
 --
-generateConstructor :: String -> String -> String -> ZeroBased -> [Type] -> Located Expr_
-generateConstructor moduleName name_ customTypeName index paramTypes =
+generateConstructor :: Name -> String -> String -> String -> ZeroBased -> [Type] -> Located Expr_
+generateConstructor (Name author project) moduleName name_ customTypeName index paramTypes =
   at (VarCtor Normal
-    (canonical "author" "project" moduleName)
+    (canonical author project moduleName)
     (name name_)
     (index)
-    (generateConstructorAnnotation paramTypes (qtyp "author" "project" moduleName customTypeName []))
+    (generateConstructorAnnotation paramTypes (qtyp author project moduleName customTypeName []))
   )
 
 -- For a given list of [Type] of params for a custom type constructor, creates the signature for that constructor
@@ -632,7 +627,7 @@ encodeForTypeValue interfaces moduleName typ value =
           call (at (VarForeign canModule (name targetEncoderName) (typeAnnotation))) [value]
 
 
-    TAlias (Canonical (Name "author" "project") moduleNameLocal) typeName [] (Holey realType) ->
+    TAlias (Canonical (Name author project) moduleNameLocal) typeName [] (Holey realType) ->
       encodeForTypeValue interfaces (N.toString moduleNameLocal) realType value
 
 
@@ -714,7 +709,7 @@ encoderForType interfaces moduleName pType =
           at (VarForeign canModule (name targetEncoderName) (typeAnnotation))
 
 
-    TAlias (Canonical (Name "author" "project") _) typeName [] (Holey realType) ->
+    TAlias (Canonical (Name author project) _) typeName [] (Holey realType) ->
       encoderForType interfaces moduleName realType
 
 
