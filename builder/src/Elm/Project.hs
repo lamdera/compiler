@@ -11,7 +11,7 @@ module Elm.Project
 
 
 import qualified Data.ByteString as BS
-import Data.Map ((!))
+import Sanity ((!)) -- import Data.Map ((!))
 import System.FilePath ((</>))
 
 import qualified Elm.Compiler as Compiler

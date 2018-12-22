@@ -7,7 +7,7 @@ module Optimize.Case
 
 import Control.Arrow (second)
 import qualified Data.Map as Map
-import Data.Map ((!))
+import Sanity ((!)) -- import Data.Map ((!))
 import qualified Data.Maybe as Maybe
 
 import qualified AST.Canonical as Can

@@ -236,11 +236,11 @@ Executable elmx
         Wire.Helpers
         Wire.Canonical
         Wire.Interfaces
+        Wire.Source
 
         -- Debug helpers
         CanSer.CanSer
         Sanity
-
 
         -- Haskelm
         East.Conversion
@@ -294,4 +294,5 @@ Executable elmx
         haskell-src-exts-simple >= 1.20,
         transformers >= 0.5.2,
         yaml,
-        aeson
+        aeson,
+        ilist
