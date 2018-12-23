@@ -381,6 +381,23 @@ decodeSet : (Decoder comparable) -> Decoder (Set comparable)
 decodeSet decVal =
     decodeList decVal |> D.map Set.fromList
 
+-- Maybe
+
+encodeMaybe : (a -> Encoder) -> Maybe a -> Encoder
+encodeMaybe encVal s =
+    case s of
+      Nothing -> encodeSequence [encodeInt 0]
+      Just v -> encodeSequence [encodeInt 1, encVal v]
+
+
+decodeMaybe : (Decoder a) -> Decoder (Maybe a)
+decodeMaybe decVal =
+    decodeInt |> D.andThen (\c -> case c of
+      0 -> succeedDecode Nothing
+      1 -> decVal |> D.map Just
+      _ -> failDecode
+    )
+
 -- Time
 
 encodeTimePosix : Time.Posix -> Encoder
@@ -396,3 +413,4 @@ encodeBytes b = E.sequence [encodeInt (B.width b), E.bytes b]
 
 decodeBytes : Decoder B.Bytes
 decodeBytes = decodeInt |> D.andThen D.bytes
+

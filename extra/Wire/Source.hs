@@ -26,6 +26,10 @@ import Data.Functor ((<&>))
 import Data.List.Index
 import qualified Elm.Package as Pkg
 
+import qualified AST.Utils.Type as Type
+import qualified Debug.Trace as DT
+import Transpile.PrettyPrint (sShow)
+
 import Prelude hiding (sequenceEnc)
 
 injectEvergreenImport s | "\nimport " `List.isPrefixOf` s =
@@ -107,7 +111,7 @@ generateCodecs (Can.Module _moduName _docs _exports _decls _unions _aliases _bin
 
     decoderForType (Can.TTuple t1 t2 Nothing) = p $pairDec (decoderForType t1) (decoderForType t2)
     decoderForType (Can.TTuple t1 t2 (Just t3)) = p $tripleDec (decoderForType t1) (decoderForType t2) (decoderForType t3)
-    decoderForType (Can.TAlias moduName name nameTypePairs aliasType) = decoderForType (unpackAliasType aliasType) -- TODO: fix
+    decoderForType (Can.TAlias moduName name nameTypePairs aliasType) = decoderForType (Type.dealias nameTypePairs aliasType)
     decoderForType x@(Can.TLambda t1 t2) = "Evergreen.failDecode " -- <> strQuote (T.pack $ show x)
 
     -- D.succeed (\a b c -> { a = a, b = b, c = c })
@@ -146,12 +150,10 @@ generateCodecs (Can.Module _moduName _docs _exports _decls _unions _aliases _bin
       <> sequenceEnc ((\(var, t) -> encoderForType (unpackFieldType t) <> " " <> N.toText var) <$> Map.toList nameFieldTypeMap) <> ")"
     encoderForType (Can.TTuple t1 t2 Nothing) = pairEnc (encoderForType t1) (encoderForType t2)
     encoderForType (Can.TTuple t1 t2 (Just t3)) = tripleEnc (encoderForType t1) (encoderForType t2) (encoderForType t3)
-    encoderForType (Can.TAlias moduName name nameTypePairs aliasType) = encoderForType (unpackAliasType aliasType) -- TODO: fix
+    encoderForType x@(Can.TAlias moduName name nameTypePairs aliasType) = encoderForType (Type.dealias nameTypePairs aliasType)
     encoderForType x@(Can.TLambda t1 t2) = "Evergreen.failEncode " -- <> strQuote (T.pack $ show x)
 
     moduleToText (Canonical pkg modu) = N.toText modu
-    unpackAliasType (Can.Holey t) = t
-    unpackAliasType (Can.Filled t) = t
     unpackFieldType (Can.FieldType _ t) = t
 
     leftWrap [] = ""
@@ -160,7 +162,7 @@ generateCodecs (Can.Module _moduName _docs _exports _decls _unions _aliases _bin
     sequenceEnc things = "Evergreen.encodeSequence [" <> T.intercalate ", " things <> "]"
     p s = "(" <> s <> ")"
 
-    codec n = "evg_x_encode_" <> (N.toText n)
+    codec n = "evg_x_c_" <> (N.toText n)
     field n = "evg_x_f_" <> (N.toText n)
 
     decodeSucceed s = "Evergreen.succeedDecode " <> s
