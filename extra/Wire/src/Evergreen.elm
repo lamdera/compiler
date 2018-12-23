@@ -25,6 +25,7 @@ import Bytes.Encode as E exposing (Encoder)
 import Array exposing (Array)
 import Dict exposing (Dict)
 import Set exposing (Set)
+import Time
 
 
 decodeAndMap : Decoder a -> Decoder (a -> b) -> Decoder b
@@ -379,3 +380,19 @@ encodeSet encVal s =
 decodeSet : (Decoder comparable) -> Decoder (Set comparable)
 decodeSet decVal =
     decodeList decVal |> D.map Set.fromList
+
+-- Time
+
+encodeTimePosix : Time.Posix -> Encoder
+encodeTimePosix t = encodeInt (Time.posixToMillis t)
+
+decodeTimePosix : Decoder Time.Posix
+decodeTimePosix = decodeInt |> D.map Time.millisToPosix
+
+-- Bytes
+
+encodeBytes : B.Bytes -> Encoder
+encodeBytes b = E.sequence [encodeInt (B.width b), E.bytes b]
+
+decodeBytes : Decoder B.Bytes
+decodeBytes = decodeInt |> D.andThen D.bytes

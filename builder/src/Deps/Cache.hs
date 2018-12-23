@@ -38,7 +38,10 @@ import qualified Reporting.Progress as Progress
 import qualified Reporting.Suggest as Suggest
 import qualified Reporting.Task as Task
 
+import qualified Elm.Project.Constraint as Con
 
+import qualified Debug.Trace as DT
+import Transpile.PrettyPrint (sShow)
 
 -- PACKAGE REGISTRY
 

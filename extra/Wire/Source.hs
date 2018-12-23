@@ -185,9 +185,12 @@ generateCodecs (Can.Module _moduName _docs _exports _decls _unions _aliases _bin
     evergreenCoreCodecs =
       Map.fromList $
       (\((pkg, modu, tipe), res) -> ((Canonical (pkgFromText pkg) modu, tipe), res)) <$>
-      ( [ --(("elm/time", "Time", "Time") --> ("Evergreen.encodeTime", "Evergreen.decodeTime") )
+      -- non elm/core types
+      ( [ (("elm/time", "Time", "Posix") --> ("Evergreen.encodeTimePosix", "Evergreen.decodeTimePosix") )
+        , (("elm/bytes", "Bytes", "Bytes") --> ("Evergreen.encodeBytes", "Evergreen.decodeBytes") )
         ] <>
         (
+          -- elm/core types
           (\(modu, tipe) -> ("elm/core", modu, tipe) --> ("Evergreen.encode" <> N.toText tipe, "Evergreen.decode" <> N.toText tipe)) <$>
           [ ("Array", "Array")
           , ("Char", "Char")
