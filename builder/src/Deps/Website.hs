@@ -49,6 +49,8 @@ import Text.RawString.QQ (r)
 import qualified Debug.Trace as DT
 import System.IO.Unsafe
 import qualified Shelly
+import Transpile.PrettyPrint (sShow)
+import Data.Maybe
 
 -- GET PACKAGE INFO
 
@@ -64,6 +66,27 @@ getDocs name version =
   Http.run $ fetchByteString $
     "packages/" ++ Pkg.toUrl name ++ "/" ++ Pkg.versionToString version ++ "/docs.json"
 
+-- LOCAL PACKAGE OVERRIDES
+
+getLamderaPkgPath = Env.lookupEnv "LAMDERA_PKG_PATH"
+
+localPackages :: Map.Map Name [Version]
+localPackages =
+  unsafePerformIO $ do
+    env <- getLamderaPkgPath
+    case env of
+      Just path ->
+        do
+          authors <- Dir.listDirectory (path </> "packages")
+          authoredPkgs <- concat <$> mapM (\author -> do pkg <- Dir.listDirectory (path </> "packages" </> author); pure (((,) author) <$> pkg)) authors :: IO [(FilePath, FilePath)]
+          versionedAuthoredPkgs <- mapM (\(author, pkg) -> do versions <- Dir.listDirectory (path </> "packages" </> author </> pkg); pure (( author, pkg, versions))) authoredPkgs :: IO [(FilePath, FilePath, [FilePath])]
+
+          DT.trace ("found local packages:" ++ sShow versionedAuthoredPkgs) $
+            pure $
+              catMaybes <$> (Map.fromList $ ((\(author, pkg, versions) -> (Name (Text.pack author) (Text.pack pkg), Pkg.versionFromText <$> Text.pack <$> versions)) <$> versionedAuthoredPkgs))
+
+      Nothing ->
+        pure Map.empty
 
 
 -- NEW PACKAGES
@@ -100,15 +123,9 @@ newPkgDecoder =
 -- ALL PACKAGES
 
 
-lamderaPackages :: Map.Map Name [Version]
-lamderaPackages = Map.fromList
-  [ (Name "Lamdera" "core", [Version 1 0 0])
-  ]
-
-
 getAllPackages :: Task.Task (Map.Map Name [Version])
 getAllPackages =
-  Map.union lamderaPackages <$>
+  Map.union localPackages <$>
   (Http.run $ fetchJson "packages" E.badJsonToDocs allPkgsDecoder "all-packages")
 
 
@@ -140,16 +157,16 @@ fetchLocal :: String -> IO (Maybe BS.ByteString)
 fetchLocal url =
   do
     -- if $LAMDERA_PKG_PATH is set, and `$LAMDERA_PKG_PATH ++ url` exists, read that and return it instead
-    env <- Env.lookupEnv "LAMDERA_PKG_PATH"
+    env <- getLamderaPkgPath
     case env of
       Just path ->
         do
           exists <- Dir.doesFileExist (path </> url)
           if exists then
-              DT.trace ("found local file at " ++ (path </> url)) $
-                Just <$> BS.readFile (path ++ url)
+              DT.trace ("using local file override at " ++ (path </> url)) $
+                Just <$> BS.readFile (path </> url)
             else
-              DT.trace ("failed to find local file at " ++ (path </> url)) $
+              DT.trace ("using web file; no local override at " ++ (path </> url)) $
                 pure Nothing
       Nothing ->
         pure Nothing
@@ -210,14 +227,14 @@ downloadHelp cache (name, version) =
     fn =
       do
         -- if $LAMDERA_PKG_PATH is set, and `$LAMDERA_PKG_PATH ++ url` exists, read that and return it instead
-        env <- Env.lookupEnv "LAMDERA_PKG_PATH"
+        env <- getLamderaPkgPath
         case env of
           Just path ->
             do
               let fullPath = path </> "packages" </> Pkg.toUrl name </> Pkg.versionToString version
               exists <- Dir.doesDirectoryExist fullPath
               if exists then
-                  DT.trace ("found local pkg at " ++ fullPath) $
+                  DT.trace ("using local pkg override at " ++ fullPath) $
                     -- TODO: pretend it's a zip archive, or at least put it where writeArchive would've
                     let
                       from = fullPath
@@ -228,7 +245,7 @@ downloadHelp cache (name, version) =
                           Shelly.shelly $ Shelly.cp_r (Shelly.fromText (Text.pack from)) (Shelly.fromText (Text.pack to))
                         pure (Just ())
                 else
-                  DT.trace ("failed to find local pkg at " ++ fullPath) $
+                  DT.trace ("using web pkg; no local override at " ++ fullPath) $
                     pure Nothing
           Nothing ->
             pure Nothing
