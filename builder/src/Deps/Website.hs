@@ -31,6 +31,7 @@ import qualified Network.HTTP.Client.MultipartFormData as Multi
 import qualified Network.HTTP.Types as Http
 import qualified System.Directory as Dir
 import System.FilePath ((</>), splitFileName)
+import qualified System.Environment as Env
 
 import Elm.Package (Name(Name), Version(Version))
 import qualified Elm.Package as Pkg
@@ -45,38 +46,17 @@ import qualified Stuff.Paths as Path
 
 import Text.RawString.QQ (r)
 
+import qualified Debug.Trace as DT
+import System.IO.Unsafe
+import qualified Shelly
+
 -- GET PACKAGE INFO
 
 
 getElmJson :: Name -> Version -> Task.Task BS.ByteString
 getElmJson name version =
-  case name of
-    (Name "Lamdera" "core") ->
-      pure $ BS.pack [r|{
-    "type": "package",
-    "name": "Lamdera/core",
-    "summary": "Lamdera core elm library",
-    "license": "BSD-3-Clause",
-    "version": "1.0.0",
-    "exposed-modules": [
-        "Lamdera.Backend",
-        "Lamdera.Frontend",
-        "Lamdera.Effect",
-        "Lamdera.Types"
-    ],
-    "elm-version": "0.19.0 <= v < 0.20.0",
-    "dependencies": {
-        "elm/browser": "1.0.0 <= v < 2.0.0",
-        "elm/core": "1.0.0 <= v < 2.0.0",
-        "elm/html": "1.0.0 <= v < 2.0.0",
-        "elm/json": "1.0.0 <= v < 2.0.0",
-        "elm/url": "1.0.0 <= v < 2.0.0"
-    },
-    "test-dependencies": {}
-}|]
-    _ ->
-      Http.run $ fetchByteString $
-        "packages/" ++ Pkg.toUrl name ++ "/" ++ Pkg.versionToString version ++ "/elm.json"
+  Http.run $ fetchByteString $
+    "packages/" ++ Pkg.toUrl name ++ "/" ++ Pkg.versionToString version ++ "/elm.json"
 
 
 getDocs :: Name -> Version -> Task.Task BS.ByteString
@@ -156,24 +136,52 @@ allPkgsDecoder =
 -- HELPERS
 
 
+fetchLocal :: String -> IO (Maybe BS.ByteString)
+fetchLocal url =
+  do
+    -- if $LAMDERA_PKG_PATH is set, and `$LAMDERA_PKG_PATH ++ url` exists, read that and return it instead
+    env <- Env.lookupEnv "LAMDERA_PKG_PATH"
+    case env of
+      Just path ->
+        do
+          exists <- Dir.doesFileExist (path </> url)
+          if exists then
+              DT.trace ("found local file at " ++ (path </> url)) $
+                Just <$> BS.readFile (path ++ url)
+            else
+              DT.trace ("failed to find local file at " ++ (path </> url)) $
+                pure Nothing
+      Nothing ->
+        pure Nothing
+
+
 fetchByteString :: String -> Http.Fetch BS.ByteString
 fetchByteString path =
-  Http.package path [] $ \request manager ->
-    do  response <- Client.httpLbs request manager
-        return $ Right $ LBS.toStrict $ Client.responseBody response
+  case unsafePerformIO $ fetchLocal path of
+    Just bs -> Http.self bs
+    Nothing ->
+      Http.package path [] $ \request manager ->
+        do  response <- Client.httpLbs request manager
+            return $ Right $ LBS.toStrict $ Client.responseBody response
 
 
 fetchJson :: String -> (e -> [D.Doc]) -> D.Decoder e a -> String -> Http.Fetch a
 fetchJson rootName errorToDocs decoder path =
-  Http.package path [] $ \request manager ->
-    do  response <- Client.httpLbs request manager
-        let bytes = LBS.toStrict (Client.responseBody response)
-        case D.parse rootName errorToDocs decoder bytes of
-          Right value ->
-            return $ Right value
+  case unsafePerformIO $ fetchLocal path of
+    Just bs ->
+      case D.parse rootName errorToDocs decoder bs of
+        Right value -> Http.self value
+        Left v -> error ("fetchJson failed to decode local file: " ++ show v)
+    Nothing ->
+      Http.package path [] $ \request manager ->
+        do  response <- Client.httpLbs request manager
+            let bytes = LBS.toStrict (Client.responseBody response)
+            case D.parse rootName errorToDocs decoder bytes of
+              Right value ->
+                return $ Right value
 
-          Left jsonProblem ->
-            return $ Left $ E.BadJson path jsonProblem
+              Left jsonProblem ->
+                return $ Left $ E.BadJson path jsonProblem
 
 
 
@@ -199,21 +207,48 @@ download packages =
 downloadHelp :: FilePath -> (Name, Version) -> Http.Fetch ()
 downloadHelp cache (name, version) =
   let
-    endpointUrl =
-      "packages/" ++ Pkg.toUrl name ++ "/" ++ Pkg.versionToString version ++ "/endpoint.json"
+    fn =
+      do
+        -- if $LAMDERA_PKG_PATH is set, and `$LAMDERA_PKG_PATH ++ url` exists, read that and return it instead
+        env <- Env.lookupEnv "LAMDERA_PKG_PATH"
+        case env of
+          Just path ->
+            do
+              let fullPath = path </> "packages" </> Pkg.toUrl name </> Pkg.versionToString version
+              exists <- Dir.doesDirectoryExist fullPath
+              if exists then
+                  DT.trace ("found local pkg at " ++ fullPath) $
+                    -- TODO: pretend it's a zip archive, or at least put it where writeArchive would've
+                    let
+                      from = fullPath
+                      to = cache </> Pkg.toFilePath name
+                    in
+                      do
+                        DT.trace ("Shelly.cp_r " ++ from ++ " " ++ to) $
+                          Shelly.shelly $ Shelly.cp_r (Shelly.fromText (Text.pack from)) (Shelly.fromText (Text.pack to))
+                        pure (Just ())
+                else
+                  DT.trace ("failed to find local pkg at " ++ fullPath) $
+                    pure Nothing
+          Nothing ->
+            pure Nothing
   in
-    (case name of
-      (Name "Lamdera" "core") -> Http.self ("https://github.com/lamdera/core/zipball/1.0.0/","ignored")
-      _ ->
-        fetchJson "version" id endpointDecoder endpointUrl
-        ) `Http.andThen` \(endpoint, hash) ->
-          let
-            start = Progress.DownloadPkgStart name version
-            toEnd = Progress.DownloadPkgEnd name version
-          in
-            Http.report start toEnd $
-              Http.anything endpoint $ \request manager ->
-                Client.withResponse request manager (downloadArchive cache name version hash)
+    case unsafePerformIO fn of
+      Just () -> Http.self ()
+      Nothing ->
+        let
+          endpointUrl =
+            "packages/" ++ Pkg.toUrl name ++ "/" ++ Pkg.versionToString version ++ "/endpoint.json"
+        in
+          fetchJson "version" id endpointDecoder endpointUrl
+          `Http.andThen` \(endpoint, hash) ->
+              let
+                start = Progress.DownloadPkgStart name version
+                toEnd = Progress.DownloadPkgEnd name version
+              in
+                Http.report start toEnd $
+                  Http.anything endpoint $ \request manager ->
+                    Client.withResponse request manager (downloadArchive cache name version hash)
 
 
 endpointDecoder :: D.Decoder e (String, String)
