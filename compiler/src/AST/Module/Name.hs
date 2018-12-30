@@ -19,8 +19,6 @@ import Data.Binary
 
 import qualified Elm.Name as N
 import qualified Elm.Package as Pkg
-import Data.Monoid ((<>))
-import qualified Data.Text as Text
 
 
 

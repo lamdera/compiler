@@ -33,14 +33,6 @@ import qualified Stuff.Paths as Path
 
 import qualified Haskelm.Yaml
 
-import qualified Debug.Trace as DT
-import Transpile.PrettyPrint (sShow)
-import qualified Wire.Interfaces
-
-import Control.Monad.Trans (liftIO)
-import Text.Show.Prettyprint
--- import qualified Debug.Trace as DT
-
 
 -- GET ROOT
 
@@ -70,34 +62,15 @@ compile
 compile mode target maybeOutput docs summary@(Summary.Summary root project _ _ _) paths =
   do  Project.check project
       args <- Args.fromPaths summary paths
-      -- debugTo "args.txt" args
       graph <- Crawl.crawl summary args
-      -- debugTo "graph.txt" graph
       (dirty, ifaces) <- Plan.plan docs summary graph
-      -- debugTo "dirty.txt" dirty
-
-      -- debugTo "ifaces.txt" ifaces
-
       answers <- Compile.compile project docs ifaces dirty
+      results <- Artifacts.write root answers
 
-      -- debugTo "answers.txt" answers
-      results <- Artifacts.write root answers -- results : Map ModuleName Artifacts, where Artifacts = {elmInterface, elmOutput (graph), docs}
-
-      -- debugTo "results.txt" results
       _ <- Haskelm.Yaml.generateHaskellYamlFiles root project graph results
 
-      -- liftIO $ putStrLn "Did generation"
-
       _ <- traverse (Artifacts.writeDocs results) docs
-
-      -- liftIO $ putStrLn "Did artefacts"
-
       Output.generate mode target maybeOutput summary graph results
-
-
-debugTo fname a = do
-  liftIO $ print $ "-------------------------------------------------------------------" ++ fname
-  liftIO $ writeFile fname $ prettyShow a
 
 
 -- COMPILE FOR REPL

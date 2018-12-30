@@ -27,7 +27,6 @@ import qualified Reporting.Exit as Exit
 import qualified Reporting.Task as Task
 import qualified Stuff.Paths as Path
 
-import System.FilePath ((</>), (<.>))
 import System.Directory (createDirectoryIfMissing)
 import System.FilePath (takeDirectory)
 import qualified Language.Haskell.Exts.Simple.Pretty as HsPretty

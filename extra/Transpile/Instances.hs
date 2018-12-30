@@ -1,22 +1,11 @@
 {-# OPTIONS_GHC -Wall #-}
 module Transpile.Instances where
 
-import qualified Reporting.Annotation as Ann
-import qualified Data.Text as Text
 import qualified Language.Haskell.Exts.Simple.Syntax as Hs
-import qualified Language.Haskell.Exts.Simple.Pretty as HsPretty
-import qualified Data.Maybe as Maybe
-import qualified Data.Map.Strict as Map
-import Data.Map.Strict (Map)
-import qualified Reporting.Region as RR
-import qualified Data.Set as Set
 
-import Data.Text (pack)
-import Data.List (intercalate, isPrefixOf)
 import Data.Monoid ((<>))
 import Data.Function ((&))
 
-import qualified Debug.Trace
 --
 -- data Declaration
 --   = Definition Pattern.Pattern [PreCommented Pattern.Pattern] Comments Expression.Expr
@@ -35,13 +24,16 @@ import qualified Debug.Trace
 
 -- OpenCommentedList [Commented (WithEol a)] (PreCommented (WithEol a))
 
+qConUnwrap :: Hs.QualConDecl -> Hs.ConDecl
+qConUnwrap (Hs.QualConDecl Nothing Nothing conDecl) = conDecl
+qConUnwrap _ = error "unexpected pattern"
+
 
  -- ##############################################
 tDataToGADT :: String -> Hs.Decl -> Hs.Decl
 tDataToGADT moduName (Hs.DataDecl dataOrNew mContext declHead qualConDecls derive) =
   -- TODO: deriving / instance
   let
-    qConUnwrap (Hs.QualConDecl Nothing Nothing conDecl) = conDecl
     qualConDecls2 = qualConDecls & fmap qConUnwrap & fmap conDeclToGadtDecl
     ctx vars = Hs.TyForall Nothing (Just (Hs.CxTuple (fmap (\ident -> Hs.ClassA (haskelmCoreIdent "ElmVal'") [Hs.TyVar ident]) vars)))
     conDeclToGadtDecl (Hs.ConDecl name types) =
@@ -49,19 +41,14 @@ tDataToGADT moduName (Hs.DataDecl dataOrNew mContext declHead qualConDecls deriv
     conDeclToGadtDecl a = error ("expected ConDecl: " ++ show a)
   in
     Hs.GDataDecl dataOrNew mContext declHead Nothing (qualConDecls2) derive
-tDataToGADT moduName a = a
+tDataToGADT _ a = a
 -- ##############################################
 
 tDataToInstDecl :: String -> Hs.Decl -> [Hs.Decl]
-tDataToInstDecl moduName (Hs.DataDecl dataOrNew mContext declHead qualConDecls derive) =
+tDataToInstDecl moduName (Hs.DataDecl _ _ declHead qualConDecls _) =
   let
-    qConUnwrap (Hs.QualConDecl Nothing Nothing conDecl) = conDecl
-    conDeclToInstDecl (Hs.ConDecl name types) = Hs.GadtDecl name Nothing (ctx (dHeadVars declHead) $ foldr1 Hs.TyFun (types ++ [dHeadToType moduName declHead]))
-    conDeclToInstDecl a = error ("missing ConDecl: " ++ show a)
-    ctx vars = Hs.TyForall Nothing (Just (Hs.CxTuple (fmap (\ident -> Hs.ClassA (haskelmCoreIdent "ElmVal'") [Hs.TyVar ident]) vars)))
-    --
-    dh = instDecl (declHead & dHeadVars) (declHead & dHeadToType moduName)
-    instDecl names t =
+    dh = instDecl (declHead & dHeadToType moduName)
+    instDecl t =
       (Hs.IRule Nothing
         (Nothing)
         (Hs.IHApp
@@ -69,10 +56,12 @@ tDataToInstDecl moduName (Hs.DataDecl dataOrNew mContext declHead qualConDecls d
           (Hs.TyParen t)
         )
       )
+    toString :: Hs.ConDecl -> Hs.InstDecl
     toString (Hs.ConDecl name types) =
       let
         vars = [0..(length types-1)] & fmap (\i -> "v" ++ show i) & fmap Hs.Ident
         rawName (Hs.Ident n) = n
+        rawName _ = error "unexpected symbol in ConDecl"
       in
       Hs.InsDecl
         (Hs.FunBind
@@ -86,10 +75,12 @@ tDataToInstDecl moduName (Hs.DataDecl dataOrNew mContext declHead qualConDecls d
               Nothing
           ]
         )
+    toString _ = error "unexpected argument; is the ext src ast corrupt?"
+
+    tEquals :: Hs.ConDecl -> Hs.Match
     tEquals (Hs.ConDecl name types) =
           let
             vars = [0..(length types-1)] & fmap (\i -> "v" ++ show i)
-            rawName (Hs.Ident n) = n
           in
           Hs.Match (Hs.Ident "equals")
             [ Hs.PApp (Hs.Qual (Hs.ModuleName moduName) name) (vars & fmap (\v -> v ++ "x") & fmap Hs.Ident & fmap Hs.PVar)
@@ -126,6 +117,7 @@ tDataToInstDecl moduName (Hs.DataDecl dataOrNew mContext declHead qualConDecls d
               )
             )
             Nothing
+    tEquals _ = error "unexpected argument; is the ext src ast corrupt?"
 
     --
     q2 = qualConDecls & fmap qConUnwrap
@@ -149,22 +141,25 @@ tDataToInstDecl moduName (Hs.DataDecl dataOrNew mContext declHead qualConDecls d
 
 tDataToInstDecl _ _ = []
 
+haskelmCoreIdent :: String -> Hs.QName
 haskelmCoreIdent i = Hs.Qual (Hs.ModuleName "Lamdera.Haskelm.Core") (Hs.Ident i)
 -- ##############################################
 
 dHeadToType :: String -> Hs.DeclHead -> Hs.Type
 dHeadToType moduName (Hs.DHead name) = Hs.TyCon (Hs.Qual (Hs.ModuleName moduName) name)
-dHeadToType moduName dh@(Hs.DHInfix (Hs.UnkindedVar v) name) = error ("dHeadToType infix notimpl: " ++ show dh)
+dHeadToType _ dh@(Hs.DHInfix (Hs.UnkindedVar _) _) = error ("dHeadToType infix notimpl: " ++ show dh)
   -- Hs.TyInfix (Hs.TyVar v) (Hs.UnpromotedName (Hs.UnQual )) (Hs.TyVar name)
 dHeadToType moduName (Hs.DHParen dh) = Hs.TyParen (dHeadToType moduName dh)
 dHeadToType moduName (Hs.DHApp dh (Hs.UnkindedVar v)) = Hs.TyApp (dHeadToType moduName dh) (Hs.TyVar v)
+dHeadToType _ _ = error "unexpected DeclHead"
 
 dHeadVars :: Hs.DeclHead -> [Hs.Name]
-dHeadVars (Hs.DHead name) = []
-dHeadVars dh@(Hs.DHInfix (Hs.UnkindedVar v) name) = error ("dHeadVars infix notimpl: " ++ show dh)
+dHeadVars (Hs.DHead _) = []
+dHeadVars dh@(Hs.DHInfix (Hs.UnkindedVar _) _) = error ("dHeadVars infix notimpl: " ++ show dh)
   -- Hs.TyInfix (Hs.TyVar v) (Hs.UnpromotedName (Hs.UnQual )) (Hs.TyVar name)
 dHeadVars (Hs.DHParen dh) = dHeadVars dh
 dHeadVars (Hs.DHApp dh (Hs.UnkindedVar v)) = v : dHeadVars dh
+dHeadVars _ = error "unexpected DeclHead"
 
 -- | dTypeVars picks out all Hs.Idents and Hs.Symbols from a type, i.e. unqualified variables and symbols
 dTypeVars :: Hs.Type -> [Hs.Name]
@@ -175,10 +170,10 @@ dTypeVars (Hs.TyList types) = dTypeVars types
 dTypeVars (Hs.TyInfix t1 _ t2) = dTypeVars t1 ++ dTypeVars t2
 dTypeVars (Hs.TyParen t) = dTypeVars t
 -- promoted types; probably superrecords
-dTypeVars (Hs.TyPromoted (Hs.PromotedInteger int rawStr)) = []
-dTypeVars (Hs.TyPromoted (Hs.PromotedString str rawStr)) = []
-dTypeVars (Hs.TyPromoted (Hs.PromotedCon hadLeadingSingleQuote qName)) = []
-dTypeVars (Hs.TyPromoted (Hs.PromotedList hadLeadingSingleQuote types)) = concatMap dTypeVars types
+dTypeVars (Hs.TyPromoted (Hs.PromotedInteger _ _)) = []
+dTypeVars (Hs.TyPromoted (Hs.PromotedString _ _)) = []
+dTypeVars (Hs.TyPromoted (Hs.PromotedCon _ _)) = []
+dTypeVars (Hs.TyPromoted (Hs.PromotedList _ types)) = concatMap dTypeVars types
 dTypeVars (Hs.TyPromoted (Hs.PromotedTuple types)) = concatMap dTypeVars types
 dTypeVars (Hs.TyPromoted (Hs.PromotedUnit)) = []
 -- base-cases

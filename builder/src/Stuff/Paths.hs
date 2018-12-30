@@ -29,6 +29,7 @@ import qualified Elm.Compiler.Module as Module
 import qualified Elm.Package as Pkg
 import qualified Reporting.Task as Task
 import Data.Monoid ((<>))
+import qualified Data.Text as T
 
 
 -- PATHS
@@ -102,6 +103,7 @@ haskellAppPackageYaml :: FilePath -> FilePath
 haskellAppPackageYaml root =
   root </> "package" <.> "yaml"
 
+cabalNameOfPackage :: Pkg.Name -> T.Text
 cabalNameOfPackage (Pkg.Name author project) =
   author <> "-delim-" <> project
 

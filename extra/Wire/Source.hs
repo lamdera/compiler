@@ -1,64 +1,47 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE FlexibleContexts #-}
 
-module Wire.Source where
+module Wire.Source (generateCodecs, injectEvergreenImport, injectEvergreenExposing) where
 
-import Reporting.Annotation (Located(..))
-import Reporting.Region
-import qualified Elm.Name as N
-
-import qualified AST.Valid as Valid
 import qualified AST.Canonical as Can
-import qualified Data.ByteString as BS
-
 import AST.Module.Name (Canonical(..))
-import Elm.Package (Name(..))
-import qualified Data.Map as Map
-import Data.Index
-import qualified Data.List as List
+import qualified AST.Utils.Type as Type
 
-import Control.Monad.Trans (liftIO)
-import System.IO.Unsafe (unsafePerformIO)
+import qualified Data.Char
+import qualified Data.Map as Map
+import qualified Data.List as List
 import qualified Data.Text as T
-import Data.Text (Text)
-import qualified Data.Index as Index
-import Data.Functor ((<&>))
-import Data.List.Index
+import Data.List.Index (imap)
+
+import qualified Elm.Name as N
 import qualified Elm.Package as Pkg
 
-import qualified AST.Utils.Type as Type
-import qualified Debug.Trace as DT
-import Transpile.PrettyPrint (sShow)
-import qualified Data.Char
-
-import Prelude hiding (sequenceEnc)
 
 -- FIXME: this requires all files to contain at least one import statement, and it's not very safe.
+injectEvergreenImport :: String -> String
 injectEvergreenImport s | "\nimport " `List.isPrefixOf` s =
   "\nimport Lamdera.Evergreen" <> s
 injectEvergreenImport (x:xs) = x : injectEvergreenImport xs
 injectEvergreenImport [] = []
 
-injectEvergreenExposing can s =
+injectEvergreenExposing :: Can.Module -> String -> String
+injectEvergreenExposing (Can.Module _ _ _exports _ _ _ _ _) s =
   -- 1. figure out what types are exposed from `can`
   -- 2. inject the encoder/decoders for those types into the exposing statement by finding the first `)\n\n`, and injecting it before that.
   -- - we can assume there to be no `exposing (..)` or trailing spaces/comments after the last `)` since elm-format will move/remove those.
   -- - - this implementation only assumes there to be no spaces/comments after the last `)`, and that there are two free newlines directly after, which is what elm-format would give us.
   let
-    (Can.Module _ _ _exports _ _ _ _ _) = can
-
-    startsWithUppercaseCharacter (x:xs) | Data.Char.isUpper x = True
+    startsWithUppercaseCharacter (x:_) | Data.Char.isUpper x = True
     startsWithUppercaseCharacter _ = False
 
     inject :: [String] -> String -> String
     inject exposedTypes s | ")\n\n" `List.isPrefixOf` s = -- no need to worry about `exposing ()` since there would be no exposed types to inject then.
       leftWrapWith ", " (codecsFor `concatMap` exposedTypes) <> s
     inject exposedTypes (x:xs) = x : inject exposedTypes xs
-    inject exposedTypes [] = []
+    inject _ [] = []
 
     codecsFor s = ["evg_encode_" ++ s, "evg_decode_" ++ s]
 
-    leftWrapWith delim [] = ""
+    leftWrapWith _ [] = ""
     leftWrapWith delim (x:xs) = delim <> x <> leftWrapWith delim xs
 
 
@@ -69,10 +52,7 @@ injectEvergreenExposing can s =
       inject (startsWithUppercaseCharacter `filter` (N.toString <$> Map.keys mapNameExport)) s
 
 
-
-a <.> b = a <> "." <> b
-
-generateCodecs :: Can.Module -> Text
+generateCodecs :: Can.Module -> T.Text
 generateCodecs (Can.Module _moduName _docs _exports _decls _unions _aliases _binops _effects) =
   let -- massive let-expr so we can closure in _moduName
     -- HELPERS
@@ -118,30 +98,30 @@ generateCodecs (Can.Module _moduName _docs _exports _decls _unions _aliases _bin
 
     -- DECODERS
 
-    decodeUnion :: [N.Name] -> [Can.Ctor] -> [Text]
+    decodeUnion :: [N.Name] -> [Can.Ctor] -> [T.Text]
     decodeUnion _u_vars _u_alts =
-      -- Can.Ctor N.Name Index.ZeroBased Int [Can.Type]
-      (\(Can.Ctor name idx _ tipes) ->
+      (\(Can.Ctor name _ _ tipes) ->
           strQuote(N.toText name) <> " -> " <> T.intercalate " |> Lamdera.Evergreen.andMapDecode " ((decodeSucceed $ N.toText name) : ((\(_, t) -> decoderForType t) <$> nargs tipes))) <$> _u_alts
 
-    decoderForType :: Can.Type -> Text
-    decoderForType (Can.TVar n) = codec n
-    decoderForType (Can.TUnit) = unitDec
-    decoderForType (Can.TType moduName name tipes) =
-      p ((case (moduName, name) `Map.lookup` evergreenCoreDecoders of
-        Just c -> c
-        Nothing -> p $ (if _moduName == moduName then "" else moduleToText moduName <> ".") <> "evg_decode_" <> N.toText name
-      ) <> leftWrap (p <$> decoderForType <$> tipes))
-    decoderForType (Can.TRecord nameFieldTypeMap mName) = p $
-      T.intercalate " |> Lamdera.Evergreen.andMapDecode " $
-      p <$> (decodeSucceed "(\\" <> leftWrap (N.toText <$> Map.keys nameFieldTypeMap) <> " -> "
-        <> recLit ((\(k, v) -> (N.toText k, N.toText k)) <$> Map.toList nameFieldTypeMap) <> ")")
-      : (decoderForType <$> unpackFieldType <$> Map.elems nameFieldTypeMap)
-
-    decoderForType (Can.TTuple t1 t2 Nothing) = p $pairDec (decoderForType t1) (decoderForType t2)
-    decoderForType (Can.TTuple t1 t2 (Just t3)) = p $tripleDec (decoderForType t1) (decoderForType t2) (decoderForType t3)
-    decoderForType (Can.TAlias moduName name nameTypePairs aliasType) = decoderForType (Type.dealias nameTypePairs aliasType)
-    decoderForType x@(Can.TLambda t1 t2) = "Lamdera.Evergreen.failDecode " -- <> strQuote (T.pack $ show x)
+    decoderForType :: Can.Type -> T.Text
+    decoderForType t =
+      case t of
+        (Can.TVar n) -> codec n
+        (Can.TUnit) -> unitDec
+        (Can.TType moduName name tipes) ->
+          p ((case (moduName, name) `Map.lookup` evergreenCoreDecoders of
+            Just c -> c
+            Nothing -> p $ (if _moduName == moduName then "" else moduleToText moduName <> ".") <> "evg_decode_" <> N.toText name
+          ) <> leftWrap (p <$> decoderForType <$> tipes))
+        (Can.TRecord nameFieldTypeMap _) -> p $
+            T.intercalate " |> Lamdera.Evergreen.andMapDecode " $
+              p <$> (decodeSucceed "(\\" <> leftWrap (N.toText <$> Map.keys nameFieldTypeMap) <> " -> "
+                <> recLit ((\k -> (N.toText k, N.toText k)) <$> Map.keys nameFieldTypeMap) <> ")")
+                : (decoderForType <$> unpackFieldType <$> Map.elems nameFieldTypeMap)
+        (Can.TTuple t1 t2 Nothing) -> p $ pairDec (decoderForType t1) (decoderForType t2)
+        (Can.TTuple t1 t2 (Just t3)) -> p $ tripleDec (decoderForType t1) (decoderForType t2) (decoderForType t3)
+        (Can.TAlias _ _ nameTypePairs aliasType) -> decoderForType (Type.dealias nameTypePairs aliasType)
+        (Can.TLambda _ _) -> "Lamdera.Evergreen.failDecode " -- <> strQuote (T.pack $ show x)
 
     -- D.succeed (\a b c -> { a = a, b = b, c = c })
     --   |> dAndMap decodeInt64
@@ -150,49 +130,48 @@ generateCodecs (Can.Module _moduName _docs _exports _decls _unions _aliases _bin
 
     -- ENCODERS
 
-    encodeUnion :: [N.Name] -> [Can.Ctor] -> [Text]
+    encodeUnion :: [N.Name] -> [Can.Ctor] -> [T.Text]
     encodeUnion _u_vars _u_alts =
-      -- Can.Ctor N.Name Index.ZeroBased Int [Can.Type]
-      (\(Can.Ctor name idx _ tipes) ->
+      (\(Can.Ctor name _ _ tipes) ->
           N.toText name <> leftWrap (fst <$> nargs tipes) <> " -> " <> sequenceEnc ((strEnc (N.toText name)) : ((\(var, t) -> encoderForType t <> " " <> var) <$> nargs tipes))) <$> _u_alts
 
-    nargs :: [Can.Type] -> [(Text, Can.Type)]
+    nargs :: [Can.Type] -> [(T.Text, Can.Type)]
     nargs xs =
       let
         f count t = ("v" <> T.pack (show count), t)
       in
         imap f xs
 
+    encoderForType :: Can.Type -> T.Text
+    encoderForType t =
+      case t of
+        (Can.TVar n) -> codec n
+        (Can.TUnit) -> unitEnc
+        (Can.TType moduName name tipes) ->
+          p ((case (moduName, name) `Map.lookup` evergreenCoreEncoders of
+            Just c -> c
+            Nothing ->
+              (if _moduName == moduName then "" else moduleToText moduName <> ".") <> "evg_encode_" <> N.toText name
+          ) <> leftWrap (p <$> encoderForType <$> tipes))
 
+        (Can.TRecord nameFieldTypeMap _) -> "(\\" <> recEnc (Map.keys nameFieldTypeMap) <> " -> "
+          <> sequenceEnc ((\(var, t) -> encoderForType (unpackFieldType t) <> " " <> N.toText var) <$> Map.toList nameFieldTypeMap) <> ")"
+        (Can.TTuple t1 t2 Nothing) -> pairEnc (encoderForType t1) (encoderForType t2)
+        (Can.TTuple t1 t2 (Just t3)) -> tripleEnc (encoderForType t1) (encoderForType t2) (encoderForType t3)
+        (Can.TAlias _ _ nameTypePairs aliasType) -> encoderForType (Type.dealias nameTypePairs aliasType)
+        (Can.TLambda _ _) -> "Lamdera.Evergreen.failEncode " -- <> strQuote (T.pack $ show x)
 
-    encoderForType :: Can.Type -> Text
-    encoderForType (Can.TVar n) = codec n
-    encoderForType (Can.TUnit) = unitEnc
-    encoderForType (Can.TType moduName name tipes) =
-      p ((case (moduName, name) `Map.lookup` evergreenCoreEncoders of
-        Just c -> c
-        Nothing ->
-          (if _moduName == moduName then "" else moduleToText moduName <> ".") <> "evg_encode_" <> N.toText name
-      ) <> leftWrap (p <$> encoderForType <$> tipes))
-
-    encoderForType (Can.TRecord nameFieldTypeMap mName) = "(\\" <> recEnc (Map.keys nameFieldTypeMap) <> " -> "
-      <> sequenceEnc ((\(var, t) -> encoderForType (unpackFieldType t) <> " " <> N.toText var) <$> Map.toList nameFieldTypeMap) <> ")"
-    encoderForType (Can.TTuple t1 t2 Nothing) = pairEnc (encoderForType t1) (encoderForType t2)
-    encoderForType (Can.TTuple t1 t2 (Just t3)) = tripleEnc (encoderForType t1) (encoderForType t2) (encoderForType t3)
-    encoderForType x@(Can.TAlias moduName name nameTypePairs aliasType) = encoderForType (Type.dealias nameTypePairs aliasType)
-    encoderForType x@(Can.TLambda t1 t2) = "Lamdera.Evergreen.failEncode " -- <> strQuote (T.pack $ show x)
-
-    moduleToText (Canonical pkg modu) = N.toText modu
+    moduleToText (Canonical _ modu) = N.toText modu
     unpackFieldType (Can.FieldType _ t) = t
 
     leftWrap [] = ""
     leftWrap (x:xs) = " " <> x <> leftWrap xs
 
     sequenceEnc things = "Lamdera.Evergreen.encodeSequence [" <> T.intercalate ", " things <> "]"
+
     p s = "(" <> s <> ")"
 
     codec n = "evg_x_c_" <> (N.toText n)
-    field n = "evg_x_f_" <> (N.toText n)
 
     decodeSucceed s = "Lamdera.Evergreen.succeedDecode " <> s
     strQuote s = T.pack (show (T.unpack s))

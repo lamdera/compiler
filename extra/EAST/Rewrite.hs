@@ -1,23 +1,12 @@
 {-# LANGUAGE OverloadedStrings #-}
-module East.Rewrite where
-
-
-import qualified Debug.Trace as DT
-import qualified Data.Text.Lazy as T
-import qualified Data.Text as Text
+module East.Rewrite (recordArgsToLet, recordArgToLet, recordPatNames) where
 
 import qualified AST.Canonical as C
 import qualified Reporting.Annotation as A
 import qualified Elm.Name as N
-import qualified Elm.Package as Pkg
-import qualified AST.Module.Name as ModuleName
-import Data.List (intercalate)
 
-import qualified Data.Map.Strict as Map
-import Data.Function ((&))
 import Data.Monoid ((<>))
-
-import Transpile.PrettyPrint
+import qualified Data.Text as Text
 
 type List a = [a]
 
@@ -33,7 +22,7 @@ recordArgsToLet (pat:pats) e =
   (np : rpats, re)
 
 recordArgToLet :: C.Pattern -> C.Expr -> (C.Pattern, C.Expr) -- TODO: we're replacing records in record replacements as well, so we never construct the record anywhere :(
-recordArgToLet pat expr@(A.At meta e) =
+recordArgToLet pat expr@(A.At meta _) =
   let
     at x = (A.At meta x)
     (np, recordChanges) = recordPatNames pat
@@ -126,14 +115,14 @@ fPattern f m (A.At _ p) =
   case p of
     (C.PAnything) -> []
     (C.PUnit) -> []
-    (C.PVar name) -> []
-    (C.PChr text) -> []
-    (C.PStr text) -> []
-    (C.PInt int) -> []
-    (C.PRecord names) -> []
-    (C.PBool union bool) -> []
+    (C.PVar _) -> []
+    (C.PChr _) -> []
+    (C.PStr _) -> []
+    (C.PInt _) -> []
+    (C.PRecord _) -> []
+    (C.PBool _ _) -> []
     -- recursive
-    (C.PAlias p1 name) -> fm [p1]
+    (C.PAlias p1 _) -> fm [p1]
     (C.PTuple p1 p2 Nothing) -> fm [p1, p2]
     (C.PTuple p1 p2 (Just p3)) -> fm [p1, p2, p3]
     (C.PList pats) -> fm pats
@@ -142,6 +131,6 @@ fPattern f m (A.At _ p) =
       fm $ tPatternCtorArg <$> _p_args
   )
 
-tPatternCtorArg (C.PatternCtorArg idx tipe arg) = arg
+tPatternCtorArg (C.PatternCtorArg _ _ arg) = arg
 
 tat (A.At _ a) = a
