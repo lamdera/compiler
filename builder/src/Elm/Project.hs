@@ -11,7 +11,7 @@ module Elm.Project
 
 
 import qualified Data.ByteString as BS
-import Data.Map ((!))
+import Sanity ((!)) -- import Data.Map ((!))
 import System.FilePath ((</>))
 
 import qualified Elm.Compiler as Compiler
@@ -76,21 +76,13 @@ compile mode target maybeOutput docs summary@(Summary.Summary root project _ _ _
       (dirty, ifaces) <- Plan.plan docs summary graph
       -- debugTo "dirty.txt" dirty
 
-      -- let ifaces_ = Wire.Interfaces.modifyInterfaces ifaces
-
-      -- debugTo "ifaces.txt" ifaces_
-
-      -- @TODO here we need to hijack ifaces and add generations for all types...
-
-      -- liftIO $ putStrLn "Got dirty & ifaces"
+      -- debugTo "ifaces.txt" ifaces
 
       answers <- Compile.compile project docs ifaces dirty
 
-      -- liftIO $ putStrLn "Got answers"
       -- debugTo "answers.txt" answers
       results <- Artifacts.write root answers -- results : Map ModuleName Artifacts, where Artifacts = {elmInterface, elmOutput (graph), docs}
 
-      -- liftIO $ putStrLn "Got results"
       -- debugTo "results.txt" results
       _ <- Haskelm.Yaml.generateHaskellYamlFiles root project graph results
 

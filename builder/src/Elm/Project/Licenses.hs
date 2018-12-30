@@ -9,7 +9,7 @@ module Elm.Project.Licenses
   where
 
 
-import Data.Map ((!))
+import Sanity ((!)) -- import Data.Map ((!))
 import qualified Data.Map as Map
 import qualified Data.Text as Text
 

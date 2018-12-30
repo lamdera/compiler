@@ -9,6 +9,7 @@ module Compile
 
 
 import qualified Data.ByteString as BS
+import Data.ByteString.UTF8 as BS8
 import qualified Data.Map as Map
 
 import qualified AST.Canonical as Can
@@ -35,10 +36,12 @@ import qualified Wire.Interfaces
 import qualified Wire.Valid
 import qualified Wire.Canonical
 import qualified Wire.Helpers
+import qualified Wire.Source
 import qualified East.Conversion as East
 
 import qualified Language.Haskell.Exts.Simple.Syntax as Hs
 
+import Transpile.PrettyPrint (sShow)
 import qualified Debug.Trace as DT
 import CanSer.CanSer
 import qualified Data.Text as T
@@ -48,6 +51,8 @@ import AST.Module.Name (Canonical(..))
 import Elm.Package (Name(..))
 import Wire.Helpers
 import System.IO.Unsafe (unsafePerformIO)
+import Data.String (fromString)
+
 import qualified Data.List as List
 
 
@@ -123,7 +128,7 @@ compile flag pkg importDict interfaces source =
       valid <- Result.mapError Error.Syntax $
         Parse.program pkg source
 
-      -- {- EVERGREEN
+      {- EVERGREEN
       -- Generate stubbed data calls for the functions that will be generated
       -- let validStubbed_ = Wire.Valid.stubValid valid flag pkg importDict interfaces source
       -- EVERGREEN -}
@@ -135,7 +140,25 @@ compile flag pkg importDict interfaces source =
 
       -- debugPrint "Got canonical"
 
-      -- {- EVERGREEN
+      -- generate wire source code from canonical ast
+      -- these are intended to be serialised and put at the end of source, then we redo the whole compilation step, generating valid as normal etc.
+      rawCodecSource <- pure $ T.unpack $ Wire.Source.generateCodecs canonical
+
+      let newSource =
+            if Map.lookup "Lamdera.Evergreen" importDict == Nothing then -- Evergreen isn't in the importDict, so this is a kernel module, or something that shouldn't have access to Evergreen, like the Evergreen module itself.
+              source
+            else
+              BS8.fromString (Wire.Source.injectEvergreenExposing canonical (Wire.Source.injectEvergreenImport (BS8.toString source))) <> "\n\n-- ### codecs\n" <> BS8.fromString rawCodecSource
+
+      valid_ <- Result.mapError Error.Syntax $
+        DT.trace (BS8.toString newSource) $
+        Parse.program pkg newSource
+
+      canonical_ <- Result.mapError Error.Canonicalize $
+        Canonicalize.canonicalize pkg importDict interfaces valid_
+
+
+      {- EVERGREEN
       -- Generate and inject Evergreen functions for all types & unions
       let canonical_ = Wire.Canonical.modifyCanonical canonical flag pkg importDict interfaces source
 
@@ -149,7 +172,7 @@ compile flag pkg importDict interfaces source =
 
       -- debugPrint "Got valid modified"
 
-      let localizer = L.fromModule valid -- TODO should this be strict for GC?
+      let localizer = L.fromModule valid_ -- TODO should this be strict for GC?
 
       -- debugPrint "Got localizer"
 

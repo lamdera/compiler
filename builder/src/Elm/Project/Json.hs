@@ -43,6 +43,7 @@ import qualified Reporting.Exit as Exit
 import qualified Reporting.Exit.Assets as E
 import qualified Reporting.Task as Task
 
+import Data.Function ((&))
 
 
 -- PROJECT
@@ -283,10 +284,31 @@ decoder =
   do  tipe <- D.field "type" D.text
       case tipe of
         "application" ->
-          D.map App appDecoder
+          appDecoder
+            & D.map (\appInfo ->
+                appInfo {_app_deps_direct = Map.union (_app_deps_direct appInfo) (Map.singleton (Pkg.Name "Lamdera" "core") (Pkg.Version 1 0 0))}
+              )
+            & D.map App
 
         "package" ->
-          D.map Pkg pkgDecoder
+          pkgDecoder
+            & D.map (\pkgInfo -> case _pkg_name pkgInfo of
+                (Pkg.Name "elm" "core") ->
+                  pkgInfo
+
+                (Pkg.Name "elm" "bytes") ->
+                  pkgInfo
+
+                (Pkg.Name "elm" "time") ->
+                  pkgInfo
+
+                (Pkg.Name "Lamdera" "core") ->
+                  pkgInfo
+
+                _ ->
+                  pkgInfo {_pkg_deps = Map.union (_pkg_deps pkgInfo) (Map.singleton (Pkg.Name "Lamdera" "core") (Con.Range (Pkg.Version 1 0 0) Con.LessOrEqual Con.Less (Pkg.Version 1 0 0)))}
+              )
+            & D.map Pkg
 
         other ->
           D.fail (E.BadType other)

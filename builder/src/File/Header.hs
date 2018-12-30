@@ -27,6 +27,7 @@ import qualified Reporting.Exit as Exit
 import qualified Reporting.Exit.Crawl as E
 import qualified Reporting.Task as Task
 
+import qualified Elm.Package as Pkg
 
 
 -- INFO
@@ -154,8 +155,17 @@ parse project path time source =
   -- TODO get regions on data extracted here
   case Header.parse (Project.getName project) source of
     Right (maybeDecl, deps) ->
+      let
+        extraDeps =
+          if Pkg.isKernel (Project.getName project) then
+            [] -- kernel modules have special instances in Lamdera/Evergreen.elm
+          else if (snd <$> maybeDecl) == Just "Lamdera.Evergreen" then
+            [] -- no cyclic imports
+          else
+            ["Lamdera.Evergreen"]
+      in
       do  maybeName <- checkTag project path maybeDecl
-          return ( maybeName, Info path time source deps )
+          return ( maybeName, Info path time source (deps ++ extraDeps) )
 
     Left msg ->
       Task.throw (E.BadHeader path time source msg)

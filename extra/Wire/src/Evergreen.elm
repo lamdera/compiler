@@ -1,178 +1,416 @@
-module Evergreen exposing (atIndex, custom, d_char, d_dict, d_order, d_set, d_time, d_tuple, d_unit, e_char, e_dict, e_order, e_time, e_tuple, e_unit, union, union1)
+module Evergreen exposing (..)
 
-import Char
+{-
+
+   data types available in elm:
+   - int
+   - float
+   - string
+   - char
+   - unit
+   - records
+   - tuples
+   - custom types
+     - bool, user-defined types, possibly with holes
+   - type aliases
+
+   all codecs take a record argument with its type arguments as keys, possibly empty I guess, and codecs as values
+
+-}
+-- encode ints
+
+import Bytes as B
+import Bytes.Decode as D exposing (Decoder)
+import Bytes.Encode as E exposing (Encoder)
+import Array exposing (Array)
 import Dict exposing (Dict)
-import Json.Decode as D
-import Json.Encode as E
 import Set exposing (Set)
 import Time
 
 
-e_char : Char -> E.Value
-e_char evg_p0 =
-    E.int (Char.toCode evg_p0)
+decodeAndMap : Decoder a -> Decoder (a -> b) -> Decoder b
+decodeAndMap =
+    D.map2 (|>)
+
+decodeAndThen = D.andThen
+
+--
+
+endianness =
+    B.LE
+
+succeedDecode : a -> Decoder a
+succeedDecode = D.succeed
+
+failDecode : Decoder a
+failDecode = D.fail
+
+failEncode : a -> Encoder
+failEncode a = encodeSequence []
 
 
-d_char : D.Decoder Char
-d_char =
-    D.int |> D.map Char.fromCode
+
+-- CODECS
 
 
-e_order : Order -> E.Value
-e_order evg_p0 =
-    case evg_p0 of
-        LT ->
-            E.string "LT"
-
-        EQ ->
-            E.string "EQ"
-
-        GT ->
-            E.string "GT"
+encodeFloat64 : Float -> Encoder
+encodeFloat64 f =
+    E.float64 endianness f
 
 
-d_order : D.Decoder Order
-d_order =
-    D.string
+decodeFloat64 : Decoder Float
+decodeFloat64 =
+    D.float64 endianness
+
+
+
+--
+
+
+intDivBy : Int -> Int -> Int
+intDivBy b a =
+    let
+        v =
+            toFloat a / toFloat b
+    in
+    if v < 0 then
+        -(floor -v)
+
+    else
+        floor v
+
+
+
+--
+{-
+   varint format:
+   0-216   1 byte    value = B0
+   217-248 2 bytes   value = 216 + 256 * (B0 - 216) + B1
+   249-255 3-9 bytes value = (B0 - 249 + 2) little-endian bytes following B0.
+
+   and then:
+   Integers are mapped to positive integers, so that positive integers become positive even numbers (2n) and negative integers become positive odd numbers. (-2n-1)
+   This is the same as moving the sign bit from the most significant position to the least significant. Otherwise, varint will encode negative numbers as large integers.
+
+   inspiration:
+   https://github.com/dominictarr/signed-varint
+   IeSQLite4:
+   0-184   1 byte    value = B0
+   185-248 2 bytes   value = 185 + 256 * (B0 - 185) + B1
+   249-255 3-9 bytes value = (B0 - 249 + 2) little-endian bytes following B0.
+
+   NOTE: Elm (js) uses F64 to represent ints, so not all values are available, and since we use the least significant bit for sign bit, large numbers become positive, even larger numbers become even, even larger become multiples of 4, etc.
+-}
+
+
+encodeInt64 : Int -> Encoder
+encodeInt64 i =
+    let
+        n =
+            signedToUnsigned i
+
+        n0 =
+            modBy 256 n
+
+        n1 =
+            modBy 256 (n |> intDivBy 256)
+
+        n2 =
+            modBy 256 (n |> intDivBy 256 |> intDivBy 256)
+
+        n3 =
+            modBy 256 (n |> intDivBy 256 |> intDivBy 256 |> intDivBy 256)
+
+        ei e =
+            E.sequence <| List.map E.unsignedInt8 e
+    in
+    if n <= 215 then
+        ei <| [ n ]
+
+    else if n <= 9431 then
+        ei <| [ 216 + ((n - 216) |> intDivBy 256), modBy 256 (n - 216) ]
+
+    else if n < 256 * 256 then
+        ei <| [ 252, n0, n1 ]
+
+    else if n < 256 * 256 * 256 then
+        ei <| [ 253, n0, n1, n2 ]
+
+    else if n < 256 * 256 * 256 * 256 then
+        ei <| [ 254, n0, n1, n2, n3 ]
+
+    else
+        E.sequence [ E.unsignedInt8 255, encodeFloat64 (toFloat i) ]
+
+
+signedToUnsigned i =
+    if i < 0 then
+        -2 * i - 1
+
+    else
+        2 * i
+
+
+unsignedToSigned i =
+    if modBy 2 i == 1 then
+        (i + 1) |> intDivBy -2
+
+    else
+        i |> intDivBy 2
+
+
+decodeInt64 : Decoder Int
+decodeInt64 =
+    let
+        d =
+            decodeAndMap D.unsignedInt8
+    in
+    D.unsignedInt8
         |> D.andThen
-            (\s ->
-                case s of
-                    "LT" ->
-                        D.succeed LT
+            (\n0 ->
+                if n0 <= 215 then
+                    D.succeed n0 |> D.map unsignedToSigned
 
-                    "EQ" ->
-                        D.succeed EQ
+                else if n0 < 252 then
+                    D.succeed (\b0 -> (n0 - 216) * 256 + b0 + 216) |> d |> D.map unsignedToSigned
 
-                    "GT" ->
-                        D.succeed GT
+                else if n0 == 252 then
+                    D.succeed (\b0 b1 -> b0 * 256 + b1) |> d |> d |> D.map unsignedToSigned
 
-                    _ ->
-                        D.fail <| "unexpected Order value: " ++ s
+                else if n0 == 253 then
+                    D.succeed (\b0 b1 b2 -> (b0 * 256 + b1) * 256 + b2) |> d |> d |> d |> D.map unsignedToSigned
+
+                else if n0 == 254 then
+                    D.succeed (\b0 b1 b2 b3 -> ((b0 * 256 + b1) * 256 + b2) * 256 + b3) |> d |> d |> d |> d |> D.map unsignedToSigned
+
+                else
+                    decodeFloat64 |> D.map identityFloatToInt
             )
 
 
-d_set : D.Decoder comparable -> D.Decoder (Set comparable)
-d_set decoder =
-    D.list decoder |> D.map Set.fromList
+{-| `floor` is one of few functions that turn integer floats in js into typed integers in Elm, e.g. the Float `3` into the Int `3`.
+-}
+identityFloatToInt : Float -> Int
+identityFloatToInt =
+    floor
 
 
-e_time : Time.Posix -> E.Value
-e_time t =
-    E.int <| Time.posixToMillis t
-
-
-d_time : D.Decoder Time.Posix
-d_time =
-    D.int |> D.map (\t -> Time.millisToPosix t)
-
-
-e_result : (err -> E.Value) -> (a -> E.Value) -> Result err a -> E.Value
-e_result err_encode a_encode result =
-    case result of
-        Ok a ->
-            E.list identity [ E.string "Ok", a_encode a ]
-
-        Err err ->
-            E.list identity [ E.string "Err", err_encode err ]
-
-
-d_result : D.Decoder err -> D.Decoder a -> D.Decoder (Result err a)
-d_result err_decode a_decode =
-    D.oneOf
-        [ union1 "Ok" a_decode Ok
-        , union1 "Err" err_decode Err
+encodeString : String -> Encoder
+encodeString s =
+    E.sequence
+        [ E.unsignedInt32 endianness (E.getStringWidth s)
+        , E.string s
         ]
 
 
-e_dict : (comparable -> E.Value) -> (v -> E.Value) -> Dict comparable v -> E.Value
-e_dict k_encode v_encode dict =
-    dict
-        |> Dict.toList
-        |> List.map (\t -> e_tuple k_encode v_encode t)
-        |> E.list identity
-
-
-d_dict : D.Decoder comparable -> D.Decoder v -> D.Decoder (Dict comparable v)
-d_dict k_decode v_decode =
-    D.list (d_tuple k_decode v_decode)
-        |> D.map Dict.fromList
-
-
-e_tuple : (a -> E.Value) -> (b -> E.Value) -> ( a, b ) -> E.Value
-e_tuple a_encode b_encode ( a, b ) =
-    E.list identity [ a_encode a, b_encode b ]
-
-
-d_tuple : D.Decoder a -> D.Decoder b -> D.Decoder ( a, b )
-d_tuple a b =
-    D.index 0 a
-        |> D.andThen
-            (\aVal ->
-                D.index 1 b
-                    |> D.andThen (\bVal -> D.succeed ( aVal, bVal ))
-            )
-
-
-e_unit : a -> E.Value
-e_unit a =
-    E.null
-
-
-d_unit : D.Decoder ()
-d_unit =
-    D.null ()
-
-
-union : String -> a -> D.Decoder a
-union str final =
-    D.index 0 D.string
-        |> D.andThen
-            (\s ->
-                if s == str then
-                    D.succeed final
-
-                else
-                    D.fail <| "expected '" ++ str ++ "' but saw '" ++ s
-            )
-
-
-union1 : String -> D.Decoder a -> (a -> b) -> D.Decoder b
-union1 str decoder constructor =
-    D.index 0 D.string
-        |> D.andThen
-            (\s ->
-                if s == str then
-                    D.index 1 decoder |> D.map constructor
-
-                else
-                    D.fail <| "expected '" ++ str ++ "' but saw '" ++ s
-            )
-
-
-union2 : String -> D.Decoder a -> D.Decoder b -> (a -> b -> c) -> D.Decoder c
-union2 str decoder1 decoder2 constructor =
-    D.index 0 D.string
-        |> D.andThen
-            (\s ->
-                if s == str then
-                    D.map2 constructor
-                        (D.index 1 decoder1)
-                        (D.index 2 decoder2)
-
-                else
-                    D.fail <| "expected '" ++ str ++ "' but saw '" ++ s
-            )
-
-
-atIndex : Int -> D.Decoder a -> (D.Decoder (a -> b) -> D.Decoder b)
-atIndex idx decoder =
-    custom (D.index idx decoder)
+decodeString : Decoder String
+decodeString =
+    D.unsignedInt32 endianness
+        |> D.andThen D.string
 
 
 
--- Trick from json-decode-pipeline
+-- lists
 
 
-custom : D.Decoder a -> D.Decoder (a -> b) -> D.Decoder b
-custom =
-    D.map2 (|>)
+encodeList : (a -> Encoder) -> List a -> Encoder
+encodeList enc s =
+    E.sequence
+        (encodeInt64 (List.length s)
+            :: List.map enc s
+        )
+
+
+decodeList : Decoder a -> Decoder (List a)
+decodeList decoder =
+    let
+        listStep : ( Int, List a ) -> Decoder (D.Step ( Int, List a ) (List a))
+        listStep ( n, xs ) =
+            if n <= 0 then
+                D.succeed (D.Done xs)
+
+            else
+                D.map (\x -> D.Loop ( n - 1, x :: xs )) decoder
+    in
+    decodeInt64
+        |> D.andThen (\len -> D.loop ( len, [] ) listStep |> D.map List.reverse)
+
+
+
+
+encodeSequence : List Encoder -> Encoder
+encodeSequence s =
+    E.sequence (encodeInt64 (List.length s) :: s)
+
+
+--
+
+
+encodeChar : Char -> Encoder
+encodeChar c =
+    Char.toCode c
+        |> encodeInt64
+
+
+decodeChar : Decoder Char
+decodeChar =
+    decodeInt64 |> D.map Char.fromCode
+
+
+
+--
+
+
+encodeUnit : () -> Encoder
+encodeUnit () =
+    E.sequence []
+
+
+decodeUnit : Decoder ()
+decodeUnit =
+    D.succeed ()
+
+
+
+--
+
+
+encodePair : (a -> Encoder) -> (b -> Encoder) -> ( a, b ) -> Encoder
+encodePair c_a c_b ( a, b ) =
+    E.sequence [ c_a a, c_b b ]
+
+
+decodePair : Decoder a -> Decoder b -> Decoder ( a, b )
+decodePair c_a c_b =
+    D.succeed (\a b -> ( a, b ))
+        |> decodeAndMap c_a
+        |> decodeAndMap c_b
+
+
+encodeTriple : (a -> Encoder) -> (b -> Encoder) -> (c -> Encoder) -> ( a, b, c ) -> Encoder
+encodeTriple c_a c_b c_c ( a, b, c ) =
+    E.sequence [ c_a a, c_b b, c_c c ]
+
+
+decodeTriple : Decoder a -> Decoder b -> Decoder c -> Decoder ( a, b, c )
+decodeTriple c_a c_b c_c =
+    D.succeed (\a b c -> ( a, b, c ))
+        |> decodeAndMap c_a
+        |> decodeAndMap c_b
+        |> decodeAndMap c_c
+
+
+-- Array
+
+encodeArray : (a -> Encoder) -> Array a -> Encoder
+encodeArray enc a =
+    encodeList enc (Array.toList a)
+
+decodeArray : Decoder a -> Decoder (Array a)
+decodeArray a = decodeList a |> D.map Array.fromList
+
+-- Basics
+
+
+encodeBool : Bool -> Encoder
+encodeBool b =
+    encodeString <|
+    case b of
+        True -> "True"
+        False -> "False"
+
+decodeBool : Decoder Bool
+decodeBool =
+    decodeString
+    |> D.andThen
+      (\s ->
+        case s of
+          "True" -> D.succeed True
+          "False" -> D.succeed False
+          _ -> D.fail
+      )
+
+
+encodeInt : Int -> Encoder
+encodeInt = encodeInt64
+
+decodeInt : Decoder Int
+decodeInt = decodeInt64
+
+
+encodeFloat : Float -> Encoder
+encodeFloat = encodeFloat64
+
+decodeFloat : Decoder Float
+decodeFloat = decodeFloat64
+
+
+encodeOrder order =
+  case order of
+    LT -> encodeSequence [encodeString "LT"]
+    EQ -> encodeSequence [encodeString "EQ"]
+    GT -> encodeSequence [encodeString "GT"]
+
+decodeOrder =
+  decodeString |> decodeAndThen (\order ->
+    case order of
+      "LT" -> succeedDecode LT
+      "EQ" -> succeedDecode EQ
+      "GT" -> succeedDecode GT
+      _ -> failDecode
+  )
+
+-- Dict
+
+encodeDict : (comparable -> Encoder) -> (value -> Encoder) -> Dict comparable value-> Encoder
+encodeDict encKey encValue d =
+    encodeList (encodePair encKey encValue) (Dict.toList d)
+
+decodeDict : (Decoder comparable) -> (Decoder value) -> Decoder (Dict comparable value)
+decodeDict decKey decValue =
+    decodeList (decodePair decKey decValue) |> D.map Dict.fromList
+
+-- Set
+
+encodeSet : (comparable -> Encoder) -> Set comparable -> Encoder
+encodeSet encVal s =
+    encodeList encVal (Set.toList s)
+
+
+decodeSet : (Decoder comparable) -> Decoder (Set comparable)
+decodeSet decVal =
+    decodeList decVal |> D.map Set.fromList
+
+-- Maybe
+
+encodeMaybe : (a -> Encoder) -> Maybe a -> Encoder
+encodeMaybe encVal s =
+    case s of
+      Nothing -> encodeSequence [encodeInt 0]
+      Just v -> encodeSequence [encodeInt 1, encVal v]
+
+
+decodeMaybe : (Decoder a) -> Decoder (Maybe a)
+decodeMaybe decVal =
+    decodeInt |> D.andThen (\c -> case c of
+      0 -> succeedDecode Nothing
+      1 -> decVal |> D.map Just
+      _ -> failDecode
+    )
+
+-- Time
+
+encodeTimePosix : Time.Posix -> Encoder
+encodeTimePosix t = encodeInt (Time.posixToMillis t)
+
+decodeTimePosix : Decoder Time.Posix
+decodeTimePosix = decodeInt |> D.map Time.millisToPosix
+
+-- Bytes
+
+encodeBytes : B.Bytes -> Encoder
+encodeBytes b = E.sequence [encodeInt (B.width b), E.bytes b]
+
+decodeBytes : Decoder B.Bytes
+decodeBytes = decodeInt |> D.andThen D.bytes
+

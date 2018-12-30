@@ -130,6 +130,7 @@ instance ToJSON HPackYaml where
         [ "exposed-modules" .= array (Aeson.String <$> exposedModules)
         , "source-dirs" .= array (Aeson.String <$> sourceDirs)
         ]
+      , "verbatim" .= object [ "cabal-version" .= (Aeson.String "2.0")]
       ]
 
 
@@ -225,7 +226,7 @@ packageYamlFromAppInfo
   let
     name = "lamdera-elm-main"
     synopsis = "lamdera elm main entrypoint"
-    license = "notApplicable"
+    license = "NONE"
     version = "0.0.1"
     exposedModules = []
     dependencies =

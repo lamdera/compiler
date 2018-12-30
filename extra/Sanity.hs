@@ -1,7 +1,7 @@
 module Sanity where
 
 import qualified Data.Map as Map
-import Interpreter.PrettyPrint
+import Transpile.PrettyPrint
 
 (!) m k =
   case Map.lookup k m of
