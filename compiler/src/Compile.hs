@@ -145,10 +145,10 @@ compile flag pkg importDict interfaces source =
       rawCodecSource <- pure $ T.unpack $ Wire.Source.generateCodecs canonical
 
       let newSource =
-            if Map.lookup "Evergreen" importDict == Nothing then -- Evergreen isn't in the importDict, so this is a kernel module, or something that shouldn't have access to Evergreen, like the Evergreen module itself.
+            if Map.lookup "Lamdera.Evergreen" importDict == Nothing then -- Evergreen isn't in the importDict, so this is a kernel module, or something that shouldn't have access to Evergreen, like the Evergreen module itself.
               source
             else
-              BS8.fromString (Wire.Source.injectEvergreenImport (BS8.toString source)) <> "\n\n-- ### codecs\n" <> BS8.fromString rawCodecSource
+              BS8.fromString (Wire.Source.injectEvergreenExposing canonical (Wire.Source.injectEvergreenImport (BS8.toString source))) <> "\n\n-- ### codecs\n" <> BS8.fromString rawCodecSource
 
       valid_ <- Result.mapError Error.Syntax $
         DT.trace (BS8.toString newSource) $

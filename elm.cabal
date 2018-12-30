@@ -295,4 +295,5 @@ Executable elmx
         transformers >= 0.5.2,
         yaml,
         aeson,
-        ilist
+        ilist,
+        shelly
