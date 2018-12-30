@@ -158,11 +158,11 @@ parse project path time source =
       let
         extraDeps =
           if Pkg.isKernel (Project.getName project) then
-            [] -- kernel modules have special instances in Evergreen.elm
-          else if (snd <$> maybeDecl) == Just "Evergreen" then
+            [] -- kernel modules have special instances in Lamdera/Evergreen.elm
+          else if (snd <$> maybeDecl) == Just "Lamdera.Evergreen" then
             [] -- no cyclic imports
           else
-            ["Evergreen"]
+            ["Lamdera.Evergreen"]
       in
       do  maybeName <- checkTag project path maybeDecl
           return ( maybeName, Info path time source (deps ++ extraDeps) )

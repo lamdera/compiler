@@ -29,13 +29,44 @@ import qualified Elm.Package as Pkg
 import qualified AST.Utils.Type as Type
 import qualified Debug.Trace as DT
 import Transpile.PrettyPrint (sShow)
+import qualified Data.Char
 
 import Prelude hiding (sequenceEnc)
 
+-- FIXME: this requires all files to contain at least one import statement, and it's not very safe.
 injectEvergreenImport s | "\nimport " `List.isPrefixOf` s =
-  "\nimport Evergreen" <> s
+  "\nimport Lamdera.Evergreen" <> s
 injectEvergreenImport (x:xs) = x : injectEvergreenImport xs
 injectEvergreenImport [] = []
+
+injectEvergreenExposing can s =
+  -- 1. figure out what types are exposed from `can`
+  -- 2. inject the encoder/decoders for those types into the exposing statement by finding the first `)\n\n`, and injecting it before that.
+  -- - we can assume there to be no `exposing (..)` or trailing spaces/comments after the last `)` since elm-format will move/remove those.
+  -- - - this implementation only assumes there to be no spaces/comments after the last `)`, and that there are two free newlines directly after, which is what elm-format would give us.
+  let
+    (Can.Module _ _ _exports _ _ _ _ _) = can
+
+    startsWithUppercaseCharacter (x:xs) | Data.Char.isUpper x = True
+    startsWithUppercaseCharacter _ = False
+
+    inject :: [String] -> String -> String
+    inject exposedTypes s | ")\n\n" `List.isPrefixOf` s = -- no need to worry about `exposing ()` since there would be no exposed types to inject then.
+      leftWrapWith ", " (codecsFor `concatMap` exposedTypes) <> s
+    inject exposedTypes (x:xs) = x : inject exposedTypes xs
+    inject exposedTypes [] = []
+
+    codecsFor s = ["evg_encode_" ++ s, "evg_decode_" ++ s]
+
+    leftWrapWith delim [] = ""
+    leftWrapWith delim (x:xs) = delim <> x <> leftWrapWith delim xs
+
+
+  in
+  case _exports of
+    Can.ExportEverything _ -> s
+    Can.Export mapNameExport ->
+      inject (startsWithUppercaseCharacter `filter` (N.toString <$> Map.keys mapNameExport)) s
 
 
 
@@ -56,8 +87,6 @@ generateCodecs (Can.Module _moduName _docs _exports _decls _unions _aliases _bin
       in
         encoder <> "\n\n" <> decoder
 
-    -- TODO: thread name of current module all the way through, so we don't use fqnames of current module in generated code :/
-
     unionCodecs (name, (Can.Union _u_vars _u_alts _u_numAlts _u_opts)) =
       let
         encoder =
@@ -72,7 +101,7 @@ generateCodecs (Can.Module _moduName _docs _exports _decls _unions _aliases _bin
             )
         decoder =
           "evg_decode_" <> N.toText name <> leftWrap (codec <$> _u_vars) <> " =\n"
-          <> "  Evergreen.decodeString |> Evergreen.decodeAndThen (\\evg_e_thingy ->\n"
+          <> "  Lamdera.Evergreen.decodeString |> Lamdera.Evergreen.andThenDecode (\\evg_e_thingy ->\n"
           <> "    case evg_e_thingy of\n      "
           <> T.intercalate "\n      "
             (case _u_opts of
@@ -81,7 +110,7 @@ generateCodecs (Can.Module _moduName _docs _exports _decls _unions _aliases _bin
               --Can.Enum -> error "codec Enum notimpl"
               --Can.Unbox -> error "codec Unbox notimpl"
             )
-          <> "\n      _ -> Evergreen.failDecode"
+          <> "\n      _ -> Lamdera.Evergreen.failDecode"
           <> "\n  )"
       in
         encoder <> "\n\n" <> decoder
@@ -93,7 +122,7 @@ generateCodecs (Can.Module _moduName _docs _exports _decls _unions _aliases _bin
     decodeUnion _u_vars _u_alts =
       -- Can.Ctor N.Name Index.ZeroBased Int [Can.Type]
       (\(Can.Ctor name idx _ tipes) ->
-          strQuote(N.toText name) <> " -> " <> T.intercalate " |> Evergreen.decodeAndMap " ((decodeSucceed $ N.toText name) : ((\(_, t) -> decoderForType t) <$> nargs tipes))) <$> _u_alts
+          strQuote(N.toText name) <> " -> " <> T.intercalate " |> Lamdera.Evergreen.andMapDecode " ((decodeSucceed $ N.toText name) : ((\(_, t) -> decoderForType t) <$> nargs tipes))) <$> _u_alts
 
     decoderForType :: Can.Type -> Text
     decoderForType (Can.TVar n) = codec n
@@ -104,7 +133,7 @@ generateCodecs (Can.Module _moduName _docs _exports _decls _unions _aliases _bin
         Nothing -> p $ (if _moduName == moduName then "" else moduleToText moduName <> ".") <> "evg_decode_" <> N.toText name
       ) <> leftWrap (p <$> decoderForType <$> tipes))
     decoderForType (Can.TRecord nameFieldTypeMap mName) = p $
-      T.intercalate " |> Evergreen.decodeAndMap " $
+      T.intercalate " |> Lamdera.Evergreen.andMapDecode " $
       p <$> (decodeSucceed "(\\" <> leftWrap (N.toText <$> Map.keys nameFieldTypeMap) <> " -> "
         <> recLit ((\(k, v) -> (N.toText k, N.toText k)) <$> Map.toList nameFieldTypeMap) <> ")")
       : (decoderForType <$> unpackFieldType <$> Map.elems nameFieldTypeMap)
@@ -112,7 +141,7 @@ generateCodecs (Can.Module _moduName _docs _exports _decls _unions _aliases _bin
     decoderForType (Can.TTuple t1 t2 Nothing) = p $pairDec (decoderForType t1) (decoderForType t2)
     decoderForType (Can.TTuple t1 t2 (Just t3)) = p $tripleDec (decoderForType t1) (decoderForType t2) (decoderForType t3)
     decoderForType (Can.TAlias moduName name nameTypePairs aliasType) = decoderForType (Type.dealias nameTypePairs aliasType)
-    decoderForType x@(Can.TLambda t1 t2) = "Evergreen.failDecode " -- <> strQuote (T.pack $ show x)
+    decoderForType x@(Can.TLambda t1 t2) = "Lamdera.Evergreen.failDecode " -- <> strQuote (T.pack $ show x)
 
     -- D.succeed (\a b c -> { a = a, b = b, c = c })
     --   |> dAndMap decodeInt64
@@ -151,7 +180,7 @@ generateCodecs (Can.Module _moduName _docs _exports _decls _unions _aliases _bin
     encoderForType (Can.TTuple t1 t2 Nothing) = pairEnc (encoderForType t1) (encoderForType t2)
     encoderForType (Can.TTuple t1 t2 (Just t3)) = tripleEnc (encoderForType t1) (encoderForType t2) (encoderForType t3)
     encoderForType x@(Can.TAlias moduName name nameTypePairs aliasType) = encoderForType (Type.dealias nameTypePairs aliasType)
-    encoderForType x@(Can.TLambda t1 t2) = "Evergreen.failEncode " -- <> strQuote (T.pack $ show x)
+    encoderForType x@(Can.TLambda t1 t2) = "Lamdera.Evergreen.failEncode " -- <> strQuote (T.pack $ show x)
 
     moduleToText (Canonical pkg modu) = N.toText modu
     unpackFieldType (Can.FieldType _ t) = t
@@ -159,21 +188,21 @@ generateCodecs (Can.Module _moduName _docs _exports _decls _unions _aliases _bin
     leftWrap [] = ""
     leftWrap (x:xs) = " " <> x <> leftWrap xs
 
-    sequenceEnc things = "Evergreen.encodeSequence [" <> T.intercalate ", " things <> "]"
+    sequenceEnc things = "Lamdera.Evergreen.encodeSequence [" <> T.intercalate ", " things <> "]"
     p s = "(" <> s <> ")"
 
     codec n = "evg_x_c_" <> (N.toText n)
     field n = "evg_x_f_" <> (N.toText n)
 
-    decodeSucceed s = "Evergreen.succeedDecode " <> s
+    decodeSucceed s = "Lamdera.Evergreen.succeedDecode " <> s
     strQuote s = T.pack (show (T.unpack s))
-    strEnc s = "Evergreen.encodeString " <> strQuote s
-    unitEnc = "Evergreen.encodeUnit"
-    pairEnc a b = "Evergreen.encodePair " <> p a <> " " <> p b
-    tripleEnc a b c = "Evergreen.encodeTriple " <> p a <> " " <> p b <> " " <> p c
-    unitDec = "Evergreen.decodeUnit"
-    pairDec a b = "Evergreen.decodePair " <> p a <> " " <> p b
-    tripleDec a b c = "Evergreen.decodeTriple " <> p a <> " " <> p b <> " " <> p c
+    strEnc s = "Lamdera.Evergreen.encodeString " <> strQuote s
+    unitEnc = "Lamdera.Evergreen.encodeUnit"
+    pairEnc a b = "Lamdera.Evergreen.encodePair " <> p a <> " " <> p b
+    tripleEnc a b c = "Lamdera.Evergreen.encodeTriple " <> p a <> " " <> p b <> " " <> p c
+    unitDec = "Lamdera.Evergreen.decodeUnit"
+    pairDec a b = "Lamdera.Evergreen.decodePair " <> p a <> " " <> p b
+    tripleDec a b c = "Lamdera.Evergreen.decodeTriple " <> p a <> " " <> p b <> " " <> p c
     recEnc fields = "{ " <> T.intercalate ", " (N.toText <$> fields) <> " }"
     recLit kvpairs = "{ " <> T.intercalate ", " ((\(k, v) -> k <> "=" <> v) <$> kvpairs) <> " }"
 
@@ -188,12 +217,12 @@ generateCodecs (Can.Module _moduName _docs _exports _decls _unions _aliases _bin
       Map.fromList $
       (\((pkg, modu, tipe), res) -> ((Canonical (pkgFromText pkg) modu, tipe), res)) <$>
       -- non elm/core types
-      ( [ (("elm/time", "Time", "Posix") --> ("Evergreen.encodeTimePosix", "Evergreen.decodeTimePosix") )
-        , (("elm/bytes", "Bytes", "Bytes") --> ("Evergreen.encodeBytes", "Evergreen.decodeBytes") )
+      ( [ (("elm/time", "Time", "Posix") --> ("Lamdera.Evergreen.encodeTimePosix", "Lamdera.Evergreen.decodeTimePosix") )
+        , (("elm/bytes", "Bytes", "Bytes") --> ("Lamdera.Evergreen.encodeBytes", "Lamdera.Evergreen.decodeBytes") )
         ] <>
         (
           -- elm/core types
-          (\(modu, tipe) -> ("elm/core", modu, tipe) --> ("Evergreen.encode" <> N.toText tipe, "Evergreen.decode" <> N.toText tipe)) <$>
+          (\(modu, tipe) -> ("elm/core", modu, tipe) --> ("Lamdera.Evergreen.encode" <> N.toText tipe, "Lamdera.Evergreen.decode" <> N.toText tipe)) <$>
           [ ("Array", "Array")
           , ("Char", "Char")
           , ("Basics", "Bool")
