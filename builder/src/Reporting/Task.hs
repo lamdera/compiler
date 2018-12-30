@@ -38,7 +38,6 @@ import qualified Reporting.Exit as Exit
 import qualified Reporting.Progress as Progress
 
 -- tls mitm
-import Network.HTTP.Client.TLS as Http
 import Network.Connection as Http
 
 -- TASKS

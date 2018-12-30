@@ -27,7 +27,6 @@ import qualified Install
 import qualified Make
 import qualified Publish
 import qualified Repl
-import qualified Wire.Test
 
 
 -- MAIN

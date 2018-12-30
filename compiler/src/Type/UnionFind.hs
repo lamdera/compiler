@@ -40,11 +40,11 @@ import Data.Word (Word32)
 
 newtype Point a =
   Pt (IORef (PointInfo a))
-  deriving (Eq, Show)
+  deriving (Eq)
 
 
-instance Show (IORef a) where
-  show _ = "<UNKNOWNPRINT IOREF PointInfo a>"
+instance Show (Point a) where
+  show _ = "Pt <UNKNOWNPRINT IOREF PointInfo a>"
 
 
 data PointInfo a

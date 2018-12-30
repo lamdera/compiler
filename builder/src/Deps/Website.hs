@@ -33,7 +33,7 @@ import qualified System.Directory as Dir
 import System.FilePath ((</>), splitFileName)
 import qualified System.Environment as Env
 
-import Elm.Package (Name(Name), Version(Version))
+import Elm.Package (Name(Name), Version)
 import qualified Elm.Package as Pkg
 import qualified Json.Decode as D
 
@@ -43,8 +43,6 @@ import qualified Reporting.Progress as Progress
 import qualified Reporting.Task as Task
 import qualified Reporting.Task.Http as Http
 import qualified Stuff.Paths as Path
-
-import Text.RawString.QQ (r)
 
 import qualified Debug.Trace as DT
 import System.IO.Unsafe

@@ -66,7 +66,7 @@ compile = do
               let jsOutput = Just (Output.Html Nothing tempFileName)
               Project.compile Output.Dev Output.Client jsOutput Nothing summary rootPaths
 
-        result <- BS.readFile tempFileName
+        _ <- BS.readFile tempFileName
         -- seq (BS.length result) (Dir.removeFile tempFileName)
         return ()
 

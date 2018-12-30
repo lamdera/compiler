@@ -18,17 +18,18 @@ import qualified File.Crawl as Crawl
 import qualified Elm.Name as N
 import qualified Elm.Project.Json as ElmJson
 import Elm.Project.Licenses (License(License))
-import Elm.Project.Json (Project(..), AppInfo(..), PkgInfo(..))
+import Elm.Project.Json (Project(..), PkgInfo(..))
 import qualified Elm.Compiler.Module
 import qualified Language.Haskell.Exts.Simple.Pretty as HsPretty
 import qualified System.Directory as Dir
 import qualified Elm.Compiler as Compiler
 import Control.Monad.Trans (liftIO)
-import System.FilePath ((</>), makeRelative, takeDirectory, pathSeparator)
+import System.FilePath ((</>), makeRelative, takeDirectory)
 import Control.Monad (filterM)
 import Data.Function ((&))
 import Data.Monoid ((<>))
 import qualified Data.Text as T
+import Control.Monad.IO.Class (MonadIO)
 
 type List a = [a]
 
@@ -55,6 +56,12 @@ generateHaskellYamlFiles root project graph results = do
       -- NOTE: this branch is probably unused; generatePkgYamlFiles is also called through the .elm/ cache mechanism
       generatePkgYamlFiles root results info
 
+generatePkgYamlFiles
+  :: MonadIO m
+  => FilePath
+  -> Map.Map Elm.Compiler.Module.Raw Compiler.Artifacts
+  -> PkgInfo
+  -> m ()
 generatePkgYamlFiles root results info =
   liftIO $ do
     mapM_ (\(name, hs) -> do
@@ -215,13 +222,13 @@ convertConstraints (Con.Range vlower op1 op2 vupper) =
 packageYamlFromAppInfo :: FilePath -> Project.AppInfo -> HPackYaml
 packageYamlFromAppInfo
   root
-  info@(Project.AppInfo
-  _elm_version
-  _source_dirs
-  _deps_direct
-  _deps_trans
-  _test_direct
-  _test_trans
+  ( Project.AppInfo
+    _elm_version
+    _source_dirs
+    _deps_direct
+    _deps_trans
+    _test_direct
+    _test_trans
   ) =
   let
     name = "lamdera-elm-main"
@@ -366,7 +373,7 @@ data StackYaml =
 
 
 instance ToJSON StackYaml where
-  toJSON (StackYaml homeDir kgs extDeps) =
+  toJSON (StackYaml homeDir _ extDeps) =
     object
     [ "packages" .= array (Aeson.String <$> ["."])
     , "extra-deps" .=

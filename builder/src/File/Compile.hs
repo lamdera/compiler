@@ -22,8 +22,6 @@ import qualified Reporting.Progress as Progress
 import qualified Reporting.Task as Task
 
 
-import Text.Show.Prettyprint
-
 -- COMPILE
 
 

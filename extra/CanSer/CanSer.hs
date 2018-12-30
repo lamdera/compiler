@@ -1,12 +1,10 @@
 {-# LANGUAGE OverloadedStrings #-}
-module CanSer.CanSer where
+module CanSer.CanSer (ppElm) where
 
 import qualified Data.Text as T
 import Data.Text (Text)
 import qualified AST.Canonical as C
 import qualified Elm.Name as N
-import Control.Monad.State.Lazy
-import Data.Semigroup
 import qualified Data.Map as Map
 import qualified Reporting.Annotation as A
 import qualified AST.Module.Name as ModuleName
@@ -32,14 +30,14 @@ pprint :: Int -> [Block] -> Text
 pprint i (Lit s:rest) = T.replace "\n" ("\n" <> rep i "  ") s <> pprint i rest
 pprint i (Indent:rest) = pprint (i+1) (Lit "\n" : rest)
 pprint i (Dedent:rest) = pprint (i-1) (Lit "\n" : rest)
-pprint i (Nodent:rest) = pprint 0 rest
-pprint i [] = ""
+pprint _ (Join _ _:_) = error "unexpected Join when printing"
+pprint _ [] = ""
 
-rep i s | i <= 0 = ""
+rep i _ | i <= 0 = ""
 rep i s = rep (i-1) s <> s
 
-intercalate sep [] = Lit ""
-intercalate sep [a] = a
+intercalate _ [] = Lit ""
+intercalate _ [a] = a
 intercalate sep (a:rest) = Join (Join a sep) (intercalate sep rest)
 
 toList (Join a b) = toList a <> toList b
@@ -50,7 +48,6 @@ data Block
   | Join Block Block
   | Indent
   | Dedent
-  | Nodent
   deriving (Show)
 
 instance Semigroup Block where
@@ -80,7 +77,7 @@ instance ToElm Int where
   toElm x = Lit $ T.pack $ show x
 
 instance ToElm ModuleName.Canonical where
-  toElm (ModuleName.Canonical pkg modu) = toElm modu
+  toElm (ModuleName.Canonical _ modu) = toElm modu
 
 
 instance ToElm a => ToElm (A.Located a) where
@@ -97,13 +94,13 @@ instance ToElm C.Expr_ where
         toElm moduName <.> toElm name
       C.VarKernel n1 n2 ->
         toElm n1 <.> toElm n2
-      C.VarForeign moduName name annot ->
+      C.VarForeign moduName name _ ->
         toElm moduName <.> toElm name
-      C.VarCtor ctorOpts moduName name zeroBasedIndex annot ->
+      C.VarCtor _ moduName name _ _ ->
         toElm moduName <.> toElm name
-      C.VarDebug moduName name annot ->
+      C.VarDebug moduName name _ ->
         toElm moduName <.> toElm name
-      C.VarOperator op moduName name annot ->
+      C.VarOperator op _ _ _ ->
         "(" <> toElm op <> ")"
       C.Chr text ->
         "'" <> Lit text <> "'"
@@ -119,7 +116,7 @@ instance ToElm C.Expr_ where
         "[" <> (intercalate ",\n" (toElm <$> exprs)) <> "\n]"
       C.Negate expr ->
         "-" <> toElm expr
-      C.Binop op _ _ annotation leftExpr rightExpr ->
+      C.Binop op _ _ _ leftExpr rightExpr ->
         toElm leftExpr <> sp (toElm op) <> toElm rightExpr
       C.Lambda pats expr ->
         "(\\" <> (intercalate " " (toElm <$> pats)) <> " -> " <> (toElm expr) <> ")"
@@ -138,14 +135,14 @@ instance ToElm C.Expr_ where
         "let" <> Indent <> toElm pat <> " = " <> Indent <> toElm expr <> Dedent <> Dedent <> "\nin " <> Indent <> toElm exprBody <> Dedent
       C.Case expr caseBranches ->
         let
-          f (C.CaseBranch pat expr) = toElm pat <> " ->" <> Indent <> toElm expr <> Dedent
+          f (C.CaseBranch pat expr1) = toElm pat <> " ->" <> Indent <> toElm expr1 <> Dedent
         in
         "case " <> toElm expr <> " of" <> Indent <> intercalate "\n" (f <$> caseBranches) <> Dedent
       C.Accessor name ->
         "." <> toElm name
       C.Access expr (A.At _ name) ->
         p(p (toElm expr) <.> toElm name)
-      C.Update name expr nameFieldUpdateMap -> -- TODO: what is this `expr` for? When people try to record update expressions, rather than variables?
+      C.Update name _ nameFieldUpdateMap -> -- TODO: what is this `expr` for? When people try to record update expressions, rather than variables?
         "{ " <> toElm name <> " | " <> intercalate ", "
           ((\(name, value) -> toElm name <> " = " <> toElm value) <$> Map.toList (tFieldUpdate <$> nameFieldUpdateMap)) <> " }"
       C.Record nameExprMap ->
@@ -154,7 +151,7 @@ instance ToElm C.Expr_ where
         "()"
       C.Tuple e1 e2 Nothing -> p (intercalate ", " (toElm <$> [e1, e2]))
       C.Tuple e1 e2 (Just e3) -> p (intercalate ", " (toElm <$> [e1, e2, e3]))
-      C.Shader uid src gltype ->
+      C.Shader uid src _ ->
         "Shader " <> Lit uid <> " " <> Lit src <> " ??? "
 
 
@@ -190,7 +187,7 @@ instance ToElm C.Pattern_ where
         -- }
         p (toElm _home <.> toElm _name <> leftPad " " (toElm <$> patternCtorArg <$> _args))
 
-patternCtorArg (C.PatternCtorArg index tipe argPattern) = argPattern -- TODO: does index matter here? Is the list always sorted as we expect?
+patternCtorArg (C.PatternCtorArg _ _ argPattern) = argPattern -- TODO: does index matter here? Is the list always sorted as we expect?
 
 
 
@@ -201,7 +198,7 @@ instance ToElm C.Def where
     case def of
       C.Def name pats expr ->
         toElm name <> leftPad " " (toElm <$> pats) <> " =" <> Indent <> toElm expr <> Dedent
-      C.TypedDef name freeVars patTypes expr tipe ->
+      C.TypedDef name _ patTypes expr tipe ->
         toElm name <> " : " <> toElm tipe <> "\n" <>
         toElm name <> leftPad " " (toElm <$> (fst <$> patTypes)) <> " =" <> Indent <> toElm expr <> Dedent
 
@@ -220,7 +217,7 @@ instance ToElm C.Type where
       C.TUnit -> "()"
       C.TTuple t1 t2 Nothing -> p (intercalate ", " (toElm <$> [t1, t2]))
       C.TTuple t1 t2 (Just t3) -> p (intercalate ", " (toElm <$> [t1, t2, t3]))
-      C.TAlias moduName name nameTypes aliasType -> toElm moduName <.> toElm name -- TODO: unsure if nameTypes should be serialized here
+      C.TAlias moduName name _ _ -> toElm moduName <.> toElm name -- TODO: unsure if nameTypes should be serialized here
 
 
 ftMap x =
@@ -228,15 +225,16 @@ ftMap x =
 fieldType (C.FieldType _ t) = t
 
 
-leftPad s [] = ""
-leftPad s xs = " " <> intercalate " " xs
+leftPad :: Block -> [Block] -> Block
+leftPad _ [] = ""
+leftPad s xs = s <> intercalate s xs
 
 
 
 -- MODULE
 
 instance ToElm C.Module where
-  toElm (C.Module name docs exports decls unions aliases binops effects) =
+  toElm (C.Module name _ exports decls unions aliases binops _) =
     -- { _name    :: ModuleName.Canonical
     -- , _docs    :: Docs
     -- , _exports :: Exports
@@ -271,7 +269,7 @@ instance ToElm C.Exports where
     let
       f (name, C.ExportBinop) = p (toElm name)
       f (name, C.ExportUnionOpen) = p (toElm name) <> "(..)"
-      f (name, exp) = toElm name
+      f (name, _) = toElm name
     in
     case exports of
       C.ExportEverything _ -> "(..)"
@@ -291,7 +289,7 @@ instance ToElm C.Union where
 instance ToElm C.Ctor where
   toElm ctor =
     case ctor of
-      C.Ctor name indexZeroBased int types ->
+      C.Ctor name _ _ types ->
         toElm name <> leftPad " " (toElm <$> types)
 
 
