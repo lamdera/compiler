@@ -27,7 +27,7 @@ import qualified Install
 import qualified Make
 import qualified Publish
 import qualified Repl
-
+import qualified Wire.Test
 
 
 -- MAIN
@@ -35,6 +35,7 @@ import qualified Repl
 
 main :: IO ()
 main =
+  --Wire.Test.compile
   do  setLocaleEncoding utf8
       complex intro outro
         [ repl

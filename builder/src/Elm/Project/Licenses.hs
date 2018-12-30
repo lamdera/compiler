@@ -9,7 +9,7 @@ module Elm.Project.Licenses
   where
 
 
-import Data.Map ((!))
+import Sanity ((!)) -- import Data.Map ((!))
 import qualified Data.Map as Map
 import qualified Data.Text as Text
 
@@ -26,7 +26,7 @@ data License =
     { _name :: Text.Text
     , _code :: Text.Text
     }
-  deriving (Eq, Ord)
+  deriving (Eq, Ord, Show)
 
 
 bsd3 :: License

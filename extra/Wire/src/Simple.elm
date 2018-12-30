@@ -342,6 +342,48 @@ aaaaacomplexRecordPatternArg ( _, ( { x, y, z }, { a, b } ) ) =
   (x++y, x < y)
 
 type TX a b =
-  TX (a -> b)
+  TX a b
 
 nameCollisionTest = SimpleTwo.nameCollisionTest + SubDir.AnotherSubDir.SimpleDeep.nameCollisionTest + 17
+
+type TxInt a =
+  TxInt (TX Int a)
+
+type Rec b a = Rec { y : Int, z : b, x : a}
+
+{-
+
+type Optional a
+    = Some a
+    | Nada
+
+
+encodeOptional : { c_a : a -> Encoder } -> Optional a -> Encoder
+encodeOptional { c_a } opt =
+    E.sequence <|
+        case opt of
+            Some a ->
+                [ encodeInt64 0, c_a a ]
+
+            Nada ->
+                [ encodeInt64 1 ]
+
+
+decodeOptional : { c_a : D.Decoder a } -> Decoder (Optional a)
+decodeOptional { c_a } =
+    decodeInt64
+        |> D.andThen
+            (\c ->
+                case c of
+                    0 ->
+                        D.succeed Some |> dAndMap c_a
+
+                    1 ->
+                        D.succeed Nada
+
+                    _ ->
+                        D.fail
+            )
+
+
+-}

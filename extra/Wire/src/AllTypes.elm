@@ -1,26 +1,10 @@
-module AllTypes exposing (..)
+module AllTypes exposing (AliasInt, AliasTuple, AllTypes, Referenced(..), ReferencedRecord, Union(..))
 
 import Array exposing (Array)
 import Dict exposing (Dict)
-import Evergreen as EG
-import Json.Decode as D
-import Json.Encode as E
-import Msg exposing (..)
+import Msg
 import Set exposing (Set)
 import Time
-
-
-
--- @TODO get aliases of remote types working
--- type alias AliasRemote = Herp
--- After checking everything, including simplifying the import, this is def a problem:
-type Referenced
-    = Wrapped Herp
-
--- @TODO check this next after custom type is working
--- type alias Referenced =
---     { wrapped : Herp }
-
 
 
 type alias AliasInt =
@@ -67,3 +51,16 @@ type alias AllTypes =
     , union : Union
     , unit : ()
     }
+
+
+
+-- Checking wrapped usages of remote user types from Msg.elm
+
+
+type Referenced
+    = Root
+    | Wrapped Msg.Herp
+
+
+type alias ReferencedRecord =
+    { wrapped : Msg.Herp }

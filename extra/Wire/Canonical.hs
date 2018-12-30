@@ -10,6 +10,7 @@ import qualified Elm.Name as N
 import AST.Canonical
 import AST.Module.Name (Canonical(..))
 import Elm.Package (Name(..))
+import qualified Elm.Interface as Interface
 import qualified Data.Map as Map
 import Data.Index
 import qualified Data.List as List
@@ -20,7 +21,7 @@ import Text.Show.Prettyprint
 import Wire.Helpers
 import CanSer.CanSer
 import qualified Data.Text as Text
-
+import Sanity ((!)) -- import Data.Map ((!))
 
 -- AST to file debugger
 tracef n a =
@@ -35,6 +36,12 @@ tracer a b =
     print a
     pure b
 
+tracerFile n a b =
+  unsafePerformIO $ do
+    putStrLn ("trace-" ++ n ++ ".txt")
+    writeFile ("trace-" ++ n ++ ".txt") $ prettyShow a
+    pure b
+
 trace a b =
   unsafePerformIO $ do
     putStrLn $ show a ++ ": " ++ show b
@@ -44,6 +51,7 @@ trace a b =
 prettytracer a ast =
   unsafePerformIO $ do
     putStrLn a
+    -- putStrLn $ (prettyShow ast)
     putStrLn $ (Text.unpack $ ppElm ast)
     pure ast
 
@@ -71,20 +79,11 @@ modifyCanonical canonical flag pkg importDict interfaces source =
     Module name docs exports decls customTypes aliases binops effects ->
       case name of
         Canonical pkg n ->
-          case N.toString n of
-            -- "Evergreen" ->
-            --   tracef ("can-" ++ N.toString n) canonical
-
-            "AllTypes" ->
-              -- Keeping this branch for the moment as the test tracks file AllTypes.elm
-              -- eventually when everything is done this will be removed and we'll not need to pattern match
-              modifyCanonicalApplied canonical n customTypes aliases
-              -- canonical
-
-            "Msg" ->
-              -- modifyCanonicalApplied canonical n customTypes aliases
-              canonical
-            -- "Lamdera.Types" -> modifyCanonicalApplied canonical n customTypes aliases
+          case (pkg, n) of
+            (Name "elm" _, _) -> canonical
+            (Name "Lamdera" _, "Lamdera.Effect") -> canonical
+            (Name "mdgriffith" "elm-ui", _) -> canonical
+            (Name _ _, "List.Nonempty") -> canonical
 
             _ -> do
               -- -- This will be the final implementation as we converge to it
@@ -95,31 +94,40 @@ modifyCanonical canonical flag pkg importDict interfaces source =
               -- -- Add declarations for our generated encoders/decoders in addition to any existing declarations
               -- canonical { _decls = DeclareRec (customTypeEncoders ++ customTypeDecoders) existingDecls }
               -- modifyCanonicalApplied canonical n customTypes aliases
-              canonical
+              -- tracerFile ("canonicalThing-" ++ N.toString n) ((pkg, n)) $ modifyCanonicalApplied canonical n customTypes aliases interfaces
+              modifyCanonicalApplied canonical pkg n customTypes aliases interfaces
 
 
 -- @TODO this definition is temporary, and once all cases are covered will become the body of `modifyCanonical`
-modifyCanonicalApplied canonical n customTypes aliases =
+modifyCanonicalApplied canonical pkg moduleName customTypes aliases interfaces =
   let
-      moduleName = N.toString n
-      customTypeEncoders = justs $ fmap (customTypeToEncoder moduleName) $ Map.toList customTypes
-      customTypeDecoders = justs $ fmap (customTypeToDecoder moduleName) $ Map.toList customTypes
-      recordEncoders = justs $ fmap (aliasToEncoder moduleName) $ Map.toList aliases
-      recordDecoders = justs $ fmap (aliasToDecoder moduleName) $ Map.toList aliases
+      moduleNameString = N.toString moduleName
+      customTypeEncoders = justs $ fmap (customTypeToEncoder pkg interfaces moduleNameString) $ Map.toList customTypes
+      customTypeDecoders = justs $ fmap (customTypeToDecoder pkg interfaces moduleNameString) $ Map.toList customTypes
+      recordEncoders = justs $ fmap (aliasToEncoder interfaces moduleNameString) $ Map.toList aliases
+      recordDecoders = justs $ fmap (aliasToDecoder interfaces moduleNameString) $ Map.toList aliases
 
+      -- @TODO check if we still need this given right now we have no valid stubs and things seem to be fine...?
       cleanCanonical = canonical { _decls = canonicalRemoveWireDef $ _decls canonical }
       existingDecls = _decls cleanCanonical
 
   in
-  -- tracer ("can-" ++ N.toString n) $
     cleanCanonical
-      { _decls = DeclareRec (
-        tracer "customTypeEncoders" customTypeEncoders) existingDecls
-        -- tracer "customTypeEncoders" customTypeEncoders ++
-        -- tracer "customTypeDecoders" customTypeDecoders ++
-        -- tracer "recordEncoders" recordEncoders ++
-        -- tracer "recordDecoders" recordDecoders) existingDecls
-      }
+      -- { _decls = DeclareRec (fmap (prettytracer $ "-------------------------- " ++ moduleNameString) $ customTypeEncoders ++ customTypeDecoders ++ recordEncoders ++ recordDecoders) existingDecls }
+      { _decls = DeclareRec (customTypeEncoders ++ customTypeDecoders ++ recordEncoders ++ recordDecoders) existingDecls }
+
+
+
+-- The final stage of module compilation runs Interface.fromModule to generate interfaces based on
+-- the exposing(?) header of the file. This function re-injects the wire interfaces after that's
+-- done, ensuring that wire functions are always "exported" from a module regardless of what scope
+-- the user has set for their own code.
+reinjectWireInterfaces annotations canonical elmi =
+  let
+    wireAnnotations = Map.filterWithKey (\n v -> List.isPrefixOf "evg_" $ N.toString n ) annotations
+
+  in
+  elmi { Interface._types = Map.union (Interface._types elmi) wireAnnotations }
 
 
 
@@ -157,7 +165,7 @@ isWireDef def =
       check name
 
 
-customTypeToEncoder moduleName (customTypeName, customType_) =
+customTypeToEncoder pkg@(Name author project) interfaces moduleName (customTypeName, customType_) =
   let
     encoderName = "evg_e_" ++ N.toString customTypeName
 
@@ -180,14 +188,14 @@ customTypeToEncoder moduleName (customTypeName, customType_) =
 
               encoders =
                 imap (\i pType ->
-                  encodeForTypeValue moduleName pType (vlocal $ "evg_v" ++ show i)
+                  encodeForTypeValue interfaces moduleName pType (vlocal $ "evg_v" ++ show i)
                 ) pTypes
           in
           -- Encodes custom types, i.e.
           --   ValueTwoParams Bool Char
           -- becomes the following case statement branch:
           --   ValueTwoParams evg_v0 evg_v1 -> E.list identity [ E.string "ValueTwo", E.bool evg_v0, EG.e_char evg_v1 ]
-          customTypeCaseBranch moduleName customTypeName customType_ _index _tagNameS
+          customTypeCaseBranch pkg moduleName customTypeName customType_ _index _tagNameS
             patternCtorArgs
              (call jsonEncodeList
                [ coreBasicsIdentity
@@ -206,26 +214,24 @@ customTypeToEncoder moduleName (customTypeName, customType_) =
 
   in
   -- @TODO temporary while we figure out what to do with polymorphic types
-  if customTypeName == "FrontendMetaMsg" then
+  if customTypeName == "FrontendMetaMsg" || customTypeName == "BackendMetaMsg" then
     Nothing
   else
     Just $
-    -- prettytracer moduleName $
+    -- tracer ("customTypeToEncoder------------------------------",moduleName, customTypeName, customType_) $
     TypedDef
       (named encoderName)
       (Map.fromList [])
       [ (at (PVar (name "evg_p0"))
-      , qtyp "author" "project" moduleName customTypeNameS [])
+      , qtyp author project moduleName customTypeNameS [])
       ]
       (at (Case (vlocal "evg_p0") customTypeBranches))
       (qtyp "elm" "json" "Json.Encode" "Value" [])
 
-      -- (tlam (qtyp "author" "project" moduleName customTypeNameS []) (qtyp "elm" "json" "Json.Encode" "Value" []))
 
-
-customTypeCaseBranch moduleName customTypeName customType index customTypeLabel customTypeArgs expr =
+customTypeCaseBranch (Name author project) moduleName customTypeName customType index customTypeLabel customTypeArgs expr =
   CaseBranch
-    (at (PCtor { _p_home = canonical "author" "project" moduleName
+    (at (PCtor { _p_home = canonical author project moduleName
                , _p_type = customTypeName
                , _p_union = customType
                , _p_name = name customTypeLabel
@@ -245,9 +251,9 @@ Right now here we've got the hardcoded desired AST representing the decoders we 
 to generate for the custom type called "Union" from extra/src/AllTypes.elm
 We still need to
 
-- Generalise it to work on any type of custom type value
-- Generalise it to work for any number of custom type paramaters, i.e type Blah = Derp Int Int Int Int Int Int (q: how many is max?)
-- Generalise it to remove reference to AllTypes explicitly and work generically across any module anywhere in the user's codebase, including core libs?
+- [DONE] Generalise it to work on any type of custom type value
+- [WIP - works on 0/1/2 params] Generalise it to work for any number of custom type paramaters, i.e type Blah = Derp Int Int Int Int Int Int (q: how many is max?)
+- [DONE] Generalise it to remove reference to AllTypes explicitly and work generically across any module anywhere in the user's codebase, including core libs?
 
 Once this is done, every single SomeModule that defines some CustomType will have a SomeModule.evg_d_CustomType automatically available.
 
@@ -255,11 +261,9 @@ We will be able to leverage this in our wrapper program as well by detecting the
 into the core runtime Elm code so it dynamically "write" the write boilerplate at compile time for us.
 
 -}
-customTypeToDecoder moduleName (customTypeName_, customType_) =
+customTypeToDecoder pkg@(Name author project) interfaces moduleName (customTypeName_, customType_) =
   let
     _customTypeName = N.toString customTypeName_
-
-    _decoderName = "evg_d_" ++ N.toString customTypeName_
 
     genCustomType0 _index ctor =
       case ctor of
@@ -269,10 +273,10 @@ customTypeToDecoder moduleName (customTypeName_, customType_) =
           in
           at (Call evergreenUnion
             [ str _tagNameT
-            , at (VarCtor Normal (canonical "author" "project" moduleName)
+            , at (VarCtor Normal (canonical author project moduleName)
                 (name _tagNameS)
                 (ZeroBased _index)
-                (Forall (Map.fromList []) (qtyp "author" "project" moduleName _customTypeName []))
+                (Forall (Map.fromList []) (qtyp author project moduleName _customTypeName []))
               )
             ]
           )
@@ -292,11 +296,11 @@ customTypeToDecoder moduleName (customTypeName_, customType_) =
         Ctor n index numParams pTypes ->
           let _tagNameT = N.toText n
               _tagNameS = N.toString n
-              constructor = generateConstructor moduleName _tagNameS _customTypeName (index) pTypes
+              constructor = generateConstructor pkg moduleName _tagNameS _customTypeName (index) pTypes
           in
           call evergreenDecodeUnion1 (
             [str _tagNameT] ++ -- The tag name string to parse, i.e. "ValueInt"
-            (fmap decodeParamType pTypes) ++ -- The decoder/s to be used (@TODO this sets us up for >1 param custom types?)
+            (fmap (decodeParamType interfaces) pTypes) ++ -- The decoder/s to be used (@TODO this sets us up for >1 param custom types?)
             [constructor] -- The constructor, i.e. ValueInt : Int -> Union
           )
 
@@ -305,22 +309,19 @@ customTypeToDecoder moduleName (customTypeName_, customType_) =
         Ctor n index numParams pTypes ->
           let _tagNameT = N.toText n
               _tagNameS = N.toString n
-              constructor = generateConstructor moduleName _tagNameS _customTypeName (index) pTypes
+              constructor = generateConstructor pkg moduleName _tagNameS _customTypeName (index) pTypes
           in
           call evergreenDecodeUnion2 (
             [str _tagNameT] ++ -- The tag name string to parse, i.e. "ValueInt"
-            (fmap decodeParamType pTypes) ++ -- The decoder/s to be used (@TODO this sets us up for >1 param custom types?)
+            (fmap (decodeParamType interfaces) pTypes) ++ -- The decoder/s to be used (@TODO this sets us up for >1 param custom types?)
             [constructor] -- The constructor, i.e. ValueInt : Int -> Union
           )
 
 
     -- @TODO only partially implemented, needs to be extended for all possible types
-    decodeParamType pType =
+    decodeParamType interfaces pType =
        case pType of
-         TType (Canonical (Name "author" "project") _) typeName next ->
-           let _targetDecoderName = "evg_d_" ++ N.toString typeName
-               _targetDecoder = at (VarTopLevel (canonical "author" "project" moduleName) (name _targetDecoderName))
-           in
+         TType (Canonical (Name author_ project_) moduleNameLocal) typeName next ->
            if _customTypeName == N.toString typeName then
 
              {- The parameter type is equal to the custom type, so this is a recursive custom type.
@@ -337,19 +338,16 @@ customTypeToDecoder moduleName (customTypeName_, customType_) =
 
              (D.lazy (\_ -> evg_d_Union))
              -}
-
-             jsonDecodeLazy1Ignore _targetDecoder
+             let targetDecoderName = "evg_d_" ++ N.toString typeName
+                 targetDecoder = at (VarTopLevel (canonical author_ project_ moduleName) (name targetDecoderName))
+             in
+             jsonDecodeLazy1Ignore targetDecoder
 
           else
-           -- Currently, any types from user, must have encoder ref in this file
-           -- @TODO we'll need to extend this to be able to call custom types from anywhere in the project
-           -- Question: how do we bubble-up the need for additional imports? Do we just transitively make sure we inject explicit
-           -- imports of all evergreen wire functions whenever a type is imported into a file? Note (..) will work fine,
-           -- just `exposing (SomeModel)` will need special treatment.
+            decoderForType interfaces moduleName pType
 
-           _targetDecoder
-
-         _ -> decoderForType moduleName pType
+         _ ->
+           decoderForType interfaces moduleName pType
 
     _customTypeBranches =
       case customType_ of
@@ -365,14 +363,16 @@ customTypeToDecoder moduleName (customTypeName_, customType_) =
                   x -> undefined $ "Decoder: Custom Type parsing for " ++ show x ++ " params has not yet been implemented"
           ) _u_alts
 
+    decoderName = "evg_d_" ++ N.toString customTypeName_
+
   in
   -- @TODO temporary while we figure out what to do with polymorphic types
-  if customTypeName_ == "FrontendMetaMsg" then
+  if _customTypeName == "FrontendMetaMsg" || _customTypeName == "BackendMetaMsg" then
     Nothing
   else
     Just $
     TypedDef
-      (named _decoderName)
+      (named decoderName)
       (Map.fromList [])
       []
       (at (Call ((qvar "elm" "json" "Json.Decode" "oneOf"
@@ -380,13 +380,13 @@ customTypeToDecoder moduleName (customTypeName_, customType_) =
                           (tlam (qtyp "elm" "core" "List" "List" [qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "a"]])
                                    (qtyp "elm" "json" "Json.Decode" "Decoder" [tvar "a"])))))
                 [at (List _customTypeBranches)]))
-      (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp "author" "project" moduleName _customTypeName []])
+      (qtyp "elm" "json" "Json.Decode" "Decoder" [qtyp author project moduleName _customTypeName []])
 
 
 
 
 -- @TODO only partially implemented, needs to be extended for all possible types
-decoderForType moduleName pType =
+decoderForType interfaces moduleName pType =
    case pType of
      TType (Canonical (Name "elm" "core") "Basics") typeName next ->
        case N.toString typeName of
@@ -413,52 +413,50 @@ decoderForType moduleName pType =
      TType (Canonical (Name "elm" "core") "List") typeName next ->
        -- @TODO do we really need to do this? Can we just destructure inline above instead? How many other types does List expose?
        case N.toString typeName of
-         "List" -> jsonDecodeList (decoderForType moduleName (head next))
+         "List" -> jsonDecodeList (decoderForType interfaces moduleName (head next))
 
      TType (Canonical (Name "elm" "core") "Array") typeName next ->
-       jsonDecodeArray (decoderForType moduleName (head next))
+       jsonDecodeArray (decoderForType interfaces moduleName (head next))
 
      TType (Canonical (Name "elm" "core") "Set") typeName next ->
-       evergreenDecodeSet (decoderForType moduleName (head next))
+       evergreenDecodeSet (decoderForType interfaces moduleName (head next))
 
      TType (Canonical (Name "elm" "core") "Result") "Result" next ->
        case next of
          first:second:rest ->
-           evergreenDecodeResult (decoderForType moduleName first) (decoderForType moduleName second)
+           evergreenDecodeResult (decoderForType interfaces moduleName first) (decoderForType interfaces moduleName second)
 
      TType (Canonical (Name "elm" "core") "Dict") typeName next ->
        case next of
          first:second:rest ->
-           evergreenDecodeDict (decoderForType moduleName first) (decoderForType moduleName second)
+           evergreenDecodeDict (decoderForType interfaces moduleName first) (decoderForType interfaces moduleName second)
 
      TUnit ->
        evergreenDecodeUnit
 
      TTuple first second _ ->
-       evergreenDecodeTuple (decoderForType moduleName first) (decoderForType moduleName second)
+       evergreenDecodeTuple (decoderForType interfaces moduleName first) (decoderForType interfaces moduleName second)
 
-     TType (Canonical (Name "author" "project") _) typeName next ->
-       let _targetDecoderName = "evg_d_" ++ N.toString typeName
-           _targetDecoder = at (VarTopLevel (canonical "author" "project" moduleName) (name _targetDecoderName))
+     TType (Canonical (Name author project) moduleNameLocal) typeName next ->
+       let
+         targetDecoderName = "evg_d_" ++ N.toString typeName
+         targetDecoder = at (VarTopLevel (canonical author project moduleName) (name targetDecoderName))
+
        in
-       -- Currently, any types from user, must have encoder ref in this file
-       -- @TODO we'll need to extend this to be able to call custom types from anywhere in the project
-       -- Question: how do we bubble-up the need for additional imports? Do we just transitively make sure we inject explicit
-       -- imports of all evergreen wire functions whenever a type is imported into a file? Note (..) will work fine,
-       -- just `exposing (SomeModel)` will need special treatment.
+       if N.fromString moduleName == moduleNameLocal then
+         at (VarTopLevel (canonical author project moduleName) (name targetDecoderName))
+       else
+         let
+           canModule = canonical author project (N.toString moduleNameLocal)
+           moduleTypes = Interface._types $ interfaces ! canModule
+           typeAnnotation = moduleTypes ! N.fromString targetDecoderName
 
-       _targetDecoder
-
-     TAlias (Canonical (Name "author" "project") _) typeName [] (Holey realType) ->
-       decoderForType moduleName realType
+         in
+           at (VarForeign canModule (name targetDecoderName) (typeAnnotation))
 
 
-     -- @TODO temporary
-     TType (Canonical (Name "Lamdera" "core") _) typeName next ->
-       let _targetDecoderName = "evg_d_" ++ N.toString typeName
-           _targetDecoder = at (VarTopLevel (canonical "Lamdera" "core" "Lamdera.Types") (name _targetDecoderName))
-       in
-       _targetDecoder
+     TAlias (Canonical (Name author project) _) typeName [] (Holey realType) ->
+       decoderForType interfaces moduleName realType
 
 
      _ -> error $ "decoderForType didn't match any existing implementations for: " ++ show pType
@@ -472,13 +470,13 @@ decoderForType moduleName pType =
 -- x = Derp 1
 --     ^^^^
 --
-generateConstructor :: String -> String -> String -> ZeroBased -> [Type] -> Located Expr_
-generateConstructor moduleName name_ customTypeName index paramTypes =
+generateConstructor :: Name -> String -> String -> String -> ZeroBased -> [Type] -> Located Expr_
+generateConstructor (Name author project) moduleName name_ customTypeName index paramTypes =
   at (VarCtor Normal
-    (canonical "author" "project" moduleName)
+    (canonical author project moduleName)
     (name name_)
     (index)
-    (generateConstructorAnnotation paramTypes (qtyp "author" "project" moduleName customTypeName []))
+    (generateConstructorAnnotation paramTypes (qtyp author project moduleName customTypeName []))
   )
 
 -- For a given list of [Type] of params for a custom type constructor, creates the signature for that constructor
@@ -495,13 +493,13 @@ generateConstructorAnnotation pTypes customType =
 
 
 
-aliasToEncoder moduleName alias =
+aliasToEncoder interfaces moduleName alias =
   case alias of
     (typeName, Alias [] (TType (Canonical _ _) (_) [])) ->
       Nothing
 
     (typeName, Alias [] (TRecord fields Nothing)) ->
-      Just $ recordTypeToEncoder moduleName alias fields
+      Just $ recordTypeToEncoder interfaces moduleName alias fields
 
     (typeName, Alias [] typ) ->
       let
@@ -512,13 +510,13 @@ aliasToEncoder moduleName alias =
         (TypedDef (named $ "evg_e_" ++ aliasName)
                   (Map.fromList [])
                   [ (at (PVar (name "evg_p0")) , typ ) ]
-                  (call (encoderForType moduleName typ) [vlocal "evg_p0"])
+                  (call (encoderForType interfaces moduleName typ) [vlocal "evg_p0"])
                   (qtyp "elm" "json" "Json.Encode" "Value" []))
 
     _ -> error $ "aliasToEncoder: didn't match any existing implementations: " ++ show alias
 
 
-recordTypeToEncoder moduleName record fields =
+recordTypeToEncoder interfaces moduleName record fields =
   case record of
     (typeName, Alias [] (TRecord fields Nothing)) ->
       let
@@ -534,26 +532,26 @@ recordTypeToEncoder moduleName record fields =
                          (Holey (TRecord fields Nothing))
                 )
                 ]
-                (call jsonEncodeList [coreBasicsIdentity, at (List $ encodeRecordFields moduleName fields)])
+                (call jsonEncodeList [coreBasicsIdentity, at (List $ encodeRecordFields interfaces moduleName fields)])
                 (qtyp "elm" "json" "Json.Encode" "Value" []))
 
     _ -> error $ "recordTypeToEncoder: received non-record type, which should be impossible! : " ++ show record
 
 
-encodeRecordFields moduleName fields =
+encodeRecordFields interfaces moduleName fields =
   let
     sortedFields = List.sortOn (\(_, FieldType index _) -> (fromIntegral index) :: Int) (Map.toList fields)
 
-  in fmap (encodeRecordField moduleName) sortedFields
+  in fmap (encodeRecordField interfaces moduleName) sortedFields
 
 
-encodeRecordField moduleName field =
+encodeRecordField interfaces moduleName field =
   case field of
     (fieldName , FieldType index fieldType) ->
-      encodeForTypeValue moduleName fieldType (rfield "evg_p0" (N.toString fieldName))
+      encodeForTypeValue interfaces moduleName fieldType (rfield "evg_p0" (N.toString fieldName))
 
 
-encodeForTypeValue moduleName typ value =
+encodeForTypeValue interfaces moduleName typ value =
   -- case trace "encodeForTypeValue" typ of
   case typ of
     TType (Canonical (Name "elm" "core") "Basics") typeName next ->
@@ -570,7 +568,7 @@ encodeForTypeValue moduleName typ value =
         "Order" ->
           call evergreenEncodeOrder [value]
 
-        _ -> error $ "encodeForTypeValue Basics type didn't match any existing implementations: " ++ show typ
+        _ -> error $ "encodeForTypeValue Basics type didn't match any existing implementations: " ++ show typ ++ " called within " ++ show moduleName
 
     TType (Canonical (Name "elm" "core") "Char") typeName next ->
       call evergreenEncodeChar [value]
@@ -579,72 +577,64 @@ encodeForTypeValue moduleName typ value =
       call jsonEncodeString [value]
 
     TType (Canonical (Name "elm" "core") "List") typeName next ->
-      call jsonEncodeList [encoderForType moduleName (head next), value]
+      call jsonEncodeList [encoderForType interfaces moduleName (head next), value]
 
     TType (Canonical (Name "elm" "core") "Array") typeName next ->
-      call jsonEncodeArray [encoderForType moduleName (head next), value]
+      call jsonEncodeArray [encoderForType interfaces moduleName (head next), value]
 
     TType (Canonical (Name "elm" "core") "Set") typeName next ->
-      call jsonEncodeSet [encoderForType moduleName (head next), value]
+      call jsonEncodeSet [encoderForType interfaces moduleName (head next), value]
 
     TType (Canonical (Name "elm" "core") "Result") "Result" next ->
       case next of
         first:second:rest ->
-          call evergreenEncodeResult [encoderForType moduleName first, encoderForType moduleName second, value]
+          call evergreenEncodeResult [encoderForType interfaces moduleName first, encoderForType interfaces moduleName second, value]
 
     TType (Canonical (Name "elm" "core") "Dict") typeName next ->
       case next of
         first:second:rest ->
-          call evergreenEncodeDict [encoderForType moduleName first, encoderForType moduleName second, value]
+          call evergreenEncodeDict [encoderForType interfaces moduleName first, encoderForType interfaces moduleName second, value]
 
     TType (Canonical (Name "elm" "time") "Time") typeName next ->
       case N.toString typeName of
         "Posix" ->
           call evergreenEncodeTime [value]
 
-        _ -> error $ "encodeForTypeValue Time type didn't match any existing implementations: " ++ show typ
+        _ -> error $ "encodeForTypeValue Time type didn't match any existing implementations: " ++ show typ ++ " called within " ++ show moduleName
 
     TUnit ->
       call evergreenEncodeUnit [value]
 
     TTuple first second _ ->
-      call evergreenEncodeTuple [encoderForType moduleName first, encoderForType moduleName second, value]
+      call evergreenEncodeTuple [encoderForType interfaces moduleName first, encoderForType interfaces moduleName second, value]
 
-    TType (Canonical (Name "author" "project") moduleNameLocal) typeName next ->
-      -- Any types from user, must have encoder ref in this file
+    TType (Canonical (Name author project) moduleNameLocal) typeName next ->
       let
         targetEncoderName = "evg_e_" ++ N.toString typeName
-
       in
-      prettytracer ("➡️  Generating encoder for:"++ show typ) $
-        call (at (VarTopLevel (canonical "author" "project" (N.toString moduleNameLocal))
-                                 (name targetEncoderName))) [value]
+      if N.fromString moduleName == moduleNameLocal then
+        -- prettytracer ("➡️  Generating encoder inside " ++ show moduleName ++ " for:"++ show typ) $
+          call (at (VarTopLevel (canonical author project (N.toString moduleNameLocal))
+                                   (name targetEncoderName))) [value]
+      else
+        let
+          canModule = canonical author project (N.toString moduleNameLocal)
+          moduleTypes = Interface._types $ interfaces ! canModule
+          typeAnnotation = moduleTypes ! N.fromString targetEncoderName
+        in
 
-    TAlias (Canonical (Name "author" "project") moduleNameLocal) typeName [] (Holey realType) ->
-      encodeForTypeValue (N.toString moduleNameLocal) realType value
-
-    -- @TODO temporary
-    TType (Canonical (Name "Lamdera" "core") moduleNameLocal) typeName next ->
-      -- Any types from user, must have encoder ref in this file
-      let
-        targetEncoderName = "evg_e_" ++ N.toString typeName
-
-      in
-      trace "LamderaCoreMatched" $
-        call ((qvar "Lamdera" "core" (N.toString moduleNameLocal) targetEncoderName
-          (Forall (Map.fromList []) (TUnit)))) [value]
-          -- @TODO needs a real type signature defined here instead of TUnit...
+        -- prettytracer ("➡️  Generating encoder inside " ++ show moduleName ++ " for:"++ show typ) $
+          call (at (VarForeign canModule (name targetEncoderName) (typeAnnotation))) [value]
 
 
+    TAlias (Canonical (Name author project) moduleNameLocal) typeName [] (Holey realType) ->
+      encodeForTypeValue interfaces (N.toString moduleNameLocal) realType value
 
 
+    _ -> error $ "encodeForTypeValue didn't match any existing implementations: " ++ show typ ++ " called within " ++ show moduleName
 
 
-
-    _ -> error $ "encodeForTypeValue didn't match any existing implementations: " ++ show typ
-
-
-encoderForType moduleName pType =
+encoderForType interfaces moduleName pType =
   case pType of
     TType (Canonical (Name "elm" "core") "Basics") typeName next ->
       case N.toString typeName of
@@ -669,65 +659,70 @@ encoderForType moduleName pType =
       jsonEncodeString
 
     TType (Canonical (Name "elm" "core") "List") typeName next ->
-      call jsonEncodeList [encoderForType moduleName (head next)]
+      call jsonEncodeList [encoderForType interfaces moduleName (head next)]
 
     TType (Canonical (Name "elm" "core") "Array") typeName next ->
-      call jsonEncodeArray [encoderForType moduleName (head next)]
+      call jsonEncodeArray [encoderForType interfaces moduleName (head next)]
 
     TType (Canonical (Name "elm" "core") "Set") typeName next ->
-      call jsonEncodeSet [encoderForType moduleName (head next)]
+      call jsonEncodeSet [encoderForType interfaces moduleName (head next)]
 
     TType (Canonical (Name "elm" "core") "Result") "Result" next ->
       case next of
         first:second:rest ->
-          call evergreenEncodeResult [encoderForType moduleName first, encoderForType moduleName second]
+          call evergreenEncodeResult [encoderForType interfaces moduleName first, encoderForType interfaces moduleName second]
 
     TType (Canonical (Name "elm" "core") "Dict") typeName next ->
       case next of
         first:second:rest ->
-          call evergreenEncodeDict [encoderForType moduleName first, encoderForType moduleName second]
+          call evergreenEncodeDict [encoderForType interfaces moduleName first, encoderForType interfaces moduleName second]
 
     TType (Canonical (Name "elm" "time") "Time") typeName next ->
       case N.toString typeName of
         "Posix" ->
           evergreenEncodeTime
 
-        _ -> error $ "encoderForType Time type didn't match any existing implementations: " ++ show pType
+        _ -> error $ "encoderForType interfaces Time type didn't match any existing implementations: " ++ show pType
 
     TUnit ->
       call evergreenEncodeUnit []
 
     TTuple first second _ ->
-      call evergreenEncodeTuple [encoderForType moduleName first, encoderForType moduleName second]
+      call evergreenEncodeTuple [encoderForType interfaces moduleName first, encoderForType interfaces moduleName second]
 
-    TType (Canonical (Name "author" "project") _) typeName next ->
-      -- Any types from user, must have encoder ref in this file
-      let _targetEncoderName = "evg_e_" ++ N.toString typeName
+    TType (Canonical (Name author project) moduleNameLocal) typeName next ->
+      let
+        targetEncoderName = "evg_e_" ++ N.toString typeName
       in
-      at (VarTopLevel (canonical "author" "project" moduleName) (name _targetEncoderName))
+      if N.fromString moduleName == moduleNameLocal then
+        -- prettytracer ("➡️  Generating encoder inside " ++ show moduleName ++ " for:"++ show typ) $
+          at (VarTopLevel (canonical author project (N.toString moduleNameLocal))
+                                   (name targetEncoderName))
+      else
+        let
+          canModule = canonical author project (N.toString moduleNameLocal)
+          moduleTypes = Interface._types $ interfaces ! canModule
+          typeAnnotation = moduleTypes ! N.fromString targetEncoderName
 
-    TAlias (Canonical (Name "author" "project") _) typeName [] (Holey realType) ->
-      encoderForType moduleName realType
-
-    -- @TODO temporary
-    TType (Canonical (Name "Lamdera" "core") _) typeName next ->
-      -- Any types from user, must have encoder ref in this file
-      let _targetEncoderName = "evg_e_" ++ N.toString typeName
-
-      in
-      at (VarTopLevel (canonical "Lamdera" "core" "Lamdera.Types") (name _targetEncoderName))
-
-
-    _ -> error $ "encoderForType didn't match any existing implementations: " ++ show pType
+        in
+        -- prettytracer ("➡️  Generating encoder inside " ++ show moduleName ++ " for:"++ show typ) $
+          at (VarForeign canModule (name targetEncoderName) (typeAnnotation))
 
 
-aliasToDecoder moduleName alias =
+    TAlias (Canonical (Name author project) _) typeName [] (Holey realType) ->
+      encoderForType interfaces moduleName realType
+
+
+    _ -> error $ "encoderForType interfaces didn't match any existing implementations: " ++ show pType
+
+
+aliasToDecoder interfaces moduleName alias =
   case alias of
     (typeName, Alias [] (TType (Canonical _ _) (_) [])) ->
       Nothing
 
     (typeName, Alias [] (TRecord fields Nothing)) ->
-      Just $ recordTypeToDecoder moduleName typeName fields
+      Just $ recordTypeToDecoder interfaces moduleName typeName fields
 
     (typeName, Alias [] typ) ->
       let
@@ -738,7 +733,7 @@ aliasToDecoder moduleName alias =
         (TypedDef (named $ "evg_d_" ++ aliasName)
                   (Map.fromList [])
                   []
-                  (decoderForType moduleName typ)
+                  (decoderForType interfaces moduleName typ)
                   (qtyp "elm" "json" "Json.Decode" "Decoder" [typ]))
 
     _ -> error $ "aliasToDecoder didn't match any existing implementations: " ++ show alias
@@ -754,7 +749,7 @@ rightpipe first second = at (Binop (name "|>")
                                      (tvar "b")))) first second)
 
 
-recordTypeToDecoder moduleName typeName fields =
+recordTypeToDecoder interfaces moduleName typeName fields =
   let
     sortedFields = List.sortOn (\(_, FieldType index _) -> (fromIntegral index) :: Int) (Map.toList fields)
 
@@ -767,7 +762,7 @@ recordTypeToDecoder moduleName typeName fields =
     decodeRecordField field =
       case field of
         (fieldName , FieldType index fieldType) ->
-          call evergreenAtIndex [int ((fromIntegral index) :: Int) , decoderForType moduleName fieldType]
+          call evergreenAtIndex [int ((fromIntegral index) :: Int) , decoderForType interfaces moduleName fieldType]
 
     decoderName = "evg_d_" ++ N.toString typeName
 

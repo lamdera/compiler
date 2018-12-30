@@ -9,6 +9,7 @@ module Compile
 
 
 import qualified Data.ByteString as BS
+import Data.ByteString.UTF8 as BS8
 import qualified Data.Map as Map
 
 import qualified AST.Canonical as Can
@@ -35,10 +36,12 @@ import qualified Wire.Interfaces
 import qualified Wire.Valid
 import qualified Wire.Canonical
 import qualified Wire.Helpers
+import qualified Wire.Source
 import qualified East.Conversion as East
 
 import qualified Language.Haskell.Exts.Simple.Syntax as Hs
 
+import Transpile.PrettyPrint (sShow)
 import qualified Debug.Trace as DT
 import CanSer.CanSer
 import qualified Data.Text as T
@@ -48,7 +51,9 @@ import AST.Module.Name (Canonical(..))
 import Elm.Package (Name(..))
 import Wire.Helpers
 import System.IO.Unsafe (unsafePerformIO)
+import Data.String (fromString)
 
+import qualified Data.List as List
 
 
 
@@ -123,19 +128,37 @@ compile flag pkg importDict interfaces source =
       valid <- Result.mapError Error.Syntax $
         Parse.program pkg source
 
-      -- {- EVERGREEN
+      {- EVERGREEN
       -- Generate stubbed data calls for the functions that will be generated
-      let validStubbed_ = Wire.Valid.stubValid valid flag pkg importDict interfaces source
+      -- let validStubbed_ = Wire.Valid.stubValid valid flag pkg importDict interfaces source
       -- EVERGREEN -}
 
       -- debugPrint "Got validstubbed"
 
       canonical <- Result.mapError Error.Canonicalize $
-        Canonicalize.canonicalize pkg importDict interfaces validStubbed_
+        Canonicalize.canonicalize pkg importDict interfaces valid
 
       -- debugPrint "Got canonical"
 
-      -- {- EVERGREEN
+      -- generate wire source code from canonical ast
+      -- these are intended to be serialised and put at the end of source, then we redo the whole compilation step, generating valid as normal etc.
+      rawCodecSource <- pure $ T.unpack $ Wire.Source.generateCodecs canonical
+
+      let newSource =
+            if Map.lookup "Lamdera.Evergreen" importDict == Nothing then -- Evergreen isn't in the importDict, so this is a kernel module, or something that shouldn't have access to Evergreen, like the Evergreen module itself.
+              source
+            else
+              BS8.fromString (Wire.Source.injectEvergreenExposing canonical (Wire.Source.injectEvergreenImport (BS8.toString source))) <> "\n\n-- ### codecs\n" <> BS8.fromString rawCodecSource
+
+      valid_ <- Result.mapError Error.Syntax $
+        DT.trace (BS8.toString newSource) $
+        Parse.program pkg newSource
+
+      canonical_ <- Result.mapError Error.Canonicalize $
+        Canonicalize.canonicalize pkg importDict interfaces valid_
+
+
+      {- EVERGREEN
       -- Generate and inject Evergreen functions for all types & unions
       let canonical_ = Wire.Canonical.modifyCanonical canonical flag pkg importDict interfaces source
 
@@ -143,7 +166,7 @@ compile flag pkg importDict interfaces source =
       -- debugPrint "Got canonical modified"
 
       -- Backfill generated valid AST for generated functions as well
-      let valid_ = Wire.Valid.modify validStubbed_ flag pkg importDict interfaces source canonical_
+      -- let valid_ = Wire.Valid.modify validStubbed_ flag pkg importDict interfaces source canonical_
       -- EVERGREEN -}
 
 
@@ -176,51 +199,14 @@ compile flag pkg importDict interfaces source =
       haskAst <-
         East.transpile canonical annotations importDict
 
-      case canonical of
-        Module name docs exports decls customTypes aliases binops effects ->
-          case name of
-            -- Canonical (Name "author" "project") "Msg" ->
-            --
-            -- -- @NEXT modify the elmi here by hand to include the type signature for evg_e_Herp
-            -- -- then see if that stops our map error and if it does generalise the whole thing
-            --
-            --   let
-            --     elmi = I.fromModule annotations canonical_
-            --
-            --     encoderName = "evg_e_Herp"
-            --
-            --     encoderType =
-            --       Forall (Map.fromList [])
-            --         (tlam (qtyp "author" "project" "Msg" "Herp" [])
-            --           (qtyp "elm" "json" "Json.Encode" "Value" []))
-            --
-            --     elmiInjected = elmi
-            --       { I._types = Map.fromList $ Map.toList (I._types elmi) ++ [(N.fromString encoderName, encoderType)]
-            --       }
-            --
-            --   in
-            --   Result.ok $
-            --     -- DT.trace (T.unpack $ ppElm canonical_) $
-            --     Wire.Canonical.tracef ("artifacts-msg") $
-            --     Artifacts
-            --       -- { _elmi = I.fromModule annotations canonical_
-            --       { _elmi = elmiInjected
-            --       , _elmo = graph
-            --       , _haskelmo = haskAst
-            --       , Compile._docs = documentation
-            --       }
 
-            _ ->
-
-              Result.ok $
-                -- DT.trace (T.unpack $ ppElm canonical_) $
-                -- Wire.Canonical.tracef ("artifacts" ++ show pkg) $
-                Artifacts
-                  { _elmi = I.fromModule annotations canonical_
-                  , _elmo = graph
-                  , _haskelmo = haskAst
-                  , Compile._docs = documentation
-                  }
+      Result.ok $
+        Artifacts
+          { _elmi = Wire.Canonical.reinjectWireInterfaces annotations canonical_ $ I.fromModule annotations canonical_
+          , _elmo = graph
+          , _haskelmo = haskAst
+          , Compile._docs = documentation
+          }
 
 
 -- TYPE INFERENCE

@@ -1,4 +1,4 @@
-module AllTypes_Check exposing (Model, Msg(..), allTypesMock, init, main, subscriptions, unionMocks, update, view)
+module AllTypes_Check exposing (Model, Msg(..), aliasedInt, allTypesMocks, encodeDecodeCheck, init, main, subscriptions, unionMocks, update, view)
 
 import AllTypes exposing (..)
 import Array
@@ -38,21 +38,22 @@ init flags =
     ( { x = 1 }, Cmd.none )
 
 
-allTypesMock =
-    { int = 1
-    , float = 1.3
-    , bool = True
-    , char = 'c'
-    , string = "test"
-    , listInt = [ 3, 2, 1 ]
-    , setFloat = Set.fromList [ 1.2, 2.3, 3.4 ]
-    , arrayString = Array.fromList [ "herp", "derp" ]
-    , dict = Dict.fromList [ ( "Nice", [ 1, 2, 3 ] ), ( "Twice", [ 3, 2, 1 ] ) ]
-    , time = Time.millisToPosix 1000000000
-    , order = LT
-    , union = Recursive Leaf
-    , unit = ()
-    }
+allTypesMocks =
+    [ { int = 1
+      , float = 1.3
+      , bool = True
+      , char = 'c'
+      , string = "test"
+      , listInt = [ 3, 2, 1 ]
+      , setFloat = Set.fromList [ 1.2, 2.3, 3.4 ]
+      , arrayString = Array.fromList [ "herp", "derp" ]
+      , dict = Dict.fromList [ ( "Nice", [ 1, 2, 3 ] ), ( "Twice", [ 3, 2, 1 ] ) ]
+      , time = Time.millisToPosix 1000000000
+      , order = LT
+      , union = Recursive Leaf
+      , unit = ()
+      }
+    ]
 
 
 aliasedInt : AliasInt
@@ -82,78 +83,43 @@ unionMocks =
     ]
 
 
-herpMocks : List Herp
-herpMocks =
-    [ Derp, Derp ]
-
--- aliasRemoteMocks : List AliasRemote
--- aliasRemoteMocks =
---     [ Derp, Derp ]
-
-
 view : Model -> { body : List (Html.Html msg), title : String }
 view model =
-    let
-        a =
-            1
-
-        encoded =
-            E.encode 0 (AllTypes.evg_e_AllTypes allTypesMock)
-
-        decoded =
-            D.decodeString AllTypes.evg_d_AllTypes encoded
-
-        recordsMatching =
-            Ok allTypesMock == decoded
-
-        e2 =
-            E.encode 0 (E.list AllTypes.evg_e_Union unionMocks)
-
-        d2 =
-            D.decodeString (D.list AllTypes.evg_d_Union) e2
-
-        customTypesMatching =
-            Ok unionMocks == d2
-
-        e3 =
-            E.encode 0 (E.list Msg.evg_e_Herp herpMocks)
-
-        d3 =
-            D.decodeString (D.list Msg.evg_d_Herp) e3
-
-        -- @TODO get aliases of remote types working
-        -- eRemoteAlias =
-        --     E.encode 0 (E.list AllTypes.evg_e_AliasRemote aliasRemoteMocks)
-        --
-        -- dRemoteAlias =
-        --     D.decodeString (D.list AllTypes.evg_d_AliasRemote) eRemoteAlias
-    in
     { title = "Hello"
     , body =
-        -- [ layout [] <| text "you disabled me" ]
         [ layout [] <|
             column [ spacing 10, padding 10 ]
-                [ row [ padding 10 ] [ paragraph [] [ text <| "Encoded AllTypes: " ++ encoded ] ]
-                , row [ padding 10 ] [ paragraph [] [ text <| "Decoded AllTypes: " ++ Debug.toString decoded ] ]
-                , if recordsMatching then
-                    row [ padding 10, Background.color (rgb255 186 255 188) ] [ paragraph [] [ text <| "Record equal to original? " ++ Debug.toString recordsMatching ] ]
-
-                  else
-                    row [ padding 10, Background.color (rgb255 255 179 186) ] [ paragraph [] [ text <| "Record equal to original? " ++ Debug.toString recordsMatching ] ]
-                , row [ padding 10 ] [ paragraph [] [ text <| "Encoded Unions: " ++ e2 ] ]
-                , row [ padding 10 ] [ paragraph [] [ text <| "Decoded Unions: " ++ Debug.toString d2 ] ]
-                , if customTypesMatching then
-                    row [ padding 10, Background.color (rgb255 186 255 188) ] [ paragraph [] [ text <| "Custom type equal to original? " ++ Debug.toString customTypesMatching ] ]
-
-                  else
-                    row [ padding 10, Background.color (rgb255 255 179 186) ] [ paragraph [] [ text <| "Custom type equal to original? " ++ Debug.toString customTypesMatching ] ]
-
-                , row [] [ text <| "Encoded Another: " ++ e3 ]
-                , row [] [ text <| "Decoded Another: " ++ Debug.toString d3 ]
-                -- , row [] [ Html.text <| "Shadow value not existent in code: " ++ Debug.toString AllTypes.evg ]
+                [ encodeDecodeCheck "AllTypes" allTypesMocks AllTypes.evg_e_AllTypes AllTypes.evg_d_AllTypes
+                , encodeDecodeCheck "Unions" unionMocks AllTypes.evg_e_Union AllTypes.evg_d_Union
+                , encodeDecodeCheck "Herp" [ Derp "arg1" "arg2" ] Msg.evg_e_Herp Msg.evg_d_Herp
+                , encodeDecodeCheck "Referenced" [ Root, Wrapped (Derp "test" "best") ] AllTypes.evg_e_Referenced AllTypes.evg_d_Referenced
+                , encodeDecodeCheck "ReferencedRecord" [ { wrapped = Derp "test" "nest" } ] AllTypes.evg_e_ReferencedRecord AllTypes.evg_d_ReferencedRecord
                 ]
         ]
     }
+
+
+encodeDecodeCheck : String -> List a -> (a -> E.Value) -> D.Decoder a -> Element msg
+encodeDecodeCheck label mock encoder decoder =
+    let
+        roundtripMatches =
+            Ok mock == decoded
+
+        encoded =
+            E.encode 0 (E.list encoder mock)
+
+        decoded =
+            D.decodeString (D.list decoder) encoded
+    in
+    column []
+        [ row [ padding 10 ] [ paragraph [] [ text <| "Encoded " ++ label ++ ": " ++ encoded ] ]
+        , row [ padding 10 ] [ paragraph [] [ text <| "Decoded " ++ label ++ ": " ++ Debug.toString decoded ] ]
+        , if roundtripMatches then
+            row [ padding 10, Background.color (rgb255 186 255 188) ] [ paragraph [] [ text <| label ++ " equal to original? " ++ Debug.toString roundtripMatches ] ]
+
+          else
+            row [ padding 10, Background.color (rgb255 255 179 186) ] [ paragraph [] [ text <| label ++ " equal to original? " ++ Debug.toString roundtripMatches ] ]
+        ]
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )

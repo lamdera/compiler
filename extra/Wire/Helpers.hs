@@ -30,8 +30,9 @@ region =
 at = At region
 
 
-canonical author project n =
-  Canonical {_package = Name {_author = author ,_project = project} ,_module = name n}
+canonical author project moduleName =
+  Canonical {_package = Name {_author = author ,_project = project} ,_module = name moduleName }
+
 
 
 -- An Int literal

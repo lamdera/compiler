@@ -31,7 +31,7 @@ import qualified Reporting.Exit as Exit
 import qualified Reporting.Exit.Crawl as E
 import qualified Reporting.Task as Task
 
-
+import qualified Elm.Name as N
 
 -- GRAPH
 
@@ -107,7 +107,6 @@ crawlHelp summary ( maybeName, info@(Header.Info path _ _ deps) ) =
 depthFirstSearch :: Summary -> [Unvisited] -> WorkGraph -> Task.Task Result
 depthFirstSearch summary unvisited startGraph =
   do  chan <- liftIO newChan
-
       (Graph args locals kernelPaths foreigns problems) <-
         dfs summary chan 0 Set.empty unvisited startGraph
 
@@ -215,6 +214,7 @@ data Unvisited =
     { _origin :: E.Origin
     , _name :: Module.Raw
     }
+    deriving (Show)
 
 
 data Asset

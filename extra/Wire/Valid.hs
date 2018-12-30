@@ -33,15 +33,15 @@ stubValid valid flag pkg importDict interfaces source =
   case valid of
     AS.Module n _ _ _ _ _ _ _ _ _ ->
       case N.toString n of
-        "AllTypes" ->
-          tracef
-            ("-" ++ N.toString n)
-            (valid { _decls =
-              [ evg_e_AllTypes_stubbed
-              , evg_d_AllTypes_stubbed
-              , evg_e_Union_stubbed
-              , evg_d_Union_stubbed
-              ] })
+        -- "AllTypes" ->
+        --   tracef
+        --     ("-" ++ N.toString n)
+        --     (valid { _decls =
+        --       [ evg_e_AllTypes_stubbed
+        --       , evg_d_AllTypes_stubbed
+        --       , evg_e_Union_stubbed
+        --       , evg_d_Union_stubbed
+        --       ] })
 
         -- "Msg" ->
         --   valid { _decls =
