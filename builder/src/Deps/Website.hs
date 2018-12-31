@@ -171,7 +171,7 @@ fetchLocal url =
               DT.trace ("using local file override at " ++ (path </> url)) $
                 Just <$> BS.readFile (path </> url)
             else
-              DT.trace ("using web file; no local override at " ++ (path </> url)) $
+              DT.trace ("using web file; no local override found at " ++ (path </> url)) $
                 pure Nothing
       Nothing ->
         pure Nothing
@@ -250,7 +250,7 @@ downloadHelp cache (name, version) =
                           Shelly.shelly $ Shelly.cp_r (Shelly.fromText (T.pack from)) (Shelly.fromText (T.pack to))
                         pure (Just ())
                 else
-                  DT.trace ("using web pkg; no local override at " ++ fullPath) $
+                  DT.trace ("using web pkg; no local override found at " ++ fullPath) $
                     pure Nothing
           Nothing ->
             pure Nothing

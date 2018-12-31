@@ -34,9 +34,6 @@ import qualified Reporting.Exit as Exit
 import qualified Reporting.Exit.Deps as E
 import qualified Reporting.Task as Task
 
-import Transpile.PrettyPrint (sShow)
-import qualified Debug.Trace as DT
-
 
 -- EXPLORER
 
@@ -92,7 +89,7 @@ getVersions name =
 
         Left _suggestions ->
           do  elmHome <- liftIO PerUserCache.getElmHome
-              DT.trace ("CorruptVersionCache suggestions:" ++ sShow _suggestions ++ "\nregistry:" ++ sShow registry) $ throwError (Exit.Deps (E.CorruptVersionCache elmHome name))
+              throwError (Exit.Deps (E.CorruptVersionCache elmHome name))
 
 
 

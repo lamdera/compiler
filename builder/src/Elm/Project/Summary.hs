@@ -19,10 +19,6 @@ import Elm.Package (Package(..), Name, Version)
 import Elm.Project.Json (Project(..), AppInfo(..), PkgInfo(..))
 import qualified Elm.Project.Json as Project
 
-import qualified Debug.Trace as DT
-import Transpile.PrettyPrint (sShow)
-
-
 
 -- SUMMARY
 
@@ -51,7 +47,6 @@ type DepsGraph =
 
 init :: FilePath -> Project -> Map Name PkgInfo -> Module.Interfaces -> Summary
 init root project deps ifaces =
-  DT.trace (sShow ("init", root, project, deps, ifaces)) $
   let
     exposed =
       case project of

@@ -77,7 +77,6 @@ transpile
     moduleHead = Hs.ModuleHead (Hs.ModuleName moduName) Nothing (tExport _exports constructorFunctionsToExport)
     module_ = Hs.Module (Just moduleHead) [{-ModulePragma-}] (haskelmImports ++ imports) decls
   in
-  -- DT.trace (sShow (moduName, imports, importDict)) $
   pure module_
 
 -- IMPORTS
@@ -156,7 +155,6 @@ tUnion (name, (C.Union tvars ctors _ _)) =
 -- TYPE ALIASES
 
 tAlias (aliasName, C.Alias tvars t) =
-  --DT.trace (sShow ("tAlias", aliasName, "tvars", tvars, "t", t)) $
   [ Hs.TypeDecl
       (foldl Hs.DHApp (Hs.DHead $ ident aliasName) (Hs.UnkindedVar <$> ident <$> tvars))
       (tType t)
