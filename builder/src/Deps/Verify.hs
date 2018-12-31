@@ -127,7 +127,7 @@ appToSolution (Project.AppInfo _ _ depsDirect depsTrans testDirect testTrans) =
       union noDups a b
 
 
-noDups :: Show a => Name -> a -> a -> Task.Task a
+noDups :: Name -> a -> a -> Task.Task a
 noDups _ _ _ =
   throw E.BadDeps
 
