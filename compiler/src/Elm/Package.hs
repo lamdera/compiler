@@ -21,6 +21,7 @@ module Elm.Package
   , versionDecoder
   , encodeVersion
   , unpack
+  , shouldHaveCodecsGenerated
   )
   where
 
@@ -69,6 +70,24 @@ data Package =
 
 -- HELPERS
 
+
+shouldHaveCodecsGenerated :: Name -> Bool
+shouldHaveCodecsGenerated name =
+  case name of
+    Name "elm" _ ->
+      -- all elm packages are ignored, so those codecs have to be defined in `Lamdera/codecs`, and `Lamdera/codecs` may only depend on packages from the `elm` author.
+      False
+
+    Name "elm-explorations" _ ->
+      -- all elm-explorations packages are ignored, so those codecs have to be defined in `Lamdera/codecs`, and `Lamdera/codecs` may only depend on packages from the `elm` author.
+      False
+
+    Name "Lamdera" "codecs" ->
+      -- avoid cyclic imports; generated codecs rely on Lamdera/codecs:Lamdera.Evergreen. This is our codec bootstrap module.
+      False
+
+    _ ->
+      True
 
 isKernel :: Name -> Bool
 isKernel (Name author _) =

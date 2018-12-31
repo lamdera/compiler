@@ -308,7 +308,7 @@ appDecoder =
   )
   & D.map
     (\appInfo ->
-      appInfo {_app_deps_direct = Map.union (_app_deps_direct appInfo) (Map.singleton (Pkg.Name "Lamdera" "core") (Pkg.Version 1 0 0))}
+      appInfo {_app_deps_direct = Map.union (_app_deps_direct appInfo) (Map.singleton (Pkg.Name "Lamdera" "codecs") (Pkg.Version 1 0 0))}
     )
 
 pkgDecoder :: Decoder PkgInfo
@@ -325,16 +325,10 @@ pkgDecoder =
   )
   & D.map
     (\pkgInfo ->
-      case _pkg_name pkgInfo of
-        (Pkg.Name "elm" _) ->
-          -- all elm packages are ignored, so those codecs have to be defined in `Lamdera/core`, and `Lamdera/core` may only depend on packages from the `elm` author.
-          pkgInfo
-
-        (Pkg.Name "Lamdera" "core") ->
-          pkgInfo
-
-        _ ->
-          pkgInfo {_pkg_deps = Map.union (_pkg_deps pkgInfo) (Map.singleton (Pkg.Name "Lamdera" "core") (Con.exactly (Pkg.Version 1 0 0)))}
+      if Pkg.shouldHaveCodecsGenerated (_pkg_name pkgInfo) then
+          pkgInfo {_pkg_deps = Map.union (_pkg_deps pkgInfo) (Map.singleton (Pkg.Name "Lamdera" "codecs") (Con.exactly (Pkg.Version 1 0 0)))}
+      else
+        pkgInfo
     )
 
 
