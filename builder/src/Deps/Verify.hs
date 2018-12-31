@@ -48,6 +48,7 @@ import qualified Haskelm.Yaml
 
 import qualified Debug.Trace as DT
 import Transpile.PrettyPrint (sShow)
+import qualified Elm.Package as Pkg
 
 
 -- VERIFY
@@ -127,16 +128,18 @@ appToSolution (Project.AppInfo _ _ depsDirect depsTrans testDirect testTrans) =
       union noDups a b
 
 
-noDups :: Name -> a -> a -> Task.Task a
-noDups _ _ _ =
+noDups :: Show a => Name -> a -> a -> Task.Task a
+noDups name a b =
+  DT.trace ("Deps.Verify.noDups failed, " ++ show name ++ " is specified as " ++ show a ++ " somewhere, and as " ++ show b ++ " somewhere else.") $
   throw E.BadDeps
 
 
 allowEqualDups :: Name -> Version -> Version -> Task.Task Version
-allowEqualDups _ v1 v2 =
+allowEqualDups name v1 v2 =
   if v1 == v2 then
     return v1
   else
+    DT.trace ("Deps.Verify.allowEqualDups failed, " ++ show name ++ " is specified as " ++ Pkg.versionToString v1 ++ " somewhere, and as " ++ Pkg.versionToString v2 ++ " somewhere else.") $
     throw E.BadDeps
 
 

@@ -25,7 +25,7 @@ import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Digest.Pure.SHA as SHA
 import qualified Data.HashMap.Lazy as HashMap
 import qualified Data.Map as Map
-import qualified Data.Text as Text
+import qualified Data.Text as T
 import qualified Network.HTTP.Client as Client
 import qualified Network.HTTP.Client.MultipartFormData as Multi
 import qualified Network.HTTP.Types as Http
@@ -48,7 +48,6 @@ import qualified Debug.Trace as DT
 import System.IO.Unsafe
 import qualified Shelly
 import Transpile.PrettyPrint (sShow)
-import Data.Maybe
 
 -- GET PACKAGE INFO
 
@@ -81,11 +80,19 @@ localPackages =
 
           DT.trace ("found local packages:" ++ sShow versionedAuthoredPkgs) $
             pure $
-              catMaybes <$> (Map.fromList $ ((\(author, pkg, versions) -> (Name (Text.pack author) (Text.pack pkg), Pkg.versionFromText <$> Text.pack <$> versions)) <$> versionedAuthoredPkgs))
+              catResultsOrCrashOnLeft <$> (Map.fromList $ ((\(author, pkg, versions) -> (Name (T.pack author) (T.pack pkg), versionFromText <$> T.pack <$> versions)) <$> versionedAuthoredPkgs))
 
       Nothing ->
         pure Map.empty
 
+versionFromText t =
+  case Pkg.versionFromText t of
+    Just v -> Right v
+    Nothing -> Left t
+
+catResultsOrCrashOnLeft (Right a:rest) = (a:catResultsOrCrashOnLeft rest)
+catResultsOrCrashOnLeft (Left a:_) = error ("failed to parse folder structure; did you accidentally end up with `$LAMDERA_PKG_PATH/packages/packages/...` or something similar? I expected something like `$LAMDERA_PKG_PATH/packages/Lamdera/core/1.0.0/...`, but where I expected the `1.0.0` part to be, there wasn't a valid elm semver, instead I saw `" <> T.unpack a <> "`.")
+catResultsOrCrashOnLeft [] = []
 
 -- NEW PACKAGES
 
@@ -99,7 +106,7 @@ getNewPackages index =
 newPkgDecoder :: D.Decoder E.BadJson ( Name, Version )
 newPkgDecoder =
   do  txt <- D.text
-      case Text.splitOn "@" txt of
+      case T.splitOn "@" txt of
         [key, value] ->
           case Pkg.fromText key of
             Right pkg ->
@@ -240,7 +247,7 @@ downloadHelp cache (name, version) =
                     in
                       do
                         DT.trace ("Shelly.cp_r " ++ from ++ " " ++ to) $
-                          Shelly.shelly $ Shelly.cp_r (Shelly.fromText (Text.pack from)) (Shelly.fromText (Text.pack to))
+                          Shelly.shelly $ Shelly.cp_r (Shelly.fromText (T.pack from)) (Shelly.fromText (T.pack to))
                         pure (Just ())
                 else
                   DT.trace ("using web pkg; no local override at " ++ fullPath) $

@@ -44,6 +44,7 @@ import qualified Reporting.Task as Task
 
 data PackageRegistry =
   PackageRegistry Int (Map Pkg.Name [Pkg.Version])
+  deriving (Show)
 
 
 getPackageRegistry :: Task.Task PackageRegistry
