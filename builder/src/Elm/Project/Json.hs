@@ -284,31 +284,10 @@ decoder =
   do  tipe <- D.field "type" D.text
       case tipe of
         "application" ->
-          appDecoder
-            & D.map (\appInfo ->
-                appInfo {_app_deps_direct = Map.union (_app_deps_direct appInfo) (Map.singleton (Pkg.Name "Lamdera" "core") (Pkg.Version 1 0 0))}
-              )
-            & D.map App
+          D.map App appDecoder
 
         "package" ->
-          pkgDecoder
-            & D.map (\pkgInfo -> case _pkg_name pkgInfo of
-                (Pkg.Name "elm" "core") ->
-                  pkgInfo
-
-                (Pkg.Name "elm" "bytes") ->
-                  pkgInfo
-
-                (Pkg.Name "elm" "time") ->
-                  pkgInfo
-
-                (Pkg.Name "Lamdera" "core") ->
-                  pkgInfo
-
-                _ ->
-                  pkgInfo {_pkg_deps = Map.union (_pkg_deps pkgInfo) (Map.singleton (Pkg.Name "Lamdera" "core") (Con.Range (Pkg.Version 1 0 0) Con.LessOrEqual Con.Less (Pkg.Version 1 0 0)))}
-              )
-            & D.map Pkg
+          D.map Pkg pkgDecoder
 
         other ->
           D.fail (E.BadType other)
@@ -316,18 +295,22 @@ decoder =
 
 appDecoder :: Decoder AppInfo
 appDecoder =
-  AppInfo
+  (AppInfo
     <$> D.field "elm-version" versionDecoder
     <*> D.field "source-directories" (D.list dirDecoder)
     <*> D.field "dependencies" (D.field "direct" (depsDecoder versionDecoder))
     <*> D.field "dependencies" (D.field "indirect" (depsDecoder versionDecoder))
     <*> D.field "test-dependencies" (D.field "direct" (depsDecoder versionDecoder))
     <*> D.field "test-dependencies" (D.field "indirect" (depsDecoder versionDecoder))
-
+  )
+  & D.map
+    (\appInfo ->
+      appInfo {_app_deps_direct = Map.union (_app_deps_direct appInfo) (Map.singleton (Pkg.Name "Lamdera" "codecs") (Pkg.Version 1 0 0))}
+    )
 
 pkgDecoder :: Decoder PkgInfo
 pkgDecoder =
-  PkgInfo
+  (PkgInfo
     <$> D.field "name" pkgNameDecoder
     <*> D.field "summary" summaryDecoder
     <*> D.field "license" licenseDecoder
@@ -336,6 +319,14 @@ pkgDecoder =
     <*> D.field "dependencies" (depsDecoder constraintDecoder)
     <*> D.field "test-dependencies" (depsDecoder constraintDecoder)
     <*> D.field "elm-version" constraintDecoder
+  )
+  & D.map
+    (\pkgInfo ->
+      if Pkg.shouldHaveCodecsGenerated (_pkg_name pkgInfo) then
+          pkgInfo {_pkg_deps = Map.union (_pkg_deps pkgInfo) (Map.singleton (Pkg.Name "Lamdera" "codecs") (Con.exactly (Pkg.Version 1 0 0)))}
+      else
+        pkgInfo
+    )
 
 
 

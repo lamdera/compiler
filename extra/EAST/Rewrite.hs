@@ -61,7 +61,6 @@ recordPatNames p =
     recordFieldsInPattern = removeDuplicates $! fPattern pRecFetchRecordFields (++) p
     patternWithReplacedRecordFields = rPattern recordPat $! p
   in
-    -- DT.trace (sShow ("recordPatNames", p, "into", patternWithReplacedRecordFields, recordFieldsInPattern)) $
     (patternWithReplacedRecordFields, recordFieldsInPattern)
 
 

@@ -29,6 +29,7 @@ import qualified Reporting.Result as Result
 import qualified Reporting.Warning as Warning
 import qualified Type.Constrain.Module as Type
 import qualified Type.Solve as Type
+import qualified Data.Text as T
 
 import System.IO.Unsafe (unsafePerformIO)
 
@@ -37,8 +38,7 @@ import qualified East.Conversion as East
 
 import qualified Language.Haskell.Exts.Simple.Syntax as Hs
 
-import qualified Debug.Trace as DT
-import qualified Data.Text as T
+--import qualified Debug.Trace as DT
 
 
 -- COMPILE
@@ -117,7 +117,7 @@ compile flag pkg importDict interfaces source =
               BS8.fromString (Wire.Source.injectEvergreenExposing canonical (Wire.Source.injectEvergreenImport (BS8.toString source))) <> "\n\n-- ### codecs\n" <> BS8.fromString rawCodecSource
 
       valid_ <- Result.mapError Error.Syntax $
-        DT.trace (BS8.toString newSource) $
+        --DT.trace (BS8.toString newSource) $ -- uncomment to print source code for all modules
         Parse.program pkg newSource
 
       canonical_ <- Result.mapError Error.Canonicalize $

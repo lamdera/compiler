@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Wire.Source (generateCodecs, injectEvergreenImport, injectEvergreenExposing) where
+module Wire.Source (generateCodecs, injectEvergreenImport, injectEvergreenExposing, isEvergreenCodecName) where
 
 import qualified AST.Canonical as Can
 import AST.Module.Name (Canonical(..))
@@ -22,6 +22,9 @@ injectEvergreenImport s | "\nimport " `List.isPrefixOf` s =
   "\nimport Lamdera.Evergreen" <> s
 injectEvergreenImport (x:xs) = x : injectEvergreenImport xs
 injectEvergreenImport [] = []
+
+isEvergreenCodecName :: N.Name -> Bool
+isEvergreenCodecName name = "evg_encode_" `T.isPrefixOf` n || "evg_decode_" `T.isPrefixOf` n where n = N.toText name
 
 injectEvergreenExposing :: Can.Module -> String -> String
 injectEvergreenExposing (Can.Module _ _ _exports _ _ _ _ _) s =
