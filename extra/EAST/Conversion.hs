@@ -158,23 +158,21 @@ tAlias (aliasName, C.Alias tvars t) =
   [ Hs.TypeDecl
       (foldl Hs.DHApp (Hs.DHead $ ident aliasName) (Hs.UnkindedVar <$> ident <$> tvars))
       (tType t)
-  ] ++ (
+  ] ++ ( -- constructors for record type aliases, e.g. `constructor'MyRecordAlias a b c = {a=a, b=b, c=c}`
   case t of
     (C.TRecord mapNameToFieldType _) ->
       let
-        fields = Map.toList $ fmap tFieldType $ mapNameToFieldType
+        fields = fmap fst $ C.fieldsToList mapNameToFieldType
       in
       [ Hs.FunBind
         [ Hs.Match
           (ident $ toConstructorName aliasName)
           (fields
-           & fmap fst
            & fmap (\n -> Hs.PVar (ident n))
           )
 
           (Hs.UnGuardedRhs $
             fields
-            & fmap fst
             & fmap (\fieldName -> Hs.InfixApp (Hs.OverloadedLabel $ rawIdent fieldName) (Hs.QConOp (Hs.Qual (Hs.ModuleName "Lamdera.Haskelm.Core") (Hs.Symbol ":="))) (Hs.Paren (Hs.Var (Hs.UnQual (ident fieldName)))))
             & foldl (\assignment state -> Hs.InfixApp (Hs.Paren state) (Hs.QVarOp (Hs.Qual (Hs.ModuleName "Lamdera.Haskelm.Core") (Hs.Symbol "&"))) assignment)
                     (Hs.Var (Hs.Qual (Hs.ModuleName "Lamdera.Haskelm.Core") (Hs.Ident "rnil"))))
@@ -210,30 +208,15 @@ tType t = case t of
   (C.TRecord mapNameToFieldType _) ->
     let recordField (name, t) =
           Hs.TyInfix (Hs.TyPromoted (Hs.PromotedString (rawIdent name) (rawIdent name))) (Hs.UnpromotedName (Hs.Qual (Hs.ModuleName "Lamdera.Haskelm.Core") (Hs.Symbol ":="))) (Hs.TyParen (tType $ t))
-    in  Hs.TyParen $ Hs.TyApp (Hs.TyCon (Hs.Qual (Hs.ModuleName "Lamdera.Haskelm.Core") (Hs.Ident "Record'"))) (Hs.TyPromoted (Hs.PromotedList True (fmap recordField $ Map.toList $ fmap tFieldType $ mapNameToFieldType)))
+    in  Hs.TyParen $ Hs.TyApp (Hs.TyCon (Hs.Qual (Hs.ModuleName "Lamdera.Haskelm.Core") (Hs.Ident "Record'"))) (Hs.TyPromoted (Hs.PromotedList True (fmap recordField $ C.fieldsToList mapNameToFieldType)))
   (C.TUnit) -> Hs.TyCon (Hs.Special (Hs.UnitCon))
   (C.TTuple t1 t2 Nothing) -> Hs.TyTuple Hs.Boxed [tType t1, tType t2]
   (C.TTuple t1 t2 (Just t3)) -> Hs.TyTuple Hs.Boxed [tType t1, tType t2, tType t3]
-  (C.TAlias moduleName name nameTypePairs aliasType) ->
-    -- aliasType = the "original" type we're aliasing, right hand side of type alias declaration
-    --
-    let
-      conv =
-        foldl -- T a b instead of a b T
-          Hs.TyApp
-          (Hs.TyCon (qual moduleName name))
-          (nameTypePairs & fmap snd & fmap tType)
-    in
-    case aliasType of
-      C.Holey _ ->
-        conv
-
-      C.Filled _ ->
-        -- used e.g. in VirtualDom.Node, guessing this refers to whether the right hand side has any type variables or not.
-        conv
-
-
-tFieldType (C.FieldType _ t) = t
+  (C.TAlias moduleName name nameTypePairs _) ->
+    foldl -- T a b instead of a b T
+      Hs.TyApp
+      (Hs.TyCon (qual moduleName name))
+      (nameTypePairs & fmap snd & fmap tType)
 
 
 tDef (C.Def (A.At _ name) pats e) =
