@@ -387,7 +387,7 @@ instance ToJSON StackYaml where
           , Aeson.String (T.pack $ homeDir </> "lamdera" </> "haskelm" </> "runtime")
           ]
         )
-    , "resolver" .= Aeson.String "lts-11.9"
+    , "resolver" .= Aeson.String "lts-13.1"
     , "require-stack-version" .= Aeson.String ">= 1.4.0"
     --, "flags" .= array ()
     --, "extra-package-dbs" .= array ()
@@ -399,5 +399,8 @@ lamderaDeps =
   , "superrecord-0.5.0.1"
   , "unagi-chan-0.4.1.0"
   , "mtlparse-0.1.4.0"
+  , "slave-thread-1.0.3"
+  , "stm-containers-1.1.0.2"
+  , "stm-hamt-1.2.0.2"
+  , "primitive-extras-0.7.1"
   ]
-
