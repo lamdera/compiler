@@ -22,7 +22,6 @@ import qualified Reporting.Progress as Progress
 import qualified Reporting.Task as Task
 
 
-
 -- COMPILE
 
 
@@ -52,6 +51,7 @@ data Answer
   = Blocked
   | Bad FilePath Time.UTCTime BS.ByteString [Compiler.Error]
   | Good Compiler.Artifacts
+  deriving (Show)
 
 
 type Dict a = Map.Map Module.Raw a
@@ -85,6 +85,7 @@ compileModule tell project maybeDocsPath answersMVar ifacesMVar name info =
                     let imports = makeImports project info
                     ifaces <- readMVar ifacesMVar
                     let source = Plan._src info
+
                     case Compiler.compile docs pkg imports ifaces source of
                       (_warnings, Left errors) ->
                         do  tell (Progress.CompileFileEnd name Progress.Bad)
@@ -92,7 +93,7 @@ compileModule tell project maybeDocsPath answersMVar ifacesMVar name info =
                             let path = Plan._path info
                             putMVar mvar (Bad path time source errors)
 
-                      (_warnings, Right result@(Compiler.Artifacts elmi _ _)) ->
+                      (_warnings, Right result@(Compiler.Artifacts elmi _ _ _)) ->
                         do  tell (Progress.CompileFileEnd name Progress.Good)
                             let canonicalName = Module.Canonical pkg name
                             lock <- takeMVar ifacesMVar
@@ -100,7 +101,6 @@ compileModule tell project maybeDocsPath answersMVar ifacesMVar name info =
                             putMVar mvar (Good result)
 
       return mvar
-
 
 
 -- TO DOCS FLAG
@@ -139,7 +139,7 @@ isExposed name exposed =
 
 
 makeImports :: Project -> Plan.Info -> Dict Module.Canonical
-makeImports project (Plan.Info _ _ _ clean dirty foreign) =
+makeImports project (Plan.Info _ _ _ clean dirty foreign_) =
   let
     pkgName =
       Project.getName project
@@ -153,7 +153,7 @@ makeImports project (Plan.Info _ _ _ clean dirty foreign) =
     Map.fromList $
       map mkLocal clean
       ++ map mkLocal dirty
-      ++ map mkForeign foreign
+      ++ map mkForeign foreign_
 
 
 

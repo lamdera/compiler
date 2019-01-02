@@ -1,5 +1,6 @@
 {-# OPTIONS_GHC -Wall #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE FlexibleInstances #-}
 module File.Plan
   ( plan
   , Info(..)
@@ -59,6 +60,11 @@ data Env =
     , _pkg :: Pkg.Name
     , _docs :: Maybe FilePath
     }
+    deriving (Show)
+
+
+instance Show (Chan Msg) where
+  show _ = "<UNKNOWNPRINT Chan a>"
 
 
 
@@ -79,6 +85,7 @@ data Info =
     , _dirty :: [Module.Raw]
     , _foreign :: [Module.Canonical]  -- TODO is this needed?
     }
+    deriving (Show)
 
 
 
@@ -186,6 +193,7 @@ remove path =
 data Msg
   = EndLoop (Dict Info)
   | Get Module.Canonical FilePath
+  deriving (Show)
 
 
 ifaceLoader :: Chan Msg -> Module.Interfaces -> IO (Dict Info, Module.Interfaces)

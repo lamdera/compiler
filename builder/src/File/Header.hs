@@ -27,6 +27,7 @@ import qualified Reporting.Exit as Exit
 import qualified Reporting.Exit.Crawl as E
 import qualified Reporting.Task as Task
 
+import qualified Elm.Package as Pkg
 
 
 -- INFO
@@ -39,6 +40,7 @@ data Info =
     , _source :: BS.ByteString
     , _imports :: [Module.Raw]
     }
+    deriving (Show)
 
 
 atRoot :: Task.Task_ E.Problem a -> Task.Task_ E.Exit a
@@ -153,8 +155,15 @@ parse project path time source =
   -- TODO get regions on data extracted here
   case Header.parse (Project.getName project) source of
     Right (maybeDecl, deps) ->
+      let
+        extraDeps =
+          if Pkg.shouldHaveCodecsGenerated (Project.getName project) then
+            ["Lamdera.Evergreen"]
+          else
+            [] -- these modules are bootstrapped in Lamdera.Evergreen
+      in
       do  maybeName <- checkTag project path maybeDecl
-          return ( maybeName, Info path time source deps )
+          return ( maybeName, Info path time source (deps ++ extraDeps) )
 
     Left msg ->
       Task.throw (E.BadHeader path time source msg)

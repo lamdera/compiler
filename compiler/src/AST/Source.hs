@@ -58,9 +58,10 @@ data Expr_
   | Unit
   | Tuple Expr Expr [Expr]
   | Shader Text Text Shader.Shader
+  deriving (Show)
 
 
-data VarType = Value | Ctor
+data VarType = Value | Ctor deriving (Show)
 
 
 
@@ -71,6 +72,7 @@ data Def
   = Annotate N.Name Type
   | Define (A.Located N.Name) [Pattern] Expr
   | Destruct Pattern Expr
+  deriving (Show)
 
 
 
@@ -94,6 +96,7 @@ data Pattern_
   | PChr Text
   | PStr Text
   | PInt Int
+  deriving (Show)
 
 
 
@@ -112,6 +115,7 @@ data Type_
   | TRecord [(A.Located N.Name, Type)] (Maybe (A.Located N.Name))
   | TUnit
   | TTuple Type Type [Type]
+  deriving (Show)
 
 
 
@@ -129,6 +133,7 @@ data Decl_
   | Docs Text
   | Annotation (A.Located N.Name) Type
   | Definition (A.Located N.Name) [Pattern] Expr
+  deriving (Show)
 
 
 
@@ -137,6 +142,7 @@ data Decl_
 
 data Module decls =
   Module (Maybe Header) [Import] decls
+  deriving (Show)
 
 
 data Header
@@ -146,6 +152,7 @@ data Header
       , _exports :: A.Located Exposing
       , _docs :: Docs
       }
+      deriving (Show)
 
 
 data Import =
@@ -154,23 +161,27 @@ data Import =
     , _alias :: Maybe N.Name
     , _exposing :: Exposing
     }
+    deriving (Show)
 
 
 data Docs
   = NoDocs R.Region
   | YesDocs R.Region B.ByteString
+  deriving (Show)
 
 
 data Effects
   = NoEffects
   | Ports R.Region
   | Manager R.Region Manager
+  deriving (Show)
 
 
 data Manager
   = Cmd (A.Located N.Name)
   | Sub (A.Located N.Name)
   | Fx (A.Located N.Name) (A.Located N.Name)
+  deriving (Show)
 
 
 
@@ -180,14 +191,17 @@ data Manager
 data Exposing
   = Open
   | Explicit ![A.Located Exposed]
+  deriving (Show)
 
 
 data Exposed
   = Lower !N.Name
   | Upper !N.Name !Privacy
   | Operator !N.Name
+  deriving (Show)
 
 
 data Privacy
   = Public
   | Private
+  deriving (Show)

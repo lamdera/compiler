@@ -23,6 +23,7 @@ data Bag a
   = Empty
   | One a
   | Two (Bag a) (Bag a)
+  deriving (Show)
 
 
 

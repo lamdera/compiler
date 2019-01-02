@@ -7,7 +7,7 @@ module Elm.Install
 
 import Control.Monad (filterM, foldM, forM, msum, void)
 import Control.Monad.Except (catchError, lift, liftIO)
-import Data.Map ((!))
+import Sanity ((!)) -- import Data.Map ((!))
 import qualified Data.Map as Map
 import qualified Data.Map.Merge.Lazy as Map
 

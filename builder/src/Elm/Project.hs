@@ -11,7 +11,7 @@ module Elm.Project
 
 
 import qualified Data.ByteString as BS
-import Data.Map ((!))
+import Sanity ((!)) -- import Data.Map ((!))
 import System.FilePath ((</>))
 
 import qualified Elm.Compiler as Compiler
@@ -31,6 +31,7 @@ import qualified Reporting.Render.Type.Localizer as L
 import qualified Reporting.Task as Task
 import qualified Stuff.Paths as Path
 
+import qualified Haskelm.Yaml
 
 
 -- GET ROOT
@@ -65,9 +66,11 @@ compile mode target maybeOutput docs summary@(Summary.Summary root project _ _ _
       (dirty, ifaces) <- Plan.plan docs summary graph
       answers <- Compile.compile project docs ifaces dirty
       results <- Artifacts.write root answers
+
+      _ <- Haskelm.Yaml.generateHaskellYamlFiles root project graph results
+
       _ <- traverse (Artifacts.writeDocs results) docs
       Output.generate mode target maybeOutput summary graph results
-
 
 
 -- COMPILE FOR REPL
@@ -81,7 +84,7 @@ compileForRepl noColors localizer source maybeName =
       (dirty, ifaces) <- Plan.plan Nothing summary graph
       answers <- Compile.compile project Nothing ifaces dirty
       results <- Artifacts.write root answers
-      let (Compiler.Artifacts elmi _ _) = results ! N.replModule
+      let (Compiler.Artifacts elmi _ _ _) = results ! N.replModule
       traverse (Output.generateReplFile noColors localizer summary graph elmi) maybeName
 
 

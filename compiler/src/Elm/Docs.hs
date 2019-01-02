@@ -20,7 +20,7 @@ module Elm.Docs
 
 import qualified Data.ByteString as B
 import qualified Data.List as List
-import Data.Map ((!))
+import Sanity ((!)) -- import Data.Map ((!))
 import qualified Data.Map as Map
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
@@ -47,6 +47,7 @@ import qualified Parse.Primitives.Symbol as Symbol
 import qualified Parse.Primitives.Variable as Var
 import qualified Parse.Primitives.Whitespace as W
 
+import qualified Wire.Source
 
 
 -- DOCUMENTATION
@@ -80,15 +81,16 @@ data Module =
     , _values :: Map.Map N.Name Value
     , _binops :: Map.Map N.Name Binop
     }
+    deriving (Show)
 
 
 type Comment = Text.Text
 
 
-data Alias = Alias Comment [N.Name] Type.Type
-data Union = Union Comment [N.Name] [(N.Name, [Type.Type])]
-data Value = Value Comment Type.Type
-data Binop = Binop Comment Type.Type Binop.Associativity Binop.Precedence
+data Alias = Alias Comment [N.Name] Type.Type deriving (Show)
+data Union = Union Comment [N.Name] [(N.Name, [Type.Type])] deriving (Show)
+data Value = Value Comment Type.Type deriving (Show)
+data Binop = Binop Comment Type.Type Binop.Associativity Binop.Precedence deriving (Show)
 
 
 
@@ -111,6 +113,7 @@ data Error
   = BadAssociativity Text.Text
   | BadName
   | BadType
+  deriving (Show)
 
 
 decoder :: D.Decoder Error Module
@@ -377,7 +380,10 @@ type Dups =
 
 
 checkNames :: Map.Map N.Name (A.Located Can.Export) -> [A.Located N.Name] -> Result i w ()
-checkNames exports names =
+checkNames exports_ names =
+  let
+    exports = Map.filterWithKey (\k _ -> Wire.Source.isEvergreenCodecName k == False) exports_ -- otherwise we'll get doc errors in packages because our evergreen codec functions aren't documented in the module docs
+  in
   do  docs <- Map.traverseWithKey isUnique (List.foldl' addName Map.empty names)
       let overlap = Map.size (Map.intersection docs exports)
       if Map.size exports == overlap && overlap == Map.size docs
@@ -427,12 +433,16 @@ data Info =
     , _iBinops   :: Map.Map N.Name Can.Binop
     , _iEffects  :: Can.Effects
     }
+    deriving (Show)
 
 
 checkExport :: Info -> N.Name -> A.Located Can.Export -> Result i w (Module -> Module)
 checkExport info name (A.At region export) =
   case export of
     Can.ExportValue ->
+      if Wire.Source.isEvergreenCodecName name then
+        Result.ok id -- please don't check the docs of our generated codecs, otherwise we'll get doc errors in every single package
+      else
       do  tipe <- getType name info
           comment <- getComment region name info
           Result.ok $ \m ->

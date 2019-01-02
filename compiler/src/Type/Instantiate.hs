@@ -8,7 +8,7 @@ module Type.Instantiate
 
 
 import qualified Data.Map.Strict as Map
-import Data.Map.Strict ((!))
+import Sanity ((!)) -- import Data.Map.Strict ((!))
 
 import qualified AST.Canonical as Can
 import qualified Elm.Name as N

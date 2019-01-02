@@ -20,6 +20,8 @@ module Elm.Package
   , encode
   , versionDecoder
   , encodeVersion
+  , unpack
+  , shouldHaveCodecsGenerated
   )
   where
 
@@ -54,7 +56,7 @@ data Name =
     { _author :: !Text
     , _project :: !Text
     }
-    deriving (Eq, Ord)
+    deriving (Eq, Ord, Show)
 
 
 data Package =
@@ -62,16 +64,34 @@ data Package =
     { _name :: !Name
     , _version :: !Version
     }
-    deriving (Eq, Ord)
+    deriving (Eq, Ord, Show)
 
 
 
 -- HELPERS
 
 
+shouldHaveCodecsGenerated :: Name -> Bool
+shouldHaveCodecsGenerated name =
+  case name of
+    Name "elm" _ ->
+      -- all elm packages are ignored, so those codecs have to be defined in `Lamdera/codecs`, and `Lamdera/codecs` may only depend on packages from the `elm` author.
+      False
+
+    Name "elm-explorations" _ ->
+      -- all elm-explorations packages are ignored, so those codecs have to be defined in `Lamdera/codecs`, and `Lamdera/codecs` may only depend on packages from the `elm` author.
+      False
+
+    Name "Lamdera" "codecs" ->
+      -- avoid cyclic imports; generated codecs rely on Lamdera/codecs:Lamdera.Evergreen. This is our codec bootstrap module.
+      False
+
+    _ ->
+      True
+
 isKernel :: Name -> Bool
 isKernel (Name author _) =
-  author == "elm" || author == "elm-explorations"
+  author == "elm" || author == "elm-explorations" || author == "Lamdera"
 
 
 toString :: Name -> String
@@ -82,6 +102,11 @@ toString name =
 toText :: Name -> Text
 toText (Name author project) =
     author <> "/" <> project
+
+unpack :: Name -> (Text, Text)
+unpack (Name author project) =
+    (author, project)
+
 
 
 toUrl :: Name -> String
@@ -263,7 +288,7 @@ data Version =
     , _minor :: {-# UNPACK #-} !Word16
     , _patch :: {-# UNPACK #-} !Word16
     }
-    deriving (Eq, Ord)
+    deriving (Eq, Ord, Show)
 
 
 initialVersion :: Version

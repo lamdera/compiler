@@ -1,5 +1,6 @@
 {-# OPTIONS_GHC -funbox-strict-fields #-}
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE FlexibleInstances #-}
 module Type.UnionFind
   ( Point
   , fresh
@@ -39,13 +40,20 @@ import Data.Word (Word32)
 
 newtype Point a =
   Pt (IORef (PointInfo a))
-  deriving Eq
+  deriving (Eq)
+
+
+instance Show (Point a) where
+  show _ = "Pt <UNKNOWNPRINT IOREF PointInfo a>"
 
 
 data PointInfo a
   = Info {-# UNPACK #-} !(IORef Word32) {-# UNPACK #-} !(IORef a)
   | Link {-# UNPACK #-} !(Point a)
 
+
+instance Show (PointInfo a) where
+  show _ = "<UNKNOWNPRINT PointInfo a>"
 
 
 -- HELPERS

@@ -29,12 +29,12 @@ import qualified Publish
 import qualified Repl
 
 
-
 -- MAIN
 
 
 main :: IO ()
 main =
+  --Wire.Test.compile
   do  setLocaleEncoding utf8
       complex intro outro
         [ repl

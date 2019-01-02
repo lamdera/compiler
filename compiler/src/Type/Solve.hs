@@ -8,7 +8,7 @@ module Type.Solve
 
 import Control.Monad
 import qualified Data.Map.Strict as Map
-import Data.Map.Strict ((!))
+import Sanity ((!)) -- import Data.Map.Strict ((!))
 import qualified Data.Vector as Vector
 import qualified Data.Vector.Mutable as MVector
 

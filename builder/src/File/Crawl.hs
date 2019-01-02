@@ -31,8 +31,6 @@ import qualified Reporting.Exit as Exit
 import qualified Reporting.Exit.Crawl as E
 import qualified Reporting.Task as Task
 
-
-
 -- GRAPH
 
 
@@ -44,6 +42,7 @@ data Graph kernel problems =
     , _foreigns :: Map.Map Module.Raw Pkg.Package
     , _problems :: problems
     }
+    deriving (Show)
 
 
 type Result =
@@ -106,7 +105,6 @@ crawlHelp summary ( maybeName, info@(Header.Info path _ _ deps) ) =
 depthFirstSearch :: Summary -> [Unvisited] -> WorkGraph -> Task.Task Result
 depthFirstSearch summary unvisited startGraph =
   do  chan <- liftIO newChan
-
       (Graph args locals kernelPaths foreigns problems) <-
         dfs summary chan 0 Set.empty unvisited startGraph
 
@@ -214,6 +212,7 @@ data Unvisited =
     { _origin :: E.Origin
     , _name :: Module.Raw
     }
+    deriving (Show)
 
 
 data Asset
@@ -294,4 +293,3 @@ toImportDict (Summary _ project exposed _ _) locals =
       Map.insertWith (++) name localPkg dict
   in
   Map.foldrWithKey addLocal (Map.map (map Pkg._name) exposed) locals
-

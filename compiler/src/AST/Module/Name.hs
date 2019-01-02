@@ -30,8 +30,10 @@ data Canonical =
     { _package :: !Pkg.Name
     , _module :: !N.Name
     }
-    deriving (Ord)
+    deriving (Ord, Show)
 
+-- instance Show Canonical where
+  -- show (Canonical pkg modu) = Text.unpack $ Pkg.toText pkg <> "~" <> N.toText modu
 
 instance Eq Canonical where
   (==) (Canonical pkg home) (Canonical pkg' home') =
