@@ -66,8 +66,10 @@ transpile
 
     imports = importDict & Map.toList & fmap tImport
 
-    constructorFunctionsToExport = unions & concatMap (\v ->
+    constructorFunctionsToExport = (unions <> aliasDecls) & concatMap (\v ->
       case v of
+        (Hs.FunBind [Hs.Match (Hs.Ident name) _ _ _]) | "constructor'" `List.isPrefixOf` name
+          -> [name]
         (Hs.PatBind (Hs.PVar (Hs.Ident name)) _ _) | "constructor'" `List.isPrefixOf` name
           -> [name]
         _ -> []
@@ -105,19 +107,27 @@ tExport (C.Export (nameExportMap)) constructorFunctionsToExport =
   nameExportMap
   & Map.toList
   & fmap (mapSnd tat)
-  & concatMap tExportInner
-  & (\v -> Hs.ExportSpecList (v ++ fmap (\c -> Hs.EVar (Hs.UnQual (Hs.Ident c))) constructorFunctionsToExport))
+  & concatMap (tExportInner (N.fromString <$> constructorFunctionsToExport))
+  & Hs.ExportSpecList
   & Just
 
-tExportInner (name, C.ExportValue) = [Hs.EVar (Hs.UnQual (ident name))]
-tExportInner (name, C.ExportBinop) = [Hs.EVar (Hs.UnQual (symIdent name))]
-tExportInner (name, C.ExportAlias) = [Hs.EAbs (Hs.NoNamespace) (Hs.UnQual (ident name))
-                                     -- type alias constructors are always exported
-                                     ,Hs.EAbs (Hs.NoNamespace) (Hs.UnQual (ident $ toConstructorName name))
-                                     ]
-tExportInner (name, C.ExportUnionOpen) = [Hs.EThingWith (Hs.EWildcard 0) (Hs.UnQual (ident name)) []]
-tExportInner (name, C.ExportUnionClosed) = [Hs.EThingWith (Hs.NoWildcard) (Hs.UnQual (ident name)) []]
-tExportInner (_, C.ExportPort) = [error "ports are not available server-side"]
+tExportInner constructors (name, kind) =
+  [case kind of
+    C.ExportValue -> Hs.EVar (Hs.UnQual (ident name))
+    C.ExportBinop -> Hs.EVar (Hs.UnQual (symIdent name))
+    C.ExportAlias -> Hs.EAbs (Hs.NoNamespace) (Hs.UnQual (ident name))
+    C.ExportUnionOpen -> Hs.EThingWith (Hs.EWildcard 0) (Hs.UnQual (ident name)) []
+    C.ExportUnionClosed -> Hs.EThingWith (Hs.NoWildcard) (Hs.UnQual (ident name)) []
+    C.ExportPort -> error "ports are not available server-side"
+  ] ++
+  (
+    (\c -> Hs.EVar (Hs.UnQual (Hs.Ident (N.toString (toConstructorName c))))) <$>
+    (case kind of
+      C.ExportAlias -> if elem (toConstructorName name) constructors then [name] else []
+      C.ExportUnionOpen -> if elem (toConstructorName name) constructors then [name] else []
+      _ -> []
+    )
+  )
 
 mapSnd fn (a,b) = (a, fn b)
 
