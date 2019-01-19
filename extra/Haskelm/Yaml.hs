@@ -329,7 +329,7 @@ removeDuplicates = Prelude.foldr (\x seen -> if x `elem` seen then seen else x :
 matchElmPkg onMatch pkgPath =
   if "/package/elm/" `isInfixOf` pkgPath
   || "/package/elm-explorations" `isInfixOf` pkgPath
-  || "/package/lamdera" `isInfixOf` pkgPath then
+  || "/package/Lamdera/core" `isInfixOf` pkgPath then
     let
       withoutPrefix =
         pkgPath
