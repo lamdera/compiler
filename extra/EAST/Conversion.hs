@@ -52,7 +52,7 @@ transpile
     _aliases -- :: Map.Map N.Name Alias
     _binops  -- :: Map.Map N.Name Binop
     _effects -- :: Effects
-  ) annotations importDict =
+  ) _ importDict =
   let
     moduName = _tModuleName _name
     unions = _unions & tUnions
@@ -61,7 +61,7 @@ transpile
 
     aliasDecls = _aliases & Map.toList & concatMap tAlias
 
-    _decls' = concatMap (tDecls annotations) $ declsToList _decls
+    _decls' = concatMap tDecls $ declsToList _decls
     decls = unionTypeDecls <> aliasDecls <> instDecls <> _decls'
 
     imports = importDict & Map.toList & fmap tImport
@@ -199,9 +199,8 @@ declsToList (C.Declare def decls) = [def] : declsToList decls
 declsToList (C.DeclareRec defs decls) = defs : declsToList decls
 declsToList (C.SaveTheEnvironment) = []
 
-tDecls :: Map.Map N.Name C.Annotation -> List C.Def -> List Hs.Decl
-tDecls annotations [def@(C.Def (A.At _ name) _ _)] = tAnnot name (Map.lookup name annotations) ++ tDef def
-tDecls _ defs = concat $ tDef <$> defs
+tDecls :: List C.Def -> List Hs.Decl
+tDecls defs = concat $ tDef <$> defs
 
 tAnnot :: N.Name -> Maybe C.Annotation -> [Hs.Decl]
 tAnnot _ Nothing = error "missing type annotation"
@@ -249,7 +248,7 @@ tExpr (A.At _ e) = case e of
   (C.VarForeign moduleName name _) -> Hs.Var (qual moduleName name)
   (C.VarCtor _ moduleName name _ _) ->
     Hs.Con (qual moduleName (toConstructorName name))
-  (C.VarDebug moduleName name _) -> Hs.Var (qual moduleName name) -- error (sShow e) -- TODO: don't allow debug vars
+  (C.VarDebug _ name _) -> Hs.Var (qual ModuleName.debug name) -- error (sShow e) -- TODO: don't allow debug vars
   (C.VarOperator op _ _ _) -> Hs.Var (Hs.UnQual (symIdent op))
   (C.Chr text) -> Hs.Lit (Hs.String (Text.unpack text))
   (C.Str text) -> Hs.Lit (Hs.String (Text.unpack text))
