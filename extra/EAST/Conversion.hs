@@ -19,12 +19,14 @@ import Data.Function ((&))
 import Data.Monoid ((<>))
 import qualified Data.List as List
 import qualified Data.Text as Text
+import qualified Data.Maybe as Maybe
 
 import qualified East.Rewrite as Rewrite
 import qualified Transpile.Instances
 import Transpile.Reserved (ident, symIdent, rawIdent)
 import qualified Transpile.Deriving
 import Transpile.PrettyPrint
+--import qualified Debug.Trace as DT
 
 import qualified Language.Haskell.Exts.Simple.Syntax as Hs
 
@@ -66,7 +68,9 @@ transpile
 
     imports = importDict & Map.toList & fmap tImport
 
-    constructorFunctionsToExport = (unions <> aliasDecls) & concatMap (\v ->
+    unionCtorMap = unionConstructorNames <$> _unions
+
+    ctorFns = decls & concatMap (\v -> -- all constructor functions we've generated
       case v of
         (Hs.FunBind [Hs.Match (Hs.Ident name) _ _ _]) | "constructor'" `List.isPrefixOf` name
           -> [name]
@@ -76,7 +80,7 @@ transpile
       )
 
     -- binops = tBinops _binops
-    moduleHead = Hs.ModuleHead (Hs.ModuleName moduName) Nothing (tExport _exports constructorFunctionsToExport)
+    moduleHead = Hs.ModuleHead (Hs.ModuleName moduName) Nothing (tExport _exports ctorFns unionCtorMap)
     module_ = Hs.Module (Just moduleHead) [{-ModulePragma-}] (haskelmImports ++ imports) decls
   in
   pure module_
@@ -102,16 +106,16 @@ haskelmImports =
 
 -- EXPORTS
 
-tExport (C.ExportEverything _) _ = Nothing -- TODO: maybe walk over ast and explicitly export things that should be?
-tExport (C.Export (nameExportMap)) constructorFunctionsToExport =
+tExport (C.ExportEverything _) _ _ = Nothing -- TODO: maybe walk over ast and explicitly export things that should be?
+tExport (C.Export nameExportMap) ctorFns unionCtorMap =
   nameExportMap
   & Map.toList
   & fmap (mapSnd tat)
-  & concatMap (tExportInner (N.fromString <$> constructorFunctionsToExport))
+  & concatMap (tExportInner (N.fromString <$> ctorFns) unionCtorMap)
   & Hs.ExportSpecList
   & Just
 
-tExportInner constructors (name, kind) =
+tExportInner ctorFns unionCtorMap (name, kind) =
   [case kind of
     C.ExportValue -> Hs.EVar (Hs.UnQual (ident name))
     C.ExportBinop -> Hs.EVar (Hs.UnQual (symIdent name))
@@ -123,8 +127,8 @@ tExportInner constructors (name, kind) =
   (
     (\c -> Hs.EVar (Hs.UnQual (Hs.Ident (N.toString (toConstructorName c))))) <$>
     (case kind of
-      C.ExportAlias -> if elem (toConstructorName name) constructors then [name] else []
-      C.ExportUnionOpen -> if elem (toConstructorName name) constructors then [name] else []
+      C.ExportAlias -> if elem (toConstructorName name) ctorFns then [name] else []
+      C.ExportUnionOpen -> unionCtorMap Map.!? name & Maybe.fromMaybe []
       _ -> []
     )
   )
@@ -161,6 +165,9 @@ tUnion (name, (C.Union tvars ctors _ _)) =
       [] -- deriving nothing
   ] ++ ((\(C.Ctor name _ _ _) -> Hs.PatBind (Hs.PVar (ident $ toConstructorName name)) (Hs.UnGuardedRhs (Hs.Con (Hs.UnQual (ident name)))) Nothing)
     <$> ctors)
+
+unionConstructorNames (C.Union _ ctors _ _) =
+  (\(C.Ctor name _ _ _) -> name) <$> ctors
 
 -- TYPE ALIASES
 
