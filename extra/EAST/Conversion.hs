@@ -200,6 +200,11 @@ tAlias (aliasName, C.Alias tvars t) =
     _ -> []
   )
 
+data SerialiseTypes
+  = KeepTypeSigs
+  | DropTypeSigs
+
+
 -- DECLS
 
 declsToList (C.Declare def decls) = [def] : declsToList decls
@@ -207,7 +212,7 @@ declsToList (C.DeclareRec defs decls) = defs : declsToList decls
 declsToList (C.SaveTheEnvironment) = []
 
 tDecls :: List C.Def -> List Hs.Decl
-tDecls defs = concat $ tDef <$> defs
+tDecls defs = concat $ tDef KeepTypeSigs <$> defs
 
 tAnnot :: N.Name -> Maybe C.Annotation -> [Hs.Decl]
 tAnnot _ Nothing = error "missing type annotation"
@@ -235,18 +240,20 @@ tType t = case t of
       (nameTypePairs & fmap snd & fmap tType)
 
 
-tDef (C.Def (A.At _ name) pats e) =
+tDef _ (C.Def (A.At _ name) pats e) =
   let
     (npats, ne1) = Rewrite.recordArgsToLet pats e
   in
   [Hs.FunBind [Hs.Match (ident name) (tPattern <$> npats) (Hs.UnGuardedRhs (tExpr ne1)) Nothing]]
-tDef (C.TypedDef name freeVars patTypeTuples e t) =
+tDef DropTypeSigs (C.TypedDef name _ patTypeTuples e _) =
+  tDef DropTypeSigs (C.Def name (fst <$> patTypeTuples) e)
+tDef KeepTypeSigs (C.TypedDef name freeVars patTypeTuples e t) =
   tAnnot (tat name) (Just $ C.Forall freeVars
     ( ((patTypeTuples & fmap snd) ++ [t])
       & foldr1 C.TLambda -- (a -> b) -> c vs a -> b -> c
     )
   ) ++
-  tDef (C.Def name (fmap fst patTypeTuples) e)
+  tDef KeepTypeSigs (C.Def name (fmap fst patTypeTuples) e)
 
 tExpr (A.At _ e) = case e of
   (C.VarLocal name) -> Hs.Var (Hs.UnQual $ ident name)
@@ -277,9 +284,9 @@ tExpr (A.At _ e) = case e of
         tIf [] = error "got if-statement with no (predicate,thenExpr) clauses"
       in tIf exprPairs
 
-  (C.Let def restExpr) -> Hs.Let (Hs.BDecls $ tDef def) (tExpr restExpr)
+  (C.Let def restExpr) -> Hs.Let (Hs.BDecls $ tDef DropTypeSigs def) (tExpr restExpr)
   (C.LetRec [] restExpr) -> tExpr restExpr -- for prettier output
-  (C.LetRec defs restExpr) -> Hs.Let (Hs.BDecls $ concat $ tDef <$> defs) (tExpr restExpr)
+  (C.LetRec defs restExpr) -> Hs.Let (Hs.BDecls $ concat $ tDef DropTypeSigs <$> defs) (tExpr restExpr)
 
   (C.LetDestruct pat e1 restExpr) ->
     let
@@ -288,7 +295,7 @@ tExpr (A.At _ e) = case e of
     Hs.Let
       (Hs.BDecls
         ((Hs.PatBind (tPattern np) (Hs.UnGuardedRhs (tExpr e1)) Nothing)
-        : (concat $ tDef <$> lrDefs)
+        : (concat $ tDef DropTypeSigs <$> lrDefs)
         )
       )
       (tExpr lrExpr) -- TODO: or restExpr?
