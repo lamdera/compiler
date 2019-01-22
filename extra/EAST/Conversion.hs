@@ -262,13 +262,13 @@ tExpr (A.At _ e) = case e of
   (C.Int int) -> Hs.Lit (Hs.Frac (toRational int))
   (C.Float double) -> Hs.Lit (Hs.Frac (toRational double))
   (C.List exprs) -> Hs.List (tExpr <$> exprs)
-  (C.Negate e) -> Hs.NegApp (tExpr e)
-  (C.Binop infixOp _ _ _ larg rarg) -> Hs.InfixApp (tExpr larg) (Hs.QVarOp $ Hs.UnQual $ symIdent infixOp) (tExpr rarg)
+  (C.Negate e) -> Hs.Paren $ Hs.NegApp (tExpr e)
+  (C.Binop infixOp _ _ _ larg rarg) -> Hs.Paren $ Hs.InfixApp (tExpr larg) (Hs.QVarOp $ Hs.UnQual $ symIdent infixOp) (tExpr rarg)
   (C.Lambda pats e) ->
     let
       (npats, ne) = Rewrite.recordArgsToLet pats e
     in
-    Hs.Lambda (tPattern <$> npats) (tExpr ne)
+    Hs.Paren $ Hs.Lambda (tPattern <$> npats) (tExpr ne)
   (C.Call expr exprs) -> foldl Hs.App (tExpr expr) (tExpr <$> exprs)
   (C.If exprPairs _else) ->
       let
@@ -302,7 +302,7 @@ tExpr (A.At _ e) = case e of
         in C.CaseBranch npat nexpr
     in
     Hs.Case (tExpr e) ((\(C.CaseBranch pat expr) -> Hs.Alt (tPattern pat) (Hs.UnGuardedRhs (tExpr expr)) Nothing) <$> newCaseBranches)
-  (C.Accessor name) -> Hs.App (Hs.Var (Hs.UnQual (Hs.Ident "Lamdera.Haskelm.Core.get"))) (Hs.Var (Hs.UnQual (ident name)))
+  (C.Accessor name) -> Hs.Paren $ Hs.App (Hs.Var (Hs.UnQual (Hs.Ident "Lamdera.Haskelm.Core.get"))) (Hs.Var (Hs.UnQual (ident name)))
   (C.Access record (A.At _ fieldName)) ->
     let get       = Hs.Var (Hs.Qual (Hs.ModuleName "Lamdera.Haskelm.Core") (Hs.Ident "get"))
         fieldAst  = Hs.OverloadedLabel $ rawIdent fieldName
@@ -319,6 +319,7 @@ tExpr (A.At _ e) = case e of
     in Hs.Paren $ foldl folder (Hs.Var $ Hs.UnQual $ ident base) fieldsAst
 
   (C.Record fieldNameValueMap) ->
+    Hs.Paren $
     fieldNameValueMap
       & Map.toList
       & reverse
