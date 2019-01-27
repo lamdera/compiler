@@ -235,7 +235,7 @@ packageYamlFromAppInfo
     synopsis = "lamdera elm main entrypoint"
     license = "NONE"
     version = "0.0.1"
-    exposedModules = []
+    exposedModules = ["Backend"]
     dependencies =
       haskelm_deps ++
       (fmap (\(fqname, _) -> Paths.cabalNameOfPackage fqname)
