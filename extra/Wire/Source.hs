@@ -138,7 +138,7 @@ generateCodecs (Can.Module _moduName _docs _exports _decls _unions _aliases _bin
     encodeUnion :: [N.Name] -> [Can.Ctor] -> [T.Text]
     encodeUnion _u_vars _u_alts =
       (\(Can.Ctor name _ _ tipes) ->
-          N.toText name <> leftWrap (fst <$> nargs tipes) <> " -> " <> sequenceEnc ((strEnc (N.toText name)) : ((\(var, t) -> encoderForType t <> " " <> var) <$> nargs tipes))) <$> _u_alts
+          N.toText name <> leftWrap (fst <$> nargs tipes) <> " -> " <> sequenceEncWithoutLength ((strEnc (N.toText name)) : ((\(var, t) -> encoderForType t <> " " <> var) <$> nargs tipes))) <$> _u_alts
 
     nargs :: [Can.Type] -> [(T.Text, Can.Type)]
     nargs xs =
@@ -173,6 +173,7 @@ generateCodecs (Can.Module _moduName _docs _exports _decls _unions _aliases _bin
     leftWrap (x:xs) = " " <> x <> leftWrap xs
 
     sequenceEnc things = "Lamdera.Evergreen.encodeSequence [" <> T.intercalate ", " things <> "]"
+    sequenceEncWithoutLength things = "Lamdera.Evergreen.encodeSequenceWithoutLength [" <> T.intercalate ", " things <> "]"
 
     p s = "(" <> s <> ")"
 
