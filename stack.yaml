@@ -1,6 +1,7 @@
-resolver: lts-12.19
+resolver: lts-13.1
 flags: {}
 packages:
 - '.'
 extra-deps:
 - language-glsl-0.3.0
+- haskell-src-exts-simple-1.20.0.0
