@@ -22,6 +22,8 @@ injectEvergreenImport s@(_:withoutNewline) | "\n\nimport " `List.isPrefixOf` s =
   "\nimport Lamdera.Evergreen" <> withoutNewline
 injectEvergreenImport s | "\nimport " `List.isPrefixOf` s = -- otherwise we inject anyway, but now the line numbers are off by one in error messages
   "\nimport Lamdera.Evergreen" <> s
+injectEvergreenImport s@(_:_:withoutNewline) | "\n\n{-|" `List.isPrefixOf` s = -- hope that there's a module-level docstring, empty or not, in case there are no import statements at all
+  "\nimport Lamdera.Evergreen\n" <> withoutNewline
 injectEvergreenImport (x:xs) = x : injectEvergreenImport xs
 injectEvergreenImport [] = []
 
