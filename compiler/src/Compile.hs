@@ -112,7 +112,7 @@ compile flag pkg importDict interfaces source =
 
       -- generate wire source code from canonical ast
       -- these are intended to be serialised and put at the end of source, then we redo the whole compilation step, generating valid as normal etc.
-      rawCodecSource <- pure $ T.unpack $ Wire.Source.generateCodecs canonical
+      rawCodecSource <- pure $ T.unpack $ Wire.Source.generateCodecs (getImportDict valid) canonical
 
       valid_ <- Result.mapError Error.Syntax $
         if Map.lookup "Lamdera.Evergreen" importDict == Nothing then -- Evergreen isn't in the importDict, so this is a kernel module, or something that shouldn't have access to Evergreen, like the Evergreen module itself.
@@ -158,6 +158,16 @@ compile flag pkg importDict interfaces source =
 addImport :: Src.Import -> Valid.Module -> Valid.Module
 addImport i (Valid.Module _name _overview _docs _exports _imports _decls _unions _aliases _binop _effects) =
   Valid.Module _name _overview _docs _exports (i : _imports) _decls _unions _aliases _binop _effects
+
+getImportDict :: Valid.Module -> Map.Map N.Name N.Name
+getImportDict (Valid.Module _name _overview _docs _exports _imports _decls _unions _aliases _binop _effects) =
+  Map.fromList $
+  (\(Src.Import (A.At _ _import) _alias _exposing) ->
+    case _alias of
+      Just al -> (_import, al)
+      Nothing -> (_import, _import)
+  ) <$> _imports
+
 
 -- TYPE INFERENCE
 
