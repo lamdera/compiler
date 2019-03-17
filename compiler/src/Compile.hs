@@ -146,7 +146,6 @@ compile flag pkg importDict interfaces source =
       haskAst <-
         East.transpile canonical_ annotations importDict
 
-
       Result.ok $
         Artifacts
           { _elmi = I.fromModule annotations canonical_
