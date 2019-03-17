@@ -6,6 +6,10 @@ module Haskelm.Yaml
   where
 
 import Data.Yaml
+import qualified Data.Yaml as Yaml
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.UTF8 as BS8
+import qualified System.Directory as Dir
 import Data.Text
 import Data.Aeson.Types as Aeson
 import qualified Elm.Package as Pkg
@@ -33,6 +37,24 @@ import Control.Monad.IO.Class (MonadIO)
 
 type List a = [a]
 
+encodeYaml :: ToJSON yaml => FilePath -> yaml -> IO ()
+encodeYaml path y = do
+  writeIfChanged path (Yaml.encode y)
+
+writeIfChanged :: FilePath -> BS.ByteString -> IO ()
+writeIfChanged path new = do
+  exists <- Dir.doesFileExist path
+  if exists then do
+      current <- BS.readFile path
+      if current == new then
+          putStrLn ("contents equal " <> path)
+        else do
+          putStrLn ("not equal " <> path)
+          BS.writeFile path new
+    else do
+      putStrLn ("not exists " <> path)
+      BS.writeFile path new
+
 
 generateHaskellYamlFiles
   :: FilePath
@@ -43,14 +65,14 @@ generateHaskellYamlFiles
 generateHaskellYamlFiles root project graph results = do
   -- write stack.yaml
   stackFileContents <- stackYaml root graph
-  liftIO $ encodeFile (root </> "stack.yaml") stackFileContents
+  liftIO $ encodeYaml (root </> "stack.yaml") stackFileContents
 
   -- write package.yaml files
   case project of
     Project.App info -> liftIO $ do
       let appdir = root -- Paths.haskelmoRoot root
       Dir.createDirectoryIfMissing True appdir
-      encodeFile (Paths.haskellAppPackageYaml appdir) (packageYamlFromAppInfo root info)
+      encodeYaml (Paths.haskellAppPackageYaml appdir) (packageYamlFromAppInfo root info)
 
     Project.Pkg info ->
       -- NOTE: this branch is probably unused; generatePkgYamlFiles is also called through the .elm/ cache mechanism
@@ -67,11 +89,11 @@ generatePkgYamlFiles root results info =
     mapM_ (\(name, hs) -> do
         let path = Paths.haskelmoWithoutStuff root name
         Dir.createDirectoryIfMissing True (takeDirectory path)
-        writeFile path (HsPretty.prettyPrint hs)
+        writeIfChanged path (BS8.fromString (HsPretty.prettyPrint hs))
       ) $ Map.toList $ Compiler._haskelmo <$> results
 
     -- generate package.yaml
-    encodeFile (Paths.haskellPkgPackageYaml root) (packageYamlFromPkgInfo info)
+    encodeYaml (Paths.haskellPkgPackageYaml root) (packageYamlFromPkgInfo info)
 
 
 -- HASKELM PROJECT FILE GENERATION
