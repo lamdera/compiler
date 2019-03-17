@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Wire.Source (generateCodecs, injectEvergreenImport, injectEvergreenExposing, isEvergreenCodecName) where
+module Wire.Source (generateCodecs, injectEvergreenExposing, isEvergreenCodecName) where
 
 import qualified AST.Canonical as Can
 import AST.Module.Name (Canonical(..))
@@ -16,14 +16,6 @@ import qualified Elm.Name as N
 import qualified Elm.Package as Pkg
 
 
--- FIXME: this requires all files to contain at least one import statement, and it's not very safe.
-injectEvergreenImport :: String -> String
-injectEvergreenImport s@(_:withoutNewline) | "\n\nimport " `List.isPrefixOf` s = -- hope that there's an empty line between the import statements and whatever comes before it; this should be the case if the code is elm-formatted
-  "\nimport Lamdera.Evergreen" <> withoutNewline
-injectEvergreenImport s | "\nimport " `List.isPrefixOf` s = -- otherwise we inject anyway, but now the line numbers are off by one in error messages
-  "\nimport Lamdera.Evergreen" <> s
-injectEvergreenImport (x:xs) = x : injectEvergreenImport xs
-injectEvergreenImport [] = []
 
 isEvergreenCodecName :: N.Name -> Bool
 isEvergreenCodecName name = "evg_encode_" `T.isPrefixOf` n || "evg_decode_" `T.isPrefixOf` n where n = N.toText name
