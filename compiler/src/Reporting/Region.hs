@@ -3,6 +3,7 @@ module Reporting.Region
   ( Region(..)
   , Position(..)
   , zero
+  , lamderaInject
   , one
   , merge
   , encode
@@ -43,6 +44,11 @@ merge (Region start _) (Region _ end) =
 zero :: Region
 zero =
   Region (Position 0 0) (Position 0 0)
+
+{-# NOINLINE lamderaInject #-}
+lamderaInject :: Region
+lamderaInject =
+  Region (Position 0 0) (Position 1 0)
 
 
 {-# NOINLINE one #-}
