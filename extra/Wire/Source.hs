@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Wire.Source (generateCodecs, injectEvergreenImport, injectEvergreenExposing, isEvergreenCodecName) where
+module Wire.Source (generateCodecs, injectEvergreenExposing, isEvergreenCodecName) where
 
 import qualified AST.Canonical as Can
 import AST.Module.Name (Canonical(..))
