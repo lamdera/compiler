@@ -212,6 +212,7 @@ evergreenCoreDecoders = snd <$> evergreenCoreCodecs
 
 evergreenCoreCodecs :: Map.Map (Canonical, N.Name) (T.Text, T.Text)
 evergreenCoreCodecs =
+  -- NOTE: the injected failEncode and failDecode values follow a simple pattern; they take the (de/en)coders of type variables as arguments; one argument per type variable, in the same order as the type variables in the main type. A two-argument type that we want to `fail` must thus be wrapped in a two-argument lambda that drops both its arguments, for the generated source code to kind-check. Se examples below.
   Map.fromList $
   (\((pkg, modu, tipe), res) -> ((Canonical (pkgFromText pkg) modu, tipe), res)) <$>
   -- non elm/core types
@@ -221,9 +222,9 @@ evergreenCoreCodecs =
     , (("elm/virtual-dom", "VirtualDom", "Attribute") --> ("(\\_ -> Lamdera.Evergreen.failEncode)", "(\\_ -> Lamdera.Evergreen.failDecode)") )
     , (("elm/virtual-dom", "VirtualDom", "Handler") --> ("(\\_ -> Lamdera.Evergreen.failEncode)", "(\\_ -> Lamdera.Evergreen.failDecode)") )
     -- Disable for now, but need to revisit these and whether we want actual proper wire support
-    , (("elm/browser", "Browser", "UrlRequest") --> ("(\\_ -> Lamdera.Evergreen.failEncode)", "(\\_ -> Lamdera.Evergreen.failDecode)") )
-    , (("elm/url", "Url", "Protocol") --> ("(\\_ -> Lamdera.Evergreen.failEncode)", "(\\_ -> Lamdera.Evergreen.failDecode)") )
-    , (("elm/http", "Http", "Error") --> ("(\\_ -> Lamdera.Evergreen.failEncode)", "(\\_ -> Lamdera.Evergreen.failDecode)") )
+    , (("elm/browser", "Browser", "UrlRequest") --> ("Lamdera.Evergreen.failEncode", "Lamdera.Evergreen.failDecode") )
+    , (("elm/url", "Url", "Protocol") --> ("Lamdera.Evergreen.failEncode", "Lamdera.Evergreen.failDecode") )
+    , (("elm/http", "Http", "Error") --> ("Lamdera.Evergreen.failEncode", "Lamdera.Evergreen.failDecode") )
     ] <>
     (
       -- elm/core types
