@@ -48,6 +48,7 @@ injectEvergreenExposing (Can.Module _ _ _exports _ _ _ _ _) s =
     Can.Export mapNameExport ->
       inject (startsWithUppercaseCharacter `filter` (N.toString <$> Map.keys mapNameExport)) s
 
+-- pkgNone is just to make the types line up; it's stripped out right after it's used
 pkgNone = Pkg.Name "-lamdera-inject-package-" "-lamdera-inject-module-"
 
 generateCodecs :: Map.Map N.Name N.Name -> Can.Module -> T.Text
