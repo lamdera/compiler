@@ -229,21 +229,27 @@ evergreenCoreCodecs =
     , (("elm/http", "Http", "Error") --> ("Lamdera.Evergreen.failEncode", "Lamdera.Evergreen.failDecode") )
     ] <>
     (
-      -- elm/core types
+      -- elm/core types; these are exhaustive (but some types are commented out atm)
       (\(modu, tipe) -> ("elm/core", modu, tipe) --> ("Lamdera.Evergreen.encode" <> N.toText tipe, "Lamdera.Evergreen.decode" <> N.toText tipe)) <$>
       [ ("Array", "Array")
-      , ("Char", "Char")
       , ("Basics", "Bool")
       , ("Basics", "Float")
       , ("Basics", "Int")
       , ("Basics", "Never")
       , ("Basics", "Order")
-      , ("List", "List")
+      , ("Char", "Char")
+      , ("Dict", "Dict")
+      , ("List", "List") -- list type is only defined in kernel code, there's no `type List a = List` or similar in elm land. Accidentally maybe?
       , ("Maybe", "Maybe")
+      -- , ("Platform", "ProcessId")
+      -- , ("Platform", "Program")
+      -- , ("Platform", "Router")
+      -- , ("Platform", "Task")
+      -- , ("Platform.Cmd", "Cmd")
+      -- , ("Platform.Sub", "Sub")
+      , ("Result", "Result")
       , ("Set", "Set")
       , ("String", "String")
-      , ("Dict", "Dict")
-      , ("Result", "Result")
       ]
     )
   )
