@@ -20,6 +20,7 @@ import Data.Monoid ((<>))
 import qualified Data.List as List
 import qualified Data.Text as Text
 import qualified Data.Maybe as Maybe
+import Control.Arrow
 
 import qualified East.Rewrite as Rewrite
 import qualified Transpile.Instances
@@ -80,7 +81,7 @@ transpile
       )
 
     -- binops = tBinops _binops
-    moduleHead = Hs.ModuleHead (Hs.ModuleName moduName) Nothing (tExport _exports ctorFns unionCtorMap)
+    moduleHead = Hs.ModuleHead (Hs.ModuleName moduName) Nothing (tExport moduName _exports ctorFns unionCtorMap)
     module_ = Hs.Module (Just moduleHead) [{-ModulePragma-}] (haskelmImports ++ imports) decls
   in
   pure module_
@@ -106,11 +107,12 @@ haskelmImports =
 
 -- EXPORTS
 
-tExport (C.ExportEverything _) _ _ = Nothing -- TODO: maybe walk over ast and explicitly export things that should be?
-tExport (C.Export nameExportMap) ctorFns unionCtorMap =
+tExport _ (C.ExportEverything _) _ _ = Nothing -- TODO: maybe walk over ast and explicitly export things that should be?
+tExport moduName (C.Export nameExportMap) ctorFns unionCtorMap =
   nameExportMap
   & Map.toList
-  & fmap (mapSnd tat)
+  & fmap (first (\n -> N.fromString (moduName <> "." <> N.toString n)))
+  & fmap (second tat)
   & concatMap (tExportInner (N.fromString <$> ctorFns) unionCtorMap)
   & Hs.ExportSpecList
   & Just
