@@ -46,6 +46,7 @@ import qualified Elm.Name as N
 import qualified Json.Decode.Internals as Decode
 import qualified Json.Encode as Encode
 
+import qualified Debug.Trace as DT
 
 
 -- PACKGE NAMES
@@ -73,13 +74,43 @@ data Package =
 
 shouldHaveCodecsGenerated :: Name -> Bool
 shouldHaveCodecsGenerated name =
+  (\res -> DT.trace ("shouldHaveCodecsGenerated? " ++ show name ++ " => " ++ show res) $ res) $
   case name of
-    Name "elm" _ ->
-      -- all elm packages are ignored, so those codecs have to be defined in `Lamdera/codecs`, and `Lamdera/codecs` may only depend on packages from the `elm` author.
-      False
+    -- Some elm packages are ignored because of cyclic dependencies.
+    -- Those codecs have to be manually defined in `Lamdera/codecs`.
+
+    -- elm deps used by Lamdera/codecs
+    Name "elm" "bytes" -> False
+    Name "elm" "core" -> False
+
+    -- below here are things filip has checked doesn't use types defined in js (e.g. `type T a = T`)
+    -- they can still use kernel functions, but types are fully defined in elm land
+    Name "elm" "html" -> True
+    Name "elm" "time" -> True
+    Name "elm" "url" -> True
+
+    -- shady, but let's try these ones too
+    Name "elm" "browser" -> False
+    Name "elm" "http" -> True
+
+    -- all other elm packages that could have native code
+    -- todo: check which of these we can run wire for, and which ones need manual intervention
+    Name "elm" "browser" -> False
+    Name "elm" "file" -> False
+    Name "elm" "json" -> False
+    Name "elm" "parser" -> False
+    Name "elm" "project-metadata-utils" -> False
+    Name "elm" "random" -> False
+    Name "elm" "regex" -> False
+    Name "elm" "svg" -> False
+    Name "elm" "virtual-dom" -> False
+    Name "elm-explorations" "benchmark" -> False
+    Name "elm-explorations" "linear-algebra" -> False
+    Name "elm-explorations" "markdown" -> False
+    Name "elm-explorations" "test" -> False
+    Name "elm-explorations" "webgl" -> False
 
     Name "elm-explorations" _ ->
-      -- all elm-explorations packages are ignored, so those codecs have to be defined in `Lamdera/codecs`, and `Lamdera/codecs` may only depend on packages from the `elm` author.
       False
 
     Name "Lamdera" "codecs" ->
