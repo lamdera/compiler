@@ -217,16 +217,21 @@ evergreenCoreCodecs =
   (\((pkg, modu, tipe), res) -> ((Canonical (pkgFromText pkg) modu, tipe), res)) <$>
   -- non elm/core types
   -- NOTE: none of these packages have been checked exhaustively for types; we should do that
-  ( [ (("elm/time", "Time", "Posix") --> ("Lamdera.Evergreen.encodeTimePosix", "Lamdera.Evergreen.decodeTimePosix") )
-    , (("elm/bytes", "Bytes", "Bytes") --> ("Lamdera.Evergreen.encodeBytes", "Lamdera.Evergreen.decodeBytes") )
+  ( [ (("elm/bytes", "Bytes", "Bytes") --> ("Lamdera.Evergreen.encodeBytes", "Lamdera.Evergreen.decodeBytes") )
     , (("elm/virtual-dom", "VirtualDom", "Node") --> ("(\\_ -> Lamdera.Evergreen.failEncode)", "(\\_ -> Lamdera.Evergreen.failDecode)") )
     , (("elm/virtual-dom", "VirtualDom", "Attribute") --> ("(\\_ -> Lamdera.Evergreen.failEncode)", "(\\_ -> Lamdera.Evergreen.failDecode)") )
     , (("elm/virtual-dom", "VirtualDom", "Handler") --> ("(\\_ -> Lamdera.Evergreen.failEncode)", "(\\_ -> Lamdera.Evergreen.failDecode)") )
     -- Disable for now, but need to revisit these and whether we want actual proper wire support
     , (("elm/browser", "Browser", "UrlRequest") --> ("Lamdera.Evergreen.failEncode", "Lamdera.Evergreen.failDecode") )
     , (("elm/browser", "Browser.Navigation", "Key") --> ("Lamdera.Evergreen.failEncode", "Lamdera.Evergreen.failDecode") )
-    , (("elm/url", "Url", "Protocol") --> ("Lamdera.Evergreen.failEncode", "Lamdera.Evergreen.failDecode") )
-    , (("elm/http", "Http", "Error") --> ("Lamdera.Evergreen.failEncode", "Lamdera.Evergreen.failDecode") )
+    -- not implemented yet, but needed by other pkgs
+    , (("elm/core", "Platform", "ProcessId") --> ("Lamdera.Evergreen.failEncode", "Lamdera.Evergreen.failDecode") ) -- time
+    -- not needed by anything immediately, but we don't know how to encode these anyway, so let's fail them now
+    , (("elm/core", "Platform", "Program") --> ("(\\_ _ _ -> Lamdera.Evergreen.failEncode)", "(\\_ _ _ -> Lamdera.Evergreen.failDecode)") ) -- idk
+    , (("elm/core", "Platform", "Router") --> ("(\\_ _ _ -> Lamdera.Evergreen.failEncode)", "(\\_ _ _ -> Lamdera.Evergreen.failDecode)") ) -- idk
+    , (("elm/core", "Platform", "Task") --> ("(\\_ _ -> Lamdera.Evergreen.failEncode)", "(\\_ _ -> Lamdera.Evergreen.failDecode)") ) -- idk
+    , (("elm/core", "Platform.Cmd", "Cmd") --> ("(\\_ -> Lamdera.Evergreen.failEncode)", "(\\_ -> Lamdera.Evergreen.failDecode)") ) -- idk
+    , (("elm/core", "Platform.Sub", "Sub") --> ("(\\_ -> Lamdera.Evergreen.failEncode)", "(\\_ -> Lamdera.Evergreen.failDecode)") ) -- idk
     ] <>
     (
       -- elm/core types; these are exhaustive (but some types are commented out atm)
