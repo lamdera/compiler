@@ -80,8 +80,13 @@ transpile
         _ -> []
       )
 
+    fqExports (Hs.ExportSpecList lst) = Hs.ExportSpecList (fqExport <$> lst)
+
+    fqExport (Hs.EVar (Hs.UnQual n)) = Hs.EVar (Hs.Qual (Hs.ModuleName moduName) n)
+    fqExport n = n
+
     -- binops = tBinops _binops
-    moduleHead = Hs.ModuleHead (Hs.ModuleName moduName) Nothing (tExport moduName _exports ctorFns unionCtorMap)
+    moduleHead = Hs.ModuleHead (Hs.ModuleName moduName) Nothing (fqExports <$> tExport _exports ctorFns unionCtorMap)
     module_ = Hs.Module (Just moduleHead) [{-ModulePragma-}] (haskelmImports ++ imports) decls
   in
   pure module_
@@ -107,11 +112,10 @@ haskelmImports =
 
 -- EXPORTS
 
-tExport _ (C.ExportEverything _) _ _ = Nothing -- TODO: maybe walk over ast and explicitly export things that should be?
-tExport moduName (C.Export nameExportMap) ctorFns unionCtorMap =
+tExport (C.ExportEverything _) _ _ = Nothing -- TODO: maybe walk over ast and explicitly export things that should be?
+tExport (C.Export nameExportMap) ctorFns unionCtorMap =
   nameExportMap
   & Map.toList
-  & fmap (first (\n -> N.fromString (moduName <> "." <> N.toString n)))
   & fmap (second tat)
   & concatMap (tExportInner (N.fromString <$> ctorFns) unionCtorMap)
   & Hs.ExportSpecList
@@ -266,7 +270,7 @@ tExpr (A.At _ e) = case e of
     Hs.Con (qual moduleName (toConstructorName name))
   (C.VarDebug _ name _) -> Hs.Var (qual ModuleName.debug name) -- error (sShow e) -- TODO: don't allow debug vars
   (C.VarOperator op _ _ _) -> Hs.Var (Hs.UnQual (symIdent op))
-  (C.Chr text) -> Hs.Lit (Hs.String (Text.unpack text))
+  (C.Chr text) -> Hs.Lit (Hs.Char (head $ Text.unpack text))
   (C.Str text) -> Hs.Lit (Hs.String (Text.unpack text))
   (C.Int int) -> Hs.Lit (Hs.Frac (toRational int))
   (C.Float double) -> Hs.Lit (Hs.Frac (toRational double))
@@ -311,7 +315,7 @@ tExpr (A.At _ e) = case e of
         in C.CaseBranch npat nexpr
     in
     Hs.Case (tExpr e) ((\(C.CaseBranch pat expr) -> Hs.Alt (tPattern pat) (Hs.UnGuardedRhs (tExpr expr)) Nothing) <$> newCaseBranches)
-  (C.Accessor name) -> Hs.Paren $ Hs.App (Hs.Var (Hs.UnQual (Hs.Ident "Lamdera.Haskelm.Core.get"))) (Hs.Var (Hs.UnQual (ident name)))
+  (C.Accessor name) -> Hs.Paren $ Hs.App (Hs.Var (Hs.UnQual (Hs.Ident "Lamdera.Haskelm.Core.get"))) (Hs.OverloadedLabel (rawIdent name))
   (C.Access record (A.At _ fieldName)) ->
     let get       = Hs.Var (Hs.Qual (Hs.ModuleName "Lamdera.Haskelm.Core") (Hs.Ident "get"))
         fieldAst  = Hs.OverloadedLabel $ rawIdent fieldName
@@ -361,7 +365,7 @@ tPattern (A.At _ p) = case p of
   (C.PAnything) -> Hs.PWildCard
   (C.PUnit) -> Hs.PApp (Hs.Special Hs.UnitCon) []
   (C.PVar name) -> Hs.PVar (ident name)
-  (C.PChr text) -> Hs.PLit Hs.Signless (Hs.String $ Text.unpack text) -- TODO: treating chars as strings
+  (C.PChr text) -> Hs.PLit Hs.Signless (Hs.Char $ head $ Text.unpack text) -- TODO: treating chars as chars, should be strings
   (C.PStr text) -> Hs.PLit Hs.Signless (Hs.String $ Text.unpack text)
   (C.PInt int) -> Hs.PParen $ Hs.PLit Hs.Signless (Hs.Frac $ toRational int) -- TODO: signless?
   (C.PRecord _) -> error (show "C.PRecord got through Rewrite: " ++ sShow p)
