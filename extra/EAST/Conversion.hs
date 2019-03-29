@@ -196,7 +196,7 @@ tAlias (aliasName, C.Alias tvars t) =
 
           (Hs.UnGuardedRhs $
             fields
-            & fmap (\fieldName -> Hs.InfixApp (Hs.OverloadedLabel $ rawIdent fieldName) (Hs.QConOp (Hs.Qual (Hs.ModuleName "Lamdera.Haskelm.Core") (Hs.Symbol ":="))) (Hs.Paren (Hs.Var (Hs.UnQual (ident fieldName)))))
+            & fmap (\fieldName -> Hs.InfixApp (Hs.OverloadedLabel $ rawIdent fieldName) (Hs.QConOp (Hs.Qual (Hs.ModuleName "Lamdera.Haskelm.Core") (Hs.Symbol ".=="))) (Hs.Paren (Hs.Var (Hs.UnQual (ident fieldName)))))
             & foldl (\assignment state -> Hs.InfixApp (Hs.Paren state) (Hs.QVarOp (Hs.Qual (Hs.ModuleName "Lamdera.Haskelm.Core") (Hs.Symbol "&"))) assignment)
                     (Hs.Var (Hs.Qual (Hs.ModuleName "Lamdera.Haskelm.Core") (Hs.Ident "rnil"))))
           Nothing
@@ -349,7 +349,7 @@ tExpr (A.At _ e) = case e of
     fieldNameValueMap
       & Map.toList
       & reverse
-      & fmap (\(field, expr) -> Hs.InfixApp (Hs.OverloadedLabel $ rawIdent field) (Hs.QConOp (Hs.Qual (Hs.ModuleName "Lamdera.Haskelm.Core") (Hs.Symbol ":="))) (Hs.Paren (tExpr expr)))
+      & fmap (\(field, expr) -> Hs.InfixApp (Hs.OverloadedLabel $ rawIdent field) (Hs.QConOp (Hs.Qual (Hs.ModuleName "Lamdera.Haskelm.Core") (Hs.Symbol ".=="))) (Hs.Paren (tExpr expr)))
       & foldl (\assignment state -> Hs.InfixApp (Hs.Paren state) (Hs.QVarOp (Hs.Qual (Hs.ModuleName "Lamdera.Haskelm.Core") (Hs.Symbol "&"))) assignment)
               (Hs.Var (Hs.Qual (Hs.ModuleName "Lamdera.Haskelm.Core") (Hs.Ident "rnil")))
 
