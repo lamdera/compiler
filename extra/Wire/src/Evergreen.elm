@@ -392,11 +392,52 @@ encodeMaybe encVal s =
 
 decodeMaybe : (Decoder a) -> Decoder (Maybe a)
 decodeMaybe decVal =
-    decodeInt |> D.andThen (\c -> case c of
-      0 -> succeedDecode Nothing
-      1 -> decVal |> D.map Just
-      _ -> failDecode
-    )
+    decodeInt
+        |> D.andThen
+            (\c ->
+                case c of
+                    0 ->
+                        succeedDecode Nothing
+
+                    1 ->
+                        decVal |> D.map Just
+
+                    _ ->
+                        failDecode
+            )
+
+
+
+-- Result
+
+
+encodeResult : (err -> Encoder) -> (a -> Encoder) -> Result err a -> Encoder
+encodeResult encErr encValue result =
+    case result of
+        Err err ->
+            encodeSequence [ encodeInt 0, encErr err ]
+
+        Ok v ->
+            encodeSequence [ encodeInt 1, encValue v ]
+
+
+decodeResult : Decoder err -> Decoder a -> Decoder (Result err a)
+decodeResult decErr decValue =
+    decodeInt
+        |> D.andThen
+            (\c ->
+                case c of
+                    0 ->
+                        decErr |> D.map Err
+
+                    1 ->
+                        decValue |> D.map Ok
+
+                    _ ->
+                        failDecode
+            )
+
+
 
 -- Time
 

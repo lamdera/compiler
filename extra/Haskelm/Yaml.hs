@@ -6,6 +6,10 @@ module Haskelm.Yaml
   where
 
 import Data.Yaml
+import qualified Data.Yaml as Yaml
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.UTF8 as BS8
+import qualified System.Directory as Dir
 import Data.Text
 import Data.Aeson.Types as Aeson
 import qualified Elm.Package as Pkg
@@ -33,6 +37,24 @@ import Control.Monad.IO.Class (MonadIO)
 
 type List a = [a]
 
+encodeYaml :: ToJSON yaml => FilePath -> yaml -> IO ()
+encodeYaml path y = do
+  writeIfChanged path (Yaml.encode y)
+
+writeIfChanged :: FilePath -> BS.ByteString -> IO ()
+writeIfChanged path new = do
+  exists <- Dir.doesFileExist path
+  if exists then do
+      current <- BS.readFile path
+      if current == new then
+          putStrLn ("contents equal " <> path)
+        else do
+          putStrLn ("not equal " <> path)
+          BS.writeFile path new
+    else do
+      putStrLn ("not exists " <> path)
+      BS.writeFile path new
+
 
 generateHaskellYamlFiles
   :: FilePath
@@ -42,15 +64,20 @@ generateHaskellYamlFiles
   -> Task.Task ()
 generateHaskellYamlFiles root project graph results = do
   -- write stack.yaml
-  stackFileContents <- stackYaml root graph
-  liftIO $ encodeFile (root </> "stack.yaml") stackFileContents
+  stackFileContents <- stackYaml root graph []
+  liftIO $ encodeYaml (root </> "stack.yaml") stackFileContents
 
   -- write package.yaml files
   case project of
-    Project.App info -> liftIO $ do
+    Project.App info -> do
+      -- harness-stack.yaml
+      harnessStackFileContents <- stackYaml root graph ["../backend"]
+      liftIO $  encodeYaml (root </> "harness-stack.yaml") harnessStackFileContents
+
+      -- package.yaml
       let appdir = root -- Paths.haskelmoRoot root
-      Dir.createDirectoryIfMissing True appdir
-      encodeFile (Paths.haskellAppPackageYaml appdir) (packageYamlFromAppInfo root info)
+      liftIO $ Dir.createDirectoryIfMissing True appdir
+      liftIO $ encodeYaml (Paths.haskellAppPackageYaml appdir) (packageYamlFromAppInfo root info)
 
     Project.Pkg info ->
       -- NOTE: this branch is probably unused; generatePkgYamlFiles is also called through the .elm/ cache mechanism
@@ -67,11 +94,11 @@ generatePkgYamlFiles root results info =
     mapM_ (\(name, hs) -> do
         let path = Paths.haskelmoWithoutStuff root name
         Dir.createDirectoryIfMissing True (takeDirectory path)
-        writeFile path (HsPretty.prettyPrint hs)
+        writeIfChanged path (BS8.fromString (HsPretty.prettyPrint hs))
       ) $ Map.toList $ Compiler._haskelmo <$> results
 
     -- generate package.yaml
-    encodeFile (Paths.haskellPkgPackageYaml root) (packageYamlFromPkgInfo info)
+    encodeYaml (Paths.haskellPkgPackageYaml root) (packageYamlFromPkgInfo info)
 
 
 -- HASKELM PROJECT FILE GENERATION
@@ -267,7 +294,7 @@ haskelm_deps = ["lamdera-haskelm-runtime", "base >=4.7 && <5"]
 
 -- GENERATE STACK.YAML
 
-stackYaml :: FilePath -> Crawl.Graph a b -> Task.Task StackYaml
+stackYaml :: FilePath -> Crawl.Graph a b -> List Text -> Task.Task StackYaml
 stackYaml
   root
   (Crawl.Graph
@@ -275,7 +302,8 @@ stackYaml
   _locals
   _kernels
   _foreigns
-  _problems) =
+  _problems)
+  extraDeps =
     let
       pkgs =
         _foreigns
@@ -322,7 +350,7 @@ stackYaml
       p <- pkgs
       e <- extDeps
       homedir <- liftIO $ Dir.getHomeDirectory
-      pure $ StackYaml homedir p e
+      pure $ StackYaml homedir p (e ++ extraDeps)
 
 removeDuplicates = Prelude.foldr (\x seen -> if x `elem` seen then seen else x : seen) []
 
@@ -396,7 +424,7 @@ instance ToJSON StackYaml where
 lamderaDeps =
   [ "acid-state-0.14.3"
   , "regexpr-0.5.4"
-  , "superrecord-0.5.0.1"
+  , "row-types-0.2.3.0"
   , "unagi-chan-0.4.1.0"
   , "mtlparse-0.1.4.0"
   , "slave-thread-1.0.3"

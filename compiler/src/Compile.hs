@@ -42,7 +42,7 @@ import qualified East.Conversion as East
 
 import qualified Language.Haskell.Exts.Simple.Syntax as Hs
 
-import qualified Debug.Trace as DT
+--import qualified Debug.Trace as DT
 
 
 -- COMPILE
@@ -121,7 +121,7 @@ compile flag pkg importDict interfaces source =
           let newSource =
                 BS8.fromString (Wire.Source.injectEvergreenExposing canonical (BS8.toString source)) <> "\n\n-- ### codecs\n" <> BS8.fromString rawCodecSource
           in
-            DT.trace (BS8.toString newSource) $ -- uncomment to print source code for all modules
+            --DT.trace (BS8.toString newSource) $ -- uncomment to print source code for all modules
             -- it's safer to add stuff to the parsed result, but much harder to debug, so codecs are generated as source code, and imports are added like this now
             addImport (Src.Import (A.At R.lamderaInject "Lamdera.Evergreen") Nothing Src.Open) <$>
             Parse.program pkg newSource

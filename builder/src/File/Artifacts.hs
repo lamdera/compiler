@@ -31,6 +31,8 @@ import System.Directory (createDirectoryIfMissing)
 import System.FilePath (takeDirectory)
 import qualified Language.Haskell.Exts.Simple.Pretty as HsPretty
 
+import qualified East.Hacks
+
 -- IGNORE
 
 
@@ -58,7 +60,7 @@ write root answers =
 
                 let path = Path.haskelmo root name
                 createDirectoryIfMissing True (takeDirectory path)
-                writeFile path (HsPretty.prettyPrint haskelmo)
+                writeFile path (HsPretty.prettyPrint (East.Hacks.injectKernelImport haskelmo))
 
                 putMVar mvar result
           return mvar
