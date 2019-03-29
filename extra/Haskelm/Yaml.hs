@@ -424,7 +424,7 @@ instance ToJSON StackYaml where
 lamderaDeps =
   [ "acid-state-0.14.3"
   , "regexpr-0.5.4"
-  , "superrecord-0.5.0.1"
+  , "row-types-0.2.3.0"
   , "unagi-chan-0.4.1.0"
   , "mtlparse-0.1.4.0"
   , "slave-thread-1.0.3"
