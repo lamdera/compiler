@@ -14,6 +14,10 @@ import qualified Data.Map as Map
 
 import qualified AST.Canonical as Can
 import qualified AST.Optimized as Opt
+import qualified AST.Source as Src
+import qualified AST.Valid as Valid
+import qualified Reporting.Region as R
+import qualified Reporting.Annotation as A
 import qualified AST.Module.Name as ModuleName
 import qualified Canonicalize.Module as Canonicalize
 import qualified Elm.Docs as Docs
@@ -38,7 +42,7 @@ import qualified East.Conversion as East
 
 import qualified Language.Haskell.Exts.Simple.Syntax as Hs
 
---import qualified Debug.Trace as DT
+import qualified Debug.Trace as DT
 
 
 -- COMPILE
@@ -108,17 +112,19 @@ compile flag pkg importDict interfaces source =
 
       -- generate wire source code from canonical ast
       -- these are intended to be serialised and put at the end of source, then we redo the whole compilation step, generating valid as normal etc.
-      rawCodecSource <- pure $ T.unpack $ Wire.Source.generateCodecs canonical
-
-      let newSource =
-            if Map.lookup "Lamdera.Evergreen" importDict == Nothing then -- Evergreen isn't in the importDict, so this is a kernel module, or something that shouldn't have access to Evergreen, like the Evergreen module itself.
-              source
-            else
-              BS8.fromString (Wire.Source.injectEvergreenImport (Wire.Source.injectEvergreenExposing canonical (BS8.toString source))) <> "\n\n-- ### codecs\n" <> BS8.fromString rawCodecSource
+      rawCodecSource <- pure $ T.unpack $ Wire.Source.generateCodecs (getImportDict valid) canonical
 
       valid_ <- Result.mapError Error.Syntax $
-        --DT.trace (BS8.toString newSource) $ -- uncomment to print source code for all modules
-        Parse.program pkg newSource
+        if Map.lookup "Lamdera.Evergreen" importDict == Nothing then -- Evergreen isn't in the importDict, so this is a kernel module, or something that shouldn't have access to Evergreen, like the Evergreen module itself.
+          Parse.program pkg source
+        else
+          let newSource =
+                BS8.fromString (Wire.Source.injectEvergreenExposing canonical (BS8.toString source)) <> "\n\n-- ### codecs\n" <> BS8.fromString rawCodecSource
+          in
+            DT.trace (BS8.toString newSource) $ -- uncomment to print source code for all modules
+            -- it's safer to add stuff to the parsed result, but much harder to debug, so codecs are generated as source code, and imports are added like this now
+            addImport (Src.Import (A.At R.lamderaInject "Lamdera.Evergreen") Nothing Src.Open) <$>
+            Parse.program pkg newSource
 
       canonical_ <- Result.mapError Error.Canonicalize $
         Canonicalize.canonicalize pkg importDict interfaces valid_
@@ -140,7 +146,6 @@ compile flag pkg importDict interfaces source =
       haskAst <-
         East.transpile canonical_ annotations importDict
 
-
       Result.ok $
         Artifacts
           { _elmi = I.fromModule annotations canonical_
@@ -149,6 +154,19 @@ compile flag pkg importDict interfaces source =
           , _haskelmo = haskAst
           , Compile._docs = documentation
           }
+
+addImport :: Src.Import -> Valid.Module -> Valid.Module
+addImport i (Valid.Module _name _overview _docs _exports _imports _decls _unions _aliases _binop _effects) =
+  Valid.Module _name _overview _docs _exports (i : _imports) _decls _unions _aliases _binop _effects
+
+getImportDict :: Valid.Module -> Map.Map N.Name N.Name
+getImportDict (Valid.Module _name _overview _docs _exports _imports _decls _unions _aliases _binop _effects) =
+  Map.fromList $
+  (\(Src.Import (A.At _ _import) _alias _exposing) ->
+    case _alias of
+      Just al -> (_import, al)
+      Nothing -> (_import, _import)
+  ) <$> _imports
 
 
 -- TYPE INFERENCE
