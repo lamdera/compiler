@@ -241,6 +241,7 @@ Executable elmx
         -- Haskelm
         East.Conversion
         East.Rewrite
+        East.Hacks
         Haskelm.Yaml
         Transpile.Deriving
         Transpile.Reserved
