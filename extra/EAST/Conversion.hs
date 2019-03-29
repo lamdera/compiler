@@ -234,8 +234,21 @@ tType t = case t of
   (C.TType moduleName name types) -> foldl Hs.TyApp (Hs.TyCon (qual moduleName name)) (tType <$> types)
   (C.TRecord mapNameToFieldType _) ->
     let recordField (name, t) =
-          Hs.TyInfix (Hs.TyPromoted (Hs.PromotedString (rawIdent name) (rawIdent name))) (Hs.UnpromotedName (Hs.Qual (Hs.ModuleName "Lamdera.Haskelm.Core") (Hs.Symbol ":="))) (Hs.TyParen (tType $ t))
-    in  Hs.TyParen $ Hs.TyApp (Hs.TyCon (Hs.Qual (Hs.ModuleName "Lamdera.Haskelm.Core") (Hs.Ident "Record'"))) (Hs.TyPromoted (Hs.PromotedList True (fmap recordField $ C.fieldsToList mapNameToFieldType)))
+          Hs.TyInfix (Hs.TyPromoted (Hs.PromotedString (rawIdent name) (rawIdent name))) (Hs.UnpromotedName (Hs.Qual (Hs.ModuleName "Lamdera.Haskelm.Core") (Hs.Symbol ".=="))) (Hs.TyParen (tType $ t))
+    in  Hs.TyParen
+    $
+      Hs.TyApp
+        (Hs.TyCon (Hs.Qual (Hs.ModuleName "Lamdera.Haskelm.Core") (Hs.Ident "Record'")))
+        (Hs.TyParen
+          (foldr1
+            (\a b ->
+              (Hs.TyInfix
+                a
+                (Hs.UnpromotedName (Hs.Qual (Hs.ModuleName "Lamdera.Haskelm.Core") (Hs.Symbol ".+")))
+                b
+              )
+            ) $ Hs.TyParen <$> recordField <$> C.fieldsToList mapNameToFieldType)
+        )
   (C.TUnit) -> Hs.TyCon (Hs.Special (Hs.UnitCon))
   (C.TTuple t1 t2 Nothing) -> Hs.TyTuple Hs.Boxed [tType t1, tType t2]
   (C.TTuple t1 t2 (Just t3)) -> Hs.TyTuple Hs.Boxed [tType t1, tType t2, tType t3]
