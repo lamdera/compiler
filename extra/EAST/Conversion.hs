@@ -289,7 +289,7 @@ tExpr (A.At _ e) = case e of
   (C.Float double) -> Hs.Lit (Hs.Frac (toRational double))
   (C.List exprs) -> Hs.List (tExpr <$> exprs)
   (C.Negate e) -> Hs.Paren $ Hs.NegApp (tExpr e)
-  (C.Binop infixOp _ _ _ larg rarg) -> Hs.Paren $ Hs.InfixApp (tExpr larg) (Hs.QVarOp $ Hs.UnQual $ symIdent infixOp) (tExpr rarg)
+  (C.Binop infixOp _ _ _ larg rarg) -> Hs.Paren $ Hs.InfixApp (Hs.Paren $ tExpr larg) (Hs.QVarOp $ Hs.UnQual $ symIdent infixOp) (Hs.Paren $ tExpr rarg)
   (C.Lambda pats e) ->
     let
       (npats, ne) = Rewrite.recordArgsToLet pats e
@@ -389,7 +389,7 @@ tPattern (A.At _ p) = case p of
   (C.PTuple p1 p2 (Just p3)) -> Hs.PTuple Hs.Boxed $ [tPattern p1, tPattern p2, tPattern p3]
   (C.PList pats) -> Hs.PList $ tPattern <$> pats
   (C.PCons p1 p2) ->
-    Hs.PInfixApp (tPattern p1) (Hs.Special (Hs.Cons)) (tPattern p2)
+    Hs.PParen $ Hs.PInfixApp (Hs.PParen $ tPattern p1) (Hs.Special (Hs.Cons)) (Hs.PParen $ tPattern p2)
   (C.PCtor
     _p_home_moduleName -- :: ModuleName.Canonical
     _p_type_name -- :: N.Name
