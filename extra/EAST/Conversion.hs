@@ -275,6 +275,7 @@ tDef KeepTypeSigs (C.TypedDef name freeVars patTypeTuples e t) =
   tDef KeepTypeSigs (C.Def name (fmap fst patTypeTuples) e)
 
 tExpr (A.At _ e) = case e of
+  -- variables
   (C.VarLocal name) -> Hs.Var (Hs.UnQual $ ident name)
   (C.VarTopLevel moduleName name) -> Hs.Var (qual moduleName name)
   (C.VarKernel n1 n2) -> Hs.Var (Hs.Qual (Hs.ModuleName ("Lamdera.Haskelm.Kernel." ++ Text.unpack (N.toText n1))) (ident n2))
@@ -283,10 +284,12 @@ tExpr (A.At _ e) = case e of
     Hs.Con (qual moduleName (toConstructorName name))
   (C.VarDebug _ name _) -> Hs.Var (qual ModuleName.debug name) -- error (sShow e) -- TODO: don't allow debug vars
   (C.VarOperator op _ _ _) -> Hs.Var (Hs.UnQual (symIdent op))
-  (C.Chr text) -> Hs.Lit (Hs.Char (head $ Text.unpack text))
-  (C.Str text) -> Hs.Lit (Hs.String (Text.unpack text))
-  (C.Int int) -> Hs.Lit (Hs.Frac (toRational int))
-  (C.Float double) -> Hs.Lit (Hs.Frac (toRational double))
+  -- literals
+  (C.Chr text) -> Hs.ExpTypeSig (Hs.Lit (Hs.Char (head $ Text.unpack text))) (Hs.TyCon (Hs.Qual (Hs.ModuleName "Lamdera.Haskelm.Core") (Hs.Ident "Char")))
+  (C.Str text) -> Hs.ExpTypeSig (Hs.Lit (Hs.String (Text.unpack text))) (Hs.TyCon (Hs.Qual (Hs.ModuleName "Lamdera.Haskelm.Core") (Hs.Ident "Text")))
+  (C.Int int) -> Hs.ExpTypeSig (Hs.Lit (Hs.Frac (toRational int))) (Hs.TyCon (Hs.Qual (Hs.ModuleName "Lamdera.Haskelm.Core") (Hs.Ident "Double")))
+  (C.Float double) -> Hs.ExpTypeSig (Hs.Lit (Hs.Frac (toRational double))) (Hs.TyCon (Hs.Qual (Hs.ModuleName "Lamdera.Haskelm.Core") (Hs.Ident "Double")))
+  -- others
   (C.List exprs) -> Hs.List (tExpr <$> exprs)
   (C.Negate e) -> Hs.Paren $ Hs.NegApp (tExpr e)
   (C.Binop infixOp _ _ _ larg rarg) -> Hs.Paren $ Hs.InfixApp (Hs.Paren $ tExpr larg) (Hs.QVarOp $ Hs.UnQual $ symIdent infixOp) (Hs.Paren $ tExpr rarg)
