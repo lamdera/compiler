@@ -35,6 +35,9 @@ import Data.Monoid ((<>))
 import qualified Data.Text as T
 import Control.Monad.IO.Class (MonadIO)
 
+import System.IO.Unsafe (unsafePerformIO)
+import qualified Debug.Trace as DT
+
 type List a = [a]
 
 encodeYaml :: ToJSON yaml => FilePath -> yaml -> IO ()
@@ -354,7 +357,9 @@ stackYaml
 
 removeDuplicates = Prelude.foldr (\x seen -> if x `elem` seen then seen else x : seen) []
 
-matchElmPkg onMatch pkgPath =
+
+matchElmPkgOld :: (Text -> Text) -> Text -> Text
+matchElmPkgOld onMatch pkgPath =
   if "/package/elm/" `isInfixOf` pkgPath
   || "/package/elm-explorations" `isInfixOf` pkgPath
   || "/package/Lamdera/core" `isInfixOf` pkgPath then
@@ -368,6 +373,23 @@ matchElmPkg onMatch pkgPath =
     in onMatch withoutPrefix
   else
     T.pack $ T.unpack pkgPath </> "haskelm"
+
+matchElmPkg :: (Text -> Text) -> Text -> Text
+matchElmPkg onMatch pkgPath =
+  do
+    let
+        withoutPrefix =
+          pkgPath
+          & T.splitOn "/package/"
+          & Prelude.drop 1
+          & T.intercalate "/package/"
+          & T.replace "/haskelm" ""
+          & onMatch
+    if unsafePerformIO $ Dir.doesDirectoryExist (T.unpack withoutPrefix) then
+        DT.trace ("found stdlib at " <> T.unpack withoutPrefix) $
+        withoutPrefix
+      else
+        T.pack $ T.unpack pkgPath </> "haskelm"
 
 
 -- data Graph kernel problems =
@@ -425,6 +447,7 @@ lamderaDeps =
   [ "acid-state-0.14.3"
   , "regexpr-0.5.4"
   , "row-types-0.2.3.0"
+  , "superrecord-0.5.0.1"
   , "unagi-chan-0.4.1.0"
   , "mtlparse-0.1.4.0"
   , "slave-thread-1.0.3"
