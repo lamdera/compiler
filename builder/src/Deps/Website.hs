@@ -46,7 +46,7 @@ import qualified Stuff.Paths as Path
 
 import qualified Debug.Trace as DT
 import System.IO.Unsafe
-import qualified Shelly
+import qualified System.Process
 import Transpile.PrettyPrint (sShow)
 
 -- GET PACKAGE INFO
@@ -246,9 +246,12 @@ downloadHelp cache (name, version) =
                       to = cache </> Pkg.toFilePath name
                     in
                       do
-                        DT.trace ("Shelly.cp_r " ++ from ++ " " ++ to) $
-                          Shelly.shelly $ Shelly.cp_r (Shelly.fromText (T.pack from)) (Shelly.fromText (T.pack to))
-                        pure (Just ())
+                        (exit, stdout, stderr) <- System.Process.readProcessWithExitCode "rsync" ["-vptchr", from, to] ""
+                        DT.trace ("(roughly) rsync -vptchr " ++ from ++ " " ++ to ++ "\n") $
+                          DT.trace ("  exit code: " ++ show exit ++ "\n") $
+                          DT.trace ("  stdout: " ++ stdout ++ "\n") $
+                          DT.trace ("  stderr: " ++ stderr ++ "\n") $
+                          pure (Just ())
                 else
                   DT.trace ("using web pkg; no local override found at " ++ fullPath) $
                     pure Nothing
