@@ -37,6 +37,7 @@ import Control.Monad.IO.Class (MonadIO)
 
 import System.IO.Unsafe (unsafePerformIO)
 import qualified Debug.Trace as DT
+import Transpile.PrettyPrint
 
 type List a = [a]
 
@@ -66,16 +67,14 @@ generateHaskellYamlFiles
   -> Map.Map Elm.Compiler.Module.Raw Compiler.Artifacts
   -> Task.Task ()
 generateHaskellYamlFiles root project graph results = do
-  -- write stack.yaml
-  stackFileContents <- stackYaml root graph []
-  liftIO $ encodeYaml (root </> "stack.yaml") stackFileContents
-
-  -- write package.yaml files
   case project of
     Project.App info -> do
+      -- write stack.yaml
+      stackFileContents <- stackYaml info root graph []
+      liftIO $ encodeYaml (root </> "stack.yaml") stackFileContents
       -- harness-stack.yaml
-      harnessStackFileContents <- stackYaml root graph ["../backend"]
-      liftIO $  encodeYaml (root </> "harness-stack.yaml") harnessStackFileContents
+      harnessStackFileContents <- stackYaml info root graph ["../backend"]
+      liftIO $ encodeYaml (root </> "harness-stack.yaml") harnessStackFileContents
 
       -- package.yaml
       let appdir = root -- Paths.haskelmoRoot root
@@ -268,10 +267,11 @@ packageYamlFromAppInfo
     exposedModules = ["Backend","Msg"]
     dependencies =
       haskelm_deps ++
-      (fmap (\(fqname, _) -> Paths.cabalNameOfPackage fqname)
+      (fmap (\(fqname, version) -> Paths.cabalNameOfPackage fqname <> " == " <> Pkg.versionToText version)
       $ Map.toList
       $ (_deps_direct `Map.union` _deps_trans))
   in
+  DT.trace (sShow ("direct", _deps_direct, "trans", _deps_trans, "deps", dependencies)) $
   HPackYaml
     name
     synopsis
@@ -297,8 +297,9 @@ haskelm_deps = ["lamdera-haskelm-runtime", "base >=4.7 && <5"]
 
 -- GENERATE STACK.YAML
 
-stackYaml :: FilePath -> Crawl.Graph a b -> List Text -> Task.Task StackYaml
+stackYaml :: Project.AppInfo -> FilePath -> Crawl.Graph a b -> List Text -> Task.Task StackYaml
 stackYaml
+  (Project.AppInfo _ _ dirDeps transDeps _ _)
   root
   (Crawl.Graph
   _args
@@ -307,8 +308,8 @@ stackYaml
   _foreigns
   _problems)
   extraDeps =
-    let
-      pkgs =
+    do
+      pkgs <-
         _foreigns
         & Map.elems
         & removeDuplicates
@@ -319,60 +320,17 @@ stackYaml
             let relPath = makeRelative root absPath
             pure $ pack relPath
           )
-      extDeps =
-        let
-          getSubdirs :: FilePath -> IO [FilePath]
-          getSubdirs d =
-            do
-              contents <- Dir.listDirectory d
-              let contentPaths = (d </>) <$> contents
-              subDirs <- filterM (Dir.doesDirectoryExist) contentPaths
-              pure subDirs
-        in
-        do
-          cacheDir <- Task.getPackageCacheDir
-          sub1 <- liftIO $ getSubdirs cacheDir
-          sub2 <- liftIO $ getSubdirs `mapM` sub1
-          sub3 <- liftIO $ getSubdirs `mapM` (Prelude.concat sub2)
-
-          homeDir <- liftIO $ Dir.getHomeDirectory
-
-          let dirs = Prelude.concat sub3
-          let d2 =
-                (matchElmPkg
-                  (\fqPkgName ->
-                    let
-                      absPath = homeDir </> "lamdera" </> "haskelm" </> "stdlib" </> T.unpack fqPkgName
-                      relPath = makeRelative root absPath
-                    in
-                      pack relPath
-                )) <$> pack <$> dirs
-          -- let appdir = makeRelative root $ Paths.haskelmoRoot root
-          pure $ d2
-    in do
-      p <- pkgs
-      e <- extDeps
-      homedir <- liftIO $ Dir.getHomeDirectory
-      pure $ StackYaml homedir p (e ++ extraDeps)
+      extDeps <-
+            (\(pkgName, vsn) ->
+              do
+                dir <- Task.getPackageCacheDirFor pkgName vsn
+                pure $ (matchElmPkg
+                     (\fqPkgName -> pack $ ".." </> "backend-runtime" </> "stdlib" </> T.unpack fqPkgName)) (T.pack dir)
+            ) `mapM` (Map.toList (dirDeps `Map.union` transDeps))
+      pure $ StackYaml pkgs (extDeps ++ extraDeps)
 
 removeDuplicates = Prelude.foldr (\x seen -> if x `elem` seen then seen else x : seen) []
 
-
-matchElmPkgOld :: (Text -> Text) -> Text -> Text
-matchElmPkgOld onMatch pkgPath =
-  if "/package/elm/" `isInfixOf` pkgPath
-  || "/package/elm-explorations" `isInfixOf` pkgPath
-  || "/package/Lamdera/core" `isInfixOf` pkgPath then
-    let
-      withoutPrefix =
-        pkgPath
-        & T.splitOn "/package/"
-        & Prelude.drop 1
-        & T.intercalate "/package/"
-        & T.replace "/haskelm" ""
-    in onMatch withoutPrefix
-  else
-    T.pack $ T.unpack pkgPath </> "haskelm"
 
 matchElmPkg :: (Text -> Text) -> Text -> Text
 matchElmPkg onMatch pkgPath =
@@ -416,14 +374,13 @@ matchElmPkg onMatch pkgPath =
 
 data StackYaml =
   StackYaml
-  { homeDir :: String
-  , packages :: List Text
+  { packages :: List Text
   , extDeps :: List Text
   }
 
 
 instance ToJSON StackYaml where
-  toJSON (StackYaml homeDir _ extDeps) =
+  toJSON (StackYaml _ extDeps) =
     object
     [ "packages" .= array (Aeson.String <$> ["."])
     , "extra-deps" .=
@@ -433,8 +390,8 @@ instance ToJSON StackYaml where
             [ "git" .= Aeson.String "https://github.com/supermario/hilt.git"
             , "commit" .= Aeson.String "f59eff3a1b4d2d897ddd1ce94c8f7e9a6b4eefea"
             ]
-          , Aeson.String (T.pack $ homeDir </> "lamdera" </> "shared")
-          , Aeson.String (T.pack $ homeDir </> "lamdera" </> "haskelm" </> "runtime")
+          , Aeson.String (T.pack $ ".." </> "backend-runtime" </> "shared")
+          , Aeson.String (T.pack $ ".." </> "backend-runtime" </> "haskelm" </> "runtime")
           ]
         )
     , "resolver" .= Aeson.String "lts-13.1"
