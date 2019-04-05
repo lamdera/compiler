@@ -309,7 +309,6 @@ stackYaml
   _problems)
   extraDeps =
     do
-      homeDir <- liftIO $ Dir.getHomeDirectory
       pkgs <-
         _foreigns
         & Map.elems
@@ -322,20 +321,13 @@ stackYaml
             pure $ pack relPath
           )
       extDeps <-
-          -- elm-home/0.19.0/package/fredcy/elm-parseint/2.0.1
             (\(pkgName, vsn) ->
               do
                 dir <- Task.getPackageCacheDirFor pkgName vsn
                 pure $ (matchElmPkg
-                     (\fqPkgName ->
-                       let
-                         absPath = homeDir </> "lamdera" </> "haskelm" </> "stdlib" </> T.unpack fqPkgName
-                         relPath = makeRelative root absPath
-                       in
-                         pack relPath
-                   )) (T.pack dir)
+                     (\fqPkgName -> pack $ ".." </> "backend-runtime" </> "stdlib" </> T.unpack fqPkgName)) (T.pack dir)
             ) `mapM` (Map.toList (dirDeps `Map.union` transDeps))
-      pure $ StackYaml homeDir pkgs (extDeps ++ extraDeps)
+      pure $ StackYaml pkgs (extDeps ++ extraDeps)
 
 removeDuplicates = Prelude.foldr (\x seen -> if x `elem` seen then seen else x : seen) []
 
@@ -382,14 +374,13 @@ matchElmPkg onMatch pkgPath =
 
 data StackYaml =
   StackYaml
-  { homeDir :: String
-  , packages :: List Text
+  { packages :: List Text
   , extDeps :: List Text
   }
 
 
 instance ToJSON StackYaml where
-  toJSON (StackYaml homeDir _ extDeps) =
+  toJSON (StackYaml _ extDeps) =
     object
     [ "packages" .= array (Aeson.String <$> ["."])
     , "extra-deps" .=
@@ -399,8 +390,8 @@ instance ToJSON StackYaml where
             [ "git" .= Aeson.String "https://github.com/supermario/hilt.git"
             , "commit" .= Aeson.String "f59eff3a1b4d2d897ddd1ce94c8f7e9a6b4eefea"
             ]
-          , Aeson.String (T.pack $ homeDir </> "lamdera" </> "shared")
-          , Aeson.String (T.pack $ homeDir </> "lamdera" </> "haskelm" </> "runtime")
+          , Aeson.String (T.pack $ ".." </> "backend-runtime" </> "shared")
+          , Aeson.String (T.pack $ ".." </> "backend-runtime" </> "haskelm" </> "runtime")
           ]
         )
     , "resolver" .= Aeson.String "lts-13.1"
