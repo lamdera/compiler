@@ -246,8 +246,8 @@ downloadHelp cache (name, version) =
                       to = cache </> Pkg.toFilePath name
                     in
                       do
-                        (exit, stdout, stderr) <- System.Process.readProcessWithExitCode "rsync" ["-vptchr", from, to] ""
-                        DT.trace ("(roughly) rsync -vptchr " ++ from ++ " " ++ to ++ "\n") $
+                        (exit, stdout, stderr) <- System.Process.readProcessWithExitCode "rsync" ["-ptchr", from, to] ""
+                        DT.trace ("(roughly) rsync -ptchr " ++ from ++ " " ++ to ++ "\n") $
                           DT.trace ("  exit code: " ++ show exit ++ "\n") $
                           DT.trace ("  stdout: " ++ stdout ++ "\n") $
                           DT.trace ("  stderr: " ++ stderr ++ "\n") $

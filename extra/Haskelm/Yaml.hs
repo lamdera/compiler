@@ -51,12 +51,13 @@ writeIfChanged path new = do
   if exists then do
       current <- BS.readFile path
       if current == new then
-          putStrLn ("contents equal " <> path)
+          --putStrLn ("contents equal " <> path)
+          pure ()
         else do
-          putStrLn ("not equal " <> path)
+          --putStrLn ("not equal " <> path)
           BS.writeFile path new
     else do
-      putStrLn ("not exists " <> path)
+      --putStrLn ("not exists " <> path)
       BS.writeFile path new
 
 
@@ -271,7 +272,7 @@ packageYamlFromAppInfo
       $ Map.toList
       $ (_deps_direct `Map.union` _deps_trans))
   in
-  DT.trace (sShow ("direct", _deps_direct, "trans", _deps_trans, "deps", dependencies)) $
+  --DT.trace (sShow ("direct", _deps_direct, "trans", _deps_trans, "deps", dependencies)) $
   HPackYaml
     name
     synopsis

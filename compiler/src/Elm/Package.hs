@@ -74,7 +74,7 @@ data Package =
 
 shouldHaveCodecsGenerated :: Name -> Bool
 shouldHaveCodecsGenerated name =
-  (\res -> DT.trace ("shouldHaveCodecsGenerated? " ++ show name ++ " => " ++ show res) $ res) $
+  --(\res -> DT.trace ("shouldHaveCodecsGenerated? " ++ show name ++ " => " ++ show res) $ res) $
   case name of
     -- Some elm packages are ignored because of cyclic dependencies.
     -- Those codecs have to be manually defined in `Lamdera/codecs`.
