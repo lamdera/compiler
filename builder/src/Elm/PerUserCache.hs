@@ -44,4 +44,4 @@ version =
 getElmHome :: IO FilePath
 getElmHome =
   do  maybeHome <- Env.lookupEnv "ELM_HOME"
-      maybe (Dir.getAppUserDataDirectory "elm") return maybeHome
+      maybe ((\v -> v </> "elm") <$> Dir.getAppUserDataDirectory "lamdera") return maybeHome
