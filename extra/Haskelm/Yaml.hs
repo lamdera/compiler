@@ -412,4 +412,6 @@ lamderaDeps =
   , "stm-containers-1.1.0.2"
   , "stm-hamt-1.2.0.2"
   , "primitive-extras-0.7.1"
+  , "timers-0.2.0.3"
+  , "suspend-0.2.0.0"
   ]
