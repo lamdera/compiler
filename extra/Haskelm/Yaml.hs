@@ -410,6 +410,7 @@ lamderaDeps =
   , "mtlparse-0.1.4.0"
   , "slave-thread-1.0.3"
   , "stm-containers-1.1.0.2"
+  , "focus-1.0.1.3"
   , "stm-hamt-1.2.0.2"
   , "primitive-extras-0.7.1"
   , "timers-0.2.0.3"

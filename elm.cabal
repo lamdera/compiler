@@ -284,7 +284,8 @@ Executable elmx
         unordered-containers,
         utf8-string,
         vector,
-        zip-archive,
+        -- zip-archive 0.4 (which is used by default in ghc 8.6+) adds a check for absolute paths in zip archives, which breaks the compiler
+        zip-archive < 0.4,
         show-prettyprint,
         -- EAST
         pretty-simple >= 2.1.0.0,

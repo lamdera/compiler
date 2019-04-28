@@ -30,6 +30,7 @@ import qualified Reporting.Exit as Exit
 import qualified Reporting.Exit.Http as E
 import qualified Reporting.Progress as Progress
 import qualified Reporting.Task as Task
+import qualified Data.List as List
 
 
 
@@ -162,7 +163,11 @@ makePackageUrl path params =
       else
         "?" ++ Http.urlEncodeVars params
   in
-    packageDomain ++ "/" ++ path ++ query
+    -- This is a hack to make another hack work; if the url we got is a valid url, use it directly instead of prefixing with package.elm-lang.org. This is so we can fetch elm.json files from github directly for lamdera/core and lamdera/codecs.
+    if "http" `List.isPrefixOf` path then
+      path ++ query
+    else
+      packageDomain ++ "/" ++ path ++ query
 
 
 

@@ -69,7 +69,8 @@ getLamderaPkgPath = Env.lookupEnv "LAMDERA_PKG_PATH"
 
 localPackages :: Map.Map Name [Version]
 localPackages =
-  unsafePerformIO $ do
+  Map.union (Map.fromList [(Name "Lamdera" "codecs", [Pkg.Version 1 0 0]), (Name "Lamdera" "core", [Pkg.Version 1 0 0])])
+  $ unsafePerformIO $ do
     env <- getLamderaPkgPath
     case env of
       Just path ->
@@ -174,15 +175,32 @@ fetchLocal url =
               DT.trace ("using web file; no local override found at " ++ (path </> url)) $
                 pure Nothing
       Nothing ->
-        pure Nothing
+        pure $ case url of
+          "packages/Lamdera/core/1.0.0/endpoint.json" ->
+            Just ("{\"url\":\"https://github.com/Lamdera/core/zipball/1.0.0/\",\"hash\":\"ignored\"}")
+          "packages/Lamdera/codecs/1.0.0/endpoint.json" ->
+            Just ("{\"url\":\"https://github.com/Lamdera/codecs/zipball/1.0.0/\",\"hash\":\"ignored\"}")
+          _ ->
+            Nothing
 
+redirectLamderaPaths :: String -> String
+redirectLamderaPaths s =
+  -- Since package.elm-lang.org doesn't contain copies of elm.json for lamdera packages, we redirect the requests to github directly.
+  -- This is dangerous in general, since the author can change the elm.json files, but in this case we control all these packages, so we're all good.
+  case s of
+    "packages/Lamdera/core/1.0.0/elm.json" ->
+      "https://raw.githubusercontent.com/Lamdera/core/1.0.0/elm.json"
+    "packages/Lamdera/codecs/1.0.0/elm.json" ->
+      "https://raw.githubusercontent.com/Lamdera/codecs/1.0.0/elm.json"
+    _ ->
+      s
 
 fetchByteString :: String -> Http.Fetch BS.ByteString
 fetchByteString path =
   case unsafePerformIO $ fetchLocal path of
     Just bs -> Http.self bs
     Nothing ->
-      Http.package path [] $ \request manager ->
+      Http.package (redirectLamderaPaths path) [] $ \request manager ->
         do  response <- Client.httpLbs request manager
             return $ Right $ LBS.toStrict $ Client.responseBody response
 
@@ -195,7 +213,7 @@ fetchJson rootName errorToDocs decoder path =
         Right value -> Http.self value
         Left v -> error ("fetchJson failed to decode local file: " ++ show v)
     Nothing ->
-      Http.package path [] $ \request manager ->
+      Http.package (redirectLamderaPaths path) [] $ \request manager ->
         do  response <- Client.httpLbs request manager
             let bytes = LBS.toStrict (Client.responseBody response)
             case D.parse rootName errorToDocs decoder bytes of
@@ -341,7 +359,6 @@ readArchive body (AS len sha zip) =
 
 
 -- WRITE ARCHIVE
-
 
 writeArchive :: Zip.Archive -> FilePath -> FilePath -> IO ()
 writeArchive archive destination newRoot =

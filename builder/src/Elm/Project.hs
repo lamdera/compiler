@@ -13,6 +13,7 @@ module Elm.Project
 import qualified Data.ByteString as BS
 import Sanity ((!)) -- import Data.Map ((!))
 import System.FilePath ((</>))
+import Control.Monad.Trans (liftIO)
 
 import qualified Elm.Compiler as Compiler
 import qualified Elm.Docs as Docs
@@ -31,6 +32,7 @@ import qualified Reporting.Render.Type.Localizer as L
 import qualified Reporting.Task as Task
 import qualified Stuff.Paths as Path
 
+import qualified System.Environment as Env
 import qualified Haskelm.Yaml
 
 
@@ -67,7 +69,13 @@ compile mode target maybeOutput docs summary@(Summary.Summary root project _ _ _
       answers <- Compile.compile project docs ifaces dirty
       results <- Artifacts.write root answers
 
-      _ <- Haskelm.Yaml.generateHaskellYamlFiles root project graph results
+      -- only write haskell yaml files if LAMDERA_PKG_PATH is set
+      pkgPath <- liftIO $ Env.lookupEnv "LAMDERA_PKG_PATH"
+      case pkgPath of
+        Just _ ->
+          Haskelm.Yaml.generateHaskellYamlFiles root project graph results
+        Nothing ->
+          pure ()
 
       _ <- traverse (Artifacts.writeDocs results) docs
       Output.generate mode target maybeOutput summary graph results
