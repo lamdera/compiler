@@ -213,12 +213,16 @@ evergreenCoreDecoders = snd <$> evergreenCoreCodecs
 
 evergreenCoreCodecs :: Map.Map (Canonical, N.Name) (T.Text, T.Text)
 evergreenCoreCodecs =
-  -- NOTE: the injected failEncode and failDecode values follow a simple pattern; they take the (de/en)coders of type variables as arguments; one argument per type variable, in the same order as the type variables in the main type. A two-argument type that we want to `fail` must thus be wrapped in a two-argument lambda that drops both its arguments, for the generated source code to kind-check. Se examples below.
+  -- NOTE: the injected failEncode and failDecode values follow a simple pattern; they take the (de/en)coders
+  -- of type variables as arguments; one argument per type variable, in the same order as the type variables
+  -- in the main type. A two-argument type that we want to `fail` must thus be wrapped in a two-argument lambda
+  -- that drops both its arguments, for the generated source code to kind-check. Se examples below.
   Map.fromList $
   (\((pkg, modu, tipe), res) -> ((Canonical (pkgFromText pkg) modu, tipe), res)) <$>
   -- non elm/core types
   -- NOTE: none of these packages have been checked exhaustively for types; we should do that
   ( [ (("elm/bytes", "Bytes", "Bytes") --> ("Lamdera.Evergreen.encodeBytes", "Lamdera.Evergreen.decodeBytes") )
+    , (("elm/time", "Time", "Posix") --> ("(\\t -> Lamdera.Evergreen.encodeInt (Time.posixToMillis t))", "Lamdera.Evergreen.decodeInt |> Lamdera.Evergreen.andThenDecode (\\t -> Lamdera.Evergreen.succeedDecode (Time.millisToPosix t))"))
     , (("elm/virtual-dom", "VirtualDom", "Node") --> ("(\\_ -> Lamdera.Evergreen.failEncode)", "(\\_ -> Lamdera.Evergreen.failDecode)") )
     , (("elm/virtual-dom", "VirtualDom", "Attribute") --> ("(\\_ -> Lamdera.Evergreen.failEncode)", "(\\_ -> Lamdera.Evergreen.failDecode)") )
     , (("elm/virtual-dom", "VirtualDom", "Handler") --> ("(\\_ -> Lamdera.Evergreen.failEncode)", "(\\_ -> Lamdera.Evergreen.failDecode)") )
