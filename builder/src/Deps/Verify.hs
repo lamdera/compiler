@@ -47,9 +47,6 @@ import qualified Stuff.Paths as Paths
 import qualified Haskelm.Yaml
 import qualified System.Environment as Env
 
-import qualified Debug.Trace as DT
-import Transpile.PrettyPrint (sShow)
-
 
 -- VERIFY
 
@@ -212,8 +209,9 @@ verifyBuild pkgInfoMVar ifacesMVar name version =
                           putMVar ifacesMVar (Map.union ifacesNow ifaces)
                           return (Ok info)
 
-                    Left v ->
-                      DT.trace (sShow ("verifyBuild", "Err", name, version, v)) $
+                    Left r -> do
+                      liftIO $ putStr "\n"
+                      liftIO $ Exit.toStderr r
                       return (Err name version)
 
             report Progress.BuildDepsProgress
