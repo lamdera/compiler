@@ -164,7 +164,7 @@ generateCodecs revImportDict (Can.Module _moduName _docs _exports _decls _unions
             (newVarMap, recVar) = newRecVar varMap -- store `Map Varname Int` so we can append numbers to varnames to avoid shadowing
           in
             "(\\" <> recVar <> " -> "
-              <> sequenceEnc ((\(var, t) ->
+              <> sequenceEncWithoutLength ((\(var, t) ->
                 encoderForType newVarMap (unpackFieldType t) <> " " <> recAccess newVarMap var) <$> Map.toList nameFieldTypeMap) <> ")"
         (Can.TTuple t1 t2 Nothing) -> pairEnc (encoderForType varMap t1) (encoderForType varMap t2)
         (Can.TTuple t1 t2 (Just t3)) -> tripleEnc (encoderForType varMap t1) (encoderForType varMap t2) (encoderForType varMap t3)
