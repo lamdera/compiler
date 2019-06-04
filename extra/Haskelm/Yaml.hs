@@ -345,7 +345,7 @@ matchElmPkg onMatch pkgPath =
           & T.replace "/haskelm" ""
           & onMatch
     if unsafePerformIO $ Dir.doesDirectoryExist (T.unpack withoutPrefix) then
-        DT.trace ("found stdlib at " <> T.unpack withoutPrefix) $
+        -- DT.trace ("found stdlib at " <> T.unpack withoutPrefix) $
         withoutPrefix
       else
         T.pack $ T.unpack pkgPath </> "haskelm"
