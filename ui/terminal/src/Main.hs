@@ -53,6 +53,9 @@ intro =
   P.vcat
     [ P.fillSep
         ["Hi,","thank","you","for","trying","out"
+        ,P.green "Lamdera"
+        ,P.green "0.1.0"
+        ,P.green "/"
         ,P.green "Elm"
         ,P.green (P.text (Pkg.versionToString Compiler.version)) <> "."
         ,"I hope you like it!"
