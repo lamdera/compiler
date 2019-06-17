@@ -54,7 +54,7 @@ intro =
     [ P.fillSep
         ["Hi,","thank","you","for","trying","out"
         ,P.green "Lamdera"
-        ,P.green "0.1.0"
+        ,P.green "0.2.0"
         ,P.green "/"
         ,P.green "Elm"
         ,P.green (P.text (Pkg.versionToString Compiler.version)) <> "."
