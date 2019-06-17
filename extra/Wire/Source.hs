@@ -168,7 +168,9 @@ generateCodecs revImportDict (Can.Module _moduName _docs _exports _decls _unions
                 encoderForType newVarMap (unpackFieldType t) <> " " <> recAccess newVarMap var) <$> Map.toList nameFieldTypeMap) <> ")"
         (Can.TTuple t1 t2 Nothing) -> pairEnc (encoderForType varMap t1) (encoderForType varMap t2)
         (Can.TTuple t1 t2 (Just t3)) -> tripleEnc (encoderForType varMap t1) (encoderForType varMap t2) (encoderForType varMap t3)
-        (Can.TAlias _ _ nameTypePairs aliasType) -> encoderForType varMap (Type.dealias nameTypePairs aliasType)
+        (Can.TAlias moduName name nameTypePairs aliasType) ->
+          encoderForType varMap (Can.TType moduName name (snd <$> nameTypePairs)) -- TODO: hotfix: is this correct? What if an alias has filled in some tvar with a concrete type, does that affect this?
+          -- encoderForType varMap (Type.dealias nameTypePairs aliasType)
         (Can.TLambda _ _) -> "Lamdera.Evergreen.failEncode " -- <> strQuote (T.pack $ show x)
 
   in
