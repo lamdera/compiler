@@ -231,6 +231,7 @@ evergreenCoreCodecs =
     -- Disable for now, but need to revisit these and whether we want actual proper wire support
     , (("elm/browser", "Browser", "UrlRequest") --> ("Lamdera.Evergreen.failEncode", "Lamdera.Evergreen.failDecode") )
     , (("elm/browser", "Browser.Navigation", "Key") --> ("Lamdera.Evergreen.failEncode", "Lamdera.Evergreen.failDecode") )
+    , (("elm/file", "File", "File") --> ("Lamdera.Evergreen.failEncode", "Lamdera.Evergreen.failDecode") )
     -- not implemented yet, but needed by other pkgs
     , (("elm/core", "Platform", "ProcessId") --> ("Lamdera.Evergreen.failEncode", "Lamdera.Evergreen.failDecode") ) -- time
     -- not needed by anything immediately, but we don't know how to encode these anyway, so let's fail them now
