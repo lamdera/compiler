@@ -82,7 +82,9 @@ transpile
 
     fqExports (Hs.ExportSpecList lst) = Hs.ExportSpecList (fqExport <$> lst)
 
-    fqExport (Hs.EVar (Hs.UnQual n)) = Hs.EVar (Hs.Qual (Hs.ModuleName moduName) n)
+    fqExport (Hs.EVar (Hs.UnQual n)) = Hs.EVar (Hs.Qual (Hs.ModuleName moduName) n) -- top-level values
+    fqExport (Hs.EThingWith wc (Hs.UnQual n) cnames) = Hs.EThingWith wc (Hs.Qual (Hs.ModuleName moduName) n) cnames -- type/ctor
+    fqExport (Hs.EAbs ns (Hs.UnQual n)) = Hs.EAbs ns (Hs.Qual (Hs.ModuleName moduName) n) -- type alias
     fqExport n = n
 
     -- binops = tBinops _binops
