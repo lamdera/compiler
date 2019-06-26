@@ -233,6 +233,7 @@ evergreenCoreCodecs =
     , (("elm/browser", "Browser.Navigation", "Key") --> ("Lamdera.Evergreen.failEncode", "Lamdera.Evergreen.failDecode") )
     , (("elm/file", "File", "File") --> ("Lamdera.Evergreen.failEncode", "Lamdera.Evergreen.failDecode") )
     -- not implemented yet, but needed by other pkgs
+    , (("elm/core", "Process", "Id") --> ("Lamdera.Evergreen.failEncode", "Lamdera.Evergreen.failDecode") ) -- alias of Platform.ProcessId
     , (("elm/core", "Platform", "ProcessId") --> ("Lamdera.Evergreen.failEncode", "Lamdera.Evergreen.failDecode") ) -- time
     -- not needed by anything immediately, but we don't know how to encode these anyway, so let's fail them now
     , (("elm/core", "Platform", "Program") --> ("(\\_ _ _ -> Lamdera.Evergreen.failEncode)", "(\\_ _ _ -> Lamdera.Evergreen.failDecode)") ) -- idk
