@@ -96,10 +96,12 @@ shouldHaveCodecsGenerated name =
     Name "elm-explorations" "markdown" -> True
     Name "elm-explorations" "test" -> True -- some types contain functions
 
+    -- deps that definitely use types defined in native code, but should still get codecs generated
+    Name "elm" "json" -> True -- Json.Value and Json.Decoder are both native
+
     -- deps that definitely use types defined in native code
     Name "elm" "file" -> False -- File type doesn't expose any pair of codecs :(
     Name "elm" "http" -> False
-    Name "elm" "json" -> False -- Json.Value and Json.Decoder are both native
     Name "elm" "project-metadata-utils" -> False -- uses `type Info = Info { r | name : String }`, we don't support partial records yet
     Name "elm" "regex" -> False -- Regex type is native
     Name "elm" "virtual-dom" -> False

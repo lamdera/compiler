@@ -220,6 +220,13 @@ evergreenCoreDecoders = snd <$> evergreenCoreCodecs
 
 evergreenCoreCodecs :: Map.Map (Canonical, N.Name) (T.Text, T.Text)
 evergreenCoreCodecs =
+  let
+    failEnc 0 = "Lamdera.Evergreen.failEncode"
+    failEnc n = p ("\\" <> T.replicate n "_ " <> "-> Lamdera.Evergreen.failEncode")
+    failDec 0 = "Lamdera.Evergreen.failDecode"
+    failDec n = p ("\\" <> T.replicate n "_ " <> "-> Lamdera.Evergreen.failDecode")
+    failCodec n = (failEnc n, failDec n)
+  in
   -- NOTE: the injected failEncode and failDecode values follow a simple pattern; they take the (de/en)coders
   -- of type variables as arguments; one argument per type variable, in the same order as the type variables
   -- in the main type. A two-argument type that we want to `fail` must thus be wrapped in a two-argument lambda
@@ -230,22 +237,26 @@ evergreenCoreCodecs =
   -- NOTE: none of these packages have been checked exhaustively for types; we should do that
   ( [ (("elm/bytes", "Bytes", "Bytes") --> ("Lamdera.Evergreen.encodeBytes", "Lamdera.Evergreen.decodeBytes") )
     , (("elm/time", "Time", "Posix") --> ("(\\t -> Lamdera.Evergreen.encodeInt (Time.posixToMillis t))", "Lamdera.Evergreen.decodeInt |> Lamdera.Evergreen.andThenDecode (\\t -> Lamdera.Evergreen.succeedDecode (Time.millisToPosix t))"))
-    , (("elm/virtual-dom", "VirtualDom", "Node") --> ("(\\_ -> Lamdera.Evergreen.failEncode)", "(\\_ -> Lamdera.Evergreen.failDecode)") )
-    , (("elm/virtual-dom", "VirtualDom", "Attribute") --> ("(\\_ -> Lamdera.Evergreen.failEncode)", "(\\_ -> Lamdera.Evergreen.failDecode)") )
-    , (("elm/virtual-dom", "VirtualDom", "Handler") --> ("(\\_ -> Lamdera.Evergreen.failEncode)", "(\\_ -> Lamdera.Evergreen.failDecode)") )
+    , (("elm/virtual-dom", "VirtualDom", "Node") --> failCodec 1 )
+    , (("elm/virtual-dom", "VirtualDom", "Attribute") --> failCodec 1 )
+    , (("elm/virtual-dom", "VirtualDom", "Handler") --> failCodec 1 )
     -- Disable for now, but need to revisit these and whether we want actual proper wire support
-    , (("elm/browser", "Browser", "UrlRequest") --> ("Lamdera.Evergreen.failEncode", "Lamdera.Evergreen.failDecode") )
-    , (("elm/browser", "Browser.Navigation", "Key") --> ("Lamdera.Evergreen.failEncode", "Lamdera.Evergreen.failDecode") )
-    , (("elm/file", "File", "File") --> ("Lamdera.Evergreen.failEncode", "Lamdera.Evergreen.failDecode") )
+    , (("elm/browser", "Browser", "UrlRequest") --> failCodec 0 )
+    , (("elm/browser", "Browser.Navigation", "Key") --> failCodec 0 )
+    , (("elm/file", "File", "File") --> failCodec 0 )
     -- not implemented yet, but needed by other pkgs
-    , (("elm/core", "Process", "Id") --> ("Lamdera.Evergreen.failEncode", "Lamdera.Evergreen.failDecode") ) -- alias of Platform.ProcessId
-    , (("elm/core", "Platform", "ProcessId") --> ("Lamdera.Evergreen.failEncode", "Lamdera.Evergreen.failDecode") ) -- time
+    , (("elm/core", "Process", "Id") --> failCodec 0 ) -- alias of Platform.ProcessId
+    , (("elm/core", "Platform", "ProcessId") --> failCodec 0 ) -- time
     -- not needed by anything immediately, but we don't know how to encode these anyway, so let's fail them now
-    , (("elm/core", "Platform", "Program") --> ("(\\_ _ _ -> Lamdera.Evergreen.failEncode)", "(\\_ _ _ -> Lamdera.Evergreen.failDecode)") ) -- idk
-    , (("elm/core", "Platform", "Router") --> ("(\\_ _ _ -> Lamdera.Evergreen.failEncode)", "(\\_ _ _ -> Lamdera.Evergreen.failDecode)") ) -- idk
-    , (("elm/core", "Platform", "Task") --> ("(\\_ _ -> Lamdera.Evergreen.failEncode)", "(\\_ _ -> Lamdera.Evergreen.failDecode)") ) -- idk
-    , (("elm/core", "Platform.Cmd", "Cmd") --> ("(\\_ -> Lamdera.Evergreen.failEncode)", "(\\_ -> Lamdera.Evergreen.failDecode)") ) -- idk
-    , (("elm/core", "Platform.Sub", "Sub") --> ("(\\_ -> Lamdera.Evergreen.failEncode)", "(\\_ -> Lamdera.Evergreen.failDecode)") ) -- idk
+    , (("elm/core", "Platform", "Program") --> failCodec 3 ) -- idk
+    , (("elm/core", "Platform", "Router") --> failCodec 3 ) -- idk
+    , (("elm/core", "Platform", "Task") --> failCodec 2 ) -- idk
+    , (("elm/core", "Platform.Cmd", "Cmd") --> failCodec 1 ) -- idk
+    , (("elm/core", "Platform.Sub", "Sub") --> failCodec 1 )
+    -- elm/json
+    , (("elm/json", "Json.Encode", "Value") --> failCodec 0 ) -- js type
+    , (("elm/json", "Json.Decode", "Decoder") --> failCodec 1 ) -- js type
+    , (("elm/json", "Json.Decode", "Value") --> failCodec 0 ) -- js type
     ] <>
     (
       -- elm/core types; these are exhaustive (but some types are commented out atm)
