@@ -85,31 +85,29 @@ shouldHaveCodecsGenerated name =
 
     -- below here are things filip has checked doesn't use types defined in js (e.g. `type T a = T`)
     -- they can still use kernel functions, but types are fully defined in elm land
+    Name "elm" "browser" -> True
     Name "elm" "html" -> True
+    Name "elm" "parser" -> True -- the Parser type contains a function, but codec generator fns will correctly generate a failEncode/failDecode whenever it encounters a function, turning it into a runtime error.
+    Name "elm" "random" -> True -- Generator type contains a function, but codec should generate a failEncode/failDecode for it
+    Name "elm" "svg" -> True
     Name "elm" "time" -> True
     Name "elm" "url" -> True
+    Name "elm-explorations" "benchmark" -> True
+    Name "elm-explorations" "markdown" -> True
+    Name "elm-explorations" "test" -> True -- some types contain functions
 
-    -- shady, but let's try these ones too
-    Name "elm" "browser" -> False
-    Name "elm" "http" -> True
+    -- deps that definitely use types defined in native code
+    Name "elm" "file" -> False -- File type doesn't expose any pair of codecs :(
+    Name "elm" "http" -> False
+    Name "elm" "json" -> False -- Json.Value and Json.Decoder are both native
+    Name "elm" "project-metadata-utils" -> False -- uses `type Info = Info { r | name : String }`, we don't support partial records yet
+    Name "elm" "regex" -> False -- Regex type is native
+    Name "elm" "virtual-dom" -> False
+    Name "elm-explorations" "linear-algebra" -> False
+    Name "elm-explorations" "webgl" -> False
 
     -- all other elm packages that could have native code
     -- todo: check which of these we can run wire for, and which ones need manual intervention
-    Name "elm" "browser" -> False
-    Name "elm" "file" -> False
-    Name "elm" "json" -> False
-    Name "elm" "parser" -> False
-    Name "elm" "project-metadata-utils" -> False
-    Name "elm" "random" -> False
-    Name "elm" "regex" -> False
-    Name "elm" "svg" -> False
-    Name "elm" "virtual-dom" -> False
-    Name "elm-explorations" "benchmark" -> False
-    Name "elm-explorations" "linear-algebra" -> False
-    Name "elm-explorations" "markdown" -> False
-    Name "elm-explorations" "test" -> False
-    Name "elm-explorations" "webgl" -> False
-
     Name "elm-explorations" _ ->
       False
 

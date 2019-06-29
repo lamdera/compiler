@@ -122,7 +122,9 @@ generateCodecs revImportDict (Can.Module _moduName _docs _exports _decls _unions
               let qualModuName = qualImport moduName
               in p $ (if _moduName == moduName then "" else moduleToText qualModuName <> ".") <> "evg_decode_" <> N.toText name
           ) <> leftWrap (p <$> decoderForType varMap <$> tipes))
-        (Can.TRecord nameFieldTypeMap _) -> p $
+        (Can.TRecord nameFieldTypeMap (Just _)) ->
+          "Lamdera.Evergreen.failDecode"
+        (Can.TRecord nameFieldTypeMap Nothing) -> p $
           let
             (newVarMap, vars) = manyVars varMap (Map.keys nameFieldTypeMap)
           in
@@ -133,7 +135,7 @@ generateCodecs revImportDict (Can.Module _moduName _docs _exports _decls _unions
         (Can.TTuple t1 t2 Nothing) -> p $ pairDec (decoderForType varMap t1) (decoderForType varMap t2)
         (Can.TTuple t1 t2 (Just t3)) -> p $ tripleDec (decoderForType varMap t1) (decoderForType varMap t2) (decoderForType varMap t3)
         (Can.TAlias moduName name nameTypePairs aliasType) -> decoderForType varMap (Can.TType moduName name (snd <$> nameTypePairs))
-        (Can.TLambda _ _) -> "Lamdera.Evergreen.failDecode " -- <> strQuote (T.pack $ show x)
+        (Can.TLambda _ _) -> "Lamdera.Evergreen.failDecode" -- <> strQuote (T.pack $ show x)
 
     -- D.succeed (\a b c -> { a = a, b = b, c = c })
     --   |> dAndMap decodeInt64
@@ -159,7 +161,10 @@ generateCodecs revImportDict (Can.Module _moduName _docs _exports _decls _unions
               let qualModuName = qualImport moduName
               in (if _moduName == moduName then "" else moduleToText qualModuName <> ".") <> "evg_encode_" <> N.toText name
           ) <> leftWrap (p <$> encoderForType varMap <$> tipes))
-        (Can.TRecord nameFieldTypeMap _) ->
+        (Can.TRecord nameFieldTypeMap (Just _)) ->
+          "Lamdera.Evergreen.failEncode"
+        (Can.TRecord nameFieldTypeMap Nothing) ->
+          -- We don't allow sending partial records atm.
           let
             (newVarMap, recVar) = newRecVar varMap -- store `Map Varname Int` so we can append numbers to varnames to avoid shadowing
           in
@@ -171,7 +176,7 @@ generateCodecs revImportDict (Can.Module _moduName _docs _exports _decls _unions
         (Can.TAlias moduName name nameTypePairs aliasType) ->
           encoderForType varMap (Can.TType moduName name (snd <$> nameTypePairs))
           -- encoderForType varMap (Type.dealias nameTypePairs aliasType)
-        (Can.TLambda _ _) -> "Lamdera.Evergreen.failEncode " -- <> strQuote (T.pack $ show x)
+        (Can.TLambda _ _) -> "Lamdera.Evergreen.failEncode" -- <> strQuote (T.pack $ show x)
 
   in
     T.intercalate "\n\n\n" ((unionCodecs <$> Map.toList _unions) <> (aliasCodecs <$> Map.toList _aliases))
