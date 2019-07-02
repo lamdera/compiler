@@ -2,7 +2,6 @@
 module Develop.StaticFiles.Build
   ( readAsset
   , compile
-  , compile_
   )
   where
 
@@ -55,8 +54,3 @@ rootPaths =
   , "src" </> "Index.elm"
   , "src" </> "NotFound.elm"
   ]
-
-
-compile_ :: IO BS.ByteString
-compile_ =
-  pure ""
