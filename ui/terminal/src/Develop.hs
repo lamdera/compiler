@@ -52,6 +52,7 @@ run () (Flags maybePort) =
           serveFiles
           <|> serveDirectoryWith directoryConfig "."
           <|> serveAssets
+          <|> serveLamderaPublicFiles
           <|> error404
 
 
@@ -261,3 +262,13 @@ mimeTypeDict =
     , ".zip"     ==> "application/zip"
     ]
 
+
+
+-- Additional handler to serve files in /public from root / so that
+-- image/asset references from Elm work locally same as in production
+serveLamderaPublicFiles :: Snap ()
+serveLamderaPublicFiles =
+  do  file <- getSafePath
+      let pubFile = "public" </> file
+      guard =<< liftIO (Dir.doesFileExist pubFile)
+      serveElm pubFile <|> serveFilePretty pubFile
