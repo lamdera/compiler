@@ -1,4 +1,5 @@
 {-# OPTIONS_GHC -Wall #-}
+{-# LANGUAGE OverloadedStrings #-}
 module Type.Constrain.Expression
   ( constrain
   , constrainDef
@@ -14,6 +15,7 @@ import qualified AST.Module.Name as ModuleName
 import qualified AST.Utils.Shader as Shader
 import qualified Data.Index as Index
 import qualified Elm.Name as N
+import qualified Elm.Package as Pkg
 import qualified Reporting.Annotation as A
 import qualified Reporting.Error.Type as E
 import Reporting.Error.Type (Expected(..), Context(..), SubContext(..), MaybeName(..), Category(..), PExpected(..), PContext(..))
@@ -22,6 +24,10 @@ import qualified Type.Constrain.Pattern as Pattern
 import qualified Type.Instantiate as Instantiate
 import Type.Type as Type hiding (Descriptor(..))
 
+import qualified Debug.Trace as DT
+import Transpile.PrettyPrint
+
+import Control.Lens.Plated (transform)
 
 
 -- CONSTRAIN
@@ -50,8 +56,22 @@ constrain rtv (A.At region expression) expected =
     Can.VarKernel _ _ ->
       return CTrue
 
-    Can.VarForeign _ name annotation ->
-      return $ CForeign region name annotation expected
+    Can.VarForeign (ModuleName.Canonical pkg modu) name annotation@(Can.Forall freevars t) ->
+      if pkg == Pkg.lamderaCore && modu == "Lamdera.Frontend" && name == "sendToBackend" then
+        let
+          fn (Can.TVar "toBackend") = Can.TType (ModuleName.Canonical Pkg.dummyName "Msg") "ToBackend" []
+          fn x = x
+        in
+          pure $ CForeign region name (Can.Forall freevars (transform fn t)) expected
+
+      else if pkg == Pkg.lamderaCore && modu == "Lamdera.Backend" && name == "sendToFrontend" then
+        let
+          fn (Can.TVar "toFrontend") = Can.TType (ModuleName.Canonical Pkg.dummyName "Msg") "ToFrontend" []
+          fn x = x
+        in
+          pure $ CForeign region name (Can.Forall freevars (transform fn t)) expected
+
+      else return $ CForeign region name annotation expected
 
     Can.VarCtor _ _ name _ annotation ->
       return $ CForeign region name annotation expected

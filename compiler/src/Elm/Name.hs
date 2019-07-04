@@ -1,5 +1,6 @@
 {-# OPTIONS_GHC -Wall #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 module Elm.Name
   ( Name
   -- utilities
@@ -48,12 +49,19 @@ import Data.Word (Word8)
 import Foreign.ForeignPtr (ForeignPtr)
 
 
+-- recursion schemes
+import Data.Data
+import Control.Lens.Plated (Plated(plate))
+import Data.Data.Lens (uniplate)
 
 -- NAME
 
 
 newtype Name = Name { _name :: Text.Text }
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord, Show, Data)
+
+instance Plated Name where
+  plate = uniplate
 
 -- instance Show Name where
   -- show n = Text.unpack $ toText n

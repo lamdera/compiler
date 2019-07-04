@@ -1,4 +1,5 @@
 {-# OPTIONS_GHC -Wall #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE OverloadedStrings #-}
 module AST.Canonical
   ( Expr, Expr_(..)
@@ -67,6 +68,10 @@ import qualified Elm.Name as N
 import qualified Reporting.Annotation as A
 import qualified Reporting.Region as R
 
+-- recursion schemes
+import Data.Data
+import Control.Lens.Plated (Plated(plate))
+import Data.Data.Lens (uniplate)
 
 
 -- EXPRESSIONS
@@ -203,18 +208,27 @@ data Type
   | TUnit
   | TTuple Type Type (Maybe Type)
   | TAlias ModuleName.Canonical N.Name [(N.Name, Type)] AliasType
-  deriving (Show)
+  deriving (Show, Data)
+
+instance Plated Type where
+  plate = uniplate
 
 
 data AliasType
   = Holey Type
   | Filled Type
-  deriving (Show)
+  deriving (Show, Data)
+
+instance Plated AliasType where
+  plate = uniplate
 
 
 data FieldType =
   FieldType {-# UNPACK #-} !Word16 Type
-  deriving (Show)
+  deriving (Show, Data)
+
+instance Plated FieldType where
+  plate = uniplate
 
 
 -- NOTE: The Word16 marks the source order, but it may not be available
