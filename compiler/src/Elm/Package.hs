@@ -1,11 +1,13 @@
 {-# OPTIONS_GHC -Wall #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 module Elm.Package
   ( Name(..)
   , Package(..)
   , isKernel
   , toString, toText, toUrl, toFilePath
   , fromText
+  , lamderaCore, lamderaCodecs
   , dummyName, kernel, core
   , browser, virtualDom, html
   , json, http, url
@@ -48,6 +50,11 @@ import qualified Json.Encode as Encode
 
 import qualified Debug.Trace as DT
 
+-- recursion schemes
+import Data.Data
+import Control.Lens.Plated (Plated(plate))
+import Data.Data.Lens (uniplate)
+
 
 -- PACKGE NAMES
 
@@ -57,16 +64,20 @@ data Name =
     { _author :: !Text
     , _project :: !Text
     }
-    deriving (Eq, Ord, Show)
+    deriving (Eq, Ord, Show, Data)
 
+instance Plated Name where
+  plate = uniplate
 
 data Package =
   Package
     { _name :: !Name
     , _version :: !Version
     }
-    deriving (Eq, Ord, Show)
+    deriving (Eq, Ord, Show, Data)
 
+instance Plated Package where
+  plate = uniplate
 
 
 -- HELPERS
@@ -197,6 +208,18 @@ gatherCaps char (buffer, chunks) =
 -- COMMON PACKAGE NAMES
 
 
+{-# NOINLINE lamderaCore #-}
+lamderaCore :: Name
+lamderaCore =
+  Name "Lamdera" "core"
+
+
+{-# NOINLINE lamderaCodecs #-}
+lamderaCodecs :: Name
+lamderaCodecs =
+  Name "Lamdera" "codecs"
+
+
 {-# NOINLINE dummyName #-}
 dummyName :: Name
 dummyName =
@@ -290,7 +313,10 @@ data Version =
     , _minor :: {-# UNPACK #-} !Word16
     , _patch :: {-# UNPACK #-} !Word16
     }
-    deriving (Eq, Ord, Show)
+    deriving (Eq, Ord, Show, Data)
+
+instance Plated Version where
+  plate = uniplate
 
 
 initialVersion :: Version

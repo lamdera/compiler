@@ -1,5 +1,6 @@
 {-# OPTIONS_GHC -Wall #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 module AST.Module.Name
   ( Canonical(..)
   , basics, char, string
@@ -21,6 +22,10 @@ import qualified Elm.Name as N
 import qualified Elm.Package as Pkg
 
 
+-- recursion schemes
+import Data.Data
+import Control.Lens.Plated (Plated(plate))
+import Data.Data.Lens (uniplate)
 
 -- NAMES
 
@@ -30,7 +35,10 @@ data Canonical =
     { _package :: !Pkg.Name
     , _module :: !N.Name
     }
-    deriving (Ord, Show)
+    deriving (Ord, Show, Data)
+
+instance Plated Canonical where
+  plate = uniplate
 
 -- instance Show Canonical where
   -- show (Canonical pkg modu) = Text.unpack $ Pkg.toText pkg <> "~" <> N.toText modu
