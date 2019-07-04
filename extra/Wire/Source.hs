@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Wire.Source (generateCodecs, injectEvergreenExposing, isEvergreenCodecName) where
+module Wire.Source (generateCodecs, injectEvergreenExposing, isEvergreenCodecName, evergreenCoreCodecs) where
 
 import qualified AST.Canonical as Can
 import AST.Module.Name (Canonical(..))
@@ -123,6 +123,7 @@ generateCodecs revImportDict (Can.Module _moduName _docs _exports _decls _unions
               in p $ (if _moduName == moduName then "" else moduleToText qualModuName <> ".") <> "evg_decode_" <> N.toText name
           ) <> leftWrap (p <$> decoderForType varMap <$> tipes))
         (Can.TRecord nameFieldTypeMap (Just _)) ->
+          -- We don't allow sending partial records atm, because we haven't fully figured out how to encode/decode them.
           "Lamdera.Evergreen.failDecode"
         (Can.TRecord nameFieldTypeMap Nothing) -> p $
           let
@@ -162,9 +163,9 @@ generateCodecs revImportDict (Can.Module _moduName _docs _exports _decls _unions
               in (if _moduName == moduName then "" else moduleToText qualModuName <> ".") <> "evg_encode_" <> N.toText name
           ) <> leftWrap (p <$> encoderForType varMap <$> tipes))
         (Can.TRecord nameFieldTypeMap (Just _)) ->
+          -- We don't allow sending partial records atm, because we haven't fully figured out how to encode/decode them.
           "Lamdera.Evergreen.failEncode"
         (Can.TRecord nameFieldTypeMap Nothing) ->
-          -- We don't allow sending partial records atm.
           let
             (newVarMap, recVar) = newRecVar varMap -- store `Map Varname Int` so we can append numbers to varnames to avoid shadowing
           in
