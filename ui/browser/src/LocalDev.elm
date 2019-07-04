@@ -11,7 +11,6 @@ import Url exposing (Url)
 
 
 {-| WARNING: do not change the types in this module, they must be as is for `lamdera reactor` to work
-This local development harness is temporary and will be integrated into the reactor in future
 -}
 type Msg
     = FEMsg Msg.FrontendMsg
