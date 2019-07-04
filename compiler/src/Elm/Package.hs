@@ -74,44 +74,15 @@ data Package =
 
 shouldHaveCodecsGenerated :: Name -> Bool
 shouldHaveCodecsGenerated name =
-  --(\res -> DT.trace ("shouldHaveCodecsGenerated? " ++ show name ++ " => " ++ show res) $ res) $
   case name of
     -- Some elm packages are ignored because of cyclic dependencies.
     -- Those codecs have to be manually defined in `Lamdera/codecs`.
+    -- All other packages, even if their types are defined in js, have codecs generated for their types.
+    -- Then we manually override specific types in `Wire.Source`.
 
     -- elm deps used by Lamdera/codecs
     Name "elm" "bytes" -> False
     Name "elm" "core" -> False
-
-    -- below here are things filip has checked doesn't use types defined in js (e.g. `type T a = T`)
-    -- they can still use kernel functions, but types are fully defined in elm land
-    Name "elm" "browser" -> True
-    Name "elm" "html" -> True
-    Name "elm" "parser" -> True -- the Parser type contains a function, but codec generator fns will correctly generate a failEncode/failDecode whenever it encounters a function, turning it into a runtime error.
-    Name "elm" "random" -> True -- Generator type contains a function, but codec should generate a failEncode/failDecode for it
-    Name "elm" "svg" -> True
-    Name "elm" "time" -> True
-    Name "elm" "url" -> True
-    Name "elm-explorations" "benchmark" -> True
-    Name "elm-explorations" "markdown" -> True
-    Name "elm-explorations" "test" -> True -- some types contain functions
-
-    -- deps that definitely use types defined in native code, but should still get codecs generated
-    Name "elm" "json" -> True -- Json.Value and Json.Decoder are both native
-
-    -- deps that definitely use types defined in native code
-    Name "elm" "file" -> False -- File type doesn't expose any pair of codecs :(
-    Name "elm" "http" -> False
-    Name "elm" "project-metadata-utils" -> False -- uses `type Info = Info { r | name : String }`, we don't support partial records yet
-    Name "elm" "regex" -> False -- Regex type is native
-    Name "elm" "virtual-dom" -> False
-    Name "elm-explorations" "linear-algebra" -> False
-    Name "elm-explorations" "webgl" -> False
-
-    -- all other elm packages that could have native code
-    -- todo: check which of these we can run wire for, and which ones need manual intervention
-    Name "elm-explorations" _ ->
-      False
 
     Name "Lamdera" "codecs" ->
       -- avoid cyclic imports; generated codecs rely on Lamdera/codecs:Lamdera.Evergreen. This is our codec bootstrap module.
