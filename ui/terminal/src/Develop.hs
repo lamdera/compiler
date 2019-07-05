@@ -53,6 +53,7 @@ run () (Flags maybePort) =
           <|> serveDirectoryWith directoryConfig "."
           <|> serveAssets
           <|> serveLamderaPublicFiles
+          <|> serveUnmatchedUrlsToIndex
           <|> error404
 
 
@@ -272,3 +273,17 @@ serveLamderaPublicFiles =
       let pubFile = "public" </> file
       guard =<< liftIO (Dir.doesFileExist pubFile)
       serveElm pubFile <|> serveFilePretty pubFile
+
+
+-- So that Elm's Navigation routing can work on any URL, serve any unmatched
+-- non-extensioned paths to the "index" (in this case the src/LocalDev.elm
+-- harness as we're local in the reactor). Extensioned paths will continue to
+-- the next handler, namely `error404` (see `run` fn at top of file)
+serveUnmatchedUrlsToIndex :: Snap ()
+serveUnmatchedUrlsToIndex =
+  do  file <- getSafePath
+      guard (takeExtension file == "")
+      let harnessPath = "src/LocalDev.elm"
+      liftIO $ BS.writeFile harnessPath StaticFiles.lamderaLocalDev
+      serveElm harnessPath
+      liftIO $ Dir.removeFile harnessPath

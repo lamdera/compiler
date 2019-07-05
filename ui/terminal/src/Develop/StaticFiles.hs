@@ -6,6 +6,7 @@ module Develop.StaticFiles
   , cssPath
   , elmPath
   , waitingPath
+  , lamderaLocalDev
   )
   where
 
@@ -127,3 +128,10 @@ favicon =
 waiting :: BS.ByteString
 waiting =
   $(bsToExp =<< runIO (Build.readAsset "waiting.gif"))
+
+
+-- Lamdera
+
+lamderaLocalDev :: BS.ByteString
+lamderaLocalDev =
+  $(bsToExp =<< runIO (BS.readFile ("ui" </> "browser" </> "src" </> "LocalDev.elm")))
