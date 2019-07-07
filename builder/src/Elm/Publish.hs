@@ -35,6 +35,8 @@ import qualified Stuff.Paths as Path
 
 publish :: Summary.Summary -> Task.Task ()
 publish summary@(Summary.Summary root project _ _ _) =
+  throw E.LamderaPublishNeutered
+  {-
   case project of
     Project.App _ ->
       throw E.Application
@@ -60,6 +62,7 @@ publish summary@(Summary.Summary root project _ _ _) =
           Website.register name version commitHash zipHash
 
           Task.report Progress.PublishEnd
+  -}
 
 
 throw :: E.Exit -> Task.Task a
