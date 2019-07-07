@@ -76,7 +76,9 @@ generateCodecs revImportDict (Can.Module _moduName _docs _exports _decls _unions
     unionCodecs :: (N.Name, Can.Union) -> T.Text
     unionCodecs (name, (Can.Union _u_vars _u_alts _u_numAlts _u_opts)) =
       let
+        tName = N.toText name <> leftWrap (N.toText <$> _u_vars)
         encoder =
+          "evg_encode_" <> N.toText name <> " : " <> T.intercalate " -> " (((\v -> "(" <> v <> " -> Lamdera.Evergreen.Encoder)") <$> N.toText <$> _u_vars) ++ [tName, "Lamdera.Evergreen.Encoder"]) <> "\n" <>
           "evg_encode_" <> N.toText name <> leftWrap (codec <$> _u_vars) <> " evg_e_thingy =\n" <>
           "  case evg_e_thingy of\n    "
           <> T.intercalate "\n    "
@@ -87,7 +89,8 @@ generateCodecs revImportDict (Can.Module _moduName _docs _exports _decls _unions
               --Can.Unbox -> error "codec Unbox notimpl"
             )
         decoder =
-          "evg_decode_" <> N.toText name <> leftWrap (codec <$> _u_vars) <> " =\n"
+          "evg_decode_" <> N.toText name <> " : " <> T.intercalate " -> " (((\v -> "(Lamdera.Evergreen.Decoder " <> v <> ")") <$> N.toText  <$> _u_vars) ++ ["Lamdera.Evergreen.Decoder (" <> tName <> ")"]) <> "\n"
+          <> "evg_decode_" <> N.toText name <> leftWrap (codec <$> _u_vars) <> " =\n"
           <> "  Lamdera.Evergreen.decodeString |> Lamdera.Evergreen.andThenDecode (\\evg_e_thingy ->\n"
           <> "    case evg_e_thingy of\n      "
           <> T.intercalate "\n      "
