@@ -31,6 +31,7 @@ data Exit
   | MissingTag Pkg.Version
   | NoGit
   | LocalChanges Pkg.Version
+  | LamderaPublishNeutered
   deriving (Show)
 
 
@@ -216,6 +217,17 @@ toReport exit =
             "If you are sure everything is in order, you can run `git checkout "
             ++ vsn ++ "` and publish your code from there."
         ]
+
+    LamderaPublishNeutered ->
+      Help.report "LAMDERA-ONLY PACKAGE" Nothing
+        "Hey there, thanks for trying to share your work. Right now, we don't\
+        \ have a package repository for Lamdera-specific packages, and\
+        \ publishing packages which only make sense on Lamdera onto the normal\
+        \ Elm package manager isn't very nice. So if you have something that\
+        \ is truly useful for the Elm community, even for those who aren't\
+        \ using Lamdera, then publish it using the normal Elm binary.\
+        \ Otherwise, sit tight for a while."
+        []
 
 
 badReadmeReport :: String -> String -> Help.Report
