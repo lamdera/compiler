@@ -7,7 +7,6 @@ import Frontend
 import Html
 import Lamdera.Types exposing (Milliseconds, MsgId, WsError)
 import Msg exposing (BackendMsg, FrontendMsg, ToBackend, ToFrontend)
-import Url exposing (Url)
 
 
 {-| WARNING: do not change the types in this module, they must be as is for `lamdera reactor` to work
@@ -19,7 +18,7 @@ type Msg
     | FEtoBE Milliseconds MsgId Msg.ToBackend (Result WsError () -> Msg)
 
 
-init : flags -> Url.Url -> Navigation.Key -> ( ( Frontend.Model, Backend.Model ), Cmd Msg )
+init : flags -> url -> Navigation.Key -> ( ( Frontend.Model, Backend.Model ), Cmd Msg )
 init flags url nav =
     let
         ( feim, fecmd ) =
