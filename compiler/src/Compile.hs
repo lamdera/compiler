@@ -123,7 +123,7 @@ compile flag pkg importDict interfaces source =
           in
             --DT.trace (BS8.toString newSource) $ -- uncomment to print source code for all modules
             -- it's safer to add stuff to the parsed result, but much harder to debug, so codecs are generated as source code, and imports are added like this now
-            addImport (Src.Import (A.At R.lamderaInject "Lamdera.Evergreen") Nothing Src.Open) <$>
+            addImport (Src.Import (A.At R.lamderaInject "Lamdera.Evergreen") Nothing (Src.Explicit [])) <$>
             Parse.program pkg newSource
 
       canonical_ <- Result.mapError Error.Canonicalize $
