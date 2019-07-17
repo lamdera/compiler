@@ -199,7 +199,7 @@ instance ToElm C.Def where
       C.Def name pats expr ->
         toElm name <> leftPad " " (toElm <$> pats) <> " =" <> Indent <> toElm expr <> Dedent
       C.TypedDef name _ patTypes expr tipe ->
-        toElm name <> " : " <> toElm tipe <> "\n" <>
+        toElm name <> " : " <> intercalate " -> " (toElm <$> ((snd <$> patTypes) <> [tipe])) <> "\n" <>
         toElm name <> leftPad " " (toElm <$> (fst <$> patTypes)) <> " =" <> Indent <> toElm expr <> Dedent
 
 
