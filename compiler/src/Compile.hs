@@ -110,6 +110,24 @@ compile flag pkg importDict interfaces source =
       canonical <- Result.mapError Error.Canonicalize $
         Canonicalize.canonicalize pkg importDict interfaces valid
 
+      let localizer = L.fromModule valid -- TODO should this be strict for GC?
+
+      annotations <-
+        runTypeInference localizer canonical
+
+      () <-
+        exhaustivenessCheck canonical
+
+      graph <- Result.mapError (Error.Main localizer) $
+        Optimize.optimize annotations canonical
+
+      documentation <-
+        genarateDocs flag canonical
+
+      --
+      -- Ok, normal elm compilation chain is now done for this module, so any normal elm errors which may have happened will have been found and returned by now. This should reduce confusion for devs. Next, after the elm code is known good, we generate evergreen codecs, inject them, and then run the whole compilation step once more, with generated code this time.
+      --
+
       -- generate wire source code from canonical ast
       -- these are intended to be serialised and put at the end of source, then we redo the whole compilation step, generating valid as normal etc.
       rawCodecSource <- pure $ T.unpack $ Wire.Source.generateCodecs (getImportDict valid) canonical
