@@ -33,12 +33,6 @@ import qualified Language.Haskell.Exts.Simple.Syntax as Hs
 
 type List a = [a]
 
-{-
-TODO: list of possible issues
-- elm allows shadowing of imported things
-  - import Bitwise exposing (or), then define `or` locally, the use `or`. Will fail in haskell due to ambiguity, but not in elm.
-  - probably not an issue; references to top-level things seem to be fully qualified
--}
 
 transpile
   :: C.Module
