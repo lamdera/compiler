@@ -1,5 +1,6 @@
 module Transpile.Reserved where
 
+-- This module avoids the reserved keywords and symbols in Haskell by applying some simple rewrite rules.
 
 import qualified Language.Haskell.Exts.Simple.Syntax as Hs
 
