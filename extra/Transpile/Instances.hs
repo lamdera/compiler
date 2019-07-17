@@ -1,10 +1,31 @@
 {-# OPTIONS_GHC -Wall #-}
-module Transpile.Instances where
+module Transpile.Instances (tDataToGADT, tDataToInstDecl) where
 
 import qualified Language.Haskell.Exts.Simple.Syntax as Hs
 
 import Data.Monoid ((<>))
 import Data.Function ((&))
+
+
+{-
+Useful example when first developing this module:
+
+  type LazyListView a
+    = Nil
+    | Cons a (LazyList a)
+
+  data LazyListView a
+    = Nil
+    | Cons a (Lazy.List.LazyList a)
+    deriving (Lamdera.Haskelm.Core.Show, Lamdera.Haskelm.Core.Eq, Lamdera.Haskelm.Core.ElmVal')
+
+  data LazyListView a where
+    Nil :: (Lamdera.Haskelm.Core.ElmVal' a) => LazyListView a
+    Cons :: (Lamdera.Haskelm.Core.ElmVal' a) => a -> (LazyList a) -> LazyListView a
+
+Also, ident(ifier) /= indent(ation).
+-}
+
 
 --
 -- data Declaration
@@ -24,15 +45,9 @@ import Data.Function ((&))
 
 -- OpenCommentedList [Commented (WithEol a)] (PreCommented (WithEol a))
 
-qConUnwrap :: Hs.QualConDecl -> Hs.ConDecl
-qConUnwrap (Hs.QualConDecl Nothing Nothing conDecl) = conDecl
-qConUnwrap _ = error "unexpected pattern"
-
-
- -- ##############################################
 tDataToGADT :: String -> Hs.Decl -> Hs.Decl
 tDataToGADT moduName (Hs.DataDecl dataOrNew mContext declHead qualConDecls derive) =
-  -- TODO: deriving / instance
+  -- translate a data definition to a gadt, so we can have different type instances for different ctors of the same data type, like in elm.
   let
     qualConDecls2 = qualConDecls & fmap qConUnwrap & fmap conDeclToGadtDecl
     ctx vars = Hs.TyForall Nothing (Just (Hs.CxTuple (fmap (\ident -> Hs.ClassA (haskelmCoreIdent "ElmVal'") [Hs.TyVar ident]) vars)))
@@ -42,10 +57,15 @@ tDataToGADT moduName (Hs.DataDecl dataOrNew mContext declHead qualConDecls deriv
   in
     Hs.GDataDecl dataOrNew mContext declHead Nothing (qualConDecls2) derive
 tDataToGADT _ a = a
--- ##############################################
+
+
 
 tDataToInstDecl :: String -> Hs.Decl -> [Hs.Decl]
 tDataToInstDecl moduName (Hs.DataDecl _ _ declHead qualConDecls _) =
+  -- generate instance declarations for data types for the super types and global elm fns;
+  -- Monoid/appendable, Ord/comparable, Eq and Show.
+  -- We don't need a num instance since all Elm numbers are doubles under the hood, so we type aliased them both to Double.
+  -- This function is really opaque; sorry about that. When modifying, pretty-print the result and iterate until it seems correct.
   let
     dh = instDecl (declHead & dHeadToType moduName)
     instDecl t =
@@ -138,12 +158,12 @@ tDataToInstDecl moduName (Hs.DataDecl _ _ declHead qualConDecls _) =
         )
       )
     ]
-
 tDataToInstDecl _ _ = []
+
+-- INTERNALS
 
 haskelmCoreIdent :: String -> Hs.QName
 haskelmCoreIdent i = Hs.Qual (Hs.ModuleName "Lamdera.Haskelm.Core") (Hs.Ident i)
--- ##############################################
 
 dHeadToType :: String -> Hs.DeclHead -> Hs.Type
 dHeadToType moduName (Hs.DHead name) = Hs.TyCon (Hs.Qual (Hs.ModuleName moduName) name)
@@ -153,13 +173,13 @@ dHeadToType moduName (Hs.DHParen dh) = Hs.TyParen (dHeadToType moduName dh)
 dHeadToType moduName (Hs.DHApp dh (Hs.UnkindedVar v)) = Hs.TyApp (dHeadToType moduName dh) (Hs.TyVar v)
 dHeadToType _ _ = error "unexpected DeclHead"
 
-dHeadVars :: Hs.DeclHead -> [Hs.Name]
-dHeadVars (Hs.DHead _) = []
-dHeadVars dh@(Hs.DHInfix (Hs.UnkindedVar _) _) = error ("dHeadVars infix notimpl: " ++ show dh)
-  -- Hs.TyInfix (Hs.TyVar v) (Hs.UnpromotedName (Hs.UnQual )) (Hs.TyVar name)
-dHeadVars (Hs.DHParen dh) = dHeadVars dh
-dHeadVars (Hs.DHApp dh (Hs.UnkindedVar v)) = v : dHeadVars dh
-dHeadVars _ = error "unexpected DeclHead"
+-- dHeadVars :: Hs.DeclHead -> [Hs.Name]
+-- dHeadVars (Hs.DHead _) = []
+-- dHeadVars dh@(Hs.DHInfix (Hs.UnkindedVar _) _) = error ("dHeadVars infix notimpl: " ++ show dh)
+--   -- Hs.TyInfix (Hs.TyVar v) (Hs.UnpromotedName (Hs.UnQual )) (Hs.TyVar name)
+-- dHeadVars (Hs.DHParen dh) = dHeadVars dh
+-- dHeadVars (Hs.DHApp dh (Hs.UnkindedVar v)) = v : dHeadVars dh
+-- dHeadVars _ = error "unexpected DeclHead"
 
 -- | dTypeVars picks out all Hs.Idents and Hs.Symbols from a type, i.e. unqualified variables and symbols
 dTypeVars :: Hs.Type -> [Hs.Name]
@@ -186,18 +206,8 @@ dedup :: Eq a => [a] -> [a]
 dedup [] = []
 dedup (x:xs) = x : filter (/= x) (dedup xs)
 
-{-
+qConUnwrap :: Hs.QualConDecl -> Hs.ConDecl
+qConUnwrap (Hs.QualConDecl Nothing Nothing conDecl) = conDecl
+qConUnwrap _ = error "unexpected pattern"
 
-  type LazyListView a
-    = Nil
-    | Cons a (LazyList a)
 
-  data LazyListView a
-    = Nil
-    | Cons a (Lazy.List.LazyList a)
-    deriving (Lamdera.Haskelm.Core.Show, Lamdera.Haskelm.Core.Eq, ElmVal')
-
-  data LazyListView a where
-    Nil :: ElmVal' a => LazyListView a
-    Cons :: ElmVal' a => a -> (LazyList a) -> LazyListView a
--}
