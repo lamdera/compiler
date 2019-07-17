@@ -48,18 +48,16 @@ injectEvergreenExposing (Can.Module _ _ _exports _ _ _ _ _) s =
     Can.Export mapNameExport ->
       inject (startsWithUppercaseCharacter `filter` (N.toString <$> Map.keys mapNameExport)) s
 
--- pkgNone is just to make the types line up; it's stripped out right after it's used
-pkgNone = Pkg.Name "-lamdera-inject-package-" "-lamdera-inject-module-"
-
 generateCodecs :: Map.Map N.Name N.Name -> Can.Module -> T.Text
 generateCodecs revImportDict (Can.Module _moduName _docs _exports _decls _unions _aliases _binops _effects) =
   let -- massive let-expr so we can closure in _moduName
     -- HELPERS
-    qualImport :: Canonical -> Canonical
-    qualImport c@(Canonical _ n) =
-      case revImportDict Map.!? n of
-        Just v -> Canonical pkgNone v
-        Nothing -> Canonical pkgNone n
+    qualImport :: Canonical -> T.Text
+    qualImport (Canonical _ n) =
+      N.toText $
+        case revImportDict Map.!? n of
+          Just v -> v
+          Nothing -> n
 
     aliasCodecs :: (N.Name, Can.Alias) -> T.Text
     aliasCodecs (name, (Can.Alias names t)) =
@@ -121,9 +119,7 @@ generateCodecs revImportDict (Can.Module _moduName _docs _exports _decls _unions
         (Can.TType moduName name tipes) ->
           p ((case (moduName, name) `Map.lookup` evergreenCoreDecoders of
             Just c -> c
-            Nothing ->
-              let qualModuName = qualImport moduName
-              in p $ (if _moduName == moduName then "" else moduleToText qualModuName <> ".") <> "evg_decode_" <> N.toText name
+            Nothing -> p $ (if _moduName == moduName then "" else qualImport moduName <> ".") <> "evg_decode_" <> N.toText name
           ) <> leftWrap (p <$> decoderForType varMap <$> tipes))
         (Can.TRecord nameFieldTypeMap (Just _)) ->
           -- We don't allow sending partial records atm, because we haven't fully figured out how to encode/decode them.
@@ -161,9 +157,7 @@ generateCodecs revImportDict (Can.Module _moduName _docs _exports _decls _unions
         (Can.TType moduName name tipes) ->
           p ((case (moduName, name) `Map.lookup` evergreenCoreEncoders of
             Just c -> c
-            Nothing ->
-              let qualModuName = qualImport moduName
-              in (if _moduName == moduName then "" else moduleToText qualModuName <> ".") <> "evg_encode_" <> N.toText name
+            Nothing -> (if _moduName == moduName then "" else qualImport moduName <> ".") <> "evg_encode_" <> N.toText name
           ) <> leftWrap (p <$> encoderForType varMap <$> tipes))
         (Can.TRecord nameFieldTypeMap (Just _)) ->
           -- We don't allow sending partial records atm, because we haven't fully figured out how to encode/decode them.
