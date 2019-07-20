@@ -39,6 +39,8 @@ data ElmJsonProblem
   | NoPkgCore
   | NoAppCore
   | NoAppJson
+  -- lamdera
+  | NoAppLamderaCore
   deriving (Show)
 
 
@@ -127,6 +129,15 @@ elmJsonProblemToReport problem =
         "An application must have \"elm/json\" as a dependency. Try running:"
         [ D.indent 4 $ D.green $ "elm install elm/json"
         , D.reflow "It helps me handle flags and ports."
+        ]
+
+    NoAppLamderaCore ->
+      Help.report "MISSING DEPENDENCY" (Just "elm.json")
+        "A Lamdera application must have \"Lamdera/core\" as a dependency."
+        [ D.reflow "Perhaps you're not trying to run this app on Lamdera? That's fine, but please use the normal elm binary instead."
+        , D.reflow "Otherwise, try running:"
+        , D.indent 4 $ D.green $ "elm install Lamdera/core"
+        , D.reflow "I need it for hooking up the frontend to the backend."
         ]
 
 
