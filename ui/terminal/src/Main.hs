@@ -223,8 +223,8 @@ install =
         [ reflow
             "For example, if you want to get packages for HTTP and JSON, you would say:"
         , P.indent 4 $ P.green $ P.vcat $
-              [ "elm install elm/http"
-              , "elm install elm/json"
+              [ "lamdera install elm/http"
+              , "lamdera install elm/json"
               ]
         , reflow
             "Notice that you must say the AUTHOR name and PROJECT name! After running those\
