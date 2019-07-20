@@ -75,7 +75,7 @@ getWithReplFallback =
               let root = cache </> "tmp"
               Dir.createDirectoryIfMissing True root
               Dir.setCurrentDirectory root
-              IO.removeDir "elm-stuff"
+              IO.removeDir "lamdera-stuff"
               Encode.write "elm.json" (Project.encode (Project.Pkg replInfo))
               return root
 

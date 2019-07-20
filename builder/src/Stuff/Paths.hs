@@ -37,7 +37,7 @@ import qualified Data.Text as T
 
 stuff :: FilePath
 stuff =
-  "elm-stuff" </> Pkg.versionToString Compiler.version
+  "lamdera-stuff" </> Pkg.versionToString Compiler.version
 
 
 docs :: FilePath
@@ -62,7 +62,7 @@ prepublishDir  =
 removeStuff :: FilePath -> Task.Task_ e ()
 removeStuff root =
   liftIO $
-  do  let dir = root </> "elm-stuff"
+  do  let dir = root </> "lamdera-stuff"
       exists <- Dir.doesDirectoryExist dir
       if exists
         then Dir.removeDirectoryRecursive dir
