@@ -71,7 +71,7 @@ toReport exit =
     NoElmJson ->
       Help.report "NO elm.json FILE" Nothing
         "It looks like you are starting a new Elm project. Very exciting! Try running:"
-        [ D.indent 4 $ D.green $ "elm init"
+        [ D.indent 4 $ D.green $ "lamdera init"
         , D.reflow $
             "It will help you get set up. It is really simple!"
         ]
