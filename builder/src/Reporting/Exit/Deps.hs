@@ -105,7 +105,7 @@ toReport exit =
         [ D.fillSep
             ["Did","you","change","them","by","hand?","Try","to","change","it","back!"
             ,"It","is","much","better","to","add","dependencies","with",D.green "lamdera install"
-            ,"or","the","dependency","management","tool","in",D.green "elm reactor" <> "."
+            ,"or","the","dependency","management","tool","in",D.green "lamdera reactor" <> "."
             ]
         , D.reflow $
             "Please ask for help on the Elm slack <http://elmlang.herokuapp.com/> if\
