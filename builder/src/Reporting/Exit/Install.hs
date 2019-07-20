@@ -46,8 +46,8 @@ toReport exit =
             ,"This","reduces","build","times,","reduces","server","costs,","and","makes","it"
             ,"easier","to","work","offline.","As","a","result"
             ,D.dullcyan "lamdera install","is","only","for","adding","dependencies","to","elm.json,"
-            ,"whereas",D.dullcyan "elm make","is","in","charge","of","gathering","dependencies"
-            ,"and","building","everything.","So","maybe","try",D.green "elm make","instead?"
+            ,"whereas",D.dullcyan "lamdera make","is","in","charge","of","gathering","dependencies"
+            ,"and","building","everything.","So","maybe","try",D.green "lamdera make","instead?"
             ]
         ]
 
