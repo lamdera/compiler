@@ -58,10 +58,10 @@ toReport exit =
     CorruptBinary elmHome path ->
       Help.report "CORRUPT BINARY" (Just path)
         ("The binary data at " ++ path ++ " is corrupt.")
-        [ D.reflow "Elm caches build artifacts in the following directories:"
+        [ D.reflow "Lamdera Elm caches build artifacts in the following directories:"
         , D.dullyellow $ D.indent 4 $ D.vcat $
             [ D.fromString elmHome
-            , "elm-stuff/"
+            , "lamdera-stuff/"
             ]
         , D.reflow
             "Maybe you recently installed a command line tool or editor plugin that messes\
