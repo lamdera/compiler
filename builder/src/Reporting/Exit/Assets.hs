@@ -39,6 +39,8 @@ data ElmJsonProblem
   | NoPkgCore
   | NoAppCore
   | NoAppJson
+  -- lamdera
+  | NoAppLamderaCore
   deriving (Show)
 
 
@@ -111,22 +113,31 @@ elmJsonProblemToReport problem =
     NoPkgCore ->
       Help.report "MISSING DEPENDENCY" (Just "elm.json")
         "A package must have \"elm/core\" as a dependency. Try running:"
-        [ D.indent 4 $ D.green $ "elm install elm/core"
+        [ D.indent 4 $ D.green $ "lamdera install elm/core"
         , D.reflow "I need it for the default imports that make `List` and `Maybe` available."
         ]
 
     NoAppCore ->
       Help.report "MISSING DEPENDENCY" (Just "elm.json")
         "An application must have \"elm/core\" as a dependency. Try running:"
-        [ D.indent 4 $ D.green $ "elm install elm/core"
+        [ D.indent 4 $ D.green $ "lamdera install elm/core"
         , D.reflow "It has some supporting code that is needed by every Elm application!"
         ]
 
     NoAppJson ->
       Help.report "MISSING DEPENDENCY" (Just "elm.json")
         "An application must have \"elm/json\" as a dependency. Try running:"
-        [ D.indent 4 $ D.green $ "elm install elm/json"
+        [ D.indent 4 $ D.green $ "lamdera install elm/json"
         , D.reflow "It helps me handle flags and ports."
+        ]
+
+    NoAppLamderaCore ->
+      Help.report "MISSING DEPENDENCY" (Just "elm.json")
+        "A Lamdera application must have \"Lamdera/core\" as a dependency."
+        [ D.reflow "Perhaps you're not trying to run this app on Lamdera? That's fine, but please use the normal elm binary instead."
+        , D.reflow "Otherwise, try running:"
+        , D.indent 4 $ D.green $ "lamdera install Lamdera/core"
+        , D.reflow "I need it for hooking up the frontend to the backend."
         ]
 
 
@@ -182,7 +193,7 @@ badContentToDocs badContent =
       ["The",D.fromString (show name),"entry","is","not","a","valid","package","name."
       ,"I","recommend","deleting","it,","finding","the","package","you","want","on"
       ,"the","package","website,","and","installing","it","with","the"
-      ,D.green "`elm install`","command","instead."
+      ,D.green "`lamdera install`","command","instead."
       ]
 
     BadLicense _given suggestions ->

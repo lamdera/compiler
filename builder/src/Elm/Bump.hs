@@ -112,7 +112,7 @@ suggestVersion summary@(Summary.Summary root _ _ _ _) info@(Project.PkgInfo name
           mag = D.fromString $ Diff.magnitudeToString (Diff.toMagnitude changes)
         in
           "Based on your new API, this should be a" <+> D.green mag <+> "change (" <> old <> " => " <> new <> ")\n"
-          <> "Bail out of this command and run 'elm diff' for a full explanation.\n"
+          <> "Bail out of this command and run 'lamdera diff' for a full explanation.\n"
           <> "\n"
           <> "Should I perform the update (" <> old <> " => " <> new <> ") in elm.json? [Y/n] "
 

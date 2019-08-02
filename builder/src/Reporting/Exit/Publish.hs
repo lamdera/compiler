@@ -69,7 +69,7 @@ toReport exit =
             , "Try using the `bump` command:"
             ]
         )
-        [ D.dullyellow $ D.indent 4 "elm bump"
+        [ D.dullyellow $ D.indent 4 "lamdera bump"
         , D.reflow $
             "It computes the version number based on API changes, ensuring\
             \ that no breaking changes end up in PATCH releases!"
@@ -90,10 +90,10 @@ toReport exit =
             ,"which","is","the","most","recently","published","version."
             ,"From","there,","have","Elm","bump","the","version","by","running:"
             ]
-        , D.indent 4 $ D.green "elm bump"
+        , D.indent 4 $ D.green "lamdera bump"
         , D.reflow $
             "If you want more insight on the API changes Elm detects, you\
-            \ can run `elm diff` at this point as well."
+            \ can run `lamdera diff` at this point as well."
         ]
 
     BadBump old new magnitude realNew realMagnitude ->
@@ -108,7 +108,7 @@ toReport exit =
             ]
         )
         [ D.indent 4 $ D.fromString $
-            "elm diff " ++ Pkg.versionToString old
+            "lamdera diff " ++ Pkg.versionToString old
 
         , D.fillSep $
             ["This","command","says","this","is","a"
@@ -119,7 +119,7 @@ toReport exit =
             ,"are","publishing","what","you","want!"
             ]
         , D.reflow $
-            "Also, next time use `elm bump` and I'll figure all this out for you!"
+            "Also, next time use `lamdera bump` and I'll figure all this out for you!"
         ]
 
     NoSummary ->

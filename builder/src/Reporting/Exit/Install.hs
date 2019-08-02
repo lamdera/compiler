@@ -32,9 +32,9 @@ toReport exit =
       Help.report "INSTALL WHAT?" Nothing
         "I am expecting commands like:"
         [ D.green $ D.indent 4 $ D.vcat $
-            [ "elm install elm/http"
-            , "elm install elm/json"
-            , "elm install elm/random"
+            [ "lamdera install elm/http"
+            , "lamdera install elm/json"
+            , "lamdera install elm/random"
             ]
         , D.toFancyHint
             ["In","JavaScript","folks","run","`npm install`","to","start","projects."
@@ -45,9 +45,9 @@ toReport exit =
             ,"Elm","projects","check","that","cache","before","trying","the","internet."
             ,"This","reduces","build","times,","reduces","server","costs,","and","makes","it"
             ,"easier","to","work","offline.","As","a","result"
-            ,D.dullcyan "elm install","is","only","for","adding","dependencies","to","elm.json,"
-            ,"whereas",D.dullcyan "elm make","is","in","charge","of","gathering","dependencies"
-            ,"and","building","everything.","So","maybe","try",D.green "elm make","instead?"
+            ,D.dullcyan "lamdera install","is","only","for","adding","dependencies","to","elm.json,"
+            ,"whereas",D.dullcyan "lamdera make","is","in","charge","of","gathering","dependencies"
+            ,"and","building","everything.","So","maybe","try",D.green "lamdera make","instead?"
             ]
         ]
 
@@ -58,7 +58,7 @@ toReport exit =
             "This usually happens if you try to modify dependency constraints by\
             \ hand. I recommend deleting any dependency you added recently (or all\
             \ of them if things are bad) and then adding them again with:"
-            [ D.indent 4 $ D.green "elm install"
+            [ D.indent 4 $ D.green "lamdera install"
             , D.reflow $
                 "And do not be afaid to ask for help on Slack if you get stuck!"
             ]

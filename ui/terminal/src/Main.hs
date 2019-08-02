@@ -190,7 +190,7 @@ make =
       stack
         [ reflow
             "For example:"
-        , P.indent 4 $ P.green "elm make src/Main.elm"
+        , P.indent 4 $ P.green "lamdera make src/Main.elm"
         , reflow
             "This tries to compile an Elm file named src/Main.elm, putting the resulting\
             \ JavaScript code in an elm.js file."
@@ -223,8 +223,8 @@ install =
         [ reflow
             "For example, if you want to get packages for HTTP and JSON, you would say:"
         , P.indent 4 $ P.green $ P.vcat $
-              [ "elm install elm/http"
-              , "elm install elm/json"
+              [ "lamdera install elm/http"
+              , "lamdera install elm/json"
               ]
         , reflow
             "Notice that you must say the AUTHOR name and PROJECT name! After running those\
@@ -315,7 +315,7 @@ diff =
         [ reflow
             "For example, to see what changed in the HTML package between\
             \ versions 1.0.0 and 2.0.0, you can say:"
-        , P.indent 4 $ P.green $ "elm diff elm/html 1.0.0 2.0.0"
+        , P.indent 4 $ P.green $ "lamdera diff elm/html 1.0.0 2.0.0"
         , reflow
             "Sometimes a MAJOR change is not actually very big, so\
             \ this can help you plan your upgrade timelines."

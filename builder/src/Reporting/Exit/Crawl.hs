@@ -242,7 +242,7 @@ notFoundDetails child srcDirs =
       , D.reflow $
           "Do you want the one from the " ++ Pkg.toString pkg
           ++ " package? If so, run this command to add that dependency to your elm.json file:"
-      , D.indent 4 $ D.green $ D.fromString $ "elm install " ++ Pkg.toString pkg
+      , D.indent 4 $ D.green $ D.fromString $ "lamdera install " ++ Pkg.toString pkg
       , case srcDirs of
           Pkg ->
             D.reflow $

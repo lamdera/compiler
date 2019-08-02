@@ -150,7 +150,10 @@ check project =
       if Map.member Pkg.core direct then
 
         if Map.member Pkg.json direct || Map.member Pkg.json indirect
-          then return ()
+          then
+            if Map.member Pkg.lamderaCore direct || Map.member Pkg.lamderaCore indirect
+            then return ()
+            else throwBadJson E.NoAppLamderaCore
           else throwBadJson E.NoAppJson
 
       else

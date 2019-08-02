@@ -95,7 +95,7 @@ toReport exit =
         , D.fillSep
             ["This","usually","means","you","are","editing","elm.json","by","hand."
             ,"It","is","much","more","reliable","to","use","the"
-            ,D.green "elm install","command","instead."
+            ,D.green "lamdera install","command","instead."
             ]
         ]
 
@@ -104,8 +104,8 @@ toReport exit =
         "The dependencies in your elm.json are not compatible."
         [ D.fillSep
             ["Did","you","change","them","by","hand?","Try","to","change","it","back!"
-            ,"It","is","much","better","to","add","dependencies","with",D.green "elm install"
-            ,"or","the","dependency","management","tool","in",D.green "elm reactor" <> "."
+            ,"It","is","much","better","to","add","dependencies","with",D.green "lamdera install"
+            ,"or","the","dependency","management","tool","in",D.green "lamdera reactor" <> "."
             ]
         , D.reflow $
             "Please ask for help on the Elm slack <http://elmlang.herokuapp.com/> if\
