@@ -129,7 +129,7 @@ createChoices
     -> (Int, Opt.Expr)
     -> ( (Int, Opt.Choice), Maybe (Int, Opt.Expr) )
 createChoices targetCounts (target, branch) =
-    if targetCounts ! target == 1 then
+    if (targetCounts, ("Optimize.Case.createChoices", targetCounts)) ! target == 1 then
         ( (target, Opt.Inline branch)
         , Nothing
         )
@@ -151,7 +151,7 @@ insertChoices choiceDict decider =
   in
     case decider of
       Opt.Leaf target ->
-          Opt.Leaf (choiceDict ! target)
+          Opt.Leaf ((choiceDict, ("Optimize.Case.insertChoices", choiceDict)) ! target)
 
       Opt.Chain testChain success failure ->
           Opt.Chain testChain (go success) (go failure)

@@ -234,7 +234,7 @@ addDef :: ModuleName.Canonical -> Annotations -> Can.Def -> Opt.Graph -> Result 
 addDef home annotations def graph =
   case def of
     Can.Def (A.At region name) args body ->
-      do  let (Can.Forall _ tipe) = annotations ! name
+      do  let (Can.Forall _ tipe) = (annotations, ("Optimize.Module.addDef", home)) ! name
           Result.warn $ W.MissingTypeAnnotation region name tipe
           addDefHelp region annotations home name args body graph
 
@@ -248,7 +248,7 @@ addDefHelp region annotations home name args body graph@(Opt.Graph mains nodes f
     Result.ok (addDefNode home name args body Set.empty graph)
   else
     let
-      (Can.Forall _ tipe) = annotations ! name
+      (Can.Forall _ tipe) = (annotations, ("Optimize.Module.addDefHelp", home)) ! name
 
       addMain (deps, fields, main) =
         let
