@@ -1,6 +1,54 @@
 {-# OPTIONS_GHC -Wall #-}
 module Transpile.Instances (tDataToGADT, tDataToInstDecl) where
 
+{-
+This module turns adt defs into gadt's so we can put ElmVal constraints on all vars, as well as generates ElmVal' instances for all types.
+ElmVal' wraps the things you can do on any elm value in elm, e.g. `==` and `Debug.toString`. Supertypes such as `appendable` are handled in extra/Transpile/Deriving.hs.
+
+e.g.
+
+```
+type FrontendMsg
+    = Increment
+    | Decrement
+    | FNoop
+```
+
+is first translated into
+
+```
+data FrontendMsg
+    = Increment
+    | Decrement
+    | FNoop
+```
+
+and then, before being output as haskell source, into
+
+```
+data FrontendMsg where
+  Increment :: () => Msg.FrontendMsg
+  Decrement :: () => Msg.FrontendMsg
+  FNoop :: () => Msg.FrontendMsg
+constructor'Increment = Increment
+constructor'Decrement = Decrement
+constructor'FNoop = FNoop
+
+
+instance Lamdera.Haskelm.Core.ElmVal' (Msg.FrontendMsg) where
+  toString Msg.Increment = String.join " " ["Increment"]
+  toString Msg.Decrement = String.join " " ["Decrement"]
+  toString Msg.FNoop = String.join " " ["FNoop"]
+
+  equals Msg.Increment Msg.Increment = True
+  equals Msg.Decrement Msg.Decrement = True
+  equals Msg.FNoop Msg.FNoop = True
+  equals _ _ = False
+```
+
+
+-}
+
 import qualified Language.Haskell.Exts.Simple.Syntax as Hs
 
 import Data.Monoid ((<>))
