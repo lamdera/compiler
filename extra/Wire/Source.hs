@@ -2,6 +2,18 @@
 
 module Wire.Source (generateCodecs, injectEvergreenExposing, isEvergreenCodecName, evergreenCoreCodecs) where
 
+{-
+Wire.Source is responsible for generating Evergreen codecs for all Elm types. It does this by injecting generated source code, as this was the fastest and safest way forward at the time. For some codecs it also writes out type annotations.
+
+This module is also responsible for figuring out which of these codecs should be exposed/imported; if the type is reachable, so is the codec.
+
+Thirdly, we handle the set of built-in codecs here and what code we should generate in order to interact with them.
+
+
+ASSUMPTION: no user code defines any variables starting with the string `evg_`
+
+-}
+
 import qualified AST.Canonical as Can
 import AST.Module.Name (Canonical(..))
 import qualified AST.Module.Name as ModuleName

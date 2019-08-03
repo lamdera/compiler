@@ -1,5 +1,7 @@
 module Transpile.PrettyPrint where
 
+-- Quick and dirty pretty-printing of strings with nested parentheses. Outputs a multi-line indented string.
+
 import qualified Data.Text.Lazy as T
 import Data.Function ((&))
 

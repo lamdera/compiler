@@ -67,42 +67,7 @@ data Artifacts =
 
 compile :: DocsFlag -> Pkg.Name -> ImportDict -> I.Interfaces -> BS.ByteString -> Result i Artifacts
 compile flag pkg importDict interfaces source =
-  {-
-
-  pkg: Name {_author = "elm",_project = "browser"}
-       The local author+project names of the package this file belongs to
-
-  importDict: fromList [(Name {_name = "AllTypes"}
-                ,Canonical {_package = Name {_author = "author",_project = "project"}
-                           ,_module = Name {_name = "AllTypes"}})
-                ,(Name {_name = "Basics"}
-                ,Canonical {_package = Name {_author = "elm",_project = "core"}
-                           ,_module = Name {_name = "Basics"}})
-                , ...
-                ]
-       The set of packages imported by this file
-
-  interfaces: _types, _unions and _aliases for all imported modules
-
-
-  The problem here is that AST.Valid doesn't contain canonicalised information.
-
-  As a result, we can't accurately generate Evergreen for non-standard types
-  included from external modules as we don't yet have the canonical paths to
-  know where those types come from.
-
-  However, we can't just modify the AST.Canonical version either - the original
-  AST.Valid value is still used elsewhere and if they disagree it causes probelms.
-
-  So it seems we'll need to:
-
-  1. Inject dummy declarations into `valid`
-  2. Inject proper implementations into `canonical`
-  3. Backfill proper implementations into `valid`
-
-  Because type-inference doesn't come till a later stage, we should be ok with this funny business.
-
-  -}
+  -- This is the main function for compiling a single Elm module.
   do
       valid <- Result.mapError Error.Syntax $
         Parse.program pkg source
@@ -126,10 +91,11 @@ compile flag pkg importDict interfaces source =
 
       --
       -- Ok, normal elm compilation chain is now done for this module, so any normal elm errors which may have happened will have been found and returned by now. This should reduce confusion for devs. Next, after the elm code is known good, we generate evergreen codecs, inject them, and then run the whole compilation step once more, with generated code this time.
+      -- This also gives us a free pass from our previous discussion on how many compilation steps we should run before we inject codecs; more steps is slower but more correct. Now we need to run all steps, so we're free to use all information if we want to.
       --
 
       -- generate wire source code from canonical ast
-      -- these are intended to be serialised and put at the end of source, then we redo the whole compilation step, generating valid as normal etc.
+      -- these are intended to be serialised and put at the end of the source code string, then we redo the whole module compilation with this new source injected.
       rawCodecSource <- pure $ T.unpack $ Wire.Source.generateCodecs (getImportDict valid) canonical
 
       valid_ <- Result.mapError Error.Syntax $
@@ -167,7 +133,6 @@ compile flag pkg importDict interfaces source =
       Result.ok $
         Artifacts
           { _elmi = I.fromModule annotations canonical_
-          --{ _elmi = Wire.Canonical.reinjectWireInterfaces annotations canonical_ $ I.fromModule annotations canonical_
           , _elmo = graph
           , _haskelmo = haskAst
           , Compile._docs = documentation
