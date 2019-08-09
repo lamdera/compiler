@@ -308,7 +308,7 @@ appDecoder =
   )
   & D.map
     (\appInfo ->
-      appInfo {_app_deps_direct = Map.union (_app_deps_direct appInfo) (Map.singleton (Pkg.Name "Lamdera" "codecs") (Pkg.Version 1 0 0))}
+      appInfo {_app_deps_direct = Map.insert Pkg.lamderaCodecs (Pkg.Version 1 0 0) (_app_deps_direct appInfo)}
     )
 
 pkgDecoder :: Decoder PkgInfo
@@ -326,7 +326,7 @@ pkgDecoder =
   & D.map
     (\pkgInfo ->
       if Pkg.shouldHaveCodecsGenerated (_pkg_name pkgInfo) then
-          pkgInfo {_pkg_deps = Map.union (_pkg_deps pkgInfo) (Map.singleton (Pkg.Name "Lamdera" "codecs") (Con.exactly (Pkg.Version 1 0 0)))}
+          pkgInfo {_pkg_deps = Map.union (_pkg_deps pkgInfo) (Map.singleton (Pkg.lamderaCodecs) (Con.exactly (Pkg.Version 1 0 0)))}
       else
         pkgInfo
     )
