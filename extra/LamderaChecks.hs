@@ -6,8 +6,9 @@ import Data.Text as T
 import Data.Text.IO as TIO
 import qualified System.Directory as Dir
 import Control.Monad.Except (ExceptT, runExceptT, throwError, withExceptT, liftIO)
+import Data.Monoid ((<>))
 
-type Check = ExceptT String IO
+type Check = ExceptT Text IO
 
 runChecks = do
   r <- runExceptT checks
@@ -15,7 +16,7 @@ runChecks = do
     Right _ -> pure True
 
     Left err -> do
-      Prelude.putStrLn err
+      TIO.putStrLn err
       pure False
 
 
@@ -24,7 +25,10 @@ checks = do
   missingFiles <- liftIO $ checkMissingFiles ["src/Frontend.elm", "src/Backend.elm", "src/Msg.elm"]
 
   if Prelude.length missingFiles /= 0 then
-    throwError "The following files required by Lamdera are missing:\n"
+    throwError $
+      "The following files required by Lamdera are missing:\n"
+      <>
+      (T.concat $ fmap (\file -> "- " <> T.pack (show file)) missingFiles)
   else
     pure True
 
@@ -91,7 +95,7 @@ checkMsgHasTypes typeNames = do
   source <- TIO.readFile "src/Msg.elm"
 
   let
-    results = fmap (\search -> containsText search source) typeNames
+    results = fmap (\search -> containsText ("type " <> search) source) typeNames
 
   pure $ Prelude.all ((==) True) results
 
