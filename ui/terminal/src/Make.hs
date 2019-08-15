@@ -20,7 +20,7 @@ import qualified Reporting.Progress.Json as Json
 import qualified Reporting.Progress.Terminal as Terminal
 import Terminal.Args (Parser(..))
 
-import LamderaChecks
+import qualified LamderaChecks
 
 
 -- RUN

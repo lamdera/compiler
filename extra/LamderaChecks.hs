@@ -1,10 +1,11 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module LamderaChecks where
+module LamderaChecks (runChecks) where
 
 import Data.Text as T
 import Data.Text.IO as TIO
 import qualified System.Directory as Dir
+import Control.Monad (unless)
 import Control.Monad.Except (ExceptT, runExceptT, throwError, withExceptT, liftIO)
 import Data.Monoid ((<>))
 
@@ -23,48 +24,46 @@ runChecks = do
 checks :: Check Bool
 checks = do
   missingFiles <- liftIO $ checkMissingFiles ["src/Frontend.elm", "src/Backend.elm", "src/Msg.elm"]
-
-  if Prelude.length missingFiles /= 0 then
+  unless (missingFiles == []) $
     throwError $
-      "The following files required by Lamdera are missing:\n"
+      "The following files required by Lamdera are missing:\n\n"
       <>
       (T.concat $ fmap (\file -> "- " <> T.pack (show file)) missingFiles)
-  else
-    pure True
+      <>
+      "\n\nPlease see https://alpha.lamdera.app/development for how to set up a Lamdera app."
+
 
   frontendAppDefined <- liftIO $ checkHasAppDefinition "src/Frontend.elm"
-  if not frontendAppDefined then
+  unless frontendAppDefined $
     throwError
-      "Oops! It appears Frontend.elm is missing an `app` definition.\n\
+      "src/Frontend.elm is missing an `app` definition. \n\
       \\n\
-      \Lamdera apps need an `app =` definition in Frontend.elm and Backend.elm.\n\
+      \Lamdera apps need an `app =` definition in Frontend.elm and Backend.elm so I know where the app begins, similar to how Elm apps need a `main`.\n\
       \\n\
       \Please see https://alpha.lamdera.app/development for how to set up a Lamdera app."
-  else
-    pure True
+
 
   backendAppDefined <- liftIO $ checkHasAppDefinition "src/Backend.elm"
-  if not backendAppDefined then
+  unless backendAppDefined $
     throwError
-      "Oops! It appears Backend.elm is missing an `app` definition.\n\
+      "src/Backend.elm is missing an `app` definition. \n\
       \\n\
-      \Lamdera apps need an `app =` definition in Frontend.elm and Backend.elm.\n\
+      \Lamdera apps need an `app =` definition in Frontend.elm and Backend.elm so I know where the app begins, similar to how Elm apps need a `main`.\n\
       \\n\
       \Please see https://alpha.lamdera.app/development for how to set up a Lamdera app."
-  else
-    pure True
 
 
   msgHasTypes <- liftIO $ checkMsgHasTypes ["FrontendMsg", "ToBackend", "BackendMsg", "ToFrontend"]
-  if not msgHasTypes then
+  unless (msgHasTypes == True) $
     throwError
-      "Oops! It appears Msg.elm is missing some type definitions.\n\
+      "src/Msg.elm is missing some type definitions.\n\
       \\n\
       \Lamdera apps need FrontendMsg, ToBackend, BackendMsg and ToFrontend types defined in Msg.elm.\n\
       \\n\
       \Please see https://alpha.lamdera.app/development for how to set up a Lamdera app."
-  else do
-    pure True
+
+
+  pure True
 
 
 checkMissingFiles :: [FilePath] -> IO [FilePath]
@@ -87,7 +86,7 @@ checkMissingFiles paths = do
 checkHasAppDefinition :: FilePath -> IO Bool
 checkHasAppDefinition path = do
   source <- TIO.readFile path
-  pure $ containsText "app =" source
+  pure $ T.isInfixOf "app =" source
 
 
 checkMsgHasTypes :: [Text] -> IO Bool
@@ -95,9 +94,6 @@ checkMsgHasTypes typeNames = do
   source <- TIO.readFile "src/Msg.elm"
 
   let
-    results = fmap (\search -> containsText ("type " <> search) source) typeNames
+    results = fmap (\search -> T.isInfixOf ("type " <> search) source) typeNames
 
   pure $ Prelude.all ((==) True) results
-
-containsText :: Text -> Text -> Bool
-containsText search source = search `T.isInfixOf` source
