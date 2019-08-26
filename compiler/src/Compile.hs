@@ -42,8 +42,8 @@ import qualified East.Conversion as East
 import Control.Concurrent.MVar (MVar, newEmptyMVar, newMVar, putMVar, readMVar, takeMVar)
 
 import qualified Language.Haskell.Exts.Simple.Syntax as Hs
-
---import qualified Debug.Trace as DT
+import qualified Debug.Trace as DT
+import Transpile.PrettyPrint
 
 
 -- COMPILE
@@ -118,29 +118,29 @@ compile flag pkg importDict interfaces source srcMVar =
       canonical_ <- Result.mapError Error.Canonicalize $
         Canonicalize.canonicalize pkg importDict interfaces valid_
 
-      let localizer = L.fromModule valid_ -- TODO should this be strict for GC?
+      let localizer_ = L.fromModule valid_ -- TODO should this be strict for GC?
 
-      annotations <-
-        runTypeInference localizer canonical_
+      annotations_ <-
+        runTypeInference localizer_ canonical_
 
       () <-
         exhaustivenessCheck canonical_
 
-      graph <- Result.mapError (Error.Main localizer) $
-        Optimize.optimize annotations canonical_
+      graph_ <- Result.mapError (Error.Main localizer_) $
+        Optimize.optimize annotations_ canonical_
 
-      documentation <-
+      documentation_ <-
         genarateDocs flag canonical_
 
-      haskAst <-
-        East.transpile canonical_ annotations importDict
+      haskAst_ <-
+        East.transpile canonical_ annotations_ importDict
 
       Result.ok $
         Artifacts
-          { _elmi = I.fromModule annotations canonical_
-          , _elmo = graph
-          , _haskelmo = haskAst
-          , Compile._docs = documentation
+          { _elmi = I.fromModule annotations_ canonical_
+          , _elmo = graph_
+          , _haskelmo = haskAst_
+          , Compile._docs = documentation_
           }
 
 addImport :: Src.Import -> Valid.Module -> Valid.Module
