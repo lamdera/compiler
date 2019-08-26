@@ -24,7 +24,7 @@ import qualified Type.Error as ET
 import qualified Type.Unify as Unify
 import qualified Type.UnionFind as UF
 
-
+import Elm
 
 -- RUN SOLVER
 
@@ -519,7 +519,7 @@ srcTypeToVar rank pools flexVars srcType =
           register rank pools (Structure (Fun1 argVar resultVar))
 
     Can.TVar name ->
-      return ((flexVars, ("Type.Solve.srcTypeToVar.TVar", rank, srcType)) ! name)
+      return ((flexVars, ("Type.Solve.srcTypeToVar.TVar", rank, "srcType", srcType, "flexVars", flexVars)) ! name)
 
     Can.TType home name args ->
       do  argVars <- traverse go args
@@ -530,7 +530,7 @@ srcTypeToVar rank pools flexVars srcType =
           extVar <-
             case maybeExt of
               Nothing -> register rank pools emptyRecord1
-              Just ext -> return ((flexVars, ("Type.Solve.srcTypeToVar.TRecord")) ! ext)
+              Just ext -> return ((flexVars, ("Type.Solve.srcTypeToVar.TRecord", fields, "ext", ext, "rank", rank, "flexVars", flexVars, "srcType", srcType)) ! ext)
           register rank pools (Structure (Record1 fieldVars extVar))
 
     Can.TUnit ->
