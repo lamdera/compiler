@@ -29,7 +29,7 @@ import qualified Reporting.Report as Report
 import qualified Reporting.Result as Result
 import qualified Reporting.Warning as Warning
 
-
+import Control.Concurrent.MVar (MVar)
 
 -- VERSION
 
@@ -49,9 +49,10 @@ compile
   -> Map.Map M.Raw M.Canonical
   -> M.Interfaces
   -> BS.ByteString
+  -> MVar BS.ByteString
   -> ( [Warning.Warning], Either [Error.Error] Compile.Artifacts )
-compile docsFlag pkg importDict interfaces source =
-  Result.run $ Compile.compile docsFlag pkg importDict interfaces source
+compile docsFlag pkg importDict interfaces source srcMVar =
+  Result.run $ Compile.compile docsFlag pkg importDict interfaces source srcMVar
 
 
 

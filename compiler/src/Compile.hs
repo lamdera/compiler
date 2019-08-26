@@ -39,6 +39,7 @@ import System.IO.Unsafe (unsafePerformIO)
 
 import qualified Wire.Source
 import qualified East.Conversion as East
+import Control.Concurrent.MVar (MVar, newEmptyMVar, newMVar, putMVar, readMVar, takeMVar)
 
 import qualified Language.Haskell.Exts.Simple.Syntax as Hs
 
@@ -65,8 +66,8 @@ data Artifacts =
     } deriving (Show)
 
 
-compile :: DocsFlag -> Pkg.Name -> ImportDict -> I.Interfaces -> BS.ByteString -> Result i Artifacts
-compile flag pkg importDict interfaces source =
+compile :: DocsFlag -> Pkg.Name -> ImportDict -> I.Interfaces -> BS.ByteString -> MVar BS.ByteString -> Result i Artifacts
+compile flag pkg importDict interfaces source srcMVar =
   -- This is the main function for compiling a single Elm module.
   do
       valid <- Result.mapError Error.Syntax $
@@ -104,6 +105,10 @@ compile flag pkg importDict interfaces source =
         else
           let newSource =
                 BS8.fromString (Wire.Source.injectEvergreenExposing canonical (BS8.toString source)) <> "\n\n-- ### codecs\n" <> BS8.fromString rawCodecSource
+              !_ = unsafePerformIO $ do
+                    -- yolo; put the new source into an mvar, so we can communicate upstream to the scheduler that we've modified the input, so it can use the modified source form here on when generating error messages. I tried, but I didn't see a better option to accomplish this than a mutable variable.
+                    _ <- takeMVar srcMVar -- drop the old source code
+                    putMVar srcMVar newSource -- insert the new source code
           in
             --DT.trace (BS8.toString newSource) $ -- uncomment to print source code for all modules
             -- it's safer to add stuff to the parsed result, but much harder to debug, so codecs are generated as source code, and imports are added like this now
