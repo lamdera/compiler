@@ -100,9 +100,7 @@ compile flag pkg importDict interfaces source srcMVar =
       rawCodecSource <- pure $ T.unpack $ Wire.Source.generateCodecs (getImportDict valid) canonical
 
       valid_ <- Result.mapError Error.Syntax $
-        if Map.lookup "Lamdera.Evergreen" importDict == Nothing then -- Evergreen isn't in the importDict, so this is a kernel module, or something that shouldn't have access to Evergreen, like the Evergreen module itself.
-          Parse.program pkg source
-        else
+        if Map.member "Lamdera.Evergreen" importDict then -- The Evergreen module is in the importDict, so this module is something that should have access to Evergreen.
           let newSource =
                 BS8.fromString (Wire.Source.injectEvergreenExposing canonical (BS8.toString source)) <> "\n\n-- ### codecs\n" <> BS8.fromString rawCodecSource
               !_ = unsafePerformIO $ do
@@ -112,8 +110,10 @@ compile flag pkg importDict interfaces source srcMVar =
           in
             --DT.trace (BS8.toString newSource) $ -- uncomment to print source code for all modules
             -- it's safer to add stuff to the parsed result, but much harder to debug, so codecs are generated as source code, and imports are added like this now
-            addImport (Src.Import (A.At R.lamderaInject "Lamdera.Evergreen") Nothing (Src.Explicit [])) <$>
-            Parse.program pkg newSource
+            addImport (Src.Import (A.At R.lamderaInject "Lamdera.Evergreen") Nothing (Src.Explicit []))
+              <$> Parse.program pkg newSource
+        else -- this shouldn't have access to the Evergreen module. It's stuff like the Lamdera/codecs or elm/core that would cause cyclic imports.
+          Parse.program pkg source
 
       canonical_ <- Result.mapError Error.Canonicalize $
         Canonicalize.canonicalize pkg importDict interfaces valid_
