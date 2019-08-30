@@ -24,7 +24,7 @@ import qualified Type.Error as ET
 import qualified Type.Unify as Unify
 import qualified Type.UnionFind as UF
 
-
+import Elm
 
 -- RUN SOLVER
 
@@ -96,7 +96,7 @@ solve env rank pools state constraint =
                       Error.typeReplace expectation expectedType
 
     CLocal region name expectation ->
-      do  actual <- makeCopy rank pools (env ! name)
+      do  actual <- makeCopy rank pools ((env, ("Type.Solve.solve.CLocal", region, expectation)) ! name)
           expected <- expectedToVariable rank pools expectation
           answer <- Unify.unify actual expected
           case answer of
@@ -448,7 +448,7 @@ typeToVar rank pools aliasDict tipe =
           register rank pools (Alias home name argVars aliasVar)
 
     PlaceHolder name ->
-      return (aliasDict ! name)
+      return ((aliasDict, ("Type.Solve.typeToVar.PlaceHolder", rank, tipe)) ! name)
 
     RecordN fields ext ->
       do  fieldVars <- traverse go fields
@@ -519,7 +519,7 @@ srcTypeToVar rank pools flexVars srcType =
           register rank pools (Structure (Fun1 argVar resultVar))
 
     Can.TVar name ->
-      return (flexVars ! name)
+      return ((flexVars, ("Type.Solve.srcTypeToVar.TVar", rank, "srcType", srcType, "flexVars", flexVars)) ! name)
 
     Can.TType home name args ->
       do  argVars <- traverse go args
@@ -530,7 +530,7 @@ srcTypeToVar rank pools flexVars srcType =
           extVar <-
             case maybeExt of
               Nothing -> register rank pools emptyRecord1
-              Just ext -> return (flexVars ! ext)
+              Just ext -> return ((flexVars, ("Type.Solve.srcTypeToVar.TRecord", fields, "ext", ext, "rank", rank, "flexVars", flexVars, "srcType", srcType)) ! ext)
           register rank pools (Structure (Record1 fieldVars extVar))
 
     Can.TUnit ->

@@ -247,6 +247,7 @@ Executable elmx
         Transpile.Reserved
         Transpile.Instances
         Transpile.PrettyPrint
+        Elm
 
 
     Build-depends:
@@ -296,4 +297,5 @@ Executable elmx
         yaml,
         aeson,
         ilist,
+        witherable,
         shelly

@@ -217,7 +217,8 @@ instance ToElm C.Type where
       C.TUnit -> "()"
       C.TTuple t1 t2 Nothing -> p (intercalate ", " (toElm <$> [t1, t2]))
       C.TTuple t1 t2 (Just t3) -> p (intercalate ", " (toElm <$> [t1, t2, t3]))
-      C.TAlias moduName name _ _ -> toElm moduName <.> toElm name -- TODO: unsure if nameTypes should be serialized here
+      C.TAlias moduName name [] _ -> toElm moduName <.> toElm name
+      C.TAlias moduName name nameTypes _ -> p (toElm moduName <.> toElm name <> leftPad " " (toElm . snd <$> nameTypes))
 
 
 ftMap x =

@@ -85,13 +85,15 @@ compileModule tell project maybeDocsPath answersMVar ifacesMVar name info =
                     let imports = makeImports project info
                     ifaces <- readMVar ifacesMVar
                     let source = Plan._src info
+                    srcMVar <- newMVar source
 
-                    case Compiler.compile docs pkg imports ifaces source of
+                    case Compiler.compile docs pkg imports ifaces source srcMVar of
                       (_warnings, Left errors) ->
                         do  tell (Progress.CompileFileEnd name Progress.Bad)
                             let time = Plan._time info
                             let path = Plan._path info
-                            putMVar mvar (Bad path time source errors)
+                            actualSource <- readMVar srcMVar
+                            putMVar mvar (Bad path time actualSource errors)
 
                       (_warnings, Right result@(Compiler.Artifacts elmi _ _ _)) ->
                         do  tell (Progress.CompileFileEnd name Progress.Good)

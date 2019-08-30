@@ -39,10 +39,11 @@ import System.IO.Unsafe (unsafePerformIO)
 
 import qualified Wire.Source
 import qualified East.Conversion as East
+import Control.Concurrent.MVar (MVar, newEmptyMVar, newMVar, putMVar, readMVar, takeMVar)
 
 import qualified Language.Haskell.Exts.Simple.Syntax as Hs
-
---import qualified Debug.Trace as DT
+import qualified Debug.Trace as DT
+import Transpile.PrettyPrint
 
 
 -- COMPILE
@@ -65,8 +66,8 @@ data Artifacts =
     } deriving (Show)
 
 
-compile :: DocsFlag -> Pkg.Name -> ImportDict -> I.Interfaces -> BS.ByteString -> Result i Artifacts
-compile flag pkg importDict interfaces source =
+compile :: DocsFlag -> Pkg.Name -> ImportDict -> I.Interfaces -> BS.ByteString -> MVar BS.ByteString -> Result i Artifacts
+compile flag pkg importDict interfaces source srcMVar =
   -- This is the main function for compiling a single Elm module.
   do
       valid <- Result.mapError Error.Syntax $
@@ -99,43 +100,47 @@ compile flag pkg importDict interfaces source =
       rawCodecSource <- pure $ T.unpack $ Wire.Source.generateCodecs (getImportDict valid) canonical
 
       valid_ <- Result.mapError Error.Syntax $
-        if Map.lookup "Lamdera.Evergreen" importDict == Nothing then -- Evergreen isn't in the importDict, so this is a kernel module, or something that shouldn't have access to Evergreen, like the Evergreen module itself.
-          Parse.program pkg source
-        else
+        if Map.member "Lamdera.Evergreen" importDict then -- The Evergreen module is in the importDict, so this module is something that should have access to Evergreen.
           let newSource =
                 BS8.fromString (Wire.Source.injectEvergreenExposing canonical (BS8.toString source)) <> "\n\n-- ### codecs\n" <> BS8.fromString rawCodecSource
+              !_ = unsafePerformIO $ do
+                    -- yolo; put the new source into an mvar, so we can communicate upstream to the scheduler that we've modified the input, so it can use the modified source form here on when generating error messages. I tried, but I didn't see a better option to accomplish this than a mutable variable.
+                    _ <- takeMVar srcMVar -- drop the old source code
+                    putMVar srcMVar newSource -- insert the new source code
           in
             --DT.trace (BS8.toString newSource) $ -- uncomment to print source code for all modules
             -- it's safer to add stuff to the parsed result, but much harder to debug, so codecs are generated as source code, and imports are added like this now
-            addImport (Src.Import (A.At R.lamderaInject "Lamdera.Evergreen") Nothing (Src.Explicit [])) <$>
-            Parse.program pkg newSource
+            addImport (Src.Import (A.At R.lamderaInject "Lamdera.Evergreen") Nothing (Src.Explicit []))
+              <$> Parse.program pkg newSource
+        else -- this shouldn't have access to the Evergreen module. It's stuff like the Lamdera/codecs or elm/core that would cause cyclic imports.
+          Parse.program pkg source
 
       canonical_ <- Result.mapError Error.Canonicalize $
         Canonicalize.canonicalize pkg importDict interfaces valid_
 
-      let localizer = L.fromModule valid_ -- TODO should this be strict for GC?
+      let localizer_ = L.fromModule valid_ -- TODO should this be strict for GC?
 
-      annotations <-
-        runTypeInference localizer canonical_
+      annotations_ <-
+        runTypeInference localizer_ canonical_
 
       () <-
         exhaustivenessCheck canonical_
 
-      graph <- Result.mapError (Error.Main localizer) $
-        Optimize.optimize annotations canonical_
+      graph_ <- Result.mapError (Error.Main localizer_) $
+        Optimize.optimize annotations_ canonical_
 
-      documentation <-
+      documentation_ <-
         genarateDocs flag canonical_
 
-      haskAst <-
-        East.transpile canonical_ annotations importDict
+      haskAst_ <-
+        East.transpile canonical_ annotations_ importDict
 
       Result.ok $
         Artifacts
-          { _elmi = I.fromModule annotations canonical_
-          , _elmo = graph
-          , _haskelmo = haskAst
-          , Compile._docs = documentation
+          { _elmi = I.fromModule annotations_ canonical_
+          , _elmo = graph_
+          , _haskelmo = haskAst_
+          , Compile._docs = documentation_
           }
 
 addImport :: Src.Import -> Valid.Module -> Valid.Module

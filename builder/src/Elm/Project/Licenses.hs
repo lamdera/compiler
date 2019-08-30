@@ -31,7 +31,7 @@ data License =
 
 bsd3 :: License
 bsd3 =
-  osiApprovedSpdxLicenses ! "BSD-3-Clause"
+  (osiApprovedSpdxLicenses, ("Elm.Project.Licenses.bsd3")) ! "BSD-3-Clause"
 
 
 encode :: License -> Encode.Value

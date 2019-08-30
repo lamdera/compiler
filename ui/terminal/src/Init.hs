@@ -97,4 +97,6 @@ defaults =
     [ (Pkg.core, Con.anything)
     , (Pkg.browser, Con.anything)
     , (Pkg.html, Con.anything)
+    , (Pkg.lamderaCore, Con.exactly (Pkg.Version 1 0 0))
+    , (Pkg.lamderaCodecs, Con.exactly (Pkg.Version 1 0 0))
     ]

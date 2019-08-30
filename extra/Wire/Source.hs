@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE BangPatterns #-}
 
 module Wire.Source (generateCodecs, injectEvergreenExposing, isEvergreenCodecName, evergreenCoreCodecs) where
 
@@ -26,7 +27,26 @@ import qualified Data.Text as T
 import Data.List.Index (imap)
 import qualified Elm.Name as N
 import qualified Elm.Package as Pkg
+import qualified Reporting.Annotation as A
+import qualified Reporting.Region as R
 
+import CanSer.CanSer as CanSer
+
+import Elm
+
+insertAfterRegion :: R.Region -> String -> String -> String
+insertAfterRegion region@(R.Region _ (R.Position lend cend)) insertion hay =
+  let
+    -- !_ = trace (sShow ("insertAfterRegion", region)) ()
+    regionOffset (line, col) [] = length hay
+    regionOffset (line, col) rest | (line, col+1) >= (lend, cend) = length hay - length rest
+    regionOffset (line, col) ('\n':xs) = regionOffset (line+1, 0) xs
+    regionOffset (line, col) (x:xs) = regionOffset (line, col+1) xs
+
+    offset = regionOffset (1, 0) hay
+    (start, end) = splitAt offset hay
+  in
+    start ++ insertion ++ end
 
 
 isEvergreenCodecName :: N.Name -> Bool
@@ -39,45 +59,64 @@ injectEvergreenExposing (Can.Module _ _ _exports _ _ _ _ _) s =
   -- - we can assume there to be no `exposing (..)` or trailing spaces/comments after the last `)` since elm-format will move/remove those.
   -- - - this implementation only assumes there to be no spaces/comments after the last `)`, and that there are two free newlines directly after, which is what elm-format would give us.
   let
+    exposingRegion (Can.ExportEverything r) = r
+    exposingRegion (Can.Export m) =
+      case Map.elemAt 0 m of -- ASSUMPTION: Export map is non-empty, since parser requires exposing to be non-empty.
+        (_, A.At r _) ->
+          -- trace (sShow ("exposingRegion", Map.elemAt 0 m))
+          r
+
     startsWithUppercaseCharacter (x:_) | Data.Char.isUpper x = True
     startsWithUppercaseCharacter _ = False
 
-    inject :: [String] -> String -> String
-    inject exposedTypes s | ")\n\n" `List.isPrefixOf` s = -- no need to worry about `exposing ()` since there would be no exposed types to inject then.
-      leftWrapWith ", " (codecsFor `concatMap` exposedTypes) <> s
-    inject exposedTypes (x:xs) = x : inject exposedTypes xs
-    inject _ [] = []
-
     codecsFor s = ["evg_encode_" ++ s, "evg_decode_" ++ s]
 
-    leftWrapWith _ [] = ""
-    leftWrapWith delim (x:xs) = delim <> x <> leftWrapWith delim xs
 
 
   in
   case _exports of
     Can.ExportEverything _ -> s
     Can.Export mapNameExport ->
-      inject (startsWithUppercaseCharacter `filter` (N.toString <$> Map.keys mapNameExport)) s
+      insertAfterRegion
+        (exposingRegion _exports)
+        (mapNameExport
+        & Map.keys
+        & fmap N.toString
+        & filter startsWithUppercaseCharacter
+        & concatMap codecsFor
+        & leftPadWith ", "
+        & (\v -> "  " ++ v)
+        )
+        s
+
+leftPadWith _ [] = ""
+leftPadWith delim (x:xs) = delim <> x <> leftPadWith delim xs
 
 generateCodecs :: Map.Map N.Name N.Name -> Can.Module -> T.Text
 generateCodecs revImportDict (Can.Module _moduName _docs _exports _decls _unions _aliases _binops _effects) =
   let -- massive let-expr so we can closure in _moduName
     -- HELPERS
-    qualImport :: Canonical -> T.Text
-    qualImport (Canonical _ n) =
-      N.toText $
-        case revImportDict Map.!? n of
-          Just v -> v
-          Nothing -> n
+    -- | qualIfNeeded does a reverse lookup from fully qualified module name to import alias, so we generate valid code when people do e.g. `import Json.Decode as Decode` or when we're actually referencing something in the same module which then shouldn't be fully qualified.
+    qualIfNeeded :: Canonical -> T.Text
+    qualIfNeeded moduName | moduName == _moduName = ""
+    qualIfNeeded moduName@(Canonical _ n) =
+      case revImportDict Map.!? n of
+        Just v -> N.toText v <> "."
+        Nothing -> trace (sShow ("Lamdera: qualIfNeeded import not found", moduName)) (N.toText n <> ".")
+
+    evergreenCoreEncoder tipes = fmap fst <$> evergreenCoreCodecs qualIfNeeded tipes
+    evergreenCoreDecoder tipes = fmap snd <$> evergreenCoreCodecs qualIfNeeded tipes
 
     aliasCodecs :: (N.Name, Can.Alias) -> T.Text
     aliasCodecs (name, (Can.Alias names t)) =
       let
+        tName = N.toText name <> leftWrap (N.toText <$> names)
         encoder =
+          --"evg_encode_" <> N.toText name <> " : " <> T.intercalate " -> " (((\v -> "(" <> v <> " -> Lamdera.Evergreen.Encoder)") <$> N.toText <$> names) ++ [tName, "Lamdera.Evergreen.Encoder"]) <> "\n" <>
           "evg_encode_" <> N.toText name <> leftWrap (codec <$> names) <> " =\n" <>
           "  " <> encoderForType Map.empty t
         decoder =
+          --"evg_decode_" <> N.toText name <> " : " <> T.intercalate " -> " (((\v -> "(Lamdera.Evergreen.Decoder " <> v <> ")") <$> N.toText  <$> names) ++ ["Lamdera.Evergreen.Decoder (" <> tName <> ")"]) <> "\n" <>
           "evg_decode_" <> N.toText name <> leftWrap (codec <$> names) <> " =\n" <>
           "  " <> decoderForType Map.empty t
       in
@@ -88,7 +127,7 @@ generateCodecs revImportDict (Can.Module _moduName _docs _exports _decls _unions
       let
         tName = N.toText name <> leftWrap (N.toText <$> _u_vars)
         encoder =
-          "evg_encode_" <> N.toText name <> " : " <> T.intercalate " -> " (((\v -> "(" <> v <> " -> Lamdera.Evergreen.Encoder)") <$> N.toText <$> _u_vars) ++ [tName, "Lamdera.Evergreen.Encoder"]) <> "\n" <>
+          --"evg_encode_" <> N.toText name <> " : " <> T.intercalate " -> " (((\v -> "(" <> v <> " -> Lamdera.Evergreen.Encoder)") <$> N.toText <$> _u_vars) ++ [tName, "Lamdera.Evergreen.Encoder"]) <> "\n" <>
           "evg_encode_" <> N.toText name <> leftWrap (codec <$> _u_vars) <> " evg_e_thingy =\n" <>
           "  case evg_e_thingy of\n    "
           <> T.intercalate "\n    "
@@ -99,8 +138,8 @@ generateCodecs revImportDict (Can.Module _moduName _docs _exports _decls _unions
               --Can.Unbox -> error "codec Unbox notimpl"
             )
         decoder =
-          "evg_decode_" <> N.toText name <> " : " <> T.intercalate " -> " (((\v -> "(Lamdera.Evergreen.Decoder " <> v <> ")") <$> N.toText  <$> _u_vars) ++ ["Lamdera.Evergreen.Decoder (" <> tName <> ")"]) <> "\n"
-          <> "evg_decode_" <> N.toText name <> leftWrap (codec <$> _u_vars) <> " =\n"
+          --"evg_decode_" <> N.toText name <> " : " <> T.intercalate " -> " (((\v -> "(Lamdera.Evergreen.Decoder " <> v <> ")") <$> N.toText  <$> _u_vars) ++ ["Lamdera.Evergreen.Decoder (" <> tName <> ")"]) <> "\n" <>
+          "evg_decode_" <> N.toText name <> leftWrap (codec <$> _u_vars) <> " =\n"
           <> "  Lamdera.Evergreen.decodeString |> Lamdera.Evergreen.andThenDecode (\\evg_e_thingy ->\n"
           <> "    case evg_e_thingy of\n      "
           <> T.intercalate "\n      "
@@ -129,21 +168,24 @@ generateCodecs revImportDict (Can.Module _moduName _docs _exports _decls _unions
         (Can.TVar n) -> codec n
         (Can.TUnit) -> unitDec
         (Can.TType moduName name tipes) ->
-          p ((case (moduName, name) `Map.lookup` evergreenCoreDecoders of
+          p ((case evergreenCoreDecoder tipes (moduName, name) of
             Just c -> c
-            Nothing -> p $ (if _moduName == moduName then "" else qualImport moduName <> ".") <> "evg_decode_" <> N.toText name
+            Nothing -> p $ qualIfNeeded moduName <> "evg_decode_" <> N.toText name
           ) <> leftWrap (p <$> decoderForType varMap <$> tipes))
         (Can.TRecord nameFieldTypeMap (Just _)) ->
           -- We don't allow sending partial records atm, because we haven't fully figured out how to encode/decode them.
           "Lamdera.Evergreen.failDecode"
+        (Can.TRecord nameFieldTypeMap Nothing) | Map.null nameFieldTypeMap ->
+          p (decodeSucceed "{}")
         (Can.TRecord nameFieldTypeMap Nothing) -> p $
           let
-            (newVarMap, vars) = manyVars varMap (Map.keys nameFieldTypeMap)
+            nameFieldTypes = Can.fieldsToList nameFieldTypeMap
+            (newVarMap, vars) = manyVars varMap (fst <$> nameFieldTypes)
           in
             T.intercalate " |> Lamdera.Evergreen.andMapDecode " $
               p <$> (decodeSucceed "(\\" <> leftWrap vars <> " -> "
-                <> recLit ((\k -> (N.toText k, getVar newVarMap k)) <$> Map.keys nameFieldTypeMap) <> ")")
-                : (decoderForType newVarMap <$> unpackFieldType <$> Map.elems nameFieldTypeMap)
+                <> recLit ((\k -> (N.toText k, getVar newVarMap k)) <$> (fst <$> nameFieldTypes)) <> ")")
+                : (decoderForType newVarMap <$> (snd <$> nameFieldTypes))
         (Can.TTuple t1 t2 Nothing) -> p $ pairDec (decoderForType varMap t1) (decoderForType varMap t2)
         (Can.TTuple t1 t2 (Just t3)) -> p $ tripleDec (decoderForType varMap t1) (decoderForType varMap t2) (decoderForType varMap t3)
         (Can.TAlias moduName name nameTypePairs aliasType) -> decoderForType varMap (Can.TType moduName name (snd <$> nameTypePairs))
@@ -167,10 +209,14 @@ generateCodecs revImportDict (Can.Module _moduName _docs _exports _decls _unions
         (Can.TVar n) -> codec n
         (Can.TUnit) -> unitEnc
         (Can.TType moduName name tipes) ->
-          p ((case (moduName, name) `Map.lookup` evergreenCoreEncoders of
-            Just c -> c
-            Nothing -> (if _moduName == moduName then "" else qualImport moduName <> ".") <> "evg_encode_" <> N.toText name
-          ) <> leftWrap (p <$> encoderForType varMap <$> tipes))
+          p (
+              (case evergreenCoreEncoder tipes (moduName, name) of
+                Just c -> c
+                Nothing ->
+                  qualIfNeeded moduName
+                   <> "evg_encode_" <> N.toText name
+              ) <> leftWrap (p <$> encoderForType varMap <$> tipes)
+            )
         (Can.TRecord nameFieldTypeMap (Just _)) ->
           -- We don't allow sending partial records atm, because we haven't fully figured out how to encode/decode them.
           "Lamdera.Evergreen.failEncode"
@@ -180,7 +226,7 @@ generateCodecs revImportDict (Can.Module _moduName _docs _exports _decls _unions
           in
             "(\\" <> recVar <> " -> "
               <> sequenceEncWithoutLength ((\(var, t) ->
-                encoderForType newVarMap (unpackFieldType t) <> " " <> recAccess newVarMap var) <$> Map.toList nameFieldTypeMap) <> ")"
+                encoderForType newVarMap t <> " " <> recAccess newVarMap var) <$> Can.fieldsToList nameFieldTypeMap) <> ")"
         (Can.TTuple t1 t2 Nothing) -> pairEnc (encoderForType varMap t1) (encoderForType varMap t2)
         (Can.TTuple t1 t2 (Just t3)) -> tripleEnc (encoderForType varMap t1) (encoderForType varMap t2) (encoderForType varMap t3)
         (Can.TAlias moduName name nameTypePairs aliasType) ->
@@ -199,7 +245,6 @@ nargs xs =
     imap f xs
 
 moduleToText (Canonical _ modu) = N.toText modu
-unpackFieldType (Can.FieldType _ t) = t
 
 leftWrap [] = ""
 leftWrap (x:xs) = " " <> x <> leftWrap xs
@@ -225,74 +270,100 @@ recLit kvpairs = "{ " <> T.intercalate ", " ((\(k, v) -> k <> "=" <> v) <$> kvpa
 
 (-->) = (,)
 
-evergreenCoreEncoders = fst <$> evergreenCoreCodecs
-evergreenCoreDecoders = snd <$> evergreenCoreCodecs
-
-evergreenCoreCodecs :: Map.Map (Canonical, N.Name) (T.Text, T.Text)
-evergreenCoreCodecs =
+evergreenCoreCodecs :: (Canonical -> T.Text) -> [Can.Type] -> (Canonical, N.Name) -> Maybe (T.Text, T.Text)
+evergreenCoreCodecs qualIfNeeded targs key =
   let
-    failEnc 0 = "Lamdera.Evergreen.failEncode"
-    failEnc n = p ("\\" <> T.replicate n "_ " <> "-> Lamdera.Evergreen.failEncode")
-    failDec 0 = "Lamdera.Evergreen.failDecode"
-    failDec n = p ("\\" <> T.replicate n "_ " <> "-> Lamdera.Evergreen.failDecode")
-    failCodec n = (failEnc n, failDec n)
+    -- NOTE: Int argument is the number of type variables of the type in question; FIXME: arity is never used, so do we need to write it down? We know arity from targs context, right?
+    failCodec n moduName = (typedFailEncode qualIfNeeded targs moduName, typedFailDecode qualIfNeeded targs moduName)
+
+    notimplCodecs =
+      ((\((pkg, modu, tipe), arity) ->
+        let
+          fqType = (Canonical (pkgFromText pkg) modu, tipe)
+        in (fqType, failCodec arity fqType)) <$>
+      -- non elm/core types
+      -- NOTE: none of these packages have been checked exhaustively for types; we should do that
+      ( [ (("elm/bytes", "Bytes", "Endianness") --> 0 )
+        , (("elm/bytes", "Bytes.Encode", "Encoder") --> 0 )
+        , (("elm/bytes", "Bytes.Decode", "Decoder") --> 1 )
+        , (("elm/virtual-dom", "VirtualDom", "Node") --> 1 )
+        , (("elm/virtual-dom", "VirtualDom", "Attribute") --> 1 )
+        , (("elm/virtual-dom", "VirtualDom", "Handler") --> 1 )
+        -- Disable for now, but need to revisit these and whether we want actual proper wire support
+        , (("elm/browser", "Browser", "UrlRequest") --> 0 )
+        , (("elm/browser", "Browser.Navigation", "Key") --> 0 )
+        , (("elm/file", "File", "File") --> 0 )
+        -- not implemented yet, but needed by other pkgs
+        , (("elm/core", "Process", "Id") --> 0 ) -- alias of Platform.ProcessId
+        , (("elm/core", "Platform", "ProcessId") --> 0 ) -- time
+        -- not needed by anything immediately, but we don't know how to encode these anyway, so let's fail them now
+        , (("elm/core", "Platform", "Program") --> 3 ) -- idk
+        , (("elm/core", "Platform", "Router") --> 2 ) -- idk
+        , (("elm/core", "Platform", "Task") --> 2 ) -- idk
+        , (("elm/core", "Platform.Cmd", "Cmd") --> 1 ) -- idk
+        , (("elm/core", "Platform.Sub", "Sub") --> 1 )
+        -- elm/json
+        , (("elm/json", "Json.Encode", "Value") --> 0 ) -- js type
+        , (("elm/json", "Json.Decode", "Decoder") --> 1 ) -- js type
+        , (("elm/json", "Json.Decode", "Value") --> 0 ) -- js type
+        -- elm/core
+        , (("elm/core", "Task", "Task") --> 2 ) -- js type
+        ]))
+      <>
+      ( (\((pkg, modu, tipe), res) -> ((Canonical (pkgFromText pkg) modu, tipe), res)) <$>
+        -- elm/core types; these are exhaustive (but some types are commented out atm)
+        (\(modu, tipe) -> ("elm/core", modu, tipe) --> ("Lamdera.Evergreen.encode" <> N.toText tipe, "Lamdera.Evergreen.decode" <> N.toText tipe)) <$>
+        [ -- , ("Platform", "ProcessId")
+        -- , ("Platform", "Program")
+        -- , ("Platform", "Router")
+        -- , ("Platform", "Task")
+        -- , ("Platform.Cmd", "Cmd")
+        -- , ("Platform.Sub", "Sub")
+        ]
+      )
+
+
+    implementedCodecs =
+      (\((pkg, modu, tipe), res) -> ((Canonical (pkgFromText pkg) modu, tipe), res)) <$>
+      -- non elm/core types
+      -- NOTE: none of these packages have been checked exhaustively for types; we should do that
+      ( [ (("elm/bytes", "Bytes", "Bytes") --> ("Lamdera.Evergreen.encodeBytes", "Lamdera.Evergreen.decodeBytes") )
+        , (("elm/time", "Time", "Posix") --> ("(\\t -> Lamdera.Evergreen.encodeInt (Time.posixToMillis t))", "Lamdera.Evergreen.decodeInt |> Lamdera.Evergreen.andThenDecode (\\t -> Lamdera.Evergreen.succeedDecode (Time.millisToPosix t))"))
+        ] <>
+        (
+          -- elm/core types; these are exhaustive (but some types are commented out atm)
+          (\(modu, tipe) -> ("elm/core", modu, tipe) --> ("Lamdera.Evergreen.encode" <> N.toText tipe, "Lamdera.Evergreen.decode" <> N.toText tipe)) <$>
+          [ ("Array", "Array")
+          , ("Basics", "Bool")
+          , ("Basics", "Float")
+          , ("Basics", "Int")
+          , ("Basics", "Never")
+          , ("Basics", "Order")
+          , ("Char", "Char")
+          , ("Dict", "Dict")
+          , ("List", "List") -- list type is only defined in kernel code, there's no `type List a = List` or similar in elm land. Accidentally maybe?
+          , ("Maybe", "Maybe")
+          -- , ("Platform", "ProcessId")
+          -- , ("Platform", "Program")
+          -- , ("Platform", "Router")
+          -- , ("Platform", "Task")
+          -- , ("Platform.Cmd", "Cmd")
+          -- , ("Platform.Sub", "Sub")
+          , ("Result", "Result")
+          , ("Set", "Set")
+          , ("String", "String")
+          ]
+        )
+      )
+
+
   in
   -- NOTE: the injected failEncode and failDecode values follow a simple pattern; they take the (de/en)coders
   -- of type variables as arguments; one argument per type variable, in the same order as the type variables
   -- in the main type. A two-argument type that we want to `fail` must thus be wrapped in a two-argument lambda
   -- that drops both its arguments, for the generated source code to kind-check. Se examples below.
-  Map.fromList $
-  (\((pkg, modu, tipe), res) -> ((Canonical (pkgFromText pkg) modu, tipe), res)) <$>
-  -- non elm/core types
-  -- NOTE: none of these packages have been checked exhaustively for types; we should do that
-  ( [ (("elm/bytes", "Bytes", "Bytes") --> ("Lamdera.Evergreen.encodeBytes", "Lamdera.Evergreen.decodeBytes") )
-    , (("elm/time", "Time", "Posix") --> ("(\\t -> Lamdera.Evergreen.encodeInt (Time.posixToMillis t))", "Lamdera.Evergreen.decodeInt |> Lamdera.Evergreen.andThenDecode (\\t -> Lamdera.Evergreen.succeedDecode (Time.millisToPosix t))"))
-    , (("elm/virtual-dom", "VirtualDom", "Node") --> failCodec 1 )
-    , (("elm/virtual-dom", "VirtualDom", "Attribute") --> failCodec 1 )
-    , (("elm/virtual-dom", "VirtualDom", "Handler") --> failCodec 1 )
-    -- Disable for now, but need to revisit these and whether we want actual proper wire support
-    , (("elm/browser", "Browser", "UrlRequest") --> failCodec 0 )
-    , (("elm/browser", "Browser.Navigation", "Key") --> failCodec 0 )
-    , (("elm/file", "File", "File") --> failCodec 0 )
-    -- not implemented yet, but needed by other pkgs
-    , (("elm/core", "Process", "Id") --> failCodec 0 ) -- alias of Platform.ProcessId
-    , (("elm/core", "Platform", "ProcessId") --> failCodec 0 ) -- time
-    -- not needed by anything immediately, but we don't know how to encode these anyway, so let's fail them now
-    , (("elm/core", "Platform", "Program") --> failCodec 3 ) -- idk
-    , (("elm/core", "Platform", "Router") --> failCodec 3 ) -- idk
-    , (("elm/core", "Platform", "Task") --> failCodec 2 ) -- idk
-    , (("elm/core", "Platform.Cmd", "Cmd") --> failCodec 1 ) -- idk
-    , (("elm/core", "Platform.Sub", "Sub") --> failCodec 1 )
-    -- elm/json
-    , (("elm/json", "Json.Encode", "Value") --> failCodec 0 ) -- js type
-    , (("elm/json", "Json.Decode", "Decoder") --> failCodec 1 ) -- js type
-    , (("elm/json", "Json.Decode", "Value") --> failCodec 0 ) -- js type
-    ] <>
-    (
-      -- elm/core types; these are exhaustive (but some types are commented out atm)
-      (\(modu, tipe) -> ("elm/core", modu, tipe) --> ("Lamdera.Evergreen.encode" <> N.toText tipe, "Lamdera.Evergreen.decode" <> N.toText tipe)) <$>
-      [ ("Array", "Array")
-      , ("Basics", "Bool")
-      , ("Basics", "Float")
-      , ("Basics", "Int")
-      , ("Basics", "Never")
-      , ("Basics", "Order")
-      , ("Char", "Char")
-      , ("Dict", "Dict")
-      , ("List", "List") -- list type is only defined in kernel code, there's no `type List a = List` or similar in elm land. Accidentally maybe?
-      , ("Maybe", "Maybe")
-      -- , ("Platform", "ProcessId")
-      -- , ("Platform", "Program")
-      -- , ("Platform", "Router")
-      -- , ("Platform", "Task")
-      -- , ("Platform.Cmd", "Cmd")
-      -- , ("Platform.Sub", "Sub")
-      , ("Result", "Result")
-      , ("Set", "Set")
-      , ("String", "String")
-      ]
-    )
-  )
+  Map.lookup key $
+  Map.fromListWithKey (\k a b -> error (sShow ("Wire.Source.evergreenCoreCodecs got duplicate values for a key", k, "namely", a, b))) $ (notimplCodecs ++ implementedCodecs)
 
 pkgFromText :: T.Text -> Pkg.Name
 pkgFromText s =
@@ -339,3 +410,80 @@ newGenVar varName varMap =
         Nothing -> (Map.insert varName 0 varMap, N.toText varName <> "0")
   in
     (newVarMap, var)
+
+typedFailEncode :: (Canonical -> T.Text) -> [Can.Type] -> (Canonical, N.Name) -> T.Text
+typedFailEncode qualIfNeeded targs (can, name) =
+  -- We wrap the failEncode decoder in a type annotation to say what that targ should be, and then let type inference handle the type annotation for the whole encoder so we don't have to deal with supertypes.
+  -- In some types, super types aren't written out as super types in the type definition, e.g. the elm/core Dict type is defined as `Dict k v` instead of `Dict comparable v`
+  let
+    failEnc 0 = "evg_typed_failure"
+    failEnc n = p ("\\" <> T.replicate n "_ " <> "-> " <> "evg_typed_failure")
+
+    -- CanSer-style Can.Type pretty-printer that respects aliased/exposed imports. It also never generates newlines.
+    toElm tipe =
+      case tipe of
+        Can.TLambda t1 t2 -> p (toElm t1 <> " -> " <> toElm t2)
+        Can.TVar name -> N.toText name
+        Can.TType moduName name [] -> qualIfNeeded moduName <> N.toText name
+        Can.TType moduName name types | elem moduName [ModuleName.list] -> p (N.toText name <> leftPadWith " " (toElm <$> types))
+        Can.TType moduName name types -> p (qualIfNeeded moduName <> N.toText name <> leftPadWith " " (toElm <$> types))
+        Can.TRecord nameFieldTypeMap Nothing -> "{ " <> T.intercalate ", " (ftMap nameFieldTypeMap) <> " }"
+        Can.TRecord nameFieldTypeMap (Just name) -> "{ " <> N.toText name <> " | " <> T.intercalate ", " (ftMap nameFieldTypeMap) <> " }"
+        Can.TUnit -> "()"
+        Can.TTuple t1 t2 Nothing -> p (T.intercalate ", " (toElm <$> [t1, t2]))
+        Can.TTuple t1 t2 (Just t3) -> p (T.intercalate ", " (toElm <$> [t1, t2, t3]))
+        Can.TAlias moduName name [] _ -> qualIfNeeded moduName <> N.toText name
+        Can.TAlias moduName name nameTypePairs _ -> p (qualIfNeeded moduName <> N.toText name <> leftPadWith " " (toElm <$> snd <$> nameTypePairs))
+    ftMap x =
+      (\(f, t) -> N.toText f <> " : " <> toElm (fieldType t)) <$> (Map.toList x)
+    fieldType (Can.FieldType _ t) = t
+
+  in
+  T.replace "%CanType%" (T.intercalate " " ([qualIfNeeded can <> N.toText name] <> (toElm <$> targs))) $
+  T.replace "%Lambda%" (failEnc (length targs)) $
+  -- 8 space indentation to be indented more than body of case branches in generated code
+  "(\n\
+  \        let\n\
+  \          evg_typed_failure : (%CanType%) -> Lamdera.Evergreen.Encoder\n\
+  \          evg_typed_failure = Lamdera.Evergreen.failEncode\n\
+  \        in %Lambda%\n\
+  \        )"
+
+typedFailDecode :: (Canonical -> T.Text) -> [Can.Type] -> (Canonical, N.Name) -> T.Text
+typedFailDecode qualIfNeeded targs (can, name) =
+  -- since decoders have a type argument in their type, the generated codec has to have the correct type in there or we'll infer it to `a`.
+  -- We wrap the failDecode decoder in a type annotation to say what that targ should be, and then let type inference handle the type annotation for the whole encoder so we don't have to deal with supertypes.
+  -- In some types, super types aren't written out as super types in the type definition, e.g. the elm/core Dict type is defined as `Dict k v` instead of `Dict comparable v`
+  let
+    failDec 0 = "evg_typed_failure"
+    failDec n = p ("\\" <> T.replicate n "_ " <> "-> " <> "evg_typed_failure")
+
+    -- CanSer-style Can.Type pretty-printer that respects aliased/exposed imports. It also never generates newlines.
+    toElm tipe =
+      case tipe of
+        Can.TLambda t1 t2 -> p (toElm t1 <> " -> " <> toElm t2)
+        Can.TVar name -> N.toText name
+        Can.TType moduName name [] -> qualIfNeeded moduName <> N.toText name
+        Can.TType moduName name types | elem moduName [ModuleName.list] -> p (N.toText name <> leftPadWith " " (toElm <$> types))
+        Can.TType moduName name types -> p (qualIfNeeded moduName <> N.toText name <> leftPadWith " " (toElm <$> types))
+        Can.TRecord nameFieldTypeMap Nothing -> "{ " <> T.intercalate ", " (ftMap nameFieldTypeMap) <> " }"
+        Can.TRecord nameFieldTypeMap (Just name) -> "{ " <> N.toText name <> " | " <> T.intercalate ", " (ftMap nameFieldTypeMap) <> " }"
+        Can.TUnit -> "()"
+        Can.TTuple t1 t2 Nothing -> p (T.intercalate ", " (toElm <$> [t1, t2]))
+        Can.TTuple t1 t2 (Just t3) -> p (T.intercalate ", " (toElm <$> [t1, t2, t3]))
+        Can.TAlias moduName name [] _ -> qualIfNeeded moduName <> N.toText name
+        Can.TAlias moduName name nameTypePairs _ -> p (qualIfNeeded moduName <> N.toText name <> leftPadWith " " (toElm <$> snd <$> nameTypePairs))
+    ftMap x =
+      (\(f, t) -> N.toText f <> " : " <> toElm (fieldType t)) <$> (Map.toList x)
+    fieldType (Can.FieldType _ t) = t
+
+  in
+  T.replace "%CanType%" (T.intercalate " " ([qualIfNeeded can <> N.toText name] <> (toElm <$> targs))) $
+  T.replace "%Lambda%" (failDec (length targs)) $
+  -- 8 space indentation to be indented more than body of case branches in generated code
+  "(\n\
+  \        let\n\
+  \          evg_typed_failure : Lamdera.Evergreen.Decoder (%CanType%)\n\
+  \          evg_typed_failure = Lamdera.Evergreen.failDecode\n\
+  \        in %Lambda%\n\
+  \        )"

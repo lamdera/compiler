@@ -121,8 +121,8 @@ extractTransitive interfaces (Deps seenAliases seenUnions) (Deps nextAliases nex
 extractAlias :: I.Interfaces -> Opt.Global -> Extractor T.Alias
 extractAlias interfaces (Opt.Global home name) =
   let
-    (I.Interface _ _ aliases _) = interfaces ! home
-    (Can.Alias args aliasType) = I.toAliasInternals (aliases ! name)
+    (I.Interface _ _ aliases _) = (interfaces, ("Compiler.Type.Extract.extractAlias.Interface", home, name)) ! home
+    (Can.Alias args aliasType) = I.toAliasInternals ((aliases, ("Compiler.Type.Extract.extractAlias.Alias", home, name)) ! name)
   in
   T.Alias (toPublicName home name) args <$> extract aliasType
 
@@ -134,9 +134,9 @@ extractUnion interfaces (Opt.Global home name) =
     else
       let
         pname = toPublicName home name
-        unions = I._unions (interfaces ! home)
+        unions = I._unions ((interfaces, ("Compiler.Type.Extract.extractUnion.1", home, name)) ! home)
       in
-      case I.toUnionInternals (unions ! name) of
+      case I.toUnionInternals ((unions, ("Compiler.Type.Extract.extractUnion.2", home, name)) ! name) of
         Can.Union vars ctors _ _ ->
           T.Union pname vars <$> traverse extractCtor ctors
 

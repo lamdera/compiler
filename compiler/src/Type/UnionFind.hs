@@ -33,6 +33,7 @@ import Control.Monad ( when )
 import Data.IORef (IORef, modifyIORef', newIORef, readIORef, writeIORef)
 import Data.Word (Word32)
 
+import System.IO.Unsafe (unsafePerformIO)
 
 
 -- POINT
@@ -43,8 +44,11 @@ newtype Point a =
   deriving (Eq)
 
 
-instance Show (Point a) where
-  show _ = "Pt <UNKNOWNPRINT IOREF PointInfo a>"
+instance Show a => Show (Point a) where
+  show (Pt a) =
+    unsafePerformIO $ do
+      v <- readIORef a
+      pure ("<Pt:" ++ show v ++ ">")
 
 
 data PointInfo a
@@ -52,8 +56,14 @@ data PointInfo a
   | Link {-# UNPACK #-} !(Point a)
 
 
-instance Show (PointInfo a) where
-  show _ = "<UNKNOWNPRINT PointInfo a>"
+instance Show a => Show (PointInfo a) where
+  show (Info w32 a) =
+    unsafePerformIO $ do
+      w32r <- readIORef w32
+      a' <- readIORef a
+      pure ("Info " ++ show w32r ++ " " ++ show a')
+  show (Link a) =
+    "Link (" ++ show a ++ ")"
 
 
 -- HELPERS

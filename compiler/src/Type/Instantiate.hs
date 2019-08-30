@@ -36,7 +36,7 @@ fromSrcType freeVars sourceType =
         <*> fromSrcType freeVars result
 
     Can.TVar name ->
-      return (freeVars ! name)
+      return ((freeVars, ("Type.Instantiate.fromSrcType.TVar")) ! name)
 
     Can.TType home name args ->
       AppN home name <$> traverse (fromSrcType freeVars) args
@@ -69,7 +69,7 @@ fromSrcType freeVars sourceType =
               return EmptyRecordN
 
             Just ext ->
-              return (freeVars ! ext)
+              return ((freeVars, ("Type.Instantiate.fromSrcType.TRecord")) ! ext)
 
 
 fromSrcFieldType :: Map.Map N.Name Type -> Can.FieldType -> IO Type

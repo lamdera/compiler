@@ -94,7 +94,7 @@ generateForRepl ansi localizer (Opt.Graph _ graph _) iface home name =
   in
   stateToBuilder evalState
   <>
-  print ansi localizer home name (I._types iface ! name)
+  print ansi localizer home name ((I._types iface, ("Generate.Javascript.generateForRepl")) ! name)
 
 
 print :: Bool -> L.Localizer -> ModuleName.Canonical -> N.Name -> Can.Annotation -> B.Builder
@@ -164,7 +164,7 @@ addGlobalHelp mode graph global state =
     addDeps deps someState =
       Set.foldl' (addGlobal mode graph) someState deps
   in
-  case graph ! global of
+  case (graph, ("Generate.Javascript.addGlobalHelp")) ! global of
     Opt.Define expr deps ->
       addStmt (addDeps deps state) (
         var global (Expr.generate mode expr)
