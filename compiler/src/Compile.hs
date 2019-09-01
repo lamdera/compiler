@@ -1,5 +1,6 @@
 {-# OPTIONS_GHC -Wall -fno-warn-unused-do-bind #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE BangPatterns #-}
 module Compile
   ( DocsFlag(..)
   , compile
