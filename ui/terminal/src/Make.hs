@@ -44,8 +44,8 @@ run paths (Flags debug optimize output report docs) =
           do  mode <- toMode debug optimize
               summary <- Project.getRoot
               Project.compile mode Output.Client output docs summary paths
-      else
-        pure ()
+        else
+          pure ()
 
 
 toMode :: Bool -> Bool -> Task.Task Output.Mode
