@@ -26,9 +26,9 @@ checks = do
   missingFiles <- liftIO $ checkMissingFiles ["src/Frontend.elm", "src/Backend.elm", "src/Msg.elm"]
   unless (missingFiles == []) $
     throwError $
-      "The following files required by Lamdera are missing:\n\n"
+      "The following files required by Lamdera are missing:\n"
       <>
-      (T.concat $ fmap (\file -> "- " <> T.pack (show file)) missingFiles)
+      (T.concat $ fmap (\file -> "\n- " <> T.pack file) missingFiles)
       <>
       "\n\nPlease see https://alpha.lamdera.app/development for how to set up a Lamdera app."
 
