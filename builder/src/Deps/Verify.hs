@@ -294,12 +294,12 @@ getIface name version info infos depIfaces =
               _ <- Artifacts.writeDocs results docsPath
 
               -- only write haskell yaml files if LAMDERA_PKG_PATH is set
-              pkgPath <- liftIO $ Env.lookupEnv "LAMDERA_PKG_PATH"
-              case pkgPath of
-                Just _ ->
-                  Haskelm.Yaml.generatePkgYamlFiles root results info
-                Nothing ->
-                  pure ()
+              -- pkgPath <- liftIO $ Env.lookupEnv "LAMDERA_PKG_PATH"
+              -- case pkgPath of
+              --   Just _ ->
+              --     Haskelm.Yaml.generatePkgYamlFiles root results info
+              --   Nothing ->
+              --     pure ()
 
               Paths.removeStuff root
 

@@ -60,14 +60,14 @@ write root answers =
                 Binary.encodeFile (Path.elmo root name) elmo
 
                 -- only write hs files if LAMDERA_PKG_PATH is set
-                pkgPath <- Env.lookupEnv "LAMDERA_PKG_PATH"
-                case pkgPath of
-                  Just _ -> do
-                    let path = Path.haskelmo root name
-                    createDirectoryIfMissing True (takeDirectory path)
-                    writeFile path (HsPretty.prettyPrint (East.Hacks.injectKernelImport haskelmo))
-                  Nothing ->
-                    pure ()
+                -- pkgPath <- Env.lookupEnv "LAMDERA_PKG_PATH"
+                -- case pkgPath of
+                --   Just _ -> do
+                --     let path = Path.haskelmo root name
+                --     createDirectoryIfMissing True (takeDirectory path)
+                --     writeFile path (HsPretty.prettyPrint (East.Hacks.injectKernelImport haskelmo))
+                --   Nothing ->
+                --     pure ()
 
                 putMVar mvar result
           return mvar
