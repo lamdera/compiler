@@ -90,7 +90,7 @@ sansFontPath =
 
 elm :: BS.ByteString
 elm =
-  $(bsToExp =<< runIO Build.compile)
+  $(bsToExp =<< runIO Build.compile_)
 
 
 
