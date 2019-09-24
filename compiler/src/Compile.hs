@@ -90,13 +90,22 @@ compile flag pkg importDict interfaces source srcMVar =
       documentation <-
         genarateDocs flag canonical
 
+
       --
-      -- Ok, normal elm compilation chain is now done for this module, so any normal elm errors which may have happened will have been found and returned by now. This should reduce confusion for devs. Next, after the elm code is known good, we generate evergreen codecs, inject them, and then run the whole compilation step once more, with generated code this time.
-      -- This also gives us a free pass from our previous discussion on how many compilation steps we should run before we inject codecs; more steps is slower but more correct. Now we need to run all steps, so we're free to use all information if we want to.
+      -- Ok, normal elm compilation chain is now done for this module, so any normal
+      -- elm errors which may have happened will have been found and returned by now.
+      -- This should reduce confusion for devs. Next, after the elm code is known good,
+      -- we generate evergreen codecs, inject them, and then run the whole compilation
+      -- step once more, with generated code this time.
+      -- This also gives us a free pass from our previous discussion on how many
+      -- compilation steps we should run before we inject codecs; more steps is
+      -- slower but more correct. Now we need to run all steps, so we're free to
+      -- use all information if we want to.
       --
 
       -- generate wire source code from canonical ast
-      -- these are intended to be serialised and put at the end of the source code string, then we redo the whole module compilation with this new source injected.
+      -- these are intended to be serialised and put at the end of the source code
+      -- string, then we redo the whole module compilation with this new source injected.
       rawCodecSource <- pure $ T.unpack $ Wire.Source.generateCodecs (getImportDict valid) canonical
 
       valid_ <- Result.mapError Error.Syntax $
@@ -108,7 +117,7 @@ compile flag pkg importDict interfaces source srcMVar =
                     _ <- takeMVar srcMVar -- drop the old source code
                     putMVar srcMVar newSource -- insert the new source code
           in
-            --DT.trace (BS8.toString newSource) $ -- uncomment to print source code for all modules
+            -- DT.trace (BS8.toString newSource) $ -- uncomment to print source code for all modules
             -- it's safer to add stuff to the parsed result, but much harder to debug, so codecs are generated as source code, and imports are added like this now
             addImport (Src.Import (A.At R.lamderaInject "Lamdera.Evergreen") Nothing (Src.Explicit []))
               <$> Parse.program pkg newSource

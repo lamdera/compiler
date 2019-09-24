@@ -233,6 +233,7 @@ Executable elmx
         -- Wire
         Wire.Test
         Wire.Source
+        Wire.TypeHash
 
         -- Debug helpers
         CanSer.CanSer

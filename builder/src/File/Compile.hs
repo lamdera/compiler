@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 module File.Compile
   ( compile
   , Answer(..)
@@ -21,6 +22,7 @@ import qualified File.Plan as Plan
 import qualified Reporting.Progress as Progress
 import qualified Reporting.Task as Task
 
+import qualified Wire.TypeHash
 
 -- COMPILE
 
@@ -101,6 +103,8 @@ compileModule tell project maybeDocsPath answersMVar ifacesMVar name info =
                             lock <- takeMVar ifacesMVar
                             putMVar ifacesMVar (Map.insert canonicalName elmi lock)
                             putMVar mvar (Good result)
+                            Wire.TypeHash.possiblyWriteModelSha tell name elmi
+
 
       return mvar
 

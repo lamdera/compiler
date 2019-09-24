@@ -23,7 +23,7 @@ import Reporting.Progress (Msg(..), Progress(..), Outcome(..), PublishPhase(..),
 import qualified Reporting.Progress as Progress
 import qualified Reporting.Progress.Bar as Bar
 
-
+import qualified Wire.TypeHash
 
 -- CREATE
 
@@ -209,7 +209,11 @@ loopHelp chan progress state@(State total good bad) =
           putStrLn "here, but my request failed. Are you offline? I will try to continue anyway.\n"
           loop chan state
 
+    -- Lamdera
 
+    LamderaWriteSha str ->
+      do  Wire.TypeHash.write str
+          loop chan state
 
 -- BULLETS
 

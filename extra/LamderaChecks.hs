@@ -23,44 +23,44 @@ runChecks = do
 
 checks :: Check Bool
 checks = do
-  missingFiles <- liftIO $ checkMissingFiles ["src/Frontend.elm", "src/Backend.elm", "src/Msg.elm"]
-  unless (missingFiles == []) $
-    throwError $
-      "The following files required by Lamdera are missing:\n"
-      <>
-      (T.concat $ fmap (\file -> "\n- " <> T.pack file) missingFiles)
-      <>
-      "\n\nPlease see https://alpha.lamdera.app/development for how to set up a Lamdera app."
-
-
-  frontendAppDefined <- liftIO $ checkHasAppDefinition "src/Frontend.elm"
-  unless frontendAppDefined $
-    throwError
-      "src/Frontend.elm is missing an `app` definition. \n\
-      \\n\
-      \Lamdera apps need an `app =` definition in Frontend.elm and Backend.elm so I know where the app begins, similar to how Elm apps need a `main`.\n\
-      \\n\
-      \Please see https://alpha.lamdera.app/development for how to set up a Lamdera app."
-
-
-  backendAppDefined <- liftIO $ checkHasAppDefinition "src/Backend.elm"
-  unless backendAppDefined $
-    throwError
-      "src/Backend.elm is missing an `app` definition. \n\
-      \\n\
-      \Lamdera apps need an `app =` definition in Frontend.elm and Backend.elm so I know where the app begins, similar to how Elm apps need a `main`.\n\
-      \\n\
-      \Please see https://alpha.lamdera.app/development for how to set up a Lamdera app."
-
-
-  msgHasTypes <- liftIO $ checkMsgHasTypes ["FrontendMsg", "ToBackend", "BackendMsg", "ToFrontend"]
-  unless (msgHasTypes == True) $
-    throwError
-      "src/Msg.elm is missing some type definitions.\n\
-      \\n\
-      \Lamdera apps need FrontendMsg, ToBackend, BackendMsg and ToFrontend types defined in Msg.elm.\n\
-      \\n\
-      \Please see https://alpha.lamdera.app/development for how to set up a Lamdera app."
+  -- missingFiles <- liftIO $ checkMissingFiles ["src/Frontend.elm", "src/Backend.elm", "src/Msg.elm"]
+  -- unless (missingFiles == []) $
+  --   throwError $
+  --     "The following files required by Lamdera are missing:\n"
+  --     <>
+  --     (T.concat $ fmap (\file -> "\n- " <> T.pack file) missingFiles)
+  --     <>
+  --     "\n\nPlease see https://alpha.lamdera.app/development for how to set up a Lamdera app."
+  --
+  --
+  -- frontendAppDefined <- liftIO $ checkHasAppDefinition "src/Frontend.elm"
+  -- unless frontendAppDefined $
+  --   throwError
+  --     "src/Frontend.elm is missing an `app` definition. \n\
+  --     \\n\
+  --     \Lamdera apps need an `app =` definition in Frontend.elm and Backend.elm so I know where the app begins, similar to how Elm apps need a `main`.\n\
+  --     \\n\
+  --     \Please see https://alpha.lamdera.app/development for how to set up a Lamdera app."
+  --
+  --
+  -- backendAppDefined <- liftIO $ checkHasAppDefinition "src/Backend.elm"
+  -- unless backendAppDefined $
+  --   throwError
+  --     "src/Backend.elm is missing an `app` definition. \n\
+  --     \\n\
+  --     \Lamdera apps need an `app =` definition in Frontend.elm and Backend.elm so I know where the app begins, similar to how Elm apps need a `main`.\n\
+  --     \\n\
+  --     \Please see https://alpha.lamdera.app/development for how to set up a Lamdera app."
+  --
+  --
+  -- msgHasTypes <- liftIO $ checkMsgHasTypes ["FrontendMsg", "ToBackend", "BackendMsg", "ToFrontend"]
+  -- unless (msgHasTypes == True) $
+  --   throwError
+  --     "src/Msg.elm is missing some type definitions.\n\
+  --     \\n\
+  --     \Lamdera apps need FrontendMsg, ToBackend, BackendMsg and ToFrontend types defined in Msg.elm.\n\
+  --     \\n\
+  --     \Please see https://alpha.lamdera.app/development for how to set up a Lamdera app."
 
 
   pure True
