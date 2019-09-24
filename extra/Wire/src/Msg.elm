@@ -1,32 +1,23 @@
-module Msg exposing (Herp(..))
+module Msg exposing (..)
 
 import Lamdera.Types exposing (ClientId, WsError)
 
 
-type Herp
-    = Derp String String
-
-
 type FrontendMsg
-    = MessageFieldChanged String
-    | MessageResponse (Result WsError ())
-    | MessageSubmitted
-    | Skip
+    = Increment
+    | Decrement
+    | FNoop
 
 
 type ToBackend
-    = MsgSubmitted String
-    | ClientJoined
+    = ClientJoin
+    | CounterIncremented
+    | CounterDecremented
 
 
 type BackendMsg
     = Noop
-    | MsgResponse ClientId (Result WsError ())
 
 
 type ToFrontend
-    = RoomMsgReceived Message
-
-
-type alias Message =
-    ( String, String )
+    = CounterNewValue Int

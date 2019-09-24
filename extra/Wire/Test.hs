@@ -78,8 +78,8 @@ tempFileName =
 
 rootPaths :: [FilePath]
 rootPaths =
-  [ "src" </> "AllTypes_Check.elm"
-  -- [ "src" </> "Frontend.elm"
+  -- [ "src" </> "AllTypes_Check.elm"
+  [ "src" </> "Backend.elm"
   ]
 
 

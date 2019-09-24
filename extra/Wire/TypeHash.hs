@@ -38,7 +38,7 @@ import CanSer.CanSer as CanSer
 import Elm
 
 
-possiblyWriteModelSha tell name elmi = do
+possiblyWriteModelSha tell name elmi =
   -- @TODO be more careful and check module name too? i.e. elm/author
   if name == N.fromText "Backend" then
     case Map.lookup (N.fromText "Model") $ Interface._aliases elmi of
