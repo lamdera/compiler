@@ -53,7 +53,7 @@ ignore answers =
 write :: FilePath -> Map Module.Raw Answer -> Task.Task (Map Module.Raw Compiler.Artifacts)
 write root answers =
   let
-    writer name result@(Compiler.Artifacts elmi elmo haskelmo _) =
+    writer name result@(Compiler.Artifacts elmi elmo haskelmo) =
       do  mvar <- newEmptyMVar
           void $ forkIO $
             do  Binary.encodeFile (Path.elmi root name) elmi
@@ -79,7 +79,7 @@ write root answers =
 writeDocs :: Map Module.Raw Compiler.Artifacts -> FilePath -> Task.Task Docs.Documentation
 writeDocs results path =
   let
-    getDocs (Compiler.Artifacts _ _ _ docs) =
+    getDocs (Compiler.Artifacts _ _ docs) =
       docs
   in
     case Maybe.mapMaybe getDocs (Map.elems results) of

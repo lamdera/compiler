@@ -33,7 +33,6 @@ import qualified Reporting.Task as Task
 import qualified Stuff.Paths as Path
 
 import qualified System.Environment as Env
-import qualified Haskelm.Yaml
 
 
 -- GET ROOT
@@ -69,14 +68,6 @@ compile mode target maybeOutput docs summary@(Summary.Summary root project _ _ _
       answers <- Compile.compile project docs ifaces dirty
       results <- Artifacts.write root answers
 
-      -- only write haskell yaml files if LAMDERA_PKG_PATH is set
-      pkgPath <- liftIO $ Env.lookupEnv "LAMDERA_PKG_PATH"
-      case pkgPath of
-        Just _ ->
-          Haskelm.Yaml.generateHaskellYamlFiles root project graph results
-        Nothing ->
-          pure ()
-
       _ <- traverse (Artifacts.writeDocs results) docs
       Output.generate mode target maybeOutput summary graph results
 
@@ -92,7 +83,7 @@ compileForRepl noColors localizer source maybeName =
       (dirty, ifaces) <- Plan.plan Nothing summary graph
       answers <- Compile.compile project Nothing ifaces dirty
       results <- Artifacts.write root answers
-      let (Compiler.Artifacts elmi _ _ _) = (results, ("Elm.Project.compileForRepl", maybeName)) ! N.replModule
+      let (Compiler.Artifacts elmi _ _) = (results, ("Elm.Project.compileForRepl", maybeName)) ! N.replModule
       traverse (Output.generateReplFile noColors localizer summary graph elmi) maybeName
 
 

@@ -242,7 +242,6 @@ Executable elmx
         East.Conversion
         East.Rewrite
         East.Hacks
-        Haskelm.Yaml
         Transpile.Deriving
         Transpile.Reserved
         Transpile.Instances

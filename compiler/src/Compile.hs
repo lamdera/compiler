@@ -62,7 +62,6 @@ data Artifacts =
   Artifacts
     { _elmi :: I.Interface
     , _elmo :: Opt.Graph
-    , _haskelmo :: Hs.Module
     , _docs :: Maybe Docs.Module
     } deriving (Show)
 
@@ -133,14 +132,10 @@ compile flag pkg importDict interfaces source srcMVar =
       documentation_ <-
         genarateDocs flag canonical_
 
-      haskAst_ <-
-        East.transpile canonical_ annotations_ importDict
-
       Result.ok $
         Artifacts
           { _elmi = I.fromModule annotations_ canonical_
           , _elmo = graph_
-          , _haskelmo = haskAst_
           , Compile._docs = documentation_
           }
 

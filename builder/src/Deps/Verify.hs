@@ -44,7 +44,6 @@ import qualified Reporting.Progress as Progress
 import qualified Reporting.Task as Task
 import qualified Stuff.Paths as Paths
 
-import qualified Haskelm.Yaml
 import qualified System.Environment as Env
 
 
@@ -293,14 +292,6 @@ getIface name version info infos depIfaces =
               results <- Artifacts.ignore answers
               _ <- Artifacts.writeDocs results docsPath
 
-              -- only write haskell yaml files if LAMDERA_PKG_PATH is set
-              -- pkgPath <- liftIO $ Env.lookupEnv "LAMDERA_PKG_PATH"
-              -- case pkgPath of
-              --   Just _ ->
-              --     Haskelm.Yaml.generatePkgYamlFiles root results info
-              --   Nothing ->
-              --     pure ()
-
               Paths.removeStuff root
 
               updateCache root name info solution graph results
@@ -384,7 +375,7 @@ crush pkg info results =
 
 
 crushHelp :: Set Module.Raw -> Module.Raw -> Compiler.Artifacts -> Maybe Module.Interface
-crushHelp exposed name (Compiler.Artifacts elmi _ _ _) =
+crushHelp exposed name (Compiler.Artifacts elmi _ _) =
   if Set.member name exposed then
     Just elmi
 
@@ -397,7 +388,7 @@ crushHelp exposed name (Compiler.Artifacts elmi _ _ _) =
 
 
 addDocs :: Compiler.Artifacts -> [Docs.Module] -> [Docs.Module]
-addDocs (Compiler.Artifacts _ _ _ maybeDocs) docsList =
+addDocs (Compiler.Artifacts _ _ maybeDocs) docsList =
   case maybeDocs of
     Nothing ->
       docsList
@@ -411,7 +402,7 @@ addDocs (Compiler.Artifacts _ _ _ maybeDocs) docsList =
 
 
 addGraph :: Compiler.Artifacts -> Obj.Graph -> Obj.Graph
-addGraph (Compiler.Artifacts _ elmo _ _) graph =
+addGraph (Compiler.Artifacts _ elmo _) graph =
   Obj.union elmo graph
 
 
