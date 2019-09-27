@@ -169,17 +169,17 @@ fetchLocal url =
         do
           exists <- Dir.doesFileExist (path </> url)
           if exists then
-              --DT.trace ("using local file override at " ++ (path </> url)) $
+              DT.trace ("using local file override at " ++ (path </> url)) $
               Just <$> BS.readFile (path </> url)
             else
-              --DT.trace ("using web file; no local override found at " ++ (path </> url)) $
+              DT.trace ("using web file; no local override found at " ++ (path </> url)) $
               pure Nothing
       Nothing ->
         pure $ case url of
           "packages/Lamdera/core/1.0.0/endpoint.json" ->
-            Just ("{\"url\":\"https://github.com/Lamdera/core/zipball/1.0.0/\",\"hash\":\"ignored\"}")
+            Just ("{\"url\":\"http://static.lamdera.com/r/Lamdera/core/pack.zip\",\"hash\":\"ignored\"}")
           "packages/Lamdera/codecs/1.0.0/endpoint.json" ->
-            Just ("{\"url\":\"https://github.com/Lamdera/codecs/zipball/1.0.0/\",\"hash\":\"ignored\"}")
+            Just ("{\"url\":\"http://static.lamdera.com/r/Lamdera/codecs/pack.zip\",\"hash\":\"ignored\"}")
           _ ->
             Nothing
 
@@ -189,9 +189,9 @@ redirectLamderaPaths s =
   -- This is dangerous in general, since the author can change the elm.json files, but in this case we control all these packages, so we're all good.
   case s of
     "packages/Lamdera/core/1.0.0/elm.json" ->
-      "https://raw.githubusercontent.com/Lamdera/core/1.0.0/elm.json"
+      "http://static.lamdera.com/r/Lamdera/core/1.0.0/elm.json"
     "packages/Lamdera/codecs/1.0.0/elm.json" ->
-      "https://raw.githubusercontent.com/Lamdera/codecs/1.0.0/elm.json"
+      "http://static.lamdera.com/r/Lamdera/codecs/1.0.0/elm.json"
     _ ->
       s
 
