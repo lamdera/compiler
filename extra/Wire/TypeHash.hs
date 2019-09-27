@@ -58,8 +58,7 @@ hash showable =
 
 
 write str =
-  -- @TODO write to file
-  File.writeUtf8 ".lamdera-hash" (BS8.pack $ str ++ "\n")
+  File.writeUtf8 ".lamdera-hash" (BS8.pack str)
 
 
 modelHash :: Can.Module -> [(T.Text, T.Text)]
