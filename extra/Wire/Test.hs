@@ -54,12 +54,15 @@ Last line is optional, but it's cool! Lambda prompt!
 compile :: IO ()
 compile = do
   -- Bust Elm's caching with this one weird trick!
-  touch "extra/Wire/src/AllTypes.elm"
-  touch "extra/Wire/src/Msg.elm"
-  -- touch "/Users/mario/dev/projects/lamdera/frontend/elm/src/Frontend.elm"
+  -- touch "extra/Wire/src/AllTypes.elm"
+  -- touch "extra/Wire/src/Msg.elm"
+  touch "/Users/mario/dev/projects/lamdera/example-apps/counter/src/LamderaBackendRuntime.elm"
+  touch "/Users/mario/dev/projects/lamdera/example-apps/counter/src/LamderaFrontendRuntime.elm"
 
-  Dir.withCurrentDirectory ("extra/Wire") $
-  -- Dir.withCurrentDirectory ("/Users/mario/dev/projects/lamdera/frontend/elm") $
+  let rootPaths = [ "src" </> "Both.elm" ]
+
+  -- Dir.withCurrentDirectory ("extra/Wire") $
+  Dir.withCurrentDirectory ("/Users/mario/dev/projects/lamdera/example-apps/counter") $
     do  reporter <- Terminal.create
         Task.run reporter $
           do  summary <- Project.getRoot
@@ -76,11 +79,11 @@ tempFileName =
   "wire.html"
 
 
-rootPaths :: [FilePath]
-rootPaths =
-  -- [ "src" </> "AllTypes_Check.elm"
-  [ "src" </> "Backend.elm"
-  ]
+-- rootPaths :: [FilePath]
+-- rootPaths =
+--   -- [ "src" </> "AllTypes_Check.elm"
+--   [ "src" </> "Backend.elm"
+--   ]
 
 
 touch :: String -> IO ()
