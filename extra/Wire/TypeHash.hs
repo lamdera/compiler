@@ -40,8 +40,8 @@ import Elm
 
 possiblyWriteModelSha tell name elmi =
   -- @TODO be more careful and check module name too? i.e. elm/author
-  if name == N.fromText "Backend" then
-    case Map.lookup (N.fromText "Model") $ Interface._aliases elmi of
+  if name == N.fromText "Types" then
+    case Map.lookup (N.fromText "BackendModel") $ Interface._aliases elmi of
       Just tipe ->
         tell (Progress.LamderaWriteSha $ T.unpack $ hash tipe)
 
