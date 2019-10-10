@@ -6,38 +6,68 @@ import Browser.Navigation as Navigation
 import Frontend
 import Html
 import Lamdera.Types exposing (Milliseconds, MsgId, WsError)
-import Msg exposing (BackendMsg, FrontendMsg, ToBackend, ToFrontend)
+import Types exposing (BackendModel, BackendMsg, FrontendModel, FrontendMsg, ToBackend, ToFrontend)
 import Url exposing (Url)
 
 
 {-| WARNING: do not change the types in this module, they must be as is for `lamdera reactor` to work
 -}
 type Msg
-    = FEMsg Msg.FrontendMsg
-    | BEMsg Msg.BackendMsg
-    | BEtoFE Milliseconds MsgId Msg.ToFrontend (Result WsError () -> Msg)
-    | FEtoBE Milliseconds MsgId Msg.ToBackend (Result WsError () -> Msg)
+    = FEMsg Types.FrontendMsg
+    | BEMsg Types.BackendMsg
+    | BEtoFE Milliseconds MsgId Types.ToFrontend (Result WsError () -> Msg)
+    | FEtoBE Milliseconds MsgId Types.ToBackend (Result WsError () -> Msg)
 
 
-init : flags -> Url.Url -> Navigation.Key -> ( ( Frontend.Model, Backend.Model ), Cmd Msg )
+fApp =
+    Frontend.app
+        { inPort = Debug.todo "F.inPort"
+        , outPort = Debug.todo "F.outPort"
+        , encodeToBackend = Debug.todo "F.encodeToBackend"
+        , decodeToBackend = Debug.todo "F.decodeToBackend"
+        , encodeToFrontend = Debug.todo "F.encodeToFrontend"
+        , decodeToFrontend = Debug.todo "F.decodeToFrontend"
+        }
+
+
+bApp =
+    Backend.app
+        { inPort = Debug.todo "B.inPort"
+        , outPort = Debug.todo "B.outPort"
+        , requestSnapshot = Debug.todo "B.requestSnapshot"
+        , createSnapshot = Debug.todo "B.createSnapshot"
+        , restoreSnapshot = Debug.todo "B.restoreSnapshot"
+        , enterUpgradeMode = Debug.todo "B.enterUpgradeMode"
+        , createFinalSnapshot = Debug.todo "B.createFinalSnapshot"
+        , redirectMsg = Debug.todo "B.redirectMsg"
+        , encodeBackendModel = Debug.todo "B.encodeBackendModel"
+        , decodeBackendModel = Debug.todo "B.decodeBackendModel"
+        , encodeToBackend = Debug.todo "B.encodeToBackend"
+        , decodeToBackend = Debug.todo "B.decodeToBackend"
+        , encodeToFrontend = Debug.todo "B.encodeToFrontend"
+        , decodeToFrontend = Debug.todo "B.decodeToFrontend"
+        }
+
+
+init : flags -> Url.Url -> Navigation.Key -> ( ( FrontendModel, BackendModel ), Cmd Msg )
 init flags url nav =
     let
         ( feim, fecmd ) =
-            Frontend.app.init url nav
+            fApp.init url nav
 
         ( beim, becmd ) =
-            Backend.app.init
+            bApp.init
     in
     ( ( feim, beim ), Cmd.batch [ Cmd.map FEMsg fecmd, Cmd.map BEMsg becmd ] )
 
 
-update : Msg -> ( Frontend.Model, Backend.Model ) -> ( ( Frontend.Model, Backend.Model ), Cmd Msg )
+update : Msg -> ( FrontendModel, BackendModel ) -> ( ( FrontendModel, BackendModel ), Cmd Msg )
 update msg ( fem, bem ) =
     case msg of
         FEMsg frontendMsg ->
             let
                 ( nfem, fcmd ) =
-                    Frontend.app.update frontendMsg fem
+                    fApp.update frontendMsg fem
 
                 _ =
                     Debug.log "FEMsg" frontendMsg
@@ -47,7 +77,7 @@ update msg ( fem, bem ) =
         BEMsg backendMsg ->
             let
                 ( nbem, bcmd ) =
-                    Backend.app.update backendMsg bem
+                    bApp.update backendMsg bem
 
                 _ =
                     Debug.log "BEMsg" backendMsg
@@ -57,7 +87,7 @@ update msg ( fem, bem ) =
         BEtoFE ms msgId toFrontend tagger ->
             let
                 ( nfem, fcmd ) =
-                    Frontend.app.updateFromBackend toFrontend fem
+                    fApp.updateFromBackend toFrontend fem
 
                 ( newModel, ncmd ) =
                     -- TODO: delay response by `ms` milliseconds
@@ -71,7 +101,7 @@ update msg ( fem, bem ) =
         FEtoBE ms msgId toBackend tagger ->
             let
                 ( nbem, bcmd ) =
-                    Backend.app.updateFromFrontend "ClientID-local-dev" toBackend bem
+                    bApp.updateFromFrontend "ClientID-local-dev" toBackend bem
 
                 ( newModel, ncmd ) =
                     -- TODO: delay response by `ms` milliseconds
@@ -83,21 +113,24 @@ update msg ( fem, bem ) =
             ( newModel, Cmd.batch [ Cmd.map BEMsg bcmd, ncmd ] )
 
 
-subscriptions ( fem, _ ) =
-    Sub.map FEMsg (Frontend.app.subscriptions fem)
+subscriptions ( fem, bem ) =
+    Sub.batch
+        [ Sub.map FEMsg (fApp.subscriptions fem)
+        , Sub.map BEMsg (bApp.subscriptions bem)
+        ]
 
 
 mapDocument fn { title, body } =
     { title = title, body = List.map (Html.map fn) body }
 
 
-main : Program () ( Frontend.Model, Backend.Model ) Msg
+main : Program () ( FrontendModel, BackendModel ) Msg
 main =
     Browser.application
         { init = init
-        , view = \( fem, _ ) -> mapDocument FEMsg (Frontend.app.view fem)
+        , view = \( fem, _ ) -> mapDocument FEMsg (fApp.view fem)
         , update = update
         , subscriptions = subscriptions
-        , onUrlRequest = \url -> FEMsg (Frontend.app.onUrlRequest url)
-        , onUrlChange = \ureq -> FEMsg (Frontend.app.onUrlChange ureq)
+        , onUrlRequest = \url -> FEMsg (fApp.onUrlRequest url)
+        , onUrlChange = \ureq -> FEMsg (fApp.onUrlChange ureq)
         }
