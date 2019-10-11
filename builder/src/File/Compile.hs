@@ -103,7 +103,7 @@ compileModule tell project maybeDocsPath answersMVar ifacesMVar name info =
                             lock <- takeMVar ifacesMVar
                             putMVar ifacesMVar (Map.insert canonicalName elmi lock)
                             putMVar mvar (Good result)
-                            Wire.TypeHash.possiblyWriteModelSha tell name elmi
+                            Wire.TypeHash.possiblyWriteModelSha tell canonicalName elmi
 
 
       return mvar

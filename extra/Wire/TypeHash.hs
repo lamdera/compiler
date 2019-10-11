@@ -32,22 +32,52 @@ import qualified Reporting.Progress as Progress
 import qualified Data.ByteString.Char8 as BS8
 
 import qualified File.IO as File
+import Control.Monad.Trans (liftIO)
 
 import CanSer.CanSer as CanSer
 
 import Elm
 
 
-possiblyWriteModelSha tell name elmi =
-  -- @TODO be more careful and check module name too? i.e. elm/author
-  if name == N.fromText "Types" then
-    case Map.lookup (N.fromText "BackendModel") $ Interface._aliases elmi of
-      Just tipe ->
-        tell (Progress.LamderaWriteSha $ T.unpack $ hash tipe)
+possiblyWriteModelSha tell canonicalName elmi =
+  if canonicalName == Canonical (Pkg.Name "author" "project") "Types" then do
 
-      Nothing ->
-        pure ()
-  else
+    let lamderaTypes =
+          [ "FrontendModel"
+          , "BackendModel"
+          , "FrontendMsg"
+          , "ToBackend"
+          , "BackendMsg"
+          , "ToFrontend"
+          ]
+
+        hashes =
+          fmap (\typeName ->
+            case Map.lookup (N.fromText typeName) $ Interface._aliases elmi of
+              Just tipe ->
+                (T.unpack typeName, T.unpack $ hash tipe)
+
+              Nothing ->
+                -- Try unions
+                case Map.lookup (N.fromText typeName) $ Interface._unions elmi of
+                  Just tipe ->
+                    (T.unpack typeName, T.unpack $ hash tipe)
+
+                  Nothing ->
+                    (T.unpack typeName, "")
+
+          ) lamderaTypes
+
+        hashesFormatted =
+          hashes
+            & fmap (\(hashName, hashType) -> hashName <> "," <> hashType)
+            & List.intersperse "\n"
+            & List.concat
+
+    tell (Progress.LamderaWriteShas hashesFormatted)
+
+  else do
+    -- liftIO $ putStrLn $ show canonicalName
     pure ()
 
 
