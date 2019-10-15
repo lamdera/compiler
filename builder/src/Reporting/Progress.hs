@@ -98,7 +98,7 @@ data Progress
   | UnableToLoadLatestPackages
 
   -- Lamdera
-  | LamderaWriteShas String
+  | LamderaWriteHashes String
 
 
 data Outcome = Good | Bad

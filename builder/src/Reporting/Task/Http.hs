@@ -163,7 +163,10 @@ makePackageUrl path params =
       else
         "?" ++ Http.urlEncodeVars params
   in
-    -- This is a hack to make another hack work; if the url we got is a valid url, use it directly instead of prefixing with package.elm-lang.org. This is so we can fetch elm.json files from github directly for lamdera/core and lamdera/codecs.
+    -- @LAMDERA This is a hack to make another hack work; if the url we got is a
+    -- valid url, use it directly instead of prefixing with package.elm-lang.org.
+    -- This is so we can fetch elm.json files from github directly for
+    -- lamdera/core and lamdera/codecs.
     if "http" `List.isPrefixOf` path then
       path ++ query
     else

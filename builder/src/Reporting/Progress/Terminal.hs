@@ -211,7 +211,7 @@ loopHelp chan progress state@(State total good bad) =
 
     -- Lamdera
 
-    LamderaWriteShas str ->
+    LamderaWriteHashes str ->
       do  Wire.TypeHash.write str
           loop chan state
 

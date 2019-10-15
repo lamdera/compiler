@@ -10,7 +10,10 @@ import qualified Generate.Output as Output
 import qualified Reporting.Task as Task
 import qualified Reporting.Progress.Terminal as Terminal
 
+import qualified Check
+
 import System.Process (callCommand)
+import System.Environment (setEnv)
 
 {-
 
@@ -56,13 +59,18 @@ compile = do
   -- Bust Elm's caching with this one weird trick!
   -- touch "extra/Wire/src/AllTypes.elm"
   -- touch "extra/Wire/src/Msg.elm"
-  touch "/Users/mario/dev/projects/lamdera/example-apps/counter/src/LamderaBackendRuntime.elm"
-  touch "/Users/mario/dev/projects/lamdera/example-apps/counter/src/LamderaFrontendRuntime.elm"
+  touch "/Users/mario/dev/projects/lamdera/test/v1/src/Types.elm"
+  -- touch "/Users/mario/dev/projects/lamdera/test/v1/src/LamderaFrontendRuntime.elm"
+
+  setEnv "LAMDERA_PKG_PATH" "/Users/mario/dev/projects/lamdera/haskelm/pkg-overrides"
+  setEnv "ELM_HOME" "/Users/mario/dev/projects/lamdera/test/v1/elm-home"
+
+  -- =${LAMDERA_PKG_PATH} ELM_HOME=$BUILD_DIR/cache/elm-home elmx make src/LamderaBackendRuntime.elm --output="backend-app.js"
 
   let rootPaths = [ "src" </> "Both.elm" ]
 
   -- Dir.withCurrentDirectory ("extra/Wire") $
-  Dir.withCurrentDirectory ("/Users/mario/dev/projects/lamdera/example-apps/counter") $
+  Dir.withCurrentDirectory ("/Users/mario/dev/projects/lamdera/test/v1") $
     do  reporter <- Terminal.create
         Task.run reporter $
           do  summary <- Project.getRoot
@@ -76,7 +84,7 @@ compile = do
 
 tempFileName :: FilePath
 tempFileName =
-  "wire.html"
+  "/dev/null"
 
 
 -- rootPaths :: [FilePath]
@@ -88,3 +96,12 @@ tempFileName =
 
 touch :: String -> IO ()
 touch path = callCommand $ "touch " ++ path
+
+
+
+-- CHECK
+
+check =
+  Dir.withCurrentDirectory ("/Users/mario/dev/projects/lamdera/test/v2") $
+    do
+        Check.run () ()

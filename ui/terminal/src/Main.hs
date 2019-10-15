@@ -27,6 +27,7 @@ import qualified Install
 import qualified Make
 import qualified Publish
 import qualified Repl
+import qualified Check
 
 
 -- MAIN
@@ -45,6 +46,7 @@ main =
         , bump
         , diff
         , publish
+        , check
         ]
 
 
@@ -344,3 +346,24 @@ stack docs =
 reflow :: String -> P.Doc
 reflow string =
   P.fillSep $ map P.text $ words string
+
+
+
+-- Lamdera
+
+check :: Interface
+check =
+  let
+    summary =
+      "Check the status of the Lamdera project types\
+      \  against the deployed production app."
+
+    details =
+      "The `check` command helps prepare Lamdera Elm projects for deployment:"
+
+    example =
+      reflow
+        "It will query the production enviornment and supply\
+        \ information about the next version and required migrations."
+  in
+  Interface "check" (Common summary) details example noArgs noFlags Check.run

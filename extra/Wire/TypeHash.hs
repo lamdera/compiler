@@ -70,11 +70,12 @@ possiblyWriteModelSha tell canonicalName elmi =
 
         hashesFormatted =
           hashes
-            & fmap (\(hashName, hashType) -> hashName <> "," <> hashType)
-            & List.intersperse "\n"
+            & fmap (\(hashName, hashString) -> hashString)
+            & List.intersperse "\",\""
             & List.concat
+            & (\str -> "[\"" <> str <> "\"]")
 
-    tell (Progress.LamderaWriteShas hashesFormatted)
+    tell (Progress.LamderaWriteHashes hashesFormatted)
 
   else do
     -- liftIO $ putStrLn $ show canonicalName
@@ -88,7 +89,7 @@ hash showable =
 
 
 write str =
-  File.writeUtf8 ".lamdera-hash" (BS8.pack str)
+  File.writeUtf8 ".lamdera-hashes" (BS8.pack str)
 
 
 modelHash :: Can.Module -> [(T.Text, T.Text)]
