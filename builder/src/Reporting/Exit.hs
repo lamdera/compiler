@@ -45,6 +45,7 @@ data Exit
   | Publish Publish.Exit
   | BadHttp String Http.Exit
   | Check Check.Exit
+  | Lamdera Help.Report
   deriving (Show)
 
 
@@ -119,3 +120,6 @@ toReport exit =
 
     BadHttp url httpExit ->
       Http.toReport url httpExit
+
+    Lamdera report ->
+      report

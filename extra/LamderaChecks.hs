@@ -1,6 +1,12 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module LamderaChecks (runChecks) where
+module LamderaChecks where
+
+import qualified Reporting.Doc as D
+import qualified Elm.Package as Pkg
+import AST.Module.Name (Canonical(..))
+import qualified Type.Error as T
+
 
 import Data.Text as T
 import Data.Text.IO as TIO
@@ -8,6 +14,7 @@ import qualified System.Directory as Dir
 import Control.Monad (unless)
 import Control.Monad.Except (ExceptT, runExceptT, throwError, withExceptT, liftIO)
 import Data.Monoid ((<>))
+import qualified Debug.Trace as DT
 
 type Check = ExceptT Text IO
 

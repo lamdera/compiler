@@ -211,6 +211,13 @@ loopHelp chan progress state@(State total good bad) =
 
     -- Lamdera
 
+    LamderaCannotCheckRemote ->
+      do  putStrLn ""
+          Help.toStdout $ D.red "ERROR:" <+> "I normally check <https://apps.lamdera.com> for deployment info\n"
+          putStrLn "but my request failed. Are you offline?\n"
+          loop chan state
+
+
     LamderaWriteHashes str ->
       do  Wire.TypeHash.write str
           loop chan state

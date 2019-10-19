@@ -1,12 +1,11 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Check
-  ( run
-  )
-  where
+{-# LANGUAGE QuasiQuotes #-}
+
+module Check (run) where
 
 
 import Prelude hiding (init)
-import Control.Monad.Trans (liftIO)
+import Control.Monad.Except (catchError, liftIO)
 import qualified Data.Map as Map
 import qualified System.Directory as Dir
 
@@ -61,7 +60,9 @@ import qualified Stuff.Paths as Path
 import qualified Elm.Project as Project
 import qualified Generate.Output as Output
 import qualified Reporting.Task as Task
+import qualified Reporting.Exit.Help as Help
 import qualified Reporting.Progress.Terminal as Terminal
+
 
 -- This file itself
 
@@ -69,76 +70,138 @@ import qualified File.IO as IO
 import qualified Data.List as List
 import Elm
 import Control.Concurrent (threadDelay)
-
+import NeatInterpolation
+import Algorithms.NaturalSort
+import Text.Read
+import Data.Maybe
+import qualified Data.Text.Encoding as Text
+import qualified Data.Char as Char
+import Data.Text.Internal.Search
 
 
 run :: () -> () -> IO ()
 run () () =
   do  reporter <- Terminal.create
 
-      currentDir <- Dir.getCurrentDirectory
-      -- liftIO $ putStrLn $ show currentDir
-
-      -- @TODO make sure we're in the root directory
-      -- See if we can re-use a check for elm.json and throw Elm's not a project error?
+      -- @TODO do we need to check we're in the Elm root?
       hashesExist <- Dir.doesFileExist ".lamdera-hashes"
-      Task.run reporter $ do
-        if hashesExist then do
-          pure ()
-        else
-          compileCheck
 
-        (prodVersion, productionTypes) <- fetchProductionTypes
+      Task.run reporter $ do
+        liftIO $ putStrLn "Checking project compiles..."
+
+        checkUserProjectCompiles
+
+        (prodVersion, productionTypes) <-
+            fetchProductionTypes `catchError` (\err -> pure (0, []))
 
         let nextVersion = (prodVersion + 1)
 
-        localTypes <- fetchLocalTypes
+        if prodVersion == 0 then
+          Task.report Progress.LamderaCannotCheckRemote
 
-        if productionTypes /= localTypes then do
+        else if nextVersion == 1 then
+          -- This is the first version, we don't need any migration checking.
+          allSet 1 nextVersion
 
-          let lamderaTypes =
-                [ "FrontendModel"
-                , "BackendModel"
-                , "FrontendMsg"
-                , "ToBackend"
-                , "BackendMsg"
-                , "ToFrontend"
-                ]
+        else do
+          localTypes <- fetchLocalTypes
 
-              comparison =
-                zipWith3 (\label local prod -> (label,local,prod)) lamderaTypes localTypes productionTypes
-                & filter (\(label, local, prod) -> local /= prod)
+          if productionTypes /= localTypes then do
 
-          let nextMigrationPath = "src/Evergreen/Migrate/V" ++ (show nextVersion) ++ ".elm"
+            let lamderaTypes =
+                  [ "FrontendModel"
+                  , "BackendModel"
+                  , "FrontendMsg"
+                  , "ToBackend"
+                  , "BackendMsg"
+                  , "ToFrontend"
+                  ]
 
-          migrationExists <- liftIO $ Dir.doesFileExist $ nextMigrationPath
+                typeCompares = zipWith3 (\label local prod -> (label,local,prod)) lamderaTypes localTypes productionTypes
 
-          if migrationExists then do
+                comparison =
+                  typeCompares & filter (\(label, local, prod) -> local /= prod)
 
-            liftIO $ putStrLn "Compiling Evergreen migrations...\n"
+                formattedChangedTypes =
+                  comparison
+                    & fmap (\(label, local, prod) -> D.indent 4 (D.dullyellow (D.fromString label)))
 
-            migrationCheck nextVersion
+                nextMigrationPath = "src/Evergreen/Migrate/V" ++ (show nextVersion) ++ ".elm"
 
-            liftIO $ threadDelay 50000 -- @TODO this is because the migrationCheck does weird terminal stuff that mangles the display... how to fix this?
+            migrationExists <- liftIO $ Dir.doesFileExist $ nextMigrationPath
 
-            liftIO $ putStrLn $ "\nIt appears you're all set to deploy version " ++ (show nextVersion) ++ "."
+            if migrationExists then do
+
+              -- @TODO check migrations match changes. I.e. user might have changed one thing, we generated
+              -- a migration, and then later changed another thing. Basically grep for `toBackend old = Unchanged` for each label?
+              -- so we don't acidentally run a migration saying nothing changed when it's not type safe? is that even possible or will compiler catch incorrect "unchanged" declarations?
+
+              migrationSource <- liftIO $ Text.decodeUtf8 <$> IO.readUtf8 nextMigrationPath
+
+              if textContains "Unimplemented" migrationSource then
+                Task.throw $ Exit.Lamdera
+                  $ Help.report "UNIMPLEMENTED MIGRATION" (Just nextMigrationPath)
+                    ("The following types have changed since v" ++ show prodVersion ++ " and require migrations:")
+                    (formattedChangedTypes ++
+                      [ D.reflow $ "The migration file at " ++ nextMigrationPath ++ " has migrations that still haven't been implemented."
+                      , D.reflow "See <https://lamdera.com/evergreen-migrations> more info."
+                      ]
+                    )
+              else do
+                migrationCheck nextVersion
+
+                -- @TODO this is because the migrationCheck does weird terminal stuff that mangles the display... how to fix this?
+                liftIO $ threadDelay 50000 -- 50 milliseconds
+
+                allSet 2 nextVersion
 
 
-          else do
-            liftIO $ putStrLn $ "The following types have changed since v" ++ show prodVersion ++ " and require migrations:\n"
+            else do
+              lastTypeChangeVersion <- liftIO getLastTypeChangeVersion
 
-            comparison
-              & fmap (\(label, local, prod) -> "- " ++ label)
-              & List.intersperse "\n"
-              & List.concat
-              & putStrLn
-              & liftIO
+              let m = defaultMigrationFile lastTypeChangeVersion nextVersion typeCompares
 
-            liftIO $ putStrLn $ "\nI've created a placeholder migration file in " ++ nextMigrationPath
+              liftIO $ IO.writeUtf8 nextMigrationPath $ Text.encodeUtf8 m
 
-        else
-          liftIO $ putStrLn "Types are the same!"
+              Task.throw $ Exit.Lamdera
+                $ Help.report "UNIMPLEMENTED MIGRATION" (Just nextMigrationPath)
+                  ("The following types have changed since v" ++ show prodVersion ++ " and require migrations:")
+                  (formattedChangedTypes ++
+                    [ D.reflow $ "I've generated a placeholder migration file in " ++ nextMigrationPath ++ " to help you get started."
+                    , D.reflow "See <https://lamdera.com/evergreen-migrations> more info."
+                    ]
+                  )
 
+
+              -- liftIO $ putStrLn $ T.unpack m
+
+              liftIO $ putStrLn $ "\nI've created a placeholder migration file in " ++ nextMigrationPath
+
+          else
+            -- Types are the same.
+            -- @TODO If we have a version with no type changes do we still write migrations?
+            -- If not, what happens when we get to the next version and we can't refer to the types from the previous one?
+            allSet 3 nextVersion
+
+
+getLastTypeChangeVersion = do
+
+  migrations <- Dir.listDirectory "src/Evergreen/Migrate"
+  if migrations == [] then
+    pure 1
+  else do
+    migrations
+      & List.sortBy Algorithms.NaturalSort.compare
+      & List.last
+      & drop 1
+      & takeWhile (\i -> i /= '.')
+      & readMaybe
+      & fromMaybe 1 -- If there are no migrations or it failed, it must be version 1?
+      & pure
+
+
+allSet identifier nextVersion =
+  liftIO $ putStrLn $ "\nIt appears you're all set to deploy version " ++ (show nextVersion) ++ ". (" ++ show identifier ++ ")"
 
 
 fetchProductionTypes :: Task.Task (Int, [String])
@@ -193,8 +256,7 @@ fetchLocalTypes = do
       return $ error $ show jsonProblem --Left $ E.BadJson "github.json" jsonProblem
 
 
-
-compileCheck =
+checkUserProjectCompiles =
   -- Dir.withCurrentDirectory ("/Users/mario/dev/projects/lamdera/test/v2") $
     -- do  reporter <- Terminal.create
         -- Task.run reporter $
@@ -223,8 +285,6 @@ migrationCheck version =
 
 
 
-
-
 -- exampleInitRun :: () -> () -> IO ()
 -- exampleInitRun () () =
 --   do  reporter <- Terminal.create
@@ -240,3 +300,67 @@ migrationCheck version =
 --                       liftIO $ putStrLn "Okay, I created it. Now read that link!"
 --                 else
 --                   liftIO $ putStrLn "Okay, I did not make any changes!"
+
+
+defaultMigrationFile :: Int -> Int -> [(String, String, String)] -> Text
+defaultMigrationFile oldVersion newVersion typeCompares = do
+  let old = T.pack $ show oldVersion
+      new = T.pack $ show newVersion
+
+      typeCompareMigration :: (String, String, String) -> Text
+      typeCompareMigration (typename, oldhash, newhash) = do
+        let implementation =
+              if oldhash == newhash then
+                "Unchanged"
+              else
+                "Unimplemented"
+            msgType = msgForType typename
+
+            typenameCamel =
+              case typename of
+                first:rest -> T.pack $ [Char.toLower first] ++ rest
+
+            typenameT = T.pack typename
+
+        [text|
+          $typenameCamel : Old.$typenameT -> Migration New.$typenameT New.$msgType
+          $typenameCamel old =
+              $implementation
+        |]
+
+      msgForType t =
+        case t of
+          "BackendModel" ->
+            "BackendMsg"
+          "FrontendModel" ->
+            "FrontendMsg"
+          "FrontendMsg" ->
+            "FrontendMsg"
+          "ToBackend" ->
+            "BackendMsg"
+          "BackendMsg" ->
+            "BackendMsg"
+          "ToFrontend" ->
+            "FrontendMsg"
+
+
+  let header = [text|
+
+    module Evergreen.Migrate.V$new exposing (..)
+
+    import Evergreen.Migrate exposing (..)
+    import Evergreen.Type.V$old as Old
+    import Evergreen.Type.V$new as New
+
+
+  |]
+
+  typeCompares
+    & fmap typeCompareMigration
+    & (++) [header]
+    & T.intercalate "\n\n"
+
+
+
+textContains :: Text -> Text -> Bool
+textContains needle haystack = indices needle haystack /= []

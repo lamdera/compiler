@@ -234,6 +234,7 @@ Executable elmx
         Wire.Test
         Wire.Source
         Wire.TypeHash
+        LamderaChecks
 
         -- Debug helpers
         CanSer.CanSer
@@ -298,4 +299,6 @@ Executable elmx
         aeson,
         ilist,
         witherable,
-        shelly
+        shelly,
+        neat-interpolation,
+        natural-sort

@@ -35,7 +35,7 @@ import qualified Reporting.Report as Report
 import qualified Reporting.Suggest as Suggest
 import qualified Type.Error as T
 
-
+import qualified LamderaChecks
 
 -- ERRORS
 
