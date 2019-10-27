@@ -101,7 +101,12 @@ touch path = callCommand $ "touch " ++ path
 
 -- CHECK
 
-check =
+check = do
+
+  setEnv "LAMDERA_PKG_PATH" "/Users/mario/dev/projects/lamdera/haskelm/pkg-overrides"
+  setEnv "ELM_HOME" "/Users/mario/dev/projects/lamdera/test/v2/elm-home"
+
+
   Dir.withCurrentDirectory ("/Users/mario/dev/projects/lamdera/test/v2") $
     do
         Check.run () ()

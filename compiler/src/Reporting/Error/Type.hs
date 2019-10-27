@@ -667,7 +667,7 @@ toExprReport source localizer exprRegion category tipe expected =
           , typeComparison localizer tipe expectedType
               (addCategory itIs category)
               ("But the type annotation on `" <> N.toString name <> "` says it should be:")
-              []
+              (LamderaChecks.contextHintsWhenTypeMismatch tipe)
           )
 
     FromContext region context expectedType ->

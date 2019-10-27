@@ -104,3 +104,18 @@ checkMsgHasTypes typeNames = do
     results = fmap (\search -> T.isInfixOf ("type " <> search) source) typeNames
 
   pure $ Prelude.all ((==) True) results
+
+
+contextHintsWhenTypeMismatch tipe =
+  case tipe of
+    -- @TODO fix when we move this to core
+    (T.Type (Canonical (Pkg.Name "author" "project") "Evergreen.Migrate") "UnimplementedMigration" []) ->
+      -- DT.trace ("contextHintsWhenTypeMismatch: " ++ show tipe )
+        [ D.toSimpleHint $
+           "I need you to implement migrations for changed types\
+            \ as described in <https://lamdera.com/evergreen-migrations>"
+        ]
+    _ ->
+      []
+
+    -- Type (Canonical {_package = Name {_author = "author", _project = "project"}, _module = Name {_name = "Evergreen.Migrate"}}) (Name {_name = "UnimplementedMigration"}) []
