@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
 
-module Check (run) where
+module Check where
 
 
 import Prelude hiding (init)
@@ -79,6 +79,7 @@ import qualified Data.Char as Char
 import Data.Text.Internal.Search
 import System.Process
 import Control.Monad (unless)
+import qualified System.IO as IO
 
 
 
@@ -121,14 +122,6 @@ run () () =
                 & T.splitOn "."
                 & List.head
 
-
-        -- -- @TODO temp remove me
-        -- Task.throw $ Exit.Lamdera
-        --   $ Help.report "EXIT" (Just "debugging")
-        --     ("Early kill")
-        --     ([])
-
-
         (prodVersion, productionTypes) <-
             fetchProductionInfo appName `catchError` (\err -> pure (0, []))
 
@@ -140,15 +133,14 @@ run () () =
 
           else if nextVersion == 1 then do
             -- This is the first version, we don't need any migration checking.
-
             _ <- liftIO $ snapshotCurrentTypesTo nextVersion
 
-            allSet 1 nextVersion
+            pDocLn $ D.dullyellow (D.reflow $ "It appears you're all set to deploy the first version of your app!")
 
           else do
             localTypes <- fetchLocalTypes
 
-            if productionTypes == localTypes -- @TODO restore me back to /=
+            if productionTypes /= localTypes
               then do
 
                 lastTypeChangeVersion <- liftIO getLastLocalTypeChangeVersion
@@ -207,12 +199,23 @@ run () () =
                       else do
                         migrationCheck nextVersion
 
-                        allSet 2 nextVersion
+                        committedCheck nextVersion
 
+                        pDocLn $ D.dullyellow $ D.reflow $ "\nIt appears you're all set to deploy v" ++ (show nextVersion) ++ "."
+
+                        mapM pDocLn $
+                          ([ D.reflow "Evergreen migrations will be applied to the following types:" ]
+                           ++ formattedChangedTypes ++
+                           [ D.reflow "See <https://lamdera.com/evergreen-migrations> more info." ]
+                          )
+
+                        pure ()
 
                   else do
 
                     let defaultMigrations = defaultMigrationFile lastTypeChangeVersion nextVersion typeCompares
+
+                    liftIO $ writeUtf8 defaultMigrations nextMigrationPath
 
                     Text.encodeUtf8 defaultMigrations
                       & IO.writeUtf8 nextMigrationPath
@@ -229,11 +232,13 @@ run () () =
                           ]
                         )
 
-              else
+              else do
                 -- Types are the same.
                 -- @TODO If we have a version with no type changes do we still write migrations?
                 -- If not, what happens when we get to the next version and we can't refer to the types from the previous one?
-                allSet 3 nextVersion
+
+                pDocLn $ D.dullyellow $ D.reflow $ "\nIt appears you're all set to deploy v" ++ (show nextVersion) ++ "."
+                pDocLn $ D.reflow $ "\nThere are no Evergreen type changes for this version."
 
 
 snapshotCurrentTypesTo :: Int -> IO String
@@ -263,8 +268,12 @@ getLastLocalTypeChangeVersion = do
         & pure
 
 
-allSet identifier nextVersion =
-  liftIO $ putStrLn $ "\nIt appears you're all set to deploy v" ++ (show nextVersion) ++ ". (" ++ show identifier ++ ")"
+pDocLn doc =
+  liftIO $ do
+    putStrLn ""
+    D.toAnsi IO.stdout doc
+    putStrLn ""
+
 
 
 fetchProductionInfo :: Text -> Task.Task (Int, [String])
@@ -359,16 +368,12 @@ fetchLocalTypes = do
 
 checkUserProjectCompiles =
   -- Dir.withCurrentDirectory ("/Users/mario/dev/projects/lamdera/test/v2") $
-    -- do  reporter <- Terminal.create
-        -- Task.run reporter $
+  --   do  reporter <- Terminal.create
+  --       Task.run reporter $
           do  summary <- Project.getRoot
               let jsOutput = Just (Output.Html Nothing "/dev/null")
               Project.compile Output.Dev Output.Client jsOutput Nothing summary [ "src" </> "Frontend.elm" ]
               Project.compile Output.Dev Output.Client jsOutput Nothing summary [ "src" </> "Backend.elm" ]
-
-        -- _ <- BS.readFile tempFileName
-        -- seq (BS.length result) (Dir.removeFile tempFileName)
-        -- return ()
 
 
 migrationCheck version =
@@ -377,24 +382,56 @@ migrationCheck version =
         -- Task.run reporter $
           do  summary <- Project.getRoot
 
-              -- Temporarily point migration to current types
-              -- liftIO $ callCommand $ "sed -i -e 's/import Evergreen.Type.V" ++ show version ++ "/import Types/g' src/Evergreen/Migrate/V" ++ show version ++ ".elm"
+              -- Temporarily point migration to current types in order to type-check
+              liftIO $ putStrLn "Checking Evergreen migrations..."
+
+              liftIO $ callCommand $ "sed -i -e 's/import Evergreen.Type.V" ++ show version ++ "/import Types/g' src/Evergreen/Migrate/V" ++ show version ++ ".elm"
+
+
 
               -- Compile check it
+              liftIO $ writeUtf8 lamderaCheckBothFileContents "src/LamderaCheckBoth.elm"
               let jsOutput = Just (Output.Html Nothing "/dev/null")
-              -- Project.compile Output.Dev Output.Client jsOutput Nothing summary [ "src" </> "Evergreen" </> "Migrate" </> "V" ++ show version ++ ".elm" ]
-              Project.compile Output.Dev Output.Client jsOutput Nothing summary [ "src" </> "Both.elm" ]
+              Project.compile Output.Dev Output.Client jsOutput Nothing summary [ "src" </> "LamderaCheckBoth.elm" ]
 
               -- @TODO this is because the migrationCheck does weird terminal stuff that mangles the display... how to fix this?
               liftIO $ threadDelay 50000 -- 50 milliseconds
 
+              -- Remove our temporarily checker file
+              liftIO $ callCommand $ "rm src/LamderaCheckBoth.elm"
+
               -- Restore the type back to what it was
-              -- liftIO $ callCommand $ "sed -i -e 's/import Types/import Evergreen.Type.V" ++ show version ++ "/g' src/Evergreen/Migrate/V" ++ show version ++ ".elm"
+              liftIO $ callCommand $ "sed -i -e 's/import Types/import Evergreen.Type.V" ++ show version ++ "/g' src/Evergreen/Migrate/V" ++ show version ++ ".elm"
+              liftIO $ callCommand $ "rm src/Evergreen/Migrate/V" ++ show version ++ ".elm-e"
 
 
-        -- _ <- BS.readFile tempFileName
-        -- seq (BS.length result) (Dir.removeFile tempFileName)
-        -- return ()
+committedCheck version = do
+
+  let migrationPath = "src/Evergreen/Migrate/V" ++ show version ++ ".elm"
+  migrations <- liftIO $ gitStatus migrationPath
+
+  unless (migrations == Committed) $
+    Task.throw $ Exit.Lamdera
+      $ Help.report "UNCOMMITTED MIGRATION" (Just migrationPath)
+        ("I need migration files to be comitted otherwise I cannot deploy!")
+        ([ D.reflow "Here is a shortcut to add this file to git:"
+         , D.dullyellow (D.reflow $ "git add " <> migrationPath)
+         , D.reflow "You will then need to commit it."
+         ]
+        )
+
+  let typesPath = "src/Evergreen/Type/V" ++ show version ++ ".elm"
+  types <- liftIO $ gitStatus typesPath
+
+  unless (types == Committed) $
+    Task.throw $ Exit.Lamdera
+    $ Help.report "UNCOMMITTED TYPES" (Just typesPath)
+      ("I need type snapshot files to be comitted otherwise I cannot deploy!")
+      ([ D.reflow "Here is a shortcut to add this file to git:"
+       , D.dullyellow (D.reflow $ "git add " <> typesPath)
+       , D.reflow "You will then need to commit it."
+       ]
+      )
 
 
 
@@ -474,6 +511,72 @@ defaultMigrationFile oldVersion newVersion typeCompares = do
     & T.intercalate "\n\n"
 
 
+lamderaCheckBothFileContents =
+  [text|
+    module LamderaCheckBoth exposing (..)
+
+    import Html
+    import LamderaBackendRuntime
+    import LamderaFrontendRuntime
+
+
+    lamdera =
+        "both"
+  |]
+
+
 
 textContains :: Text -> Text -> Bool
 textContains needle haystack = indices needle haystack /= []
+
+
+gitStatus :: String -> IO GitStatus
+gitStatus filepath = do
+  gsPorcelain <- readProcess "git" ["status", "--porcelain", filepath] ""
+  -- print $ firstTwoChars gsPorcelain
+  case firstTwoChars gsPorcelain of
+    ('_', '_') -> do
+      -- `git status` is empty, so we need to check if the file is tracked (thus clean) or non-existent
+      gitFiles <- readProcess "git" ["ls-files", filepath] ""
+      case gitFiles of
+        "" -> pure Uninitiated
+        _  -> pure Committed
+
+    ('?', _) ->
+      pure ChangesPending -- Untracked, but exists
+    ('A', _) ->
+      pure ChangesPending -- Added, so not yet committed
+    (' ', 'M') ->
+      pure ChangesPending -- Modified
+    ('M', ' ') ->
+      pure ChangesPending -- Added, so not yet committed
+    (' ', 'D') ->
+      pure Deleted -- Added, so not yet committed
+
+
+    -- @TODO other statuses other than Uninitiatied
+    -- https://git-scm.com/docs/git-status#_short_format
+    _ -> pure UnexpectedGitStatus
+
+
+data GitStatus
+  = Uninitiated
+  | ChangesPending
+  | Committed
+  | Staged
+  | Deleted
+  | UnexpectedGitStatus
+  deriving (Show, Eq)
+
+
+firstTwoChars :: String -> (Char, Char)
+firstTwoChars str =
+  case str of
+    first:second:_ -> (first, second)
+    _ -> ('_','_')
+
+
+writeUtf8 :: Text -> FilePath -> IO ()
+writeUtf8 textContent path =
+  Text.encodeUtf8 textContent
+    & IO.writeUtf8 path

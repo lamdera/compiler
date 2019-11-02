@@ -169,10 +169,10 @@ fetchLocal url =
         do
           exists <- Dir.doesFileExist (path </> url)
           if exists then
-              DT.trace ("using local file override at " ++ (path </> url)) $
+              -- DT.trace ("using local file override at " ++ (path </> url)) $
               Just <$> BS.readFile (path </> url)
             else
-              DT.trace ("using web file; no local override found at " ++ (path </> url)) $
+              -- DT.trace ("using web file; no local override found at " ++ (path </> url)) $
               pure Nothing
       Nothing ->
         pure $ case url of
