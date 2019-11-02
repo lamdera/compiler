@@ -87,9 +87,6 @@ run :: () -> () -> IO ()
 run () () =
   do  reporter <- Terminal.create
 
-      -- @TODO do we need to check we're in the Elm root?
-      hashesExist <- Dir.doesFileExist ".lamdera-hashes"
-
       Task.run reporter $ do
         liftIO $ putStrLn "Checking project compiles..."
 
@@ -305,40 +302,6 @@ fetchProductionInfo appName =
       do  response <- Client.httpLbs (request { Client.requestHeaders = headers }) manager
           let bytes = LBS.toStrict (Client.responseBody response)
           case D.parse "lamdera-info" id decoder bytes of
-            Right value ->
-              return $ Right value
-
-            Left jsonProblem ->
-              -- @TODO fix this
-              return $ Left $ E.BadJson "github.json" jsonProblem
-
-
-fetchProductionTypes :: Text -> Task.Task Text
-fetchProductionTypes appName =
-  let
-    endpoint =
-      case appName of
-        "testapp" ->
-          "http://localhost:3030/_i"
-        _ ->
-          "https://" ++ T.unpack appName ++ ".apps.lamdera.com/_i"
-
-    headers =
-      [ ( Http.hUserAgent, "lamdera-cli" )
-      , ( Http.hAccept, "application/json" )
-      ]
-
-    decoder =
-      D.at ["t"] D.string
-        & D.andThen
-            (\source ->
-              D.succeed $ T.pack source
-            )
-  in
-    Http.run $ Http.anything endpoint $ \request manager ->
-      do  response <- Client.httpLbs (request { Client.requestHeaders = headers }) manager
-          let bytes = LBS.toStrict (Client.responseBody response)
-          case D.parse "lamdera-types" id decoder bytes of
             Right value ->
               return $ Right value
 

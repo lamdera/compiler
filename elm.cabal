@@ -230,11 +230,13 @@ Executable elmx
         Validate
         Paths_elm
 
-        -- Wire
+        -- Lamdera
         Wire.Test
         Wire.Source
         Wire.TypeHash
         LamderaChecks
+        Check
+        Reporting.Exit.Check
 
         -- Debug helpers
         CanSer.CanSer
