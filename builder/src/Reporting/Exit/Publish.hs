@@ -219,15 +219,12 @@ toReport exit =
         ]
 
     LamderaPublishNeutered ->
-      Help.report "LAMDERA-ONLY PACKAGE" Nothing
-        "Hey there, thanks for trying to share your work! Right now, we don't\
-        \ have a package repository for Lamdera-specific packages, and\
-        \ publishing packages which only make sense on Lamdera onto the normal\
-        \ Elm package manager wouldn't be very nice."
+      Help.report "LAMDERA PACKAGES" Nothing
+        "Right now, Lamdera doesn't have a package repository\
+        \ for Lamdera-specific packages."
         [ D.reflow $
-          "If you're publishing something that\
-          \ is useful for the Elm community, even for those who aren't\
-          \ using Lamdera, publish it using the Elm binary."
+          "If you're publishing something that is generally useful for the Elm\
+          \ community, publish it using the Elm binary."
         , D.reflow "Otherwise, sit tight for a while."
         ]
 

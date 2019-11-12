@@ -4,11 +4,15 @@
 module Wire.Source (generateCodecs, injectEvergreenExposing, isEvergreenCodecName, evergreenCoreCodecs) where
 
 {-
-Wire.Source is responsible for generating Evergreen codecs for all Elm types. It does this by injecting generated source code, as this was the fastest and safest way forward at the time. For some codecs it also writes out type annotations.
+Wire.Source is responsible for generating Evergreen codecs for all Elm types. It
+does this by injecting generated source code, as this was the fastest and safest
+way forward at the time. For some codecs it also writes out type annotations.
 
-This module is also responsible for figuring out which of these codecs should be exposed/imported; if the type is reachable, so is the codec.
+This module is also responsible for figuring out which of these codecs should be
+exposed/imported; if the type is reachable, so is the codec.
 
-Thirdly, we handle the set of built-in codecs here and what code we should generate in order to interact with them.
+Thirdly, we handle the set of built-in codecs here and what code we should
+generate in order to interact with them.
 
 
 ASSUMPTION: no user code defines any variables starting with the string `evg_`
@@ -55,13 +59,18 @@ isEvergreenCodecName name = "evg_encode_" `T.isPrefixOf` n || "evg_decode_" `T.i
 injectEvergreenExposing :: Can.Module -> String -> String
 injectEvergreenExposing (Can.Module _ _ _exports _ _ _ _ _) s =
   -- 1. figure out what types are exposed from `can`
-  -- 2. inject the encoder/decoders for those types into the exposing statement by finding the first `)\n\n`, and injecting it before that.
-  -- - we can assume there to be no `exposing (..)` or trailing spaces/comments after the last `)` since elm-format will move/remove those.
-  -- - - this implementation only assumes there to be no spaces/comments after the last `)`, and that there are two free newlines directly after, which is what elm-format would give us.
+  -- 2. inject the encoder/decoders for those types into the exposing statement
+  --    by finding the first `)\n\n`, and injecting it before that.
+  -- - we can assume there to be no `exposing (..)` or trailing spaces/comments
+  --   after the last `)` since elm-format will move/remove those.
+  -- - - this implementation only assumes there to be no spaces/comments after
+  --     the last `)`, and that there are two free newlines directly after,
+  --     which is what elm-format would give us.
   let
     exposingRegion (Can.ExportEverything r) = r
     exposingRegion (Can.Export m) =
-      case Map.elemAt 0 m of -- ASSUMPTION: Export map is non-empty, since parser requires exposing to be non-empty.
+      case Map.elemAt 0 m of -- ASSUMPTION: Export map is non-empty, since
+                             -- parser requires exposing to be non-empty.
         (_, A.At r _) ->
           -- trace (sShow ("exposingRegion", Map.elemAt 0 m))
           r
@@ -96,7 +105,10 @@ generateCodecs :: Map.Map N.Name N.Name -> Can.Module -> T.Text
 generateCodecs revImportDict (Can.Module _moduName _docs _exports _decls _unions _aliases _binops _effects) =
   let -- massive let-expr so we can closure in _moduName
     -- HELPERS
-    -- | qualIfNeeded does a reverse lookup from fully qualified module name to import alias, so we generate valid code when people do e.g. `import Json.Decode as Decode` or when we're actually referencing something in the same module which then shouldn't be fully qualified.
+    -- | qualIfNeeded does a reverse lookup from fully qualified module name to
+    -- import alias, so we generate valid code when people do e.g.
+    -- `import Json.Decode as Decode` or when we're actually referencing
+    -- something in the same module which then shouldn't be fully qualified.
     qualIfNeeded :: Canonical -> T.Text
     qualIfNeeded moduName | moduName == _moduName = ""
     qualIfNeeded moduName@(Canonical _ n) =
