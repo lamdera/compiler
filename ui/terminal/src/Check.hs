@@ -78,7 +78,7 @@ import qualified Data.Text.Encoding as Text
 import qualified Data.Char as Char
 import Data.Text.Internal.Search
 import System.Process
-import Control.Monad (unless)
+import Control.Monad (unless, filterM)
 import qualified System.IO as IO
 
 
@@ -132,7 +132,9 @@ run () () =
             -- This is the first version, we don't need any migration checking.
             _ <- liftIO $ snapshotCurrentTypesTo nextVersion
 
-            pDocLn $ D.dullyellow (D.reflow $ "It appears you're all set to deploy the first version of your app!")
+            pDocLn $ D.dullyellow (D.reflow $ "It appears you're all set to deploy the first version of '" <> T.unpack appName <> "'!")
+
+            testWriteLamderaGenerated nextVersion
 
           else do
             localTypes <- fetchLocalTypes
@@ -160,9 +162,9 @@ run () () =
                       comparison
                         & fmap (\(label, local, prod) -> D.indent 4 (D.dullyellow (D.fromString label)))
 
-                    nextMigrationPath = "src/Evergreen/Migrate/V" ++ (show nextVersion) ++ ".elm"
+                    nextMigrationPath = "src/Evergreen/Migrate/V" <> (show nextVersion) <> ".elm"
 
-                    lastTypesPath = "src/Evergreen/Type/V" ++ (show prodVersion) ++ ".elm"
+                    lastTypesPath = "src/Evergreen/Type/V" <> (show prodVersion) <> ".elm"
 
 
 
@@ -184,12 +186,14 @@ run () () =
                     migrationSource <- liftIO $ Text.decodeUtf8 <$> IO.readUtf8 nextMigrationPath
 
                     if textContains "Unimplemented" migrationSource
-                      then
+                      then do
+                        testWriteLamderaGenerated nextVersion
+
                         Task.throw $ Exit.Lamdera
                           $ Help.report "UNIMPLEMENTED MIGRATION" (Just nextMigrationPath)
-                            ("The following types have changed since v" ++ show prodVersion ++ " and require migrations:")
-                            (formattedChangedTypes ++
-                              [ D.reflow $ "The migration file at " ++ nextMigrationPath ++ " has migrations that still haven't been implemented."
+                            ("The following types have changed since v" <> show prodVersion <> " and require migrations:")
+                            (formattedChangedTypes <>
+                              [ D.reflow $ "The migration file at " <> nextMigrationPath <> " has migrations that still haven't been implemented."
                               , D.reflow "See <https://lamdera.com/evergreen-migrations> more info."
                               ]
                             )
@@ -198,13 +202,15 @@ run () () =
 
                         committedCheck nextVersion
 
-                        pDocLn $ D.dullyellow $ D.reflow $ "\nIt appears you're all set to deploy v" ++ (show nextVersion) ++ "."
+                        pDocLn $ D.dullyellow $ D.reflow $ "\nIt appears you're all set to deploy v" <> (show nextVersion) <> " of '" <> T.unpack appName <> "'."
 
                         mapM pDocLn $
                           ([ D.reflow "Evergreen migrations will be applied to the following types:" ]
-                           ++ formattedChangedTypes ++
+                           <> formattedChangedTypes <>
                            [ D.reflow "See <https://lamdera.com/evergreen-migrations> more info." ]
                           )
+
+                        testWriteLamderaGenerated nextVersion
 
                         pure ()
 
@@ -214,17 +220,19 @@ run () () =
 
                     liftIO $ writeUtf8 defaultMigrations nextMigrationPath
 
-                    Text.encodeUtf8 defaultMigrations
-                      & IO.writeUtf8 nextMigrationPath
-                      & liftIO
+                    -- Text.encodeUtf8 defaultMigrations
+                    --   & IO.writeUtf8 nextMigrationPath
+                    --   & liftIO
 
                     _ <- liftIO $ snapshotCurrentTypesTo nextVersion
 
+                    testWriteLamderaGenerated nextVersion
+
                     Task.throw $ Exit.Lamdera
                       $ Help.report "UNIMPLEMENTED MIGRATION" (Just nextMigrationPath)
-                        ("The following types have changed since v" ++ show prodVersion ++ " and require migrations:")
-                        (formattedChangedTypes ++
-                          [ D.reflow $ "I've generated a placeholder migration file in " ++ nextMigrationPath ++ " to help you get started."
+                        ("The following types have changed since v" <> show prodVersion <> " and require migrations:")
+                        (formattedChangedTypes <>
+                          [ D.reflow $ "I've generated a placeholder migration file in " <> nextMigrationPath <> " to help you get started."
                           , D.reflow "See <https://lamdera.com/evergreen-migrations> more info."
                           ]
                         )
@@ -234,20 +242,26 @@ run () () =
                 -- @TODO If we have a version with no type changes do we still write migrations?
                 -- If not, what happens when we get to the next version and we can't refer to the types from the previous one?
 
-                pDocLn $ D.dullyellow $ D.reflow $ "\nIt appears you're all set to deploy v" ++ (show nextVersion) ++ "."
+                pDocLn $ D.dullyellow $ D.reflow $ "\nIt appears you're all set to deploy v" <> (show nextVersion) <> " of '" <> T.unpack appName <> "'."
                 pDocLn $ D.reflow $ "\nThere are no Evergreen type changes for this version."
+
+                -- liftIO $ writeUtf8 defaultMigrations nextMigrationPath
+                testWriteLamderaGenerated nextVersion
+
 
 
 snapshotCurrentTypesTo :: Int -> IO String
 snapshotCurrentTypesTo version = do
   -- Snapshot the current types, and rename the module for the snapshot
-  _ <- readProcess "cp" ["src/Types.elm", "src/Evergreen/Type/V" ++ show version ++ ".elm"] ""
-  callCommand $ "sed -i -e 's/module Types exposing/module Evergreen.Type.V" ++ show version ++ " exposing/g' src/Evergreen/Type/V" ++ show version ++ ".elm"
+  _ <- readProcess "cp" ["src/Types.elm", "src/Evergreen/Type/V" <> show version <> ".elm"] ""
+  callCommand $ "sed -i -e 's/module Types exposing/module Evergreen.Type.V" <> show version <> " exposing/g' src/Evergreen/Type/V" <> show version <> ".elm"
   -- How do we get sed to not make these files? Same issue in build.sh...
-  callCommand $ "rm src/Evergreen/Type/V" ++ show version ++ ".elm-e"
+  callCommand $ "rm src/Evergreen/Type/V" <> show version <> ".elm-e"
   pure ""
 
 
+
+getLastLocalTypeChangeVersion :: IO Int
 getLastLocalTypeChangeVersion = do
 
   types <- Dir.listDirectory "src/Evergreen/Type"
@@ -281,7 +295,7 @@ fetchProductionInfo appName =
         "testapp" ->
           "http://localhost:3030/_i"
         _ ->
-          "https://" ++ T.unpack appName ++ ".apps.lamdera.com/_i"
+          "https://" <> T.unpack appName <> ".apps.lamdera.com/_i"
 
     headers =
       [ ( Http.hUserAgent, "lamdera-cli" )
@@ -348,9 +362,14 @@ migrationCheck version =
               -- Temporarily point migration to current types in order to type-check
               liftIO $ putStrLn "Checking Evergreen migrations..."
 
-              liftIO $ callCommand $ "sed -i -e 's/import Evergreen.Type.V" ++ show version ++ "/import Types/g' src/Evergreen/Migrate/V" ++ show version ++ ".elm"
+              liftIO $ callCommand $ "sed -i -e 's/import Evergreen.Type.V" <> show version <> "/import Types/g' src/Evergreen/Migrate/V" <> show version <> ".elm"
 
 
+              frontendRuntimeExists <- liftIO $ Dir.doesFileExist $ "src/LamderaFrontendRuntime.elm"
+              liftIO $ unless frontendRuntimeExists $ writeUtf8 frontendRuntimeLocalContent "src/LamderaFrontendRuntime.elm"
+
+              backendRuntimeExists <- liftIO $ Dir.doesFileExist $ "src/LamderaBackendRuntime.elm"
+              liftIO $ unless backendRuntimeExists $ writeUtf8 backendRuntimeLocalContent "src/LamderaBackendRuntime.elm"
 
               -- Compile check it
               liftIO $ writeUtf8 lamderaCheckBothFileContents "src/LamderaCheckBoth.elm"
@@ -364,13 +383,18 @@ migrationCheck version =
               liftIO $ callCommand $ "rm src/LamderaCheckBoth.elm"
 
               -- Restore the type back to what it was
-              liftIO $ callCommand $ "sed -i -e 's/import Types/import Evergreen.Type.V" ++ show version ++ "/g' src/Evergreen/Migrate/V" ++ show version ++ ".elm"
-              liftIO $ callCommand $ "rm src/Evergreen/Migrate/V" ++ show version ++ ".elm-e"
+              liftIO $ callCommand $ "sed -i -e 's/import Types/import Evergreen.Type.V" <> show version <> "/g' src/Evergreen/Migrate/V" <> show version <> ".elm"
+              liftIO $ callCommand $ "rm src/Evergreen/Migrate/V" <> show version <> ".elm-e"
+
+              -- Cleanup dummy runtime files if we added them
+              liftIO $ unless frontendRuntimeExists $ callCommand $ "rm src/LamderaFrontendRuntime.elm"
+              liftIO $ unless backendRuntimeExists $ callCommand $ "rm src/LamderaBackendRuntime.elm"
+
 
 
 committedCheck version = do
 
-  let migrationPath = "src/Evergreen/Migrate/V" ++ show version ++ ".elm"
+  let migrationPath = "src/Evergreen/Migrate/V" <> show version <> ".elm"
   migrations <- liftIO $ gitStatus migrationPath
 
   unless (migrations == Committed) $
@@ -383,7 +407,7 @@ committedCheck version = do
          ]
         )
 
-  let typesPath = "src/Evergreen/Type/V" ++ show version ++ ".elm"
+  let typesPath = "src/Evergreen/Type/V" <> show version <> ".elm"
   types <- liftIO $ gitStatus typesPath
 
   unless (types == Committed) $
@@ -395,24 +419,6 @@ committedCheck version = do
        , D.reflow "You will then need to commit it."
        ]
       )
-
-
-
--- exampleInitRun :: () -> () -> IO ()
--- exampleInitRun () () =
---   do  reporter <- Terminal.create
---       exists <- Dir.doesFileExist ".lamdera-hash"
---       Task.run reporter $
---         if exists then
---           Task.throw (Exit.Init E.AlreadyStarted)
---         else
---           do  approved <- Task.getApproval question
---               if approved
---                 then
---                   do  init
---                       liftIO $ putStrLn "Okay, I created it. Now read that link!"
---                 else
---                   liftIO $ putStrLn "Okay, I did not make any changes!"
 
 
 defaultMigrationFile :: Int -> Int -> [(String, String, String)] -> Text
@@ -429,9 +435,7 @@ defaultMigrationFile oldVersion newVersion typeCompares = do
                 "Unimplemented"
             msgType = msgForType typename
 
-            typenameCamel =
-              case typename of
-                first:rest -> T.pack $ [Char.toLower first] ++ rest
+            typenameCamel = lowerFirstLetter typename
 
             typenameT = T.pack typename
 
@@ -470,15 +474,15 @@ defaultMigrationFile oldVersion newVersion typeCompares = do
 
   typeCompares
     & fmap typeCompareMigration
-    & (++) [header]
+    & (<>) [header]
     & T.intercalate "\n\n"
 
 
+lamderaCheckBothFileContents :: Text
 lamderaCheckBothFileContents =
   [text|
     module LamderaCheckBoth exposing (..)
 
-    import Html
     import LamderaBackendRuntime
     import LamderaFrontendRuntime
 
@@ -487,6 +491,28 @@ lamderaCheckBothFileContents =
         "both"
   |]
 
+
+-- Dummy files for when checking things locally. Remote has full generated file.
+frontendRuntimeLocalContent :: Text
+frontendRuntimeLocalContent =
+  [text|
+    module LamderaFrontendRuntime exposing (..)
+
+    import Frontend
+
+    lamderaFrontendRuntime = ""
+  |]
+
+
+backendRuntimeLocalContent :: Text
+backendRuntimeLocalContent =
+  [text|
+    module LamderaBackendRuntime exposing (..)
+
+    import Backend
+
+    lamderaBackendRuntime = ""
+  |]
 
 
 textContains :: Text -> Text -> Bool
@@ -543,3 +569,225 @@ writeUtf8 :: Text -> FilePath -> IO ()
 writeUtf8 textContent path =
   Text.encodeUtf8 textContent
     & IO.writeUtf8 path
+
+
+lowerFirstLetter :: String -> Text
+lowerFirstLetter text =
+  case text of
+    first:rest -> T.pack $ [Char.toLower first] <> rest
+
+
+createLamderaGenerated :: Int -> IO Text
+createLamderaGenerated currentVersion = do
+
+  migrationSequence <- liftIO $ getMigrationsSequence
+
+  let
+    migrationImports :: Text
+    migrationImports =
+      migrationSequence
+        & List.head
+        & (\(_:actualMigrations) ->
+            fmap migrationImport actualMigrations
+          )
+        & T.concat
+
+
+    migrationImport :: Int -> Text
+    migrationImport version =
+      let versionT = T.pack $ show version
+      in
+      [text|import Evergreen.Migrate.V$versionT as M$versionT|]
+
+
+    typeImports :: Text
+    typeImports =
+      migrationSequence
+        & fmap (\(version:_) -> typeImport version)
+        & T.concat
+
+
+    typeImport :: Int -> Text
+    typeImport version =
+      let versionT = T.pack $ show version
+      in
+      [text|import Evergreen.Type.V$versionT as T$versionT|]
+
+
+    historicMigrations :: Text
+    historicMigrations =
+      migrationSequence
+        & fmap historicMigration
+        & T.intercalate "\n"
+        
+
+
+    historicMigration :: [Int] -> Text
+    historicMigration (startVersion:subsequentVersions) =
+      let
+        types = [ "BackendModel", "FrontendModel", "FrontendMsg", "ToBackend", "BackendMsg", "ToFrontend"]
+
+        typeMigrations =
+          types
+            & fmap (migrationForType startVersion subsequentVersions)
+            & T.intercalate "\n"
+
+        startVersion_ = T.pack $ show startVersion
+
+      in
+      [text|
+        $startVersion_ ->
+            case tipe of
+                $typeMigrations
+
+                _ ->
+                    UnknownType tipe
+      |]
+
+
+    migrationForType :: Int -> [Int] -> Text -> Text
+    migrationForType startVersion intermediateVersions tipe = do
+
+      let
+        typenameCamel = lowerFirstLetter $ T.unpack tipe
+
+        intermediateMigration from to =
+          let from_ = T.pack $ show from
+              to_ = T.pack $ show to
+          in
+          [text|
+            |> thenMigrate "$tipe" M$to_.$typenameCamel T$from_.evg_encode_$tipe T$to_.evg_decode_$tipe $to_
+          |]
+
+        intermediateMigrations =
+          intermediateVersions
+            & fmap (\to -> intermediateMigration (to - 1) to) -- @TODO fix (-1) when list of versions is proper
+            & T.concat
+
+
+        startVersion_ = T.pack $ show startVersion
+
+      [text|
+        "$tipe" ->
+            decodeType version intList T$startVersion_.evg_decode_$tipe
+                $intermediateMigrations
+                |> upgradeSucceeds Current$tipe
+                |> otherwiseError
+      |]
+
+    currentVersion_ = T.pack $ show currentVersion
+
+  pure $ [text|
+    module LamderaGenerated exposing (..)
+
+    $migrationImports
+    $typeImports
+    import Lamdera.Migrations exposing (..)
+    import LamderaHelpers exposing (..)
+    import Types as T$currentVersion_
+
+
+    currentVersion : Int
+    currentVersion =
+        $currentVersion_
+
+
+    decodeAndUpgrade : Int -> String -> List Int -> UpgradeResult T$currentVersion_.BackendModel T$currentVersion_.FrontendModel T$currentVersion_.FrontendMsg T$currentVersion_.ToBackend T$currentVersion_.BackendMsg T$currentVersion_.ToFrontend
+    decodeAndUpgrade version tipe intList =
+        case version of
+            $historicMigrations
+
+
+            $currentVersion_ ->
+                case tipe of
+                    "BackendModel" ->
+                        decodeType version intList T$currentVersion_.evg_decode_BackendModel
+                            |> upgradeIsCurrent CurrentBackendModel
+                            |> otherwiseError
+
+
+                    "FrontendModel" ->
+                        decodeType version intList T$currentVersion_.evg_decode_FrontendModel
+                            |> upgradeIsCurrent CurrentBackendModel
+                            |> otherwiseError
+
+
+                    "FrontendMsg" ->
+                        decodeType version intList T$currentVersion_.evg_decode_FrontendMsg
+                            |> upgradeIsCurrent CurrentBackendModel
+                            |> otherwiseError
+
+
+                    "ToBackend" ->
+                        decodeType version intList T$currentVersion_.evg_decode_ToBackend
+                            |> upgradeIsCurrent CurrentBackendModel
+                            |> otherwiseError
+
+
+                    "BackendMsg" ->
+                        decodeType version intList T$currentVersion_.evg_decode_BackendMsg
+                            |> upgradeIsCurrent CurrentBackendModel
+                            |> otherwiseError
+
+
+                    "ToFrontend" ->
+                        decodeType version intList T$currentVersion_.evg_decode_ToFrontend
+                            |> upgradeIsCurrent CurrentBackendModel
+                            |> otherwiseError
+
+
+                    _ ->
+                        UnknownType tipe
+
+            _ ->
+                UnknownVersion ( version, tipe, intList )
+  |]
+
+
+
+testWriteLamderaGenerated :: Int -> Task.Task ()
+testWriteLamderaGenerated nextVersion = do
+  gen <- liftIO $ createLamderaGenerated nextVersion
+  liftIO $ writeUtf8 gen "src/LamderaGenerated.elm"
+
+
+getMigrationsSequence :: IO [[Int]]
+getMigrationsSequence = do
+  migrations <- Dir.listDirectory "src/Evergreen/Migrate"
+
+  let
+    getVersion :: FilePath -> Maybe Int
+    getVersion filename =
+      filename
+        & drop 1 -- Drop the 'V'
+        & takeWhile (\i -> i /= '.')
+        & readMaybe
+
+    versions =
+      migrations
+        -- There will never be a V1 migration but it is always
+        -- the first version in our sequence
+        & (++) ["V1.elm"]
+        & List.sortBy Algorithms.NaturalSort.compare
+        & fmap getVersion
+        & justs -- This is bad? But those files probably aren't VX.elm files?
+
+    sequences =
+      versions
+        & scanr (\v acc -> acc ++ [v]) []
+        & filter ((/=) [])
+        & fmap reverse
+
+  pure sequences
+
+
+justs :: [Maybe a] -> [a]
+justs xs = [ x | Just x <- xs ]
+
+
+
+earlyBail =
+  Task.throw $ Exit.Lamdera
+    $ Help.report "EARLY BAIL" (Just "I'm out!")
+      ("You used earlyBail")
+      []
