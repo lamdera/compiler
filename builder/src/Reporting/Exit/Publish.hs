@@ -220,8 +220,7 @@ toReport exit =
 
     LamderaPublishNeutered ->
       Help.report "LAMDERA PACKAGES" Nothing
-        "Right now, Lamdera doesn't have a package repository\
-        \ for Lamdera-specific packages."
+        "There is no Lamdera-specific package repository right now."
         [ D.reflow $
           "If you're publishing something that is generally useful for the Elm\
           \ community, publish it using the Elm binary."

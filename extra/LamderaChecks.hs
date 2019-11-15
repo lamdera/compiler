@@ -28,6 +28,7 @@ runChecks = do
       pure False
 
 
+-- These were disabled as they ran indiscriminently on package builds too, preventing building core/codecs.
 checks :: Check Bool
 checks = do
   -- missingFiles <- liftIO $ checkMissingFiles ["src/Frontend.elm", "src/Backend.elm", "src/Msg.elm"]

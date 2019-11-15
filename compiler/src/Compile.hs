@@ -121,7 +121,7 @@ compile flag pkg importDict interfaces source srcMVar =
             -- it's safer to add stuff to the parsed result, but much harder to debug, so codecs are generated as source code, and imports are added like this now
             addImport (Src.Import (A.At R.lamderaInject "Lamdera.Evergreen") Nothing (Src.Explicit []))
               <$> Parse.program pkg newSource
-        else -- this shouldn't have access to the Evergreen module. It's stuff like the Lamdera/codecs or elm/core that would cause cyclic imports.
+        else -- this shouldn't have access to the Evergreen module. It's stuff like the lamdera/codecs or elm/core that would cause cyclic imports.
           Parse.program pkg source
 
       canonical_ <- Result.mapError Error.Canonicalize $

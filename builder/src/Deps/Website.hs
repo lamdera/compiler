@@ -69,7 +69,7 @@ getLamderaPkgPath = Env.lookupEnv "LAMDERA_PKG_PATH"
 
 localPackages :: Map.Map Name [Version]
 localPackages =
-  Map.union (Map.fromList [(Name "Lamdera" "codecs", [Pkg.Version 1 0 0]), (Name "Lamdera" "core", [Pkg.Version 1 0 0])])
+  Map.union (Map.fromList [(Name "lamdera" "codecs", [Pkg.Version 1 0 0]), (Name "lamdera" "core", [Pkg.Version 1 0 0])])
   $ unsafePerformIO $ do
     env <- getLamderaPkgPath
     case env of
@@ -176,10 +176,10 @@ fetchLocal url =
               pure Nothing
       Nothing ->
         pure $ case url of
-          "packages/Lamdera/core/1.0.0/endpoint.json" ->
-            Just ("{\"url\":\"http://static.lamdera.com/r/Lamdera/core/pack.zip\",\"hash\":\"ignored\"}")
-          "packages/Lamdera/codecs/1.0.0/endpoint.json" ->
-            Just ("{\"url\":\"http://static.lamdera.com/r/Lamdera/codecs/pack.zip\",\"hash\":\"ignored\"}")
+          "packages/lamdera/core/1.0.0/endpoint.json" ->
+            Just ("{\"url\":\"http://static.lamdera.com/r/lamdera/core/pack.zip\",\"hash\":\"ignored\"}")
+          "packages/lamdera/codecs/1.0.0/endpoint.json" ->
+            Just ("{\"url\":\"http://static.lamdera.com/r/lamdera/codecs/pack.zip\",\"hash\":\"ignored\"}")
           _ ->
             Nothing
 
@@ -188,10 +188,10 @@ redirectLamderaPaths s =
   -- Since package.elm-lang.org doesn't contain copies of elm.json for lamdera packages, we redirect the requests to github directly.
   -- This is dangerous in general, since the author can change the elm.json files, but in this case we control all these packages, so we're all good.
   case s of
-    "packages/Lamdera/core/1.0.0/elm.json" ->
-      "http://static.lamdera.com/r/Lamdera/core/1.0.0/elm.json"
-    "packages/Lamdera/codecs/1.0.0/elm.json" ->
-      "http://static.lamdera.com/r/Lamdera/codecs/1.0.0/elm.json"
+    "packages/lamdera/core/1.0.0/elm.json" ->
+      "http://static.lamdera.com/r/lamdera/core/1.0.0/elm.json"
+    "packages/lamdera/codecs/1.0.0/elm.json" ->
+      "http://static.lamdera.com/r/lamdera/codecs/1.0.0/elm.json"
     _ ->
       s
 

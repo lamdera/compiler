@@ -87,16 +87,16 @@ shouldHaveCodecsGenerated :: Name -> Bool
 shouldHaveCodecsGenerated name =
   case name of
     -- Some elm packages are ignored because of cyclic dependencies.
-    -- Those codecs have to be manually defined in `Lamdera/codecs`.
+    -- Those codecs have to be manually defined in `lamdera/codecs`.
     -- All other packages, even if their types are defined in js, have codecs generated for their types.
     -- Then we manually override specific types in `Wire.Source`.
 
-    -- elm deps used by Lamdera/codecs
+    -- elm deps used by lamdera/codecs
     Name "elm" "bytes" -> False
     Name "elm" "core" -> False
 
-    Name "Lamdera" "codecs" ->
-      -- avoid cyclic imports; generated codecs rely on Lamdera/codecs:Lamdera.Evergreen. This is our codec bootstrap module.
+    Name "lamdera" "codecs" ->
+      -- avoid cyclic imports; generated codecs rely on lamdera/codecs:Lamdera.Evergreen. This is our codec bootstrap module.
       False
 
     _ ->
@@ -104,7 +104,7 @@ shouldHaveCodecsGenerated name =
 
 isKernel :: Name -> Bool
 isKernel (Name author _) =
-  author == "elm" || author == "elm-explorations" || author == "Lamdera"
+  author == "elm" || author == "elm-explorations" || author == "lamdera"
 
 
 toString :: Name -> String
@@ -211,13 +211,13 @@ gatherCaps char (buffer, chunks) =
 {-# NOINLINE lamderaCore #-}
 lamderaCore :: Name
 lamderaCore =
-  Name "Lamdera" "core"
+  Name "lamdera" "core"
 
 
 {-# NOINLINE lamderaCodecs #-}
 lamderaCodecs :: Name
 lamderaCodecs =
-  Name "Lamdera" "codecs"
+  Name "lamdera" "codecs"
 
 
 {-# NOINLINE dummyName #-}

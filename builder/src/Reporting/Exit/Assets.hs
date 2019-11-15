@@ -133,11 +133,10 @@ elmJsonProblemToReport problem =
 
     NoAppLamderaCore ->
       Help.report "MISSING DEPENDENCY" (Just "elm.json")
-        "A Lamdera application must have \"Lamdera/core\" as a dependency."
-        [ D.reflow "Perhaps you're not trying to run this app on Lamdera? That's fine, but please use the normal elm binary instead."
-        , D.reflow "Otherwise, try running:"
-        , D.indent 4 $ D.green $ "lamdera install Lamdera/core"
-        , D.reflow "I need it for hooking up the frontend to the backend."
+        "A Lamdera application must have \"lamdera/core\" as a dependency."
+        [ D.reflow "You can install it with:"
+        , D.indent 4 $ D.green $ "lamdera install lamdera/core"
+        , D.reflow "Note: if you're trying to run a normal Elm app, use the elm binary instead."
         ]
 
 
