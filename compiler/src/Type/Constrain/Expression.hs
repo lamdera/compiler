@@ -25,7 +25,7 @@ import qualified Type.Instantiate as Instantiate
 import Type.Type as Type hiding (Descriptor(..))
 
 import qualified Debug.Trace as DT
-import Transpile.PrettyPrint
+import Wire.PrettyPrint
 
 import Control.Lens.Plated (transform)
 import Data.Data

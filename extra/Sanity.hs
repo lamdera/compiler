@@ -1,7 +1,7 @@
 module Sanity where
 
 import qualified Data.Map as Map
-import Transpile.PrettyPrint
+import Wire.PrettyPrint
 
 (!) :: (Ord c, Show c, Show ctx) => (Map.Map c a, ctx) -> c -> a
 (!) (m, ctx) k =

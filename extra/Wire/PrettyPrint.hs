@@ -1,4 +1,4 @@
-module Transpile.PrettyPrint where
+module Wire.PrettyPrint where
 
 -- Quick and dirty pretty-printing of strings with nested parentheses. Outputs a multi-line indented string.
 
@@ -28,5 +28,3 @@ pformat ident s =
     ']':rest -> "]\n" ++ indl ++ pformat (ident-1) rest
     x:rest -> x : pformat ident rest
     [] -> ""
-
-

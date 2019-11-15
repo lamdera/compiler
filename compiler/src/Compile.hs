@@ -39,12 +39,10 @@ import qualified Data.Text as T
 import System.IO.Unsafe (unsafePerformIO)
 
 import qualified Wire.Source
-import qualified East.Conversion as East
 import Control.Concurrent.MVar (MVar, newEmptyMVar, newMVar, putMVar, readMVar, takeMVar)
 
-import qualified Language.Haskell.Exts.Simple.Syntax as Hs
 import qualified Debug.Trace as DT
-import Transpile.PrettyPrint
+import Wire.PrettyPrint
 
 
 -- COMPILE

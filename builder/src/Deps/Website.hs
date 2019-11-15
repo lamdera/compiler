@@ -47,7 +47,7 @@ import qualified Stuff.Paths as Path
 import qualified Debug.Trace as DT
 import System.IO.Unsafe
 import qualified System.Process
-import Transpile.PrettyPrint (sShow)
+import Wire.PrettyPrint (sShow)
 
 -- GET PACKAGE INFO
 

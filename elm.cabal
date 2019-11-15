@@ -241,15 +241,8 @@ Executable elmx
         -- Debug helpers
         CanSer.CanSer
         Sanity
+        Wire.PrettyPrint
 
-        -- Haskelm
-        East.Conversion
-        East.Rewrite
-        East.Hacks
-        Transpile.Deriving
-        Transpile.Reserved
-        Transpile.Instances
-        Transpile.PrettyPrint
         Elm
 
 
@@ -293,14 +286,8 @@ Executable elmx
         -- zip-archive 0.4 (which is used by default in ghc 8.6+) adds a check for absolute paths in zip archives, which breaks the compiler
         zip-archive < 0.4,
         show-prettyprint,
-        -- EAST
-        pretty-simple >= 2.1.0.0,
-        haskell-src-exts-simple >= 1.20,
-        transformers >= 0.5.2,
-        yaml,
-        aeson,
+        -- Extra
         ilist,
         witherable,
-        shelly,
         neat-interpolation,
         natural-sort

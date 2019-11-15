@@ -10,8 +10,8 @@ module Elm
   , second
   , List
   , ppElm
-  , mapMaybe
-  , catMaybes
+  , Data.Witherable.mapMaybe
+  , Data.Witherable.catMaybes
   )
   where
 
@@ -21,15 +21,13 @@ module Elm
 import Prelude ()
 
 import qualified Debug.Trace as DT
-import qualified Transpile.PrettyPrint as PP
+import qualified Wire.PrettyPrint as PP
 import qualified Data.Text as T
 import Data.Monoid ((<>), mconcat)
 import Data.Function ((&))
 import Control.Arrow (first, second)
 
 import CanSer.CanSer (ppElm)
-import Data.Witherable
+import qualified Data.Witherable
 
 type List a = [a]
-
-

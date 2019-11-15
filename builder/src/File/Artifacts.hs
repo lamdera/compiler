@@ -29,10 +29,7 @@ import qualified Stuff.Paths as Path
 
 import System.Directory (createDirectoryIfMissing)
 import System.FilePath (takeDirectory)
-import qualified Language.Haskell.Exts.Simple.Pretty as HsPretty
 
-import qualified East.Hacks
-import qualified System.Environment as Env
 
 -- IGNORE
 
@@ -58,17 +55,6 @@ write root answers =
           void $ forkIO $
             do  Binary.encodeFile (Path.elmi root name) elmi
                 Binary.encodeFile (Path.elmo root name) elmo
-
-                -- only write hs files if LAMDERA_PKG_PATH is set
-                -- pkgPath <- Env.lookupEnv "LAMDERA_PKG_PATH"
-                -- case pkgPath of
-                --   Just _ -> do
-                --     let path = Path.haskelmo root name
-                --     createDirectoryIfMissing True (takeDirectory path)
-                --     writeFile path (HsPretty.prettyPrint (East.Hacks.injectKernelImport haskelmo))
-                --   Nothing ->
-                --     pure ()
-
                 putMVar mvar result
           return mvar
   in
