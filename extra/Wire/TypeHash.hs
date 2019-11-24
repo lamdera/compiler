@@ -28,15 +28,17 @@ import qualified Reporting.Annotation as A
 import qualified Reporting.Region as R
 import qualified Elm.Interface as Interface
 import qualified Reporting.Progress as Progress
+import qualified Stuff.Paths as Paths
 
 import qualified Data.ByteString.Char8 as BS8
 
 import qualified File.IO as File
 import Control.Monad.Trans (liftIO)
-
+import System.FilePath ((</>))
 import CanSer.CanSer as CanSer
 
 import Elm
+
 
 
 possiblyWriteModelSha tell canonicalName elmi =
@@ -88,8 +90,9 @@ hash showable =
   T.pack $ SHA.showDigest $ SHA.sha1 $ TLE.encodeUtf8 $ TL.pack $ show showable
 
 
-write str =
-  File.writeUtf8 ".lamdera-hashes" (BS8.pack str)
+write :: FilePath -> String -> IO ()
+write root str =
+  File.writeUtf8 (Paths.lamderaHashes root) (BS8.pack str)
 
 
 modelHash :: Can.Module -> [(T.Text, T.Text)]

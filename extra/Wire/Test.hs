@@ -58,7 +58,7 @@ compile :: IO ()
 compile = do
   -- Bust Elm's caching with this one weird trick!
   -- touch "extra/Wire/src/AllTypes.elm"
-  -- touch "extra/Wire/src/Msg.elm"
+  -- touch "extra/Wire/src/Types.elm"
   touch "/Users/mario/dev/projects/lamdera/test/v1/src/Types.elm"
   -- touch "/Users/mario/dev/projects/lamdera/test/v1/src/LamderaFrontendRuntime.elm"
 
@@ -104,9 +104,9 @@ touch path = callCommand $ "touch " ++ path
 check = do
 
   setEnv "LAMDERA_PKG_PATH" "/Users/mario/dev/projects/lamdera/haskelm/pkg-overrides"
-  setEnv "ELM_HOME" "/Users/mario/dev/projects/lamdera/test/v3/elm-home"
+  setEnv "ELM_HOME" "/Users/mario/dev/projects/lamdera/test/v1/elm-home"
 
 
-  Dir.withCurrentDirectory ("/Users/mario/dev/projects/lamdera/test/v3") $
+  Dir.withCurrentDirectory ("/Users/mario/dev/projects/lamdera/test/v1") $
     do
         Check.run () ()

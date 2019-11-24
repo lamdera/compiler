@@ -31,14 +31,14 @@ runChecks = do
 -- These were disabled as they ran indiscriminently on package builds too, preventing building core/codecs.
 checks :: Check Bool
 checks = do
-  -- missingFiles <- liftIO $ checkMissingFiles ["src/Frontend.elm", "src/Backend.elm", "src/Msg.elm"]
+  missingFiles <- liftIO $ checkMissingFiles ["src/Frontend.elm", "src/Backend.elm", "src/Types.elm"]
   -- unless (missingFiles == []) $
-  --   throwError $
-  --     "The following files required by Lamdera are missing:\n"
-  --     <>
-  --     (T.concat $ fmap (\file -> "\n- " <> T.pack file) missingFiles)
-  --     <>
-  --     "\n\nPlease see https://alpha.lamdera.app/development for how to set up a Lamdera app."
+    -- throwError $
+    --   "The following files required by Lamdera are missing:\n"
+    --   <>
+    --   (T.concat $ fmap (\file -> "\n- " <> T.pack file) missingFiles)
+    --   <>
+    --   "\n\nPlease see https://alpha.lamdera.app/development for how to set up a Lamdera app."
   --
   --
   -- frontendAppDefined <- liftIO $ checkHasAppDefinition "src/Frontend.elm"
@@ -64,9 +64,9 @@ checks = do
   -- msgHasTypes <- liftIO $ checkMsgHasTypes ["FrontendMsg", "ToBackend", "BackendMsg", "ToFrontend"]
   -- unless (msgHasTypes == True) $
   --   throwError
-  --     "src/Msg.elm is missing some type definitions.\n\
+  --     "src/Types.elm is missing some type definitions.\n\
   --     \\n\
-  --     \Lamdera apps need FrontendMsg, ToBackend, BackendMsg and ToFrontend types defined in Msg.elm.\n\
+  --     \Lamdera apps need FrontendMsg, ToBackend, BackendMsg and ToFrontend types defined in Types.elm.\n\
   --     \\n\
   --     \Please see https://alpha.lamdera.app/development for how to set up a Lamdera app."
 
@@ -99,7 +99,7 @@ checkHasAppDefinition path = do
 
 checkMsgHasTypes :: [Text] -> IO Bool
 checkMsgHasTypes typeNames = do
-  source <- TIO.readFile "src/Msg.elm"
+  source <- TIO.readFile "src/Types.elm"
 
   let
     results = fmap (\search -> T.isInfixOf ("type " <> search) source) typeNames

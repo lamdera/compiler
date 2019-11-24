@@ -7,15 +7,10 @@ module Stuff.Paths
   , removeStuff
   , elmi
   , elmo
-  , haskelmo
   , stuff
-  , haskelmoRoot
-  , haskelmoWithoutStuff
-  , haskellPkgPackageYaml
-  , haskellAppPackageYaml
-  , cabalNameOfPackage
   , moduleDocs
   , temp
+  , lamderaHashes
   )
   where
 
@@ -82,30 +77,6 @@ elmo :: FilePath -> Module.Raw -> FilePath
 elmo root name =
   toArtifactPath root name "elmo"
 
-haskelmo :: FilePath -> Module.Raw -> FilePath
-haskelmo root name =
-  --toArtifactPath root name "hs"
-  haskelmoWithoutStuff (root </> stuff) name
-
-haskelmoRoot :: FilePath -> FilePath
-haskelmoRoot root =
-  root </> stuff </> "haskelm"
-
-haskelmoWithoutStuff :: FilePath -> Module.Raw -> FilePath
-haskelmoWithoutStuff root name =
-  root </> "haskelm" </> "src" </> Module.nameToSlashPath name <.> "hs"
-
-haskellPkgPackageYaml :: FilePath -> FilePath
-haskellPkgPackageYaml root =
-  root </> "haskelm" </> "package" <.> "yaml"
-
-haskellAppPackageYaml :: FilePath -> FilePath
-haskellAppPackageYaml root =
-  root </> "package" <.> "yaml"
-
-cabalNameOfPackage :: Pkg.Name -> T.Text
-cabalNameOfPackage (Pkg.Name author project) =
-  author <> "-delim-" <> project
 
 moduleDocs :: FilePath -> Module.Raw -> FilePath
 moduleDocs root name =
@@ -124,3 +95,8 @@ toArtifactPath root name ext =
 temp :: String -> FilePath
 temp ext =
   stuff </> "temp" <.> ext
+
+
+lamderaHashes :: FilePath -> FilePath
+lamderaHashes root =
+  root </> "lamdera-stuff" </> ".lamdera-hashes"

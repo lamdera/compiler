@@ -24,6 +24,9 @@ import qualified Reporting.Progress as Progress
 import qualified Reporting.Progress.Bar as Bar
 
 import qualified Wire.TypeHash
+import qualified Elm.Project as Project
+import qualified Elm.Project.Summary as Summary
+import qualified Reporting.Task as Task
 
 -- CREATE
 
@@ -219,8 +222,14 @@ loopHelp chan progress state@(State total good bad) =
 
 
     LamderaWriteHashes str ->
-      do  Wire.TypeHash.write str
-          loop chan state
+      do  summaryM <- Task.try Progress.silentReporter Project.getRoot
+          case summaryM of
+            Just summary -> do
+              Wire.TypeHash.write (Summary._root summary) str
+              loop chan state
+            Nothing ->
+              loop chan state
+
 
 -- BULLETS
 

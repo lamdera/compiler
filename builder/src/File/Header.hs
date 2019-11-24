@@ -158,9 +158,9 @@ parse project path time source =
       let
         extraDeps =
           if Pkg.shouldHaveCodecsGenerated (Project.getName project) then
-            ["Lamdera.Evergreen"]
+            ["Lamdera.Wire"]
           else
-            [] -- these modules are bootstrapped in Lamdera.Evergreen
+            [] -- these modules are bootstrapped in Lamdera.Wire
       in
       do  maybeName <- checkTag project path maybeDecl
           return ( maybeName, Info path time source (deps ++ extraDeps) )

@@ -96,7 +96,7 @@ shouldHaveCodecsGenerated name =
     Name "elm" "core" -> False
 
     Name "lamdera" "codecs" ->
-      -- avoid cyclic imports; generated codecs rely on lamdera/codecs:Lamdera.Evergreen. This is our codec bootstrap module.
+      -- avoid cyclic imports; generated codecs rely on lamdera/codecs:Lamdera.Wire. This is our codec bootstrap module.
       False
 
     _ ->

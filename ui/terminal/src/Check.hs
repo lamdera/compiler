@@ -52,7 +52,7 @@ import qualified Reporting.Exit.Http as E
 import qualified Reporting.Progress as Progress
 import qualified Reporting.Task as Task
 import qualified Reporting.Task.Http as Http
-import qualified Stuff.Paths as Path
+import qualified Stuff.Paths as Paths
 
 
 -- Compilation
@@ -80,6 +80,7 @@ import Data.Text.Internal.Search
 import System.Process
 import Control.Monad (unless, filterM)
 import qualified System.IO as IO
+import qualified Elm.Project.Summary as Summary
 
 
 
@@ -100,7 +101,10 @@ run () () =
                 & T.splitOn "\n"
                 & filter (textContains "lamdera")
 
-        unless (lamderaRemotes /= []) $
+        appNameEnvM <- liftIO $ Env.lookupEnv "LAMDERA_APP_NAME"
+        let isProduction = (appNameEnvM /= Nothing) -- @TODO better isProd check...
+
+        onlyWhen (lamderaRemotes == [] && appNameEnvM == Nothing) $
           Task.throw $ Exit.Lamdera
             $ Help.report "UNKNOWN APP" (Just "git remote -v")
               ("I cannot figure out which Lamdera app this repository belongs to.")
@@ -109,15 +113,21 @@ run () () =
                ]
               )
 
-        let appName =
-              List.head lamderaRemotes
-                & T.splitOn ":"
-                & (\l ->
-                    case l of
-                      f:second:_ -> second
-                  )
-                & T.splitOn "."
-                & List.head
+        -- Prior `onlyWhen` guards against situation where no name is determinable
+        let
+          appName :: Text
+          appName =
+              case appNameEnvM of
+                Just appNameEnv -> T.pack appNameEnv
+                _ ->
+                  List.head lamderaRemotes
+                    & T.splitOn ":"
+                    & (\l ->
+                        case l of
+                          f:second:_ -> second
+                      )
+                    & T.splitOn "."
+                    & List.head
 
         (prodVersion, productionTypes) <-
             fetchProductionInfo appName `catchError` (\err -> pure (0, []))
@@ -134,9 +144,12 @@ run () () =
 
             pDocLn $ D.dullyellow (D.reflow $ "It appears you're all set to deploy the first version of '" <> T.unpack appName <> "'!")
 
-            testWriteLamderaGenerated nextVersion
+            writeLamderaGenerated nextVersion
+            buildProductionJsFiles isProduction nextVersion
 
           else do
+            writeLamderaGenerated nextVersion
+
             localTypes <- fetchLocalTypes
 
             if productionTypes /= localTypes
@@ -187,8 +200,6 @@ run () () =
 
                     if textContains "Unimplemented" migrationSource
                       then do
-                        testWriteLamderaGenerated nextVersion
-
                         Task.throw $ Exit.Lamdera
                           $ Help.report "UNIMPLEMENTED MIGRATION" (Just nextMigrationPath)
                             ("The following types have changed since v" <> show prodVersion <> " and require migrations:")
@@ -200,7 +211,9 @@ run () () =
                       else do
                         migrationCheck nextVersion
 
-                        committedCheck nextVersion
+                        unless isProduction $
+                          -- Only check committed locally, as on remote it won't be
+                          committedCheck nextVersion
 
                         pDocLn $ D.dullyellow $ D.reflow $ "\nIt appears you're all set to deploy v" <> (show nextVersion) <> " of '" <> T.unpack appName <> "'."
 
@@ -210,9 +223,7 @@ run () () =
                            [ D.reflow "See <https://lamdera.com/evergreen-migrations> more info." ]
                           )
 
-                        testWriteLamderaGenerated nextVersion
-
-                        pure ()
+                        buildProductionJsFiles isProduction nextVersion
 
                   else do
 
@@ -220,13 +231,7 @@ run () () =
 
                     liftIO $ writeUtf8 defaultMigrations nextMigrationPath
 
-                    -- Text.encodeUtf8 defaultMigrations
-                    --   & IO.writeUtf8 nextMigrationPath
-                    --   & liftIO
-
                     _ <- liftIO $ snapshotCurrentTypesTo nextVersion
-
-                    testWriteLamderaGenerated nextVersion
 
                     Task.throw $ Exit.Lamdera
                       $ Help.report "UNIMPLEMENTED MIGRATION" (Just nextMigrationPath)
@@ -245,8 +250,50 @@ run () () =
                 pDocLn $ D.dullyellow $ D.reflow $ "\nIt appears you're all set to deploy v" <> (show nextVersion) <> " of '" <> T.unpack appName <> "'."
                 pDocLn $ D.reflow $ "\nThere are no Evergreen type changes for this version."
 
+                buildProductionJsFiles isProduction nextVersion
+
                 -- liftIO $ writeUtf8 defaultMigrations nextMigrationPath
-                testWriteLamderaGenerated nextVersion
+
+
+
+buildProductionJsFiles isProduction version =
+  onlyWhen isProduction $ do
+    summary <- Project.getRoot
+
+    liftIO $ putStrLn "Compiling for production..."
+
+    onlyWhen (version /= 1) $ do -- Version 1 has no migrations for rewrite
+      let migrationPath = "src/Evergreen/Migrate/V" <> show version <> ".elm"
+      -- Temporarily point migration to current types in order to type-check
+      liftIO $ callCommand $ "sed -i -e 's/import Evergreen.Type.V" <> show version <> "/import Types/g' " ++ migrationPath
+
+    Project.compile
+      Output.Dev
+      Output.Client
+      (Just (Output.JavaScript Nothing "frontend-app.js"))
+      Nothing
+      summary
+      [ "src" </> "LamderaFrontendRuntime.elm" ]
+
+    -- @TODO this is because the migrationCheck does weird terminal stuff that mangles the display... how to fix this?
+    liftIO $ threadDelay 50000 -- 50 milliseconds
+
+    Project.compile
+      Output.Dev
+      Output.Client
+      (Just (Output.JavaScript Nothing "backend-app.js"))
+      Nothing
+      summary
+      [ "src" </> "LamderaBackendRuntime.elm" ]
+
+    -- @TODO this is because the migrationCheck does weird terminal stuff that mangles the display... how to fix this?
+    liftIO $ threadDelay 50000 -- 50 milliseconds
+
+    -- NOTE: Could do this, but assuming it'll be good to have the original evidence of
+    -- state for situation where things go wrong in production and you can poke around
+    -- Restore the type back to what it was
+    -- liftIO $ callCommand $ "sed -i -e 's/import Types/import Evergreen.Type.V" <> show version <> "/g' " ++ migrationPath
+    -- liftIO $ callCommand $ "rm src/Evergreen/Migrate/V" <> show version <> ".elm-e"
 
 
 
@@ -326,9 +373,13 @@ fetchProductionInfo appName =
 
 fetchLocalTypes :: Task.Task [String]
 fetchLocalTypes = do
+
+  summary <- Project.getRoot
+  let root = Summary._root summary
+
   -- This could fail normally but we're using this function after
   -- we've already checked it exists
-  hashString <- liftIO $ IO.readUtf8 ".lamdera-hashes"
+  hashString <- liftIO $ IO.readUtf8 (Paths.lamderaHashes root)
 
   let
     decoder =
@@ -352,6 +403,10 @@ checkUserProjectCompiles =
               Project.compile Output.Dev Output.Client jsOutput Nothing summary [ "src" </> "Frontend.elm" ]
               Project.compile Output.Dev Output.Client jsOutput Nothing summary [ "src" </> "Backend.elm" ]
 
+              -- @TODO this is because the migrationCheck does weird terminal stuff that mangles the display... how to fix this?
+              liftIO $ threadDelay 50000 -- 50 milliseconds
+
+
 
 migrationCheck version =
   -- Dir.withCurrentDirectory ("/Users/mario/dev/projects/lamdera/test/v2") $
@@ -362,16 +417,17 @@ migrationCheck version =
               -- Temporarily point migration to current types in order to type-check
               liftIO $ putStrLn "Checking Evergreen migrations..."
 
-              liftIO $ callCommand $ "sed -i -e 's/import Evergreen.Type.V" <> show version <> "/import Types/g' src/Evergreen/Migrate/V" <> show version <> ".elm"
+              let migrationPath = "src/Evergreen/Migrate/V" <> show version <> ".elm"
+
+              liftIO $ callCommand $ "sed -i -e 's/import Evergreen.Type.V" <> show version <> "/import Types/g' " ++ migrationPath
 
 
               frontendRuntimeExists <- liftIO $ Dir.doesFileExist $ "src/LamderaFrontendRuntime.elm"
-              liftIO $ unless frontendRuntimeExists $ writeUtf8 frontendRuntimeLocalContent "src/LamderaFrontendRuntime.elm"
-
               backendRuntimeExists <- liftIO $ Dir.doesFileExist $ "src/LamderaBackendRuntime.elm"
+
+              liftIO $ unless frontendRuntimeExists $ writeUtf8 frontendRuntimeLocalContent "src/LamderaFrontendRuntime.elm"
               liftIO $ unless backendRuntimeExists $ writeUtf8 backendRuntimeLocalContent "src/LamderaBackendRuntime.elm"
 
-              -- Compile check it
               liftIO $ writeUtf8 lamderaCheckBothFileContents "src/LamderaCheckBoth.elm"
               let jsOutput = Just (Output.Html Nothing "/dev/null")
               Project.compile Output.Dev Output.Client jsOutput Nothing summary [ "src" </> "LamderaCheckBoth.elm" ]
@@ -383,7 +439,7 @@ migrationCheck version =
               liftIO $ callCommand $ "rm src/LamderaCheckBoth.elm"
 
               -- Restore the type back to what it was
-              liftIO $ callCommand $ "sed -i -e 's/import Types/import Evergreen.Type.V" <> show version <> "/g' src/Evergreen/Migrate/V" <> show version <> ".elm"
+              liftIO $ callCommand $ "sed -i -e 's/import Types/import Evergreen.Type.V" <> show version <> "/g' " ++ migrationPath
               liftIO $ callCommand $ "rm src/Evergreen/Migrate/V" <> show version <> ".elm-e"
 
               -- Cleanup dummy runtime files if we added them
@@ -397,7 +453,7 @@ committedCheck version = do
   let migrationPath = "src/Evergreen/Migrate/V" <> show version <> ".elm"
   migrations <- liftIO $ gitStatus migrationPath
 
-  unless (migrations == Committed) $
+  onlyWhen (migrations /= Committed) $
     Task.throw $ Exit.Lamdera
       $ Help.report "UNCOMMITTED MIGRATION" (Just migrationPath)
         ("I need migration files to be comitted otherwise I cannot deploy!")
@@ -410,7 +466,7 @@ committedCheck version = do
   let typesPath = "src/Evergreen/Type/V" <> show version <> ".elm"
   types <- liftIO $ gitStatus typesPath
 
-  unless (types == Committed) $
+  onlyWhen (types /= Committed) $
     Task.throw $ Exit.Lamdera
     $ Help.report "UNCOMMITTED TYPES" (Just typesPath)
       ("I need type snapshot files to be comitted otherwise I cannot deploy!")
@@ -580,17 +636,21 @@ lowerFirstLetter text =
 createLamderaGenerated :: Int -> IO Text
 createLamderaGenerated currentVersion = do
 
-  migrationSequence <- liftIO $ getMigrationsSequence
+  migrationSequence <- liftIO $ getMigrationsSequence `catchError` (\err -> pure [])
 
   let
     migrationImports :: Text
     migrationImports =
-      migrationSequence
-        & List.head
-        & (\(_:actualMigrations) ->
-            fmap migrationImport actualMigrations
-          )
-        & T.concat
+      case migrationSequence of
+        firstMigration:_ ->
+          firstMigration
+            & (\(_:actualMigrations) ->
+                fmap migrationImport actualMigrations
+              )
+            & T.concat
+
+        _ ->
+          ""
 
 
     migrationImport :: Int -> Text
@@ -604,6 +664,11 @@ createLamderaGenerated currentVersion = do
     typeImports =
       migrationSequence
         & fmap (\(version:_) -> typeImport version)
+        & (\list ->
+            case list of
+              [] -> []
+              _ -> List.init list -- All except last, as we already `import Types as VN`
+          )
         & T.concat
 
 
@@ -618,8 +683,12 @@ createLamderaGenerated currentVersion = do
     historicMigrations =
       migrationSequence
         & fmap historicMigration
+        & (\list ->
+            case list of
+              [] -> []
+              _ -> List.init list -- All except last, as we already `import Types as VN`
+          )
         & T.intercalate "\n"
-        
 
 
     historicMigration :: [Int] -> Text
@@ -708,31 +777,31 @@ createLamderaGenerated currentVersion = do
 
                     "FrontendModel" ->
                         decodeType version intList T$currentVersion_.evg_decode_FrontendModel
-                            |> upgradeIsCurrent CurrentBackendModel
+                            |> upgradeIsCurrent CurrentFrontendModel
                             |> otherwiseError
 
 
                     "FrontendMsg" ->
                         decodeType version intList T$currentVersion_.evg_decode_FrontendMsg
-                            |> upgradeIsCurrent CurrentBackendModel
+                            |> upgradeIsCurrent CurrentFrontendMsg
                             |> otherwiseError
 
 
                     "ToBackend" ->
                         decodeType version intList T$currentVersion_.evg_decode_ToBackend
-                            |> upgradeIsCurrent CurrentBackendModel
+                            |> upgradeIsCurrent CurrentToBackend
                             |> otherwiseError
 
 
                     "BackendMsg" ->
                         decodeType version intList T$currentVersion_.evg_decode_BackendMsg
-                            |> upgradeIsCurrent CurrentBackendModel
+                            |> upgradeIsCurrent CurrentBackendMsg
                             |> otherwiseError
 
 
                     "ToFrontend" ->
                         decodeType version intList T$currentVersion_.evg_decode_ToFrontend
-                            |> upgradeIsCurrent CurrentBackendModel
+                            |> upgradeIsCurrent CurrentToFrontend
                             |> otherwiseError
 
 
@@ -745,9 +814,10 @@ createLamderaGenerated currentVersion = do
 
 
 
-testWriteLamderaGenerated :: Int -> Task.Task ()
-testWriteLamderaGenerated nextVersion = do
+writeLamderaGenerated :: Int -> Task.Task ()
+writeLamderaGenerated nextVersion = do
   gen <- liftIO $ createLamderaGenerated nextVersion
+  liftIO $ putStrLn $ T.unpack gen
   liftIO $ writeUtf8 gen "src/LamderaGenerated.elm"
 
 
@@ -789,5 +859,10 @@ justs xs = [ x | Just x <- xs ]
 earlyBail =
   Task.throw $ Exit.Lamdera
     $ Help.report "EARLY BAIL" (Just "I'm out!")
-      ("You used earlyBail")
+      ("The code used earlyBail, it was super effective!")
       []
+
+
+-- Inversion of `unless` that runs IO only when condition is True
+onlyWhen condition io =
+  unless (not condition) io

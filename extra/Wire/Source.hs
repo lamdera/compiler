@@ -124,11 +124,11 @@ generateCodecs revImportDict (Can.Module _moduName _docs _exports _decls _unions
       let
         tName = N.toText name <> leftWrap (N.toText <$> names)
         encoder =
-          --"evg_encode_" <> N.toText name <> " : " <> T.intercalate " -> " (((\v -> "(" <> v <> " -> Lamdera.Evergreen.Encoder)") <$> N.toText <$> names) ++ [tName, "Lamdera.Evergreen.Encoder"]) <> "\n" <>
+          --"evg_encode_" <> N.toText name <> " : " <> T.intercalate " -> " (((\v -> "(" <> v <> " -> Lamdera.Wire.Encoder)") <$> N.toText <$> names) ++ [tName, "Lamdera.Wire.Encoder"]) <> "\n" <>
           "evg_encode_" <> N.toText name <> leftWrap (codec <$> names) <> " =\n" <>
           "  " <> encoderForType Map.empty t
         decoder =
-          --"evg_decode_" <> N.toText name <> " : " <> T.intercalate " -> " (((\v -> "(Lamdera.Evergreen.Decoder " <> v <> ")") <$> N.toText  <$> names) ++ ["Lamdera.Evergreen.Decoder (" <> tName <> ")"]) <> "\n" <>
+          --"evg_decode_" <> N.toText name <> " : " <> T.intercalate " -> " (((\v -> "(Lamdera.Wire.Decoder " <> v <> ")") <$> N.toText  <$> names) ++ ["Lamdera.Wire.Decoder (" <> tName <> ")"]) <> "\n" <>
           "evg_decode_" <> N.toText name <> leftWrap (codec <$> names) <> " =\n" <>
           "  " <> decoderForType Map.empty t
       in
@@ -139,7 +139,7 @@ generateCodecs revImportDict (Can.Module _moduName _docs _exports _decls _unions
       let
         tName = N.toText name <> leftWrap (N.toText <$> _u_vars)
         encoder =
-          --"evg_encode_" <> N.toText name <> " : " <> T.intercalate " -> " (((\v -> "(" <> v <> " -> Lamdera.Evergreen.Encoder)") <$> N.toText <$> _u_vars) ++ [tName, "Lamdera.Evergreen.Encoder"]) <> "\n" <>
+          --"evg_encode_" <> N.toText name <> " : " <> T.intercalate " -> " (((\v -> "(" <> v <> " -> Lamdera.Wire.Encoder)") <$> N.toText <$> _u_vars) ++ [tName, "Lamdera.Wire.Encoder"]) <> "\n" <>
           "evg_encode_" <> N.toText name <> leftWrap (codec <$> _u_vars) <> " evg_e_thingy =\n" <>
           "  case evg_e_thingy of\n    "
           <> T.intercalate "\n    "
@@ -150,9 +150,9 @@ generateCodecs revImportDict (Can.Module _moduName _docs _exports _decls _unions
               --Can.Unbox -> error "codec Unbox notimpl"
             )
         decoder =
-          --"evg_decode_" <> N.toText name <> " : " <> T.intercalate " -> " (((\v -> "(Lamdera.Evergreen.Decoder " <> v <> ")") <$> N.toText  <$> _u_vars) ++ ["Lamdera.Evergreen.Decoder (" <> tName <> ")"]) <> "\n" <>
+          --"evg_decode_" <> N.toText name <> " : " <> T.intercalate " -> " (((\v -> "(Lamdera.Wire.Decoder " <> v <> ")") <$> N.toText  <$> _u_vars) ++ ["Lamdera.Wire.Decoder (" <> tName <> ")"]) <> "\n" <>
           "evg_decode_" <> N.toText name <> leftWrap (codec <$> _u_vars) <> " =\n"
-          <> "  Lamdera.Evergreen.decodeString |> Lamdera.Evergreen.andThenDecode (\\evg_e_thingy ->\n"
+          <> "  Lamdera.Wire.decodeString |> Lamdera.Wire.andThenDecode (\\evg_e_thingy ->\n"
           <> "    case evg_e_thingy of\n      "
           <> T.intercalate "\n      "
             (case _u_opts of
@@ -161,7 +161,7 @@ generateCodecs revImportDict (Can.Module _moduName _docs _exports _decls _unions
               --Can.Enum -> error "codec Enum notimpl"
               --Can.Unbox -> error "codec Unbox notimpl"
             )
-          <> "\n      _ -> Lamdera.Evergreen.failDecode"
+          <> "\n      _ -> Lamdera.Wire.failDecode"
           <> "\n  )"
       in
         encoder <> "\n\n" <> decoder
@@ -172,7 +172,7 @@ generateCodecs revImportDict (Can.Module _moduName _docs _exports _decls _unions
     decodeUnion :: [N.Name] -> [Can.Ctor] -> [T.Text]
     decodeUnion _u_vars _u_alts =
       (\(Can.Ctor name _ _ tipes) ->
-          strQuote(N.toText name) <> " -> " <> T.intercalate " |> Lamdera.Evergreen.andMapDecode " ((decodeSucceed $ N.toText name) : ((\(_, t) -> decoderForType Map.empty t) <$> nargs tipes))) <$> _u_alts
+          strQuote(N.toText name) <> " -> " <> T.intercalate " |> Lamdera.Wire.andMapDecode " ((decodeSucceed $ N.toText name) : ((\(_, t) -> decoderForType Map.empty t) <$> nargs tipes))) <$> _u_alts
 
     decoderForType :: Map.Map N.Name Int -> Can.Type -> T.Text
     decoderForType varMap t =
@@ -186,7 +186,7 @@ generateCodecs revImportDict (Can.Module _moduName _docs _exports _decls _unions
           ) <> leftWrap (p <$> decoderForType varMap <$> tipes))
         (Can.TRecord nameFieldTypeMap (Just _)) ->
           -- We don't allow sending partial records atm, because we haven't fully figured out how to encode/decode them.
-          "Lamdera.Evergreen.failDecode"
+          "Lamdera.Wire.failDecode"
         (Can.TRecord nameFieldTypeMap Nothing) | Map.null nameFieldTypeMap ->
           p (decodeSucceed "{}")
         (Can.TRecord nameFieldTypeMap Nothing) -> p $
@@ -194,14 +194,14 @@ generateCodecs revImportDict (Can.Module _moduName _docs _exports _decls _unions
             nameFieldTypes = Can.fieldsToList nameFieldTypeMap
             (newVarMap, vars) = manyVars varMap (fst <$> nameFieldTypes)
           in
-            T.intercalate " |> Lamdera.Evergreen.andMapDecode " $
+            T.intercalate " |> Lamdera.Wire.andMapDecode " $
               p <$> (decodeSucceed "(\\" <> leftWrap vars <> " -> "
                 <> recLit ((\k -> (N.toText k, getVar newVarMap k)) <$> (fst <$> nameFieldTypes)) <> ")")
                 : (decoderForType newVarMap <$> (snd <$> nameFieldTypes))
         (Can.TTuple t1 t2 Nothing) -> p $ pairDec (decoderForType varMap t1) (decoderForType varMap t2)
         (Can.TTuple t1 t2 (Just t3)) -> p $ tripleDec (decoderForType varMap t1) (decoderForType varMap t2) (decoderForType varMap t3)
         (Can.TAlias moduName name nameTypePairs aliasType) -> decoderForType varMap (Can.TType moduName name (snd <$> nameTypePairs))
-        (Can.TLambda _ _) -> "Lamdera.Evergreen.failDecode" -- <> strQuote (T.pack $ show x)
+        (Can.TLambda _ _) -> "Lamdera.Wire.failDecode" -- <> strQuote (T.pack $ show x)
 
     -- D.succeed (\a b c -> { a = a, b = b, c = c })
     --   |> dAndMap decodeInt64
@@ -231,7 +231,7 @@ generateCodecs revImportDict (Can.Module _moduName _docs _exports _decls _unions
             )
         (Can.TRecord nameFieldTypeMap (Just _)) ->
           -- We don't allow sending partial records atm, because we haven't fully figured out how to encode/decode them.
-          "Lamdera.Evergreen.failEncode"
+          "Lamdera.Wire.failEncode"
         (Can.TRecord nameFieldTypeMap Nothing) ->
           let
             (newVarMap, recVar) = newRecVar varMap -- store `Map Varname Int` so we can append numbers to varnames to avoid shadowing
@@ -244,7 +244,7 @@ generateCodecs revImportDict (Can.Module _moduName _docs _exports _decls _unions
         (Can.TAlias moduName name nameTypePairs aliasType) ->
           encoderForType varMap (Can.TType moduName name (snd <$> nameTypePairs))
           -- encoderForType varMap (Type.dealias nameTypePairs aliasType)
-        (Can.TLambda _ _) -> "Lamdera.Evergreen.failEncode" -- <> strQuote (T.pack $ show x)
+        (Can.TLambda _ _) -> "Lamdera.Wire.failEncode" -- <> strQuote (T.pack $ show x)
 
   in
     T.intercalate "\n\n\n" ((unionCodecs <$> Map.toList _unions) <> (aliasCodecs <$> Map.toList _aliases))
@@ -261,22 +261,22 @@ moduleToText (Canonical _ modu) = N.toText modu
 leftWrap [] = ""
 leftWrap (x:xs) = " " <> x <> leftWrap xs
 
-sequenceEnc things = "Lamdera.Evergreen.encodeSequence [" <> T.intercalate ", " things <> "]"
-sequenceEncWithoutLength things = "Lamdera.Evergreen.encodeSequenceWithoutLength [" <> T.intercalate ", " things <> "]"
+sequenceEnc things = "Lamdera.Wire.encodeSequence [" <> T.intercalate ", " things <> "]"
+sequenceEncWithoutLength things = "Lamdera.Wire.encodeSequenceWithoutLength [" <> T.intercalate ", " things <> "]"
 
 p s = "(" <> s <> ")"
 
 codec n = "evg_x_c_" <> (N.toText n)
 
-decodeSucceed s = "Lamdera.Evergreen.succeedDecode " <> s
+decodeSucceed s = "Lamdera.Wire.succeedDecode " <> s
 strQuote s = T.pack (show (T.unpack s))
-strEnc s = "Lamdera.Evergreen.encodeString " <> strQuote s
-unitEnc = "Lamdera.Evergreen.encodeUnit"
-pairEnc a b = "Lamdera.Evergreen.encodePair " <> p a <> " " <> p b
-tripleEnc a b c = "Lamdera.Evergreen.encodeTriple " <> p a <> " " <> p b <> " " <> p c
-unitDec = "Lamdera.Evergreen.decodeUnit"
-pairDec a b = "Lamdera.Evergreen.decodePair " <> p a <> " " <> p b
-tripleDec a b c = "Lamdera.Evergreen.decodeTriple " <> p a <> " " <> p b <> " " <> p c
+strEnc s = "Lamdera.Wire.encodeString " <> strQuote s
+unitEnc = "Lamdera.Wire.encodeUnit"
+pairEnc a b = "Lamdera.Wire.encodePair " <> p a <> " " <> p b
+tripleEnc a b c = "Lamdera.Wire.encodeTriple " <> p a <> " " <> p b <> " " <> p c
+unitDec = "Lamdera.Wire.decodeUnit"
+pairDec a b = "Lamdera.Wire.decodePair " <> p a <> " " <> p b
+tripleDec a b c = "Lamdera.Wire.decodeTriple " <> p a <> " " <> p b <> " " <> p c
 recEnc fields = "{ " <> T.intercalate ", " (N.toText <$> fields) <> " }"
 recLit kvpairs = "{ " <> T.intercalate ", " ((\(k, v) -> k <> "=" <> v) <$> kvpairs) <> " }"
 
@@ -324,7 +324,7 @@ evergreenCoreCodecs qualIfNeeded targs key =
       <>
       ( (\((pkg, modu, tipe), res) -> ((Canonical (pkgFromText pkg) modu, tipe), res)) <$>
         -- elm/core types; these are exhaustive (but some types are commented out atm)
-        (\(modu, tipe) -> ("elm/core", modu, tipe) --> ("Lamdera.Evergreen.encode" <> N.toText tipe, "Lamdera.Evergreen.decode" <> N.toText tipe)) <$>
+        (\(modu, tipe) -> ("elm/core", modu, tipe) --> ("Lamdera.Wire.encode" <> N.toText tipe, "Lamdera.Wire.decode" <> N.toText tipe)) <$>
         [ -- , ("Platform", "ProcessId")
         -- , ("Platform", "Program")
         -- , ("Platform", "Router")
@@ -339,12 +339,12 @@ evergreenCoreCodecs qualIfNeeded targs key =
       (\((pkg, modu, tipe), res) -> ((Canonical (pkgFromText pkg) modu, tipe), res)) <$>
       -- non elm/core types
       -- NOTE: none of these packages have been checked exhaustively for types; we should do that
-      ( [ (("elm/bytes", "Bytes", "Bytes") --> ("Lamdera.Evergreen.encodeBytes", "Lamdera.Evergreen.decodeBytes") )
-        , (("elm/time", "Time", "Posix") --> ("(\\t -> Lamdera.Evergreen.encodeInt (Time.posixToMillis t))", "Lamdera.Evergreen.decodeInt |> Lamdera.Evergreen.andThenDecode (\\t -> Lamdera.Evergreen.succeedDecode (Time.millisToPosix t))"))
+      ( [ (("elm/bytes", "Bytes", "Bytes") --> ("Lamdera.Wire.encodeBytes", "Lamdera.Wire.decodeBytes") )
+        , (("elm/time", "Time", "Posix") --> ("(\\t -> Lamdera.Wire.encodeInt (Time.posixToMillis t))", "Lamdera.Wire.decodeInt |> Lamdera.Wire.andThenDecode (\\t -> Lamdera.Wire.succeedDecode (Time.millisToPosix t))"))
         ] <>
         (
           -- elm/core types; these are exhaustive (but some types are commented out atm)
-          (\(modu, tipe) -> ("elm/core", modu, tipe) --> ("Lamdera.Evergreen.encode" <> N.toText tipe, "Lamdera.Evergreen.decode" <> N.toText tipe)) <$>
+          (\(modu, tipe) -> ("elm/core", modu, tipe) --> ("Lamdera.Wire.encode" <> N.toText tipe, "Lamdera.Wire.decode" <> N.toText tipe)) <$>
           [ ("Array", "Array")
           , ("Basics", "Bool")
           , ("Basics", "Float")
@@ -456,8 +456,8 @@ typedFailEncode qualIfNeeded targs (can, name) =
   -- 8 space indentation to be indented more than body of case branches in generated code
   "(\n\
   \        let\n\
-  \          evg_typed_failure : (%CanType%) -> Lamdera.Evergreen.Encoder\n\
-  \          evg_typed_failure = Lamdera.Evergreen.failEncode\n\
+  \          evg_typed_failure : (%CanType%) -> Lamdera.Wire.Encoder\n\
+  \          evg_typed_failure = Lamdera.Wire.failEncode\n\
   \        in %Lambda%\n\
   \        )"
 
@@ -495,7 +495,7 @@ typedFailDecode qualIfNeeded targs (can, name) =
   -- 8 space indentation to be indented more than body of case branches in generated code
   "(\n\
   \        let\n\
-  \          evg_typed_failure : Lamdera.Evergreen.Decoder (%CanType%)\n\
-  \          evg_typed_failure = Lamdera.Evergreen.failDecode\n\
+  \          evg_typed_failure : Lamdera.Wire.Decoder (%CanType%)\n\
+  \          evg_typed_failure = Lamdera.Wire.failDecode\n\
   \        in %Lambda%\n\
   \        )"

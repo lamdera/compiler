@@ -10,7 +10,7 @@ import Dict
 import Element exposing (..)
 import Element.Background as Background
 import Html
-import Lamdera.Evergreen
+import Lamdera.Wire
 import Msg exposing (..)
 import Result exposing (Result(..))
 import Set
@@ -100,7 +100,7 @@ view model =
     }
 
 
-encodeDecodeCheck : String -> List a -> (a -> Lamdera.Evergreen.Encoder) -> D.Decoder a -> Element msg
+encodeDecodeCheck : String -> List a -> (a -> Lamdera.Wire.Encoder) -> D.Decoder a -> Element msg
 encodeDecodeCheck label mock encoder decoder =
     let
         roundtripMatches =
