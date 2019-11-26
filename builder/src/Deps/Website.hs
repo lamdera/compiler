@@ -92,7 +92,7 @@ versionFromText t =
     Nothing -> Left t
 
 catResultsOrCrashOnLeft (Right a:rest) = (a:catResultsOrCrashOnLeft rest)
-catResultsOrCrashOnLeft (Left a:_) = error ("failed to parse folder structure; did you accidentally end up with `$LAMDERA_PKG_PATH/packages/packages/...` or something similar? I expected something like `$LAMDERA_PKG_PATH/packages/Lamdera/core/1.0.0/...`, but where I expected the `1.0.0` part to be, there wasn't a valid elm semver, instead I saw `" <> T.unpack a <> "`.")
+catResultsOrCrashOnLeft (Left a:_) = error ("failed to parse folder structure; did you accidentally end up with `$LAMDERA_PKG_PATH/packages/packages/...` or something similar? I expected something like `$LAMDERA_PKG_PATH/packages/lamdera/core/1.0.0/...`, but where I expected the `1.0.0` part to be, there wasn't a valid elm semver, instead I saw `" <> T.unpack a <> "`.")
 catResultsOrCrashOnLeft [] = []
 
 -- NEW PACKAGES
