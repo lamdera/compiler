@@ -5,7 +5,7 @@ import Html.Attributes
 import Html.Events exposing (onClick)
 import Lamdera.Frontend
 import Lamdera.Types exposing (Milliseconds, WsError)
-import Msg exposing (..)
+import Types exposing (..)
 
 
 {-| Lamdera applications define 'app' instead of 'main'.

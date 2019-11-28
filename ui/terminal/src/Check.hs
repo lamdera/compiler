@@ -88,10 +88,17 @@ run :: () -> () -> IO ()
 run () () =
   do  reporter <- Terminal.create
 
+      appNameEnvM <- liftIO $ Env.lookupEnv "LAMDERA_APP_NAME"
+
+      let isProduction = (appNameEnvM /= Nothing) -- @TODO better isProd check...
+
       Task.run reporter $ do
         liftIO $ putStrLn "Checking project compiles..."
 
-        checkUserProjectCompiles
+        summary <- Project.getRoot
+        let root = Summary._root summary
+
+        checkUserProjectCompiles root
 
         gitRemotes <- liftIO $ readProcess "git" ["remote", "-v"] ""
 
@@ -101,8 +108,6 @@ run () () =
                 & T.splitOn "\n"
                 & filter (textContains "lamdera")
 
-        appNameEnvM <- liftIO $ Env.lookupEnv "LAMDERA_APP_NAME"
-        let isProduction = (appNameEnvM /= Nothing) -- @TODO better isProd check...
 
         onlyWhen (lamderaRemotes == [] && appNameEnvM == Nothing) $
           Task.throw $ Exit.Lamdera
@@ -134,28 +139,36 @@ run () () =
 
         let nextVersion = (prodVersion + 1)
 
+        debug $ "Continuing with (prodV,nextV) " ++ show (prodVersion, nextVersion)
+
         if nextVersion == 0
           then
             Task.report Progress.LamderaCannotCheckRemote
 
           else if nextVersion == 1 then do
             -- This is the first version, we don't need any migration checking.
-            _ <- liftIO $ snapshotCurrentTypesTo nextVersion
+            _ <- liftIO $ snapshotCurrentTypesTo root nextVersion
+
+            unless isProduction $
+              -- Only check committed locally, as on remote it won't be
+              committedCheck root nextVersion
+
+            writeLamderaGenerated root isProduction nextVersion
+            buildProductionJsFiles root isProduction nextVersion
 
             pDocLn $ D.dullyellow (D.reflow $ "It appears you're all set to deploy the first version of '" <> T.unpack appName <> "'!")
 
-            writeLamderaGenerated nextVersion
-            buildProductionJsFiles isProduction nextVersion
-
           else do
-            writeLamderaGenerated nextVersion
+            writeLamderaGenerated root isProduction nextVersion
 
-            localTypes <- fetchLocalTypes
+            localTypes <- fetchLocalTypes root
 
             if productionTypes /= localTypes
               then do
 
-                lastTypeChangeVersion <- liftIO getLastLocalTypeChangeVersion
+                debug $ "Local and production types differ"
+
+                lastTypeChangeVersion <- liftIO $ getLastLocalTypeChangeVersion root
 
                 let lamderaTypes =
                       [ "FrontendModel"
@@ -175,9 +188,9 @@ run () () =
                       comparison
                         & fmap (\(label, local, prod) -> D.indent 4 (D.dullyellow (D.fromString label)))
 
-                    nextMigrationPath = "src/Evergreen/Migrate/V" <> (show nextVersion) <> ".elm"
+                    nextMigrationPath = (root </> "src/Evergreen/Migrate/V") <> (show nextVersion) <> ".elm"
 
-                    lastTypesPath = "src/Evergreen/Type/V" <> (show prodVersion) <> ".elm"
+                    lastTypesPath = (root </> "src/Evergreen/Type/V") <> (show prodVersion) <> ".elm"
 
 
 
@@ -185,6 +198,9 @@ run () () =
 
                 if migrationExists
                   then do
+
+                    debug $ "Migration file already exists"
+
                     -- @TODO check migrations match changes. I.e. user might have changed one thing, we generated
                     -- a migration, and then later changed another thing. Basically grep for `toBackend old = Unchanged` for each label?
                     -- so we don't acidentally run a migration saying nothing changed when it's not type safe?
@@ -194,8 +210,9 @@ run () () =
                     -- the top level of this branching condition, but doens't because you wanted to keep the effects close to the contentious areas
                     -- until the desired behavior was clear
 
-                    _ <- liftIO $ snapshotCurrentTypesTo nextVersion
+                    _ <- liftIO $ snapshotCurrentTypesTo root nextVersion
 
+                    debug $ "Reading migration source..."
                     migrationSource <- liftIO $ Text.decodeUtf8 <$> IO.readUtf8 nextMigrationPath
 
                     if textContains "Unimplemented" migrationSource
@@ -209,11 +226,14 @@ run () () =
                               ]
                             )
                       else do
-                        migrationCheck nextVersion
 
-                        unless isProduction $
+                        debug $ "Type-checking migration file"
+
+                        migrationCheck root nextVersion
+
+                        unless isProduction $ do
                           -- Only check committed locally, as on remote it won't be
-                          committedCheck nextVersion
+                          committedCheck root nextVersion
 
                         pDocLn $ D.dullyellow $ D.reflow $ "\nIt appears you're all set to deploy v" <> (show nextVersion) <> " of '" <> T.unpack appName <> "'."
 
@@ -223,15 +243,18 @@ run () () =
                            [ D.reflow "See <https://lamdera.com/evergreen-migrations> more info." ]
                           )
 
-                        buildProductionJsFiles isProduction nextVersion
+                        buildProductionJsFiles root isProduction nextVersion
 
                   else do
 
+                    debug $ "Migration does not exist"
+
                     let defaultMigrations = defaultMigrationFile lastTypeChangeVersion nextVersion typeCompares
 
+                    _ <- liftIO $ readProcess "mkdir" ["-p", root </> "src/Evergreen/Migrate"] ""
                     liftIO $ writeUtf8 defaultMigrations nextMigrationPath
 
-                    _ <- liftIO $ snapshotCurrentTypesTo nextVersion
+                    _ <- liftIO $ snapshotCurrentTypesTo root nextVersion
 
                     Task.throw $ Exit.Lamdera
                       $ Help.report "UNIMPLEMENTED MIGRATION" (Just nextMigrationPath)
@@ -250,20 +273,20 @@ run () () =
                 pDocLn $ D.dullyellow $ D.reflow $ "\nIt appears you're all set to deploy v" <> (show nextVersion) <> " of '" <> T.unpack appName <> "'."
                 pDocLn $ D.reflow $ "\nThere are no Evergreen type changes for this version."
 
-                buildProductionJsFiles isProduction nextVersion
+                buildProductionJsFiles root isProduction nextVersion
 
                 -- liftIO $ writeUtf8 defaultMigrations nextMigrationPath
 
 
-
-buildProductionJsFiles isProduction version =
+buildProductionJsFiles :: FilePath -> Bool -> Int -> Task.Task ()
+buildProductionJsFiles root isProduction version =
   onlyWhen isProduction $ do
     summary <- Project.getRoot
 
     liftIO $ putStrLn "Compiling for production..."
 
     onlyWhen (version /= 1) $ do -- Version 1 has no migrations for rewrite
-      let migrationPath = "src/Evergreen/Migrate/V" <> show version <> ".elm"
+      let migrationPath = (root </> "src/Evergreen/Migrate/V") <> show version <> ".elm"
       -- Temporarily point migration to current types in order to type-check
       liftIO $ callCommand $ "sed -i -e 's/import Evergreen.Type.V" <> show version <> "/import Types/g' " ++ migrationPath
 
@@ -297,21 +320,24 @@ buildProductionJsFiles isProduction version =
 
 
 
-snapshotCurrentTypesTo :: Int -> IO String
-snapshotCurrentTypesTo version = do
+snapshotCurrentTypesTo :: FilePath -> Int -> IO String
+snapshotCurrentTypesTo root version = do
   -- Snapshot the current types, and rename the module for the snapshot
-  _ <- readProcess "cp" ["src/Types.elm", "src/Evergreen/Type/V" <> show version <> ".elm"] ""
-  callCommand $ "sed -i -e 's/module Types exposing/module Evergreen.Type.V" <> show version <> " exposing/g' src/Evergreen/Type/V" <> show version <> ".elm"
+
+  let nextType = (root </> "src/Evergreen/Type/V") <> show version <> ".elm"
+  _ <- readProcess "mkdir" [ "-p", root </> "src/Evergreen/Type" ] ""
+  _ <- readProcess "cp" [ root </> "src/Types.elm", nextType ] ""
+  callCommand $ "sed -i -e 's/module Types exposing/module Evergreen.Type.V" <> show version <> " exposing/g' " <> nextType
   -- How do we get sed to not make these files? Same issue in build.sh...
-  callCommand $ "rm src/Evergreen/Type/V" <> show version <> ".elm-e"
+  callCommand $ "rm " <> nextType <> "-e"
   pure ""
 
 
 
-getLastLocalTypeChangeVersion :: IO Int
-getLastLocalTypeChangeVersion = do
+getLastLocalTypeChangeVersion :: FilePath -> IO Int
+getLastLocalTypeChangeVersion root = do
 
-  types <- Dir.listDirectory "src/Evergreen/Type"
+  types <- Dir.listDirectory $ root </> "src/Evergreen/Type"
   if types == []
     then
       pure 1
@@ -371,11 +397,10 @@ fetchProductionInfo appName =
               return $ Left $ E.BadJson "github.json" jsonProblem
 
 
-fetchLocalTypes :: Task.Task [String]
-fetchLocalTypes = do
+fetchLocalTypes :: FilePath -> Task.Task [String]
+fetchLocalTypes root = do
 
-  summary <- Project.getRoot
-  let root = Summary._root summary
+  debug $ "Reading local types..."
 
   -- This could fail normally but we're using this function after
   -- we've already checked it exists
@@ -394,21 +419,41 @@ fetchLocalTypes = do
       return $ error $ show jsonProblem --Left $ E.BadJson "github.json" jsonProblem
 
 
-checkUserProjectCompiles =
+checkUserProjectCompiles root = do
   -- Dir.withCurrentDirectory ("/Users/mario/dev/projects/lamdera/test/v2") $
   --   do  reporter <- Terminal.create
   --       Task.run reporter $
-          do  summary <- Project.getRoot
-              let jsOutput = Just (Output.Html Nothing "/dev/null")
-              Project.compile Output.Dev Output.Client jsOutput Nothing summary [ "src" </> "Frontend.elm" ]
-              Project.compile Output.Dev Output.Client jsOutput Nothing summary [ "src" </> "Backend.elm" ]
-
-              -- @TODO this is because the migrationCheck does weird terminal stuff that mangles the display... how to fix this?
-              liftIO $ threadDelay 50000 -- 50 milliseconds
+  summary <- Project.getRoot
 
 
+  -- Why do we sometimes not get .lamdera-hashes generated?
+  --
+  -- $ DEBUG=1 lamdera check
+  --   Checking project compiles...
+  --   Success!
+  --   Success!
+  --   DEBUG: Continuing with (prodV,nextV) (1,2)
+  --   DEBUG: Reading local types...
+  --   lamdera: /Users/mario/dev/projects/lamdera/test/v2/lamdera-stuff/.lamdera-hashes: openFile: does not exist (No such file or directory)
+  --
+  -- Because of caches? But how? First non-cached build should always generate it?
+  --
+  -- touch src/Types.elm fixed the problem, so something to look into here... maybe we always touch it for now?
+  --
+  -- But need to have a better error message for this probably... watch out for it in future.
 
-migrationCheck version =
+  _ <- liftIO $ readProcess "touch" [root </> "src" </> "Types.elm"] ""
+
+  let jsOutput = Just (Output.Html Nothing "/dev/null")
+  Project.compile Output.Dev Output.Client jsOutput Nothing summary [ "src" </> "Frontend.elm" ]
+  Project.compile Output.Dev Output.Client jsOutput Nothing summary [ "src" </> "Backend.elm" ]
+
+  -- @TODO this is because the migrationCheck does weird terminal stuff that mangles the display... how to fix this?
+  liftIO $ threadDelay 50000 -- 50 milliseconds
+
+
+
+migrationCheck root version =
   -- Dir.withCurrentDirectory ("/Users/mario/dev/projects/lamdera/test/v2") $
     -- do  reporter <- Terminal.create
         -- Task.run reporter $
@@ -417,64 +462,72 @@ migrationCheck version =
               -- Temporarily point migration to current types in order to type-check
               liftIO $ putStrLn "Checking Evergreen migrations..."
 
-              let migrationPath = "src/Evergreen/Migrate/V" <> show version <> ".elm"
+              let migrationPath = (root </> "src/Evergreen/Migrate/V") <> show version <> ".elm"
 
+              debug "Replacing type reference"
               liftIO $ callCommand $ "sed -i -e 's/import Evergreen.Type.V" <> show version <> "/import Types/g' " ++ migrationPath
 
+              frontendRuntimeExists <- liftIO $ Dir.doesFileExist $ root </> "src/LamderaFrontendRuntime.elm"
+              backendRuntimeExists <- liftIO $ Dir.doesFileExist $ root </> "src/LamderaBackendRuntime.elm"
 
-              frontendRuntimeExists <- liftIO $ Dir.doesFileExist $ "src/LamderaFrontendRuntime.elm"
-              backendRuntimeExists <- liftIO $ Dir.doesFileExist $ "src/LamderaBackendRuntime.elm"
+              debug "Creating build scaffold files"
+              liftIO $ unless frontendRuntimeExists $ writeUtf8 frontendRuntimeLocalContent $ root </> "src/LamderaFrontendRuntime.elm"
+              liftIO $ unless backendRuntimeExists $ writeUtf8 backendRuntimeLocalContent $ root </> "src/LamderaBackendRuntime.elm"
 
-              liftIO $ unless frontendRuntimeExists $ writeUtf8 frontendRuntimeLocalContent "src/LamderaFrontendRuntime.elm"
-              liftIO $ unless backendRuntimeExists $ writeUtf8 backendRuntimeLocalContent "src/LamderaBackendRuntime.elm"
-
-              liftIO $ writeUtf8 lamderaCheckBothFileContents "src/LamderaCheckBoth.elm"
+              liftIO $ writeUtf8 lamderaCheckBothFileContents $ root </> "src/LamderaCheckBoth.elm"
               let jsOutput = Just (Output.Html Nothing "/dev/null")
               Project.compile Output.Dev Output.Client jsOutput Nothing summary [ "src" </> "LamderaCheckBoth.elm" ]
 
               -- @TODO this is because the migrationCheck does weird terminal stuff that mangles the display... how to fix this?
               liftIO $ threadDelay 50000 -- 50 milliseconds
 
+              debug "Cleaning up build scaffold"
               -- Remove our temporarily checker file
-              liftIO $ callCommand $ "rm src/LamderaCheckBoth.elm"
+              liftIO $ callCommand $ "rm " <> (root </> "src/LamderaCheckBoth.elm")
 
               -- Restore the type back to what it was
               liftIO $ callCommand $ "sed -i -e 's/import Types/import Evergreen.Type.V" <> show version <> "/g' " ++ migrationPath
-              liftIO $ callCommand $ "rm src/Evergreen/Migrate/V" <> show version <> ".elm-e"
+              liftIO $ callCommand $ "rm " <> (root </> migrationPath) <> "-e"
 
               -- Cleanup dummy runtime files if we added them
-              liftIO $ unless frontendRuntimeExists $ callCommand $ "rm src/LamderaFrontendRuntime.elm"
-              liftIO $ unless backendRuntimeExists $ callCommand $ "rm src/LamderaBackendRuntime.elm"
+              liftIO $ unless frontendRuntimeExists $ callCommand $ "rm " <> root </> "src/LamderaFrontendRuntime.elm"
+              liftIO $ unless backendRuntimeExists $ callCommand $ "rm " <> root </> "src/LamderaBackendRuntime.elm"
 
 
 
-committedCheck version = do
+committedCheck root version = do
 
-  let migrationPath = "src/Evergreen/Migrate/V" <> show version <> ".elm"
+  debug $ "Commit-checking migration and types files"
+
+  let migrationPath = (root </> "src/Evergreen/Migrate/V") <> show version <> ".elm"
   migrations <- liftIO $ gitStatus migrationPath
 
-  onlyWhen (migrations /= Committed) $
-    Task.throw $ Exit.Lamdera
-      $ Help.report "UNCOMMITTED MIGRATION" (Just migrationPath)
-        ("I need migration files to be comitted otherwise I cannot deploy!")
-        ([ D.reflow "Here is a shortcut to add this file to git:"
-         , D.dullyellow (D.reflow $ "git add " <> migrationPath)
-         , D.reflow "You will then need to commit it."
-         ]
-        )
-
-  let typesPath = "src/Evergreen/Type/V" <> show version <> ".elm"
+  let typesPath = (root </> "src/Evergreen/Type/V") <> show version <> ".elm"
   types <- liftIO $ gitStatus typesPath
 
-  onlyWhen (types /= Committed) $
+  let missingPaths =
+        [ if (migrations /= Committed && version > 1) then
+            Just migrationPath
+          else
+            Nothing
+        , if types /= Committed then
+            Just typesPath
+          else
+            Nothing
+        ]
+        & justs
+
+  -- On first version, we have no migrations
+  onlyWhen (missingPaths /= []) $
     Task.throw $ Exit.Lamdera
-    $ Help.report "UNCOMMITTED TYPES" (Just typesPath)
-      ("I need type snapshot files to be comitted otherwise I cannot deploy!")
-      ([ D.reflow "Here is a shortcut to add this file to git:"
-       , D.dullyellow (D.reflow $ "git add " <> typesPath)
-       , D.reflow "You will then need to commit it."
-       ]
-      )
+      $ Help.report "UNCOMMITTED FILES" (Just migrationPath)
+        ("I need type and migration files to be comitted otherwise I cannot deploy!")
+        ([ D.reflow "Here is a shortcut:"
+         , D.dullyellow (D.reflow $ "git add " <> (List.intercalate " " missingPaths))
+         , D.dullyellow (D.reflow $ "git commit -m \"Preparing for v" <> show version <> "\"")
+         , D.reflow "Alpha note: This will be a y/n automatic action in future!"
+         ]
+        )
 
 
 defaultMigrationFile :: Int -> Int -> [(String, String, String)] -> Text
@@ -622,7 +675,8 @@ firstTwoChars str =
 
 
 writeUtf8 :: Text -> FilePath -> IO ()
-writeUtf8 textContent path =
+writeUtf8 textContent path = do
+  debug_ $ "writeUtf8: " ++ show path
   Text.encodeUtf8 textContent
     & IO.writeUtf8 path
 
@@ -633,10 +687,10 @@ lowerFirstLetter text =
     first:rest -> T.pack $ [Char.toLower first] <> rest
 
 
-createLamderaGenerated :: Int -> IO Text
-createLamderaGenerated currentVersion = do
+createLamderaGenerated :: FilePath -> Int -> IO Text
+createLamderaGenerated root currentVersion = do
 
-  migrationSequence <- liftIO $ getMigrationsSequence `catchError` (\err -> pure [])
+  migrationSequence <- liftIO $ getMigrationsSequence root `catchError` (\err -> pure [])
 
   let
     migrationImports :: Text
@@ -746,6 +800,8 @@ createLamderaGenerated currentVersion = do
 
     currentVersion_ = T.pack $ show currentVersion
 
+  debug_ $ "Generated source for LamderaGenerated"
+
   pure $ [text|
     module LamderaGenerated exposing (..)
 
@@ -814,16 +870,19 @@ createLamderaGenerated currentVersion = do
 
 
 
-writeLamderaGenerated :: Int -> Task.Task ()
-writeLamderaGenerated nextVersion = do
-  gen <- liftIO $ createLamderaGenerated nextVersion
-  liftIO $ putStrLn $ T.unpack gen
-  liftIO $ writeUtf8 gen "src/LamderaGenerated.elm"
+writeLamderaGenerated :: FilePath -> Bool -> Int -> Task.Task ()
+writeLamderaGenerated root isProduction nextVersion =
+  onlyWhen isProduction $ do
+    gen <- liftIO $ createLamderaGenerated root nextVersion
+    debug $ "Writing src/LamderaGenerated.elm"
+    liftIO $ writeUtf8 gen $ root </> "src/LamderaGenerated.elm"
 
 
-getMigrationsSequence :: IO [[Int]]
-getMigrationsSequence = do
-  migrations <- Dir.listDirectory "src/Evergreen/Migrate"
+getMigrationsSequence :: FilePath -> IO [[Int]]
+getMigrationsSequence root = do
+
+  debug_ $ "Reading src/Evergreen/Migrate to determine migrationSequence"
+  migrations <- Dir.listDirectory $ root </> "src/Evergreen/Migrate"
 
   let
     getVersion :: FilePath -> Maybe Int
@@ -848,6 +907,7 @@ getMigrationsSequence = do
         & filter ((/=) [])
         & fmap reverse
 
+  debug_ $ "Migration sequence: " ++ show sequences
   pure sequences
 
 
@@ -866,3 +926,16 @@ earlyBail =
 -- Inversion of `unless` that runs IO only when condition is True
 onlyWhen condition io =
   unless (not condition) io
+
+
+debug :: String -> Task.Task ()
+debug str =
+  liftIO $ debug_ str
+
+
+debug_ :: String -> IO ()
+debug_ str = do
+  debugM <- Env.lookupEnv "DEBUG"
+  case debugM of
+    Just _ -> putStrLn $ "DEBUG: " ++ str
+    Nothing -> pure ()
