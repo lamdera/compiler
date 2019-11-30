@@ -91,7 +91,7 @@ sansFontPath =
 elm :: BS.ByteString
 elm =
   -- Un-neuter here for reactor compilations
-  $(bsToExp =<< runIO Build.compile_)
+  $(bsToExp =<< runIO Build.compile)
 
 
 

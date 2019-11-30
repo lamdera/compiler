@@ -507,11 +507,13 @@ committedCheck root version = do
 
   let missingPaths =
         [ if (migrations /= Committed && version > 1) then
-            Just migrationPath
+            -- Bare non-root path intentional otherwise UI is pretty ugly...
+            Just $ "src/Evergreen/Migrate/V" <> show version <> ".elm"
           else
             Nothing
         , if types /= Committed then
-            Just typesPath
+            -- Bare non-root path intentional otherwise UI is pretty ugly...
+            Just $ "src/Evergreen/Type/V" <> show version <> ".elm"
           else
             Nothing
         ]
@@ -520,7 +522,7 @@ committedCheck root version = do
   -- On first version, we have no migrations
   onlyWhen (missingPaths /= []) $
     Task.throw $ Exit.Lamdera
-      $ Help.report "UNCOMMITTED FILES" (Just migrationPath)
+      $ Help.report "UNCOMMITTED FILES" (Just "src/Evergreen/")
         ("I need type and migration files to be comitted otherwise I cannot deploy!")
         ([ D.reflow "Here is a shortcut:"
          , D.dullyellow (D.reflow $ "git add " <> (List.intercalate " " missingPaths))
@@ -926,16 +928,3 @@ earlyBail =
 -- Inversion of `unless` that runs IO only when condition is True
 onlyWhen condition io =
   unless (not condition) io
-
-
-debug :: String -> Task.Task ()
-debug str =
-  liftIO $ debug_ str
-
-
-debug_ :: String -> IO ()
-debug_ str = do
-  debugM <- Env.lookupEnv "DEBUG"
-  case debugM of
-    Just _ -> putStrLn $ "DEBUG: " ++ str
-    Nothing -> pure ()

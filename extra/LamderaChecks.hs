@@ -111,7 +111,7 @@ contextHintsWhenTypeMismatch tipe =
   case tipe of
     -- @TODO fix when we move this to core
     (T.Type (Canonical (Pkg.Name "author" "project") "Evergreen.Migrate") "UnimplementedMigration" []) ->
-      -- DT.trace ("contextHintsWhenTypeMismatch: " ++ show tipe )
+      -- debugTrace ("contextHintsWhenTypeMismatch: " ++ show tipe )
         [ D.toSimpleHint $
            "I need you to implement migrations for changed types\
             \ as described in <https://lamdera.com/evergreen-migrations>"

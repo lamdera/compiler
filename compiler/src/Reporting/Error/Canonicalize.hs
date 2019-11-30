@@ -16,6 +16,7 @@ module Reporting.Error.Canonicalize
 import qualified Data.Char as Char
 import qualified Data.Map as Map
 import qualified Data.Set as Set
+import qualified Data.List as List
 
 import qualified AST.Canonical as Can
 import qualified AST.Source as Src
@@ -320,7 +321,8 @@ toReport source err =
     ExportNotFound region kind rawName possibleNames ->
       let
         suggestions =
-          map N.toString $ take 4 $
+          -- @LAMDERA remove evg_ functions from hints
+          map N.toString $ take 4 $ filter (\x -> not $ List.isInfixOf "evg_" (N.toString x)) $
             Suggest.sort (N.toString rawName) N.toString possibleNames
       in
       Report.Report "UNKNOWN EXPORT" region suggestions $
@@ -406,7 +408,8 @@ toReport source err =
     ImportExposingNotFound region (ModuleName.Canonical _ home) value possibleNames ->
       let
         suggestions =
-          map N.toString $ take 4 $
+          -- @LAMDERA remove evg_ functions from hints
+          map N.toString $ take 4 $ filter (\x -> not $ List.isInfixOf "evg_" (N.toString x)) $
             Suggest.sort (N.toString home) N.toString possibleNames
       in
       Report.Report "BAD IMPORT" region suggestions $
@@ -1067,7 +1070,8 @@ notFound source region maybePrefix name thing (PossibleNames locals quals) =
       Map.foldrWithKey addQuals (map N.toString (Set.toList locals)) quals
 
     nearbyNames =
-      take 4 (Suggest.sort givenName id possibleNames)
+      -- @LAMDERA remove evg_ functions from hints
+      take 4 $ filter (\x -> not $ List.isInfixOf "evg_" x) $ (Suggest.sort givenName id possibleNames)
 
     toDetails noSuggestionDetails yesSuggestionDetails =
       case nearbyNames of

@@ -44,7 +44,7 @@ import qualified Reporting.Task as Task
 import qualified Reporting.Task.Http as Http
 import qualified Stuff.Paths as Path
 
-import qualified Debug.Trace as DT
+import Elm
 import System.IO.Unsafe
 import qualified System.Process
 import Wire.PrettyPrint (sShow)
@@ -79,7 +79,7 @@ localPackages =
           authoredPkgs <- concat <$> mapM (\author -> do pkg <- Dir.listDirectory (path </> "packages" </> author); pure (((,) author) <$> pkg)) authors :: IO [(FilePath, FilePath)]
           versionedAuthoredPkgs <- mapM (\(author, pkg) -> do versions <- Dir.listDirectory (path </> "packages" </> author </> pkg); pure (( author, pkg, versions))) authoredPkgs :: IO [(FilePath, FilePath, [FilePath])]
 
-          -- DT.trace ("found local packages:" ++ sShow versionedAuthoredPkgs) $
+          -- debugTrace ("found local packages:" ++ sShow versionedAuthoredPkgs) $
           pure $
             catResultsOrCrashOnLeft <$> (Map.fromList $ ((\(author, pkg, versions) -> (Name (T.pack author) (T.pack pkg), versionFromText <$> T.pack <$> versions)) <$> versionedAuthoredPkgs))
 
@@ -169,10 +169,10 @@ fetchLocal url =
         do
           exists <- Dir.doesFileExist (path </> url)
           if exists then
-              -- DT.trace ("using local file override at " ++ (path </> url)) $
+              -- debugTrace ("using local file override at " ++ (path </> url)) $
               Just <$> BS.readFile (path </> url)
             else
-              -- DT.trace ("using web file; no local override found at " ++ (path </> url)) $
+              -- debugTrace ("using web file; no local override found at " ++ (path </> url)) $
               pure Nothing
       Nothing ->
         pure $ case url of
@@ -257,7 +257,7 @@ downloadHelp cache (name, version) =
               let fullPath = path </> "packages" </> Pkg.toUrl name </> Pkg.versionToString version
               exists <- Dir.doesDirectoryExist fullPath
               if exists then
-                  --DT.trace ("using local pkg override at " ++ fullPath) $
+                  --debugTrace ("using local pkg override at " ++ fullPath) $
                   -- TODO: pretend it's a zip archive, or at least put it where writeArchive would've
                   let
                     from = fullPath
@@ -265,13 +265,13 @@ downloadHelp cache (name, version) =
                   in
                     do
                       (exit, stdout, stderr) <- System.Process.readProcessWithExitCode "rsync" ["-ptchr", from, to] ""
-                      DT.trace ("(roughly) rsync -ptchr " ++ from ++ " " ++ to ++ "\n") $
-                      --  DT.trace ("  exit code: " ++ show exit ++ "\n") $
-                      --  DT.trace ("  stdout: " ++ stdout ++ "\n") $
-                      --  DT.trace ("  stderr: " ++ stderr ++ "\n") $
+                      debugTrace ("(roughly) rsync -ptchr " ++ from ++ " " ++ to ++ "\n") $
+                      --  debugTrace ("  exit code: " ++ show exit ++ "\n") $
+                      --  debugTrace ("  stdout: " ++ stdout ++ "\n") $
+                      --  debugTrace ("  stderr: " ++ stderr ++ "\n") $
                         pure (Just ())
                 else
-                  --DT.trace ("using web pkg; no local override found at " ++ fullPath) $
+                  --debugTrace ("using web pkg; no local override found at " ++ fullPath) $
                   pure Nothing
           Nothing ->
             pure Nothing

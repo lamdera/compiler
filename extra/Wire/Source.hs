@@ -114,7 +114,7 @@ generateCodecs revImportDict (Can.Module _moduName _docs _exports _decls _unions
     qualIfNeeded moduName@(Canonical _ n) =
       case revImportDict Map.!? n of
         Just v -> N.toText v <> "."
-        Nothing -> trace (sShow ("Lamdera: qualIfNeeded import not found", moduName)) (N.toText n <> ".")
+        Nothing -> debugTrace (sShow ("Lamdera: qualIfNeeded import not found", moduName)) (N.toText n <> ".")
 
     evergreenCoreEncoder tipes = fmap fst <$> evergreenCoreCodecs qualIfNeeded tipes
     evergreenCoreDecoder tipes = fmap snd <$> evergreenCoreCodecs qualIfNeeded tipes
