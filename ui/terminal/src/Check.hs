@@ -283,23 +283,19 @@ buildProductionJsFiles root isProduction version =
   onlyWhen isProduction $ do
     summary <- Project.getRoot
 
-    liftIO $ putStrLn "Compiling for production..."
+    liftIO $ putStrLn "---> Compiling for production..."
 
     onlyWhen (version /= 1) $ do -- Version 1 has no migrations for rewrite
       let migrationPath = (root </> "src/Evergreen/Migrate/V") <> show version <> ".elm"
       -- Temporarily point migration to current types in order to type-check
       liftIO $ callCommand $ "sed -i -e 's/import Evergreen.Type.V" <> show version <> "/import Types/g' " ++ migrationPath
 
-    Project.compile
-      Output.Dev
-      Output.Client
-      (Just (Output.JavaScript Nothing "frontend-app.js"))
-      Nothing
-      summary
-      [ "src" </> "LamderaFrontendRuntime.elm" ]
+    -- debug $ "Injecting BACKENDINJECTION " <> (root </> "elm-backend-overrides.js")
+    -- liftIO $ Env.setEnv "BACKENDINJECTION" (root </> "elm-backend-overrides.js")
+    -- _ <- liftIO $ readProcess "touch" [root </> "src" </> "Types.elm"] ""
 
     -- @TODO this is because the migrationCheck does weird terminal stuff that mangles the display... how to fix this?
-    liftIO $ threadDelay 50000 -- 50 milliseconds
+    -- liftIO $ threadDelay 50000 -- 50 milliseconds
 
     Project.compile
       Output.Dev
@@ -309,8 +305,24 @@ buildProductionJsFiles root isProduction version =
       summary
       [ "src" </> "LamderaBackendRuntime.elm" ]
 
+    -- debug $ "Unsetting BACKENDINJECTION"
+    -- liftIO $ Env.unsetEnv "BACKENDINJECTION"
+
     -- @TODO this is because the migrationCheck does weird terminal stuff that mangles the display... how to fix this?
     liftIO $ threadDelay 50000 -- 50 milliseconds
+
+    Project.compile
+      Output.Dev
+      Output.Client
+      (Just (Output.JavaScript Nothing "frontend-app.js"))
+      Nothing
+      summary
+      [ "src" </> "LamderaFrontendRuntime.elm" ]
+
+
+    -- @TODO this is because the migrationCheck does weird terminal stuff that mangles the display... how to fix this?
+    liftIO $ threadDelay 50000 -- 50 milliseconds
+
 
     -- NOTE: Could do this, but assuming it'll be good to have the original evidence of
     -- state for situation where things go wrong in production and you can poke around

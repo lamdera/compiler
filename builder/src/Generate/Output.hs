@@ -45,6 +45,8 @@ import qualified Reporting.Task as Task
 import qualified Stuff.Paths as Paths
 import Terminal.Args (Parser(..))
 
+import LamderaInjection
+import Elm
 
 -- GENERATE
 
@@ -129,9 +131,13 @@ generateMonolith mode maybeOutput (Summary.Summary _ project _ _ _) graph rootNa
 
         Obj.Some name _names builder ->
           let
+            -- @LAMDERA
+            -- injections = LamderaInjection.source
+
             monolith =
               "(function(scope){\n'use strict';"
               <> Functions.functions <> builder <> "}(this));"
+              -- <> Functions.functions <> builder <> injections <> "}(this));"
           in
           liftIO $
           case maybeOutput of

@@ -48,7 +48,7 @@ debug str =
 
 debug_ :: String -> IO ()
 debug_ str = do
-  debugM <- Env.lookupEnv "DEBUG"
+  debugM <- Env.lookupEnv "LDEBUG"
   case debugM of
     Just _ -> putStrLn $ "DEBUG: " ++ str
     Nothing -> pure ()
@@ -57,7 +57,7 @@ debug_ str = do
 debugTrace :: String -> a -> a
 debugTrace msg value =
   unsafePerformIO $ do
-    debugM <- Env.lookupEnv "DEBUG"
+    debugM <- Env.lookupEnv "LDEBUG"
     case debugM of
       Just _ -> pure $ debugTrace msg value
       Nothing -> pure value

@@ -234,6 +234,7 @@ Executable elmx
         Wire.Test
         Wire.Source
         Wire.TypeHash
+        LamderaInjection
         LamderaChecks
         Check
         Reporting.Exit.Check
