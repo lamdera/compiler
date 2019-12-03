@@ -85,197 +85,200 @@ import qualified Elm.Project.Summary as Summary
 
 
 run :: () -> () -> IO ()
-run () () =
-  do  reporter <- Terminal.create
+run () () = do
+  debug_ "Starting check..."
 
-      appNameEnvM <- liftIO $ Env.lookupEnv "LAMDERA_APP_NAME"
+  reporter <- Terminal.create
 
-      let isProduction = (appNameEnvM /= Nothing) -- @TODO better isProd check...
+  appNameEnvM <- liftIO $ Env.lookupEnv "LAMDERA_APP_NAME"
 
-      Task.run reporter $ do
-        liftIO $ putStrLn "Checking project compiles..."
+  let isProduction = (appNameEnvM /= Nothing) -- @TODO better isProd check...
 
-        summary <- Project.getRoot
-        let root = Summary._root summary
+  putStrLn "---> Checking project compiles..."
 
-        checkUserProjectCompiles root
+  Task.run reporter $ do
 
-        gitRemotes <- liftIO $ readProcess "git" ["remote", "-v"] ""
+    summary <- Project.getRoot
+    let root = Summary._root summary
 
-        let lamderaRemotes =
-              gitRemotes
-                & T.pack
-                & T.splitOn "\n"
-                & filter (textContains "lamdera")
+    checkUserProjectCompiles root
+
+    gitRemotes <- liftIO $ readProcess "git" ["remote", "-v"] ""
+
+    let lamderaRemotes =
+          gitRemotes
+            & T.pack
+            & T.splitOn "\n"
+            & filter (textContains "lamdera")
 
 
-        onlyWhen (lamderaRemotes == [] && appNameEnvM == Nothing) $
-          Task.throw $ Exit.Lamdera
-            $ Help.report "UNKNOWN APP" (Just "git remote -v")
-              ("I cannot figure out which Lamdera app this repository belongs to.")
-              ([ D.reflow "I normally look for a git remote labelled 'lamdera' but did not find one."
-               , D.reflow "See <https://lamdera.com/app-setup> for more info."
-               ]
-              )
+    onlyWhen (lamderaRemotes == [] && appNameEnvM == Nothing) $
+      Task.throw $ Exit.Lamdera
+        $ Help.report "UNKNOWN APP" (Just "git remote -v")
+          ("I cannot figure out which Lamdera app this repository belongs to.")
+          ([ D.reflow "I normally look for a git remote labelled 'lamdera' but did not find one."
+           , D.reflow "See <https://lamdera.com/app-setup> for more info."
+           ]
+          )
 
-        -- Prior `onlyWhen` guards against situation where no name is determinable
-        let
-          appName :: Text
-          appName =
-              case appNameEnvM of
-                Just appNameEnv -> T.pack appNameEnv
-                _ ->
-                  List.head lamderaRemotes
-                    & T.splitOn ":"
-                    & (\l ->
-                        case l of
-                          f:second:_ -> second
-                      )
-                    & T.splitOn "."
-                    & List.head
+    -- Prior `onlyWhen` guards against situation where no name is determinable
+    let
+      appName :: Text
+      appName =
+          case appNameEnvM of
+            Just appNameEnv -> T.pack appNameEnv
+            _ ->
+              List.head lamderaRemotes
+                & T.splitOn ":"
+                & (\l ->
+                    case l of
+                      f:second:_ -> second
+                  )
+                & T.splitOn "."
+                & List.head
 
-        (prodVersion, productionTypes) <-
-            fetchProductionInfo appName `catchError` (\err -> pure (0, []))
+    (prodVersion, productionTypes) <-
+        fetchProductionInfo appName `catchError` (\err -> pure (0, []))
 
-        let nextVersion = (prodVersion + 1)
+    let nextVersion = (prodVersion + 1)
 
-        debug $ "Continuing with (prodV,nextV) " ++ show (prodVersion, nextVersion)
+    debug $ "Continuing with (prodV,nextV) " ++ show (prodVersion, nextVersion)
 
-        if nextVersion == 0
-          then
-            Task.report Progress.LamderaCannotCheckRemote
+    if nextVersion == 0
+      then
+        Task.report Progress.LamderaCannotCheckRemote
 
-          else if nextVersion == 1 then do
-            -- This is the first version, we don't need any migration checking.
-            _ <- liftIO $ snapshotCurrentTypesTo root nextVersion
+      else if nextVersion == 1 then do
+        -- This is the first version, we don't need any migration checking.
+        _ <- liftIO $ snapshotCurrentTypesTo root nextVersion
 
-            unless isProduction $
-              -- Only check committed locally, as on remote it won't be
-              committedCheck root nextVersion
+        unless isProduction $
+          -- Only check committed locally, as on remote it won't be
+          committedCheck root nextVersion
 
-            writeLamderaGenerated root isProduction nextVersion
-            buildProductionJsFiles root isProduction nextVersion
+        writeLamderaGenerated root isProduction nextVersion
+        buildProductionJsFiles root isProduction nextVersion
 
-            pDocLn $ D.dullyellow (D.reflow $ "It appears you're all set to deploy the first version of '" <> T.unpack appName <> "'!")
+        pDocLn $ D.green (D.reflow $ "It appears you're all set to deploy the first version of '" <> T.unpack appName <> "'!")
 
-          else do
-            writeLamderaGenerated root isProduction nextVersion
+      else do
+        writeLamderaGenerated root isProduction nextVersion
 
-            localTypes <- fetchLocalTypes root
+        localTypes <- fetchLocalTypes root
 
-            if productionTypes /= localTypes
+        if productionTypes /= localTypes
+          then do
+
+            debug $ "Local and production types differ"
+
+            lastTypeChangeVersion <- liftIO $ getLastLocalTypeChangeVersion root
+
+            let lamderaTypes =
+                  [ "FrontendModel"
+                  , "BackendModel"
+                  , "FrontendMsg"
+                  , "ToBackend"
+                  , "BackendMsg"
+                  , "ToFrontend"
+                  ]
+
+                typeCompares = zipWith3 (\label local prod -> (label,local,prod)) lamderaTypes localTypes productionTypes
+
+                comparison =
+                  typeCompares & filter (\(label, local, prod) -> local /= prod)
+
+                formattedChangedTypes =
+                  comparison
+                    & fmap (\(label, local, prod) -> D.indent 4 (D.dullyellow (D.fromString label)))
+
+                nextMigrationPath = (root </> "src/Evergreen/Migrate/V") <> (show nextVersion) <> ".elm"
+
+                lastTypesPath = (root </> "src/Evergreen/Type/V") <> (show prodVersion) <> ".elm"
+
+
+
+            migrationExists <- liftIO $ Dir.doesFileExist $ nextMigrationPath
+
+            if migrationExists
               then do
 
-                debug $ "Local and production types differ"
+                debug $ "Migration file already exists"
 
-                lastTypeChangeVersion <- liftIO $ getLastLocalTypeChangeVersion root
+                -- @TODO check migrations match changes. I.e. user might have changed one thing, we generated
+                -- a migration, and then later changed another thing. Basically grep for `toBackend old = Unchanged` for each label?
+                -- so we don't acidentally run a migration saying nothing changed when it's not type safe?
+                -- is that even possible or will compiler catch incorrect "unchanged" declarations?
 
-                let lamderaTypes =
-                      [ "FrontendModel"
-                      , "BackendModel"
-                      , "FrontendMsg"
-                      , "ToBackend"
-                      , "BackendMsg"
-                      , "ToFrontend"
-                      ]
+                -- This also might have implications for ordering of snapshotCurrentTypesTo, which could currently happen at
+                -- the top level of this branching condition, but doens't because you wanted to keep the effects close to the contentious areas
+                -- until the desired behavior was clear
 
-                    typeCompares = zipWith3 (\label local prod -> (label,local,prod)) lamderaTypes localTypes productionTypes
+                _ <- liftIO $ snapshotCurrentTypesTo root nextVersion
 
-                    comparison =
-                      typeCompares & filter (\(label, local, prod) -> local /= prod)
+                debug $ "Reading migration source..."
+                migrationSource <- liftIO $ Text.decodeUtf8 <$> IO.readUtf8 nextMigrationPath
 
-                    formattedChangedTypes =
-                      comparison
-                        & fmap (\(label, local, prod) -> D.indent 4 (D.dullyellow (D.fromString label)))
-
-                    nextMigrationPath = (root </> "src/Evergreen/Migrate/V") <> (show nextVersion) <> ".elm"
-
-                    lastTypesPath = (root </> "src/Evergreen/Type/V") <> (show prodVersion) <> ".elm"
-
-
-
-                migrationExists <- liftIO $ Dir.doesFileExist $ nextMigrationPath
-
-                if migrationExists
+                if textContains "Unimplemented" migrationSource
                   then do
-
-                    debug $ "Migration file already exists"
-
-                    -- @TODO check migrations match changes. I.e. user might have changed one thing, we generated
-                    -- a migration, and then later changed another thing. Basically grep for `toBackend old = Unchanged` for each label?
-                    -- so we don't acidentally run a migration saying nothing changed when it's not type safe?
-                    -- is that even possible or will compiler catch incorrect "unchanged" declarations?
-
-                    -- This also might have implications for ordering of snapshotCurrentTypesTo, which could currently happen at
-                    -- the top level of this branching condition, but doens't because you wanted to keep the effects close to the contentious areas
-                    -- until the desired behavior was clear
-
-                    _ <- liftIO $ snapshotCurrentTypesTo root nextVersion
-
-                    debug $ "Reading migration source..."
-                    migrationSource <- liftIO $ Text.decodeUtf8 <$> IO.readUtf8 nextMigrationPath
-
-                    if textContains "Unimplemented" migrationSource
-                      then do
-                        Task.throw $ Exit.Lamdera
-                          $ Help.report "UNIMPLEMENTED MIGRATION" (Just nextMigrationPath)
-                            ("The following types have changed since v" <> show prodVersion <> " and require migrations:")
-                            (formattedChangedTypes <>
-                              [ D.reflow $ "The migration file at " <> nextMigrationPath <> " has migrations that still haven't been implemented."
-                              , D.reflow "See <https://lamdera.com/evergreen-migrations> more info."
-                              ]
-                            )
-                      else do
-
-                        debug $ "Type-checking migration file"
-
-                        migrationCheck root nextVersion
-
-                        unless isProduction $ do
-                          -- Only check committed locally, as on remote it won't be
-                          committedCheck root nextVersion
-
-                        pDocLn $ D.dullyellow $ D.reflow $ "\nIt appears you're all set to deploy v" <> (show nextVersion) <> " of '" <> T.unpack appName <> "'."
-
-                        mapM pDocLn $
-                          ([ D.reflow "Evergreen migrations will be applied to the following types:" ]
-                           <> formattedChangedTypes <>
-                           [ D.reflow "See <https://lamdera.com/evergreen-migrations> more info." ]
-                          )
-
-                        buildProductionJsFiles root isProduction nextVersion
-
-                  else do
-
-                    debug $ "Migration does not exist"
-
-                    let defaultMigrations = defaultMigrationFile lastTypeChangeVersion nextVersion typeCompares
-
-                    _ <- liftIO $ readProcess "mkdir" ["-p", root </> "src/Evergreen/Migrate"] ""
-                    liftIO $ writeUtf8 defaultMigrations nextMigrationPath
-
-                    _ <- liftIO $ snapshotCurrentTypesTo root nextVersion
-
                     Task.throw $ Exit.Lamdera
                       $ Help.report "UNIMPLEMENTED MIGRATION" (Just nextMigrationPath)
                         ("The following types have changed since v" <> show prodVersion <> " and require migrations:")
                         (formattedChangedTypes <>
-                          [ D.reflow $ "I've generated a placeholder migration file in " <> nextMigrationPath <> " to help you get started."
+                          [ D.reflow $ "The migration file at " <> nextMigrationPath <> " has migrations that still haven't been implemented."
                           , D.reflow "See <https://lamdera.com/evergreen-migrations> more info."
                           ]
                         )
+                  else do
+
+                    debug $ "Type-checking migration file"
+
+                    migrationCheck root nextVersion
+
+                    unless isProduction $ do
+                      -- Only check committed locally, as on remote it won't be
+                      committedCheck root nextVersion
+
+                    pDocLn $ D.green $ D.reflow $ "\nIt appears you're all set to deploy v" <> (show nextVersion) <> " of '" <> T.unpack appName <> "'."
+
+                    mapM pDocLn $
+                      ([ D.reflow "Evergreen migrations will be applied to the following types:" ]
+                       <> formattedChangedTypes <>
+                       [ D.reflow "See <https://lamdera.com/evergreen-migrations> more info." ]
+                      )
+
+                    buildProductionJsFiles root isProduction nextVersion
 
               else do
-                -- Types are the same.
-                -- @TODO If we have a version with no type changes do we still write migrations?
-                -- If not, what happens when we get to the next version and we can't refer to the types from the previous one?
 
-                pDocLn $ D.dullyellow $ D.reflow $ "\nIt appears you're all set to deploy v" <> (show nextVersion) <> " of '" <> T.unpack appName <> "'."
-                pDocLn $ D.reflow $ "\nThere are no Evergreen type changes for this version."
+                debug $ "Migration does not exist"
 
-                buildProductionJsFiles root isProduction nextVersion
+                let defaultMigrations = defaultMigrationFile lastTypeChangeVersion nextVersion typeCompares
 
-                -- liftIO $ writeUtf8 defaultMigrations nextMigrationPath
+                _ <- liftIO $ readProcess "mkdir" ["-p", root </> "src/Evergreen/Migrate"] ""
+                liftIO $ writeUtf8 defaultMigrations nextMigrationPath
+
+                _ <- liftIO $ snapshotCurrentTypesTo root nextVersion
+
+                Task.throw $ Exit.Lamdera
+                  $ Help.report "UNIMPLEMENTED MIGRATION" (Just nextMigrationPath)
+                    ("The following types have changed since v" <> show prodVersion <> " and require migrations:")
+                    (formattedChangedTypes <>
+                      [ D.reflow $ "I've generated a placeholder migration file in " <> nextMigrationPath <> " to help you get started."
+                      , D.reflow "See <https://lamdera.com/evergreen-migrations> more info."
+                      ]
+                    )
+
+          else do
+            -- Types are the same.
+            -- @TODO If we have a version with no type changes do we still write migrations?
+            -- If not, what happens when we get to the next version and we can't refer to the types from the previous one?
+
+            pDocLn $ D.green $ D.reflow $ "\nIt appears you're all set to deploy v" <> (show nextVersion) <> " of '" <> T.unpack appName <> "'."
+            pDocLn $ D.reflow $ "\nThere are no Evergreen type changes for this version."
+
+            buildProductionJsFiles root isProduction nextVersion
+
+            -- liftIO $ writeUtf8 defaultMigrations nextMigrationPath
 
 
 buildProductionJsFiles :: FilePath -> Bool -> Int -> Task.Task ()
