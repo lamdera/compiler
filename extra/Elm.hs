@@ -59,5 +59,5 @@ debugTrace msg value =
   unsafePerformIO $ do
     debugM <- Env.lookupEnv "LDEBUG"
     case debugM of
-      Just _ -> pure $ debugTrace msg value
+      Just _ -> pure $ DT.trace msg value
       Nothing -> pure value
