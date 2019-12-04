@@ -47,6 +47,7 @@ run () (Flags maybePort) =
       maybe 8000 id maybePort
   in
     do  putStrLn $ "Go to <http://localhost:" ++ show port ++ "> to see your project dashboard."
+        putStrLn $ "Go to <http://localhost:" ++ show port ++ "/lamdera> to run your Lamdera project."
 
         httpServe (config port) $
           serveFiles
