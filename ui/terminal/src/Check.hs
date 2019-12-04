@@ -331,7 +331,8 @@ buildProductionJsFiles root isProduction version =
     -- state for situation where things go wrong in production and you can poke around
     -- Restore the type back to what it was
     -- liftIO $ callCommand $ "sed -i -e 's/import Types/import Evergreen.Type.V" <> show version <> "/g' " ++ migrationPath
-    -- liftIO $ callCommand $ "rm src/Evergreen/Migrate/V" <> show version <> ".elm-e"
+    -- -- sed on OS X generates these noisy extra files
+    -- liftIO $ callCommand $ "rm src/Evergreen/Migrate/V" <> show version <> ".elm-e || true >> /dev/null 2>&1"
 
 
 
@@ -343,8 +344,9 @@ snapshotCurrentTypesTo root version = do
   _ <- readProcess "mkdir" [ "-p", root </> "src/Evergreen/Type" ] ""
   _ <- readProcess "cp" [ root </> "src/Types.elm", nextType ] ""
   callCommand $ "sed -i -e 's/module Types exposing/module Evergreen.Type.V" <> show version <> " exposing/g' " <> nextType
+  -- sed on OS X generates these noisy extra files
   -- How do we get sed to not make these files? Same issue in build.sh...
-  callCommand $ "rm " <> nextType <> "-e"
+  callCommand $ "rm " <> nextType <> "-e || true >> /dev/null 2>&1"
   pure ""
 
 
@@ -502,7 +504,8 @@ migrationCheck root version =
 
               -- Restore the type back to what it was
               liftIO $ callCommand $ "sed -i -e 's/import Types/import Evergreen.Type.V" <> show version <> "/g' " ++ migrationPath
-              liftIO $ callCommand $ "rm " <> (root </> migrationPath) <> "-e"
+              -- sed on OS X generates these noisy extra files
+              liftIO $ callCommand $ "rm " <> (root </> migrationPath) <> "-e || true >> /dev/null 2>&1"
 
               -- Cleanup dummy runtime files if we added them
               liftIO $ unless frontendRuntimeExists $ callCommand $ "rm " <> root </> "src/LamderaFrontendRuntime.elm"
