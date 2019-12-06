@@ -385,7 +385,7 @@ fetchProductionInfo appName =
         "testapp" ->
           "http://localhost:3030/_i"
         _ ->
-          "https://" <> T.unpack appName <> ".apps.lamdera.com/_i"
+          "https://" <> T.unpack appName <> ".lamdera.app/_i"
 
     headers =
       [ ( Http.hUserAgent, "lamdera-cli" )

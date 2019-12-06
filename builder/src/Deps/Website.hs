@@ -177,9 +177,9 @@ fetchLocal url =
       Nothing ->
         pure $ case url of
           "packages/lamdera/core/1.0.0/endpoint.json" ->
-            Just ("{\"url\":\"http://static.lamdera.com/r/lamdera/core/pack.zip\",\"hash\":\"ignored\"}")
+            Just ("{\"url\":\"https://static.lamdera.com/r/lamdera/core/pack.zip\",\"hash\":\"ignored\"}")
           "packages/lamdera/codecs/1.0.0/endpoint.json" ->
-            Just ("{\"url\":\"http://static.lamdera.com/r/lamdera/codecs/pack.zip\",\"hash\":\"ignored\"}")
+            Just ("{\"url\":\"https://static.lamdera.com/r/lamdera/codecs/pack.zip\",\"hash\":\"ignored\"}")
           _ ->
             Nothing
 
@@ -189,9 +189,9 @@ redirectLamderaPaths s =
   -- This is dangerous in general, since the author can change the elm.json files, but in this case we control all these packages, so we're all good.
   case s of
     "packages/lamdera/core/1.0.0/elm.json" ->
-      "http://static.lamdera.com/r/lamdera/core/1.0.0/elm.json"
+      "https://static.lamdera.com/r/lamdera/core/1.0.0/elm.json"
     "packages/lamdera/codecs/1.0.0/elm.json" ->
-      "http://static.lamdera.com/r/lamdera/codecs/1.0.0/elm.json"
+      "https://static.lamdera.com/r/lamdera/codecs/1.0.0/elm.json"
     _ ->
       s
 

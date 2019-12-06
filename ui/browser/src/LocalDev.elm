@@ -81,7 +81,7 @@ update msg ( userFrontendModel, userBackendModel ) =
                     Debug.log "FEtoBE" toBackend
 
                 ( newUserBackendModel, newUserBackendCmds ) =
-                    userBackendApp.updateFromFrontend "ClientID-local-dev" toBackend userBackendModel
+                    userBackendApp.updateFromFrontend "clientIdLocalDev" toBackend userBackendModel
             in
             ( ( userFrontendModel, newUserBackendModel ), Cmd.map BEMsg newUserBackendCmds )
 
