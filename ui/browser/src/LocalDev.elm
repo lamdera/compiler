@@ -14,7 +14,7 @@ type Msg
     = FEMsg Types.FrontendMsg
     | BEMsg Types.BackendMsg
     | BEtoFE ClientId Types.ToFrontend
-    | FEtoBE Milliseconds MsgId Types.ToBackend (Result WsError () -> Msg)
+    | FEtoBE Types.ToBackend
 
 
 userFrontendApp =
@@ -75,7 +75,7 @@ update msg ( userFrontendModel, userBackendModel ) =
             in
             ( ( newUserFrontendModel, userBackendModel ), Cmd.map FEMsg newUserFrontendCmds )
 
-        FEtoBE ms msgId toBackend tagger ->
+        FEtoBE toBackend ->
             let
                 _ =
                     Debug.log "FEtoBE" toBackend
