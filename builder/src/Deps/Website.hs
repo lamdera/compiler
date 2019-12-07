@@ -65,7 +65,7 @@ getDocs name version =
 
 -- LOCAL PACKAGE OVERRIDES
 
-getLamderaPkgPath = Env.lookupEnv "LAMDERA_PKG_PATH"
+getLamderaPkgPath = Env.lookupEnv "LOVR"
 
 localPackages :: Map.Map Name [Version]
 localPackages =
@@ -92,7 +92,7 @@ versionFromText t =
     Nothing -> Left t
 
 catResultsOrCrashOnLeft (Right a:rest) = (a:catResultsOrCrashOnLeft rest)
-catResultsOrCrashOnLeft (Left a:_) = error ("failed to parse folder structure; did you accidentally end up with `$LAMDERA_PKG_PATH/packages/packages/...` or something similar? I expected something like `$LAMDERA_PKG_PATH/packages/lamdera/core/1.0.0/...`, but where I expected the `1.0.0` part to be, there wasn't a valid elm semver, instead I saw `" <> T.unpack a <> "`.")
+catResultsOrCrashOnLeft (Left a:_) = error ("pathfail:" <> T.unpack a <> ".")
 catResultsOrCrashOnLeft [] = []
 
 -- NEW PACKAGES
@@ -162,7 +162,7 @@ allPkgsDecoder =
 fetchLocal :: String -> IO (Maybe BS.ByteString)
 fetchLocal url =
   do
-    -- if $LAMDERA_PKG_PATH is set, and `$LAMDERA_PKG_PATH ++ url` exists, read that and return it instead
+    -- if $LOVR is set, and `$LOVR ++ url` exists, read that and return it instead
     env <- getLamderaPkgPath
     case env of
       Just path ->
@@ -249,7 +249,7 @@ downloadHelp cache (name, version) =
   let
     fn =
       do
-        -- if $LAMDERA_PKG_PATH is set, and `$LAMDERA_PKG_PATH ++ url` exists, read that and return it instead
+        -- if $LOVR is set, and `$LOVR ++ url` exists, read that and return it instead
         env <- getLamderaPkgPath
         case env of
           Just path ->

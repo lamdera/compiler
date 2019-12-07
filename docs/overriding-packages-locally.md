@@ -1,10 +1,10 @@
 Use a local package override instead of remote.
 
 ```
-git clone https://github.com/lamdera/core ~/lamdera/haskelm/pkg-overrides/packages/lamdera/core/1.0.0
+git clone https://github.com/lamdera/core ~/lamdera/overrides/packages/lamdera/core/1.0.0
 
 $ rm -rf elm-stuff/ elm-home/
-$ LAMDERA_PKG_PATH=~/lamdera/haskelm/pkg-overrides ELM_HOME=elm-home elmx make src/Simple.elm
+$ LOVR=~/lamdera/overrides ELM_HOME=elm-home elmx make src/Simple.elm
 ```
 
 Note that core/codecs pull from static.lamdera.com, not github.

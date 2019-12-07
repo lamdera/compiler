@@ -62,10 +62,10 @@ compile = do
   touch "/Users/mario/dev/projects/lamdera/test/v1/src/Types.elm"
   -- touch "/Users/mario/dev/projects/lamdera/test/v1/src/LamderaFrontendRuntime.elm"
 
-  setEnv "LAMDERA_PKG_PATH" "/Users/mario/dev/projects/lamdera/haskelm/pkg-overrides"
+  setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
   setEnv "ELM_HOME" "/Users/mario/dev/projects/lamdera/test/v1/elm-home"
 
-  -- =${LAMDERA_PKG_PATH} ELM_HOME=$BUILD_DIR/cache/elm-home elmx make src/LamderaBackendRuntime.elm --output="backend-app.js"
+  -- =${LOVR} ELM_HOME=$BUILD_DIR/cache/elm-home elmx make src/LamderaBackendRuntime.elm --output="backend-app.js"
 
   let rootPaths = [ "src" </> "Both.elm" ]
 
@@ -103,7 +103,7 @@ touch path = callCommand $ "touch " ++ path
 
 check = do
 
-  setEnv "LAMDERA_PKG_PATH" "/Users/mario/dev/projects/lamdera/haskelm/pkg-overrides"
+  setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
   setEnv "ELM_HOME" "/Users/mario/dev/projects/lamdera/test/v1/elm-home"
 
 
