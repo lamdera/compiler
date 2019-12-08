@@ -88,7 +88,7 @@ run :: Fetch a -> Task.Task a
 run fetch =
   Task.runHttp $ \manager tell ->
     do  chan <- newChan
-        replicateM_ 64 $ forkIO $ forever $ join (readChan chan) -- number of threads when fetching dependencies from elm-package
+        replicateM_ 4 $ forkIO $ forever $ join (readChan chan) -- number of threads when fetching dependencies from elm-package
         readMVar =<< runHelp chan manager tell fetch
 
 

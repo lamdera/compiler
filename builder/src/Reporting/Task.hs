@@ -62,8 +62,8 @@ data Env =
 
 -- TODO: REMOVE! SECURITY RISK!
 -- this tells tls to allow self-signed tls certs, so we can use a mitm proxy to analyze traffic
-noVerifyTlsManagerSettings :: Http.ManagerSettings
-noVerifyTlsManagerSettings = Http.mkManagerSettings noVerifyTlsSettings Nothing
+-- noVerifyTlsManagerSettings :: Http.ManagerSettings
+-- noVerifyTlsManagerSettings = Http.mkManagerSettings noVerifyTlsSettings Nothing
 
 noVerifyTlsSettings :: Http.TLSSettings
 noVerifyTlsSettings = Http.TLSSettingsSimple
@@ -75,8 +75,8 @@ noVerifyTlsSettings = Http.TLSSettingsSimple
 try :: Progress.Reporter -> Task a -> IO (Maybe a)
 try (Progress.Reporter tell ask end) task =
   do  root <- PerUserCache.getPackageRoot
-      pool <- initPool 16 -- number of threads when compiling
-      httpManager <- Http.newManager noVerifyTlsManagerSettings -- Http.tlsManagerSettings
+      pool <- initPool 4 -- number of threads when compiling
+      httpManager <- Http.newManager Http.tlsManagerSettings
       let env = Env root pool httpManager tell ask
       result <- R.runReaderT (runExceptT task) env
       case result of

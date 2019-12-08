@@ -38,15 +38,16 @@ main =
   --Wire.Test.compile
   do  setLocaleEncoding utf8
       complex intro outro
-        [ repl
+        [ check
+        , repl
         , init
         , reactor
         , make
         , install
-        , bump
-        , diff
-        , publish
-        , check
+        -- , bump
+        -- , diff
+        -- , publish
+
         ]
 
 
