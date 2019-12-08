@@ -462,8 +462,8 @@ checkUserProjectCompiles root = do
   _ <- liftIO $ readProcess "touch" [root </> "src" </> "Types.elm"] ""
 
   let jsOutput = Just (Output.Html Nothing "/dev/null")
-  Project.compile Output.Dev Output.Client jsOutput Nothing summary [ "src" </> "Frontend.elm" ]
-  Project.compile Output.Dev Output.Client jsOutput Nothing summary [ "src" </> "Backend.elm" ]
+  Project.compile Output.Prod Output.Client jsOutput Nothing summary [ "src" </> "Frontend.elm" ]
+  Project.compile Output.Prod Output.Client jsOutput Nothing summary [ "src" </> "Backend.elm" ]
 
   -- @TODO this is because the migrationCheck does weird terminal stuff that mangles the display... how to fix this?
   liftIO $ threadDelay 50000 -- 50 milliseconds
