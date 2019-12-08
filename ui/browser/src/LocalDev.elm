@@ -39,10 +39,10 @@ userBackendApp =
 init : flags -> Url.Url -> Navigation.Key -> ( Model, Cmd Msg )
 init flags url key =
     let
-        ( fem, userFrontendCmds ) =
+        ( fem, newFeCmds ) =
             userFrontendApp.init url key
 
-        ( bem, userBackendCmds ) =
+        ( bem, newBeCmds ) =
             userBackendApp.init
     in
     ( { fem = Lamdera.debugR "fe" fem
@@ -50,8 +50,8 @@ init flags url key =
       , originalKey = key
       }
     , Cmd.batch
-        [ Cmd.map FEMsg userFrontendCmds
-        , Cmd.map BEMsg userBackendCmds
+        [ Cmd.map FEMsg newFeCmds
+        , Cmd.map BEMsg newBeCmds
         ]
     )
 
@@ -64,43 +64,42 @@ update msg m =
                 x =
                     Debug.log "FEMsg" frontendMsg
 
-                ( newUserFrontendModel, newUserFrontendCmds ) =
+                ( newFem, newFeCmds ) =
                     userFrontendApp.update frontendMsg m.fem
             in
-            ( { m | fem = Lamdera.debugS "fe" newUserFrontendModel, bem = m.bem }, Cmd.map FEMsg newUserFrontendCmds )
+            ( { m | fem = Lamdera.debugS "fe" newFem, bem = m.bem }, Cmd.map FEMsg newFeCmds )
 
         BEMsg backendMsg ->
             let
                 x =
                     Debug.log "BEMsg" backendMsg
 
-                ( newUserBackendModel, newUserBackendCmds ) =
+                ( newBem, newBeCmds ) =
                     userBackendApp.update backendMsg m.bem
             in
-            ( { m | fem = m.fem, bem = Lamdera.debugS "be" newUserBackendModel }, Cmd.map BEMsg newUserBackendCmds )
+            ( { m | fem = m.fem, bem = Lamdera.debugS "be" newBem }, Cmd.map BEMsg newBeCmds )
 
         BEtoFE clientId toFrontend ->
             let
                 x =
                     Debug.log "BEtoFE" toFrontend
 
-                ( newUserFrontendModel, newUserFrontendCmds ) =
+                ( newFem, newFeCmds ) =
                     userFrontendApp.updateFromBackend toFrontend m.fem
             in
-            ( { m | fem = Lamdera.debugS "fe" newUserFrontendModel, bem = m.bem }, Cmd.map FEMsg newUserFrontendCmds )
+            ( { m | fem = Lamdera.debugS "fe" newFem, bem = m.bem }, Cmd.map FEMsg newFeCmds )
 
         FEtoBE toBackend ->
             let
                 _ =
                     Debug.log "FEtoBE" toBackend
 
-                ( newUserBackendModel, newUserBackendCmds ) =
+                ( newBem, newBeCmds ) =
                     userBackendApp.updateFromFrontend "clientIdLocalDev" toBackend m.bem
             in
-            ( { m | fem = m.fem, bem = Lamdera.debugS "be" newUserBackendModel }, Cmd.map BEMsg newUserBackendCmds )
+            ( { m | fem = m.fem, bem = Lamdera.debugS "be" newBem }, Cmd.map BEMsg newBeCmds )
 
         ResetDebugStore ->
-            -- ( { m | fem = fem, bem = bem }, Cmd.none )
             let
                 defaultUrl =
                     -- @TODO improve this in future, maybe keep track of all URLs?
@@ -112,17 +111,20 @@ update msg m =
                     , fragment = Nothing
                     }
 
-                ( femi, userFrontendCmds ) =
+                ( newFem, newFeCmds ) =
                     userFrontendApp.init defaultUrl m.originalKey
 
-                ( bemi, userBackendCmds ) =
+                ( newBem, newBeCmds ) =
                     userBackendApp.init
             in
             ( { m
-                | fem = Lamdera.debugS "fe" femi
-                , bem = Lamdera.debugS "be" bemi
+                | fem = Lamdera.debugS "fe" newFem
+                , bem = Lamdera.debugS "be" newBem
               }
-            , Navigation.reloadAndSkipCache
+            , Cmd.batch
+                [ Cmd.map FEMsg newFeCmds
+                , Cmd.map BEMsg newBeCmds
+                ]
             )
 
 

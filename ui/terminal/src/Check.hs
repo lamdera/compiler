@@ -94,7 +94,7 @@ run () () = do
 
   let isProduction = (appNameEnvM /= Nothing) -- @TODO better isProd check...
 
-  putStrLn "---> Checking project compiles..."
+  putStrLn "───> Checking project compiles..."
 
   Task.run reporter $ do
 
@@ -287,7 +287,7 @@ buildProductionJsFiles root isProduction version =
   onlyWhen isProduction $ do
     summary <- Project.getRoot
 
-    liftIO $ putStrLn "---> Compiling for production..."
+    liftIO $ putStrLn "───> Compiling for production..."
 
     onlyWhen (version /= 1) $ do -- Version 1 has no migrations for rewrite
       let migrationPath = (root </> "src/Evergreen/Migrate/V") <> show version <> ".elm"
