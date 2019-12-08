@@ -43,7 +43,7 @@ import Control.Concurrent.MVar (MVar, newEmptyMVar, newMVar, putMVar, readMVar, 
 
 import qualified Debug.Trace as DT
 import Wire.PrettyPrint
-import Elm
+import Lamdera
 
 -- COMPILE
 
@@ -115,7 +115,7 @@ compile flag pkg importDict interfaces source srcMVar =
                     _ <- takeMVar srcMVar -- drop the old source code
                     putMVar srcMVar newSource -- insert the new source code
           in
-            -- Elm.debugTrace (BS8.toString newSource) $ -- uncomment to print source code for all modules
+            -- Lamdera.debugTrace (BS8.toString newSource) $ -- uncomment to print source code for all modules
             -- it's safer to add stuff to the parsed result, but much harder to debug, so codecs are generated as source code, and imports are added like this now
             addImport (Src.Import (A.At R.lamderaInject "Lamdera.Wire") Nothing (Src.Explicit []))
               <$> Parse.program pkg newSource

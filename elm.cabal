@@ -238,13 +238,14 @@ Executable elmx
         LamderaChecks
         Check
         Reporting.Exit.Check
+        Deploy
 
         -- Debug helpers
         CanSer.CanSer
         Sanity
         Wire.PrettyPrint
 
-        Elm
+        Lamdera
 
 
     Build-depends:

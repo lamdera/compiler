@@ -66,9 +66,9 @@ import qualified Reporting.Progress.Terminal as Terminal
 
 -- This file itself
 
+import Lamdera
 import qualified File.IO as IO
 import qualified Data.List as List
-import Elm
 import Control.Concurrent (threadDelay)
 import NeatInterpolation
 import Algorithms.NaturalSort
@@ -160,6 +160,7 @@ run () () = do
         buildProductionJsFiles root isProduction nextVersion
 
         pDocLn $ D.green (D.reflow $ "It appears you're all set to deploy the first version of '" <> T.unpack appName <> "'!")
+        liftIO $ putStrLn ""
 
       else do
         writeLamderaGenerated root isProduction nextVersion

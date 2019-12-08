@@ -35,7 +35,7 @@ import Control.Lens.Prism
 import Data.Data.Lens
 import Data.Witherable
 
-import Elm
+import Lamdera
 
 -- CONSTRAIN
 

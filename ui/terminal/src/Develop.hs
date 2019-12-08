@@ -30,7 +30,7 @@ import qualified Reporting.Progress as Progress
 import qualified Reporting.Task as Task
 
 
-import Elm
+import Lamdera
 
 -- RUN THE DEV SERVER
 
@@ -287,7 +287,7 @@ serveUnmatchedUrlsToIndex =
       guard (takeExtension file == "")
       let harnessPath = "src/LocalDev.elm"
 
-      d <- liftIO $ Elm.isDebug
+      d <- liftIO $ Lamdera.isDebug
 
       harness <-
         if d then

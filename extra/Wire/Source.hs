@@ -36,7 +36,7 @@ import qualified Reporting.Region as R
 
 import CanSer.CanSer as CanSer
 
-import Elm
+import Lamdera
 
 insertAfterRegion :: R.Region -> String -> String -> String
 insertAfterRegion region@(R.Region _ (R.Position lend cend)) insertion hay =

@@ -37,7 +37,7 @@ import Control.Monad.Trans (liftIO)
 import System.FilePath ((</>))
 import CanSer.CanSer as CanSer
 
-import Elm
+import Lamdera
 
 
 

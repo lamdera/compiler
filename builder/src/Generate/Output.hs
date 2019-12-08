@@ -46,7 +46,7 @@ import qualified Stuff.Paths as Paths
 import Terminal.Args (Parser(..))
 
 import LamderaInjection
-import Elm
+import Lamdera
 
 -- GENERATE
 

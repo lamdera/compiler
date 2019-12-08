@@ -28,7 +28,9 @@ import qualified Make
 import qualified Publish
 import qualified Repl
 import qualified Check
+import qualified Deploy
 
+import Lamdera
 
 -- MAIN
 
@@ -39,9 +41,10 @@ main =
   do  setLocaleEncoding utf8
       complex intro outro
         [ check
-        , repl
-        , init
+        , deploy
         , reactor
+        , init
+        , repl
         , make
         , install
         -- , bump
@@ -57,7 +60,7 @@ intro =
     [ P.fillSep
         ["Hi,","thank","you","for","trying","out"
         ,P.green "Lamdera"
-        ,P.green "0.0.1-alpha2"
+        ,P.green (P.text Lamdera.lamderaVersion)
         ,"on"
         ,P.green "Elm"
         ,P.green (P.text (Pkg.versionToString Compiler.version)) <> "."
@@ -368,3 +371,21 @@ check =
         \ information about the next version and required migrations."
   in
   Interface "check" (Common summary) details example noArgs noFlags Check.run
+
+
+deploy :: Interface
+deploy =
+  let
+    summary =
+      "Deploy Lamdera app after a successful `lamdera check`"
+
+    details =
+      "The `deploy` command is equivalent to `lamdera check && git push lamdera master`"
+
+    example =
+      reflow
+        "It will query the production enviornment and supply\
+        \ information about the next version and required migrations, \
+        \ and then attempt to deploy."
+  in
+  Interface "deploy" (Common summary) details example noArgs noFlags Deploy.run

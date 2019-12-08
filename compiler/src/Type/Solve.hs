@@ -24,7 +24,7 @@ import qualified Type.Error as ET
 import qualified Type.Unify as Unify
 import qualified Type.UnionFind as UF
 
-import Elm
+import Lamdera
 
 -- RUN SOLVER
 

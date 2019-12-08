@@ -44,7 +44,7 @@ import qualified Reporting.Task as Task
 import qualified Reporting.Task.Http as Http
 import qualified Stuff.Paths as Path
 
-import Elm
+import Lamdera
 import System.IO.Unsafe
 import qualified System.Process
 import Wire.PrettyPrint (sShow)

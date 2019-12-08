@@ -1,5 +1,7 @@
-module Elm
-  ( debugTrace
+{-# LANGUAGE OverloadedStrings #-}
+module Lamdera
+  ( lamderaVersion
+  , debugTrace
   , debug_
   , debug
   , PP.sShow
@@ -33,9 +35,14 @@ import qualified System.Environment as Env
 import Control.Monad.Except (liftIO)
 import System.IO.Unsafe (unsafePerformIO)
 import qualified Debug.Trace as DT
+import Data.Text
 
 import CanSer.CanSer (ppElm)
 import qualified Data.Witherable
+
+
+lamderaVersion :: String
+lamderaVersion = "0.0.1-alpha2"
 
 -- import qualified Reporting.Task as Task
 

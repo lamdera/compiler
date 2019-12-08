@@ -30,7 +30,7 @@ import Terminal.Args.Internal
 import qualified Terminal.Args.Chomp as Chomp
 import qualified Terminal.Args.Error as Error
 
-
+import Lamdera
 
 -- GET
 
@@ -40,7 +40,7 @@ simple details example args_ flags_ callback =
   do  argStrings <- Env.getArgs
       case argStrings of
         ["--version"] ->
-          do  hPutStrLn stdout (Pkg.versionToString Compiler.version)
+          do  hPutStrLn stdout (Lamdera.lamderaVersion ++ "-" ++ Pkg.versionToString Compiler.version)
               Exit.exitSuccess
 
         chunks ->
@@ -67,7 +67,7 @@ complex intro outro interfaces =
           Error.exitWithOverview intro outro interfaces
 
         ["--version"] ->
-          do  hPutStrLn stdout (Pkg.versionToString Compiler.version)
+          do  hPutStrLn stdout (Lamdera.lamderaVersion ++ "-" ++ Pkg.versionToString Compiler.version)
               Exit.exitSuccess
 
         command : chunks ->
@@ -367,4 +367,3 @@ isPossibleSuggestion extensions start dir path =
 isOkayExtension :: FilePath -> [String] -> Bool
 isOkayExtension path extensions =
   null extensions || elem (FP.takeExtension path) extensions
-
