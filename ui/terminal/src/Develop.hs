@@ -30,6 +30,7 @@ import qualified Reporting.Progress as Progress
 import qualified Reporting.Task as Task
 
 
+import Elm
 
 -- RUN THE DEV SERVER
 
@@ -285,6 +286,15 @@ serveUnmatchedUrlsToIndex =
   do  file <- getSafePath
       guard (takeExtension file == "")
       let harnessPath = "src/LocalDev.elm"
-      liftIO $ BS.writeFile harnessPath StaticFiles.lamderaLocalDev
+
+      d <- liftIO $ Elm.isDebug
+
+      harness <-
+        if d then
+          liftIO $ BS.readFile ("/Users/mario/dev/projects/elmx/ui/browser/src/LocalDev.elm")
+        else
+          pure StaticFiles.lamderaLocalDev
+
+      liftIO $ BS.writeFile harnessPath harness
       serveElm harnessPath
       liftIO $ Dir.removeFile harnessPath

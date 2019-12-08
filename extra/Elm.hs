@@ -14,6 +14,7 @@ module Elm
   , ppElm
   , Data.Witherable.mapMaybe
   , Data.Witherable.catMaybes
+  , isDebug
   )
   where
 
@@ -61,3 +62,11 @@ debugTrace msg value =
     case debugM of
       Just _ -> pure $ DT.trace msg value
       Nothing -> pure value
+
+
+isDebug :: IO Bool
+isDebug = do
+  debugM <- Env.lookupEnv "LDEBUG"
+  case debugM of
+    Just _ -> pure True
+    Nothing -> pure False

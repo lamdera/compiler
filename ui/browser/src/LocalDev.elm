@@ -5,6 +5,9 @@ import Browser
 import Browser.Navigation as Navigation
 import Frontend
 import Html
+import Html.Attributes as A
+import Html.Events
+import Lamdera.Debug as Lamdera
 import Lamdera.Types exposing (ClientId, Milliseconds, MsgId, WsError)
 import Types exposing (BackendModel, BackendMsg, FrontendModel, FrontendMsg, ToBackend, ToFrontend)
 import Url exposing (Url)
@@ -15,6 +18,14 @@ type Msg
     | BEMsg Types.BackendMsg
     | BEtoFE ClientId Types.ToFrontend
     | FEtoBE Types.ToBackend
+    | ResetDebugStore
+
+
+type alias Model =
+    { fem : FrontendModel
+    , bem : BackendModel
+    , originalKey : Navigation.Key
+    }
 
 
 userFrontendApp =
@@ -25,16 +36,19 @@ userBackendApp =
     Backend.app
 
 
-init : flags -> Url.Url -> Navigation.Key -> ( ( FrontendModel, BackendModel ), Cmd Msg )
-init flags url nav =
+init : flags -> Url.Url -> Navigation.Key -> ( Model, Cmd Msg )
+init flags url key =
     let
-        ( userFrontendModel, userFrontendCmds ) =
-            userFrontendApp.init url nav
+        ( fem, userFrontendCmds ) =
+            userFrontendApp.init url key
 
-        ( userBackendModel, userBackendCmds ) =
+        ( bem, userBackendCmds ) =
             userBackendApp.init
     in
-    ( ( userFrontendModel, userBackendModel )
+    ( { fem = Lamdera.debugR "fe" fem
+      , bem = Lamdera.debugR "be" bem
+      , originalKey = key
+      }
     , Cmd.batch
         [ Cmd.map FEMsg userFrontendCmds
         , Cmd.map BEMsg userBackendCmds
@@ -42,8 +56,8 @@ init flags url nav =
     )
 
 
-update : Msg -> ( FrontendModel, BackendModel ) -> ( ( FrontendModel, BackendModel ), Cmd Msg )
-update msg ( userFrontendModel, userBackendModel ) =
+update : Msg -> Model -> ( Model, Cmd Msg )
+update msg m =
     case msg of
         FEMsg frontendMsg ->
             let
@@ -51,9 +65,9 @@ update msg ( userFrontendModel, userBackendModel ) =
                     Debug.log "FEMsg" frontendMsg
 
                 ( newUserFrontendModel, newUserFrontendCmds ) =
-                    userFrontendApp.update frontendMsg userFrontendModel
+                    userFrontendApp.update frontendMsg m.fem
             in
-            ( ( newUserFrontendModel, userBackendModel ), Cmd.map FEMsg newUserFrontendCmds )
+            ( { m | fem = Lamdera.debugS "fe" newUserFrontendModel, bem = m.bem }, Cmd.map FEMsg newUserFrontendCmds )
 
         BEMsg backendMsg ->
             let
@@ -61,9 +75,9 @@ update msg ( userFrontendModel, userBackendModel ) =
                     Debug.log "BEMsg" backendMsg
 
                 ( newUserBackendModel, newUserBackendCmds ) =
-                    userBackendApp.update backendMsg userBackendModel
+                    userBackendApp.update backendMsg m.bem
             in
-            ( ( userFrontendModel, newUserBackendModel ), Cmd.map BEMsg newUserBackendCmds )
+            ( { m | fem = m.fem, bem = Lamdera.debugS "be" newUserBackendModel }, Cmd.map BEMsg newUserBackendCmds )
 
         BEtoFE clientId toFrontend ->
             let
@@ -71,9 +85,9 @@ update msg ( userFrontendModel, userBackendModel ) =
                     Debug.log "BEtoFE" toFrontend
 
                 ( newUserFrontendModel, newUserFrontendCmds ) =
-                    userFrontendApp.updateFromBackend toFrontend userFrontendModel
+                    userFrontendApp.updateFromBackend toFrontend m.fem
             in
-            ( ( newUserFrontendModel, userBackendModel ), Cmd.map FEMsg newUserFrontendCmds )
+            ( { m | fem = Lamdera.debugS "fe" newUserFrontendModel, bem = m.bem }, Cmd.map FEMsg newUserFrontendCmds )
 
         FEtoBE toBackend ->
             let
@@ -81,27 +95,68 @@ update msg ( userFrontendModel, userBackendModel ) =
                     Debug.log "FEtoBE" toBackend
 
                 ( newUserBackendModel, newUserBackendCmds ) =
-                    userBackendApp.updateFromFrontend "clientIdLocalDev" toBackend userBackendModel
+                    userBackendApp.updateFromFrontend "clientIdLocalDev" toBackend m.bem
             in
-            ( ( userFrontendModel, newUserBackendModel ), Cmd.map BEMsg newUserBackendCmds )
+            ( { m | fem = m.fem, bem = Lamdera.debugS "be" newUserBackendModel }, Cmd.map BEMsg newUserBackendCmds )
+
+        ResetDebugStore ->
+            -- ( { m | fem = fem, bem = bem }, Cmd.none )
+            let
+                defaultUrl =
+                    -- @TODO improve this in future, maybe keep track of all URLs?
+                    { protocol = Url.Http
+                    , host = "localhost"
+                    , port_ = Just 8000
+                    , path = "/lamdera"
+                    , query = Nothing
+                    , fragment = Nothing
+                    }
+
+                ( femi, userFrontendCmds ) =
+                    userFrontendApp.init defaultUrl m.originalKey
+
+                ( bemi, userBackendCmds ) =
+                    userBackendApp.init
+            in
+            ( { m
+                | fem = Lamdera.debugS "fe" femi
+                , bem = Lamdera.debugS "be" bemi
+              }
+            , Navigation.reloadAndSkipCache
+            )
 
 
-subscriptions ( userFrontendModel, userBackendModel ) =
+subscriptions { fem, bem } =
     Sub.batch
-        [ Sub.map FEMsg (userFrontendApp.subscriptions userFrontendModel)
-        , Sub.map BEMsg (userBackendApp.subscriptions userBackendModel)
+        [ Sub.map FEMsg (userFrontendApp.subscriptions fem)
+        , Sub.map BEMsg (userBackendApp.subscriptions bem)
         ]
 
 
-mapDocument fn { title, body } =
-    { title = title, body = List.map (Html.map fn) body }
+lamderaPane =
+    Html.div []
+        [ Html.span
+            [ Html.Events.onClick ResetDebugStore
+            , A.style "font-family" "sans-serif"
+            , A.style "font-size" "12px"
+            , A.style "padding" "4px"
+            , A.style "color" "#fff"
+            , A.style "background-color" "#61b6cd"
+            , A.style "display" "inline-block"
+            ]
+            [ Html.text "Reset" ]
+        ]
 
 
-main : Program () ( FrontendModel, BackendModel ) Msg
+mapDocument msg { title, body } =
+    { title = title, body = [ lamderaPane ] ++ List.map (Html.map msg) body }
+
+
+main : Program () Model Msg
 main =
     Browser.application
         { init = init
-        , view = \( userFrontendModel, _ ) -> mapDocument FEMsg (userFrontendApp.view userFrontendModel)
+        , view = \{ fem } -> mapDocument FEMsg (userFrontendApp.view fem)
         , update = update
         , subscriptions = subscriptions
         , onUrlRequest = \url -> FEMsg (userFrontendApp.onUrlRequest url)

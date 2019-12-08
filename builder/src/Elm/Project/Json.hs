@@ -45,7 +45,6 @@ import qualified Reporting.Task as Task
 
 import Data.Function ((&))
 
-import Elm
 
 -- PROJECT
 
