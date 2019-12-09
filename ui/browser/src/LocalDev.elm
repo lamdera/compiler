@@ -24,6 +24,7 @@ type Msg
 type alias Model =
     { fem : FrontendModel
     , bem : BackendModel
+    , originalUrl : Url.Url
     , originalKey : Navigation.Key
     }
 
@@ -39,20 +40,34 @@ userBackendApp =
 init : flags -> Url.Url -> Navigation.Key -> ( Model, Cmd Msg )
 init flags url key =
     let
-        ( fem, newFeCmds ) =
+        ( ifem, iFeCmds ) =
             userFrontendApp.init url key
 
-        ( bem, newBeCmds ) =
+        ( ibem, iBeCmds ) =
             userBackendApp.init
+
+        ( fem, newFeCmds ) =
+            case Lamdera.debugR "fe" ifem of
+                Nothing ->
+                    ( ifem, iFeCmds )
+
+                Just rfem ->
+                    ( rfem, Cmd.none )
+
+        ( bem, newBeCmds ) =
+            case Lamdera.debugR "be" ibem of
+                Nothing ->
+                    ( ibem, iBeCmds )
+
+                Just rbem ->
+                    ( rbem, Cmd.none )
     in
-    ( { fem = Lamdera.debugR "fe" fem
-      , bem = Lamdera.debugR "be" bem
+    ( { fem = fem
+      , bem = bem
       , originalKey = key
+      , originalUrl = url
       }
-    , Cmd.batch
-        [ Cmd.map FEMsg newFeCmds
-        , Cmd.map BEMsg newBeCmds
-        ]
+    , Cmd.none
     )
 
 
@@ -141,10 +156,14 @@ lamderaPane =
             [ Html.Events.onClick ResetDebugStore
             , A.style "font-family" "sans-serif"
             , A.style "font-size" "12px"
-            , A.style "padding" "4px"
+            , A.style "padding" "5px"
             , A.style "color" "#fff"
             , A.style "background-color" "#61b6cd"
             , A.style "display" "inline-block"
+            , A.style "position" "absolute"
+            , A.style "top" "0"
+            , A.style "left" "0"
+            , A.style "z-index" "100"
             ]
             [ Html.text "Reset" ]
         ]
