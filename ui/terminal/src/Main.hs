@@ -40,17 +40,16 @@ main =
   --Wire.Test.compile
   do  setLocaleEncoding utf8
       complex intro outro
-        [ check
+        [ make
+        , check
         , deploy
         , reactor
         , init
-        , repl
-        , make
         , install
+        , repl
         -- , bump
         -- , diff
         -- , publish
-
         ]
 
 
@@ -90,16 +89,16 @@ init :: Interface
 init =
   let
     summary =
-      "Start an Elm project. It creates a starter elm.json file and\
+      "Start a Lamdera Elm project. It creates a starter elm.json file and\
       \ provides a link explaining what to do from there."
 
     details =
-      "The `init` command helps start Elm projects:"
+      "The `init` command helps start Lamdera Elm projects:"
 
     example =
       reflow
         "It will ask permission to create an elm.json file, the one thing common\
-        \ to all Elm projects. It also provides a link explaining what to do from there."
+        \ to all Lamdera Elm projects. It also provides a link explaining what to do from there."
   in
   Interface "init" (Common summary) details example noArgs noFlags Init.run
 

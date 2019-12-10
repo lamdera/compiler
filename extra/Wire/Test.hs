@@ -104,9 +104,10 @@ touch path = callCommand $ "touch " ++ path
 check = do
 
   setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
-  setEnv "ELM_HOME" "/Users/mario/dev/projects/lamdera/test/v1/elm-home"
+  setEnv "LDEBUG" "1"
+  setEnv "ELM_HOME" "/Users/mario/dev/projects/lamdera-dashboard/elm-home"
+  setEnv "LAMDERA_APP_NAME" "dashboard"
 
-
-  Dir.withCurrentDirectory ("/Users/mario/dev/projects/lamdera/test/v1") $
+  Dir.withCurrentDirectory ("/Users/mario/dev/projects/lamdera-dashboard") $
     do
         Check.run () ()

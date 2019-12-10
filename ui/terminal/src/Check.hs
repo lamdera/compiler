@@ -103,6 +103,8 @@ run () () = do
 
     checkUserProjectCompiles root
 
+    liftIO $ putStrLn "───> Checking Evergreen migrations..."
+
     gitRemotes <- liftIO $ readProcess "git" ["remote", "-v"] ""
 
     let lamderaRemotes =
@@ -193,6 +195,7 @@ run () () = do
                     & fmap (\(label, local, prod) -> D.indent 4 (D.dullyellow (D.fromString label)))
 
                 nextMigrationPath = (root </> "src/Evergreen/Migrate/V") <> (show nextVersion) <> ".elm"
+                nextMigrationPathBare = ("src/Evergreen/Migrate/V") <> (show nextVersion) <> ".elm"
 
                 lastTypesPath = (root </> "src/Evergreen/Type/V") <> (show prodVersion) <> ".elm"
 
@@ -225,7 +228,7 @@ run () () = do
                       $ Help.report "UNIMPLEMENTED MIGRATION" (Just nextMigrationPath)
                         ("The following types have changed since v" <> show prodVersion <> " and require migrations:")
                         (formattedChangedTypes <>
-                          [ D.reflow $ "The migration file at " <> nextMigrationPath <> " has migrations that still haven't been implemented."
+                          [ D.reflow $ "The migration file at " <> nextMigrationPathBare <> " has migrations that still haven't been implemented."
                           , D.reflow "See <https://lamdera.com/evergreen-migrations> more info."
                           ]
                         )
@@ -264,7 +267,7 @@ run () () = do
                   $ Help.report "UNIMPLEMENTED MIGRATION" (Just nextMigrationPath)
                     ("The following types have changed since v" <> show prodVersion <> " and require migrations:")
                     (formattedChangedTypes <>
-                      [ D.reflow $ "I've generated a placeholder migration file in " <> nextMigrationPath <> " to help you get started."
+                      [ D.reflow $ "I've generated a placeholder migration file in " <> nextMigrationPathBare <> " to help you get started."
                       , D.reflow "See <https://lamdera.com/evergreen-migrations> more info."
                       ]
                     )
@@ -292,7 +295,7 @@ buildProductionJsFiles root isProduction version =
     onlyWhen (version /= 1) $ do -- Version 1 has no migrations for rewrite
       let migrationPath = (root </> "src/Evergreen/Migrate/V") <> show version <> ".elm"
       -- Temporarily point migration to current types in order to type-check
-      liftIO $ callCommand $ "sed -i -e 's/import Evergreen.Type.V" <> show version <> "/import Types/g' " ++ migrationPath
+      liftIO $ callCommand $ "sed -i '' -e 's/import Evergreen.Type.V" <> show version <> "/import Types/g' " ++ migrationPath
 
     -- debug $ "Injecting BACKENDINJECTION " <> (root </> "elm-backend-overrides.js")
     -- liftIO $ Env.setEnv "BACKENDINJECTION" (root </> "elm-backend-overrides.js")
@@ -300,6 +303,10 @@ buildProductionJsFiles root isProduction version =
 
     -- @TODO this is because the migrationCheck does weird terminal stuff that mangles the display... how to fix this?
     -- liftIO $ threadDelay 50000 -- 50 milliseconds
+
+    -- liftIO $ callCommand $ "cp ~/lamdera/runtime/src/LamderaHelpers.elm " ++ root ++ "/src"
+    -- liftIO $ callCommand $ "cp ~/lamdera/runtime/src/LamderaFrontendRuntime.elm " ++ root ++ "/src"
+    -- liftIO $ callCommand $ "cp ~/lamdera/runtime/src/LamderaBackendRuntime.elm " ++ root ++ "/src"
 
     Project.compile
       Output.Dev
@@ -331,9 +338,8 @@ buildProductionJsFiles root isProduction version =
     -- NOTE: Could do this, but assuming it'll be good to have the original evidence of
     -- state for situation where things go wrong in production and you can poke around
     -- Restore the type back to what it was
-    -- liftIO $ callCommand $ "sed -i -e 's/import Types/import Evergreen.Type.V" <> show version <> "/g' " ++ migrationPath
-    -- -- sed on OS X generates these noisy extra files
-    -- liftIO $ callCommand $ "rm src/Evergreen/Migrate/V" <> show version <> ".elm-e || true >> /dev/null 2>&1"
+    -- liftIO $ callCommand $ "sed -i '' -e 's/import Types/import Evergreen.Type.V" <> show version <> "/g' " ++ migrationPath
+
 
 
 
@@ -344,10 +350,7 @@ snapshotCurrentTypesTo root version = do
   let nextType = (root </> "src/Evergreen/Type/V") <> show version <> ".elm"
   _ <- readProcess "mkdir" [ "-p", root </> "src/Evergreen/Type" ] ""
   _ <- readProcess "cp" [ root </> "src/Types.elm", nextType ] ""
-  callCommand $ "sed -i -e 's/module Types exposing/module Evergreen.Type.V" <> show version <> " exposing/g' " <> nextType
-  -- sed on OS X generates these noisy extra files
-  -- How do we get sed to not make these files? Same issue in build.sh...
-  callCommand $ "rm " <> nextType <> "-e >> /dev/null 2>&1 || true"
+  callCommand $ "sed -i '' -e 's/module Types exposing/module Evergreen.Type.V" <> show version <> " exposing/g' " <> nextType
   pure ""
 
 
@@ -478,19 +481,21 @@ migrationCheck root version =
           do  summary <- Project.getRoot
 
               -- Temporarily point migration to current types in order to type-check
-              liftIO $ putStrLn "Checking Evergreen migrations..."
+              debug "Compiling Evergreen migrations..."
 
               let migrationPath = (root </> "src/Evergreen/Migrate/V") <> show version <> ".elm"
 
               debug "Replacing type reference"
-              liftIO $ callCommand $ "sed -i -e 's/import Evergreen.Type.V" <> show version <> "/import Types/g' " ++ migrationPath
+              liftIO $ callCommand $ "sed -i '' -e 's/import Evergreen.Type.V" <> show version <> "/import Types/g' " ++ migrationPath
 
-              frontendRuntimeExists <- liftIO $ Dir.doesFileExist $ root </> "src/LamderaFrontendRuntime.elm"
-              backendRuntimeExists <- liftIO $ Dir.doesFileExist $ root </> "src/LamderaBackendRuntime.elm"
+              -- @TODO
+              -- This is now cleaner for local checks, but we still need a full e2e check in production before we deploy!
+              -- frontendRuntimeExists <- liftIO $ Dir.doesFileExist $ root </> "src/LamderaFrontendRuntime.elm"
+              -- backendRuntimeExists <- liftIO $ Dir.doesFileExist $ root </> "src/LamderaBackendRuntime.elm"
 
-              debug "Creating build scaffold files"
-              liftIO $ unless frontendRuntimeExists $ writeUtf8 frontendRuntimeLocalContent $ root </> "src/LamderaFrontendRuntime.elm"
-              liftIO $ unless backendRuntimeExists $ writeUtf8 backendRuntimeLocalContent $ root </> "src/LamderaBackendRuntime.elm"
+              -- debug "Creating build scaffold files"
+              -- liftIO $ unless frontendRuntimeExists $ writeUtf8 frontendRuntimeLocalContent $ root </> "src/LamderaFrontendRuntime.elm"
+              -- liftIO $ unless backendRuntimeExists $ writeUtf8 backendRuntimeLocalContent $ root </> "src/LamderaBackendRuntime.elm"
 
               liftIO $ writeUtf8 lamderaCheckBothFileContents $ root </> "src/LamderaCheckBoth.elm"
               let jsOutput = Just (Output.Html Nothing "/dev/null")
@@ -504,13 +509,11 @@ migrationCheck root version =
               liftIO $ callCommand $ "rm " <> (root </> "src/LamderaCheckBoth.elm")
 
               -- Restore the type back to what it was
-              liftIO $ callCommand $ "sed -i -e 's/import Types/import Evergreen.Type.V" <> show version <> "/g' " ++ migrationPath
-              -- sed on OS X generates these noisy extra files
-              liftIO $ callCommand $ "rm " <> (root </> migrationPath) <> "-e >> /dev/null 2>&1 || true"
+              liftIO $ callCommand $ "sed -i '' -e 's/import Types/import Evergreen.Type.V" <> show version <> "/g' " ++ migrationPath
 
               -- Cleanup dummy runtime files if we added them
-              liftIO $ unless frontendRuntimeExists $ callCommand $ "rm " <> root </> "src/LamderaFrontendRuntime.elm"
-              liftIO $ unless backendRuntimeExists $ callCommand $ "rm " <> root </> "src/LamderaBackendRuntime.elm"
+              -- liftIO $ unless frontendRuntimeExists $ callCommand $ "rm " <> root </> "src/LamderaFrontendRuntime.elm"
+              -- liftIO $ unless backendRuntimeExists $ callCommand $ "rm " <> root </> "src/LamderaBackendRuntime.elm"
 
 
 
@@ -610,15 +613,63 @@ defaultMigrationFile oldVersion newVersion typeCompares = do
 
 lamderaCheckBothFileContents :: Text
 lamderaCheckBothFileContents =
+  -- Source for this is in lamdera/runtime/src/LamderaCheckBoth.elm
   [text|
     module LamderaCheckBoth exposing (..)
 
-    import LamderaBackendRuntime
-    import LamderaFrontendRuntime
+    import Backend
+    import Browser exposing (Document, UrlRequest)
+    import Browser.Navigation exposing (Key)
+    import Frontend
+    import Lamdera.Types exposing (BrowserUrl, ClientId)
 
 
-    lamdera =
-        "both"
+    checkFrontendTypes :
+        { init : BrowserUrl -> Key -> ( frontendModel, Cmd frontendMsg )
+        , view : frontendModel -> Document frontendMsg
+        , update : frontendMsg -> frontendModel -> ( frontendModel, Cmd frontendMsg )
+        , updateFromBackend : toFrontend -> frontendModel -> ( frontendModel, Cmd frontendMsg )
+        , subscriptions : frontendModel -> Sub frontendMsg
+        , onUrlRequest : UrlRequest -> frontendMsg
+        , onUrlChange : BrowserUrl -> frontendMsg
+        }
+        -> Bool
+    checkFrontendTypes app = True
+
+    checkBackendTypes :
+            { init : ( backendModel, Cmd backendMsg )
+            , update : backendMsg -> backendModel -> ( backendModel, Cmd backendMsg )
+            , updateFromFrontend : ClientId -> toBackend -> backendModel -> ( backendModel, Cmd backendMsg )
+            , subscriptions : backendModel -> Sub backendMsg
+            }
+        -> Bool
+    checkBackendTypes app = True
+
+    checkBoth :
+        { init : BrowserUrl -> Key -> ( frontendModel, Cmd frontendMsg )
+        , view : frontendModel -> Document frontendMsg
+        , update : frontendMsg -> frontendModel -> ( frontendModel, Cmd frontendMsg )
+        , updateFromBackend : toFrontend -> frontendModel -> ( frontendModel, Cmd frontendMsg )
+        , subscriptions : frontendModel -> Sub frontendMsg
+        , onUrlRequest : UrlRequest -> frontendMsg
+        , onUrlChange : BrowserUrl -> frontendMsg
+        }
+        ->
+            { init : ( backendModel, Cmd backendMsg )
+            , update : backendMsg -> backendModel -> ( backendModel, Cmd backendMsg )
+            , updateFromFrontend : ClientId -> toBackend -> backendModel -> ( backendModel, Cmd backendMsg )
+            , subscriptions : backendModel -> Sub backendMsg
+            }
+        -> Bool
+    checkBoth frontend backend =
+      let
+        checkFrontend = checkFrontendTypes frontend
+        checkBackend = checkBackendTypes backend
+      in
+      True
+
+    check =
+        checkBoth Frontend.app Backend.app
   |]
 
 
@@ -795,12 +846,22 @@ createLamderaGenerated root currentVersion = do
       let
         typenameCamel = lowerFirstLetter $ T.unpack tipe
 
+        thenMigrateForType =
+          case tipe of
+            "BackendModel"  -> "thenMigrateModel"
+            "FrontendModel" -> "thenMigrateModel"
+            "FrontendMsg"   -> "thenMigrateMsg"
+            "ToBackend"     -> "thenMigrateMsg"
+            "BackendMsg"    -> "thenMigrateMsg"
+            "ToFrontend"    -> "thenMigrateMsg"
+
+
         intermediateMigration from to =
           let from_ = T.pack $ show from
               to_ = T.pack $ show to
           in
           [text|
-            |> thenMigrate "$tipe" M$to_.$typenameCamel T$from_.evg_encode_$tipe T$to_.evg_decode_$tipe $to_
+            |> $thenMigrateForType "$tipe" M$to_.$typenameCamel T$from_.evg_encode_$tipe T$to_.evg_decode_$tipe $to_
           |]
 
         intermediateMigrations =
@@ -895,7 +956,6 @@ writeLamderaGenerated :: FilePath -> Bool -> Int -> Task.Task ()
 writeLamderaGenerated root isProduction nextVersion =
   onlyWhen isProduction $ do
     gen <- liftIO $ createLamderaGenerated root nextVersion
-    debug $ "Writing src/LamderaGenerated.elm"
     liftIO $ writeUtf8 gen $ root </> "src/LamderaGenerated.elm"
 
 
