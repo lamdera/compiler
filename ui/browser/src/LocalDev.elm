@@ -8,9 +8,8 @@ import Html
 import Html.Attributes as A
 import Html.Events
 import Lamdera.Debug as Lamdera
-import Lamdera.Types exposing (ClientId, Milliseconds, MsgId, WsError)
+import Lamdera.Types exposing (BrowserUrl, ClientId, Milliseconds, MsgId, WsError)
 import Types exposing (BackendModel, BackendMsg, FrontendModel, FrontendMsg, ToBackend, ToFrontend)
-import Url exposing (Url)
 
 
 type Msg
@@ -24,7 +23,7 @@ type Msg
 type alias Model =
     { fem : FrontendModel
     , bem : BackendModel
-    , originalUrl : Url.Url
+    , originalUrl : BrowserUrl
     , originalKey : Navigation.Key
     }
 
@@ -37,7 +36,7 @@ userBackendApp =
     Backend.app
 
 
-init : flags -> Url.Url -> Navigation.Key -> ( Model, Cmd Msg )
+init : flags -> BrowserUrl -> Navigation.Key -> ( Model, Cmd Msg )
 init flags url key =
     let
         ( ifem, iFeCmds ) =
@@ -119,18 +118,8 @@ update msg m =
 
         ResetDebugStore ->
             let
-                defaultUrl =
-                    -- @TODO improve this in future, maybe keep track of all URLs?
-                    { protocol = Url.Http
-                    , host = "localhost"
-                    , port_ = Just 8000
-                    , path = "/lamdera"
-                    , query = Nothing
-                    , fragment = Nothing
-                    }
-
                 ( newFem, newFeCmds ) =
-                    userFrontendApp.init defaultUrl m.originalKey
+                    userFrontendApp.init m.originalUrl m.originalKey
 
                 ( newBem, newBeCmds ) =
                     userBackendApp.init
