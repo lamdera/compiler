@@ -67,7 +67,10 @@ init flags url key =
       , originalKey = key
       , originalUrl = url
       }
-    , Cmd.none
+    , Cmd.batch
+        [ Cmd.map FEMsg newFeCmds
+        , Cmd.map BEMsg newBeCmds
+        ]
     )
 
 
