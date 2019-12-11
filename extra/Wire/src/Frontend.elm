@@ -4,7 +4,7 @@ import Html exposing (Html, text)
 import Html.Attributes
 import Html.Events exposing (onClick)
 import Lamdera.Frontend
-import Lamdera.Types exposing (Milliseconds, WsError)
+import Lamdera.Types exposing (Milliseconds)
 import Types exposing (..)
 
 
