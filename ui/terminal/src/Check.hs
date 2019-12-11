@@ -140,15 +140,20 @@ run () () = do
                 & List.head
 
     (prodVersion, productionTypes) <-
-        fetchProductionInfo appName `catchError` (\err -> pure (0, []))
+      if (appName == "testapp")
+        then
+          fetchProductionInfo appName `catchError` (\err -> pure (0, []))
+        else
+          fetchProductionInfo appName
 
     let nextVersion = (prodVersion + 1)
 
     debug $ "Continuing with (prodV,nextV) " ++ show (prodVersion, nextVersion)
 
     if nextVersion == 0
-      then
+      then do
         Task.report Progress.LamderaCannotCheckRemote
+        error "Exit."
 
       else if nextVersion == 1 then do
         -- This is the first version, we don't need any migration checking.
@@ -232,6 +237,8 @@ run () () = do
                           , D.reflow "See <https://lamdera.com/evergreen-migrations> more info."
                           ]
                         )
+                    error "Exit."
+
                   else do
 
                     debug $ "Type-checking migration file"
@@ -271,6 +278,7 @@ run () () = do
                       , D.reflow "See <https://lamdera.com/evergreen-migrations> more info."
                       ]
                     )
+                error "Exit."
 
           else do
             -- Types are the same.
@@ -874,7 +882,7 @@ createLamderaGenerated root currentVersion = do
 
       [text|
         "$tipe" ->
-            decodeType version intList T$startVersion_.evg_decode_$tipe
+            decodeType "$tipe" version intList T$startVersion_.evg_decode_$tipe
                 $intermediateMigrations
                 |> upgradeSucceeds Current$tipe
                 |> otherwiseError
@@ -908,37 +916,37 @@ createLamderaGenerated root currentVersion = do
             $currentVersion_ ->
                 case tipe of
                     "BackendModel" ->
-                        decodeType version intList T$currentVersion_.evg_decode_BackendModel
+                        decodeType "BackendModel" version intList T$currentVersion_.evg_decode_BackendModel
                             |> upgradeIsCurrent CurrentBackendModel
                             |> otherwiseError
 
 
                     "FrontendModel" ->
-                        decodeType version intList T$currentVersion_.evg_decode_FrontendModel
+                        decodeType "FrontendModel" version intList T$currentVersion_.evg_decode_FrontendModel
                             |> upgradeIsCurrent CurrentFrontendModel
                             |> otherwiseError
 
 
                     "FrontendMsg" ->
-                        decodeType version intList T$currentVersion_.evg_decode_FrontendMsg
+                        decodeType "FrontendMsg" version intList T$currentVersion_.evg_decode_FrontendMsg
                             |> upgradeIsCurrent CurrentFrontendMsg
                             |> otherwiseError
 
 
                     "ToBackend" ->
-                        decodeType version intList T$currentVersion_.evg_decode_ToBackend
+                        decodeType "ToBackend" version intList T$currentVersion_.evg_decode_ToBackend
                             |> upgradeIsCurrent CurrentToBackend
                             |> otherwiseError
 
 
                     "BackendMsg" ->
-                        decodeType version intList T$currentVersion_.evg_decode_BackendMsg
+                        decodeType "BackendMsg" version intList T$currentVersion_.evg_decode_BackendMsg
                             |> upgradeIsCurrent CurrentBackendMsg
                             |> otherwiseError
 
 
                     "ToFrontend" ->
-                        decodeType version intList T$currentVersion_.evg_decode_ToFrontend
+                        decodeType "ToFrontend" version intList T$currentVersion_.evg_decode_ToFrontend
                             |> upgradeIsCurrent CurrentToFrontend
                             |> otherwiseError
 
