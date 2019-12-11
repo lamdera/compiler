@@ -8,7 +8,7 @@ import Html
 import Html.Attributes as A
 import Html.Events
 import Lamdera.Debug as Lamdera
-import Lamdera.Types exposing (BrowserUrl, ClientId, Milliseconds, MsgId, WsError)
+import Lamdera.Types exposing (BrowserUrl, ClientId, Milliseconds)
 import Types exposing (BackendModel, BackendMsg, FrontendModel, FrontendMsg, ToBackend, ToFrontend)
 
 
