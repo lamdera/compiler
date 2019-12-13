@@ -8,7 +8,7 @@ import Html
 import Html.Attributes as A
 import Html.Events
 import Lamdera.Debug as Lamdera
-import Lamdera.Types exposing (BrowserUrl, ClientId, Milliseconds)
+import Lamdera.Frontend exposing (ClientId, Url)
 import Types exposing (BackendModel, BackendMsg, FrontendModel, FrontendMsg, ToBackend, ToFrontend)
 
 
@@ -23,7 +23,7 @@ type Msg
 type alias Model =
     { fem : FrontendModel
     , bem : BackendModel
-    , originalUrl : BrowserUrl
+    , originalUrl : Url
     , originalKey : Navigation.Key
     }
 
@@ -36,7 +36,7 @@ userBackendApp =
     Backend.app
 
 
-init : flags -> BrowserUrl -> Navigation.Key -> ( Model, Cmd Msg )
+init : flags -> Url -> Navigation.Key -> ( Model, Cmd Msg )
 init flags url key =
     let
         ( ifem, iFeCmds ) =

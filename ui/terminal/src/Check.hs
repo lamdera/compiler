@@ -629,17 +629,17 @@ lamderaCheckBothFileContents =
     import Browser exposing (Document, UrlRequest)
     import Browser.Navigation exposing (Key)
     import Frontend
-    import Lamdera.Types exposing (BrowserUrl, ClientId)
+    import Lamdera.Frontend exposing (Url, ClientId)
 
 
     checkFrontendTypes :
-        { init : BrowserUrl -> Key -> ( frontendModel, Cmd frontendMsg )
+        { init : Url -> Key -> ( frontendModel, Cmd frontendMsg )
         , view : frontendModel -> Document frontendMsg
         , update : frontendMsg -> frontendModel -> ( frontendModel, Cmd frontendMsg )
         , updateFromBackend : toFrontend -> frontendModel -> ( frontendModel, Cmd frontendMsg )
         , subscriptions : frontendModel -> Sub frontendMsg
         , onUrlRequest : UrlRequest -> frontendMsg
-        , onUrlChange : BrowserUrl -> frontendMsg
+        , onUrlChange : Url -> frontendMsg
         }
         -> Bool
     checkFrontendTypes app = True
@@ -654,13 +654,13 @@ lamderaCheckBothFileContents =
     checkBackendTypes app = True
 
     checkBoth :
-        { init : BrowserUrl -> Key -> ( frontendModel, Cmd frontendMsg )
+        { init : Url -> Key -> ( frontendModel, Cmd frontendMsg )
         , view : frontendModel -> Document frontendMsg
         , update : frontendMsg -> frontendModel -> ( frontendModel, Cmd frontendMsg )
         , updateFromBackend : toFrontend -> frontendModel -> ( frontendModel, Cmd frontendMsg )
         , subscriptions : frontendModel -> Sub frontendMsg
         , onUrlRequest : UrlRequest -> frontendMsg
-        , onUrlChange : BrowserUrl -> frontendMsg
+        , onUrlChange : Url -> frontendMsg
         }
         ->
             { init : ( backendModel, Cmd backendMsg )
