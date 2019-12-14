@@ -91,8 +91,10 @@ run () () = do
   reporter <- Terminal.create
 
   appNameEnvM <- liftIO $ Env.lookupEnv "LAMDERA_APP_NAME"
+  hoistRebuild <- liftIO $ Env.lookupEnv "HOIST_REBUILD"
 
   let isProduction = (appNameEnvM /= Nothing) -- @TODO better isProd check...
+      isHoistRebuild = (hoistRebuild /= Nothing)
 
   putStrLn "───> Checking project compiles..."
 
@@ -146,7 +148,13 @@ run () () = do
         else
           fetchProductionInfo appName
 
-    let nextVersion = (prodVersion + 1)
+    let
+      nextVersion =
+        if isHoistRebuild then
+          -- No Evergreen
+          prodVersion
+        else
+          (prodVersion + 1)
 
     debug $ "Continuing with (prodV,nextV) " ++ show (prodVersion, nextVersion)
 
@@ -395,7 +403,8 @@ fetchProductionInfo appName =
     endpoint =
       case appName of
         "testapp" ->
-          "http://localhost:3030/_i"
+          "https://testapp.lamdera.test/_i"
+
         _ ->
           "https://" <> T.unpack appName <> ".lamdera.app/_i"
 
