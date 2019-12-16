@@ -249,8 +249,6 @@ run () () = do
 
                   else do
 
-                    debug $ "Type-checking migration file"
-
                     migrationCheck root nextVersion
 
                     unless isProduction $ do
@@ -424,7 +422,8 @@ fetchProductionInfo appName =
            )
   in
     Http.run $ Http.anything endpoint $ \request manager ->
-      do  response <- Client.httpLbs (request { Client.requestHeaders = headers }) manager
+      do  debug $ "HTTP fetching " <> endpoint
+          response <- Client.httpLbs (request { Client.requestHeaders = headers }) manager
           let bytes = LBS.toStrict (Client.responseBody response)
           case D.parse "lamdera-info" id decoder bytes of
             Right value ->
@@ -498,7 +497,7 @@ migrationCheck root version =
           do  summary <- Project.getRoot
 
               -- Temporarily point migration to current types in order to type-check
-              debug "Compiling Evergreen migrations..."
+              debug "Type-checking Evergreen migrations..."
 
               let migrationPath = (root </> "src/Evergreen/Migrate/V") <> show version <> ".elm"
 
@@ -514,7 +513,7 @@ migrationCheck root version =
               -- liftIO $ unless frontendRuntimeExists $ writeUtf8 frontendRuntimeLocalContent $ root </> "src/LamderaFrontendRuntime.elm"
               -- liftIO $ unless backendRuntimeExists $ writeUtf8 backendRuntimeLocalContent $ root </> "src/LamderaBackendRuntime.elm"
 
-              liftIO $ writeUtf8 lamderaCheckBothFileContents $ root </> "src/LamderaCheckBoth.elm"
+              liftIO $ writeUtf8 (lamderaCheckBothFileContents version) $ root </> "src/LamderaCheckBoth.elm"
               let jsOutput = Just (Output.Html Nothing "/dev/null")
               Project.compile Output.Dev Output.Client jsOutput Nothing summary [ "src" </> "LamderaCheckBoth.elm" ]
 
@@ -589,11 +588,28 @@ defaultMigrationFile oldVersion newVersion typeCompares = do
 
             typenameT = T.pack typename
 
+            migrationType = migrationForType typename
+
         [text|
-          $typenameCamel : Old.$typenameT -> Migration New.$typenameT New.$msgType
+          $typenameCamel : Old.$typenameT -> $migrationType New.$typenameT New.$msgType
           $typenameCamel old =
               $implementation
         |]
+
+      migrationForType t =
+        case t of
+          "BackendModel" ->
+            "ModelMigration"
+          "FrontendModel" ->
+            "ModelMigration"
+          "FrontendMsg" ->
+            "MsgMigration"
+          "ToBackend" ->
+            "MsgMigration"
+          "BackendMsg" ->
+            "MsgMigration"
+          "ToFrontend" ->
+            "MsgMigration"
 
       msgForType t =
         case t of
@@ -628,15 +644,18 @@ defaultMigrationFile oldVersion newVersion typeCompares = do
     & T.intercalate "\n\n"
 
 
-lamderaCheckBothFileContents :: Text
-lamderaCheckBothFileContents =
+lamderaCheckBothFileContents :: Int -> Text
+lamderaCheckBothFileContents version =
   -- Source for this is in lamdera/runtime/src/LamderaCheckBoth.elm
+  let version_ = T.pack $ show version
+  in
   [text|
     module LamderaCheckBoth exposing (..)
 
     import Backend
     import Browser exposing (Document, UrlRequest)
     import Browser.Navigation exposing (Key)
+    import Evergreen.Migrate.V$version_
     import Frontend
     import Lamdera.Frontend exposing (Url, ClientId)
 
