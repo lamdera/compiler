@@ -31,6 +31,16 @@ import qualified Reporting.Task as Task
 
 
 import Lamdera
+import qualified Network.WebSockets      as WS
+import qualified Network.WebSockets.Snap as WS
+import SocketServer
+import qualified Data.Text.IO as T
+import qualified Data.Text.Encoding as T
+import System.FSNotify
+import Control.Concurrent (threadDelay, forkIO)
+import Control.Monad (forever)
+
+
 
 -- RUN THE DEV SERVER
 
@@ -49,9 +59,26 @@ run () (Flags maybePort) =
   in
     do  putStrLn $ "Go to <http://localhost:" ++ show port ++ "/lamdera> to run your Lamdera project."
 
+        mClients <- liftIO $ SocketServer.clientsInit
+
+        forkIO $ withManager $ \mgr -> do
+          -- start a watching job (in the background)
+          watchDir
+            mgr          -- manager
+            "."          -- directory to watch
+            (const True) -- predicate
+            (\e -> do
+              putStrLn "got file changed event"
+              SocketServer.broadcastImpl mClients "r" -- r is refresh, see live.js
+            )  -- action
+
+          -- sleep forever (until interrupted)
+          forever $ threadDelay 1000000
+
         httpServe (config port) $
           serveFiles
           <|> serveDirectoryWith directoryConfig "."
+          <|> serveWebsocket mClients
           <|> serveAssets
           <|> serveLamderaPublicFiles
           <|> serveUnmatchedUrlsToIndex
@@ -60,7 +87,7 @@ run () (Flags maybePort) =
 
 config :: Int -> Config Snap a
 config port =
-  defaultConfig
+  Snap.Http.Server.defaultConfig
     # setVerbose False
     # setPort port
     # setAccessLog ConfigNoLog
@@ -297,3 +324,23 @@ serveUnmatchedUrlsToIndex =
       liftIO $ BS.writeFile harnessPath harness
       serveElm harnessPath
       liftIO $ Dir.removeFile harnessPath
+
+
+-- serveWebsocket :: TVar [Client] -> Snap ()
+serveWebsocket mClients =
+  do  file <- getSafePath
+      guard (file == "_w")
+
+      mKey <- getHeader "sec-websocket-key" <$> getRequest
+
+      case mKey of
+        Just key -> do
+
+          let onJoined _ _ = pure Nothing
+              onReceive _ text = do
+                Lamdera.debugT $ "onReceive:" <> text
+
+          WS.runWebSocketsSnap $ SocketServer.socketHandler mClients onJoined onReceive (T.decodeUtf8 key)
+
+        Nothing ->
+          error404

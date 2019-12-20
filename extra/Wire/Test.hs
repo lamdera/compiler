@@ -105,9 +105,10 @@ check = do
 
   setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
   setEnv "LDEBUG" "1"
-  setEnv "ELM_HOME" "/Users/mario/dev/projects/lamdera-dashboard/elm-home"
+  setEnv "ELM_HOME" "/Users/mario/elm-home-elmx-test"
   setEnv "LAMDERA_APP_NAME" "dashboard"
 
-  Dir.withCurrentDirectory ("/Users/mario/dev/projects/lamdera-dashboard") $
+  -- Dir.withCurrentDirectory ("/Users/mario/dev/projects/lamdera-dashboard") $
+  Dir.withCurrentDirectory ("/Users/mario/lamdera/test/v1") $
     do
         Check.run () ()

@@ -239,6 +239,7 @@ Executable elmx
         Check
         Reporting.Exit.Check
         Deploy
+        SocketServer
 
         -- Debug helpers
         CanSer.CanSer
@@ -292,4 +293,9 @@ Executable elmx
         ilist,
         witherable,
         neat-interpolation,
-        natural-sort
+        natural-sort,
+        -- Live
+        websockets,
+        websockets-snap,
+        stm,
+        fsnotify

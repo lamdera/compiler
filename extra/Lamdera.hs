@@ -4,6 +4,7 @@ module Lamdera
   , debugTrace
   , debug_
   , debug
+  , debugT
   , PP.sShow
   , PP.tShow
   , T.Text
@@ -17,6 +18,7 @@ module Lamdera
   , Data.Witherable.mapMaybe
   , Data.Witherable.catMaybes
   , isDebug
+  , unsafe
   )
   where
 
@@ -54,6 +56,10 @@ debug str =
   liftIO $ debug_ str
 
 
+debugT text =
+  liftIO $ debug_ (T.unpack text)
+
+
 debug_ :: String -> IO ()
 debug_ str = do
   debugM <- Env.lookupEnv "LDEBUG"
@@ -77,3 +83,6 @@ isDebug = do
   case debugM of
     Just _ -> pure True
     Nothing -> pure False
+
+
+unsafe = unsafePerformIO
