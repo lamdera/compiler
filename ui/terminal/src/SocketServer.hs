@@ -1,5 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
+-- Ported from https://github.com/supermario/hilt/blob/master/src/Hilt/SocketServer.hs
+
 module SocketServer where
 
 import Data.Monoid           ((<>))
@@ -12,11 +14,6 @@ import qualified Network.WebSockets as WS
 import Control.Concurrent.STM
 
 import Lamdera
--- import Hilt.Handles.SocketServer
-
--- @TODO all logging should go via handler dependency so user can control behavior
-
--- import Control.Monad.Managed (Managed, managed)
 
 
 clientsInit :: IO (TVar [Client])
@@ -109,43 +106,6 @@ broadcastImpl :: TVar [Client] -> T.Text -> IO ()
 broadcastImpl mClients message = do
   clients <- atomically $ readTVar mClients
   broadcast_ clients message
-
-
--- appImpl :: TVar [Client] -> TVar [ClientId] -> OnJoined -> OnReceive -> WS.ServerApp
--- appImpl mClients mClientIds onJoined onReceive pendingConn = do
---   conn <- WS.acceptRequest pendingConn
---   WS.forkPingThread conn 30
---
---   clientId <- atomically $ do
---     clientIds <- readTVar mClientIds
---     let next:remaining = clientIds
---     writeTVar mClientIds remaining
---     pure next
---
---   let client     = (clientId, conn)
---       disconnect = do
---         atomically $ do
---           clients <- readTVar mClients
---           writeTVar mClients $ removeClient client clients
---
---         T.putStrLn ("[websocket:disconnect] " <> T.pack (show clientId))
---         pure ()
---
---   flip finally disconnect $ do
---     clientCount <- atomically $ do
---       clients <- readTVar mClients
---       writeTVar mClients $ addClient client clients
---       pure $ length clients
---
---     initText <- onJoined clientId clientCount
---     case initText of
---       Just text -> sendImpl mClients clientId text
---       Nothing   -> do
---         -- @TODO Should really be a NOTICE level log via a logger
---         T.putStrLn "[websocket:notice] No init message for new client was provided"
---         pure ()
---
---     talk onReceive conn mClients client
 
 
 talk :: OnReceive -> WS.Connection -> TVar [Client] -> Client -> IO ()

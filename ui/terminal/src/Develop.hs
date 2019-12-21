@@ -39,7 +39,7 @@ import qualified Data.Text.Encoding as T
 import System.FSNotify
 import Control.Concurrent (threadDelay, forkIO)
 import Control.Monad (forever)
-
+import qualified Data.List as List
 
 
 -- RUN THE DEV SERVER
@@ -62,14 +62,29 @@ run () (Flags maybePort) =
         mClients <- liftIO $ SocketServer.clientsInit
 
         forkIO $ withManager $ \mgr -> do
+          Lamdera.debug "forking watcher"
           -- start a watching job (in the background)
-          watchDir
+          watchTree
             mgr          -- manager
             "."          -- directory to watch
             (const True) -- predicate
             (\e -> do
-              putStrLn "got file changed event"
-              SocketServer.broadcastImpl mClients "r" -- r is refresh, see live.js
+              let
+                shouldRefresh =
+                  case e of
+                    Modified filename _ _ ->
+                      not (List.isInfixOf "LocalDev.elm" filename) && not (List.isInfixOf "/lamdera-stuff/" filename)
+                    Removed filename _ _ ->
+                      not (List.isInfixOf "LocalDev.elm" filename) && not (List.isInfixOf "/lamdera-stuff/" filename)
+                    _ ->
+                      True
+
+              if shouldRefresh
+                then do
+                  Lamdera.debug "refreshing"
+                  SocketServer.broadcastImpl mClients "r" -- r is refresh, see live.js
+                else
+                  pure ()
             )  -- action
 
           -- sleep forever (until interrupted)
