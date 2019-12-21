@@ -309,7 +309,7 @@ buildProductionJsFiles root isProduction version =
     onlyWhen (version /= 1) $ do -- Version 1 has no migrations for rewrite
       let migrationPath = (root </> "src/Evergreen/Migrate/V") <> show version <> ".elm"
       -- Temporarily point migration to current types in order to type-check
-      liftIO $ callCommand $ "sed -i '' -e 's/import Evergreen.Type.V" <> show version <> "/import Types/g' " ++ migrationPath
+      osReplace ("s/import Evergreen.Type.V" <> show version <> "/import Types/g") migrationPath
 
     -- debug $ "Injecting BACKENDINJECTION " <> (root </> "elm-backend-overrides.js")
     -- liftIO $ Env.setEnv "BACKENDINJECTION" (root </> "elm-backend-overrides.js")
@@ -352,7 +352,7 @@ buildProductionJsFiles root isProduction version =
     -- NOTE: Could do this, but assuming it'll be good to have the original evidence of
     -- state for situation where things go wrong in production and you can poke around
     -- Restore the type back to what it was
-    -- liftIO $ callCommand $ "sed -i '' -e 's/import Types/import Evergreen.Type.V" <> show version <> "/g' " ++ migrationPath
+    -- osReplace ("s/import Types/import Evergreen.Type.V" <> show version <> "/g") migrationPath
 
 
 
@@ -364,7 +364,7 @@ snapshotCurrentTypesTo root version = do
   let nextType = (root </> "src/Evergreen/Type/V") <> show version <> ".elm"
   _ <- readProcess "mkdir" [ "-p", root </> "src/Evergreen/Type" ] ""
   _ <- readProcess "cp" [ root </> "src/Types.elm", nextType ] ""
-  callCommand $ "sed -i '' -e 's/module Types exposing/module Evergreen.Type.V" <> show version <> " exposing/g' " <> nextType
+  osReplace ("s/module Types exposing/module Evergreen.Type.V" <> show version <> " exposing/g") nextType
   pure ""
 
 
@@ -502,7 +502,7 @@ migrationCheck root version =
               let migrationPath = (root </> "src/Evergreen/Migrate/V") <> show version <> ".elm"
 
               debug "Replacing type reference"
-              liftIO $ callCommand $ "sed -i '' -e 's/import Evergreen.Type.V" <> show version <> "/import Types/g' " ++ migrationPath
+              osReplace ("s/import Evergreen.Type.V" <> show version <> "/import Types/g") migrationPath
 
               -- @TODO
               -- This is now cleaner for local checks, but we still need a full e2e check in production before we deploy!
@@ -513,19 +513,21 @@ migrationCheck root version =
               -- liftIO $ unless frontendRuntimeExists $ writeUtf8 frontendRuntimeLocalContent $ root </> "src/LamderaFrontendRuntime.elm"
               -- liftIO $ unless backendRuntimeExists $ writeUtf8 backendRuntimeLocalContent $ root </> "src/LamderaBackendRuntime.elm"
 
-              liftIO $ writeUtf8 (lamderaCheckBothFileContents version) $ root </> "src/LamderaCheckBoth.elm"
+              liftIO $ callCommand $ "mkdir -p " <> root </> "lamdera-stuff/alpha"
+              let lamderaCheckBothPath = "lamdera-stuff/alpha/LamderaCheckBoth.elm"
+              liftIO $ writeUtf8 (lamderaCheckBothFileContents version) $ root </> lamderaCheckBothPath
               let jsOutput = Just (Output.Html Nothing "/dev/null")
-              Project.compile Output.Dev Output.Client jsOutput Nothing summary [ "src" </> "LamderaCheckBoth.elm" ]
+              Project.compile Output.Dev Output.Client jsOutput Nothing summary [ lamderaCheckBothPath ]
 
               -- @TODO this is because the migrationCheck does weird terminal stuff that mangles the display... how to fix this?
               liftIO $ threadDelay 50000 -- 50 milliseconds
 
               debug "Cleaning up build scaffold"
               -- Remove our temporarily checker file
-              liftIO $ callCommand $ "rm " <> (root </> "src/LamderaCheckBoth.elm")
+              liftIO $ callCommand $ "rm " <> (root </> lamderaCheckBothPath)
 
               -- Restore the type back to what it was
-              liftIO $ callCommand $ "sed -i '' -e 's/import Types/import Evergreen.Type.V" <> show version <> "/g' " ++ migrationPath
+              osReplace ("s/import Types/import Evergreen.Type.V" <> show version <> "/g") migrationPath
 
               -- Cleanup dummy runtime files if we added them
               -- liftIO $ unless frontendRuntimeExists $ callCommand $ "rm " <> root </> "src/LamderaFrontendRuntime.elm"
@@ -1043,3 +1045,25 @@ earlyBail =
 -- Inversion of `unless` that runs IO only when condition is True
 onlyWhen condition io =
   unless (not condition) io
+
+
+
+osReplace regex filename =
+  -- https://stackoverflow.com/questions/4247068/sed-command-with-i-option-failing-on-mac-but-works-on-linux
+  liftIO $ do
+    mOsType <- Lamdera.ostype
+    case mOsType of
+      Just ostype ->
+        if List.isInfixOf "linux" ostype then
+          liftIO $ callCommand $ "sed -i'' -e '" <> regex <> "' " ++ filename
+        else do
+          -- Probably OS X?
+          liftIO $ callCommand $ "sed -i '' -e '" <> regex <> "' " ++ filename
+          liftIO $ callCommand $ "rm " <> filename <> "-e || true"
+      Nothing -> do
+        -- No idea... try the linux one anyway?
+        -- env <- Lamdera.env
+        -- putStrLn $ show env
+        Lamdera.debug "Couldn't figure out OS type for `sed` variant"
+        liftIO $ callCommand $ "sed -i'' -e '" <> regex <> "' " <> filename
+        liftIO $ callCommand $ "rm " <> filename <> "-e || true"

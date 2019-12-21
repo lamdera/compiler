@@ -75,9 +75,9 @@ run () (Flags maybePort) =
                 shouldRefresh =
                   case e of
                     Modified filename _ _ ->
-                      not (List.isInfixOf "LocalDev.elm" filename) && not (List.isInfixOf "/lamdera-stuff/" filename)
+                      not (List.isInfixOf "/.git/" filename) && not (List.isInfixOf "/lamdera-stuff/" filename)
                     Removed filename _ _ ->
-                      not (List.isInfixOf "LocalDev.elm" filename) && not (List.isInfixOf "/lamdera-stuff/" filename)
+                      not (List.isInfixOf "/.git/" filename) && not (List.isInfixOf "/lamdera-stuff/" filename)
                     _ ->
                       True
 

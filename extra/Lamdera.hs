@@ -20,6 +20,8 @@ module Lamdera
   , Data.Witherable.mapMaybe
   , Data.Witherable.catMaybes
   , isDebug
+  , ostype
+  , env
   , unsafe
   , lamderaLiveSrc
   )
@@ -103,6 +105,14 @@ isDebug = do
   case debugM of
     Just _ -> pure True
     Nothing -> pure False
+
+
+ostype =
+  Env.lookupEnv "OSTYPE"
+
+
+env =
+  Env.getEnvironment
 
 
 unsafe = unsafePerformIO
