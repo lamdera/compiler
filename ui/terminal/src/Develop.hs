@@ -40,7 +40,10 @@ import System.FSNotify
 import Control.Concurrent (threadDelay, forkIO)
 import Control.Monad (forever)
 import qualified Data.List as List
+import System.Process
 
+import Elm.Project.Json
+import Elm.Project.Summary
 
 -- RUN THE DEV SERVER
 
@@ -57,12 +60,11 @@ run () (Flags maybePort) =
     port =
       maybe 8000 id maybePort
   in
-    do  putStrLn $ "Go to <http://localhost:" ++ show port ++ "/lamdera> to run your Lamdera project."
+    do  putStrLn $ "Go to <http://localhost:" ++ show port ++ "> to run your Lamdera project."
 
         mClients <- liftIO $ SocketServer.clientsInit
 
         forkIO $ withManager $ \mgr -> do
-          Lamdera.debug "forking watcher"
           -- start a watching job (in the background)
           watchTree
             mgr          -- manager
@@ -81,7 +83,7 @@ run () (Flags maybePort) =
 
               if shouldRefresh
                 then do
-                  Lamdera.debug "refreshing"
+                  Lamdera.debug $ "refreshing for change: " <> show e
                   SocketServer.broadcastImpl mClients "r" -- r is refresh, see live.js
                 else
                   pure ()
@@ -92,12 +94,12 @@ run () (Flags maybePort) =
 
         httpServe (config port) $
           serveFiles
-          <|> serveDirectoryWith directoryConfig "."
+          <|> serveDirectoryWith directoryConfig "." -- Default directory/file config
           <|> serveWebsocket mClients
-          <|> serveAssets
-          <|> serveLamderaPublicFiles
-          <|> serveUnmatchedUrlsToIndex
-          <|> error404
+          <|> serveAssets -- Compiler packaged static files
+          <|> serveLamderaPublicFiles -- Add /public/* as if it were /* to mirror production
+          <|> serveUnmatchedUrlsToIndex -- Everything else without extensions goes to Lamdera LocalDev harness
+          <|> error404 -- Will get hit for any non-matching extensioned paths i.e. /hello.blah
 
 
 config :: Int -> Config Snap a
@@ -121,12 +123,19 @@ config port =
 directoryConfig :: MonadSnap m => DirectoryConfig m
 directoryConfig =
   let
-    customGenerator pwd =
-      do  modifyResponse $ setContentType "text/html; charset=utf-8"
-          html <- liftIO $
-            do  root <- Dir.getCurrentDirectory
-                Index.get root pwd
-          writeBuilder html
+    customGenerator pwd = do
+      if (pwd == ".")
+        then do
+          Lamdera.debug "passing on / index"
+          pass
+        else
+          pure ()
+
+      modifyResponse $ setContentType "text/html; charset=utf-8"
+      html <- liftIO $
+        do  root <- Dir.getCurrentDirectory
+            Index.get root pwd
+      writeBuilder html
   in
     fancyDirectoryConfig
       { indexFiles = []
@@ -236,6 +245,7 @@ serveAssets =
 
         Just (content, mimeType) ->
           do  modifyResponse (setContentType (mimeType <> ";charset=utf-8"))
+              -- Lamdera.debug $ "serving assets: " <> file
               writeBS content
 
 
@@ -315,6 +325,7 @@ serveLamderaPublicFiles =
   do  file <- getSafePath
       let pubFile = "public" </> file
       guard =<< liftIO (Dir.doesFileExist pubFile)
+      -- Lamdera.debug $ "serving lamdera public files: " <> file
       serveElm pubFile <|> serveFilePretty pubFile
 
 
@@ -326,19 +337,22 @@ serveUnmatchedUrlsToIndex :: Snap ()
 serveUnmatchedUrlsToIndex =
   do  file <- getSafePath
       guard (takeExtension file == "")
-      let harnessPath = "src/LocalDev.elm"
+      let harnessPath = "lamdera-stuff/alpha/LocalDev.elm"
+      -- Lamdera.debug $ "serving unmatched URL: " <> file
 
       d <- liftIO $ Lamdera.isDebug
-
       harness <-
         if d then
           liftIO $ BS.readFile ("/Users/mario/dev/projects/elmx/ui/browser/src/LocalDev.elm")
         else
           pure StaticFiles.lamderaLocalDev
 
+      liftIO $ callCommand $ "mkdir -p lamdera-stuff/alpha"
       liftIO $ BS.writeFile harnessPath harness
       serveElm harnessPath
-      liftIO $ Dir.removeFile harnessPath
+      -- liftIO $ Dir.removeFile harnessPath
+      -- liftIO $ callCommand $ "rm " <> harnessPath <> " || true " -- less exception-ey on double-reload!
+
 
 
 -- serveWebsocket :: TVar [Client] -> Snap ()

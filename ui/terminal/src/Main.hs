@@ -40,10 +40,11 @@ main =
   --Wire.Test.compile
   do  setLocaleEncoding utf8
       complex intro outro
-        [ make
+        [ live
         , check
         , deploy
-        , reactor
+        -- , reactor
+        , make
         , init
         , install
         , repl
@@ -168,6 +169,33 @@ reactor =
         |-- flag "port" port_ "The port of the server (default: 8000)"
   in
   Interface "reactor" (Common summary) details example noArgs reactorFlags Develop.run
+
+
+-- LAMDERA LIVE
+
+
+live :: Interface
+live =
+  let
+    summary =
+      "Local development for full-stack Lamdera with live reload."
+
+    details =
+      "The `live` command starts a local server on your computer:"
+
+    example =
+      reflow
+        "After running that command, you would have a server at <http://localhost:8000>\
+        \ that helps with development. It emulates the Lamdera frontend/backend stack, \
+        \ automatically reloads with state-restoration on changes to the project directory\
+        \ and provides some UI utilities to help with development."
+
+    liveFlags =
+      flags Develop.Flags
+        |-- flag "port" port_ "The port of the server (default: 8000)"
+  in
+  Interface "live" (Common summary) details example noArgs liveFlags Develop.run
+
 
 
 port_ :: Parser Int
@@ -358,15 +386,15 @@ check :: Interface
 check =
   let
     summary =
-      "Check the status of the Lamdera project types\
-      \  against the deployed production app."
+      "Compile Lamdera project and type-check Evergreen migrations \
+      \against the deployed production app."
 
     details =
       "The `check` command helps prepare Lamdera Elm projects for deployment:"
 
     example =
       reflow
-        "It will query the production enviornment and supply\
+        "It will query the production environment and supply\
         \ information about the next version and required migrations."
   in
   Interface "check" (Common summary) details example noArgs noFlags Check.run

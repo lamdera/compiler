@@ -53,6 +53,7 @@ import qualified Data.ByteString as BS
 import Data.FileEmbed (bsToExp)
 import Language.Haskell.TH (runIO)
 import System.FilePath ((</>))
+import qualified System.Directory as Dir
 
 -- Vendored from File.IO due to recursion errors
 import qualified System.IO as IO
@@ -112,9 +113,15 @@ lamderaLiveSrc =
     debug <- Lamdera.isDebug
     if debug
       then do
-        Lamdera.debug "Using elmx/ui/browser/dist/live.js for lamderaLive"
-        res <- readUtf8 "/Users/mario/dev/projects/elmx/ui/browser/dist/live.js"
-        pure (T.encodeUtf8Builder (T.decodeUtf8 res))
+        let overridePath = "/Users/mario/dev/projects/elmx/ui/browser/dist/live.js"
+        exists <- Dir.doesFileExist overridePath
+        if exists
+          then do
+            Lamdera.debug "Using elmx/ui/browser/dist/live.js for lamderaLive"
+            res <- readUtf8 overridePath
+            pure (T.encodeUtf8Builder (T.decodeUtf8 res))
+          else
+            pure (T.encodeUtf8Builder (T.decodeUtf8 lamderaLive))
       else
         pure (T.encodeUtf8Builder (T.decodeUtf8 lamderaLive))
 

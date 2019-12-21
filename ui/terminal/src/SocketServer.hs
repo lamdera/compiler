@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 -- Ported from https://github.com/supermario/hilt/blob/master/src/Hilt/SocketServer.hs
+-- Modified to remove managed and have clientId injection rather than auto-gen
 
 module SocketServer where
 
@@ -70,30 +71,6 @@ type OnReceive = ClientId -> T.Text -> IO ()
 
 type ClientId = T.Text
 type Client = (ClientId, WS.Connection)
-
-
--- load :: OnJoined -> OnReceive -> Managed Handle
--- load onJoined onReceive = managed $ withHandle onJoined onReceive
-
-
--- loadDefault :: OnJoined -> OnReceive -> Managed Handle
--- loadDefault onJoined onReceive = managed $ withHandle onJoined onReceive
-
-
--- withHandle :: OnJoined -> OnReceive -> (Handle -> IO a) -> IO a
--- withHandle onJoined onReceive f = loadRaw onJoined onReceive >>= f
-
-
--- loadRaw :: OnJoined -> OnReceive -> IO Handle
--- loadRaw onJoined onReceive = do
---   mClients   <- newTVarIO []
---   mClientIds <- newTVarIO [1 ..]
---
---   pure Handle
---     { send      = sendImpl mClients
---     , broadcast = broadcastImpl mClients
---     , app       = appImpl mClients mClientIds onJoined onReceive
---     }
 
 
 sendImpl :: TVar [Client] -> ClientId -> T.Text -> IO ()
