@@ -1066,4 +1066,4 @@ osReplace regex filename =
         -- putStrLn $ show env
         Lamdera.debug "Couldn't figure out OS type for `sed` variant"
         liftIO $ callCommand $ "sed -i'' -e '" <> regex <> "' " <> filename
-        liftIO $ callCommand $ "rm " <> filename <> "-e || true >> /dev/null 2>&1"
+        liftIO $ callCommand $ "rm " <> filename <> "-e >> /dev/null 2>&1 || true"
