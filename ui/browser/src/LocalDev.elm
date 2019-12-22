@@ -177,7 +177,7 @@ update msg m =
                     Debug.log "FEtoBE" toBackend
 
                 ( newBem, newBeCmds ) =
-                    userBackendApp.updateFromFrontend "clientIdLocalDev" toBackend m.bem
+                    userBackendApp.updateFromFrontend "sessionIdLocalDev" "clientIdLocalDev" toBackend m.bem
             in
             ( { m | fem = m.fem, bem = storeBE m newBem }, Cmd.map BEMsg newBeCmds )
 
