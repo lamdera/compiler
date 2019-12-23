@@ -100,7 +100,7 @@ init flags url key =
             { expanded = False
             , snapshotFE = True
             , snapshotBE = True
-            , location = TopLeft
+            , location = BottomLeft
             }
     in
     ( { fem = fem
@@ -325,7 +325,7 @@ lamderaPane m =
     Html.div
         [ A.style "font-family" "sans-serif"
         , A.style "font-size" "12px"
-        , A.style "position" "absolute"
+        , A.style "position" "fixed"
         , xForLocation m.devbar.location
         , yForLocation m.devbar.location
         , A.style "z-index" "100"
@@ -335,65 +335,86 @@ lamderaPane m =
         , Html.Events.onMouseEnter DevbarExpand
         , Html.Events.onMouseLeave DevbarCollapse
         ]
-        [ Html.div
-            [ A.style "padding" "5px"
+        (case m.devbar.location of
+            TopLeft ->
+                devBar True m
+
+            TopRight ->
+                devBar True m
+
+            BottomRight ->
+                devBar False m
+
+            BottomLeft ->
+                devBar False m
+        )
+
+
+devBar topDown m =
+    case topDown of
+        True ->
+            [ collapsedUI m
+            , if m.devbar.expanded then
+                expandedUI m
+
+              else
+                Html.text ""
             ]
-            [ Html.img [ Html.Events.onClick ClickedLocation, A.src "/favicon.ico", A.style "width" "20px", A.align "top" ] []
-            , Html.text " "
-            , Html.span [ Html.Events.onClick ToggledSnapshotFE ]
-                [ if m.devbar.snapshotFE then
-                    Html.text "✅"
 
-                  else
-                    Html.text "❌"
-                ]
-            , Html.span [ Html.Events.onClick ToggledSnapshotBE ]
-                [ if m.devbar.snapshotBE then
-                    Html.text "✅"
+        False ->
+            [ if m.devbar.expanded then
+                expandedUI m
 
-                  else
-                    Html.text "❌"
-                ]
+              else
+                Html.text ""
+            , collapsedUI m
             ]
-        , if m.devbar.expanded then
-            Html.div [ A.style "padding" "5px" ]
-                [ Html.text "💾 Snapshots"
-                , Html.div
-                    []
-                    [ Html.text "FE "
-                    , Html.span [ Html.Events.onClick ToggledSnapshotFE ]
-                        [ if m.devbar.snapshotFE then
-                            Html.text "✅"
 
-                          else
-                            Html.text "❌"
-                        ]
-                    , if m.devbar.snapshotFE then
-                        Html.span [ Html.Events.onClick ResetDebugStoreFE ] [ Html.text "🔄" ]
 
-                      else
-                        Html.text ""
-                    ]
-                , Html.div
-                    []
-                    [ Html.text "BE "
-                    , Html.span [ Html.Events.onClick ToggledSnapshotBE ]
-                        [ if m.devbar.snapshotBE then
-                            Html.text "✅"
+collapsedUI m =
+    Html.div
+        [ A.style "padding" "5px"
+        ]
+        [ Html.img [ Html.Events.onClick ClickedLocation, A.src "/favicon.ico", A.style "width" "20px", A.align "top" ] []
+        , Html.text " "
+        , toggleSnapshot m.devbar.snapshotFE ToggledSnapshotFE
+        , toggleSnapshot m.devbar.snapshotBE ToggledSnapshotBE
+        ]
 
-                          else
-                            Html.text "❌"
-                        ]
-                    , if m.devbar.snapshotBE then
-                        Html.span [ Html.Events.onClick ResetDebugStoreBE ] [ Html.text "🔄" ]
 
-                      else
-                        Html.text ""
-                    ]
-                ]
+expandedUI m =
+    Html.div [ A.style "padding" "5px" ]
+        [ Html.text "💾 Snapshots"
+        , Html.div
+            []
+            [ Html.text "FE "
+            , toggleSnapshot m.devbar.snapshotFE ToggledSnapshotFE
+            , if m.devbar.snapshotFE then
+                Html.span [ Html.Events.onClick ResetDebugStoreFE ] [ Html.text "🔄" ]
+
+              else
+                Html.text ""
+            ]
+        , Html.div
+            []
+            [ Html.text "BE "
+            , toggleSnapshot m.devbar.snapshotBE ToggledSnapshotBE
+            , if m.devbar.snapshotBE then
+                Html.span [ Html.Events.onClick ResetDebugStoreBE ] [ Html.text "🔄" ]
+
+              else
+                Html.text ""
+            ]
+        ]
+
+
+toggleSnapshot bool msg =
+    Html.span [ Html.Events.onClick msg ]
+        [ if bool then
+            Html.text "✅"
 
           else
-            Html.text ""
+            Html.text "❌"
         ]
 
 

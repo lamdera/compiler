@@ -187,7 +187,9 @@ run () () = do
 
             debug $ "Local and production types differ"
 
-            lastTypeChangeVersion <- liftIO $ getLastLocalTypeChangeVersion root
+            -- @TODO future optimisations if we want to not generate migrations for
+            -- deployments that don't change types...?
+            -- lastTypeChangeVersion <- liftIO $ getLastLocalTypeChangeVersion root
 
             let lamderaTypes =
                   [ "FrontendModel"
@@ -269,7 +271,8 @@ run () () = do
 
                 debug $ "Migration does not exist"
 
-                let defaultMigrations = defaultMigrationFile lastTypeChangeVersion nextVersion typeCompares
+                -- @TODO (nextVersion - 1) used to be lastTypeChangeVersion, see note above on lastTypeChangeVersion
+                let defaultMigrations = defaultMigrationFile (nextVersion - 1) nextVersion typeCompares
 
                 _ <- liftIO $ readProcess "mkdir" ["-p", root </> "src/Evergreen/Migrate"] ""
                 liftIO $ writeUtf8 defaultMigrations nextMigrationPath
@@ -581,7 +584,7 @@ defaultMigrationFile oldVersion newVersion typeCompares = do
       typeCompareMigration (typename, oldhash, newhash) = do
         let implementation =
               if oldhash == newhash then
-                "Unchanged"
+                unchangedForType typename
               else
                 "Unimplemented"
             msgType = msgForType typename
@@ -628,6 +631,20 @@ defaultMigrationFile oldVersion newVersion typeCompares = do
           "ToFrontend" ->
             "FrontendMsg"
 
+      unchangedForType t =
+        case t of
+          "BackendModel" ->
+            "ModelUnchanged"
+          "FrontendModel" ->
+            "ModelUnchanged"
+          "FrontendMsg" ->
+            "MsgUnchanged"
+          "ToBackend" ->
+            "MsgUnchanged"
+          "BackendMsg" ->
+            "MsgUnchanged"
+          "ToFrontend" ->
+            "MsgUnchanged"
 
   let header = [text|
 
@@ -659,7 +676,8 @@ lamderaCheckBothFileContents version =
     import Browser.Navigation exposing (Key)
     import Evergreen.Migrate.V$version_
     import Frontend
-    import Lamdera.Frontend exposing (Url, ClientId)
+    import Lamdera.Frontend exposing (Url)
+    import Lamdera.Backend exposing (SessionId, ClientId)
 
 
     checkFrontendTypes :
@@ -677,7 +695,7 @@ lamderaCheckBothFileContents version =
     checkBackendTypes :
             { init : ( backendModel, Cmd backendMsg )
             , update : backendMsg -> backendModel -> ( backendModel, Cmd backendMsg )
-            , updateFromFrontend : ClientId -> toBackend -> backendModel -> ( backendModel, Cmd backendMsg )
+            , updateFromFrontend : SessionId -> ClientId -> toBackend -> backendModel -> ( backendModel, Cmd backendMsg )
             , subscriptions : backendModel -> Sub backendMsg
             }
         -> Bool
@@ -695,7 +713,7 @@ lamderaCheckBothFileContents version =
         ->
             { init : ( backendModel, Cmd backendMsg )
             , update : backendMsg -> backendModel -> ( backendModel, Cmd backendMsg )
-            , updateFromFrontend : ClientId -> toBackend -> backendModel -> ( backendModel, Cmd backendMsg )
+            , updateFromFrontend : SessionId -> ClientId -> toBackend -> backendModel -> ( backendModel, Cmd backendMsg )
             , subscriptions : backendModel -> Sub backendMsg
             }
         -> Bool
