@@ -322,8 +322,8 @@ buildProductionJsFiles root isProduction version =
     -- liftIO $ threadDelay 50000 -- 50 milliseconds
 
     -- liftIO $ callCommand $ "cp ~/lamdera/runtime/src/LamderaHelpers.elm " ++ root ++ "/src"
-    -- liftIO $ callCommand $ "cp ~/lamdera/runtime/src/LamderaFrontendRuntime.elm " ++ root ++ "/src"
-    -- liftIO $ callCommand $ "cp ~/lamdera/runtime/src/LamderaBackendRuntime.elm " ++ root ++ "/src"
+    -- liftIO $ callCommand $ "cp ~/lamdera/runtime/src/LFR.elm " ++ root ++ "/src"
+    -- liftIO $ callCommand $ "cp ~/lamdera/runtime/src/LBR.elm " ++ root ++ "/src"
 
     Project.compile
       Output.Dev
@@ -331,7 +331,7 @@ buildProductionJsFiles root isProduction version =
       (Just (Output.JavaScript Nothing "backend-app.js"))
       Nothing
       summary
-      [ "src" </> "LamderaBackendRuntime.elm" ]
+      [ "src" </> "LBR.elm" ]
 
     -- debug $ "Unsetting BACKENDINJECTION"
     -- liftIO $ Env.unsetEnv "BACKENDINJECTION"
@@ -345,7 +345,7 @@ buildProductionJsFiles root isProduction version =
       (Just (Output.JavaScript Nothing "frontend-app.js"))
       Nothing
       summary
-      [ "src" </> "LamderaFrontendRuntime.elm" ]
+      [ "src" </> "LFR.elm" ]
 
 
     -- @TODO this is because the migrationCheck does weird terminal stuff that mangles the display... how to fix this?
@@ -509,12 +509,12 @@ migrationCheck root version =
 
               -- @TODO
               -- This is now cleaner for local checks, but we still need a full e2e check in production before we deploy!
-              -- frontendRuntimeExists <- liftIO $ Dir.doesFileExist $ root </> "src/LamderaFrontendRuntime.elm"
-              -- backendRuntimeExists <- liftIO $ Dir.doesFileExist $ root </> "src/LamderaBackendRuntime.elm"
+              -- frontendRuntimeExists <- liftIO $ Dir.doesFileExist $ root </> "src/LFR.elm"
+              -- backendRuntimeExists <- liftIO $ Dir.doesFileExist $ root </> "src/LBR.elm"
 
               -- debug "Creating build scaffold files"
-              -- liftIO $ unless frontendRuntimeExists $ writeUtf8 frontendRuntimeLocalContent $ root </> "src/LamderaFrontendRuntime.elm"
-              -- liftIO $ unless backendRuntimeExists $ writeUtf8 backendRuntimeLocalContent $ root </> "src/LamderaBackendRuntime.elm"
+              -- liftIO $ unless frontendRuntimeExists $ writeUtf8 frontendRuntimeLocalContent $ root </> "src/LFR.elm"
+              -- liftIO $ unless backendRuntimeExists $ writeUtf8 backendRuntimeLocalContent $ root </> "src/LBR.elm"
 
               liftIO $ callCommand $ "mkdir -p " <> root </> "lamdera-stuff/alpha"
               let lamderaCheckBothPath = "lamdera-stuff/alpha/LamderaCheckBoth.elm"
@@ -533,8 +533,8 @@ migrationCheck root version =
               osReplace ("s/import Types/import Evergreen.Type.V" <> show version <> "/g") migrationPath
 
               -- Cleanup dummy runtime files if we added them
-              -- liftIO $ unless frontendRuntimeExists $ callCommand $ "rm " <> root </> "src/LamderaFrontendRuntime.elm"
-              -- liftIO $ unless backendRuntimeExists $ callCommand $ "rm " <> root </> "src/LamderaBackendRuntime.elm"
+              -- liftIO $ unless frontendRuntimeExists $ callCommand $ "rm " <> root </> "src/LFR.elm"
+              -- liftIO $ unless backendRuntimeExists $ callCommand $ "rm " <> root </> "src/LBR.elm"
 
 
 
@@ -733,7 +733,7 @@ lamderaCheckBothFileContents version =
 frontendRuntimeLocalContent :: Text
 frontendRuntimeLocalContent =
   [text|
-    module LamderaFrontendRuntime exposing (..)
+    module LFR exposing (..)
 
     import Frontend
 
@@ -744,7 +744,7 @@ frontendRuntimeLocalContent =
 backendRuntimeLocalContent :: Text
 backendRuntimeLocalContent =
   [text|
-    module LamderaBackendRuntime exposing (..)
+    module LBR exposing (..)
 
     import Backend
 
