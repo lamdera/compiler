@@ -17,6 +17,7 @@ type Msg
     | BEMsg Types.BackendMsg
     | BEtoFE ClientId Types.ToFrontend
     | FEtoBE Types.ToBackend
+    | FENewUrl Url
     | DevbarExpand
     | DevbarCollapse
     | ResetDebugStoreBoth
@@ -180,6 +181,13 @@ update msg m =
                     userBackendApp.updateFromFrontend "sessionIdLocalDev" "clientIdLocalDev" toBackend m.bem
             in
             ( { m | fem = m.fem, bem = storeBE m newBem }, Cmd.map BEMsg newBeCmds )
+
+        FENewUrl url ->
+            let
+                ( newModel, newCmds ) =
+                    update (FEMsg (userFrontendApp.onUrlChange url)) m
+            in
+            ( { newModel | originalUrl = url }, newCmds )
 
         DevbarExpand ->
             let
@@ -375,7 +383,14 @@ collapsedUI m =
     Html.div
         [ A.style "padding" "5px"
         ]
-        [ Html.img [ Html.Events.onClick ClickedLocation, A.src "/favicon.ico", A.style "width" "20px", A.align "top" ] []
+        [ Html.img
+            [ Html.Events.onClick ClickedLocation
+            , A.style "cursor" "pointer"
+            , A.src "/favicon.ico"
+            , A.style "width" "20px"
+            , A.align "top"
+            ]
+            []
         , Html.text " "
         , toggleSnapshot m.devbar.snapshotFE ToggledSnapshotFE
         , toggleSnapshot m.devbar.snapshotBE ToggledSnapshotBE
@@ -390,7 +405,11 @@ expandedUI m =
             [ Html.text "FE "
             , toggleSnapshot m.devbar.snapshotFE ToggledSnapshotFE
             , if m.devbar.snapshotFE then
-                Html.span [ Html.Events.onClick ResetDebugStoreFE ] [ Html.text "🔄" ]
+                Html.span
+                    [ Html.Events.onClick ResetDebugStoreFE
+                    , A.style "cursor" "pointer"
+                    ]
+                    [ Html.text "🔄" ]
 
               else
                 Html.text ""
@@ -400,7 +419,11 @@ expandedUI m =
             [ Html.text "BE "
             , toggleSnapshot m.devbar.snapshotBE ToggledSnapshotBE
             , if m.devbar.snapshotBE then
-                Html.span [ Html.Events.onClick ResetDebugStoreBE ] [ Html.text "🔄" ]
+                Html.span
+                    [ Html.Events.onClick ResetDebugStoreBE
+                    , A.style "cursor" "pointer"
+                    ]
+                    [ Html.text "🔄" ]
 
               else
                 Html.text ""
@@ -409,7 +432,7 @@ expandedUI m =
 
 
 toggleSnapshot bool msg =
-    Html.span [ Html.Events.onClick msg ]
+    Html.span [ Html.Events.onClick msg, A.style "cursor" "pointer" ]
         [ if bool then
             Html.text "✅"
 
@@ -429,6 +452,6 @@ main =
         , view = \model -> mapDocument model FEMsg (userFrontendApp.view model.fem)
         , update = update
         , subscriptions = subscriptions
-        , onUrlRequest = \url -> FEMsg (userFrontendApp.onUrlRequest url)
-        , onUrlChange = \ureq -> FEMsg (userFrontendApp.onUrlChange ureq)
+        , onUrlRequest = \ureq -> FEMsg (userFrontendApp.onUrlRequest ureq)
+        , onUrlChange = \url -> FENewUrl url
         }
