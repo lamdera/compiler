@@ -87,15 +87,12 @@ tempFileName =
   "/dev/null"
 
 
--- rootPaths :: [FilePath]
--- rootPaths =
---   -- [ "src" </> "AllTypes_Check.elm"
---   [ "src" </> "Backend.elm"
---   ]
-
-
 touch :: String -> IO ()
 touch path = callCommand $ "touch " ++ path
+
+
+cp :: String -> String -> IO ()
+cp from to = callCommand $ "cp " ++ from ++ " " ++ to
 
 
 
@@ -103,12 +100,18 @@ touch path = callCommand $ "touch " ++ path
 
 check = do
 
+  let project = "/Users/mario/lamdera/test/v3"
+
   setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
   setEnv "LDEBUG" "1"
   setEnv "ELM_HOME" "/Users/mario/elm-home-elmx-test"
-  setEnv "LAMDERA_APP_NAME" "dashboard"
+  setEnv "LAMDERA_APP_NAME" "testapp"
+
+  cp "/Users/mario/lamdera/runtime/src/LBR.elm" (project ++ "/src")
+  cp "/Users/mario/lamdera/runtime/src/LFR.elm" (project ++ "/src")
+  cp "/Users/mario/lamdera/runtime/src/LamderaHelpers.elm" (project ++ "/src")
 
   -- Dir.withCurrentDirectory ("/Users/mario/dev/projects/lamdera-dashboard") $
-  Dir.withCurrentDirectory ("/Users/mario/lamdera/test/v1") $
+  Dir.withCurrentDirectory project $
     do
         Check.run () ()
