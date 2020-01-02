@@ -1071,7 +1071,7 @@ writeLamderaGenerated :: FilePath -> Bool -> Int -> Task.Task ()
 writeLamderaGenerated root inProduction nextVersion =
   onlyWhen inProduction $ do
     gen <- liftIO $ createLamderaGenerated root nextVersion
-    liftIO $ putStrLn $ T.unpack gen
+    -- liftIO $ putStrLn $ T.unpack gen
     liftIO $ writeUtf8 gen $ root </> "src/LamderaGenerated.elm"
 
 
