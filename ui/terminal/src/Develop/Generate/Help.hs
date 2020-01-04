@@ -26,6 +26,7 @@ makePageHtml moduleName maybeFlags =
 <html>
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, minimum-scale=1.0">
   <link type="text/css" rel="stylesheet" href="/_elm/styles.css">
   <script src="/_elm/elm.js"></script>
 </head>
@@ -49,6 +50,7 @@ makeCodeHtml title code =
 <html>
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, minimum-scale=1.0">
   <title>|] <> B.stringUtf8 title <> [r|</title>
   <style type="text/css">
     @import url(/_elm/source-code-pro.ttf);
