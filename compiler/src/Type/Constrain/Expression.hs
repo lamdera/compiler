@@ -76,14 +76,14 @@ constrain rtv (A.At region expression) expected =
       return CTrue
 
     Can.VarForeign (ModuleName.Canonical pkg modu) name annotation@(Can.Forall freevars t) ->
-      if pkg == Pkg.lamderaCore && modu == "Lamdera.Frontend" && name == "sendToBackend" then
+      if pkg == Pkg.lamderaCore && modu == "Lamdera" && name == "sendToBackend" then
         let
           fn (Can.TVar "toBackend") = Can.TType (ModuleName.Canonical Pkg.dummyName "Types") "ToBackend" []
           fn x = x
         in
           pure $ CForeign region name (Can.Forall freevars (transform fn t)) expected
 
-      else if pkg == Pkg.lamderaCore && modu == "Lamdera.Backend" && name == "sendToFrontend" then
+      else if pkg == Pkg.lamderaCore && modu == "Lamdera" && name == "sendToFrontend" then
         let
           fn (Can.TVar "toFrontend") = Can.TType (ModuleName.Canonical Pkg.dummyName "Types") "ToFrontend" []
           fn x = x

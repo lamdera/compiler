@@ -114,7 +114,7 @@ contextHintsWhenTypeMismatch tipe =
       -- debugTrace ("contextHintsWhenTypeMismatch: " ++ show tipe )
         [ D.toSimpleHint $
            "I need you to implement migrations for changed types\
-            \ as described in <https://lamdera.com/evergreen-migrations>"
+            \ as described in <https://dashboard.lamdera.app/docs/evergreen>"
         ]
     _ ->
       []

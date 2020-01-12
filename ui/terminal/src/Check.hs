@@ -240,7 +240,7 @@ run () () = do
                     mapM pDocLn $
                       ([ D.reflow "Evergreen migrations will be applied to the following types:" ]
                        <> formattedChangedTypes <>
-                       [ D.reflow "See <https://lamdera.com/evergreen-migrations> more info." ]
+                       [ D.reflow "See <https://dashboard.lamdera.app/docs/evergreen> for more info." ]
                       )
 
                     buildProductionJsFiles root inProduction nextVersionInfo
@@ -260,7 +260,7 @@ run () () = do
                     ("The following types have changed since v" <> show prodVersion <> " and require migrations:")
                     (formattedChangedTypes <>
                       [ D.reflow $ "I've generated a placeholder migration file in " <> nextMigrationPathBare <> " to help you get started."
-                      , D.reflow "See <https://lamdera.com/evergreen-migrations> more info."
+                      , D.reflow "See <https://dashboard.lamdera.app/docs/evergreen> for more info."
                       ]
                     )
                 error "Exit."
@@ -380,7 +380,7 @@ lamderaThrowUnknownApp =
     $ Help.report "UNKNOWN APP" (Just "git remote -v")
       ("I cannot figure out which Lamdera app this repository belongs to.")
       ([ D.reflow "I normally look for a git remote labelled 'lamdera' but did not find one."
-       , D.reflow "See <https://lamdera.com/app-setup> for more info."
+       , D.reflow "See <https://dashboard.lamdera.app/docs/deploying> for more info."
        ]
       )
 
@@ -391,7 +391,7 @@ lamderaThrowUnimplementedMigration nextMigrationPath formattedChangedTypes prodV
       ("The following types have changed since v" <> show prodVersion <> " and require migrations:")
       (formattedChangedTypes <>
         [ D.reflow $ "The migration file at " <> nextMigrationPathBare <> " has migrations that still haven't been implemented."
-        , D.reflow "See <https://lamdera.com/evergreen-migrations> more info."
+        , D.reflow "See <https://dashboard.lamdera.app/docs/evergreen> for more info."
         ]
       )
   error "Exit."
@@ -693,8 +693,7 @@ lamderaCheckBothFileContents version =
     import Browser.Navigation exposing (Key)
     import Evergreen.Migrate.V$version_
     import Frontend
-    import Lamdera.Frontend exposing (Url)
-    import Lamdera.Backend exposing (SessionId, ClientId)
+    import Lamdera exposing (Url, SessionId, ClientId)
 
 
     checkFrontendTypes :

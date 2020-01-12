@@ -7,8 +7,8 @@ import Frontend
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events exposing (onClick, onMouseEnter, onMouseLeave)
+import Lamdera exposing (ClientId, Url)
 import Lamdera.Debug as Lamdera
-import Lamdera.Frontend exposing (ClientId, Url)
 import Types exposing (BackendModel, BackendMsg, FrontendModel, FrontendMsg, ToBackend, ToFrontend)
 
 
