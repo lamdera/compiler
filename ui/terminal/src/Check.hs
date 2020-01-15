@@ -81,7 +81,7 @@ import System.Process
 import Control.Monad (unless, filterM)
 import qualified System.IO as IO
 import qualified Elm.Project.Summary as Summary
-
+import qualified Text.Read
 
 
 run :: () -> () -> IO ()
@@ -92,12 +92,21 @@ run () () = do
 
   appNameEnvM <- liftIO $ Env.lookupEnv "LAMDERA_APP_NAME"
   hoistRebuild <- liftIO $ Env.lookupEnv "HOIST_REBUILD"
+  forceVersionM <- liftIO $ Env.lookupEnv "VERSION"
 
-  let inProduction = (appNameEnvM /= Nothing && appNameEnvM /= Just "testappx") -- @TODO better isProd check...
+
+  let inProduction = (appNameEnvM /= Nothing) -- @TODO better isProd check...
       isHoistRebuild = (hoistRebuild /= Nothing)
+      forceVersion = fromMaybe (-1) $
+        case forceVersionM of
+          Just fv -> Text.Read.readMaybe fv
+          Nothing -> Nothing
+
+      -- Text.Read.readMaybe <$>
 
   debug $ "production:" ++ show inProduction
   debug $ "hoist rebuild:" ++ show isHoistRebuild
+  debug $ "force version:" ++ show forceVersion
 
   putStrLn "───> Checking project compiles..."
 
@@ -123,14 +132,32 @@ run () () = do
     -- Prior `onlyWhen` guards against situation where no name is determinable
     let appName = certainAppName lamderaRemotes appNameEnvM
 
-    (prodVersion, productionTypes) <-
-      if (appName == "testapp")
-        then
-          fetchProductionInfo appName `catchError` (\err -> pure (0, []))
-        else
-          fetchProductionInfo appName
-
     localTypes <- fetchLocalTypes root
+
+    (prodVersion, productionTypes) <-
+      -- @TODO what about v1 when there is no app...? This will break in prod?
+      if isHoistRebuild
+        then do
+          if (forceVersion == (-1))
+            then
+              genericExit "ERROR: Hoist rebuild got -1 for version, check your usage."
+
+            else do
+              liftIO $ putStrLn $ "❗️Gen with forced version: " <> show forceVersion
+              pure (forceVersion, localTypes)
+
+        else
+          if (appName == "testapp")
+            then
+              fetchProductionInfo appName `catchError` (\err -> pure (0, []))
+            else
+              fetchProductionInfo appName
+
+    migrationSequence <- liftIO $ getMigrationsSequence root `catchError`
+      (\err -> do
+        debug "getMigrationsSequence was empty - that should only be true on v1 deploy"
+        pure []
+      )
 
     let
       localTypesChangedFromProduction =
@@ -138,16 +165,19 @@ run () () = do
 
       nextVersion =
         if isHoistRebuild then
-          -- No Evergreen
+          -- No version bump, the stated version will be the prod version
           prodVersion
         else
           (prodVersion + 1)
 
       nextVersionInfo =
-        if localTypesChangedFromProduction then
-          WithMigrations nextVersion
-        else
-          WithoutMigrations nextVersion
+        case List.last migrationSequence of
+          [vInfo] ->
+            vInfo
+
+          _ ->
+            WithoutMigrations nextVersion
+
 
     debug $ "Continuing with (prodV,nextV,nextVInfo) " ++ show (prodVersion, nextVersion, nextVersionInfo)
 
@@ -285,14 +315,15 @@ buildProductionJsFiles root inProduction versionInfo = do
   onlyWhen inProduction $ do
     summary <- Project.getRoot
 
-    liftIO $ putStrLn "───> Compiling for production..."
+    liftIO $ putStrLn $ "───> Compiling for production: " <> show versionInfo
 
-    onlyWhen (version /= 1) $ do -- Version 1 has no migrations for rewrite
+    onlyWhen (version /= 1 && versionInfo == WithMigrations version) $ do -- Version 1 has no migrations for rewrite
 
-      onlyWhen (versionInfo == WithMigrations version) $ do
-        let migrationPath = (root </> "src/Evergreen/Migrate/V") <> show version <> ".elm"
-        -- Temporarily point migration to current types in order to type-check
-        osReplace ("s/import Evergreen.Type.V" <> show version <> "/import Types/g") migrationPath
+      let migrationPath = (root </> "src/Evergreen/Migrate/V") <> show version <> ".elm"
+      debug $ "Rewriting " <> migrationPath <> " type import to point to Types"
+
+      -- Temporarily point migration to current types in order to type-check
+      osReplace ("s/import Evergreen.Type.V" <> show version <> "/import Types/g") migrationPath
 
     -- debug $ "Injecting BACKENDINJECTION " <> (root </> "elm-backend-overrides.js")
     -- liftIO $ Env.setEnv "BACKENDINJECTION" (root </> "elm-backend-overrides.js")
@@ -331,6 +362,13 @@ buildProductionJsFiles root inProduction versionInfo = do
     -- @TODO this is because the migrationCheck does weird terminal stuff that mangles the display... how to fix this?
     liftIO $ threadDelay 50000 -- 50 milliseconds
 
+    onlyWhen (version /= 1 && versionInfo == WithMigrations version) $ do -- Version 1 has no migrations for rewrite
+
+      let migrationPath = (root </> "src/Evergreen/Migrate/V") <> show version <> ".elm"
+      debug $ "Rewriting " <> migrationPath <> " type import back to VX"
+
+      -- Temporarily point migration to current types in order to type-check
+      osReplace ("s/import Types/import Evergreen.Type.V" <> show version <> "/g") migrationPath
 
     -- NOTE: Could do this, but assuming it'll be good to have the original evidence of
     -- state for situation where things go wrong in production and you can poke around
@@ -1125,7 +1163,7 @@ getMigrationsSequence root = do
         & fmap reverse
 
   debug_ $ "Migration sequence: " ++ show sequences
-  debug_ $ "Tyoes sequence: " ++ show typeVersions
+  debug_ $ "Types sequence: " ++ show typeVersions
   pure sequences
 
 
@@ -1140,6 +1178,14 @@ earlyBail =
     $ Help.report "EARLY BAIL" (Just "I'm out!")
       ("The code used earlyBail, it was super effective!")
       []
+
+
+genericExit str =
+  Task.throw $ Exit.Lamdera
+    $ Help.report "ERROR" (Just "???")
+      (str)
+      []
+
 
 
 -- Inversion of `unless` that runs IO only when condition is True
@@ -1164,6 +1210,6 @@ osReplace regex filename =
         -- No idea... try the linux one anyway?
         -- env <- Lamdera.env
         -- putStrLn $ show env
-        Lamdera.debug "Couldn't figure out OS type for `sed` variant"
+        debug "Couldn't figure out OS type for `sed` variant, falling back to OS X"
         liftIO $ callCommand $ "sed -i'' -e '" <> regex <> "' " <> filename
         liftIO $ callCommand $ "rm " <> filename <> "-e >> /dev/null 2>&1 || true"

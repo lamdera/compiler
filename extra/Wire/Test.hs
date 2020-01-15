@@ -67,7 +67,7 @@ compile = do
 
   -- =${LOVR} ELM_HOME=$BUILD_DIR/cache/elm-home elmx make src/LamderaBackendRuntime.elm --output="backend-app.js"
 
-  let rootPaths = [ "src" </> "Both.elm" ]
+  let rootPaths = [ "src" </> "Frontend.elm" ]
 
   -- Dir.withCurrentDirectory ("extra/Wire") $
   Dir.withCurrentDirectory ("/Users/mario/dev/projects/lamdera/test/v1") $
@@ -100,12 +100,14 @@ cp from to = callCommand $ "cp " ++ from ++ " " ++ to
 
 check = do
 
-  let project = "/Users/mario/lamdera/test/v3"
+  let project = "/Users/mario/lamdera/test/v2"
 
   setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
   setEnv "LDEBUG" "1"
   setEnv "ELM_HOME" "/Users/mario/elm-home-elmx-test"
-  setEnv "LAMDERA_APP_NAME" "testapp"
+  setEnv "LAMDERA_APP_NAME" "testappx"
+  setEnv "HOIST_REBUILD" "1"
+  setEnv "VERSION" "2"
 
   cp "/Users/mario/lamdera/runtime/src/LBR.elm" (project ++ "/src")
   cp "/Users/mario/lamdera/runtime/src/LFR.elm" (project ++ "/src")

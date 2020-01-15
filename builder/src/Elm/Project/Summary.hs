@@ -32,6 +32,7 @@ data Summary =
     , _ifaces :: Module.Interfaces
     , _depsGraph :: DepsGraph
     }
+    deriving (Show)
 
 
 type ExposedModules =
