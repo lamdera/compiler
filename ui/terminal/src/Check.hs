@@ -69,6 +69,7 @@ import qualified Reporting.Progress.Terminal as Terminal
 import Lamdera
 import qualified File.IO as IO
 import qualified Data.List as List
+import qualified Data.List.Safe as SafeList
 import Control.Concurrent (threadDelay)
 import NeatInterpolation
 import Algorithms.NaturalSort
@@ -94,15 +95,12 @@ run () () = do
   hoistRebuild <- liftIO $ Env.lookupEnv "HOIST_REBUILD"
   forceVersionM <- liftIO $ Env.lookupEnv "VERSION"
 
-
   let inProduction = (appNameEnvM /= Nothing) -- @TODO better isProd check...
       isHoistRebuild = (hoistRebuild /= Nothing)
       forceVersion = fromMaybe (-1) $
         case forceVersionM of
           Just fv -> Text.Read.readMaybe fv
           Nothing -> Nothing
-
-      -- Text.Read.readMaybe <$>
 
   debug $ "production:" ++ show inProduction
   debug $ "hoist rebuild:" ++ show isHoistRebuild
@@ -134,6 +132,12 @@ run () () = do
 
     localTypes <- fetchLocalTypes root
 
+    migrationSequence <- liftIO $ getMigrationsSequence root `catchError`
+      (\err -> do
+        debug "getMigrationsSequence was empty - that should only be true on v1 deploy"
+        pure []
+      )
+
     (prodVersion, productionTypes) <-
       -- @TODO what about v1 when there is no app...? This will break in prod?
       if isHoistRebuild
@@ -150,14 +154,45 @@ run () () = do
           if (appName == "testapp")
             then
               fetchProductionInfo appName `catchError` (\err -> pure (0, []))
-            else
-              fetchProductionInfo appName
+            else do
+              (pv, pt) <- fetchProductionInfo appName `catchError` (\err -> pure ((-1), []))
+              if (pv /= (-1))
+                then
+                  -- Everything is as it should be
+                  pure (pv, pt)
+                else do
+                  if (inProduction)
+                    then
+                      genericExit "FATAL: application info could not be obtained. Please report this to support."
 
-    migrationSequence <- liftIO $ getMigrationsSequence root `catchError`
-      (\err -> do
-        debug "getMigrationsSequence was empty - that should only be true on v1 deploy"
-        pure []
-      )
+                    else do
+
+                      let
+                        assumedNextVersion =
+                          case SafeList.last migrationSequence of
+                            Just [vInfo] ->
+                              (vinfoVersion vInfo)
+
+                            _ ->
+                              1
+                        assumedCurrentVersion =
+                          assumedNextVersion - 1
+
+                      approved <- Task.getApproval $
+                        D.stack
+                          [ D.fillSep [ D.yellow "WARNING:","I","normally","check","for","production","info","here","but","I","wasn't","able","to." ]
+                          , D.reflow $ "Shall I proceed assuming the next version is v" <> show assumedNextVersion <> "? [Y/n]: "
+                          ]
+
+                      if approved
+                        then do
+                          liftIO $ putStrLn $ "Okay, continuing assuming v" <> show assumedNextVersion <> " is the next version to deploy..."
+                          pure (assumedCurrentVersion, localTypes)
+
+                        else do
+                          genericExit "Okay, giving up!"
+                          pure (0, [])
+
 
     let
       localTypesChangedFromProduction =
@@ -171,12 +206,15 @@ run () () = do
           (prodVersion + 1)
 
       nextVersionInfo =
-        case List.last migrationSequence of
-          [vInfo] ->
-            vInfo
+        if prodVersion == 0 then
+          WithoutMigrations 1
+        else
+          case SafeList.last migrationSequence of
+            Just [vInfo] ->
+              vInfo
 
-          _ ->
-            WithoutMigrations nextVersion
+            _ ->
+              WithoutMigrations nextVersion
 
 
     debug $ "Continuing with (prodV,nextV,nextVInfo) " ++ show (prodVersion, nextVersion, nextVersionInfo)
@@ -297,6 +335,7 @@ run () () = do
 
           else do
             -- Types are the same.
+            debug "Local and production types are identical"
 
             onlyWhen (not inProduction) $ committedCheck root nextVersionInfo
 
@@ -306,6 +345,7 @@ run () () = do
             buildProductionJsFiles root inProduction nextVersionInfo
 
             -- liftIO $ writeUtf8 defaultMigrations nextMigrationPath
+
 
 
 buildProductionJsFiles :: FilePath -> Bool -> VersionInfo -> Task.Task ()
@@ -417,7 +457,7 @@ lamderaThrowUnknownApp =
   Task.throw $ Exit.Lamdera
     $ Help.report "UNKNOWN APP" (Just "git remote -v")
       ("I cannot figure out which Lamdera app this repository belongs to.")
-      ([ D.reflow "I normally look for a git remote labelled 'lamdera' but did not find one."
+      ([ D.reflow "I normally look for a git remote called 'lamdera' but did not find one."
        , D.reflow "See <https://dashboard.lamdera.app/docs/deploying> for more info."
        ]
       )
@@ -1173,16 +1213,9 @@ justs xs = [ x | Just x <- xs ]
 
 
 
-earlyBail =
-  Task.throw $ Exit.Lamdera
-    $ Help.report "EARLY BAIL" (Just "I'm out!")
-      ("The code used earlyBail, it was super effective!")
-      []
-
-
 genericExit str =
   Task.throw $ Exit.Lamdera
-    $ Help.report "ERROR" (Just "???")
+    $ Help.report "ERROR" Nothing
       (str)
       []
 

@@ -294,6 +294,7 @@ Executable elmx
         witherable,
         neat-interpolation,
         natural-sort,
+        listsafe,
         -- Live
         websockets,
         websockets-snap,
