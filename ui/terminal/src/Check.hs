@@ -377,7 +377,7 @@ buildProductionJsFiles root inProduction versionInfo = do
     -- liftIO $ callCommand $ "cp ~/lamdera/runtime/src/LBR.elm " ++ root ++ "/src"
 
     Project.compile
-      Output.Dev
+      Output.Prod
       Output.Client
       (Just (Output.JavaScript Nothing "backend-app.js"))
       Nothing
@@ -391,7 +391,7 @@ buildProductionJsFiles root inProduction versionInfo = do
     liftIO $ threadDelay 50000 -- 50 milliseconds
 
     Project.compile
-      Output.Dev
+      Output.Prod
       Output.Client
       (Just (Output.JavaScript Nothing "frontend-app.js"))
       Nothing
