@@ -368,7 +368,9 @@ devBar topDown m =
         True ->
             [ collapsedUI m
             , if m.devbar.expanded then
-                expandedUI m
+                Html.div [ style "padding-bottom" "5px" ]
+                    [ expandedUI m
+                    ]
 
               else
                 text ""
