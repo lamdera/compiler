@@ -48,7 +48,7 @@ socketHandler mClients onJoined onReceive clientId pending = do
       Just text -> sendImpl mClients clientId text
       Nothing   -> do
         -- @TODO Should really be a NOTICE level log via a logger
-        Lamdera.debugT "[websocket:notice] No init message for new client was provided"
+        -- Lamdera.debugT "[websocket:notice] No init message for new client was provided"
         pure ()
 
     talk onReceive conn mClients client

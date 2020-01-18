@@ -50,7 +50,7 @@ question =
   D.stack
     [ D.fillSep
         ["Hello!"
-        ,"Elm","projects","always","start","with","an",D.green "elm.json","file."
+        ,"Lamdera","projects","always","start","with","an",D.green "elm.json","file."
         ,"I","can","create","them!"
         ]
     , D.reflow
@@ -60,6 +60,10 @@ question =
     , D.fillSep
         ["Check","out",D.cyan (D.fromString (D.makeLink "init"))
         ,"for","all","the","answers!"
+        ]
+    , D.fillSep
+        ["Then","check","out",D.cyan ("<https://dashboard.lamdera.app/docs/building>")
+        ,"for","Lamdera","specific","information!"
         ]
     , "Knowing all that, would you like me to create an elm.json file now? [Y/n]: "
     ]
