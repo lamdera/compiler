@@ -167,31 +167,38 @@ run () () = do
 
                     else do
 
-                      let
-                        assumedNextVersion =
-                          case SafeList.last migrationSequence of
-                            Just [vInfo] ->
-                              (vinfoVersion vInfo)
+                      Task.throw $ Exit.Lamdera
+                        $ Help.report "ERROR" Nothing
+                          ("I normally check for production info here but I wasn't able to.")
+                          [ D.reflow $ "Please check your connection and try again."]
 
-                            _ ->
-                              1
-                        assumedCurrentVersion =
-                          assumedNextVersion - 1
-
-                      approved <- Task.getApproval $
-                        D.stack
-                          [ D.fillSep [ D.yellow "WARNING:","I","normally","check","for","production","info","here","but","I","wasn't","able","to." ]
-                          , D.reflow $ "Shall I proceed assuming the next version is v" <> show assumedNextVersion <> "? [Y/n]: "
-                          ]
-
-                      if approved
-                        then do
-                          liftIO $ putStrLn $ "Okay, continuing assuming v" <> show assumedNextVersion <> " is the next version to deploy..."
-                          pure (assumedCurrentVersion, localTypes)
-
-                        else do
-                          genericExit "Okay, giving up!"
-                          pure (0, [])
+                      -- We actually can't sensibly guess what the next production version will be, especially
+                      -- when we stop snapshotting redundant Type for unchanged versions as well.
+                      -- let
+                      --   assumedNextVersion =
+                      --     case SafeList.last migrationSequence of
+                      --       Just [vInfo] ->
+                      --         (vinfoVersion vInfo)
+                      --
+                      --       _ ->
+                      --         1
+                      --   assumedCurrentVersion =
+                      --     assumedNextVersion - 1
+                      --
+                      -- approved <- Task.getApproval $
+                      --   D.stack
+                      --     [ D.fillSep [ D.yellow "WARNING:","I","normally","check","for","production","info","here","but","I","wasn't","able","to." ]
+                      --     , D.reflow $ "Shall I proceed assuming the next version is v" <> show assumedNextVersion <> "? [Y/n]: "
+                      --     ]
+                      --
+                      -- if approved
+                      --   then do
+                      --     liftIO $ putStrLn $ "Okay, continuing assuming v" <> show assumedNextVersion <> " is the next version to deploy..."
+                      --     pure (assumedCurrentVersion, localTypes)
+                      --
+                      --   else do
+                      --     genericExit "Okay, giving up!"
+                      --     pure (0, [])
 
 
     let
@@ -355,7 +362,7 @@ buildProductionJsFiles root inProduction versionInfo = do
   onlyWhen inProduction $ do
     summary <- Project.getRoot
 
-    liftIO $ putStrLn $ "───> Compiling for production: " <> show versionInfo
+    debug $ "Compiling JS for production v" <> show (vinfoVersion versionInfo)
 
     onlyWhen (version /= 1 && versionInfo == WithMigrations version) $ do -- Version 1 has no migrations for rewrite
 
@@ -422,6 +429,7 @@ snapshotCurrentTypesTo root version = do
   -- Snapshot the current types, and rename the module for the snapshot
   _ <- readProcess "mkdir" [ "-p", root </> "src/Evergreen/Type" ] ""
   let nextType = (root </> "src/Evergreen/Type/V") <> show version <> ".elm"
+  debug $ "Snapshotting current types to " <> nextType
   _ <- readProcess "cp" [ root </> "src/Types.elm", nextType ] ""
   osReplace ("s/module Types exposing/module Evergreen.Type.V" <> show version <> " exposing/g") nextType
   pure ""
@@ -456,7 +464,7 @@ pDocLn doc =
 lamderaThrowUnknownApp =
   Task.throw $ Exit.Lamdera
     $ Help.report "UNKNOWN APP" (Just "git remote -v")
-      ("I cannot figure out which Lamdera app this repository belongs to.")
+      ("I cannot figure out which Lamdera app this repository belongs to!")
       ([ D.reflow "I normally look for a git remote called 'lamdera' but did not find one."
        , D.reflow "See <https://dashboard.lamdera.app/docs/deploying> for more info."
        ]
