@@ -117,3 +117,7 @@ check = do
   Dir.withCurrentDirectory project $
     do
         Check.run () ()
+
+  rm (project ++ "/src/LBR.elm")
+  rm (project ++ "/src/LFR.elm")
+  rm (project ++ "/src/LamderaHelpers.elm")

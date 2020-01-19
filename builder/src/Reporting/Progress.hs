@@ -98,7 +98,6 @@ data Progress
   | UnableToLoadLatestPackages
 
   -- Lamdera
-  | LamderaCannotCheckRemote
   | LamderaWriteHashes String
 
 

@@ -22,9 +22,6 @@ import qualified Reporting.Exit.Init as E
 import qualified Reporting.Task as Task
 import qualified Reporting.Progress.Terminal as Terminal
 
--- HTTP...
-
-
 import Prelude hiding (zip)
 import qualified Codec.Archive.Zip as Zip
 import Control.Monad (void)
@@ -54,18 +51,15 @@ import qualified Reporting.Task as Task
 import qualified Reporting.Task.Http as Http
 import qualified Stuff.Paths as Paths
 
-
 -- Compilation
-
 import qualified Elm.Project as Project
 import qualified Generate.Output as Output
 import qualified Reporting.Task as Task
 import qualified Reporting.Exit.Help as Help
 import qualified Reporting.Progress.Terminal as Terminal
-
+import qualified Reporting.Report as Report
 
 -- This file itself
-
 import Lamdera
 import qualified File.IO as IO
 import qualified Data.List as List
@@ -117,14 +111,7 @@ run () () = do
 
     liftIO $ putStrLn "───> Checking Evergreen migrations..."
 
-    gitRemotes <- liftIO $ readProcess "git" ["remote", "-v"] ""
-
-    let lamderaRemotes =
-          gitRemotes
-            & T.pack
-            & T.splitOn "\n"
-            & filter (textContains "lamdera")
-
+    lamderaRemotes <- liftIO getLamderaRemotes
     onlyWhen (lamderaRemotes == [] && appNameEnvM == Nothing) lamderaThrowUnknownApp
 
     -- Prior `onlyWhen` guards against situation where no name is determinable
@@ -132,14 +119,7 @@ run () () = do
 
     localTypes <- fetchLocalTypes root
 
-    migrationSequence <- liftIO $ getMigrationsSequence root `catchError`
-      (\err -> do
-        debug "getMigrationsSequence was empty - that should only be true on v1 deploy"
-        pure []
-      )
-
     (prodVersion, productionTypes) <-
-      -- @TODO what about v1 when there is no app...? This will break in prod?
       if isHoistRebuild
         then do
           if (forceVersion == (-1))
@@ -150,56 +130,23 @@ run () () = do
               liftIO $ putStrLn $ "❗️Gen with forced version: " <> show forceVersion
               pure (forceVersion, localTypes)
 
-        else
-          if (appName == "testapp")
+        else do
+          (pv, pt) <- fetchProductionInfo appName `catchError` (\err -> pure ((-1), []))
+          if (pv /= (-1))
             then
-              fetchProductionInfo appName `catchError` (\err -> pure (0, []))
+              -- Everything is as it should be
+              pure (pv, pt)
             else do
-              (pv, pt) <- fetchProductionInfo appName `catchError` (\err -> pure ((-1), []))
-              if (pv /= (-1))
+              if (inProduction)
                 then
-                  -- Everything is as it should be
-                  pure (pv, pt)
+                  genericExit "FATAL: application info could not be obtained. Please report this to support."
+
                 else do
-                  if (inProduction)
-                    then
-                      genericExit "FATAL: application info could not be obtained. Please report this to support."
-
-                    else do
-
-                      Task.throw $ Exit.Lamdera
-                        $ Help.report "ERROR" Nothing
-                          ("I normally check for production info here but I wasn't able to.")
-                          [ D.reflow $ "Please check your connection and try again, or contact support."]
-
-                      -- We actually can't sensibly guess what the next production version will be, especially
-                      -- when we stop snapshotting redundant Type for unchanged versions as well.
-                      -- let
-                      --   assumedNextVersion =
-                      --     case SafeList.last migrationSequence of
-                      --       Just [vInfo] ->
-                      --         (vinfoVersion vInfo)
-                      --
-                      --       _ ->
-                      --         1
-                      --   assumedCurrentVersion =
-                      --     assumedNextVersion - 1
-                      --
-                      -- approved <- Task.getApproval $
-                      --   D.stack
-                      --     [ D.fillSep [ D.yellow "WARNING:","I","normally","check","for","production","info","here","but","I","wasn't","able","to." ]
-                      --     , D.reflow $ "Shall I proceed assuming the next version is v" <> show assumedNextVersion <> "? [Y/n]: "
-                      --     ]
-                      --
-                      -- if approved
-                      --   then do
-                      --     liftIO $ putStrLn $ "Okay, continuing assuming v" <> show assumedNextVersion <> " is the next version to deploy..."
-                      --     pure (assumedCurrentVersion, localTypes)
-                      --
-                      --   else do
-                      --     genericExit "Okay, giving up!"
-                      --     pure (0, [])
-
+                  -- See commented out code at bottom re prior "assume version when offline"
+                  Task.throw $ Exit.Lamdera
+                    $ Help.report "ERROR" Nothing
+                      ("I normally check for production info here but I wasn't able to.")
+                      [ D.reflow $ "Please check your connection and try again, or contact support."]
 
     let
       localTypesChangedFromProduction =
@@ -212,31 +159,41 @@ run () () = do
         else
           (prodVersion + 1)
 
-      nextVersionInfo =
-        if prodVersion == 0 then
-          WithoutMigrations 1
-        else
-          case SafeList.last migrationSequence of
-            Just [vInfo] ->
-              vInfo
+    nextVersionInfo <-
+      if prodVersion == 0 then
+        pure $ WithoutMigrations 1
+      else
+        if isHoistRebuild
+          then do
+            -- Hoist case
+            hoistMigrationExists <- liftIO $ Dir.doesFileExist $ "src/Evergreen/Migrate/V" <> show prodVersion <> ".elm"
+            if hoistMigrationExists
+              then
+                pure $ WithMigrations prodVersion
+              else
+                pure $ WithoutMigrations prodVersion
 
-            _ ->
-              WithoutMigrations nextVersion
-
+          else
+            -- Normal case
+            if localTypesChangedFromProduction then
+              pure $ WithMigrations nextVersion
+            else
+              pure $ WithoutMigrations nextVersion
 
     debug $ "Continuing with (prodV,nextV,nextVInfo) " ++ show (prodVersion, nextVersion, nextVersionInfo)
 
-    -- Always snapshot our types, we need to be 100% sure we match the current Types.elm at all times.
-    _ <- liftIO $ snapshotCurrentTypesTo root nextVersion
+    onlyWhen isHoistRebuild $ do
+      approveHoist <- Task.getApproval $
+        D.stack
+          [ D.fillSep [ D.yellow "WARNING:","Confirm","hoist!" ]
+          , D.reflow $ "Proceed with hoise as v" <> show nextVersion <> "? [Y/n]: "
+          ]
+      onlyWhen (not approveHoist) $ genericExit "Quitting hoist"
 
-    if nextVersion == 0
+
+    if nextVersion == 1
       then do
-        Task.report Progress.LamderaCannotCheckRemote
-        error "Exit."
-
-      else if nextVersion == 1 then do
         -- This is the first version, we don't need any migration checking.
-
         onlyWhen (not inProduction) $ committedCheck root nextVersionInfo
 
         writeLamderaGenerated root inProduction nextVersion
@@ -248,54 +205,41 @@ run () () = do
       else do
         writeLamderaGenerated root inProduction nextVersion
 
+        let
+          nextMigrationPathBare = ("src/Evergreen/Migrate/V") <> (show nextVersion) <> ".elm"
+          nextMigrationPath = root </> nextMigrationPathBare
+          -- lastTypesPath = (root </> "src/Evergreen/Type/V") <> (show prodVersion) <> ".elm"
+
+        migrationExists <- liftIO $ Dir.doesFileExist $ nextMigrationPath
+
         if localTypesChangedFromProduction
           then do
-
             debug $ "Local and production types differ"
 
-            -- @TODO future optimisations if we want to not generate migrations for
-            -- deployments that don't change types...?
-            -- lastTypeChangeVersion <- liftIO $ getLastLocalTypeChangeVersion root
+            _ <- liftIO $ snapshotCurrentTypesTo root nextVersion
 
-            let lamderaTypes =
-                  [ "FrontendModel"
-                  , "BackendModel"
-                  , "FrontendMsg"
-                  , "ToBackend"
-                  , "BackendMsg"
-                  , "ToFrontend"
-                  ]
+            let
+              typeCompares = zipWith3
+                (\label local prod -> (label,local,prod))
+                [ "FrontendModel", "BackendModel", "FrontendMsg", "ToBackend", "BackendMsg", "ToFrontend" ]
+                localTypes
+                productionTypes
 
-                typeCompares = zipWith3 (\label local prod -> (label,local,prod)) lamderaTypes localTypes productionTypes
+              changedTypes =
+                typeCompares & filter (\(label, local, prod) -> local /= prod)
 
-                changedTypes =
-                  typeCompares & filter (\(label, local, prod) -> local /= prod)
-
-                formattedChangedTypes =
-                  changedTypes
-                    & fmap (\(label, local, prod) -> D.indent 4 (D.dullyellow (D.fromString label)))
-
-                nextMigrationPathBare = ("src/Evergreen/Migrate/V") <> (show nextVersion) <> ".elm"
-                nextMigrationPath = root </> nextMigrationPathBare
-
-                lastTypesPath = (root </> "src/Evergreen/Type/V") <> (show prodVersion) <> ".elm"
-
-
-            migrationExists <- liftIO $ Dir.doesFileExist $ nextMigrationPath
+              formattedChangedTypes =
+                changedTypes
+                  & fmap (\(label, local, prod) -> D.indent 4 (D.dullyellow (D.fromString label)))
 
             if migrationExists
               then do
-
                 debug $ "Migration file already exists"
 
                 -- @TODO check migrations match changes. I.e. user might have changed one thing, we generated
                 -- a migration, and then later changed another thing. Basically grep for `toBackend old = Unchanged` for each label?
                 -- so we don't acidentally run a migration saying nothing changed when it's not type safe?
                 -- is that even possible or will compiler catch incorrect "unchanged" declarations?
-
-                -- This also might have implications for ordering of snapshotCurrentTypesTo, which got moved to
-                -- the top level of this branching condition, but might be contentious
-                -- until the desired behavior is clear
 
                 debug $ "Reading migration source..."
                 migrationSource <- liftIO $ Text.decodeUtf8 <$> IO.readUtf8 nextMigrationPath
@@ -305,9 +249,7 @@ run () () = do
                     lamderaThrowUnimplementedMigration nextMigrationPath formattedChangedTypes prodVersion nextMigrationPathBare
 
                   else do
-
                     migrationCheck root nextVersion
-
                     onlyWhen (not inProduction) $ committedCheck root nextVersionInfo
 
                     pDocLn $ D.green $ D.reflow $ "\nIt appears you're all set to deploy v" <> (show nextVersion) <> " of '" <> T.unpack appName <> "'."
@@ -321,7 +263,6 @@ run () () = do
                     buildProductionJsFiles root inProduction nextVersionInfo
 
               else do
-
                 debug $ "Migration does not exist"
 
                 -- @TODO (nextVersion - 1) used to be lastTypeChangeVersion, see note above on lastTypeChangeVersion
@@ -338,21 +279,28 @@ run () () = do
                       , D.reflow "See <https://dashboard.lamdera.app/docs/evergreen> for more info."
                       ]
                     )
-                error "Exit."
 
           else do
             -- Types are the same.
             debug "Local and production types are identical"
 
-            onlyWhen (not inProduction) $ committedCheck root nextVersionInfo
+            -- @TODO probably need to hint to the user here if types have become
+            -- the same but snapshots / migrations exist? They'll need to be removed!
+            -- onlyWhen (not inProduction) $ committedCheck root nextVersionInfo
+
+            onlyWhen migrationExists $
+              Task.throw $ Exit.Lamdera
+                $ Help.report "UNEXPECTED MIGRATION" (Just nextMigrationPathBare)
+                  ("There appears to be a migration file when I wasn't expecting one.")
+                  [ D.reflow $ "It appears local types have not changed compared to production, however I'm seeing a migration at " <> nextMigrationPathBare <> "."
+                  , D.reflow "Perhaps it needs to be removed?"
+                  , D.reflow "See <https://dashboard.lamdera.app/docs/evergreen> for more info."
+                  ]
 
             pDocLn $ D.green $ D.reflow $ "\nIt appears you're all set to deploy v" <> (show nextVersion) <> " of '" <> T.unpack appName <> "'."
             pDocLn $ D.reflow $ "\nThere are no Evergreen type changes for this version."
 
             buildProductionJsFiles root inProduction nextVersionInfo
-
-            -- liftIO $ writeUtf8 defaultMigrations nextMigrationPath
-
 
 
 buildProductionJsFiles :: FilePath -> Bool -> VersionInfo -> Task.Task ()
@@ -435,30 +383,20 @@ snapshotCurrentTypesTo root version = do
   pure ""
 
 
-
-getLastLocalTypeChangeVersion :: FilePath -> IO Int
-getLastLocalTypeChangeVersion root = do
-
-  types <- Dir.listDirectory $ root </> "src/Evergreen/Type"
-  if types == []
-    then
-      pure 1
-    else do
-      types
-        & List.sortBy Algorithms.NaturalSort.compare
-        & List.last
-        & drop 1
-        & takeWhile (\i -> i /= '.')
-        & readMaybe
-        & fromMaybe 1 -- If there are no migrations or it failed, it must be version 1?
-        & pure
-
-
 pDocLn doc =
   liftIO $ do
     putStrLn ""
     D.toAnsi IO.stdout doc
     putStrLn ""
+
+
+getLamderaRemotes = do
+  gitRemotes <- readProcess "git" ["remote", "-v"] ""
+  gitRemotes
+    & T.pack
+    & T.splitOn "\n"
+    & filter (textContains "lamdera")
+    & pure
 
 
 lamderaThrowUnknownApp =
@@ -561,11 +499,7 @@ fetchLocalTypes root = do
 
 
 checkUserProjectCompiles root = do
-  -- Dir.withCurrentDirectory ("/Users/mario/dev/projects/lamdera/test/v2") $
-  --   do  reporter <- Terminal.create
-  --       Task.run reporter $
   summary <- Project.getRoot
-
 
   -- Why do we sometimes not get .lamdera-hashes generated?
   --
@@ -666,16 +600,42 @@ committedCheck root versionInfo = do
         & justs
 
   -- On first version, we have no migrations
-  onlyWhen (missingPaths /= []) $
-    Task.throw $ Exit.Lamdera
-      $ Help.report "UNCOMMITTED FILES" (Just "src/Evergreen/")
-        ("I need type and migration files to be comitted otherwise I cannot deploy!")
-        ([ D.reflow "Here is a shortcut:"
-         , D.dullyellow (D.reflow $ "git add " <> (List.intercalate " " missingPaths))
-         , D.dullyellow (D.reflow $ "git commit -m \"Preparing for v" <> show version <> "\"")
-         , D.reflow "Alpha note: This will be a y/n automatic action in future!"
-         ]
-        )
+  onlyWhen (missingPaths /= []) $ do
+
+    -- pDocLn $ D.green (D.reflow $ "It appears you're all set to deploy the first version of ''!")
+    Task.report $
+      Progress.LamderaProgress $
+        Help.reportToDoc $
+        Help.report "UNCOMMITTED FILES" (Just "src/Evergreen/")
+          ("I need type and migration files to be comitted otherwise I cannot deploy!")
+          ([ D.reflow "Here is a shortcut:"
+           , D.dullyellow (D.reflow $ "git add " <> (List.intercalate " " missingPaths))
+           , D.dullyellow (D.reflow $ "git commit -m \"Preparing for v" <> show version <> "\"")
+           ]
+          )
+
+    addToGitApproved <- Task.getApproval $
+      D.stack
+        [ D.reflow $ "Shall I add to git for you? [Y/n]: "
+        ]
+
+    if addToGitApproved
+      then do
+        liftIO $ mapM (\path -> callCommand $ "git add " <> path) missingPaths
+        commitApproved <- Task.getApproval $
+          D.stack
+            [ D.reflow $ "Shall I commit for you? [Y/n]: "
+            ]
+
+        if commitApproved
+          then
+            liftIO $ callCommand $ "git commit -m \"Preparing for v" <> show version <> "\""
+
+          else
+            genericExit "Bailing on git commit."
+
+      else
+        genericExit "Bailing on git add."
 
 
 defaultMigrationFile :: Int -> Int -> [(String, String, String)] -> Text
@@ -690,6 +650,17 @@ defaultMigrationFile oldVersion newVersion typeCompares = do
                 unchangedForType typename
               else
                 "Unimplemented"
+                -- @TODO when working on more intelligent auto-generations...
+                -- if typename == "BackendModel" || typename == "FrontendModel" then
+                --   [text|
+                --     ModelMigrated
+                --         ( Unimplemented
+                --         , Cmd.none
+                --         )
+                --   |]
+                -- else
+                --   "Unimplemented"
+
             msgType = msgForType typename
 
             typenameCamel = lowerFirstLetter typename
@@ -944,9 +915,13 @@ vinfoMinusOne vinfo =
 
 
 createLamderaGenerated :: FilePath -> Int -> IO Text
-createLamderaGenerated root currentVersion = do
+createLamderaGenerated root nextVersion = do
 
-  migrationSequence <- liftIO $ getMigrationsSequence root `catchError` (\err -> pure [])
+  migrationSequence <- liftIO $ getMigrationsSequence root nextVersion `catchError`
+    (\err -> do
+      debug "getMigrationsSequence was empty - that should only be true on v1 deploy"
+      pure []
+    )
 
   let
     importMigrations :: Text
@@ -1080,7 +1055,7 @@ createLamderaGenerated root currentVersion = do
                 |> otherwiseError
       |]
 
-    currentVersion_ = T.pack $ show currentVersion
+    nextVersion_ = T.pack $ show nextVersion
 
   debug_ $ "Generated source for LamderaGenerated"
 
@@ -1091,54 +1066,54 @@ createLamderaGenerated root currentVersion = do
     $importTypes
     import Lamdera.Migrations exposing (..)
     import LamderaHelpers exposing (..)
-    import Types as T$currentVersion_
+    import Types as T$nextVersion_
 
 
     currentVersion : Int
     currentVersion =
-        $currentVersion_
+        $nextVersion_
 
 
-    decodeAndUpgrade : Int -> String -> List Int -> UpgradeResult T$currentVersion_.BackendModel T$currentVersion_.FrontendModel T$currentVersion_.FrontendMsg T$currentVersion_.ToBackend T$currentVersion_.BackendMsg T$currentVersion_.ToFrontend
+    decodeAndUpgrade : Int -> String -> List Int -> UpgradeResult T$nextVersion_.BackendModel T$nextVersion_.FrontendModel T$nextVersion_.FrontendMsg T$nextVersion_.ToBackend T$nextVersion_.BackendMsg T$nextVersion_.ToFrontend
     decodeAndUpgrade version tipe intList =
         case version of
             $historicMigrations
 
 
-            $currentVersion_ ->
+            $nextVersion_ ->
                 case tipe of
                     "BackendModel" ->
-                        decodeType "BackendModel" version intList T$currentVersion_.evg_decode_BackendModel
+                        decodeType "BackendModel" version intList T$nextVersion_.evg_decode_BackendModel
                             |> upgradeIsCurrent CurrentBackendModel
                             |> otherwiseError
 
 
                     "FrontendModel" ->
-                        decodeType "FrontendModel" version intList T$currentVersion_.evg_decode_FrontendModel
+                        decodeType "FrontendModel" version intList T$nextVersion_.evg_decode_FrontendModel
                             |> upgradeIsCurrent CurrentFrontendModel
                             |> otherwiseError
 
 
                     "FrontendMsg" ->
-                        decodeType "FrontendMsg" version intList T$currentVersion_.evg_decode_FrontendMsg
+                        decodeType "FrontendMsg" version intList T$nextVersion_.evg_decode_FrontendMsg
                             |> upgradeIsCurrent CurrentFrontendMsg
                             |> otherwiseError
 
 
                     "ToBackend" ->
-                        decodeType "ToBackend" version intList T$currentVersion_.evg_decode_ToBackend
+                        decodeType "ToBackend" version intList T$nextVersion_.evg_decode_ToBackend
                             |> upgradeIsCurrent CurrentToBackend
                             |> otherwiseError
 
 
                     "BackendMsg" ->
-                        decodeType "BackendMsg" version intList T$currentVersion_.evg_decode_BackendMsg
+                        decodeType "BackendMsg" version intList T$nextVersion_.evg_decode_BackendMsg
                             |> upgradeIsCurrent CurrentBackendMsg
                             |> otherwiseError
 
 
                     "ToFrontend" ->
-                        decodeType "ToFrontend" version intList T$currentVersion_.evg_decode_ToFrontend
+                        decodeType "ToFrontend" version intList T$nextVersion_.evg_decode_ToFrontend
                             |> upgradeIsCurrent CurrentToFrontend
                             |> otherwiseError
 
@@ -1163,8 +1138,8 @@ writeLamderaGenerated root inProduction nextVersion =
 data VersionInfo = WithMigrations Int | WithoutMigrations Int deriving (Eq, Show)
 
 
-getMigrationsSequence :: FilePath -> IO [[VersionInfo]]
-getMigrationsSequence root = do
+getMigrationsSequence :: FilePath -> Int -> IO [[VersionInfo]]
+getMigrationsSequence root nextVersion = do
 
   debug_ $ "Reading src/Evergreen/Migrate to determine migrationSequence"
   migrations <- Dir.listDirectory $ root </> "src/Evergreen/Migrate"
@@ -1204,14 +1179,18 @@ getMigrationsSequence root = do
 
     sequences :: [[VersionInfo]]
     sequences =
-      typeVersions
-        & fmap toVersionInfo
+      [1..nextVersion]
+        & fmap (\v ->
+            if List.elem v migrationVersions then
+              WithMigrations v
+            else
+              WithoutMigrations v
+          )
         & scanr (\v acc -> acc ++ [v]) []
         & filter ((/=) [])
         & fmap reverse
 
   debug_ $ "Migration sequence: " ++ show sequences
-  debug_ $ "Types sequence: " ++ show typeVersions
   pure sequences
 
 
@@ -1254,3 +1233,41 @@ osReplace regex filename =
         debug "Couldn't figure out OS type for `sed` variant, falling back to OS X"
         liftIO $ callCommand $ "sed -i'' -e '" <> regex <> "' " <> filename
         liftIO $ callCommand $ "rm " <> filename <> "-e >> /dev/null 2>&1 || true"
+
+
+
+
+
+-- Snapshot of old code attempting to guess next prod version number
+--
+-- We actually can't sensibly guess what the next production version will be, especially
+-- when we stop snapshotting redundant Type for unchanged versions as well, which became
+-- clearer with the appzero concept which fixes first-deploy version guessing.
+--
+-- Code here anyway for posterity.
+--
+-- let
+--   assumedNextVersion =
+--     case SafeList.last migrationSequence of
+--       Just [vInfo] ->
+--         (vinfoVersion vInfo)
+--
+--       _ ->
+--         1
+--   assumedCurrentVersion =
+--     assumedNextVersion - 1
+--
+-- approved <- Task.getApproval $
+--   D.stack
+--     [ D.fillSep [ D.yellow "WARNING:","I","normally","check","for","production","info","here","but","I","wasn't","able","to." ]
+--     , D.reflow $ "Shall I proceed assuming the next version is v" <> show assumedNextVersion <> "? [Y/n]: "
+--     ]
+--
+-- if approved
+--   then do
+--     liftIO $ putStrLn $ "Okay, continuing assuming v" <> show assumedNextVersion <> " is the next version to deploy..."
+--     pure (assumedCurrentVersion, localTypes)
+--
+--   else do
+--     genericExit "Okay, giving up!"
+--     pure (0, [])

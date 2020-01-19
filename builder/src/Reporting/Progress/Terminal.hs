@@ -214,13 +214,6 @@ loopHelp chan progress state@(State total good bad) =
 
     -- Lamdera
 
-    LamderaCannotCheckRemote ->
-      do  putStrLn ""
-          Help.toStdout $ D.red "ERROR:" <+> "I normally check <https://<appname>.lamdera.com> for deployment info\n"
-          putStrLn "but my request failed. Are you offline? I can't continue.\n"
-          loop chan state
-
-
     LamderaWriteHashes str ->
       do  summaryM <- Task.try Progress.silentReporter Project.getRoot
           case summaryM of
