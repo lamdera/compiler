@@ -170,7 +170,7 @@ run () () = do
                       Task.throw $ Exit.Lamdera
                         $ Help.report "ERROR" Nothing
                           ("I normally check for production info here but I wasn't able to.")
-                          [ D.reflow $ "Please check your connection and try again."]
+                          [ D.reflow $ "Please check your connection and try again, or contact support."]
 
                       -- We actually can't sensibly guess what the next production version will be, especially
                       -- when we stop snapshotting redundant Type for unchanged versions as well.
