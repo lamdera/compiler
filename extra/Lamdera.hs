@@ -7,6 +7,7 @@ module Lamdera
   , debug_
   , debug
   , debugT
+  , dt
   , PP.sShow
   , PP.tShow
   , T.Text
@@ -24,6 +25,7 @@ module Lamdera
   , env
   , unsafe
   , lamderaLiveSrc
+  , Data.List.Index.imap
   )
   where
 
@@ -64,6 +66,7 @@ import qualified Data.ByteString.Internal as BS
 import qualified Foreign.ForeignPtr as FPtr
 import Control.Exception (catch)
 import System.IO.Error (ioeGetErrorType, annotateIOError, modifyIOError)
+import Data.List.Index
 
 lamderaVersion :: String
 lamderaVersion = "0.0.1-alpha2"
@@ -96,6 +99,15 @@ debugTrace msg value =
     debugM <- Env.lookupEnv "LDEBUG"
     case debugM of
       Just _ -> pure $ DT.trace msg value
+      Nothing -> pure value
+
+
+dt :: Show a => String -> a -> a
+dt msg value =
+  unsafePerformIO $ do
+    debugM <- Env.lookupEnv "LDEBUG"
+    case debugM of
+      Just _ -> pure $ DT.trace (msg ++ ":" ++ show value) value
       Nothing -> pure value
 
 
