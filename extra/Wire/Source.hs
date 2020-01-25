@@ -80,8 +80,6 @@ injectEvergreenExposing (Can.Module _ _ _exports _ _ _ _ _) s =
 
     codecsFor s = ["evg_encode_" ++ s, "evg_decode_" ++ s]
 
-
-
   in
   case _exports of
     Can.ExportEverything _ -> s

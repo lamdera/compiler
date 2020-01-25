@@ -154,7 +154,7 @@ compile flag pkg importDict interfaces source srcMVar =
           canonicalName = Module.Canonical pkg name
           combinedInterfaces = (Map.insert canonicalName elmi interfaces)
 
-        TypeHash.maybeGenHashes pkg canonical_ valid_ combinedInterfaces
+        TypeHash.maybeGenHashes pkg valid_ combinedInterfaces
 
       Result.ok $
         Artifacts

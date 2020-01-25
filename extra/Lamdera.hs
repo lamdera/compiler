@@ -234,7 +234,7 @@ hunt_ thing label = do
   pure ()
 
 
-hunt thing label = do
+hunt thing label =
   if textContains "AnotherExternalThing" $ T.pack $ show thing then
     putStrLn $ "found it!!!!!!!!!!!!!!!!!!!!!!!!" <> label
   else

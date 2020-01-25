@@ -56,30 +56,21 @@ Last line is optional, but it's cool! Lambda prompt!
 
 compile :: IO ()
 compile = do
+  let project = "/Users/mario/lamdera/test/v1"
+  setEnv "LAMDERA_APP_NAME" "testapp"
+
+  -- let project = "/Users/mario/dev/projects/lamdera-dashboard"
+  -- setEnv "LAMDERA_APP_NAME" "dashboard"
+
   -- Bust Elm's caching with this one weird trick!
-  -- touch "extra/Wire/src/AllTypes.elm"
-  -- touch "extra/Wire/src/Types.elm"
-  -- touch "/Users/mario/dev/projects/lamdera/test/v1/src/LamderaFrontendRuntime.elm"
-  -- touch "/Users/mario/dev/projects/lamdera/test/v1/src/Types.elm"
-  -- setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
-  -- setEnv "ELM_HOME" "/Users/mario/dev/projects/lamdera/test/v1/elm-home"
-
-  let project = "/Users/mario/dev/projects/lamdera-dashboard"
-  setEnv "LAMDERA_APP_NAME" "dashboard"
-
   touch $ project </> "src/Types.elm"
 
   setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
   setEnv "LDEBUG" "1"
   setEnv "ELM_HOME" "/Users/mario/elm-home-elmx-test"
 
-
-
-  -- =${LOVR} ELM_HOME=$BUILD_DIR/cache/elm-home elmx make src/LamderaBackendRuntime.elm --output="backend-app.js"
-
   let rootPaths = [ "src" </> "Frontend.elm" ]
 
-  -- Dir.withCurrentDirectory ("extra/Wire") $
   Dir.withCurrentDirectory project $
     do  reporter <- Terminal.create
         Task.run reporter $
@@ -110,14 +101,12 @@ rm path = callCommand $ "rm " ++ path
 
 
 -- CHECK
-
 check = do
+  let project = "/Users/mario/lamdera/test/v1"
+  setEnv "LAMDERA_APP_NAME" "testapp"
 
-  -- let project = "/Users/mario/lamdera/test/v3"
-  -- setEnv "LAMDERA_APP_NAME" "testapp"
-
-  let project = "/Users/mario/dev/projects/lamdera-dashboard"
-  setEnv "LAMDERA_APP_NAME" "dashboard"
+  -- let project = "/Users/mario/dev/projects/lamdera-dashboard"
+  -- setEnv "LAMDERA_APP_NAME" "dashboard"
 
   setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
   setEnv "LDEBUG" "1"
