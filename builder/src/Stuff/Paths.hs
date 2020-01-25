@@ -10,7 +10,6 @@ module Stuff.Paths
   , stuff
   , moduleDocs
   , temp
-  , lamderaHashes
   )
   where
 
@@ -95,8 +94,3 @@ toArtifactPath root name ext =
 temp :: String -> FilePath
 temp ext =
   stuff </> "temp" <.> ext
-
-
-lamderaHashes :: FilePath -> FilePath
-lamderaHashes root =
-  root </> "lamdera-stuff" </> ".lamdera-hashes"

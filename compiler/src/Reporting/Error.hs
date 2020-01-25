@@ -13,6 +13,7 @@ import qualified Reporting.Error.Main as Main
 import qualified Reporting.Error.Pattern as Pattern
 import qualified Reporting.Error.Syntax as Syntax
 import qualified Reporting.Error.Type as Type
+import qualified Reporting.Error.LamderaError as LamderaError
 import qualified Reporting.Render.Code as Code
 import qualified Reporting.Render.Type.Localizer as L
 import qualified Reporting.Report as Report
@@ -29,6 +30,7 @@ data Error
   | Main L.Localizer Main.Error
   | Pattern [Pattern.Error]
   | Docs Docs.Error
+  | Lamdera LamderaError.Error
   deriving (Show)
 
 
@@ -55,3 +57,6 @@ toReports source err =
 
     Docs docsError ->
         [Docs.toReport source docsError]
+
+    Lamdera lamderaError ->
+        [LamderaError.toReport lamderaError]

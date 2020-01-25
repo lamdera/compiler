@@ -213,15 +213,9 @@ loopHelp chan progress state@(State total good bad) =
           loop chan state
 
     -- Lamdera
-
-    LamderaWriteHashes str ->
-      do  summaryM <- Task.try Progress.silentReporter Project.getRoot
-          case summaryM of
-            Just summary -> do
-              Wire.TypeHash.write (Summary._root summary) str
-              loop chan state
-            Nothing ->
-              loop chan state
+    LamderaProgress thing ->
+      do  Help.toStdout $ thing
+          loop chan state
 
 
 -- BULLETS

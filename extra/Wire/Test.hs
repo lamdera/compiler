@@ -59,18 +59,28 @@ compile = do
   -- Bust Elm's caching with this one weird trick!
   -- touch "extra/Wire/src/AllTypes.elm"
   -- touch "extra/Wire/src/Types.elm"
-  touch "/Users/mario/dev/projects/lamdera/test/v1/src/Types.elm"
   -- touch "/Users/mario/dev/projects/lamdera/test/v1/src/LamderaFrontendRuntime.elm"
+  -- touch "/Users/mario/dev/projects/lamdera/test/v1/src/Types.elm"
+  -- setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
+  -- setEnv "ELM_HOME" "/Users/mario/dev/projects/lamdera/test/v1/elm-home"
+
+  let project = "/Users/mario/dev/projects/lamdera-dashboard"
+  setEnv "LAMDERA_APP_NAME" "dashboard"
+
+  touch $ project </> "src/Types.elm"
 
   setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
-  setEnv "ELM_HOME" "/Users/mario/dev/projects/lamdera/test/v1/elm-home"
+  setEnv "LDEBUG" "1"
+  setEnv "ELM_HOME" "/Users/mario/elm-home-elmx-test"
+
+
 
   -- =${LOVR} ELM_HOME=$BUILD_DIR/cache/elm-home elmx make src/LamderaBackendRuntime.elm --output="backend-app.js"
 
   let rootPaths = [ "src" </> "Frontend.elm" ]
 
   -- Dir.withCurrentDirectory ("extra/Wire") $
-  Dir.withCurrentDirectory ("/Users/mario/dev/projects/lamdera/test/v1") $
+  Dir.withCurrentDirectory project $
     do  reporter <- Terminal.create
         Task.run reporter $
           do  summary <- Project.getRoot
@@ -95,19 +105,26 @@ cp :: String -> String -> IO ()
 cp from to = callCommand $ "cp " ++ from ++ " " ++ to
 
 
+rm :: String -> IO ()
+rm path = callCommand $ "rm " ++ path
+
 
 -- CHECK
 
 check = do
 
-  let project = "/Users/mario/lamdera/test/v2"
+  -- let project = "/Users/mario/lamdera/test/v3"
+  -- setEnv "LAMDERA_APP_NAME" "testapp"
+
+  let project = "/Users/mario/dev/projects/lamdera-dashboard"
+  setEnv "LAMDERA_APP_NAME" "dashboard"
 
   setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
   setEnv "LDEBUG" "1"
   setEnv "ELM_HOME" "/Users/mario/elm-home-elmx-test"
-  setEnv "LAMDERA_APP_NAME" "testappx"
-  setEnv "HOIST_REBUILD" "1"
-  setEnv "VERSION" "2"
+
+  -- setEnv "HOIST_REBUILD" "1"
+  -- setEnv "VERSION" "2"
 
   cp "/Users/mario/lamdera/runtime/src/LBR.elm" (project ++ "/src")
   cp "/Users/mario/lamdera/runtime/src/LFR.elm" (project ++ "/src")

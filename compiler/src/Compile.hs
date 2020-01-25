@@ -41,9 +41,12 @@ import System.IO.Unsafe (unsafePerformIO)
 import qualified Wire.Source
 import Control.Concurrent.MVar (MVar, newEmptyMVar, newMVar, putMVar, readMVar, takeMVar)
 
+import qualified Elm.Compiler.Module as Module
+
 import qualified Debug.Trace as DT
 import Wire.PrettyPrint
 import Lamdera
+import Wire.TypeHash as TypeHash
 
 -- COMPILE
 
@@ -89,7 +92,6 @@ compile flag pkg importDict interfaces source srcMVar =
         genarateDocs flag canonical
 
 
-      --
       -- Ok, normal elm compilation chain is now done for this module, so any normal
       -- elm errors which may have happened will have been found and returned by now.
       -- This should reduce confusion for devs. Next, after the elm code is known good,
@@ -101,8 +103,8 @@ compile flag pkg importDict interfaces source srcMVar =
       -- use all information if we want to.
       --
 
-      -- generate wire source code from canonical ast
-      -- these are intended to be serialised and put at the end of the source code
+      -- Generate wire source code from canonical ast
+      -- These are intended to be serialised and put at the end of the source code
       -- string, then we redo the whole module compilation with this new source injected.
       rawCodecSource <- pure $ T.unpack $ Wire.Source.generateCodecs (getImportDict valid) canonical
 
@@ -111,15 +113,18 @@ compile flag pkg importDict interfaces source srcMVar =
           let newSource =
                 BS8.fromString (Wire.Source.injectEvergreenExposing canonical (BS8.toString source)) <> "\n\n-- ### codecs\n" <> BS8.fromString rawCodecSource
               !_ = unsafePerformIO $ do
-                    -- yolo; put the new source into an mvar, so we can communicate upstream to the scheduler that we've modified the input, so it can use the modified source form here on when generating error messages. I tried, but I didn't see a better option to accomplish this than a mutable variable.
+                    -- Put the new source into an mvar, so we can communicate upstream to the scheduler that we've modified the input,
+                    -- so it can use the modified source form here on when generating error messages.
+                    -- I tried, but I didn't see a better option to accomplish this than a mutable variable.
                     _ <- takeMVar srcMVar -- drop the old source code
                     putMVar srcMVar newSource -- insert the new source code
           in
             -- Lamdera.debugTrace (BS8.toString newSource) $ -- uncomment to print source code for all modules
-            -- it's safer to add stuff to the parsed result, but much harder to debug, so codecs are generated as source code, and imports are added like this now
+            -- It's safer to add stuff to the parsed result, but much harder to debug, so codecs are generated as source code, and imports are added like this now
             addImport (Src.Import (A.At R.lamderaInject "Lamdera.Wire") Nothing (Src.Explicit []))
               <$> Parse.program pkg newSource
-        else -- this shouldn't have access to the Evergreen module. It's stuff like the lamdera/codecs or elm/core that would cause cyclic imports.
+        else
+          -- This shouldn't have access to the Evergreen module. It's stuff like the lamdera/codecs or elm/core that would cause cyclic imports.
           Parse.program pkg source
 
       canonical_ <- Result.mapError Error.Canonicalize $
@@ -139,16 +144,30 @@ compile flag pkg importDict interfaces source srcMVar =
       documentation_ <-
         genarateDocs flag canonical_
 
+      let
+        elmi = I.fromModule annotations_ canonical_
+        name = case valid_ of
+                 (Valid.Module name _ _ exports imports decls _ _ binops effects) -> name
+
+      onlyWhen (pkg == (Pkg.Name "author" "project") && (name == N.fromText "Types")) $ do
+        let
+          canonicalName = Module.Canonical pkg name
+          combinedInterfaces = (Map.insert canonicalName elmi interfaces)
+
+        TypeHash.maybeGenHashes pkg canonical_ valid_ combinedInterfaces
+
       Result.ok $
         Artifacts
-          { _elmi = I.fromModule annotations_ canonical_
+          { _elmi = elmi
           , _elmo = graph_
           , Compile._docs = documentation_
           }
 
+
 addImport :: Src.Import -> Valid.Module -> Valid.Module
 addImport i (Valid.Module _name _overview _docs _exports _imports _decls _unions _aliases _binop _effects) =
   Valid.Module _name _overview _docs _exports (i : _imports) _decls _unions _aliases _binop _effects
+
 
 getImportDict :: Valid.Module -> Map.Map N.Name N.Name
 getImportDict (Valid.Module _name _overview _docs _exports _imports _decls _unions _aliases _binop _effects) =

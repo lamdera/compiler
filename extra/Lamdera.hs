@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE BangPatterns #-}
 
 module Lamdera
   ( lamderaVersion
@@ -26,6 +27,13 @@ module Lamdera
   , unsafe
   , lamderaLiveSrc
   , Data.List.Index.imap
+  , onlyWhen
+  , textContains
+  , hunt
+  , formatHaskellValue
+  , writeUtf8
+  , lamderaHashesPath
+  , getProjectRoot
   )
   where
 
@@ -45,6 +53,7 @@ import Control.Monad.Except (liftIO)
 import System.IO.Unsafe (unsafePerformIO)
 import qualified Debug.Trace as DT
 import Data.Text
+import qualified Data.Text.Encoding as Text
 
 import CanSer.CanSer (ppElm)
 import qualified Data.Witherable
@@ -56,8 +65,9 @@ import Prelude hiding (lookup)
 import qualified Data.ByteString as BS
 import Data.FileEmbed (bsToExp)
 import Language.Haskell.TH (runIO)
-import System.FilePath ((</>))
+import System.FilePath as FP ((</>), joinPath, splitDirectories)
 import qualified System.Directory as Dir
+import Control.Monad (unless, filterM)
 
 -- Vendored from File.IO due to recursion errors
 import qualified System.IO as IO
@@ -67,6 +77,9 @@ import qualified Foreign.ForeignPtr as FPtr
 import Control.Exception (catch)
 import System.IO.Error (ioeGetErrorType, annotateIOError, modifyIOError)
 import Data.List.Index
+import Text.Show.Unicode
+import qualified System.Process
+import Data.Text.Internal.Search (indices)
 
 lamderaVersion :: String
 lamderaVersion = "0.0.1-alpha2"
@@ -201,3 +214,89 @@ encodingError filePath ioErr =
 
     _ ->
       ioErr
+
+
+-- Inversion of `unless` that runs IO only when condition is True
+onlyWhen condition io =
+  unless (not condition) io
+
+
+textContains :: Text -> Text -> Bool
+textContains needle haystack = indices needle haystack /= []
+
+
+hunt_ thing label = do
+  let
+      !_ =
+        unsafePerformIO $ do
+             hunt thing label
+
+  pure ()
+
+
+hunt thing label = do
+  if textContains "AnotherExternalThing" $ T.pack $ show thing then
+    putStrLn $ "found it!!!!!!!!!!!!!!!!!!!!!!!!" <> label
+  else
+    putStrLn $ "not in " <> label
+
+
+{-|
+
+Useful when trying to understand AST values or just unknown values in general.
+
+Requires hindent to be installed; try stack install hindent
+
+Most conveniently used like so;
+
+{-# LANGUAGE BangPatterns #-}
+
+let
+  !_ = formatHaskellValue "some sensible label" (blah) :: IO ()
+in
+blah
+
+The bang pattern forces evaluation and you don't have to worry about the type-context, i.e. not being in IO.
+
+-}
+formatHaskellValue label v =
+  unsafePerformIO $ do
+    _ <- putStrLn $ "----------------------------------------------------------------------------------------------------------------" <> label
+    (exit, stdout, stderr) <- System.Process.readProcessWithExitCode "hindent" [] (Text.Show.Unicode.ushow v)
+    _ <- putStrLn stdout
+    pure $ pure ()
+
+
+-- Copied from File.IO due to cyclic imports and adjusted for Text
+writeUtf8 :: FilePath -> Text -> IO ()
+writeUtf8 filePath content = do
+  debug_ $ "writeUtf8: " ++ show filePath
+  withUtf8 filePath IO.WriteMode $ \handle ->
+    BS.hPut handle (Text.encodeUtf8 content)
+
+
+lamderaHashesPath :: FilePath -> FilePath
+lamderaHashesPath root =
+  root </> "lamdera-stuff" </> ".lamdera-hashes"
+
+
+-- Copy of combined internals of Project.getRoot as it seems to notoriously cause cyclic wherever imported
+getProjectRoot :: IO FilePath
+getProjectRoot = do
+  subDir <- Dir.getCurrentDirectory
+  res <- findHelp "elm.json" (FP.splitDirectories subDir)
+  case res of
+    Just filepath -> pure filepath
+    Nothing -> error "derp"
+
+
+findHelp :: FilePath -> [String] -> IO (Maybe FilePath)
+findHelp name dirs =
+  if Prelude.null dirs then
+    return Nothing
+
+  else
+    do  exists_ <- Dir.doesFileExist (FP.joinPath dirs </> name)
+        if exists_
+          then return (Just (FP.joinPath dirs))
+          else findHelp name (Prelude.init dirs)

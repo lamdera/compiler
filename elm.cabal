@@ -299,4 +299,6 @@ Executable elmx
         websockets,
         websockets-snap,
         stm,
-        fsnotify
+        fsnotify,
+        -- Debug
+        unicode-show

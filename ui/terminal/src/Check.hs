@@ -71,7 +71,7 @@ import Text.Read
 import Data.Maybe
 import qualified Data.Text.Encoding as Text
 import qualified Data.Char as Char
-import Data.Text.Internal.Search
+import Data.Text.Internal.Search (indices)
 import System.Process
 import Control.Monad (unless, filterM)
 import qualified System.IO as IO
@@ -269,7 +269,7 @@ run () () = do
                 let defaultMigrations = defaultMigrationFile (nextVersion - 1) nextVersion typeCompares
 
                 _ <- liftIO $ readProcess "mkdir" ["-p", root </> "src/Evergreen/Migrate"] ""
-                liftIO $ writeUtf8 defaultMigrations nextMigrationPath
+                liftIO $ writeUtf8 nextMigrationPath defaultMigrations
 
                 Task.throw $ Exit.Lamdera
                   $ Help.report "UNIMPLEMENTED MIGRATION" (Just nextMigrationPath)
@@ -418,7 +418,6 @@ lamderaThrowUnimplementedMigration nextMigrationPath formattedChangedTypes prodV
         , D.reflow "See <https://dashboard.lamdera.app/docs/evergreen> for more info."
         ]
       )
-  error "Exit."
 
 
 certainAppName :: [Text] -> Maybe String -> Text
@@ -483,7 +482,7 @@ fetchLocalTypes root = do
 
   -- This could fail normally but we're using this function after
   -- we've already checked it exists
-  hashString <- liftIO $ IO.readUtf8 (Paths.lamderaHashes root)
+  hashString <- liftIO $ IO.readUtf8 (lamderaHashesPath root)
 
   let
     decoder =
@@ -553,7 +552,7 @@ migrationCheck root version =
 
               liftIO $ callCommand $ "mkdir -p " <> root </> "lamdera-stuff/alpha"
               let lamderaCheckBothPath = "lamdera-stuff/alpha/LamderaCheckBoth.elm"
-              liftIO $ writeUtf8 (lamderaCheckBothFileContents version) $ root </> lamderaCheckBothPath
+              liftIO $ writeUtf8 (root </> lamderaCheckBothPath) (lamderaCheckBothFileContents version)
               let jsOutput = Just (Output.Html Nothing "/dev/null")
               Project.compile Output.Dev Output.Client jsOutput Nothing summary [ lamderaCheckBothPath ]
 
@@ -825,10 +824,6 @@ backendRuntimeLocalContent =
   |]
 
 
-textContains :: Text -> Text -> Bool
-textContains needle haystack = indices needle haystack /= []
-
-
 gitStatus :: String -> IO GitStatus
 gitStatus filepath = do
   gsPorcelain <- readProcess "git" ["status", "--porcelain", filepath] ""
@@ -875,13 +870,6 @@ firstTwoChars str =
     _ -> ('_','_')
 
 
-writeUtf8 :: Text -> FilePath -> IO ()
-writeUtf8 textContent path = do
-  debug_ $ "writeUtf8: " ++ show path
-  Text.encodeUtf8 textContent
-    & IO.writeUtf8 path
-
-
 lowerFirstLetter :: String -> Text
 lowerFirstLetter text =
   case text of
@@ -905,13 +893,6 @@ vinfoVersion vinfo =
   case vinfo of
     WithMigrations v -> v
     WithoutMigrations v -> v
-
-
-vinfoMinusOne :: VersionInfo -> VersionInfo
-vinfoMinusOne vinfo =
-  case vinfo of
-    WithMigrations v -> WithMigrations (v - 1)
-    WithoutMigrations v -> WithoutMigrations (v - 1)
 
 
 createLamderaGenerated :: FilePath -> VersionInfo -> IO Text
@@ -1166,7 +1147,7 @@ writeLamderaGenerated root inProduction nextVersion =
   onlyWhen inProduction $ do
     gen <- liftIO $ createLamderaGenerated root nextVersion
     -- liftIO $ putStrLn $ T.unpack gen
-    liftIO $ writeUtf8 gen $ root </> "src/LamderaGenerated.elm"
+    liftIO $ writeUtf8 (root </> "src/LamderaGenerated.elm") gen
 
 
 data VersionInfo = WithMigrations Int | WithoutMigrations Int deriving (Eq, Show)
@@ -1247,10 +1228,8 @@ takeWhileInclusive _ [] = []
 takeWhileInclusive p (x:xs) = x : if p x then takeWhileInclusive p xs
                                          else []
 
-
 justs :: [Maybe a] -> [a]
 justs xs = [ x | Just x <- xs ]
-
 
 
 genericExit str =
@@ -1258,13 +1237,6 @@ genericExit str =
     $ Help.report "ERROR" Nothing
       (str)
       []
-
-
-
--- Inversion of `unless` that runs IO only when condition is True
-onlyWhen condition io =
-  unless (not condition) io
-
 
 
 osReplace regex filename =

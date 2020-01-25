@@ -2,7 +2,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 module Elm.Name
-  ( Name
+  ( Name(..)
   -- utilities
   , length
   , contains
