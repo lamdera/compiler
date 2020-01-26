@@ -193,6 +193,9 @@ run () () = do
 
     if nextVersion == 1
       then do
+        -- Always snapshot types for the first version, we need a starting point
+        _ <- liftIO $ snapshotCurrentTypesTo root nextVersion
+
         -- This is the first version, we don't need any migration checking.
         onlyWhen (not inProduction) $ committedCheck root nextVersionInfo
 
@@ -904,7 +907,7 @@ createLamderaGenerated root nextVersion = do
   migrationSequence <- liftIO $ getMigrationsSequence root nextVersion `catchError`
     (\err -> do
       debug "getMigrationsSequence was empty - that should only be true on v1 deploy"
-      pure []
+      pure [[WithoutMigrations 1]]
     )
 
   let
@@ -1202,7 +1205,12 @@ getMigrationsSequence root nextVersion = do
           -- WithMigrations v
           migrationVersions
             & fmap (\v -> WithMigrations v)
-            & (\lm -> lm ++ [nextVersion])
+            & (\lm ->
+                case nextVersion of
+                  WithMigrations _ -> lm
+                  -- Make sure next version is in the sequence even if it has no migration
+                  WithoutMigrations _ -> lm ++ [nextVersion]
+              )
             & List.reverse
             & takeWhileInclusive
                 (\mv ->
