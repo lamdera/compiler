@@ -73,7 +73,7 @@ toReport exit =
   case exit of
     NoElmJson ->
       Help.report "NO elm.json FILE" Nothing
-        "It looks like you are starting a new Lamdera project. Very exciting! Try running:"
+        "It looks like you are starting a new Lamdera Elm project. Very exciting! Try running:"
         [ D.indent 4 $ D.green $ "lamdera init"
         , D.reflow $
             "It will help you get set up. It is really simple!"

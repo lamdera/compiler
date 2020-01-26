@@ -186,7 +186,7 @@ run () () = do
       approveHoist <- Task.getApproval $
         D.stack
           [ D.fillSep [ D.yellow "WARNING:","Confirm","hoist!" ]
-          , D.reflow $ "Proceed with hoise as v" <> show nextVersion <> "? [Y/n]: "
+          , D.reflow $ "Proceed with hoist as v" <> show nextVersion <> "? [Y/n]: "
           ]
       onlyWhen (not approveHoist) $ genericExit "Quitting hoist"
 
@@ -272,10 +272,11 @@ run () () = do
                 liftIO $ writeUtf8 nextMigrationPath defaultMigrations
 
                 Task.throw $ Exit.Lamdera
-                  $ Help.report "UNIMPLEMENTED MIGRATION" (Just nextMigrationPath)
+                  $ Help.report "UNIMPLEMENTED MIGRATION" (Just nextMigrationPathBare)
                     ("The following types have changed since v" <> show prodVersion <> " and require migrations:")
                     (formattedChangedTypes <>
-                      [ D.reflow $ "I've generated a placeholder migration file in " <> nextMigrationPathBare <> " to help you get started."
+                      [ D.reflow $ "I've generated a placeholder migration file to help you get started:"
+                      , D.reflow $ nextMigrationPath
                       , D.reflow "See <https://dashboard.lamdera.app/docs/evergreen> for more info."
                       ]
                     )
@@ -404,6 +405,7 @@ lamderaThrowUnknownApp =
     $ Help.report "UNKNOWN APP" (Just "git remote -v")
       ("I cannot figure out which Lamdera app this repository belongs to!")
       ([ D.reflow "I normally look for a git remote called 'lamdera' but did not find one."
+       , D.reflow "Did you maybe forget to add the lamdera remote for your app as listed on the Dashboard?"
        , D.reflow "See <https://dashboard.lamdera.app/docs/deploying> for more info."
        ]
       )
@@ -411,11 +413,12 @@ lamderaThrowUnknownApp =
 
 lamderaThrowUnimplementedMigration nextMigrationPath formattedChangedTypes prodVersion nextMigrationPathBare = do
   Task.throw $ Exit.Lamdera
-    $ Help.report "UNIMPLEMENTED MIGRATION" (Just nextMigrationPath)
+    $ Help.report "UNIMPLEMENTED MIGRATION" (Just nextMigrationPathBare)
       ("The following types have changed since v" <> show prodVersion <> " and require migrations:")
       (formattedChangedTypes <>
-        [ D.reflow $ "The migration file at " <> nextMigrationPathBare <> " has migrations that still haven't been implemented."
-        , D.reflow "See <https://dashboard.lamdera.app/docs/evergreen> for more info."
+        [ D.reflow $ "The migration file has migrations that still haven't been implemented:"
+        , D.reflow $ nextMigrationPath
+        , D.fillSep ["See",D.cyan ("<https://dashboard.lamdera.app/docs/evergreen>"),"for more info."]
         ]
       )
 

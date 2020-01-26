@@ -236,6 +236,7 @@ Executable elmx
         Wire.TypeHash
         LamderaInjection
         LamderaChecks
+        LamderaHints
         Check
         Reporting.Exit.Check
         Reporting.Error.LamderaError

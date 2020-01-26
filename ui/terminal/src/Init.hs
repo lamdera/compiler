@@ -23,7 +23,7 @@ import qualified Reporting.Exit.Init as E
 import qualified Reporting.Task as Task
 import qualified Reporting.Progress.Terminal as Terminal
 
-
+import LamderaChecks
 
 -- RUN
 
@@ -40,6 +40,7 @@ run () () =
               if approved
                 then
                   do  init
+                      liftIO $ LamderaChecks.writeDefaultImplementations
                       liftIO $ putStrLn "Okay, I created it. Now read that link!"
                 else
                   liftIO $ putStrLn "Okay, I did not make any changes!"
@@ -50,22 +51,18 @@ question =
   D.stack
     [ D.fillSep
         ["Hello!"
-        ,"Lamdera","projects","always","start","with","an",D.green "elm.json","file."
-        ,"I","can","create","them!"
-        ]
-    , D.reflow
-        "Now you may be wondering, what will be in this file? How do I add Elm files to\
-        \ my project? How do I see it in the browser? How will my code grow? Do I need\
-        \ more directories? What about tests? Etc."
-    , D.fillSep
-        ["Check","out",D.cyan (D.fromString (D.makeLink "init"))
-        ,"for","all","the","answers!"
+        ,"Lamdera","projects","always","start","with","an",D.green "elm.json","file,"
+        ,"as","well","as","three","source","files:",D.green "Frontend.elm",",",D.green "Backend.elm","and",D.green "Types.elm"
         ]
     , D.fillSep
-        ["Then","check","out",D.cyan ("<https://dashboard.lamdera.app/docs/building>")
+        ["If","you're","new","to","Elm,","the","best","starting","point","is"
+        , D.cyan (D.fromString (D.makeLink "init"))
+        ]
+    , D.fillSep
+        ["Otherwise","check","out",D.cyan ("<https://dashboard.lamdera.app/docs/building>")
         ,"for","Lamdera","specific","information!"
         ]
-    , "Knowing all that, would you like me to create an elm.json file now? [Y/n]: "
+    , "Knowing all that, would you like me to create a starter impementation? [Y/n]: "
     ]
 
 
@@ -99,8 +96,9 @@ defaults :: Map.Map Pkg.Name Con.Constraint
 defaults =
   Map.fromList
     [ (Pkg.core, Con.anything)
-    , (Pkg.browser, Con.anything)
     , (Pkg.html, Con.anything)
+    , (Pkg.browser, Con.anything)
+    , (Pkg.url, Con.anything)
     , (Pkg.lamderaCore, Con.exactly (Pkg.Version 1 0 0))
     , (Pkg.lamderaCodecs, Con.exactly (Pkg.Version 1 0 0))
     ]

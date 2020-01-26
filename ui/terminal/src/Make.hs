@@ -20,8 +20,6 @@ import qualified Reporting.Progress.Json as Json
 import qualified Reporting.Progress.Terminal as Terminal
 import Terminal.Args (Parser(..))
 
-import qualified LamderaChecks
-
 
 -- RUN
 
@@ -37,15 +35,11 @@ data Flags =
 
 run :: [FilePath] -> Flags -> IO ()
 run paths (Flags debug optimize output report docs) =
-  do  lamderaChecksOk <- LamderaChecks.runChecks
-      if lamderaChecksOk then do
-        reporter <- toReporter report
-        Task.run reporter $
-          do  mode <- toMode debug optimize
-              summary <- Project.getRoot
-              Project.compile mode Output.Client output docs summary paths
-        else
-          pure ()
+  do  reporter <- toReporter report
+      Task.run reporter $
+        do  mode <- toMode debug optimize
+            summary <- Project.getRoot
+            Project.compile mode Output.Client output docs summary paths
 
 
 toMode :: Bool -> Bool -> Task.Task Output.Mode

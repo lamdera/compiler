@@ -43,7 +43,10 @@ import qualified Reporting.Exit as Exit
 import qualified Reporting.Exit.Assets as E
 import qualified Reporting.Task as Task
 
-import Data.Function ((&))
+
+import Lamdera
+import qualified LamderaChecks
+import Control.Monad.Except (liftIO)
 
 
 -- PROJECT
@@ -156,8 +159,10 @@ check project =
         if Map.member Pkg.json direct || Map.member Pkg.json indirect
           then
             if Map.member Pkg.lamderaCore direct || Map.member Pkg.lamderaCore indirect
-            then return ()
-            else throwBadJson E.NoAppLamderaCore
+            then do
+              LamderaChecks.runChecks
+            else
+              throwBadJson E.NoAppLamderaCore
           else throwBadJson E.NoAppJson
 
       else
