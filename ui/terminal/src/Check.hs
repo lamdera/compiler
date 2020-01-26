@@ -634,10 +634,10 @@ committedCheck root versionInfo = do
             liftIO $ callCommand $ "git commit -m \"Preparing for v" <> show version <> "\""
 
           else
-            genericExit "Bailing on git commit."
+            genericExit "Okay, I did not commit it."
 
       else
-        genericExit "Bailing on git add."
+        genericExit "Okay, I did not add it."
 
 
 defaultMigrationFile :: Int -> Int -> [(String, String, String)] -> Text
