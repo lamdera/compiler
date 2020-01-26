@@ -2,13 +2,14 @@ module LocalDev exposing (main)
 
 import Backend
 import Browser
-import Browser.Navigation as Navigation
 import Frontend
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events exposing (onClick, onMouseEnter, onMouseLeave)
-import Lamdera exposing (ClientId, Url)
-import Lamdera.Debug as Lamdera
+import Lamdera exposing (ClientId, Key, Url)
+import Lamdera.Debug
+import Process
+import Task
 import Types exposing (BackendModel, BackendMsg, FrontendModel, FrontendMsg, ToBackend, ToFrontend)
 
 
@@ -16,7 +17,9 @@ type Msg
     = FEMsg Types.FrontendMsg
     | BEMsg Types.BackendMsg
     | BEtoFE ClientId Types.ToFrontend
+    | BEtoFEDelayed ClientId Types.ToFrontend
     | FEtoBE Types.ToBackend
+    | FEtoBEDelayed Types.ToBackend
     | FENewUrl Url
     | DevbarExpand
     | DevbarCollapse
@@ -24,6 +27,7 @@ type Msg
     | ResetDebugStoreFE
     | ResetDebugStoreBE
     | ToggledDevMode
+    | ToggledNetworkDelay
     | ClickedLocation
     | Noop
 
@@ -32,11 +36,12 @@ type alias Model =
     { fem : FrontendModel
     , bem : BackendModel
     , originalUrl : Url
-    , originalKey : Navigation.Key
+    , originalKey : Key
     , devbar :
         { expanded : Bool
         , location : Location
         , devMode : DevMode
+        , networkDelay : Bool
         }
     }
 
@@ -76,11 +81,11 @@ userBackendApp =
     Backend.app
 
 
-init : flags -> Url -> Navigation.Key -> ( Model, Cmd Msg )
+init : flags -> Url -> Key -> ( Model, Cmd Msg )
 init flags url key =
     let
         devbar =
-            case Lamdera.debugR "d" devbarInit of
+            case Lamdera.Debug.debugR "d" devbarInit of
                 Nothing ->
                     devbarInit
 
@@ -94,7 +99,7 @@ init flags url key =
             userBackendApp.init
 
         ( fem, newFeCmds ) =
-            case Lamdera.debugR "fe" ifem of
+            case Lamdera.Debug.debugR "fe" ifem of
                 Nothing ->
                     ( ifem, iFeCmds )
 
@@ -106,7 +111,7 @@ init flags url key =
                         ( ifem, iFeCmds )
 
         ( bem, newBeCmds ) =
-            case Lamdera.debugR "be" ibem of
+            case Lamdera.Debug.debugR "be" ibem of
                 Nothing ->
                     ( ibem, iBeCmds )
 
@@ -117,6 +122,7 @@ init flags url key =
             { expanded = False
             , location = BottomLeft
             , devMode = Normal
+            , networkDelay = False
             }
     in
     ( { fem = fem
@@ -134,14 +140,14 @@ init flags url key =
 
 storeFE m newFem =
     if m.devbar.devMode == Freeze then
-        Lamdera.debugS "fe" newFem
+        Lamdera.Debug.debugS "fe" newFem
 
     else
         newFem
 
 
 storeBE m newBem =
-    Lamdera.debugS "be" newBem
+    Lamdera.Debug.debugS "be" newBem
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -168,9 +174,23 @@ update msg m =
             ( { m | fem = m.fem, bem = storeBE m newBem }, Cmd.map BEMsg newBeCmds )
 
         BEtoFE clientId toFrontend ->
+            if m.devbar.networkDelay then
+                ( m, delay 500 (BEtoFEDelayed clientId toFrontend) )
+
+            else
+                let
+                    x =
+                        Debug.log "BEtoFE" toFrontend
+
+                    ( newFem, newFeCmds ) =
+                        userFrontendApp.updateFromBackend toFrontend m.fem
+                in
+                ( { m | fem = storeFE m newFem, bem = m.bem }, Cmd.map FEMsg newFeCmds )
+
+        BEtoFEDelayed clientId toFrontend ->
             let
                 x =
-                    Debug.log "BEtoFE" toFrontend
+                    Debug.log "[delayed] BEtoFE" toFrontend
 
                 ( newFem, newFeCmds ) =
                     userFrontendApp.updateFromBackend toFrontend m.fem
@@ -178,9 +198,23 @@ update msg m =
             ( { m | fem = storeFE m newFem, bem = m.bem }, Cmd.map FEMsg newFeCmds )
 
         FEtoBE toBackend ->
+            if m.devbar.networkDelay then
+                ( m, delay 500 (FEtoBEDelayed toBackend) )
+
+            else
+                let
+                    _ =
+                        Debug.log "FEtoBE" toBackend
+
+                    ( newBem, newBeCmds ) =
+                        userBackendApp.updateFromFrontend "sessionIdLocalDev" "clientIdLocalDev" toBackend m.bem
+                in
+                ( { m | fem = m.fem, bem = storeBE m newBem }, Cmd.map BEMsg newBeCmds )
+
+        FEtoBEDelayed toBackend ->
             let
                 _ =
-                    Debug.log "FEtoBE" toBackend
+                    Debug.log "[delayed] FEtoBE" toBackend
 
                 ( newBem, newBeCmds ) =
                     userBackendApp.updateFromFrontend "sessionIdLocalDev" "clientIdLocalDev" toBackend m.bem
@@ -217,8 +251,8 @@ update msg m =
                     userBackendApp.init
             in
             ( { m
-                | fem = Lamdera.debugS "fe" newFem
-                , bem = Lamdera.debugS "be" newBem
+                | fem = Lamdera.Debug.debugS "fe" newFem
+                , bem = Lamdera.Debug.debugS "be" newBem
               }
             , Cmd.batch
                 [ Cmd.map FEMsg newFeCmds
@@ -232,7 +266,7 @@ update msg m =
                     userFrontendApp.init m.originalUrl m.originalKey
             in
             ( { m
-                | fem = Lamdera.debugS "fe" newFem
+                | fem = Lamdera.Debug.debugS "fe" newFem
               }
             , Cmd.batch
                 [ Cmd.map FEMsg newFeCmds
@@ -245,11 +279,11 @@ update msg m =
                     userBackendApp.init
             in
             ( { m
-                | bem = Lamdera.debugS "be" newBem
+                | bem = Lamdera.Debug.debugS "be" newBem
               }
             , Cmd.batch
                 [ Cmd.map BEMsg newBeCmds
-                , Navigation.reload
+                , Lamdera.Debug.browserReload
                 ]
             )
 
@@ -271,12 +305,24 @@ update msg m =
 
                 newFem =
                     if newDevbar.devMode == Freeze then
-                        Lamdera.debugS "fe" m.fem
+                        Lamdera.Debug.debugS "fe" m.fem
 
                     else
                         m.fem
             in
-            ( { m | devbar = Lamdera.debugS "d" newDevbar, fem = newFem }
+            ( { m | devbar = Lamdera.Debug.debugS "d" newDevbar, fem = newFem }
+            , Cmd.none
+            )
+
+        ToggledNetworkDelay ->
+            let
+                devbar =
+                    m.devbar
+
+                newDevbar =
+                    { devbar | networkDelay = not m.devbar.networkDelay }
+            in
+            ( { m | devbar = Lamdera.Debug.debugS "d" newDevbar }
             , Cmd.none
             )
 
@@ -288,7 +334,7 @@ update msg m =
                 newDevbar =
                     { devbar | location = next m.devbar.location }
             in
-            ( { m | devbar = Lamdera.debugS "d" newDevbar }
+            ( { m | devbar = Lamdera.Debug.debugS "d" newDevbar }
             , Cmd.none
             )
 
@@ -439,6 +485,12 @@ expandedUI m =
 
             Freeze ->
                 buttonDev "Reset Both" ResetDebugStoreBoth
+        , case m.devbar.networkDelay of
+            True ->
+                buttonDev "Network Delay: 500ms" ToggledNetworkDelay
+
+            False ->
+                buttonDevOff "Network Delay: Off" ToggledNetworkDelay
         ]
 
 
@@ -447,7 +499,21 @@ buttonDev label msg =
         [ style "background-color" "#555"
         , style "color" "#eee"
         , style "cursor" "pointer"
-        , style "padding" "3px"
+        , style "padding" "3px 8px"
+        , style "margin-top" "5px"
+        , style "text-align" "center"
+        , onClick msg
+        ]
+        [ text label
+        ]
+
+
+buttonDevOff label msg =
+    div
+        [ style "background-color" "#444"
+        , style "color" "#888"
+        , style "cursor" "pointer"
+        , style "padding" "3px 8px"
         , style "margin-top" "5px"
         , style "text-align" "center"
         , onClick msg
@@ -464,7 +530,7 @@ buttonDevInactiveBy cond label msg =
         div
             [ style "background-color" "#444"
             , style "color" "#888"
-            , style "padding" "3px"
+            , style "padding" "3px 8px"
             , style "margin-top" "5px"
             , style "text-align" "center"
             ]
@@ -488,6 +554,10 @@ main =
         , onUrlRequest = \ureq -> FEMsg (userFrontendApp.onUrlRequest ureq)
         , onUrlChange = \url -> FENewUrl url
         }
+
+
+delay time msg =
+    Process.sleep time |> Task.perform (always msg)
 
 
 {-| Modified from <https://iamsteve.me/blog/entry/css-only-ios-style-toggle>
