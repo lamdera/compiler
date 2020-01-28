@@ -82,15 +82,17 @@ maybeGenHashes pkg module_@(Valid.Module name _ _ _ _ _ _ _ _ _) interfaces = do
 
       errors =
         typediffs
-          & fmap (\(t,tds) -> (t, diffableTypeErrors tds))
-          & filter (\(t,errs) -> List.length errs > 0)
+          & fmap (\(t,tds) -> (t, diffableTypeErrors tds, tds))
+          & filter (\(t,errs,tds) -> List.length errs > 0)
 
     if List.length errors > 0
       then
       let
+        -- !x = formatHaskellValue "diffHasErrors:" errors :: IO ()
+
         formattedErrors =
           errors
-            & fmap (\(tipe, errors) ->
+            & fmap (\(tipe, errors, tds) ->
                 D.stack $
                   [D.fillSep [ D.yellow $ D.fromText $ tipe <> ":" ]]
                   ++
@@ -133,7 +135,7 @@ diffableTypeByName interfaces typeName name interface = do
       case Map.lookup (N.fromText typeName) $ Interface._unions interface of
         Just union -> do
           let
-            diffableUnion = unionToDiffableType interfaces [recursionIdentifier] union []
+            diffableUnion = unionToDiffableType typeName interfaces [recursionIdentifier] [] union []
 
             -- !y = formatHaskellValue "diffableTypeByName.Union" diffableUnion :: IO ()
 
@@ -145,7 +147,7 @@ diffableTypeByName interfaces typeName name interface = do
 
 data DiffableType
   = DRecord [(Text, DiffableType)]
-  | DCustom [(Text, [DiffableType])]
+  | DCustom Text [(Text, [DiffableType])]
   | DError Text
   | DString
   | DInt
@@ -166,8 +168,8 @@ data DiffableType
   deriving (Show)
 
 
-unionToDiffableType :: (Map.Map Canonical Module.Interface) -> [(ModuleName.Canonical, N.Name)] -> Interface.Union -> [Can.Type] -> DiffableType
-unionToDiffableType interfaces recursionMap unionInterface params =
+unionToDiffableType :: Text -> (Map.Map Canonical Module.Interface) -> [(ModuleName.Canonical, N.Name)] -> [(N.Name, Can.Type)] -> Interface.Union -> [Can.Type] -> DiffableType
+unionToDiffableType typeName interfaces recursionMap tvarMap unionInterface params =
   let
     treat union =
       let
@@ -195,11 +197,11 @@ unionToDiffableType interfaces recursionMap unionInterface params =
           ( N.toText name
           , fmap
               -- For each constructor type param
-              (\p -> canonicalToDiffableType interfaces recursionMap p [] )
+              (\p -> canonicalToDiffableType interfaces recursionMap p tvarMap )
               (resolveTvars params_)
           )
         )
-        & DCustom
+        & DCustom typeName
   in
   case unionInterface of
     Interface.OpenUnion u -> treat u
@@ -233,7 +235,7 @@ aliasToDiffableType interfaces recursionMap aliasInterface =
 -- | TUnit
 -- | TTuple Type Type (Maybe Type)
 -- | TAlias ModuleName.Canonical N.Name [(N.Name, Type)] AliasType
--- canonicalToDiffableType :: Interface.Interfaces -> [(ModuleName.Canonical, N.Name)] -> Can.Type -> [(N.Name, Can.Type)] -> DiffableType
+canonicalToDiffableType :: Interface.Interfaces -> [(ModuleName.Canonical, N.Name)] -> Can.Type -> [(N.Name, Can.Type)] -> DiffableType
 canonicalToDiffableType interfaces recursionMap canonical tvarMap =
   case canonical of
     Can.TType moduleName name params ->
@@ -360,7 +362,7 @@ canonicalToDiffableType interfaces recursionMap canonical tvarMap =
               -- Try unions
               case Map.lookup name $ Interface._unions subInterface of
                 Just union -> do
-                  unionToDiffableType interfaces newRecursionMap union tvarResolvedParams
+                  unionToDiffableType (N.toText name) interfaces newRecursionMap tvarMap union tvarResolvedParams
 
                 Nothing ->
                   -- Try aliases
@@ -395,6 +397,9 @@ canonicalToDiffableType interfaces recursionMap canonical tvarMap =
           canonicalToDiffableType interfaces recursionMap cType tvarResolvedMap
 
         Can.Filled cType ->
+          -- @TODO hypothesis...
+          -- If an alias is filled, then it can't have any open holes within it either?
+          -- So we can take this opportunity to reset tvars to reduce likeliness of naming conflicts?
           canonicalToDiffableType interfaces recursionMap cType []
 
     Can.TRecord fieldMap maybeName_whatisit ->
@@ -424,7 +429,10 @@ canonicalToDiffableType interfaces recursionMap canonical tvarMap =
           canonicalToDiffableType interfaces recursionMap ti tvarMap
 
         Nothing ->
-          DError $ "Error: tvar lookup failed, please report issue along with your type!: " <> N.toText name <> " in tvarMap " <>  (T.pack $ show tvarMap)
+          DError $ "Error: tvar lookup failed, please report this issue: cannot find "
+            <> N.toText name
+            <> " in tvarMap "
+            <>  (T.pack $ show tvarMap)
 
     Can.TLambda _ _ ->
       DError $ "must not contain functions"
@@ -446,7 +454,7 @@ diffableTypeToText dtype =
         & (\v -> "Rec["<> v <>"]")
 
     -- DCustom [(Text, [DiffableType])]
-    DCustom constructors ->
+    DCustom name constructors ->
       constructors
         & fmap (\(n, params) -> T.intercalate "" $ fmap diffableTypeToText params)
         & T.intercalate ""
@@ -538,7 +546,7 @@ diffableTypeErrors dtype =
         & List.concat
 
     -- DCustom [(Text, [DiffableType])]
-    DCustom constructors ->
+    DCustom name constructors ->
       constructors
         & fmap (\(n, params) ->
             fmap diffableTypeErrors params
