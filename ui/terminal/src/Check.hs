@@ -61,16 +61,15 @@ import qualified Reporting.Report as Report
 
 -- This file itself
 import Lamdera
+import LamderaGenerated (VersionInfo(..), createLamderaGenerated, vinfoVersion, getLastLocalTypeChangeVersion)
 import qualified File.IO as IO
 import qualified Data.List as List
 import qualified Data.List.Safe as SafeList
 import Control.Concurrent (threadDelay)
 import NeatInterpolation
-import Algorithms.NaturalSort
 import Text.Read
 import Data.Maybe
 import qualified Data.Text.Encoding as Text
-import qualified Data.Char as Char
 import Data.Text.Internal.Search (indices)
 import System.Process
 import Control.Monad (unless, filterM)
@@ -88,6 +87,7 @@ run () () = do
   appNameEnvM <- liftIO $ Env.lookupEnv "LAMDERA_APP_NAME"
   hoistRebuild <- liftIO $ Env.lookupEnv "HOIST_REBUILD"
   forceVersionM <- liftIO $ Env.lookupEnv "VERSION"
+  inDebug <- Lamdera.isDebug
 
   let inProduction = (appNameEnvM /= Nothing) -- @TODO better isProd check...
       isHoistRebuild = (hoistRebuild /= Nothing)
@@ -131,7 +131,7 @@ run () () = do
               pure (forceVersion, localTypes)
 
         else do
-          (pv, pt) <- fetchProductionInfo appName `catchError` (\err -> pure ((-1), []))
+          (pv, pt) <- fetchProductionInfo appName inDebug `catchError` (\err -> pure ((-1), []))
           if (pv /= (-1))
             then
               -- Everything is as it should be
@@ -268,8 +268,9 @@ run () () = do
               else do
                 debug $ "Migration does not exist"
 
-                -- @TODO (nextVersion - 1) used to be lastTypeChangeVersion, see note above on lastTypeChangeVersion
-                let defaultMigrations = defaultMigrationFile (nextVersion - 1) nextVersion typeCompares
+                lastLocalTypeChangeVersion <- liftIO $ LamderaGenerated.getLastLocalTypeChangeVersion root
+
+                let defaultMigrations = defaultMigrationFile lastLocalTypeChangeVersion nextVersion typeCompares
 
                 _ <- liftIO $ readProcess "mkdir" ["-p", root </> "src/Evergreen/Migrate"] ""
                 liftIO $ writeUtf8 nextMigrationPath defaultMigrations
@@ -305,6 +306,9 @@ run () () = do
             pDocLn $ D.reflow $ "\nThere are no Evergreen type changes for this version."
 
             buildProductionJsFiles root inProduction nextVersionInfo
+
+
+
 
 
 buildProductionJsFiles :: FilePath -> Bool -> VersionInfo -> Task.Task ()
@@ -442,15 +446,15 @@ certainAppName lamderaRemotes appNameEnvM =
 
 
 
-fetchProductionInfo :: Text -> Task.Task (Int, [String])
-fetchProductionInfo appName =
+fetchProductionInfo :: Text -> Bool -> Task.Task (Int, [String])
+fetchProductionInfo appName inDebug =
   let
     endpoint =
-      case appName of
-        "testapp" ->
-          "https://testapp.lamdera.test/_i"
+      if textContains "-local" appName && inDebug
+        then
+          "https://" <> T.unpack appName <> ".lamdera.test/_i"
 
-        _ ->
+        else
           "https://" <> T.unpack appName <> ".lamdera.app/_i"
 
     headers =
@@ -876,371 +880,12 @@ firstTwoChars str =
     _ -> ('_','_')
 
 
-lowerFirstLetter :: String -> Text
-lowerFirstLetter text =
-  case text of
-    first:rest -> T.pack $ [Char.toLower first] <> rest
-
-
-
-justWithMigrationVersions :: [VersionInfo] -> [Int]
-justWithMigrationVersions versions =
-  versions
-    & fmap (\vinfo ->
-      case vinfo of
-        WithMigrations v -> Just v
-        WithoutMigrations v -> Nothing
-    )
-    & justs
-
-
-vinfoVersion :: VersionInfo -> Int
-vinfoVersion vinfo =
-  case vinfo of
-    WithMigrations v -> v
-    WithoutMigrations v -> v
-
-
-createLamderaGenerated :: FilePath -> VersionInfo -> IO Text
-createLamderaGenerated root nextVersion = do
-
-  migrationSequence <- liftIO $ getMigrationsSequence root nextVersion `catchError`
-    (\err -> do
-      debug "getMigrationsSequence was empty - that should only be true on v1 deploy"
-      pure [[WithoutMigrations 1]]
-    )
-
-  let
-    allMigrations = List.head migrationSequence
-
-    importMigrations :: Text
-    importMigrations =
-      case migrationSequence of
-        firstMigration:_ ->
-          firstMigration
-            & (\(_:actualMigrations) ->
-                fmap importMigration (justWithMigrationVersions actualMigrations)
-              )
-            & T.concat
-
-        _ ->
-          ""
-
-
-    importMigration :: Int -> Text
-    importMigration version =
-      let versionT = T.pack $ show version
-      in
-      [text|import Evergreen.Migrate.V$versionT as M$versionT|]
-
-
-    importTypes :: Text
-    importTypes =
-      migrationSequence
-        & List.head
-        & justWithMigrationVersions
-        -- & dt "hrm"
-        & fmap (\v -> importType v)
-        & (\list ->
-          case nextVersion of
-            WithMigrations _ ->
-              case list of
-                [] -> []
-                _ -> List.init list -- All except last, as we already `import Types as VN`
-            WithoutMigrations _ ->
-              list
-          )
-        & T.concat
-
-
-    importType :: Int -> Text
-    importType version =
-      let versionT = T.pack $ show version
-      in
-      [text|import Evergreen.Type.V$versionT as T$versionT|]
-
-
-    historicMigrations :: Text
-    historicMigrations =
-      migrationSequence
-        -- & dt "historicMigratoins:migrationSequence"
-        & imap (\i v ->
-          historicMigration (i + 1) v
-        )
-        & (\list ->
-            case list of
-              [] -> []
-              _ -> List.init list -- All except last, as we already `import Types as V[x]`
-          )
-        & T.intercalate "\n"
-
-
-    historicMigration :: Int -> [VersionInfo] -> Text
-    historicMigration forVersion migrationsForVersion =
-      let
-        (startVersion:subsequentVersions) = migrationsForVersion
-        types = [ "BackendModel", "FrontendModel", "FrontendMsg", "ToBackend", "BackendMsg", "ToFrontend"]
-
-        typeMigrations =
-          types
-            & fmap (migrationForType migrationsForVersion startVersion)
-            & T.intercalate "\n"
-
-        forVersion_ = T.pack $ show $ forVersion
-
-      in
-      [text|
-        $forVersion_ ->
-            case tipe of
-                $typeMigrations
-
-                _ ->
-                    UnknownType tipe
-      |]
-
-
-    migrationForType :: [VersionInfo] -> VersionInfo -> Text -> Text
-    migrationForType migrationsForVersion startVersion tipe = do
-
-      let
-        typenameCamel = lowerFirstLetter $ T.unpack tipe
-
-        thenMigrateForType =
-          case tipe of
-            "BackendModel"  -> "thenMigrateModel"
-            "FrontendModel" -> "thenMigrateModel"
-            "FrontendMsg"   -> "thenMigrateMsg"
-            "ToBackend"     -> "thenMigrateMsg"
-            "BackendMsg"    -> "thenMigrateMsg"
-            "ToFrontend"    -> "thenMigrateMsg"
-
-        kindForType =
-          case tipe of
-            "BackendModel"  -> "Model"
-            "FrontendModel" -> "Model"
-            "FrontendMsg"   -> "Msg"
-            "ToBackend"     -> "Msg"
-            "BackendMsg"    -> "Msg"
-            "ToFrontend"    -> "Msg"
-
-
-        intermediateMigrations =
-          migrationsForVersion
-            & pairs
-            -- & dt "intermediateMigrations:pairs"
-            & fmap (\(from,to) -> intermediateMigration from to)
-            & T.concat
-
-
-        lastMigrationBefore targetVersion =
-          allMigrations
-            & List.takeWhile (\v -> vinfoVersion v <= targetVersion)
-            -- & dt ("lastMigrationBefore:v" ++ show targetVersion)
-            & List.reverse
-            & List.find (\v -> case v of
-                WithMigrations _ -> True
-                WithoutMigrations _ -> False
-              )
-            & fmap vinfoVersion
-            & fromMaybe (-1) -- Should be impossible because v1 is always WithMigrations
-
-
-        intermediateMigration :: VersionInfo -> VersionInfo -> Text
-        intermediateMigration from to =
-          case to of
-            WithMigrations v ->
-              let from_ = T.pack $ show (vinfoVersion from)
-                  to_ = T.pack $ show (vinfoVersion to)
-                  migrationFn = [text|M$to_.$typenameCamel|]
-              in
-              [text|
-                |> $thenMigrateForType "$tipe" $migrationFn T$from_.evg_encode_$tipe T$to_.evg_decode_$tipe $to_
-              |]
-
-            WithoutMigrations v ->
-              let from_ = T.pack $ show $ lastMigrationBefore (vinfoVersion from)
-                  to_ = T.pack $ show (vinfoVersion to)
-                  migrationFn = "(always " <> kindForType <> "Unchanged)"
-              in
-              [text|
-                |> $thenMigrateForType "$tipe" $migrationFn T$from_.evg_encode_$tipe T$to_.evg_decode_$tipe $to_
-              |]
-
-        startVersion_ = T.pack $ show $ vinfoVersion startVersion
-
-      [text|
-        "$tipe" ->
-            decodeType "$tipe" version intList T$startVersion_.evg_decode_$tipe
-                $intermediateMigrations
-                |> upgradeSucceeds Current$tipe
-                |> otherwiseError
-      |]
-
-    nextVersion_ = T.pack $ show $ vinfoVersion nextVersion
-
-  debug_ $ "Generated source for LamderaGenerated"
-
-  pure $ [text|
-    module LamderaGenerated exposing (..)
-
-    $importMigrations
-    $importTypes
-    import Lamdera.Migrations exposing (..)
-    import LamderaHelpers exposing (..)
-    import Types as T$nextVersion_
-
-
-    currentVersion : Int
-    currentVersion =
-        $nextVersion_
-
-
-    decodeAndUpgrade : Int -> String -> List Int -> UpgradeResult T$nextVersion_.BackendModel T$nextVersion_.FrontendModel T$nextVersion_.FrontendMsg T$nextVersion_.ToBackend T$nextVersion_.BackendMsg T$nextVersion_.ToFrontend
-    decodeAndUpgrade version tipe intList =
-        case version of
-            $historicMigrations
-
-
-            $nextVersion_ ->
-                case tipe of
-                    "BackendModel" ->
-                        decodeType "BackendModel" version intList T$nextVersion_.evg_decode_BackendModel
-                            |> upgradeIsCurrent CurrentBackendModel
-                            |> otherwiseError
-
-
-                    "FrontendModel" ->
-                        decodeType "FrontendModel" version intList T$nextVersion_.evg_decode_FrontendModel
-                            |> upgradeIsCurrent CurrentFrontendModel
-                            |> otherwiseError
-
-
-                    "FrontendMsg" ->
-                        decodeType "FrontendMsg" version intList T$nextVersion_.evg_decode_FrontendMsg
-                            |> upgradeIsCurrent CurrentFrontendMsg
-                            |> otherwiseError
-
-
-                    "ToBackend" ->
-                        decodeType "ToBackend" version intList T$nextVersion_.evg_decode_ToBackend
-                            |> upgradeIsCurrent CurrentToBackend
-                            |> otherwiseError
-
-
-                    "BackendMsg" ->
-                        decodeType "BackendMsg" version intList T$nextVersion_.evg_decode_BackendMsg
-                            |> upgradeIsCurrent CurrentBackendMsg
-                            |> otherwiseError
-
-
-                    "ToFrontend" ->
-                        decodeType "ToFrontend" version intList T$nextVersion_.evg_decode_ToFrontend
-                            |> upgradeIsCurrent CurrentToFrontend
-                            |> otherwiseError
-
-
-                    _ ->
-                        UnknownType tipe
-
-            _ ->
-                UnknownVersion ( version, tipe, intList )
-  |]
-
-
-
 writeLamderaGenerated :: FilePath -> Bool -> VersionInfo -> Task.Task ()
 writeLamderaGenerated root inProduction nextVersion =
   onlyWhen inProduction $ do
-    gen <- liftIO $ createLamderaGenerated root nextVersion
+    gen <- liftIO $ LamderaGenerated.createLamderaGenerated root nextVersion
     -- liftIO $ putStrLn $ T.unpack gen
     liftIO $ writeUtf8 (root </> "src/LamderaGenerated.elm") gen
-
-
-data VersionInfo = WithMigrations Int | WithoutMigrations Int deriving (Eq, Show)
-
-
-getMigrationsSequence :: FilePath -> VersionInfo -> IO [[VersionInfo]]
-getMigrationsSequence root nextVersion = do
-
-  debug_ $ "Reading src/Evergreen/Migrate to determine migrationSequence"
-  migrations <- Dir.listDirectory $ root </> "src/Evergreen/Migrate"
-  types <- Dir.listDirectory $ root </> "src/Evergreen/Type"
-
-  let
-    getVersion :: FilePath -> Maybe Int
-    getVersion filename =
-      filename
-        & drop 1 -- Drop the 'V'
-        & takeWhile (\i -> i /= '.')
-        & readMaybe
-
-    toVersionInfo :: Int -> VersionInfo
-    toVersionInfo version =
-      if List.elem version migrationVersions then
-        WithMigrations version
-      else
-        WithoutMigrations version
-
-    typeVersions :: [Int]
-    typeVersions =
-      types
-        & List.sortBy Algorithms.NaturalSort.compare
-        & fmap getVersion
-        & justs -- This is bad? But those files probably aren't VX.elm files?
-
-    migrationVersions :: [Int]
-    migrationVersions =
-      migrations
-        -- There will never be a V1 migration but it is always
-        -- the first version in our sequence
-        & (++) ["V1.elm"]
-        & List.sortBy Algorithms.NaturalSort.compare
-        & fmap getVersion
-        & justs -- This is bad? But those files probably aren't VX.elm files?
-
-    sequences :: [[VersionInfo]]
-    sequences =
-      [1..(vinfoVersion nextVersion)]
-        & fmap (\v ->
-          -- WithMigrations v
-          migrationVersions
-            & fmap (\v -> WithMigrations v)
-            & (\lm ->
-                case nextVersion of
-                  WithMigrations _ -> lm
-                  -- Make sure next version is in the sequence even if it has no migration
-                  WithoutMigrations _ -> lm ++ [nextVersion]
-              )
-            & List.reverse
-            & takeWhileInclusive
-                (\mv ->
-                  (vinfoVersion mv > v)
-                  -- || (mv == WithoutMigrations (vinfoVersion mv))
-                )
-            & List.reverse
-
-              -- & fmap (\l -> [fmap WithMigrations l])
-
-            -- if List.elem v migrationVersions then
-            --   WithMigrations v
-            -- else
-            --   WithoutMigrations v
-          )
-        -- & scanr (\v acc -> acc ++ [v]) []
-        & filter ((/=) [])
-        -- & fmap reverse
-
-  debug_ $ "Migration sequence: " ++ show sequences
-  pure sequences
-
-
-takeWhileInclusive :: (a -> Bool) -> [a] -> [a]
-takeWhileInclusive _ [] = []
-takeWhileInclusive p (x:xs) = x : if p x then takeWhileInclusive p xs
-                                         else []
-
-justs :: [Maybe a] -> [a]
-justs xs = [ x | Just x <- xs ]
 
 
 genericExit str =
@@ -1270,10 +915,6 @@ osReplace regex filename =
         liftIO $ callCommand $ "sed -i'' -e '" <> regex <> "' " <> filename
         liftIO $ callCommand $ "rm " <> filename <> "-e >> /dev/null 2>&1 || true"
 
-
-
-pairs :: [a] -> [(a,a)]
-pairs xs = zip xs (tail xs)
 
 
 -- Snapshot of old code attempting to guess next prod version number

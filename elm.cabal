@@ -45,6 +45,7 @@ Executable elmx
         builder/src
         ui/terminal/src
         extra
+        test
 
     other-extensions:
         TemplateHaskell
@@ -236,6 +237,7 @@ Executable elmx
         Wire.TypeHash
         LamderaInjection
         LamderaChecks
+        LamderaGenerated
         LamderaHints
         Check
         Reporting.Exit.Check
@@ -247,6 +249,11 @@ Executable elmx
         CanSer.CanSer
         Sanity
         Wire.PrettyPrint
+
+        -- Test
+        EasyTest
+        Tests
+        TestLamderaGenerated
 
         Lamdera
 
@@ -303,4 +310,9 @@ Executable elmx
         stm,
         fsnotify,
         -- Debug
-        unicode-show
+        unicode-show,
+
+        -- Test
+        async,
+        random,
+        tree-diff

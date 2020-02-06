@@ -34,6 +34,8 @@ module Lamdera
   , writeUtf8
   , lamderaHashesPath
   , getProjectRoot
+  , justs
+  , lowerFirstLetter
   )
   where
 
@@ -54,6 +56,7 @@ import System.IO.Unsafe (unsafePerformIO)
 import qualified Debug.Trace as DT
 import Data.Text
 import qualified Data.Text.Encoding as Text
+import qualified Data.Char as Char
 
 import CanSer.CanSer (ppElm)
 import qualified Data.Witherable
@@ -300,3 +303,13 @@ findHelp name dirs =
         if exists_
           then return (Just (FP.joinPath dirs))
           else findHelp name (Prelude.init dirs)
+
+
+justs :: [Maybe a] -> [a]
+justs xs = [ x | Just x <- xs ]
+
+
+lowerFirstLetter :: String -> Text
+lowerFirstLetter text =
+  case text of
+    first:rest -> T.pack $ [Char.toLower first] <> rest
