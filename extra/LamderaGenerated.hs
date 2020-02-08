@@ -5,12 +5,14 @@ module LamderaGenerated where
 
 import Prelude hiding (init)
 import qualified System.Directory as Dir
+import qualified System.IO.Error as Error
 import qualified Data.Text as T
 import NeatInterpolation
 import Algorithms.NaturalSort
 import qualified Data.List as List
 import System.FilePath ((</>))
 import Control.Monad.Except (catchError, liftIO)
+import Control.Exception (throw)
 import Text.Read (readMaybe)
 import Data.Maybe (fromMaybe)
 
@@ -22,13 +24,14 @@ createLamderaGenerated root nextVersion = do
 
   debug_ $ "Reading src/Evergreen/Migrate to determine migrationSequence"
 
-  let
-    getMigrations = do
-      migrationFilepaths <- Dir.listDirectory $ root </> "src/Evergreen/Migrate"
-      debug_ $ "migrationFilepaths:" <> show migrationFilepaths
-      getMigrationsSequence migrationFilepaths nextVersion
+  migrationFilepaths <- safeListDirectory $ root </> "src/Evergreen/Migrate"
+  debug_ $ "migrationFilepaths:" <> show migrationFilepaths
 
-  migrationSequence <- liftIO $ getMigrations `catchError`
+  lamderaGenerated nextVersion migrationFilepaths
+
+
+lamderaGenerated nextVersion migrationFilepaths = do
+  migrationSequence <- liftIO $ getMigrationsSequence migrationFilepaths nextVersion `catchError`
     (\err -> do
       debug $ show err
       debug "getMigrationsSequence was empty - that should only be true on v1 deploy"
@@ -410,3 +413,15 @@ getLastLocalTypeChangeVersion root = do
         & getVersion
         & fromMaybe 1 -- If there are no migrations or it failed, it must be version 1?
         & pure
+
+
+safeListDirectory :: FilePath -> IO [FilePath]
+safeListDirectory dir = do
+  Dir.listDirectory dir `catchError`
+    (\err -> do
+      if Error.isDoesNotExistError err
+        then
+          pure []
+        else
+          throw err
+    )
