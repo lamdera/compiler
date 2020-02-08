@@ -251,9 +251,9 @@ Executable elmx
         Wire.PrettyPrint
 
         -- Test
-        EasyTest
-        Tests
-        TestLamderaGenerated
+        -- EasyTest
+        -- Tests
+        -- TestLamderaGenerated
 
         Lamdera
 
@@ -310,9 +310,9 @@ Executable elmx
         stm,
         fsnotify,
         -- Debug
-        unicode-show,
+        unicode-show
 
         -- Test
-        async,
-        random,
-        tree-diff
+        -- async,
+        -- random,
+        -- tree-diff
