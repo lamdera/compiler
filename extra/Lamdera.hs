@@ -85,7 +85,7 @@ import qualified System.Process
 import Data.Text.Internal.Search (indices)
 
 lamderaVersion :: String
-lamderaVersion = "0.0.1-alpha2"
+lamderaVersion = "0.0.1-alpha3"
 
 -- import qualified Reporting.Task as Task
 
