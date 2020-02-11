@@ -56,14 +56,20 @@ Last line is optional, but it's cool! Lambda prompt!
 
 compile :: IO ()
 compile = do
-  let project = "/Users/mario/lamdera/test/v1"
-  setEnv "LAMDERA_APP_NAME" "testapp"
+  -- let project = "/Users/mario/lamdera/test/v1"
+  -- setEnv "LAMDERA_APP_NAME" "testapp"
+
+  -- let project = "/Users/mario/dev/projects/elm-spa-example"
+  -- setEnv "LAMDERA_APP_NAME" "realworldish"
+
+  let project = "/Users/mario/dev/projects/lamdera-test"
+  setEnv "LAMDERA_APP_NAME" "lamderatest"
 
   -- let project = "/Users/mario/dev/projects/lamdera-dashboard"
   -- setEnv "LAMDERA_APP_NAME" "dashboard"
 
   -- Bust Elm's caching with this one weird trick!
-  touch $ project </> "src/Types.elm"
+  -- touch $ project </> "src/Types.elm"
 
   setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
   setEnv "LDEBUG" "1"
@@ -102,8 +108,8 @@ rm path = callCommand $ "rm " ++ path
 
 -- CHECK
 check = do
-  let project = "/Users/mario/lamdera/test/v1"
-  setEnv "LAMDERA_APP_NAME" "testapp"
+  let project = "/Users/mario/lamdera/test/v3"
+  setEnv "LAMDERA_APP_NAME" "test-local"
 
   -- let project = "/Users/mario/dev/projects/lamdera-dashboard"
   -- setEnv "LAMDERA_APP_NAME" "dashboard"
@@ -113,7 +119,7 @@ check = do
   setEnv "ELM_HOME" "/Users/mario/elm-home-elmx-test"
 
   -- setEnv "HOIST_REBUILD" "1"
-  -- setEnv "VERSION" "2"
+  -- setEnv "VERSION" "3"
 
   cp "/Users/mario/lamdera/runtime/src/LBR.elm" (project ++ "/src")
   cp "/Users/mario/lamdera/runtime/src/LFR.elm" (project ++ "/src")

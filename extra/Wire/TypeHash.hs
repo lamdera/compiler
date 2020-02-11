@@ -371,10 +371,14 @@ canonicalToDiffableType interfaces recursionMap canonical tvarMap =
                       aliasToDiffableType interfaces newRecursionMap alias
 
                     Nothing ->
-                      DError $ "❗️impossible: failed to find either alias or custom type for type that must exist: " <> (T.pack $ show name)
+                      DError $ "❗️Failed to find either alias or custom type for type that must exist: " <> (T.pack $ show name) <> ". Please report this issue with your code!"
 
             Nothing ->
-              DError $ "❗️impossible: failed to lookup interface for module that must exist: " <> (T.pack $ show moduleName)
+              -- let !_ = formatHaskellValue "interface modulenames" (Map.keys interfaces) :: IO ()
+              -- in
+              case moduleName of
+                Canonical (Pkg.Name author project) (N.Name moduleName) ->
+                  DError $ "A type from " <> author <> "/" <> project <> " is referenced but it is not installed (usually due to a transitive dependency)! Try `lamdera install " <> author <> "/" <> project <> "`."
 
 
     Can.TAlias moduelName name tvarMap_ aliasType ->

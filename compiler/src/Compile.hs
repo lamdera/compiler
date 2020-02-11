@@ -153,6 +153,7 @@ compile flag pkg importDict interfaces source srcMVar =
         let
           canonicalName = Module.Canonical pkg name
           combinedInterfaces = (Map.insert canonicalName elmi interfaces)
+          -- !x = formatHaskellValue "importdict" (importDict) :: IO ()
 
         TypeHash.maybeGenHashes pkg valid_ combinedInterfaces
 
