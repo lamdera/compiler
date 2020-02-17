@@ -1,4 +1,4 @@
-module LocalDev exposing (main)
+port module LocalDev exposing (main)
 
 import Backend
 import Browser
@@ -8,9 +8,26 @@ import Html.Attributes exposing (..)
 import Html.Events exposing (onClick, onMouseEnter, onMouseLeave)
 import Lamdera exposing (ClientId, Key, Url)
 import Lamdera.Debug
+import Lamdera.Json as Json
+import Lamdera.Wire
 import Process
 import Task
 import Types exposing (BackendModel, BackendMsg, FrontendModel, FrontendMsg, ToBackend, ToFrontend)
+
+
+port sendToBackend : Json.Value -> Cmd msg
+
+
+port sendToFrontend : Json.Value -> Cmd msg
+
+
+port receiveFromBackend : (Json.Value -> msg) -> Sub msg
+
+
+port receiveFromFrontend : (Json.Value -> msg) -> Sub msg
+
+
+port nodeInit : (Json.Value -> msg) -> Sub msg
 
 
 type Msg
@@ -21,6 +38,9 @@ type Msg
     | FEtoBE Types.ToBackend
     | FEtoBEDelayed Types.ToBackend
     | FENewUrl Url
+      -- | NodeInit Json.Value
+    | ReceivedFromFrontend Json.Value
+    | ReceivedFromBackend Json.Value
     | DevbarExpand
     | DevbarCollapse
     | ResetDebugStoreBoth
@@ -37,6 +57,8 @@ type alias Model =
     , bem : BackendModel
     , originalUrl : Url
     , originalKey : Key
+    , nodeType : NodeType
+    , clientId : String
     , devbar :
         { expanded : Bool
         , location : Location
@@ -81,9 +103,22 @@ userBackendApp =
     Backend.app
 
 
-init : flags -> Url -> Key -> ( Model, Cmd Msg )
+init : Json.Value -> Url -> Key -> ( Model, Cmd Msg )
 init flags url key =
     let
+        flagsDecoder =
+            Json.succeed NodeInitArgs
+                |> required "c" Json.decoderString
+                |> required "nt" decodeNodeType
+
+        args =
+            case Json.decodeValue flagsDecoder flags of
+                Ok r ->
+                    r
+
+                Err err ->
+                    Debug.todo "flags parse failed: impossible!"
+
         devbar =
             case Lamdera.Debug.debugR "d" devbarInit of
                 Nothing ->
@@ -129,11 +164,17 @@ init flags url key =
       , bem = bem
       , originalKey = key
       , originalUrl = url
+      , nodeType = args.nodeType
+      , clientId = args.clientId
       , devbar = devbar
       }
     , Cmd.batch
         [ Cmd.map FEMsg newFeCmds
-        , Cmd.map BEMsg newBeCmds
+        , if args.nodeType == Leader then
+            Cmd.map BEMsg newBeCmds
+
+          else
+            Cmd.none
         ]
     )
 
@@ -150,6 +191,61 @@ storeBE m newBem =
     Lamdera.Debug.debugS "be" newBem
 
 
+type alias NodeInitArgs =
+    { clientId : String
+    , nodeType : NodeType
+    }
+
+
+type NodeType
+    = Follower
+    | Leader
+
+
+nodeTypeToString nodeType =
+    case nodeType of
+        Follower ->
+            "Follower"
+
+        Leader ->
+            "Leader"
+
+
+decodeNodeType : Json.Decoder NodeType
+decodeNodeType =
+    Json.map
+        (\v ->
+            case v of
+                "l" ->
+                    Leader
+
+                "f" ->
+                    Follower
+
+                _ ->
+                    let
+                        x =
+                            Debug.log "error" ("decodeNodeType saw an unexpected value: " ++ v)
+                    in
+                    Follower
+        )
+        Json.decoderString
+
+
+type alias Payload =
+    { t : String
+    , c : String
+    , i : List Int
+    }
+
+
+payloadDecoder =
+    Json.succeed Payload
+        |> required "t" Json.decoderString
+        |> required "c" Json.decoderString
+        |> required "i" (Json.decoderList Json.decoderInt)
+
+
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg m =
     case msg of
@@ -161,31 +257,61 @@ update msg m =
                 ( newFem, newFeCmds ) =
                     userFrontendApp.update frontendMsg m.fem
             in
-            ( { m | fem = storeFE m newFem, bem = m.bem }, Cmd.map FEMsg newFeCmds )
+            ( { m | fem = storeFE m newFem }
+            , Cmd.map FEMsg newFeCmds
+            )
 
         BEMsg backendMsg ->
-            let
-                x =
-                    Debug.log "BEMsg" backendMsg
+            case m.nodeType of
+                Follower ->
+                    ( m, Cmd.none )
 
-                ( newBem, newBeCmds ) =
-                    userBackendApp.update backendMsg m.bem
-            in
-            ( { m | fem = m.fem, bem = storeBE m newBem }, Cmd.map BEMsg newBeCmds )
+                Leader ->
+                    let
+                        x =
+                            Debug.log "BEMsg" backendMsg
+
+                        ( newBem, newBeCmds ) =
+                            userBackendApp.update backendMsg m.bem
+                    in
+                    ( { m | bem = storeBE m newBem }
+                    , Cmd.map BEMsg newBeCmds
+                    )
 
         BEtoFE clientId toFrontend ->
-            if m.devbar.networkDelay then
-                ( m, delay 500 (BEtoFEDelayed clientId toFrontend) )
+            case m.nodeType of
+                Follower ->
+                    ( m, Cmd.none )
 
-            else
-                let
-                    x =
-                        Debug.log "BEtoFE" toFrontend
+                Leader ->
+                    if m.devbar.networkDelay then
+                        ( m, delay 500 (BEtoFEDelayed clientId toFrontend) )
 
-                    ( newFem, newFeCmds ) =
-                        userFrontendApp.updateFromBackend toFrontend m.fem
-                in
-                ( { m | fem = storeFE m newFem, bem = m.bem }, Cmd.map FEMsg newFeCmds )
+                    else
+                        let
+                            x =
+                                Debug.log "BEtoFE" toFrontend
+
+                            ( newFem, newFeCmds ) =
+                                if clientId == m.clientId then
+                                    userFrontendApp.updateFromBackend toFrontend m.fem
+
+                                else
+                                    ( m.fem, Cmd.none )
+
+                            payload =
+                                Json.object
+                                    [ ( "t", Json.string "ToFrontend" )
+                                    , ( "i", Json.list Json.int <| Lamdera.Wire.intListFromBytes (Lamdera.Wire.bytesEncode (Types.evg_encode_ToFrontend toFrontend)) )
+                                    , ( "c", Json.string clientId )
+                                    ]
+                        in
+                        ( { m | fem = storeFE m newFem }
+                        , Cmd.batch
+                            [ Cmd.map FEMsg newFeCmds
+                            , sendToFrontend payload
+                            ]
+                        )
 
         BEtoFEDelayed clientId toFrontend ->
             let
@@ -207,9 +333,21 @@ update msg m =
                         Debug.log "FEtoBE" toBackend
 
                     ( newBem, newBeCmds ) =
-                        userBackendApp.updateFromFrontend "sessionIdLocalDev" "clientIdLocalDev" toBackend m.bem
+                        userBackendApp.updateFromFrontend "sessionIdLocalDev" m.clientId toBackend m.bem
+
+                    payload =
+                        Json.object
+                            [ ( "t", Json.string "ToBackend" )
+                            , ( "i", Json.list Json.int <| Lamdera.Wire.intListFromBytes (Lamdera.Wire.bytesEncode (Types.evg_encode_ToBackend toBackend)) )
+                            , ( "c", Json.string m.clientId )
+                            ]
                 in
-                ( { m | fem = m.fem, bem = storeBE m newBem }, Cmd.map BEMsg newBeCmds )
+                ( { m | fem = m.fem, bem = storeBE m newBem }
+                , Cmd.batch
+                    [ Cmd.map BEMsg newBeCmds
+                    , sendToBackend payload
+                    ]
+                )
 
         FEtoBEDelayed toBackend ->
             let
@@ -217,7 +355,7 @@ update msg m =
                     Debug.log "[delayed] FEtoBE" toBackend
 
                 ( newBem, newBeCmds ) =
-                    userBackendApp.updateFromFrontend "sessionIdLocalDev" "clientIdLocalDev" toBackend m.bem
+                    userBackendApp.updateFromFrontend "sessionIdLocalDev" m.clientId toBackend m.bem
             in
             ( { m | fem = m.fem, bem = storeBE m newBem }, Cmd.map BEMsg newBeCmds )
 
@@ -227,6 +365,69 @@ update msg m =
                     update (FEMsg (userFrontendApp.onUrlChange url)) m
             in
             ( { newModel | originalUrl = url }, newCmds )
+
+        ReceivedFromFrontend payload ->
+            -- live.js ensures this port never gets called if we're not a leader...
+            case Json.decodeValue payloadDecoder payload of
+                Ok args ->
+                    case Lamdera.Wire.bytesDecode Types.evg_decode_ToBackend (Lamdera.Wire.intListToBytes args.i) of
+                        Just toBackend ->
+                            let
+                                _ =
+                                    Debug.log ("ReceivedFromFrontend[" ++ args.c ++ "]") toBackend
+
+                                ( newBem, newBeCmds ) =
+                                    userBackendApp.updateFromFrontend "sessionIdLocalDev" args.c toBackend m.bem
+                            in
+                            ( { m | fem = m.fem, bem = storeBE m newBem }
+                            , Cmd.batch
+                                [ Cmd.map BEMsg newBeCmds
+                                ]
+                            )
+
+                        Nothing ->
+                            let
+                                x =
+                                    Debug.log "ReceivedFromFrontend" "failed to decode provided msg!"
+                            in
+                            ( m, Cmd.none )
+
+                Err err ->
+                    let
+                        x =
+                            Debug.log "ReceivedFromFrontend decoding error" (Json.errorToString err)
+                    in
+                    ( m, Cmd.none )
+
+        ReceivedFromBackend payload ->
+            case Json.decodeValue payloadDecoder payload of
+                Ok args ->
+                    case Lamdera.Wire.bytesDecode Types.evg_decode_ToFrontend (Lamdera.Wire.intListToBytes args.i) of
+                        Just toFrontend ->
+                            let
+                                x =
+                                    Debug.log "ReceivedFromBackend" toFrontend
+
+                                ( newFem, newFeCmds ) =
+                                    userFrontendApp.updateFromBackend toFrontend m.fem
+                            in
+                            ( { m | fem = storeFE m newFem }
+                            , Cmd.map FEMsg newFeCmds
+                            )
+
+                        Nothing ->
+                            let
+                                x =
+                                    Debug.log "ReceivedFromBackend" "failed to decode provided msg!"
+                            in
+                            ( m, Cmd.none )
+
+                Err err ->
+                    let
+                        x =
+                            Debug.log "ReceivedFromBackend decoding error" (Json.errorToString err)
+                    in
+                    ( m, Cmd.none )
 
         DevbarExpand ->
             let
@@ -342,10 +543,18 @@ update msg m =
             ( m, Cmd.none )
 
 
-subscriptions { fem, bem } =
+subscriptions { nodeType, fem, bem } =
     Sub.batch
         [ Sub.map FEMsg (userFrontendApp.subscriptions fem)
-        , Sub.map BEMsg (userBackendApp.subscriptions bem)
+        , if nodeType == Leader then
+            Sub.map BEMsg (userBackendApp.subscriptions bem)
+
+          else
+            Sub.none
+
+        -- , nodeInit NodeInit
+        , receiveFromFrontend ReceivedFromFrontend
+        , receiveFromBackend ReceivedFromBackend
         ]
 
 
@@ -444,6 +653,13 @@ collapsedUI m =
             []
         , text " "
         , freezeToggle m
+        , if m.devbar.networkDelay then
+            span
+                []
+                [ text " 🐢" ]
+
+          else
+            text ""
         ]
 
 
@@ -539,10 +755,22 @@ buttonDevInactiveBy cond label msg =
 
 
 mapDocument model msg { title, body } =
-    { title = title, body = [ lamderaPane model ] ++ List.map (Html.map msg) body }
+    { title = title
+    , body =
+        [ lamderaPane model
+        , div
+            [ style "position" "absolute"
+            , style "top" "0px"
+            , style "left" "0px"
+            , style "background-color" "red"
+            ]
+            [ text <| nodeTypeToString model.nodeType ++ "(" ++ model.clientId ++ ")" ]
+        ]
+            ++ List.map (Html.map msg) body
+    }
 
 
-main : Program () Model Msg
+main : Program Json.Value Model Msg
 main =
     Browser.application
         { init = init
@@ -558,6 +786,10 @@ main =
 
 delay time msg =
     Process.sleep time |> Task.perform (always msg)
+
+
+trigger msg =
+    Process.sleep 0 |> Task.perform (always msg)
 
 
 {-| Modified from <https://iamsteve.me/blog/entry/css-only-ios-style-toggle>
@@ -659,3 +891,13 @@ customCss =
 }
 
 """
+
+
+required : String -> Json.Decoder a -> Json.Decoder (a -> b) -> Json.Decoder b
+required key valDecoder decoder =
+    custom (Json.field key valDecoder) decoder
+
+
+custom : Json.Decoder a -> Json.Decoder (a -> b) -> Json.Decoder b
+custom =
+    Json.map2 (|>)
