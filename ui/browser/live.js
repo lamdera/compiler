@@ -11,6 +11,31 @@ const clientId = getClientId()
 const leaderHeartbeatInterval = 3000
 const followerHeartbeatInterval = leaderHeartbeatInterval + 2000
 
+// Null checking as we might be on an error page, which doesn't initiate an app
+// but we still want the livereload to function
+var app = null;
+
+const ws = Sockette.default(((window.location.protocol === "https:") ? "wss://" : "ws://") + window.location.host + "/_w", {
+  onopen: e => {
+    if (app !== null) {
+      app.ports.liveStatusSet.send(true)
+    }
+    // console.log('[Λ] live watch connected')
+  },
+  onmessage: e => {
+    if (e.data == "r") {
+      isLiveReload = true
+      document.location.reload()
+    }
+  },
+  onerror: e => {
+    if (app !== null) {
+      app.ports.liveStatusSet.send(false)
+    }
+  }
+})
+
+
 setupApp = function(name, elid) {
 
   const leaderId = getLeaderId()
@@ -25,7 +50,7 @@ setupApp = function(name, elid) {
     nodeType = "f"
   }
 
-  var app = Elm[name].init({
+  app = Elm[name].init({
     node: document.getElementById(elid),
     flags: { c: clientId, nt: nodeType }
   })
@@ -33,20 +58,6 @@ setupApp = function(name, elid) {
   {
     document.getElementById(elid).innerText = 'This is a headless program, meaning there is nothing to show here.\n\nI started the program anyway though, and you can access it as `app` in the developer console.'
   }
-
-  const ws = Sockette.default(((window.location.protocol === "https:") ? "wss://" : "ws://") + window.location.host + "/_w", {
-    onopen: e => {
-      app.ports.liveStatusSet.send(true)
-      // console.log('[Λ] live watch connected')
-    },
-    onmessage: e => {
-      if (e.data == "r") {
-        isLiveReload = true
-        document.location.reload()
-      }
-    },
-    onerror: e => app.ports.liveStatusSet.send(false)
-  })
 
   app.ports.sendToFrontend.subscribe(function (payload) {
     bc.postMessage(payload)
