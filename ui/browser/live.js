@@ -148,8 +148,10 @@ setupApp = function(name, elid) {
         // Leader wasn't seen for a while! Take over leadership
         nodeType = "l"
         localStorage.setItem('llid', clientId)
-        app.ports.nodeTypeSetLeader.send(true)
         bc.postMessage({ clientId: clientId, t: "h"})
+        app.ports.nodeTypeSetLeader.send(true)
+        isLiveReload = true
+        document.location.reload()
       }
     }
   }
