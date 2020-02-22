@@ -712,8 +712,8 @@ collapsedUI m =
                                 , style "width" "4px"
                                 , style "border-radius" "10px"
                                 , style "position" "absolute"
-                                , style "top" "2px"
-                                , style "left" "-2px"
+                                , style "top" "1px"
+                                , style "left" "-3px"
                                 ]
                                 []
 
