@@ -2,30 +2,22 @@
 // cd ui/browser
 // parcel build live.js --no-source-maps
 
-var isLiveReload = false
-const clientId = getClientId()
-
 const Sockette = require('sockette')
 
-const ws = Sockette.default(((window.location.protocol === "https:") ? "wss://" : "ws://") + window.location.host + "/_w", {
-  onopen: e => console.log('[lamdera-debug-alpha] live watch connected'),
-  onmessage: e => {
-    if (e.data == "r") {
-      isLiveReload = true
-      document.location.reload()
-    }
-  }
-})
+var isLiveReload = false
+var leaderSeen = true
+const clientId = getClientId()
+
+const leaderHeartbeatInterval = 3000
+const followerHeartbeatInterval = leaderHeartbeatInterval + 2000
 
 setupApp = function(name, elid) {
 
   const leaderId = getLeaderId()
-  console.log('clientid:', clientId)
-  console.log('leaderId:', leaderId)
   var nodeType = null
   if (leaderId == null) {
     // No leaders set, we'll become the leader
-    localStorage.setItem('lamdera-lid', clientId)
+    localStorage.setItem('llid', clientId)
     nodeType = "l"
   } else if (leaderId == clientId) {
     nodeType = "l"
@@ -42,6 +34,20 @@ setupApp = function(name, elid) {
     document.getElementById(elid).innerText = 'This is a headless program, meaning there is nothing to show here.\n\nI started the program anyway though, and you can access it as `app` in the developer console.'
   }
 
+  const ws = Sockette.default(((window.location.protocol === "https:") ? "wss://" : "ws://") + window.location.host + "/_w", {
+    onopen: e => {
+      app.ports.liveStatusSet.send(true)
+      // console.log('[Λ] live watch connected')
+    },
+    onmessage: e => {
+      if (e.data == "r") {
+        isLiveReload = true
+        document.location.reload()
+      }
+    },
+    onerror: e => app.ports.liveStatusSet.send(false)
+  })
+
   app.ports.sendToFrontend.subscribe(function (payload) {
     bc.postMessage(payload)
   })
@@ -54,39 +60,45 @@ setupApp = function(name, elid) {
 
   bc.onmessage = function (msg) {
     const d = msg.data
-    console.log(d)
+    // console.log(d)
     switch(d.t) {
-      case "init":
+      case "h": // leader is announcing it is still alive (heartbeat)
+        leaderSeen = true
         break;
-      case "appoint":
-        if (d.appointed == clientId) {
-          nodeType = "l"
-        }
-        break;
-      case "stepdown":
 
+      case "k": // node is announcing it's death/end of leadership (kill)
         // Should not be possible?
         if (nodeType == "l") { break; }
 
         const leaderId = getLeaderId()
         if (leaderId == null) {
           // No leaders set, we'll become the leader
-          localStorage.setItem('lamdera-lid', clientId)
+          localStorage.setItem('llid', clientId)
           nodeType = "l"
-        } else if (leaderId == clientId) {
+          app.ports.nodeTypeSetLeader.send(true)
+          bc.postMessage({ clientId: clientId, t: "h"})
+
+        } else if (leaderId == d.clientId) {
           nodeType = "l"
+          localStorage.setItem('llid', clientId)
+          app.ports.nodeTypeSetLeader.send(true)
+          bc.postMessage({ clientId: clientId, t: "h"})
+
         } else {
           nodeType = "f"
+          app.ports.nodeTypeSetLeader.send(false)
         }
 
         break;
+
       case "ToBackend":
         if (nodeType == "l") {
           app.ports.receiveFromFrontend.send({ t: "ToBackend", c: d.c, i: d.i })
         } else {
-          console.log(`Non-leader ignoring msg: ${d}`)
+          // console.log(`Non-leader ignoring msg: ${d}`)
         }
         break;
+
       case "ToFrontend":
         // Only process messages for our clientId
         if (d.c == clientId) {
@@ -95,38 +107,79 @@ setupApp = function(name, elid) {
         break;
 
       default:
-        console.log(`[localdev] unexpected msg`, d)
+        console.log(`[Λ] unexpected msg`, d)
     }
   }
 
-  // app.ports.nodeInit.send({ clientId: clientId, nodeType: nodeType})
+  // Something to look into in future. The "easy" bit would be as below, but the
+  // issue arises if you navigate away while there's only one tab. Maybe all the
+  // windows do need to know about each other after all?
+  // document.addEventListener(
+  //   "visibilitychange",
+  //   function() {
+  //     if (document.hidden) {
+  //       if (nodeType == "l") {
+  //         // The leader is stepping down, someone else needs to act as leader now
+  //         if (!isLiveReload) {
+  //           nodeType = "f"
+  //           app.ports.nodeTypeSetLeader.send(false)
+  //           bc.postMessage({ clientId: clientId, t: "k"})
+  //         }
+  //       }
+  //     } else  {
+  //       // ???
+  //     }
+  //   },
+  //   false
+  // )
 
+  const heartbeat = function() {
+    if (nodeType == "l") {
+      // Send out a heartbeat so everyone knows we're still alive
+      bc.postMessage({ clientId: clientId, t: "h"})
+      setTimeout(heartbeat, leaderHeartbeatInterval)
+    } else {
+      //
+      if (leaderSeen) {
+        // We've seen the leader since last interval, so reset
+        leaderSeen = false
+        setTimeout(heartbeat, followerHeartbeatInterval)
+      } else {
+        // Leader wasn't seen for a while! Take over leadership
+        nodeType = "l"
+        localStorage.setItem('llid', clientId)
+        app.ports.nodeTypeSetLeader.send(true)
+        bc.postMessage({ clientId: clientId, t: "h"})
+      }
+    }
+  }
+  heartbeat()
 
-  window.onunload = processExit
   function processExit(){
     if (nodeType == "l") {
       // The leader is stepping down, someone else needs to act as leader now
       if (!isLiveReload) {
-        bc.postMessage({ clientId: clientId, t: "stepdown"})
+        bc.postMessage({ clientId: clientId, t: "k"})
       }
     }
     // alert("confirm exit is being called")
     return null
   }
 
+  window.onunload = processExit
+
 }
 
 
-
-function getRandomInt(max) {
-  return Math.floor(Math.random() * Math.floor(max))
+function getRandomInt(max, min=0) {
+  return (Math.floor(Math.random() * Math.floor(max)) - min)
 }
 
 function getClientId() {
-  let data = sessionStorage.getItem('lamdera-cid')
+  let data = sessionStorage.getItem('lcid')
   if (data == null) {
     const cid = getRandomInt(100000).toString()
-    sessionStorage.setItem('lamdera-cid', cid)
+    sessionStorage.setItem('lcid', cid)
     return cid
   } else {
     return data
@@ -134,5 +187,5 @@ function getClientId() {
 }
 
 function getLeaderId() {
-  return localStorage.getItem('lamdera-lid')
+  return localStorage.getItem('llid')
 }

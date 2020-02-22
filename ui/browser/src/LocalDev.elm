@@ -1,5 +1,21 @@
 port module LocalDev exposing (main)
 
+{-
+   Hello you curious thing!
+
+   This file is copyright © Cofoundry Ltd - All Rights Reserved.
+   Unauthorized copying of this file or its contents, via any medium is strictly prohibited.
+
+   This is the development harness used for local development of Lamdera apps.
+
+   This file should not be used as a reference for building Lamdera apps, see
+   https://dashboard.lamdera.app/docs/building instead.
+
+   The features used by this file are subject to change/removal and should not
+   be relied on in any way.
+
+-}
+
 import Backend
 import Browser
 import Frontend
@@ -7,7 +23,7 @@ import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events exposing (onClick, onMouseEnter, onMouseLeave)
 import Lamdera exposing (ClientId, Key, Url)
-import Lamdera.Debug
+import Lamdera.Debug as LD
 import Lamdera.Json as Json
 import Lamdera.Wire
 import Process
@@ -27,7 +43,10 @@ port receiveFromBackend : (Json.Value -> msg) -> Sub msg
 port receiveFromFrontend : (Json.Value -> msg) -> Sub msg
 
 
-port nodeInit : (Json.Value -> msg) -> Sub msg
+port nodeTypeSetLeader : (Bool -> msg) -> Sub msg
+
+
+port liveStatusSet : (Bool -> msg) -> Sub msg
 
 
 type Msg
@@ -38,9 +57,10 @@ type Msg
     | FEtoBE Types.ToBackend
     | FEtoBEDelayed Types.ToBackend
     | FENewUrl Url
-      -- | NodeInit Json.Value
     | ReceivedFromFrontend Json.Value
     | ReceivedFromBackend Json.Value
+    | NodeTypeSetLeader Bool
+    | LiveStatusSet Bool
     | DevbarExpand
     | DevbarCollapse
     | ResetDebugStoreBoth
@@ -58,6 +78,7 @@ type alias Model =
     , originalUrl : Url
     , originalKey : Key
     , nodeType : NodeType
+    , liveStatus : LiveStatus
     , clientId : String
     , devbar :
         { expanded : Bool
@@ -117,10 +138,10 @@ init flags url key =
                     r
 
                 Err err ->
-                    Debug.todo "flags parse failed: impossible!"
+                    Debug.todo "Flags parse failed; this should be impossible! Please report this issue."
 
         devbar =
-            case Lamdera.Debug.debugR "d" devbarInit of
+            case LD.debugR "d" devbarInit of
                 Nothing ->
                     devbarInit
 
@@ -134,7 +155,7 @@ init flags url key =
             userBackendApp.init
 
         ( fem, newFeCmds ) =
-            case Lamdera.Debug.debugR "fe" ifem of
+            case LD.debugR "fe" ifem of
                 Nothing ->
                     ( ifem, iFeCmds )
 
@@ -146,7 +167,7 @@ init flags url key =
                         ( ifem, iFeCmds )
 
         ( bem, newBeCmds ) =
-            case Lamdera.Debug.debugR "be" ibem of
+            case LD.debugR "be" ibem of
                 Nothing ->
                     ( ibem, iBeCmds )
 
@@ -165,6 +186,7 @@ init flags url key =
       , originalKey = key
       , originalUrl = url
       , nodeType = args.nodeType
+      , liveStatus = Online
       , clientId = args.clientId
       , devbar = devbar
       }
@@ -181,14 +203,14 @@ init flags url key =
 
 storeFE m newFem =
     if m.devbar.devMode == Freeze then
-        Lamdera.Debug.debugS "fe" newFem
+        LD.debugS "fe" newFem
 
     else
         newFem
 
 
 storeBE m newBem =
-    Lamdera.Debug.debugS "be" newBem
+    LD.debugS "be" newBem
 
 
 type alias NodeInitArgs =
@@ -230,6 +252,11 @@ decodeNodeType =
                     Follower
         )
         Json.decoderString
+
+
+type LiveStatus
+    = Online
+    | Offline
 
 
 type alias Payload =
@@ -367,15 +394,14 @@ update msg m =
             ( { newModel | originalUrl = url }, newCmds )
 
         ReceivedFromFrontend payload ->
-            -- live.js ensures this port never gets called if we're not a leader...
+            -- live.js ensures this port never gets called if we're not a leader
             case Json.decodeValue payloadDecoder payload of
                 Ok args ->
                     case Lamdera.Wire.bytesDecode Types.evg_decode_ToBackend (Lamdera.Wire.intListToBytes args.i) of
                         Just toBackend ->
                             let
-                                _ =
-                                    Debug.log ("ReceivedFromFrontend[" ++ args.c ++ "]") toBackend
-
+                                -- _ =
+                                --     Debug.log ("ReceivedFromFrontend[" ++ args.c ++ "]") toBackend
                                 ( newBem, newBeCmds ) =
                                     userBackendApp.updateFromFrontend "sessionIdLocalDev" args.c toBackend m.bem
                             in
@@ -405,9 +431,8 @@ update msg m =
                     case Lamdera.Wire.bytesDecode Types.evg_decode_ToFrontend (Lamdera.Wire.intListToBytes args.i) of
                         Just toFrontend ->
                             let
-                                x =
-                                    Debug.log "ReceivedFromBackend" toFrontend
-
+                                -- x =
+                                --     Debug.log "ReceivedFromBackend" toFrontend
                                 ( newFem, newFeCmds ) =
                                     userFrontendApp.updateFromBackend toFrontend m.fem
                             in
@@ -428,6 +453,32 @@ update msg m =
                             Debug.log "ReceivedFromBackend decoding error" (Json.errorToString err)
                     in
                     ( m, Cmd.none )
+
+        NodeTypeSetLeader bool ->
+            ( { m
+                | nodeType =
+                    case bool of
+                        True ->
+                            Leader
+
+                        False ->
+                            Follower
+              }
+            , Cmd.none
+            )
+
+        LiveStatusSet bool ->
+            ( { m
+                | liveStatus =
+                    case bool of
+                        True ->
+                            Online
+
+                        False ->
+                            Offline
+              }
+            , Cmd.none
+            )
 
         DevbarExpand ->
             let
@@ -452,8 +503,8 @@ update msg m =
                     userBackendApp.init
             in
             ( { m
-                | fem = Lamdera.Debug.debugS "fe" newFem
-                , bem = Lamdera.Debug.debugS "be" newBem
+                | fem = LD.debugS "fe" newFem
+                , bem = LD.debugS "be" newBem
               }
             , Cmd.batch
                 [ Cmd.map FEMsg newFeCmds
@@ -467,7 +518,7 @@ update msg m =
                     userFrontendApp.init m.originalUrl m.originalKey
             in
             ( { m
-                | fem = Lamdera.Debug.debugS "fe" newFem
+                | fem = LD.debugS "fe" newFem
               }
             , Cmd.batch
                 [ Cmd.map FEMsg newFeCmds
@@ -480,11 +531,11 @@ update msg m =
                     userBackendApp.init
             in
             ( { m
-                | bem = Lamdera.Debug.debugS "be" newBem
+                | bem = LD.debugS "be" newBem
               }
             , Cmd.batch
                 [ Cmd.map BEMsg newBeCmds
-                , Lamdera.Debug.browserReload
+                , LD.browserReload
                 ]
             )
 
@@ -506,12 +557,12 @@ update msg m =
 
                 newFem =
                     if newDevbar.devMode == Freeze then
-                        Lamdera.Debug.debugS "fe" m.fem
+                        LD.debugS "fe" m.fem
 
                     else
                         m.fem
             in
-            ( { m | devbar = Lamdera.Debug.debugS "d" newDevbar, fem = newFem }
+            ( { m | devbar = LD.debugS "d" newDevbar, fem = newFem }
             , Cmd.none
             )
 
@@ -523,7 +574,7 @@ update msg m =
                 newDevbar =
                     { devbar | networkDelay = not m.devbar.networkDelay }
             in
-            ( { m | devbar = Lamdera.Debug.debugS "d" newDevbar }
+            ( { m | devbar = LD.debugS "d" newDevbar }
             , Cmd.none
             )
 
@@ -535,7 +586,7 @@ update msg m =
                 newDevbar =
                     { devbar | location = next m.devbar.location }
             in
-            ( { m | devbar = Lamdera.Debug.debugS "d" newDevbar }
+            ( { m | devbar = LD.debugS "d" newDevbar }
             , Cmd.none
             )
 
@@ -551,8 +602,8 @@ subscriptions { nodeType, fem, bem } =
 
           else
             Sub.none
-
-        -- , nodeInit NodeInit
+        , nodeTypeSetLeader NodeTypeSetLeader
+        , liveStatusSet LiveStatusSet
         , receiveFromFrontend ReceivedFromFrontend
         , receiveFromBackend ReceivedFromBackend
         ]
@@ -642,25 +693,50 @@ devBar topDown m =
 
 
 collapsedUI m =
-    div
-        [ style "padding" "5px"
-        ]
-        [ node "style" [] [ text customCss ]
-        , Html.span
-            [ onClick ClickedLocation
-            , class "lamderaLogoWhite"
-            ]
-            []
-        , text " "
-        , freezeToggle m
-        , if m.devbar.networkDelay then
-            span
-                []
-                [ text " 🐢" ]
+    case m.liveStatus of
+        Online ->
+            div
+                [ style "padding" "3px"
+                ]
+                [ node "style" [] [ text customCss ]
+                , Html.span
+                    [ onClick ClickedLocation
+                    , class "lamderaLogoWhite"
+                    , style "position" "relative"
+                    ]
+                    [ case m.nodeType of
+                        Leader ->
+                            div
+                                [ style "background-color" "#a6f098"
+                                , style "height" "4px"
+                                , style "width" "4px"
+                                , style "border-radius" "10px"
+                                , style "position" "absolute"
+                                , style "top" "2px"
+                                , style "left" "-2px"
+                                ]
+                                []
 
-          else
-            text ""
-        ]
+                        Follower ->
+                            text ""
+                    ]
+                , text " "
+                , freezeToggle m
+                , if m.devbar.networkDelay then
+                    span
+                        []
+                        [ text " 🐢" ]
+
+                  else
+                    text ""
+                ]
+
+        Offline ->
+            Html.div
+                [ onClick ClickedLocation
+                , style "padding" "3px 8px"
+                ]
+                [ text "⚠️ lamdera live is not running!" ]
 
 
 freezeToggle m =
@@ -758,13 +834,6 @@ mapDocument model msg { title, body } =
     { title = title
     , body =
         [ lamderaPane model
-        , div
-            [ style "position" "absolute"
-            , style "top" "0px"
-            , style "left" "0px"
-            , style "background-color" "red"
-            ]
-            [ text <| nodeTypeToString model.nodeType ++ "(" ++ model.clientId ++ ")" ]
         ]
             ++ List.map (Html.map msg) body
     }
