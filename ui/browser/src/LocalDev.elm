@@ -279,7 +279,7 @@ update msg m =
         FEMsg frontendMsg ->
             let
                 x =
-                    Debug.log "FEMsg" frontendMsg
+                    Debug.log "F " frontendMsg
 
                 ( newFem, newFeCmds ) =
                     userFrontendApp.update frontendMsg m.fem
@@ -296,7 +296,7 @@ update msg m =
                 Leader ->
                     let
                         x =
-                            Debug.log "BEMsg" backendMsg
+                            Debug.log "B " backendMsg
 
                         ( newBem, newBeCmds ) =
                             userBackendApp.update backendMsg m.bem
@@ -317,10 +317,14 @@ update msg m =
                     else
                         let
                             x =
-                                Debug.log "BEtoFE" toFrontend
+                                Debug.log "◀️ " toFrontend
 
                             ( newFem, newFeCmds ) =
                                 if clientId == m.clientId then
+                                    let
+                                        y =
+                                            Debug.log "[OPTIMIZE]" "ran immediately msg for ourselves from backend"
+                                    in
                                     userFrontendApp.updateFromBackend toFrontend m.fem
 
                                 else
@@ -341,14 +345,39 @@ update msg m =
                         )
 
         BEtoFEDelayed clientId toFrontend ->
-            let
-                x =
-                    Debug.log "[delayed] BEtoFE" toFrontend
+            case m.nodeType of
+                Follower ->
+                    ( m, Cmd.none )
 
-                ( newFem, newFeCmds ) =
-                    userFrontendApp.updateFromBackend toFrontend m.fem
-            in
-            ( { m | fem = storeFE m newFem, bem = m.bem }, Cmd.map FEMsg newFeCmds )
+                Leader ->
+                    let
+                        x =
+                            Debug.log "◀️⏱ " toFrontend
+
+                        ( newFem, newFeCmds ) =
+                            if clientId == m.clientId then
+                                let
+                                    y =
+                                        Debug.log "[OPTIMIZE]" "ran immediately msg for ourselves from backend"
+                                in
+                                userFrontendApp.updateFromBackend toFrontend m.fem
+
+                            else
+                                ( m.fem, Cmd.none )
+
+                        payload =
+                            Json.object
+                                [ ( "t", Json.string "ToFrontend" )
+                                , ( "i", Json.list Json.int <| Lamdera.Wire.intListFromBytes (Lamdera.Wire.bytesEncode (Types.evg_encode_ToFrontend toFrontend)) )
+                                , ( "c", Json.string clientId )
+                                ]
+                    in
+                    ( { m | fem = storeFE m newFem }
+                    , Cmd.batch
+                        [ Cmd.map FEMsg newFeCmds
+                        , sendToFrontend payload
+                        ]
+                    )
 
         FEtoBE toBackend ->
             if m.devbar.networkDelay then
@@ -357,7 +386,7 @@ update msg m =
             else
                 let
                     _ =
-                        Debug.log "FEtoBE" toBackend
+                        Debug.log "▶️ " toBackend
 
                     ( newBem, newBeCmds ) =
                         userBackendApp.updateFromFrontend "sessionIdLocalDev" m.clientId toBackend m.bem
@@ -369,7 +398,7 @@ update msg m =
                             , ( "c", Json.string m.clientId )
                             ]
                 in
-                ( { m | fem = m.fem, bem = storeBE m newBem }
+                ( { m | bem = storeBE m newBem }
                 , Cmd.batch
                     [ Cmd.map BEMsg newBeCmds
                     , sendToBackend payload
@@ -379,12 +408,24 @@ update msg m =
         FEtoBEDelayed toBackend ->
             let
                 _ =
-                    Debug.log "[delayed] FEtoBE" toBackend
+                    Debug.log "▶️⏱ " toBackend
 
                 ( newBem, newBeCmds ) =
                     userBackendApp.updateFromFrontend "sessionIdLocalDev" m.clientId toBackend m.bem
+
+                payload =
+                    Json.object
+                        [ ( "t", Json.string "ToBackend" )
+                        , ( "i", Json.list Json.int <| Lamdera.Wire.intListFromBytes (Lamdera.Wire.bytesEncode (Types.evg_encode_ToBackend toBackend)) )
+                        , ( "c", Json.string m.clientId )
+                        ]
             in
-            ( { m | fem = m.fem, bem = storeBE m newBem }, Cmd.map BEMsg newBeCmds )
+            ( { m | bem = storeBE m newBem }
+            , Cmd.batch
+                [ Cmd.map BEMsg newBeCmds
+                , sendToBackend payload
+                ]
+            )
 
         FENewUrl url ->
             let
@@ -414,14 +455,14 @@ update msg m =
                         Nothing ->
                             let
                                 x =
-                                    Debug.log "ReceivedFromFrontend" "failed to decode provided msg!"
+                                    Debug.log "❌ ReceivedFromFrontend" "failed to decode provided msg!"
                             in
                             ( m, Cmd.none )
 
                 Err err ->
                     let
                         x =
-                            Debug.log "ReceivedFromFrontend decoding error" (Json.errorToString err)
+                            Debug.log "❌ ReceivedFromFrontend decoding error" (Json.errorToString err)
                     in
                     ( m, Cmd.none )
 
@@ -432,7 +473,7 @@ update msg m =
                         Just toFrontend ->
                             let
                                 -- x =
-                                --     Debug.log "ReceivedFromBackend" toFrontend
+                                --     Debug.log "ReceivedFromBackend" ( toFrontend, args.c )
                                 ( newFem, newFeCmds ) =
                                     userFrontendApp.updateFromBackend toFrontend m.fem
                             in
@@ -443,14 +484,14 @@ update msg m =
                         Nothing ->
                             let
                                 x =
-                                    Debug.log "ReceivedFromBackend" "failed to decode provided msg!"
+                                    Debug.log "❌ ReceivedFromBackend" "failed to decode provided msg!"
                             in
                             ( m, Cmd.none )
 
                 Err err ->
                     let
                         x =
-                            Debug.log "ReceivedFromBackend decoding error" (Json.errorToString err)
+                            Debug.log "❌ ReceivedFromBackend decoding error" (Json.errorToString err)
                     in
                     ( m, Cmd.none )
 
