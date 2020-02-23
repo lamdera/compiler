@@ -191,7 +191,8 @@ function getRandomInt(max, min=0) {
 function getClientId() {
   let data = sessionStorage.getItem('lcid')
   if (data == null) {
-    const cid = getRandomInt(100000).toString()
+    // Make the cid look similar to production sec-websocket-key clientIds
+    const cid = getRandomInt(100000,10000).toString() + "HNhbXBsZSBub25jZQ=="
     sessionStorage.setItem('lcid', cid)
     return cid
   } else {

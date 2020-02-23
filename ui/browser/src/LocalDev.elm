@@ -321,10 +321,10 @@ update msg m =
 
                             ( newFem, newFeCmds ) =
                                 if clientId == m.clientId then
-                                    let
-                                        y =
-                                            Debug.log "[OPTIMIZE]" "ran immediately msg for ourselves from backend"
-                                    in
+                                    -- let
+                                    --     y =
+                                    --         Debug.log "[OPTIMIZE]" "ran immediately msg for ourselves from backend"
+                                    -- in
                                     userFrontendApp.updateFromBackend toFrontend m.fem
 
                                 else
@@ -356,10 +356,10 @@ update msg m =
 
                         ( newFem, newFeCmds ) =
                             if clientId == m.clientId then
-                                let
-                                    y =
-                                        Debug.log "[OPTIMIZE]" "ran immediately msg for ourselves from backend"
-                                in
+                                -- let
+                                --     y =
+                                --         Debug.log "[OPTIMIZE]" "ran immediately msg for ourselves from backend"
+                                -- in
                                 userFrontendApp.updateFromBackend toFrontend m.fem
 
                             else
