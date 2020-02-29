@@ -263,7 +263,7 @@ canonicalToDiffableType interfaces recursionMap canonical tvarMap =
         kernelError =
           case identifier of
             (author, pkg, module_, tipe) ->
-              DError $ "must not contain " <> author <> "/" <> pkg <> "'s `" <> tipe <> "` kernel type"
+              DError $ "must not contain kernel type `" <> tipe <> "` from " <> author <> "/" <> pkg <> ":" <> module_
       in
 
       if (List.any ((==) recursionIdentifier) recursionMap) then
@@ -404,12 +404,12 @@ canonicalToDiffableType interfaces recursionMap canonical tvarMap =
                       aliasToDiffableType interfaces newRecursionMap alias
 
                     Nothing ->
-                      DError $ "❗️Failed to find either alias or custom type for type that seemingly must exist: " <> author <> "/" <> pkg <> "'s `" <> tipe <> "` type from the " <> module_ <> " module. Please report this issue with your code!"
+                      DError $ "❗️Failed to find either alias or custom type for type that seemingly must exist: " <> tipe <> "` from " <> author <> "/" <> pkg <> ":" <> module_ <> ". Please report this issue with your code!"
 
             Nothing ->
               let !_ = formatHaskellValue "interface modulenames" (Map.keys interfaces) :: IO ()
               in
-              DError $ "The `" <> tipe <> "` type from " <> author <> "/" <> pkg <> " is referenced, but I can't find it! You can try `lamdera install " <> author <> "/" <> pkg <> "`, otherwise this might be a type which has been intentionally hidden by the author, so it cannot be used!"
+              DError $ "The `" <> tipe <> "` type from " <> author <> "/" <> pkg <> ":" <> module_ <> " is referenced, but I can't find it! You can try `lamdera install " <> author <> "/" <> pkg <> "`, otherwise this might be a type which has been intentionally hidden by the author, so it cannot be used!"
 
 
     Can.TAlias moduelName name tvarMap_ aliasType ->
