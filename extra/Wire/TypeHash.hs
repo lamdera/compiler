@@ -254,6 +254,16 @@ canonicalToDiffableType interfaces recursionMap canonical tvarMap =
                     Nothing -> p
                 _ -> p
             )
+
+        identifier =
+          case (moduleName, name) of
+            ((ModuleName.Canonical (Pkg.Name author pkg) (N.Name module_)), N.Name tipe) ->
+              (author, pkg, module_, tipe)
+
+        kernelError =
+          case identifier of
+            (author, pkg, module_, tipe) ->
+              DError $ "must not contain " <> author <> "/" <> pkg <> "'s `" <> tipe <> "` kernel type"
       in
 
       if (List.any ((==) recursionIdentifier) recursionMap) then
@@ -262,98 +272,121 @@ canonicalToDiffableType interfaces recursionMap canonical tvarMap =
             pkg1 <> "/" <> pkg2 <> ":" <> module_ <> "." <> typename
 
       else
-      case (moduleName, name) of
-        ((ModuleName.Canonical (Pkg.Name "elm" "core") (N.Name "String")), N.Name "String") ->
+      case identifier of
+        ("elm", "core", "String", "String") ->
           DString
 
-        ((ModuleName.Canonical (Pkg.Name "elm" "core") (N.Name "Basics")), N.Name "Int") ->
+        ("elm", "core", "Basics", "Int") ->
           DInt
 
-        ((ModuleName.Canonical (Pkg.Name "elm" "core") (N.Name "Basics")), N.Name "Float") ->
+        ("elm", "core", "Basics", "Float") ->
           DFloat
 
-        ((ModuleName.Canonical (Pkg.Name "elm" "core") (N.Name "Basics")), N.Name "Bool") ->
+        ("elm", "core", "Basics", "Bool") ->
           DBool
 
-        ((ModuleName.Canonical (Pkg.Name "elm" "core") (N.Name "Basics")), N.Name "Order") ->
+        ("elm", "core", "Basics", "Order") ->
           DOrder
 
-        ((ModuleName.Canonical (Pkg.Name "elm" "core") (N.Name "Basics")), N.Name "Never") ->
+        ("elm", "core", "Basics", "Never") ->
           DNever
 
-        ((ModuleName.Canonical (Pkg.Name "elm" "core") (N.Name "Char")), N.Name "Char") ->
+        ("elm", "core", "Char", "Char") ->
           DChar
 
-        ((ModuleName.Canonical (Pkg.Name "elm" "core") (N.Name "Maybe")), N.Name "Maybe") ->
+        ("elm", "core", "Maybe", "Maybe") ->
           case tvarResolvedParams of
             p:[] ->
               DMaybe (canonicalToDiffableType interfaces recursionMap p tvarMap)
 
             _ ->
-              DError (N.toText "❗️impossiible multi-param Maybe")
+              DError "❗️impossiible multi-param Maybe"
 
-        ((ModuleName.Canonical (Pkg.Name "elm" "core") (N.Name "List")), N.Name "List") ->
+        ("elm", "core", "List", "List") ->
           case tvarResolvedParams of
             p:[] ->
               DList (canonicalToDiffableType interfaces recursionMap p tvarMap)
             _ ->
-              DError (N.toText "❗️impossiible multi-param List")
+              DError "❗️impossiible multi-param List"
 
-        ((ModuleName.Canonical (Pkg.Name "elm" "core") (N.Name "Array")), N.Name "Array") ->
+        ("elm", "core", "Array", "Array") ->
           case tvarResolvedParams of
             p:[] ->
               DArray (canonicalToDiffableType interfaces recursionMap p tvarMap)
             _ ->
-              DError (N.toText "❗️impossiible multi-param Array")
+              DError "❗️impossiible multi-param Array"
 
-        ((ModuleName.Canonical (Pkg.Name "elm" "core") (N.Name "Set")), N.Name "Set") ->
+        ("elm", "core", "Set", "Set") ->
           case tvarResolvedParams of
             p:[] ->
               DSet (canonicalToDiffableType interfaces recursionMap p tvarMap)
             _ ->
-              DError (N.toText "❗️impossiible multi-param Set")
+              DError "❗️impossiible multi-param Set"
 
-        ((ModuleName.Canonical (Pkg.Name "elm" "core") (N.Name "Result")), N.Name "Result") ->
+        ("elm", "core", "Result", "Result") ->
           case tvarResolvedParams of
             result:err:_ ->
               DResult (canonicalToDiffableType interfaces recursionMap result tvarMap) (canonicalToDiffableType interfaces recursionMap err tvarMap)
             _ ->
-              DError (N.toText "❗️impossible !2 param Result type")
+              DError "❗️impossible !2 param Result type"
 
 
-        ((ModuleName.Canonical (Pkg.Name "elm" "core") (N.Name "Dict")), N.Name "Dict") ->
+        ("elm", "core", "Dict", "Dict") ->
           case tvarResolvedParams of
             result:err:_ ->
               DDict (canonicalToDiffableType interfaces recursionMap result tvarMap) (canonicalToDiffableType interfaces recursionMap err tvarMap)
             _ ->
-              DError (N.toText "❗️impossible !2 param Dict type")
+              DError "❗️impossible !2 param Dict type"
 
 
-        -- These matches used to be to protect fallthrough while the full recursive flattening was being implemented
-        -- Now they seem to be okay. We still need to expand the test file to play with all native modules
-        -- ((ModuleName.Canonical (Pkg.Name "elm" "time") (N.Name "Time")), N.Name "Posix") ->
-        --   DCustom [("Posix", [DInt])]
-        --
-        -- ((ModuleName.Canonical (Pkg.Name "elm" "http") (N.Name "Http")), N.Name "Error") ->
-        --   DError "Http.Error"
-        --
-        -- ((ModuleName.Canonical (Pkg.Name "elm" "browser") (N.Name "Browser.Navigation")), N.Name "Key") ->
-        --   DError "Browser.Navigation.Key"
-        --
-        -- ((ModuleName.Canonical (Pkg.Name "elm" "url") (N.Name "Url")), N.Name "Protocol") ->
-        --   DError "Url.Protocol"
-        --
-        -- ((ModuleName.Canonical (Pkg.Name "elm" "browser") (N.Name "Browser")), N.Name "UrlRequest") ->
-        --   DError "Browser.UrlRequest"
-        --
-        --
+        -- Values backed by JS Kernel types we cannot encode/decode
+
+        ("elm", "virtual-dom", "VirtualDom", "Node") -> kernelError
+        ("elm", "virtual-dom", "VirtualDom", "Attribute") -> kernelError
+        ("elm", "virtual-dom", "VirtualDom", "Handler") -> kernelError
+
+        ("elm", "file", "File", "File") -> kernelError
+
+        ("elm", "core", "Process", "Id") -> kernelError
+        ("elm", "core", "Platform", "ProcessId") -> kernelError
+        ("elm", "core", "Platform", "Program") -> kernelError
+        ("elm", "core", "Platform", "Router") -> kernelError
+        ("elm", "core", "Platform", "Task") -> kernelError
+        ("elm", "core", "Task", "Task") -> kernelError
+        ("elm", "core", "Platform.Cmd", "Cmd") -> kernelError
+        ("elm", "core", "Platform.Sub", "Sub") -> kernelError
+
+        ("elm", "json", "Json.Decode", "Decoder") -> kernelError
+        ("elm", "json", "Json.Decode", "Value") -> kernelError
+        ("elm", "json", "Json.Encode", "Value") -> kernelError
+
+        ("elm", "http", "Http", "Body") -> kernelError
+        ("elm", "http", "Http", "Part") -> kernelError
+        ("elm", "http", "Http", "Expect") -> kernelError
+        ("elm", "http", "Http", "Resolver") -> kernelError
+
+        ("elm", "parser", "Parser", "Parser") -> kernelError
+        ("elm", "parser", "Parser.Advanced", "Parser") -> kernelError
+
+        ("elm", "regex", "Regex", "Regex") -> kernelError
+
+        -- Not Kernel, but have functions... should we have them here?
+        -- @TODO remove once we add test for functions in custom types
+        ("elm", "url", "Url.Parser", "Parser") -> kernelError
+        ("elm", "url", "Url.Parser.Internal", "QueryParser") -> kernelError
+
+        -- @TODO improve; These aliases will show up as VirtualDom errors which might confuse users
+        -- ("elm", "svg", "Svg", "Svg") -> kernelError
+        -- ("elm", "svg", "Svg", "Attribute") -> kernelError
+
+
         -- ((ModuleName.Canonical (Pkg.Name "elm" _) (N.Name n)), _) ->
         --   DError $ "❗️unhandled elm type: " <> (T.pack $ show moduleName) <> ":" <> (T.pack $ show name)
         --
         -- ((ModuleName.Canonical (Pkg.Name "elm-explorations" _) (N.Name n)), _) ->
         --   DError $ "❗️unhandled elm-explorations type: " <> (T.pack $ show moduleName) <> ":" <> (T.pack $ show name)
 
-        _ ->
+        (author, pkg, module_, tipe) ->
           -- Anything else must not be a core type, recurse to find it
 
           case Map.lookup moduleName interfaces of
@@ -371,14 +404,12 @@ canonicalToDiffableType interfaces recursionMap canonical tvarMap =
                       aliasToDiffableType interfaces newRecursionMap alias
 
                     Nothing ->
-                      DError $ "❗️Failed to find either alias or custom type for type that must exist: " <> (T.pack $ show name) <> ". Please report this issue with your code!"
+                      DError $ "❗️Failed to find either alias or custom type for type that seemingly must exist: " <> author <> "/" <> pkg <> "'s `" <> tipe <> "` type from the " <> module_ <> " module. Please report this issue with your code!"
 
             Nothing ->
-              -- let !_ = formatHaskellValue "interface modulenames" (Map.keys interfaces) :: IO ()
-              -- in
-              case moduleName of
-                Canonical (Pkg.Name author project) (N.Name moduleName) ->
-                  DError $ "A type from " <> author <> "/" <> project <> " is referenced but it is not installed (usually due to a transitive dependency)! Try `lamdera install " <> author <> "/" <> project <> "`."
+              let !_ = formatHaskellValue "interface modulenames" (Map.keys interfaces) :: IO ()
+              in
+              DError $ "The `" <> tipe <> "` type from " <> author <> "/" <> pkg <> " is referenced, but I can't find it! You can try `lamdera install " <> author <> "/" <> pkg <> "`, otherwise this might be a type which has been intentionally hidden by the author, so it cannot be used!"
 
 
     Can.TAlias moduelName name tvarMap_ aliasType ->
@@ -406,16 +437,21 @@ canonicalToDiffableType interfaces recursionMap canonical tvarMap =
           -- So we can take this opportunity to reset tvars to reduce likeliness of naming conflicts?
           canonicalToDiffableType interfaces recursionMap cType []
 
-    Can.TRecord fieldMap maybeName_whatisit ->
-      let
-        -- !_ = formatHaskellValue "Can.TRecord" (fieldMap, tvarMap) :: IO ()
-      in
-      fieldMap
-        & Map.toList
-        & fmap (\(name,(Can.FieldType index tipe)) ->
-          (N.toText name, canonicalToDiffableType interfaces recursionMap tipe tvarMap)
-        )
-        & DRecord
+    Can.TRecord fieldMap isPartial ->
+      case isPartial of
+        Just whatIsThis ->
+          DError "must not contain partial records"
+
+        Nothing ->
+          let
+            -- !_ = formatHaskellValue "Can.TRecord" (fieldMap, tvarMap) :: IO ()
+          in
+          fieldMap
+            & Map.toList
+            & fmap (\(name,(Can.FieldType index tipe)) ->
+              (N.toText name, canonicalToDiffableType interfaces recursionMap tipe tvarMap)
+            )
+            & DRecord
 
     Can.TTuple firstType secondType maybeType_whatisthisfor ->
       DTuple (canonicalToDiffableType interfaces recursionMap firstType tvarMap) (canonicalToDiffableType interfaces recursionMap secondType tvarMap)

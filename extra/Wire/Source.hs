@@ -15,7 +15,7 @@ Thirdly, we handle the set of built-in codecs here and what code we should
 generate in order to interact with them.
 
 
-ASSUMPTION: no user code defines any variables starting with the string `evg_`
+ASSUMPTION: no user code defines any values starting with the string `evg_`
 
 -}
 
@@ -293,15 +293,15 @@ evergreenCoreCodecs qualIfNeeded targs key =
         in (fqType, failCodec arity fqType)) <$>
       -- non elm/core types
       -- NOTE: none of these packages have been checked exhaustively for types; we should do that
-      ( [ (("elm/bytes", "Bytes", "Endianness") --> 0 )
-        , (("elm/bytes", "Bytes.Encode", "Encoder") --> 0 )
+      ( [ (("elm/bytes", "Bytes.Encode", "Encoder") --> 0 )
         , (("elm/bytes", "Bytes.Decode", "Decoder") --> 1 )
+        -- , (("elm/bytes", "Bytes", "Endianness") --> 0 )
         , (("elm/virtual-dom", "VirtualDom", "Node") --> 1 )
         , (("elm/virtual-dom", "VirtualDom", "Attribute") --> 1 )
         , (("elm/virtual-dom", "VirtualDom", "Handler") --> 1 )
         -- Disable for now, but need to revisit these and whether we want actual proper wire support
-        , (("elm/browser", "Browser", "UrlRequest") --> 0 )
-        , (("elm/browser", "Browser.Navigation", "Key") --> 0 )
+        -- , (("elm/browser", "Browser", "UrlRequest") --> 0 )
+        -- , (("elm/browser", "Browser.Navigation", "Key") --> 0 )
         , (("elm/file", "File", "File") --> 0 )
         -- not implemented yet, but needed by other pkgs
         , (("elm/core", "Process", "Id") --> 0 ) -- alias of Platform.ProcessId
