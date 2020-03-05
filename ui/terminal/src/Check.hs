@@ -293,7 +293,7 @@ run () () = do
             -- the same but snapshots / migrations exist? They'll need to be removed!
             -- onlyWhen (not inProduction) $ committedCheck root nextVersionInfo
 
-            onlyWhen migrationExists $
+            onlyWhen (migrationExists && not isHoistRebuild) $
               Task.throw $ Exit.Lamdera
                 $ Help.report "UNEXPECTED MIGRATION" (Just nextMigrationPathBare)
                   ("There appears to be a migration file when I wasn't expecting one.")
