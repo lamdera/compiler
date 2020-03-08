@@ -26,7 +26,6 @@ socketHandler mClients onJoined onReceive clientId pending = do
 
   Lamdera.debugT $ "[websocket] Handling new client: " <> clientId
   conn <- WS.acceptRequest pending
-  WS.forkPingThread conn 30
 
   let client     = (clientId, conn)
       disconnect = do
