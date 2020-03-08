@@ -8,9 +8,6 @@ var isLiveReload = false
 var leaderSeen = true
 const clientId = getClientId()
 
-const leaderHeartbeatInterval = 3000
-const followerHeartbeatInterval = leaderHeartbeatInterval + 2000
-
 // Null checking as we might be on an error page, which doesn't initiate an app
 // but we still want the livereload to function
 var app = null;
@@ -143,6 +140,9 @@ setupApp = function(name, elid) {
   //   },
   //   false
   // )
+
+  const leaderHeartbeatInterval = 500
+  const followerHeartbeatInterval = 1100
 
   const heartbeat = function() {
     if (nodeType == "l") {
