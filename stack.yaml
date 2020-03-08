@@ -1,8 +1,7 @@
-resolver: lts-13.26
+resolver: lts-14.14
 flags: {}
 packages:
 - '.'
 extra-deps:
 - language-glsl-0.3.0
-- haskell-src-exts-simple-1.20.0.0
 - zip-archive-0.3.3

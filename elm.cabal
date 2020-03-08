@@ -38,7 +38,7 @@ Executable elmx
     if flag(dev)
         ghc-options: -O0 -Wall -Werror -Wno-error=name-shadowing -Wno-error=type-defaults -Wno-missing-signatures -Wmissing-exported-signatures -Wno-error=unused-top-binds
     else
-        ghc-options: -O2 -fsimpl-tick-factor=200 -rtsopts
+        ghc-options: -O2 -fsimpl-tick-factor=200 -rtsopts -threaded
 
     Hs-Source-Dirs:
         compiler/src
@@ -259,7 +259,7 @@ Executable elmx
 
 
     Build-depends:
-        ansi-terminal >= 0.8 && < 0.9,
+        ansi-terminal,
         ansi-wl-pprint >= 0.6.8 && < 0.7,
         base >=4.8 && <5,
         binary >= 0.8 && < 0.9,
@@ -272,7 +272,7 @@ Executable elmx
         ghc-prim,
         haskeline,
         HTTP >= 4000.2.5 && < 4000.4,
-        http-client >= 0.5 && < 0.6,
+        http-client,
         http-client-tls >= 0.3 && < 0.4,
         connection >= 0.2.8,
         http-types >= 0.9 && < 1.0,
