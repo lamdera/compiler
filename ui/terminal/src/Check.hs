@@ -117,6 +117,8 @@ run () () = do
     -- Prior `onlyWhen` guards against situation where no name is determinable
     let appName = certainAppName lamderaRemotes appNameEnvM
 
+    debug $ "app name:" ++ show appName
+
     localTypes <- fetchLocalTypes root
 
     (prodVersion, productionTypes) <-
@@ -403,7 +405,8 @@ getLamderaRemotes = do
   gitRemotes
     & T.pack
     & T.splitOn "\n"
-    & filter (textContains "lamdera")
+    & filter (textContains "apps.lamdera.com")
+    & filter (textContains "(push)")
     & pure
 
 
