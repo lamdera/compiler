@@ -102,6 +102,11 @@ leftPadWith delim (x:xs) = delim <> x <> leftPadWith delim xs
 generateCodecs :: Map.Map N.Name N.Name -> Can.Module -> T.Text
 generateCodecs revImportDict (Can.Module _moduName _docs _exports _decls _unions _aliases _binops _effects) =
   let -- massive let-expr so we can closure in _moduName
+
+    !isDebug = unsafePerformIO $ Lamdera.isDebug
+
+    ifDebugT t = if isDebug then t else ""
+
     -- HELPERS
     -- | qualIfNeeded does a reverse lookup from fully qualified module name to
     -- import alias, so we generate valid code when people do e.g.
@@ -127,8 +132,11 @@ generateCodecs revImportDict (Can.Module _moduName _docs _exports _decls _unions
           "  " <> encoderForType Map.empty t
         decoder =
           --"evg_decode_" <> N.toText name <> " : " <> T.intercalate " -> " (((\v -> "(Lamdera.Wire.Decoder " <> v <> ")") <$> N.toText  <$> names) ++ ["Lamdera.Wire.Decoder (" <> tName <> ")"]) <> "\n" <>
-          "evg_decode_" <> N.toText name <> leftWrap (codec <$> names) <> " =\n" <>
-          "  " <> decoderForType Map.empty t
+          "evg_decode_" <> N.toText name <> leftWrap (codec <$> names) <> " =\n"
+          <> (ifDebugT $
+             "  let _ = Debug.log \"evg_decode_" <> N.toText name <> "\" \"called\"\n"
+          <> "  in\n")
+          <> "  " <> decoderForType Map.empty t
       in
         encoder <> "\n\n" <> decoder
 
@@ -136,6 +144,7 @@ generateCodecs revImportDict (Can.Module _moduName _docs _exports _decls _unions
     unionCodecs (name, (Can.Union _u_vars _u_alts _u_numAlts _u_opts)) =
       let
         tName = N.toText name <> leftWrap (N.toText <$> _u_vars)
+
         encoder =
           --"evg_encode_" <> N.toText name <> " : " <> T.intercalate " -> " (((\v -> "(" <> v <> " -> Lamdera.Wire.Encoder)") <$> N.toText <$> _u_vars) ++ [tName, "Lamdera.Wire.Encoder"]) <> "\n" <>
           "evg_encode_" <> N.toText name <> leftWrap (codec <$> _u_vars) <> " evg_e_thingy =\n" <>
@@ -147,10 +156,14 @@ generateCodecs revImportDict (Can.Module _moduName _docs _exports _decls _unions
               --Can.Enum -> error "codec Enum notimpl"
               --Can.Unbox -> error "codec Unbox notimpl"
             )
+
         decoder =
           --"evg_decode_" <> N.toText name <> " : " <> T.intercalate " -> " (((\v -> "(Lamdera.Wire.Decoder " <> v <> ")") <$> N.toText  <$> _u_vars) ++ ["Lamdera.Wire.Decoder (" <> tName <> ")"]) <> "\n" <>
           "evg_decode_" <> N.toText name <> leftWrap (codec <$> _u_vars) <> " =\n"
           <> "  Lamdera.Wire.decodeString |> Lamdera.Wire.andThenDecode (\\evg_e_thingy ->\n"
+          <> (ifDebugT $
+             "    let _ = Debug.log \"evg_decode_" <> N.toText name <> "\" evg_e_thingy\n"
+          <> "    in")
           <> "    case evg_e_thingy of\n      "
           <> T.intercalate "\n      "
             (case _u_opts of
@@ -159,10 +172,69 @@ generateCodecs revImportDict (Can.Module _moduName _docs _exports _decls _unions
               --Can.Enum -> error "codec Enum notimpl"
               --Can.Unbox -> error "codec Unbox notimpl"
             )
+          -- <> "\n      _ -> Lamdera.Wire.failDecode \"" <> N.toText name <> "\""
           <> "\n      _ -> Lamdera.Wire.failDecode"
           <> "\n  )"
+
+        sorted_u_alts =
+          if (List.length _u_alts > 256) then
+            -- @TODO put this error somewhere nicer that's not a crash!
+            error $ "Wow, I ran into a custom type (" <> N.toString name <> ") with more than 256 values! This is unexpected. Please report this to support!"
+          else
+            _u_alts
+              & List.sortOn
+                -- Ctor N.Name Index.ZeroBased Int [Type]
+                (\(Can.Ctor name _ _ _) -> N.toString name)
+
+        newEncoder =
+          --"evg_encode_" <> N.toText name <> " : " <> T.intercalate " -> " (((\v -> "(" <> v <> " -> Lamdera.Wire.Encoder)") <$> N.toText <$> _u_vars) ++ [tName, "Lamdera.Wire.Encoder"]) <> "\n" <>
+          "evg_encode_" <> N.toText name <> leftWrap (codec <$> _u_vars) <> " evg_e_thingy =\n" <>
+          "  case evg_e_thingy of\n    "
+          <> T.intercalate "\n    "
+            (case _u_opts of
+              _ -> newEncodeUnion _u_vars sorted_u_alts
+              --Can.Normal -> codecUnion _u_vars _u_alts
+              --Can.Enum -> error "codec Enum notimpl"
+              --Can.Unbox -> error "codec Unbox notimpl"
+            )
+
+        newEncodeUnion :: [N.Name] -> [Can.Ctor] -> [T.Text]
+        newEncodeUnion _u_vars _u_alts =
+          _u_alts
+          & imap
+          (\i (Can.Ctor name _ _ tipes) ->
+              N.toText name <> leftWrap (fst <$> nargs tipes) <> " -> " <> sequenceEncWithoutLength (("Lamdera.Wire.encodeUnsignedInt8 " <> (T.pack $ show i)) : ((\(var, t) -> encoderForType Map.empty t <> " " <> var) <$> nargs tipes)))
+
+        newDecoder =
+          --"evg_decode_" <> N.toText name <> " : " <> T.intercalate " -> " (((\v -> "(Lamdera.Wire.Decoder " <> v <> ")") <$> N.toText  <$> _u_vars) ++ ["Lamdera.Wire.Decoder (" <> tName <> ")"]) <> "\n" <>
+          "evg_decode_" <> N.toText name <> leftWrap (codec <$> _u_vars) <> " =\n"
+          <> "  Lamdera.Wire.decodeUnsignedInt8 |> Lamdera.Wire.andThenDecode (\\evg_e_thingy ->\n"
+          <> (ifDebugT $
+             "    let _ = Debug.log \"evg_decode_" <> N.toText name <> "\" evg_e_thingy\n"
+          <> "    in\n")
+          <> "    case evg_e_thingy of\n      "
+          <> T.intercalate "\n      "
+            (case _u_opts of
+              _ -> newDecodeUnion _u_vars sorted_u_alts
+              --Can.Normal -> codecUnion _u_vars _u_alts
+              --Can.Enum -> error "codec Enum notimpl"
+              --Can.Unbox -> error "codec Unbox notimpl"
+            )
+          -- <> "\n      _ -> Lamdera.Wire.failDecode \"" <> N.toText name <> "\""
+          <> "\n      _ -> Lamdera.Wire.failDecode"
+          <> "\n  )"
+
+        newDecodeUnion :: [N.Name] -> [Can.Ctor] -> [T.Text]
+        newDecodeUnion _u_vars _u_alts =
+          _u_alts
+          & imap
+            (\i (Can.Ctor name _ _ tipes) ->
+                (T.pack $ show i) <> " -> " <> T.intercalate " |> Lamdera.Wire.andMapDecode " ((decodeSucceed $ N.toText name) : ((\(_, t) -> decoderForType Map.empty t) <$> nargs tipes)))
+
       in
         encoder <> "\n\n" <> decoder
+        -- @TODO need to move these to a separate v2 generation!
+        -- newEncoder <> "\n\n" <> newDecoder
 
 
     -- DECODERS
@@ -184,6 +256,7 @@ generateCodecs revImportDict (Can.Module _moduName _docs _exports _decls _unions
           ) <> leftWrap (p <$> decoderForType varMap <$> tipes))
         (Can.TRecord nameFieldTypeMap (Just _)) ->
           -- We don't allow sending partial records atm, because we haven't fully figured out how to encode/decode them.
+          -- "(Lamdera.Wire.failDecode \"partial record\")"
           "Lamdera.Wire.failDecode"
         (Can.TRecord nameFieldTypeMap Nothing) | Map.null nameFieldTypeMap ->
           p (decodeSucceed "{}")
@@ -199,12 +272,14 @@ generateCodecs revImportDict (Can.Module _moduName _docs _exports _decls _unions
         (Can.TTuple t1 t2 Nothing) -> p $ pairDec (decoderForType varMap t1) (decoderForType varMap t2)
         (Can.TTuple t1 t2 (Just t3)) -> p $ tripleDec (decoderForType varMap t1) (decoderForType varMap t2) (decoderForType varMap t3)
         (Can.TAlias moduName name nameTypePairs aliasType) -> decoderForType varMap (Can.TType moduName name (snd <$> nameTypePairs))
+        -- (Can.TLambda _ _) -> "(Lamdera.Wire.failDecode \"lambda\")" -- <> strQuote (T.pack $ show x)
         (Can.TLambda _ _) -> "Lamdera.Wire.failDecode" -- <> strQuote (T.pack $ show x)
 
     -- D.succeed (\a b c -> { a = a, b = b, c = c })
     --   |> dAndMap decodeInt64
     --   |> dAndMap c_b
     --   |> dAndMap decodeUnit
+
 
     -- ENCODERS
 
@@ -243,6 +318,7 @@ generateCodecs revImportDict (Can.Module _moduName _docs _exports _decls _unions
           encoderForType varMap (Can.TType moduName name (snd <$> nameTypePairs))
           -- encoderForType varMap (Type.dealias nameTypePairs aliasType)
         (Can.TLambda _ _) -> "Lamdera.Wire.failEncode" -- <> strQuote (T.pack $ show x)
+
 
   in
     T.intercalate "\n\n\n" ((unionCodecs <$> Map.toList _unions) <> (aliasCodecs <$> Map.toList _aliases))
@@ -490,7 +566,14 @@ typedFailDecode qualIfNeeded targs (can, name) =
   in
   T.replace "%CanType%" (T.intercalate " " ([qualIfNeeded can <> N.toText name] <> (toElm <$> targs))) $
   T.replace "%Lambda%" (failDec (length targs)) $
+  T.replace "%Name%" (N.toText name) $
   -- 8 space indentation to be indented more than body of case branches in generated code
+  -- "(\n\
+  -- \        let\n\
+  -- \          evg_typed_failure : Lamdera.Wire.Decoder (%CanType%)\n\
+  -- \          evg_typed_failure = Lamdera.Wire.failDecode \"%Name%\"\n\
+  -- \        in %Lambda%\n\
+  -- \        )"
   "(\n\
   \        let\n\
   \          evg_typed_failure : Lamdera.Wire.Decoder (%CanType%)\n\

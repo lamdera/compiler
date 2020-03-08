@@ -62,6 +62,9 @@ lamderaTypes =
 
 maybeGenHashes :: Pkg.Name -> Valid.Module -> Interface.Interfaces -> Result.Result i w Error.Error ()
 maybeGenHashes pkg module_@(Valid.Module name _ _ _ _ _ _ _ _ _) interfaces = do
+
+  let !inDebug = unsafePerformIO Lamdera.isDebug
+
   -- This check isn't strictly required, as the callee of this function in compile only
   -- calls it when we know we've canonicalized the src/Types.elm file, but leaving it here
   -- to prevent any footguns in future testing
@@ -88,7 +91,7 @@ maybeGenHashes pkg module_@(Valid.Module name _ _ _ _ _ _ _ _ _) interfaces = do
     if List.length errors > 0
       then
       let
-        -- !x = formatHaskellValue "diffHasErrors:" errors :: IO ()
+        !x = onlyWhen inDebug $ formatHaskellValue "diffHasErrors:" typediffs :: IO ()
 
         formattedErrors =
           errors

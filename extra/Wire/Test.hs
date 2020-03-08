@@ -62,11 +62,14 @@ compile = do
   -- let project = "/Users/mario/dev/projects/elm-spa-example"
   -- setEnv "LAMDERA_APP_NAME" "realworldish"
 
-  let project = "/Users/mario/dev/projects/lamdera-test"
-  setEnv "LAMDERA_APP_NAME" "lamderatest"
+  -- let project = "/Users/mario/dev/projects/lamdera-test"
+  -- setEnv "LAMDERA_APP_NAME" "lamderatest"
 
-  -- let project = "/Users/mario/dev/projects/lamdera-dashboard"
-  -- setEnv "LAMDERA_APP_NAME" "dashboard"
+  -- let project = "/Users/mario/tmp/lamdera-experiments"
+  -- setEnv "LAMDERA_APP_NAME" "lamderatest"
+
+  let project = "/Users/mario/dev/projects/lamdera-dashboard"
+  setEnv "LAMDERA_APP_NAME" "dashboard"
 
   -- Bust Elm's caching with this one weird trick!
   -- touch $ project </> "src/Types.elm"
@@ -133,3 +136,40 @@ check = do
   rm (project ++ "/src/LBR.elm")
   rm (project ++ "/src/LFR.elm")
   rm (project ++ "/src/LamderaHelpers.elm")
+
+
+testWire = do
+  -- let project = "/Users/mario/lamdera/test/v1"
+  -- setEnv "LAMDERA_APP_NAME" "testapp"
+
+  -- let project = "/Users/mario/dev/projects/elm-spa-example"
+  -- setEnv "LAMDERA_APP_NAME" "realworldish"
+
+  let project = "/Users/mario/dev/projects/lamdera-test"
+  setEnv "LAMDERA_APP_NAME" "lamderatest"
+
+  -- let project = "/Users/mario/tmp/lamdera-experiments"
+  -- setEnv "LAMDERA_APP_NAME" "lamderatest"
+
+  -- let project = "/Users/mario/dev/projects/lamdera-dashboard"
+  -- setEnv "LAMDERA_APP_NAME" "dashboard"
+
+  -- Bust Elm's caching with this one weird trick!
+  touch $ project </> "src/Types.elm"
+
+  setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
+  setEnv "LDEBUG" "1"
+  setEnv "ELM_HOME" "/Users/mario/elm-home-elmx-test"
+
+  let rootPaths = [ "src" </> "Frontend.elm" ]
+
+  Dir.withCurrentDirectory project $
+    do  reporter <- Terminal.create
+        Task.run reporter $
+          do  summary <- Project.getRoot
+              let jsOutput = Just (Output.Html Nothing tempFileName)
+              Project.compile Output.Dev Output.Client jsOutput Nothing summary rootPaths
+
+        _ <- BS.readFile tempFileName
+        -- seq (BS.length result) (Dir.removeFile tempFileName)
+        return ()

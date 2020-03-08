@@ -4,6 +4,7 @@
 
 module Lamdera
   ( lamderaVersion
+  , unsafePerformIO
   , debugTrace
   , debug_
   , debug
