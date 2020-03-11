@@ -10,7 +10,8 @@ import qualified Type.Error as T
 
 import Data.Monoid ((<>))
 import qualified Debug.Trace as DT
-import Lamdera
+-- Don't enable this, it will cause cyclic errors
+-- import Lamdera
 
 
 

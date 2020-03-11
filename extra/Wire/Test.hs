@@ -15,6 +15,8 @@ import qualified Check
 import System.Process (callCommand)
 import System.Environment (setEnv)
 
+import Lamdera
+
 {-
 
 This is a modified clone of ui/terminal/src/Develop/StaticFiles/Build.hs
@@ -94,19 +96,32 @@ compile = do
 
 tempFileName :: FilePath
 tempFileName =
-  "/dev/null"
+  "test.html"
 
 
 touch :: String -> IO ()
-touch path = callCommand $ "touch " ++ path
+touch path = do
+  os <- Lamdera.ostype
+
+  case os of
+    Just "windows" ->
+      callCommand $ "copy /b " <> path <> " +,,"
+
+    Just "linux" ->
+      callCommand $ "touch " ++ path
+
+    _ -> do
+      -- Do nothing...
+      putStrLn $ "Skipping touch on OSTYPE: " <> show os
+      pure ()
 
 
 cp :: String -> String -> IO ()
-cp from to = callCommand $ "cp " ++ from ++ " " ++ to
+cp = Lamdera.copyFile
 
 
 rm :: String -> IO ()
-rm path = callCommand $ "rm " ++ path
+rm path = Lamdera.remove path
 
 
 -- CHECK
@@ -124,9 +139,9 @@ check = do
   -- setEnv "HOIST_REBUILD" "1"
   -- setEnv "VERSION" "3"
 
-  cp "/Users/mario/lamdera/runtime/src/LBR.elm" (project ++ "/src")
-  cp "/Users/mario/lamdera/runtime/src/LFR.elm" (project ++ "/src")
-  cp "/Users/mario/lamdera/runtime/src/LamderaHelpers.elm" (project ++ "/src")
+  cp "/Users/mario/lamdera/runtime/src/LBR.elm" (project ++ "/src/LBR.elm")
+  cp "/Users/mario/lamdera/runtime/src/LFR.elm" (project ++ "/src/LFR.elm")
+  cp "/Users/mario/lamdera/runtime/src/LamderaHelpers.elm" (project ++ "/src/LamderaHelpers.elm")
 
   -- Dir.withCurrentDirectory ("/Users/mario/dev/projects/lamdera-dashboard") $
   Dir.withCurrentDirectory project $

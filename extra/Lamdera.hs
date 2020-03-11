@@ -33,10 +33,16 @@ module Lamdera
   , hunt
   , formatHaskellValue
   , writeUtf8
+  , remove
+  , createDir
+  , copyFile
+  , replaceInFile
   , lamderaHashesPath
+  , lamderaExternalWarningsPath
   , getProjectRoot
   , justs
   , lowerFirstLetter
+  , pDocLn
   )
   where
 
@@ -84,11 +90,11 @@ import Data.List.Index
 import Text.Show.Unicode
 import qualified System.Process
 import Data.Text.Internal.Search (indices)
+import qualified Reporting.Doc as D
+
 
 lamderaVersion :: String
 lamderaVersion = "0.0.1-alpha3"
-
--- import qualified Reporting.Task as Task
 
 type List a = [a]
 
@@ -136,8 +142,11 @@ isDebug = do
     Nothing -> pure False
 
 
-ostype =
-  Env.lookupEnv "OSTYPE"
+ostype :: IO (Maybe String)
+ostype = do
+  env <- Env.lookupEnv "OSTYPE"
+  debug_ $ "OSTYPE:" <> show env
+  pure env
 
 
 env =
@@ -180,6 +189,16 @@ readUtf8 filePath =
       do  fileSize <- catch (IO.hFileSize handle) useZeroIfNotRegularFile
           let readSize = max 0 (fromIntegral fileSize) + 1
           hGetContentsSizeHint handle readSize (max 255 readSize)
+
+
+readUtf8Text :: FilePath -> IO (Maybe Text)
+readUtf8Text filePath =
+  do  exists_ <- Dir.doesFileExist filePath
+      if exists_
+        then
+          Just <$> Text.decodeUtf8 <$> readUtf8 filePath
+        else
+          pure Nothing
 
 
 withUtf8 :: FilePath -> IO.IOMode -> (IO.Handle -> IO a) -> IO a
@@ -278,10 +297,39 @@ writeUtf8 filePath content = do
   withUtf8 filePath IO.WriteMode $ \handle ->
     BS.hPut handle (Text.encodeUtf8 content)
 
+remove :: FilePath -> IO ()
+remove filePath =
+  do  exists_ <- Dir.doesFileExist filePath
+      if exists_
+        then Dir.removeFile filePath
+        else return ()
+
+createDir :: FilePath -> IO ()
+createDir dir =
+  Dir.createDirectoryIfMissing True dir
+
+copyFile :: FilePath -> FilePath -> IO ()
+copyFile source dest =
+  Dir.copyFileWithMetadata source dest
+
+replaceInFile :: Text -> Text -> FilePath -> IO ()
+replaceInFile find replace filename = do
+  textM <- readUtf8Text filename
+  case textM of
+    Just text ->
+      writeUtf8 filename $ T.replace find replace text
+
+    Nothing ->
+      pure ()
 
 lamderaHashesPath :: FilePath -> FilePath
 lamderaHashesPath root =
   root </> "lamdera-stuff" </> ".lamdera-hashes"
+
+
+lamderaExternalWarningsPath :: FilePath -> FilePath
+lamderaExternalWarningsPath root =
+  root </> "lamdera-stuff" </> ".lamdera-external-warnings"
 
 
 -- Copy of combined internals of Project.getRoot as it seems to notoriously cause cyclic wherever imported
@@ -314,3 +362,13 @@ lowerFirstLetter :: String -> Text
 lowerFirstLetter text =
   case text of
     first:rest -> T.pack $ [Char.toLower first] <> rest
+
+
+pDocLn doc =
+  liftIO $ do
+    putStrLn ""
+    D.toAnsi IO.stdout doc
+    putStrLn ""
+
+
+x = 1

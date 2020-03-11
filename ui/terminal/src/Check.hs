@@ -276,7 +276,7 @@ run () () = do
 
                 let defaultMigrations = defaultMigrationFile lastLocalTypeChangeVersion nextVersion typeCompares
 
-                _ <- liftIO $ readProcess "mkdir" ["-p", root </> "src/Evergreen/Migrate"] ""
+                _ <- liftIO $ createDir $ root </> "src/Evergreen/Migrate"
                 liftIO $ writeUtf8 nextMigrationPath defaultMigrations
 
                 possiblyShowExternalTypeWarnings
@@ -334,7 +334,8 @@ buildProductionJsFiles root inProduction versionInfo = do
       debug $ "Rewriting " <> migrationPath <> " type import to point to Types"
 
       -- Temporarily point migration to current types in order to type-check
-      osReplace ("s/import Evergreen.Type.V" <> show version <> "/import Types/g") migrationPath
+      -- osReplace ("s/import Evergreen.Type.V" <> show version <> "/import Types/g") migrationPath
+      liftIO $ replaceInFile ("import Evergreen.Type.V" <> tshow version) "import Types" migrationPath
 
     -- debug $ "Injecting BACKENDINJECTION " <> (root </> "elm-backend-overrides.js")
     -- liftIO $ Env.setEnv "BACKENDINJECTION" (root </> "elm-backend-overrides.js")
@@ -379,7 +380,8 @@ buildProductionJsFiles root inProduction versionInfo = do
       debug $ "Rewriting " <> migrationPath <> " type import back to VX"
 
       -- Temporarily point migration to current types in order to type-check
-      osReplace ("s/import Types/import Evergreen.Type.V" <> show version <> "/g") migrationPath
+      -- osReplace ("s/import Types/import Evergreen.Type.V" <> show version <> "/g") migrationPath
+      liftIO $ replaceInFile "import Types" ("import Evergreen.Type.V" <> tshow version) migrationPath
 
     -- NOTE: Could do this, but assuming it'll be good to have the original evidence of
     -- state for situation where things go wrong in production and you can poke around
@@ -387,23 +389,16 @@ buildProductionJsFiles root inProduction versionInfo = do
     -- osReplace ("s/import Types/import Evergreen.Type.V" <> show version <> "/g") migrationPath
 
 
-
 snapshotCurrentTypesTo :: FilePath -> Int -> IO String
 snapshotCurrentTypesTo root version = do
   -- Snapshot the current types, and rename the module for the snapshot
-  _ <- readProcess "mkdir" [ "-p", root </> "src/Evergreen/Type" ] ""
+  _ <- createDir $ root </> "src/Evergreen/Type"
   let nextType = (root </> "src/Evergreen/Type/V") <> show version <> ".elm"
   debug $ "Snapshotting current types to " <> nextType
   _ <- readProcess "cp" [ root </> "src/Types.elm", nextType ] ""
-  osReplace ("s/module Types exposing/module Evergreen.Type.V" <> show version <> " exposing/g") nextType
+  -- osReplace ("s/module Types exposing/module Evergreen.Type.V" <> show version <> " exposing/g") nextType
+  replaceInFile "module Types exposing" ("module Evergreen.Type.V" <> tshow version <> " exposing") nextType
   pure ""
-
-
-pDocLn doc =
-  liftIO $ do
-    putStrLn ""
-    D.toAnsi IO.stdout doc
-    putStrLn ""
 
 
 getLamderaRemotes = do
@@ -558,7 +553,8 @@ migrationCheck root version =
               let migrationPath = (root </> "src/Evergreen/Migrate/V") <> show version <> ".elm"
 
               debug "Replacing type reference"
-              osReplace ("s/import Evergreen.Type.V" <> show version <> "/import Types/g") migrationPath
+              -- osReplace ("s/import Evergreen.Type.V" <> show version <> "/import Types/g") migrationPath
+              liftIO $ replaceInFile ("import Evergreen.Type.V" <> tshow version) "import Types" migrationPath
 
               -- @TODO
               -- This is now cleaner for local checks, but we still need a full e2e check in production before we deploy!
@@ -569,7 +565,8 @@ migrationCheck root version =
               -- liftIO $ unless frontendRuntimeExists $ writeUtf8 frontendRuntimeLocalContent $ root </> "src/LFR.elm"
               -- liftIO $ unless backendRuntimeExists $ writeUtf8 backendRuntimeLocalContent $ root </> "src/LBR.elm"
 
-              liftIO $ callCommand $ "mkdir -p " <> root </> "lamdera-stuff/alpha"
+              liftIO $ createDir $ root </> "lamdera-stuff/alpha"
+
               let lamderaCheckBothPath = "lamdera-stuff/alpha/LamderaCheckBoth.elm"
               liftIO $ writeUtf8 (root </> lamderaCheckBothPath) (lamderaCheckBothFileContents version)
               let jsOutput = Just (Output.Html Nothing "/dev/null")
@@ -580,10 +577,11 @@ migrationCheck root version =
 
               debug "Cleaning up build scaffold"
               -- Remove our temporarily checker file
-              liftIO $ callCommand $ "rm " <> (root </> lamderaCheckBothPath)
+              liftIO $ remove $ root </> lamderaCheckBothPath
 
               -- Restore the type back to what it was
-              osReplace ("s/import Types/import Evergreen.Type.V" <> show version <> "/g") migrationPath
+              -- osReplace ("s/import Types/import Evergreen.Type.V" <> show version <> "/g") migrationPath
+              liftIO $ replaceInFile "import Types" ("import Evergreen.Type.V" <> tshow version) migrationPath
 
               -- Cleanup dummy runtime files if we added them
               -- liftIO $ unless frontendRuntimeExists $ callCommand $ "rm " <> root </> "src/LFR.elm"
@@ -958,26 +956,25 @@ genericExit str =
       []
 
 
-osReplace regex filename =
-  -- https://stackoverflow.com/questions/4247068/sed-command-with-i-option-failing-on-mac-but-works-on-linux
-  liftIO $ do
-    mOsType <- Lamdera.ostype
-    case mOsType of
-      Just ostype ->
-        if List.isInfixOf "linux" ostype then
-          liftIO $ callCommand $ "sed -i'' -e '" <> regex <> "' " ++ filename
-        else do
-          -- Probably OS X?
-          liftIO $ callCommand $ "sed -i '' -e '" <> regex <> "' " ++ filename
-          liftIO $ callCommand $ "rm " <> filename <> "-e || true"
-      Nothing -> do
-        -- No idea... try the linux one anyway?
-        -- env <- Lamdera.env
-        -- putStrLn $ show env
-        debug "Couldn't figure out OS type for `sed` variant, falling back to OS X"
-        liftIO $ callCommand $ "sed -i'' -e '" <> regex <> "' " <> filename
-        liftIO $ callCommand $ "rm " <> filename <> "-e >> /dev/null 2>&1 || true"
-
+-- osReplace regex filename =
+--   -- https://stackoverflow.com/questions/4247068/sed-command-with-i-option-failing-on-mac-but-works-on-linux
+--   liftIO $ do
+--     mOsType <- Lamdera.ostype
+--     case mOsType of
+--       Just ostype ->
+--         if List.isInfixOf "linux" ostype then
+--           liftIO $ callCommand $ "sed -i'' -e '" <> regex <> "' " ++ filename
+--         else do
+--           -- Probably OS X?
+--           liftIO $ callCommand $ "sed -i '' -e '" <> regex <> "' " ++ filename
+--           liftIO $ remove $ filename <> "-e"
+--       Nothing -> do
+--         -- No idea... try the linux one anyway?
+--         -- env <- Lamdera.env
+--         -- putStrLn $ show env
+--         debug "Couldn't figure out OS type for `sed` variant, falling back to OS X"
+--         liftIO $ callCommand $ "sed -i'' -e '" <> regex <> "' " <> filename
+--         liftIO $ remove $ filename <> "-e"
 
 
 -- Snapshot of old code attempting to guess next prod version number
@@ -1013,3 +1010,6 @@ osReplace regex filename =
 --   else do
 --     genericExit "Okay, giving up!"
 --     pure (0, [])
+
+tshow :: Show a => a -> Text
+tshow = T.pack . show
