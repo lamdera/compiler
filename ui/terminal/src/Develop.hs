@@ -353,7 +353,7 @@ serveUnmatchedUrlsToIndex =
         else
           pure StaticFiles.lamderaLocalDev
 
-      liftIO $ callCommand $ "mkdir -p lamdera-stuff/alpha"
+      liftIO $ Lamdera.createDir "lamdera-stuff/alpha"
       liftIO $ BS.writeFile harnessPath harness
       serveElm harnessPath
       -- liftIO $ Dir.removeFile harnessPath
