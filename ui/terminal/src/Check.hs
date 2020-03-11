@@ -265,6 +265,8 @@ run () () = do
                        [ D.reflow "See <https://dashboard.lamdera.app/docs/evergreen> for more info." ]
                       )
 
+                    possiblyShowExternalTypeWarnings
+
                     buildProductionJsFiles root inProduction nextVersionInfo
 
               else do
@@ -276,6 +278,8 @@ run () () = do
 
                 _ <- liftIO $ readProcess "mkdir" ["-p", root </> "src/Evergreen/Migrate"] ""
                 liftIO $ writeUtf8 nextMigrationPath defaultMigrations
+
+                possiblyShowExternalTypeWarnings
 
                 Task.throw $ Exit.Lamdera
                   $ Help.report "UNIMPLEMENTED MIGRATION" (Just nextMigrationPathBare)
@@ -306,6 +310,8 @@ run () () = do
 
             pDocLn $ D.green $ D.reflow $ "\nIt appears you're all set to deploy v" <> (show nextVersion) <> " of '" <> T.unpack appName <> "'."
             pDocLn $ D.reflow $ "\nThere are no Evergreen type changes for this version."
+
+            possiblyShowExternalTypeWarnings
 
             buildProductionJsFiles root inProduction nextVersionInfo
 
@@ -889,6 +895,60 @@ writeLamderaGenerated root inProduction nextVersion =
     gen <- liftIO $ LamderaGenerated.createLamderaGenerated root nextVersion
     -- liftIO $ putStrLn $ T.unpack gen
     liftIO $ writeUtf8 (root </> "src/LamderaGenerated.elm") gen
+
+
+possiblyShowExternalTypeWarnings = do
+
+  root <- liftIO getProjectRoot
+  warnings_ <- liftIO $ maybeReadUtf8 $ lamderaExternalWarningsPath root
+
+  -- debug
+
+  case warnings_ of
+    Just warnings -> do
+
+      debug "Printing out external type warnings"
+
+      pDocLn $
+        D.stack
+          (
+          [ D.fillSep [ D.red $ D.fromText $ "WARNING: note the following Alpha limitation!" ]
+          , D.reflow $ "You are referencing some types outside Types.elm:"
+          , D.fillSep [ D.fromText warnings ]
+          , D.fillSep [ D.red $ D.fromText $ "Changes to these types won't get covered by Evergreen migrations currently!" ]
+          , D.reflow "See <https://dashboard.lamdera.app/docs/evergreen> for more info."
+          ]
+          )
+
+      --
+      -- pDocLn $ D.green $ D.reflow $ "\nIt appears you're all set to deploy v" <> (show nextVersion) <> " of '" <> T.unpack appName <> "'."
+      --
+      -- mapM pDocLn $
+      --   ([ D.reflow "Evergreen migrations will be applied to the following types:" ]
+      --   <> formattedChangedTypes <>
+      --   [ D.reflow "See <https://dashboard.lamdera.app/docs/evergreen> for more info." ]
+      --   )
+      --
+      --
+      --   onlyWhen (List.length formattedWarnings > 0) $
+
+    Nothing -> do
+      debug "No external type warnings found."
+
+      pure ()
+
+
+
+maybeReadUtf8 :: FilePath -> IO (Maybe Text)
+maybeReadUtf8 filePath =
+  do  exists_ <- Dir.doesFileExist filePath
+      if exists_
+        then
+          Just <$> Text.decodeUtf8 <$> IO.readUtf8 filePath
+          -- pure $ Just $
+        else
+          pure Nothing
+
 
 
 genericExit str =

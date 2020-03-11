@@ -46,6 +46,7 @@ import qualified Reporting.Error.LamderaError as LamderaError
 import qualified Reporting.Doc as D
 import qualified Reporting.Error as Error
 
+
 import Lamdera
 
 
@@ -88,19 +89,47 @@ maybeGenHashes pkg module_@(Valid.Module name _ _ _ _ _ _ _ _ _) interfaces = do
           & fmap (\(t,tds) -> (t, diffableTypeErrors tds, tds))
           & filter (\(t,errs,tds) -> List.length errs > 0)
 
+      warnings =
+        typediffs
+          & fmap (\(t,tds) -> (t, diffableTypeExternalWarnings tds, tds))
+          & filter (\(t,errs,tds) -> List.length errs > 0)
+
+      formattedWarnings =
+        warnings
+          & fmap (\(tipe, warnings_, tds) ->
+              D.stack $
+                [D.fillSep [ D.yellow $ D.fromText $ tipe <> ":" ]]
+                ++
+                (fmap (\e -> D.fromText $ "- " <> e) warnings_)
+            )
+
+      textWarnings =
+        warnings
+          & fmap (\(tipe, warnings_, tds) ->
+              [ tipe <> " includes:\n\n" ]
+              ++
+              (warnings_
+                & fmap (\e -> "- " <> e)
+                & List.intersperse "\n"
+              )
+              ++ ["\n\n"]
+            )
+          & List.concat
+          & T.intercalate ""
+
+      formattedErrors =
+        errors
+          & fmap (\(tipe, errors_, tds) ->
+              D.stack $
+                [D.fillSep [ D.yellow $ D.fromText $ tipe <> ":" ]]
+                ++
+                (fmap (\e -> D.fromText $ "- " <> e) errors_)
+            )
+
     if List.length errors > 0
       then
       let
         !x = onlyWhen inDebug $ formatHaskellValue "diffHasErrors:" typediffs :: IO ()
-
-        formattedErrors =
-          errors
-            & fmap (\(tipe, errors, tds) ->
-                D.stack $
-                  [D.fillSep [ D.yellow $ D.fromText $ tipe <> ":" ]]
-                  ++
-                  (fmap (\e -> D.fromText $ "- " <> e) errors)
-              )
       in
       Result.throw $ Error.Lamdera $ LamderaError.LamderaGenericError $
         D.stack
@@ -108,6 +137,8 @@ maybeGenHashes pkg module_@(Valid.Module name _ _ _ _ _ _ _ _ _) interfaces = do
           -- , D.fillSep [ D.yellow "WARNING:","Confirm","hoist!" ]
           -- , D.reflow $ show errors
           ] ++ formattedErrors ++
+          [ D.reflow $ "WARNING: note the following Alpha warnings"
+          ] ++ formattedWarnings ++
           [ D.reflow "See <https://dashboard.lamdera.app/docs/wire> for more info."
           ])
 
@@ -115,6 +146,13 @@ maybeGenHashes pkg module_@(Valid.Module name _ _ _ _ _ _ _ _ _) interfaces = do
         unsafePerformIO $ do
           root <- getProjectRoot
           writeUtf8 (lamderaHashesPath root) $ T.pack $ show hashes
+
+          if (List.length formattedWarnings > 0)
+            then
+              writeUtf8 (lamderaExternalWarningsPath root) $ textWarnings
+            else
+              remove (lamderaExternalWarningsPath root)
+
           pure $ Result.ok ()
 
 
@@ -151,7 +189,6 @@ diffableTypeByName interfaces typeName name interface = do
 data DiffableType
   = DRecord [(Text, DiffableType)]
   | DCustom Text [(Text, [DiffableType])]
-  | DError Text
   | DString
   | DInt
   | DFloat
@@ -168,6 +205,8 @@ data DiffableType
   | DTuple DiffableType DiffableType
   | DUnit
   | DRecursion Text
+  | DError Text
+  | DExternalWarning (Text, Text, Text, Text) DiffableType
   deriving (Show)
 
 
@@ -398,13 +437,15 @@ canonicalToDiffableType interfaces recursionMap canonical tvarMap =
               -- Try unions
               case Map.lookup name $ Interface._unions subInterface of
                 Just union -> do
-                  unionToDiffableType (N.toText name) interfaces newRecursionMap tvarMap union tvarResolvedParams
+                  DExternalWarning (author, pkg, module_, tipe) $
+                    unionToDiffableType (N.toText name) interfaces newRecursionMap tvarMap union tvarResolvedParams
 
                 Nothing ->
                   -- Try aliases
                   case Map.lookup name $ Interface._aliases subInterface of
                     Just alias -> do
-                      aliasToDiffableType interfaces newRecursionMap alias
+                      DExternalWarning (author, pkg, module_, tipe) $
+                        aliasToDiffableType interfaces newRecursionMap alias
 
                     Nothing ->
                       DError $ "❗️Failed to find either alias or custom type for type that seemingly must exist: " <> tipe <> "` from " <> author <> "/" <> pkg <> ":" <> module_ <> ". Please report this issue with your code!"
@@ -503,10 +544,6 @@ diffableTypeToText dtype =
         & T.intercalate ""
         & (\v -> "Custom["<> v <>"]")
 
-    -- DError Text
-    DError error ->
-      "[ERROR]"
-
     -- DString
     DString ->
       "String"
@@ -573,6 +610,13 @@ diffableTypeToText dtype =
       -- change also, so for now name changes to recursive values count as "changed"
       "Recursion[" <> name <> "]"
 
+    -- DError Text
+    DError error ->
+      "[ERROR]"
+
+    DExternalWarning _ tipe ->
+      diffableTypeToText tipe
+
 
 diffableTypeErrors :: DiffableType -> [Text]
 diffableTypeErrors dtype =
@@ -596,10 +640,6 @@ diffableTypeErrors dtype =
               & List.concat
           )
         & List.concat
-
-    -- DError Text
-    DError error ->
-      [error]
 
     -- DString
     DString ->
@@ -665,3 +705,103 @@ diffableTypeErrors dtype =
 
     DRecursion name ->
       []
+
+    -- DError Text
+    DError error ->
+      [error]
+
+    DExternalWarning _ realtipe ->
+      -- [ author <> "/" <> pkg <> ":" <> module_ <> "." <> tipe <> " is outside Types.elm and won't get caught by Evergreen!"]
+      --   ++ diffableTypeErrors realtipe
+      diffableTypeErrors realtipe
+
+
+diffableTypeExternalWarnings :: DiffableType -> [Text]
+diffableTypeExternalWarnings dtype =
+  case dtype of
+    DRecord fields ->
+      fields
+        & fmap (\(n, tipe) -> diffableTypeExternalWarnings tipe)
+        & List.concat
+
+    -- DCustom [(Text, [DiffableType])]
+    DCustom name constructors ->
+      constructors
+        & fmap (\(n, params) ->
+            fmap diffableTypeExternalWarnings params
+              & List.concat
+          )
+        & List.concat
+
+    -- DString
+    DString ->
+      []
+
+    -- DInt
+    DInt ->
+      []
+
+    -- DFloat
+    DFloat ->
+      []
+
+    -- DBool
+    DBool ->
+      []
+
+    -- DOrder
+    DOrder ->
+      []
+
+    -- DNever
+    DNever ->
+      []
+
+    -- DChar
+    DChar ->
+      []
+
+    -- DMaybe DiffableType
+    DMaybe tipe ->
+      diffableTypeExternalWarnings tipe
+
+    -- DList DiffableType
+    DList tipe ->
+      diffableTypeExternalWarnings tipe
+
+    -- DArray DiffableType
+    DArray tipe ->
+      diffableTypeExternalWarnings tipe
+
+    -- DSet DiffableType
+    DSet tipe ->
+      diffableTypeExternalWarnings tipe
+
+    -- DResult DiffableType DiffableType
+    DResult err result ->
+      -- []
+      diffableTypeExternalWarnings err ++ diffableTypeExternalWarnings result
+
+    -- DDict DiffableType DiffableType
+    DDict key value ->
+      -- []
+      diffableTypeExternalWarnings key ++ diffableTypeExternalWarnings value
+
+    -- DTuple DiffableType DiffableType
+    DTuple first second ->
+      -- []
+      diffableTypeExternalWarnings first ++ diffableTypeExternalWarnings second
+
+    DUnit ->
+      []
+
+    DRecursion name ->
+      []
+
+    -- DError Text
+    DError error ->
+      []
+
+    DExternalWarning (author, pkg, module_, tipe) realtipe ->
+      [ module_ <> "." <> tipe <> " (" <> author <> "/" <> pkg <> ")"]
+        ++ diffableTypeExternalWarnings realtipe
