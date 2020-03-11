@@ -103,9 +103,9 @@ generateCodecs :: Map.Map N.Name N.Name -> Can.Module -> T.Text
 generateCodecs revImportDict (Can.Module _moduName _docs _exports _decls _unions _aliases _binops _effects) =
   let -- massive let-expr so we can closure in _moduName
 
-    !isDebug = unsafePerformIO $ Lamdera.isDebug
+    !isDebug = False -- unsafePerformIO $ Lamdera.isDebug
 
-    ifDebugT t = if isDebug then t else ""
+    ifDebugT t = "" -- if isDebug then t else ""
 
     -- HELPERS
     -- | qualIfNeeded does a reverse lookup from fully qualified module name to
