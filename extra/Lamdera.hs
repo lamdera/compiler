@@ -4,6 +4,7 @@
 
 module Lamdera
   ( lamderaVersion
+  , stdoutSetup
   , unsafePerformIO
   , debugTrace
   , debug_
@@ -18,7 +19,6 @@ module Lamdera
   , (&)
   , first
   , second
-  , List
   , ppElm
   , Data.Witherable.mapMaybe
   , Data.Witherable.catMaybes
@@ -97,7 +97,11 @@ import qualified Reporting.Doc as D
 lamderaVersion :: String
 lamderaVersion = "0.0.1-alpha3"
 
-type List a = [a]
+
+stdoutSetup :: IO ()
+stdoutSetup = do
+  IO.hSetBuffering IO.stdout IO.LineBuffering
+  IO.hSetEncoding  IO.stdout IO.utf8
 
 
 -- debug :: String -> Task.Task ()

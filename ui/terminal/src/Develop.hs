@@ -58,7 +58,10 @@ run () (Flags maybePort) =
     port =
       maybe 8000 id maybePort
   in
-    do  putStrLn $ "Go to <http://localhost:" ++ show port ++ "> to run your Lamdera project."
+    do
+        liftIO $ Lamdera.stdoutSetup
+
+        putStrLn $ "Go to <http://localhost:" ++ show port ++ "> to run your Lamdera project."
 
         mClients <- liftIO $ SocketServer.clientsInit
 
