@@ -272,11 +272,12 @@ run () () = do
               else do
                 debug $ "Migration does not exist"
 
+                _ <- liftIO $ createDir $ root </> "src/Evergreen/Migrate"
+
                 lastLocalTypeChangeVersion <- liftIO $ LamderaGenerated.getLastLocalTypeChangeVersion root
 
                 let defaultMigrations = defaultMigrationFile lastLocalTypeChangeVersion nextVersion typeCompares
 
-                _ <- liftIO $ createDir $ root </> "src/Evergreen/Migrate"
                 liftIO $ writeUtf8 nextMigrationPath defaultMigrations
 
                 possiblyShowExternalTypeWarnings
