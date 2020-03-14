@@ -36,14 +36,12 @@ import qualified Network.WebSockets.Snap as WS
 import SocketServer
 import qualified Data.Text.IO as T
 import qualified Data.Text.Encoding as T
-import System.FSNotify
-import Control.Concurrent (threadDelay, forkIO)
-import Control.Monad (forever)
-import qualified Data.List as List
 import System.Process
 
 import Elm.Project.Json
 import Elm.Project.Summary
+
+import LamderaFilewatch
 
 -- RUN THE DEV SERVER
 
@@ -64,39 +62,7 @@ run () (Flags maybePort) =
 
         mClients <- liftIO $ SocketServer.clientsInit
 
-        forkIO $ withManager $ \mgr -> do
-          -- start a watching job (in the background)
-          watchTree
-            mgr          -- manager
-            "."          -- directory to watch
-            (const True) -- predicate
-            (\e -> do
-              let
-                shouldRefresh =
-                  case e of
-                    Added filename _ _ ->
-                      not (List.isInfixOf "/.git/" filename) && not (List.isInfixOf "/lamdera-stuff/" filename)
-
-                    Modified filename _ _ ->
-                      not (List.isInfixOf "/.git/" filename) && not (List.isInfixOf "/lamdera-stuff/" filename)
-
-                    Removed filename _ _ ->
-                      not (List.isInfixOf "/.git/" filename) && not (List.isInfixOf "/lamdera-stuff/" filename)
-
-                    Unknown filename _ _ ->
-                      not (List.isInfixOf "/.git/" filename) && not (List.isInfixOf "/lamdera-stuff/" filename)
-
-
-              if shouldRefresh
-                then do
-                  Lamdera.debug $ "refreshing for change: " <> show e
-                  SocketServer.broadcastImpl mClients "r" -- r is refresh, see live.js
-                else
-                  pure ()
-            )  -- action
-
-          -- sleep forever (until interrupted)
-          forever $ threadDelay 1000000
+        LamderaFilewatch.watch mClients
 
         httpServe (config port) $
           serveFiles

@@ -239,6 +239,7 @@ Executable elmx
         LamderaChecks
         LamderaGenerated
         LamderaHints
+        LamderaFilewatch
         Check
         Reporting.Exit.Check
         Reporting.Error.LamderaError
@@ -309,6 +310,7 @@ Executable elmx
         websockets-snap,
         stm,
         fsnotify,
+        auto-update,
         -- Debug
         unicode-show
 
