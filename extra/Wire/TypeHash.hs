@@ -91,7 +91,7 @@ maybeGenHashes pkg module_@(Valid.Module name _ _ _ _ _ _ _ _ _) interfaces = do
 
       warnings =
         typediffs
-          & fmap (\(t,tds) -> (t, diffableTypeExternalWarnings tds, tds))
+          & fmap (\(t,tds) -> (t, diffableTypeExternalWarnings tds & List.nub, tds)) -- nub == unique
           & filter (\(t,errs,tds) -> List.length errs > 0)
 
       formattedWarnings =
