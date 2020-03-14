@@ -437,15 +437,15 @@ canonicalToDiffableType interfaces recursionMap canonical tvarMap =
               -- Try unions
               case Map.lookup name $ Interface._unions subInterface of
                 Just union -> do
-                  DExternalWarning (author, pkg, module_, tipe) $
-                    unionToDiffableType (N.toText name) interfaces newRecursionMap tvarMap union tvarResolvedParams
+                  unionToDiffableType (N.toText name) interfaces newRecursionMap tvarMap union tvarResolvedParams
+                    & addExternalWarning (author, pkg, module_, tipe)
 
                 Nothing ->
                   -- Try aliases
                   case Map.lookup name $ Interface._aliases subInterface of
                     Just alias -> do
-                      DExternalWarning (author, pkg, module_, tipe) $
-                        aliasToDiffableType interfaces newRecursionMap alias
+                      aliasToDiffableType interfaces newRecursionMap alias
+                        & addExternalWarning (author, pkg, module_, tipe)
 
                     Nothing ->
                       DError $ "❗️Failed to find either alias or custom type for type that seemingly must exist: " <> tipe <> "` from " <> author <> "/" <> pkg <> ":" <> module_ <> ". Please report this issue with your code!"
@@ -520,6 +520,18 @@ canonicalToDiffableType interfaces recursionMap canonical tvarMap =
 
     Can.TLambda _ _ ->
       DError $ "must not contain functions"
+
+
+-- Any types that are outside user's Types.elm need a warning currently
+addExternalWarning :: (Text,Text,Text,Text) -> DiffableType -> DiffableType
+addExternalWarning (author, pkg, module_, tipe) dtype =
+  case (author, pkg, module_, tipe) of
+    ("author", "project", "Types", _) ->
+      dtype
+
+    _ ->
+      DExternalWarning (author, pkg, module_, tipe) dtype
+
 
 
 diffableTypeToHash :: DiffableType -> Text
