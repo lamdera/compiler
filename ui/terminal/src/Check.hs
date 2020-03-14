@@ -184,13 +184,13 @@ run () () = do
 
     debug $ "Continuing with (prodV,nextV,nextVInfo) " ++ show (prodVersion, nextVersion, nextVersionInfo)
 
-    onlyWhen isHoistRebuild $ do
-      approveHoist <- Task.getApproval $
-        D.stack
-          [ D.fillSep [ D.yellow "WARNING:","Confirm","hoist!" ]
-          , D.reflow $ "Proceed with hoist as v" <> show nextVersion <> "? [Y/n]: "
-          ]
-      onlyWhen (not approveHoist) $ genericExit "Quitting hoist"
+    -- onlyWhen isHoistRebuild $ do
+    --   approveHoist <- Task.getApproval $
+    --     D.stack
+    --       [ D.fillSep [ D.yellow "WARNING:","Confirm","hoist!" ]
+    --       , D.reflow $ "Proceed with hoist as v" <> show nextVersion <> "? [Y/n]: "
+    --       ]
+    --   onlyWhen (not approveHoist) $ genericExit "Quitting hoist"
 
 
     if nextVersion == 1
