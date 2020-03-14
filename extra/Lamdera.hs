@@ -95,7 +95,7 @@ import qualified Reporting.Doc as D
 
 
 lamderaVersion :: String
-lamderaVersion = "0.0.1-alpha3"
+lamderaVersion = "0.0.1-alpha4"
 
 
 stdoutSetup :: IO ()
