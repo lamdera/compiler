@@ -312,12 +312,19 @@ serveUnmatchedUrlsToIndex =
       let harnessPath = "lamdera-stuff/alpha/LocalDev.elm"
       -- Lamdera.debug $ "serving unmatched URL: " <> file
 
-      d <- liftIO $ Lamdera.isDebug
+      isDebug <- liftIO $ Lamdera.isDebug
       harness <-
-        if d then
-          liftIO $ BS.readFile ("/Users/mario/dev/projects/elmx/ui/browser/src/LocalDev.elm")
-        else
-          pure StaticFiles.lamderaLocalDev
+        if isDebug
+          then do
+            let overridePath = "/Users/mario/dev/projects/elmx/ui/browser/src/LocalDev.elm"
+            overrideExists <- liftIO $ Lamdera.doesFileExist overridePath
+            if overrideExists
+              then
+                liftIO $ BS.readFile ("/Users/mario/dev/projects/elmx/ui/browser/src/LocalDev.elm")
+              else
+                pure StaticFiles.lamderaLocalDev
+          else
+            pure StaticFiles.lamderaLocalDev
 
       liftIO $ Lamdera.createDir "lamdera-stuff/alpha"
       liftIO $ BS.writeFile harnessPath harness

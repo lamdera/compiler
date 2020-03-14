@@ -33,6 +33,7 @@ module Lamdera
   , hunt
   , formatHaskellValue
   , writeUtf8
+  , Dir.doesFileExist
   , remove
   , createDir
   , copyFile
