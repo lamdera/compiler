@@ -15,7 +15,7 @@ watch mClients =
 
     broadcastRefresh <- mkDebounce defaultDebounceSettings
       { debounceAction = do
-          putStrLn "debounced: running!"
+          Lamdera.debug "reloading all clients, starting 500ms reload cooldown"
           SocketServer.broadcastImpl mClients "r" -- r is refresh, see live.js
       , debounceFreq = 500000 -- 500 milliseconds
       , debounceEdge = leadingEdge -- Trigger on the trailing edge
