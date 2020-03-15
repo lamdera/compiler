@@ -98,7 +98,7 @@ maybeGenHashes pkg module_@(Valid.Module name _ _ _ _ _ _ _ _ _) interfaces = do
         warnings
           & fmap (\(tipe, warnings_, tds) ->
               D.stack $
-                [D.fillSep [ D.yellow $ D.fromText $ tipe <> ":" ]]
+                [D.fillSep [ D.yellow $ D.fromText $ tipe <> " includes:" ]]
                 ++
                 (fmap (\e -> D.fromText $ "- " <> e) warnings_)
             )
@@ -130,6 +130,12 @@ maybeGenHashes pkg module_@(Valid.Module name _ _ _ _ _ _ _ _ _) interfaces = do
       then
       let
         !x = onlyWhen inDebug $ formatHaskellValue "diffHasErrors:" typediffs :: IO ()
+
+        notifyWarnings =
+          if List.length warnings > 0 then
+            [ D.reflow $ "Alpha warning: also, a number of types outside Types.elm are referenced, see `lamdera check` for more info." ]
+          else
+            []
       in
       Result.throw $ Error.Lamdera $ LamderaError.LamderaGenericError $
         D.stack
@@ -137,10 +143,8 @@ maybeGenHashes pkg module_@(Valid.Module name _ _ _ _ _ _ _ _ _) interfaces = do
           -- , D.fillSep [ D.yellow "WARNING:","Confirm","hoist!" ]
           -- , D.reflow $ show errors
           ] ++ formattedErrors ++
-          [ D.reflow $ "WARNING: note the following Alpha warnings"
-          ] ++ formattedWarnings ++
           [ D.reflow "See <https://dashboard.lamdera.app/docs/wire> for more info."
-          ])
+          ] ++ notifyWarnings)
 
       else
         unsafePerformIO $ do
