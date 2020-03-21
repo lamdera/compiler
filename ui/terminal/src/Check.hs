@@ -937,7 +937,6 @@ possiblyShowExternalTypeWarnings = do
       pure ()
 
 
-
 maybeReadUtf8 :: FilePath -> IO (Maybe Text)
 maybeReadUtf8 filePath =
   do  exists_ <- Dir.doesFileExist filePath
@@ -949,68 +948,12 @@ maybeReadUtf8 filePath =
           pure Nothing
 
 
-
 genericExit str =
   Task.throw $ Exit.Lamdera
     $ Help.report "ERROR" Nothing
       (str)
       []
 
-
--- osReplace regex filename =
---   -- https://stackoverflow.com/questions/4247068/sed-command-with-i-option-failing-on-mac-but-works-on-linux
---   liftIO $ do
---     mOsType <- Lamdera.ostype
---     case mOsType of
---       Just ostype ->
---         if List.isInfixOf "linux" ostype then
---           liftIO $ callCommand $ "sed -i'' -e '" <> regex <> "' " ++ filename
---         else do
---           -- Probably OS X?
---           liftIO $ callCommand $ "sed -i '' -e '" <> regex <> "' " ++ filename
---           liftIO $ remove $ filename <> "-e"
---       Nothing -> do
---         -- No idea... try the linux one anyway?
---         -- env <- Lamdera.env
---         -- putStrLn $ show env
---         debug "Couldn't figure out OS type for `sed` variant, falling back to OS X"
---         liftIO $ callCommand $ "sed -i'' -e '" <> regex <> "' " <> filename
---         liftIO $ remove $ filename <> "-e"
-
-
--- Snapshot of old code attempting to guess next prod version number
---
--- We actually can't sensibly guess what the next production version will be, especially
--- when we stop snapshotting redundant Type for unchanged versions as well, which became
--- clearer with the appzero concept which fixes first-deploy version guessing.
---
--- Code here anyway for posterity.
---
--- let
---   assumedNextVersion =
---     case SafeList.last migrationSequence of
---       Just [vInfo] ->
---         (vinfoVersion vInfo)
---
---       _ ->
---         1
---   assumedCurrentVersion =
---     assumedNextVersion - 1
---
--- approved <- Task.getApproval $
---   D.stack
---     [ D.fillSep [ D.yellow "WARNING:","I","normally","check","for","production","info","here","but","I","wasn't","able","to." ]
---     , D.reflow $ "Shall I proceed assuming the next version is v" <> show assumedNextVersion <> "? [Y/n]: "
---     ]
---
--- if approved
---   then do
---     liftIO $ putStrLn $ "Okay, continuing assuming v" <> show assumedNextVersion <> " is the next version to deploy..."
---     pure (assumedCurrentVersion, localTypes)
---
---   else do
---     genericExit "Okay, giving up!"
---     pure (0, [])
 
 tshow :: Show a => a -> Text
 tshow = T.pack . show

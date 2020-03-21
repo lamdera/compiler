@@ -80,6 +80,7 @@ import Language.Haskell.TH (runIO)
 import System.FilePath as FP ((</>), joinPath, splitDirectories)
 import qualified System.Directory as Dir
 import Control.Monad (unless, filterM)
+import System.Info
 
 -- Vendored from File.IO due to recursion errors
 import qualified System.IO as IO
@@ -148,11 +149,9 @@ isDebug = do
     Nothing -> pure False
 
 
-ostype :: IO (Maybe String)
+ostype :: String
 ostype = do
-  env <- Env.lookupEnv "OSTYPE"
-  debug_ $ "OSTYPE:" <> show env
-  pure env
+  dt "OSTYPE:" System.Info.os
 
 
 env =
@@ -330,20 +329,20 @@ replaceInFile find replace filename = do
 
 touch :: String -> IO ()
 touch path = do
-  os <- ostype
-
-  case os of
-    Just "windows" ->
+  case ostype of
+    "mingw32" ->
       System.Process.callCommand $ "copy /b " <> path <> " +,,"
 
-    Just "linux" ->
+    "darwin" ->
+      System.Process.callCommand $ "touch " ++ path
+
+    "linux" ->
       System.Process.callCommand $ "touch " ++ path
 
     _ -> do
       -- Default to trying touch...
-      System.Process.callCommand $ "touch " ++ path
-      -- putStrLn $ "Skipping touch on OSTYPE: " <> show os
-      -- pure ()
+      putStrLn $ "WARNING: please report: skipping touch on unknown OSTYPE: " <> show ostype
+      pure ()
 
 lamderaHashesPath :: FilePath -> FilePath
 lamderaHashesPath root =
