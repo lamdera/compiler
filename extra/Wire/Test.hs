@@ -99,23 +99,6 @@ tempFileName =
   "test.html"
 
 
-touch :: String -> IO ()
-touch path = do
-  os <- Lamdera.ostype
-
-  case os of
-    Just "windows" ->
-      callCommand $ "copy /b " <> path <> " +,,"
-
-    Just "linux" ->
-      callCommand $ "touch " ++ path
-
-    _ -> do
-      -- Do nothing...
-      putStrLn $ "Skipping touch on OSTYPE: " <> show os
-      pure ()
-
-
 cp :: String -> String -> IO ()
 cp = Lamdera.copyFile
 

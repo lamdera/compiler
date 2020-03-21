@@ -531,7 +531,7 @@ checkUserProjectCompiles root = do
   --
   -- But need to have a better error message for this probably... watch out for it in future.
 
-  _ <- liftIO $ readProcess "touch" [root </> "src" </> "Types.elm"] ""
+  _ <- liftIO $ Lamdera.touch $ root </> "src" </> "Types.elm"
 
   let jsOutput = Just (Output.Html Nothing "/dev/null")
   Project.compile Output.Prod Output.Client jsOutput Nothing summary [ "src" </> "Frontend.elm" ]

@@ -38,6 +38,7 @@ module Lamdera
   , createDir
   , copyFile
   , replaceInFile
+  , touch
   , lamderaHashesPath
   , lamderaExternalWarningsPath
   , getProjectRoot
@@ -326,6 +327,23 @@ replaceInFile find replace filename = do
 
     Nothing ->
       pure ()
+
+touch :: String -> IO ()
+touch path = do
+  os <- ostype
+
+  case os of
+    Just "windows" ->
+      System.Process.callCommand $ "copy /b " <> path <> " +,,"
+
+    Just "linux" ->
+      System.Process.callCommand $ "touch " ++ path
+
+    _ -> do
+      -- Default to trying touch...
+      System.Process.callCommand $ "touch " ++ path
+      -- putStrLn $ "Skipping touch on OSTYPE: " <> show os
+      -- pure ()
 
 lamderaHashesPath :: FilePath -> FilePath
 lamderaHashesPath root =
