@@ -633,7 +633,7 @@ committedCheck root versionInfo = do
 
     addToGitApproved <- Task.getApproval $
       D.stack
-        [ D.reflow $ "Shall I add to git for you? [Y/n]: "
+        [ D.reflow $ "Shall I `git add` for you? [Y/n]: "
         ]
 
     if addToGitApproved
@@ -641,7 +641,7 @@ committedCheck root versionInfo = do
         liftIO $ mapM (\path -> callCommand $ "git add " <> path) missingPaths
         commitApproved <- Task.getApproval $
           D.stack
-            [ D.reflow $ "Shall I commit for you? [Y/n]: "
+            [ D.reflow $ "Shall I `git commit` for you? [Y/n]: "
             ]
 
         if commitApproved
