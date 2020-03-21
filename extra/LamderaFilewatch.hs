@@ -31,16 +31,16 @@ watch mClients =
           shouldRefresh =
             case e of
               Added filename _ _ ->
-                not (List.isInfixOf "/.git/" filename) && not (List.isInfixOf "/lamdera-stuff/" filename)
+                not (List.isInfixOf ".git" filename) && not (List.isInfixOf "lamdera-stuff" filename)
 
               Modified filename _ _ ->
-                not (List.isInfixOf "/.git/" filename) && not (List.isInfixOf "/lamdera-stuff/" filename)
+                not (List.isInfixOf ".git" filename) && not (List.isInfixOf "lamdera-stuff" filename)
 
               Removed filename _ _ ->
-                not (List.isInfixOf "/.git/" filename) && not (List.isInfixOf "/lamdera-stuff/" filename)
+                not (List.isInfixOf ".git" filename) && not (List.isInfixOf "lamdera-stuff" filename)
 
               Unknown filename _ _ ->
-                not (List.isInfixOf "/.git/" filename) && not (List.isInfixOf "/lamdera-stuff/" filename)
+                not (List.isInfixOf ".git" filename) && not (List.isInfixOf "lamdera-stuff" filename)
 
 
         if shouldRefresh
