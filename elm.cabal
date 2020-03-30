@@ -305,6 +305,7 @@ Executable elmx
         neat-interpolation,
         natural-sort,
         listsafe,
+        filemanip,
         -- Live
         websockets,
         websockets-snap,

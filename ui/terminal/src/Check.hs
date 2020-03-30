@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Check where
 
@@ -272,7 +273,7 @@ run () () = do
               else do
                 debug $ "Migration does not exist"
 
-                _ <- liftIO $ createDir $ root </> "src/Evergreen/Migrate"
+                _ <- liftIO $ mkdir $ root </> "src/Evergreen/Migrate"
 
                 lastLocalTypeChangeVersion <- liftIO $ LamderaGenerated.getLastLocalTypeChangeVersion root
 
@@ -393,13 +394,109 @@ buildProductionJsFiles root inProduction versionInfo = do
 snapshotCurrentTypesTo :: FilePath -> Int -> IO String
 snapshotCurrentTypesTo root version = do
   -- Snapshot the current types, and rename the module for the snapshot
-  _ <- createDir $ root </> "src/Evergreen/Type"
+  _ <- mkdir $ root </> "src/Evergreen/Type"
   let nextType = (root </> "src/Evergreen/Type/V") <> show version <> ".elm"
   debug $ "Snapshotting current types to " <> nextType
   _ <- readProcess "cp" [ root </> "src/Types.elm", nextType ] ""
   -- osReplace ("s/module Types exposing/module Evergreen.Type.V" <> show version <> " exposing/g") nextType
   replaceInFile "module Types exposing" ("module Evergreen.Type.V" <> tshow version <> " exposing") nextType
   pure ""
+
+
+snapshotAllTypesTo :: FilePath -> Int -> IO ()
+snapshotAllTypesTo root version = do
+
+  let
+    proot = "/Users/mario/dev/projects/lamdera-dashboard"
+
+    typesDir = proot </> "src" </> "Evergreen" </> "Types" </> ("V" <> show version)
+
+  mkdir typesDir
+
+  Dir.withCurrentDirectory proot $ do
+
+    reporter <- Terminal.create
+
+    Task.run reporter $ do
+
+      project <- Project.read $ proot </> "elm.json"
+
+      let
+        dirs =
+          case project of
+            Project.App appInfo ->
+              Project._app_source_dirs appInfo
+
+            Project.Pkg pkgInfo ->
+              -- @TODO extend for package snapshotting?
+              []
+
+
+      elmFiles :: [FilePath] <-
+        liftIO $
+          List.concat <$> mapM (findElmFiles) dirs
+
+      liftIO $ elmFiles & mapM (snapshotTypes version)
+
+      liftIO $ putStrLn $ show elmFiles
+
+    pure ()
+    -- findFilesWith :: (FilePath -> IO Bool) -> [FilePath] -> String -> IO [FilePath]
+    -- Dir.findFilesWith (\fp ->  )
+
+
+snapshotTypes version filename = do
+
+
+  result <- readUtf8Text filename
+  case result of
+    Just contents -> do
+
+      let
+        modulePath = asModulePath filename version
+        moduleFilename = asModuleFilename filename version
+        moduleHeader = asModuleHeader filename version
+
+        types = extractTypes contents
+
+      putStrLn $ filename <> " -> " <> T.unpack moduleFilename
+
+      -- mkdir modulePath
+      putStrLn $ T.unpack moduleHeader <> types
+      -- writeUtf8 moduleFilename $ moduleHeader <> types
+
+    Nothing ->
+      error $ "Error: Decoding issue with " <> filename <> ". Please report this!"
+
+
+extractTypes contents = "\n\n<TYPES>\n\n"
+
+asModulePath filename version =
+  "src/Evergreen/Types/V" <> (T.pack $ show version)
+
+asModuleFilename filename version =
+  let
+    name =
+      filename
+        & T.pack
+        & T.replace "src/" ""
+        & T.replace ".elm" ""
+  in
+  asModulePath filename version <> "/" <> name <> ".elm"
+
+asModuleName filename =
+  filename
+    & T.pack
+    & T.replace "src/" ""
+    & T.replace ".elm" ""
+    & T.replace "/" "."
+
+asModuleHeader :: FilePath -> Int -> Text
+asModuleHeader filename version =
+  let
+    header = asModuleName filename
+  in
+  "module V" <> (T.pack $ show version) <> "." <> header <> " exposing (..)"
 
 
 getLamderaRemotes = do
@@ -566,7 +663,7 @@ migrationCheck root version =
               -- liftIO $ unless frontendRuntimeExists $ writeUtf8 frontendRuntimeLocalContent $ root </> "src/LFR.elm"
               -- liftIO $ unless backendRuntimeExists $ writeUtf8 backendRuntimeLocalContent $ root </> "src/LBR.elm"
 
-              liftIO $ createDir $ root </> "lamdera-stuff/alpha"
+              liftIO $ mkdir $ root </> "lamdera-stuff/alpha"
 
               let lamderaCheckBothPath = "lamdera-stuff/alpha/LamderaCheckBoth.elm"
               liftIO $ writeUtf8 (root </> lamderaCheckBothPath) (lamderaCheckBothFileContents version)

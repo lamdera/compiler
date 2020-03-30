@@ -32,10 +32,11 @@ module Lamdera
   , textContains
   , hunt
   , formatHaskellValue
+  , readUtf8Text
   , writeUtf8
   , Dir.doesFileExist
   , remove
-  , createDir
+  , mkdir
   , copyFile
   , replaceInFile
   , touch
@@ -45,6 +46,7 @@ module Lamdera
   , justs
   , lowerFirstLetter
   , pDocLn
+  , findElmFiles
   )
   where
 
@@ -81,6 +83,7 @@ import System.FilePath as FP ((</>), joinPath, splitDirectories)
 import qualified System.Directory as Dir
 import Control.Monad (unless, filterM)
 import System.Info
+import System.FilePath.Find (always, directory, extension, fileName, find, (&&?), (/~?), (==?))
 
 -- Vendored from File.IO due to recursion errors
 import qualified System.IO as IO
@@ -94,6 +97,8 @@ import Text.Show.Unicode
 import qualified System.Process
 import Data.Text.Internal.Search (indices)
 import qualified Reporting.Doc as D
+
+
 
 
 lamderaVersion :: String
@@ -309,8 +314,8 @@ remove filePath =
         then Dir.removeFile filePath
         else return ()
 
-createDir :: FilePath -> IO ()
-createDir dir =
+mkdir :: FilePath -> IO ()
+mkdir dir =
   Dir.createDirectoryIfMissing True dir
 
 copyFile :: FilePath -> FilePath -> IO ()
@@ -391,6 +396,14 @@ pDocLn doc =
     putStrLn ""
     D.toAnsi IO.stdout doc
     putStrLn ""
+
+
+findElmFiles :: FilePath -> IO [FilePath]
+findElmFiles fp = System.FilePath.Find.find isVisible (isElmFile &&? isVisible &&? isntEvergreen) fp
+    where
+      isElmFile = extension ==? ".elm"
+      isVisible = fileName /~? ".?*"
+      isntEvergreen = directory /~? "src/Evergreen/*"
 
 
 x = 1
