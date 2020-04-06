@@ -77,6 +77,7 @@ import Control.Monad (unless, filterM)
 import qualified System.IO as IO
 import qualified Elm.Project.Summary as Summary
 import qualified Text.Read
+import Text.Regex.TDFA
 
 
 run :: () -> () -> IO ()
@@ -451,7 +452,6 @@ snapshotTypes version filename = do
   result <- readUtf8Text filename
   case result of
     Just contents -> do
-
       let
         modulePath = asModulePath filename version
         moduleFilename = asModuleFilename filename version
@@ -462,18 +462,45 @@ snapshotTypes version filename = do
       putStrLn $ filename <> " -> " <> T.unpack moduleFilename
 
       -- mkdir modulePath
-      putStrLn $ T.unpack moduleHeader <> types
+      putStrLn $ T.unpack $ moduleHeader <> types
       -- writeUtf8 moduleFilename $ moduleHeader <> types
 
     Nothing ->
       error $ "Error: Decoding issue with " <> filename <> ". Please report this!"
 
 
-extractTypes contents = "\n\n<TYPES>\n\n"
 
+
+extractTypes :: Text -> Text
+extractTypes contents =
+  let
+    -- matcher :: String
+    -- matcher =
+    --   "type .*\n(\\s+.+\n)*"
+
+    regex :: Regex
+    regex =
+      makeRegexOpts (defaultCompOpt { multiline = True }) defaultExecOpt "type .*\n(\\s+.+\n)*"
+
+    matches :: String -> [String]
+    matches t =
+      matchAllText regex t
+
+      -- getAllTextMatches (t =~ regex)
+
+  in
+    matches (T.unpack contents)
+      & fmap T.pack
+      & T.intercalate "\n\n"
+
+  -- "\n\n<TYPES>\n\n"
+
+asModulePath :: FilePath -> Int -> Text
 asModulePath filename version =
   "src/Evergreen/Types/V" <> (T.pack $ show version)
 
+
+asModuleFilename :: FilePath -> Int -> Text
 asModuleFilename filename version =
   let
     name =
@@ -484,12 +511,15 @@ asModuleFilename filename version =
   in
   asModulePath filename version <> "/" <> name <> ".elm"
 
+
+asModuleName :: FilePath -> Text
 asModuleName filename =
   filename
     & T.pack
     & T.replace "src/" ""
     & T.replace ".elm" ""
     & T.replace "/" "."
+
 
 asModuleHeader :: FilePath -> Int -> Text
 asModuleHeader filename version =
