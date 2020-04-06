@@ -235,6 +235,8 @@ Executable elmx
         Wire.Test
         Wire.Source
         Wire.TypeHash
+        Lamdera.Types
+        Lamdera.Evergreen
         LamderaInjection
         LamderaChecks
         LamderaGenerated

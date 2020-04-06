@@ -47,6 +47,7 @@ module Lamdera
   , lowerFirstLetter
   , pDocLn
   , findElmFiles
+  , tshow
   )
   where
 
@@ -404,6 +405,10 @@ findElmFiles fp = System.FilePath.Find.find isVisible (isElmFile &&? isVisible &
       isElmFile = extension ==? ".elm"
       isVisible = fileName /~? ".?*"
       isntEvergreen = directory /~? "src/Evergreen/*"
+
+
+tshow :: Show a => a -> Text
+tshow = T.pack . show
 
 
 x = 1
