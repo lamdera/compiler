@@ -152,6 +152,13 @@ mergeImports :: ElmImports -> ElmImports -> ElmImports
 mergeImports i1 i2 =
   unionWithKey (\k v1 v2 -> v1) i1 i2
 
+
+addImports :: ModuleName.Canonical -> ElmImports -> ElmFilesText -> ElmFilesText
+addImports scope@(ModuleName.Canonical (Pkg.Name author pkg) (N.Name module_)) imports ft =
+  imports
+    & foldl (\ft imp -> addImport scope imp ft) ft
+
+
 addImport :: ModuleName.Canonical -> Text -> ElmFilesText -> ElmFilesText
 addImport target@(ModuleName.Canonical (Pkg.Name author pkg) (N.Name module_)) imp ft =
   ft
@@ -346,8 +353,6 @@ aliasToFt scope identifier@(author, pkg, module_, tipe) typeName interfaces recu
               & mergeFts subft
           )
 
-
-
   in
   case aliasInterface of
     Interface.PublicAlias a -> treat a
@@ -358,6 +363,11 @@ canonicalToFt :: ModuleName.Canonical -> Interface.Interfaces -> [(ModuleName.Ca
 canonicalToFt scope interfaces recursionMap canonical tvarMap =
   let
     ft = Map.empty
+
+    scopeModule =
+      case scope of
+        (ModuleName.Canonical (Pkg.Name author pkg) (N.Name module_)) -> module_
+
   in
   -- debug $
   case canonical of
@@ -554,11 +564,17 @@ canonicalToFt scope interfaces recursionMap canonical tvarMap =
                 Just union -> do
                   unionToFt moduleName (author, pkg, module_, tipe) (N.toText name) interfaces newRecursionMap tvarMap union tvarResolvedParams
                     & (\(n, imports, ft) ->
-                      ( module_ <> "." <> n
+                      ( if moduleName == scope then
+                          n
+                        else
+                          module_ <> "." <> n
                       , Map.empty
                       , imports
                           & foldl (\ft imp -> addImport scope (imp <> "(utopinc)") ft) ft
-                          & addImport scope (module_ <> "(utop)")
+                          & if moduleName == scope then
+                              id
+                            else
+                              addImport scope (module_ <> "(utop)")
                       )
                     )
 
@@ -568,11 +584,17 @@ canonicalToFt scope interfaces recursionMap canonical tvarMap =
                     Just alias -> do
                       aliasToFt moduleName (author, pkg, module_, tipe) (N.toText name) interfaces newRecursionMap alias
                         & (\(n, imports, ft) ->
-                          ( module_ <> "." <> n
+                          ( if moduleName == scope then
+                              n
+                            else
+                              module_ <> "." <> n
                           , Map.empty
                           , imports
                               & foldl (\ft imp -> addImport scope (imp <> "(atopinc)") ft) ft
-                              & addImport scope (module_ <> "(atop)")
+                              & if moduleName == scope then
+                                  id
+                                else
+                                  addImport scope (module_ <> "(atop)")
                           )
                         )
 
@@ -588,6 +610,11 @@ canonicalToFt scope interfaces recursionMap canonical tvarMap =
 
 
     Can.TAlias moduleName name tvarMap_ aliasType ->
+      let
+        module_ =
+          case moduleName of
+            (ModuleName.Canonical (Pkg.Name author pkg) (N.Name module_)) -> module_
+      in
       case aliasType of
         Can.Holey cType ->
           let
@@ -602,23 +629,44 @@ canonicalToFt scope interfaces recursionMap canonical tvarMap =
                     _ -> (n,p)
                 )
 
-
-            (subt, imps, subft) = canonicalToFt scope interfaces recursionMap cType tvarResolvedMap
+            (subt, imps, subft) = canonicalToFt moduleName interfaces recursionMap cType tvarResolvedMap
 
             -- !_ = formatHaskellValue "Can.TAlias.Holey" (cType, tvarMap_) :: IO ()
           in
-          (subt, imps, subft)
-
+          ( if module_ == scopeModule then
+              N.toText name
+            else
+              module_ <> "." <> N.toText name
+          , Map.empty -- Map.singleton "Huh?" "What should go here? 2"
+          , (Map.singleton module_ $
+              ElmFileText
+                { imports = getValues imps
+                , types = ["type alias " <> N.toText name <> " = " <> subt]
+                })
+              & mergeFts subft
+          )
 
         Can.Filled cType ->
           -- @TODO hypothesis...
           -- If an alias is filled, then it can't have any open holes within it either?
           -- So we can take this opportunity to reset tvars to reduce likeliness of naming conflicts?
-
           let
-            (subt, imps, subft) = canonicalToFt scope interfaces recursionMap cType []
+            (subt, imps, subft) = canonicalToFt moduleName interfaces recursionMap cType []
           in
-          (subt, imps, subft)
+          -- (subt, imps, subft)
+
+          ( if module_ == scopeModule then
+              N.toText name
+            else
+              module_ <> "." <> N.toText name
+          , Map.empty -- Map.singleton "Huh?" "What should go here? 3"
+          , (Map.singleton module_ $
+              ElmFileText
+                { imports = getValues imps
+                , types = ["type alias " <> N.toText name <> " = " <> subt]
+                })
+              & mergeFts subft
+          )
 
 
     Can.TRecord fieldMap isPartial ->
@@ -652,10 +700,11 @@ canonicalToFt scope interfaces recursionMap canonical tvarMap =
               fields
                 -- & foldl (\acc (name, (st, imps, ft)) -> mergeImports acc imps) Map.empty
                 & foldl (\acc (name, (st, imps, ft)) -> mergeFts acc ft) Map.empty
+                & addImports scope imports
 
           in
           ("\n    { " <> fieldsFormatted <> "\n    }"
-          , Map.empty
+          , imports
           , mergedFt
           )
 
