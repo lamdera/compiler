@@ -26,6 +26,9 @@ import qualified System.Random as Random
 import Data.Function ((&))
 import qualified Data.Text as T
 import Data.TreeDiff
+import System.IO (openTempFile, hClose)
+import System.Process (readProcessWithExitCode)
+import Lamdera
 
 data Status = Failed | Passed !Int | Skipped | Pending
 
@@ -74,11 +77,11 @@ textStripped :: T.Text -> T.Text
 textStripped t =
   t
     & T.lines
-    & fmap T.strip
+    & fmap T.stripEnd
     & T.unlines
 
-expectEqualText :: T.Text -> T.Text -> Test ()
-expectEqualText expected actual =
+expectEqualTextTrimmed :: T.Text -> T.Text -> Test ()
+expectEqualTextTrimmed expected actual =
   let
     realExpected = textStripped expected
     realActual = textStripped actual
@@ -86,7 +89,23 @@ expectEqualText expected actual =
   if realExpected == realActual
     then
       ok
-    else
+    else do
+      diff <- liftIO $ do
+        (path1, handle1) <- openTempFile "/tmp" "dleft.txt"
+        (path2, handle2) <- openTempFile "/tmp" "dright.txt"
+
+        writeUtf8Handle handle1 realExpected
+        writeUtf8Handle handle2 realActual
+
+        hClose handle1
+        hClose handle2
+
+        sleep 100
+
+        (exit, stdout, stderr) <- readProcessWithExitCode "diff" ["-y", "--suppress-common-lines", path1, path2] ""
+
+        pure stdout
+
       crash $
         T.unpack $
         T.unlines
@@ -95,8 +114,9 @@ expectEqualText expected actual =
           , (realActual)
           , "⬅️  did not equal expected value:"
           , (realExpected)
-          , "diff:"
-          , T.pack $ show $ prettyEditExpr $ ediff (realExpected) (realActual)
+          , "🔥🔥🔥 diff:"
+          , T.pack diff
+          -- , T.pack $ show $ prettyEditExpr $ ediff (realExpected) (realActual)
           ]
 
 expectNotEqual :: (Eq a, Show a) => a -> a -> Test ()

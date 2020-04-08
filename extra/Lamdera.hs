@@ -6,6 +6,7 @@ module Lamdera
   ( lamderaVersion
   , stdoutSetup
   , unsafePerformIO
+  , liftIO
   , debugTrace
   , debug_
   , debug
@@ -23,6 +24,7 @@ module Lamdera
   , Data.Witherable.mapMaybe
   , Data.Witherable.catMaybes
   , isDebug
+  , isTypeSnapshot
   , ostype
   , env
   , unsafe
@@ -34,6 +36,7 @@ module Lamdera
   , formatHaskellValue
   , readUtf8Text
   , writeUtf8
+  , writeUtf8Handle
   , Dir.doesFileExist
   , remove
   , mkdir
@@ -48,6 +51,7 @@ module Lamdera
   , pDocLn
   , findElmFiles
   , tshow
+  , sleep
   )
   where
 
@@ -80,11 +84,12 @@ import Prelude hiding (lookup)
 import qualified Data.ByteString as BS
 import Data.FileEmbed (bsToExp)
 import Language.Haskell.TH (runIO)
-import System.FilePath as FP ((</>), joinPath, splitDirectories)
+import System.FilePath as FP ((</>), joinPath, splitDirectories, takeDirectory)
 import qualified System.Directory as Dir
 import Control.Monad (unless, filterM)
 import System.Info
 import System.FilePath.Find (always, directory, extension, fileName, find, (&&?), (/~?), (==?))
+import Control.Concurrent (threadDelay)
 
 -- Vendored from File.IO due to recursion errors
 import qualified System.IO as IO
@@ -150,6 +155,14 @@ dt msg value =
 isDebug :: IO Bool
 isDebug = do
   debugM <- Env.lookupEnv "LDEBUG"
+  case debugM of
+    Just _ -> pure True
+    Nothing -> pure False
+
+
+isTypeSnapshot :: IO Bool
+isTypeSnapshot = do
+  debugM <- Env.lookupEnv "LTYPESNAPSHOT"
   case debugM of
     Just _ -> pure True
     Nothing -> pure False
@@ -304,9 +317,18 @@ formatHaskellValue label v =
 -- Copied from File.IO due to cyclic imports and adjusted for Text
 writeUtf8 :: FilePath -> Text -> IO ()
 writeUtf8 filePath content = do
+  createDirIfMissing filePath
   debug_ $ "writeUtf8: " ++ show filePath
   withUtf8 filePath IO.WriteMode $ \handle ->
     BS.hPut handle (Text.encodeUtf8 content)
+
+
+-- Write directly to handle
+writeUtf8Handle :: IO.Handle -> Text -> IO ()
+writeUtf8Handle handle content = do
+  IO.hSetEncoding handle IO.utf8
+  BS.hPut handle (Text.encodeUtf8 content)
+
 
 remove :: FilePath -> IO ()
 remove filePath =
@@ -315,13 +337,22 @@ remove filePath =
         then Dir.removeFile filePath
         else return ()
 
+
 mkdir :: FilePath -> IO ()
 mkdir dir =
   Dir.createDirectoryIfMissing True dir
 
+
+createDirIfMissing :: FilePath -> IO ()
+createDirIfMissing filepath =
+  mkdir $ FP.takeDirectory filepath
+
+
 copyFile :: FilePath -> FilePath -> IO ()
-copyFile source dest =
+copyFile source dest = do
+  createDirIfMissing dest
   Dir.copyFileWithMetadata source dest
+
 
 replaceInFile :: Text -> Text -> FilePath -> IO ()
 replaceInFile find replace filename = do
@@ -333,22 +364,25 @@ replaceInFile find replace filename = do
     Nothing ->
       pure ()
 
-touch :: String -> IO ()
-touch path = do
+
+touch :: FilePath -> IO ()
+touch filepath = do
+  createDirIfMissing filepath
   case ostype of
     "mingw32" ->
-      System.Process.callCommand $ "copy /b " <> path <> " +,,"
+      System.Process.callCommand $ "copy /b " <> filepath <> " +,,"
 
     "darwin" ->
-      System.Process.callCommand $ "touch " ++ path
+      System.Process.callCommand $ "touch " ++ filepath
 
     "linux" ->
-      System.Process.callCommand $ "touch " ++ path
+      System.Process.callCommand $ "touch " ++ filepath
 
     _ -> do
       -- Default to trying touch...
-      putStrLn $ "WARNING: please report: skipping touch on unknown OSTYPE: " <> show ostype
+      putStrLn $ "ERROR: please report: skipping touch on unknown OSTYPE: " <> show ostype
       pure ()
+
 
 lamderaHashesPath :: FilePath -> FilePath
 lamderaHashesPath root =
@@ -409,6 +443,11 @@ findElmFiles fp = System.FilePath.Find.find isVisible (isElmFile &&? isVisible &
 
 tshow :: Show a => a -> Text
 tshow = T.pack . show
+
+
+sleep milliseconds =
+  -- 50 milliseconds
+  threadDelay $ milliseconds * 1000
 
 
 x = 1

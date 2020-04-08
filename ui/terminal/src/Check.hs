@@ -67,7 +67,6 @@ import LamderaGenerated (VersionInfo(..), createLamderaGenerated, vinfoVersion, 
 import qualified File.IO as IO
 import qualified Data.List as List
 import qualified Data.List.Safe as SafeList
-import Control.Concurrent (threadDelay)
 import NeatInterpolation
 import Text.Read
 import Data.Maybe
@@ -200,7 +199,7 @@ run () () = do
     if nextVersion == 1
       then do
         -- Always snapshot types for the first version, we need a starting point
-        _ <- liftIO $ snapshotCurrentTypesTo root nextVersion
+        _ <- liftIO $ snapshotCurrentTypesTo summary root nextVersion
 
         -- This is the first version, we don't need any migration checking.
         onlyWhen (not inProduction) $ committedCheck root nextVersionInfo
@@ -225,7 +224,7 @@ run () () = do
           then do
             debug $ "Local and production types differ"
 
-            _ <- liftIO $ snapshotCurrentTypesTo root nextVersion
+            _ <- liftIO $ snapshotCurrentTypesTo summary root nextVersion
 
             let
               typeCompares = zipWith3
@@ -347,7 +346,7 @@ buildProductionJsFiles root inProduction versionInfo = do
     -- _ <- liftIO $ readProcess "touch" [root </> "src" </> "Types.elm"] ""
 
     -- @TODO this is because the migrationCheck does weird terminal stuff that mangles the display... how to fix this?
-    -- liftIO $ threadDelay 50000 -- 50 milliseconds
+    -- liftIO $ sleep 50 -- 50 milliseconds
 
     -- liftIO $ callCommand $ "cp ~/lamdera/runtime/src/LamderaHelpers.elm " ++ root ++ "/src"
     -- liftIO $ callCommand $ "cp ~/lamdera/runtime/src/LFR.elm " ++ root ++ "/src"
@@ -365,7 +364,7 @@ buildProductionJsFiles root inProduction versionInfo = do
     -- liftIO $ Env.unsetEnv "BACKENDINJECTION"
 
     -- @TODO this is because the migrationCheck does weird terminal stuff that mangles the display... how to fix this?
-    liftIO $ threadDelay 50000 -- 50 milliseconds
+    liftIO $ sleep 50 -- 50 milliseconds
 
     Project.compile
       Output.Prod
@@ -377,7 +376,7 @@ buildProductionJsFiles root inProduction versionInfo = do
 
 
     -- @TODO this is because the migrationCheck does weird terminal stuff that mangles the display... how to fix this?
-    liftIO $ threadDelay 50000 -- 50 milliseconds
+    liftIO $ sleep 50 -- 50 milliseconds
 
     onlyWhen (version /= 1 && versionInfo == WithMigrations version) $ do -- Version 1 has no migrations for rewrite
 
@@ -394,9 +393,36 @@ buildProductionJsFiles root inProduction versionInfo = do
     -- osReplace ("s/import Types/import Evergreen.Type.V" <> show version <> "/g") migrationPath
 
 
-snapshotCurrentTypesTo :: FilePath -> Int -> IO String
-snapshotCurrentTypesTo root version = do
+
+-- @TODO drop this entire type down to Task then we don't need the wrapping of IO
+snapshotCurrentTypesTo :: Summary.Summary -> FilePath -> Int -> IO String
+snapshotCurrentTypesTo summary root version = do
   -- Snapshot the current types, and rename the module for the snapshot
+
+  Env.setEnv "LTYPESNAPSHOT" ""
+
+  -- invoke compiler in snapshot mode for src/Types.elm
+  Dir.withCurrentDirectory root $
+    do  reporter <- Terminal.create
+        Task.run reporter $
+          do  --summary <- Project.getRoot
+              Project.compile
+                Output.Prod
+                Output.Client
+                (Just (Output.JavaScript Nothing "/dev/null"))
+                Nothing
+                summary
+                [ "src" </> "Types.elm" ]
+              --
+              -- let jsOutput = Just (Output.Html Nothing tempFileName)
+              -- Project.compile Output.Dev Output.Client jsOutput Nothing summary rootPaths
+
+  Env.unsetEnv "LTYPESNAPSHOT"
+
+  pure ""
+
+
+xxxxxxx root version = do
   _ <- mkdir $ root </> "src/Evergreen/Type"
   let nextType = (root </> "src/Evergreen/Type/V") <> show version <> ".elm"
   debug $ "Snapshotting current types to " <> nextType
@@ -673,7 +699,7 @@ checkUserProjectCompiles root = do
   Project.compile Output.Prod Output.Client jsOutput Nothing summary [ "src" </> "Backend.elm" ]
 
   -- @TODO this is because the migrationCheck does weird terminal stuff that mangles the display... how to fix this?
-  liftIO $ threadDelay 50000 -- 50 milliseconds
+  liftIO $ sleep 50 -- 50 milliseconds
 
 
 
@@ -709,7 +735,7 @@ migrationCheck root version =
               Project.compile Output.Dev Output.Client jsOutput Nothing summary [ lamderaCheckBothPath ]
 
               -- @TODO this is because the migrationCheck does weird terminal stuff that mangles the display... how to fix this?
-              liftIO $ threadDelay 50000 -- 50 milliseconds
+              liftIO $ sleep 50 -- 50 milliseconds
 
               debug "Cleaning up build scaffold"
               -- Remove our temporarily checker file

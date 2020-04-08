@@ -76,8 +76,9 @@ type ElmFilesText = Map Text ElmFileText
 -- @TODO in future we can use this to pin package versions and adjust import routing to those snapshots
 type ElmImports = Map Text Text
 
-sel2 (a,b,c) = b
-sel3 (a,b,c) = c
+selNames (a,b,c) = a
+selImports (a,b,c) = b
+selFts (a,b,c) = c
 
 getValues m =
   m & Map.toList & fmap snd
@@ -108,22 +109,42 @@ snapshotCurrentTypes pkg module_@(Valid.Module name _ _ _ _ _ _ _ _ _) interface
           Just i -> i
           Nothing -> error "The impossible happened, could not find src/Types.elm"
 
-      typediffs =
+      efts =
         lamderaTypes
           & fmap (\t -> (t, ftByName interfaces t name interfaceTypes_elm))
-          & (\v -> unsafePerformIO $ do
-              formatHaskellValue "ltypes-intermediary" (v) :: IO ()
-              pure v
-            )
+          -- & (\v -> unsafePerformIO $ do
+          --     formatHaskellValue "ltypes-intermediary" (v) :: IO ()
+          --     pure v
+          --   )
           & foldl (\acc (t, ft) -> mergeFts acc ft) Map.empty
-          & showFt
 
-      -- (_, dtype) = head dtypes
-      -- (ft, t) (convert dtype Map.empty)
+      debugEfts =
+        efts
+          & Map.filterWithKey (\k eft -> k == "Types")
+          & eftToText
 
-      !_ = unsafePerformIO $
-        -- formatHaskellValue "some sensible label" (typediffs) :: IO ()
-        putStrLn $ T.unpack $ typediffs
+      !_ = unsafePerformIO $ do
+        -- formatHaskellValue "some sensible label" (efts) :: IO ()
+        putStrLn $ T.unpack $ debugEfts
+
+        root <- getProjectRoot
+        efts
+          & Map.toList
+          & mapM (\(file, ef@(ElmFileText imports types)) ->
+            let
+              output = efToText ("Evergreen.Types.V1." <> file, ef)
+
+              filename =
+                file
+                  & T.splitOn "."
+                  & foldl (\acc i -> acc </> T.unpack i) (root </> "src" </> "Evergreen" </> "Types" </> "V1")
+                  & (\v -> v <> ".elm")
+
+            in
+            onlyWhen (not $ textContains "/" file) $ do
+              -- putStrLn $ show $ "writing: " <> filename
+              writeUtf8 filename output
+          )
 
     Result.ok ()
 
@@ -139,9 +160,16 @@ mergeFts :: ElmFilesText -> ElmFilesText -> ElmFilesText
 mergeFts ft1 ft2 =
   unionWithKey mergeElmFileText ft1 ft2
 
+
 mergeImports :: ElmImports -> ElmImports -> ElmImports
 mergeImports i1 i2 =
   unionWithKey (\k v1 v2 -> v1) i1 i2
+
+
+mergeAllImports :: [ElmImports] -> ElmImports
+mergeAllImports imps =
+  imps
+    & foldl (\acc elmImport -> mergeImports acc elmImport) Map.empty
 
 
 addImports :: ModuleName.Canonical -> ElmImports -> ElmFilesText -> ElmFilesText
@@ -167,13 +195,22 @@ addImport target@(ModuleName.Canonical (Pkg.Name author pkg) (N.Name module_)) i
     ) module_
 
 
-showFt :: ElmFilesText -> Text
-showFt ft =
+eftToText :: ElmFilesText -> Text
+eftToText ft =
   ft
     & Map.toList
     & List.map (\(file, ef@(ElmFileText imports types)) ->
-      [ "\n\n---------------------------------------------------------------------------------\n"
-      , "module " <> file <> " exposing (..)\n\n\n"
+      "\n\n---------------------------------------------------------------------------------\n" <>
+      efToText (file, ef)
+    )
+    & T.concat
+
+
+efToText :: (Text, ElmFileText) -> Text
+efToText ft =
+  case ft of
+    (file, ef@(ElmFileText imports types)) ->
+      [ "module " <> file <> " exposing (..)\n\n"
       , if length imports > 0 then
           imports
             & List.sort
@@ -184,9 +221,7 @@ showFt ft =
           ""
       , T.intercalate "\n\n\n" types
       ]
-    )
-    & List.concat
-    & T.intercalate ""
+      & T.concat
 
 
 ftByName :: (Map.Map Canonical Module.Interface) -> Text -> N.Name -> Interface.Interface -> ElmFilesText
@@ -245,6 +280,12 @@ unionToFt scope identifier@(author, pkg, module_, tipe) typeName interfaces recu
             & fmap (N.toText . fst)
             & T.intercalate " "
 
+        usageParams =
+          params
+            & fmap (\param -> canonicalToFt scope interfaces recursionMap param tvarMap)
+            & fmap selNames
+            & T.intercalate " "
+
         constructors =
           Can._u_alts union
             & fmap (\(Can.Ctor name index int params_) ->
@@ -271,12 +312,22 @@ unionToFt scope identifier@(author, pkg, module_, tipe) typeName interfaces recu
         fts =
           constructors
             & foldl (\acc (st, imps, ft) -> mergeFts acc ft) Map.empty
+
+        importScope =
+          if moduleName == scope then
+            ""
+          else
+            module_ <> "."
+
+        moduleName =
+          (ModuleName.Canonical (Pkg.Name author pkg) (N.Name module_))
+
       in
-      ( if length tvarMap > 0 then
-          typeName <> " " <> tvars
+      ( if length params > 0 then
+          "(" <> importScope <> typeName <> " " <> tvars <> ")"
         else
-          typeName
-      , Map.empty
+          importScope <> typeName
+      , imports
       , (Map.singleton (moduleKey identifier) $
           ElmFileText
             { imports = imports & getValues
@@ -296,7 +347,7 @@ unionToFt scope identifier@(author, pkg, module_, tipe) typeName interfaces recu
     Interface.PrivateUnion u -> treat u
 
 
--- A top level alias definition i.e. `type alias ...`
+-- A top level Alias definition i.e. `type alias ...`
 aliasToFt :: ModuleName.Canonical -> (Text, Text, Text, Text) -> Text -> (Map.Map Canonical Module.Interface) -> [(ModuleName.Canonical, N.Name)] -> Interface.Alias -> SnapRes
 aliasToFt scope identifier@(author, pkg, module_, tipe) typeName interfaces recursionMap aliasInterface =
   let
@@ -314,11 +365,19 @@ aliasToFt scope identifier@(author, pkg, module_, tipe) typeName interfaces recu
                 & fmap N.toText
                 & T.intercalate " "
 
+            importScope =
+              if moduleName == scope then
+                ""
+              else
+                module_ <> "."
+
+            moduleName =
+              (ModuleName.Canonical (Pkg.Name author pkg) (N.Name module_))
           in
           ( if length tvars > 0 then
-               typeName <> " " <> tvars_
+               importScope <> typeName <> " <2>" <> tvars_
              else
-               typeName
+               importScope <> typeName
           , Map.empty
           , (Map.singleton (moduleKey identifier) $
               ElmFileText
@@ -443,7 +502,7 @@ canonicalToFt scope interfaces recursionMap canonical tvarMap =
               let
                 (subt, imps, subft) = (canonicalToFt scope interfaces recursionMap p tvarMap)
               in
-              ("Maybe " <> subt, imps, subft)
+              ("(Maybe " <> subt <> ")", imps, subft)
               -- DMaybe (canonicalToFt scope interfaces recursionMap p tvarMap)
             _ ->
               error "Fatal: impossible multi-param Maybe! Please report this."
@@ -454,7 +513,7 @@ canonicalToFt scope interfaces recursionMap canonical tvarMap =
               let
                 (subt, imps, subft) = (canonicalToFt scope interfaces recursionMap p tvarMap)
               in
-              ("List " <> subt, imps, subft)
+              ("(List " <> subt <> ")", imps, subft)
               -- DList (canonicalToFt scope interfaces recursionMap p tvarMap)
             _ ->
               error "Fatal: impossible multi-param List! Please report this."
@@ -465,7 +524,7 @@ canonicalToFt scope interfaces recursionMap canonical tvarMap =
               let
                 (subt, imps, subft) = (canonicalToFt scope interfaces recursionMap p tvarMap)
               in
-              ("Array " <> subt, imps & Map.insert "Array" "Array", subft)
+              ("(Array " <> subt <> ")", imps & Map.insert "Array" "Array", subft)
               -- DArray (canonicalToFt scope interfaces recursionMap p tvarMap)
             _ ->
               error "Fatal: impossible multi-param Array! Please report this."
@@ -476,7 +535,7 @@ canonicalToFt scope interfaces recursionMap canonical tvarMap =
               let
                 (subt, imps, subft) = (canonicalToFt scope interfaces recursionMap p tvarMap)
               in
-              ("Set " <> subt, imps & Map.insert "Set" "Set", subft)
+              ("(Set " <> subt <> ")", imps & Map.insert "Set" "Set", subft)
               -- DSet (canonicalToFt scope interfaces recursionMap p tvarMap)
             _ ->
               error "Fatal: impossible multi-param Set! Please report this."
@@ -488,7 +547,7 @@ canonicalToFt scope interfaces recursionMap canonical tvarMap =
                 (subt, imps, subft) = (canonicalToFt scope interfaces recursionMap result tvarMap)
                 (subt2, imps2, subft2) = (canonicalToFt scope interfaces recursionMap err tvarMap)
               in
-              ("Result " <> subt <> " " <> subt2, mergeImports imps imps2, mergeFts subft subft2)
+              ("(Result " <> subt <> " " <> subt2 <> ")", mergeImports imps imps2, mergeFts subft subft2)
               -- DResult (canonicalToFt scope interfaces recursionMap result tvarMap) (canonicalToFt scope interfaces recursionMap err tvarMap)
             _ ->
               error "Fatal: impossible !2 param Result type! Please report this."
@@ -501,7 +560,7 @@ canonicalToFt scope interfaces recursionMap canonical tvarMap =
                 (subt, imps, subft) = (canonicalToFt scope interfaces recursionMap result tvarMap)
                 (subt2, imps2, subft2) = (canonicalToFt scope interfaces recursionMap err tvarMap)
               in
-              ("Dict " <> subt <> " " <> subt2, mergeImports imps imps2 & Map.insert "Dict" "Dict", mergeFts subft subft2)
+              ("(Dict " <> subt <> " " <> subt2 <> ")", mergeImports imps imps2 & Map.insert "Dict" "Dict", mergeFts subft subft2)
               -- DDict (canonicalToFt scope interfaces recursionMap result tvarMap) (canonicalToFt scope interfaces recursionMap err tvarMap)
             _ ->
               error "Fatal: impossible !2 param Dict type! Please report this."
@@ -565,10 +624,7 @@ canonicalToFt scope interfaces recursionMap canonical tvarMap =
                 Just union -> do
                   unionToFt moduleName (author, pkg, module_, tipe) (N.toText name) interfaces newRecursionMap tvarMap union tvarResolvedParams
                     & (\(n, imports, subft) ->
-                      ( if moduleName == scope then
-                          n
-                        else
-                          module_ <> "." <> n
+                      ( n
                       , Map.empty
                       , subft
                           & addImports scope imports
@@ -585,10 +641,7 @@ canonicalToFt scope interfaces recursionMap canonical tvarMap =
                     Just alias -> do
                       aliasToFt moduleName (author, pkg, module_, tipe) (N.toText name) interfaces newRecursionMap alias
                         & (\(n, imports, subft) ->
-                          ( if moduleName == scope then
-                              n
-                            else
-                              module_ <> "." <> n
+                          ( n
                           , Map.empty
                           , subft
                               & addImports scope imports
@@ -619,16 +672,36 @@ canonicalToFt scope interfaces recursionMap canonical tvarMap =
       case aliasType of
         Can.Holey cType ->
           let
-            -- tvarResolvedMap =
-            --   tvarMap_
-            --     & fmap (\(n,p) ->
+
+            -- resolveTvars ps =
+            --   ps
+            --     & fmap (\p ->
             --       case p of
             --         Can.TVar a ->
             --           case List.find (\(t,ti) -> t == a) tvarMap of
-            --             Just (_,ti) -> (n,ti)
-            --             Nothing -> (n,p)
-            --         _ -> (n,p)
+            --             Just (_,ti) -> ti
+            --             Nothing -> p
+            --         _ -> p
             --     )
+
+            usageParamFts =
+              tvarMap_
+                & fmap (\(n, paramType) ->
+                  canonicalToFt moduleName interfaces recursionMap paramType tvarMap_
+                )
+
+            usageParamNames =
+              usageParamFts
+                & fmap selNames
+                & T.intercalate " "
+
+            usageParamImports =
+              usageParamFts
+                & fmap selImports
+                & mergeAllImports
+
+                -- & fmap (N.toText . fst)
+                -- & T.intercalate " "
 
             tvars =
               tvarMap_
@@ -637,12 +710,22 @@ canonicalToFt scope interfaces recursionMap canonical tvarMap =
 
             (subt, imps, subft) = canonicalToFt moduleName interfaces recursionMap cType tvarMap_
 
+
+            importScope =
+              if moduleName == scope then
+                ""
+              else
+                module_ <> "."
+
+            -- moduleName =
+            --   (ModuleName.Canonical (Pkg.Name author pkg) (N.Name module_))
+
             -- !_ = formatHaskellValue "Can.TAlias.Holey" (cType, tvarMap_) :: IO ()
           in
-          ( if module_ == scopeModule then
-              N.toText name <> " " <> tvars
+          ( if length tvarMap_ > 0 then
+              "(" <> importScope <> N.toText name <> " " <> tvars <> ")"
             else
-              module_ <> "." <> N.toText name <> " " <> tvars
+              importScope <> N.toText name
           , Map.empty -- Map.singleton "Huh?" "What should go here? 2"
           , (Map.singleton (moduleNameKey moduleName) $
               ElmFileText

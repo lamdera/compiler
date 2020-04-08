@@ -82,6 +82,8 @@ maybeGenHashes pkg module_@(Valid.Module name _ _ _ _ _ _ _ _ _) interfaces = do
         lamderaTypes
           & fmap (\t -> (t, diffableTypeByName interfaces t name interfaceTypes_elm))
 
+      -- !_ = formatHaskellValue "typediffs" (typediffs) :: IO ()
+
       hashes =
         typediffs
           & fmap (\(t, td) -> diffableTypeToHash td)
@@ -148,13 +150,13 @@ maybeGenHashes pkg module_@(Valid.Module name _ _ _ _ _ _ _ _ _) interfaces = do
           [ D.reflow "See <https://dashboard.lamdera.app/docs/wire> for more info."
           ] ++ notifyWarnings)
 
-      else
+      else do
         unsafePerformIO $ do
           root <- getProjectRoot
           writeUtf8 (lamderaHashesPath root) $ T.pack $ show hashes
 
           if (List.length formattedWarnings > 0)
-            then
+            then do
               writeUtf8 (lamderaExternalWarningsPath root) $ textWarnings
             else
               remove (lamderaExternalWarningsPath root)
@@ -192,6 +194,7 @@ diffableTypeByName interfaces typeName name interface = do
           DError $ "Found no type named " <> typeName <> " in " <> N.toText name
 
 
+-- A top level Custom Type definition i.e. `type Herp = Derp ...`
 unionToDiffableType :: Text -> (Map.Map Canonical Module.Interface) -> [(ModuleName.Canonical, N.Name)] -> [(N.Name, Can.Type)] -> Interface.Union -> [Can.Type] -> DiffableType
 unionToDiffableType typeName interfaces recursionMap tvarMap unionInterface params =
   let
@@ -219,10 +222,10 @@ unionToDiffableType typeName interfaces recursionMap tvarMap unionInterface para
         -- For each constructor
         & fmap (\(Can.Ctor name index int params_) ->
           ( N.toText name
-          , fmap
-              -- For each constructor type param
-              (\p -> canonicalToDiffableType interfaces recursionMap p tvarMap )
-              (resolveTvars params_)
+          , -- For each constructor type param
+            params_
+              & resolveTvars
+              & fmap (\resolvedParam -> canonicalToDiffableType interfaces recursionMap resolvedParam tvarMap )
           )
         )
         & DCustom typeName
@@ -233,6 +236,7 @@ unionToDiffableType typeName interfaces recursionMap tvarMap unionInterface para
     Interface.PrivateUnion u -> treat u
 
 
+-- A top level Alias definition i.e. `type alias ...`
 aliasToDiffableType :: (Map.Map Canonical Module.Interface) -> [(ModuleName.Canonical, N.Name)] -> Interface.Alias -> DiffableType
 aliasToDiffableType interfaces recursionMap aliasInterface =
   let
@@ -453,7 +457,7 @@ canonicalToDiffableType interfaces recursionMap canonical tvarMap =
                     _ -> (n,p)
                 )
 
-            -- !_ = formatHaskellValue "Can.TAlias.Holey" (cType, tvarMap_) :: IO ()
+            -- !_ = formatHaskellValue ("Can.TAlias.Holey - " <> N.toString name) (cType, tvarMap_) :: IO ()
           in
           canonicalToDiffableType interfaces recursionMap cType tvarResolvedMap
 

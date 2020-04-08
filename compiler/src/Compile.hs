@@ -46,6 +46,7 @@ import qualified Elm.Compiler.Module as Module
 import qualified Debug.Trace as DT
 import Wire.PrettyPrint
 import Lamdera
+import qualified Lamdera.Evergreen
 import Wire.TypeHash as TypeHash
 
 -- COMPILE
@@ -156,6 +157,10 @@ compile flag pkg importDict interfaces source srcMVar =
           -- !x = formatHaskellValue "importdict" (importDict) :: IO ()
 
         TypeHash.maybeGenHashes pkg valid_ combinedInterfaces
+
+        let !typeSnapshot = unsafePerformIO Lamdera.isTypeSnapshot
+        onlyWhen typeSnapshot (Lamdera.Evergreen.snapshotCurrentTypes pkg valid_ combinedInterfaces)
+
 
       Result.ok $
         Artifacts

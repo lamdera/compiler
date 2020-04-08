@@ -96,7 +96,7 @@ compile = do
 
 tempFileName :: FilePath
 tempFileName =
-  "test.html"
+  "/dev/null"
 
 
 cp :: String -> String -> IO ()
@@ -109,42 +109,44 @@ rm path = Lamdera.remove path
 
 -- CHECK
 check = do
-  let project = "/Users/mario/lamdera/test/v3"
-  setEnv "LAMDERA_APP_NAME" "test-local"
+  -- checkWithParams "/Users/mario/lamdera/test/v3" "test-local"
+  checkWithParams "/Users/mario/lamdera/test/v1" "testapp"
+  -- checkWithParams "/Users/mario/dev/projects/lamdera-dashboard" "dashboard"
 
-  -- let project = "/Users/mario/dev/projects/lamdera-dashboard"
-  -- setEnv "LAMDERA_APP_NAME" "dashboard"
+
+checkWithParams projectPath appName = do
+  setEnv "LAMDERA_APP_NAME" appName
 
   setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
   setEnv "LDEBUG" "1"
+  setEnv "LTYPESNAPSHOT" "1"
   setEnv "ELM_HOME" "/Users/mario/elm-home-elmx-test"
 
   -- setEnv "HOIST_REBUILD" "1"
   -- setEnv "VERSION" "3"
 
-  cp "/Users/mario/lamdera/runtime/src/LBR.elm" (project ++ "/src/LBR.elm")
-  cp "/Users/mario/lamdera/runtime/src/LFR.elm" (project ++ "/src/LFR.elm")
-  cp "/Users/mario/lamdera/runtime/src/LamderaHelpers.elm" (project ++ "/src/LamderaHelpers.elm")
+  cp "/Users/mario/lamdera/runtime/src/LBR.elm" (projectPath ++ "/src/LBR.elm")
+  cp "/Users/mario/lamdera/runtime/src/LFR.elm" (projectPath ++ "/src/LFR.elm")
+  cp "/Users/mario/lamdera/runtime/src/LamderaHelpers.elm" (projectPath ++ "/src/LamderaHelpers.elm")
 
-  -- Dir.withCurrentDirectory ("/Users/mario/dev/projects/lamdera-dashboard") $
-  Dir.withCurrentDirectory project $
+  Dir.withCurrentDirectory projectPath $
     do
         Check.run () ()
 
-  rm (project ++ "/src/LBR.elm")
-  rm (project ++ "/src/LFR.elm")
-  rm (project ++ "/src/LamderaHelpers.elm")
+  rm (projectPath ++ "/src/LBR.elm")
+  rm (projectPath ++ "/src/LFR.elm")
+  rm (projectPath ++ "/src/LamderaHelpers.elm")
 
 
 testWire = do
-  -- let project = "/Users/mario/lamdera/test/v1"
-  -- setEnv "LAMDERA_APP_NAME" "testapp"
+  let project = "/Users/mario/lamdera/test/v1"
+  setEnv "LAMDERA_APP_NAME" "testapp"
 
   -- let project = "/Users/mario/dev/projects/elm-spa-example"
   -- setEnv "LAMDERA_APP_NAME" "realworldish"
 
-  let project = "/Users/mario/dev/projects/lamdera-test"
-  setEnv "LAMDERA_APP_NAME" "lamderatest"
+  -- let project = "/Users/mario/dev/projects/lamdera-test"
+  -- setEnv "LAMDERA_APP_NAME" "lamderatest"
 
   -- let project = "/Users/mario/tmp/lamdera-experiments"
   -- setEnv "LAMDERA_APP_NAME" "lamderatest"

@@ -11,7 +11,9 @@ import qualified Data.Text as T
 import Lamdera
 
 import LamderaGenerated
+import qualified Lamdera.EvergreenTest
 
+runAll = run suite
 
 show_ :: Show a => a -> T.Text
 show_ x =
@@ -20,7 +22,8 @@ show_ x =
 
 suite :: Test ()
 suite = tests
-  [ scope "deploy 3 after migrate 2" $ do
+  [ scope "evergreen -> type snapshots -> " $ Lamdera.EvergreenTest.suite
+  , scope "deploy 3 after migrate 2" $ do
       migrations <- io $ getMigrationsSequence ["V2.elm"] (WithoutMigrations 3)
       show migrations
         & expectEqual "[[WithMigrations 1,WithMigrations 2,WithoutMigrations 3],[WithMigrations 2,WithoutMigrations 3],[WithoutMigrations 3]]"
@@ -32,10 +35,10 @@ suite = tests
 
   , scope "historicMigrations: no deploys" $ do
       migrations <- io $ getMigrationsSequence [] (WithoutMigrations 1)
-      expectEqualText (historicMigrations migrations) ""
+      expectEqualTextTrimmed (historicMigrations migrations) ""
   , scope "historicMigrations: 1 deploy" $ do
       migrations <- io $ getMigrationsSequence [] (WithoutMigrations 2)
-      expectEqualText (historicMigrations migrations) [text|
+      expectEqualTextTrimmed (historicMigrations migrations) [text|
         1 ->
             case tipe of
                 "BackendModel" ->
