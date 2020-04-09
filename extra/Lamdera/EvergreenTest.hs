@@ -1,0 +1,237 @@
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE QuasiQuotes #-}
+
+module Lamdera.EvergreenTest where
+
+
+import qualified AST.Canonical as Can
+import AST.Module.Name (Canonical(..))
+import qualified AST.Module.Name as ModuleName
+import qualified AST.Utils.Type as Type
+
+
+import qualified Data.Digest.Pure.SHA as SHA
+import qualified Data.Char
+import qualified Data.Map as Map
+import Data.Map.Strict (unionWithKey)
+import qualified Data.Map.Merge.Strict as Map
+import qualified Data.List as List
+import qualified Data.Text as T
+import qualified Data.Text.Lazy as TL
+import qualified Data.Text.Lazy.Encoding as TLE
+import qualified Data.Text.Encoding as TE
+import Data.List.Index (imap)
+import qualified Elm.Name as N
+import qualified Elm.Package as Pkg
+import qualified Reporting.Annotation as A
+import qualified Reporting.Region as R
+import qualified Elm.Interface as Interface
+-- import qualified Reporting.Progress as Progress
+-- import qualified Stuff.Paths as Paths
+
+import qualified Data.ByteString.Char8 as BS8
+
+-- import qualified File.IO as File
+import Control.Monad.Trans (liftIO)
+import System.IO.Unsafe (unsafePerformIO)
+import System.FilePath ((</>))
+import CanSer.CanSer as CanSer
+
+import qualified AST.Valid as Valid
+import qualified Elm.Compiler.Module as Module
+import qualified Reporting.Result as Result
+
+import qualified Reporting.Error.LamderaError as LamderaError
+import qualified Reporting.Doc as D
+import qualified Reporting.Error as Error
+
+--- Need to clean up the above types, many are unused.
+import System.FilePath ((</>))
+import System.Process (readProcess)
+import Data.Monoid ((<>))
+import Data.Map (Map)
+import qualified Data.Map as Map
+
+import Lamdera
+import Lamdera.Types
+
+import NeatInterpolation
+import EasyTest
+import qualified Wire.Test
+import Lamdera.Evergreen
+
+suite :: Test ()
+suite = tests
+  [ scope "mergeAllImports" $ do
+      expectEqual
+        (mergeAllImports [Map.fromList [("Derp","Derp")], Map.fromList [("Herp","Herp")]])
+        (Map.fromList [("Derp","Derp"), ("Herp","Herp")])
+
+  , scope "addImports" $ do
+      let
+        moduleName = (ModuleName.Canonical (Pkg.Name "author" "pkg") (N.Name "Types"))
+        imports = Map.singleton "Derping" "Derping"
+
+        fts :: ElmFilesText
+        fts =
+          (Map.fromList
+            [ ( "Something"
+              , ElmFileText
+                  { imports = ["Existing"]
+                  , types = []
+                  }
+              )
+            ]
+          )
+
+        expected :: ElmFilesText
+        expected =
+          (Map.fromList
+            [ ( "Types"
+              , ElmFileText
+                  { imports = ["Derping"]
+                  , types = []
+                  }
+              )
+            , ( "Something"
+              , ElmFileText
+                  { imports = ["Existing"]
+                  , types = []
+                  }
+              )
+            ]
+          )
+      expectEqual
+        (addImports moduleName imports fts)
+        expected
+
+
+  , scope "alltypes e2e to disk for lamdera/test/v1/" $ do
+
+      let
+        generatedFilepath = "/Users/mario/lamdera/test/v1/src/Evergreen/Types/V1/Types.elm"
+        expected =
+          [text|
+            module Evergreen.Types.V1.Types exposing (..)
+
+            import Browser.Navigation
+            import Dict
+            import Http
+            import Lamdera
+            import Set
+            import Time
+            import WireTypes
+
+
+            type alias FrontendModel =
+                { key : Browser.Navigation.Key
+                , counter : Int
+                , sessionId : String
+                , clientId : String
+                , timestamps : (List
+                { label : String
+                , time : Time.Posix
+                })
+                , lastReceived : Time.Posix
+                , subCounter : Int
+                , rpcRes : (Result Http.Error Int)
+                }
+
+
+            type Role
+                = Admin
+                | User
+
+
+            type alias Record =
+                { name : String
+                , age : Int
+                , roles : (List Role)
+                }
+
+
+            type alias BackendModel =
+                { counter : Int
+                , clients : (Set Lamdera.ClientId)
+                , currentTime : Time.Posix
+                , benchList : (List Int)
+                , benchDictRec : (Dict String Record)
+                }
+
+
+            type FrontendMsg
+                = Increment
+                | Decrement
+                | RequestedSnapshot
+                | RequestedRestore
+                | RequestedMemcheck
+                | RequestedGc
+                | RequestedUpgrade
+                | TestFEWire
+                | HttpFinished (Result Http.Error ())
+                | Stamp FrontendMsg
+                | Test1000
+                | Test10000
+                | Start FrontendMsg Time.Posix
+                | Finish String Time.Posix
+                | SubCounterIncremented Time.Posix
+                | GrowBenchListClicked Int
+                | ClearBenchListClicked
+                | GrowBenchDictRecClicked Int
+                | ClearBenchDictRecClicked
+                | FNoop
+                | ExternalT (WireTypes.ExternalType String)
+                | TestRPC
+                | RPCRes (Result Http.Error Int)
+
+
+            type ToBackend
+                = ClientJoin
+                | CounterIncremented
+                | CounterDecremented
+                | GrowBenchList Int
+                | GrowBenchDictRec Int
+                | ClearBenchList
+                | ClearBenchDictRec
+
+
+            type BackendMsg
+                = NewTime Time.Posix
+                | DelayedNewValue Lamdera.SessionId Lamdera.ClientId
+                | Noop
+                | ExternalTX (WireTypes.ExternalRecord (WireTypes.AnotherParamRecord Int))
+
+
+            type ToFrontend
+                = CounterNewValue Int Lamdera.SessionId Lamdera.ClientId
+                | BenchStats
+                { benchListSize : Int
+                }
+
+          |]
+
+      liftIO $ Wire.Test.checkWithParams "/Users/mario/lamdera/test/v1" "testapp"
+      original <- liftIO $ readUtf8Text "/Users/mario/lamdera/test/v1/src/Types.elm"
+      generatedM <- liftIO $ readUtf8Text generatedFilepath
+
+      case generatedM of
+        Just generated ->
+          expectEqualTextTrimmed generated expected
+
+        Nothing ->
+          crash $ "Could not read generated file: " <> generatedFilepath
+
+
+
+  , scope "testing2" $ do
+
+      expectEqual "blah" "blah"
+  , scope "testing3" $ do
+
+      expectEqual "blah" "blah"
+      -- migrations <- io $ getMigrationsSequence ["V2.elm"] (WithoutMigrations 3)
+      -- show migrations
+      --   & expectEqual "[[WithMigrations 1,WithMigrations 2,WithoutMigrations 3],[WithMigrations 2,WithoutMigrations 3],[WithoutMigrations 3]]"
+
+  ]
