@@ -124,9 +124,10 @@ suite = tests
 
       liftIO $ Lamdera.Test.checkWithParams "/Users/mario/lamdera/test/v1" "testapp"
 
-      generationFileCheck
+      scope "-> Types.elm" $
+        generationFileCheck
         "/Users/mario/lamdera/test/v1/src/Types.elm"
-        "/Users/mario/lamdera/test/v1/src/Evergreen/Types/V1/Types.elm"
+        "/Users/mario/lamdera/test/v1/src/Evergreen/V1/Types.elm"
         [text|
           module Evergreen.Types.V1.Types exposing (..)
 
@@ -227,9 +228,10 @@ suite = tests
 
         |]
 
-      generationFileCheck
+      scope "-> WireTypes.elm" $
+        generationFileCheck
         "/Users/mario/lamdera/test/v1/src/WireTypes.elm"
-        "/Users/mario/lamdera/test/v1/src/Evergreen/Types/V1/WireTypes.elm"
+        "/Users/mario/lamdera/test/v1/src/Evergreen/V1/WireTypes.elm"
         [text|
           module Evergreen.Types.V1.WireTypes exposing (..)
 
@@ -316,15 +318,5 @@ suite = tests
 
           type alias ExternalAliasTuple = (Float, Bool)
         |]
-
-  , scope "testing2" $ do
-
-      expectEqual "blah" "blah"
-  , scope "testing3" $ do
-
-      expectEqual "blah" "blah"
-      -- migrations <- io $ getMigrationsSequence ["V2.elm"] (WithoutMigrations 3)
-      -- show migrations
-      --   & expectEqual "[[WithMigrations 1,WithMigrations 2,WithoutMigrations 3],[WithMigrations 2,WithoutMigrations 3],[WithoutMigrations 3]]"
 
   ]
