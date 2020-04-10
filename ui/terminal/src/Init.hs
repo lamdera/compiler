@@ -23,7 +23,7 @@ import qualified Reporting.Exit.Init as E
 import qualified Reporting.Task as Task
 import qualified Reporting.Progress.Terminal as Terminal
 
-import LamderaChecks
+import Lamdera.Checks
 
 -- RUN
 
@@ -40,7 +40,7 @@ run () () =
               if approved
                 then
                   do  init
-                      liftIO $ LamderaChecks.writeDefaultImplementations
+                      liftIO $ Lamdera.Checks.writeDefaultImplementations
                       liftIO $ putStrLn "Okay, I created it. Now read that link!"
                 else
                   liftIO $ putStrLn "Okay, I did not make any changes!"

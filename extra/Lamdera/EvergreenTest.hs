@@ -58,7 +58,7 @@ import Lamdera.Types
 
 import NeatInterpolation
 import EasyTest
-import qualified Wire.Test
+import qualified Lamdera.Test
 import Lamdera.Evergreen
 
 
@@ -122,7 +122,7 @@ suite = tests
 
   , scope "alltypes e2e to disk for lamdera/test/v1/" $ do
 
-      liftIO $ Wire.Test.checkWithParams "/Users/mario/lamdera/test/v1" "testapp"
+      liftIO $ Lamdera.Test.checkWithParams "/Users/mario/lamdera/test/v1" "testapp"
 
       generationFileCheck
         "/Users/mario/lamdera/test/v1/src/Types.elm"

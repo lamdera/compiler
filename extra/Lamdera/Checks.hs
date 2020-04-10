@@ -1,7 +1,7 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module LamderaChecks where
+module Lamdera.Checks where
 
 import qualified Reporting.Doc as D
 import qualified Elm.Package as Pkg

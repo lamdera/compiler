@@ -45,7 +45,7 @@ import qualified Reporting.Task as Task
 
 
 import Lamdera
-import qualified LamderaChecks
+import qualified Lamdera.Checks
 import Control.Monad.Except (liftIO)
 
 
@@ -160,7 +160,7 @@ check project =
           then
             if Map.member Pkg.lamderaCore direct || Map.member Pkg.lamderaCore indirect
             then do
-              LamderaChecks.runChecks
+              Lamdera.Checks.runChecks
             else
               throwBadJson E.NoAppLamderaCore
           else throwBadJson E.NoAppJson

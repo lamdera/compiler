@@ -41,7 +41,7 @@ import System.Process
 import Elm.Project.Json
 import Elm.Project.Summary
 
-import LamderaFilewatch
+import Lamdera.Filewatch
 
 -- RUN THE DEV SERVER
 
@@ -65,7 +65,7 @@ run () (Flags maybePort) =
 
         mClients <- liftIO $ SocketServer.clientsInit
 
-        LamderaFilewatch.watch mClients
+        Lamdera.Filewatch.watch mClients
 
         httpServe (config port) $
           serveFiles

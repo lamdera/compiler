@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Wire.Test where
+module Lamdera.Test where
 
 import qualified Data.ByteString as BS
 import qualified System.Directory as Dir

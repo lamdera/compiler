@@ -63,7 +63,7 @@ import qualified Reporting.Report as Report
 -- This file itself
 import Lamdera
 import qualified Lamdera.Evergreen
-import LamderaGenerated (VersionInfo(..), createLamderaGenerated, vinfoVersion, getLastLocalTypeChangeVersion)
+import Lamdera.Generated (VersionInfo(..), createLamderaGenerated, vinfoVersion, getLastLocalTypeChangeVersion)
 import qualified File.IO as IO
 import qualified Data.List as List
 import qualified Data.List.Safe as SafeList
@@ -277,7 +277,7 @@ run () () = do
 
                 _ <- liftIO $ mkdir $ root </> "src/Evergreen/Migrate"
 
-                lastLocalTypeChangeVersion <- liftIO $ LamderaGenerated.getLastLocalTypeChangeVersion root
+                lastLocalTypeChangeVersion <- liftIO $ Lamdera.Generated.getLastLocalTypeChangeVersion root
 
                 let defaultMigrations = defaultMigrationFile lastLocalTypeChangeVersion nextVersion typeCompares
 
@@ -432,135 +432,6 @@ xxxxxxx root version = do
   pure ""
 
 
-
-snapshotCurrentTypes = Lamdera.Evergreen.snapshotCurrentTypes
-
-
-
--- snapshotAllTypesTo :: FilePath -> Int -> IO ()
--- snapshotAllTypesTo root version = do
---
---   let
---     proot = "/Users/mario/dev/projects/lamdera-dashboard"
---
---     typesDir = proot </> "src" </> "Evergreen" </> "Types" </> ("V" <> show version)
---
---   mkdir typesDir
---
---   Dir.withCurrentDirectory proot $ do
---
---     reporter <- Terminal.create
---
---     Task.run reporter $ do
---
---       project <- Project.read $ proot </> "elm.json"
---
---       let
---         dirs =
---           case project of
---             Project.App appInfo ->
---               Project._app_source_dirs appInfo
---
---             Project.Pkg pkgInfo ->
---               -- @TODO extend for package snapshotting?
---               []
---
---
---       elmFiles :: [FilePath] <-
---         liftIO $
---           List.concat <$> mapM (findElmFiles) dirs
---
---       liftIO $ elmFiles & mapM (snapshotTypes version)
---
---       liftIO $ putStrLn $ show elmFiles
---
---     pure ()
-
-
--- findFilesWith :: (FilePath -> IO Bool) -> [FilePath] -> String -> IO [FilePath]
--- Dir.findFilesWith (\fp ->  )
-
-
--- snapshotTypes version filename = do
---
---   result <- readUtf8Text filename
---   case result of
---     Just contents -> do
---       let
---         modulePath = asModulePath filename version
---         moduleFilename = asModuleFilename filename version
---         moduleHeader = asModuleHeader filename version
---
---         types = extractTypes contents
---
---       putStrLn $ filename <> " -> " <> T.unpack moduleFilename
---
---       -- mkdir modulePath
---       putStrLn $ T.unpack $ moduleHeader <> types
---       -- writeUtf8 moduleFilename $ moduleHeader <> types
---
---     Nothing ->
---       error $ "Error: Decoding issue with " <> filename <> ". Please report this!"
-
-
-
-
--- extractTypes :: Text -> Text
--- extractTypes contents =
---   let
---     -- matcher :: String
---     -- matcher =
---     --   "type .*\n(\\s+.+\n)*"
---
---     regex :: Regex
---     regex =
---       makeRegexOpts (defaultCompOpt { multiline = True }) defaultExecOpt "type .*\n(\\s+.+\n)*"
---
---     matches :: String -> [String]
---     matches t =
---       matchAllText regex t
---
---       -- getAllTextMatches (t =~ regex)
---
---   in
---     matches (T.unpack contents)
---       & fmap T.pack
---       & T.intercalate "\n\n"
-
-  -- "\n\n<TYPES>\n\n"
-
--- asModulePath :: FilePath -> Int -> Text
--- asModulePath filename version =
---   "src/Evergreen/Types/V" <> (T.pack $ show version)
-
-
--- asModuleFilename :: FilePath -> Int -> Text
--- asModuleFilename filename version =
---   let
---     name =
---       filename
---         & T.pack
---         & T.replace "src/" ""
---         & T.replace ".elm" ""
---   in
---   asModulePath filename version <> "/" <> name <> ".elm"
-
-
--- asModuleName :: FilePath -> Text
--- asModuleName filename =
---   filename
---     & T.pack
---     & T.replace "src/" ""
---     & T.replace ".elm" ""
---     & T.replace "/" "."
-
-
--- asModuleHeader :: FilePath -> Int -> Text
--- asModuleHeader filename version =
---   let
---     header = asModuleName filename
---   in
---   "module V" <> (T.pack $ show version) <> "." <> header <> " exposing (..)"
 
 
 getLamderaRemotes = do
@@ -1052,7 +923,7 @@ firstTwoChars str =
 writeLamderaGenerated :: FilePath -> Bool -> VersionInfo -> Task.Task ()
 writeLamderaGenerated root inProduction nextVersion =
   onlyWhen inProduction $ do
-    gen <- liftIO $ LamderaGenerated.createLamderaGenerated root nextVersion
+    gen <- liftIO $ Lamdera.Generated.createLamderaGenerated root nextVersion
     -- liftIO $ putStrLn $ T.unpack gen
     liftIO $ writeUtf8 (root </> "src/LamderaGenerated.elm") gen
 

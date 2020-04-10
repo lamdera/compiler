@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE BangPatterns #-}
 
-module Wire.TypeHash where
+module Lamdera.TypeHash where
 
 {- Hashes for Elm types
 @TODO move into Evergreen namespace
@@ -328,28 +328,28 @@ canonicalToDiffableType interfaces recursionMap canonical tvarMap =
               DMaybe (canonicalToDiffableType interfaces recursionMap p tvarMap)
 
             _ ->
-              DError "❗️impossiible multi-param Maybe"
+              DError "❗️impossible multi-param Maybe"
 
         ("elm", "core", "List", "List") ->
           case tvarResolvedParams of
             p:[] ->
               DList (canonicalToDiffableType interfaces recursionMap p tvarMap)
             _ ->
-              DError "❗️impossiible multi-param List"
+              DError "❗️impossible multi-param List"
 
         ("elm", "core", "Array", "Array") ->
           case tvarResolvedParams of
             p:[] ->
               DArray (canonicalToDiffableType interfaces recursionMap p tvarMap)
             _ ->
-              DError "❗️impossiible multi-param Array"
+              DError "❗️impossible multi-param Array"
 
         ("elm", "core", "Set", "Set") ->
           case tvarResolvedParams of
             p:[] ->
               DSet (canonicalToDiffableType interfaces recursionMap p tvarMap)
             _ ->
-              DError "❗️impossiible multi-param Set"
+              DError "❗️impossible multi-param Set"
 
         ("elm", "core", "Result", "Result") ->
           case tvarResolvedParams of
@@ -437,8 +437,8 @@ canonicalToDiffableType interfaces recursionMap canonical tvarMap =
                       DError $ "❗️Failed to find either alias or custom type for type that seemingly must exist: " <> tipe <> "` from " <> author <> "/" <> pkg <> ":" <> module_ <> ". Please report this issue with your code!"
 
             Nothing ->
-              let !_ = formatHaskellValue "interface modulenames" (Map.keys interfaces) :: IO ()
-              in
+              -- let !_ = formatHaskellValue "interface modulenames" (Map.keys interfaces) :: IO ()
+              -- in
               DError $ "The `" <> tipe <> "` type from " <> author <> "/" <> pkg <> ":" <> module_ <> " is referenced, but I can't find it! You can try `lamdera install " <> author <> "/" <> pkg <> "`, otherwise this might be a type which has been intentionally hidden by the author, so it cannot be used!"
 
 

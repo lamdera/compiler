@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module LamderaHints where
+module Lamdera.Hints where
 
 import qualified Reporting.Doc as D
 import qualified Elm.Package as Pkg

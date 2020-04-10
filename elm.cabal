@@ -233,21 +233,26 @@ Executable elmx
 
         -- Lamdera
         Lamdera
-        Wire.Test
-        Wire.Source
-        Wire.TypeHash
+        Lamdera.Test
+        Lamdera.TypeHash
         Lamdera.Types
         Lamdera.Evergreen
-        LamderaInjection
-        LamderaChecks
-        LamderaGenerated
-        LamderaHints
-        LamderaFilewatch
+        Lamdera.Injection
+        Lamdera.Checks
+        Lamdera.Generated
+        Lamdera.Hints
+        Lamdera.Filewatch
+        Wire.Source
         Check
         Reporting.Exit.Check
         Reporting.Error.LamderaError
         Deploy
         SocketServer
+
+        -- Testing
+        EasyTest
+        Tests
+        TestLamderaGenerated
 
         -- Debug helpers
         CanSer.CanSer
@@ -309,9 +314,9 @@ Executable elmx
         fsnotify,
         auto-update,
         -- Debug
-        unicode-show
+        unicode-show,
 
         -- Test
-        -- async,
-        -- random,
-        -- tree-diff
+        async,
+        random,
+        tree-diff

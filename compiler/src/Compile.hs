@@ -47,7 +47,7 @@ import qualified Debug.Trace as DT
 import Wire.PrettyPrint
 import Lamdera
 import qualified Lamdera.Evergreen
-import Wire.TypeHash as TypeHash
+import Lamdera.TypeHash as TypeHash
 
 -- COMPILE
 

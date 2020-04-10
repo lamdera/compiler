@@ -10,7 +10,7 @@ import NeatInterpolation
 import qualified Data.Text as T
 import Lamdera
 
-import LamderaGenerated
+import Lamdera.Generated
 import qualified Lamdera.EvergreenTest
 
 runAll = run suite

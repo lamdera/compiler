@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module LamderaFilewatch where
+module Lamdera.Filewatch where
 
 import Lamdera
 import SocketServer

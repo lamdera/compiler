@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
 
-module LamderaGenerated where
+module Lamdera.Generated where
 
 import Prelude hiding (init)
 import qualified System.Directory as Dir

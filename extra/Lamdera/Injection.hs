@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module LamderaInjection where
+module Lamdera.Injection where
 
 import System.IO.Unsafe (unsafePerformIO)
 import qualified File.IO as IO
