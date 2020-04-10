@@ -232,6 +232,7 @@ Executable elmx
         Paths_elm
 
         -- Lamdera
+        Lamdera
         Wire.Test
         Wire.Source
         Wire.TypeHash
@@ -252,13 +253,6 @@ Executable elmx
         CanSer.CanSer
         Sanity
         Wire.PrettyPrint
-
-        -- Test
-        -- EasyTest
-        -- Tests
-        -- TestLamderaGenerated
-
-        Lamdera
 
 
     Build-depends:

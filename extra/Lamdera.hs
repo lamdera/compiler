@@ -12,6 +12,7 @@ module Lamdera
   , debug
   , debugT
   , dt
+  , debugHaskellWhen
   , PP.sShow
   , PP.tShow
   , T.Text
@@ -150,6 +151,35 @@ dt msg value =
     case debugM of
       Just _ -> pure $ DT.trace (msg ++ ":" ++ show value) value
       Nothing -> pure value
+
+
+debugHaskell :: Show a => Text -> a -> a
+debugHaskell label value =
+  unsafePerformIO $ do
+    debugM <- Env.lookupEnv "LDEBUG"
+    case debugM of
+      Just _ -> do
+        hindentPrintValue label value
+        pure value
+
+      Nothing ->
+        pure value
+
+
+debugHaskellWhen :: Show a => Bool -> Text -> a -> a
+debugHaskellWhen cond label value =
+  unsafePerformIO $ do
+    debugM <- Env.lookupEnv "LDEBUG"
+    case debugM of
+      Just _ -> do
+        if cond
+          then do
+            hindentPrintValue label value
+            pure value
+          else
+            pure value
+      Nothing ->
+        pure value
 
 
 isDebug :: IO Bool
@@ -308,11 +338,15 @@ The bang pattern forces evaluation and you don't have to worry about the type-co
 -}
 formatHaskellValue label v =
   unsafePerformIO $ do
-    _ <- putStrLn $ "----------------------------------------------------------------------------------------------------------------" <> label
-    (exit, stdout, stderr) <- System.Process.readProcessWithExitCode "hindent" [] (Text.Show.Unicode.ushow v)
-    _ <- putStrLn stdout
+    hindentPrintValue label v
     pure $ pure ()
 
+hindentPrintValue :: Show a => Text -> a -> IO a
+hindentPrintValue label v = do
+  _ <- putStrLn $ "----------------------------------------------------------------------------------------------------------------" <> T.unpack label
+  (exit, stdout, stderr) <- System.Process.readProcessWithExitCode "hindent" [] (Text.Show.Unicode.ushow v)
+  _ <- putStrLn stdout
+  pure v
 
 -- Copied from File.IO due to cyclic imports and adjusted for Text
 writeUtf8 :: FilePath -> Text -> IO ()

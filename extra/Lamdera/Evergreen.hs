@@ -120,12 +120,12 @@ snapshotCurrentTypes pkg module_@(Valid.Module name _ _ _ _ _ _ _ _ _) interface
 
       debugEfts =
         efts
-          & Map.filterWithKey (\k eft -> k == "Types")
+          -- & Map.filterWithKey (\k eft -> k == "Types")
           & eftToText
 
       !_ = unsafePerformIO $ do
         -- formatHaskellValue "some sensible label" (efts) :: IO ()
-        putStrLn $ T.unpack $ debugEfts
+        -- putStrLn $ T.unpack $ debugEfts
 
         root <- getProjectRoot
         efts
@@ -275,15 +275,30 @@ unionToFt scope identifier@(author, pkg, module_, tipe) typeName interfaces recu
   let
     treat union =
       let
-        tvarMap = zip (Can._u_vars union) params
+        tvarMap =
+          zip (Can._u_vars union) params
 
-        tvars =
+        tvars_ =
           tvarMap
+            -- & (\v ->
+            --   debugHaskellWhen (typeName == "ExternalCustom") ("unionToFt:tvars:"<> typeName <> ":" <> module_) (v)
+            -- )
             & fmap (N.toText . fst)
             & T.intercalate " "
 
-        usageFts =
+        tvarResolvedParams =
           params
+            & fmap (\p ->
+              case p of
+                Can.TVar a ->
+                  case List.find (\(t,ti) -> t == a) tvarMap of
+                    Just (_,ti) -> ti
+                    Nothing -> p
+                _ -> p
+            )
+
+        usageFts =
+          tvarResolvedParams
             & fmap (\param -> canonicalToFt scope interfaces recursionMap param tvarMap)
 
         usageParams =
@@ -299,9 +314,9 @@ unionToFt scope identifier@(author, pkg, module_, tipe) typeName interfaces recu
         constructorFts =
           Can._u_alts union
             & fmap (\(Can.Ctor name index int params_) ->
+              -- For each constructor type param
               let
                 cparams =
-                  -- For each constructor type param
                   fmap (\param -> canonicalToFt scope interfaces recursionMap param tvarMap) params_
               in
               ( N.toText name <> " " <> (fmap (\(t,imps,ft) -> t) cparams & T.intercalate " ")
@@ -313,7 +328,6 @@ unionToFt scope identifier@(author, pkg, module_, tipe) typeName interfaces recu
               --     formatHaskellValue ("contructorFt:"<>N.toString name) (v) :: IO ()
               --     pure v
               --   )
-
             )
 
         ctypes =
@@ -339,17 +353,20 @@ unionToFt scope identifier@(author, pkg, module_, tipe) typeName interfaces recu
           (ModuleName.Canonical (Pkg.Name author pkg) (N.Name module_))
 
       in
-      ( if length params > 0 then
-          "(" <> importScope <> typeName <> " " <> usageParams <> ")"
-        else
-          importScope <> typeName
+
+
+      ( if length tvarMap > 0 then
+           "(" <> importScope <> typeName <> " " <> usageParams <> ")" -- <> "<!2>"
+         else
+           importScope <> typeName -- <> "<!3>"
+
       , usageImports
       , (Map.singleton (moduleKey identifier) $
           ElmFileText
             { imports = imports & getValues
             , types =
                 if length tvarMap > 0 then
-                  ["type " <> typeName <> " " <> tvars <> "\n    = " <> ctypes]
+                  ["type " <> typeName <> " " <> tvars_ <> "\n    = " <> ctypes]
                 else
                   ["type " <> typeName <> "\n    = " <> ctypes]
             })
@@ -391,7 +408,7 @@ aliasToFt scope identifier@(author, pkg, module_, tipe) typeName interfaces recu
               (ModuleName.Canonical (Pkg.Name author pkg) (N.Name module_))
           in
           ( if length tvars > 0 then
-               importScope <> typeName <> tvars_ -- <> "<!2>"
+               "(" <> importScope <> typeName <> tvars_ <> ")" -- <> "<!2>"
              else
                importScope <> typeName -- <> "<!3>"
           , imps
@@ -452,7 +469,7 @@ canonicalToFt scope interfaces recursionMap canonical tvarMap =
 
     debug (t, imps, ft) =
       unsafePerformIO $ do
-          formatHaskellValue ("canonicalToFt adding imports:"<> T.unpack t) (imps) :: IO ()
+          formatHaskellValue ("canonicalToFt adding imports:"<> t) (imps) :: IO ()
           pure (t, imps, ft)
 
 
@@ -464,17 +481,6 @@ canonicalToFt scope interfaces recursionMap canonical tvarMap =
         recursionIdentifier = (moduleName, name)
 
         newRecursionMap = [recursionIdentifier] ++ recursionMap
-
-        tvarResolvedParams =
-          params
-            & fmap (\p ->
-              case p of
-                Can.TVar a ->
-                  case List.find (\(t,ti) -> t == a) tvarMap of
-                    Just (_,ti) -> ti
-                    Nothing -> p
-                _ -> p
-            )
 
         identifier =
           case (moduleName, name) of
@@ -525,7 +531,7 @@ canonicalToFt scope interfaces recursionMap canonical tvarMap =
           -- DChar
 
         ("elm", "core", "Maybe", "Maybe") ->
-          case tvarResolvedParams of
+          case params of
             p:[] ->
               let
                 (subt, imps, subft) = (canonicalToFt scope interfaces recursionMap p tvarMap)
@@ -536,7 +542,7 @@ canonicalToFt scope interfaces recursionMap canonical tvarMap =
               error "Fatal: impossible multi-param Maybe! Please report this."
 
         ("elm", "core", "List", "List") ->
-          case tvarResolvedParams of
+          case params of
             p:[] ->
               let
                 (subt, imps, subft) = (canonicalToFt scope interfaces recursionMap p tvarMap)
@@ -547,7 +553,7 @@ canonicalToFt scope interfaces recursionMap canonical tvarMap =
               error "Fatal: impossible multi-param List! Please report this."
 
         ("elm", "core", "Array", "Array") ->
-          case tvarResolvedParams of
+          case params of
             p:[] ->
               let
                 (subt, imps, subft) = (canonicalToFt scope interfaces recursionMap p tvarMap)
@@ -558,7 +564,7 @@ canonicalToFt scope interfaces recursionMap canonical tvarMap =
               error "Fatal: impossible multi-param Array! Please report this."
 
         ("elm", "core", "Set", "Set") ->
-          case tvarResolvedParams of
+          case params of
             p:[] ->
               let
                 (subt, imps, subft) = (canonicalToFt scope interfaces recursionMap p tvarMap)
@@ -569,7 +575,7 @@ canonicalToFt scope interfaces recursionMap canonical tvarMap =
               error "Fatal: impossible multi-param Set! Please report this."
 
         ("elm", "core", "Result", "Result") ->
-          case tvarResolvedParams of
+          case params of
             result:err:_ ->
               let
                 (subt, imps, subft) = (canonicalToFt scope interfaces recursionMap result tvarMap)
@@ -582,7 +588,7 @@ canonicalToFt scope interfaces recursionMap canonical tvarMap =
 
 
         ("elm", "core", "Dict", "Dict") ->
-          case tvarResolvedParams of
+          case params of
             result:err:_ ->
               let
                 (subt, imps, subft) = (canonicalToFt scope interfaces recursionMap result tvarMap)
@@ -650,7 +656,7 @@ canonicalToFt scope interfaces recursionMap canonical tvarMap =
               -- Try unions
               case Map.lookup name $ Interface._unions subInterface of
                 Just union -> do
-                  unionToFt scope (author, pkg, module_, tipe) (N.toText name) interfaces newRecursionMap tvarMap union tvarResolvedParams
+                  unionToFt scope (author, pkg, module_, tipe) (N.toText name) interfaces newRecursionMap tvarMap union params
                     & (\(n, imports, subft) ->
                       ( n -- <> "<!5>"
                       , if moduleName /= scope then
@@ -797,7 +803,7 @@ canonicalToFt scope interfaces recursionMap canonical tvarMap =
           , (Map.singleton (moduleNameKey moduleName) $
               ElmFileText
                 { imports = getValues imps
-                , types = ["type alias " <> N.toText name <> "<5> = " <> subt]
+                , types = ["type alias " <> N.toText name <> " = " <> subt]
                 })
               & mergeFts subft
           )

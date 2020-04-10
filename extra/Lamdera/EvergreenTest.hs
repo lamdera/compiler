@@ -61,6 +61,19 @@ import EasyTest
 import qualified Wire.Test
 import Lamdera.Evergreen
 
+
+generationFileCheck originalFile generatedFile expectedOutput = do
+  -- original <- liftIO $ readUtf8Text originalFile
+  generatedM <- liftIO $ readUtf8Text generatedFile
+
+  case generatedM of
+    Just generated ->
+      expectEqualTextTrimmed generated expectedOutput
+
+    Nothing ->
+      crash $ "Could not read generated file: " <> generatedFile
+
+
 suite :: Test ()
 suite = tests
   [ scope "mergeAllImports" $ do
@@ -109,120 +122,200 @@ suite = tests
 
   , scope "alltypes e2e to disk for lamdera/test/v1/" $ do
 
-      let
-        generatedFilepath = "/Users/mario/lamdera/test/v1/src/Evergreen/Types/V1/Types.elm"
-        expected =
-          [text|
-            module Evergreen.Types.V1.Types exposing (..)
-
-            import Browser.Navigation
-            import Dict
-            import Http
-            import Lamdera
-            import Set
-            import Time
-            import WireTypes
-
-
-            type alias FrontendModel =
-                { key : Browser.Navigation.Key
-                , counter : Int
-                , sessionId : String
-                , clientId : String
-                , timestamps : (List
-                { label : String
-                , time : Time.Posix
-                })
-                , lastReceived : Time.Posix
-                , subCounter : Int
-                , rpcRes : (Result Http.Error Int)
-                }
-
-
-            type Role
-                = Admin
-                | User
-
-
-            type alias Record =
-                { name : String
-                , age : Int
-                , roles : (List Role)
-                }
-
-
-            type alias BackendModel =
-                { counter : Int
-                , clients : (Set Lamdera.ClientId)
-                , currentTime : Time.Posix
-                , benchList : (List Int)
-                , benchDictRec : (Dict String Record)
-                }
-
-
-            type FrontendMsg
-                = Increment
-                | Decrement
-                | RequestedSnapshot
-                | RequestedRestore
-                | RequestedMemcheck
-                | RequestedGc
-                | RequestedUpgrade
-                | TestFEWire
-                | HttpFinished (Result Http.Error ())
-                | Stamp FrontendMsg
-                | Test1000
-                | Test10000
-                | Start FrontendMsg Time.Posix
-                | Finish String Time.Posix
-                | SubCounterIncremented Time.Posix
-                | GrowBenchListClicked Int
-                | ClearBenchListClicked
-                | GrowBenchDictRecClicked Int
-                | ClearBenchDictRecClicked
-                | FNoop
-                | ExternalT (WireTypes.ExternalType String)
-                | TestRPC
-                | RPCRes (Result Http.Error Int)
-
-
-            type ToBackend
-                = ClientJoin
-                | CounterIncremented
-                | CounterDecremented
-                | GrowBenchList Int
-                | GrowBenchDictRec Int
-                | ClearBenchList
-                | ClearBenchDictRec
-
-
-            type BackendMsg
-                = NewTime Time.Posix
-                | DelayedNewValue Lamdera.SessionId Lamdera.ClientId
-                | Noop
-                | ExternalTX (WireTypes.ExternalRecord (WireTypes.AnotherParamRecord Int))
-
-
-            type ToFrontend
-                = CounterNewValue Int Lamdera.SessionId Lamdera.ClientId
-                | BenchStats
-                { benchListSize : Int
-                }
-
-          |]
-
       liftIO $ Wire.Test.checkWithParams "/Users/mario/lamdera/test/v1" "testapp"
-      original <- liftIO $ readUtf8Text "/Users/mario/lamdera/test/v1/src/Types.elm"
-      generatedM <- liftIO $ readUtf8Text generatedFilepath
 
-      case generatedM of
-        Just generated ->
-          expectEqualTextTrimmed generated expected
+      generationFileCheck
+        "/Users/mario/lamdera/test/v1/src/Types.elm"
+        "/Users/mario/lamdera/test/v1/src/Evergreen/Types/V1/Types.elm"
+        [text|
+          module Evergreen.Types.V1.Types exposing (..)
 
-        Nothing ->
-          crash $ "Could not read generated file: " <> generatedFilepath
+          import Browser.Navigation
+          import Dict
+          import Http
+          import Lamdera
+          import Set
+          import Time
+          import WireTypes
 
 
+          type alias FrontendModel =
+              { key : Browser.Navigation.Key
+              , counter : Int
+              , sessionId : String
+              , clientId : String
+              , timestamps : (List
+              { label : String
+              , time : Time.Posix
+              })
+              , lastReceived : Time.Posix
+              , subCounter : Int
+              , rpcRes : (Result Http.Error Int)
+              }
+
+
+          type Role
+              = Admin
+              | User
+
+
+          type alias Record =
+              { name : String
+              , age : Int
+              , roles : (List Role)
+              }
+
+
+          type alias BackendModel =
+              { counter : Int
+              , clients : (Set Lamdera.ClientId)
+              , currentTime : Time.Posix
+              , benchList : (List Int)
+              , benchDictRec : (Dict String Record)
+              }
+
+
+          type FrontendMsg
+              = Increment
+              | Decrement
+              | RequestedSnapshot
+              | RequestedRestore
+              | RequestedMemcheck
+              | RequestedGc
+              | RequestedUpgrade
+              | TestFEWire
+              | HttpFinished (Result Http.Error ())
+              | Stamp FrontendMsg
+              | Test1000
+              | Test10000
+              | Start FrontendMsg Time.Posix
+              | Finish String Time.Posix
+              | SubCounterIncremented Time.Posix
+              | GrowBenchListClicked Int
+              | ClearBenchListClicked
+              | GrowBenchDictRecClicked Int
+              | ClearBenchDictRecClicked
+              | FNoop
+              | ExternalCustom_ (WireTypes.ExternalCustom String)
+              | ExternalRecord_ (WireTypes.ExternalRecord (WireTypes.AnotherParamRecord Int))
+              | ExternalAlias WireTypes.ExternalAliasTuple
+              | TestRPC
+              | RPCRes (Result Http.Error Int)
+
+
+          type ToBackend
+              = ClientJoin
+              | CounterIncremented
+              | CounterDecremented
+              | GrowBenchList Int
+              | GrowBenchDictRec Int
+              | ClearBenchList
+              | ClearBenchDictRec
+
+
+          type BackendMsg
+              = NewTime Time.Posix
+              | DelayedNewValue Lamdera.SessionId Lamdera.ClientId
+              | Noop
+
+
+          type ToFrontend
+              = CounterNewValue Int Lamdera.SessionId Lamdera.ClientId
+              | BenchStats
+              { benchListSize : Int
+              }
+
+        |]
+
+      generationFileCheck
+        "/Users/mario/lamdera/test/v1/src/WireTypes.elm"
+        "/Users/mario/lamdera/test/v1/src/Evergreen/Types/V1/WireTypes.elm"
+        [text|
+          module Evergreen.Types.V1.WireTypes exposing (..)
+
+          import Array
+          import Dict
+          import Set
+          import Time
+
+
+          type ExternalCustom threadedTvar
+              = AlphabeticallyLast
+              | AlphabeticallyFirst
+              | AlphabeticallyKMiddleThreaded threadedTvar
+
+
+          type alias SubRecord threadedTvar =
+              { subtype : Int
+              , threaded : threadedTvar
+              }
+
+
+          type alias SubSubRecordAlias threadedTvar = (SubRecord threadedTvar)
+
+
+          type alias SubRecordAlias threadedTvar = (SubSubRecordAlias threadedTvar)
+
+
+          type alias AliasInt = Int
+
+
+          type alias AllTypes =
+              { int : Int
+              , float : Float
+              , bool : Bool
+              , char : Char
+              , string : String
+              , listInt : (List Int)
+              , setFloat : (Set Float)
+              , arrayString : (Array String)
+              , dict : (Dict String (List Int))
+              , time : Time.Posix
+              , order : Order
+              , union : AllUnion
+              , unit : ()
+              }
+
+
+          type alias SubRecursiveRecord =
+              { recurse : AllTypes
+              }
+
+
+          type AllUnion
+              = ValueStandalone
+              | ValueInt Int
+              | ValueFloat Float
+              | ValueBool Bool
+              | ValueChar Char
+              | ValueString String
+              | ValueListBool (List Bool)
+              | ValueSetFloat (Set Float)
+              | ValueArrayString (Array String)
+              | ValueDict (Dict String (List Int))
+              | ValueTime Time.Posix
+              | ValueOrder Order
+              | ValueUnit ()
+              | ValueAliased AliasInt
+              | ValueRecursive AllUnion
+              | ValueSubRecursive SubRecursiveRecord
+              | ValueTwoParams Bool Char
+              | ValueTuple (Int, String)
+              | ValueTriple (Int, String)
+              | ValueResult (Result String Int)
+              | ValueAll AllTypes
+
+
+          type alias ExternalRecord threadedTvar =
+              { ext : (ExternalCustom threadedTvar)
+              , sub : (SubRecordAlias threadedTvar)
+              , alphaFirst : Int
+              , allUnion : AllUnion
+              }
+
+
+          type alias ExternalAliasTuple = (Float, Bool)
+        |]
 
   , scope "testing2" $ do
 
