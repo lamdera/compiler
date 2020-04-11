@@ -12,6 +12,8 @@ module Lamdera
   , debug
   , debugT
   , dt
+  , debugNote
+  , debugHaskell
   , debugHaskellWhen
   , PP.sShow
   , PP.tShow
@@ -150,6 +152,15 @@ dt msg value =
     debugM <- Env.lookupEnv "LDEBUG"
     case debugM of
       Just _ -> pure $ DT.trace (msg ++ ":" ++ show value) value
+      Nothing -> pure value
+
+
+debugNote :: Text -> a -> a
+debugNote msg value =
+  unsafePerformIO $ do
+    debugM <- Env.lookupEnv "LDEBUG"
+    case debugM of
+      Just _ -> pure $ DT.trace (T.unpack msg) value
       Nothing -> pure value
 
 

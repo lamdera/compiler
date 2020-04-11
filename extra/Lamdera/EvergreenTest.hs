@@ -252,6 +252,11 @@ suite = tests $
               | AlphabeticallyKMiddleThreaded threadedTvar
 
 
+          type alias AnotherParamRecord threadedTvar =
+              { threaded2 : threadedTvar
+              }
+
+
           type alias SubRecord threadedTvar =
               { subtype : Int
               , threaded : threadedTvar

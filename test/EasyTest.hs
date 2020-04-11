@@ -105,9 +105,9 @@ expectEqualTextTrimmed actual expected =
         -- putStrLn $ "diff -y --suppress-common-lines --width=160 " <> path1 <> " " <> path2
         -- (exit, stdout, stderr) <- readProcessWithExitCode "diff" ["-y", "--suppress-common-lines", "--width=160", path1, path2] ""
 
-        putStrLn $ "icdiff " <> path1 <> " " <> path2
+        putStrLn $ "icdiff -N " <> path1 <> " " <> path2
         -- (exit, stdout, stderr) <- readProcessWithExitCode "icdiff" ["--cols=150", "--show-all-spaces", path1, path2] ""
-        (exit, stdout, stderr) <- readProcessWithExitCode "icdiff" ["--cols=150", path1, path2] ""
+        (exit, stdout, stderr) <- readProcessWithExitCode "icdiff" ["-N", "--cols=150", path1, path2] ""
 
         -- @TODO try colorize vim outout. The following hangs because it's interactive
         -- putStrLn $ "vim -d " <> path1 <> " " <> path2

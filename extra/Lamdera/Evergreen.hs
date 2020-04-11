@@ -160,6 +160,12 @@ mergeFts ft1 ft2 =
   unionWithKey mergeElmFileText ft1 ft2
 
 
+mergeAllFts :: [ElmFilesText] -> ElmFilesText
+mergeAllFts ftss =
+  ftss
+    & foldl (\acc fts -> mergeFts acc fts) Map.empty
+
+
 mergeImports :: ElmImports -> ElmImports -> ElmImports
 mergeImports i1 i2 =
   Set.union i1 i2
@@ -359,8 +365,11 @@ unionToFt scope identifier@(author, pkg, module_, tipe) typeName interfaces recu
         moduleName =
           (ModuleName.Canonical (Pkg.Name author pkg) (N.Name module_))
 
-      in
+        debug (t, imps, ft) =
+          debugNote ("\n✴️  inserting def for " <> t) (t, imps, ft)
 
+      in
+      -- debug $
       ( if length tvarMap > 0 then
            "(" <> typeScope <> typeName <> " " <> usageParams <> ")" -- <> "<!2>"
          else
@@ -391,6 +400,11 @@ aliasToFt :: ModuleName.Canonical -> (Text, Text, Text, Text) -> Text -> (Map.Ma
 aliasToFt scope identifier@(author, pkg, module_, tipe) typeName interfaces recursionMap aliasInterface =
   let
     treat a =
+      let
+        debug (t, imps, ft) =
+          debugNote ("\n🔵  inserting def for " <> t) (t, imps, ft)
+      in
+      -- debug $
       case a of
         Can.Alias tvars tipe ->
           -- let
@@ -472,13 +486,12 @@ canonicalToFt scope interfaces recursionMap canonical tvarMap =
       case scope of
         (ModuleName.Canonical (Pkg.Name author pkg) (N.Name module_)) -> module_
 
-
     debug (t, imps, ft) =
-      unsafePerformIO $ do
-          formatHaskellValue ("canonicalToFt adding imports:"<> t) (imps) :: IO ()
-          pure (t, imps, ft)
-
-
+      debugHaskellWhen (textContains "AnotherParamRecord" t) ("\n✳️  inserting def for " <> t <> " - " <> (T.pack . show $ canonical)) (t, imps, ft)
+      -- debug_note ("🔵inserting def for " <> T.unpack t <> ":\n" <> ( ft)) $ (t, imps, ft)
+      -- unsafePerformIO $ do
+      --     formatHaskellValue ("\n🔵inserting def for " <> t) (ft) :: IO ()
+      --     pure (t, imps, ft)
   in
   -- debug $
   case canonical of
@@ -718,18 +731,6 @@ canonicalToFt scope interfaces recursionMap canonical tvarMap =
       case aliasType of
         Can.Holey cType ->
           let
-
-            -- resolveTvars ps =
-            --   ps
-            --     & fmap (\p ->
-            --       case p of
-            --         Can.TVar a ->
-            --           case List.find (\(t,ti) -> t == a) tvarMap of
-            --             Just (_,ti) -> ti
-            --             Nothing -> p
-            --         _ -> p
-            --     )
-
             usageParamFts =
               tvarMap_
                 & fmap (\(n, paramType) ->
@@ -767,8 +768,15 @@ canonicalToFt scope interfaces recursionMap canonical tvarMap =
               else
                 usageParamImports & Set.insert moduleName
 
+            typeDef =
+              if length tvarMap_ > 0 then
+                ["type alias " <> N.toText name <> " " <> tvars <> " = " <> subt]
+              else
+                ["type alias " <> N.toText name <> " = " <> subt]
+
             -- !_ = formatHaskellValue "Can.TAlias.Holey:" (name, cType, tvarMap_, moduleName, scope) :: IO ()
           in
+          -- debug_note ("🔵inserting def for " <> T.unpack (moduleNameKey moduleName) <> "." <> N.toString name <> "\n" <> (T.unpack $ head typeDef)) $
           (
             debugIden <>
             if length tvarMap_ > 0 then
@@ -779,13 +787,10 @@ canonicalToFt scope interfaces recursionMap canonical tvarMap =
           , (Map.singleton (moduleNameKey moduleName) $
               ElmFileText
                 { imports = imps
-                , types =
-                    if length tvarMap_ > 0 then
-                      ["type alias " <> N.toText name <> " " <> tvars <> " = " <> subt]
-                    else
-                      ["type alias " <> N.toText name <> " = " <> subt]
+                , types = typeDef
                 })
               & mergeFts subft
+              & mergeFts (mergeAllFts (fmap selFts usageParamFts))
           )
 
         Can.Filled cType ->
@@ -797,8 +802,6 @@ canonicalToFt scope interfaces recursionMap canonical tvarMap =
 
             debugIden = ""-- <af>"
           in
-          -- (subt, imps, subft)
-
           (
             debugIden <>
             if module_ == scopeModule then
