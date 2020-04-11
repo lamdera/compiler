@@ -79,7 +79,7 @@ localPackages =
           authoredPkgs <- concat <$> mapM (\author -> do pkg <- Dir.listDirectory (path </> "packages" </> author); pure (((,) author) <$> pkg)) authors :: IO [(FilePath, FilePath)]
           versionedAuthoredPkgs <- mapM (\(author, pkg) -> do versions <- Dir.listDirectory (path </> "packages" </> author </> pkg); pure (( author, pkg, versions))) authoredPkgs :: IO [(FilePath, FilePath, [FilePath])]
 
-          -- debugTrace ("found local packages:" ++ sShow versionedAuthoredPkgs) $
+          -- debug_note ("found local packages:" ++ sShow versionedAuthoredPkgs) $
           pure $
             catResultsOrCrashOnLeft <$> (Map.fromList $ ((\(author, pkg, versions) -> (Name (T.pack author) (T.pack pkg), versionFromText <$> T.pack <$> versions)) <$> versionedAuthoredPkgs))
 
@@ -169,10 +169,10 @@ fetchLocal url =
         do
           exists <- Dir.doesFileExist (path </> url)
           if exists then
-              -- debugTrace ("using local file override at " ++ (path </> url)) $
+              -- debug_note ("using local file override at " ++ (path </> url)) $
               Just <$> BS.readFile (path </> url)
             else
-              -- debugTrace ("using web file; no local override found at " ++ (path </> url)) $
+              -- debug_note ("using web file; no local override found at " ++ (path </> url)) $
               pure Nothing
       Nothing ->
         pure $ case url of
@@ -257,7 +257,7 @@ downloadHelp cache (name, version) =
               let fullPath = path </> "packages" </> Pkg.toUrl name </> Pkg.versionToString version
               exists <- Dir.doesDirectoryExist fullPath
               if exists then
-                  --debugTrace ("using local pkg override at " ++ fullPath) $
+                  --debug_note ("using local pkg override at " ++ fullPath) $
                   -- TODO: pretend it's a zip archive, or at least put it where writeArchive would've
                   let
                     from = fullPath
@@ -265,13 +265,13 @@ downloadHelp cache (name, version) =
                   in
                     do
                       (exit, stdout, stderr) <- System.Process.readProcessWithExitCode "rsync" ["-ptchr", from, to] ""
-                      debugTrace ("(roughly) rsync -ptchr " ++ from ++ " " ++ to ++ "\n") $
-                      --  debugTrace ("  exit code: " ++ show exit ++ "\n") $
-                      --  debugTrace ("  stdout: " ++ stdout ++ "\n") $
-                      --  debugTrace ("  stderr: " ++ stderr ++ "\n") $
+                      debug_note ("(roughly) rsync -ptchr " ++ from ++ " " ++ to ++ "\n") $
+                      --  debug_note ("  exit code: " ++ show exit ++ "\n") $
+                      --  debug_note ("  stdout: " ++ stdout ++ "\n") $
+                      --  debug_note ("  stderr: " ++ stderr ++ "\n") $
                         pure (Just ())
                 else
-                  --debugTrace ("using web pkg; no local override found at " ++ fullPath) $
+                  --debug_note ("using web pkg; no local override found at " ++ fullPath) $
                   pure Nothing
           Nothing ->
             pure Nothing

@@ -7,8 +7,8 @@ module Lamdera
   , stdoutSetup
   , unsafePerformIO
   , liftIO
-  , debugTrace
   , debug_
+  , debug_note
   , debug
   , debugT
   , dt
@@ -135,8 +135,8 @@ debug_ str = do
     Nothing -> pure ()
 
 
-debugTrace :: String -> a -> a
-debugTrace msg value =
+debug_note :: String -> a -> a
+debug_note msg value =
   unsafePerformIO $ do
     debugM <- Env.lookupEnv "LDEBUG"
     case debugM of

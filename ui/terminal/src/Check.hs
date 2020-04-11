@@ -69,7 +69,7 @@ import qualified Data.List as List
 import qualified Data.List.Safe as SafeList
 import NeatInterpolation
 import Text.Read
-import Data.Maybe
+import Data.Maybe (fromMaybe)
 import qualified Data.Text.Encoding as Text
 import Data.Text.Internal.Search (indices)
 import System.Process (readProcess, callCommand)
@@ -339,7 +339,7 @@ buildProductionJsFiles root inProduction versionInfo = do
 
       -- Temporarily point migration to current types in order to type-check
       -- osReplace ("s/import Evergreen.Type.V" <> show version <> "/import Types/g") migrationPath
-      liftIO $ replaceInFile ("import Evergreen.Type.V" <> tshow version) "import Types" migrationPath
+      liftIO $ replaceInFile ("import Evergreen.V" <> tshow version <> ".Types") "import Types" migrationPath
 
     -- debug $ "Injecting BACKENDINJECTION " <> (root </> "elm-backend-overrides.js")
     -- liftIO $ Env.setEnv "BACKENDINJECTION" (root </> "elm-backend-overrides.js")
@@ -384,8 +384,7 @@ buildProductionJsFiles root inProduction versionInfo = do
       debug $ "Rewriting " <> migrationPath <> " type import back to VX"
 
       -- Temporarily point migration to current types in order to type-check
-      -- osReplace ("s/import Types/import Evergreen.Type.V" <> show version <> "/g") migrationPath
-      liftIO $ replaceInFile "import Types" ("import Evergreen.Type.V" <> tshow version) migrationPath
+      liftIO $ replaceInFile "import Types" ("import Evergreen.V" <> tshow version <> ".Types") migrationPath
 
     -- NOTE: Could do this, but assuming it'll be good to have the original evidence of
     -- state for situation where things go wrong in production and you can poke around
@@ -399,9 +398,14 @@ snapshotCurrentTypesTo :: Summary.Summary -> FilePath -> Int -> IO String
 snapshotCurrentTypesTo summary root version = do
   -- Snapshot the current types, and rename the module for the snapshot
 
-  Env.setEnv "LTYPESNAPSHOT" ""
+  debug_ "Executing in type snapshot mode..."
 
-  -- invoke compiler in snapshot mode for src/Types.elm
+  Env.setEnv "LTYPESNAPSHOT" (show version)
+
+  -- Elm's caches will mean Types.elm won't get recompiled without 'changes', so we touch it
+  _ <- liftIO $ Lamdera.touch $ root </> "src" </> "Types.elm"
+
+  -- Invoke compiler in snapshot mode for src/Types.elm
   Dir.withCurrentDirectory root $
     do  reporter <- Terminal.create
         Task.run reporter $
@@ -413,9 +417,6 @@ snapshotCurrentTypesTo summary root version = do
                 Nothing
                 summary
                 [ "src" </> "Types.elm" ]
-              --
-              -- let jsOutput = Just (Output.Html Nothing tempFileName)
-              -- Project.compile Output.Dev Output.Client jsOutput Nothing summary rootPaths
 
   Env.unsetEnv "LTYPESNAPSHOT"
 
@@ -587,7 +588,7 @@ migrationCheck root version =
 
               debug "Replacing type reference"
               -- osReplace ("s/import Evergreen.Type.V" <> show version <> "/import Types/g") migrationPath
-              liftIO $ replaceInFile ("import Evergreen.Type.V" <> tshow version) "import Types" migrationPath
+              liftIO $ replaceInFile ("import Evergreen.V" <> tshow version <> ".Types") "import Types" migrationPath
 
               -- @TODO
               -- This is now cleaner for local checks, but we still need a full e2e check in production before we deploy!
@@ -613,8 +614,7 @@ migrationCheck root version =
               liftIO $ remove $ root </> lamderaCheckBothPath
 
               -- Restore the type back to what it was
-              -- osReplace ("s/import Types/import Evergreen.Type.V" <> show version <> "/g") migrationPath
-              liftIO $ replaceInFile "import Types" ("import Evergreen.Type.V" <> tshow version) migrationPath
+              liftIO $ replaceInFile "import Types" ("import Evergreen.V" <> tshow version <> ".Types") migrationPath
 
               -- Cleanup dummy runtime files if we added them
               -- liftIO $ unless frontendRuntimeExists $ callCommand $ "rm " <> root </> "src/LFR.elm"
@@ -628,10 +628,10 @@ committedCheck root versionInfo = do
 
   debug $ "Commit-checking migration and types files"
 
-  let migrationPath = (root </> "src/Evergreen/Migrate/V") <> show version <> ".elm"
+  let migrationPath = (root </> "src/Evergreen/Migrate/V") <> show version <> "/Types.elm"
   migrations <- liftIO $ gitStatus migrationPath
 
-  let typesPath = (root </> "src/Evergreen/Type/V") <> show version <> ".elm"
+  let typesPath = (root </> "src/Evergreen/V") <> show version <> "/*.elm"
   types <- liftIO $ gitStatus typesPath
 
   let missingPaths =
@@ -642,7 +642,7 @@ committedCheck root versionInfo = do
             Nothing
         , if types /= Committed then
             -- Bare non-root path intentional otherwise UI is pretty ugly...
-            Just $ "src/Evergreen/Type/V" <> show version <> ".elm"
+            Just $ "src/Evergreen/V" <> show version <> "/*"
           else
             Nothing
         ]

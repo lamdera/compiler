@@ -117,7 +117,7 @@ generateCodecs revImportDict (Can.Module _moduName _docs _exports _decls _unions
     qualIfNeeded moduName@(Canonical _ n) =
       case revImportDict Map.!? n of
         Just v -> N.toText v <> "."
-        Nothing -> debugTrace (sShow ("Lamdera: qualIfNeeded import not found", moduName)) (N.toText n <> ".")
+        Nothing -> debug_note (sShow ("Error: qualIfNeeded import not found, please report this.", moduName)) (N.toText n <> ".")
 
     evergreenCoreEncoder tipes = fmap fst <$> evergreenCoreCodecs qualIfNeeded tipes
     evergreenCoreDecoder tipes = fmap snd <$> evergreenCoreCodecs qualIfNeeded tipes
@@ -179,7 +179,7 @@ generateCodecs revImportDict (Can.Module _moduName _docs _exports _decls _unions
         sorted_u_alts =
           if (List.length _u_alts > 256) then
             -- @TODO put this error somewhere nicer that's not a crash!
-            error $ "Wow, I ran into a custom type (" <> N.toString name <> ") with more than 256 values! This is unexpected. Please report this to support!"
+            error $ "Wow, I ran into a custom type (" <> N.toString name <> ") with more than 256 values! This is unexpected. Please report this to support."
           else
             _u_alts
               & List.sortOn

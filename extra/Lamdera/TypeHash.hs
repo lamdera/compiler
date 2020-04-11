@@ -71,7 +71,8 @@ maybeGenHashes pkg module_@(Valid.Module name _ _ _ _ _ _ _ _ _) interfaces = do
   -- This check isn't strictly required, as the callee of this function in compile only
   -- calls it when we know we've canonicalized the src/Types.elm file, but leaving it here
   -- to prevent any footguns in future testing
-  onlyWhen (pkg == (Pkg.Name "author" "project") && name == N.fromText "Types") $ do
+  debug_note "Generating type hashes..." $
+   onlyWhen (pkg == (Pkg.Name "author" "project") && name == N.fromText "Types") $ do
     let
       interfaceTypes_elm =
         case Map.lookup (Module.Canonical (Pkg.Name "author" "project") "Types") interfaces of

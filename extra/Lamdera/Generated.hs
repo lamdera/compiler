@@ -66,7 +66,7 @@ lamderaGenerated nextVersion migrationFilepaths = do
     importType version =
       let versionT = T.pack $ show version
       in
-      [text|import Evergreen.Type.V$versionT as T$versionT|]
+      [text|import Evergreen.V$versionT.Types as T$versionT|]
 
     historicMigrations_ = historicMigrations migrationSequence
 

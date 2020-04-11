@@ -52,6 +52,7 @@ import System.Process (readProcess)
 import Data.Monoid ((<>))
 import Data.Map (Map)
 import qualified Data.Map as Map
+import qualified Data.Set as Set
 
 import Lamdera
 import Lamdera.Types
@@ -75,23 +76,27 @@ generationFileCheck originalFile generatedFile expectedOutput = do
 
 
 suite :: Test ()
-suite = tests
+suite = tests $
+  let
+    derpImp = ModuleName.Canonical (Pkg.Name "author" "project") (N.Name "Derp")
+    herpImp = ModuleName.Canonical (Pkg.Name "author" "project") (N.Name "Herp")
+  in
   [ scope "mergeAllImports" $ do
       expectEqual
-        (mergeAllImports [Map.fromList [("Derp","Derp")], Map.fromList [("Herp","Herp")]])
-        (Map.fromList [("Derp","Derp"), ("Herp","Herp")])
+        (mergeAllImports [Set.singleton derpImp, Set.singleton herpImp])
+        (Set.fromList [derpImp, herpImp])
 
   , scope "addImports" $ do
       let
         moduleName = (ModuleName.Canonical (Pkg.Name "author" "pkg") (N.Name "Types"))
-        imports = Map.singleton "Derping" "Derping"
+        imports = Set.singleton (ModuleName.Canonical (Pkg.Name "author" "project") (N.Name "Derping"))
 
         fts :: ElmFilesText
         fts =
           (Map.fromList
             [ ( "Something"
               , ElmFileText
-                  { imports = ["Existing"]
+                  { imports = Set.singleton ((ModuleName.Canonical (Pkg.Name "author" "project") (N.Name "Existing")))
                   , types = []
                   }
               )
@@ -103,13 +108,13 @@ suite = tests
           (Map.fromList
             [ ( "Types"
               , ElmFileText
-                  { imports = ["Derping"]
+                  { imports = Set.singleton ((ModuleName.Canonical (Pkg.Name "author" "project") (N.Name "Derping")))
                   , types = []
                   }
               )
             , ( "Something"
               , ElmFileText
-                  { imports = ["Existing"]
+                  { imports = Set.singleton ((ModuleName.Canonical (Pkg.Name "author" "project") (N.Name "Existing")))
                   , types = []
                   }
               )
@@ -122,14 +127,14 @@ suite = tests
 
   , scope "alltypes e2e to disk for lamdera/test/v1/" $ do
 
-      liftIO $ Lamdera.Test.checkWithParams "/Users/mario/lamdera/test/v1" "testapp"
+      liftIO $ Lamdera.Test.checkSnapshotWithParams "1" "/Users/mario/lamdera/test/v1" "testapp"
 
       scope "-> Types.elm" $
         generationFileCheck
         "/Users/mario/lamdera/test/v1/src/Types.elm"
         "/Users/mario/lamdera/test/v1/src/Evergreen/V1/Types.elm"
         [text|
-          module Evergreen.Types.V1.Types exposing (..)
+          module Evergreen.V1.Types exposing (..)
 
           import Browser.Navigation
           import Dict
@@ -137,7 +142,7 @@ suite = tests
           import Lamdera
           import Set
           import Time
-          import WireTypes
+          import Evergreen.V1.WireTypes as WireTypes
 
 
           type alias FrontendModel =
@@ -169,10 +174,10 @@ suite = tests
 
           type alias BackendModel =
               { counter : Int
-              , clients : (Set Lamdera.ClientId)
+              , clients : (Set.Set Lamdera.ClientId)
               , currentTime : Time.Posix
               , benchList : (List Int)
-              , benchDictRec : (Dict String Record)
+              , benchDictRec : (Dict.Dict String Record)
               }
 
 
@@ -233,7 +238,7 @@ suite = tests
         "/Users/mario/lamdera/test/v1/src/WireTypes.elm"
         "/Users/mario/lamdera/test/v1/src/Evergreen/V1/WireTypes.elm"
         [text|
-          module Evergreen.Types.V1.WireTypes exposing (..)
+          module Evergreen.V1.WireTypes exposing (..)
 
           import Array
           import Dict
@@ -269,9 +274,9 @@ suite = tests
               , char : Char
               , string : String
               , listInt : (List Int)
-              , setFloat : (Set Float)
-              , arrayString : (Array String)
-              , dict : (Dict String (List Int))
+              , setFloat : (Set.Set Float)
+              , arrayString : (Array.Array String)
+              , dict : (Dict.Dict String (List Int))
               , time : Time.Posix
               , order : Order
               , union : AllUnion
@@ -292,9 +297,9 @@ suite = tests
               | ValueChar Char
               | ValueString String
               | ValueListBool (List Bool)
-              | ValueSetFloat (Set Float)
-              | ValueArrayString (Array String)
-              | ValueDict (Dict String (List Int))
+              | ValueSetFloat (Set.Set Float)
+              | ValueArrayString (Array.Array String)
+              | ValueDict (Dict.Dict String (List Int))
               | ValueTime Time.Posix
               | ValueOrder Order
               | ValueUnit ()
