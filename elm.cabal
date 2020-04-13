@@ -231,13 +231,12 @@ Executable elmx
         Validate
         Paths_elm
 
-        -- Lamdera
+        -- Lamdera:
         Lamdera
         Lamdera.Test
         Lamdera.TypeHash
         Lamdera.Types
         Lamdera.Evergreen
-        Lamdera.EvergreenTest
         Lamdera.Injection
         Lamdera.Checks
         Lamdera.Generated
@@ -250,12 +249,13 @@ Executable elmx
         Deploy
         SocketServer
 
-        -- Testing
-        EasyTest
-        Tests
-        TestLamderaGenerated
+        -- Testing:
+        -- EasyTest
+        -- Tests
+        -- TestLamderaGenerated
+        -- Lamdera.EvergreenTest
 
-        -- Debug helpers
+        -- Debug helpers:
         CanSer.CanSer
         Sanity
         Wire.PrettyPrint
@@ -315,9 +315,9 @@ Executable elmx
         fsnotify,
         auto-update,
         -- Debug
-        unicode-show,
+        unicode-show
 
         -- Test
-        async,
-        random,
-        tree-diff
+        -- async,
+        -- random,
+        -- tree-diff
