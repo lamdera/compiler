@@ -90,9 +90,10 @@ run () () = do
   appNameEnvM <- liftIO $ Env.lookupEnv "LAMDERA_APP_NAME"
   hoistRebuild <- liftIO $ Env.lookupEnv "HOIST_REBUILD"
   forceVersionM <- liftIO $ Env.lookupEnv "VERSION"
+  forceNotProd <- liftIO $ Env.lookupEnv "NOTPROD"
   inDebug <- Lamdera.isDebug
 
-  let inProduction = (appNameEnvM /= Nothing) -- @TODO better isProd check...
+  let inProduction = (appNameEnvM /= Nothing && forceNotProd == Nothing) -- @TODO better isProd check...
       isHoistRebuild = (hoistRebuild /= Nothing)
       forceVersion = fromMaybe (-1) $
         case forceVersionM of
@@ -103,14 +104,17 @@ run () () = do
   debug $ "hoist rebuild:" ++ show isHoistRebuild
   debug $ "force version:" ++ show forceVersion
 
-  putStrLn "───> Checking project compiles..."
+
 
   Task.run reporter $ do
 
     summary <- Project.getRoot
     let root = Summary._root summary
 
-    checkUserProjectCompiles root
+    temporaryCheckOldTypesNeedingMigration inProduction root
+
+    liftIO $ putStrLn "───> Checking project compiles..."
+    checkUserProjectCompiles summary root
 
     liftIO $ putStrLn "───> Checking Evergreen migrations..."
 
@@ -423,18 +427,6 @@ snapshotCurrentTypesTo summary root version = do
   pure ""
 
 
-xxxxxxx root version = do
-  _ <- mkdir $ root </> "src/Evergreen/Type"
-  let nextType = (root </> "src/Evergreen/Type/V") <> show version <> ".elm"
-  debug $ "Snapshotting current types to " <> nextType
-  _ <- readProcess "cp" [ root </> "src/Types.elm", nextType ] ""
-  -- osReplace ("s/module Types exposing/module Evergreen.Type.V" <> show version <> " exposing/g") nextType
-  replaceInFile "module Types exposing" ("module Evergreen.Type.V" <> tshow version <> " exposing") nextType
-  pure ""
-
-
-
-
 getLamderaRemotes = do
   gitRemotes <- readProcess "git" ["remote", "-v"] ""
   gitRemotes
@@ -545,9 +537,8 @@ fetchLocalTypes root = do
       return $ error $ show jsonProblem --Left $ E.BadJson "github.json" jsonProblem
 
 
-checkUserProjectCompiles root = do
-  summary <- Project.getRoot
-
+checkUserProjectCompiles :: Summary.Summary -> FilePath -> Task.Task ()
+checkUserProjectCompiles summary root = do
   -- Why do we sometimes not get .lamdera-hashes generated?
   --
   -- $ DEBUG=1 lamdera check
@@ -574,7 +565,7 @@ checkUserProjectCompiles root = do
   liftIO $ sleep 50 -- 50 milliseconds
 
 
-
+migrationCheck :: FilePath -> Int -> Task.Task ()
 migrationCheck root version =
   -- Dir.withCurrentDirectory ("/Users/mario/dev/projects/lamdera/test/v2") $
     -- do  reporter <- Terminal.create
@@ -621,7 +612,7 @@ migrationCheck root version =
               -- liftIO $ unless backendRuntimeExists $ callCommand $ "rm " <> root </> "src/LBR.elm"
 
 
-
+committedCheck :: FilePath -> VersionInfo -> Task.Task ()
 committedCheck root versionInfo = do
 
   let version = vinfoVersion versionInfo
@@ -928,12 +919,11 @@ writeLamderaGenerated root inProduction nextVersion =
     liftIO $ writeUtf8 (root </> "src/LamderaGenerated.elm") gen
 
 
+possiblyShowExternalTypeWarnings :: Task.Task ()
 possiblyShowExternalTypeWarnings = do
 
   root <- liftIO getProjectRoot
   warnings_ <- liftIO $ maybeReadUtf8 $ lamderaExternalWarningsPath root
-
-  -- debug
 
   case warnings_ of
     Just warnings -> do
@@ -980,8 +970,81 @@ maybeReadUtf8 filePath =
           pure Nothing
 
 
+genericExit :: String -> Task.Task a
 genericExit str =
   Task.throw $ Exit.Lamdera
     $ Help.report "ERROR" Nothing
       (str)
       []
+
+
+temporaryCheckOldTypesNeedingMigration :: Bool -> FilePath -> Task.Task ()
+temporaryCheckOldTypesNeedingMigration inProduction root = do
+
+  exists_ <- liftIO $ Dir.doesDirectoryExist $ root </> "src" </> "Evergreen" </> "Type"
+
+  onlyWhen exists_ $ do
+
+    if inProduction then
+      Task.throw $ Exit.Lamdera
+        $ Help.report "Evergreen API changes" (Just "src/Evergreen/")
+            ("The Evergreen API changed in alpha5. It appears you've not migrated yet!")
+            ([ D.dullyellow $ D.reflow "Please download the latest binary and run `lamdera check` again."
+             , D.reflow $ "https://dashboard.lamdera.app/docs/download"
+             ]
+            )
+    else
+      Task.report $
+        Progress.LamderaProgress $
+          Help.reportToDoc $
+          Help.report "Evergreen API changes" (Just "src/Evergreen/")
+            ("The Evergreen API changed in alpha5. It appears you've not migrated yet!")
+            ([ D.reflow "The following changes were introduced:"
+             , D.vcat
+                 [ D.reflow $ "- Type snapshots now extract from your entire project, not just Types.elm"
+                 , D.reflow $ "- Snapshots now live in src/Evergreen/V*/ folders for each version"
+                 ]
+             , D.dullyellow $ D.reflow $ "I can help you migrate by doing the following:"
+             , D.vcat
+                 [ D.reflow $ "- Moving src/Evergreen/Type/V*.elm to src/Evergreen/V*/Types.elm"
+                 , D.reflow $ "- Renaming all the moved module declarations"
+                 , D.reflow $ "- Removing the src/Evergreen/Type/ folder"
+                 ]
+             ]
+            )
+
+    migrationApproved <- Task.getApproval $
+      D.stack
+        [ D.reflow $ "Shall I attempt to migrate for you? [Y/n]: "
+        ]
+
+    if migrationApproved
+      then do
+
+        liftIO $ do
+
+          migrationFilepaths <- safeListDirectory $ root </> "src/Evergreen/Type"
+
+          migrationFilepaths
+            & mapM (\filePath -> do
+
+              case getVersion filePath of
+                Just version -> do
+                  let dest = (root </> "src" </> "Evergreen" </> ("V" <> show version) </> "Types.elm")
+
+                  putStrLn $ "Moving " <> filePath <> " -> " <> "src/Evergreen/V" <> show version <> "/Types.elm"
+
+                  copyFile (root </> "src/Evergreen/Type" </> filePath) dest
+
+                  putStrLn $ "Renaming  " <> ("module Evergreen.Type.V" <> show version) <> " to " <> ("module Evergreen.V" <> show version <> ".Types")
+                  replaceInFile ("module Evergreen.Type.V" <> (T.pack $ show version)) ("module Evergreen.V" <> (T.pack $ show version) <> ".Types") dest
+
+            )
+
+          putStrLn $ "Removing " <> (root </> "src/Evergreen/Type")
+          rmdir $ root </> "src/Evergreen/Type"
+
+        pure ()
+
+      else
+        genericExit "Okay, I did not migrate."

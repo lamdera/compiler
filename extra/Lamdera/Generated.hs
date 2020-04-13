@@ -5,14 +5,12 @@ module Lamdera.Generated where
 
 import Prelude hiding (init)
 import qualified System.Directory as Dir
-import qualified System.IO.Error as Error
 import qualified Data.Text as T
 import NeatInterpolation
 import Algorithms.NaturalSort
 import qualified Data.List as List
 import System.FilePath ((</>))
 import Control.Monad.Except (catchError, liftIO)
-import Control.Exception (throw)
 import Text.Read (readMaybe)
 import Data.Maybe (fromMaybe)
 
@@ -382,14 +380,6 @@ migrationVersions migrationFilepaths =
     & justs -- This is bad? But those files probably aren't VX.elm files?
 
 
-getVersion :: FilePath -> Maybe Int
-getVersion filename =
-  filename
-    & drop 1 -- Drop the 'V'
-    & takeWhile (\i -> i /= '.')
-    & Text.Read.readMaybe
-
-
 takeWhileInclusive :: (a -> Bool) -> [a] -> [a]
 takeWhileInclusive _ [] = []
 takeWhileInclusive p (x:xs) = x : if p x then takeWhileInclusive p xs
@@ -413,15 +403,3 @@ getLastLocalTypeChangeVersion root = do
         & getVersion
         & fromMaybe 1 -- If there are no migrations or it failed, it must be version 1?
         & pure
-
-
-safeListDirectory :: FilePath -> IO [FilePath]
-safeListDirectory dir = do
-  Dir.listDirectory dir `catchError`
-    (\err -> do
-      if Error.isDoesNotExistError err
-        then
-          pure []
-        else
-          throw err
-    )

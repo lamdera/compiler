@@ -42,7 +42,9 @@ module Lamdera
   , writeUtf8Handle
   , Dir.doesFileExist
   , remove
+  , rmdir
   , mkdir
+  , safeListDirectory
   , copyFile
   , replaceInFile
   , touch
@@ -55,6 +57,7 @@ module Lamdera
   , findElmFiles
   , tshow
   , sleep
+  , getVersion
   )
   where
 
@@ -70,7 +73,7 @@ import Data.Monoid ((<>), mconcat)
 import Data.Function ((&))
 import Control.Arrow (first, second)
 import qualified System.Environment as Env
-import Control.Monad.Except (liftIO)
+import Control.Monad.Except (liftIO, catchError)
 import System.IO.Unsafe (unsafePerformIO)
 import qualified Debug.Trace as DT
 import Data.Text
@@ -93,13 +96,15 @@ import Control.Monad (unless, filterM)
 import System.Info
 import System.FilePath.Find (always, directory, extension, fileName, find, (&&?), (/~?), (==?))
 import Control.Concurrent (threadDelay)
+import Text.Read (readMaybe)
 
 -- Vendored from File.IO due to recursion errors
 import qualified System.IO as IO
+import qualified System.IO.Error as Error
 import GHC.IO.Exception (IOException, IOErrorType(InvalidArgument))
 import qualified Data.ByteString.Internal as BS
 import qualified Foreign.ForeignPtr as FPtr
-import Control.Exception (catch)
+import Control.Exception (catch, throw)
 import System.IO.Error (ioeGetErrorType, annotateIOError, modifyIOError)
 import Data.List.Index
 import Text.Show.Unicode
@@ -120,7 +125,7 @@ stdoutSetup = do
   IO.hSetEncoding  IO.stdout IO.utf8
 
 
--- debug :: String -> Task.Task ()
+-- debug :: String -> Task.Task a
 debug str =
   liftIO $ debug_ str
 
@@ -376,16 +381,36 @@ writeUtf8Handle handle content = do
 
 
 remove :: FilePath -> IO ()
-remove filePath =
-  do  exists_ <- Dir.doesFileExist filePath
+remove filepath =
+  do  exists_ <- Dir.doesFileExist filepath
       if exists_
-        then Dir.removeFile filePath
+        then Dir.removeFile filepath
         else return ()
+
+
+rmdir :: FilePath -> IO ()
+rmdir filepath = do
+  exists_ <- Dir.doesDirectoryExist filepath
+  if exists_
+    then Dir.removeDirectoryRecursive filepath
+    else pure ()
 
 
 mkdir :: FilePath -> IO ()
 mkdir dir =
   Dir.createDirectoryIfMissing True dir
+
+
+safeListDirectory :: FilePath -> IO [FilePath]
+safeListDirectory dir = do
+  Dir.listDirectory dir `catchError`
+    (\err -> do
+      if Error.isDoesNotExistError err
+        then
+          pure []
+        else
+          throw err
+    )
 
 
 createDirIfMissing :: FilePath -> IO ()
@@ -493,6 +518,16 @@ tshow = T.pack . show
 sleep milliseconds =
   -- 50 milliseconds
   threadDelay $ milliseconds * 1000
+
+
+-- For turning "V8.elm" into Just 8
+getVersion :: FilePath -> Maybe Int
+getVersion filename =
+  filename
+    & Prelude.drop 1 -- Drop the 'V'
+    & Prelude.takeWhile (\i -> i /= '.')
+    & Text.Read.readMaybe
+
 
 
 x = 1

@@ -237,6 +237,7 @@ Executable elmx
         Lamdera.TypeHash
         Lamdera.Types
         Lamdera.Evergreen
+        Lamdera.EvergreenTest
         Lamdera.Injection
         Lamdera.Checks
         Lamdera.Generated

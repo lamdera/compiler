@@ -89,35 +89,19 @@ suite = tests $
   , scope "addImports" $ do
       let
         moduleName = (ModuleName.Canonical (Pkg.Name "author" "pkg") (N.Name "Types"))
-        imports = Set.singleton (ModuleName.Canonical (Pkg.Name "author" "project") (N.Name "Derping"))
+        imports = Set.singleton derpImp
 
         fts :: ElmFilesText
         fts =
           (Map.fromList
-            [ ( "Something"
-              , ElmFileText
-                  { imports = Set.singleton ((ModuleName.Canonical (Pkg.Name "author" "project") (N.Name "Existing")))
-                  , types = []
-                  }
-              )
-            ]
+            [ ( "Something", ElmFileText { imports = Set.singleton herpImp , types = [] } ) ]
           )
 
         expected :: ElmFilesText
         expected =
           (Map.fromList
-            [ ( "Types"
-              , ElmFileText
-                  { imports = Set.singleton ((ModuleName.Canonical (Pkg.Name "author" "project") (N.Name "Derping")))
-                  , types = []
-                  }
-              )
-            , ( "Something"
-              , ElmFileText
-                  { imports = Set.singleton ((ModuleName.Canonical (Pkg.Name "author" "project") (N.Name "Existing")))
-                  , types = []
-                  }
-              )
+            [ ( "Types", ElmFileText { imports = Set.singleton derpImp , types = [] } )
+            , ( "Something", ElmFileText { imports = Set.singleton herpImp , types = [] } )
             ]
           )
       expectEqual

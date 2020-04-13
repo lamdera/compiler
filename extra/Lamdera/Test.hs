@@ -116,11 +116,10 @@ check = do
 
 checkWithParams projectPath appName = do
   setEnv "LAMDERA_APP_NAME" appName
-
   setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
   setEnv "LDEBUG" "1"
   setEnv "ELM_HOME" "/Users/mario/elm-home-elmx-test"
-
+  setEnv "NOTPROD" "1"
   -- setEnv "HOIST_REBUILD" "1"
   -- setEnv "VERSION" "3"
 
@@ -137,6 +136,13 @@ checkWithParams projectPath appName = do
   rm (projectPath ++ "/src/LFR.elm")
   rm (projectPath ++ "/src/RPC.elm")
   rm (projectPath ++ "/src/LamderaHelpers.elm")
+
+  unsetEnv "LAMDERA_APP_NAME"
+  unsetEnv "LOVR"
+  unsetEnv "LDEBUG"
+  unsetEnv "ELM_HOME"
+  unsetEnv "NOTPROD"
+
 
 
 checkSnapshotWithParams version projectPath appName = do
