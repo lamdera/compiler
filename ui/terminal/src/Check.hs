@@ -973,33 +973,37 @@ temporaryCheckOldTypesNeedingMigration inProduction root = do
 
   onlyWhen exists_ $ do
 
-    if inProduction then
-      Task.throw $ Exit.Lamdera
-        $ Help.report "Evergreen API changes" (Just "src/Evergreen/")
-            ("The Evergreen API changed in alpha5. It appears you've not migrated yet!")
-            ([ D.dullyellow $ D.reflow "Please download the latest binary and run `lamdera check` again."
-             , D.reflow $ "https://dashboard.lamdera.app/docs/download"
-             ]
-            )
-    else
-      Task.report $
-        Progress.LamderaProgress $
-          Help.reportToDoc $
-          Help.report "Evergreen API changes" (Just "src/Evergreen/")
-            ("The Evergreen API changed in alpha5. It appears you've not migrated yet!")
-            ([ D.reflow "The following changes were introduced:"
-             , D.vcat
-                 [ D.reflow $ "- Type snapshots now extract from your entire project, not just Types.elm"
-                 , D.reflow $ "- Snapshots now live in src/Evergreen/V*/ folders for each version"
-                 ]
-             , D.dullyellow $ D.reflow $ "I can help you migrate by doing the following:"
-             , D.vcat
-                 [ D.reflow $ "- Moving src/Evergreen/Type/V*.elm to src/Evergreen/V*/Types.elm"
-                 , D.reflow $ "- Renaming all the moved module declarations"
-                 , D.reflow $ "- Removing the src/Evergreen/Type/ folder"
-                 ]
-             ]
-            )
+    if inProduction
+      then
+        Task.throw $ Exit.Lamdera
+          $ Help.report "Evergreen API changes" (Just "src/Evergreen/")
+              ("The Evergreen API changed in alpha5. It appears you've not migrated yet!")
+              ([ D.dullyellow $ D.reflow "Please download the latest binary and run `lamdera check` again."
+               , D.reflow $ "https://dashboard.lamdera.app/docs/download"
+               , D.reflow $ "Or see the full release here: https://dashboard.lamdera.app/releases/alpha5"
+               ]
+              )
+      else
+        Task.report $
+          Progress.LamderaProgress $
+            Help.reportToDoc $
+            Help.report "Evergreen API changes" (Just "src/Evergreen/")
+              ("The Evergreen API changed in alpha5. It appears you've not migrated yet!")
+              ([ D.reflow "The following changes were introduced:"
+               , D.vcat
+                   [ D.reflow $ "- Type snapshots now extract from your entire project, not just Types.elm"
+                   , D.reflow $ "- Snapshots now live in src/Evergreen/V*/ folders for each version"
+                   ]
+               , D.reflow $ "See the full release here: https://dashboard.lamdera.app/releases/alpha5"
+               , D.dullyellow $ D.reflow $ "I can help you migrate by doing the following:"
+               , D.vcat
+                   [ D.reflow $ "- Moving src/Evergreen/Type/V*.elm to src/Evergreen/V*/Types.elm"
+                   , D.reflow $ "- Renaming all the moved module names"
+                   , D.reflow $ "- Removing the src/Evergreen/Type/ folder"
+                   , D.reflow $ "- Staging the changes for git commit"
+                   ]
+               ]
+              )
 
     migrationApproved <- Task.getApproval $
       D.stack
@@ -1011,7 +1015,9 @@ temporaryCheckOldTypesNeedingMigration inProduction root = do
 
         liftIO $ do
 
-          migrationFilepaths <- safeListDirectory $ root </> "src/Evergreen/Type"
+          let oldTypeSnapshotFolder = root </> "src/Evergreen/Type"
+
+          migrationFilepaths <- safeListDirectory $ oldTypeSnapshotFolder
 
           migrationFilepaths
             & mapM (\filePath -> do
@@ -1021,16 +1027,21 @@ temporaryCheckOldTypesNeedingMigration inProduction root = do
                   let dest = (root </> "src" </> "Evergreen" </> ("V" <> show version) </> "Types.elm")
 
                   putStrLn $ "Moving " <> filePath <> " -> " <> "src/Evergreen/V" <> show version <> "/Types.elm"
+                  copyFile (oldTypeSnapshotFolder </> filePath) dest
 
-                  copyFile (root </> "src/Evergreen/Type" </> filePath) dest
-
-                  putStrLn $ "Renaming  " <> ("module Evergreen.Type.V" <> show version) <> " to " <> ("module Evergreen.V" <> show version <> ".Types")
+                  putStrLn $ "Renaming '" <> ("module Evergreen.Type.V" <> show version) <> "' to '" <> ("module Evergreen.V" <> show version <> ".Types") <> "'"
                   replaceInFile ("module Evergreen.Type.V" <> (T.pack $ show version)) ("module Evergreen.V" <> (T.pack $ show version) <> ".Types") dest
 
+                  callCommand $ "git add " <> dest
             )
 
-          putStrLn $ "Removing " <> (root </> "src/Evergreen/Type")
+          putStrLn $ "Removing " <> (oldTypeSnapshotFolder) <> "..."
           rmdir $ root </> "src/Evergreen/Type"
+
+          putStrLn $ "Staging the changes for git commit..."
+          callCommand $ "git add -u " <> oldTypeSnapshotFolder
+
+          putStrLn $ "\n\nDone! If you encounter issues with this helper, please drop a note in Discord.\n\n"
 
         pure ()
 
