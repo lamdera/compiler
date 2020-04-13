@@ -934,24 +934,12 @@ possiblyShowExternalTypeWarnings = do
         D.stack
           (
           [ D.fillSep [ D.red $ D.fromText $ "WARNING: note the following Alpha limitation!" ]
-          , D.reflow $ "You are referencing some types outside Types.elm:"
-          , D.fillSep [ D.fromText warnings ]
+          , D.reflow $ "You are referencing some types outside your project:"
+          , D.vcat [ D.fromText warnings ]
           , D.fillSep [ D.red $ D.fromText $ "Changes to these types won't get covered by Evergreen migrations currently!" ]
           , D.reflow "See <https://dashboard.lamdera.app/docs/evergreen> for more info."
           ]
           )
-
-      --
-      -- pDocLn $ D.green $ D.reflow $ "\nIt appears you're all set to deploy v" <> (show nextVersion) <> " of '" <> T.unpack appName <> "'."
-      --
-      -- mapM pDocLn $
-      --   ([ D.reflow "Evergreen migrations will be applied to the following types:" ]
-      --   <> formattedChangedTypes <>
-      --   [ D.reflow "See <https://dashboard.lamdera.app/docs/evergreen> for more info." ]
-      --   )
-      --
-      --
-      --   onlyWhen (List.length formattedWarnings > 0) $
 
     Nothing -> do
       debug "No external type warnings found."

@@ -509,11 +509,11 @@ canonicalToDiffableType interfaces recursionMap canonical tvarMap =
       DError $ "must not contain functions"
 
 
--- Any types that are outside user's Types.elm need a warning currently
+-- Any types that are outside user's project need a warning currently
 addExternalWarning :: (Text,Text,Text,Text) -> DiffableType -> DiffableType
 addExternalWarning (author, pkg, module_, tipe) dtype =
   case (author, pkg, module_, tipe) of
-    ("author", "project", "Types", _) ->
+    ("author", "project", _, _) ->
       dtype
 
     _ ->
