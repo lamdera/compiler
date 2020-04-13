@@ -243,6 +243,7 @@ run () () = do
               formattedChangedTypes =
                 changedTypes
                   & fmap (\(label, local, prod) -> D.indent 4 (D.dullyellow (D.fromString label)))
+                  & D.vcat
 
             if migrationExists
               then do
@@ -267,9 +268,9 @@ run () () = do
                     pDocLn $ D.green $ D.reflow $ "\nIt appears you're all set to deploy v" <> (show nextVersion) <> " of '" <> T.unpack appName <> "'."
 
                     mapM pDocLn $
-                      ([ D.reflow "Evergreen migrations will be applied to the following types:" ]
-                       <> formattedChangedTypes <>
-                       [ D.reflow "See <https://dashboard.lamdera.app/docs/evergreen> for more info." ]
+                      ([ D.reflow "Evergreen migrations will be applied to the following types:"
+                       , formattedChangedTypes
+                       , D.reflow "See <https://dashboard.lamdera.app/docs/evergreen> for more info." ]
                       )
 
                     possiblyShowExternalTypeWarnings
@@ -292,12 +293,12 @@ run () () = do
                 Task.throw $ Exit.Lamdera
                   $ Help.report "UNIMPLEMENTED MIGRATION" (Just nextMigrationPathBare)
                     ("The following types have changed since v" <> show prodVersion <> " and require migrations:")
-                    (formattedChangedTypes <>
-                      [ D.reflow $ "I've generated a placeholder migration file to help you get started:"
-                      , D.reflow $ nextMigrationPath
-                      , D.reflow "See <https://dashboard.lamdera.app/docs/evergreen> for more info."
-                      ]
-                    )
+                    [ formattedChangedTypes
+                    , D.reflow $ "I've generated a placeholder migration file to help you get started:"
+                    , D.reflow $ nextMigrationPath
+                    , D.reflow "See <https://dashboard.lamdera.app/docs/evergreen> for more info."
+                    ]
+
 
           else do
             -- Types are the same.
@@ -452,12 +453,12 @@ lamderaThrowUnimplementedMigration nextMigrationPath formattedChangedTypes prodV
   Task.throw $ Exit.Lamdera
     $ Help.report "UNIMPLEMENTED MIGRATION" (Just nextMigrationPathBare)
       ("The following types have changed since v" <> show prodVersion <> " and require migrations:")
-      (formattedChangedTypes <>
-        [ D.reflow $ "The migration file has migrations that still haven't been implemented:"
-        , D.reflow $ nextMigrationPath
-        , D.fillSep ["See",D.cyan ("<https://dashboard.lamdera.app/docs/evergreen>"),"for more info."]
-        ]
-      )
+      [ formattedChangedTypes
+      , D.reflow $ "The migration file has migrations that still haven't been implemented:"
+      , D.reflow $ nextMigrationPath
+      , D.fillSep ["See",D.cyan ("<https://dashboard.lamdera.app/docs/evergreen>"),"for more info."]
+      ]
+
 
 
 certainAppName :: [Text] -> Maybe String -> Text
@@ -619,7 +620,7 @@ committedCheck root versionInfo = do
 
   debug $ "Commit-checking migration and types files"
 
-  let migrationPath = (root </> "src/Evergreen/Migrate/V") <> show version <> "/Types.elm"
+  let migrationPath = (root </> "src/Evergreen/Migrate/V") <> show version <> ".elm"
   migrations <- liftIO $ gitStatus migrationPath
 
   let typesPath = (root </> "src/Evergreen/V") <> show version <> "/*.elm"
@@ -764,8 +765,8 @@ defaultMigrationFile oldVersion newVersion typeCompares = do
 
     module Evergreen.Migrate.V$new exposing (..)
 
-    import Evergreen.Type.V$old as Old
-    import Evergreen.Type.V$new as New
+    import Evergreen.V$old.Types as Old
+    import Evergreen.V$new.Types as New
     import Lamdera.Migrations exposing (..)
 
 
@@ -933,10 +934,10 @@ possiblyShowExternalTypeWarnings = do
       pDocLn $
         D.stack
           (
-          [ D.fillSep [ D.red $ D.fromText $ "WARNING: note the following Alpha limitation!" ]
+          [ D.red $ D.reflow $ "WARNING: note the following Alpha limitation!"
           , D.reflow $ "You are referencing some types outside your project:"
           , D.vcat [ D.fromText warnings ]
-          , D.fillSep [ D.red $ D.fromText $ "Changes to these types won't get covered by Evergreen migrations currently!" ]
+          , D.red $ D.reflow $ "Package upgrades that change these types won't get covered by Evergreen migrations currently!"
           , D.reflow "See <https://dashboard.lamdera.app/docs/evergreen> for more info."
           ]
           )
@@ -980,7 +981,7 @@ temporaryCheckOldTypesNeedingMigration inProduction root = do
               ("The Evergreen API changed in alpha5. It appears you've not migrated yet!")
               ([ D.dullyellow $ D.reflow "Please download the latest binary and run `lamdera check` again."
                , D.reflow $ "https://dashboard.lamdera.app/docs/download"
-               , D.reflow $ "Or see the full release here: https://dashboard.lamdera.app/releases/alpha5"
+               , D.reflow $ "See the full release here: https://dashboard.lamdera.app/releases/alpha5"
                ]
               )
       else
@@ -999,6 +1000,7 @@ temporaryCheckOldTypesNeedingMigration inProduction root = do
                , D.vcat
                    [ D.reflow $ "- Moving src/Evergreen/Type/V*.elm to src/Evergreen/V*/Types.elm"
                    , D.reflow $ "- Renaming all the moved module names"
+                   , D.reflow $ "- Renaming all Type imports in migrations"
                    , D.reflow $ "- Removing the src/Evergreen/Type/ folder"
                    , D.reflow $ "- Staging the changes for git commit"
                    ]
@@ -1017,29 +1019,62 @@ temporaryCheckOldTypesNeedingMigration inProduction root = do
 
           let oldTypeSnapshotFolder = root </> "src/Evergreen/Type"
 
-          migrationFilepaths <- safeListDirectory $ oldTypeSnapshotFolder
+          typeFilepaths <- safeListDirectory $ oldTypeSnapshotFolder
 
-          migrationFilepaths
-            & mapM (\filePath -> do
+          typeFilepaths
+            & mapM (\filepath -> do
 
-              case getVersion filePath of
+              case getVersion filepath of
                 Just version -> do
                   let dest = (root </> "src" </> "Evergreen" </> ("V" <> show version) </> "Types.elm")
 
-                  putStrLn $ "Moving " <> filePath <> " -> " <> "src/Evergreen/V" <> show version <> "/Types.elm"
-                  copyFile (oldTypeSnapshotFolder </> filePath) dest
+                  putStrLn $ "Moving " <> filepath <> " -> " <> "src/Evergreen/V" <> show version <> "/Types.elm"
+                  copyFile (oldTypeSnapshotFolder </> filepath) dest
 
                   putStrLn $ "Renaming '" <> ("module Evergreen.Type.V" <> show version) <> "' to '" <> ("module Evergreen.V" <> show version <> ".Types") <> "'"
                   replaceInFile ("module Evergreen.Type.V" <> (T.pack $ show version)) ("module Evergreen.V" <> (T.pack $ show version) <> ".Types") dest
 
+
                   callCommand $ "git add " <> dest
+
+                Nothing ->
+                  -- Skip any incorrectly named files...
+                  pure ()
             )
 
           putStrLn $ "Removing " <> (oldTypeSnapshotFolder) <> "..."
           rmdir $ root </> "src/Evergreen/Type"
 
+
+          putStrLn $ "Renaming migration imports..."
+
+          migrationFilepaths <- safeListDirectory $ root </> "src/Evergreen/Migrate"
+
+          migrationFilepaths
+            & mapM (\filepath -> do
+
+              case getVersion filepath of
+                Just version -> do
+
+                  -- import Evergreen.Type.V18 as Old
+                  -- import Lamdera.Migrations exposing (..)
+                  -- import Evergreen.Type.V20 as New
+                  let migrationPath = (root </> "src/Evergreen/Migrate" </> filepath)
+
+                  putStrLn $ "Renaming imports in " <> migrationPath
+
+
+                  replaceInFile ("import Evergreen.Type.") ("import Evergreen.") migrationPath
+                  replaceInFile (" as Old") (".Types as Old") migrationPath
+                  replaceInFile (" as New") (".Types as New") migrationPath
+
+                Nothing ->
+                  -- Skip any incorrectly named files...
+                  pure ()
+            )
+
           putStrLn $ "Staging the changes for git commit..."
-          callCommand $ "git add -u " <> oldTypeSnapshotFolder
+          callCommand $ "git add -u " <> oldTypeSnapshotFolder <> " || true"
 
           putStrLn $ "\n\nDone! If you encounter issues with this helper, please drop a note in Discord.\n\n"
 

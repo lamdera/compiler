@@ -117,8 +117,8 @@ maybeGenHashes pkg module_@(Valid.Module name _ _ _ _ _ _ _ _ _) interfaces = do
                 & fmap (\e -> "- " <> e)
                 & List.intersperse "\n"
               )
-              ++ ["\n\n"]
             )
+          & List.intersperse ["\n\n"]
           & List.concat
           & T.intercalate ""
 
