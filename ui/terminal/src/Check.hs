@@ -993,7 +993,8 @@ temporaryCheckOldTypesNeedingMigration inProduction root = do
               ([ D.reflow "The following changes were introduced:"
                , D.vcat
                    [ D.reflow $ "- Type snapshots now extract from your entire project, not just Types.elm"
-                   , D.reflow $ "- Snapshots now live in src/Evergreen/V*/ folders for each version"
+                   , D.reflow $ "- Type snapshots now live in src/Evergreen/V*/ folders for each version"
+                   , D.reflow $ "- Only the types referenced by the 6 core types will get extracted (i.e. functions/other types no longer get copied)"
                    ]
                , D.reflow $ "See the full release here: https://dashboard.lamdera.app/releases/alpha5"
                , D.dullyellow $ D.reflow $ "I can help you migrate by doing the following:"
