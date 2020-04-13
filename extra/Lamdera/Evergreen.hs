@@ -332,7 +332,10 @@ unionToFt scope identifier@(author, pkg, module_, tipe) typeName interfaces recu
                 cparams =
                   fmap (\param -> canonicalToFt scope interfaces recursionMap param tvarMap) params_
               in
-              ( N.toText name <> " " <> (fmap (\(t,imps,ft) -> t) cparams & T.intercalate " ")
+              ( if List.length cparams > 0 then
+                  N.toText name <> " " <> (fmap (\(t,imps,ft) -> t) cparams & T.intercalate " ")
+                else
+                  N.toText name
               , foldl (\acc (st, imps, ft) -> mergeImports acc imps) Set.empty cparams
               , foldl (\acc (st, imps, ft) -> mergeFts acc ft) Map.empty cparams
               )

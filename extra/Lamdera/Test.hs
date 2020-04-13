@@ -119,7 +119,7 @@ checkWithParams projectPath appName = do
   setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
   setEnv "LDEBUG" "1"
   setEnv "ELM_HOME" "/Users/mario/elm-home-elmx-test"
-  setEnv "NOTPROD" "1"
+  -- setEnv "NOTPROD" "1"
   -- setEnv "HOIST_REBUILD" "1"
   -- setEnv "VERSION" "3"
 
