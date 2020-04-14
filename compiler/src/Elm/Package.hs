@@ -48,8 +48,6 @@ import qualified Elm.Name as N
 import qualified Json.Decode.Internals as Decode
 import qualified Json.Encode as Encode
 
-import qualified Debug.Trace as DT
-
 -- recursion schemes
 import Data.Data
 import Control.Lens.Plated (Plated(plate))

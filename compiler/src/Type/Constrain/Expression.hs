@@ -33,7 +33,7 @@ import Control.Lens ((^..), to)
 import Control.Lens.Plated
 import Control.Lens.Prism
 import Data.Data.Lens
-import Data.Witherable
+-- import Data.Witherable
 
 import Lamdera
 

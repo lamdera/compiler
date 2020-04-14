@@ -24,8 +24,6 @@ module Lamdera
   , first
   , second
   , ppElm
-  , Data.Witherable.mapMaybe
-  , Data.Witherable.catMaybes
   , isDebug
   , isTypeSnapshot
   , ostype
@@ -81,7 +79,6 @@ import qualified Data.Text.Encoding as Text
 import qualified Data.Char as Char
 
 import CanSer.CanSer (ppElm)
-import qualified Data.Witherable
 
 -- import qualified File.IO as IO
 import qualified Data.Text.Encoding as T
