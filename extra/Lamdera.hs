@@ -35,6 +35,7 @@ module Lamdera
   , textContains
   , hunt
   , formatHaskellValue
+  , hindentFormatValue
   , readUtf8Text
   , writeUtf8
   , writeUtf8Handle
@@ -354,12 +355,24 @@ formatHaskellValue label v =
     hindentPrintValue label v
     pure $ pure ()
 
+
 hindentPrintValue :: Show a => Text -> a -> IO a
 hindentPrintValue label v = do
-  _ <- putStrLn $ "----------------------------------------------------------------------------------------------------------------" <> T.unpack label
   (exit, stdout, stderr) <- System.Process.readProcessWithExitCode "hindent" [] (Text.Show.Unicode.ushow v)
-  _ <- putStrLn stdout
+  _ <- putStrLn $
+    "----------------------------------------------------------------------------------------------------------------"
+      <> T.unpack label
+      <> stdout
+
   pure v
+
+
+hindentFormatValue :: Show a => a -> Text
+hindentFormatValue v =
+  unsafePerformIO $ do
+    (exit, stdout, stderr) <- System.Process.readProcessWithExitCode "hindent" [] (Text.Show.Unicode.ushow v)
+    pure $ T.pack stdout
+
 
 -- Copied from File.IO due to cyclic imports and adjusted for Text
 writeUtf8 :: FilePath -> Text -> IO ()
