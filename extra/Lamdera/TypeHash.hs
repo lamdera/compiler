@@ -203,14 +203,16 @@ resolveTvars_ tvarMap tipe =
     Can.TVar a ->
       -- We've found a tvar, attempt to make a replacement
       case List.find (\(t,ti) -> t == a) (tvarMap) of
-        Just (t,ti) -> ti
+        Just (t,ti) ->
+          ti
+
         Nothing ->
-          error $ "Error: tvar lookup failed, please report this issue: cannot find "
-          <> N.toString a
-          <> " in tvarMap \n\n"
-          <> (show tvarMap)
-          <> " for type \n\n"
-          <> (show tipe)
+          -- Note: this used to seem an error, but throwing an error broke cases
+          -- and this makes sense – a tvar might not get resolved till a higher
+          -- up usage provide the type param. So recursively searching to resolve
+          -- makes sense.
+          -- @TODO performance might be impacted here on large types
+          tipe
 
     Can.TType moduleName name params ->
       Can.TType moduleName name (params & fmap (resolveTvars_ tvarMap))
