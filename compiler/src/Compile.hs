@@ -152,15 +152,16 @@ compile flag pkg importDict interfaces source srcMVar =
 
       onlyWhen (pkg == (Pkg.Name "author" "project") && (name == N.fromText "Types")) $ do
         let
+
+          !typeSnapshot = unsafePerformIO Lamdera.isTypeSnapshot
           canonicalName = Module.Canonical pkg name
           combinedInterfaces = (Map.insert canonicalName elmi interfaces)
           -- !x = formatHaskellValue "importdict" (importDict) :: IO ()
 
-        TypeHash.maybeGenHashes pkg valid_ combinedInterfaces
-
-        let !typeSnapshot = unsafePerformIO Lamdera.isTypeSnapshot
-        onlyWhen typeSnapshot (Lamdera.Evergreen.snapshotCurrentTypes pkg valid_ combinedInterfaces)
-
+        if typeSnapshot
+          then Lamdera.Evergreen.snapshotCurrentTypes pkg valid_ combinedInterfaces
+          -- Don't run typehash on snapshot mode, as with snapshots they are run mid-process
+          else TypeHash.maybeGenHashes pkg valid_ combinedInterfaces
 
       Result.ok $
         Artifacts
