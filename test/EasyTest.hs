@@ -438,7 +438,6 @@ instance MonadReader Env Test where
   reader f = Test (Just <$> reader f)
 
 instance Monad Test where
-  fail = Control.Monad.Fail.fail
   return a = Test $ do
     allow <- asks (null . allow)
     pure $ case allow of

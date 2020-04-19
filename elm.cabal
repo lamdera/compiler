@@ -233,7 +233,6 @@ Executable elmx
 
         -- Lamdera:
         Lamdera
-        Lamdera.Test
         Lamdera.TypeHash
         Lamdera.Types
         Lamdera.Evergreen
@@ -250,10 +249,11 @@ Executable elmx
         SocketServer
 
         -- Testing:
-        -- EasyTest
-        -- Tests
-        -- TestLamderaGenerated
-        -- Lamdera.EvergreenTest
+        EasyTest
+        Test
+        TestLamdera
+        TestLamderaGenerated
+        TestEvergreen
 
         -- Debug helpers:
         CanSer.CanSer
@@ -313,9 +313,10 @@ Executable elmx
         fsnotify,
         auto-update,
         -- Debug
-        unicode-show
+        unicode-show,
 
         -- Test
-        -- async,
-        -- random,
-        -- tree-diff
+        async,
+        random,
+        tree-diff,
+        main-tester

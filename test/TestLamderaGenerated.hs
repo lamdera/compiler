@@ -9,11 +9,9 @@ import Control.Monad
 import NeatInterpolation
 import qualified Data.Text as T
 import Lamdera
-
 import Lamdera.Generated
-import qualified Lamdera.EvergreenTest
 
-runAll = run suite
+all = run suite
 
 show_ :: Show a => a -> T.Text
 show_ x =
@@ -22,8 +20,7 @@ show_ x =
 
 suite :: Test ()
 suite = tests
-  [ scope "evergreen -> type snapshots -> " $ Lamdera.EvergreenTest.suite
-  , scope "deploy 3 after migrate 2" $ do
+  [ scope "deploy 3 after migrate 2" $ do
       migrations <- io $ getMigrationsSequence ["V2.elm"] (WithoutMigrations 3)
       show migrations
         & expectEqual "[[WithMigrations 1,WithMigrations 2,WithoutMigrations 3],[WithMigrations 2,WithoutMigrations 3],[WithoutMigrations 3]]"

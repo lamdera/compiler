@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Lamdera.Test where
+module TestLamdera where
 
 import qualified Data.ByteString as BS
 import qualified System.Directory as Dir
@@ -16,6 +16,7 @@ import System.Process (callCommand)
 import System.Environment (setEnv, unsetEnv)
 
 import Lamdera
+
 
 {-
 
@@ -110,7 +111,7 @@ rm path = Lamdera.remove path
 -- CHECK
 check = do
   -- checkWithParams "/Users/mario/lamdera/test/v3" "test-local"
-  checkWithParams "/Users/mario/lamdera/test/v2" "test-local"
+  checkWithParams "/Users/mario/lamdera/test/v2" "testapp"
   -- checkWithParams "/Users/mario/dev/projects/lamdera-dashboard" "dashboard"
 
 
@@ -144,10 +145,13 @@ checkWithParams projectPath appName = do
   unsetEnv "NOTPROD"
 
 
-
+checkSnapshotWithParams :: Int -> FilePath -> String -> IO ()
 checkSnapshotWithParams version projectPath appName = do
-  setEnv "LTYPESNAPSHOT" version
+  setEnv "LTYPESNAPSHOT" (show version)
+  -- setEnv "VERSION" (show version)
+  -- sleep 50
   checkWithParams projectPath appName
+  -- unsetEnv "VERSION"
   unsetEnv "LTYPESNAPSHOT"
 
 

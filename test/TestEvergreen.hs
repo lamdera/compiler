@@ -2,7 +2,7 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE QuasiQuotes #-}
 
-module Lamdera.EvergreenTest where
+module TestEvergreen where
 
 
 import qualified AST.Canonical as Can
@@ -59,7 +59,7 @@ import Lamdera.Types
 
 import NeatInterpolation
 import EasyTest
-import qualified Lamdera.Test
+import qualified TestLamdera
 import Lamdera.Evergreen
 
 
@@ -111,7 +111,7 @@ suite = tests $
 
   , scope "alltypes e2e to disk for lamdera/test/v1/" $ do
 
-      liftIO $ Lamdera.Test.checkSnapshotWithParams "1" "/Users/mario/lamdera/test/v1" "testapp"
+      liftIO $ TestLamdera.checkSnapshotWithParams 1 "/Users/mario/lamdera/test/v1" "test-local"
 
       scope "-> Types.elm" $
         generationFileCheck
