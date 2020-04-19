@@ -6,9 +6,11 @@ import qualified System.Directory as Dir
 import System.FilePath ((</>))
 
 import qualified Elm.Project as Project
+import qualified Elm.Project.Summary as Summary
 import qualified Generate.Output as Output
 import qualified Reporting.Task as Task
 import qualified Reporting.Progress.Terminal as Terminal
+
 
 import qualified Check
 
@@ -145,15 +147,42 @@ checkWithParams projectPath appName = do
   unsetEnv "NOTPROD"
 
 
-checkSnapshotWithParams :: Int -> FilePath -> String -> IO ()
-checkSnapshotWithParams version projectPath appName = do
+snapshotWithParams :: Int -> FilePath -> String -> IO ()
+snapshotWithParams version projectPath appName = do
   setEnv "LTYPESNAPSHOT" (show version)
-  -- setEnv "VERSION" (show version)
-  -- sleep 50
-  checkWithParams projectPath appName
-  -- unsetEnv "VERSION"
-  unsetEnv "LTYPESNAPSHOT"
+  setEnv "LAMDERA_APP_NAME" appName
+  setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
+  setEnv "LDEBUG" "1"
+  setEnv "ELM_HOME" "/Users/mario/elm-home-elmx-test"
 
+
+
+  -- let jsOutput = Just (Output.Html Nothing "/dev/null")
+  -- Project.compile Output.Prod Output.Client jsOutput Nothing summary [ "src" </> "Frontend.elm" ]
+  -- Project.compile Output.Prod Output.Client jsOutput Nothing summary [ "src" </> "Backend.elm" ]
+
+  let rootPaths = [ "src" </> "Types.elm" ]
+
+  Dir.withCurrentDirectory projectPath $
+    do  reporter <- Terminal.create
+        Task.run reporter $
+          do  summary <- Project.getRoot
+              let root = Summary._root summary
+
+              liftIO $ Lamdera.touch $ root </> "src" </> "Types.elm"
+
+              let jsOutput = Just (Output.Html Nothing tempFileName)
+              Project.compile Output.Dev Output.Client jsOutput Nothing summary rootPaths
+
+
+  -- @TODO this is because the migrationCheck does weird terminal stuff that mangles the display... how to fix this?
+  liftIO $ sleep 50 -- 50 milliseconds
+
+  unsetEnv "LAMDERA_APP_NAME"
+  unsetEnv "LOVR"
+  unsetEnv "LDEBUG"
+  unsetEnv "ELM_HOME"
+  unsetEnv "LTYPESNAPSHOT"
 
 
 testWire = do
@@ -188,6 +217,6 @@ testWire = do
               let jsOutput = Just (Output.Html Nothing tempFileName)
               Project.compile Output.Dev Output.Client jsOutput Nothing summary rootPaths
 
-        _ <- BS.readFile tempFileName
+        -- _ <- BS.readFile tempFileName
         -- seq (BS.length result) (Dir.removeFile tempFileName)
         return ()

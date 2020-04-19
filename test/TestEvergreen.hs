@@ -111,7 +111,7 @@ suite = tests $
 
   , scope "alltypes e2e to disk for lamdera/test/v1/" $ do
 
-      liftIO $ TestLamdera.checkSnapshotWithParams 1 "/Users/mario/lamdera/test/v1" "test-local"
+      liftIO $ TestLamdera.snapshotWithParams 1 "/Users/mario/lamdera/test/v1" "test-local"
 
       scope "-> Types.elm" $
         generationFileCheck
