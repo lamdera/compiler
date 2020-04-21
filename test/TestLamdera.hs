@@ -15,11 +15,13 @@ import qualified Reporting.Progress.Terminal as Terminal
 import System.Process (callCommand)
 import System.Environment (setEnv, unsetEnv)
 import NeatInterpolation
-import Test.Main (captureProcessResult)
+import Test.Main (captureProcessResult, withStdin)
+import qualified Data.ByteString.Lazy as BSL
 
 import Lamdera
-import qualified Check
 import EasyTest
+import qualified Init
+import qualified Check
 
 
 {-| For quick and general local development testing via `stack ghci` as TestLamdera.check -}
@@ -30,9 +32,44 @@ check = do
 
 all = run suite
 
+single = EasyTest.rerunOnly 2641118768625101232 "init should write .gitignore" suite
+
+
 suite :: Test ()
 suite = tests
-  [ scope "warning about external packages" $ do
+  [ scope "init should write .gitignore" $
+      let
+        tmpFolder = "tmp/new"
+
+        setup = do
+          rmdir tmpFolder
+          mkdir tmpFolder
+
+        cleanup _ = do
+          rmdir tmpFolder
+
+        test _ = do
+
+          actual <- catchOutput $ withStdinYesAll $ Dir.withCurrentDirectory tmpFolder $ Init.run () ()
+
+          io $ formatHaskellValue "actual" actual
+
+          expectTextContains actual
+            "Hello! Lamdera projects always start with an elm.json file, as well as three\\nsource files: Frontend.elm , Backend.elm and Types.elm\\n\\nIf you're new to Elm, the best starting point is\\n<https://elm-lang.org/0.19.0/init>\\n\\nOtherwise check out <https://dashboard.lamdera.app/docs/building> for Lamdera\\nspecific information!\\n\\nKnowing all that, would you like me to create a starter impementation? [Y/n]: Okay, I created it. Now read that link!\\n"
+
+          ignoreM <- io $ readUtf8Text $ tmpFolder </> ".gitignore"
+
+          case ignoreM of
+            Just ignore ->
+              expectTextContains ignore "lamdera-stuff"
+
+            Nothing ->
+              crash $ "Expected to find " <> tmpFolder <> "/.gitignore but didn't."
+
+      in
+      using setup cleanup test
+
+  , scope "warning about external packages" $ do
       actual <- catchOutput $ checkWithParamsNoDebug 1 "/Users/mario/lamdera/test/v1" "test-local"
 
       -- io $ formatHaskellValue "actual" actual
@@ -52,6 +89,17 @@ catchOutput action = do
   pr <- io $ captureProcessResult action
   -- @TODO improve this to actually pull out values
   pure $ show_ pr
+
+withStdinYesAll :: IO a -> IO a
+withStdinYesAll action =
+  -- This doesn't work as `withStdIn` actually writes to a file to emulate stdin
+  -- withStdin (BSL.cycle "\n") action
+
+  -- So instead, expect that our CLI will be reasonable and never ask the user to confirm more than this many times...
+  withStdin
+    "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
+    action
+
 
 
 

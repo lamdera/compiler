@@ -45,6 +45,7 @@ module Lamdera
   , safeListDirectory
   , copyFile
   , replaceInFile
+  , writeLineIfMissing
   , touch
   , lamderaHashesPath
   , lamderaExternalWarningsPath
@@ -439,6 +440,21 @@ replaceInFile find replace filename = do
   case textM of
     Just text ->
       writeUtf8 filename $ T.replace find replace text
+
+    Nothing ->
+      pure ()
+
+
+writeLineIfMissing :: Text -> FilePath -> IO ()
+writeLineIfMissing line filename = do
+  exists_ <- Dir.doesFileExist filename
+  onlyWhen (not exists_) $ touch filename
+
+  textM <- readUtf8Text filename
+  case textM of
+    Just text ->
+      onlyWhen (not $ textContains line text) $
+        writeUtf8 filename $ text <> "\n" <> line <> "\n"
 
     Nothing ->
       pure ()
