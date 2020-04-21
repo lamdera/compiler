@@ -63,6 +63,9 @@ import qualified TestLamdera
 import Lamdera.Evergreen
 
 
+all = run suite
+
+
 generationFileCheck originalFile generatedFile expectedOutput = do
   -- original <- liftIO $ readUtf8Text originalFile
   generatedM <- liftIO $ readUtf8Text generatedFile
@@ -187,6 +190,7 @@ suite = tests $
               | ClearBenchDictRecClicked
               | FNoop
               | ExternalCustom_ (WireTypes.ExternalCustom String)
+              | ExternalCustomBasic_ WireTypes.ExternalCustomBasic
               | ExternalRecord_ (WireTypes.ExternalRecord (WireTypes.AnotherParamRecord Int))
               | ExternalAlias WireTypes.ExternalAliasTuple
               | TestRPC
@@ -236,6 +240,11 @@ suite = tests $
               | AlphabeticallyKMiddleThreaded threadedTvar
 
 
+          type ExternalCustomBasic
+              = Custom1
+              | Custom2
+
+
           type alias AnotherParamRecord threadedTvar =
               { threaded2 : threadedTvar
               }
@@ -278,6 +287,9 @@ suite = tests $
               }
 
 
+          type alias ExternalAliasTuple = (Float, Bool)
+
+
           type AllUnion
               = ValueStandalone
               | ValueInt Int
@@ -299,6 +311,9 @@ suite = tests $
               | ValueTuple (Int, String)
               | ValueTriple (Int, String)
               | ValueResult (Result String Int)
+              | ValueCustom (ExternalCustom Int)
+              | ValueCustomBasic ExternalCustomBasic
+              | ValueAliasTuple ExternalAliasTuple
               | ValueAll AllTypes
 
 
@@ -309,8 +324,6 @@ suite = tests $
               , allUnion : AllUnion
               }
 
-
-          type alias ExternalAliasTuple = (Float, Bool)
         |]
 
   ]

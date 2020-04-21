@@ -324,13 +324,16 @@ unionToFt scope identifier@(author, pkg, module_, tipe) typeName interfaces recu
             & fmap selImports
             & mergeAllImports
 
+        localScope =
+          (ModuleName.Canonical (Pkg.Name author pkg) (N.Name module_))
+
         constructorFts =
           Can._u_alts union
             & fmap (\(Can.Ctor name index int params_) ->
               -- For each constructor type param
               let
                 cparams =
-                  fmap (\param -> canonicalToFt scope interfaces recursionMap param tvarMap) params_
+                  fmap (\param -> canonicalToFt localScope interfaces recursionMap param tvarMap) params_
               in
               ( if List.length cparams > 0 then
                   N.toText name <> " " <> (fmap (\(t,imps,ft) -> t) cparams & T.intercalate " ")
@@ -369,6 +372,7 @@ unionToFt scope identifier@(author, pkg, module_, tipe) typeName interfaces recu
           (ModuleName.Canonical (Pkg.Name author pkg) (N.Name module_))
 
         debug (t, imps, ft) =
+          -- debugHaskellWhen (typeName == "Trick") ("dunion Trick: " <> hindentFormatValue scope) (t, imps, ft)
           debugNote ("\n✴️  inserting def for " <> t) (t, imps, ft)
 
       in
@@ -678,7 +682,7 @@ canonicalToFt scope interfaces recursionMap canonical tvarMap =
               -- Try unions
               case Map.lookup name $ Interface._unions subInterface of
                 Just union -> do
-                  unionToFt scope (author, pkg, module_, tipe) (N.toText name) interfaces newRecursionMap tvarMap union params
+                  unionToFt scope identifier (N.toText name) interfaces newRecursionMap tvarMap union params
                     & (\(n, imports, subft) ->
                       ( n -- <> "<!5>"
                       , if moduleName /= scope then
@@ -698,7 +702,7 @@ canonicalToFt scope interfaces recursionMap canonical tvarMap =
                   -- Try aliases
                   case Map.lookup name $ Interface._aliases subInterface of
                     Just alias -> do
-                      aliasToFt scope (author, pkg, module_, tipe) (N.toText name) interfaces newRecursionMap alias
+                      aliasToFt scope identifier (N.toText name) interfaces newRecursionMap alias
                         & (\(n, imports, subft) ->
                           ( n -- <> "<!4>"
                           , if moduleName /= scope then
