@@ -21,10 +21,12 @@ watch mClients =
       , debounceEdge = leadingEdge -- Trigger on the trailing edge
       }
 
+    root <- getProjectRoot
+
     -- start a watching job (in the background)
     watchTree
       mgr          -- manager
-      "."          -- directory to watch
+      root         -- directory to watch
       (const True) -- predicate
       (\e -> do
         let

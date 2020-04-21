@@ -312,8 +312,9 @@ serveUnmatchedUrlsToIndex :: Snap ()
 serveUnmatchedUrlsToIndex =
   do  file <- getSafePath
       guard (takeExtension file == "")
-      let harnessPath = "lamdera-stuff/alpha/LocalDev.elm"
-      -- Lamdera.debug $ "serving unmatched URL: " <> file
+
+      root <- liftIO $ getProjectRoot
+      let harnessPath = root </> "lamdera-stuff/alpha/LocalDev.elm"
 
       isDebug <- liftIO $ Lamdera.isDebug
       harness <-
@@ -329,7 +330,7 @@ serveUnmatchedUrlsToIndex =
           else
             pure StaticFiles.lamderaLocalDev
 
-      liftIO $ Lamdera.mkdir "lamdera-stuff/alpha"
+      liftIO $ Lamdera.mkdir $ root </> "lamdera-stuff/alpha"
       liftIO $ BS.writeFile harnessPath harness
       serveElm harnessPath
       -- liftIO $ Dir.removeFile harnessPath
