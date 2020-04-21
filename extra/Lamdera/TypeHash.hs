@@ -99,28 +99,14 @@ maybeGenHashes pkg module_@(Valid.Module name _ _ _ _ _ _ _ _ _) interfaces = do
           & fmap (\(t,tds) -> (t, diffableTypeExternalWarnings tds & List.nub, tds)) -- nub == unique
           & filter (\(t,errs,tds) -> List.length errs > 0)
 
-      formattedWarnings =
-        warnings
-          & fmap (\(tipe, warnings_, tds) ->
-              D.stack $
-                [D.fillSep [ D.yellow $ D.fromText $ tipe <> " includes:" ]]
-                ++
-                (fmap (\e -> D.fromText $ "- " <> e) warnings_)
-            )
-
       textWarnings =
         warnings
-          & fmap (\(tipe, warnings_, tds) ->
-              [ tipe <> " includes:\n\n" ]
-              ++
-              (warnings_
-                & fmap (\e -> "- " <> e)
-                & List.intersperse "\n"
-              )
-            )
-          & List.intersperse ["\n\n"]
+          & fmap (\(tipe, warnings_, tds) -> warnings_)
           & List.concat
-          & T.intercalate ""
+          & List.nub
+          & List.sort
+          & T.intercalate "\n- "
+          & (<>) "- "
 
       formattedErrors =
         errors
@@ -154,9 +140,9 @@ maybeGenHashes pkg module_@(Valid.Module name _ _ _ _ _ _ _ _ _) interfaces = do
       else do
         unsafePerformIO $ do
           root <- getProjectRoot
-          writeUtf8 (lamderaHashesPath root) $ T.pack $ show hashes
+          writeUtf8 (lamderaHashesPath root) $ show_ hashes
 
-          if (List.length formattedWarnings > 0)
+          if (List.length warnings > 0)
             then do
               writeUtf8 (lamderaExternalWarningsPath root) $ textWarnings
             else

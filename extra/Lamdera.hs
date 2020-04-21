@@ -16,7 +16,6 @@ module Lamdera
   , debugHaskell
   , debugHaskellWhen
   , PP.sShow
-  , PP.tShow
   , T.Text
   , (<>)
   , mconcat
@@ -54,7 +53,7 @@ module Lamdera
   , lowerFirstLetter
   , pDocLn
   , findElmFiles
-  , tshow
+  , show_
   , sleep
   , getVersion
   )
@@ -521,8 +520,8 @@ findElmFiles fp = System.FilePath.Find.find isVisible (isElmFile &&? isVisible &
       isntEvergreen = directory /~? "src/Evergreen/*"
 
 
-tshow :: Show a => a -> Text
-tshow = T.pack . show
+show_ :: Show a => a -> Text
+show_ = T.pack . show
 
 
 sleep milliseconds =

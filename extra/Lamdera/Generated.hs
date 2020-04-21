@@ -62,13 +62,13 @@ lamderaGenerated nextVersion migrationFilepaths = do
 
     importType :: Int -> Text
     importType version =
-      let versionT = T.pack $ show version
+      let versionT = show_ version
       in
       [text|import Evergreen.V$versionT.Types as T$versionT|]
 
     historicMigrations_ = historicMigrations migrationSequence
 
-    nextVersion_ = T.pack $ show $ vinfoVersion nextVersion
+    nextVersion_ = show_ $ vinfoVersion nextVersion
 
   debug_ $ "Generated source for LamderaGenerated"
 
@@ -155,7 +155,7 @@ generateImportMigrations migrationSequence =
 
 generateImportMigration :: Int -> Text
 generateImportMigration version =
-  let versionT = T.pack $ show version
+  let versionT = show_ version
   in
   [text|import Evergreen.Migrate.V$versionT as M$versionT|]
 
@@ -190,7 +190,7 @@ historicMigration migrationSequence forVersion migrationsForVersion =
         & fmap (migrationForType migrationSequence migrationsForVersion startVersion)
         & T.intercalate "\n"
 
-    forVersion_ = T.pack $ show $ forVersion
+    forVersion_ = show_ $ forVersion
 
   in
   [text|
@@ -216,7 +216,7 @@ migrationForType migrationSequence migrationsForVersion startVersion tipe = do
         & fmap (\(from,to) -> intermediateMigration allMigrations tipe from to)
         & T.concat
 
-    startVersion_ = T.pack $ show $ vinfoVersion startVersion
+    startVersion_ = show_ $ vinfoVersion startVersion
 
   [text|
     "$tipe" ->
@@ -263,8 +263,8 @@ intermediateMigration allMigrations tipe from to =
   in
   case to of
     WithMigrations v ->
-      let from_ = T.pack $ show (vinfoVersion from)
-          to_ = T.pack $ show (vinfoVersion to)
+      let from_ = show_ (vinfoVersion from)
+          to_ = show_ (vinfoVersion to)
           migrationFn = [text|M$to_.$typenameCamel|]
       in
       [text|
@@ -272,8 +272,8 @@ intermediateMigration allMigrations tipe from to =
       |]
 
     WithoutMigrations v ->
-      let from_ = T.pack $ show $ lastMigrationBefore (vinfoVersion from)
-          to_ = T.pack $ show (vinfoVersion to)
+      let from_ = show_ $ lastMigrationBefore (vinfoVersion from)
+          to_ = show_ (vinfoVersion to)
           migrationFn = "(always " <> kindForType <> "Unchanged)"
       in
       [text|

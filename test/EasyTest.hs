@@ -70,8 +70,28 @@ expect False = crash "unexpected"
 expect True = ok
 
 expectEqual :: (Eq a, Show a) => a -> a -> Test ()
-expectEqual expected actual = if expected == actual then ok
-                  else crash $ unlines ["", (show actual), "** did not equal expected value **", (show expected)]
+expectEqual expected actual =
+  if expected == actual
+    then ok
+    else crash $ unlines ["", (show actual), "** did not equal expected value **", (show expected)]
+
+expectTextContains :: T.Text -> T.Text -> Test ()
+expectTextContains haystack needle =
+  if textContains needle haystack
+    then ok
+    else crash $ unlines
+      [ ""
+      , "💥💥💥"
+      , "Inside this haystack:"
+      , "▶️"
+      , (T.unpack haystack)
+      , "◀️"
+      , "I could not find this needle:"
+      , "▶️"
+      , (T.unpack needle)
+      , "◀️"
+      ]
+
 
 textStripped :: T.Text -> T.Text
 textStripped t =

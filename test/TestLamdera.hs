@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE QuasiQuotes #-}
 module TestLamdera where
 
 import qualified Data.ByteString as BS
@@ -11,13 +12,47 @@ import qualified Generate.Output as Output
 import qualified Reporting.Task as Task
 import qualified Reporting.Progress.Terminal as Terminal
 
-
-import qualified Check
-
 import System.Process (callCommand)
 import System.Environment (setEnv, unsetEnv)
+import NeatInterpolation
+import Test.Main (captureProcessResult)
 
 import Lamdera
+import qualified Check
+import EasyTest
+
+
+{-| For quick and general local development testing via `stack ghci` as TestLamdera.check -}
+check = do
+  checkWithParams "/Users/mario/lamdera/test/v1" "test-local"
+  -- checkWithParams "/Users/mario/dev/projects/lamdera-dashboard" "dashboard"
+
+
+all = run suite
+
+suite :: Test ()
+suite = tests
+  [ scope "warning about external packages" $ do
+      actual <- catchOutput $ checkWithParamsNoDebug 1 "/Users/mario/lamdera/test/v1" "test-local"
+
+      -- io $ formatHaskellValue "actual" actual
+
+      expectTextContains actual
+        "It appears you're all set to deploy the first version of 'test-local'!"
+
+      expectTextContains actual
+        "WARNING: Evergreen Alpha does not cover type changes outside your project\\ESC[0m\\n\\nYou are referencing the following in your core types:\\n\\n- Browser.Navigation.Key (elm/browser)\\n- Http.Error (elm/http)\\n- Time.Posix (elm/time)\\n\\n\\ESC[91mPackage upgrades that change these types won't get covered by Evergreen\\nmigrations currently!\\ESC[0m\\n\\nSee <https://dashboard.lamdera.app/docs/evergreen> for more info."
+
+  ]
+
+
+catchOutput :: IO () -> Test Text
+catchOutput action = do
+  -- https://hackage.haskell.org/package/main-tester-0.2.0.1/docs/Test-Main.html
+  pr <- io $ captureProcessResult action
+  -- @TODO improve this to actually pull out values
+  pure $ show_ pr
+
 
 
 {-
@@ -28,7 +63,6 @@ specifically to help with the development cycle for Evergreen.
 Changes are:
 - Generates `Output.Html` instead of `Output.Javascript` (so we can just refresh browser after run)
 - Uses `Output.Dev` instead of `Output.Prod` to avoid errors associated with Debug usage in AllTypes_Check
-
 
 Here's a suggested development flow to use this:
 
@@ -54,11 +88,6 @@ Last line is optional, but it's cool! Lambda prompt!
     - If something is red, you broke encoders/decoders!
 
 -}
-
-
--- COMPILE
-
-
 compile :: IO ()
 compile = do
   -- let project = "/Users/mario/lamdera/test/v1"
@@ -110,19 +139,13 @@ rm :: String -> IO ()
 rm path = Lamdera.remove path
 
 
--- CHECK
-check = do
-  -- checkWithParams "/Users/mario/lamdera/test/v3" "test-local"
-  checkWithParams "/Users/mario/lamdera/test/v2" "testapp"
-  -- checkWithParams "/Users/mario/dev/projects/lamdera-dashboard" "dashboard"
-
-
+{-| Run the `lamdera check` pipeline with specific params -}
 checkWithParams projectPath appName = do
   setEnv "LAMDERA_APP_NAME" appName
   setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
   setEnv "LDEBUG" "1"
   setEnv "ELM_HOME" "/Users/mario/elm-home-elmx-test"
-  -- setEnv "NOTPROD" "1"
+  setEnv "NOTPROD" "1"
   -- setEnv "HOIST_REBUILD" "1"
   -- setEnv "VERSION" "3"
 
@@ -147,6 +170,36 @@ checkWithParams projectPath appName = do
   unsetEnv "NOTPROD"
 
 
+{-| Run the `lamdera check` pipeline with specific params -}
+checkWithParamsNoDebug version projectPath appName = do
+  unsetEnv "LDEBUG"
+
+  setEnv "LAMDERA_APP_NAME" appName
+  setEnv "VERSION" $ show version
+  setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
+  setEnv "ELM_HOME" "/Users/mario/elm-home-elmx-test"
+  setEnv "NOTPROD" "1"
+
+  cp "/Users/mario/lamdera/runtime/src/LBR.elm" (projectPath ++ "/src/LBR.elm")
+  cp "/Users/mario/lamdera/runtime/src/LFR.elm" (projectPath ++ "/src/LFR.elm")
+  cp "/Users/mario/lamdera/runtime/src/RPC.elm" (projectPath ++ "/src/RPC.elm")
+  cp "/Users/mario/lamdera/runtime/src/LamderaHelpers.elm" (projectPath ++ "/src/LamderaHelpers.elm")
+
+  Dir.withCurrentDirectory projectPath $ Check.run () ()
+
+  rm (projectPath ++ "/src/LBR.elm")
+  rm (projectPath ++ "/src/LFR.elm")
+  rm (projectPath ++ "/src/RPC.elm")
+  rm (projectPath ++ "/src/LamderaHelpers.elm")
+
+  unsetEnv "LAMDERA_APP_NAME"
+  unsetEnv "VERSION"
+  unsetEnv "LOVR"
+  unsetEnv "ELM_HOME"
+  unsetEnv "NOTPROD"
+
+
+{-| Run the type snapshot part of `lamdera check` only, with specific params -}
 snapshotWithParams :: Int -> FilePath -> String -> IO ()
 snapshotWithParams version projectPath appName = do
   setEnv "LTYPESNAPSHOT" (show version)
@@ -154,12 +207,6 @@ snapshotWithParams version projectPath appName = do
   setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
   setEnv "LDEBUG" "1"
   setEnv "ELM_HOME" "/Users/mario/elm-home-elmx-test"
-
-
-
-  -- let jsOutput = Just (Output.Html Nothing "/dev/null")
-  -- Project.compile Output.Prod Output.Client jsOutput Nothing summary [ "src" </> "Frontend.elm" ]
-  -- Project.compile Output.Prod Output.Client jsOutput Nothing summary [ "src" </> "Backend.elm" ]
 
   let rootPaths = [ "src" </> "Types.elm" ]
 
@@ -185,6 +232,7 @@ snapshotWithParams version projectPath appName = do
   unsetEnv "LTYPESNAPSHOT"
 
 
+{-| Another test harness for local development -}
 testWire = do
   let project = "/Users/mario/lamdera/test/v1"
   setEnv "LAMDERA_APP_NAME" "testapp"

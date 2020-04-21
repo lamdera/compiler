@@ -79,8 +79,6 @@ import qualified Elm.Project.Summary as Summary
 import qualified Text.Read
 
 
-
-
 run :: () -> () -> IO ()
 run () () = do
   debug_ "Starting check..."
@@ -140,7 +138,7 @@ run () () = do
               pure (forceVersion, localTypes)
 
         else do
-          (pv, pt) <- fetchProductionInfo appName inDebug `catchError` (\err -> pure ((-1), []))
+          (pv, pt) <- fetchProductionInfo appName (inDebug || forceNotProd /= Nothing) `catchError` (\err -> pure ((-1), []))
           if (pv /= (-1))
             then
               -- Everything is as it should be
@@ -211,6 +209,8 @@ run () () = do
         writeLamderaGenerated root inProduction nextVersionInfo
         buildProductionJsFiles root inProduction nextVersionInfo
 
+        possiblyShowExternalTypeWarnings
+
         pDocLn $ D.green (D.reflow $ "It appears you're all set to deploy the first version of '" <> T.unpack appName <> "'!")
         liftIO $ putStrLn ""
 
@@ -265,6 +265,8 @@ run () () = do
                     migrationCheck root nextVersion
                     onlyWhen (not inProduction) $ committedCheck root nextVersionInfo
 
+                    possiblyShowExternalTypeWarnings
+
                     pDocLn $ D.green $ D.reflow $ "\nIt appears you're all set to deploy v" <> (show nextVersion) <> " of '" <> T.unpack appName <> "'."
 
                     mapM pDocLn $
@@ -272,8 +274,6 @@ run () () = do
                        , formattedChangedTypes
                        , D.reflow "See <https://dashboard.lamdera.app/docs/evergreen> for more info." ]
                       )
-
-                    possiblyShowExternalTypeWarnings
 
                     buildProductionJsFiles root inProduction nextVersionInfo
 
@@ -317,14 +317,12 @@ run () () = do
                   , D.reflow "See <https://dashboard.lamdera.app/docs/evergreen> for more info."
                   ]
 
+            possiblyShowExternalTypeWarnings
+
             pDocLn $ D.green $ D.reflow $ "\nIt appears you're all set to deploy v" <> (show nextVersion) <> " of '" <> T.unpack appName <> "'."
             pDocLn $ D.reflow $ "\nThere are no Evergreen type changes for this version."
 
-            possiblyShowExternalTypeWarnings
-
             buildProductionJsFiles root inProduction nextVersionInfo
-
-
 
 
 
@@ -344,7 +342,7 @@ buildProductionJsFiles root inProduction versionInfo = do
 
       -- Temporarily point migration to current types in order to type-check
       -- osReplace ("s/import Evergreen.Type.V" <> show version <> "/import Types/g") migrationPath
-      liftIO $ replaceInFile ("import Evergreen.V" <> tshow version <> ".Types") "import Types" migrationPath
+      liftIO $ replaceInFile ("import Evergreen.V" <> show_ version <> ".Types") "import Types" migrationPath
 
     -- debug $ "Injecting BACKENDINJECTION " <> (root </> "elm-backend-overrides.js")
     -- liftIO $ Env.setEnv "BACKENDINJECTION" (root </> "elm-backend-overrides.js")
@@ -389,7 +387,7 @@ buildProductionJsFiles root inProduction versionInfo = do
       debug $ "Rewriting " <> migrationPath <> " type import back to VX"
 
       -- Temporarily point migration to current types in order to type-check
-      liftIO $ replaceInFile "import Types" ("import Evergreen.V" <> tshow version <> ".Types") migrationPath
+      liftIO $ replaceInFile "import Types" ("import Evergreen.V" <> show_ version <> ".Types") migrationPath
 
     -- NOTE: Could do this, but assuming it'll be good to have the original evidence of
     -- state for situation where things go wrong in production and you can poke around
@@ -478,10 +476,10 @@ certainAppName lamderaRemotes appNameEnvM =
 
 
 fetchProductionInfo :: Text -> Bool -> Task.Task (Int, [String])
-fetchProductionInfo appName inDebug =
+fetchProductionInfo appName useLocal =
   let
     endpoint =
-      if textContains "-local" appName && inDebug
+      if textContains "-local" appName && useLocal
         then
           "https://" <> T.unpack appName <> ".lamdera.test/_i"
 
@@ -580,7 +578,7 @@ migrationCheck root version =
 
               debug "Replacing type reference"
               -- osReplace ("s/import Evergreen.Type.V" <> show version <> "/import Types/g") migrationPath
-              liftIO $ replaceInFile ("import Evergreen.V" <> tshow version <> ".Types") "import Types" migrationPath
+              liftIO $ replaceInFile ("import Evergreen.V" <> show_ version <> ".Types") "import Types" migrationPath
 
               -- @TODO
               -- This is now cleaner for local checks, but we still need a full e2e check in production before we deploy!
@@ -606,7 +604,7 @@ migrationCheck root version =
               liftIO $ remove $ root </> lamderaCheckBothPath
 
               -- Restore the type back to what it was
-              liftIO $ replaceInFile "import Types" ("import Evergreen.V" <> tshow version <> ".Types") migrationPath
+              liftIO $ replaceInFile "import Types" ("import Evergreen.V" <> show_ version <> ".Types") migrationPath
 
               -- Cleanup dummy runtime files if we added them
               -- liftIO $ unless frontendRuntimeExists $ callCommand $ "rm " <> root </> "src/LFR.elm"
@@ -681,8 +679,8 @@ committedCheck root versionInfo = do
 
 defaultMigrationFile :: Int -> Int -> [(String, String, String)] -> Text
 defaultMigrationFile oldVersion newVersion typeCompares = do
-  let old = T.pack $ show oldVersion
-      new = T.pack $ show newVersion
+  let old = show_ oldVersion
+      new = show_ newVersion
 
       typeCompareMigration :: (String, String, String) -> Text
       typeCompareMigration (typename, oldhash, newhash) = do
@@ -781,7 +779,7 @@ defaultMigrationFile oldVersion newVersion typeCompares = do
 lamderaCheckBothFileContents :: Int -> Text
 lamderaCheckBothFileContents version =
   -- Source for this is in lamdera/runtime/src/LamderaCheckBoth.elm
-  let version_ = T.pack $ show version
+  let version_ = show_ version
   in
   [text|
     module LamderaCheckBoth exposing (..)
@@ -934,8 +932,8 @@ possiblyShowExternalTypeWarnings = do
       pDocLn $
         D.stack
           (
-          [ D.red $ D.reflow $ "WARNING: note the following Alpha limitation!"
-          , D.reflow $ "You are referencing some types outside your project:"
+          [ D.red $ D.reflow $ "WARNING: Evergreen Alpha does not cover type changes outside your project"
+          , D.reflow $ "You are referencing the following in your core types:"
           , D.vcat [ D.fromText warnings ]
           , D.red $ D.reflow $ "Package upgrades that change these types won't get covered by Evergreen migrations currently!"
           , D.reflow "See <https://dashboard.lamdera.app/docs/evergreen> for more info."
@@ -1033,7 +1031,7 @@ temporaryCheckOldTypesNeedingMigration inProduction root = do
                   copyFile (oldTypeSnapshotFolder </> filepath) dest
 
                   putStrLn $ "Renaming '" <> ("module Evergreen.Type.V" <> show version) <> "' to '" <> ("module Evergreen.V" <> show version <> ".Types") <> "'"
-                  replaceInFile ("module Evergreen.Type.V" <> (T.pack $ show version)) ("module Evergreen.V" <> (T.pack $ show version) <> ".Types") dest
+                  replaceInFile ("module Evergreen.Type.V" <> (show_ version)) ("module Evergreen.V" <> (show_ version) <> ".Types") dest
 
 
                   callCommand $ "git add " <> dest

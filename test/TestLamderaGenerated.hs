@@ -13,10 +13,6 @@ import Lamdera.Generated
 
 all = run suite
 
-show_ :: Show a => a -> T.Text
-show_ x =
-  T.pack $ show x
-
 
 suite :: Test ()
 suite = tests
