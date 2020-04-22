@@ -41,7 +41,7 @@ run () () =
                 then
                   do  init
                       liftIO $ Lamdera.Checks.writeDefaultImplementations
-                      liftIO $ putStrLn "Okay, I created it. Now read that link!"
+                      liftIO $ putStrLn "Okay, I created it! Now read those links, or get going with `lamdera live`."
                 else
                   liftIO $ putStrLn "Okay, I did not make any changes!"
 

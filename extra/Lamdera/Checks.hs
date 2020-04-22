@@ -134,6 +134,7 @@ defaultImplementations =
       import Browser exposing (UrlRequest(..))
       import Browser.Navigation as Nav
       import Html
+      import Html.Attributes as Attr
       import Lamdera
       import Types exposing (..)
       import Url
@@ -157,7 +158,9 @@ defaultImplementations =
 
       init : Url.Url -> Nav.Key -> ( Model, Cmd FrontendMsg )
       init url key =
-          ( { key = key, message = "Welcome to Lamdera! You're looking at the auto-generated base implementation. Check out src/Frontend.elm to start coding!" }
+          ( { key = key
+            , message = "Welcome to Lamdera! You're looking at the auto-generated base implementation. Check out src/Frontend.elm to start coding!"
+            }
           , Cmd.none
           )
 
@@ -192,10 +195,16 @@ defaultImplementations =
       view model =
           { title = ""
           , body =
-              [ Html.div [] [ Html.text model.message ]
+              [ Html.div [ Attr.style "text-align" "center", Attr.style "padding-top" "40px" ]
+                  [ Html.img [ Attr.src "https://lamdera.app/lamdera-logo-black.png", Attr.width 150 ] []
+                  , Html.div
+                      [ Attr.style "font-family" "sans-serif"
+                      , Attr.style "padding-top" "40px"
+                      ]
+                      [ Html.text model.message ]
+                  ]
               ]
           }
-
   |])
   , ("src/Backend.elm", [text|
       module Backend exposing (..)
