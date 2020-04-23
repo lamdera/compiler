@@ -25,7 +25,7 @@ import Html.Events exposing (onClick, onMouseEnter, onMouseLeave)
 import Lamdera exposing (ClientId, Key, Url)
 import Lamdera.Debug as LD
 import Lamdera.Json as Json
-import Lamdera.Wire
+import Lamdera.Wire2 as Wire
 import Process
 import Task
 import Types exposing (BackendModel, BackendMsg, FrontendModel, FrontendMsg, ToBackend, ToFrontend)
@@ -333,7 +333,7 @@ update msg m =
                             payload =
                                 Json.object
                                     [ ( "t", Json.string "ToFrontend" )
-                                    , ( "i", Json.list Json.int <| Lamdera.Wire.intListFromBytes (Lamdera.Wire.bytesEncode (Types.evg_encode_ToFrontend toFrontend)) )
+                                    , ( "i", Json.list Json.int <| Wire.intListFromBytes (Wire.bytesEncode (Types.w2_encode_ToFrontend toFrontend)) )
                                     , ( "c", Json.string clientId )
                                     ]
                         in
@@ -368,7 +368,7 @@ update msg m =
                         payload =
                             Json.object
                                 [ ( "t", Json.string "ToFrontend" )
-                                , ( "i", Json.list Json.int <| Lamdera.Wire.intListFromBytes (Lamdera.Wire.bytesEncode (Types.evg_encode_ToFrontend toFrontend)) )
+                                , ( "i", Json.list Json.int <| Wire.intListFromBytes (Wire.bytesEncode (Types.w2_encode_ToFrontend toFrontend)) )
                                 , ( "c", Json.string clientId )
                                 ]
                     in
@@ -394,7 +394,7 @@ update msg m =
                     payload =
                         Json.object
                             [ ( "t", Json.string "ToBackend" )
-                            , ( "i", Json.list Json.int <| Lamdera.Wire.intListFromBytes (Lamdera.Wire.bytesEncode (Types.evg_encode_ToBackend toBackend)) )
+                            , ( "i", Json.list Json.int <| Wire.intListFromBytes (Wire.bytesEncode (Types.w2_encode_ToBackend toBackend)) )
                             , ( "c", Json.string m.clientId )
                             ]
                 in
@@ -416,7 +416,7 @@ update msg m =
                 payload =
                     Json.object
                         [ ( "t", Json.string "ToBackend" )
-                        , ( "i", Json.list Json.int <| Lamdera.Wire.intListFromBytes (Lamdera.Wire.bytesEncode (Types.evg_encode_ToBackend toBackend)) )
+                        , ( "i", Json.list Json.int <| Wire.intListFromBytes (Wire.bytesEncode (Types.w2_encode_ToBackend toBackend)) )
                         , ( "c", Json.string m.clientId )
                         ]
             in
@@ -438,7 +438,7 @@ update msg m =
             -- live.js ensures this port never gets called if we're not a leader
             case Json.decodeValue payloadDecoder payload of
                 Ok args ->
-                    case Lamdera.Wire.bytesDecode Types.evg_decode_ToBackend (Lamdera.Wire.intListToBytes args.i) of
+                    case Wire.bytesDecode Types.w2_decode_ToBackend (Wire.intListToBytes args.i) of
                         Just toBackend ->
                             let
                                 -- _ =
@@ -469,7 +469,7 @@ update msg m =
         ReceivedFromBackend payload ->
             case Json.decodeValue payloadDecoder payload of
                 Ok args ->
-                    case Lamdera.Wire.bytesDecode Types.evg_decode_ToFrontend (Lamdera.Wire.intListToBytes args.i) of
+                    case Wire.bytesDecode Types.w2_decode_ToFrontend (Wire.intListToBytes args.i) of
                         Just toFrontend ->
                             let
                                 -- x =

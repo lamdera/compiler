@@ -35,38 +35,38 @@ suite = tests
         1 ->
             case tipe of
                 "BackendModel" ->
-                    decodeType "BackendModel" version intList T1.evg_decode_BackendModel
-                        |> thenMigrateModel "BackendModel" (always ModelUnchanged) T1.evg_encode_BackendModel T2.evg_decode_BackendModel 2
+                    decodeType "BackendModel" version intList T1.w2_decode_BackendModel
+                        |> thenMigrateModel "BackendModel" (always ModelUnchanged) T1.w2_encode_BackendModel T2.w2_decode_BackendModel 2
                         |> upgradeSucceeds CurrentBackendModel
                         |> otherwiseError
 
                 "FrontendModel" ->
-                    decodeType "FrontendModel" version intList T1.evg_decode_FrontendModel
-                        |> thenMigrateModel "FrontendModel" (always ModelUnchanged) T1.evg_encode_FrontendModel T2.evg_decode_FrontendModel 2
+                    decodeType "FrontendModel" version intList T1.w2_decode_FrontendModel
+                        |> thenMigrateModel "FrontendModel" (always ModelUnchanged) T1.w2_encode_FrontendModel T2.w2_decode_FrontendModel 2
                         |> upgradeSucceeds CurrentFrontendModel
                         |> otherwiseError
 
                 "FrontendMsg" ->
-                    decodeType "FrontendMsg" version intList T1.evg_decode_FrontendMsg
-                        |> thenMigrateMsg "FrontendMsg" (always MsgUnchanged) T1.evg_encode_FrontendMsg T2.evg_decode_FrontendMsg 2
+                    decodeType "FrontendMsg" version intList T1.w2_decode_FrontendMsg
+                        |> thenMigrateMsg "FrontendMsg" (always MsgUnchanged) T1.w2_encode_FrontendMsg T2.w2_decode_FrontendMsg 2
                         |> upgradeSucceeds CurrentFrontendMsg
                         |> otherwiseError
 
                 "ToBackend" ->
-                    decodeType "ToBackend" version intList T1.evg_decode_ToBackend
-                        |> thenMigrateMsg "ToBackend" (always MsgUnchanged) T1.evg_encode_ToBackend T2.evg_decode_ToBackend 2
+                    decodeType "ToBackend" version intList T1.w2_decode_ToBackend
+                        |> thenMigrateMsg "ToBackend" (always MsgUnchanged) T1.w2_encode_ToBackend T2.w2_decode_ToBackend 2
                         |> upgradeSucceeds CurrentToBackend
                         |> otherwiseError
 
                 "BackendMsg" ->
-                    decodeType "BackendMsg" version intList T1.evg_decode_BackendMsg
-                        |> thenMigrateMsg "BackendMsg" (always MsgUnchanged) T1.evg_encode_BackendMsg T2.evg_decode_BackendMsg 2
+                    decodeType "BackendMsg" version intList T1.w2_decode_BackendMsg
+                        |> thenMigrateMsg "BackendMsg" (always MsgUnchanged) T1.w2_encode_BackendMsg T2.w2_decode_BackendMsg 2
                         |> upgradeSucceeds CurrentBackendMsg
                         |> otherwiseError
 
                 "ToFrontend" ->
-                    decodeType "ToFrontend" version intList T1.evg_decode_ToFrontend
-                        |> thenMigrateMsg "ToFrontend" (always MsgUnchanged) T1.evg_encode_ToFrontend T2.evg_decode_ToFrontend 2
+                    decodeType "ToFrontend" version intList T1.w2_decode_ToFrontend
+                        |> thenMigrateMsg "ToFrontend" (always MsgUnchanged) T1.w2_encode_ToFrontend T2.w2_decode_ToFrontend 2
                         |> upgradeSucceeds CurrentToFrontend
                         |> otherwiseError
 

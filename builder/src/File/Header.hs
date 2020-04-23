@@ -158,7 +158,8 @@ parse project path time source =
       let
         extraDeps =
           if Pkg.shouldHaveCodecsGenerated (Project.getName project) then
-            ["Lamdera.Wire"]
+            -- @TODO wire1: remove when deprecated
+            ["Lamdera.Wire2", "Lamdera.Wire"]
           else
             [] -- these modules are bootstrapped in Lamdera.Wire
       in

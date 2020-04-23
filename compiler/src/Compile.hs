@@ -38,7 +38,9 @@ import qualified Data.Text as T
 
 import System.IO.Unsafe (unsafePerformIO)
 
+-- @TODO wire1: remove when deprecated
 import qualified Wire.Source
+import qualified Wire.Source2
 import Control.Concurrent.MVar (MVar, newEmptyMVar, newMVar, putMVar, readMVar, takeMVar)
 
 import qualified Elm.Compiler.Module as Module
@@ -108,11 +110,18 @@ compile flag pkg importDict interfaces source srcMVar =
       -- These are intended to be serialised and put at the end of the source code
       -- string, then we redo the whole module compilation with this new source injected.
       rawCodecSource <- pure $ T.unpack $ Wire.Source.generateCodecs (getImportDict valid) canonical
+      rawCodecSource2 <- pure $ T.unpack $ Wire.Source2.generateCodecs (getImportDict valid) canonical
 
       valid_ <- Result.mapError Error.Syntax $
-        if Map.member "Lamdera.Wire" importDict then -- The Wire module is in the importDict, so this module is something that should have access to Evergreen.
+        if Map.member "Lamdera.Wire" importDict || Map.member "Lamdera.Wire2" importDict then -- The Wire module is in the importDict, so this module is something that should have access to Evergreen.
           let newSource =
-                BS8.fromString (Wire.Source.injectEvergreenExposing canonical (BS8.toString source)) <> "\n\n-- ### codecs\n" <> BS8.fromString rawCodecSource
+                BS8.fromString (Wire.Source2.injectEvergreenExposing canonical (BS8.toString source))
+                  <> "\n\n-- ### codecs\n"
+                  -- @TODO wire1: remove when deprecated
+                  <> BS8.fromString rawCodecSource
+                  <> "\n\n"
+                  <> BS8.fromString rawCodecSource2
+
               !_ = unsafePerformIO $ do
                     -- Put the new source into an mvar, so we can communicate upstream to the scheduler that we've modified the input,
                     -- so it can use the modified source form here on when generating error messages.
@@ -122,7 +131,11 @@ compile flag pkg importDict interfaces source srcMVar =
           in
             -- Lamdera.debug_note (BS8.toString newSource) $ -- uncomment to print source code for all modules
             -- It's safer to add stuff to the parsed result, but much harder to debug, so codecs are generated as source code, and imports are added like this now
-            addImport (Src.Import (A.At R.lamderaInject "Lamdera.Wire") Nothing (Src.Explicit []))
+            Wire.Source2.addImports
+              [ Src.Import (A.At R.lamderaInject "Lamdera.Wire2") Nothing (Src.Explicit [])
+              -- @TODO wire1: remove when deprecated
+              , Src.Import (A.At R.lamderaInject "Lamdera.Wire") Nothing (Src.Explicit [])
+              ]
               <$> Parse.program pkg newSource
         else
           -- This shouldn't have access to the Evergreen module. It's stuff like the lamdera/codecs or elm/core that would cause cyclic imports.
@@ -169,11 +182,6 @@ compile flag pkg importDict interfaces source srcMVar =
           , _elmo = graph_
           , Compile._docs = documentation_
           }
-
-
-addImport :: Src.Import -> Valid.Module -> Valid.Module
-addImport i (Valid.Module _name _overview _docs _exports _imports _decls _unions _aliases _binop _effects) =
-  Valid.Module _name _overview _docs _exports (i : _imports) _decls _unions _aliases _binop _effects
 
 
 getImportDict :: Valid.Module -> Map.Map N.Name N.Name

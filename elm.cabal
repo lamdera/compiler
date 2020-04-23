@@ -242,6 +242,7 @@ Executable elmx
         Lamdera.Hints
         Lamdera.Filewatch
         Wire.Source
+        Wire.Source2
         Check
         Reporting.Exit.Check
         Reporting.Error.LamderaError

@@ -96,37 +96,37 @@ lamderaGenerated nextVersion migrationFilepaths = do
             $nextVersion_ ->
                 case tipe of
                     "BackendModel" ->
-                        decodeType "BackendModel" version intList T$nextVersion_.evg_decode_BackendModel
+                        decodeType "BackendModel" version intList T$nextVersion_.w2_decode_BackendModel
                             |> upgradeIsCurrent CurrentBackendModel
                             |> otherwiseError
 
 
                     "FrontendModel" ->
-                        decodeType "FrontendModel" version intList T$nextVersion_.evg_decode_FrontendModel
+                        decodeType "FrontendModel" version intList T$nextVersion_.w2_decode_FrontendModel
                             |> upgradeIsCurrent CurrentFrontendModel
                             |> otherwiseError
 
 
                     "FrontendMsg" ->
-                        decodeType "FrontendMsg" version intList T$nextVersion_.evg_decode_FrontendMsg
+                        decodeType "FrontendMsg" version intList T$nextVersion_.w2_decode_FrontendMsg
                             |> upgradeIsCurrent CurrentFrontendMsg
                             |> otherwiseError
 
 
                     "ToBackend" ->
-                        decodeType "ToBackend" version intList T$nextVersion_.evg_decode_ToBackend
+                        decodeType "ToBackend" version intList T$nextVersion_.w2_decode_ToBackend
                             |> upgradeIsCurrent CurrentToBackend
                             |> otherwiseError
 
 
                     "BackendMsg" ->
-                        decodeType "BackendMsg" version intList T$nextVersion_.evg_decode_BackendMsg
+                        decodeType "BackendMsg" version intList T$nextVersion_.w2_decode_BackendMsg
                             |> upgradeIsCurrent CurrentBackendMsg
                             |> otherwiseError
 
 
                     "ToFrontend" ->
-                        decodeType "ToFrontend" version intList T$nextVersion_.evg_decode_ToFrontend
+                        decodeType "ToFrontend" version intList T$nextVersion_.w2_decode_ToFrontend
                             |> upgradeIsCurrent CurrentToFrontend
                             |> otherwiseError
 
@@ -220,7 +220,7 @@ migrationForType migrationSequence migrationsForVersion startVersion tipe = do
 
   [text|
     "$tipe" ->
-        decodeType "$tipe" version intList T$startVersion_.evg_decode_$tipe
+        decodeType "$tipe" version intList T$startVersion_.w2_decode_$tipe
             $intermediateMigrations
             |> upgradeSucceeds Current$tipe
             |> otherwiseError
@@ -268,7 +268,7 @@ intermediateMigration allMigrations tipe from to =
           migrationFn = [text|M$to_.$typenameCamel|]
       in
       [text|
-        |> $thenMigrateForType "$tipe" $migrationFn T$from_.evg_encode_$tipe T$to_.evg_decode_$tipe $to_
+        |> $thenMigrateForType "$tipe" $migrationFn T$from_.w2_encode_$tipe T$to_.w2_decode_$tipe $to_
       |]
 
     WithoutMigrations v ->
@@ -277,7 +277,7 @@ intermediateMigration allMigrations tipe from to =
           migrationFn = "(always " <> kindForType <> "Unchanged)"
       in
       [text|
-        |> $thenMigrateForType "$tipe" $migrationFn T$from_.evg_encode_$tipe T$to_.evg_decode_$tipe $to_
+        |> $thenMigrateForType "$tipe" $migrationFn T$from_.w2_encode_$tipe T$to_.w2_decode_$tipe $to_
       |]
 
 

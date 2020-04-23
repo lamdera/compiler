@@ -47,7 +47,7 @@ import qualified Parse.Primitives.Symbol as Symbol
 import qualified Parse.Primitives.Variable as Var
 import qualified Parse.Primitives.Whitespace as W
 
-import qualified Wire.Source
+import qualified Wire.Source2
 
 
 -- DOCUMENTATION
@@ -382,7 +382,8 @@ type Dups =
 checkNames :: Map.Map N.Name (A.Located Can.Export) -> [A.Located N.Name] -> Result i w ()
 checkNames exports_ names =
   let
-    exports = Map.filterWithKey (\k _ -> Wire.Source.isEvergreenCodecName k == False) exports_ -- otherwise we'll get doc errors in packages because our evergreen codec functions aren't documented in the module docs
+    -- skip docs check for generated wire codecs, they don't exist
+    exports = Map.filterWithKey (\k _ -> Wire.Source2.isEvergreenCodecName k == False) exports_
   in
   do  docs <- Map.traverseWithKey isUnique (List.foldl' addName Map.empty names)
       let overlap = Map.size (Map.intersection docs exports)
@@ -440,8 +441,9 @@ checkExport :: Info -> N.Name -> A.Located Can.Export -> Result i w (Module -> M
 checkExport info name (A.At region export) =
   case export of
     Can.ExportValue ->
-      if Wire.Source.isEvergreenCodecName name then
-        Result.ok id -- please don't check the docs of our generated codecs, otherwise we'll get doc errors in every single package
+      if Wire.Source2.isEvergreenCodecName name then
+        -- skip docs check for generated wire codecs, they don't exist
+        Result.ok id
       else
       do  tipe <- getType name info
           comment <- getComment region name info

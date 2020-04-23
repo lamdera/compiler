@@ -10,7 +10,7 @@ import Dict
 import Element exposing (..)
 import Element.Background as Background
 import Html
-import Lamdera.Wire
+import Lamdera.Wire2
 import Msg exposing (..)
 import Result exposing (Result(..))
 import Set
@@ -90,7 +90,13 @@ view model =
     , body =
         [ layout [] <|
             column [ spacing 10, padding 10 ]
-                [ encodeDecodeCheck "AllTypes" allTypesMocks AllTypes.evg_encode_AllTypes AllTypes.evg_decode_AllTypes
+                [ encodeDecodeCheck "AllTypes" allTypesMocks AllTypes.w2_encode_AllTypes AllTypes.w2_decode_AllTypes
+                , encodeDecodeCheck "Unions" unionMocks AllTypes.w2_encode_Union AllTypes.w2_decode_Union
+                , encodeDecodeCheck "Herp" [ Derp "arg1" "arg2" ] Msg.w2_encode_Herp Msg.w2_decode_Herp
+                , encodeDecodeCheck "Referenced" [ Root, Wrapped (Derp "test" "best") ] AllTypes.w2_encode_Referenced AllTypes.w2_decode_Referenced
+                , encodeDecodeCheck "ReferencedRecord" [ { wrapped = Derp "test" "nest" } ] AllTypes.w2_encode_ReferencedRecord AllTypes.w2_decode_ReferencedRecord
+                , text "Legacy:"
+                , encodeDecodeCheck "AllTypes" allTypesMocks AllTypes.evg_encode_AllTypes AllTypes.evg_decode_AllTypes
                 , encodeDecodeCheck "Unions" unionMocks AllTypes.evg_encode_Union AllTypes.evg_decode_Union
                 , encodeDecodeCheck "Herp" [ Derp "arg1" "arg2" ] Msg.evg_encode_Herp Msg.evg_decode_Herp
                 , encodeDecodeCheck "Referenced" [ Root, Wrapped (Derp "test" "best") ] AllTypes.evg_encode_Referenced AllTypes.evg_decode_Referenced
@@ -100,7 +106,7 @@ view model =
     }
 
 
-encodeDecodeCheck : String -> List a -> (a -> Lamdera.Wire.Encoder) -> D.Decoder a -> Element msg
+encodeDecodeCheck : String -> List a -> (a -> Lamdera.Wire2.Encoder) -> D.Decoder a -> Element msg
 encodeDecodeCheck label mock encoder decoder =
     let
         roundtripMatches =
