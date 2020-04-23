@@ -110,11 +110,12 @@ maybeGenHashes pkg module_@(Valid.Module name _ _ _ _ _ _ _ _ _) interfaces = do
 
       formattedErrors =
         errors
+
           & fmap (\(tipe, errors_, tds) ->
               D.stack $
                 [D.fillSep [ D.yellow $ D.fromText $ tipe <> ":" ]]
                 ++
-                (fmap (\e -> D.fromText $ "- " <> e) errors_)
+                (errors_ & List.nub & fmap (\e -> D.fromText $ "- " <> e) )
             )
 
     if List.length errors > 0
