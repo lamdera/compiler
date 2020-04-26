@@ -310,19 +310,24 @@ unionToFt scope identifier@(author, pkg, module_, tipe) typeName interfaces recu
                 _ -> p
             )
 
-        usageFts =
+        usageSnapRes =
           tvarResolvedParams
             & fmap (\param -> canonicalToFt scope interfaces recursionMap param tvarMap)
 
         usageParams =
-          usageFts
+          usageSnapRes
             & fmap selNames
             & T.intercalate " "
 
         usageImports =
-          usageFts
+          usageSnapRes
             & fmap selImports
             & mergeAllImports
+
+        usageFts =
+          usageSnapRes
+            & fmap selFts
+            & mergeAllFts
 
         localScope =
           (ModuleName.Canonical (Pkg.Name author pkg) (N.Name module_))
@@ -372,7 +377,7 @@ unionToFt scope identifier@(author, pkg, module_, tipe) typeName interfaces recu
           (ModuleName.Canonical (Pkg.Name author pkg) (N.Name module_))
 
         debug (t, imps, ft) =
-          -- debugHaskellWhen (typeName == "Trick") ("dunion Trick: " <> hindentFormatValue scope) (t, imps, ft)
+          -- debugHaskellWhen (typeName == "RoomId") ("dunion: " <> hindentFormatValue scope) (t, imps, ft)
           debugNote ("\n✴️  inserting def for " <> t) (t, imps, ft)
 
       in
@@ -393,6 +398,7 @@ unionToFt scope identifier@(author, pkg, module_, tipe) typeName interfaces recu
                   ["type " <> typeName <> "\n    = " <> ctypes]
             })
           & mergeFts fts
+          & mergeFts usageFts
       )
 
   in

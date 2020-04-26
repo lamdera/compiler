@@ -21,7 +21,6 @@ import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Lazy.Encoding as TLE
 import qualified Data.Text.Encoding as TE
-import Data.List.Index (imap)
 import qualified Elm.Name as N
 import qualified Elm.Package as Pkg
 import qualified Reporting.Annotation as A
@@ -83,6 +82,7 @@ maybeGenHashes pkg module_@(Valid.Module name _ _ _ _ _ _ _ _ _) interfaces = do
         lamderaTypes
           & fmap (\t -> (t, diffableTypeByName interfaces t name interfaceTypes_elm))
 
+      -- @WARNING this may freeze for a while, hindent struggles with large haskell values
       -- !_ = formatHaskellValue "typediffs" (typediffs) :: IO ()
 
       hashes =
@@ -572,7 +572,9 @@ addExternalWarning (author, pkg, module_, tipe) dtype =
 
 diffableTypeToHash :: DiffableType -> Text
 diffableTypeToHash dtype =
-  T.pack $ SHA.showDigest $ SHA.sha1 $ TLE.encodeUtf8 $ TL.fromStrict $ diffableTypeToText dtype
+  T.pack $ SHA.showDigest $ SHA.sha1 $ TLE.encodeUtf8 $ TL.fromStrict $
+    -- debugTrace "typediffhash" $
+    diffableTypeToText dtype
 
 
 diffableTypeToText :: DiffableType -> Text

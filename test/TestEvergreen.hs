@@ -287,6 +287,14 @@ suite = tests $
               }
 
 
+          type OnlyUsedInPhantom
+              = OnlyUsedInPhantom
+
+
+          type Phantom a
+              = Phantom String
+
+
           type alias ExternalAliasTuple = (Float, Bool)
 
 
@@ -313,6 +321,7 @@ suite = tests $
               | ValueResult (Result String Int)
               | ValueCustom (ExternalCustom Int)
               | ValueCustomBasic ExternalCustomBasic
+              | ValuePhantom (Phantom OnlyUsedInPhantom)
               | ValueAliasTuple ExternalAliasTuple
               | ValueAll AllTypes
 

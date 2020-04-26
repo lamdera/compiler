@@ -12,6 +12,7 @@ module Lamdera
   , debug
   , debugT
   , dt
+  , debugTrace
   , debugNote
   , debugHaskell
   , debugHaskellWhen
@@ -157,6 +158,8 @@ dt msg value =
       Just _ -> pure $ DT.trace (msg ++ ":" ++ show value) value
       Nothing -> pure value
 
+debugTrace :: Show a => String -> a -> a
+debugTrace = dt
 
 debugNote :: Text -> a -> a
 debugNote msg value =
