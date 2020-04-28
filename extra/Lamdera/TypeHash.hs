@@ -569,12 +569,14 @@ addExternalWarning (author, pkg, module_, tipe) dtype =
       DExternalWarning (author, pkg, module_, tipe) dtype
 
 
-
 diffableTypeToHash :: DiffableType -> Text
 diffableTypeToHash dtype =
-  T.pack $ SHA.showDigest $ SHA.sha1 $ TLE.encodeUtf8 $ TL.fromStrict $
-    -- debugTrace "typediffhash" $
-    diffableTypeToText dtype
+  textSha1 $ diffableTypeToText dtype
+
+
+textSha1 :: Text -> Text
+textSha1 input =
+  T.pack $ SHA.showDigest $ SHA.sha1 $ TLE.encodeUtf8 $ TL.fromStrict $ input
 
 
 diffableTypeToText :: DiffableType -> Text
@@ -585,7 +587,7 @@ diffableTypeToText dtype =
       fields
         & fmap (\(n, tipe) -> diffableTypeToText tipe)
         & T.intercalate ""
-        & (\v -> "Rec["<> v <>"]")
+        & (\v -> "R["<> v <>"]")
 
     -- DCustom [(Text, [DiffableType])]
     DCustom name constructors ->
@@ -597,27 +599,27 @@ diffableTypeToText dtype =
               & (\t -> "["<> t <> "]")
           )
         & T.intercalate ""
-        & (\v -> "Custom["<> v <>"]")
+        & (\v -> "C["<> v <>"]")
 
     -- DString
     DString ->
-      "String"
+      "S"
 
     -- DInt
     DInt ->
-      "Int"
+      "I"
 
     -- DFloat
     DFloat ->
-      "Float"
+      "F"
 
     -- DBool
     DBool ->
-      "Bool"
+      "B"
 
     -- DOrder
     DOrder ->
-      "Order"
+      "Ord"
 
     -- DNever
     DNever ->
@@ -625,35 +627,35 @@ diffableTypeToText dtype =
 
     -- DChar
     DChar ->
-      "Char"
+      "Ch"
 
     -- DMaybe DiffableType
     DMaybe tipe ->
-      "Maybe["<> diffableTypeToText tipe <>"]"
+      "M["<> diffableTypeToText tipe <>"]"
 
     -- DList DiffableType
     DList tipe ->
-      "List["<> diffableTypeToText tipe <>"]"
+      "L["<> diffableTypeToText tipe <>"]"
 
     -- DArray DiffableType
     DArray tipe ->
-      "Array["<> diffableTypeToText tipe <>"]"
+      "A["<> diffableTypeToText tipe <>"]"
 
     -- DSet DiffableType
     DSet tipe ->
-      "Set["<> diffableTypeToText tipe <>"]"
+      "S["<> diffableTypeToText tipe <>"]"
 
     -- DResult DiffableType DiffableType
     DResult err result ->
-      "Result["<> diffableTypeToText err <>","<> diffableTypeToText result <>"]"
+      "Res["<> diffableTypeToText err <>","<> diffableTypeToText result <>"]"
 
     -- DDict DiffableType DiffableType
     DDict key value ->
-      "Dict["<> diffableTypeToText key <>","<> diffableTypeToText value <>"]"
+      "D["<> diffableTypeToText key <>","<> diffableTypeToText value <>"]"
 
     -- DTuple DiffableType DiffableType
     DTuple first second ->
-      "Tuple["<> diffableTypeToText first <>","<> diffableTypeToText second <>"]"
+      "T["<> diffableTypeToText first <>","<> diffableTypeToText second <>"]"
 
     DUnit ->
       "()"

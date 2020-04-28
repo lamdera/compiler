@@ -517,7 +517,7 @@ fetchProductionInfo appName useLocal =
 fetchLocalTypes :: FilePath -> Task.Task [String]
 fetchLocalTypes root = do
 
-  debug $ "Reading local types..."
+  debug $ "Reading local types from " <> lamderaHashesPath root
 
   -- This could fail normally but we're using this function after
   -- we've already checked it exists

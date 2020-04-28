@@ -255,6 +255,7 @@ Executable elmx
         TestLamdera
         TestLamderaGenerated
         TestEvergreen
+        TestTypeHashes
 
         -- Debug helpers:
         CanSer.CanSer
