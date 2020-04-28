@@ -590,7 +590,12 @@ diffableTypeToText dtype =
     -- DCustom [(Text, [DiffableType])]
     DCustom name constructors ->
       constructors
-        & fmap (\(n, params) -> T.intercalate "" $ fmap diffableTypeToText params)
+        & fmap (\(n, params) ->
+            params
+              & fmap diffableTypeToText
+              & T.intercalate ""
+              & (\t -> "["<> t <> "]")
+          )
         & T.intercalate ""
         & (\v -> "Custom["<> v <>"]")
 
