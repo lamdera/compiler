@@ -452,7 +452,7 @@ lamderaThrowUnimplementedMigration nextMigrationPath formattedChangedTypes prodV
     $ Help.report "UNIMPLEMENTED MIGRATION" (Just nextMigrationPathBare)
       ("The following types have changed since v" <> show prodVersion <> " and require migrations:")
       [ formattedChangedTypes
-      , D.reflow $ "The migration file has migrations that still haven't been implemented:"
+      , D.reflow $ "There are still migration placeholders that need implementing here:"
       , D.reflow $ nextMigrationPath
       , D.fillSep ["See",D.cyan ("<https://dashboard.lamdera.app/docs/evergreen>"),"for more info."]
       ]
