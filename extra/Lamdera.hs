@@ -466,8 +466,15 @@ touch :: FilePath -> IO ()
 touch filepath = do
   createDirIfMissing filepath
   case ostype of
-    "mingw32" ->
-      System.Process.callCommand $ "copy /b " <> filepath <> " +,,"
+    "mingw32" -> do
+      -- Windows doesn't create the file with this method, so need to check if
+      -- it exists and write an empty one instead in that case
+      exists_ <- Dir.doesFileExist filepath
+      if exists_
+        then
+          System.Process.callCommand $ "copy /b " <> filepath <> " +,,"
+        else
+          writeUtf8 filepath ""
 
     "darwin" ->
       System.Process.callCommand $ "touch " ++ filepath
