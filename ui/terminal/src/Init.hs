@@ -62,7 +62,7 @@ question =
         ["Otherwise","check","out",D.cyan ("<https://dashboard.lamdera.app/docs/building>")
         ,"for","Lamdera","specific","information!"
         ]
-    , "Knowing all that, would you like me to create a starter impementation? [Y/n]: "
+    , "Knowing all that, would you like me to create a starter implementation? [Y/n]: "
     ]
 
 
