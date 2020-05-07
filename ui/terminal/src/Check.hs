@@ -209,7 +209,7 @@ run () () = do
         writeLamderaGenerated root inProduction nextVersionInfo
         buildProductionJsFiles root inProduction nextVersionInfo
 
-        possiblyShowExternalTypeWarnings
+        onlyWhen (not inProduction) $ possiblyShowExternalTypeWarnings
 
         pDocLn $ D.green (D.reflow $ "It appears you're all set to deploy the first version of '" <> T.unpack appName <> "'!")
         liftIO $ putStrLn ""
@@ -265,7 +265,7 @@ run () () = do
                     migrationCheck root nextVersion
                     onlyWhen (not inProduction) $ committedCheck root nextVersionInfo
 
-                    possiblyShowExternalTypeWarnings
+                    onlyWhen (not inProduction) $ possiblyShowExternalTypeWarnings
 
                     pDocLn $ D.green $ D.reflow $ "\nIt appears you're all set to deploy v" <> (show nextVersion) <> " of '" <> T.unpack appName <> "'."
 
@@ -288,7 +288,7 @@ run () () = do
 
                 liftIO $ writeUtf8 nextMigrationPath defaultMigrations
 
-                possiblyShowExternalTypeWarnings
+                onlyWhen (not inProduction) $ possiblyShowExternalTypeWarnings
 
                 Task.throw $ Exit.Lamdera
                   $ Help.report "UNIMPLEMENTED MIGRATION" (Just nextMigrationPathBare)
@@ -317,7 +317,7 @@ run () () = do
                   , D.reflow "See <https://dashboard.lamdera.app/docs/evergreen> for more info."
                   ]
 
-            possiblyShowExternalTypeWarnings
+            onlyWhen (not inProduction) $ possiblyShowExternalTypeWarnings
 
             pDocLn $ D.green $ D.reflow $ "\nIt appears you're all set to deploy v" <> (show nextVersion) <> " of '" <> T.unpack appName <> "'."
             pDocLn $ D.reflow $ "\nThere are no Evergreen type changes for this version."
