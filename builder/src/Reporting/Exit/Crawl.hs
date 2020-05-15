@@ -23,6 +23,7 @@ import qualified Reporting.Doc as D
 import qualified Reporting.Exit.Compile as Compile
 import qualified Reporting.Exit.Help as Help
 
+import Lamdera.OldFeatureHelper
 
 
 -- EXIT
@@ -225,6 +226,7 @@ notFoundToDoc origin child srcDirs =
         (notFoundDetails child srcDirs)
 
     Module path parent ->
+      Lamdera.OldFeatureHelper.adviseLocalDevImport path child $
       Help.report "UNKNOWN IMPORT" (Just path)
         ("The " ++ Module.nameToString parent ++ " module has a bad import:")
         (notFoundDetails child srcDirs)

@@ -10,7 +10,7 @@ module Elm.Package
   , lamderaCore, lamderaCodecs
   , dummyName, kernel, core
   , browser, virtualDom, html
-  , json, http, url
+  , json, http, url, time
   , webgl, linearAlgebra
   , suggestions
   , Version(..)
@@ -270,6 +270,12 @@ http =
 url :: Name
 url =
   Name "elm" "url"
+
+
+{-# NOINLINE time #-}
+time :: Name
+time =
+  Name "elm" "time"
 
 
 {-# NOINLINE webgl #-}
