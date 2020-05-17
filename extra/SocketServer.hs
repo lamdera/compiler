@@ -20,20 +20,53 @@ import Lamdera
 clientsInit :: IO (TVar [Client])
 clientsInit = newTVarIO []
 
+leaderInit :: IO (TVar (Maybe ClientId))
+leaderInit = newTVarIO Nothing
 
-socketHandler :: TVar [Client] -> OnJoined -> OnReceive -> T.Text -> WS.ServerApp
-socketHandler mClients onJoined onReceive clientId pending = do
 
-  Lamdera.debugT $ "[websocket] Handling new client: " <> clientId
+socketHandler :: TVar [Client] -> TVar (Maybe ClientId) -> TVar Text -> OnJoined -> OnReceive -> T.Text -> WS.ServerApp
+socketHandler mClients mLeader beState onJoined onReceive clientId pending = do
+
+  Lamdera.debugT $ "[websocket] ❇️  " <> clientId
   conn <- WS.acceptRequest pending
 
   let client     = (clientId, conn)
       disconnect = do
-        atomically $ do
+        leaderChanged <- atomically $ do
           clients <- readTVar mClients
-          writeTVar mClients $ removeClient client clients
+          let remainingClients = removeClient client clients
 
-        Lamdera.debugT ("[websocket:disconnect] " <> clientId)
+          leader <- readTVar mLeader
+          changed <- do
+            case leader of
+              Just leaderId ->
+                if leaderId == clientId
+                  then do
+                    writeTVar mLeader (getNextLeader remainingClients)
+                    pure True
+
+                  else
+                    -- No need to change leader ID
+                    pure False
+
+              Nothing ->
+                -- No leader elected already somehow,
+                -- should be impossible
+                pure False
+
+          writeTVar mClients remainingClients
+          pure changed
+
+        Lamdera.debugT ("[websocket] 🚫 " <> clientId)
+
+        onlyWhen leaderChanged $ do
+          sendToLeader mClients mLeader (\leader -> do
+              -- Tell the new leader about the backend state they need
+              atomically $ readTVar beState
+            )
+          -- Tell everyone about the new leader (also causes actual leader to go active as leader)
+          broadcastLeader mClients mLeader
+
         pure ()
 
   flip finally disconnect $ do
@@ -51,6 +84,42 @@ socketHandler mClients onJoined onReceive clientId pending = do
         pure ()
 
     talk onReceive conn mClients client
+
+electionFor :: ClientId -> Text
+electionFor leaderId =
+  "{\"t\":\"e\",\"l\":\"" <> leaderId <> "\"}"
+
+getNextLeader :: [Client] -> Maybe ClientId
+getNextLeader clients =
+  case clients of
+  [] ->
+    Nothing
+
+  (newLeaderId, _):_ ->
+    (Just newLeaderId)
+
+
+broadcastLeader :: TVar [Client] -> TVar (Maybe ClientId) -> IO ()
+broadcastLeader mClients mLeader = do
+  leader <- atomically $ readTVar mLeader
+  case leader of
+    Just leaderId ->
+      broadcastImpl mClients $ "{\"t\":\"e\",\"l\":\"" <> leaderId <> "\"}"
+
+    Nothing ->
+      pure ()
+
+
+sendToLeader :: TVar [Client] -> TVar (Maybe ClientId) -> (ClientId -> IO Text) -> IO ()
+sendToLeader mClients mLeader fn = do
+  leader <- atomically $ readTVar mLeader
+  case leader of
+    Just leaderId -> do
+      text <- fn leaderId
+      sendImpl mClients leaderId text
+
+    Nothing ->
+      pure ()
 
 
 data Handle = Handle
@@ -87,7 +156,7 @@ broadcastImpl mClients message = do
 talk :: OnReceive -> WS.Connection -> TVar [Client] -> Client -> IO ()
 talk onReceive conn _ (clientId, _) = forever $ do
   msg <- WS.receiveData conn
-  Lamdera.debugT ("[websocket:received] " <> T.pack (show clientId) <> ":" <> msg)
+  Lamdera.debugT ("[websocket] ▶️  " <> T.pack (show clientId) <> ":" <> T.take 70 msg)
   onReceive clientId msg
 
 
@@ -97,6 +166,10 @@ addClient client clients = client : clients
 
 removeClient :: Client -> [Client] -> [Client]
 removeClient client = filter ((/=fst client) . fst)
+
+
+removeClientId :: ClientId -> [Client] -> [Client]
+removeClientId clientId = filter ((/= clientId) . fst)
 
 
 findClient :: [Client] -> ClientId -> Maybe Client
@@ -112,5 +185,5 @@ send_ clients clientId text =
 
 broadcast_ :: [Client] -> T.Text -> IO ()
 broadcast_ clients message = do
-  Lamdera.debugT ("[websocket:broadcast] " <> T.pack (show $ length clients) <> ":" <> message)
+  Lamdera.debugT ("[websocket] ◀️  " <> T.pack (show $ length clients) <> ":" <> T.take 70 message)
   forM_ clients $ \(_, conn) -> WS.sendTextData conn message

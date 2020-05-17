@@ -6,200 +6,175 @@ const Sockette = require('sockette')
 
 var isLiveReload = false
 var leaderSeen = true
-const clientId = getClientId()
+
+var clientId = ""
+const sessionId = getSessionId()
+var connected = false
+var bufferOutbound = []
+
+var leaderId = null
+var nodeType = "f"
 
 // Null checking as we might be on an error page, which doesn't initiate an app
 // but we still want the livereload to function
-var app = null;
-
-const ws = Sockette.default(((window.location.protocol === "https:") ? "wss://" : "ws://") + window.location.host + "/_w", {
-  onopen: e => {
-    if (app !== null) {
-      app.ports.liveStatusSet.send(true)
-    }
-    // console.log('[Λ] live watch connected')
-  },
-  onmessage: e => {
-    if (e.data == "r") {
-      isLiveReload = true
-      document.location.reload()
-    }
-  },
-  onerror: e => {
-    if (app !== null) {
-      app.ports.liveStatusSet.send(false)
-    }
-  }
-})
-
+var app = null
+var initBackendModel = []
 
 setupApp = function(name, elid) {
 
-  const leaderId = getLeaderId()
-  var nodeType = null
-  if (leaderId == null) {
-    // No leaders set, we'll become the leader
-    localStorage.setItem('llid', clientId)
-    nodeType = "l"
-  } else if (leaderId == clientId) {
-    nodeType = "l"
-  } else {
-    nodeType = "f"
+  const ws = Sockette.default(((window.location.protocol === "https:") ? "wss://" : "ws://") + window.location.host + "/_w", {
+    timeout: 2e3,
+    maxAttempts: Infinity,
+    onopen: e => {
+      if (clientId !== "") { connected = true }
+      if (app !== null) { app.ports.liveStatusSet.send(connected) }
+      flushOutbound()
+    },
+    onmessage: e => {
+      msgHandler(e)
+      if (clientId !== "" && connected === false) {
+        connected = true
+        flushOutbound()
+      }
+    },
+    onreconnect: e => {}, // Called when connection is already down and a reconnect is attempted
+    onmaximum: e => {}, // Will never be hit
+    onclose: e => { // Called whenever the connection is terminated
+      // console.log(`ws closed`, e)
+      connected = false
+      if (app !== null) { app.ports.liveStatusSet.send(connected) }
+    },
+    onerror: e => { //
+      // console.log(`ws error`, e)
+      connected = false
+      if (app !== null) { app.ports.liveStatusSet.send(connected) }
+    }
+  })
+
+  const flushOutbound = function() {
+    if (connected) {
+      while(bufferOutbound.length > 0) {
+        var out = bufferOutbound.pop()
+        if (out.t == "ToBackend") { out.c = clientId }
+        console.log('ws sending',out)
+        ws.json(out)
+      }
+    }
   }
 
-  app = Elm[name].init({
-    node: document.getElementById(elid),
-    flags: { c: clientId, nt: nodeType }
-  })
-  if (document.getElementById(elid))
-  {
-    document.getElementById(elid).innerText = 'This is a headless program, meaning there is nothing to show here.\n\nI started the program anyway though, and you can access it as `app` in the developer console.'
+  const msgEmitter = function(payload) {
+    if (connected) {
+      ws.json(payload)
+    } else {
+      bufferOutbound.unshift(payload)
+    }
   }
 
-  app.ports.sendToFrontend.subscribe(function (payload) {
-    bc.postMessage(payload)
-  })
 
-  app.ports.sendToBackend.subscribe(function (payload) {
-    bc.postMessage(payload)
-  })
+  function initApp() {
+    if (app !== null) { return } // Don't init when already initialised
 
-  const bc = new BroadcastChannel('lamdera-local')
+    app = Elm[name].init({
+      node: document.getElementById(elid),
+      flags: { c: clientId, s: sessionId, nt: nodeType, i: initBackendModel }
+    })
+    if (document.getElementById(elid))
+    {
+      document.getElementById(elid).innerText = 'This is a headless program, meaning there is nothing to show here.\n\nI started the program anyway though, and you can access it as `app` in the developer console.'
+    }
 
-  bc.onmessage = function (msg) {
-    const d = msg.data
-    // console.log(d)
+    app.ports.sendToFrontend.subscribe(function (payload) {
+      msgEmitter(payload)
+    })
+
+    app.ports.sendToBackend.subscribe(function (payload) {
+      msgEmitter(payload)
+    })
+  }
+
+  function msgHandler(e) {
+
+    // console.log(`got message`,e)
+    const d = JSON.parse(e.data)
+
     switch(d.t) {
-      case "h": // leader is announcing it is still alive (heartbeat)
-        leaderSeen = true
+      case "r":
+        isLiveReload = true
+        document.location.reload()
         break;
 
-      case "k": // node is announcing it's death/end of leadership (kill)
-        // Should not be possible?
-        if (nodeType == "l") { break; }
+      case "s": // setup message, will get called again if websocket drops and reconnects
+        clientId = d.c
+        if (app !== null) { app.ports.setClientId.send(clientId) }
 
-        const leaderId = getLeaderId()
-        if (leaderId == null) {
-          // No leaders set, we'll become the leader
-          localStorage.setItem('llid', clientId)
+        leaderId = d.l
+        if (clientId == leaderId) {
           nodeType = "l"
-          app.ports.nodeTypeSetLeader.send(true)
-          bc.postMessage({ clientId: clientId, t: "h"})
-
-        } else if (leaderId == d.clientId) {
-          nodeType = "l"
-          localStorage.setItem('llid', clientId)
-          app.ports.nodeTypeSetLeader.send(true)
-          bc.postMessage({ clientId: clientId, t: "h"})
-
+          if (app !== null) { app.ports.nodeTypeSetLeader.send(true) }
         } else {
           nodeType = "f"
-          app.ports.nodeTypeSetLeader.send(false)
+          if (app !== null) { app.ports.nodeTypeSetLeader.send(false) }
         }
 
+        initApp()
+        break;
+
+      case "e": // leader has been elected
+        leaderId = d.l
+        if (clientId == leaderId) {
+          nodeType = "l"
+          if (app !== null) { app.ports.nodeTypeSetLeader.send(true) }
+        } else {
+          nodeType = "f"
+          if (app !== null) { app.ports.nodeTypeSetLeader.send(false) }
+        }
         break;
 
       case "ToBackend":
-        if (nodeType == "l") {
-          app.ports.receiveFromFrontend.send({ t: "ToBackend", c: d.c, i: d.i })
-        } else {
-          // console.log(`Non-leader ignoring msg: ${d}`)
-        }
+        app.ports.receiveFromFrontend.send(d)
         break;
 
       case "ToFrontend":
         // Only process messages for our clientId
         if (d.c == clientId) {
-          app.ports.receiveFromBackend.send({ t: "ToFrontend", c: d.c, i: d.i })
+          app.ports.receiveFromBackend.send(d)
+        } else {
+          // console.log(`dropped message`, d)
         }
         break;
 
+      case "BackendModel":
+        if (app === null) {
+          // We're being given a backend state to boot up with
+          initBackendModel = d.i
+        } else {
+          // We're already live and being given a new backend state
+          app.ports.receiveBackendModel.send(d)
+        }
+        break;
+
+      case "x":
+        // Dummy msg to ignore, i.e. for initial backendModel state which is empty
+        break;
+
       default:
-        console.log(`[Λ] unexpected msg`, d)
+        console.warn(`unexpected msg`, d)
     }
   }
-
-  // Something to look into in future. The "easy" bit would be as below, but the
-  // issue arises if you navigate away while there's only one tab. Maybe all the
-  // windows do need to know about each other after all?
-  // document.addEventListener(
-  //   "visibilitychange",
-  //   function() {
-  //     if (document.hidden) {
-  //       if (nodeType == "l") {
-  //         // The leader is stepping down, someone else needs to act as leader now
-  //         if (!isLiveReload) {
-  //           nodeType = "f"
-  //           app.ports.nodeTypeSetLeader.send(false)
-  //           bc.postMessage({ clientId: clientId, t: "k"})
-  //         }
-  //       }
-  //     } else  {
-  //       // ???
-  //     }
-  //   },
-  //   false
-  // )
-
-  const leaderHeartbeatInterval = 500
-  const followerHeartbeatInterval = 1100
-
-  const heartbeat = function() {
-    if (nodeType == "l") {
-      // Send out a heartbeat so everyone knows we're still alive
-      bc.postMessage({ clientId: clientId, t: "h"})
-      setTimeout(heartbeat, leaderHeartbeatInterval)
-    } else {
-      //
-      if (leaderSeen) {
-        // We've seen the leader since last interval, so reset
-        leaderSeen = false
-        setTimeout(heartbeat, followerHeartbeatInterval)
-      } else {
-        // Leader wasn't seen for a while! Take over leadership
-        nodeType = "l"
-        localStorage.setItem('llid', clientId)
-        bc.postMessage({ clientId: clientId, t: "h"})
-        app.ports.nodeTypeSetLeader.send(true)
-        isLiveReload = true
-        document.location.reload()
-      }
-    }
-  }
-  heartbeat()
-
-  function processExit(){
-    if (nodeType == "l") {
-      // The leader is stepping down, someone else needs to act as leader now
-      if (!isLiveReload) {
-        bc.postMessage({ clientId: clientId, t: "k"})
-      }
-    }
-    // alert("confirm exit is being called")
-    return null
-  }
-
-  window.onunload = processExit
-
 }
-
 
 function getRandomInt(max, min=0) {
-  return (Math.floor(Math.random() * Math.floor(max)) - min)
+  return Math.abs(Math.floor(Math.random() * Math.floor(max)) - min)
 }
 
-function getClientId() {
-  let data = sessionStorage.getItem('lcid')
-  if (data == null) {
+function getSessionId() {
+  let sid = localStorage.getItem('sid')
+  if (sid === null) {
     // Make the cid look similar to production sec-websocket-key clientIds
-    const cid = getRandomInt(100000,10000).toString() + "HNhbXBsZSBub25jZQ=="
-    sessionStorage.setItem('lcid', cid)
-    return cid
+    const newSid = getRandomInt(100000,10000).toString().padEnd(40,"c04b8f7b594cdeedebc2a8029b82943b0a620815")
+    localStorage.setItem('sid', newSid)
+    return newSid
   } else {
-    return data
+    return sid
   }
-}
-
-function getLeaderId() {
-  return localStorage.getItem('llid')
 }

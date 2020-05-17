@@ -1,10 +1,11 @@
 port module LocalDev exposing (main)
 
-{-
-   Hello you curious thing!
-
-   This file is copyright © Cofoundry Ltd - All Rights Reserved.
+{- This file is copyright © Cofoundry Ltd - All Rights Reserved.
    Unauthorized copying of this file or its contents, via any medium is strictly prohibited.
+
+   ---
+
+   Hello you curious thing!
 
    This is the development harness used for local development of Lamdera apps.
 
@@ -28,6 +29,7 @@ import Lamdera.Json as Json
 import Lamdera.Wire2 as Wire
 import Process
 import Task
+import Time
 import Types exposing (BackendModel, BackendMsg, FrontendModel, FrontendMsg, ToBackend, ToFrontend)
 
 
@@ -43,10 +45,16 @@ port receiveFromBackend : (Json.Value -> msg) -> Sub msg
 port receiveFromFrontend : (Json.Value -> msg) -> Sub msg
 
 
+port receiveBackendModel : (Json.Value -> msg) -> Sub msg
+
+
 port nodeTypeSetLeader : (Bool -> msg) -> Sub msg
 
 
 port liveStatusSet : (Bool -> msg) -> Sub msg
+
+
+port setClientId : (String -> msg) -> Sub msg
 
 
 type Msg
@@ -59,8 +67,10 @@ type Msg
     | FENewUrl Url
     | ReceivedFromFrontend Json.Value
     | ReceivedFromBackend Json.Value
+    | ReceivedBackendModel Json.Value
     | NodeTypeSetLeader Bool
     | LiveStatusSet Bool
+    | ReceivedClientId String
     | DevbarExpand
     | DevbarCollapse
     | ResetDebugStoreBoth
@@ -68,23 +78,29 @@ type Msg
     | ResetDebugStoreBE
     | ToggledDevMode
     | ToggledNetworkDelay
+    | ToggledLogging
     | ClickedLocation
+    | PersistBackend Bool
+    | Reload
     | Noop
 
 
 type alias Model =
     { fem : FrontendModel
     , bem : BackendModel
+    , bemDirty : Bool
     , originalUrl : Url
     , originalKey : Key
     , nodeType : NodeType
     , liveStatus : LiveStatus
+    , sessionId : String
     , clientId : String
     , devbar :
         { expanded : Bool
         , location : Location
         , devMode : DevMode
         , networkDelay : Bool
+        , logging : Bool
         }
     }
 
@@ -127,10 +143,19 @@ userBackendApp =
 init : Json.Value -> Url -> Key -> ( Model, Cmd Msg )
 init flags url key =
     let
+        log t v =
+            if devbar.logging then
+                Debug.log t v
+
+            else
+                v
+
         flagsDecoder =
             Json.succeed NodeInitArgs
                 |> required "c" Json.decoderString
+                |> required "s" Json.decoderString
                 |> required "nt" decodeNodeType
+                |> required "i" (Json.decoderList Json.decoderInt)
 
         args =
             case Json.decodeValue flagsDecoder flags of
@@ -167,26 +192,44 @@ init flags url key =
                         ( ifem, iFeCmds )
 
         ( bem, newBeCmds ) =
-            case LD.debugR "be" ibem of
-                Nothing ->
+            case args.backendModelIntList of
+                [] ->
                     ( ibem, iBeCmds )
 
-                Just rbem ->
-                    ( rbem, Cmd.none )
+                backendModelIntList ->
+                    case Wire.bytesDecode Types.w2_decode_BackendModel (Wire.intListToBytes args.backendModelIntList) of
+                        Just restoredBem ->
+                            let
+                                x =
+                                    log "☀️ Restored BackendModel" restoredBem
+                            in
+                            ( restoredBem
+                            , Cmd.none
+                            )
+
+                        Nothing ->
+                            let
+                                x =
+                                    log "❌ Init error" "Failed to decode provided BackendModel! Resetting to init."
+                            in
+                            ( ibem, iBeCmds )
 
         devbarInit =
             { expanded = False
             , location = BottomLeft
             , devMode = Normal
             , networkDelay = False
+            , logging = True
             }
     in
     ( { fem = fem
       , bem = bem
+      , bemDirty = True
       , originalKey = key
       , originalUrl = url
       , nodeType = args.nodeType
       , liveStatus = Online
+      , sessionId = args.sessionId
       , clientId = args.clientId
       , devbar = devbar
       }
@@ -209,13 +252,11 @@ storeFE m newFem =
         newFem
 
 
-storeBE m newBem =
-    LD.debugS "be" newBem
-
-
 type alias NodeInitArgs =
     { clientId : String
+    , sessionId : String
     , nodeType : NodeType
+    , backendModelIntList : List Int
     }
 
 
@@ -235,23 +276,23 @@ nodeTypeToString nodeType =
 
 decodeNodeType : Json.Decoder NodeType
 decodeNodeType =
-    Json.map
-        (\v ->
-            case v of
-                "l" ->
-                    Leader
+    Json.decoderString
+        |> Json.map
+            (\v ->
+                case v of
+                    "l" ->
+                        Leader
 
-                "f" ->
-                    Follower
+                    "f" ->
+                        Follower
 
-                _ ->
-                    let
-                        x =
-                            Debug.log "error" ("decodeNodeType saw an unexpected value: " ++ v)
-                    in
-                    Follower
-        )
-        Json.decoderString
+                    _ ->
+                        let
+                            x =
+                                Debug.log "error" ("decodeNodeType saw an unexpected value: " ++ v)
+                        in
+                        Follower
+            )
 
 
 type LiveStatus
@@ -261,6 +302,7 @@ type LiveStatus
 
 type alias Payload =
     { t : String
+    , s : String
     , c : String
     , i : List Int
     }
@@ -269,17 +311,27 @@ type alias Payload =
 payloadDecoder =
     Json.succeed Payload
         |> required "t" Json.decoderString
+        |> required "s" Json.decoderString
         |> required "c" Json.decoderString
         |> required "i" (Json.decoderList Json.decoderInt)
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg m =
+    let
+        log t v =
+            if m.devbar.logging then
+                Debug.log t v
+
+            else
+                v
+    in
+    -- case log "msg" msg of
     case msg of
         FEMsg frontendMsg ->
             let
                 x =
-                    Debug.log "F " frontendMsg
+                    log "F " frontendMsg
 
                 ( newFem, newFeCmds ) =
                     userFrontendApp.update frontendMsg m.fem
@@ -291,23 +343,27 @@ update msg m =
         BEMsg backendMsg ->
             case m.nodeType of
                 Follower ->
+                    -- Followers don't run BE messages
                     ( m, Cmd.none )
 
                 Leader ->
                     let
                         x =
-                            Debug.log "B " backendMsg
+                            log "B " backendMsg
 
                         ( newBem, newBeCmds ) =
                             userBackendApp.update backendMsg m.bem
                     in
-                    ( { m | bem = storeBE m newBem }
-                    , Cmd.map BEMsg newBeCmds
+                    ( { m | bem = newBem, bemDirty = True }
+                    , Cmd.batch
+                        [ Cmd.map BEMsg newBeCmds
+                        ]
                     )
 
         BEtoFE clientId toFrontend ->
             case m.nodeType of
                 Follower ->
+                    -- Followers don't broadcast ToFrontends
                     ( m, Cmd.none )
 
                 Leader ->
@@ -316,31 +372,24 @@ update msg m =
 
                     else
                         let
-                            x =
-                                Debug.log "◀️ " toFrontend
-
-                            ( newFem, newFeCmds ) =
-                                if clientId == m.clientId then
-                                    -- let
-                                    --     y =
-                                    --         Debug.log "[OPTIMIZE]" "ran immediately msg for ourselves from backend"
-                                    -- in
-                                    userFrontendApp.updateFromBackend toFrontend m.fem
-
-                                else
-                                    ( m.fem, Cmd.none )
-
                             payload =
                                 Json.object
                                     [ ( "t", Json.string "ToFrontend" )
-                                    , ( "i", Json.list Json.int <| Wire.intListFromBytes (Wire.bytesEncode (Types.w2_encode_ToFrontend toFrontend)) )
+                                    , ( "i"
+                                      , toFrontend
+                                            |> log "◀️ "
+                                            |> Types.w2_encode_ToFrontend
+                                            |> Wire.bytesEncode
+                                            |> Wire.intListFromBytes
+                                            |> Json.list Json.int
+                                      )
+                                    , ( "s", Json.string "" )
                                     , ( "c", Json.string clientId )
                                     ]
                         in
-                        ( { m | fem = storeFE m newFem }
+                        ( m
                         , Cmd.batch
-                            [ Cmd.map FEMsg newFeCmds
-                            , sendToFrontend payload
+                            [ sendToFrontend payload
                             ]
                         )
 
@@ -351,31 +400,24 @@ update msg m =
 
                 Leader ->
                     let
-                        x =
-                            Debug.log "◀️⏱ " toFrontend
-
-                        ( newFem, newFeCmds ) =
-                            if clientId == m.clientId then
-                                -- let
-                                --     y =
-                                --         Debug.log "[OPTIMIZE]" "ran immediately msg for ourselves from backend"
-                                -- in
-                                userFrontendApp.updateFromBackend toFrontend m.fem
-
-                            else
-                                ( m.fem, Cmd.none )
-
                         payload =
                             Json.object
                                 [ ( "t", Json.string "ToFrontend" )
-                                , ( "i", Json.list Json.int <| Wire.intListFromBytes (Wire.bytesEncode (Types.w2_encode_ToFrontend toFrontend)) )
+                                , ( "i"
+                                  , toFrontend
+                                        |> log "◀️⏱ "
+                                        |> Types.w2_encode_ToFrontend
+                                        |> Wire.bytesEncode
+                                        |> Wire.intListFromBytes
+                                        |> Json.list Json.int
+                                  )
+                                , ( "s", Json.string "" )
                                 , ( "c", Json.string clientId )
                                 ]
                     in
-                    ( { m | fem = storeFE m newFem }
+                    ( m
                     , Cmd.batch
-                        [ Cmd.map FEMsg newFeCmds
-                        , sendToFrontend payload
+                        [ sendToFrontend payload
                         ]
                     )
 
@@ -386,44 +428,38 @@ update msg m =
             else
                 let
                     _ =
-                        Debug.log "▶️ " toBackend
-
-                    ( newBem, newBeCmds ) =
-                        userBackendApp.updateFromFrontend "sessionIdLocalDev" m.clientId toBackend m.bem
+                        log "▶️ " toBackend
 
                     payload =
                         Json.object
                             [ ( "t", Json.string "ToBackend" )
-                            , ( "i", Json.list Json.int <| Wire.intListFromBytes (Wire.bytesEncode (Types.w2_encode_ToBackend toBackend)) )
+                            , ( "s", Json.string m.sessionId )
                             , ( "c", Json.string m.clientId )
+                            , ( "i", Json.list Json.int (Wire.intListFromBytes (Wire.bytesEncode (Types.w2_encode_ToBackend toBackend))) )
                             ]
                 in
-                ( { m | bem = storeBE m newBem }
+                ( m
                 , Cmd.batch
-                    [ Cmd.map BEMsg newBeCmds
-                    , sendToBackend payload
+                    [ sendToBackend payload
                     ]
                 )
 
         FEtoBEDelayed toBackend ->
             let
                 _ =
-                    Debug.log "▶️⏱ " toBackend
-
-                ( newBem, newBeCmds ) =
-                    userBackendApp.updateFromFrontend "sessionIdLocalDev" m.clientId toBackend m.bem
+                    log "▶️⏱ " toBackend
 
                 payload =
                     Json.object
                         [ ( "t", Json.string "ToBackend" )
-                        , ( "i", Json.list Json.int <| Wire.intListFromBytes (Wire.bytesEncode (Types.w2_encode_ToBackend toBackend)) )
+                        , ( "s", Json.string m.sessionId )
                         , ( "c", Json.string m.clientId )
+                        , ( "i", Json.list Json.int (Wire.intListFromBytes (Wire.bytesEncode (Types.w2_encode_ToBackend toBackend))) )
                         ]
             in
-            ( { m | bem = storeBE m newBem }
+            ( m
             , Cmd.batch
-                [ Cmd.map BEMsg newBeCmds
-                , sendToBackend payload
+                [ sendToBackend payload
                 ]
             )
 
@@ -435,36 +471,41 @@ update msg m =
             ( { newModel | originalUrl = url }, newCmds )
 
         ReceivedFromFrontend payload ->
-            -- live.js ensures this port never gets called if we're not a leader
-            case Json.decodeValue payloadDecoder payload of
-                Ok args ->
-                    case Wire.bytesDecode Types.w2_decode_ToBackend (Wire.intListToBytes args.i) of
-                        Just toBackend ->
-                            let
-                                -- _ =
-                                --     Debug.log ("ReceivedFromFrontend[" ++ args.c ++ "]") toBackend
-                                ( newBem, newBeCmds ) =
-                                    userBackendApp.updateFromFrontend "sessionIdLocalDev" args.c toBackend m.bem
-                            in
-                            ( { m | fem = m.fem, bem = storeBE m newBem }
-                            , Cmd.batch
-                                [ Cmd.map BEMsg newBeCmds
-                                ]
-                            )
+            case m.nodeType of
+                Follower ->
+                    -- Followers don't run BE messages
+                    ( m, Cmd.none )
 
-                        Nothing ->
+                Leader ->
+                    case Json.decodeValue payloadDecoder payload of
+                        Ok args ->
+                            case Wire.bytesDecode Types.w2_decode_ToBackend (Wire.intListToBytes args.i) of
+                                Just toBackend ->
+                                    let
+                                        -- _ =
+                                        --     log "ReceivedFromBackend" ( toBackend, args.c )
+                                        ( newBem, newBeCmds ) =
+                                            userBackendApp.updateFromFrontend m.sessionId args.c toBackend m.bem
+                                    in
+                                    ( { m | bem = newBem, bemDirty = True }
+                                    , Cmd.batch
+                                        [ Cmd.map BEMsg newBeCmds
+                                        ]
+                                    )
+
+                                Nothing ->
+                                    let
+                                        x =
+                                            log "❌ ReceivedFromFrontend" "failed to decode provided msg!"
+                                    in
+                                    ( m, Cmd.none )
+
+                        Err err ->
                             let
                                 x =
-                                    Debug.log "❌ ReceivedFromFrontend" "failed to decode provided msg!"
+                                    log "❌ ReceivedFromFrontend decoding error" (Json.errorToString err)
                             in
                             ( m, Cmd.none )
-
-                Err err ->
-                    let
-                        x =
-                            Debug.log "❌ ReceivedFromFrontend decoding error" (Json.errorToString err)
-                    in
-                    ( m, Cmd.none )
 
         ReceivedFromBackend payload ->
             case Json.decodeValue payloadDecoder payload of
@@ -473,7 +514,7 @@ update msg m =
                         Just toFrontend ->
                             let
                                 -- x =
-                                --     Debug.log "ReceivedFromBackend" ( toFrontend, args.c )
+                                --     log "ReceivedFromBackend" ( toFrontend, args.c )
                                 ( newFem, newFeCmds ) =
                                     userFrontendApp.updateFromBackend toFrontend m.fem
                             in
@@ -484,14 +525,41 @@ update msg m =
                         Nothing ->
                             let
                                 x =
-                                    Debug.log "❌ ReceivedFromBackend" "failed to decode provided msg!"
+                                    log "❌ ReceivedFromBackend" "failed to decode provided msg!"
                             in
                             ( m, Cmd.none )
 
                 Err err ->
                     let
                         x =
-                            Debug.log "❌ ReceivedFromBackend decoding error" (Json.errorToString err)
+                            log "❌ ReceivedFromBackend decoding error" (Json.errorToString err)
+                    in
+                    ( m, Cmd.none )
+
+        ReceivedBackendModel payload ->
+            case Json.decodeValue payloadDecoder payload of
+                Ok args ->
+                    case Wire.bytesDecode Types.w2_decode_BackendModel (Wire.intListToBytes args.i) of
+                        Just newBem ->
+                            let
+                                x =
+                                    log "❇️ ReceivedBackendModel" newBem
+                            in
+                            ( { m | bem = newBem }
+                            , Cmd.none
+                            )
+
+                        Nothing ->
+                            let
+                                x =
+                                    log "❌ ReceivedBackendModel" "failed to decode provided msg!"
+                            in
+                            ( m, Cmd.none )
+
+                Err err ->
+                    let
+                        x =
+                            log "❌ ReceivedBackendModel decoding error" (Json.errorToString err)
                     in
                     ( m, Cmd.none )
 
@@ -521,6 +589,9 @@ update msg m =
             , Cmd.none
             )
 
+        ReceivedClientId clientId ->
+            ( { m | clientId = clientId }, Cmd.none )
+
         DevbarExpand ->
             let
                 devbar =
@@ -545,11 +616,11 @@ update msg m =
             in
             ( { m
                 | fem = LD.debugS "fe" newFem
-                , bem = LD.debugS "be" newBem
+                , bem = newBem
+                , bemDirty = True
               }
             , Cmd.batch
-                [ Cmd.map FEMsg newFeCmds
-                , Cmd.map BEMsg newBeCmds
+                [ trigger (PersistBackend True)
                 ]
             )
 
@@ -572,11 +643,12 @@ update msg m =
                     userBackendApp.init
             in
             ( { m
-                | bem = LD.debugS "be" newBem
+                | bem = newBem
+                , bemDirty = True
               }
             , Cmd.batch
                 [ Cmd.map BEMsg newBeCmds
-                , LD.browserReload
+                , trigger (PersistBackend True)
                 ]
             )
 
@@ -619,6 +691,18 @@ update msg m =
             , Cmd.none
             )
 
+        ToggledLogging ->
+            let
+                devbar =
+                    m.devbar
+
+                newDevbar =
+                    { devbar | logging = not m.devbar.logging }
+            in
+            ( { m | devbar = LD.debugS "d" newDevbar }
+            , Cmd.none
+            )
+
         ClickedLocation ->
             let
                 devbar =
@@ -630,6 +714,47 @@ update msg m =
             ( { m | devbar = LD.debugS "d" newDevbar }
             , Cmd.none
             )
+
+        PersistBackend reload ->
+            let
+                persistBeState nodeType bem =
+                    case nodeType of
+                        Follower ->
+                            Cmd.none
+
+                        Leader ->
+                            [ ( "t", Json.string "BackendModel" )
+                            , ( "s", Json.string "system" )
+                            , ( "c", Json.string "system" )
+                            , ( "f"
+                              , if reload then
+                                    Json.string "force"
+
+                                else
+                                    Json.string ""
+                              )
+                            , ( "i", Json.list Json.int (Wire.intListFromBytes (Wire.bytesEncode (Types.w2_encode_BackendModel bem))) )
+                            ]
+                                |> Json.object
+                                |> sendToBackend
+            in
+            if m.bemDirty then
+                ( { m | bemDirty = False }
+                , Cmd.batch
+                    [ persistBeState m.nodeType m.bem
+                    , if reload then
+                        delay 200 Reload
+
+                      else
+                        Cmd.none
+                    ]
+                )
+
+            else
+                ( m, Cmd.none )
+
+        Reload ->
+            ( m, LD.browserReload )
 
         Noop ->
             ( m, Cmd.none )
@@ -643,10 +768,17 @@ subscriptions { nodeType, fem, bem } =
 
           else
             Sub.none
+        , if nodeType == Leader then
+            Time.every 2000 (always (PersistBackend False))
+
+          else
+            Sub.none
         , nodeTypeSetLeader NodeTypeSetLeader
         , liveStatusSet LiveStatusSet
+        , setClientId ReceivedClientId
         , receiveFromFrontend ReceivedFromFrontend
         , receiveFromBackend ReceivedFromBackend
+        , receiveBackendModel ReceivedBackendModel
         ]
 
 
@@ -824,6 +956,12 @@ expandedUI m =
 
             False ->
                 buttonDevOff "Network Delay: Off" ToggledNetworkDelay
+        , case m.devbar.logging of
+            True ->
+                buttonDev "Logging: On" ToggledLogging
+
+            False ->
+                buttonDevOff "Logging: Off" ToggledLogging
         ]
 
 

@@ -7,9 +7,11 @@ module Develop
 
 
 import Control.Applicative ((<|>))
-import Control.Concurrent.MVar (newEmptyMVar, putMVar, takeMVar)
+import Control.Concurrent.MVar (newEmptyMVar, putMVar, takeMVar, MVar)
+import Control.Concurrent.STM (atomically, newTVarIO, readTVar, writeTVar, TVar)
 import Control.Monad (guard, void)
 import Control.Monad.Trans (MonadIO(liftIO))
+import Control.Exception (finally)
 import qualified Data.ByteString.Builder as B
 import qualified Data.ByteString as BS
 import qualified Data.HashMap.Strict as HashMap
@@ -34,6 +36,7 @@ import Lamdera
 import qualified Network.WebSockets      as WS
 import qualified Network.WebSockets.Snap as WS
 import SocketServer
+import qualified Data.Text as Text
 import qualified Data.Text.IO as T
 import qualified Data.Text.Encoding as T
 import System.Process
@@ -64,13 +67,30 @@ run () (Flags maybePort) =
         putStrLn $ "Go to <http://localhost:" ++ show port ++ "> to run your Lamdera project."
 
         mClients <- liftIO $ SocketServer.clientsInit
+        mLeader <- liftIO $ SocketServer.leaderInit
+        beState <- do
+          bePath <- liftIO $ lamderaBackendDevSnapshotPath
+          beText <- liftIO $ readUtf8Text bePath
+          liftIO $ newTVarIO $
+            case beText of
+              Just text -> text
+              Nothing -> "{\"t\":\"x\"}"
 
-        Lamdera.Filewatch.watch mClients
+        Lamdera.Filewatch.watch mClients mLeader
 
-        httpServe (config port) $
+        let
+          end = do
+            Lamdera.debug "[backendSt] 🧠"
+            text <- atomically $ readTVar beState
+            bePath <- lamderaBackendDevSnapshotPath
+            writeUtf8 bePath text
+
+        flip finally end $
+         httpServe (config port) $
           serveFiles
           <|> serveDirectoryWith directoryConfig "." -- Default directory/file config
-          <|> serveWebsocket mClients
+          <|> serveWebsocket mClients mLeader beState
+          <|> serveRpc mClients mLeader
           <|> serveAssets -- Compiler packaged static files
           <|> serveLamderaPublicFiles -- Add /public/* as if it were /* to mirror production
           <|> serveUnmatchedUrlsToIndex -- Everything else without extensions goes to Lamdera LocalDev harness
@@ -339,20 +359,88 @@ serveUnmatchedUrlsToIndex =
 
 
 -- serveWebsocket :: TVar [Client] -> Snap ()
-serveWebsocket mClients =
+serveWebsocket mClients mLeader beState =
   do  file <- getSafePath
       guard (file == "_w")
-
       mKey <- getHeader "sec-websocket-key" <$> getRequest
 
       case mKey of
         Just key -> do
+          let onJoined clientId totalClients = do
+                leaderChanged <- atomically $ do
+                  leader <- readTVar mLeader
+                  case leader of
+                    Just leaderId ->
+                      -- No change
+                      pure False
 
-          let onJoined _ _ = pure Nothing
-              onReceive _ text = do
-                Lamdera.debugT $ "onReceive:" <> text
+                    Nothing -> do
+                      -- If there's no leader, become the leader
+                      writeTVar mLeader (Just clientId)
+                      pure True
 
-          WS.runWebSocketsSnap $ SocketServer.socketHandler mClients onJoined onReceive (T.decodeUtf8 key)
+                onlyWhen leaderChanged $ do
+                  sendToLeader mClients mLeader (\leader -> do
+                      -- Tell the new leader about the backend state they need
+                      atomically $ readTVar beState
+                    )
+                  -- Tell everyone about the new leader (also causes actual leader to go active as leader)
+                  broadcastLeader mClients mLeader
+
+                leader <- atomically $ readTVar mLeader
+                case leader of
+                  Just leaderId ->
+                    pure $ Just $ "{\"t\":\"s\",\"c\":\"" <> clientId <> "\",\"l\":\"" <> leaderId <> "\"}"
+
+                  Nothing ->
+                    -- Impossible
+                    pure Nothing
+
+              onReceive clientId text = do
+                if Text.isPrefixOf "{\"t\":\"BackendModel\"," text
+                  then do
+                    Lamdera.debug "[backendSt] 💾"
+                    atomically $ writeTVar beState text
+                    onlyWhen (textContains "force" text) $ do
+                      Lamdera.debug "[refresh  ] 🔄 "
+                      -- Force due to backend reset, force a refresh
+                      SocketServer.broadcastImpl mClients "{\"t\":\"r\"}"
+
+                  else if Text.isPrefixOf "{\"t\":\"ToBackend\"," text
+
+                    then do
+                      sendToLeader mClients mLeader (\l -> pure text)
+
+                  else
+                    SocketServer.broadcastImpl mClients text
+
+          WS.runWebSocketsSnap $ SocketServer.socketHandler mClients mLeader beState onJoined onReceive (T.decodeUtf8 key)
+
 
         Nothing ->
           error404
+
+
+serveRpc mClients mLeader =
+  do  file <- getSafePath
+      guard (file == "_r")
+
+      writeBuilder "todo"
+
+      -- pseudocode
+
+      -- leader <- getCurrentLeader
+      -- body <- getBody <$> getRequest
+      --
+      -- requestId <- generateUuidv1
+      --
+      -- websocketSend requestId leader body
+      --
+      -- result <- waitFor 10000 requestId inboundChannel
+      --
+      -- case result of
+      --   Left err ->
+      --     error500 err
+      --
+      --   Right response ->
+      --     writeBuilder response

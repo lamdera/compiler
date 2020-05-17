@@ -50,6 +50,7 @@ module Lamdera
   , touch
   , lamderaHashesPath
   , lamderaExternalWarningsPath
+  , lamderaBackendDevSnapshotPath
   , getProjectRoot
   , justs
   , lowerFirstLetter
@@ -108,7 +109,6 @@ import System.IO.Error (ioeGetErrorType, annotateIOError, modifyIOError)
 import Data.List.Index
 import Text.Show.Unicode
 import qualified System.Process
-import Data.Text.Internal.Search (indices)
 import qualified Reporting.Doc as D
 
 
@@ -315,7 +315,7 @@ onlyWhen condition io =
 
 
 textContains :: Text -> Text -> Bool
-textContains needle haystack = indices needle haystack /= []
+textContains needle haystack = T.isInfixOf needle haystack
 
 
 hunt_ thing label = do
@@ -498,6 +498,12 @@ lamderaExternalWarningsPath root =
   root </> "lamdera-stuff" </> ".lamdera-external-warnings"
 
 
+lamderaBackendDevSnapshotPath :: IO FilePath
+lamderaBackendDevSnapshotPath = do
+  root <- getProjectRoot
+  pure $ root </> "lamdera-stuff" </> ".lamdera-bem-dev"
+
+
 -- Copy of combined internals of Project.getRoot as it seems to notoriously cause cyclic wherever imported
 getProjectRoot :: IO FilePath
 getProjectRoot = do
@@ -561,7 +567,3 @@ getVersion filename =
     & Prelude.drop 1 -- Drop the 'V'
     & Prelude.takeWhile (\i -> i /= '.')
     & Text.Read.readMaybe
-
-
-
-x = 1

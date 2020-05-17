@@ -66,7 +66,6 @@ import qualified Lamdera.Evergreen
 import Lamdera.Generated (VersionInfo(..), createLamderaGenerated, vinfoVersion, getLastLocalTypeChangeVersion)
 import qualified File.IO as IO
 import qualified Data.List as List
-import qualified Data.List.Safe as SafeList
 import NeatInterpolation
 import Text.Read
 import Data.Maybe (fromMaybe)
