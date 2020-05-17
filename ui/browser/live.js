@@ -20,47 +20,57 @@ var nodeType = "f"
 var app = null
 var initBackendModel = []
 
-setupApp = function(name, elid) {
+var msgHandler = function(e) {
+  const d = JSON.parse(e.data)
+  switch(d.t) {
+    case "r":
+      isLiveReload = true
+      document.location.reload()
+      break;
+  }
+}
 
-  const ws = Sockette.default(((window.location.protocol === "https:") ? "wss://" : "ws://") + window.location.host + "/_w", {
-    timeout: 2e3,
-    maxAttempts: Infinity,
-    onopen: e => {
-      if (clientId !== "") { connected = true }
-      if (app !== null) { app.ports.liveStatusSet.send(connected) }
+const ws = Sockette.default(((window.location.protocol === "https:") ? "wss://" : "ws://") + window.location.host + "/_w", {
+  timeout: 2e3,
+  maxAttempts: Infinity,
+  onopen: e => {
+    if (clientId !== "") { connected = true }
+    if (app !== null) { app.ports.liveStatusSet.send(connected) }
+    flushOutbound()
+  },
+  onmessage: e => {
+    msgHandler(e)
+    if (clientId !== "" && connected === false) {
+      connected = true
       flushOutbound()
-    },
-    onmessage: e => {
-      msgHandler(e)
-      if (clientId !== "" && connected === false) {
-        connected = true
-        flushOutbound()
-      }
-    },
-    onreconnect: e => {}, // Called when connection is already down and a reconnect is attempted
-    onmaximum: e => {}, // Will never be hit
-    onclose: e => { // Called whenever the connection is terminated
-      // console.log(`ws closed`, e)
-      connected = false
-      if (app !== null) { app.ports.liveStatusSet.send(connected) }
-    },
-    onerror: e => { //
-      // console.log(`ws error`, e)
-      connected = false
-      if (app !== null) { app.ports.liveStatusSet.send(connected) }
     }
-  })
+  },
+  onreconnect: e => {}, // Called when connection is already down and a reconnect is attempted
+  onmaximum: e => {}, // Will never be hit
+  onclose: e => { // Called whenever the connection is terminated
+    // console.log(`ws closed`, e)
+    connected = false
+    if (app !== null) { app.ports.liveStatusSet.send(connected) }
+  },
+  onerror: e => { //
+    // console.log(`ws error`, e)
+    connected = false
+    if (app !== null) { app.ports.liveStatusSet.send(connected) }
+  }
+})
 
-  const flushOutbound = function() {
-    if (connected) {
-      while(bufferOutbound.length > 0) {
-        var out = bufferOutbound.pop()
-        if (out.t == "ToBackend") { out.c = clientId }
-        console.log('ws sending',out)
-        ws.json(out)
-      }
+const flushOutbound = function() {
+  if (connected) {
+    while(bufferOutbound.length > 0) {
+      var out = bufferOutbound.pop()
+      if (out.t == "ToBackend") { out.c = clientId }
+      console.log('ws sending',out)
+      ws.json(out)
     }
   }
+}
+
+setupApp = function(name, elid) {
 
   const msgEmitter = function(payload) {
     if (connected) {
@@ -69,7 +79,6 @@ setupApp = function(name, elid) {
       bufferOutbound.unshift(payload)
     }
   }
-
 
   function initApp() {
     if (app !== null) { return } // Don't init when already initialised
@@ -92,7 +101,8 @@ setupApp = function(name, elid) {
     })
   }
 
-  function msgHandler(e) {
+  // Upgrade the msg handler now that the app is binding
+  msgHandler = function(e) {
 
     // console.log(`got message`,e)
     const d = JSON.parse(e.data)
