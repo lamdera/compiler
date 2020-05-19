@@ -45,13 +45,13 @@ import qualified Reporting.Task as Task
 import qualified Stuff.Paths as Paths
 import Terminal.Args (Parser(..))
 
-import Lamdera.Injection
+import qualified Lamdera.Injection
 import Lamdera
 
 -- GENERATE
 
 
-data Mode = Debug | Dev | Prod
+data Mode = Debug | Dev | Prod deriving (Show)
 
 
 generate
@@ -137,6 +137,7 @@ generateMonolith mode maybeOutput (Summary.Summary _ project _ _ _) graph rootNa
             monolith =
               "(function(scope){\n'use strict';"
               <> Functions.functions <> builder <> "}(this));"
+              <> "\n" <> Lamdera.Injection.elmPkgJs mode <> "\n"
               -- <> Functions.functions <> builder <> injections <> "}(this));"
           in
           liftIO $
