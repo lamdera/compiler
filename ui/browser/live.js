@@ -3,6 +3,7 @@
 // parcel build live.js --no-source-maps
 
 const Sockette = require('sockette')
+const Cookie = require('js-cookie')
 
 var isLiveReload = false
 var leaderSeen = true
@@ -167,6 +168,52 @@ setupApp = function(name, elid) {
         }
         break;
 
+      case "q":
+        // RPC Query
+
+        try {
+          console.log("got rpc req")
+          console.log(d)
+
+          var done = false
+          var response = null
+
+          const returnHandler = function(payload) {
+            if (payload.r === d.r) {
+              console.log("got rpc resp:", payload)
+              response = payload
+              done = true
+            }
+          }
+
+          app.ports.rpcOut.subscribe(returnHandler)
+
+          app.ports.rpcIn.send(d)
+
+          // Is there a nicer way to do this?
+          waitUntil(() => {
+            return done
+          }, 10000)
+          .then((result) => {
+            app.ports.rpcOut.unsubscribe(returnHandler)
+            msgEmitter(response)
+          })
+          .catch((error) => {
+            console.log(error)
+            app.ports.rpcOut.unsubscribe(returnHandler)
+          });
+
+        } catch (error) {
+          console.log(error)
+        }
+
+        break;
+
+      // case "qr":
+      //
+      //
+      //   break;
+
       case "x":
         // Dummy msg to ignore, i.e. for initial backendModel state which is empty
         break;
@@ -182,13 +229,61 @@ function getRandomInt(max, min=0) {
 }
 
 function getSessionId() {
-  let sid = localStorage.getItem('sid')
-  if (sid === null) {
+  let sid = Cookie.get('sid')
+  if (typeof sid == 'undefined') {
     // Make the cid look similar to production sec-websocket-key clientIds
     const newSid = getRandomInt(1000000,10000).toString().padEnd(40,"c04b8f7b594cdeedebc2a8029b82943b0a620815")
-    localStorage.setItem('sid', newSid)
+    Cookie.set('sid', newSid)
     return newSid
   } else {
     return sid
   }
 }
+
+var DEFAULT_INTERVAL = 50;
+var DEFAULT_TIMEOUT = 5000;
+
+function waitUntil(
+  predicate,
+  timeout,
+  interval
+) {
+  var timerInterval = interval || DEFAULT_INTERVAL;
+  var timerTimeout = timeout || DEFAULT_TIMEOUT;
+
+  return new Promise(function promiseCallback(resolve, reject) {
+    var timer;
+    var timeoutTimer;
+    var clearTimers;
+    var doStep;
+
+    clearTimers = function clearWaitTimers() {
+      clearTimeout(timeoutTimer);
+      clearInterval(timer);
+    };
+
+    doStep = function doTimerStep() {
+      var result;
+
+      try {
+        result = predicate();
+
+        if (result) {
+          clearTimers();
+          resolve(result);
+        } else {
+          timer = setTimeout(doStep, timerInterval);
+        }
+      } catch (e) {
+        clearTimers();
+        reject(e);
+      }
+    };
+
+    timer = setTimeout(doStep, timerInterval);
+    timeoutTimer = setTimeout(function onTimeout() {
+      clearTimers();
+      reject(new Error('Timed out after waiting for ' + timerTimeout + 'ms'));
+    }, timerTimeout);
+  });
+};

@@ -315,6 +315,9 @@ Executable elmx
         stm,
         fsnotify,
         auto-update,
+        uuid,
+        broadcast-chan,
+        timeout,
         -- Debug
         unicode-show,
 

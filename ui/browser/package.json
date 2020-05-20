@@ -5,6 +5,7 @@
   "target": "node",
   "devDependencies": {},
   "dependencies": {
+    "js-cookie": "^2.2.1",
     "sockette": "^2.0.6"
   },
   "browserslist": [

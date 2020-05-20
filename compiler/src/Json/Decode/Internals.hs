@@ -13,6 +13,7 @@ module Json.Decode.Internals
   , map, map2, mapError
   , succeed, fail
   , andThen, oneOf
+  , value, toEncodeValue
   )
   where
 
@@ -230,6 +231,11 @@ index i (Decoder run) =
       _ ->
         Left (expecting value TArray)
 
+
+value :: Decoder e Value
+value =
+  Decoder $ \value ->
+    Right value
 
 
 -- ERRORS

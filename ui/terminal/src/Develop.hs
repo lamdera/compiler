@@ -14,6 +14,7 @@ import Control.Monad.Trans (MonadIO(liftIO))
 import Control.Exception (finally)
 import qualified Data.ByteString.Builder as B
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Lazy as BSL
 import qualified Data.HashMap.Strict as HashMap
 import Data.Monoid ((<>))
 import qualified System.Directory as Dir
@@ -37,12 +38,23 @@ import qualified Network.WebSockets      as WS
 import qualified Network.WebSockets.Snap as WS
 import SocketServer
 import qualified Data.Text as Text
+import qualified Data.Text.Lazy as TL
 import qualified Data.Text.IO as T
 import qualified Data.Text.Encoding as T
+import qualified Data.Text.Lazy.Encoding as TL
+import Data.Word (Word8)
 import System.Process
 
 import Elm.Project.Json
 import Elm.Project.Summary
+
+import qualified Json.Decode as D
+import qualified Json.Encode as E
+
+import qualified Data.UUID as UUID
+import qualified Data.UUID.V4 as UUID
+import BroadcastChan
+import Control.Timeout
 
 import Lamdera.Filewatch
 
@@ -68,6 +80,8 @@ run () (Flags maybePort) =
 
         mClients <- liftIO $ SocketServer.clientsInit
         mLeader <- liftIO $ SocketServer.leaderInit
+        mChan <- liftIO $ newBroadcastChan
+
         beState <- do
           bePath <- liftIO $ lamderaBackendDevSnapshotPath
           beText <- liftIO $ readUtf8Text bePath
@@ -89,8 +103,8 @@ run () (Flags maybePort) =
          httpServe (config port) $
           serveFiles
           <|> serveDirectoryWith directoryConfig "." -- Default directory/file config
-          <|> serveWebsocket mClients mLeader beState
-          <|> serveRpc mClients mLeader
+          <|> serveWebsocket mClients mLeader beState mChan
+          <|> route [ ("_r/:endpoint", serveRpc mClients mLeader mChan) ]
           <|> serveAssets -- Compiler packaged static files
           <|> serveLamderaPublicFiles -- Add /public/* as if it were /* to mirror production
           <|> serveUnmatchedUrlsToIndex -- Everything else without extensions goes to Lamdera LocalDev harness
@@ -359,7 +373,7 @@ serveUnmatchedUrlsToIndex =
 
 
 -- serveWebsocket :: TVar [Client] -> Snap ()
-serveWebsocket mClients mLeader beState =
+serveWebsocket mClients mLeader beState mChan =
   do  file <- getSafePath
       guard (file == "_w")
       mKey <- getHeader "sec-websocket-key" <$> getRequest
@@ -411,6 +425,16 @@ serveWebsocket mClients mLeader beState =
                     then do
                       sendToLeader mClients mLeader (\l -> pure text)
 
+
+                  else if Text.isPrefixOf "{\"t\":\"qr\"," text
+
+                    then do
+
+                      Lamdera.debugT $ "🍕  rpc response:" <> text
+                      -- Query response, send it to the chan for pickup by awaiting HTTP endpoint
+                      liftIO $ writeBChan mChan text
+                      pure ()
+
                   else
                     SocketServer.broadcastImpl mClients text
 
@@ -421,26 +445,122 @@ serveWebsocket mClients mLeader beState =
           error404
 
 
-serveRpc mClients mLeader =
-  do  file <- getSafePath
-      guard (file == "_r")
+serveRpc mClients mLeader mChan = do
 
-      writeBuilder "todo"
+  mEndpoint <- getParam "endpoint"
+  rbody <- readRequestBody 10000000 -- 10MB limit
+  mSid <- getCookie "sid"
+  contentType <- getHeader "Content-Type" <$> getRequest
 
-      -- pseudocode
+  onlyWhen (mSid == Nothing) $ error500 "no sid present"
+  onlyWhen (mEndpoint == Nothing) $ error500 "no endpoint present"
 
-      -- leader <- getCurrentLeader
-      -- body <- getBody <$> getRequest
-      --
-      -- requestId <- generateUuidv1
-      --
-      -- websocketSend requestId leader body
-      --
-      -- result <- waitFor 10000 requestId inboundChannel
-      --
-      -- case result of
-      --   Left err ->
-      --     error500 err
-      --
-      --   Right response ->
-      --     writeBuilder response
+  -- Using UUIDv4 here instead of UUIDv1 like in production is merely a matter
+  -- of ergonomics; The UUIDv1 package only has `nextUUID :: IO (Maybe UUID)`
+  -- as it returns Nothing for requests too close together, so using UUIDv4
+  -- was more practical than implementing a UUIDv1 with retry
+  reqId <- liftIO $ UUID.toText <$> UUID.nextRandom
+  outChan <- newBChanListener mChan
+
+  let
+    sid =
+      case mSid of
+        Just sid_ ->
+          T.decodeUtf8 $ cookieValue sid_
+
+        Nothing ->
+          -- Should be impossible given we already checked above
+          error "no sid present"
+
+    endpoint =
+      case mEndpoint of
+        Just endpoint_ ->
+          endpoint_
+
+        Nothing ->
+          -- Should be impossible given we already checked above
+          error "no endpoint present"
+
+    -- Splice some extra info onto the RPC JSON request
+    payload =
+      case contentType of
+        Just "application/octet-stream" ->
+          let
+            body = Text.pack $ show $ BSL.unpack rbody
+          in
+          -- t s e r i j
+          "{\"t\":\"q\",\"s\":\""<> sid <>
+          "\",\"e\":\"" <> T.decodeUtf8 endpoint <>
+          "\",\"r\":\""<> reqId <>
+          "\",\"i\":" <> body <>
+          ",\"j\":null}"
+
+        Just "application/json" ->
+          let
+            body = TL.toStrict $ TL.decodeUtf8 rbody
+          in
+          "{\"t\":\"q\",\"s\":\""<> sid <>
+          "\",\"e\":\"" <> T.decodeUtf8 endpoint <>
+          "\",\"r\":\""<> reqId <>
+          "\",\"i\":[],\"j\":" <> body <> "}"
+
+        Nothing ->
+          error "invalid Content-Type"
+
+    loopRead = do
+      Lamdera.sleep 100
+      res <- readBChan outChan
+
+      case res of
+        Nothing ->
+          loopRead
+
+        Just chanText ->
+          if textContains reqId chanText
+            then do
+              let
+                decoder =
+                  D.oneOf
+                    [ D.at ["i"] (D.list D.int)
+                        & D.andThen (\intList ->
+                          let
+                            intList_ :: [Word8]
+                            intList_ = fmap fromIntegral intList
+                          in
+                          D.succeed (B.byteString $ BS.pack $ intList_)
+                        )
+
+                    , D.at ["v"] D.value
+                        & D.andThen (\json ->
+                          D.succeed (E.encode $ D.toEncodeValue json)
+                        )
+                    ]
+
+              case D.parse "rpc-resp" id decoder (T.encodeUtf8 chanText) of
+                Right value ->
+                  pure $ writeBuilder value
+
+                Left jsonProblem -> do
+                  Lamdera.debugT $ "😢  rpc response decoding failed for " <> chanText
+                  pure $ writeBuilder $ B.byteString $ "rpc response decoding failed for " <> T.encodeUtf8 chanText
+
+            else
+              loopRead
+
+  liftIO $ sendToLeader mClients mLeader (\leader -> pure payload)
+
+  result <- liftIO $ timeout 2 $ loopRead
+
+  case result of
+    Just builder -> do
+      builder
+    Nothing -> do
+      Lamdera.debugT $ "⏰ RPC timed out for:" <> payload
+      writeBuilder "error:timeout"
+
+
+-- error500 :: Snap ()
+error500 s =
+  do  modifyResponse $ setResponseStatus 500 "Internal server error"
+      modifyResponse $ setContentType "text/html; charset=utf-8"
+      writeBuilder $ "error:" <> s

@@ -11,6 +11,7 @@ module Json.Decode
   , Json.map, Json.map2, Json.mapError
   , Json.succeed, Json.fail
   , Json.andThen, Json.oneOf
+  , Json.value, Json.toEncodeValue
   )
   where
 
