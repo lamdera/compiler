@@ -240,6 +240,7 @@ Executable elmx
         Lamdera.Checks
         Lamdera.Generated
         Lamdera.Hints
+        Lamdera.Live
         Lamdera.Filewatch
         Lamdera.OldFeatureHelper
         Wire.Source

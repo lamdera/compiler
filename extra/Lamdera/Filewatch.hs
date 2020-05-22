@@ -10,7 +10,7 @@ import Control.Monad (forever)
 import qualified Data.List as List
 import Control.Debounce
 
-watch mClients mLeader =
+watch (mClients, mLeader, mChan, beState) =
   forkIO $ withManager $ \mgr -> do
 
     broadcastRefresh <- mkDebounce defaultDebounceSettings

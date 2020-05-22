@@ -27,12 +27,14 @@ import Lamdera exposing (ClientId, Key, Url)
 import Lamdera.Debug as LD
 import Lamdera.Json as Json
 import Lamdera.Wire2 as Wire
-import LamderaRPC
 import Process
-import RPC
 import Task
 import Time
 import Types exposing (BackendModel, BackendMsg, FrontendModel, FrontendMsg, ToBackend, ToFrontend)
+
+
+
+-- MKRRI
 
 
 port sendToBackend : Json.Value -> Cmd msg
@@ -573,26 +575,10 @@ update msg m =
                     ( m, Cmd.none )
 
         RPCIn rpcArgsJson ->
-            let
-                model =
-                    { userModel = m.bem }
+            -- MKRRC
+            ( m, Cmd.none )
 
-                ( newModel, newBeCmds ) =
-                    LamderaRPC.process
-                        (\k v ->
-                            let
-                                x =
-                                    log k v
-                            in
-                            Cmd.none
-                        )
-                        rpcOut
-                        rpcArgsJson
-                        RPC.lamdera_handleEndpoints
-                        model
-            in
-            ( { m | bem = newModel.userModel }, Cmd.map BEMsg newBeCmds )
-
+        --}
         NodeTypeSetLeader bool ->
             ( { m
                 | nodeType =
