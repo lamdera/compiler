@@ -172,8 +172,7 @@ setupApp = function(name, elid) {
         // RPC Query
 
         try {
-          console.log("got rpc req")
-          console.log(d)
+          console.log("got rpc req", d)
 
           var done = false
           var response = null

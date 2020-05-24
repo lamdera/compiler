@@ -44,6 +44,10 @@ import qualified Network.WebSockets.Snap as WS
 import SocketServer
 import Data.Word (Word8)
 import System.Process
+
+-- Bytes
+import System.Entropy
+
 -- import Snap.Http.Server
 import Snap.Util.FileServe
 import Control.Monad (guard, void)
@@ -285,7 +289,20 @@ serveRpc (mClients, mLeader, mChan, beState) = do
   mSid <- getCookie "sid"
   contentType <- getHeader "Content-Type" <$> getRequest
 
-  onlyWhen (mSid == Nothing) $ error500 "no sid present"
+  randBytes <- liftIO $ getEntropy 20
+  let newSid = BSL.toStrict $ B.toLazyByteString $ B.byteStringHex randBytes
+
+  sid <-
+    case mSid of
+      Nothing -> do
+        let cookie = Cookie "sid" newSid Nothing Nothing Nothing False False
+        modifyResponse $ addResponseCookie cookie
+
+        pure $ T.decodeUtf8 $ newSid
+
+      Just sid_ ->
+        pure $ T.decodeUtf8 $ cookieValue sid_
+
   onlyWhen (mEndpoint == Nothing) $ error500 "no endpoint present"
 
   -- Using UUIDv4 here instead of UUIDv1 like in production is merely a matter
@@ -296,15 +313,6 @@ serveRpc (mClients, mLeader, mChan, beState) = do
   outChan <- newBChanListener mChan
 
   let
-    sid =
-      case mSid of
-        Just sid_ ->
-          T.decodeUtf8 $ cookieValue sid_
-
-        Nothing ->
-          -- Should be impossible given we already checked above
-          error "no sid present"
-
     endpoint =
       case mEndpoint of
         Just endpoint_ ->
@@ -341,7 +349,6 @@ serveRpc (mClients, mLeader, mChan, beState) = do
           error "invalid Content-Type"
 
     loopRead = do
-      Lamdera.sleep 100
       res <- readBChan outChan
 
       case res of
@@ -374,7 +381,7 @@ serveRpc (mClients, mLeader, mChan, beState) = do
                   pure $ writeBuilder value
 
                 Left jsonProblem -> do
-                  Lamdera.debugT $ "😢  rpc response decoding failed for " <> chanText
+                  Lamdera.debugT $ "😢 rpc response decoding failed for " <> chanText
                   pure $ writeBuilder $ B.byteString $ "rpc response decoding failed for " <> T.encodeUtf8 chanText
 
             else
@@ -392,7 +399,7 @@ serveRpc (mClients, mLeader, mChan, beState) = do
       writeBuilder "error:timeout"
 
 
--- error500 :: Snap ()
+error500 :: B.Builder -> Snap ()
 error500 s =
   do  modifyResponse $ setResponseStatus 500 "Internal server error"
       modifyResponse $ setContentType "text/html; charset=utf-8"

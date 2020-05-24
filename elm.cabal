@@ -319,6 +319,7 @@ Executable elmx
         uuid,
         broadcast-chan,
         timeout,
+        entropy,
         -- Debug
         unicode-show,
 
