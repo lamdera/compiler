@@ -13,6 +13,7 @@ import System.FilePath ((</>))
 import Control.Monad.Except (catchError, liftIO)
 import Text.Read (readMaybe)
 import Data.Maybe (fromMaybe)
+import Data.List
 
 import Lamdera
 
@@ -366,7 +367,11 @@ getMigrationsSequence migrationFilepaths nextVersion =
         -- & fmap reverse
 
   in
-  pure sequences
+  pure $ lastN 2 sequences
+
+
+lastN :: Int -> [a] -> [a]
+lastN n xs = foldl' (const . drop 1) xs (drop n xs)
 
 
 migrationVersions :: [FilePath] -> [Int]
