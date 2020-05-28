@@ -367,7 +367,11 @@ getMigrationsSequence migrationFilepaths nextVersion =
         -- & fmap reverse
 
   in
-  pure $ lastN 2 sequences
+  pure sequences
+  -- This was the attempt to limit the amount of migrations, but it broke
+  -- because it _only_ generated migrations for type change pairs?
+  -- We need to be smarter and figure out how to generate last 2 regardless of prior pairs
+  -- pure $ lastN 2 sequences
 
 
 lastN :: Int -> [a] -> [a]
