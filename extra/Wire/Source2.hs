@@ -401,6 +401,7 @@ evergreenCoreCodecs qualIfNeeded targs key =
       -- non elm/core types
       -- NOTE: Most of these should get caught in the TypeDiff. The mapping there has been checked extensively against types in packages that are backed by Kernel.
       ( [ (("elm/bytes", "Bytes", "Bytes") --> ("Lamdera.Wire2.encodeBytes", "Lamdera.Wire2.decodeBytes") )
+        , (("elm/bytes", "Bytes", "Endianness") --> ("Lamdera.Wire2.encodeEndianness", "Lamdera.Wire2.decodeEndianness") )
         , (("elm/time", "Time", "Posix") --> ("(\\t -> Lamdera.Wire2.encodeInt (Time.posixToMillis t))", "Lamdera.Wire2.decodeInt |> Lamdera.Wire2.andThenDecode (\\t -> Lamdera.Wire2.succeedDecode (Time.millisToPosix t))"))
         ] <>
         (

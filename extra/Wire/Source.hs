@@ -369,6 +369,7 @@ evergreenCoreCodecs qualIfNeeded targs key =
       -- non elm/core types
       -- NOTE: none of these packages have been checked exhaustively for types; we should do that
       ( [ (("elm/bytes", "Bytes", "Bytes") --> ("Lamdera.Wire.encodeBytes", "Lamdera.Wire.decodeBytes") )
+        , (("elm/bytes", "Bytes", "Endianness") --> ("Lamdera.Wire.encodeEndianness", "Lamdera.Wire.decodeEndianness") )
         , (("elm/time", "Time", "Posix") --> ("(\\t -> Lamdera.Wire.encodeInt (Time.posixToMillis t))", "Lamdera.Wire.decodeInt |> Lamdera.Wire.andThenDecode (\\t -> Lamdera.Wire.succeedDecode (Time.millisToPosix t))"))
         ] <>
         (
