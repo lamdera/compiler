@@ -242,7 +242,7 @@ Executable elmx
         Lamdera.Hints
         Lamdera.Live
         Lamdera.Filewatch
-        -- Lamdera.OldFeatureHelper
+        Lamdera.OldFeatureHelper
         Wire.Source
         Wire.Source2
         Check
