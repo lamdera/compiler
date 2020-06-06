@@ -241,6 +241,7 @@ suite = tests $
           import Array
           import Dict
           import Set
+          import Evergreen.V1.Subdir.Subsubdir.SubsubdirType
           import Time
 
 
@@ -308,11 +309,13 @@ suite = tests $
               | ValueAliased AliasInt
               | ValueRecursive AllUnion
               | ValueSubRecursive SubRecursiveRecord
+              | ValueDeep Evergreen.V1.Subdir.Subsubdir.SubsubdirType.DeepRec
               | ValueTwoParams Bool Char
               | ValueTuple (Int, String)
               | ValueTriple (Int, String)
               | ValueResult (Result String Int)
               | ValueCustom (ExternalCustom Int)
+              | ValueCustomDeep Evergreen.V1.Subdir.Subsubdir.SubsubdirType.DeepCustom
               | ValueCustomBasic ExternalCustomBasic
               | ValuePhantom (Phantom OnlyUsedInPhantom)
               | ValueAliasTuple ExternalAliasTuple
