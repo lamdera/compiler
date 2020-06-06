@@ -125,11 +125,12 @@ suite = tests $
 
           import Browser.Navigation
           import Dict
+          import Evergreen.V1.Fusion
           import Http
           import Lamdera
           import Set
           import Time
-          import Evergreen.V1.WireTypes as WireTypes
+          import Evergreen.V1.WireTypes
 
 
           type alias FrontendModel =
@@ -144,6 +145,8 @@ suite = tests $
               , lastReceived : Time.Posix
               , subCounter : Int
               , rpcRes : (Result Http.Error Int)
+              , backendTtype : (Maybe Evergreen.V1.Fusion.TType)
+              , backendVal : Evergreen.V1.Fusion.VType
               }
 
 
@@ -165,6 +168,7 @@ suite = tests $
               , currentTime : Time.Posix
               , benchList : (List Int)
               , benchDictRec : (Dict.Dict String Record)
+              , allTypes : Evergreen.V1.WireTypes.AllTypes
               }
 
 
@@ -189,12 +193,14 @@ suite = tests $
               | GrowBenchDictRecClicked Int
               | ClearBenchDictRecClicked
               | FNoop
-              | ExternalCustom_ (WireTypes.ExternalCustom String)
-              | ExternalCustomBasic_ WireTypes.ExternalCustomBasic
-              | ExternalRecord_ (WireTypes.ExternalRecord (WireTypes.AnotherParamRecord Int))
-              | ExternalAlias WireTypes.ExternalAliasTuple
+              | ExternalCustom_ (Evergreen.V1.WireTypes.ExternalCustom String)
+              | ExternalCustomBasic_ Evergreen.V1.WireTypes.ExternalCustomBasic
+              | ExternalRecord_ (Evergreen.V1.WireTypes.ExternalRecord (Evergreen.V1.WireTypes.AnotherParamRecord Int))
+              | ExternalAlias Evergreen.V1.WireTypes.ExternalAliasTuple
               | TestRPC
               | RPCRes (Result Http.Error Int)
+              | EditLocal Evergreen.V1.Fusion.FType
+              | FusionQuery (List Evergreen.V1.Fusion.FType)
 
 
           type ToBackend
@@ -205,6 +211,8 @@ suite = tests $
               | GrowBenchDictRec Int
               | ClearBenchList
               | ClearBenchDictRec
+              | PatchedQuery Evergreen.V1.Fusion.FType
+              | FusionedQuery (List Evergreen.V1.Fusion.FType)
 
 
           type BackendMsg
@@ -215,6 +223,8 @@ suite = tests $
 
           type ToFrontend
               = CounterNewValue Int Lamdera.SessionId Lamdera.ClientId
+              | BackendModelTypeInfo Evergreen.V1.Fusion.TType
+              | ReceivedBackendLType Evergreen.V1.Fusion.VType
               | BenchStats
               { benchListSize : Int
               }
@@ -232,34 +242,6 @@ suite = tests $
           import Dict
           import Set
           import Time
-
-
-          type ExternalCustom threadedTvar
-              = AlphabeticallyLast
-              | AlphabeticallyFirst
-              | AlphabeticallyKMiddleThreaded threadedTvar
-
-
-          type ExternalCustomBasic
-              = Custom1
-              | Custom2
-
-
-          type alias AnotherParamRecord threadedTvar =
-              { threaded2 : threadedTvar
-              }
-
-
-          type alias SubRecord threadedTvar =
-              { subtype : Int
-              , threaded : threadedTvar
-              }
-
-
-          type alias SubSubRecordAlias threadedTvar = (SubRecord threadedTvar)
-
-
-          type alias SubRecordAlias threadedTvar = (SubSubRecordAlias threadedTvar)
 
 
           type alias AliasInt = Int
@@ -285,6 +267,17 @@ suite = tests $
           type alias SubRecursiveRecord =
               { recurse : AllTypes
               }
+
+
+          type ExternalCustom threadedTvar
+              = AlphabeticallyLast
+              | AlphabeticallyFirst
+              | AlphabeticallyKMiddleThreaded threadedTvar
+
+
+          type ExternalCustomBasic
+              = Custom1
+              | Custom2
 
 
           type OnlyUsedInPhantom
@@ -324,6 +317,23 @@ suite = tests $
               | ValuePhantom (Phantom OnlyUsedInPhantom)
               | ValueAliasTuple ExternalAliasTuple
               | ValueAll AllTypes
+
+
+          type alias AnotherParamRecord threadedTvar =
+              { threaded2 : threadedTvar
+              }
+
+
+          type alias SubRecord threadedTvar =
+              { subtype : Int
+              , threaded : threadedTvar
+              }
+
+
+          type alias SubSubRecordAlias threadedTvar = (SubRecord threadedTvar)
+
+
+          type alias SubRecordAlias threadedTvar = (SubSubRecordAlias threadedTvar)
 
 
           type alias ExternalRecord threadedTvar =
