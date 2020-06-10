@@ -511,7 +511,7 @@ getProjectRoot = do
   res <- findHelp "elm.json" (FP.splitDirectories subDir)
   case res of
     Just filepath -> pure filepath
-    Nothing -> error "derp"
+    Nothing -> error "Error: could not determine project root while looking for elm.json. Please report this issue."
 
 
 findHelp :: FilePath -> [String] -> IO (Maybe FilePath)
