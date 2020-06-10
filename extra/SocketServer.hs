@@ -55,9 +55,11 @@ socketHandler mClients mLeader beState onJoined onReceive clientId pending = do
                 pure False
 
           writeTVar mClients remainingClients
+
           pure changed
 
         Lamdera.debugT ("[websocket] 🚫 " <> clientId)
+        SocketServer.broadcastImpl mClients $ "{\"t\":\"d\",\"c\":\""<> clientId <> "\"}"
 
         onlyWhen leaderChanged $ do
           sendToLeader mClients mLeader (\leader -> do

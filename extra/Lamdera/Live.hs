@@ -231,6 +231,8 @@ serveWebsocket (mClients, mLeader, mChan, beState) =
                   -- Tell everyone about the new leader (also causes actual leader to go active as leader)
                   broadcastLeader mClients mLeader
 
+                SocketServer.broadcastImpl mClients $ "{\"t\":\"c\",\"c\":\""<> clientId <> "\"}"
+
                 leader <- atomically $ readTVar mLeader
                 case leader of
                   Just leaderId ->

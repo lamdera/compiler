@@ -67,6 +67,12 @@ port rpcIn : (Json.Value -> msg) -> Sub msg
 port rpcOut : Json.Value -> Cmd msg
 
 
+port onConnection : (ClientId -> msg) -> Sub msg
+
+
+port onDisconnection : (ClientId -> msg) -> Sub msg
+
+
 type Msg
     = FEMsg Types.FrontendMsg
     | BEMsg Types.BackendMsg
@@ -75,6 +81,8 @@ type Msg
     | FEtoBE Types.ToBackend
     | FEtoBEDelayed Types.ToBackend
     | FENewUrl Url
+    | OnConnection ClientId
+    | OnDisconnection ClientId
     | ReceivedFromFrontend Json.Value
     | ReceivedFromBackend Json.Value
     | ReceivedBackendModel Json.Value
@@ -481,6 +489,12 @@ update msg m =
             in
             ( { newModel | originalUrl = url }, newCmds )
 
+        OnConnection clientId ->
+            ( m, Lamdera.clientConnected_ clientId )
+
+        OnDisconnection clientId ->
+            ( m, Lamdera.clientDisconnected_ clientId )
+
         ReceivedFromFrontend payload ->
             case m.nodeType of
                 Follower ->
@@ -796,6 +810,8 @@ subscriptions { nodeType, fem, bem } =
         , receiveFromBackend ReceivedFromBackend
         , receiveBackendModel ReceivedBackendModel
         , rpcIn RPCIn
+        , onConnection OnConnection
+        , onDisconnection OnDisconnection
         ]
 
 
