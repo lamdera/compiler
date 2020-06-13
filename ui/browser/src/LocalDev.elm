@@ -359,7 +359,7 @@ update msg m =
         FEMsg frontendMsg ->
             let
                 x =
-                    log "F " frontendMsg
+                    log "F   " frontendMsg
 
                 ( newFem, newFeCmds ) =
                     userFrontendApp.update frontendMsg m.fem
@@ -377,7 +377,7 @@ update msg m =
                 Leader ->
                     let
                         x =
-                            log "B " backendMsg
+                            log "  B " backendMsg
 
                         ( newBem, newBeCmds ) =
                             userBackendApp.update backendMsg m.bem
@@ -405,7 +405,7 @@ update msg m =
                                     [ ( "t", Json.string "ToFrontend" )
                                     , ( "i"
                                       , toFrontend
-                                            |> log "◀️ "
+                                            |> log " ◀️B "
                                             |> Types.w2_encode_ToFrontend
                                             |> Wire.bytesEncode
                                             |> Wire.intListFromBytes
@@ -433,7 +433,7 @@ update msg m =
                                 [ ( "t", Json.string "ToFrontend" )
                                 , ( "i"
                                   , toFrontend
-                                        |> log "◀️⏱ "
+                                        |> log " ◀️B⏱"
                                         |> Types.w2_encode_ToFrontend
                                         |> Wire.bytesEncode
                                         |> Wire.intListFromBytes
@@ -456,7 +456,7 @@ update msg m =
             else
                 let
                     _ =
-                        log "▶️ " toBackend
+                        log "F▶️  " toBackend
 
                     payload =
                         Json.object
@@ -475,7 +475,7 @@ update msg m =
         FEtoBEDelayed toBackend ->
             let
                 _ =
-                    log "▶️⏱ " toBackend
+                    log "F▶️ ⏱" toBackend
 
                 payload =
                     Json.object
@@ -535,7 +535,7 @@ update msg m =
                                 Just toBackend ->
                                     let
                                         _ =
-                                            log "▶️ " toBackend
+                                            log " ▶️B " toBackend
 
                                         ( newBem, newBeCmds ) =
                                             userBackendApp.updateFromFrontend m.sessionId args.c toBackend m.bem
@@ -566,8 +566,9 @@ update msg m =
                     case Wire.bytesDecode Types.w2_decode_ToFrontend (Wire.intListToBytes args.i) of
                         Just toFrontend ->
                             let
-                                -- x =
-                                --     log "ReceivedFromBackend" ( toFrontend, args.c )
+                                x =
+                                    log "F◀️  " toFrontend
+
                                 ( newFem, newFeCmds ) =
                                     userFrontendApp.updateFromBackend toFrontend m.fem
                             in
