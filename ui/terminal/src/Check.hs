@@ -291,7 +291,7 @@ run () () = do
 
                 Task.throw $ Exit.Lamdera
                   $ Help.report "UNIMPLEMENTED MIGRATION" (Just nextMigrationPathBare)
-                    ("The following types have changed since v" <> show prodVersion <> " and require migrations:")
+                    ("The following types have changed since last deploy (v" <> show prodVersion <> ") and require migrations:")
                     [ formattedChangedTypes
                     , D.reflow $ "I've generated a placeholder migration file to help you get started:"
                     , D.reflow $ nextMigrationPath
@@ -449,7 +449,7 @@ lamderaThrowUnknownApp =
 lamderaThrowUnimplementedMigration nextMigrationPath formattedChangedTypes prodVersion nextMigrationPathBare = do
   Task.throw $ Exit.Lamdera
     $ Help.report "UNIMPLEMENTED MIGRATION" (Just nextMigrationPathBare)
-      ("The following types have changed since v" <> show prodVersion <> " and require migrations:")
+      ("The following types have changed since last deploy (v" <> show prodVersion <> ") and require migrations:")
       [ formattedChangedTypes
       , D.reflow $ "There are still migration placeholders that need implementing here:"
       , D.reflow $ nextMigrationPath
