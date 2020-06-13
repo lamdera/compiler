@@ -207,6 +207,21 @@ serveWebsocket (mClients, mLeader, mChan, beState) =
   do  file <- getSafePath
       guard (file == "_w")
       mKey <- getHeader "sec-websocket-key" <$> getRequest
+      mSid <- getCookie "sid"
+
+      randBytes <- liftIO $ getEntropy 20
+      let newSid = BSL.toStrict $ B.toLazyByteString $ B.byteStringHex randBytes
+
+      sessionId <-
+        case mSid of
+          Nothing -> do
+            let cookie = Cookie "sid" newSid Nothing Nothing Nothing False False
+            modifyResponse $ addResponseCookie cookie
+
+            pure $ T.decodeUtf8 $ newSid
+
+          Just sid_ ->
+            pure $ T.decodeUtf8 $ cookieValue sid_
 
       case mKey of
         Just key -> do
@@ -231,7 +246,7 @@ serveWebsocket (mClients, mLeader, mChan, beState) =
                   -- Tell everyone about the new leader (also causes actual leader to go active as leader)
                   broadcastLeader mClients mLeader
 
-                SocketServer.broadcastImpl mClients $ "{\"t\":\"c\",\"c\":\""<> clientId <> "\"}"
+                SocketServer.broadcastImpl mClients $ "{\"t\":\"c\",\"s\":\"" <> sessionId <> "\",\"c\":\""<> clientId <> "\"}"
 
                 leader <- atomically $ readTVar mLeader
                 case leader of
@@ -270,7 +285,7 @@ serveWebsocket (mClients, mLeader, mChan, beState) =
                   else
                     SocketServer.broadcastImpl mClients text
 
-          WS.runWebSocketsSnap $ SocketServer.socketHandler mClients mLeader beState onJoined onReceive (T.decodeUtf8 key)
+          WS.runWebSocketsSnap $ SocketServer.socketHandler mClients mLeader beState onJoined onReceive (T.decodeUtf8 key) sessionId
 
 
         Nothing ->

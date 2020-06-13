@@ -23,7 +23,7 @@ import Frontend
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events exposing (onClick, onMouseEnter, onMouseLeave)
-import Lamdera exposing (ClientId, Key, Url)
+import Lamdera exposing (ClientId, Key, SessionId, Url)
 import Lamdera.Debug as LD
 import Lamdera.Json as Json
 import Lamdera.Wire2 as Wire
@@ -67,10 +67,10 @@ port rpcIn : (Json.Value -> msg) -> Sub msg
 port rpcOut : Json.Value -> Cmd msg
 
 
-port onConnection : (ClientId -> msg) -> Sub msg
+port onConnection : (Json.Value -> msg) -> Sub msg
 
 
-port onDisconnection : (ClientId -> msg) -> Sub msg
+port onDisconnection : (Json.Value -> msg) -> Sub msg
 
 
 type Msg
@@ -81,8 +81,8 @@ type Msg
     | FEtoBE Types.ToBackend
     | FEtoBEDelayed Types.ToBackend
     | FENewUrl Url
-    | OnConnection ClientId
-    | OnDisconnection ClientId
+    | OnConnection Json.Value
+    | OnDisconnection Json.Value
     | ReceivedFromFrontend Json.Value
     | ReceivedFromBackend Json.Value
     | ReceivedBackendModel Json.Value
@@ -335,6 +335,16 @@ payloadDecoder =
         |> required "i" (Json.decoderList Json.decoderInt)
 
 
+type alias ClientJson =
+    { sessionId : SessionId, clientId : ClientId }
+
+
+clientJsonDecoder =
+    Json.succeed ClientJson
+        |> required "s" Json.decoderString
+        |> required "c" Json.decoderString
+
+
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg m =
     let
@@ -489,11 +499,29 @@ update msg m =
             in
             ( { newModel | originalUrl = url }, newCmds )
 
-        OnConnection clientId ->
-            ( m, Lamdera.clientConnected_ clientId )
+        OnConnection json ->
+            case Json.decodeValue clientJsonDecoder json of
+                Ok c ->
+                    ( m, Lamdera.clientConnected_ c.sessionId c.clientId )
 
-        OnDisconnection clientId ->
-            ( m, Lamdera.clientDisconnected_ clientId )
+                Err err ->
+                    let
+                        _ =
+                            log "❌" "Connect parse failed; this should be impossible! Please report this issue."
+                    in
+                    ( m, Cmd.none )
+
+        OnDisconnection json ->
+            case Json.decodeValue clientJsonDecoder json of
+                Ok c ->
+                    ( m, Lamdera.clientDisconnected_ c.sessionId c.clientId )
+
+                Err err ->
+                    let
+                        _ =
+                            log "❌" "Disconnect parse failed; this should be impossible! Please report this issue."
+                    in
+                    ( m, Cmd.none )
 
         ReceivedFromFrontend payload ->
             case m.nodeType of
@@ -507,8 +535,9 @@ update msg m =
                             case Wire.bytesDecode Types.w2_decode_ToBackend (Wire.intListToBytes args.i) of
                                 Just toBackend ->
                                     let
-                                        -- _ =
-                                        --     log "ReceivedFromBackend" ( toBackend, args.c )
+                                        _ =
+                                            log "▶️ " toBackend
+
                                         ( newBem, newBeCmds ) =
                                             userBackendApp.updateFromFrontend m.sessionId args.c toBackend m.bem
                                     in

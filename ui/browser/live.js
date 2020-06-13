@@ -231,11 +231,11 @@ setupApp = function(name, elid) {
       //   break;
 
       case "c":
-        msgInbound("onConnection", d.c)
+        msgInbound("onConnection", { s: d.s, c: d.c })
         break;
 
       case "d":
-        msgInbound("onDisconnection", d.c)
+        msgInbound("onDisconnection", { s: d.s, c: d.c })
         break;
 
       case "x":

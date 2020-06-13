@@ -24,8 +24,8 @@ leaderInit :: IO (TVar (Maybe ClientId))
 leaderInit = newTVarIO Nothing
 
 
-socketHandler :: TVar [Client] -> TVar (Maybe ClientId) -> TVar Text -> OnJoined -> OnReceive -> T.Text -> WS.ServerApp
-socketHandler mClients mLeader beState onJoined onReceive clientId pending = do
+socketHandler :: TVar [Client] -> TVar (Maybe ClientId) -> TVar Text -> OnJoined -> OnReceive -> T.Text -> T.Text -> WS.ServerApp
+socketHandler mClients mLeader beState onJoined onReceive clientId sessionId pending = do
 
   Lamdera.debugT $ "[websocket] ❇️  " <> clientId
   conn <- WS.acceptRequest pending
@@ -59,7 +59,7 @@ socketHandler mClients mLeader beState onJoined onReceive clientId pending = do
           pure changed
 
         Lamdera.debugT ("[websocket] 🚫 " <> clientId)
-        SocketServer.broadcastImpl mClients $ "{\"t\":\"d\",\"c\":\""<> clientId <> "\"}"
+        SocketServer.broadcastImpl mClients $ "{\"t\":\"d\",\"s\":\"" <> sessionId <> "\",\"c\":\""<> clientId <> "\"}"
 
         onlyWhen leaderChanged $ do
           sendToLeader mClients mLeader (\leader -> do
