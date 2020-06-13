@@ -99,8 +99,7 @@ defaults =
     , (Pkg.html, Con.anything)
     , (Pkg.browser, Con.anything)
     , (Pkg.url, Con.anything)
-    , (Pkg.time, Con.anything)
-    , (Pkg.http, Con.anything)
+    -- @LAMDERA todo - move into Lamdera
     , (Pkg.lamderaCore, Con.exactly (Pkg.Version 1 0 0))
     , (Pkg.lamderaCodecs, Con.exactly (Pkg.Version 1 0 0))
     ]

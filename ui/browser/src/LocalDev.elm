@@ -29,7 +29,6 @@ import Lamdera.Json as Json
 import Lamdera.Wire2 as Wire
 import Process
 import Task
-import Time
 import Types exposing (BackendModel, BackendMsg, FrontendModel, FrontendMsg, ToBackend, ToFrontend)
 
 
@@ -828,7 +827,7 @@ subscriptions { nodeType, fem, bem } =
           else
             Sub.none
         , if nodeType == Leader then
-            Time.every 2000 (always (PersistBackend False))
+            LD.every 2000 (always (PersistBackend False))
 
           else
             Sub.none

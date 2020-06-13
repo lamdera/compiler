@@ -1,5 +1,19 @@
 module Lamdera.OldFeatureHelper where
 
+{- UNUSED
+
+Kept for reference. Search `Lamdera.OldFeatureHelper` to see commented-out inclusion points.
+
+Was added to help folks missing LocalDev deps to elm/http & elm/time have a nicer error
+message for that particular case, but in the end decided better to have Lamdera.Debug expose
+those bits and it remain an indirect dependency.
+
+More context:
+
+https://trello.com/c/j2igqmlo/497-yak-nice-error-handling-for-additional-package-deps
+
+-}
+
 import qualified Reporting.Doc as D
 import qualified Reporting.Exit.Help as Help
 import qualified Elm.Compiler.Module as Module
