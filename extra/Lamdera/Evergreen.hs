@@ -3,6 +3,16 @@
 
 module Lamdera.Evergreen where
 
+{-
+
+Type snapshotting for Evergreen.
+
+@TODO :
+
+- Once design settles, refactor and document the duplicate bits
+
+-}
+
 import qualified AST.Canonical as Can
 import AST.Module.Name (Canonical(..))
 import qualified AST.Module.Name as ModuleName
@@ -294,7 +304,7 @@ unionToFt version scope identifier@(author, pkg, module_, tipe) typeName interfa
         tvars_ =
           tvarMap
             -- & (\v ->
-            --   debugHaskellWhen (typeName == "ExternalCustom") ("unionToFt:tvars:"<> typeName <> ":" <> module_) (v)
+            --   debugHaskellWhen (typeName == "OptionalData") ("unionToFt:tvars:"<> typeName <> ":" <> module_) (v)
             -- )
             & fmap (N.toText . fst)
             & T.intercalate " "
@@ -504,7 +514,7 @@ canonicalToFt version scope interfaces recursionMap canonical tvarMap =
         (ModuleName.Canonical (Pkg.Name author pkg) (N.Name module_)) -> module_
 
     debug (t, imps, ft) =
-      debugHaskellWhen (textContains "AnotherParamRecord" t) ("\n✳️  inserting def for " <> t <> " - " <> (T.pack . show $ canonical)) (t, imps, ft)
+      debugHaskellWhen (textContains "OptionalData" t) ("\n✳️  inserting def for " <> t <> "\n" <> (T.pack . show $ canonical)) (t, imps, ft)
       -- debug_note ("🔵inserting def for " <> T.unpack t <> ":\n" <> ( ft)) $ (t, imps, ft)
       -- unsafePerformIO $ do
       --     formatHaskellValue ("\n🔵inserting def for " <> t) (ft) :: IO ()
@@ -531,10 +541,50 @@ canonicalToFt version scope interfaces recursionMap canonical tvarMap =
       in
 
       if (List.any ((==) recursionIdentifier) recursionMap) then
-        (N.toText name, Set.empty, Map.empty)
-        -- DRecursion $ case (moduleName, name) of
-        --   ((ModuleName.Canonical (Pkg.Name pkg1 pkg2) (N.Name module_)), N.Name typename) ->
-        --     pkg1 <> "/" <> pkg2 <> ":" <> module_ <> "." <> typename
+
+        let
+          usageSnapRes =
+            params
+              & fmap (\param -> canonicalToFt version scope interfaces recursionMap param tvarMap)
+
+          usageParams =
+            usageSnapRes
+              & fmap selNames
+              & T.intercalate " "
+
+          usageImports =
+            usageSnapRes
+              & fmap selImports
+              & mergeAllImports
+
+          usageFts =
+            usageSnapRes
+              & fmap selFts
+              & mergeAllFts
+
+          typeScope =
+            if moduleName == scope then
+              ""
+            else if isUserType identifier then
+              "Evergreen.V" <> version <> "." <> module_ <> "."
+            else
+              module_ <> "."
+
+          typeName =
+            N.toText name
+
+          module_ =
+            case moduleName of
+              (ModuleName.Canonical (Pkg.Name author pkg) (N.Name module_)) -> module_
+
+        in
+        ( if length params > 0 then
+            "(" <> typeScope <> typeName <> " " <> usageParams <> ")" -- <> "<!R>"
+          else
+            typeScope <> typeName -- <> "<!R>"
+        , usageImports
+        , usageFts
+        )
 
       else
       case identifier of
@@ -784,7 +834,7 @@ canonicalToFt version scope interfaces recursionMap canonical tvarMap =
               else
                 module_ <> "."
 
-            debugIden = ""-- <ah>"
+            debugIden = "" -- <> "<ah>"
 
             scopeImports =
               if moduleName == scope then
@@ -824,7 +874,7 @@ canonicalToFt version scope interfaces recursionMap canonical tvarMap =
           let
             (subt, imps, subft) = canonicalToFt version moduleName interfaces recursionMap cType []
 
-            debugIden = ""-- <af>"
+            debugIden = "" -- <> "<af>"
           in
           (
             debugIden <>
@@ -900,7 +950,7 @@ canonicalToFt version scope interfaces recursionMap canonical tvarMap =
       (N.toText name, Set.empty, Map.empty)
 
     Can.TLambda _ _ ->
-      error "Fatal: impossible multi-param Maybe! Please report this."
+      error "Fatal: impossible function type! Please report this."
       ("XXXXXX TLambda", Set.empty, Map.empty)
       -- DError $ "must not contain functions"
 
