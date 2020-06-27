@@ -169,7 +169,7 @@ setupApp = function(name, elid) {
 
       case "ToFrontend":
         // Only process messages for our clientId, or a broadcast
-        if (d.c == clientId || d.c == "b") {
+        if (d.c == clientId || d.c == sessionId || d.c == "b") {
           d.c = clientId
           app.ports.receiveFromBackend.send(d)
         } else {

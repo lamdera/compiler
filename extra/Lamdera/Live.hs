@@ -157,7 +157,7 @@ serveUnmatchedUrlsToIndex serveElm =
 
             onlyWhen rpcExists $ do
 
-              -- Replace body implementation
+              -- Inject missing imports
               liftIO $
                 replaceInFile
                   "-- MKRRI"
@@ -186,12 +186,9 @@ serveUnmatchedUrlsToIndex serveElm =
                   \                        RPC.lamdera_handleEndpoints\n\
                   \                        model\n\
                   \            in\n\
-                  \            ( { m | bem = newModel.userModel }, Cmd.map BEMsg newBeCmds )\n\
+                  \            ( { m | bem = newModel.userModel, bemDirty = True }, Cmd.map BEMsg newBeCmds )\n\
                   \            {-}"
                   harnessPath
-
-
-
 
           else
             normalLocalDevWrite

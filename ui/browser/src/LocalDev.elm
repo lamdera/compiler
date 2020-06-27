@@ -828,7 +828,7 @@ subscriptions { nodeType, fem, bem } =
           else
             Sub.none
         , if nodeType == Leader then
-            LD.every 2000 (always (PersistBackend False))
+            LD.every 1000 (always (PersistBackend False))
 
           else
             Sub.none
