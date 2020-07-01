@@ -90,12 +90,21 @@ constrain rtv (A.At region expression) expected =
         in
           pure $ CForeign region name (Can.Forall freevars (transform fn t)) expected
 
+      else if pkg == Pkg.lamderaCore && modu == "Lamdera" && name == "broadcast" then
+        let
+          fn (Can.TVar "toFrontend") = Can.TType (ModuleName.Canonical Pkg.dummyName "Types") "ToFrontend" []
+          fn x = x
+        in
+          pure $ CForeign region name (Can.Forall freevars (transform fn t)) expected
+
       -- Since we don't have type annotations on codecs, we have exposed top-level
       -- things without type annotations, which means that we see bugs in the type
       -- inference engine that shouldn't be there. This is a hotfix for such a bug,
       -- where the forall. part of the type doesn't hold all the tvars used in the
       -- type, so we inject any missning tvars and hope it works out.
-      else return $ CForeign region name (Can.Forall (freevars <> getFreevars t) t) expected -- NOTE: prefer freevars over getFreevars if there's a conflict
+      -- @LAMDERA todo legacy from Haskell transpilation, re-evalutate and remove
+      else
+        return $ CForeign region name (Can.Forall (freevars <> getFreevars t) t) expected -- NOTE: prefer freevars over getFreevars if there's a conflict
 
     Can.VarCtor _ _ name _ annotation ->
       return $ CForeign region name annotation expected

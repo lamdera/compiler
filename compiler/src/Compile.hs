@@ -96,15 +96,14 @@ compile flag pkg importDict interfaces source srcMVar =
 
 
       -- Ok, normal elm compilation chain is now done for this module, so any normal
-      -- elm errors which may have happened will have been found and returned by now.
-      -- This should reduce confusion for devs. Next, after the elm code is known good,
-      -- we generate evergreen codecs, inject them, and then run the whole compilation
-      -- step once more, with generated code this time.
-      -- This also gives us a free pass from our previous discussion on how many
-      -- compilation steps we should run before we inject codecs; more steps is
-      -- slower but more correct. Now we need to run all steps, so we're free to
-      -- use all information if we want to.
-      --
+      -- Elm errors which may have happened should have been found and thrown by now.
+
+      -- If we're getting past this point, we are assuming there are no baseline errors
+      -- so auto-generation stands on good ground.
+
+      -- This solves a second problem as a side effect; we no longer have the issue
+      -- of needing information from an AST stage that hasn't run yet, so our scope
+      -- for auto-generation is widened at the cost of a second run in terms of performance.
 
       -- Generate wire source code from canonical ast
       -- These are intended to be serialised and put at the end of the source code
