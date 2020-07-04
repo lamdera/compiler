@@ -248,6 +248,21 @@ suite = tests $
           type alias AliasInt = Int
 
 
+          type ExternalCustom threadedTvar
+              = AlphabeticallyLast
+              | AlphabeticallyFirst
+              | AlphabeticallyKMiddleThreaded threadedTvar
+
+
+          type alias Emoji =
+              { available : (OptionalData Bool)
+              }
+
+
+          type OptionalData a
+              = Included a
+
+
           type alias AllTypes =
               { int : Int
               , float : Float
@@ -262,18 +277,14 @@ suite = tests $
               , order : Order
               , union : AllUnion
               , unit : ()
+              , externalCustom : (ExternalCustom Int)
+              , reactions : (OptionalData (List Emoji))
               }
 
 
           type alias SubRecursiveRecord =
               { recurse : AllTypes
               }
-
-
-          type ExternalCustom threadedTvar
-              = AlphabeticallyLast
-              | AlphabeticallyFirst
-              | AlphabeticallyKMiddleThreaded threadedTvar
 
 
           type ExternalCustomBasic
