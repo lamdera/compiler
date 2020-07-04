@@ -189,7 +189,9 @@ defaultImplementations =
 
       updateFromBackend : ToFrontend -> Model -> ( Model, Cmd FrontendMsg )
       updateFromBackend msg model =
-          ( model, Cmd.none )
+          case msg of
+              NoOpToFrontend ->
+                  ( model, Cmd.none )
 
 
       view model =
