@@ -233,6 +233,9 @@ Executable elmx
 
         -- Lamdera:
         Lamdera
+        Lamdera.Check
+        Lamdera.Deploy
+        Lamdera.Live
         Lamdera.TypeHash
         Lamdera.Types
         Lamdera.Evergreen
@@ -240,16 +243,14 @@ Executable elmx
         Lamdera.Checks
         Lamdera.Generated
         Lamdera.Hints
-        Lamdera.Live
         Lamdera.Filewatch
         Lamdera.OldFeatureHelper
         Lamdera.Secrets
         Wire.Source
         Wire.Source2
-        Check
         Reporting.Exit.Check
         Reporting.Error.LamderaError
-        Deploy
+
         SocketServer
 
         -- Testing:

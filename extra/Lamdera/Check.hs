@@ -2,7 +2,7 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Check where
+module Lamdera.Check where
 
 
 import Prelude hiding (init)

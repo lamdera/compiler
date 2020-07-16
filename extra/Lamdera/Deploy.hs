@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
 
-module Deploy where
+module Lamdera.Deploy where
 
 
 import Prelude hiding (init)
@@ -82,13 +82,13 @@ import Control.Monad (unless, filterM)
 import qualified System.IO as IO
 import qualified Elm.Project.Summary as Summary
 
-import Check
+import qualified Lamdera.Check
 
 run :: () -> () -> IO ()
 run () () = do
   debug_ "Starting check..."
 
-  Check.run () ()
+  Lamdera.Check.run () ()
 
   _ <- liftIO $ readProcess "git" ["push", "lamdera", "master"] ""
 
