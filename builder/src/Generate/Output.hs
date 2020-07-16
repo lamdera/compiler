@@ -1,5 +1,6 @@
 {-# OPTIONS_GHC -Wall #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE BangPatterns #-}
 module Generate.Output
   ( Mode(..)
   , Mode.Target(..)
@@ -47,6 +48,7 @@ import Terminal.Args (Parser(..))
 
 import qualified Lamdera.Injection
 import Lamdera
+import qualified Lamdera.Secrets
 
 -- GENERATE
 
@@ -125,6 +127,9 @@ generateMonolith
 generateMonolith mode maybeOutput (Summary.Summary _ project _ _ _) graph rootNames =
   do  let pkg = Project.getName project
       let roots = map (Module.Canonical pkg) rootNames
+
+      liftIO $ Lamdera.Secrets.writeUsage rootNames graph
+
       case Obj.generate mode graph roots of -- this is where js is generated
         Obj.None ->
           return ()
@@ -133,6 +138,7 @@ generateMonolith mode maybeOutput (Summary.Summary _ project _ _ _) graph rootNa
           let
             -- @LAMDERA
             -- injections = Lamdera.Injection.source
+            -- At this stage, we can still find ABC123. So it's not removed yet here.
 
             monolith =
               "(function(scope){\n'use strict';"

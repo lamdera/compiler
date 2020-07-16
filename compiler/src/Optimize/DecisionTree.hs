@@ -68,7 +68,7 @@ data DecisionTree
       , _edges :: [(Test, DecisionTree)]
       , _default :: Maybe DecisionTree
       }
-  deriving (Eq, Show)
+  deriving (Eq, Show, Ord)
 
 
 data Test
@@ -87,7 +87,7 @@ data Path
   = Index Index.ZeroBased Path
   | Unbox Path
   | Empty
-  deriving (Eq, Show)
+  deriving (Eq, Show, Ord)
 
 
 

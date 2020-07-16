@@ -111,6 +111,10 @@ compile flag pkg importDict interfaces source srcMVar =
       rawCodecSource <- pure $ T.unpack $ Wire.Source.generateCodecs (getImportDict valid) canonical
       rawCodecSource2 <- pure $ T.unpack $ Wire.Source2.generateCodecs (getImportDict valid) canonical
 
+      let
+        name = case valid of
+          (Valid.Module name _ _ exports imports decls _ _ binops effects) -> name
+
       valid_ <- Result.mapError Error.Syntax $
         if Map.member "Lamdera.Wire" importDict || Map.member "Lamdera.Wire2" importDict then -- The Wire module is in the importDict, so this module is something that should have access to Evergreen.
           let newSource =
@@ -120,6 +124,15 @@ compile flag pkg importDict interfaces source srcMVar =
                   <> BS8.fromString rawCodecSource
                   <> "\n\n"
                   <> BS8.fromString rawCodecSource2
+                  <> (if (pkg == (Pkg.Name "author" "project") && (name == N.fromText "Env"))
+                        then
+                          let
+                            !envMode = unsafePerformIO $ Lamdera.getEnvMode
+                          in
+                          "\n\ntype Mode = Production | Staging | Development\n\nmode = " <> (BS8.fromString $ show envMode)
+                        else
+                          ""
+                     )
 
               !_ = unsafePerformIO $ do
                     -- Put the new source into an mvar, so we can communicate upstream to the scheduler that we've modified the input,
@@ -159,8 +172,6 @@ compile flag pkg importDict interfaces source srcMVar =
 
       let
         elmi = I.fromModule annotations_ canonical_
-        name = case valid_ of
-                 (Valid.Module name _ _ exports imports decls _ _ binops effects) -> name
 
       onlyWhen (pkg == (Pkg.Name "author" "project") && (name == N.fromText "Types")) $ do
         let

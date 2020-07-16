@@ -208,7 +208,7 @@ data Type
   | TUnit
   | TTuple Type Type (Maybe Type)
   | TAlias ModuleName.Canonical N.Name [(N.Name, Type)] AliasType
-  deriving (Show, Data)
+  deriving (Show, Data, Eq, Ord)
 
 instance Plated Type where
   plate = uniplate
@@ -217,7 +217,7 @@ instance Plated Type where
 data AliasType
   = Holey Type
   | Filled Type
-  deriving (Show, Data)
+  deriving (Show, Data, Eq, Ord)
 
 instance Plated AliasType where
   plate = uniplate
@@ -225,7 +225,7 @@ instance Plated AliasType where
 
 data FieldType =
   FieldType {-# UNPACK #-} !Word16 Type
-  deriving (Show, Data)
+  deriving (Show, Data, Eq, Ord)
 
 instance Plated FieldType where
   plate = uniplate

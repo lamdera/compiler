@@ -55,7 +55,6 @@ import qualified Stuff.Paths as Paths
 -- Compilation
 import qualified Elm.Project as Project
 import qualified Generate.Output as Output
-import qualified Reporting.Task as Task
 import qualified Reporting.Exit.Help as Help
 import qualified Reporting.Progress.Terminal as Terminal
 import qualified Reporting.Report as Report
@@ -76,6 +75,7 @@ import Control.Monad (unless, filterM)
 import qualified System.IO as IO
 import qualified Elm.Project.Summary as Summary
 import qualified Text.Read
+import qualified Lamdera.Secrets
 
 
 run :: () -> () -> IO ()
@@ -101,8 +101,6 @@ run () () = do
   debug $ "hoist rebuild:" ++ show isHoistRebuild
   debug $ "force version:" ++ show forceVersion
 
-
-
   Task.run reporter $ do
 
     summary <- Project.getRoot
@@ -113,13 +111,15 @@ run () () = do
     liftIO $ putStrLn "───> Checking project compiles..."
     checkUserProjectCompiles summary root
 
-    liftIO $ putStrLn "───> Checking Evergreen migrations..."
-
     lamderaRemotes <- liftIO getLamderaRemotes
     onlyWhen (lamderaRemotes == [] && appNameEnvM == Nothing) lamderaThrowUnknownApp
-
     -- Prior `onlyWhen` guards against situation where no name is determinable
     let appName = certainAppName lamderaRemotes appNameEnvM
+
+    liftIO $ putStrLn "───> Checking config..."
+    checkUserConfig appName
+
+    liftIO $ putStrLn "───> Checking Evergreen migrations..."
 
     debug $ "app name:" ++ show appName
 
@@ -1080,3 +1080,84 @@ temporaryCheckOldTypesNeedingMigration inProduction root = do
 
       else
         genericExit "Okay, I did not migrate."
+
+
+
+checkUserConfig appName = do
+  -- @TODO skip when offline?
+
+  prodConfigItems <- Lamdera.Secrets.fetchAppConfigItems appName True
+  localConfigItems <- Lamdera.Secrets.readAppConfigUses
+
+  -- Alert of any usages that don't have defined values
+  let
+    prodConfigMap = prodConfigItems & fmap (\v@(e1,e2,e3,e4) -> (e1, v) ) & Map.fromList
+
+    missingConfigs =
+      localConfigItems
+        & filter (\(module_, expression, config) ->
+            case Map.lookup (T.unpack config) prodConfigMap of
+              Just x ->
+                -- Exists in prod, drop
+                False
+              Nothing ->
+                -- Missing in prod, keep
+                True
+        )
+
+    secretBreakingConfigs =
+      localConfigItems
+        & filter (\(module_, expression, config) ->
+            case Map.lookup (T.unpack config) prodConfigMap of
+              Just (name_, value_, used_, secret) ->
+                if secret then
+                  -- Exists in prod and is secret, should not be usable
+                  True
+                else
+                  -- Exists in prod and not secret, ignore
+                  False
+              Nothing ->
+                -- Missing in prod, ignore
+                False
+        )
+
+
+  onlyWhen (length missingConfigs > 0) $ do
+    let
+      missingFormatted =
+        missingConfigs
+          & fmap (\(module_, expr, config) ->
+              -- D.fromText $
+              D.indent 4 $ D.fillSep [D.yellow $ D.fromText config , "in" , D.fromText $ module_ <> "." <> expr]
+            )
+          -- & D.stack
+          -- & T.intercalate "\n"
+
+    Task.throw $ Exit.Lamdera
+      $ Help.report "MISSING PRODUCTION CONFIG" (Nothing)
+        ("The following Env.elm config values are used but have no production value set:")
+        ([ D.vcat missingFormatted
+         , D.reflow "I need you to set a production value here before I can deploy:"
+         , D.reflow $ "<https://dashboard.lamdera.app/app/" <> T.unpack appName <> ">"
+         , D.reflow "See <https://dashboard.lamdera.app/docs/secrets> more info."
+         ]
+        )
+
+  -- Alert of any Frontend usages of secret config
+  onlyWhen (length secretBreakingConfigs > 0) $ do
+    let
+      missingFormatted =
+        secretBreakingConfigs
+          & fmap (\(module_, expr, config) ->
+              D.indent 4 $ D.fillSep [D.yellow $ D.fromText config , "in" , D.fromText $ module_ <> "." <> expr]
+            )
+
+    Task.throw $ Exit.Lamdera
+      $ Help.report "MISSING PRODUCTION CONFIG" (Nothing)
+        ("These Frontend functions are trying to use secret config values:")
+        ([ D.vcat missingFormatted
+         , D.reflow "You must either remove these uses, or make the config public here:"
+         , D.reflow $ "<https://dashboard.lamdera.app/app/" <> T.unpack appName <> ">"
+         , D.reflow "See <https://dashboard.lamdera.app/docs/secrets> more info."
+         ]
+        )

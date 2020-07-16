@@ -22,12 +22,15 @@ import Lamdera
 import EasyTest
 import qualified Init
 import qualified Check
-
+import qualified Lamdera.Secrets
 
 {-| For quick and general local development testing via `stack ghci` as TestLamdera.check -}
 check = do
-  checkWithParams "/Users/mario/lamdera/test/v1" "test-local"
+  checkWithParams "/Users/mario/lamdera/test/v1" "discord-bot-local"
+  -- checkWithParams "/Users/mario/dev/lamdera-user-projects/beat-the-big-two" "beat-the-big-two"
   -- checkWithParams "/Users/mario/dev/projects/lamdera-dashboard" "dashboard"
+  -- checkWithParams "/Users/mario/dev/projects/lamdera-mogee" "mogee"
+  -- checkWithParams "/Users/mario/lamdera/tmp/elm-audio-test0" "elm-audio-test0"
 
 
 all = run suite
@@ -138,8 +141,8 @@ Last line is optional, but it's cool! Lambda prompt!
 -}
 compile :: IO ()
 compile = do
-  -- let project = "/Users/mario/lamdera/test/v1"
-  -- setEnv "LAMDERA_APP_NAME" "testapp"
+  let project = "/Users/mario/lamdera/test/v1"
+  setEnv "LAMDERA_APP_NAME" "testapp"
 
   -- let project = "/Users/mario/dev/projects/elm-spa-example"
   -- setEnv "LAMDERA_APP_NAME" "realworldish"
@@ -150,11 +153,11 @@ compile = do
   -- let project = "/Users/mario/tmp/lamdera-experiments"
   -- setEnv "LAMDERA_APP_NAME" "lamderatest"
 
-  let project = "/Users/mario/dev/projects/lamdera-dashboard"
-  setEnv "LAMDERA_APP_NAME" "dashboard"
+  -- let project = "/Users/mario/dev/projects/lamdera-dashboard"
+  -- setEnv "LAMDERA_APP_NAME" "dashboard"
 
   -- Bust Elm's caching with this one weird trick!
-  -- touch $ project </> "src/Types.elm"
+  touch $ project </> "src/Frontend.elm"
 
   setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
   setEnv "LDEBUG" "1"
@@ -199,7 +202,7 @@ checkWithParams projectPath appName = do
 
   cp "/Users/mario/lamdera/runtime/src/LBR.elm" (projectPath ++ "/src/LBR.elm")
   cp "/Users/mario/lamdera/runtime/src/LFR.elm" (projectPath ++ "/src/LFR.elm")
-  cp "/Users/mario/lamdera/runtime/src/RPC.elm" (projectPath ++ "/src/RPC.elm")
+  -- cp "/Users/mario/lamdera/runtime/src/RPC.elm" (projectPath ++ "/src/RPC.elm")
   cp "/Users/mario/lamdera/runtime/src/LamderaHelpers.elm" (projectPath ++ "/src/LamderaHelpers.elm")
 
   Dir.withCurrentDirectory projectPath $
@@ -208,7 +211,7 @@ checkWithParams projectPath appName = do
 
   rm (projectPath ++ "/src/LBR.elm")
   rm (projectPath ++ "/src/LFR.elm")
-  rm (projectPath ++ "/src/RPC.elm")
+  -- rm (projectPath ++ "/src/RPC.elm")
   rm (projectPath ++ "/src/LamderaHelpers.elm")
 
   unsetEnv "LAMDERA_APP_NAME"
@@ -316,3 +319,11 @@ testWire = do
         -- _ <- BS.readFile tempFileName
         -- seq (BS.length result) (Dir.removeFile tempFileName)
         return ()
+
+
+testHttp = do
+  reporter <- Terminal.create
+  Task.run reporter $ do
+    res <- Lamdera.Secrets.fetchAppConfigItems "discord-bot-local" True
+
+    liftIO $ putStrLn $ show res

@@ -255,32 +255,45 @@ serveWebsocket (mClients, mLeader, mChan, beState) =
                     pure Nothing
 
               onReceive clientId text = do
-                if Text.isPrefixOf "{\"t\":\"BackendModel\"," text
+                if Text.isPrefixOf "{\"t\":\"envMode\"," text
                   then do
-                    Lamdera.debug "[backendSt] 💾"
-                    atomically $ writeTVar beState text
-                    onlyWhen (textContains "force" text) $ do
-                      Lamdera.debug "[refresh  ] 🔄 "
-                      -- Force due to backend reset, force a refresh
-                      SocketServer.broadcastImpl mClients "{\"t\":\"r\"}"
+                    root <- liftIO $ getProjectRoot
+                    -- This is a bit dodge, but avoids needing to pull in all of Aeson
+                    Lamdera.setEnvMode root $ (Text.splitOn "\"" text) !! 7
 
-                  else if Text.isPrefixOf "{\"t\":\"ToBackend\"," text
+                    -- Touch the src/Env.elm file to make sure it gets recompiled
+                    Lamdera.touch $ root </> "src" </> "Env.elm"
 
+                    -- Mode has changed, force a refresh
+                    -- Actually not needed, because the touch will do this for us!
+                    -- SocketServer.broadcastImpl mClients "{\"t\":\"r\"}"
+
+                  else if Text.isPrefixOf "{\"t\":\"BackendModel\"," text
                     then do
-                      sendToLeader mClients mLeader (\l -> pure text)
+                      Lamdera.debug "[backendSt] 💾"
+                      atomically $ writeTVar beState text
+                      onlyWhen (textContains "force" text) $ do
+                        Lamdera.debug "[refresh  ] 🔄 "
+                        -- Force due to backend reset, force a refresh
+                        SocketServer.broadcastImpl mClients "{\"t\":\"r\"}"
+
+                    else if Text.isPrefixOf "{\"t\":\"ToBackend\"," text
+
+                      then do
+                        sendToLeader mClients mLeader (\l -> pure text)
 
 
-                  else if Text.isPrefixOf "{\"t\":\"qr\"," text
+                    else if Text.isPrefixOf "{\"t\":\"qr\"," text
 
-                    then do
+                      then do
 
-                      Lamdera.debugT $ "🍕  rpc response:" <> text
-                      -- Query response, send it to the chan for pickup by awaiting HTTP endpoint
-                      liftIO $ writeBChan mChan text
-                      pure ()
+                        Lamdera.debugT $ "🍕  rpc response:" <> text
+                        -- Query response, send it to the chan for pickup by awaiting HTTP endpoint
+                        liftIO $ writeBChan mChan text
+                        pure ()
 
-                  else
-                    SocketServer.broadcastImpl mClients text
+                    else
+                      SocketServer.broadcastImpl mClients text
 
           WS.runWebSocketsSnap $ SocketServer.socketHandler mClients mLeader beState onJoined onReceive (T.decodeUtf8 key) sessionId
 
@@ -302,6 +315,8 @@ serveRpc (mClients, mLeader, mChan, beState) = do
   rbody <- readRequestBody 10000000 -- 10MB limit
   mSid <- getCookie "sid"
   contentType <- getHeader "Content-Type" <$> getRequest
+
+  debug $ "RPC received: " ++ show (contentType, mEndpoint, mSid, rbody)
 
   randBytes <- liftIO $ getEntropy 20
   let newSid = BSL.toStrict $ B.toLazyByteString $ B.byteStringHex randBytes
@@ -359,7 +374,7 @@ serveRpc (mClients, mLeader, mChan, beState) = do
           "\",\"r\":\""<> reqId <>
           "\",\"i\":[],\"j\":" <> body <> "}"
 
-        Nothing ->
+        Nothing -> do
           error "invalid Content-Type"
 
     loopRead = do
@@ -401,16 +416,26 @@ serveRpc (mClients, mLeader, mChan, beState) = do
             else
               loopRead
 
-  liftIO $ sendToLeader mClients mLeader (\leader -> pure payload)
 
-  result <- liftIO $ timeout 2 $ loopRead
+  leader <- liftIO $ atomically $ readTVar mLeader
+  case leader of
+    Just leaderId -> do
+      liftIO $ sendToLeader mClients mLeader (\leader -> pure payload)
 
-  case result of
-    Just builder -> do
-      builder
+      result <- liftIO $ timeout 2 $ loopRead
+
+      case result of
+        Just builder -> do
+          builder
+        Nothing -> do
+          Lamdera.debugT $ "⏰ RPC timed out for:" <> payload
+          writeBuilder "error:timeout"
+
+
     Nothing -> do
-      Lamdera.debugT $ "⏰ RPC timed out for:" <> payload
-      writeBuilder "error:timeout"
+      debug "RPC: no active leader"
+      error503 "it appears no browser instances are running! Please open http://localhost:8000 in a browser."
+
 
 
 error500 :: B.Builder -> Snap ()

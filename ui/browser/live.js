@@ -5,9 +5,6 @@
 const Sockette = require('sockette')
 const Cookie = require('js-cookie')
 
-var isLiveReload = false
-var leaderSeen = true
-
 var clientId = ""
 const sessionId = getSessionId()
 var connected = false
@@ -26,7 +23,6 @@ var msgHandler = function(e) {
   const d = JSON.parse(e.data)
   switch(d.t) {
     case "r":
-      isLiveReload = true
       document.location.reload()
       break;
   }
@@ -132,7 +128,6 @@ setupApp = function(name, elid) {
 
     switch(d.t) {
       case "r":
-        isLiveReload = true
         document.location.reload()
         break;
 

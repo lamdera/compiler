@@ -66,7 +66,7 @@ data Expr
   | Unit
   | Tuple Expr Expr (Maybe Expr) -- struct with names `f0`, `f1`, ... for indices
   | Shader Text (Set.Set N.Name) (Set.Set N.Name)
-  deriving (Show)
+  deriving (Show, Eq, Ord)
 
 {-
 - union types
@@ -112,14 +112,14 @@ kernel home =
 data Def
   = Def N.Name Expr
   | TailDef N.Name [N.Name] Expr
-  deriving (Show)
+  deriving (Show, Eq, Ord)
 
 
 data Destructor =
   -- let varname = this thing over at this path
   -- Destructor varname path
   Destructor N.Name Path
-  deriving (Show)
+  deriving (Show, Eq, Ord)
 
 
 data Path
@@ -127,7 +127,7 @@ data Path
   | Field N.Name Path
   | Unbox Path
   | Root N.Name
-  deriving (Show)
+  deriving (Show, Eq, Ord)
 
 
 
@@ -146,13 +146,13 @@ data Decider a
       , _tests :: [(DT.Test, Decider a)]
       , _fallback :: Decider a
       }
-  deriving (Eq, Show)
+  deriving (Show, Eq, Ord)
 
 
 data Choice
   = Inline Expr
   | Jump Int -- TODO: what does this int mean?
-  deriving (Show)
+  deriving (Show, Eq, Ord)
 
 
 
@@ -165,7 +165,7 @@ data Graph =
     , _nodes :: Map.Map Global Node
     , _fields :: Map.Map N.Name Int
     }
-    deriving (Show)
+    deriving (Show, Eq, Ord)
 
 
 data Main
@@ -174,7 +174,7 @@ data Main
       { _message :: Can.Type
       , _decoder :: Expr
       }
-      deriving (Show)
+      deriving (Show, Eq, Ord)
 
 type GlobalDeps
   -- Set.Set Global is the set of things referenced in the Expr(s), with `elm/kernel~Utils.$` being function application
@@ -192,14 +192,14 @@ data Node
   | Kernel KContent (Maybe KContent)
   | PortIncoming Expr GlobalDeps
   | PortOutgoing Expr GlobalDeps
-  deriving (Show)
+  deriving (Show, Eq, Ord)
 
 
-data EffectsType = Cmd | Sub | Fx deriving (Show)
+data EffectsType = Cmd | Sub | Fx deriving (Show, Eq, Ord)
 
 
 data KContent =
-  KContent [KChunk] (Set.Set Global) deriving (Show)
+  KContent [KChunk] (Set.Set Global) deriving (Show, Eq, Ord)
 
 
 data KChunk
@@ -211,7 +211,7 @@ data KChunk
   | JsEnum Int
   | Debug
   | Prod
-  deriving (Show)
+  deriving (Show, Eq, Ord)
 
 
 

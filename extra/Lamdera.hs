@@ -39,6 +39,7 @@ module Lamdera
   , readUtf8Text
   , writeUtf8
   , writeUtf8Handle
+  , writeUtf8Root
   , Dir.doesFileExist
   , remove
   , rmdir
@@ -49,6 +50,7 @@ module Lamdera
   , writeLineIfMissing
   , touch
   , lamderaHashesPath
+  , lamderaEnvModePath
   , lamderaExternalWarningsPath
   , lamderaBackendDevSnapshotPath
   , getProjectRoot
@@ -59,6 +61,8 @@ module Lamdera
   , show_
   , sleep
   , getVersion
+  , getEnvMode
+  , setEnvMode
   )
   where
 
@@ -154,13 +158,20 @@ dt msg value =
   unsafePerformIO $ do
     debugM <- Env.lookupEnv "LDEBUG"
     case debugM of
-      Just _ -> pure $ DT.trace (msg ++ ":" ++ show value) value
+      Just _ -> do
+        let s = show value
+
+        if Prelude.length s > 10000
+          then
+            pure $ DT.trace (msg ++ ": ❌SKIPPED display, value show > 10,000 chars, here's a clip:\n" <> (Prelude.take 1000 s)) value
+          else
+            pure $ DT.trace (msg ++ ":" ++ show value) value
       Nothing -> pure value
 
 debugTrace :: Show a => String -> a -> a
 debugTrace = dt
 
-debugNote :: Text -> a -> a
+debugNote :: Show a => Text -> a -> a
 debugNote msg value =
   unsafePerformIO $ do
     debugM <- Env.lookupEnv "LDEBUG"
@@ -360,10 +371,19 @@ formatHaskellValue label v =
 
 hindentPrintValue :: Show a => Text -> a -> IO a
 hindentPrintValue label v = do
-  (exit, stdout, stderr) <- System.Process.readProcessWithExitCode "hindent" [] (Text.Show.Unicode.ushow v)
+  let
+    str = Text.Show.Unicode.ushow v
+    input =
+      if Prelude.length str > 10000 then
+        "err \"hindentPrintValue value was > 10,000 - skipping\" "
+      else
+        str
+
+  (exit, stdout, stderr) <- System.Process.readProcessWithExitCode "hindent" [] input
   _ <- putStrLn $
     "----------------------------------------------------------------------------------------------------------------"
       <> T.unpack label
+      <> "\n"
       <> stdout
 
   pure v
@@ -390,6 +410,13 @@ writeUtf8Handle :: IO.Handle -> Text -> IO ()
 writeUtf8Handle handle content = do
   IO.hSetEncoding handle IO.utf8
   BS.hPut handle (Text.encodeUtf8 content)
+
+
+-- Copied from File.IO due to cyclic imports and adjusted for Text
+writeUtf8Root :: FilePath -> Text -> IO ()
+writeUtf8Root filePath content = do
+  root <- getProjectRoot
+  writeUtf8 (root </> filePath) content
 
 
 remove :: FilePath -> IO ()
@@ -493,6 +520,11 @@ lamderaHashesPath root =
   root </> "lamdera-stuff" </> ".lamdera-hashes"
 
 
+lamderaEnvModePath :: FilePath -> FilePath
+lamderaEnvModePath root =
+  root </> "lamdera-stuff" </> ".lamdera-mode"
+
+
 lamderaExternalWarningsPath :: FilePath -> FilePath
 lamderaExternalWarningsPath root =
   root </> "lamdera-stuff" </> ".lamdera-external-warnings"
@@ -567,3 +599,22 @@ getVersion filename =
     & Prelude.drop 1 -- Drop the 'V'
     & Prelude.takeWhile (\i -> i /= '.')
     & Text.Read.readMaybe
+
+
+data Env = Production | Staging | Development
+  deriving (Show)
+
+-- Used for Env.mode value injection
+getEnvMode = do
+  root <- getProjectRoot
+  modeString <- readUtf8Text (lamderaEnvModePath root)
+  debug $ show $ "[mode] " <> show_ modeString
+  pure $
+    case modeString of
+      Just "Production" -> Production
+      Just "Staging" -> Staging
+      Just "Development" -> Development
+      _ -> Development
+
+setEnvMode root mode = do
+  writeUtf8 (lamderaEnvModePath root) $ mode
