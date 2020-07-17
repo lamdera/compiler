@@ -4,7 +4,6 @@
 
 module Lamdera.Check where
 
-
 import Prelude hiding (init)
 import Control.Monad.Except (catchError, liftIO)
 import qualified Data.Map as Map
@@ -62,6 +61,7 @@ import qualified Reporting.Report as Report
 -- This file itself
 import Lamdera
 import qualified Lamdera.Evergreen
+import qualified Lamdera.Project
 import Lamdera.Generated (VersionInfo(..), createLamderaGenerated, vinfoVersion, getLastLocalTypeChangeVersion)
 import qualified File.IO as IO
 import qualified Data.List as List
@@ -90,8 +90,9 @@ run () () = do
   forceNotProd <- liftIO $ Env.lookupEnv "NOTPROD"
   inDebug <- Lamdera.isDebug
 
-  let inProduction = (appNameEnvM /= Nothing && forceNotProd == Nothing) -- @TODO better isProd check...
-      isHoistRebuild = (hoistRebuild /= Nothing)
+  inProduction <- Lamdera.Project.inProduction
+
+  let isHoistRebuild = (hoistRebuild /= Nothing)
       forceVersion = fromMaybe (-1) $
         case forceVersionM of
           Just fv -> Text.Read.readMaybe fv
@@ -111,13 +112,13 @@ run () () = do
     liftIO $ putStrLn "───> Checking project compiles..."
     checkUserProjectCompiles summary root
 
-    lamderaRemotes <- liftIO getLamderaRemotes
-    onlyWhen (lamderaRemotes == [] && appNameEnvM == Nothing) lamderaThrowUnknownApp
+    lamderaRemotes <- liftIO Lamdera.Project.getLamderaRemotes
+    onlyWhen (lamderaRemotes == [] && appNameEnvM == Nothing) Lamdera.Project.lamderaThrowUnknownApp
     -- Prior `onlyWhen` guards against situation where no name is determinable
-    let appName = certainAppName lamderaRemotes appNameEnvM
+    let appName = Lamdera.Project.certainAppName lamderaRemotes appNameEnvM
 
     liftIO $ putStrLn "───> Checking config..."
-    checkUserConfig appName
+    Lamdera.Secrets.checkUserConfig appName
 
     liftIO $ putStrLn "───> Checking Evergreen migrations..."
 
@@ -151,7 +152,7 @@ run () () = do
                   -- See commented out code at bottom re prior "assume version when offline"
                   Task.throw $ Exit.Lamdera
                     $ Help.report "ERROR" Nothing
-                      ("I normally check for production info here but I wasn't able to.")
+                      ("I normally check for production info here but the request failed.")
                       [ D.reflow $ "Please check your connection and try again, or contact support."]
 
     let
@@ -425,25 +426,6 @@ snapshotCurrentTypesTo summary root version = do
   pure ""
 
 
-getLamderaRemotes = do
-  gitRemotes <- readProcess "git" ["remote", "-v"] ""
-  gitRemotes
-    & T.pack
-    & T.splitOn "\n"
-    & filter (textContains "apps.lamdera.com")
-    & filter (textContains "(push)")
-    & pure
-
-
-lamderaThrowUnknownApp =
-  Task.throw $ Exit.Lamdera
-    $ Help.report "UNKNOWN APP" (Just "git remote -v")
-      ("I cannot figure out which Lamdera app this repository belongs to!")
-      ([ D.reflow "I normally look for a git remote called 'lamdera' but did not find one."
-       , D.reflow "Did you maybe forget to add the lamdera remote for your app as listed on the Dashboard?"
-       , D.reflow "See <https://dashboard.lamdera.app/docs/deploying> for more info."
-       ]
-      )
 
 
 lamderaThrowUnimplementedMigration nextMigrationPath formattedChangedTypes prodVersion nextMigrationPathBare = do
@@ -455,22 +437,6 @@ lamderaThrowUnimplementedMigration nextMigrationPath formattedChangedTypes prodV
       , D.reflow $ nextMigrationPath
       , D.fillSep ["See",D.cyan ("<https://dashboard.lamdera.app/docs/evergreen>"),"for more info."]
       ]
-
-
-
-certainAppName :: [Text] -> Maybe String -> Text
-certainAppName lamderaRemotes appNameEnvM =
-  case appNameEnvM of
-    Just appNameEnv -> T.pack appNameEnv
-    _ ->
-      List.head lamderaRemotes
-        & T.splitOn ":"
-        & (\l ->
-            case l of
-              f:second:_ -> second
-          )
-        & T.splitOn "."
-        & List.head
 
 
 
@@ -510,7 +476,7 @@ fetchProductionInfo appName useLocal =
 
             Left jsonProblem ->
               -- @TODO fix this
-              return $ Left $ E.BadJson "github.json" jsonProblem
+              return $ Left $ E.BadJson "Lamdera production info" jsonProblem
 
 
 fetchLocalTypes :: FilePath -> Task.Task [String]
@@ -1080,84 +1046,3 @@ temporaryCheckOldTypesNeedingMigration inProduction root = do
 
       else
         genericExit "Okay, I did not migrate."
-
-
-
-checkUserConfig appName = do
-  -- @TODO skip when offline?
-
-  prodConfigItems <- Lamdera.Secrets.fetchAppConfigItems appName True
-  localConfigItems <- Lamdera.Secrets.readAppConfigUses
-
-  -- Alert of any usages that don't have defined values
-  let
-    prodConfigMap = prodConfigItems & fmap (\v@(e1,e2,e3,e4) -> (e1, v) ) & Map.fromList
-
-    missingConfigs =
-      localConfigItems
-        & filter (\(module_, expression, config) ->
-            case Map.lookup (T.unpack config) prodConfigMap of
-              Just x ->
-                -- Exists in prod, drop
-                False
-              Nothing ->
-                -- Missing in prod, keep
-                True
-        )
-
-    secretBreakingConfigs =
-      localConfigItems
-        & filter (\(module_, expression, config) ->
-            case Map.lookup (T.unpack config) prodConfigMap of
-              Just (name_, value_, used_, secret) ->
-                if secret then
-                  -- Exists in prod and is secret, should not be usable
-                  True
-                else
-                  -- Exists in prod and not secret, ignore
-                  False
-              Nothing ->
-                -- Missing in prod, ignore
-                False
-        )
-
-
-  onlyWhen (length missingConfigs > 0) $ do
-    let
-      missingFormatted =
-        missingConfigs
-          & fmap (\(module_, expr, config) ->
-              -- D.fromText $
-              D.indent 4 $ D.fillSep [D.yellow $ D.fromText config , "in" , D.fromText $ module_ <> "." <> expr]
-            )
-          -- & D.stack
-          -- & T.intercalate "\n"
-
-    Task.throw $ Exit.Lamdera
-      $ Help.report "MISSING PRODUCTION CONFIG" (Nothing)
-        ("The following Env.elm config values are used but have no production value set:")
-        ([ D.vcat missingFormatted
-         , D.reflow "I need you to set a production value here before I can deploy:"
-         , D.reflow $ "<https://dashboard.lamdera.app/app/" <> T.unpack appName <> ">"
-         , D.reflow "See <https://dashboard.lamdera.app/docs/secrets> more info."
-         ]
-        )
-
-  -- Alert of any Frontend usages of secret config
-  onlyWhen (length secretBreakingConfigs > 0) $ do
-    let
-      missingFormatted =
-        secretBreakingConfigs
-          & fmap (\(module_, expr, config) ->
-              D.indent 4 $ D.fillSep [D.yellow $ D.fromText config , "in" , D.fromText $ module_ <> "." <> expr]
-            )
-
-    Task.throw $ Exit.Lamdera
-      $ Help.report "MISSING PRODUCTION CONFIG" (Nothing)
-        ("These Frontend functions are trying to use secret config values:")
-        ([ D.vcat missingFormatted
-         , D.reflow "You must either remove these uses, or make the config public here:"
-         , D.reflow $ "<https://dashboard.lamdera.app/app/" <> T.unpack appName <> ">"
-         , D.reflow "See <https://dashboard.lamdera.app/docs/secrets> more info."
-         ]
-        )

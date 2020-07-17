@@ -21,7 +21,7 @@ import qualified Data.ByteString.Lazy as BSL
 import Lamdera
 import EasyTest
 import qualified Init
-import qualified Check
+import qualified Lamdera.Check
 import qualified Lamdera.Secrets
 
 {-| For quick and general local development testing via `stack ghci` as TestLamdera.check -}
@@ -207,7 +207,7 @@ checkWithParams projectPath appName = do
 
   Dir.withCurrentDirectory projectPath $
     do
-        Check.run () ()
+        Lamdera.Check.run () ()
 
   rm (projectPath ++ "/src/LBR.elm")
   rm (projectPath ++ "/src/LFR.elm")
@@ -236,7 +236,7 @@ checkWithParamsNoDebug version projectPath appName = do
   cp "/Users/mario/lamdera/runtime/src/RPC.elm" (projectPath ++ "/src/RPC.elm")
   cp "/Users/mario/lamdera/runtime/src/LamderaHelpers.elm" (projectPath ++ "/src/LamderaHelpers.elm")
 
-  Dir.withCurrentDirectory projectPath $ Check.run () ()
+  Dir.withCurrentDirectory projectPath $ Lamdera.Check.run () ()
 
   rm (projectPath ++ "/src/LBR.elm")
   rm (projectPath ++ "/src/LFR.elm")

@@ -27,8 +27,8 @@ import qualified Install
 import qualified Make
 import qualified Publish
 import qualified Repl
-import qualified Check
-import qualified Deploy
+import qualified Lamdera.Check
+import qualified Lamdera.Deploy
 
 import Lamdera
 
@@ -397,7 +397,7 @@ check =
         "It will query the production environment and supply\
         \ information about the next version and required migrations."
   in
-  Interface "check" (Common summary) details example noArgs noFlags Check.run
+  Interface "check" (Common summary) details example noArgs noFlags Lamdera.Check.run
 
 
 deploy :: Interface
@@ -415,4 +415,4 @@ deploy =
         \ information about the next version and required migrations, \
         \ and then attempt to deploy."
   in
-  Interface "deploy" (Common summary) details example noArgs noFlags Deploy.run
+  Interface "deploy" (Common summary) details example noArgs noFlags Lamdera.Deploy.run

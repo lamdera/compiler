@@ -124,11 +124,12 @@ generateMonolith
   -> Obj.Graph
   -> [Module.Raw]
   -> Task.Task ()
-generateMonolith mode maybeOutput (Summary.Summary _ project _ _ _) graph rootNames =
+generateMonolith mode maybeOutput (Summary.Summary _ project _ _ _) graph_ rootNames =
   do  let pkg = Project.getName project
       let roots = map (Module.Canonical pkg) rootNames
 
-      liftIO $ Lamdera.Secrets.writeUsage rootNames graph
+      liftIO $ Lamdera.Secrets.writeUsage rootNames graph_
+      graph <- liftIO $ Lamdera.Secrets.injectConfig graph_
 
       case Obj.generate mode graph roots of -- this is where js is generated
         Obj.None ->

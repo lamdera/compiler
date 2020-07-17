@@ -236,6 +236,7 @@ Executable elmx
         Lamdera.Check
         Lamdera.Deploy
         Lamdera.Live
+        Lamdera.Project
         Lamdera.TypeHash
         Lamdera.Types
         Lamdera.Evergreen

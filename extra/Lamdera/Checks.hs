@@ -75,7 +75,10 @@ runChecks = do
 writeDefaultImplementations = do
   root <- getProjectRoot
   writeLineIfMissing "lamdera-stuff" (root </> ".gitignore")
-  defaultImplementations & mapM (\(filename, implementation) -> writeUtf8 (root </> filename) implementation)
+  defaultImplementations
+    & mapM (\(filename, implementation) ->
+        writeUtf8 (root </> filename) implementation
+      )
 
 
 checkMissingFiles :: [FilePath] -> IO [FilePath]

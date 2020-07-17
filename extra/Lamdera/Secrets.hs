@@ -12,6 +12,7 @@ import qualified Data.Set as Set
 
 import qualified Data.Map as Map
 import qualified Data.Set as Set
+import Data.Maybe (fromMaybe)
 
 import qualified AST.Optimized as Opt
 import qualified AST.Module.Name as ModuleName
@@ -22,6 +23,7 @@ import Prelude hiding ((||), any)
 import qualified Prelude
 
 import Lamdera
+import qualified Lamdera.Project
 
 -- Querying
 import qualified Data.Text as T
@@ -36,8 +38,13 @@ import qualified Reporting.Exit.Http as E
 import qualified Data.ByteString.Lazy as LBS
 import qualified Reporting.Task.Http as Http
 import qualified Data.ByteString.Builder as BS
-
 import System.FilePath ((</>))
+
+-- Check + Errors
+import qualified Reporting.Doc as D
+import qualified Reporting.Exit.Help as Help
+import qualified Reporting.Exit as Exit
+import qualified Reporting.Progress as Progress
 
 writeUsage rootNames graph = do
   let
@@ -78,6 +85,15 @@ readAppConfigUses =
     beConfig <- readUtf8Text $ root </> "lamdera-stuff/.lamdera-be-config"
 
     pure $ extract feConfig ++ extract beConfig
+
+
+readAppFrontendConfigUses :: Task.Task [(Text, Text, Text)]
+readAppFrontendConfigUses =
+  liftIO $ do
+    root <- getProjectRoot
+    feConfig <- readUtf8Text $ root </> "lamdera-stuff/.lamdera-fe-config"
+
+    pure $ extract feConfig
 
 
 extract rawConfig = do
@@ -311,7 +327,7 @@ any fn things = foldl Set.union Set.empty (fmap fn things)
 
 
 
-fetchAppConfigItems :: Text -> Bool -> Task.Task [(String, String, Bool, Bool)]
+fetchAppConfigItems :: Text -> Bool -> Task.Task [(Text, Text, Bool, Bool)]
 fetchAppConfigItems appName useLocal =
   let
     endpoint =
@@ -332,8 +348,8 @@ fetchAppConfigItems appName useLocal =
     decoder =
       D.list $
         D.succeed (,,,)
-          & required "name" D.string
-          & required "value" D.string
+          & required "name" D.text
+          & required "value" D.text
           & required "used" D.bool
           & required "secret" D.bool
   in
@@ -382,3 +398,139 @@ httpPostJson manager request body =
       , Client.requestBody = Client.RequestBodyLBS $ BS.toLazyByteString $ E.encode body
       })
     manager
+
+
+checkUserConfig appName = do
+  -- @TODO skip when offline?
+
+  prodConfigItems <- Lamdera.Secrets.fetchAppConfigItems appName True
+  localConfigItems <- Lamdera.Secrets.readAppConfigUses
+  localFrontendConfigItems <- Lamdera.Secrets.readAppFrontendConfigUses
+
+  -- Alert of any usages that don't have defined values
+  let
+    prodConfigMap = prodConfigItems & fmap (\v@(e1,e2,e3,e4) -> (e1, v) ) & Map.fromList
+
+    missingConfigs =
+      localConfigItems
+        & filter (\(module_, expression, config) ->
+            case Map.lookup config prodConfigMap of
+              Just x ->
+                -- Exists in prod, drop
+                False
+              Nothing ->
+                -- Missing in prod, keep
+                True
+        )
+
+    secretBreakingConfigs =
+      localFrontendConfigItems
+        & filter (\(module_, expression, config) ->
+            case Map.lookup config prodConfigMap of
+              Just (name_, value_, used_, secret) ->
+                if secret then
+                  -- Exists in prod and is secret, should not be usable
+                  True
+                else
+                  -- Exists in prod and not secret, ignore
+                  False
+              Nothing ->
+                -- Missing in prod, ignore
+                False
+        )
+
+
+  onlyWhen (length missingConfigs > 0) $ do
+    let
+      missingFormatted =
+        missingConfigs
+          & fmap (\(module_, expr, config) ->
+              D.indent 4 $ D.fillSep [D.yellow $ D.fromText config , "in" , D.fromText $ module_ <> "." <> expr]
+            )
+
+    Task.throw $ Exit.Lamdera
+      $ Help.report "MISSING PRODUCTION CONFIG" (Nothing)
+        ("The following Env.elm config values are used but have no production value set:")
+        ([ D.vcat missingFormatted
+         , D.reflow "I need you to set a production value here before I can deploy:"
+         , D.reflow $ "<https://dashboard.lamdera.app/app/" <> T.unpack appName <> ">"
+         , D.reflow "See <https://dashboard.lamdera.app/docs/secrets> more info."
+         ]
+        )
+
+  -- Alert of any Frontend usages of secret config
+  onlyWhen (length secretBreakingConfigs > 0) $ do
+    let
+      missingFormatted =
+        secretBreakingConfigs
+          & fmap (\(module_, expr, config) ->
+              D.indent 4 $ D.fillSep [D.yellow $ D.fromText config , "in" , D.fromText $ module_ <> "." <> expr]
+            )
+
+    Task.throw $ Exit.Lamdera
+      $ Help.report "MISSING PRODUCTION CONFIG" (Nothing)
+        ("These frontend functions are trying to use secret config values:")
+        ([ D.vcat missingFormatted
+         , D.reflow "You must either remove these uses, or make the config public here:"
+         , D.reflow $ "<https://dashboard.lamdera.app/app/" <> T.unpack appName <> ">"
+         , D.reflow "See <https://dashboard.lamdera.app/docs/secrets> more info."
+         ]
+        )
+
+
+injectConfig graph = do
+
+  inProduction <- Lamdera.Project.inProduction
+
+  if inProduction
+    then do
+
+      appName <- Lamdera.Project.maybeAppName
+
+      case appName of
+        Nothing -> do
+          debug "❌ injectConfig: No name set, skipping"
+          -- No app name set, just return the graph as-is for now.
+          pure $ graph
+
+        Just appName -> do
+
+          prodConfigItems <- Task.try Progress.silentReporter $ fetchAppConfigItems appName True
+
+          let
+            prodConfigMap =
+              prodConfigItems
+                & fromMaybe []
+                & fmap (\v@(e1,e2,e3,e4) -> (e1, v) )
+                & Map.fromList
+
+          pure $
+            graph { Obj._nodes =
+              Obj._nodes graph
+                & Map.mapWithKey (\k a ->
+                  case k of
+                    Global (Canonical (Pkg.Name "author" "project") (N.Name "Env")) (N.Name name_) ->
+                      -- True
+                      case a of
+                        Define (Str t) gDeps ->
+                          case Map.lookup name_ prodConfigMap of
+                            Just (name, value, used, secret) -> do
+                              let !_ = debugNote ("Injecting prod value for Env." <> name) value
+                              -- Exists in prod, drop
+                              Define (Str value) gDeps
+
+                            Nothing -> do
+                              let !_ = debugHaskell "impossible missing config item" (t, prodConfigMap)
+                              -- Missing in prod, keep
+                              -- Define (Str "MISSING-IMPOSSIBLE") gDeps
+                              a
+
+                        _ ->
+                          a
+
+                    _ ->
+                      a
+                )
+            }
+    else
+      pure graph
