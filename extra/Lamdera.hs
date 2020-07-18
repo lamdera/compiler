@@ -416,6 +416,7 @@ writeUtf8Handle handle content = do
 writeUtf8Root :: FilePath -> Text -> IO ()
 writeUtf8Root filePath content = do
   root <- getProjectRoot
+  debug_ $ "writeUtf8: " ++ show (root </> filePath)
   writeUtf8 (root </> filePath) content
 
 
@@ -498,15 +499,18 @@ touch filepath = do
       -- it exists and write an empty one instead in that case
       exists_ <- Dir.doesFileExist filepath
       if exists_
-        then
+        then do
+          Lamdera.debug $ "[touch] " <> "copy /b " <> filepath <> " +,,"
           System.Process.callCommand $ "copy /b " <> filepath <> " +,,"
         else
           writeUtf8 filepath ""
 
-    "darwin" ->
+    "darwin" -> do
+      Lamdera.debug $ "[touch] " <> "touch " ++ filepath
       System.Process.callCommand $ "touch " ++ filepath
 
-    "linux" ->
+    "linux" -> do
+      Lamdera.debug $ "[touch] " <> "touch " ++ filepath
       System.Process.callCommand $ "touch " ++ filepath
 
     _ -> do
