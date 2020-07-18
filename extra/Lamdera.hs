@@ -102,6 +102,8 @@ import System.FilePath.Find (always, directory, extension, fileName, find, (&&?)
 import Control.Concurrent (threadDelay)
 import Text.Read (readMaybe)
 
+import qualified System.PosixCompat.Files
+
 -- Vendored from File.IO due to recursion errors
 import qualified System.IO as IO
 import qualified System.IO.Error as Error
@@ -492,31 +494,7 @@ writeLineIfMissing line filename = do
 
 touch :: FilePath -> IO ()
 touch filepath = do
-  createDirIfMissing filepath
-  case ostype of
-    "mingw32" -> do
-      -- Windows doesn't create the file with this method, so need to check if
-      -- it exists and write an empty one instead in that case
-      exists_ <- Dir.doesFileExist filepath
-      if exists_
-        then do
-          Lamdera.debug $ "[touch] " <> "copy /b " <> filepath <> " +,,"
-          System.Process.callCommand $ "copy /b " <> filepath <> " +,,"
-        else
-          writeUtf8 filepath ""
-
-    "darwin" -> do
-      Lamdera.debug $ "[touch] " <> "touch " ++ filepath
-      System.Process.callCommand $ "touch " ++ filepath
-
-    "linux" -> do
-      Lamdera.debug $ "[touch] " <> "touch " ++ filepath
-      System.Process.callCommand $ "touch " ++ filepath
-
-    _ -> do
-      -- Default to trying touch...
-      putStrLn $ "ERROR: please report: skipping touch on unknown OSTYPE: " <> show ostype
-      pure ()
+  System.PosixCompat.Files.touchFile filepath
 
 
 lamderaHashesPath :: FilePath -> FilePath

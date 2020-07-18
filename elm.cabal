@@ -313,6 +313,7 @@ Executable elmx
         natural-sort,
         listsafe,
         filemanip,
+        unix-compat,
         -- Live
         websockets,
         websockets-snap,
