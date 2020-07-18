@@ -443,3 +443,9 @@ error500 s =
   do  modifyResponse $ setResponseStatus 500 "Internal server error"
       modifyResponse $ setContentType "text/html; charset=utf-8"
       writeBuilder $ "error:" <> s
+
+error503 :: B.Builder -> Snap ()
+error503 s =
+  do  modifyResponse $ setResponseStatus 503 "Service Unavailable"
+      modifyResponse $ setContentType "text/html; charset=utf-8"
+      writeBuilder $ "error:" <> s
