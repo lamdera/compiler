@@ -551,8 +551,7 @@ canonicalToDiffableType interfaces recursionMap canonical tvarMap =
           DError $ "Error: tvar lookup failed, please report this issue: cannot find "
             <> N.toText name
             <> " in tvarMap "
-            -- <>  (T.pack $ show tvarMap)
-            <>  (hindentFormatValue tvarMap)
+            <>  (T.pack $ show tvarMap)
 
     Can.TLambda _ _ ->
       DError $ "must not contain functions"

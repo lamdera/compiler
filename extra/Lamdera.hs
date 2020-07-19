@@ -170,8 +170,10 @@ dt msg value =
             pure $ DT.trace (msg ++ ":" ++ show value) value
       Nothing -> pure value
 
+
 debugTrace :: Show a => String -> a -> a
 debugTrace = dt
+
 
 debugNote :: Show a => Text -> a -> a
 debugNote msg value =

@@ -65,15 +65,16 @@ writeUsage rootNames graph = do
         & LBS.toStrict
         & T.decodeUtf8
 
-    !_ = debugHaskell ("following exprs in " <> show_ rootNames <> " use Env.elm values") usages
+    -- !_ = debugHaskell ("following exprs in " <> show_ rootNames <> " use Env.elm values") usages
 
-  if rootNames == [N.Name "Frontend"]
-    then
+  case rootNames of
+    [N.Name "Frontend"] ->
       writeUtf8Root "lamdera-stuff/.lamdera-fe-config" usages
-    else if rootNames == [N.Name "Backend"]
-      then
-        writeUtf8Root "lamdera-stuff/.lamdera-be-config" usages
-    else
+
+    [N.Name "Backend"] ->
+      writeUtf8Root "lamdera-stuff/.lamdera-be-config" usages
+
+    _ ->
       pure ()
 
 
@@ -116,13 +117,13 @@ extract rawConfig = do
             )
             & concat
 
-
-
-        Left jsonProblem ->
+        Left jsonProblem -> do
+          let !_ = debugHaskell "❌ config extraction failed" jsonProblem
           []
           -- return $ Left $ E.BadJson endpoint jsonProblem
 
-    Nothing ->
+    Nothing -> do
+      let !_ = debugNote "❌ config read failed" ""
       []
 
 
@@ -336,7 +337,7 @@ fetchAppConfigItems appName useLocal =
           "http://localhost:8000/_r/configItemsJson"
           -- "https://" <> T.unpack appName <> ".lamdera.test/_i"
         else
-          "https://" <> T.unpack appName <> ".lamdera.app/_i"
+          "https://" <> T.unpack appName <> ".lamdera.app/_r/configItemsJson"
 
     body =
       E.object
@@ -469,9 +470,9 @@ checkUserConfig appName = do
 
     Task.throw $ Exit.Lamdera
       $ Help.report "MISSING PRODUCTION CONFIG" (Nothing)
-        ("These frontend functions are trying to use secret config values:")
+        ("These secret config values are being exposed by frontend code!")
         ([ D.vcat missingFormatted
-         , D.reflow "You must either remove these uses, or make the config public here:"
+         , D.reflow "Remove these uses, or make config items public here:"
          , D.reflow $ "<https://dashboard.lamdera.app/app/" <> T.unpack appName <> ">"
          , D.reflow "See <https://dashboard.lamdera.app/docs/secrets> more info."
          ]
