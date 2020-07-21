@@ -41,7 +41,7 @@ import qualified AST.Valid as Valid
 import qualified Elm.Compiler.Module as Module
 import qualified Reporting.Result as Result
 
-import qualified Reporting.Error.LamderaError as LamderaError
+import qualified Lamdera.Error
 import qualified Reporting.Doc as D
 import qualified Reporting.Error as Error
 
@@ -129,7 +129,7 @@ maybeGenHashes pkg module_@(Valid.Module name _ _ _ _ _ _ _ _ _) interfaces = do
           else
             []
       in
-      Result.throw $ Error.Lamdera $ LamderaError.LamderaGenericError $
+      Result.throw $ Error.Lamdera $ Lamdera.Error.LamderaGenericError $
         D.stack
           ([ D.reflow $ "I ran into the following problems when checking Lamdera core types:"
           -- , D.fillSep [ D.yellow "WARNING:","Confirm","hoist!" ]

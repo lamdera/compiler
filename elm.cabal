@@ -249,8 +249,8 @@ Executable elmx
         Lamdera.Secrets
         Wire.Source
         Wire.Source2
-        Reporting.Exit.Check
-        Reporting.Error.LamderaError
+        Lamdera.Exit
+        Lamdera.Error
 
         SocketServer
 

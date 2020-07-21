@@ -1,25 +1,18 @@
 {-# OPTIONS_GHC -Wall #-}
 {-# LANGUAGE OverloadedStrings #-}
-module Reporting.Error.LamderaError
+module Lamdera.Error
   ( Error(..)
   , toReport
   )
   where
 
 
--- import qualified AST.Canonical as Can
--- import qualified Elm.Name as N
 import qualified Reporting.Doc as D
--- import qualified Reporting.Error.Canonicalize as E
 import qualified Reporting.Region as R
 import qualified Reporting.Render.Code as Code
--- import qualified Reporting.Render.Type as RT
 import qualified Reporting.Render.Type.Localizer as L
 import qualified Reporting.Report as Report
 
--- import qualified Reporting.Exit.Help as Help
-
--- import Data.Text (Text)
 
 -- ERROR
 

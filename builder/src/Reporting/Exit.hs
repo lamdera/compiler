@@ -23,8 +23,8 @@ import qualified Reporting.Exit.Make as Make
 import qualified Reporting.Exit.Init as Init
 import qualified Reporting.Exit.Install as Install
 import qualified Reporting.Exit.Publish as Publish
-import qualified Reporting.Exit.Check as Check
 
+import qualified Lamdera.Exit
 
 
 -- ALL POSSIBLE ERRORS
@@ -44,7 +44,7 @@ data Exit
   | Install Install.Exit
   | Publish Publish.Exit
   | BadHttp String Http.Exit
-  | Check Check.Exit
+  | Check Lamdera.Exit.Exit
   | Lamdera Help.Report
   deriving (Show)
 

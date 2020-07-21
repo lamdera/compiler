@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Reporting.Exit.Check
+module Lamdera.Exit
   ( Exit(..)
   , toReport
   )

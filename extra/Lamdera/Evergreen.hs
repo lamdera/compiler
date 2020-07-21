@@ -46,7 +46,6 @@ import qualified AST.Valid as Valid
 import qualified Elm.Compiler.Module as Module
 import qualified Reporting.Result as Result
 
-import qualified Reporting.Error.LamderaError as LamderaError
 import qualified Reporting.Doc as D
 import qualified Reporting.Error as Error
 

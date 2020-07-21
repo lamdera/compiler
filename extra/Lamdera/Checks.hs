@@ -9,7 +9,7 @@ import AST.Module.Name (Canonical(..))
 import qualified Type.Error as T
 import qualified Reporting.Task as Task
 import qualified Reporting.Exit as Exit
-import qualified Reporting.Error.LamderaError as LamderaError
+
 import qualified Reporting.Exit.Help as Help
 import qualified Reporting.Progress as Progress
 
