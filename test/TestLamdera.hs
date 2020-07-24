@@ -21,12 +21,13 @@ import qualified Data.ByteString.Lazy as BSL
 import Lamdera
 import EasyTest
 import qualified Init
+import qualified Lamdera.Login
 import qualified Lamdera.Check
 import qualified Lamdera.Secrets
 
 {-| For quick and general local development testing via `stack ghci` as TestLamdera.check -}
 check = do
-  checkWithParams "/Users/mario/lamdera/test/v1" "discord-bot-local"
+  checkWithParams "/Users/mario/lamdera/test/v1" "test-local"
   -- checkWithParams "/Users/mario/dev/lamdera-user-projects/beat-the-big-two" "beat-the-big-two"
   -- checkWithParams "/Users/mario/dev/projects/lamdera-dashboard" "dashboard"
   -- checkWithParams "/Users/mario/dev/projects/lamdera-mogee" "mogee"
@@ -327,3 +328,13 @@ testHttp = do
     res <- Lamdera.Secrets.fetchAppConfigItems "discord-bot-local" True
 
     liftIO $ putStrLn $ show res
+
+
+login = do
+  let project = "/Users/mario/lamdera/test/v1"
+  setEnv "LDEBUG" "1"
+  -- setEnv "LAMDERA_APP_NAME" "test-local"
+  Dir.withCurrentDirectory project $
+    Lamdera.Login.run () ()
+  unsetEnv "LDEBUG"
+  unsetEnv "LAMDERA_APP_NAME"

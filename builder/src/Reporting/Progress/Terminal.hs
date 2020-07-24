@@ -215,6 +215,7 @@ loopHelp chan progress state@(State total good bad) =
     -- Lamdera
     LamderaProgress thing ->
       do  Help.toStdout $ thing
+          hFlush stdout
           loop chan state
 
 

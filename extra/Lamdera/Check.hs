@@ -77,6 +77,15 @@ import qualified Elm.Project.Summary as Summary
 import qualified Text.Read
 import qualified Lamdera.Secrets
 
+progressPointer t = do
+  Task.report $ Progress.LamderaProgress $ D.fillSep [ D.fromText "───>", D.blue $ t <> "\n" ]
+
+progress t =
+  Task.report $ Progress.LamderaProgress $ D.reflow t
+
+progressDoc d =
+  Task.report $ Progress.LamderaProgress $ d
+
 
 run :: () -> () -> IO ()
 run () () = do
@@ -84,10 +93,10 @@ run () () = do
 
   reporter <- Terminal.create
 
-  appNameEnvM <- liftIO $ Env.lookupEnv "LAMDERA_APP_NAME"
-  hoistRebuild <- liftIO $ Env.lookupEnv "HOIST_REBUILD"
-  forceVersionM <- liftIO $ Env.lookupEnv "VERSION"
-  forceNotProd <- liftIO $ Env.lookupEnv "NOTPROD"
+  appNameEnvM <- Env.lookupEnv "LAMDERA_APP_NAME"
+  hoistRebuild <- Env.lookupEnv "HOIST_REBUILD"
+  forceVersionM <- Env.lookupEnv "VERSION"
+  forceNotProd <- Env.lookupEnv "NOTPROD"
   inDebug <- Lamdera.isDebug
 
   inProduction <- Lamdera.Project.inProduction
@@ -109,7 +118,7 @@ run () () = do
 
     temporaryCheckOldTypesNeedingMigration inProduction root
 
-    liftIO $ putStrLn "───> Checking project compiles..."
+    progressPointer "Checking project compiles..."
     checkUserProjectCompiles summary root
 
     lamderaRemotes <- liftIO Lamdera.Project.getLamderaRemotes
@@ -117,11 +126,10 @@ run () () = do
     -- Prior `onlyWhen` guards against situation where no name is determinable
     let appName = Lamdera.Project.certainAppName lamderaRemotes appNameEnvM
 
-    liftIO $ putStrLn "───> Checking config..."
+    progressPointer "Checking config..."
     Lamdera.Secrets.checkUserConfig appName
 
-    liftIO $ putStrLn "───> Checking Evergreen migrations..."
-
+    progressPointer  "Checking Evergreen migrations..."
     debug $ "app name:" ++ show appName
 
     localTypes <- fetchLocalTypes root
@@ -134,7 +142,7 @@ run () () = do
               genericExit "ERROR: Hoist rebuild got -1 for version, check your usage."
 
             else do
-              liftIO $ putStrLn $ "❗️Gen with forced version: " <> show forceVersion
+              progress $ "❗️Gen with forced version: " <> show forceVersion
               pure (forceVersion, localTypes)
 
         else do
@@ -211,7 +219,7 @@ run () () = do
 
         onlyWhen (not inProduction) $ possiblyShowExternalTypeWarnings
 
-        pDocLn $ D.green (D.reflow $ "It appears you're all set to deploy the first version of '" <> T.unpack appName <> "'!")
+        progressDoc $ D.green (D.reflow $ "It appears you're all set to deploy the first version of '" <> T.unpack appName <> "'!")
         liftIO $ putStrLn ""
 
       else do
@@ -879,7 +887,6 @@ writeLamderaGenerated :: FilePath -> Bool -> VersionInfo -> Task.Task ()
 writeLamderaGenerated root inProduction nextVersion =
   onlyWhen inProduction $ do
     gen <- liftIO $ Lamdera.Generated.createLamderaGenerated root nextVersion
-    -- liftIO $ putStrLn $ T.unpack gen
     liftIO $ writeUtf8 (root </> "src/LamderaGenerated.elm") gen
 
 

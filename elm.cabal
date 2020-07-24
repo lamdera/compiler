@@ -233,6 +233,7 @@ Executable elmx
 
         -- Lamdera:
         Lamdera
+        Lamdera.Login
         Lamdera.Check
         Lamdera.Deploy
         Lamdera.Live
@@ -247,6 +248,8 @@ Executable elmx
         Lamdera.Filewatch
         Lamdera.OldFeatureHelper
         Lamdera.Secrets
+        Lamdera.Task
+        Lamdera.Http
         Wire.Source
         Wire.Source2
         Lamdera.Exit

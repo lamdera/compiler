@@ -27,10 +27,11 @@ import qualified Install
 import qualified Make
 import qualified Publish
 import qualified Repl
-import qualified Lamdera.Check
-import qualified Lamdera.Deploy
 
 import Lamdera
+import qualified Lamdera.Login
+import qualified Lamdera.Check
+import qualified Lamdera.Deploy
 
 -- MAIN
 
@@ -381,6 +382,23 @@ reflow string =
 
 
 -- Lamdera
+
+login :: Interface
+login =
+  let
+    summary =
+      "Log in to the Lamdera CLI."
+
+    details =
+      "The `lamdera` command authenticates the Lamdera CLI."
+
+    example =
+      reflow
+        "It will open the Dashboard to authenticate you and use the\
+        \ established session for other CLI operations requiring Dashboard info."
+  in
+  Interface "login" (Common summary) details example noArgs noFlags Lamdera.Login.run
+
 
 check :: Interface
 check =

@@ -405,13 +405,7 @@ serveRpc (mClients, mLeader, mChan, beState) = do
                         )
                     ]
 
-              case D.parse "rpc-resp" id decoder (T.encodeUtf8 chanText) of
-                Right value ->
-                  pure $ writeBuilder value
-
-                Left jsonProblem -> do
-                  Lamdera.debugT $ "😢 rpc response decoding failed for " <> chanText
-                  pure $ writeBuilder $ B.byteString $ "rpc response decoding failed for " <> T.encodeUtf8 chanText
+              pure (D.parse "rpc-resp" id decoder (T.encodeUtf8 chanText), chanText)
 
             else
               loopRead
@@ -425,8 +419,19 @@ serveRpc (mClients, mLeader, mChan, beState) = do
       result <- liftIO $ timeout 2 $ loopRead
 
       case result of
-        Just builder -> do
-          builder
+        Just (result, chanText) ->
+          case result of
+            Right value ->
+              if textContains "\"error\":" chanText then
+                error400 (B.byteString $ T.encodeUtf8 chanText)
+              else
+                writeBuilder value
+
+            Left jsonProblem -> do
+              Lamdera.debugT $ "😢 rpc response decoding failed for " <> chanText
+              writeBuilder $ B.byteString $ "rpc response decoding failed for " <> T.encodeUtf8 chanText
+
+
         Nothing -> do
           Lamdera.debugT $ "⏰ RPC timed out for:" <> payload
           writeBuilder "error:timeout"
@@ -448,4 +453,11 @@ error503 :: B.Builder -> Snap ()
 error503 s =
   do  modifyResponse $ setResponseStatus 503 "Service Unavailable"
       modifyResponse $ setContentType "text/html; charset=utf-8"
-      writeBuilder $ "error:" <> s
+      writeBuilder $ "error: " <> s
+
+
+error400 :: B.Builder -> Snap ()
+error400 s =
+  do  modifyResponse $ setResponseStatus 400 "Bad Request"
+      modifyResponse $ setContentType "text/html; charset=utf-8"
+      writeBuilder $ "error: " <> s

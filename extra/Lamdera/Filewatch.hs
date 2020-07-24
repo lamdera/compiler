@@ -30,20 +30,13 @@ watch (mClients, mLeader, mChan, beState) =
       (const True) -- predicate
       (\e -> do
         let
-          shouldRefresh =
-            case e of
-              Added filename _ _ ->
-                not (List.isInfixOf ".git" filename) && not (List.isInfixOf "lamdera-stuff" filename)
-
-              Modified filename _ _ ->
-                not (List.isInfixOf ".git" filename) && not (List.isInfixOf "lamdera-stuff" filename)
-
-              Removed filename _ _ ->
-                not (List.isInfixOf ".git" filename) && not (List.isInfixOf "lamdera-stuff" filename)
-
-              Unknown filename _ _ ->
-                not (List.isInfixOf ".git" filename) && not (List.isInfixOf "lamdera-stuff" filename)
-
+          shouldRefresh = do
+            let check f = not (List.isInfixOf ".git" f) && not (List.isInfixOf "lamdera-stuff" f)
+            check $ case e of
+              Added f _ _ -> f
+              Modified f _ _ -> f
+              Removed f _ _ -> f
+              Unknown f _ _ -> f
 
         if shouldRefresh
           then do

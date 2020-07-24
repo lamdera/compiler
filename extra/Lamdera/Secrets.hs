@@ -45,6 +45,7 @@ import qualified Reporting.Doc as D
 import qualified Reporting.Exit.Help as Help
 import qualified Reporting.Exit as Exit
 import qualified Reporting.Progress as Progress
+import Lamdera.Http
 
 writeUsage rootNames graph = do
   let
@@ -364,6 +365,7 @@ fetchAppConfigItems appName useLocal =
               & T.unpack
             )
           response <- httpPostJson manager request body
+          debug $ "<--- " <> (T.unpack $ T.decodeUtf8 $ LBS.toStrict $ Client.responseBody response)
 
           let bytes = LBS.toStrict (Client.responseBody response)
           case D.parse endpoint id decoder bytes of
@@ -374,33 +376,8 @@ fetchAppConfigItems appName useLocal =
               return $ Left $ E.BadJson endpoint jsonProblem
 
 
-required :: Text -> D.Decoder e a -> D.Decoder e (a -> b) -> D.Decoder e b
-required key valDecoder decoder =
-    custom (D.field key valDecoder) decoder
 
-
-custom :: D.Decoder e a -> D.Decoder e (a -> b) -> D.Decoder e b
-custom d1 d2 =
-    D.map2 (\a_ fn_ -> fn_ a_) d1 d2
-
-
-jsonHeaders =
-  [ ( Http.hUserAgent, "lamdera-cli" )
-  , ( Http.hContentType, "application/json" )
-  , ( Http.hAccept, "application/json" )
-  ]
-
-
-httpPostJson manager request body =
-  Client.httpLbs
-    (request
-      { Client.requestHeaders = jsonHeaders
-      , Client.method = "POST"
-      , Client.requestBody = Client.RequestBodyLBS $ BS.toLazyByteString $ E.encode body
-      })
-    manager
-
-
+checkUserConfig :: Text -> Task.Task ()
 checkUserConfig appName = do
   -- @TODO skip when offline?
 

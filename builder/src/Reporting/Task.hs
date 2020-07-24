@@ -5,7 +5,7 @@ module Reporting.Task
   , run
   , throw
   , mapError
-  , Env
+  , Env(..)
   , getPackageCacheDir
   , getPackageCacheDirFor
   , report
@@ -15,6 +15,7 @@ module Reporting.Task
   , getSilentRunner
   , workerChan
   , runHttp
+  , initPool
   )
   where
 

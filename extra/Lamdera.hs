@@ -63,6 +63,7 @@ module Lamdera
   , getVersion
   , getEnvMode
   , setEnvMode
+  , openUrlInBrowser
   )
   where
 
@@ -602,3 +603,21 @@ getEnvMode = do
 
 setEnvMode root mode = do
   writeUtf8 (lamderaEnvModePath root) $ mode
+
+
+openUrlInBrowser :: Text -> IO ()
+openUrlInBrowser url = do
+  case ostype of
+    "mingw32" -> do
+      System.Process.callCommand $ "start " <> T.unpack url
+
+    "darwin" -> do
+      System.Process.callCommand $ "open " <> T.unpack url
+
+    "linux" -> do
+      System.Process.callCommand $ "xdg-open " <> T.unpack url
+
+    _ -> do
+      -- We have an unexpected system...
+      putStrLn $ "ERROR: please report: skipping url open on unknown OSTYPE: " <> show ostype
+      pure ()
