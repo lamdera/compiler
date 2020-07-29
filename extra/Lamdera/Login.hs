@@ -28,18 +28,66 @@ import qualified Reporting.Doc as D
 import Lamdera
 import qualified Lamdera.Project
 
+
 run :: () -> () -> IO ()
 run () () = do
   debug_ "Starting login..."
 
-  token <- UUID.toText <$> UUID.nextRandom
   inProduction <- Lamdera.Project.inProduction
   appName <- Lamdera.Project.maybeAppName
+
+  token <- do
+    elmHome <- PerUserCache.getElmHome
+    existingToken <- readUtf8Text (elmHome </> ".lamdera-cli")
+    newToken <- UUID.toText <$> UUID.nextRandom
+    case existingToken of
+      Just token -> do
+
+        apiSession <- fetchApiSession (appName & fromMaybe "test-local") token True
+
+        case apiSession of
+          Right "success" -> do
+            pure token
+
+          _ -> do
+            pDocLn $ D.fillSep ["───>", D.red "Existing token invalid, starting again"]
+            removeFile (elmHome </> ".lamdera-cli")
+            pure newToken
+
+      Nothing ->
+        pure newToken
 
   doUntil ((==) True) $
     checkApiLoop inProduction (appName & fromMaybe "test-local") token
 
   pure ()
+
+
+validateCliToken :: IO Text
+validateCliToken = do
+  appName <- Lamdera.Project.maybeAppName
+  elmHome <- PerUserCache.getElmHome
+  existingToken <- readUtf8Text (elmHome </> ".lamdera-cli")
+
+  case existingToken of
+    Just token -> do
+
+      apiSession <- fetchApiSession (appName & fromMaybe "test-local") token True
+
+      case apiSession of
+        Right "success" -> do
+          pure token
+
+        _ -> do
+          pDocLn $ D.fillSep ["───>", D.red "Existing token invalid, please run `lamdera login`"]
+          removeFile (elmHome </> ".lamdera-cli")
+          fail "Invalid token"
+
+    Nothing -> do
+      pDocLn $ D.fillSep ["───>", D.red "No CLI auth, please run `lamdera login`"]
+      fail "Invalid token"
+
+
 
 
 doUntil :: (a -> Bool) -> (IO a) -> IO a
@@ -51,8 +99,7 @@ doUntil check fn = do
 
 
 checkApiLoop inProduction appName token = do
-  let username = "mario@cofoundry.uk"
-  apiSession <- fetchApiSession appName token username True
+  apiSession <- fetchApiSession appName token True
   case apiSession of
     Right response ->
       case response of
@@ -90,8 +137,8 @@ checkApiLoop inProduction appName token = do
       pure True
 
 
-fetchApiSession :: Text -> Text -> Text -> Bool -> IO (Either Reporting.Exit.Exit Text)
-fetchApiSession appName token username useLocal =
+fetchApiSession :: Text -> Text -> Bool -> IO (Either Reporting.Exit.Exit Text)
+fetchApiSession appName token useLocal =
   let
     endpoint =
       if textContains "-local" appName && useLocal
@@ -102,11 +149,7 @@ fetchApiSession appName token username useLocal =
           "https://" <> T.unpack appName <> ".lamdera.app/_r/apiSessionJson"
 
     body =
-      E.object
-        -- @TODO this cannot be in source
-        [ ("token", E.text token)
-        , ("username", E.text username)
-        ]
+      E.object [ ("token", E.text token) ]
 
     decoder =
       D.text

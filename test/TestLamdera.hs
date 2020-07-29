@@ -5,6 +5,7 @@ module TestLamdera where
 import qualified Data.ByteString as BS
 import qualified System.Directory as Dir
 import System.FilePath ((</>))
+import Data.Text as T
 
 import qualified Elm.Project as Project
 import qualified Elm.Project.Summary as Summary
@@ -17,6 +18,7 @@ import System.Environment (setEnv, unsetEnv)
 import NeatInterpolation
 import Test.Main (captureProcessResult, withStdin)
 import qualified Data.ByteString.Lazy as BSL
+import qualified System.Environment as Env
 
 import Lamdera
 import EasyTest
@@ -322,12 +324,24 @@ testWire = do
         return ()
 
 
-testHttp = do
-  reporter <- Terminal.create
-  Task.run reporter $ do
-    res <- Lamdera.Secrets.fetchAppConfigItems "discord-bot-local" True
+config = do
+  let project = "/Users/mario/lamdera/test/v1"
+  Dir.withCurrentDirectory project $ do
+    reporter <- Terminal.create
+    setEnv "TOKEN" "a739477eb8bd2acbc251c246438906f4"
 
-    liftIO $ putStrLn $ show res
+    prodTokenM <- Env.lookupEnv "TOKEN"
+    Task.run reporter $ do
+
+      Lamdera.Secrets.checkUserConfig "test-local" (fmap T.pack prodTokenM)
+
+    unsetEnv "TOKEN"
+
+
+-- http =
+--   token <- liftIO $ Lamdera.Login.validateCliToken
+--   res <- Lamdera.Secrets.fetchAppConfigItems "discord-bot-local" token True
+--   liftIO $ putStrLn $ show res
 
 
 login = do

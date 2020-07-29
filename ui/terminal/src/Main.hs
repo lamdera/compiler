@@ -42,6 +42,7 @@ main =
   do  setLocaleEncoding utf8
       complex intro outro
         [ live
+        , login
         , check
         , deploy
         -- , reactor

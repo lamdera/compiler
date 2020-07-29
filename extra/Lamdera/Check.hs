@@ -98,6 +98,7 @@ run () () = do
   forceVersionM <- Env.lookupEnv "VERSION"
   forceNotProd <- Env.lookupEnv "NOTPROD"
   inDebug <- Lamdera.isDebug
+  prodTokenM <- Env.lookupEnv "TOKEN"
 
   inProduction <- Lamdera.Project.inProduction
 

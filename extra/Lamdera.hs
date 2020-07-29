@@ -44,6 +44,7 @@ module Lamdera
   , remove
   , rmdir
   , mkdir
+  , Dir.removeFile
   , safeListDirectory
   , copyFile
   , replaceInFile

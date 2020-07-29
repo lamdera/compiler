@@ -45,7 +45,9 @@ import qualified Reporting.Doc as D
 import qualified Reporting.Exit.Help as Help
 import qualified Reporting.Exit as Exit
 import qualified Reporting.Progress as Progress
+
 import Lamdera.Http
+import qualified Lamdera.Login
 
 writeUsage rootNames graph = do
   let
@@ -329,8 +331,8 @@ any fn things = foldl Set.union Set.empty (fmap fn things)
 
 
 
-fetchAppConfigItems :: Text -> Bool -> Task.Task [(Text, Text, Bool, Bool)]
-fetchAppConfigItems appName useLocal =
+fetchAppConfigItems :: Text -> Text -> Bool -> Task.Task [(Text, Text, Bool, Bool)]
+fetchAppConfigItems appName token useLocal = do
   let
     endpoint =
       if textContains "-local" appName && useLocal
@@ -342,8 +344,7 @@ fetchAppConfigItems appName useLocal =
 
     body =
       E.object
-        -- @TODO this cannot be in source
-        [ ("key", E.text "a739477eb8bd2acbc251c246438906f4")
+        [ ("key", E.text token)
         , ("appId", E.text appName)
         ]
 
@@ -354,34 +355,25 @@ fetchAppConfigItems appName useLocal =
           & required "value" D.text
           & required "used" D.bool
           & required "secret" D.bool
-  in
-    Http.run $ Http.anything endpoint $ \request manager ->
-      do  debug $ "HTTP POST " <> endpoint <> "\n---> " <> (
-            body
-              & E.encodeUgly
-              & BS.toLazyByteString
-              & LBS.toStrict
-              & T.decodeUtf8
-              & T.unpack
-            )
-          response <- httpPostJson manager request body
-          debug $ "<--- " <> (T.unpack $ T.decodeUtf8 $ LBS.toStrict $ Client.responseBody response)
 
-          let bytes = LBS.toStrict (Client.responseBody response)
-          case D.parse endpoint id decoder bytes of
-            Right value ->
-              return $ Right value
-
-            Left jsonProblem ->
-              return $ Left $ E.BadJson endpoint jsonProblem
+  Lamdera.Http.normalRpcJson body endpoint decoder
 
 
+checkUserConfig :: Text -> Maybe Text -> Task.Task ()
+checkUserConfig appName prodTokenM = do
 
-checkUserConfig :: Text -> Task.Task ()
-checkUserConfig appName = do
-  -- @TODO skip when offline?
+  token <-
+    case prodTokenM of
+      Just token ->
+        pure token
 
-  prodConfigItems <- Lamdera.Secrets.fetchAppConfigItems appName True
+      Nothing ->
+        -- Will throw if invalid token forcing user to auth first
+        liftIO $ Lamdera.Login.validateCliToken
+
+  debug $ "Checking with token: " <> T.unpack token
+
+  prodConfigItems <- Lamdera.Secrets.fetchAppConfigItems appName token True
   localConfigItems <- Lamdera.Secrets.readAppConfigUses
   localFrontendConfigItems <- Lamdera.Secrets.readAppFrontendConfigUses
 
@@ -473,7 +465,10 @@ injectConfig graph = do
 
         Just appName -> do
 
-          prodConfigItems <- Task.try Progress.silentReporter $ fetchAppConfigItems appName True
+          -- @TODO remove hardcoded token use ENV.TOKEN
+          let token = "a739477eb8bd2acbc251c246438906f4"
+
+          prodConfigItems <- Task.try Progress.silentReporter $ fetchAppConfigItems appName token True
 
           let
             prodConfigMap =
