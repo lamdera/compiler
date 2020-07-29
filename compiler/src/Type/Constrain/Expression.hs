@@ -7,7 +7,6 @@ module Type.Constrain.Expression
   )
   where
 
-
 import qualified Data.Map.Strict as Map
 
 import qualified AST.Canonical as Can
@@ -24,18 +23,8 @@ import qualified Type.Constrain.Pattern as Pattern
 import qualified Type.Instantiate as Instantiate
 import Type.Type as Type hiding (Descriptor(..))
 
-import qualified Debug.Trace as DT
-import Wire.PrettyPrint
-
-import Control.Lens.Plated (transform)
-import Data.Data
-import Control.Lens ((^..), to)
-import Control.Lens.Plated
-import Control.Lens.Prism
-import Data.Data.Lens
--- import Data.Witherable
-
 import Lamdera
+import qualified Lamdera.Constrain
 
 -- CONSTRAIN
 
@@ -49,18 +38,6 @@ import Lamdera
 --
 type RTV =
   Map.Map N.Name Type
-
-getFreevars t =
-  let
-    actualFreeVars :: Can.Type -> [N.Name]
-    actualFreeVars e =
-      let
-        fn (Can.TVar n) = Just n
-        fn _ = Nothing
-      in
-        e ^.. cosmos . to fn . _Just
-  in
-  Map.fromList $ fmap (\k -> (k, ())) (actualFreeVars t)
 
 
 constrain :: RTV -> Can.Expr -> Expected Type -> IO Constraint
@@ -76,35 +53,8 @@ constrain rtv (A.At region expression) expected =
       return CTrue
 
     Can.VarForeign (ModuleName.Canonical pkg modu) name annotation@(Can.Forall freevars t) ->
-      if pkg == Pkg.lamderaCore && modu == "Lamdera" && name == "sendToBackend" then
-        let
-          fn (Can.TVar "toBackend") = Can.TType (ModuleName.Canonical Pkg.dummyName "Types") "ToBackend" []
-          fn x = x
-        in
-          pure $ CForeign region name (Can.Forall freevars (transform fn t)) expected
-
-      else if pkg == Pkg.lamderaCore && modu == "Lamdera" && name == "sendToFrontend" then
-        let
-          fn (Can.TVar "toFrontend") = Can.TType (ModuleName.Canonical Pkg.dummyName "Types") "ToFrontend" []
-          fn x = x
-        in
-          pure $ CForeign region name (Can.Forall freevars (transform fn t)) expected
-
-      else if pkg == Pkg.lamderaCore && modu == "Lamdera" && name == "broadcast" then
-        let
-          fn (Can.TVar "toFrontend") = Can.TType (ModuleName.Canonical Pkg.dummyName "Types") "ToFrontend" []
-          fn x = x
-        in
-          pure $ CForeign region name (Can.Forall freevars (transform fn t)) expected
-
-      -- Since we don't have type annotations on codecs, we have exposed top-level
-      -- things without type annotations, which means that we see bugs in the type
-      -- inference engine that shouldn't be there. This is a hotfix for such a bug,
-      -- where the forall. part of the type doesn't hold all the tvars used in the
-      -- type, so we inject any missning tvars and hope it works out.
-      -- @LAMDERA todo legacy from Haskell transpilation, re-evalutate and remove
-      else
-        return $ CForeign region name (Can.Forall (freevars <> getFreevars t) t) expected -- NOTE: prefer freevars over getFreevars if there's a conflict
+      -- return $ CForeign region name annotation expected
+      Lamdera.Constrain.constrain pkg modu name freevars t region expected
 
     Can.VarCtor _ _ name _ annotation ->
       return $ CForeign region name annotation expected

@@ -33,7 +33,6 @@ module Lamdera
   , Data.List.Index.imap
   , onlyWhen
   , textContains
-  , hunt
   , formatHaskellValue
   , hindentFormatValue
   , readUtf8Text
@@ -334,21 +333,6 @@ onlyWhen condition io =
 textContains :: Text -> Text -> Bool
 textContains needle haystack = T.isInfixOf needle haystack
 
-
-hunt_ thing label = do
-  let
-      !_ =
-        unsafePerformIO $ do
-             hunt thing label
-
-  pure ()
-
-
-hunt thing label =
-  if textContains "AnotherExternalThing" $ T.pack $ show thing then
-    putStrLn $ "found it!!!!!!!!!!!!!!!!!!!!!!!!" <> label
-  else
-    putStrLn $ "not in " <> label
 
 
 {-|

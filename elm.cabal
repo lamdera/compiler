@@ -233,23 +233,24 @@ Executable elmx
 
         -- Lamdera:
         Lamdera
-        Lamdera.Login
         Lamdera.Check
-        Lamdera.Deploy
-        Lamdera.Live
-        Lamdera.Project
-        Lamdera.TypeHash
-        Lamdera.Types
-        Lamdera.Evergreen
-        Lamdera.Injection
         Lamdera.Checks
+        Lamdera.Constrain
+        Lamdera.Deploy
+        Lamdera.Evergreen
+        Lamdera.Filewatch
         Lamdera.Generated
         Lamdera.Hints
-        Lamdera.Filewatch
+        Lamdera.Http
+        Lamdera.Injection
+        Lamdera.Live
+        Lamdera.Login
         Lamdera.OldFeatureHelper
+        Lamdera.Project
         Lamdera.Secrets
         Lamdera.Task
-        Lamdera.Http
+        Lamdera.TypeHash
+        Lamdera.Types
         Wire.Source
         Wire.Source2
         Lamdera.Exit
