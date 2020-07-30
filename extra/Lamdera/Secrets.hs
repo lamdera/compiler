@@ -13,6 +13,7 @@ import qualified Data.Set as Set
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Data.Maybe (fromMaybe)
+import qualified System.Environment as Env
 
 import qualified AST.Optimized as Opt
 import qualified AST.Module.Name as ModuleName
@@ -32,7 +33,6 @@ import qualified Reporting.Task as Task
 import qualified Json.Decode as D
 import qualified Json.Encode as E
 import qualified Network.HTTP.Client as Client
--- import qualified Network.HTTP.Client.MultipartFormData as Multi
 import qualified Network.HTTP.Types as Http
 import qualified Reporting.Exit.Http as E
 import qualified Data.ByteString.Lazy as LBS
@@ -448,6 +448,7 @@ checkUserConfig appName prodTokenM = do
         )
 
 
+-- Production config value injection
 injectConfig graph = do
 
   inProduction <- Lamdera.Project.inProduction
@@ -465,10 +466,18 @@ injectConfig graph = do
 
         Just appName -> do
 
-          -- @TODO remove hardcoded token use ENV.TOKEN
-          let token = "a739477eb8bd2acbc251c246438906f4"
+          prodTokenM <- Env.lookupEnv "TOKEN"
 
-          prodConfigItems <- Task.try Progress.silentReporter $ fetchAppConfigItems appName token True
+          token <-
+            case prodTokenM of
+              Just token ->
+                pure token
+
+              Nothing ->
+                -- There must be a token present in production
+                error "Error: could not generate production config, please report this."
+
+          prodConfigItems <- Task.try Progress.silentReporter $ fetchAppConfigItems appName (T.pack token) True
 
           let
             prodConfigMap =
