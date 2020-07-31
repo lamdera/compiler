@@ -155,4 +155,4 @@ fetchApiSession appName token useLocal =
       D.text
 
   in
-  Lamdera.Http.tryNormalRpcJson body endpoint decoder
+  Lamdera.Http.tryNormalRpcJson "fetchApiSession" body endpoint decoder

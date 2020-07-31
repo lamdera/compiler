@@ -48,9 +48,9 @@ httpPostJson manager request body =
     manager
 
 
-normalRpcJson body endpoint decoder =
+normalRpcJson debugIdentifier body endpoint decoder =
   Http.run $ Http.anything endpoint $ \request manager ->
-    do  debug $ "HTTP POST " <> endpoint <> "\n---> " <> (
+    do  debug $ "HTTP POST " <> endpoint <> " (" <> debugIdentifier <> ")\n---> " <> (
           body
             & E.encodeUgly
             & BS.toLazyByteString
@@ -70,8 +70,8 @@ normalRpcJson body endpoint decoder =
             return $ Left $ BadJson endpoint jsonProblem
 
 
-tryNormalRpcJson body endpoint decoder =
-  Lamdera.Task.tryEither Progress.silentReporter $ normalRpcJson body endpoint decoder
+tryNormalRpcJson debugIdentifier body endpoint decoder =
+  Lamdera.Task.tryEither Progress.silentReporter $ normalRpcJson debugIdentifier body endpoint decoder
 
 
 -- Custom handler to extract message text from HTTP failures

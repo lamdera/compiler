@@ -145,7 +145,8 @@ Last line is optional, but it's cool! Lambda prompt!
 compile :: IO ()
 compile = do
   let project = "/Users/mario/lamdera/test/v1"
-  setEnv "LAMDERA_APP_NAME" "testapp"
+  -- setEnv "LAMDERA_APP_NAME" "testapp"
+  setEnv "TOKEN" "a739477eb8bd2acbc251c246438906f4"
 
   -- let project = "/Users/mario/dev/projects/elm-spa-example"
   -- setEnv "LAMDERA_APP_NAME" "realworldish"
@@ -178,6 +179,12 @@ compile = do
         _ <- BS.readFile tempFileName
         -- seq (BS.length result) (Dir.removeFile tempFileName)
         return ()
+
+  unsetEnv "TOKEN"
+  unsetEnv "LAMDERA_APP_NAME"
+  unsetEnv "LOVR"
+  unsetEnv "LDEBUG"
+  unsetEnv "ELM_HOME"
 
 
 tempFileName :: FilePath

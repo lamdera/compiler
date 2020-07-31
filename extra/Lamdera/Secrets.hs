@@ -356,7 +356,7 @@ fetchAppConfigItems appName token useLocal = do
           & required "used" D.bool
           & required "secret" D.bool
 
-  Lamdera.Http.normalRpcJson body endpoint decoder
+  Lamdera.Http.normalRpcJson "fetchAppConfigItems" body endpoint decoder
 
 
 checkUserConfig :: Text -> Maybe Text -> Task.Task ()
@@ -455,6 +455,7 @@ injectConfig graph = do
 
   if inProduction
     then do
+      debug "💉 Injecting production config"
 
       appName <- Lamdera.Project.maybeAppName
 

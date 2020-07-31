@@ -128,7 +128,7 @@ run () () = do
     let appName = Lamdera.Project.certainAppName lamderaRemotes appNameEnvM
 
     progressPointer "Checking config..."
-    Lamdera.Secrets.checkUserConfig appName
+    Lamdera.Secrets.checkUserConfig appName (fmap T.pack prodTokenM)
 
     progressPointer  "Checking Evergreen migrations..."
     debug $ "app name:" ++ show appName
