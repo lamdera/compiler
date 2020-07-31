@@ -132,6 +132,7 @@ elmJsonProblemToReport problem =
         ]
 
     NoAppLamderaCore ->
+      -- @NOTE cannot be extract into Checks.hs because of cyclic deps
       Help.report "MISSING DEPENDENCY" (Just "elm.json")
         "A Lamdera application must have \"lamdera/core\" as a dependency."
         [ D.reflow "You can install it with:"

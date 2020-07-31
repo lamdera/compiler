@@ -51,10 +51,7 @@ runChecks = do
       if initialiseLamderaFiles
         then do
           liftIO $ writeDefaultImplementations
-
-          Task.report $
-            Progress.LamderaProgress $
-              D.green "Okay, I've generated them for you!"
+          Task.report $ Progress.LamderaProgress $ D.green "Okay, I've generated them for you!\n"
         else
           Task.throw $ Exit.Lamdera
             $ Help.report "SKIPPING AUTO-GENERATION" (Nothing)
@@ -70,6 +67,28 @@ runChecks = do
               [ D.reflow "It looks like you've already started implementing things!"
               , D.reflow "See <https://dashboard.lamdera.app/docs/building> for more."
               ])
+
+
+  -- Ensure Env.elm is in place before we get going, otherwise
+  -- our `mode` value injection will fail spectacularly
+  envExists <- liftIO $ doesFileExist "src/Env.elm"
+
+  onlyWhen (not envExists) $ do
+    liftIO $ writeUtf8 "src/Env.elm"
+      [text|
+        module Env exposing (..)
+
+        -- The Env.elm file is for per-environment configuration.
+        -- See https://dashboard.lamdera.app/docs/environment for more info.
+
+        dummyConfigItem = ""
+      |]
+    progressPointer "Created empty Env.elm"
+
+
+progressPointer t =
+    Task.report $ Progress.LamderaProgress $ D.fillSep [ D.fromText "───>", D.green $ t <> "\n" ]
+
 
 
 writeDefaultImplementations = do
@@ -113,20 +132,6 @@ checkMsgHasTypes typeNames = do
 
   pure $ Prelude.all ((==) True) results
 
-
-contextHintsWhenTypeMismatch tipe =
-  case tipe of
-    -- @TODO fix when we move this to core
-    (T.Type (Canonical (Pkg.Name "author" "project") "Evergreen.Migrate") "UnimplementedMigration" []) ->
-      -- debug_note ("contextHintsWhenTypeMismatch: " ++ show tipe )
-        [ D.toSimpleHint $
-           "I need you to implement migrations for changed types\
-            \ as described in <https://dashboard.lamdera.app/docs/evergreen>"
-        ]
-    _ ->
-      []
-
-    -- Type (Canonical {_package = Name {_author = "author", _project = "project"}, _module = Name {_name = "Evergreen.Migrate"}}) (Name {_name = "UnimplementedMigration"}) []
 
 
 defaultImplementations :: [(FilePath, Text)]

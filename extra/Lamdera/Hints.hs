@@ -7,13 +7,8 @@ import qualified Elm.Package as Pkg
 import AST.Module.Name (Canonical(..))
 import qualified Type.Error as T
 
-
 import Data.Monoid ((<>))
 import qualified Debug.Trace as DT
--- Don't enable this, it will cause cyclic errors
--- import Lamdera
-
-
 
 contextHintsWhenTypeMismatch tipe =
   case tipe of
