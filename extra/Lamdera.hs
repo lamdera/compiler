@@ -406,7 +406,6 @@ writeUtf8Handle handle content = do
 writeUtf8Root :: FilePath -> Text -> IO ()
 writeUtf8Root filePath content = do
   root <- getProjectRoot
-  debug_ $ "writeUtf8: " ++ show (root </> filePath)
   writeUtf8 (root </> filePath) content
 
 
