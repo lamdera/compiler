@@ -207,6 +207,7 @@ checkWithParams projectPath appName = do
   setEnv "LDEBUG" "1"
   setEnv "ELM_HOME" "/Users/mario/elm-home-elmx-test"
   setEnv "NOTPROD" "1"
+  setEnv "TOKEN" "a739477eb8bd2acbc251c246438906f4"
   -- setEnv "HOIST_REBUILD" "1"
   -- setEnv "VERSION" "3"
 
@@ -229,6 +230,8 @@ checkWithParams projectPath appName = do
   unsetEnv "LDEBUG"
   unsetEnv "ELM_HOME"
   unsetEnv "NOTPROD"
+  unsetEnv "TOKEN"
+
 
 
 {-| Run the `lamdera check` pipeline with specific params -}
