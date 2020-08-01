@@ -24,6 +24,7 @@ import Frontend
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events exposing (onClick, onMouseEnter, onMouseLeave)
+import Html.Lazy
 import Lamdera exposing (ClientId, Key, SessionId, Url)
 import Lamdera.Debug as LD
 import Lamdera.Json as Json
@@ -120,14 +121,17 @@ type alias Model =
     , liveStatus : LiveStatus
     , sessionId : String
     , clientId : String
-    , devbar :
-        { expanded : Bool
-        , location : Location
-        , freeze : Bool
-        , networkDelay : Bool
-        , logging : Bool
-        }
+    , devbar : DevBar
     , showModeChanger : Bool
+    }
+
+
+type alias DevBar =
+    { expanded : Bool
+    , location : Location
+    , freeze : Bool
+    , networkDelay : Bool
+    , logging : Bool
     }
 
 
@@ -882,49 +886,17 @@ yForLocation location =
             style "bottom" "5px"
 
 
-lamderaUI m =
-    case m.liveStatus of
+lamderaUI :
+    DevBar
+    -> LiveStatus
+    -> NodeType
+    -> Bool
+    -> List (Html Msg)
+lamderaUI devbar liveStatus nodeType showModeChanger =
+    case liveStatus of
         Online ->
-            [ node "style" [] [ text customCss ]
-            , lamderaPane m
-            , if m.showModeChanger then
-                withOverlay
-                    [ div
-                        [ style "padding" "10px"
-                        , style "color" white
-                        , style "background-color" charcoal
-                        , style "border-radius" "5px"
-                        ]
-                        [ div [ style "padding" "2px" ] [ text "Select `Env.mode` value:" ]
-                        , div
-                            [ onClick (EnvModeSelected "Development")
-                            , style "cursor" "pointer"
-                            , style "padding" "6px 6px"
-                            , style "margin" "4px 2px"
-                            , style "border-left" "3px solid #85BC7A"
-                            ]
-                            [ text "Development" ]
-                        , div
-                            [ onClick (EnvModeSelected "Review")
-                            , style "cursor" "pointer"
-                            , style "padding" "6px 6px"
-                            , style "margin" "4px 2px"
-                            , style "border-left" "3px solid #4196ad"
-                            ]
-                            [ text "Review" ]
-                        , div
-                            [ onClick (EnvModeSelected "Production")
-                            , style "cursor" "pointer"
-                            , style "padding" "6px 6px"
-                            , style "margin" "4px 2px"
-                            , style "border-left" "3px solid #E06C75"
-                            ]
-                            [ text "Production" ]
-                        ]
-                    ]
-
-              else
-                text ""
+            [ Html.Lazy.lazy2 lamderaPane devbar nodeType
+            , Html.Lazy.lazy envModeChanger showModeChanger
             ]
 
         Offline ->
@@ -947,13 +919,58 @@ lamderaUI m =
             ]
 
 
-lamderaPane m =
+envModeChanger showModeChanger =
+    if showModeChanger then
+        withOverlay
+            [ div
+                [ style "padding" "10px"
+                , style "color" white
+                , style "background-color" charcoal
+                , style "border-radius" "5px"
+                ]
+                [ div [ style "padding" "2px" ] [ text "Select `Env.mode` value:" ]
+                , div
+                    [ onClick (EnvModeSelected "Development")
+                    , style "cursor" "pointer"
+                    , style "padding" "6px 6px"
+                    , style "margin" "4px 2px"
+                    , style "border-left" "3px solid #85BC7A"
+                    ]
+                    [ text "Development" ]
+                , div
+                    [ onClick (EnvModeSelected "Review")
+                    , style "cursor" "pointer"
+                    , style "padding" "6px 6px"
+                    , style "margin" "4px 2px"
+                    , style "border-left" "3px solid #4196ad"
+                    ]
+                    [ text "Review" ]
+                , div
+                    [ onClick (EnvModeSelected "Production")
+                    , style "cursor" "pointer"
+                    , style "padding" "6px 6px"
+                    , style "margin" "4px 2px"
+                    , style "border-left" "3px solid #E06C75"
+                    ]
+                    [ text "Production" ]
+                ]
+            ]
+
+    else
+        text ""
+
+
+lamderaPane devbar nodeType =
+    let
+        x =
+            Debug.log "redering" "h!"
+    in
     div
         [ style "font-family" "system-ui, Helvetica Neue, sans-serif"
         , style "font-size" "12px"
         , style "position" "fixed"
-        , xForLocation m.devbar.location
-        , yForLocation m.devbar.location
+        , xForLocation devbar.location
+        , yForLocation devbar.location
         , style "color" white
         , style "background-color" charcoal
         , style "border-radius" "5px"
@@ -961,18 +978,18 @@ lamderaPane m =
         , onMouseLeave CollapsedDevbar
         , style "user-select" "none"
         ]
-        (case m.devbar.location of
+        (case devbar.location of
             TopLeft ->
-                devBar True m
+                lamderaDevBar True devbar nodeType
 
             TopRight ->
-                devBar True m
+                lamderaDevBar True devbar nodeType
 
             BottomRight ->
-                devBar False m
+                lamderaDevBar False devbar nodeType
 
             BottomLeft ->
-                devBar False m
+                lamderaDevBar False devbar nodeType
         )
 
 
@@ -991,7 +1008,6 @@ withOverlay html =
         , style "justify-content" "center"
         , style "align-items" "center"
         , onClick EnvClicked
-        , class "lamdera-overlay"
         ]
         html
 
@@ -1028,15 +1044,15 @@ envMeta =
             ( "Dev", green )
 
 
-devBar topDown m =
+lamderaDevBar topDown devbar nodeType =
     case topDown of
         True ->
-            [ collapsedUI m
-            , if m.devbar.expanded then
+            [ collapsedUI devbar nodeType
+            , if devbar.expanded then
                 div
                     [ style "border-top" "1px solid #393939"
                     ]
-                    [ expandedUI topDown m
+                    [ expandedUI topDown devbar
                     ]
 
               else
@@ -1044,20 +1060,20 @@ devBar topDown m =
             ]
 
         False ->
-            [ if m.devbar.expanded then
+            [ if devbar.expanded then
                 div
                     [ style "border-bottom" "1px solid #393939"
                     , style "padding-bottom" "5px"
                     ]
-                    [ expandedUI topDown m ]
+                    [ expandedUI topDown devbar ]
 
               else
                 text ""
-            , collapsedUI m
+            , collapsedUI devbar nodeType
             ]
 
 
-collapsedUI m =
+collapsedUI devbar nodeType =
     div []
         [ div
             [ style "padding" "5px 7px 2px 5px"
@@ -1067,10 +1083,16 @@ collapsedUI m =
             ]
             [ span
                 [ onClick ClickedLocation
-                , class "lamderaLogoWhite"
+                , style "margin" "-2px 5px 0 5px"
+                , style "display" "inline-block"
+                , style "vertical-align" "middle"
+                , style "height" "22px"
+                , style "width" "13px"
+                , style "cursor" "pointer"
+                , style "background-image" """url("data:image/svg+xml;utf8,<svg width='13px' height='23px' viewBox='0 0 23 27' version='1.1' xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink'><g stroke='none' stroke-width='1' fill='none' fill-rule='evenodd'><g transform='translate(-272.000000, -129.000000)' fill='white'><g transform='translate(272.000000, 129.000000)'><path d='M22.721133,26.2285714 C22.3975092,26.7428597 21.8359081,27 21.1720266,27 C20.745075,26.9311782 20.4000491,26.7155717 20.1369487,26.3531804 C19.9207409,26.049077 19.4876467,25.1169484 18.8376663,23.5567944 L11.48425,6.00209059 L3.14198812,25.9651568 C2.85432248,26.6550557 2.3569081,27 1.64973006,27 C1.42199476,27 1.20025582,26.9498263 0.984506591,26.8494774 C0.564994195,26.6613231 0.277332868,26.3477374 0.121513978,25.9087108 C-0.0462909803,25.4696842 -0.040298036,25.0306642 0.139492991,24.5916376 L9.99199199,1.03484321 C10.2796576,0.344944286 10.777072,0 11.48425,0 C12.2034142,0 12.7068215,0.344944286 12.9944871,1.03484321 L22.8469861,24.5916376 C23.0867075,25.1561004 23.0447569,25.7017395 22.721133,26.2285714 Z'></path></g></g></g></svg>")"""
                 , style "position" "relative"
                 ]
-                [ case m.nodeType of
+                [ case nodeType of
                     Leader ->
                         div
                             [ style "background-color" "#a6f098"
@@ -1087,19 +1109,19 @@ collapsedUI m =
                         text ""
                 ]
             , spacer 5
-            , if m.devbar.freeze then
+            , if devbar.freeze then
                 summaryIcon iconFreeze blue ToggledFreezeMode
 
               else
                 summaryIcon iconFreeze grey ToggledFreezeMode
             , spacer 5
-            , if m.devbar.networkDelay then
+            , if devbar.networkDelay then
                 summaryIcon iconNetwork yellow ToggledNetworkDelay
 
               else
                 summaryIcon iconNetwork grey ToggledNetworkDelay
             , spacer 5
-            , if m.devbar.logging then
+            , if devbar.logging then
                 summaryIcon iconLogs white ToggledLogging
 
               else
@@ -1118,10 +1140,10 @@ spacer width =
     span [ style "width" (String.fromInt width ++ "px"), style "display" "inline-block" ] []
 
 
-expandedUI topDown m =
+expandedUI topDown devbar =
     let
         modeText =
-            case m.devbar.freeze of
+            case devbar.freeze of
                 False ->
                     "Inactive"
 
@@ -1157,30 +1179,30 @@ expandedUI topDown m =
 
           else
             envDocs
-        , case m.devbar.freeze of
+        , case devbar.freeze of
             False ->
                 buttonDev "Reset Backend" ResetDebugStoreBE
 
             True ->
                 buttonDev "Reset Both" ResetDebugStoreBoth
-        , if m.devbar.freeze then
+        , if devbar.freeze then
             buttonDev "Reset Frontend" ResetDebugStoreFE
 
           else
             text ""
-        , case m.devbar.freeze of
+        , case devbar.freeze of
             False ->
                 buttonDevOff "Freeze Mode: Off" iconFreeze ToggledFreezeMode
 
             True ->
                 buttonDevColoredIcon "Freeze Mode" "On" blue iconFreeze ToggledFreezeMode
-        , case m.devbar.networkDelay of
+        , case devbar.networkDelay of
             True ->
                 buttonDevColoredIcon "Network Delay" "500ms" yellow iconNetwork ToggledNetworkDelay
 
             False ->
                 buttonDevOff "Network Delay: Off" iconNetwork ToggledNetworkDelay
-        , case m.devbar.logging of
+        , case devbar.logging of
             True ->
                 -- buttonDev "Logging: On"
                 buttonDevColoredIcon "Logging" "On" white iconLogs ToggledLogging
@@ -1278,26 +1300,17 @@ buttonDevLink label url =
         ]
 
 
+mapDocument : Model -> (FrontendMsg -> Msg) -> Browser.Document FrontendMsg -> Browser.Document Msg
 mapDocument model msg { title, body } =
     { title = title
     , body =
         List.map (Html.map msg) body
-            ++ lamderaUI model
+            ++ lamderaUI
+                model.devbar
+                model.liveStatus
+                model.nodeType
+                model.showModeChanger
     }
-
-
-customCss =
-    """
-.lamderaLogoWhite {
-  margin: -2px 5px 0 5px;
-  display: inline-block;
-  vertical-align: middle;
-  height: 22px;
-  width: 13px;
-  cursor: pointer;
-  background-image:  url("data:image/svg+xml;utf8,<svg width='13px' height='23px' viewBox='0 0 23 27' version='1.1' xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink'><g stroke='none' stroke-width='1' fill='none' fill-rule='evenodd'><g transform='translate(-272.000000, -129.000000)' fill='white'><g transform='translate(272.000000, 129.000000)'><path d='M22.721133,26.2285714 C22.3975092,26.7428597 21.8359081,27 21.1720266,27 C20.745075,26.9311782 20.4000491,26.7155717 20.1369487,26.3531804 C19.9207409,26.049077 19.4876467,25.1169484 18.8376663,23.5567944 L11.48425,6.00209059 L3.14198812,25.9651568 C2.85432248,26.6550557 2.3569081,27 1.64973006,27 C1.42199476,27 1.20025582,26.9498263 0.984506591,26.8494774 C0.564994195,26.6613231 0.277332868,26.3477374 0.121513978,25.9087108 C-0.0462909803,25.4696842 -0.040298036,25.0306642 0.139492991,24.5916376 L9.99199199,1.03484321 C10.2796576,0.344944286 10.777072,0 11.48425,0 C12.2034142,0 12.7068215,0.344944286 12.9944871,1.03484321 L22.8469861,24.5916376 C23.0867075,25.1561004 23.0447569,25.7017395 22.721133,26.2285714 Z'></path></g></g></g></svg>");
-}
-"""
 
 
 icon fn size hex =
