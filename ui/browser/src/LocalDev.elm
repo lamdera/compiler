@@ -37,6 +37,10 @@ import Types exposing (BackendModel, BackendMsg, FrontendModel, FrontendMsg, ToB
 -- MKRRI
 
 
+lamderaVersion =
+    "alpha9"
+
+
 port sendToBackend : Json.Value -> Cmd msg
 
 
@@ -52,10 +56,10 @@ port receiveFromFrontend : (Json.Value -> msg) -> Sub msg
 port receiveBackendModel : (Json.Value -> msg) -> Sub msg
 
 
-port nodeTypeSetLeader : (Bool -> msg) -> Sub msg
+port setNodeTypeLeader : (Bool -> msg) -> Sub msg
 
 
-port liveStatusSet : (Bool -> msg) -> Sub msg
+port setLiveStatus : (Bool -> msg) -> Sub msg
 
 
 port setClientId : (String -> msg) -> Sub msg
@@ -87,15 +91,15 @@ type Msg
     | ReceivedFromBackend Json.Value
     | ReceivedBackendModel Json.Value
     | RPCIn Json.Value
-    | NodeTypeSetLeader Bool
-    | LiveStatusSet Bool
+    | SetNodeTypeLeader Bool
+    | SetLiveStatus Bool
     | ReceivedClientId String
-    | DevbarExpand
-    | DevbarCollapse
+    | ExpandedDevbar
+    | CollapsedDevbar
     | ResetDebugStoreBoth
     | ResetDebugStoreFE
     | ResetDebugStoreBE
-    | ToggledDevMode
+    | ToggledFreezeMode
     | ToggledNetworkDelay
     | ToggledLogging
     | ClickedLocation
@@ -119,17 +123,12 @@ type alias Model =
     , devbar :
         { expanded : Bool
         , location : Location
-        , devMode : DevMode
+        , freeze : Bool
         , networkDelay : Bool
         , logging : Bool
         }
     , showModeChanger : Bool
     }
-
-
-type DevMode
-    = Normal
-    | Freeze
 
 
 type Location
@@ -207,7 +206,7 @@ init flags url key =
                     ( ifem, iFeCmds )
 
                 Just rfem ->
-                    if devbar.devMode == Freeze then
+                    if devbar.freeze then
                         ( rfem, Cmd.none )
 
                     else
@@ -239,7 +238,7 @@ init flags url key =
         devbarInit =
             { expanded = False
             , location = BottomLeft
-            , devMode = Normal
+            , freeze = False
             , networkDelay = False
             , logging = True
             }
@@ -268,7 +267,7 @@ init flags url key =
 
 
 storeFE m newFem =
-    if m.devbar.devMode == Freeze then
+    if m.devbar.freeze then
         LD.debugS "fe" newFem
 
     else
@@ -627,7 +626,7 @@ update msg m =
             ( m, Cmd.none )
 
         --}
-        NodeTypeSetLeader bool ->
+        SetNodeTypeLeader bool ->
             ( { m
                 | nodeType =
                     case bool of
@@ -640,7 +639,7 @@ update msg m =
             , Cmd.none
             )
 
-        LiveStatusSet bool ->
+        SetLiveStatus bool ->
             ( { m
                 | liveStatus =
                     case bool of
@@ -656,14 +655,14 @@ update msg m =
         ReceivedClientId clientId ->
             ( { m | clientId = clientId }, Cmd.none )
 
-        DevbarExpand ->
+        ExpandedDevbar ->
             let
                 devbar =
                     m.devbar
             in
             ( { m | devbar = { devbar | expanded = True } }, Cmd.none )
 
-        DevbarCollapse ->
+        CollapsedDevbar ->
             let
                 devbar =
                     m.devbar
@@ -716,24 +715,16 @@ update msg m =
                 ]
             )
 
-        ToggledDevMode ->
+        ToggledFreezeMode ->
             let
-                toggleDevMode mode =
-                    case mode of
-                        Normal ->
-                            Freeze
-
-                        Freeze ->
-                            Normal
-
                 devbar =
                     m.devbar
 
                 newDevbar =
-                    { devbar | devMode = toggleDevMode m.devbar.devMode }
+                    { devbar | freeze = not m.devbar.freeze }
 
                 newFem =
-                    if newDevbar.devMode == Freeze then
+                    if newDevbar.freeze then
                         LD.debugS "fe" m.fem
 
                     else
@@ -849,8 +840,8 @@ subscriptions { nodeType, fem, bem, bemDirty } =
 
           else
             Sub.none
-        , nodeTypeSetLeader NodeTypeSetLeader
-        , liveStatusSet LiveStatusSet
+        , setNodeTypeLeader SetNodeTypeLeader
+        , setLiveStatus SetLiveStatus
         , setClientId ReceivedClientId
         , receiveFromFrontend ReceivedFromFrontend
         , receiveFromBackend ReceivedFromBackend
@@ -904,7 +895,7 @@ lamderaUI m =
                         , style "background-color" charcoal
                         , style "border-radius" "5px"
                         ]
-                        [ div [ style "padding" "2px" ] [ text "Change `Env.mode` value:" ]
+                        [ div [ style "padding" "2px" ] [ text "Select `Env.mode` value:" ]
                         , div
                             [ onClick (EnvModeSelected "Development")
                             , style "cursor" "pointer"
@@ -966,8 +957,9 @@ lamderaPane m =
         , style "color" white
         , style "background-color" charcoal
         , style "border-radius" "5px"
-        , onMouseEnter DevbarExpand
-        , onMouseLeave DevbarCollapse
+        , onMouseEnter ExpandedDevbar
+        , onMouseLeave CollapsedDevbar
+        , style "user-select" "none"
         ]
         (case m.devbar.location of
             TopLeft ->
@@ -1012,14 +1004,15 @@ envIndicator =
     div []
         [ div
             [ style "text-align" "center"
-            , style "background-color" color
+            , style "border-top" "1px solid #393939"
             , style "border-radius" "0px 0px 5px 5px"
             , style "font-size" "10px"
             , style "padding" "1px 4px 2px 4px"
             , style "cursor" "pointer"
+            , style "color" "#fff"
             , onClick EnvClicked
             ]
-            [ text <| "Env: " ++ label ]
+            [ text <| "Env: ", span [ style "color" color ] [ text label ] ]
         ]
 
 
@@ -1040,8 +1033,10 @@ devBar topDown m =
         True ->
             [ collapsedUI m
             , if m.devbar.expanded then
-                div [ style "padding-bottom" "5px" ]
-                    [ expandedUI m
+                div
+                    [ style "border-top" "1px solid #393939"
+                    ]
+                    [ expandedUI topDown m
                     ]
 
               else
@@ -1050,7 +1045,11 @@ devBar topDown m =
 
         False ->
             [ if m.devbar.expanded then
-                expandedUI m
+                div
+                    [ style "border-bottom" "1px solid #393939"
+                    , style "padding-bottom" "5px"
+                    ]
+                    [ expandedUI topDown m ]
 
               else
                 text ""
@@ -1061,7 +1060,7 @@ devBar topDown m =
 collapsedUI m =
     div []
         [ div
-            [ style "padding" "3px 5px 3px 3px"
+            [ style "padding" "5px 7px 2px 5px"
             , style "display" "flex"
             , style "justify-content" "center"
             , style "align-items" "center"
@@ -1070,7 +1069,6 @@ collapsedUI m =
                 [ onClick ClickedLocation
                 , class "lamderaLogoWhite"
                 , style "position" "relative"
-                , style "margin-right" "auto"
                 ]
                 [ case m.nodeType of
                     Leader ->
@@ -1080,7 +1078,7 @@ collapsedUI m =
                             , style "width" "4px"
                             , style "border-radius" "10px"
                             , style "position" "absolute"
-                            , style "top" "1px"
+                            , style "top" "3px"
                             , style "left" "-3px"
                             ]
                             []
@@ -1088,27 +1086,31 @@ collapsedUI m =
                     Follower ->
                         text ""
                 ]
-            , spacer 8
-            , if m.devbar.devMode == Freeze then
-                icon iconFreeze 16 blue
+            , spacer 5
+            , if m.devbar.freeze then
+                summaryIcon iconFreeze blue ToggledFreezeMode
 
               else
-                icon iconFreeze 16 grey
+                summaryIcon iconFreeze grey ToggledFreezeMode
             , spacer 5
             , if m.devbar.networkDelay then
-                icon iconNetworkFast 16 yellow
+                summaryIcon iconNetwork yellow ToggledNetworkDelay
 
               else
-                icon iconNetworkFast 16 grey
+                summaryIcon iconNetwork grey ToggledNetworkDelay
             , spacer 5
             , if m.devbar.logging then
-                icon iconLogs 16 white
+                summaryIcon iconLogs white ToggledLogging
 
               else
-                icon iconLogs 16 grey
+                summaryIcon iconLogs grey ToggledLogging
             ]
         , envIndicator
         ]
+
+
+summaryIcon icon_ color msg =
+    span [ onClick msg, style "cursor" "pointer" ] [ icon icon_ 16 color ]
 
 
 spacer width =
@@ -1116,43 +1118,80 @@ spacer width =
     span [ style "width" (String.fromInt width ++ "px"), style "display" "inline-block" ] []
 
 
-expandedUI m =
+expandedUI topDown m =
     let
         modeText =
-            case m.devbar.devMode of
-                Normal ->
+            case m.devbar.freeze of
+                False ->
                     "Inactive"
 
-                Freeze ->
+                True ->
                     "Active"
+
+        envDocs =
+            let
+                borderPos =
+                    if topDown then
+                        "border-top"
+
+                    else
+                        "border-bottom"
+            in
+            div
+                [ style "display" "flex"
+                , style "justify-content" "space-evenly"
+                , style borderPos "1px solid #393939"
+                ]
+                [ let
+                    ( label, color ) =
+                        envMeta
+                  in
+                  buttonDevColored "Env" label color EnvClicked
+                , div [ style "height" "30px", style "width" "1px", style "background-color" "#393939" ] []
+                , buttonDevLink "Docs" "https://dashboard.lamdera.app/docs"
+                ]
     in
-    div [ style "width" "160px" ]
-        [ case m.devbar.devMode of
-            Normal ->
+    div [ style "width" "175px" ]
+        [ if topDown then
+            text ""
+
+          else
+            envDocs
+        , case m.devbar.freeze of
+            False ->
                 buttonDev "Reset Backend" ResetDebugStoreBE
 
-            Freeze ->
+            True ->
                 buttonDev "Reset Both" ResetDebugStoreBoth
-        , buttonDevInactiveBy (m.devbar.devMode == Freeze) "Reset Frontend" ResetDebugStoreFE
-        , case m.devbar.devMode of
-            Normal ->
-                buttonDevOff "Freeze Mode: Off" ToggledDevMode
+        , if m.devbar.freeze then
+            buttonDev "Reset Frontend" ResetDebugStoreFE
 
-            Freeze ->
-                buttonDevColored "Freeze Mode" "On" blue ToggledDevMode
+          else
+            text ""
+        , case m.devbar.freeze of
+            False ->
+                buttonDevOff "Freeze Mode: Off" iconFreeze ToggledFreezeMode
+
+            True ->
+                buttonDevColoredIcon "Freeze Mode" "On" blue iconFreeze ToggledFreezeMode
         , case m.devbar.networkDelay of
             True ->
-                buttonDevColored "Network Delay" "500ms" yellow ToggledNetworkDelay
+                buttonDevColoredIcon "Network Delay" "500ms" yellow iconNetwork ToggledNetworkDelay
 
             False ->
-                buttonDevOff "Network Delay: Off" ToggledNetworkDelay
+                buttonDevOff "Network Delay: Off" iconNetwork ToggledNetworkDelay
         , case m.devbar.logging of
             True ->
-                buttonDev "Logging: On" ToggledLogging
+                -- buttonDev "Logging: On"
+                buttonDevColoredIcon "Logging" "On" white iconLogs ToggledLogging
 
             False ->
-                buttonDevOff "Logging: Off" ToggledLogging
-        , buttonDevLink "Docs" "https://dashboard.lamdera.app/docs"
+                buttonDevOff "Logging: Off" iconLogs ToggledLogging
+        , if topDown then
+            envDocs
+
+          else
+            text ""
         ]
 
 
@@ -1160,8 +1199,7 @@ buttonDev label msg =
     div
         [ style "color" white
         , style "cursor" "pointer"
-        , style "padding" "3px 8px"
-        , style "margin-top" "5px"
+        , style "padding" "8px 8px"
         , style "text-align" "center"
         , onClick msg
         ]
@@ -1173,27 +1211,51 @@ buttonDevColored label value color msg =
     div
         [ style "color" white
         , style "cursor" "pointer"
-        , style "padding" "3px 8px"
-        , style "margin-top" "5px"
-        , style "text-align" "center"
+        , style "padding" "8px 8px"
+        , style "display" "flex"
+        , style "justify-content" "center"
+        , style "align-items" "center"
         , onClick msg
         ]
         [ text label
-        , text ": "
+        , text ":"
+        , spacer 3
         , span [ style "color" color ] [ text value ]
         ]
 
 
-buttonDevOff label msg =
+buttonDevColoredIcon label value color icon_ msg =
+    div
+        [ style "color" white
+        , style "cursor" "pointer"
+        , style "padding" "8px 8px"
+        , style "display" "flex"
+        , style "justify-content" "center"
+        , style "align-items" "center"
+        , onClick msg
+        ]
+        [ icon icon_ 16 color
+        , spacer 5
+        , text label
+        , text ":"
+        , spacer 3
+        , span [ style "color" color ] [ text value ]
+        ]
+
+
+buttonDevOff label icon_ msg =
     div
         [ style "color" grey
         , style "cursor" "pointer"
-        , style "padding" "3px 8px"
-        , style "margin-top" "5px"
-        , style "text-align" "center"
+        , style "padding" "8px 8px"
+        , style "display" "flex"
+        , style "justify-content" "center"
+        , style "align-items" "center"
         , onClick msg
         ]
-        [ text label
+        [ icon icon_ 16 grey
+        , spacer 5
+        , text label
         ]
 
 
@@ -1201,8 +1263,7 @@ buttonDevLink label url =
     a
         [ style "color" white
         , style "cursor" "pointer"
-        , style "padding" "3px 8px"
-        , style "margin-top" "5px"
+        , style "padding" "8px 8px"
         , style "text-decoration" "none"
         , style "display" "block"
         , style "display" "flex"
@@ -1217,21 +1278,6 @@ buttonDevLink label url =
         ]
 
 
-buttonDevInactiveBy cond label msg =
-    if cond then
-        buttonDev label msg
-
-    else
-        div
-            [ style "color" grey
-            , style "padding" "3px 8px"
-            , style "margin-top" "5px"
-            , style "text-align" "center"
-            ]
-            [ text label
-            ]
-
-
 mapDocument model msg { title, body } =
     { title = title
     , body =
@@ -1243,7 +1289,7 @@ mapDocument model msg { title, body } =
 customCss =
     """
 .lamderaLogoWhite {
-  margin: 0 5px;
+  margin: -2px 5px 0 5px;
   display: inline-block;
   vertical-align: middle;
   height: 22px;
@@ -1257,8 +1303,6 @@ customCss =
 icon fn size hex =
     div
         [ style "display" "inline-block"
-
-        -- , style "vertical-align" "middle"
         , style "height" (String.fromInt size ++ "px")
         , style "width" (String.fromInt size ++ "px")
         , style "background-image" (fn size hex)
@@ -1276,7 +1320,7 @@ iconWarning size hex =
         ++ """' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' class='feather feather-alert-triangle'><path d='M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z'></path><line x1='12' y1='9' x2='12' y2='13'></line><line x1='12' y1='17' x2='12.01' y2='17'></line></svg>")"""
 
 
-iconNetworkFast size hex =
+iconNetwork size hex =
     """url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='"""
         ++ String.fromInt size
         ++ """' height='"""

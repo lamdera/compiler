@@ -33,7 +33,7 @@ const ws = Sockette.default(((window.location.protocol === "https:") ? "wss://" 
   maxAttempts: Infinity,
   onopen: e => {
     if (clientId !== "") { connected = true }
-    if (app !== null) { app.ports.liveStatusSet.send(connected) }
+    if (app !== null) { app.ports.setLiveStatus.send(connected) }
     flushOutbound()
   },
   onmessage: e => {
@@ -48,12 +48,12 @@ const ws = Sockette.default(((window.location.protocol === "https:") ? "wss://" 
   onclose: e => { // Called whenever the connection is terminated
     // console.log(`ws closed`, e)
     connected = false
-    if (app !== null) { app.ports.liveStatusSet.send(connected) }
+    if (app !== null) { app.ports.setLiveStatus.send(connected) }
   },
   onerror: e => { //
     // console.log(`ws error`, e)
     connected = false
-    if (app !== null) { app.ports.liveStatusSet.send(connected) }
+    if (app !== null) { app.ports.setLiveStatus.send(connected) }
   }
 })
 
@@ -138,10 +138,10 @@ setupApp = function(name, elid) {
         leaderId = d.l
         if (clientId == leaderId) {
           nodeType = "l"
-          if (app !== null) { app.ports.nodeTypeSetLeader.send(true) }
+          if (app !== null) { app.ports.setNodeTypeLeader.send(true) }
         } else {
           nodeType = "f"
-          if (app !== null) { app.ports.nodeTypeSetLeader.send(false) }
+          if (app !== null) { app.ports.setNodeTypeLeader.send(false) }
         }
 
         initApp()
@@ -151,10 +151,10 @@ setupApp = function(name, elid) {
         leaderId = d.l
         if (clientId == leaderId) {
           nodeType = "l"
-          if (app !== null) { app.ports.nodeTypeSetLeader.send(true) }
+          if (app !== null) { app.ports.setNodeTypeLeader.send(true) }
         } else {
           nodeType = "f"
-          if (app !== null) { app.ports.nodeTypeSetLeader.send(false) }
+          if (app !== null) { app.ports.setNodeTypeLeader.send(false) }
         }
         break;
 
