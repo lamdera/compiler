@@ -76,6 +76,7 @@ import qualified System.IO as IO
 import qualified Elm.Project.Summary as Summary
 import qualified Text.Read
 import qualified Lamdera.Secrets
+import qualified Lamdera.Generated
 
 progressPointer t = do
   Task.report $ Progress.LamderaProgress $ D.fillSep [ D.fromText "───>", D.blue $ t <> "\n" ]
@@ -539,50 +540,47 @@ checkUserProjectCompiles summary root = do
 
 
 migrationCheck :: FilePath -> Int -> Task.Task ()
-migrationCheck root version =
-  -- Dir.withCurrentDirectory ("/Users/mario/dev/projects/lamdera/test/v2") $
-    -- do  reporter <- Terminal.create
-        -- Task.run reporter $
-          do  summary <- Project.getRoot
+migrationCheck root version = do
+  summary <- Project.getRoot
+  let root = Summary._root summary
 
-              -- Temporarily point migration to current types in order to type-check
-              debug "Type-checking Evergreen migrations..."
+  debug "Type-checking Evergreen migrations..."
 
-              let migrationPath = (root </> "src/Evergreen/Migrate/V") <> show version <> ".elm"
+  let
+    migrationPath = (root </> "src/Evergreen/Migrate/V") <> show version <> ".elm"
+    migrationPathBk = (root </> "src/Evergreen/Migrate/.V") <> show version <> ".elm.bk"
 
-              debug "Replacing type reference"
-              -- osReplace ("s/import Evergreen.Type.V" <> show version <> "/import Types/g") migrationPath
-              liftIO $ replaceInFile ("import Evergreen.V" <> show_ version <> ".Types") "import Types" migrationPath
 
-              -- @TODO
-              -- This is now cleaner for local checks, but we still need a full e2e check in production before we deploy!
-              -- frontendRuntimeExists <- liftIO $ Dir.doesFileExist $ root </> "src/LFR.elm"
-              -- backendRuntimeExists <- liftIO $ Dir.doesFileExist $ root </> "src/LBR.elm"
+  debug $ "Replacing " <> "Evergreen.V" <> show version <> " type references"
+  -- osReplace ("s/import Evergreen.Type.V" <> show version <> "/import Types/g") migrationPath
+  -- liftIO $ replaceInFile ("import Evergreen.V" <> show_ version <> ".Types") "import Types" migrationPath
 
-              -- debug "Creating build scaffold files"
-              -- liftIO $ unless frontendRuntimeExists $ writeUtf8 frontendRuntimeLocalContent $ root </> "src/LFR.elm"
-              -- liftIO $ unless backendRuntimeExists $ writeUtf8 backendRuntimeLocalContent $ root </> "src/LBR.elm"
+  liftIO $ copyFile migrationPath migrationPathBk
+  liftIO $ replaceInFile ("Evergreen.V" <> show_ version <> ".") "" migrationPath
 
-              liftIO $ mkdir $ root </> "lamdera-stuff/alpha"
 
-              let lamderaCheckBothPath = "lamdera-stuff/alpha/LamderaCheckBoth.elm"
-              liftIO $ writeUtf8 (root </> lamderaCheckBothPath) (lamderaCheckBothFileContents version)
-              let jsOutput = Just (Output.Html Nothing "/dev/null")
-              Project.compile Output.Dev Output.Client jsOutput Nothing summary [ lamderaCheckBothPath ]
+  liftIO $ mkdir $ root </> "lamdera-stuff/alpha"
 
-              -- @TODO this is because the migrationCheck does weird terminal stuff that mangles the display... how to fix this?
-              liftIO $ sleep 50 -- 50 milliseconds
+  gen <- liftIO $ Lamdera.Generated.createLamderaGenerated root (WithMigrations version) -- @TODO fix hardcode
 
-              debug "Cleaning up build scaffold"
-              -- Remove our temporarily checker file
-              liftIO $ remove $ root </> lamderaCheckBothPath
+  liftIO $ putStrLn $ T.unpack gen
 
-              -- Restore the type back to what it was
-              liftIO $ replaceInFile "import Types" ("import Evergreen.V" <> show_ version <> ".Types") migrationPath
+  let lamderaCheckBothPath = "lamdera-stuff/alpha/LamderaCheckBoth.elm"
+  -- liftIO $ writeUtf8 (root </> lamderaCheckBothPath) (lamderaCheckBothFileContents version)
+  liftIO $ writeUtf8 (root </> lamderaCheckBothPath) (gen)
+  let jsOutput = Just (Output.Html Nothing "/dev/null")
+  Project.compile Output.Dev Output.Client jsOutput Nothing summary [ lamderaCheckBothPath ]
 
-              -- Cleanup dummy runtime files if we added them
-              -- liftIO $ unless frontendRuntimeExists $ callCommand $ "rm " <> root </> "src/LFR.elm"
-              -- liftIO $ unless backendRuntimeExists $ callCommand $ "rm " <> root </> "src/LBR.elm"
+  -- @TODO this is because the migrationCheck does weird terminal stuff that mangles the display... how to fix this?
+  liftIO $ sleep 50 -- 50 milliseconds
+
+  debug "Cleaning up build scaffold"
+  -- Remove our temporarily checker file
+  liftIO $ remove $ root </> lamderaCheckBothPath
+
+  -- Restore backed up unaltered migration file
+  liftIO $ copyFile migrationPathBk migrationPath
+  liftIO $ remove migrationPathBk
 
 
 committedCheck :: FilePath -> VersionInfo -> Task.Task ()

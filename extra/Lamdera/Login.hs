@@ -51,7 +51,7 @@ run () () = do
 
           _ -> do
             pDocLn $ D.fillSep ["───>", D.red "Existing token invalid, starting again"]
-            removeFile (elmHome </> ".lamdera-cli")
+            remove (elmHome </> ".lamdera-cli")
             pure newToken
 
       Nothing ->
@@ -80,7 +80,7 @@ validateCliToken = do
 
         _ -> do
           pDocLn $ D.fillSep ["───>", D.red "Existing token invalid, please run `lamdera login`"]
-          removeFile (elmHome </> ".lamdera-cli")
+          remove (elmHome </> ".lamdera-cli")
           fail "Invalid token"
 
     Nothing -> do

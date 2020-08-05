@@ -30,12 +30,14 @@ createLamderaGenerated root nextVersion = do
 
 
 lamderaGenerated nextVersion migrationFilepaths = do
-  migrationSequence <- liftIO $ getMigrationsSequence migrationFilepaths nextVersion `catchError`
+  migrationSequence_ <- liftIO $ getMigrationsSequence migrationFilepaths nextVersion `catchError`
     (\err -> do
       debug $ show err
       debug "getMigrationsSequence was empty - that should only be true on v1 deploy"
       pure [[WithMigrations 1]]
     )
+
+  let migrationSequence = migrationSequence_ & reverse & take 3 & reverse
 
   debug_ $ "Migration sequence: " ++ show migrationSequence
 
@@ -67,7 +69,7 @@ lamderaGenerated nextVersion migrationFilepaths = do
       in
       [text|import Evergreen.V$versionT.Types as T$versionT|]
 
-    historicMigrations_ = historicMigrations migrationSequence
+    historicMigrations_ = historicMigrations migrationSequence nextVersion
 
     nextVersion_ = show_ $ vinfoVersion nextVersion
 
@@ -161,16 +163,21 @@ generateImportMigration version =
   [text|import Evergreen.Migrate.V$versionT as M$versionT|]
 
 
-
-
-
-
-historicMigrations :: [[VersionInfo]] -> Text
-historicMigrations migrationSequence =
+-- Generate the migration funnel for the set of consequetive
+-- app versions leading up to the current version.
+historicMigrations :: [[VersionInfo]] -> VersionInfo -> Text
+historicMigrations migrationSequence nextVersion =
+  let
+    v = vinfoVersion nextVersion
+    end = v
+    start = v - (length migrationSequence) + 1
+    versionEntrypoints = [start..end]
+  in
   migrationSequence
+    & zip versionEntrypoints
     -- & dt "historicMigratoins:migrationSequence"
-    & imap (\i v ->
-      historicMigration migrationSequence (i + 1) v
+    & fmap (\(i,v) ->
+      historicMigration migrationSequence i v
     )
     & (\list ->
         case list of
@@ -180,6 +187,7 @@ historicMigrations migrationSequence =
     & T.intercalate "\n"
 
 
+-- Generate migration funnel for a single app version entrypoint
 historicMigration :: [[VersionInfo]] -> Int -> [VersionInfo] -> Text
 historicMigration migrationSequence forVersion migrationsForVersion =
   let

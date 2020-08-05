@@ -28,10 +28,10 @@ suite = tests
 
   , scope "historicMigrations: no deploys" $ do
       migrations <- io $ getMigrationsSequence [] (WithoutMigrations 1)
-      expectEqualTextTrimmed (historicMigrations migrations) ""
+      expectEqualTextTrimmed (historicMigrations migrations (WithoutMigrations 1)) ""
   , scope "historicMigrations: 1 deploy" $ do
       migrations <- io $ getMigrationsSequence [] (WithoutMigrations 2)
-      expectEqualTextTrimmed (historicMigrations migrations) [text|
+      expectEqualTextTrimmed (historicMigrations migrations (WithoutMigrations 2)) [text|
         1 ->
             case tipe of
                 "BackendModel" ->

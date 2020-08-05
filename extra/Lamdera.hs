@@ -43,7 +43,6 @@ module Lamdera
   , remove
   , rmdir
   , mkdir
-  , Dir.removeFile
   , safeListDirectory
   , copyFile
   , replaceInFile
@@ -269,7 +268,8 @@ lamderaLive =
 -- Vendored from File.IO due to recursion errors
 
 readUtf8 :: FilePath -> IO BS.ByteString
-readUtf8 filePath =
+readUtf8 filePath = do
+  debug $ "readUtf8:" <> filePath
   withUtf8 filePath IO.ReadMode $ \handle ->
     modifyIOError (encodingError filePath) $
       do  fileSize <- catch (IO.hFileSize handle) useZeroIfNotRegularFile
@@ -411,10 +411,13 @@ writeUtf8Root filePath content = do
 
 remove :: FilePath -> IO ()
 remove filepath =
-  do  exists_ <- Dir.doesFileExist filepath
+  do  debug_ $ "remove: " ++ show filepath
+      exists_ <- Dir.doesFileExist filepath
       if exists_
         then Dir.removeFile filepath
-        else return ()
+        else do
+          debug_ $ "[FAILED:DOES NOT EXIST] remove: " ++ show filepath
+          return ()
 
 
 rmdir :: FilePath -> IO ()
@@ -449,6 +452,7 @@ createDirIfMissing filepath =
 
 copyFile :: FilePath -> FilePath -> IO ()
 copyFile source dest = do
+  debug_ $ "copy: " ++ show source ++ " -> " ++ show dest
   createDirIfMissing dest
   Dir.copyFileWithMetadata source dest
 
