@@ -38,6 +38,30 @@ jsonHeaders =
   ]
 
 
+httpGetJson manager request =
+  Client.httpLbs
+    (request
+      { Client.requestHeaders = jsonHeaders
+      , Client.method = "GET"
+      })
+    manager
+
+
+normalJson debugIdentifier endpoint decoder =
+  Http.run $ Http.anything endpoint $ \request manager ->
+    do  debug $ "HTTP GET " <> endpoint <> " (" <> debugIdentifier <> ")"
+        response <- httpGetJson manager request
+        debug $ "<--- " <> (T.unpack $ T.decodeUtf8 $ LBS.toStrict $ Client.responseBody response)
+
+        let bytes = LBS.toStrict (Client.responseBody response)
+        case D.parse endpoint id decoder bytes of
+          Right value ->
+            return $ Right value
+
+          Left jsonProblem ->
+            return $ Left $ BadJson endpoint jsonProblem
+
+
 httpPostJson manager request body =
   Client.httpLbs
     (request

@@ -77,15 +77,16 @@ import qualified Elm.Project.Summary as Summary
 import qualified Text.Read
 import qualified Lamdera.Secrets
 import qualified Lamdera.Generated
+import qualified Lamdera.Update
 
 progressPointer t = do
   Task.report $ Progress.LamderaProgress $ D.fillSep [ D.fromText "───>", D.blue $ t <> "\n" ]
 
-progress t =
-  Task.report $ Progress.LamderaProgress $ D.reflow t
+progress t = do
+  Task.report $ Progress.LamderaProgress $ D.stack [D.reflow t, ""]
 
 progressDoc d =
-  Task.report $ Progress.LamderaProgress $ d
+  Task.report $ Progress.LamderaProgress $ D.stack [d, ""]
 
 
 run :: () -> () -> IO ()
@@ -329,10 +330,22 @@ run () () = do
 
             onlyWhen (not inProduction) $ possiblyShowExternalTypeWarnings
 
-            pDocLn $ D.green $ D.reflow $ "\nIt appears you're all set to deploy v" <> (show nextVersion) <> " of '" <> T.unpack appName <> "'."
-            pDocLn $ D.reflow $ "\nThere are no Evergreen type changes for this version."
+            progressDoc $ D.green $ D.reflow $ "\nIt appears you're all set to deploy v" <> (show nextVersion) <> " of '" <> T.unpack appName <> "'."
+            progressDoc $ D.reflow $ "\nThere are no Evergreen type changes for this version."
 
             buildProductionJsFiles root inProduction nextVersionInfo
+
+    version <- Lamdera.Update.fetchCurrentVersion
+
+    if not $ textContains version (T.pack Lamdera.lamderaVersion)
+      then do
+        progressDoc $ D.stack
+          [ D.yellow $ D.reflow $ "NOTE: There is a new alpha version, please upgrade before you deploy."
+          , D.reflow $ "Download here: <https://dashboard.lamdera.app/docs/download>"
+          ]
+
+      else do
+        progress "Checks complete!"
 
 
 
@@ -550,10 +563,7 @@ migrationCheck root version = do
     migrationPath = (root </> "src/Evergreen/Migrate/V") <> show version <> ".elm"
     migrationPathBk = (root </> "src/Evergreen/Migrate/.V") <> show version <> ".elm.bk"
 
-
   debug $ "Replacing " <> "Evergreen.V" <> show version <> " type references"
-  -- osReplace ("s/import Evergreen.Type.V" <> show version <> "/import Types/g") migrationPath
-  -- liftIO $ replaceInFile ("import Evergreen.V" <> show_ version <> ".Types") "import Types" migrationPath
 
   liftIO $ copyFile migrationPath migrationPathBk
   liftIO $ replaceInFile ("Evergreen.V" <> show_ version <> ".") "" migrationPath
@@ -562,8 +572,6 @@ migrationCheck root version = do
   liftIO $ mkdir $ root </> "lamdera-stuff/alpha"
 
   gen <- liftIO $ Lamdera.Generated.createLamderaGenerated root (WithMigrations version) -- @TODO fix hardcode
-
-  liftIO $ putStrLn $ T.unpack gen
 
   let lamderaCheckBothPath = "lamdera-stuff/alpha/LamderaCheckBoth.elm"
   -- liftIO $ writeUtf8 (root </> lamderaCheckBothPath) (lamderaCheckBothFileContents version)

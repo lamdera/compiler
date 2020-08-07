@@ -251,6 +251,7 @@ Executable elmx
         Lamdera.Task
         Lamdera.TypeHash
         Lamdera.Types
+        Lamdera.Update
         Wire.Source
         Wire.Source2
         Lamdera.Exit

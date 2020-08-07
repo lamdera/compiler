@@ -348,10 +348,11 @@ config = do
     unsetEnv "TOKEN"
 
 
--- http =
---   token <- liftIO $ Lamdera.Login.validateCliToken
---   res <- Lamdera.Secrets.fetchAppConfigItems "discord-bot-local" token True
---   liftIO $ putStrLn $ show res
+http = do
+  reporter <- Terminal.create
+  Task.run reporter $ do
+    res <- Lamdera.Update.fetchCurrentVersion
+    liftIO $ putStrLn $ show res
 
 
 login = do

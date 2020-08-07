@@ -25,12 +25,14 @@ import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events exposing (onClick, onMouseEnter, onMouseLeave)
 import Html.Lazy
+import Http
 import Lamdera exposing (ClientId, Key, SessionId, Url)
 import Lamdera.Debug as LD
 import Lamdera.Json as Json
 import Lamdera.Wire2 as Wire
 import Process
 import Task
+import Time
 import Types exposing (BackendModel, BackendMsg, FrontendModel, FrontendMsg, ToBackend, ToFrontend)
 
 
@@ -108,6 +110,8 @@ type Msg
     | Reload
     | EnvClicked
     | EnvModeSelected String
+    | VersionCheck Time.Posix
+    | VersionCheckResult (Result Http.Error VersionCheck)
     | Noop
 
 
@@ -117,12 +121,10 @@ type alias Model =
     , bemDirty : Bool
     , originalUrl : Url
     , originalKey : Key
-    , nodeType : NodeType
-    , liveStatus : LiveStatus
     , sessionId : String
     , clientId : String
+    , nodeType : NodeType
     , devbar : DevBar
-    , showModeChanger : Bool
     }
 
 
@@ -132,7 +134,16 @@ type alias DevBar =
     , freeze : Bool
     , networkDelay : Bool
     , logging : Bool
+    , liveStatus : LiveStatus
+    , showModeChanger : Bool
+    , versionCheck : VersionCheck
     }
+
+
+type VersionCheck
+    = VersionUnchecked
+    | VersionCheckFailed Time.Posix
+    | VersionCheckSucceeded String Time.Posix
 
 
 type Location
@@ -245,6 +256,9 @@ init flags url key =
             , freeze = False
             , networkDelay = False
             , logging = True
+            , liveStatus = Online
+            , showModeChanger = False
+            , versionCheck = VersionUnchecked
             }
     in
     ( { fem = fem
@@ -253,11 +267,9 @@ init flags url key =
       , originalKey = key
       , originalUrl = url
       , nodeType = args.nodeType
-      , liveStatus = Online
       , sessionId = args.sessionId
       , clientId = args.clientId
       , devbar = devbar
-      , showModeChanger = False
       }
     , Cmd.batch
         [ Cmd.map FEMsg newFeCmds
@@ -266,6 +278,7 @@ init flags url key =
 
           else
             Cmd.none
+        , Time.now |> Task.perform VersionCheck
         ]
     )
 
@@ -362,7 +375,7 @@ update msg m =
             else
                 v
     in
-    -- case log "msg" msg of
+    -- case Debug.log "msg" msg of
     case msg of
         FEMsg frontendMsg ->
             let
@@ -644,14 +657,21 @@ update msg m =
             )
 
         SetLiveStatus bool ->
+            let
+                devbar =
+                    m.devbar
+            in
             ( { m
-                | liveStatus =
-                    case bool of
-                        True ->
-                            Online
+                | devbar =
+                    { devbar
+                        | liveStatus =
+                            case bool of
+                                True ->
+                                    Online
 
-                        False ->
-                            Offline
+                                False ->
+                                    Offline
+                    }
               }
             , Cmd.none
             )
@@ -816,7 +836,11 @@ update msg m =
             ( m, LD.browserReload )
 
         EnvClicked ->
-            ( { m | showModeChanger = not m.showModeChanger }, Cmd.none )
+            let
+                devbar =
+                    m.devbar
+            in
+            ( { m | devbar = { devbar | showModeChanger = not devbar.showModeChanger } }, Cmd.none )
 
         EnvModeSelected env ->
             ( m
@@ -826,6 +850,54 @@ update msg m =
                 |> Json.object
                 |> sendToBackend
             )
+
+        VersionCheck timeCurrent ->
+            let
+                check =
+                    ( m
+                    , getLatestVersion timeCurrent
+                        |> Task.onError (\err -> Task.succeed <| VersionCheckFailed timeCurrent)
+                        |> Task.attempt VersionCheckResult
+                    )
+
+                recheckIfLongerThanHours hours timeOld =
+                    if (Time.posixToMillis timeCurrent - Time.posixToMillis timeOld) > (hours * 1000 * 60 * 60) then
+                        check
+
+                    else
+                        ( m, Cmd.none )
+            in
+            case m.devbar.versionCheck of
+                VersionUnchecked ->
+                    check
+
+                VersionCheckFailed t ->
+                    recheckIfLongerThanHours 1 t
+
+                VersionCheckSucceeded v t ->
+                    recheckIfLongerThanHours 24 t
+
+        VersionCheckResult res ->
+            case res of
+                Ok val ->
+                    let
+                        devbar =
+                            m.devbar
+                    in
+                    case val of
+                        VersionUnchecked ->
+                            -- Not possible, not mapped in decoder
+                            ( m, Cmd.none )
+
+                        VersionCheckFailed time ->
+                            ( { m | devbar = LD.debugS "d" { devbar | versionCheck = val } }, Cmd.none )
+
+                        VersionCheckSucceeded v time ->
+                            ( { m | devbar = LD.debugS "d" { devbar | versionCheck = val } }, Cmd.none )
+
+                Err err ->
+                    -- Not possible, errors remapped to VersionCheckFailed
+                    ( m, Cmd.none )
 
         Noop ->
             ( m, Cmd.none )
@@ -853,6 +925,7 @@ subscriptions { nodeType, fem, bem, bemDirty } =
         , rpcIn RPCIn
         , onConnection OnConnection
         , onDisconnection OnDisconnection
+        , Time.every (10 * 60 * 1000) VersionCheck
         ]
 
 
@@ -888,15 +961,13 @@ yForLocation location =
 
 lamderaUI :
     DevBar
-    -> LiveStatus
     -> NodeType
-    -> Bool
     -> List (Html Msg)
-lamderaUI devbar liveStatus nodeType showModeChanger =
-    case liveStatus of
+lamderaUI devbar nodeType =
+    case devbar.liveStatus of
         Online ->
             [ Html.Lazy.lazy2 lamderaPane devbar nodeType
-            , Html.Lazy.lazy envModeChanger showModeChanger
+            , Html.Lazy.lazy envModeChanger devbar.showModeChanger
             ]
 
         Offline ->
@@ -961,10 +1032,6 @@ envModeChanger showModeChanger =
 
 
 lamderaPane devbar nodeType =
-    let
-        x =
-            Debug.log "redering" "h!"
-    in
     div
         [ style "font-family" "system-ui, Helvetica Neue, sans-serif"
         , style "font-size" "12px"
@@ -1047,7 +1114,7 @@ envMeta =
 lamderaDevBar topDown devbar nodeType =
     case topDown of
         True ->
-            [ collapsedUI devbar nodeType
+            [ pill devbar nodeType
             , if devbar.expanded then
                 div
                     [ style "border-top" "1px solid #393939"
@@ -1069,11 +1136,11 @@ lamderaDevBar topDown devbar nodeType =
 
               else
                 text ""
-            , collapsedUI devbar nodeType
+            , pill devbar nodeType
             ]
 
 
-collapsedUI devbar nodeType =
+pill devbar nodeType =
     div []
         [ div
             [ style "padding" "5px 7px 2px 5px"
@@ -1128,6 +1195,29 @@ collapsedUI devbar nodeType =
                 summaryIcon iconLogs grey ToggledLogging
             ]
         , envIndicator
+        , case devbar.versionCheck of
+            VersionUnchecked ->
+                text ""
+
+            VersionCheckFailed time ->
+                text ""
+
+            VersionCheckSucceeded version time ->
+                if version /= lamderaVersion then
+                    div
+                        [ style "text-align" "center"
+                        , style "font-size" "10px"
+                        , style "background-color" "#8E4CD0"
+                        , style "padding" "4px"
+                        , style "border-radius" "0 0 5px 5px"
+                        , style "box-shadow" "inset 0px 3px 3px -3px rgba(0,0,0,1)"
+                        , style "border-top" "1px solid #555"
+                        ]
+                        [ buttonDevLink "New version!" "https://dashboard.lamdera.app/docs/download" white
+                        ]
+
+                else
+                    text ""
         ]
 
 
@@ -1170,7 +1260,28 @@ expandedUI topDown devbar =
                   in
                   buttonDevColored "Env" label color EnvClicked
                 , div [ style "height" "30px", style "width" "1px", style "background-color" "#393939" ] []
-                , buttonDevLink "Docs" "https://dashboard.lamdera.app/docs"
+                , buttonDevLink "Docs" "https://dashboard.lamdera.app/docs" white
+                ]
+
+        versionInfo =
+            let
+                ( borderPos, borderRadius ) =
+                    if topDown then
+                        ( "border-top", "0 0 5px 5px" )
+
+                    else
+                        ( "border-bottom", "5px 5px 0 0" )
+            in
+            div
+                [ style "text-align" "center"
+                , style "font-size" "10px"
+                , style "background-color" "#222"
+                , style "color" "#888"
+                , style "border-radius" borderRadius
+                , style "padding" "4px"
+                , style borderPos "1px solid #393939"
+                ]
+                [ text <| "Version: " ++ lamderaVersion
                 ]
     in
     div [ style "width" "175px" ]
@@ -1178,7 +1289,7 @@ expandedUI topDown devbar =
             text ""
 
           else
-            envDocs
+            div [] [ versionInfo, envDocs ]
         , case devbar.freeze of
             False ->
                 buttonDev "Reset Backend" ResetDebugStoreBE
@@ -1210,7 +1321,7 @@ expandedUI topDown devbar =
             False ->
                 buttonDevOff "Logging: Off" iconLogs ToggledLogging
         , if topDown then
-            envDocs
+            div [] [ envDocs, versionInfo ]
 
           else
             text ""
@@ -1281,11 +1392,10 @@ buttonDevOff label icon_ msg =
         ]
 
 
-buttonDevLink label url =
+buttonDevLink label url color =
     a
-        [ style "color" white
+        [ style "color" color
         , style "cursor" "pointer"
-        , style "padding" "8px 8px"
         , style "text-decoration" "none"
         , style "display" "block"
         , style "display" "flex"
@@ -1296,7 +1406,7 @@ buttonDevLink label url =
         ]
         [ text label
         , spacer 5
-        , icon iconExternalLink 12 white
+        , icon iconExternalLink 12 color
         ]
 
 
@@ -1307,9 +1417,7 @@ mapDocument model msg { title, body } =
         List.map (Html.map msg) body
             ++ lamderaUI
                 model.devbar
-                model.liveStatus
                 model.nodeType
-                model.showModeChanger
     }
 
 
@@ -1389,6 +1497,10 @@ yellow =
     "#FFCB64"
 
 
+darkYellow =
+    "#C98F1B"
+
+
 white =
     "#EEE"
 
@@ -1431,3 +1543,45 @@ required key valDecoder decoder =
 custom : Json.Decoder a -> Json.Decoder (a -> b) -> Json.Decoder b
 custom =
     Json.map2 (|>)
+
+
+getLatestVersion time =
+    Http.task
+        { method = "GET"
+        , headers = []
+        , url = "https://lamdera.com/current-version.json"
+        , body = Http.emptyBody
+        , resolver = Http.stringResolver <| handleJsonResponse <| decodeVersionCheck time
+        , timeout = Nothing
+        }
+
+
+decodeVersionCheck : Time.Posix -> Json.Decoder VersionCheck
+decodeVersionCheck time =
+    Json.decoderString
+        |> Json.andThen
+            (\v -> Json.succeed <| VersionCheckSucceeded v time)
+
+
+handleJsonResponse : Json.Decoder a -> Http.Response String -> Result Http.Error a
+handleJsonResponse decoder response =
+    case response of
+        Http.BadUrl_ url ->
+            Err (Http.BadUrl url)
+
+        Http.Timeout_ ->
+            Err Http.Timeout
+
+        Http.BadStatus_ { statusCode } _ ->
+            Err (Http.BadStatus statusCode)
+
+        Http.NetworkError_ ->
+            Err Http.NetworkError
+
+        Http.GoodStatus_ _ body ->
+            case Json.decodeString decoder body of
+                Err _ ->
+                    Err (Http.BadBody body)
+
+                Ok result ->
+                    Ok result

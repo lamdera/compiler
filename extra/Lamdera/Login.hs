@@ -88,8 +88,6 @@ validateCliToken = do
       fail "Invalid token"
 
 
-
-
 doUntil :: (a -> Bool) -> (IO a) -> IO a
 doUntil check fn = do
   x <- fn
@@ -128,7 +126,6 @@ checkApiLoop inProduction appName token = do
         "success" -> do
           elmHome <- PerUserCache.getElmHome
           writeUtf8 (elmHome </> ".lamdera-cli") token
-          -- putStrLn $ "───> Logged in!"
           pDocLn $ D.fillSep ["───>", D.green "Logged in!"]
           pure True
 
