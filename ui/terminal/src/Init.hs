@@ -100,6 +100,9 @@ defaults =
     , (Pkg.browser, Con.anything)
     , (Pkg.url, Con.anything)
     -- @LAMDERA todo - move into Lamdera
+    , (Pkg.http, Con.anything)
+    , (Pkg.json, Con.anything)
+    , (Pkg.time, Con.anything)
     , (Pkg.lamderaCore, Con.exactly (Pkg.Version 1 0 0))
     , (Pkg.lamderaCodecs, Con.exactly (Pkg.Version 1 0 0))
     ]
