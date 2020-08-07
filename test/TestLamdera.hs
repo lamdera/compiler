@@ -26,6 +26,7 @@ import qualified Init
 import qualified Lamdera.Login
 import qualified Lamdera.Check
 import qualified Lamdera.Secrets
+import qualified Lamdera.Update
 
 {-| For quick and general local development testing via `stack ghci` as TestLamdera.check -}
 check = do

@@ -214,15 +214,16 @@ run () () = do
         -- Always snapshot types for the first version, we need a starting point
         _ <- liftIO $ snapshotCurrentTypesTo summary root nextVersion
 
-        -- This is the first version, we don't need any migration checking.
-        onlyWhen (not inProduction) $ committedCheck root nextVersionInfo
-
         writeLamderaGenerated root inProduction nextVersionInfo
         buildProductionJsFiles root inProduction nextVersionInfo
 
         onlyWhen (not inProduction) $ possiblyShowExternalTypeWarnings
 
         progressDoc $ D.green (D.reflow $ "It appears you're all set to deploy the first version of '" <> T.unpack appName <> "'!")
+
+        -- This is the first version, we don't need any migration checking.
+        onlyWhen (not inProduction) $ committedCheck root nextVersionInfo
+
         liftIO $ putStrLn ""
 
       else do
@@ -274,17 +275,17 @@ run () () = do
 
                   else do
                     migrationCheck root nextVersion
-                    onlyWhen (not inProduction) $ committedCheck root nextVersionInfo
-
                     onlyWhen (not inProduction) $ possiblyShowExternalTypeWarnings
 
-                    pDocLn $ D.green $ D.reflow $ "\nIt appears you're all set to deploy v" <> (show nextVersion) <> " of '" <> T.unpack appName <> "'."
+                    progressDoc $ D.green $ D.reflow $ "\nIt appears you're all set to deploy v" <> (show nextVersion) <> " of '" <> T.unpack appName <> "'."
 
-                    mapM pDocLn $
+                    mapM progressDoc $
                       ([ D.reflow "Evergreen migrations will be applied to the following types:"
                        , formattedChangedTypes
                        , D.reflow "See <https://dashboard.lamdera.app/docs/evergreen> for more info." ]
                       )
+
+                    onlyWhen (not inProduction) $ committedCheck root nextVersionInfo
 
                     buildProductionJsFiles root inProduction nextVersionInfo
 
@@ -651,10 +652,10 @@ committedCheck root versionInfo = do
             liftIO $ callCommand $ "git commit -m \"Preparing for v" <> show version <> "\""
 
           else
-            genericExit "Okay, I did not commit it."
+            progress "Okay, I did not commit it."
 
       else
-        genericExit "Okay, I did not add it."
+        progress "Okay, I did not add it."
 
 
 defaultMigrationFile :: Int -> Int -> [(String, String, String)] -> Text
@@ -908,7 +909,7 @@ possiblyShowExternalTypeWarnings = do
 
       debug "Printing out external type warnings"
 
-      pDocLn $
+      progressDoc $
         D.stack
           (
           [ D.red $ D.reflow $ "WARNING: Evergreen Alpha does not cover type changes outside your project"

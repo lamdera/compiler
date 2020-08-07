@@ -143,7 +143,7 @@ fetchApiSession appName token useLocal =
           "http://localhost:8000/_r/apiSessionJson"
           -- "https://" <> T.unpack appName <> ".lamdera.test/_i"
         else
-          "https://" <> T.unpack appName <> ".lamdera.app/_r/apiSessionJson"
+          "https://dashboard.lamdera.app/_r/apiSessionJson"
 
     body =
       E.object [ ("token", E.text token) ]
