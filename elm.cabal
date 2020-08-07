@@ -340,6 +340,7 @@ Executable elmx
         entropy,
         -- Debug
         unicode-show,
+        network-info,
 
         -- Test
         async,
