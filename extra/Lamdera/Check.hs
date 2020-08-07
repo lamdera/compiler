@@ -579,6 +579,18 @@ migrationCheck root version = do
   liftIO $ writeUtf8 (root </> lamderaCheckBothPath) (gen)
   let jsOutput = Just (Output.Html Nothing "/dev/null")
   Project.compile Output.Dev Output.Client jsOutput Nothing summary [ lamderaCheckBothPath ]
+    `catchError` (\err -> do
+      debug "catchError: Cleaning up build scaffold"
+      -- Remove our temporarily checker file
+      liftIO $ remove $ root </> lamderaCheckBothPath
+
+      -- Restore backed up unaltered migration file
+      liftIO $ copyFile migrationPathBk migrationPath
+      liftIO $ remove migrationPathBk
+
+      -- liftIO $ putStrLn $ show err
+      Task.throw err
+    )
 
   -- @TODO this is because the migrationCheck does weird terminal stuff that mangles the display... how to fix this?
   liftIO $ sleep 50 -- 50 milliseconds
@@ -648,8 +660,9 @@ committedCheck root versionInfo = do
             ]
 
         if commitApproved
-          then
+          then do
             liftIO $ callCommand $ "git commit -m \"Preparing for v" <> show version <> "\""
+            progress ""
 
           else
             progress "Okay, I did not commit it."
