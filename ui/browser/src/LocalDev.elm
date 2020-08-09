@@ -26,9 +26,10 @@ import Html.Attributes exposing (..)
 import Html.Events exposing (onClick, onMouseEnter, onMouseLeave)
 import Html.Lazy
 import Http
+import Json.Decode as D
+import Json.Encode as E
 import Lamdera exposing (ClientId, Key, SessionId, Url)
 import Lamdera.Debug as LD
-import Lamdera.Json as Json
 import Lamdera.Wire2 as Wire
 import Process
 import Task
@@ -44,19 +45,19 @@ lamderaVersion =
     "alpha9"
 
 
-port sendToBackend : Json.Value -> Cmd msg
+port sendToBackend : E.Value -> Cmd msg
 
 
-port sendToFrontend : Json.Value -> Cmd msg
+port sendToFrontend : E.Value -> Cmd msg
 
 
-port receiveFromBackend : (Json.Value -> msg) -> Sub msg
+port receiveFromBackend : (E.Value -> msg) -> Sub msg
 
 
-port receiveFromFrontend : (Json.Value -> msg) -> Sub msg
+port receiveFromFrontend : (E.Value -> msg) -> Sub msg
 
 
-port receiveBackendModel : (Json.Value -> msg) -> Sub msg
+port receiveBackendModel : (E.Value -> msg) -> Sub msg
 
 
 port setNodeTypeLeader : (Bool -> msg) -> Sub msg
@@ -68,16 +69,16 @@ port setLiveStatus : (Bool -> msg) -> Sub msg
 port setClientId : (String -> msg) -> Sub msg
 
 
-port rpcIn : (Json.Value -> msg) -> Sub msg
+port rpcIn : (E.Value -> msg) -> Sub msg
 
 
-port rpcOut : Json.Value -> Cmd msg
+port rpcOut : E.Value -> Cmd msg
 
 
-port onConnection : (Json.Value -> msg) -> Sub msg
+port onConnection : (E.Value -> msg) -> Sub msg
 
 
-port onDisconnection : (Json.Value -> msg) -> Sub msg
+port onDisconnection : (E.Value -> msg) -> Sub msg
 
 
 type Msg
@@ -88,12 +89,12 @@ type Msg
     | FEtoBE Types.ToBackend
     | FEtoBEDelayed Types.ToBackend
     | FENewUrl Url
-    | OnConnection Json.Value
-    | OnDisconnection Json.Value
-    | ReceivedFromFrontend Json.Value
-    | ReceivedFromBackend Json.Value
-    | ReceivedBackendModel Json.Value
-    | RPCIn Json.Value
+    | OnConnection E.Value
+    | OnDisconnection E.Value
+    | ReceivedFromFrontend E.Value
+    | ReceivedFromBackend E.Value
+    | ReceivedBackendModel E.Value
+    | RPCIn E.Value
     | SetNodeTypeLeader Bool
     | SetLiveStatus Bool
     | ReceivedClientId String
@@ -176,7 +177,7 @@ userBackendApp =
     Backend.app
 
 
-init : Json.Value -> Url -> Key -> ( Model, Cmd Msg )
+init : E.Value -> Url -> Key -> ( Model, Cmd Msg )
 init flags url key =
     let
         log t v =
@@ -187,14 +188,14 @@ init flags url key =
                 v
 
         flagsDecoder =
-            Json.succeed NodeInitArgs
-                |> required "c" Json.decoderString
-                |> required "s" Json.decoderString
+            D.succeed NodeInitArgs
+                |> required "c" D.string
+                |> required "s" D.string
                 |> required "nt" decodeNodeType
-                |> required "i" (Json.decoderList Json.decoderInt)
+                |> required "i" (D.list D.int)
 
         args =
-            case Json.decodeValue flagsDecoder flags of
+            case D.decodeValue flagsDecoder flags of
                 Ok r ->
                     r
 
@@ -313,10 +314,10 @@ nodeTypeToString nodeType =
             "Leader"
 
 
-decodeNodeType : Json.Decoder NodeType
+decodeNodeType : D.Decoder NodeType
 decodeNodeType =
-    Json.decoderString
-        |> Json.map
+    D.string
+        |> D.map
             (\v ->
                 case v of
                     "l" ->
@@ -348,11 +349,11 @@ type alias Payload =
 
 
 payloadDecoder =
-    Json.succeed Payload
-        |> required "t" Json.decoderString
-        |> required "s" Json.decoderString
-        |> required "c" Json.decoderString
-        |> required "i" (Json.decoderList Json.decoderInt)
+    D.succeed Payload
+        |> required "t" D.string
+        |> required "s" D.string
+        |> required "c" D.string
+        |> required "i" (D.list D.int)
 
 
 type alias ClientJson =
@@ -360,9 +361,9 @@ type alias ClientJson =
 
 
 clientJsonDecoder =
-    Json.succeed ClientJson
-        |> required "s" Json.decoderString
-        |> required "c" Json.decoderString
+    D.succeed ClientJson
+        |> required "s" D.string
+        |> required "c" D.string
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -422,18 +423,18 @@ update msg m =
                     else
                         let
                             payload =
-                                Json.object
-                                    [ ( "t", Json.string "ToFrontend" )
+                                E.object
+                                    [ ( "t", E.string "ToFrontend" )
                                     , ( "i"
                                       , toFrontend
                                             |> log " ◀️B "
                                             |> Types.w2_encode_ToFrontend
                                             |> Wire.bytesEncode
                                             |> Wire.intListFromBytes
-                                            |> Json.list Json.int
+                                            |> E.list E.int
                                       )
-                                    , ( "s", Json.string "" )
-                                    , ( "c", Json.string clientId )
+                                    , ( "s", E.string "" )
+                                    , ( "c", E.string clientId )
                                     ]
                         in
                         ( m
@@ -450,18 +451,18 @@ update msg m =
                 Leader ->
                     let
                         payload =
-                            Json.object
-                                [ ( "t", Json.string "ToFrontend" )
+                            E.object
+                                [ ( "t", E.string "ToFrontend" )
                                 , ( "i"
                                   , toFrontend
                                         |> log " ◀️B⏱"
                                         |> Types.w2_encode_ToFrontend
                                         |> Wire.bytesEncode
                                         |> Wire.intListFromBytes
-                                        |> Json.list Json.int
+                                        |> E.list E.int
                                   )
-                                , ( "s", Json.string "" )
-                                , ( "c", Json.string clientId )
+                                , ( "s", E.string "" )
+                                , ( "c", E.string clientId )
                                 ]
                     in
                     ( m
@@ -480,11 +481,11 @@ update msg m =
                         log "F▶️  " toBackend
 
                     payload =
-                        Json.object
-                            [ ( "t", Json.string "ToBackend" )
-                            , ( "s", Json.string m.sessionId )
-                            , ( "c", Json.string m.clientId )
-                            , ( "i", Json.list Json.int (Wire.intListFromBytes (Wire.bytesEncode (Types.w2_encode_ToBackend toBackend))) )
+                        E.object
+                            [ ( "t", E.string "ToBackend" )
+                            , ( "s", E.string m.sessionId )
+                            , ( "c", E.string m.clientId )
+                            , ( "i", E.list E.int (Wire.intListFromBytes (Wire.bytesEncode (Types.w2_encode_ToBackend toBackend))) )
                             ]
                 in
                 ( m
@@ -499,11 +500,11 @@ update msg m =
                     log "F▶️ ⏱" toBackend
 
                 payload =
-                    Json.object
-                        [ ( "t", Json.string "ToBackend" )
-                        , ( "s", Json.string m.sessionId )
-                        , ( "c", Json.string m.clientId )
-                        , ( "i", Json.list Json.int (Wire.intListFromBytes (Wire.bytesEncode (Types.w2_encode_ToBackend toBackend))) )
+                    E.object
+                        [ ( "t", E.string "ToBackend" )
+                        , ( "s", E.string m.sessionId )
+                        , ( "c", E.string m.clientId )
+                        , ( "i", E.list E.int (Wire.intListFromBytes (Wire.bytesEncode (Types.w2_encode_ToBackend toBackend))) )
                         ]
             in
             ( m
@@ -520,7 +521,7 @@ update msg m =
             ( { newModel | originalUrl = url }, newCmds )
 
         OnConnection json ->
-            case Json.decodeValue clientJsonDecoder json of
+            case D.decodeValue clientJsonDecoder json of
                 Ok c ->
                     ( m, Lamdera.clientConnected_ c.sessionId c.clientId )
 
@@ -532,7 +533,7 @@ update msg m =
                     ( m, Cmd.none )
 
         OnDisconnection json ->
-            case Json.decodeValue clientJsonDecoder json of
+            case D.decodeValue clientJsonDecoder json of
                 Ok c ->
                     ( m, Lamdera.clientDisconnected_ c.sessionId c.clientId )
 
@@ -550,7 +551,7 @@ update msg m =
                     ( m, Cmd.none )
 
                 Leader ->
-                    case Json.decodeValue payloadDecoder payload of
+                    case D.decodeValue payloadDecoder payload of
                         Ok args ->
                             case Wire.bytesDecode Types.w2_decode_ToBackend (Wire.intListToBytes args.i) of
                                 Just toBackend ->
@@ -577,12 +578,12 @@ update msg m =
                         Err err ->
                             let
                                 x =
-                                    log "❌ ReceivedFromFrontend decoding error" (Json.errorToString err)
+                                    log "❌ ReceivedFromFrontend decoding error" (D.errorToString err)
                             in
                             ( m, Cmd.none )
 
         ReceivedFromBackend payload ->
-            case Json.decodeValue payloadDecoder payload of
+            case D.decodeValue payloadDecoder payload of
                 Ok args ->
                     case Wire.bytesDecode Types.w2_decode_ToFrontend (Wire.intListToBytes args.i) of
                         Just toFrontend ->
@@ -607,12 +608,12 @@ update msg m =
                 Err err ->
                     let
                         x =
-                            log "❌ ReceivedFromBackend decoding error" (Json.errorToString err)
+                            log "❌ ReceivedFromBackend decoding error" (D.errorToString err)
                     in
                     ( m, Cmd.none )
 
         ReceivedBackendModel payload ->
-            case Json.decodeValue payloadDecoder payload of
+            case D.decodeValue payloadDecoder payload of
                 Ok args ->
                     case Wire.bytesDecode Types.w2_decode_BackendModel (Wire.intListToBytes args.i) of
                         Just newBem ->
@@ -634,7 +635,7 @@ update msg m =
                 Err err ->
                     let
                         x =
-                            log "❌ ReceivedBackendModel decoding error" (Json.errorToString err)
+                            log "❌ ReceivedBackendModel decoding error" (D.errorToString err)
                     in
                     ( m, Cmd.none )
 
@@ -802,19 +803,19 @@ update msg m =
                             Cmd.none
 
                         Leader ->
-                            [ ( "t", Json.string "BackendModel" )
-                            , ( "s", Json.string "system" )
-                            , ( "c", Json.string "system" )
+                            [ ( "t", E.string "BackendModel" )
+                            , ( "s", E.string "system" )
+                            , ( "c", E.string "system" )
                             , ( "f"
                               , if reload then
-                                    Json.string "force"
+                                    E.string "force"
 
                                 else
-                                    Json.string ""
+                                    E.string ""
                               )
-                            , ( "i", Json.list Json.int (Wire.intListFromBytes (Wire.bytesEncode (Types.w2_encode_BackendModel bem))) )
+                            , ( "i", E.list E.int (Wire.intListFromBytes (Wire.bytesEncode (Types.w2_encode_BackendModel bem))) )
                             ]
-                                |> Json.object
+                                |> E.object
                                 |> sendToBackend
             in
             if m.bemDirty then
@@ -844,10 +845,10 @@ update msg m =
 
         EnvModeSelected env ->
             ( m
-            , [ ( "t", Json.string "envMode" )
-              , ( "v", Json.string env )
+            , [ ( "t", E.string "envMode" )
+              , ( "v", E.string env )
               ]
-                |> Json.object
+                |> E.object
                 |> sendToBackend
             )
 
@@ -1203,7 +1204,10 @@ pill devbar nodeType =
                 text ""
 
             VersionCheckSucceeded version time ->
-                if version /= lamderaVersion then
+                if String.contains "wip" lamderaVersion then
+                    text ""
+
+                else if version /= lamderaVersion then
                     div
                         [ style "text-align" "center"
                         , style "font-size" "10px"
@@ -1513,7 +1517,7 @@ charcoal =
     "#2e3335"
 
 
-main : Program Json.Value Model Msg
+main : Program E.Value Model Msg
 main =
     Browser.application
         { init = init
@@ -1535,14 +1539,14 @@ trigger msg =
     Process.sleep 0 |> Task.perform (always msg)
 
 
-required : String -> Json.Decoder a -> Json.Decoder (a -> b) -> Json.Decoder b
+required : String -> D.Decoder a -> D.Decoder (a -> b) -> D.Decoder b
 required key valDecoder decoder =
-    custom (Json.field key valDecoder) decoder
+    custom (D.field key valDecoder) decoder
 
 
-custom : Json.Decoder a -> Json.Decoder (a -> b) -> Json.Decoder b
+custom : D.Decoder a -> D.Decoder (a -> b) -> D.Decoder b
 custom =
-    Json.map2 (|>)
+    D.map2 (|>)
 
 
 getLatestVersion time =
@@ -1556,14 +1560,14 @@ getLatestVersion time =
         }
 
 
-decodeVersionCheck : Time.Posix -> Json.Decoder VersionCheck
+decodeVersionCheck : Time.Posix -> D.Decoder VersionCheck
 decodeVersionCheck time =
-    Json.decoderString
-        |> Json.andThen
-            (\v -> Json.succeed <| VersionCheckSucceeded v time)
+    D.string
+        |> D.andThen
+            (\v -> D.succeed <| VersionCheckSucceeded v time)
 
 
-handleJsonResponse : Json.Decoder a -> Http.Response String -> Result Http.Error a
+handleJsonResponse : D.Decoder a -> Http.Response String -> Result Http.Error a
 handleJsonResponse decoder response =
     case response of
         Http.BadUrl_ url ->
@@ -1579,7 +1583,7 @@ handleJsonResponse decoder response =
             Err Http.NetworkError
 
         Http.GoodStatus_ _ body ->
-            case Json.decodeString decoder body of
+            case D.decodeString decoder body of
                 Err _ ->
                     Err (Http.BadBody body)
 
