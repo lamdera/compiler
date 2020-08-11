@@ -208,7 +208,15 @@ init flags url key =
                     devbarInit
 
                 Just restoredDevbar ->
-                    { restoredDevbar | expanded = False }
+                    { restoredDevbar
+                      -- Avoid scenario where we persisted while expanded and now
+                      -- every refresh it's opening up again without cursor
+                        | expanded = False
+
+                        -- If we've just loaded the page, then we must have connectivity,
+                        -- so avoid an odd scenario where we persisted debvar while disconnected
+                        , liveStatus = Online
+                    }
 
         ( ifem, iFeCmds ) =
             userFrontendApp.init url key
@@ -1072,6 +1080,8 @@ withOverlay html =
         , style "height" "100vh"
         , style "width" "100vw"
         , style "background-color" "#2e333588"
+        , style "-webkit-backdrop-filter" "blur(3px)"
+        , style "backdrop-filter" "blur(3px)"
         , style "display" "flex"
         , style "justify-content" "center"
         , style "align-items" "center"

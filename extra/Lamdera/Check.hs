@@ -341,7 +341,7 @@ run () () = do
     if not $ textContains version (T.pack Lamdera.lamderaVersion)
       then do
         progressDoc $ D.stack
-          [ D.yellow $ D.reflow $ "NOTE: There is a new alpha version, please upgrade before you deploy."
+          [ D.red $ D.reflow $ "NOTE: There is a new alpha version, please upgrade before you deploy."
           , D.reflow $ "Download here: <https://dashboard.lamdera.app/docs/download>"
           ]
 

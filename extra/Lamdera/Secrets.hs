@@ -424,7 +424,7 @@ checkUserConfig appName prodTokenM = do
         ([ D.vcat missingFormatted
          , D.reflow "I need you to set a production value here before I can deploy:"
          , D.reflow $ "<https://dashboard.lamdera.app/app/" <> T.unpack appName <> ">"
-         , D.reflow "See <https://dashboard.lamdera.app/docs/secrets> more info."
+         , D.reflow "See <https://dashboard.lamdera.app/docs/environment> more info."
          ]
         )
 
@@ -443,7 +443,7 @@ checkUserConfig appName prodTokenM = do
         ([ D.vcat missingFormatted
          , D.reflow "Remove these uses, or make config items public here:"
          , D.reflow $ "<https://dashboard.lamdera.app/app/" <> T.unpack appName <> ">"
-         , D.reflow "See <https://dashboard.lamdera.app/docs/secrets> more info."
+         , D.reflow "See <https://dashboard.lamdera.app/docs/environment> more info."
          ]
         )
 
