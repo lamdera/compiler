@@ -48,66 +48,66 @@ run () () = do
 
         case apiSession of
           Right "success" -> do
-            pure token
+            writeUtf8 (elmHome </> ".lamdera-cli") token
+            pDocLn $ D.fillSep ["───>", D.green "Logged in!"]
 
           _ -> do
             pDocLn $ D.fillSep ["───>", D.red "Existing token invalid, starting again"]
             remove (elmHome </> ".lamdera-cli")
-            pure newToken
+            checkApiLoop inProduction appName newToken
 
-      Nothing ->
-        pure newToken
-
-  doUntil ((==) True) $
-    checkApiLoop inProduction appName token
+      Nothing -> do
+        checkApiLoop inProduction appName newToken
 
   pure ()
 
 
-checkApiLoop inProduction appName token = do
-  apiSession <- fetchApiSession appName token
-  case apiSession of
-    Right response ->
-      case response of
-        "init" -> do
+checkApiLoop inProduction appName token =
+  doUntil ((==) True) $ do
+    apiSession <- fetchApiSession appName token
+    case apiSession of
+      Right response ->
+        case response of
+          "init" -> do
+            let
+              mask = textSha1 $ "x827c2" <> token
+              url =
+                if textContains "-local" appName
+                  then
+                    "http://localhost:8000/auth/cli/" <> mask
+                  else
+                    "https://dashboard.lamdera.app/auth/cli/" <> mask
 
-          let
-            url =
-              if textContains "-local" appName
-                then
-                  "http://localhost:8000/auth/cli/" <> token
-                else
-                  "https://dashboard.lamdera.app/auth/cli/" <> token
+            putStrLn $ "───> Opening " <> T.unpack url
+            sleep 1000
+            openUrlInBrowser url
+            putStrLn $ "───> Waiting for authorization..."
+            sleep 1000
+            pure False
 
-          putStrLn $ "───> Opening " <> T.unpack url
-          sleep 1000
-          openUrlInBrowser url
-          putStrLn $ "───> Waiting for authorization..."
-          sleep 1000
-          pure False
+          "pending" -> do
+            sleep 1000
+            pure False
 
-        "pending" -> do
-          sleep 1000
-          pure False
+          "invalid" -> do
+            pDocLn $ D.fillSep ["───>", D.red "Error:", D.reflow "invalid token. Please try again."]
+            pure True
 
-        "invalid" -> do
-          pDocLn $ D.fillSep ["───>", D.red "Error:", D.reflow "invalid token. Please try again."]
-          pure True
+          "success" -> do
+            elmHome <- PerUserCache.getElmHome
+            writeUtf8 (elmHome </> ".lamdera-cli") token
+            pDocLn $ D.fillSep ["───>", D.green "Logged in!"]
+            pure True
 
-        "success" -> do
-          elmHome <- PerUserCache.getElmHome
-          writeUtf8 (elmHome </> ".lamdera-cli") token
-          pDocLn $ D.fillSep ["───>", D.green "Logged in!"]
-          pure True
-
-        _ -> do
-          -- Unexpected response... ignore and loop again
-          pure False
+          _ -> do
+            -- Unexpected response... ignore and loop again
+            sleep 1000
+            pure False
 
 
-    Left err -> do
-      putStrLn $ Lamdera.Http.errorToString err
-      pure True
+      Left err -> do
+        putStrLn $ Lamdera.Http.errorToString err
+        pure True
 
 
 validateCliToken :: IO Text
@@ -165,9 +165,9 @@ fetchApiSession appName token =
   Lamdera.Http.tryNormalRpcJson "fetchApiSession" body endpoint decoder
 
 
-doUntil :: (a -> Bool) -> (IO a) -> IO a
+doUntil :: (a -> Bool) -> (IO a) -> IO ()
 doUntil check fn = do
   x <- fn
   if check x
-    then pure x
+    then pure ()
     else doUntil check fn

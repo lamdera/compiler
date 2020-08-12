@@ -63,13 +63,12 @@ module Lamdera
   , getEnvMode
   , setEnvMode
   , openUrlInBrowser
+  , textSha1
   )
   where
 
 -- A prelude-like thing that contains the commonly used things in elm.
 -- Names differ, but semantics are similar.
-
--- import Prelude (Maybe(..), String, IO)
 
 import qualified Debug.Trace as DT
 import qualified Wire.PrettyPrint as PP
@@ -87,8 +86,9 @@ import qualified Data.Char as Char
 
 import CanSer.CanSer (ppElm)
 
--- import qualified File.IO as IO
 import qualified Data.Text.Encoding as T
+import qualified Data.Text.Lazy as TL
+import qualified Data.Text.Lazy.Encoding as TLE
 
 import Prelude hiding (lookup)
 import qualified Data.ByteString as BS
@@ -115,9 +115,9 @@ import System.IO.Error (ioeGetErrorType, annotateIOError, modifyIOError)
 import Data.List.Index
 import Text.Show.Unicode
 import qualified System.Process
+import qualified Data.Digest.Pure.SHA as SHA
+
 import qualified Reporting.Doc as D
-
-
 
 lamderaVersion :: String
 lamderaVersion = "0.0.1-alpha9"
@@ -588,6 +588,7 @@ getEnvMode = do
       Just "Development" -> Development
       _ -> Development
 
+
 setEnvMode root mode = do
   writeUtf8 (lamderaEnvModePath root) $ mode
 
@@ -608,3 +609,8 @@ openUrlInBrowser url = do
       -- We have an unexpected system...
       putStrLn $ "ERROR: please report: skipping url open on unknown OSTYPE: " <> show ostype
       pure ()
+
+
+textSha1 :: Text -> Text
+textSha1 input =
+  T.pack $ SHA.showDigest $ SHA.sha1 $ TLE.encodeUtf8 $ TL.fromStrict $ input

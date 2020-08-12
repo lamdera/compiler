@@ -50,8 +50,8 @@ suite = tests
       -- I figured this one was worth writing down!
 
       let
-        sha_first = TypeHash.textSha1 "C[[R[SS]][S][Res[S,L[R[SS]]]][Res[S,R[SL[C[[][]]]SS]]][D[S,I]][D[S,R[C[[I]]SC[[I]]SC[[S]]L[C[[][]]]SS]]][D[S,R[C[[I]]SSS]]][][][Res[S,R[SL[C[[][]]]SS]]]]"
-        sha_second = TypeHash.textSha1 "C[[R[SS]][S][Res[S,L[R[SS]]]][Res[S,R[SL[C[[][]]]SS]]][D[S,I]][D[S,R[C[[I]]SC[[I]]SC[[S]]L[C[[][]]]SS]]][D[S,R[C[[I]]SSS]]][][][][Res[S,R[SL[C[[][]]]SS]]]]"
+        sha_first = textSha1 "C[[R[SS]][S][Res[S,L[R[SS]]]][Res[S,R[SL[C[[][]]]SS]]][D[S,I]][D[S,R[C[[I]]SC[[I]]SC[[S]]L[C[[][]]]SS]]][D[S,R[C[[I]]SSS]]][][][Res[S,R[SL[C[[][]]]SS]]]]"
+        sha_second = textSha1 "C[[R[SS]][S][Res[S,L[R[SS]]]][Res[S,R[SL[C[[][]]]SS]]][D[S,I]][D[S,R[C[[I]]SC[[I]]SC[[S]]L[C[[][]]]SS]]][D[S,R[C[[I]]SSS]]][][][][Res[S,R[SL[C[[][]]]SS]]]]"
 
       liftIO $ putStrLn $ show sha_first
       liftIO $ putStrLn $ show sha_second

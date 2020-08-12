@@ -13,13 +13,10 @@ import qualified AST.Module.Name as ModuleName
 import qualified AST.Utils.Type as Type
 
 
-import qualified Data.Digest.Pure.SHA as SHA
 import qualified Data.Char
 import qualified Data.Map as Map
 import qualified Data.List as List
 import qualified Data.Text as T
-import qualified Data.Text.Lazy as TL
-import qualified Data.Text.Lazy.Encoding as TLE
 import qualified Data.Text.Encoding as TE
 import qualified Elm.Name as N
 import qualified Elm.Package as Pkg
@@ -571,11 +568,6 @@ addExternalWarning (author, pkg, module_, tipe) dtype =
 diffableTypeToHash :: DiffableType -> Text
 diffableTypeToHash dtype =
   textSha1 $ diffableTypeToText dtype
-
-
-textSha1 :: Text -> Text
-textSha1 input =
-  T.pack $ SHA.showDigest $ SHA.sha1 $ TLE.encodeUtf8 $ TL.fromStrict $ input
 
 
 diffableTypeToText :: DiffableType -> Text
