@@ -543,7 +543,6 @@ lowerFirstLetter text =
 
 pDocLn doc =
   liftIO $ do
-    putStrLn ""
     D.toAnsi IO.stdout doc
     putStrLn ""
 

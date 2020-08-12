@@ -4,6 +4,7 @@ module Lamdera.Project where
 
 import qualified Data.Text as T
 import System.Process (readProcess)
+import System.Exit (exitFailure)
 import qualified Reporting.Doc as D
 import qualified Reporting.Exit.Help as Help
 import qualified Reporting.Exit as Exit
@@ -35,6 +36,19 @@ maybeAppName = do
       pure $ Just $ certainAppName lamderaRemotes appNameEnvM
 
 
+appNameOrThrow :: IO Text
+appNameOrThrow = do
+  appNameM <- maybeAppName
+
+  case appNameM of
+    Just appName -> do
+      pure appName
+
+    Nothing -> do
+      pDocLn $ Help.reportToDoc lamderaUnknownApp
+      exitFailure
+
+
 certainAppName :: [Text] -> Maybe String -> Text
 certainAppName lamderaRemotes appNameEnvM =
   case appNameEnvM of
@@ -63,11 +77,14 @@ getLamderaRemotes = do
 
 lamderaThrowUnknownApp :: Task.Task ()
 lamderaThrowUnknownApp =
-  Task.throw $ Exit.Lamdera
-    $ Help.report "UNKNOWN APP" (Just "git remote -v")
-      ("I cannot figure out which Lamdera app this repository belongs to!")
-      ([ D.reflow "I normally look for a git remote called 'lamdera' but did not find one."
-       , D.reflow "Did you maybe forget to add the lamdera remote for your app as listed on the Dashboard?"
-       , D.reflow "See <https://dashboard.lamdera.app/docs/deploying> for more info."
-       ]
-      )
+  Task.throw $ Exit.Lamdera lamderaUnknownApp
+
+
+lamderaUnknownApp =
+  Help.report "UNKNOWN APP" (Just "git remote -v")
+    ("I cannot figure out which Lamdera app this repository belongs to!")
+    ([ D.reflow "I normally look for a git remote called `lamdera` but did not find one."
+     , D.reflow "Did you add the `lamdera` remote for your app as listed on the Dashboard?"
+     , D.reflow "See <https://dashboard.lamdera.app/docs/deploying> for more info."
+     ]
+    )

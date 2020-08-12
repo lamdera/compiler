@@ -53,7 +53,7 @@ writeUsage rootNames graph = do
   let
     usages =
       graph
-        & Lamdera.Secrets.envNodes
+        & findSecretUses (Pkg.Name "author" "project")
         & fmap (\(module_, expression, secrets) -> (N.toText module_, N.toText expression, Set.map N.toText secrets))
         & fmap (\(module_, expression, secrets) ->
             E.list id
@@ -126,28 +126,9 @@ extract rawConfig = do
           -- return $ Left $ E.BadJson endpoint jsonProblem
 
     Nothing -> do
-      let !_ = debugNote "❌ config read failed" ""
+      let !_ = debugNote "❌ config read failed:" rawConfig
       []
 
-
-
-envNodes graph =
-  -- fst $ Map.elemAt 1 ()
-  -- works but not at the right stage, so still catches unused Env strings.
-
-
-  -- Map.elemAt 1 $ Obj._nodes graph
-
-  -- Debugging
-  -- definedSecrets graph
-
-  -- Obj._nodes graph
-  --   & Map.filter nodeContainsEnvRef
-    -- & Map.keys
-    -- & length
-
-  -- DONE: find all secret uses
-  findSecretUses (Pkg.Name "author" "project") graph
 
 
 -- Unused: attempt to find strings, non-exhaustive.
@@ -168,55 +149,6 @@ definedSecrets graph =
         _ ->
           False
     )
-
-
-nodeContainsEnvRef node =
-  case node of
-    Define expr globalDeps ->
-      globalDeps
-        & Set.filter (\global ->
-          case global of
-            Global (Canonical (Pkg.Name "author" "project") (N.Name "Env")) _ ->
-              True
-
-            _ ->
-              False
-        )
-        & (not . Set.null)
-
-    _ ->
-      -- @TODO extend for all types
-      False
-
-      -- asdf =
-      --   Env.blah
-      --
-      -- Results in ->
-      --
-      -- fromList
-      --   [ ( Global
-      --         (Canonical
-      --            { _package = Name {_author = "author", _project = "project"}
-      --            , _module = Name {_name = "Frontend"}
-      --            })
-      --         (Name {_name = "asdf"})
-      --     , Define
-      --         (VarGlobal
-      --            (Global
-      --               (Canonical
-      --                  { _package = Name {_author = "author", _project = "project"}
-      --                  , _module = Name {_name = "Env"}
-      --                  })
-      --               (Name {_name = "blah"})))
-      --         (fromList
-      --            [ Global
-      --                (Canonical
-      --                   { _package = Name {_author = "author", _project = "project"}
-      --                   , _module = Name {_name = "Env"}
-      --                   })
-      --                (Name {_name = "blah"})
-      --            ]))
-      --   ]
 
 
 exprContainsEnvString expr =
@@ -242,12 +174,12 @@ extractSecretName node =
 -- Duplicate of FIND DEBUG USES from Nitpick
 
 
--- findSecretUses :: Pkg.Name -> Opt.Graph -> [(N.Name, N.Name)]
+findSecretUses :: Pkg.Name -> Opt.Graph -> [(N.Name, N.Name, Set.Set N.Name)]
 findSecretUses pkg (Opt.Graph _ graph _) =
   Set.toList $ Map.foldrWithKey (addSecretUses pkg) Set.empty graph
 
 
--- addSecretUses :: Pkg.Name -> Opt.Global -> Opt.Node -> Set.Set (N.Name, N.Name) -> Set.Set (N.Name, N.Name)
+addSecretUses :: Pkg.Name -> Opt.Global -> Opt.Node -> Set.Set (N.Name, N.Name, Set.Set N.Name) -> Set.Set (N.Name, N.Name, Set.Set N.Name)
 addSecretUses here (Opt.Global (ModuleName.Canonical pkg home) expr) node uses =
   let secrets = nodeHasSecret node
   in
@@ -331,16 +263,16 @@ any fn things = foldl Set.union Set.empty (fmap fn things)
 
 
 
-fetchAppConfigItems :: Text -> Text -> Bool -> Task.Task [(Text, Text, Bool, Bool)]
-fetchAppConfigItems appName token useLocal = do
+fetchAppConfigItems :: Text -> Text -> Task.Task [(Text, Text, Bool, Bool)]
+fetchAppConfigItems appName token = do
   let
     endpoint =
-      if textContains "-local" appName && useLocal
+      if textContains "-local" appName
         then
           "http://localhost:8000/_r/configItemsJson"
           -- "https://" <> T.unpack appName <> ".lamdera.test/_i"
         else
-          "https://" <> T.unpack appName <> ".lamdera.app/_r/configItemsJson"
+          "https://dashboard.lamdera.app/_r/configItemsJson"
 
     body =
       E.object
@@ -373,7 +305,7 @@ checkUserConfig appName prodTokenM = do
 
   debug $ "Checking with token: " <> T.unpack token
 
-  prodConfigItems <- Lamdera.Secrets.fetchAppConfigItems appName token True
+  prodConfigItems <- Lamdera.Secrets.fetchAppConfigItems appName token
   localConfigItems <- Lamdera.Secrets.readAppConfigUses
   localFrontendConfigItems <- Lamdera.Secrets.readAppFrontendConfigUses
 
@@ -478,7 +410,7 @@ injectConfig graph = do
                 -- There must be a token present in production
                 error "Error: could not generate production config, please report this."
 
-          prodConfigItems <- Task.try Progress.silentReporter $ fetchAppConfigItems appName (T.pack token) True
+          prodConfigItems <- Task.try Progress.silentReporter $ fetchAppConfigItems appName (T.pack token)
 
           let
             prodConfigMap =

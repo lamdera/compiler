@@ -132,7 +132,7 @@ run () () = do
     progressPointer "Checking config..."
     Lamdera.Secrets.checkUserConfig appName (fmap T.pack prodTokenM)
 
-    progressPointer  "Checking Evergreen migrations..."
+    progressPointer  "Checking Evergreen migrations...\n"
     debug $ "app name:" ++ show appName
 
     localTypes <- fetchLocalTypes root
@@ -338,16 +338,11 @@ run () () = do
 
     version <- Lamdera.Update.fetchCurrentVersion
 
-    if not $ textContains version (T.pack Lamdera.lamderaVersion)
-      then do
+    onlyWhen (not $ textContains version (T.pack Lamdera.lamderaVersion)) $
         progressDoc $ D.stack
           [ D.red $ D.reflow $ "NOTE: There is a new alpha version, please upgrade before you deploy."
           , D.reflow $ "Download here: <https://dashboard.lamdera.app/docs/download>"
           ]
-
-      else do
-        progress "Checks complete!"
-
 
 
 buildProductionJsFiles :: FilePath -> Bool -> VersionInfo -> Task.Task ()

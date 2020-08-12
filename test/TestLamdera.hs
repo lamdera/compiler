@@ -336,17 +336,19 @@ testWire = do
 
 
 config = do
-  let project = "/Users/mario/lamdera/test/v1"
+  -- let project = "/Users/mario/lamdera/test/v1"
+  let project = "/Users/mario/dev/projects/lamdera-test"
   Dir.withCurrentDirectory project $ do
     reporter <- Terminal.create
-    setEnv "TOKEN" "a739477eb8bd2acbc251c246438906f4"
+    -- setEnv "TOKEN" "a739477eb8bd2acbc251c246438906f4"
 
     prodTokenM <- Env.lookupEnv "TOKEN"
     Task.run reporter $ do
 
-      Lamdera.Secrets.checkUserConfig "test-local" (fmap T.pack prodTokenM)
+      Lamdera.Secrets.checkUserConfig "testapp" (fmap T.pack prodTokenM)
 
     unsetEnv "TOKEN"
+    unsetEnv "LDEBUG"
 
 
 http = do
