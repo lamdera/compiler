@@ -111,6 +111,8 @@ type Msg
     | Reload
     | EnvClicked
     | EnvModeSelected String
+    | EnvCleared
+    | ModelResetCleared
     | VersionCheck Time.Posix
     | VersionCheckResult (Result Http.Error VersionCheck)
     | Noop
@@ -137,6 +139,7 @@ type alias DevBar =
     , logging : Bool
     , liveStatus : LiveStatus
     , showModeChanger : Bool
+    , showResetNotification : Bool
     , versionCheck : VersionCheck
     }
 
@@ -216,6 +219,9 @@ init flags url key =
                         -- If we've just loaded the page, then we must have connectivity,
                         -- so avoid an odd scenario where we persisted debvar while disconnected
                         , liveStatus = Online
+
+                        -- Data might have reset since our last refresh
+                        , showResetNotification = didReset
                     }
 
         ( ifem, iFeCmds ) =
@@ -236,28 +242,23 @@ init flags url key =
                     else
                         ( ifem, iFeCmds )
 
-        ( bem, newBeCmds ) =
+        ( bem, newBeCmds, didReset ) =
             case args.backendModelIntList of
                 [] ->
-                    ( ibem, iBeCmds )
+                    -- No intList, brand new app
+                    ( ibem, iBeCmds, False )
 
                 backendModelIntList ->
                     case Wire.bytesDecode Types.w2_decode_BackendModel (Wire.intListToBytes args.backendModelIntList) of
                         Just restoredBem ->
-                            let
-                                x =
-                                    log "☀️ Restored BackendModel" restoredBem
-                            in
                             ( restoredBem
                             , Cmd.none
+                            , False
                             )
 
                         Nothing ->
-                            let
-                                x =
-                                    log "❌ Init error" "Failed to decode provided BackendModel! Resetting to init."
-                            in
-                            ( ibem, iBeCmds )
+                            -- Prior backend model has failed to restore, notify the user of a resulting reset
+                            ( ibem, iBeCmds, True )
 
         devbarInit =
             { expanded = False
@@ -267,8 +268,17 @@ init flags url key =
             , logging = True
             , liveStatus = Online
             , showModeChanger = False
+            , showResetNotification = didReset
             , versionCheck = VersionUnchecked
             }
+    in
+    let
+        x =
+            if didReset || (bem == ibem) then
+                bem
+
+            else
+                log "☀️ Restored BackendModel" bem
     in
     ( { fem = fem
       , bem = bem
@@ -860,6 +870,20 @@ update msg m =
                 |> sendToBackend
             )
 
+        EnvCleared ->
+            let
+                devbar =
+                    m.devbar
+            in
+            ( { m | devbar = { devbar | showModeChanger = False } }, Cmd.none )
+
+        ModelResetCleared ->
+            let
+                devbar =
+                    m.devbar
+            in
+            ( { m | devbar = { devbar | showResetNotification = False } }, Cmd.none )
+
         VersionCheck timeCurrent ->
             let
                 check =
@@ -977,10 +1001,11 @@ lamderaUI devbar nodeType =
         Online ->
             [ Html.Lazy.lazy2 lamderaPane devbar nodeType
             , Html.Lazy.lazy envModeChanger devbar.showModeChanger
+            , Html.Lazy.lazy resetNotification devbar.showResetNotification
             ]
 
         Offline ->
-            [ withOverlay
+            [ withOverlay Noop
                 [ div
                     [ onClick ClickedLocation
                     , style "padding" "10px"
@@ -1001,7 +1026,7 @@ lamderaUI devbar nodeType =
 
 envModeChanger showModeChanger =
     if showModeChanger then
-        withOverlay
+        withOverlay EnvCleared
             [ div
                 [ style "padding" "10px"
                 , style "color" white
@@ -1040,6 +1065,43 @@ envModeChanger showModeChanger =
         text ""
 
 
+resetNotification showReset =
+    if showReset then
+        withOverlay ModelResetCleared
+            [ div
+                [ onClick ClickedLocation
+                , style "padding" "10px"
+                , style "display" "flex"
+                , style "justify-content" "center"
+                , style "align-items" "center"
+                , style "color" white
+                , style "background-color" charcoal
+                , style "border-radius" "5px"
+                ]
+                [ icon iconWarning 18 yellow
+                , spacer 8
+                , div [ style "text-align" "center" ]
+                    [ div [ style "padding" "5px" ] [ text "It looks like your BackendModel type has changed!" ]
+                    , div [ style "padding" "5px" ] [ text "Your Backend has been reset to its init value." ]
+                    , div
+                        [ onClick ModelResetCleared
+                        , style "padding" "8px 20px"
+                        , style "margin" "5px"
+                        , style "color" white
+                        , style "background-color" grey
+                        , style "border-radius" "5px"
+                        , style "display" "inline-block"
+                        , style "cursor" "pointer"
+                        ]
+                        [ text "Okay" ]
+                    ]
+                ]
+            ]
+
+    else
+        text ""
+
+
 lamderaPane devbar nodeType =
     div
         [ style "font-family" "system-ui, Helvetica Neue, sans-serif"
@@ -1069,7 +1131,7 @@ lamderaPane devbar nodeType =
         )
 
 
-withOverlay html =
+withOverlay dismiss html =
     div
         [ style "font-family" "system-ui, Helvetica Neue, sans-serif"
         , style "font-size" "14px"
@@ -1085,7 +1147,7 @@ withOverlay html =
         , style "display" "flex"
         , style "justify-content" "center"
         , style "align-items" "center"
-        , onClick EnvClicked
+        , onClick dismiss
         ]
         html
 
