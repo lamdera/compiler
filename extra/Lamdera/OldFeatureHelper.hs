@@ -34,9 +34,10 @@ adviseLocalDevImport path child origin parent normalReport = do
         "Json.Encode" -> "elm/json"
         "Json.Decode" -> "elm/json"
 
-  if (isInfixOf "LocalDev.elm" path && n == "Time")
+  if   (isInfixOf "LocalDev.elm" path && n == "Time")
     || (isInfixOf "LocalDev.elm" path && n == "Json.Encode")
     || (isInfixOf "LocalDev.elm" path && n == "Json.Decode")
+    || (isInfixOf "LocalDev.elm" path && n == "Http")
     then do
 
       let

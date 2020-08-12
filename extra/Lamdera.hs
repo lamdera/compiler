@@ -471,7 +471,7 @@ replaceInFile find replace filename = do
 writeLineIfMissing :: Text -> FilePath -> IO ()
 writeLineIfMissing line filename = do
   exists_ <- Dir.doesFileExist filename
-  onlyWhen (not exists_) $ touch filename
+  onlyWhen (not exists_) $ writeUtf8 filename ""
 
   textM <- readUtf8Text filename
   case textM of

@@ -100,6 +100,11 @@ checkApiLoop inProduction appName token = do
           pDocLn $ D.fillSep ["───>", D.green "Logged in!"]
           pure True
 
+        _ -> do
+          -- Unexpected response... ignore and loop again
+          pure False
+
+
     Left err -> do
       putStrLn $ Lamdera.Http.errorToString err
       pure True
