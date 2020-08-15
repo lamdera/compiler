@@ -39,6 +39,7 @@ import qualified Data.ByteString.Lazy as LBS
 import qualified Reporting.Task.Http as Http
 import qualified Data.ByteString.Builder as BS
 import System.FilePath ((</>))
+import System.Exit (exitFailure)
 
 -- Check + Errors
 import qualified Reporting.Doc as D
@@ -262,8 +263,7 @@ deciderHasSecret decider =
 any fn things = foldl Set.union Set.empty (fmap fn things)
 
 
-
-fetchAppConfigItems :: Text -> Text -> Task.Task [(Text, Text, Bool, Bool)]
+fetchAppConfigItems :: Text -> Text -> Task.Task (WithErrorField [(Text, Text, Bool, Bool)])
 fetchAppConfigItems appName token = do
   let
     endpoint =
@@ -281,12 +281,16 @@ fetchAppConfigItems appName token = do
         ]
 
     decoder =
-      D.list $
-        D.succeed (,,,)
-          & required "name" D.text
-          & required "value" D.text
-          & required "used" D.bool
-          & required "secret" D.bool
+      D.oneOf
+        [ D.map SuccessField $ D.list $
+            D.succeed (,,,)
+              & required "name" D.text
+              & required "value" D.text
+              & required "used" D.bool
+              & required "secret" D.bool
+        , D.field "error" D.text
+            & D.map ErrorField
+        ]
 
   Lamdera.Http.normalRpcJson "fetchAppConfigItems" body endpoint decoder
 
@@ -305,7 +309,19 @@ checkUserConfig appName prodTokenM = do
 
   debug $ "Checking with token: " <> T.unpack token
 
-  prodConfigItems <- Lamdera.Secrets.fetchAppConfigItems appName token
+  prodConfigItems <- do
+    res <- Lamdera.Secrets.fetchAppConfigItems appName token
+    case res of
+      SuccessField configItems -> pure configItems
+      ErrorField text ->
+        Task.throw $ Exit.Lamdera
+          $ Help.report "ERROR" Nothing
+            ("A HTTP request failed with the following error:")
+            [ D.reflow $ T.unpack text
+            , D.reflow $ "Please check your configuration, or report this issue."
+            ]
+
+
   localConfigItems <- Lamdera.Secrets.readAppConfigUses
   localFrontendConfigItems <- Lamdera.Secrets.readAppFrontendConfigUses
 
@@ -410,12 +426,27 @@ injectConfig graph = do
                 -- There must be a token present in production
                 error "Error: could not generate production config, please report this."
 
-          prodConfigItems <- Task.try Progress.silentReporter $ fetchAppConfigItems appName (T.pack token)
+
+          prodConfigItems <- do
+            res_ <- Task.try Progress.silentReporter $ fetchAppConfigItems appName (T.pack token)
+            case res_ of
+              Just res ->
+                case res of
+                  SuccessField configItems -> pure configItems
+                  ErrorField text -> do
+                    pDocLn $ Help.reportToDoc $ Help.report "ERROR" Nothing
+                        ("A HTTP request failed with the following error:")
+                        [ D.red $ D.reflow $ T.unpack text
+                        , D.reflow $ "Please check your configuration, or report this issue."
+                        ]
+                    exitFailure
+
+              Nothing ->
+                pure []
 
           let
             prodConfigMap =
               prodConfigItems
-                & fromMaybe []
                 & fmap (\v@(e1,e2,e3,e4) -> (e1, v) )
                 & Map.fromList
 

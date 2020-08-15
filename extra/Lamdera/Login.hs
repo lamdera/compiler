@@ -104,7 +104,6 @@ checkApiLoop inProduction appName token =
             sleep 1000
             pure False
 
-
       Left err -> do
         putStrLn $ Lamdera.Http.errorToString err
         pure True
@@ -137,6 +136,12 @@ validateCliToken = do
               pDocLn $ D.fillSep ["───>", D.red "Invalid CLI auth, please re-run `lamdera login`"]
               remove (elmHome </> ".lamdera-cli")
               exitFailure
+
+        _ -> do
+          pDocLn $ D.fillSep ["───>", D.red "Invalid CLI auth, please re-run `lamdera login`"]
+          remove (elmHome </> ".lamdera-cli")
+          exitFailure
+
 
     Nothing -> do
       pDocLn $ D.fillSep ["───>", D.red "No CLI auth, please run `lamdera login`"]

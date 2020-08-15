@@ -31,6 +31,11 @@ custom d1 d2 =
     D.map2 (\a_ fn_ -> fn_ a_) d1 d2
 
 
+data WithErrorField a
+  = SuccessField a
+  | ErrorField Text
+
+
 jsonHeaders =
   [ ( Http.hUserAgent, "lamdera-cli" )
   , ( Http.hContentType, "application/json" )

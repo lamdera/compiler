@@ -72,6 +72,7 @@ import qualified Data.Text.Encoding as Text
 import Data.Text.Internal.Search (indices)
 import System.Process (readProcess, callCommand)
 import Control.Monad (unless, filterM)
+import System.Exit (exitSuccess)
 import qualified System.IO as IO
 import qualified Elm.Project.Summary as Summary
 import qualified Text.Read
@@ -174,6 +175,8 @@ run () () = do
         if isHoistRebuild then
           -- No version bump, the stated version will be the prod version
           prodVersion
+        else if forceVersion /= (-1) then
+          forceVersion
         else
           (prodVersion + 1)
 
@@ -337,8 +340,12 @@ run () () = do
             buildProductionJsFiles root inProduction nextVersionInfo
 
     version <- Lamdera.Update.fetchCurrentVersion
+      `catchError` (\err -> do
+        debug "version check failed, skipping"
+        pure "skip"
+      )
 
-    onlyWhen (not $ textContains version (T.pack Lamdera.lamderaVersion)) $
+    onlyWhen (version /= "skip" && (not $ textContains version (T.pack Lamdera.lamderaVersion))) $
         progressDoc $ D.stack
           [ D.red $ D.reflow $ "NOTE: There is a new alpha version, please upgrade before you deploy."
           , D.reflow $ "Download here: <https://dashboard.lamdera.app/docs/download>"
@@ -642,17 +649,13 @@ committedCheck root versionInfo = do
           )
 
     addToGitApproved <- Task.getApproval $
-      D.stack
-        [ D.reflow $ "Shall I `git add` for you? [Y/n]: "
-        ]
+      D.stack [ D.reflow $ "Shall I `git add` for you? [Y/n]: " ]
 
     if addToGitApproved
       then do
         liftIO $ mapM (\path -> callCommand $ "git add " <> path) missingPaths
         commitApproved <- Task.getApproval $
-          D.stack
-            [ D.reflow $ "Shall I `git commit` for you? [Y/n]: "
-            ]
+          D.stack [ D.reflow $ "Shall I `git commit` for you? [Y/n]: " ]
 
         if commitApproved
           then do
