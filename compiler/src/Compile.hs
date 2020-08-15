@@ -129,7 +129,7 @@ compile flag pkg importDict interfaces source srcMVar =
                           let
                             !envMode = unsafePerformIO $ Lamdera.getEnvMode
                           in
-                          "\n\ntype Mode = Production | Review | Development\n\nmode = " <> (BS8.fromString $ show envMode)
+                          "\n\ntype Mode = Production | Development\n\nmode = " <> (BS8.fromString $ show envMode)
                         else
                           ""
                      )

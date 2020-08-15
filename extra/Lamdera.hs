@@ -573,7 +573,7 @@ getVersion filename =
     & Text.Read.readMaybe
 
 
-data Env = Production | Review | Development
+data Env = Production | Development
   deriving (Show)
 
 -- Used for Env.mode value injection
@@ -584,7 +584,7 @@ getEnvMode = do
   pure $
     case modeString of
       Just "Production" -> Production
-      Just "Review" -> Review
+      -- Just "Review" -> Review
       Just "Development" -> Development
       _ -> Development
 

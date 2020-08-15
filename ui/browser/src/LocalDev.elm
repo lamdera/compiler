@@ -1042,14 +1042,15 @@ envModeChanger showModeChanger =
                     , style "border-left" "3px solid #85BC7A"
                     ]
                     [ text "Development" ]
-                , div
-                    [ onClick (EnvModeSelected "Review")
-                    , style "cursor" "pointer"
-                    , style "padding" "6px 6px"
-                    , style "margin" "4px 2px"
-                    , style "border-left" "3px solid #4196ad"
-                    ]
-                    [ text "Review" ]
+
+                -- , div
+                --     [ onClick (EnvModeSelected "Review")
+                --     , style "cursor" "pointer"
+                --     , style "padding" "6px 6px"
+                --     , style "margin" "4px 2px"
+                --     , style "border-left" "3px solid #4196ad"
+                --     ]
+                --     [ text "Review" ]
                 , div
                     [ onClick (EnvModeSelected "Production")
                     , style "cursor" "pointer"
@@ -1177,9 +1178,8 @@ envMeta =
         Env.Production ->
             ( "Prod", red )
 
-        Env.Review ->
-            ( "Review", blue )
-
+        -- Env.Review ->
+        --     ( "Review", blue )
         Env.Development ->
             ( "Dev", green )
 
