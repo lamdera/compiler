@@ -6,9 +6,10 @@ module Lamdera.Secrets where
 
 -- Clean up these
 import AST.Module.Name (Canonical(..))
-import AST.Optimized (Global(..), Node(Define), Expr(..))
+import AST.Optimized
 import qualified Elm.Compiler.Objects as Obj
 import qualified Data.Set as Set
+import qualified Data.List as List
 
 import qualified Data.Map as Map
 import qualified Data.Set as Set
@@ -20,8 +21,6 @@ import qualified AST.Module.Name as ModuleName
 import qualified Elm.Package as Pkg
 import qualified Elm.Name as N
 
-import Prelude hiding ((||), any)
-import qualified Prelude
 
 import Lamdera
 import qualified Lamdera.Project
@@ -52,15 +51,14 @@ import qualified Lamdera.Login
 
 writeUsage rootNames graph = do
   let
-    usages =
-      graph
-        & findSecretUses (Pkg.Name "author" "project")
-        & fmap (\(module_, expression, secrets) -> (N.toText module_, N.toText expression, Set.map N.toText secrets))
+    prep usages =
+      usages
+        & Set.toList
         & fmap (\(module_, expression, secrets) ->
             E.list id
               [ E.text module_
               , E.text expression
-              , Set.toList secrets & fmap E.text & E.list id
+              , secrets & fmap E.text & E.list id
               ]
           )
         & E.list id
@@ -69,17 +67,137 @@ writeUsage rootNames graph = do
         & LBS.toStrict
         & T.decodeUtf8
 
-    -- !_ = debugHaskell ("following exprs in " <> show_ rootNames <> " use Env.elm values") usages
-
   case rootNames of
-    [N.Name "Frontend"] ->
-      writeUtf8Root "lamdera-stuff/.lamdera-fe-config" usages
+    [N.Name "Frontend"] -> do
+      let usages = findSecretUses graph "Frontend" "app"
+      -- progress $ hindentFormatValue usages
+      liftIO $ writeUtf8Root "lamdera-stuff/.lamdera-fe-config" $ prep usages
 
-    [N.Name "Backend"] ->
-      writeUtf8Root "lamdera-stuff/.lamdera-be-config" usages
+    [N.Name "Backend"] -> do
+      let usages = findSecretUses graph "Backend" "app"
+      -- progress $ hindentFormatValue usages
+      liftIO $ writeUtf8Root "lamdera-stuff/.lamdera-be-config" $ prep usages
 
     _ ->
       pure ()
+
+
+progress t = do
+  Task.report $ Progress.LamderaProgress $ D.stack [ D.fromText t, ""]
+
+
+findSecretUses graph module_ expr = do
+  let
+    entryNode =
+      Obj._nodes graph
+         & Map.filterWithKey (\k a ->
+             k == Global (Canonical (Pkg.Name "author" "project") (N.Name module_)) (N.Name expr)
+         )
+
+  if Map.null entryNode
+    then Set.empty
+    else entryNode & Map.elemAt 0 & traverse_ graph
+
+
+onlyAuthorProjectDeps globalDeps =
+  globalDeps
+    & Set.filter (\global ->
+      case global of
+        Global (Canonical (Pkg.Name "author" "project") _) (N.Name expr) ->
+          not (textContains "w2_" expr) && not (textContains "evg_" expr)
+        _ ->
+          False
+    )
+
+traverse_ :: Graph -> (Global, Node) -> Set.Set (Text, Text, [Text])
+traverse_ graph (global, currentNode) = do
+  let
+    refs =
+      nodeEnvRefs (global, currentNode)
+
+  -- onlyWhen (not $ Set.null refs) $ do
+    -- let
+    (module_, expression) =
+      case global of
+        Global (Canonical (Pkg.Name "author" "project") (N.Name module_)) (N.Name expr) ->
+          (module_, expr)
+
+        _ ->
+          error $ "Unexpected expression reduction. Please report this issue!\n\n" <> show global
+
+    extractExpr global =
+       case global of
+         Global (Canonical (Pkg.Name "author" "project") _) (N.Name expr) ->
+           expr
+
+         _ ->
+           error $ "Unexpected expression extraction. Please report this issue!\n\n" <> show global
+
+    res = Set.singleton (module_, expression, refs & Set.map extractExpr & Set.toList)
+
+    childResults =
+      currentNode
+        & selectNextDeps
+        & Set.map (\global -> do
+            Obj._nodes graph
+               & Map.lookup global
+               & (\nodeM ->
+                case nodeM of
+                  Just node -> traverse_ graph (global, node)
+                  Nothing -> error "The impossible happened: an expression's global dep didn't exist in the graph. Please report this issue."
+               )
+          )
+        & foldl Set.union Set.empty
+
+  if Set.null refs
+    then childResults
+    else Set.union res childResults
+
+
+selectNextDeps node =
+  case node of
+    Define expr globalDeps ->
+      globalDeps & onlyAuthorProjectDeps
+    DefineTailFunc names expr globalDeps ->
+      globalDeps & onlyAuthorProjectDeps
+    Ctor index int ->
+      Set.empty
+    Enum index ->
+      Set.empty
+    Box ->
+      Set.empty
+    Link global ->
+      Set.singleton global & onlyAuthorProjectDeps
+    Cycle names namedExprs defs globalDeps ->
+      -- Cycle [N.Name] [(N.Name, Expr)] [Def] GlobalDeps ->
+      -- Need to confirm if we do indeed catch everything in a cycle
+      -- already, but in any case this causes an infinite loop!
+      Set.empty
+    Manager effectsType ->
+      Set.empty
+    Kernel kContent kContentM ->
+      Set.empty
+    PortIncoming expr globalDeps ->
+      globalDeps & onlyAuthorProjectDeps
+    PortOutgoing expr globalDeps ->
+      globalDeps & onlyAuthorProjectDeps
+
+
+nodeEnvRefs (global, node) =
+  case node of
+    Define expr globalDeps ->
+      globalDeps
+        & Set.filter (\globalDep ->
+          case globalDep of
+            Global (Canonical (Pkg.Name "author" "project") (N.Name "Env")) (N.Name expr) ->
+              True
+
+            _ ->
+              False
+        )
+
+    _ ->
+      Set.empty
 
 
 readAppConfigUses :: Task.Task [(Text, Text, Text)]
@@ -159,108 +277,6 @@ exprContainsEnvString expr =
 
     _ ->
       False
-
-
-extractSecretName node =
-  case node of
-    Define (VarGlobal (Global (Canonical (Pkg.Name "author" "project") (N.Name "Env")) name)) _ ->
-      name
-
-    _ ->
-      error "should be impossible"
-
-
-
--- FIND SECRET USES
--- Duplicate of FIND DEBUG USES from Nitpick
-
-
-findSecretUses :: Pkg.Name -> Opt.Graph -> [(N.Name, N.Name, Set.Set N.Name)]
-findSecretUses pkg (Opt.Graph _ graph _) =
-  Set.toList $ Map.foldrWithKey (addSecretUses pkg) Set.empty graph
-
-
-addSecretUses :: Pkg.Name -> Opt.Global -> Opt.Node -> Set.Set (N.Name, N.Name, Set.Set N.Name) -> Set.Set (N.Name, N.Name, Set.Set N.Name)
-addSecretUses here (Opt.Global (ModuleName.Canonical pkg home) expr) node uses =
-  let secrets = nodeHasSecret node
-  in
-  if pkg == here && not (Set.null secrets) then
-    Set.insert (home, expr, secrets) uses
-  else
-    uses
-
-
-nodeHasSecret :: Opt.Node -> Set.Set N.Name
-nodeHasSecret node =
-  case node of
-    Opt.Define expr _           -> hasSecret expr
-    Opt.DefineTailFunc _ expr _ -> hasSecret expr
-    Opt.Ctor _ _                -> Set.empty
-    Opt.Enum _                  -> Set.empty
-    Opt.Box                     -> Set.empty
-    Opt.Link _                  -> Set.empty
-    Opt.Cycle _ vs fs _         -> any (hasSecret . snd) vs || any defHasSecret fs
-    Opt.Manager _               -> Set.empty
-    Opt.Kernel _ _              -> Set.empty
-    Opt.PortIncoming expr _     -> hasSecret expr
-    Opt.PortOutgoing expr _     -> hasSecret expr
-
-
-hasSecret :: Opt.Expr -> Set.Set N.Name
-hasSecret expression =
-  case expression of
-    Opt.Bool _           -> Set.empty
-    Opt.Chr _            -> Set.empty
-    Opt.Str _            -> Set.empty
-    Opt.Int _            -> Set.empty
-    Opt.Float _          -> Set.empty
-    Opt.VarLocal _       -> Set.empty
-    Opt.VarGlobal _      -> case expression of
-                              VarGlobal (Global (Canonical (Pkg.Name "author" "project") (N.Name "Env")) expr) ->
-                                Set.singleton expr
-                              _ ->
-                                Set.empty
-    Opt.VarEnum _ _      -> Set.empty
-    Opt.VarBox _         -> Set.empty
-    Opt.VarCycle _ _     -> Set.empty
-    Opt.VarDebug _ _ _ _ -> Set.empty
-    Opt.VarKernel _ _    -> Set.empty
-    Opt.List exprs       -> any hasSecret exprs
-    Opt.Function _ expr  -> hasSecret expr
-    Opt.Call e es        -> hasSecret e || any hasSecret es
-    Opt.TailCall _ args  -> any (hasSecret . snd) args
-    Opt.If conds finally -> any (\(c,e) -> hasSecret c || hasSecret e) conds || hasSecret finally
-    Opt.Let def body     -> defHasSecret def || hasSecret body
-    Opt.Destruct _ expr  -> hasSecret expr
-    Opt.Case _ _ d jumps -> deciderHasSecret d || any (hasSecret . snd) jumps
-    Opt.Accessor _       -> Set.empty
-    Opt.Access r _       -> hasSecret r
-    Opt.Update r fs      -> hasSecret r || any hasSecret fs
-    Opt.Record fs        -> any hasSecret fs
-    Opt.Unit             -> Set.empty
-    Opt.Tuple a b c      -> hasSecret a || hasSecret b || maybe Set.empty hasSecret c
-    Opt.Shader _ _ _     -> Set.empty
-
-
-defHasSecret :: Opt.Def -> Set.Set N.Name
-defHasSecret def =
-  case def of
-    Opt.Def _ expr       -> hasSecret expr
-    Opt.TailDef _ _ expr -> hasSecret expr
-
-
-deciderHasSecret :: Opt.Decider Opt.Choice -> Set.Set N.Name
-deciderHasSecret decider =
-  case decider of
-    Opt.Leaf (Opt.Inline expr)  -> hasSecret expr
-    Opt.Leaf (Opt.Jump _)       -> Set.empty
-    Opt.Chain _ success failure -> deciderHasSecret success || deciderHasSecret failure
-    Opt.FanOut _ tests fallback -> any (deciderHasSecret . snd) tests || deciderHasSecret fallback
-
-
-(||) = Set.union
-
-any fn things = foldl Set.union Set.empty (fmap fn things)
 
 
 fetchAppConfigItems :: Text -> Text -> Task.Task (WithErrorField [(Text, Text, Bool, Bool)])

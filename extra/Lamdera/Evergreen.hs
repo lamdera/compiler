@@ -581,7 +581,7 @@ canonicalToFt version scope interfaces recursionMap canonical tvarMap =
             "(" <> typeScope <> typeName <> " " <> usageParams <> ")" -- <> "<!R>"
           else
             typeScope <> typeName -- <> "<!R>"
-        , usageImports
+        , Set.insert moduleName usageImports
         , usageFts
         )
 
@@ -896,12 +896,14 @@ canonicalToFt version scope interfaces recursionMap canonical tvarMap =
     Can.TRecord fieldMap isPartial ->
       case isPartial of
         Just whatIsThis ->
-          ("XXXXXX TRecord", Set.empty, Map.empty)
+          ("ERROR TRecord, please report this!", Set.empty, Map.empty)
           -- DError "must not contain partial records"
 
         Nothing ->
           let
-            -- !_ = formatHaskellValue "Can.TRecord" (fieldMap, tvarMap) :: IO ()
+            -- !_ =
+            --   onlyWhen (textContains "cellPosition" fieldsFormatted) $
+            --     formatHaskellValue "Can.TRecord" (result, fields) :: IO ()
 
             fields =
               fieldMap
@@ -928,11 +930,13 @@ canonicalToFt version scope interfaces recursionMap canonical tvarMap =
                 & foldl (\acc (name, (st, imps, ft)) -> mergeFts acc ft) Map.empty
                 & addImports scope imports
 
+            result =
+              ("\n    { " <> fieldsFormatted <> "\n    }"
+              , imports
+              , mergedFt
+              )
           in
-          ("\n    { " <> fieldsFormatted <> "\n    }"
-          , imports
-          , mergedFt
-          )
+          result
 
     Can.TTuple firstType secondType maybeType_whatisthisfor ->
       let
