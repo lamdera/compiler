@@ -197,6 +197,7 @@ suite = tests $
               | ExternalRecord_ (Evergreen.V1.WireTypes.ExternalRecord (Evergreen.V1.WireTypes.AnotherParamRecord Int))
               | ExternalAlias Evergreen.V1.WireTypes.ExternalAliasTuple
               | TestRPC
+              | TestBackendHttp_
               | RPCRes (Result Http.Error Int)
               | EditLocal Evergreen.V1.Fusion.FType
               | FusionQuery (List Evergreen.V1.Fusion.FType)
@@ -206,6 +207,7 @@ suite = tests $
               = ClientJoin
               | CounterIncremented
               | CounterDecremented
+              | TestBackendHttp
               | GrowBenchList Int
               | GrowBenchDictRec Int
               | ClearBenchList
@@ -217,6 +219,7 @@ suite = tests $
           type BackendMsg
               = NewTime Time.Posix
               | DelayedNewValue Lamdera.SessionId Lamdera.ClientId
+              | HttpResult (Result Http.Error ())
               | Noop
 
 

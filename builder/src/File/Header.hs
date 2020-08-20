@@ -29,6 +29,7 @@ import qualified Reporting.Task as Task
 
 import qualified Elm.Package as Pkg
 
+import qualified Lamdera.Wire
 
 -- INFO
 
@@ -157,7 +158,7 @@ parse project path time source =
     Right (maybeDecl, deps) ->
       let
         extraDeps =
-          if Pkg.shouldHaveCodecsGenerated (Project.getName project) then
+          if Lamdera.Wire.shouldHaveCodecsGenerated (Project.getName project) then
             -- @TODO wire1: remove when deprecated
             ["Lamdera.Wire2", "Lamdera.Wire"]
           else

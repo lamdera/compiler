@@ -252,6 +252,7 @@ Executable elmx
         Lamdera.TypeHash
         Lamdera.Types
         Lamdera.Update
+        Lamdera.Wire
         Wire.Source
         Wire.Source2
         Lamdera.Exit

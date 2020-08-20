@@ -46,6 +46,7 @@ import qualified Reporting.Task as Task
 
 import Lamdera
 import qualified Lamdera.Checks
+import qualified Lamdera.Wire
 import Control.Monad.Except (liftIO)
 
 
@@ -334,7 +335,7 @@ pkgDecoder =
   )
   & D.map
     (\pkgInfo ->
-      if Pkg.shouldHaveCodecsGenerated (_pkg_name pkgInfo) then
+      if Lamdera.Wire.shouldHaveCodecsGenerated (_pkg_name pkgInfo) then
           pkgInfo {_pkg_deps = Map.union (_pkg_deps pkgInfo) (Map.singleton (Pkg.lamderaCodecs) Con.anything)}
       else
         pkgInfo

@@ -28,14 +28,6 @@ import qualified Lamdera.Check
 import qualified Lamdera.Secrets
 import qualified Lamdera.Update
 
-{-| For quick and general local development testing via `stack ghci` as TestLamdera.check -}
-check = do
-  checkWithParams "/Users/mario/lamdera/test/v1" "test-local"
-  -- checkWithParams "/Users/mario/dev/lamdera-user-projects/beat-the-big-two" "beat-the-big-two"
-  -- checkWithParams "/Users/mario/dev/projects/lamdera-dashboard" "dashboard"
-  -- checkWithParams "/Users/mario/dev/projects/lamdera-mogee" "mogee"
-  -- checkWithParams "/Users/mario/lamdera/tmp/elm-audio-test0" "elm-audio-test0"
-
 
 all = run suite
 
@@ -201,6 +193,18 @@ rm :: String -> IO ()
 rm path = Lamdera.remove path
 
 
+
+{-| For quick and general local development testing via `stack ghci` as TestLamdera.check -}
+check = do
+  -- checkWithParams "/Users/mario/lamdera/test/v1" "test-local"
+  checkWithParams "/Users/mario/dev/test/ascii-art" "ascii-art-local"
+  -- checkWithParams "/Users/mario/dev/test/lamdera-minilatex-app" "minilatex"
+  -- checkWithParams "/Users/mario/dev/lamdera-user-projects/beat-the-big-two" "beat-the-big-two"
+  -- checkWithParams "/Users/mario/dev/projects/lamdera-dashboard" "dashboard"
+  -- checkWithParams "/Users/mario/dev/projects/lamdera-mogee" "mogee"
+  -- checkWithParams "/Users/mario/lamdera/tmp/elm-audio-test0" "elm-audio-test0"
+
+
 {-| Run the `lamdera check` pipeline with specific params -}
 checkWithParams projectPath appName = do
   setEnv "LAMDERA_APP_NAME" appName
@@ -210,7 +214,7 @@ checkWithParams projectPath appName = do
   setEnv "NOTPROD" "1"
   setEnv "TOKEN" "a739477eb8bd2acbc251c246438906f4"
   -- setEnv "HOIST_REBUILD" "1"
-  -- setEnv "VERSION" "3"
+  -- setEnv "VERSION" "1"
 
   cp "/Users/mario/lamdera/runtime/src/LBR.elm" (projectPath ++ "/src/LBR.elm")
   cp "/Users/mario/lamdera/runtime/src/LFR.elm" (projectPath ++ "/src/LFR.elm")
@@ -232,6 +236,7 @@ checkWithParams projectPath appName = do
   unsetEnv "ELM_HOME"
   unsetEnv "NOTPROD"
   unsetEnv "TOKEN"
+  unsetEnv "VERSION"
 
 
 
@@ -336,16 +341,16 @@ testWire = do
 
 
 config = do
+  -- setEnv "LDEBUG" "1"
   -- let project = "/Users/mario/lamdera/test/v1"
   let project = "/Users/mario/dev/projects/lamdera-test"
   Dir.withCurrentDirectory project $ do
     reporter <- Terminal.create
-    -- setEnv "TOKEN" "a739477eb8bd2acbc251c246438906f4"
+    setEnv "TOKEN" "a739477eb8bd2acbc251c246438906f4"
 
     prodTokenM <- Env.lookupEnv "TOKEN"
     Task.run reporter $ do
-
-      Lamdera.Secrets.checkUserConfig "testapp" (fmap T.pack prodTokenM)
+      Lamdera.Secrets.checkUserConfig "test-local" (fmap T.pack prodTokenM)
 
     unsetEnv "TOKEN"
     unsetEnv "LDEBUG"
