@@ -261,11 +261,11 @@ Executable elmx
         SocketServer
 
         -- Fusion
-        Fusion.Types
-        Fusion.Core
-        Fusion.Bytes
-        Fusion.Encode
-        Fusion.Binary
+        -- Fusion.Types
+        -- Fusion.Core
+        -- Fusion.Bytes
+        -- Fusion.Encode
+        -- Fusion.Binary
 
         -- Testing:
         EasyTest
