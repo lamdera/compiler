@@ -578,7 +578,7 @@ update msg m =
                                             log " ▶️B " toBackend
 
                                         ( newBem, newBeCmds ) =
-                                            userBackendApp.updateFromFrontend m.sessionId args.c toBackend m.bem
+                                            userBackendApp.updateFromFrontend args.s args.c toBackend m.bem
                                     in
                                     ( { m | bem = newBem, bemDirty = True }
                                     , Cmd.batch
