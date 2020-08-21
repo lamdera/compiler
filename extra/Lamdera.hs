@@ -119,6 +119,7 @@ import qualified Data.Digest.Pure.SHA as SHA
 
 import qualified Reporting.Doc as D
 
+
 lamderaVersion :: String
 lamderaVersion = "0.0.1-alpha9"
 

@@ -94,26 +94,16 @@ findSecretUses graph module_ expr = do
              k == Global (Canonical (Pkg.Name "author" "project") (N.Name module_)) (N.Name expr)
          )
 
-  if Map.null entryNode
-    then Set.empty
-    else entryNode & Map.elemAt 0 & traverse_ graph
+  if not $ Map.null entryNode
+    then entryNode & Map.elemAt 0 & traverse_ graph
+    else Set.empty
 
-
-onlyAuthorProjectDeps globalDeps =
-  globalDeps
-    & Set.filter (\global ->
-      case global of
-        Global (Canonical (Pkg.Name "author" "project") _) (N.Name expr) ->
-          not (textContains "w2_" expr) && not (textContains "evg_" expr)
-        _ ->
-          False
-    )
 
 traverse_ :: Graph -> (Global, Node) -> Set.Set (Text, Text, [Text])
 traverse_ graph (global, currentNode) = do
   let
     refs =
-      nodeEnvRefs (global, currentNode)
+      nodeEnvRefs graph (global, currentNode)
 
   -- onlyWhen (not $ Set.null refs) $ do
     -- let
@@ -183,7 +173,18 @@ selectNextDeps node =
       globalDeps & onlyAuthorProjectDeps
 
 
-nodeEnvRefs (global, node) =
+onlyAuthorProjectDeps globalDeps =
+  globalDeps
+    & Set.filter (\global ->
+      case global of
+        Global (Canonical (Pkg.Name "author" "project") _) (N.Name expr) ->
+          not (textContains "w2_" expr) && not (textContains "evg_" expr)
+        _ ->
+          False
+    )
+
+
+nodeEnvRefs graph (global, node) =
   case node of
     Define expr globalDeps ->
       globalDeps
@@ -191,9 +192,27 @@ nodeEnvRefs (global, node) =
           case globalDep of
             Global (Canonical (Pkg.Name "author" "project") (N.Name "Env")) (N.Name expr) ->
               True
-
             _ ->
               False
+        )
+        & Set.filter (\globalDep ->
+          Obj._nodes graph
+             & Map.lookup globalDep
+             & (\nodeM ->
+              case nodeM of
+                Just node ->
+                  case node of
+                    Define (Str _) _ ->
+                      -- Only select string values defined in Env.elm
+                      True
+
+                    _ ->
+                      False
+
+                Nothing ->
+                  -- Should not be possible
+                  False
+             )
         )
 
     _ ->
@@ -248,35 +267,6 @@ extract rawConfig = do
       let !_ = debugNote "❌ config read failed:" rawConfig
       []
 
-
-
--- Unused: attempt to find strings, non-exhaustive.
-definedSecrets graph =
-  -- DONE: find all defined secrets
-  Obj._nodes graph
-    & Map.filterWithKey (\k a ->
-      case k of
-        Global (Canonical (Pkg.Name "author" "project") (N.Name "Env")) _ ->
-          -- True
-          case a of
-            Define (Str _) _ ->
-              True
-
-            _ ->
-              False
-
-        _ ->
-          False
-    )
-
-
-exprContainsEnvString expr =
-  case expr of
-    VarGlobal (Global (Canonical (Pkg.Name "author" "project") (N.Name "Env")) _) ->
-      True
-
-    _ ->
-      False
 
 
 fetchAppConfigItems :: Text -> Text -> Task.Task (WithErrorField [(Text, Text, Bool, Bool)])
@@ -352,6 +342,7 @@ checkUserConfig appName prodTokenM = do
               Just x ->
                 -- Exists in prod, drop
                 False
+
               Nothing ->
                 -- Missing in prod, keep
                 True
@@ -368,6 +359,7 @@ checkUserConfig appName prodTokenM = do
                 else
                   -- Exists in prod and not secret, ignore
                   False
+
               Nothing ->
                 -- Missing in prod, ignore
                 False
@@ -473,7 +465,6 @@ injectConfig graph = do
                 & Map.mapWithKey (\k a ->
                   case k of
                     Global (Canonical (Pkg.Name "author" "project") (N.Name "Env")) (N.Name name_) ->
-                      -- True
                       case a of
                         Define (Str t) gDeps ->
                           case Map.lookup name_ prodConfigMap of

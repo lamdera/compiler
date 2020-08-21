@@ -196,8 +196,8 @@ rm path = Lamdera.remove path
 
 {-| For quick and general local development testing via `stack ghci` as TestLamdera.check -}
 check = do
-  -- checkWithParams "/Users/mario/lamdera/test/v1" "test-local"
-  checkWithParams "/Users/mario/dev/test/ascii-art" "ascii-art-local"
+  checkWithParams "/Users/mario/lamdera/test/v1" "test-local"
+  -- checkWithParams "/Users/mario/dev/test/ascii-art" "ascii-art-local"
   -- checkWithParams "/Users/mario/dev/test/lamdera-minilatex-app" "minilatex"
   -- checkWithParams "/Users/mario/dev/lamdera-user-projects/beat-the-big-two" "beat-the-big-two"
   -- checkWithParams "/Users/mario/dev/projects/lamdera-dashboard" "dashboard"
@@ -342,8 +342,8 @@ testWire = do
 
 config = do
   -- setEnv "LDEBUG" "1"
-  -- let project = "/Users/mario/lamdera/test/v1"
-  let project = "/Users/mario/dev/projects/lamdera-test"
+  let project = "/Users/mario/lamdera/test/v1"
+  -- let project = "/Users/mario/dev/projects/lamdera-test"
   Dir.withCurrentDirectory project $ do
     reporter <- Terminal.create
     setEnv "TOKEN" "a739477eb8bd2acbc251c246438906f4"
