@@ -1071,7 +1071,7 @@ resetNotification showReset =
         withOverlay ModelResetCleared
             [ div
                 [ onClick ClickedLocation
-                , style "padding" "10px"
+                , style "padding" "10px 20px"
                 , style "display" "flex"
                 , style "justify-content" "center"
                 , style "align-items" "center"
@@ -1083,7 +1083,7 @@ resetNotification showReset =
                 , spacer 8
                 , div [ style "text-align" "center" ]
                     [ div [ style "padding" "5px" ] [ text "It looks like your BackendModel type has changed!" ]
-                    , div [ style "padding" "5px" ] [ text "Your Backend has been reset to its init value." ]
+                    , div [ style "padding" "5px" ] [ text "I've reset the BackendModel to its init value." ]
                     , div
                         [ onClick ModelResetCleared
                         , style "padding" "8px 20px"
