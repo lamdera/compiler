@@ -394,7 +394,7 @@ checkUserConfig appName prodTokenM = do
             )
 
     Task.throw $ Exit.Lamdera
-      $ Help.report "MISSING PRODUCTION CONFIG" (Nothing)
+      $ Help.report "EXPOSED PRODUCTION CONFIG" (Nothing)
         ("These secret config values are being exposed by frontend code!")
         ([ D.vcat missingFormatted
          , D.reflow "Remove these uses, or make config items public here:"
