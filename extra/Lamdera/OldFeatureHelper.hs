@@ -33,15 +33,15 @@ adviseLocalDevImport path child origin parent normalReport = do
         "Time" -> "elm/time"
         "Json.Encode" -> "elm/json"
         "Json.Decode" -> "elm/json"
+        "Http" -> "elm/http"
+        _ -> ""
+
 
   if   (isInfixOf "LocalDev.elm" path && n == "Time")
     || (isInfixOf "LocalDev.elm" path && n == "Json.Encode")
     || (isInfixOf "LocalDev.elm" path && n == "Json.Decode")
     || (isInfixOf "LocalDev.elm" path && n == "Http")
     then do
-
-      let
-        !_ = debugHaskell "other args" (origin, parent)
 
       Help.report "MISSING PACKAGE" (Nothing)
         ("`lamdera live` needs certain packages to work.")
