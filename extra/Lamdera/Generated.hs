@@ -229,7 +229,7 @@ migrationForType migrationSequence migrationsForVersion startVersion tipe = do
 
   [text|
     "$tipe" ->
-        decodeType "$tipe" version intList T$startVersion_.w2_decode_$tipe
+        decodeType "$tipe" $startVersion_ intList T$startVersion_.w2_decode_$tipe
             $intermediateMigrations
             |> upgradeSucceeds Current$tipe
             |> otherwiseError
