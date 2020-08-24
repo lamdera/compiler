@@ -11,7 +11,7 @@ module Elm.Project
 
 
 import qualified Data.ByteString as BS
-import Sanity ((!)) -- import Data.Map ((!))
+import Data.Map ((!))
 import System.FilePath ((</>))
 import Control.Monad.Trans (liftIO)
 

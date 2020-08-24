@@ -16,7 +16,7 @@ module Elm.Interface
 
 import Control.Monad (liftM4)
 import Data.Binary
-import Sanity ((!)) -- import Data.Map ((!))
+import Data.Map ((!))
 import qualified Data.Map as Map
 import qualified Data.Map.Merge.Strict as Map
 

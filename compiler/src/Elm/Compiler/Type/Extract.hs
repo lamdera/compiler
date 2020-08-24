@@ -9,7 +9,7 @@ module Elm.Compiler.Type.Extract
   where
 
 
-import Sanity ((!)) -- import Data.Map ((!))
+import Data.Map ((!))
 import qualified Data.Maybe as Maybe
 import qualified Data.Set as Set
 

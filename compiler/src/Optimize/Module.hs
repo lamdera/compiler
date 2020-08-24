@@ -11,7 +11,7 @@ import Control.Monad (foldM)
 import qualified Data.List as List
 import qualified Data.Map as Map
 import qualified Data.Set as Set
-import Sanity ((!)) -- import Data.Map ((!))
+import Data.Map ((!))
 
 import qualified AST.Canonical as Can
 import qualified AST.Optimized as Opt

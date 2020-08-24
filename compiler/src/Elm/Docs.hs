@@ -20,7 +20,7 @@ module Elm.Docs
 
 import qualified Data.ByteString as B
 import qualified Data.List as List
-import Sanity ((!)) -- import Data.Map ((!))
+import Data.Map ((!))
 import qualified Data.Map as Map
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
