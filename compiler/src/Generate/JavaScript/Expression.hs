@@ -304,7 +304,7 @@ generateField mode name =
       Name.fromLocal name
 
     Mode.Prod _ fields ->
-      (fields, ("Generate.Javascript.Expression.generateField")) ! name
+      fields ! name
 
 
 

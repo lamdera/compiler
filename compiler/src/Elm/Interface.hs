@@ -97,7 +97,7 @@ privatize exports dict =
 
 toOp :: Map.Map N.Name Can.Annotation -> Can.Binop -> Binop
 toOp types (Can.Binop_ associativity precedence name) =
-  Binop name ((types, ("Elm.Interface.toOp", name)) ! name) associativity precedence
+  Binop name (types ! name) associativity precedence
 
 
 privatizeUnions :: Can.Exports -> Map.Map N.Name Can.Union -> Map.Map N.Name Union

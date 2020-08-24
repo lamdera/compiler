@@ -451,26 +451,26 @@ checkExport info name (A.At region export) =
             m { _values = Map.insert name (Value comment tipe) (_values m) }
 
     Can.ExportBinop ->
-      do  let (Can.Binop_ assoc prec realName) = (_iBinops info, ("Elm.Docs.checkExport.ExportBinop", name)) ! name
+      do  let (Can.Binop_ assoc prec realName) = _iBinops info ! name
           tipe <- getType realName info
           comment <- getComment region realName info
           Result.ok $ \m ->
             m { _binops = Map.insert name (Binop comment tipe assoc prec) (_binops m) }
 
     Can.ExportAlias ->
-      do  let (Can.Alias tvars tipe) = (_iAliases info, ("Elm.Docs.checkExport.ExportAlias", name)) ! name
+      do  let (Can.Alias tvars tipe) = _iAliases info ! name
           comment <- getComment region name info
           Result.ok $ \m ->
             m { _aliases = Map.insert name (Alias comment tvars (Extract.fromType tipe)) (_aliases m) }
 
     Can.ExportUnionOpen ->
-      do  let (Can.Union tvars ctors _ _) = (_iUnions info, ("Elm.Docs.checkExport.ExportUnionOpen", name)) ! name
+      do  let (Can.Union tvars ctors _ _) = _iUnions info ! name
           comment <- getComment region name info
           Result.ok $ \m ->
             m { _unions = Map.insert name (Union comment tvars (map dector ctors)) (_unions m) }
 
     Can.ExportUnionClosed ->
-      do  let (Can.Union tvars _ _ _) = (_iUnions info, ("Elm.Docs.checkExport.ExportUnionClosed", name)) ! name
+      do  let (Can.Union tvars _ _ _) = _iUnions info ! name
           comment <- getComment region name info
           Result.ok $ \m ->
             m { _unions = Map.insert name (Union comment tvars []) (_unions m) }
@@ -494,7 +494,7 @@ getComment region name info =
 
 getType :: N.Name -> Info -> Result i w Type.Type
 getType name info =
-  case (_iValues info, ("Elm.Docs.getType", name)) ! name of
+  case _iValues info ! name of
     A.At defRegion Nothing ->
       Result.throw (E.NoAnnotation name defRegion)
 

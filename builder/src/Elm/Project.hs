@@ -83,7 +83,7 @@ compileForRepl noColors localizer source maybeName =
       (dirty, ifaces) <- Plan.plan Nothing summary graph
       answers <- Compile.compile project Nothing ifaces dirty
       results <- Artifacts.write root answers
-      let (Compiler.Artifacts elmi _ _) = (results, ("Elm.Project.compileForRepl", maybeName)) ! N.replModule
+      let (Compiler.Artifacts elmi _ _) = results ! N.replModule
       traverse (Output.generateReplFile noColors localizer summary graph elmi) maybeName
 
 

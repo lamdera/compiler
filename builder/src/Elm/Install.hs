@@ -284,7 +284,7 @@ collectTransitive
   -> Pkg.Name
   -> Explorer (Map.Map Pkg.Name Pkg.Version)
 collectTransitive solution state name =
-  do  let version = (solution, ("Elm.Install.collectTransitive", name)) ! name
+  do  let version = solution ! name
       (Explorer.Info _ trans) <- Explorer.getConstraints name version
       foldM
         (collectTransitive solution)
@@ -319,7 +319,7 @@ addToPkgHelp pkg (Project.PkgInfo _ _ _ _ _ deps tests _) =
   do  let directs = Map.union deps tests
       let newCons = Map.insert pkg Con.anything directs
       solution <- Solver.solve newCons
-      let con = Con.untilNextMajor ((solution, ("Elm.Install.addToPkgHelp")) ! pkg)
+      let con = Con.untilNextMajor (solution ! pkg)
       return $ Map.insert pkg con directs
 
 
