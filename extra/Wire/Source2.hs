@@ -557,8 +557,8 @@ typedFailDecode qualIfNeeded targs (can, name) =
   -- 8 space indentation to be indented more than body of case branches in generated code
   -- "(\n\
   -- \        let\n\
-  -- \          evg_typed_failure : Lamdera.Wire2.Decoder (%CanType%)\n\
-  -- \          evg_typed_failure = Lamdera.Wire2.failDecode \"%Name%\"\n\
+  -- \          w2_typed_failure : Lamdera.Wire2.Decoder (%CanType%)\n\
+  -- \          w2_typed_failure = Lamdera.Wire2.failDecode \"%Name%\"\n\
   -- \        in %Lambda%\n\
   -- \        )"
   "(\n\
