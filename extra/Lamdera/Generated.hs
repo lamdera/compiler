@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE BangPatterns #-}
 
 module Lamdera.Generated where
 
@@ -30,44 +31,20 @@ createLamderaGenerated root nextVersion = do
 
 
 lamderaGenerated nextVersion migrationFilepaths = do
-  migrationSequence_ <- liftIO $ getMigrationsSequence migrationFilepaths nextVersion `catchError`
+  migrationSequence <- liftIO $ getMigrationsSequence migrationFilepaths nextVersion 3 `catchError`
     (\err -> do
       debug $ show err
       debug "getMigrationsSequence was empty - that should only be true on v1 deploy"
-      pure [[WithMigrations 1]]
+      pure [(1,[WithMigrations 1])]
     )
 
-  let migrationSequence = migrationSequence_ & reverse & take 3 & reverse
-
   debug_ $ "Migration sequence: " ++ show migrationSequence
+  debug_ $ "Next version: " ++ show nextVersion
 
   let
     importMigrations = generateImportMigrations migrationSequence
 
-    importTypes :: Text
-    importTypes =
-      migrationSequence
-        & List.head
-        & justWithMigrationVersions
-        -- & dt "hrm"
-        & fmap (\v -> importType v)
-        & (\list ->
-          case nextVersion of
-            WithMigrations _ ->
-              case list of
-                [] -> []
-                _ -> List.init list -- All except last, as we already `import Types as VN`
-            WithoutMigrations _ ->
-              list
-          )
-        & T.concat
-
-
-    importType :: Int -> Text
-    importType version =
-      let versionT = show_ version
-      in
-      [text|import Evergreen.V$versionT.Types as T$versionT|]
+    importTypes_ = importTypes migrationSequence nextVersion
 
     historicMigrations_ = historicMigrations migrationSequence nextVersion
 
@@ -79,10 +56,142 @@ lamderaGenerated nextVersion migrationFilepaths = do
     module LamderaGenerated exposing (..)
 
     $importMigrations
-    $importTypes
+    $importTypes_
     import Lamdera.Migrations exposing (..)
-    import LamderaHelpers exposing (..)
     import Types as T$nextVersion_
+    import Lamdera.Wire2 exposing (Decoder, Encoder, bytesDecode, bytesEncode, intListFromBytes, intListToBytes)
+
+
+    type CurrentType backendModel frontendModel frontendMsg toBackend backendMsg toFrontend
+        = CurrentBackendModel ( backendModel, Cmd backendMsg )
+        | CurrentFrontendModel ( frontendModel, Cmd frontendMsg )
+        | CurrentFrontendMsg ( frontendMsg, Cmd frontendMsg )
+        | CurrentToBackend ( toBackend, Cmd backendMsg )
+        | CurrentBackendMsg ( backendMsg, Cmd backendMsg )
+        | CurrentToFrontend ( toFrontend, Cmd frontendMsg )
+
+
+    type UpgradeResult backendModel frontendModel frontendMsg toBackend backendMsg toFrontend
+        = AlreadyCurrent (CurrentType backendModel frontendModel frontendMsg toBackend backendMsg toFrontend)
+        | Upgraded (CurrentType backendModel frontendModel frontendMsg toBackend backendMsg toFrontend)
+        | UnknownVersion ( Int, String, List Int )
+        | UnknownType String
+        | DecoderError String
+
+
+    thenMigrateModel :
+        String
+        -> (oldModel -> ModelMigration newModel msgN)
+        -> (oldModel -> Encoder)
+        -> Decoder newModel
+        -> Int
+        -> Result String ( oldModel, Cmd msgO )
+        -> Result String ( newModel, Cmd msgN )
+    thenMigrateModel tipe migrationFn oldEncoder newDecoder newVersion priorResult =
+        priorResult
+            |> Result.andThen (\( oldValue, _ ) -> migrateModelValue tipe migrationFn oldValue oldEncoder newDecoder newVersion)
+
+
+    thenMigrateMsg :
+        String
+        -> (oldMsg -> MsgMigration newMsg msgN)
+        -> (oldMsg -> Encoder)
+        -> Decoder newMsg
+        -> Int
+        -> Result String ( oldMsg, Cmd msgO )
+        -> Result String ( newMsg, Cmd msgN )
+    thenMigrateMsg tipe migrationFn oldEncoder newDecoder newVersion priorResult =
+        priorResult
+            |> Result.andThen (\( oldValue, _ ) -> migrateMsgValue tipe migrationFn oldValue oldEncoder newDecoder newVersion)
+
+
+    upgradeSucceeds tagger priorResult =
+        priorResult
+            |> Result.andThen (\( value, cmds ) -> Ok <| Upgraded (tagger ( value, cmds )))
+
+
+    upgradeIsCurrent tagger priorResult =
+        priorResult
+            |> Result.andThen (\( value, cmds ) -> Ok <| AlreadyCurrent (tagger ( value, cmds )))
+
+
+    otherwiseError : Result String (UpgradeResult backendModel frontendModel frontendMsg toBackend backendMsg toFrontend) -> UpgradeResult backendModel frontendModel frontendMsg toBackend backendMsg toFrontend
+    otherwiseError priorResult =
+        case priorResult of
+            Ok upgradeResult ->
+                upgradeResult
+
+            Err err ->
+                DecoderError err
+
+
+    migrateModelValue :
+        String
+        -> (oldModel -> ModelMigration newModel msg)
+        -> oldModel
+        -> (oldModel -> Encoder)
+        -> Decoder newModel
+        -> Int
+        -> Result String ( newModel, Cmd msg )
+    migrateModelValue tipe migrationFn oldValue oldEncoder newDecoder newVersion =
+        case migrationFn oldValue of
+            ModelMigrated ( newValue, cmds ) ->
+                Ok ( newValue, cmds )
+
+            ModelUnchanged ->
+                -- @TODO technically getting here should mean we can unsafeCoerce the value,
+                -- however in the spirit of skepticism (as users could potentially screw with values)
+                -- we'll instead attempt to decode in the latest version...
+                oldValue
+                    |> oldEncoder
+                    |> bytesEncode
+                    |> intListFromBytes
+                    |> (\intList -> decodeType tipe newVersion intList newDecoder)
+
+
+    migrateMsgValue :
+        String
+        -> (oldMsg -> MsgMigration newMsg msg)
+        -> oldMsg
+        -> (oldMsg -> Encoder)
+        -> Decoder newMsg
+        -> Int
+        -> Result String ( newMsg, Cmd msg )
+    migrateMsgValue tipe migrationFn oldValue oldEncoder newDecoder newVersion =
+        case migrationFn oldValue of
+            MsgMigrated ( newValue, cmds ) ->
+                Ok ( newValue, cmds )
+
+            MsgUnchanged ->
+                -- @TODO technically getting here should mean we can unsafeCoerce the value,
+                -- however in the spirit of skepticism (as users could potentially screw with values)
+                -- we'll instead attempt to decode in the latest version...
+                oldValue
+                    |> oldEncoder
+                    |> bytesEncode
+                    |> intListFromBytes
+                    |> (\intList -> decodeType tipe newVersion intList newDecoder)
+
+            MsgOldValueIgnored ->
+                Err <| "Migration for " ++ tipe ++ "." ++ String.fromInt (newVersion - 1) ++ "->" ++ String.fromInt newVersion ++ " ignores old values"
+
+
+    {-| -}
+    decodeType : String -> Int -> List Int -> Decoder oldValue -> Result String ( oldValue, Cmd msg )
+    decodeType tipe version intList decoderOld =
+        case bytesDecode decoderOld (intListToBytes intList) of
+            Just oldValue ->
+                Ok ( oldValue, Cmd.none )
+
+            Nothing ->
+                -- This would mean data has been manipulated or corrupted,
+                -- or we have a bug in our encoder/decoder generation
+                Err <| "[decodeType] the impossible happened; failed to decode " ++ tipe ++ ".v" ++ String.fromInt version ++ " intlist length " ++ (String.fromInt <| List.length intList)
+
+
+    intlistToString i =
+        i |> List.map String.fromInt |> String.join ","
+
 
 
     currentVersion : Int
@@ -142,12 +251,35 @@ lamderaGenerated nextVersion migrationFilepaths = do
   |]
 
 
-generateImportMigrations :: [[VersionInfo]] -> Text
+importTypes migrationSequence nextVersion =
+  migrationSequence
+    & List.head
+    & (\(v,l) -> justWithMigrationVersions l)
+    & fmap (\v -> importType v)
+    & (\list ->
+      case nextVersion of
+        WithMigrations _ ->
+          case list of
+            [] -> []
+            _ -> List.init list -- All except last, as we already `import Types as VN`
+        WithoutMigrations _ ->
+          list
+      )
+    & T.concat
+
+
+importType :: Int -> Text
+importType version =
+  let versionT = show_ version
+  in
+  [text|import Evergreen.V$versionT.Types as T$versionT|]
+
+generateImportMigrations :: [(Int, [VersionInfo])] -> Text
 generateImportMigrations migrationSequence =
   case migrationSequence of
     firstMigration:_ ->
       firstMigration
-        & (\(_:actualMigrations) ->
+        & (\(v, (_:actualMigrations)) ->
             fmap generateImportMigration (justWithMigrationVersions actualMigrations)
           )
         & T.concat
@@ -165,19 +297,12 @@ generateImportMigration version =
 
 -- Generate the migration funnel for the set of consequetive
 -- app versions leading up to the current version.
-historicMigrations :: [[VersionInfo]] -> VersionInfo -> Text
-historicMigrations migrationSequence nextVersion =
-  let
-    v = vinfoVersion nextVersion
-    end = v
-    start = v - (length migrationSequence) + 1
-    versionEntrypoints = [start..end]
-  in
+historicMigrations :: [(Int,[VersionInfo])] -> VersionInfo -> Text
+historicMigrations migrationSequence finalVersion =
   migrationSequence
-    & zip versionEntrypoints
     -- & dt "historicMigratoins:migrationSequence"
-    & fmap (\(i,v) ->
-      historicMigration migrationSequence i v
+    & fmap (\(forVersion, migrationsForVersion) ->
+      historicMigration migrationSequence forVersion migrationsForVersion finalVersion
     )
     & (\list ->
         case list of
@@ -188,15 +313,15 @@ historicMigrations migrationSequence nextVersion =
 
 
 -- Generate migration funnel for a single app version entrypoint
-historicMigration :: [[VersionInfo]] -> Int -> [VersionInfo] -> Text
-historicMigration migrationSequence forVersion migrationsForVersion =
+historicMigration :: [(Int, [VersionInfo])] -> Int -> [VersionInfo] -> VersionInfo -> Text
+historicMigration migrationSequence forVersion migrationsForVersion finalVersion =
   let
     (startVersion:subsequentVersions) = migrationsForVersion
     types = [ "BackendModel", "FrontendModel", "FrontendMsg", "ToBackend", "BackendMsg", "ToFrontend"]
 
     typeMigrations =
       types
-        & fmap (migrationForType migrationSequence migrationsForVersion startVersion)
+        & fmap (migrationForType migrationSequence migrationsForVersion startVersion finalVersion)
         & T.intercalate "\n"
 
     forVersion_ = show_ $ forVersion
@@ -212,32 +337,62 @@ historicMigration migrationSequence forVersion migrationsForVersion =
   |]
 
 
-migrationForType :: [[VersionInfo]] -> [VersionInfo] -> VersionInfo -> Text -> Text
-migrationForType migrationSequence migrationsForVersion startVersion tipe = do
+migrationForType :: [(Int, [VersionInfo])] -> [VersionInfo] -> VersionInfo -> VersionInfo -> Text ->  Text
+migrationForType migrationSequence migrationsForVersion startVersion finalVersion tipe = do
 
   let
-    allMigrations = List.head migrationSequence
+    -- !_ = debugHaskell "migrationForType" (migrationSequence, migrationsForVersion, startVersion, tipe)
+
+    (v, allMigrations) = List.head migrationSequence
 
     intermediateMigrations =
       migrationsForVersion
         & pairs
         -- & dt "intermediateMigrations:pairs"
-        & fmap (\(from,to) -> intermediateMigration allMigrations tipe from to)
+
+    intermediateMigrationsFormatted =
+      intermediateMigrations
+        & fmap (\(from,to) -> intermediateMigration allMigrations tipe from to finalVersion)
         & T.concat
 
     startVersion_ = show_ $ vinfoVersion startVersion
+    finalVersion_ = show_ $ vinfoVersion finalVersion
 
-  [text|
-    "$tipe" ->
-        decodeType "$tipe" $startVersion_ intList T$startVersion_.w2_decode_$tipe
-            $intermediateMigrations
-            |> upgradeSucceeds Current$tipe
-            |> otherwiseError
-  |]
+    decodeAsLatest =
+      [text|
+        "$tipe" ->
+            decodeType "$tipe" $finalVersion_ intList T$finalVersion_.w2_decode_$tipe
+                |> upgradeSucceeds Current$tipe
+                |> otherwiseError
+      |]
+
+    migrateNext =
+      [text|
+        "$tipe" ->
+            decodeType "$tipe" $startVersion_ intList T$startVersion_.w2_decode_$tipe
+                $intermediateMigrationsFormatted
+                |> upgradeSucceeds Current$tipe
+                |> otherwiseError
+      |]
+
+  case intermediateMigrations of
+    single:[] ->
+      case single of
+        (from, WithoutMigrations to) ->
+          -- Our migration consists of a prior migration point, to the latest
+          -- unchanged point. This means we can skip some work and just decode as
+          -- the latest right away.
+          decodeAsLatest
+
+        _ ->
+          migrateNext
+
+    _ ->
+      migrateNext
 
 
-intermediateMigration :: [VersionInfo] -> Text -> VersionInfo -> VersionInfo -> Text
-intermediateMigration allMigrations tipe from to =
+intermediateMigration :: [VersionInfo] -> Text -> VersionInfo -> VersionInfo -> VersionInfo -> Text
+intermediateMigration allMigrations tipe from to finalVersion =
   let
     typenameCamel = lowerFirstLetter $ T.unpack tipe
 
@@ -281,6 +436,16 @@ intermediateMigration allMigrations tipe from to =
       |]
 
     WithoutMigrations v ->
+      {- It might seem like this is uneeded, but it's for when there's a migration in our chain, yet
+         the last version has no migrations. I.e.:
+
+         decodeType "BackendModel" 1 intList T1.w2_decode_BackendModel
+             |> thenMigrateModel "BackendModel" M2.backendModel T1.w2_encode_BackendModel T2.w2_decode_BackendModel 2
+             |> thenMigrateModel "BackendModel" (always ModelUnchanged) T2.w2_encode_BackendModel T3.w2_decode_BackendModel 3
+             |> upgradeSucceeds CurrentBackendModel
+             |> otherwiseError
+
+      -}
       let from_ = show_ $ lastMigrationBefore (vinfoVersion from)
           to_ = show_ (vinfoVersion to)
           migrationFn = "(always " <> kindForType <> "Unchanged)"
@@ -288,13 +453,6 @@ intermediateMigration allMigrations tipe from to =
       [text|
         |> $thenMigrateForType "$tipe" $migrationFn T$from_.w2_encode_$tipe T$to_.w2_decode_$tipe $to_
       |]
-
-
-
-
-
-
-
 
 
 
@@ -319,36 +477,26 @@ vinfoVersion vinfo =
     WithoutMigrations v -> v
 
 
-
 -- Doesn't need to be in IO, but left so that we can use convenient catchError and debugging
-getMigrationsSequence :: [FilePath] -> VersionInfo -> IO [[VersionInfo]]
-getMigrationsSequence migrationFilepaths nextVersion =
-
-  -- types <- Dir.listDirectory $ root </> "src/Evergreen/Type"
+getMigrationsSequence :: [FilePath] -> VersionInfo -> Int -> IO [(Int,[VersionInfo])]
+getMigrationsSequence migrationFilepaths nextVersion depth =
 
   let
+    versions = migrationVersions migrationFilepaths
+
     toVersionInfo :: Int -> VersionInfo
     toVersionInfo version =
-      if List.elem version (migrationVersions migrationFilepaths) then
+      if List.elem version versions then
         WithMigrations version
       else
         WithoutMigrations version
 
-    -- typeVersions :: [Int]
-    -- typeVersions =
-    --   types
-    --     & List.sortBy Algorithms.NaturalSort.compare
-    --     & fmap getVersion
-    --     & justs -- This is bad? But those files probably aren't VX.elm files?
-
-
-    sequences :: [[VersionInfo]]
+    sequences :: [(Int,[VersionInfo])]
     sequences =
       [1..(vinfoVersion nextVersion)]
         & fmap (\v ->
-          -- WithMigrations v
-          migrationVersions migrationFilepaths
-            & fmap (\v -> WithMigrations v)
+          versions
+            & fmap (\mv -> WithMigrations mv)
             & (\lm ->
                 case nextVersion of
                   WithMigrations _ -> lm
@@ -357,29 +505,14 @@ getMigrationsSequence migrationFilepaths nextVersion =
               )
             & List.reverse
             & takeWhileInclusive
-                (\mv ->
-                  (vinfoVersion mv > v)
-                  -- || (mv == WithoutMigrations (vinfoVersion mv))
-                )
+                (\mv -> vinfoVersion mv > v)
             & List.reverse
-
-              -- & fmap (\l -> [fmap WithMigrations l])
-
-            -- if List.elem v migrationVersions then
-            --   WithMigrations v
-            -- else
-            --   WithoutMigrations v
+            & (\m -> (v,m))
           )
-        -- & scanr (\v acc -> acc ++ [v]) []
-        & filter ((/=) [])
-        -- & fmap reverse
-
+        & filter (\(v,l) -> l /= [])
+        & lastN depth
   in
   pure sequences
-  -- This was the attempt to limit the amount of migrations, but it broke
-  -- because it _only_ generated migrations for type change pairs?
-  -- We need to be smarter and figure out how to generate last 2 regardless of prior pairs
-  -- pure $ lastN 2 sequences
 
 
 lastN :: Int -> [a] -> [a]

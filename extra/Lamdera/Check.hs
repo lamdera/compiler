@@ -277,7 +277,7 @@ run () () = do
                     lamderaThrowUnimplementedMigration nextMigrationPath formattedChangedTypes prodVersion nextMigrationPathBare
 
                   else do
-                    migrationCheck root nextVersion
+                    migrationCheck root nextVersionInfo
                     onlyWhen (not inProduction) $ possiblyShowExternalTypeWarnings
 
                     progressDoc $ D.green $ D.reflow $ "\nIt appears you're all set to deploy v" <> (show nextVersion) <> " of '" <> T.unpack appName <> "'."
@@ -332,6 +332,7 @@ run () () = do
                   , D.reflow "See <https://dashboard.lamdera.app/docs/evergreen> for more info."
                   ]
 
+            migrationCheck root nextVersionInfo
             onlyWhen (not inProduction) $ possiblyShowExternalTypeWarnings
 
             progressDoc $ D.green $ D.reflow $ "\nIt appears you're all set to deploy v" <> (show nextVersion) <> " of '" <> T.unpack appName <> "'."
@@ -555,26 +556,32 @@ checkUserProjectCompiles summary root = do
   liftIO $ sleep 50 -- 50 milliseconds
 
 
-migrationCheck :: FilePath -> Int -> Task.Task ()
-migrationCheck root version = do
+migrationCheck :: FilePath -> VersionInfo -> Task.Task ()
+migrationCheck root nextVersion = do
   summary <- Project.getRoot
-  let root = Summary._root summary
-
-  debug "Type-checking Evergreen migrations..."
-
   let
+    root = Summary._root summary
+    version = vinfoVersion nextVersion
     migrationPath = (root </> "src/Evergreen/Migrate/V") <> show version <> ".elm"
     migrationPathBk = (root </> "src/Evergreen/Migrate/.V") <> show version <> ".elm.bk"
 
-  debug $ "Replacing " <> "Evergreen.V" <> show version <> " type references"
+  debug "Type-checking Evergreen migrations..."
 
-  liftIO $ copyFile migrationPath migrationPathBk
-  liftIO $ replaceInFile ("Evergreen.V" <> show_ version <> ".") "" migrationPath
+
+
+  migrationExists <- liftIO $ Dir.doesFileExist migrationPath
+
+  onlyWhen migrationExists $ do
+
+    debug $ "Replacing " <> "Evergreen.V" <> show version <> " type references"
+
+    liftIO $ copyFile migrationPath migrationPathBk
+    liftIO $ replaceInFile ("Evergreen.V" <> show_ version <> ".") "" migrationPath
 
 
   liftIO $ mkdir $ root </> "lamdera-stuff/alpha"
 
-  gen <- liftIO $ Lamdera.Generated.createLamderaGenerated root (WithMigrations version) -- @TODO fix hardcode
+  gen <- liftIO $ Lamdera.Generated.createLamderaGenerated root nextVersion
 
   let lamderaCheckBothPath = "lamdera-stuff/alpha/LamderaCheckBoth.elm"
   -- liftIO $ writeUtf8 (root </> lamderaCheckBothPath) (lamderaCheckBothFileContents version)
@@ -587,8 +594,9 @@ migrationCheck root version = do
       liftIO $ remove $ root </> lamderaCheckBothPath
 
       -- Restore backed up unaltered migration file
-      liftIO $ copyFile migrationPathBk migrationPath
-      liftIO $ remove migrationPathBk
+      onlyWhen migrationExists $ do
+        liftIO $ copyFile migrationPathBk migrationPath
+        liftIO $ remove migrationPathBk
 
       -- liftIO $ putStrLn $ show err
       Task.throw err
@@ -602,8 +610,9 @@ migrationCheck root version = do
   liftIO $ remove $ root </> lamderaCheckBothPath
 
   -- Restore backed up unaltered migration file
-  liftIO $ copyFile migrationPathBk migrationPath
-  liftIO $ remove migrationPathBk
+  onlyWhen migrationExists $ do
+    liftIO $ copyFile migrationPathBk migrationPath
+    liftIO $ remove migrationPathBk
 
 
 committedCheck :: FilePath -> VersionInfo -> Task.Task ()
