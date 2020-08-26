@@ -50,6 +50,8 @@ lamderaGenerated nextVersion migrationFilepaths = do
 
     nextVersion_ = show_ $ vinfoVersion nextVersion
 
+  supportingCode <- genSupportingCode
+
   debug_ $ "Generated source for LamderaGenerated"
 
   pure $ [text|
@@ -60,138 +62,7 @@ lamderaGenerated nextVersion migrationFilepaths = do
     import Lamdera.Migrations exposing (..)
     import Types as T$nextVersion_
     import Lamdera.Wire2 exposing (Decoder, Encoder, bytesDecode, bytesEncode, intListFromBytes, intListToBytes)
-
-
-    type CurrentType backendModel frontendModel frontendMsg toBackend backendMsg toFrontend
-        = CurrentBackendModel ( backendModel, Cmd backendMsg )
-        | CurrentFrontendModel ( frontendModel, Cmd frontendMsg )
-        | CurrentFrontendMsg ( frontendMsg, Cmd frontendMsg )
-        | CurrentToBackend ( toBackend, Cmd backendMsg )
-        | CurrentBackendMsg ( backendMsg, Cmd backendMsg )
-        | CurrentToFrontend ( toFrontend, Cmd frontendMsg )
-
-
-    type UpgradeResult backendModel frontendModel frontendMsg toBackend backendMsg toFrontend
-        = AlreadyCurrent (CurrentType backendModel frontendModel frontendMsg toBackend backendMsg toFrontend)
-        | Upgraded (CurrentType backendModel frontendModel frontendMsg toBackend backendMsg toFrontend)
-        | UnknownVersion ( Int, String, List Int )
-        | UnknownType String
-        | DecoderError String
-
-
-    thenMigrateModel :
-        String
-        -> (oldModel -> ModelMigration newModel msgN)
-        -> (oldModel -> Encoder)
-        -> Decoder newModel
-        -> Int
-        -> Result String ( oldModel, Cmd msgO )
-        -> Result String ( newModel, Cmd msgN )
-    thenMigrateModel tipe migrationFn oldEncoder newDecoder newVersion priorResult =
-        priorResult
-            |> Result.andThen (\( oldValue, _ ) -> migrateModelValue tipe migrationFn oldValue oldEncoder newDecoder newVersion)
-
-
-    thenMigrateMsg :
-        String
-        -> (oldMsg -> MsgMigration newMsg msgN)
-        -> (oldMsg -> Encoder)
-        -> Decoder newMsg
-        -> Int
-        -> Result String ( oldMsg, Cmd msgO )
-        -> Result String ( newMsg, Cmd msgN )
-    thenMigrateMsg tipe migrationFn oldEncoder newDecoder newVersion priorResult =
-        priorResult
-            |> Result.andThen (\( oldValue, _ ) -> migrateMsgValue tipe migrationFn oldValue oldEncoder newDecoder newVersion)
-
-
-    upgradeSucceeds tagger priorResult =
-        priorResult
-            |> Result.andThen (\( value, cmds ) -> Ok <| Upgraded (tagger ( value, cmds )))
-
-
-    upgradeIsCurrent tagger priorResult =
-        priorResult
-            |> Result.andThen (\( value, cmds ) -> Ok <| AlreadyCurrent (tagger ( value, cmds )))
-
-
-    otherwiseError : Result String (UpgradeResult backendModel frontendModel frontendMsg toBackend backendMsg toFrontend) -> UpgradeResult backendModel frontendModel frontendMsg toBackend backendMsg toFrontend
-    otherwiseError priorResult =
-        case priorResult of
-            Ok upgradeResult ->
-                upgradeResult
-
-            Err err ->
-                DecoderError err
-
-
-    migrateModelValue :
-        String
-        -> (oldModel -> ModelMigration newModel msg)
-        -> oldModel
-        -> (oldModel -> Encoder)
-        -> Decoder newModel
-        -> Int
-        -> Result String ( newModel, Cmd msg )
-    migrateModelValue tipe migrationFn oldValue oldEncoder newDecoder newVersion =
-        case migrationFn oldValue of
-            ModelMigrated ( newValue, cmds ) ->
-                Ok ( newValue, cmds )
-
-            ModelUnchanged ->
-                -- @TODO technically getting here should mean we can unsafeCoerce the value,
-                -- however in the spirit of skepticism (as users could potentially screw with values)
-                -- we'll instead attempt to decode in the latest version...
-                oldValue
-                    |> oldEncoder
-                    |> bytesEncode
-                    |> intListFromBytes
-                    |> (\intList -> decodeType tipe newVersion intList newDecoder)
-
-
-    migrateMsgValue :
-        String
-        -> (oldMsg -> MsgMigration newMsg msg)
-        -> oldMsg
-        -> (oldMsg -> Encoder)
-        -> Decoder newMsg
-        -> Int
-        -> Result String ( newMsg, Cmd msg )
-    migrateMsgValue tipe migrationFn oldValue oldEncoder newDecoder newVersion =
-        case migrationFn oldValue of
-            MsgMigrated ( newValue, cmds ) ->
-                Ok ( newValue, cmds )
-
-            MsgUnchanged ->
-                -- @TODO technically getting here should mean we can unsafeCoerce the value,
-                -- however in the spirit of skepticism (as users could potentially screw with values)
-                -- we'll instead attempt to decode in the latest version...
-                oldValue
-                    |> oldEncoder
-                    |> bytesEncode
-                    |> intListFromBytes
-                    |> (\intList -> decodeType tipe newVersion intList newDecoder)
-
-            MsgOldValueIgnored ->
-                Err <| "Migration for " ++ tipe ++ "." ++ String.fromInt (newVersion - 1) ++ "->" ++ String.fromInt newVersion ++ " ignores old values"
-
-
-    {-| -}
-    decodeType : String -> Int -> List Int -> Decoder oldValue -> Result String ( oldValue, Cmd msg )
-    decodeType tipe version intList decoderOld =
-        case bytesDecode decoderOld (intListToBytes intList) of
-            Just oldValue ->
-                Ok ( oldValue, Cmd.none )
-
-            Nothing ->
-                -- This would mean data has been manipulated or corrupted,
-                -- or we have a bug in our encoder/decoder generation
-                Err <| "[decodeType] the impossible happened; failed to decode " ++ tipe ++ ".v" ++ String.fromInt version ++ " intlist length " ++ (String.fromInt <| List.length intList)
-
-
-    intlistToString i =
-        i |> List.map String.fromInt |> String.join ","
-
+    $supportingCode
 
 
     currentVersion : Int
@@ -553,3 +424,152 @@ getLastLocalTypeChangeVersion root = do
         & getVersion
         & fromMaybe 1 -- If there are no migrations or it failed, it must be version 1?
         & pure
+
+
+
+genSupportingCode = do
+
+  inProduction <- Lamdera.inProduction
+
+  if inProduction
+    then
+      -- In production, use shared injected code that the LBR/LFR runtime harnesses
+      -- also reference to share types and type check everything together
+      pure "import LamderaHelpers exposing (..)\n"
+    else
+      -- In development, we aren't building with the harnesses, so rather than an extra
+      -- file dependency, just inject the additional helpers we need to type check our migrations
+      pure [text|
+
+
+        type CurrentType backendModel frontendModel frontendMsg toBackend backendMsg toFrontend
+            = CurrentBackendModel ( backendModel, Cmd backendMsg )
+            | CurrentFrontendModel ( frontendModel, Cmd frontendMsg )
+            | CurrentFrontendMsg ( frontendMsg, Cmd frontendMsg )
+            | CurrentToBackend ( toBackend, Cmd backendMsg )
+            | CurrentBackendMsg ( backendMsg, Cmd backendMsg )
+            | CurrentToFrontend ( toFrontend, Cmd frontendMsg )
+
+
+        type UpgradeResult backendModel frontendModel frontendMsg toBackend backendMsg toFrontend
+            = AlreadyCurrent (CurrentType backendModel frontendModel frontendMsg toBackend backendMsg toFrontend)
+            | Upgraded (CurrentType backendModel frontendModel frontendMsg toBackend backendMsg toFrontend)
+            | UnknownVersion ( Int, String, List Int )
+            | UnknownType String
+            | DecoderError String
+
+
+        thenMigrateModel :
+            String
+            -> (oldModel -> ModelMigration newModel msgN)
+            -> (oldModel -> Encoder)
+            -> Decoder newModel
+            -> Int
+            -> Result String ( oldModel, Cmd msgO )
+            -> Result String ( newModel, Cmd msgN )
+        thenMigrateModel tipe migrationFn oldEncoder newDecoder newVersion priorResult =
+            priorResult
+                |> Result.andThen (\( oldValue, _ ) -> migrateModelValue tipe migrationFn oldValue oldEncoder newDecoder newVersion)
+
+
+        thenMigrateMsg :
+            String
+            -> (oldMsg -> MsgMigration newMsg msgN)
+            -> (oldMsg -> Encoder)
+            -> Decoder newMsg
+            -> Int
+            -> Result String ( oldMsg, Cmd msgO )
+            -> Result String ( newMsg, Cmd msgN )
+        thenMigrateMsg tipe migrationFn oldEncoder newDecoder newVersion priorResult =
+            priorResult
+                |> Result.andThen (\( oldValue, _ ) -> migrateMsgValue tipe migrationFn oldValue oldEncoder newDecoder newVersion)
+
+
+        upgradeSucceeds tagger priorResult =
+            priorResult
+                |> Result.andThen (\( value, cmds ) -> Ok <| Upgraded (tagger ( value, cmds )))
+
+
+        upgradeIsCurrent tagger priorResult =
+            priorResult
+                |> Result.andThen (\( value, cmds ) -> Ok <| AlreadyCurrent (tagger ( value, cmds )))
+
+
+        otherwiseError : Result String (UpgradeResult backendModel frontendModel frontendMsg toBackend backendMsg toFrontend) -> UpgradeResult backendModel frontendModel frontendMsg toBackend backendMsg toFrontend
+        otherwiseError priorResult =
+            case priorResult of
+                Ok upgradeResult ->
+                    upgradeResult
+
+                Err err ->
+                    DecoderError err
+
+
+        migrateModelValue :
+            String
+            -> (oldModel -> ModelMigration newModel msg)
+            -> oldModel
+            -> (oldModel -> Encoder)
+            -> Decoder newModel
+            -> Int
+            -> Result String ( newModel, Cmd msg )
+        migrateModelValue tipe migrationFn oldValue oldEncoder newDecoder newVersion =
+            case migrationFn oldValue of
+                ModelMigrated ( newValue, cmds ) ->
+                    Ok ( newValue, cmds )
+
+                ModelUnchanged ->
+                    -- @TODO technically getting here should mean we can unsafeCoerce the value,
+                    -- however in the spirit of skepticism (as users could potentially screw with values)
+                    -- we'll instead attempt to decode in the latest version...
+                    oldValue
+                        |> oldEncoder
+                        |> bytesEncode
+                        |> intListFromBytes
+                        |> (\intList -> decodeType tipe newVersion intList newDecoder)
+
+
+        migrateMsgValue :
+            String
+            -> (oldMsg -> MsgMigration newMsg msg)
+            -> oldMsg
+            -> (oldMsg -> Encoder)
+            -> Decoder newMsg
+            -> Int
+            -> Result String ( newMsg, Cmd msg )
+        migrateMsgValue tipe migrationFn oldValue oldEncoder newDecoder newVersion =
+            case migrationFn oldValue of
+                MsgMigrated ( newValue, cmds ) ->
+                    Ok ( newValue, cmds )
+
+                MsgUnchanged ->
+                    -- @TODO technically getting here should mean we can unsafeCoerce the value,
+                    -- however in the spirit of skepticism (as users could potentially screw with values)
+                    -- we'll instead attempt to decode in the latest version...
+                    oldValue
+                        |> oldEncoder
+                        |> bytesEncode
+                        |> intListFromBytes
+                        |> (\intList -> decodeType tipe newVersion intList newDecoder)
+
+                MsgOldValueIgnored ->
+                    Err <| "Migration for " ++ tipe ++ "." ++ String.fromInt (newVersion - 1) ++ "->" ++ String.fromInt newVersion ++ " ignores old values"
+
+
+        {-| -}
+        decodeType : String -> Int -> List Int -> Decoder oldValue -> Result String ( oldValue, Cmd msg )
+        decodeType tipe version intList decoderOld =
+            case bytesDecode decoderOld (intListToBytes intList) of
+                Just oldValue ->
+                    Ok ( oldValue, Cmd.none )
+
+                Nothing ->
+                    -- This would mean data has been manipulated or corrupted,
+                    -- or we have a bug in our encoder/decoder generation
+                    Err <| "[decodeType] the impossible happened; failed to decode " ++ tipe ++ ".v" ++ String.fromInt version ++ " intlist length " ++ (String.fromInt <| List.length intList)
+
+
+        intlistToString i =
+            i |> List.map String.fromInt |> String.join ","
+
+      |]

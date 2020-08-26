@@ -130,9 +130,6 @@ run () () = do
     -- Prior `onlyWhen` guards against situation where no name is determinable
     let appName = Lamdera.Project.certainAppName lamderaRemotes appNameEnvM
 
-    progressPointer "Checking config..."
-    Lamdera.Secrets.checkUserConfig appName (fmap T.pack prodTokenM)
-
     progressPointer  "Checking Evergreen migrations...\n"
     debug $ "app name:" ++ show appName
 
@@ -339,6 +336,9 @@ run () () = do
             progressDoc $ D.reflow $ "\nThere are no Evergreen type changes for this version."
 
             buildProductionJsFiles root inProduction nextVersionInfo
+
+    progressPointer "Checking config..."
+    Lamdera.Secrets.checkUserConfig appName (fmap T.pack prodTokenM)
 
     version <- Lamdera.Update.fetchCurrentVersion
       `catchError` (\err -> do
