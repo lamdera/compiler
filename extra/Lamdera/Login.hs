@@ -34,7 +34,7 @@ run :: () -> () -> IO ()
 run () () = do
   debug_ "Starting login..."
 
-  inProduction <- Lamdera.Project.inProduction
+  inProduction <- Lamdera.inProduction
   appName <- Lamdera.Project.appNameOrThrow
 
   token <- do

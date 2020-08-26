@@ -15,13 +15,6 @@ import qualified Data.List as List
 import Lamdera
 
 
-inProduction :: IO Bool
-inProduction = do
-  appNameEnvM <- liftIO $ Env.lookupEnv "LAMDERA_APP_NAME"
-  forceNotProd <- liftIO $ Env.lookupEnv "NOTPROD"
-  pure $ (appNameEnvM /= Nothing && forceNotProd == Nothing) -- @TODO better isProd check...
-
-
 maybeAppName :: IO (Maybe Text)
 maybeAppName = do
 

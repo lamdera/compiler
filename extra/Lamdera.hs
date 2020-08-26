@@ -4,6 +4,7 @@
 
 module Lamdera
   ( lamderaVersion
+  , inProduction
   , stdoutSetup
   , unsafePerformIO
   , liftIO
@@ -128,6 +129,13 @@ stdoutSetup :: IO ()
 stdoutSetup = do
   IO.hSetBuffering IO.stdout IO.LineBuffering
   IO.hSetEncoding  IO.stdout IO.utf8
+
+
+inProduction :: IO Bool
+inProduction = do
+  appNameEnvM <- liftIO $ Env.lookupEnv "LAMDERA_APP_NAME"
+  forceNotProd <- liftIO $ Env.lookupEnv "NOTPROD"
+  pure $ (appNameEnvM /= Nothing && forceNotProd == Nothing) -- @TODO better isProd check...
 
 
 -- debug :: String -> Task.Task a
@@ -578,18 +586,27 @@ data Env = Production | Development
   deriving (Show)
 
 -- Used for Env.mode value injection
+getEnvMode :: IO Env
 getEnvMode = do
+  inProduction <- Lamdera.inProduction
   root <- getProjectRoot
-  modeString <- readUtf8Text (lamderaEnvModePath root)
-  debug $ show $ "[mode] " <> show_ modeString
-  pure $
-    case modeString of
-      Just "Production" -> Production
-      -- Just "Review" -> Review
-      Just "Development" -> Development
-      _ -> Development
+  if inProduction
+    then do
+      debug "[mode] inProduction"
+      pure Production
+
+    else do
+      modeString <- readUtf8Text (lamderaEnvModePath root)
+      debug $ show $ "[mode] " <> show_ modeString
+      pure $
+        case modeString of
+          Just "Production" -> Production
+          -- Just "Review" -> Review
+          Just "Development" -> Development
+          _ -> Development
 
 
+setEnvMode :: FilePath -> Text -> IO ()
 setEnvMode root mode = do
   writeUtf8 (lamderaEnvModePath root) $ mode
 

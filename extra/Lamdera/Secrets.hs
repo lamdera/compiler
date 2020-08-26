@@ -408,7 +408,7 @@ checkUserConfig appName prodTokenM = do
 injectConfig graph = do
 
   isTypeSnapshot <- Lamdera.isTypeSnapshot
-  inProduction <- Lamdera.Project.inProduction
+  inProduction <- Lamdera.inProduction
 
   if inProduction && not isTypeSnapshot
     then do

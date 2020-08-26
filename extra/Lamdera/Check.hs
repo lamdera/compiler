@@ -103,7 +103,7 @@ run () () = do
   inDebug <- Lamdera.isDebug
   prodTokenM <- Env.lookupEnv "TOKEN"
 
-  inProduction <- Lamdera.Project.inProduction
+  inProduction <- Lamdera.inProduction
 
   let isHoistRebuild = (hoistRebuild /= Nothing)
       forceVersion = fromMaybe (-1) $
