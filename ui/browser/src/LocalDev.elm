@@ -42,7 +42,7 @@ import Types exposing (BackendModel, BackendMsg, FrontendModel, FrontendMsg, ToB
 
 
 lamderaVersion =
-    "alpha9"
+    "alpha10"
 
 
 port sendToBackend : E.Value -> Cmd msg
