@@ -346,10 +346,13 @@ run () () = do
         pure "skip"
       )
 
-    onlyWhen (version /= "skip" && (not $ textContains version (T.pack Lamdera.lamderaVersion))) $
+    onlyWhen (version /= "skip" && (not $ textContains version (T.pack Lamdera.lamderaVersion))) $ do
+        progressPointer "Checking version..."
         progressDoc $ D.stack
           [ D.red $ D.reflow $ "NOTE: There is a new alpha version, please upgrade before you deploy."
-          , D.reflow $ "Download here: <https://dashboard.lamdera.app/docs/download>"
+          , D.reflow $ "Current: " <> Lamdera.lamderaVersion
+          , D.reflow $ "New:     " <> T.unpack version
+          , D.reflow $ "You can download it here: <https://dashboard.lamdera.app/docs/download>"
           ]
 
 
