@@ -211,13 +211,13 @@ checkWithParams projectPath appName = do
   setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
   setEnv "LDEBUG" "1"
   setEnv "ELM_HOME" "/Users/mario/elm-home-elmx-test"
-  setEnv "NOTPROD" "1"
+  -- setEnv "NOTPROD" "1"
   setEnv "TOKEN" "a739477eb8bd2acbc251c246438906f4"
   -- setEnv "HOIST_REBUILD" "1"
   -- setEnv "VERSION" "1"
 
-  cp "/Users/mario/lamdera/runtime/src/LBR.elm" (projectPath ++ "/src/LBR.elm")
-  cp "/Users/mario/lamdera/runtime/src/LFR.elm" (projectPath ++ "/src/LFR.elm")
+  -- cp "/Users/mario/lamdera/runtime/src/LBR.elm" (projectPath ++ "/src/LBR.elm")
+  -- cp "/Users/mario/lamdera/runtime/src/LFR.elm" (projectPath ++ "/src/LFR.elm")
   -- cp "/Users/mario/lamdera/runtime/src/RPC.elm" (projectPath ++ "/src/RPC.elm")
   cp "/Users/mario/lamdera/runtime/src/LamderaHelpers.elm" (projectPath ++ "/src/LamderaHelpers.elm")
 
@@ -225,10 +225,10 @@ checkWithParams projectPath appName = do
     do
         Lamdera.Check.run () ()
 
-  rm (projectPath ++ "/src/LBR.elm")
-  rm (projectPath ++ "/src/LFR.elm")
+  -- rm (projectPath ++ "/src/LBR.elm")
+  -- rm (projectPath ++ "/src/LFR.elm")
   -- rm (projectPath ++ "/src/RPC.elm")
-  rm (projectPath ++ "/src/LamderaHelpers.elm")
+  -- rm (projectPath ++ "/src/LamderaHelpers.elm")
 
   unsetEnv "LAMDERA_APP_NAME"
   unsetEnv "LOVR"

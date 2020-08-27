@@ -431,6 +431,9 @@ canonicalToDiffableType interfaces recursionMap canonical tvarMap =
         ("elm", "core", "Platform.Sub", "Sub") -> kernelError
 
         ("elm", "json", "Json.Decode", "Decoder") -> kernelError
+
+        -- These are particularly problematic for FrontendMsg, it means you can't
+        -- get an E.Value from a HTTP call that then you parse later (problem for RPC!)
         ("elm", "json", "Json.Decode", "Value") -> kernelError
         ("elm", "json", "Json.Encode", "Value") -> kernelError
 

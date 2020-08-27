@@ -276,6 +276,7 @@ Executable elmx
         TestTypeHashes
 
         -- Debug helpers:
+        Show
         CanSer.CanSer
         Sanity
         Wire.PrettyPrint
