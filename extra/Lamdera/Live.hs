@@ -1,13 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Lamdera.Live
-  ( Lamdera.Live.init
-  , withEnd
-  , serveWebsocket
-  , serveRpc
-  , serveLamderaPublicFiles
-  , serveUnmatchedUrlsToIndex)
-  where
+module Lamdera.Live where
 
 import qualified Data.ByteString.Builder as B
 import qualified Data.ByteString as BS
@@ -109,95 +102,93 @@ serveUnmatchedUrlsToIndex serveElm =
 
       root <- liftIO $ getProjectRoot
       let harnessPath = root </> "lamdera-stuff/alpha/LocalDev.elm"
-      liftIO $ Lamdera.mkdir $ root </> "lamdera-stuff/alpha"
 
       isDebug <- liftIO $ Lamdera.isDebug
 
-      let
-        normalLocalDevWrite = liftIO $ do
-          harnessExists <- Lamdera.doesFileExist harnessPath
-          if harnessExists
-            then do
-              now <- getCurrentTime
-              modified <- Dir.getModificationTime harnessPath
-              accessed <- Dir.getAccessTime harnessPath
-
-              debug $ "🚧 n:" <> show now
-              debug $ "🚧 a:" <> show accessed
-              debug $ "🚧 m:" <> show modified
-
-              if diffUTCTime now modified > 60
-                then do
-                  -- File was last modified more than 5 seconds ago, okay to rewrite
-                  debug $ "🚧 writing, more than 5:" <> show (diffUTCTime now modified)
-                  BS.writeFile harnessPath StaticFiles.lamderaLocalDev
-                else do
-                  -- Modified recently, don't rewrite to prevent compiler issues
-                  -- when multiple tabs are open for lamdera live
-                  debug $ "🚧 skipping write! "  <> show (diffUTCTime now modified)
-                  pure ()
-            else do
-              -- No file exists yet, must be a new project
-              debug "🚧 🆕"
-              BS.writeFile harnessPath StaticFiles.lamderaLocalDev
-
       liftIO $ do
-        if isDebug
-          then do
-            let overridePath = "/Users/mario/dev/projects/elmx/ui/browser/src/LocalDev.elm"
-            overrideExists <- Lamdera.doesFileExist overridePath
-            if overrideExists
-              then do
-                debug $ "🚧 OVERRIDE from elmx/ui/browser/src/LocalDev.elm"
-                Lamdera.copyFile overridePath harnessPath
-              else
-                normalLocalDevWrite
+        onlyWhen isDebug $ do
+          let overridePath = "/Users/mario/dev/projects/elmx/ui/browser/src/LocalDev.elm"
+          overrideExists <- Lamdera.doesFileExist overridePath
+          onlyWhen overrideExists $ do
+            debug $ "🚧 OVERRIDE from elmx/ui/browser/src/LocalDev.elm"
+            Lamdera.copyFile overridePath harnessPath
 
-            rpcExists <- Lamdera.doesFileExist $ root </> "src" </> "RPC.elm"
+          rpcExists <- Lamdera.doesFileExist $ root </> "src" </> "RPC.elm"
 
-            onlyWhen rpcExists $ do
+          onlyWhen rpcExists $ do
 
-              -- Inject missing imports
-              liftIO $
-                replaceInFile
-                  "-- MKRRI"
-                  "import RPC\n\
-                  \import LamderaRPC"
-                  harnessPath
-              -- Replace body implementation
-              liftIO $
-                replaceInFile
-                  "-- MKRRC"
-                  "let\n\
-                  \                model =\n\
-                  \                    { userModel = m.bem }\n\
-                  \\n\
-                  \                ( newModel, newBeCmds ) =\n\
-                  \                    LamderaRPC.process\n\
-                  \                        (\\k v ->\n\
-                  \                            let\n\
-                  \                                x =\n\
-                  \                                    log k v\n\
-                  \                            in\n\
-                  \                            Cmd.none\n\
-                  \                        )\n\
-                  \                        rpcOut\n\
-                  \                        rpcArgsJson\n\
-                  \                        RPC.lamdera_handleEndpoints\n\
-                  \                        model\n\
-                  \            in\n\
-                  \            ( { m | bem = newModel.userModel, bemDirty = True }, Cmd.map BEMsg newBeCmds )\n\
-                  \            {-}"
-                  harnessPath
+            -- Inject missing imports
+            liftIO $
+              replaceInFile
+                "-- MKRRI"
+                "import RPC\n\
+                \import LamderaRPC"
+                harnessPath
+            -- Replace body implementation
+            liftIO $
+              replaceInFile
+                "-- MKRRC"
+                "let\n\
+                \                model =\n\
+                \                    { userModel = m.bem }\n\
+                \\n\
+                \                ( newModel, newBeCmds ) =\n\
+                \                    LamderaRPC.process\n\
+                \                        (\\k v ->\n\
+                \                            let\n\
+                \                                x =\n\
+                \                                    log k v\n\
+                \                            in\n\
+                \                            Cmd.none\n\
+                \                        )\n\
+                \                        rpcOut\n\
+                \                        rpcArgsJson\n\
+                \                        RPC.lamdera_handleEndpoints\n\
+                \                        model\n\
+                \            in\n\
+                \            ( { m | bem = newModel.userModel, bemDirty = True }, Cmd.map BEMsg newBeCmds )\n\
+                \            {-}"
+                harnessPath
 
-          else
-            normalLocalDevWrite
 
       serveElm harnessPath
       -- Cleanup causes issues because we might have a slew of tabs
       -- We can restore this when we further optimise `serveElm` to have a debounce cache!
       -- liftIO $ Dir.removeFile harnessPath
       -- liftIO $ callCommand $ "rm " <> harnessPath <> " || true " -- less exception-ey on double-reload!
+
+
+normalLocalDevWrite = do
+
+  root <- liftIO $ getProjectRoot
+  let harnessPath = root </> "lamdera-stuff/alpha/LocalDev.elm"
+  liftIO $ Lamdera.mkdir $ root </> "lamdera-stuff/alpha"
+
+  harnessExists <- Lamdera.doesFileExist harnessPath
+  if harnessExists
+    then do
+      now <- getCurrentTime
+      modified <- Dir.getModificationTime harnessPath
+      accessed <- Dir.getAccessTime harnessPath
+
+      debug $ "🚧 n:" <> show now
+      debug $ "🚧 a:" <> show accessed
+      debug $ "🚧 m:" <> show modified
+
+      if diffUTCTime now modified > 60
+        then do
+          -- File was last modified more than 5 seconds ago, okay to rewrite
+          debug $ "🚧 writing, more than 5:" <> show (diffUTCTime now modified)
+          BS.writeFile harnessPath StaticFiles.lamderaLocalDev
+        else do
+          -- Modified recently, don't rewrite to prevent compiler issues
+          -- when multiple tabs are open for lamdera live
+          debug $ "🚧 skipping write! "  <> show (diffUTCTime now modified)
+          pure ()
+    else do
+      -- No file exists yet, must be a new project
+      debug "🚧 🆕"
+      BS.writeFile harnessPath StaticFiles.lamderaLocalDev
 
 
 serveWebsocket (mClients, mLeader, mChan, beState) =

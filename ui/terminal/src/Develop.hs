@@ -34,8 +34,8 @@ import qualified Reporting.Task as Task
 
 
 import Lamdera
-import Lamdera.Live
-import Lamdera.Filewatch
+import qualified Lamdera.Live
+import qualified Lamdera.Filewatch
 
 -- RUN THE DEV SERVER
 
@@ -59,17 +59,19 @@ run () (Flags maybePort) =
 
         liveState <- liftIO $ Lamdera.Live.init
 
+        Lamdera.Live.normalLocalDevWrite
+
         Lamdera.Filewatch.watch liveState
 
         Lamdera.Live.withEnd liveState $
          httpServe (config port) $
           serveFiles
           <|> serveDirectoryWith directoryConfig "." -- Default directory/file config
-          <|> serveWebsocket liveState
-          <|> route [ ("_r/:endpoint", serveRpc liveState) ]
+          <|> Lamdera.Live.serveWebsocket liveState
+          <|> route [ ("_r/:endpoint", Lamdera.Live.serveRpc liveState) ]
           <|> serveAssets -- Compiler packaged static files
-          <|> serveLamderaPublicFiles serveElm serveFilePretty -- Add /public/* as if it were /* to mirror production
-          <|> serveUnmatchedUrlsToIndex serveElm -- Everything else without extensions goes to Lamdera LocalDev harness
+          <|> Lamdera.Live.serveLamderaPublicFiles serveElm serveFilePretty -- Add /public/* as if it were /* to mirror production
+          <|> Lamdera.Live.serveUnmatchedUrlsToIndex serveElm -- Everything else without extensions goes to Lamdera LocalDev harness
           <|> error404 -- Will get hit for any non-matching extensioned paths i.e. /hello.blah
 
 
@@ -286,4 +288,3 @@ mimeTypeDict =
     , ".xwd"     ==> "image/x-xwindowdump"
     , ".zip"     ==> "application/zip"
     ]
-
