@@ -365,25 +365,13 @@ buildProductionJsFiles root inProduction versionInfo = do
 
     debug $ "Compiling JS for production v" <> show (vinfoVersion versionInfo)
 
-    onlyWhen (version /= 1 && versionInfo == WithMigrations version) $ do -- Version 1 has no migrations for rewrite
-
-      let migrationPath = (root </> "src/Evergreen/Migrate/V") <> show version <> ".elm"
-      debug $ "Rewriting " <> migrationPath <> " type import to point to Types"
-
-      -- Temporarily point migration to current types in order to type-check
-      -- osReplace ("s/import Evergreen.Type.V" <> show version <> "/import Types/g") migrationPath
-      liftIO $ replaceInFile ("import Evergreen.V" <> show_ version <> ".Types") "import Types" migrationPath
+    onlyWhen (version /= 1 && versionInfo == WithMigrations version) $ do
+      let migrationPath = root </> "src/Evergreen/Migrate/V" <> show version <> ".elm"
+      replaceSnapshotTypeReferences migrationPath version
 
     -- debug $ "Injecting BACKENDINJECTION " <> (root </> "elm-backend-overrides.js")
     -- liftIO $ Env.setEnv "BACKENDINJECTION" (root </> "elm-backend-overrides.js")
     -- _ <- liftIO $ readProcess "touch" [root </> "src" </> "Types.elm"] ""
-
-    -- @TODO this is because the migrationCheck does weird terminal stuff that mangles the display... how to fix this?
-    -- liftIO $ sleep 50 -- 50 milliseconds
-
-    -- liftIO $ callCommand $ "cp ~/lamdera/runtime/src/LamderaHelpers.elm " ++ root ++ "/src"
-    -- liftIO $ callCommand $ "cp ~/lamdera/runtime/src/LFR.elm " ++ root ++ "/src"
-    -- liftIO $ callCommand $ "cp ~/lamdera/runtime/src/LBR.elm " ++ root ++ "/src"
 
     Project.compile
       Output.Prod
@@ -411,18 +399,11 @@ buildProductionJsFiles root inProduction versionInfo = do
     -- @TODO this is because the migrationCheck does weird terminal stuff that mangles the display... how to fix this?
     liftIO $ sleep 50 -- 50 milliseconds
 
-    onlyWhen (version /= 1 && versionInfo == WithMigrations version) $ do -- Version 1 has no migrations for rewrite
 
-      let migrationPath = (root </> "src/Evergreen/Migrate/V") <> show version <> ".elm"
-      debug $ "Rewriting " <> migrationPath <> " type import back to VX"
 
-      -- Temporarily point migration to current types in order to type-check
-      liftIO $ replaceInFile "import Types" ("import Evergreen.V" <> show_ version <> ".Types") migrationPath
-
-    -- NOTE: Could do this, but assuming it'll be good to have the original evidence of
-    -- state for situation where things go wrong in production and you can poke around
-    -- Restore the type back to what it was
-    -- osReplace ("s/import Types/import Evergreen.Type.V" <> show version <> "/g") migrationPath
+replaceSnapshotTypeReferences migrationPath version = do
+  debug $ "Replacing " <> "Evergreen.V" <> show version <> " type references in " <> migrationPath
+  liftIO $ replaceInFile ("Evergreen.V" <> show_ version <> ".") "" migrationPath
 
 
 
@@ -570,24 +551,18 @@ migrationCheck root nextVersion = do
 
   debug "Type-checking Evergreen migrations..."
 
-
-
   migrationExists <- liftIO $ Dir.doesFileExist migrationPath
 
   onlyWhen migrationExists $ do
-
-    debug $ "Replacing " <> "Evergreen.V" <> show version <> " type references"
-
     liftIO $ copyFile migrationPath migrationPathBk
-    liftIO $ replaceInFile ("Evergreen.V" <> show_ version <> ".") "" migrationPath
-
+    replaceSnapshotTypeReferences migrationPath version
 
   liftIO $ mkdir $ root </> "lamdera-stuff/alpha"
 
   gen <- liftIO $ Lamdera.Generated.createLamderaGenerated root nextVersion
 
   let lamderaCheckBothPath = "lamdera-stuff/alpha/LamderaCheckBoth.elm"
-  -- liftIO $ writeUtf8 (root </> lamderaCheckBothPath) (lamderaCheckBothFileContents version)
+
   liftIO $ writeUtf8 (root </> lamderaCheckBothPath) (gen)
   let jsOutput = Just (Output.Html Nothing "/dev/null")
   Project.compile Output.Dev Output.Client jsOutput Nothing summary [ lamderaCheckBothPath ]
@@ -966,6 +941,14 @@ genericExit str =
     $ Help.report "ERROR" Nothing
       (str)
       []
+
+
+
+
+
+
+
+-- Legacy, to be removed at Beta
 
 
 temporaryCheckOldTypesNeedingMigration :: Bool -> FilePath -> Task.Task ()
