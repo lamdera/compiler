@@ -19,7 +19,6 @@ data Exit
   = CannotMakeNothing
   | CannotOptimizeDebugValues Module.Raw [Module.Raw]
   | CannotOptimizeAndDebug
-  deriving (Show)
 
 
 

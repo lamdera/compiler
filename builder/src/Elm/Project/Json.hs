@@ -56,7 +56,6 @@ import Control.Monad.Except (liftIO)
 data Project
   = App AppInfo
   | Pkg PkgInfo
-  deriving (Show)
 
 
 
@@ -72,7 +71,6 @@ data AppInfo =
     , _app_test_direct :: Map Name Version
     , _app_test_trans :: Map Name Version
     }
-    deriving (Show)
 
 
 
@@ -90,13 +88,11 @@ data PkgInfo =
     , _pkg_test_deps :: Map Name Con.Constraint
     , _pkg_elm_version :: Con.Constraint
     }
-    deriving (Show)
 
 
 data Exposed
   = ExposedList [Module.Raw]
   | ExposedDict [(Text, [Module.Raw])]
-  deriving (Show)
 
 
 

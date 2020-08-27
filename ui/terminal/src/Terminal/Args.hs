@@ -367,3 +367,4 @@ isPossibleSuggestion extensions start dir path =
 isOkayExtension :: FilePath -> [String] -> Bool
 isOkayExtension path extensions =
   null extensions || elem (FP.takeExtension path) extensions
+

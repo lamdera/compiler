@@ -228,7 +228,6 @@ toByte n
 
 newtype BadFields =
   BadFields { _renamings :: Renamings }
-  deriving (Show, Eq, Ord)
 
 
 type Renamings =

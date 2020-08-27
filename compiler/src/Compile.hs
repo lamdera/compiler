@@ -67,7 +67,7 @@ data Artifacts =
     { _elmi :: I.Interface
     , _elmo :: Opt.Graph
     , _docs :: Maybe Docs.Module
-    } deriving (Show)
+    }
 
 
 compile :: DocsFlag -> Pkg.Name -> ImportDict -> I.Interfaces -> BS.ByteString -> MVar BS.ByteString -> Result i Artifacts
@@ -235,7 +235,7 @@ exhaustivenessCheck canonical =
 -- DOCUMENTATION
 
 
-data DocsFlag = YesDocs | NoDocs deriving (Show)
+data DocsFlag = YesDocs | NoDocs
 
 
 genarateDocs :: DocsFlag -> Can.Module -> Result.Result i w Error.Error (Maybe Docs.Module)

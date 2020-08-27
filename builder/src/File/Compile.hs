@@ -23,6 +23,7 @@ import qualified Reporting.Progress as Progress
 import qualified Reporting.Task as Task
 
 
+
 -- COMPILE
 
 
@@ -52,7 +53,6 @@ data Answer
   = Blocked
   | Bad FilePath Time.UTCTime BS.ByteString [Compiler.Error]
   | Good Compiler.Artifacts
-  deriving (Show)
 
 
 type Dict a = Map.Map Module.Raw a
@@ -103,8 +103,8 @@ compileModule tell project maybeDocsPath answersMVar ifacesMVar name info =
                             putMVar ifacesMVar (Map.insert canonicalName elmi lock)
                             putMVar mvar (Good result)
 
-
       return mvar
+
 
 
 -- TO DOCS FLAG

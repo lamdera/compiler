@@ -41,7 +41,6 @@ data Info =
     , _source :: BS.ByteString
     , _imports :: [Module.Raw]
     }
-    deriving (Show)
 
 
 atRoot :: Task.Task_ E.Problem a -> Task.Task_ E.Exit a

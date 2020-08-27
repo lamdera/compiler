@@ -60,7 +60,6 @@ data Kernel =
     { _client :: Opt.KContent
     , _server :: Maybe Opt.KContent
     }
-    deriving (Show)
 
 
 fromKernels :: Map.Map N.Name Kernel -> Opt.Graph

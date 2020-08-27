@@ -35,7 +35,6 @@ data Exit
   | RootNameless FilePath
   | DependencyProblems Problem [Problem]
   | BadKernelHeader FilePath
-  deriving (Show)
 
 
 data Problem
@@ -50,20 +49,17 @@ data Problem
       Module.Raw -- actual
   | PortsInPackage FilePath Module.Raw
   | EffectsUnexpected FilePath Module.Raw
-  deriving (Show)
 
 
 data Origin
   = ElmJson
   | File FilePath
   | Module FilePath Module.Raw
-  deriving (Show)
 
 
 data SrcDirs
   = App [FilePath]
   | Pkg
-  deriving (Show)
 
 
 

@@ -68,7 +68,7 @@ data DecisionTree
       , _edges :: [(Test, DecisionTree)]
       , _default :: Maybe DecisionTree
       }
-  deriving (Eq, Show, Ord)
+  deriving (Eq)
 
 
 data Test
@@ -80,14 +80,14 @@ data Test
   | IsChr Text
   | IsStr Text
   | IsBool Bool
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord)
 
 
 data Path
   = Index Index.ZeroBased Path
   | Unbox Path
   | Empty
-  deriving (Eq, Show, Ord)
+  deriving (Eq)
 
 
 
@@ -99,7 +99,6 @@ data Branch =
     { _goal :: Int
     , _patterns :: [(Path, Can.Pattern)]
     }
-    deriving (Show)
 
 
 toDecisionTree :: [Branch] -> DecisionTree

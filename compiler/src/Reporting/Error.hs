@@ -31,7 +31,6 @@ data Error
   | Pattern [Pattern.Error]
   | Docs Docs.Error
   | Lamdera Lamdera.Error.Error
-  deriving (Show)
 
 
 -- TO REPORT

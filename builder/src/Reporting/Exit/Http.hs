@@ -24,7 +24,7 @@ data Exit
   | BadJson String D.Doc
   | BadZipData
   | BadZipSha String String
-  deriving (Show)
+
 
 
 -- TO REPORT

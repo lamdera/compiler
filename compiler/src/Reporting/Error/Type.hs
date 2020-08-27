@@ -44,7 +44,6 @@ data Error
   = BadExpr R.Region Category T.Type (Expected T.Type)
   | BadPattern R.Region PCategory T.Type (PExpected T.Type)
   | InfiniteType R.Region N.Name T.Type
-  deriving (Show)
 
 
 
@@ -55,7 +54,6 @@ data Expected tipe
   = NoExpectation tipe
   | FromContext R.Region Context tipe
   | FromAnnotation N.Name Int SubContext tipe
-  deriving (Show)
 
 
 data Context
@@ -72,14 +70,12 @@ data Context
   | RecordUpdateKeys N.Name (Map.Map N.Name Can.FieldUpdate)
   | RecordUpdateValue N.Name
   | Destructure
-  deriving (Show)
 
 
 data SubContext
   = TypedIfBranch Index.ZeroBased
   | TypedCaseBranch Index.ZeroBased
   | TypedBody
-  deriving (Show)
 
 
 data MaybeName
@@ -87,7 +83,6 @@ data MaybeName
   | CtorName N.Name
   | OpName N.Name
   | NoName
-  deriving (Show)
 
 
 data Category
@@ -109,7 +104,6 @@ data Category
   | Effects
   | Local N.Name
   | Foreign N.Name
-  deriving (Show)
 
 
 
@@ -119,7 +113,6 @@ data Category
 data PExpected tipe
   = PNoExpectation tipe
   | PFromContext R.Region PContext tipe
-  deriving (Show)
 
 
 data PContext
@@ -128,7 +121,6 @@ data PContext
   | PCtorArg N.Name Index.ZeroBased
   | PListEntry Index.ZeroBased
   | PTail
-  deriving (Show)
 
 
 data PCategory
@@ -141,7 +133,6 @@ data PCategory
   | PStr
   | PChr
   | PBool
-  deriving (Show)
 
 
 

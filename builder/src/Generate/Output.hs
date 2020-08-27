@@ -53,7 +53,7 @@ import qualified Lamdera.Secrets
 -- GENERATE
 
 
-data Mode = Debug | Dev | Prod deriving (Show)
+data Mode = Debug | Dev | Prod
 
 
 generate

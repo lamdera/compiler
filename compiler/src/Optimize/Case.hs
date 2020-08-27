@@ -158,3 +158,4 @@ insertChoices choiceDict decider =
 
       Opt.FanOut path tests fallback ->
           Opt.FanOut path (map (second go) tests) (go fallback)
+

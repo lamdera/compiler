@@ -286,3 +286,4 @@ mimeTypeDict =
     , ".xwd"     ==> "image/x-xwindowdump"
     , ".zip"     ==> "application/zip"
     ]
+

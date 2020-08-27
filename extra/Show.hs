@@ -8,6 +8,14 @@
 
 module Show where
 
+import qualified AST.Optimized
+
+
+deriving instance Show AST.Optimized.Global
+
+
+
+
 -- import qualified Elm.Name
 -- import qualified Elm.Package
 -- import qualified AST.Canonical as Can
@@ -18,7 +26,6 @@ module Show where
 -- import qualified Data.Index as Index -- from elm compiler
 -- import qualified File.Find as Find
 -- import qualified "elm" Reporting.Annotation as Ann
-
 
 -- instance Show Elm.Name.Name where
 --   show = Elm.Name.toString

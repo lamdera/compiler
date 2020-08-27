@@ -22,7 +22,6 @@ data Exit
   | Unpublished
   | UnknownPackage Pkg.Name [Pkg.Name]
   | UnknownVersion Pkg.Name Pkg.Version [Pkg.Version]
-  deriving (Show)
 
 
 

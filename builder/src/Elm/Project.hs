@@ -67,9 +67,9 @@ compile mode target maybeOutput docs summary@(Summary.Summary root project _ _ _
       (dirty, ifaces) <- Plan.plan docs summary graph
       answers <- Compile.compile project docs ifaces dirty
       results <- Artifacts.write root answers
-
       _ <- traverse (Artifacts.writeDocs results) docs
       Output.generate mode target maybeOutput summary graph results
+
 
 
 -- COMPILE FOR REPL

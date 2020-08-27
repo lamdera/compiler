@@ -46,8 +46,6 @@ data Exit
   | BadHttp String Http.Exit
   | Check Lamdera.Exit.Exit
   | Lamdera Help.Report
-  deriving (Show)
-
 
 
 -- RENDERERS

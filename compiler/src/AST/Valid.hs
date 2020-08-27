@@ -57,7 +57,6 @@ data Expr_
     | Unit
     | Tuple Expr Expr [Expr]
     | Shader Text Text Shader.Shader
-    deriving (Show)
 
 
 
@@ -67,7 +66,6 @@ data Expr_
 data Def
     = Define R.Region (A.Located N.Name) [Src.Pattern] Expr (Maybe Src.Type)
     | Destruct R.Region Src.Pattern Expr
-    deriving (Show)
 
 
 
@@ -87,30 +85,27 @@ data Module =
     , _binop    :: [Binop]
     , _effects  :: Effects
     }
-    deriving (Show)
 
 
-data Decl = Decl (A.Located N.Name) [Src.Pattern] Expr (Maybe Src.Type) deriving (Show)
-data Union = Union R.Region (A.Located N.Name) [A.Located N.Name] [(A.Located N.Name, [Src.Type])] deriving (Show)
-data Alias = Alias R.Region (A.Located N.Name) [A.Located N.Name] Src.Type deriving (Show)
-data Binop = Binop N.Name Binop.Associativity Binop.Precedence N.Name deriving (Show)
+data Decl = Decl (A.Located N.Name) [Src.Pattern] Expr (Maybe Src.Type)
+data Union = Union R.Region (A.Located N.Name) [A.Located N.Name] [(A.Located N.Name, [Src.Type])]
+data Alias = Alias R.Region (A.Located N.Name) [A.Located N.Name] Src.Type
+data Binop = Binop N.Name Binop.Associativity Binop.Precedence N.Name
 
 
 data Effects
   = NoEffects
   | Ports [Port]
   | Manager R.Region Manager
-  deriving (Show)
 
 
 data Manager
   = Cmd (A.Located N.Name)
   | Sub (A.Located N.Name)
   | Fx (A.Located N.Name) (A.Located N.Name)
-  deriving (Show)
 
 
-data Port = Port (A.Located N.Name) Src.Type deriving (Show)
+data Port = Port (A.Located N.Name) Src.Type
 
 
 defaultModule :: Map.Map N.Name Text -> [Src.Import] -> [A.Located Decl] -> [Union] -> [Alias] -> [Binop] -> Module

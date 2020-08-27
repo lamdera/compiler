@@ -7,6 +7,7 @@ module Type.Constrain.Expression
   )
   where
 
+
 import qualified Data.Map.Strict as Map
 
 import qualified AST.Canonical as Can

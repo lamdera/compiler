@@ -66,7 +66,6 @@ data Expr
   | Unit
   | Tuple Expr Expr (Maybe Expr) -- struct with names `f0`, `f1`, ... for indices
   | Shader Text (Set.Set N.Name) (Set.Set N.Name)
-  deriving (Show, Eq, Ord)
 
 {-
 - union types
@@ -93,7 +92,7 @@ golang:
 -- TODO: how do we represent boxing/unboxing?
 
 data Global = Global ModuleName.Canonical N.Name
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord)
 
 -- instance Show Global where
 --   show (Global can name) = show can ++ "." ++ show name
@@ -112,14 +111,12 @@ kernel home =
 data Def
   = Def N.Name Expr
   | TailDef N.Name [N.Name] Expr
-  deriving (Show, Eq, Ord)
 
 
 data Destructor =
   -- let varname = this thing over at this path
   -- Destructor varname path
   Destructor N.Name Path
-  deriving (Show, Eq, Ord)
 
 
 data Path
@@ -127,7 +124,6 @@ data Path
   | Field N.Name Path
   | Unbox Path
   | Root N.Name
-  deriving (Show, Eq, Ord)
 
 
 
@@ -146,13 +142,12 @@ data Decider a
       , _tests :: [(DT.Test, Decider a)]
       , _fallback :: Decider a
       }
-  deriving (Show, Eq, Ord)
+  deriving (Eq)
 
 
 data Choice
   = Inline Expr
-  | Jump Int -- TODO: what does this int mean?
-  deriving (Show, Eq, Ord)
+  | Jump Int
 
 
 
@@ -165,7 +160,6 @@ data Graph =
     , _nodes :: Map.Map Global Node
     , _fields :: Map.Map N.Name Int
     }
-    deriving (Show, Eq, Ord)
 
 
 data Main
@@ -174,32 +168,27 @@ data Main
       { _message :: Can.Type
       , _decoder :: Expr
       }
-      deriving (Show, Eq, Ord)
 
-type GlobalDeps
-  -- Set.Set Global is the set of things referenced in the Expr(s), with `elm/kernel~Utils.$` being function application
-  = (Set.Set Global)
 
 data Node
-  = Define Expr GlobalDeps
-  | DefineTailFunc [N.Name] Expr GlobalDeps
+  = Define Expr (Set.Set Global)
+  | DefineTailFunc [N.Name] Expr (Set.Set Global)
   | Ctor Index.ZeroBased Int
   | Enum Index.ZeroBased
   | Box
   | Link Global
-  | Cycle [N.Name] [(N.Name, Expr)] [Def] GlobalDeps
+  | Cycle [N.Name] [(N.Name, Expr)] [Def] (Set.Set Global)
   | Manager EffectsType
   | Kernel KContent (Maybe KContent)
-  | PortIncoming Expr GlobalDeps
-  | PortOutgoing Expr GlobalDeps
-  deriving (Show, Eq, Ord)
+  | PortIncoming Expr (Set.Set Global)
+  | PortOutgoing Expr (Set.Set Global)
 
 
-data EffectsType = Cmd | Sub | Fx deriving (Show, Eq, Ord)
+data EffectsType = Cmd | Sub | Fx
 
 
 data KContent =
-  KContent [KChunk] (Set.Set Global) deriving (Show, Eq, Ord)
+  KContent [KChunk] (Set.Set Global)
 
 
 data KChunk
@@ -211,7 +200,6 @@ data KChunk
   | JsEnum Int
   | Debug
   | Prod
-  deriving (Show, Eq, Ord)
 
 
 

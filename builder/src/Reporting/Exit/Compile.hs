@@ -30,7 +30,7 @@ data Exit =
     , _source :: Text.Text
     , _errors :: [Compiler.Error]
     }
-  deriving (Show)
+
 
 
 -- TO JSON

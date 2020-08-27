@@ -111,17 +111,14 @@ data Expr_
   | Unit
   | Tuple Expr Expr (Maybe Expr)
   | Shader Text Text Shader.Shader
-  deriving (Show)
 
 
 data CaseBranch =
   CaseBranch Pattern Expr
-  deriving (Show)
 
 
 data FieldUpdate =
   FieldUpdate R.Region Expr
-  deriving (Show)
 
 
 
@@ -131,18 +128,16 @@ data FieldUpdate =
 data Def
   = Def (A.Located N.Name) [Pattern] Expr
   | TypedDef (A.Located N.Name) FreeVars [(Pattern, Type)] Expr Type
-  deriving (Show)
 
 
 
 -- DECLARATIONS
 
 
-data Decls -- behaves as a linked list
+data Decls
   = Declare Def Decls
   | DeclareRec [Def] Decls
   | SaveTheEnvironment
-  deriving (Show)
 
 
 
@@ -174,7 +169,6 @@ data Pattern_
       , _p_index :: Index.ZeroBased
       , _p_args :: [PatternCtorArg]
       }
-  deriving (Show)
       -- CACHE _p_home, _p_type, and _p_vars for type inference
       -- CACHE _p_index to replace _p_name in PROD code gen
       -- CACHE _p_opts to allocate less in PROD code gen
@@ -187,14 +181,13 @@ data PatternCtorArg =
     , _type :: Type             -- CACHE for type inference
     , _arg :: Pattern
     }
-    deriving (Show)
 
 
 
 -- TYPES
 
 
-data Annotation = Forall FreeVars Type deriving (Show)
+data Annotation = Forall FreeVars Type
 
 
 type FreeVars = Map.Map N.Name ()
@@ -262,11 +255,10 @@ data Module =
     , _binops  :: Map.Map N.Name Binop
     , _effects :: Effects
     }
-    deriving (Show)
 
 
-data Alias = Alias [N.Name] Type deriving (Show)
-data Binop = Binop_ Binop.Associativity Binop.Precedence N.Name deriving (Show)
+data Alias = Alias [N.Name] Type
+data Binop = Binop_ Binop.Associativity Binop.Precedence N.Name
 
 
 data Union =
@@ -276,19 +268,17 @@ data Union =
     , _u_numAlts :: Int -- CACHE numAlts for exhaustiveness checking
     , _u_opts :: CtorOpts -- CACHE which optimizations are available
     }
-    deriving (Show)
 
 
 data CtorOpts
   = Normal
   | Enum
   | Unbox
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord)
 
 
 data Ctor =
   Ctor N.Name Index.ZeroBased Int [Type] -- CACHE length args
-  deriving (Show)
 
 
 
@@ -302,7 +292,6 @@ data Docs
       , _overview :: B.ByteString
       , _comments :: Map.Map N.Name Text
       }
-  deriving (Show)
 
 
 
@@ -312,7 +301,6 @@ data Docs
 data Exports
   = ExportEverything R.Region
   | Export (Map.Map N.Name (A.Located Export))
-  deriving (Show)
 
 
 data Export
@@ -322,7 +310,6 @@ data Export
   | ExportUnionOpen
   | ExportUnionClosed
   | ExportPort
-  deriving (Show)
 
 
 
@@ -333,20 +320,17 @@ data Effects
   = NoEffects
   | Ports (Map.Map N.Name Port)
   | Manager R.Region R.Region R.Region Manager
-  deriving (Show)
 
 
 data Port
   = Incoming { _freeVars :: FreeVars, _payload :: Type, _func :: Type }
   | Outgoing { _freeVars :: FreeVars, _payload :: Type, _func :: Type }
-  deriving (Show)
 
 
 data Manager
   = Cmd N.Name
   | Sub N.Name
   | Fx N.Name N.Name
-  deriving (Show)
 
 
 

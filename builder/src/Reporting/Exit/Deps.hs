@@ -27,7 +27,6 @@ data Exit
   | AppMissingTrans [(Pkg.Name, Pkg.Version)]
   | BadDeps
   | BuildFailure FilePath Pkg.Name Pkg.Version
-  deriving (Show)
 
 
 

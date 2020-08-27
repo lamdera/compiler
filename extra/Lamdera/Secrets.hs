@@ -21,7 +21,7 @@ import qualified AST.Module.Name as ModuleName
 import qualified Elm.Package as Pkg
 import qualified Elm.Name as N
 
-
+import Show
 import Lamdera
 import qualified Lamdera.Project
 

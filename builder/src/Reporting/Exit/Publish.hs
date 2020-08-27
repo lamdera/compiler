@@ -32,7 +32,6 @@ data Exit
   | NoGit
   | LocalChanges Pkg.Version
   | LamderaPublishNeutered
-  deriving (Show)
 
 
 -- TO REPORT

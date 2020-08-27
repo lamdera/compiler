@@ -360,6 +360,7 @@ readArchive body (AS len sha zip) =
 
 -- WRITE ARCHIVE
 
+
 writeArchive :: Zip.Archive -> FilePath -> FilePath -> IO ()
 writeArchive archive destination newRoot =
   do  Dir.createDirectoryIfMissing True destination

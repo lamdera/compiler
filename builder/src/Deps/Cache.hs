@@ -39,12 +39,12 @@ import qualified Reporting.Suggest as Suggest
 import qualified Reporting.Task as Task
 
 
+
 -- PACKAGE REGISTRY
 
 
 data PackageRegistry =
   PackageRegistry Int (Map Pkg.Name [Pkg.Version])
-  deriving (Show)
 
 
 getPackageRegistry :: Task.Task PackageRegistry
