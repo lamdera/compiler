@@ -47,11 +47,9 @@ import qualified Elm.Name as N
 import qualified Json.Decode.Internals as Decode
 import qualified Json.Encode as Encode
 
--- recursion schemes
-import Data.Data
-import Control.Lens.Plated (Plated(plate))
-import Data.Data.Lens (uniplate)
 
+-- @LAMDERA recursion schemes
+import Data.Data
 
 -- PACKGE NAMES
 
@@ -63,18 +61,14 @@ data Name =
     }
     deriving (Eq, Ord, Show, Data)
 
-instance Plated Name where
-  plate = uniplate
 
 data Package =
   Package
     { _name :: !Name
     , _version :: !Version
     }
-    deriving (Eq, Ord, Show, Data)
+    deriving (Eq, Ord, Show)
 
-instance Plated Package where
-  plate = uniplate
 
 
 -- HELPERS
@@ -298,10 +292,7 @@ data Version =
     , _minor :: {-# UNPACK #-} !Word16
     , _patch :: {-# UNPACK #-} !Word16
     }
-    deriving (Eq, Ord, Show, Data)
-
-instance Plated Version where
-  plate = uniplate
+    deriving (Eq, Ord, Show)
 
 
 initialVersion :: Version

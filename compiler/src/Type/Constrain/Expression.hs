@@ -391,7 +391,6 @@ constrainRecord rtv region fields expected =
       let vars = Map.foldr (\(v,_,_) vs -> v:vs) [] dict
       let cons = Map.foldr (\(_,_,c) cs -> c:cs) [recordCon] dict
 
-      -- trace (sShow ("constrainRecord.CRecord", region, "rtv", rtv, "fields", fields, "exp", expected, ("recordType", recordType, "recordCon", recordCon, "vars", vars, "cons", cons))) $
       return $ exists vars (CAnd cons)
 
 

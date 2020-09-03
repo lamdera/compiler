@@ -1,6 +1,5 @@
 {-# OPTIONS_GHC -funbox-strict-fields #-}
 {-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE FlexibleInstances #-}
 module Type.UnionFind
   ( Point
   , fresh
@@ -33,7 +32,6 @@ import Control.Monad ( when )
 import Data.IORef (IORef, modifyIORef', newIORef, readIORef, writeIORef)
 import Data.Word (Word32)
 
-import System.IO.Unsafe (unsafePerformIO)
 
 
 -- POINT
@@ -41,29 +39,13 @@ import System.IO.Unsafe (unsafePerformIO)
 
 newtype Point a =
   Pt (IORef (PointInfo a))
-  deriving (Eq)
-
-
-instance Show a => Show (Point a) where
-  show (Pt a) =
-    unsafePerformIO $ do
-      v <- readIORef a
-      pure ("<Pt:" ++ show v ++ ">")
+  deriving Eq
 
 
 data PointInfo a
   = Info {-# UNPACK #-} !(IORef Word32) {-# UNPACK #-} !(IORef a)
   | Link {-# UNPACK #-} !(Point a)
 
-
-instance Show a => Show (PointInfo a) where
-  show (Info w32 a) =
-    unsafePerformIO $ do
-      w32r <- readIORef w32
-      a' <- readIORef a
-      pure ("Info " ++ show w32r ++ " " ++ show a')
-  show (Link a) =
-    "Link (" ++ show a ++ ")"
 
 
 -- HELPERS

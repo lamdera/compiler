@@ -5,7 +5,7 @@ module Reporting.Task
   , run
   , throw
   , mapError
-  , Env(..)
+  , Env(..) -- @LAMDERA constructor exposure
   , getPackageCacheDir
   , getPackageCacheDirFor
   , report
@@ -15,7 +15,7 @@ module Reporting.Task
   , getSilentRunner
   , workerChan
   , runHttp
-  , initPool
+  , initPool -- @LAMDERA
   )
   where
 
@@ -38,8 +38,8 @@ import qualified Reporting.Doc as D
 import qualified Reporting.Exit as Exit
 import qualified Reporting.Progress as Progress
 
--- tls mitm
-import Network.Connection as Http
+-- @LAMDERA tls mitm
+-- import Network.Connection as Http
 
 -- TASKS
 
@@ -61,22 +61,25 @@ data Env =
     , _ask :: D.Doc -> IO Bool
     }
 
--- TODO: REMOVE! SECURITY RISK!
+
+-- @LAMDERA reference
+-- WARNING: SECURITY RISK!
 -- this tells tls to allow self-signed tls certs, so we can use a mitm proxy to analyze traffic
 -- noVerifyTlsManagerSettings :: Http.ManagerSettings
 -- noVerifyTlsManagerSettings = Http.mkManagerSettings noVerifyTlsSettings Nothing
-
-noVerifyTlsSettings :: Http.TLSSettings
-noVerifyTlsSettings = Http.TLSSettingsSimple
-  { settingDisableCertificateValidation = True
-  , settingDisableSession = True
-  , settingUseServerName = False
-  }
+--
+-- noVerifyTlsSettings :: Http.TLSSettings
+-- noVerifyTlsSettings = Http.TLSSettingsSimple
+--   { settingDisableCertificateValidation = True
+--   , settingDisableSession = True
+--   , settingUseServerName = False
+--   }
 
 try :: Progress.Reporter -> Task a -> IO (Maybe a)
 try (Progress.Reporter tell ask end) task =
   do  root <- PerUserCache.getPackageRoot
-      pool <- initPool 4 -- number of threads when compiling
+      -- @LAMDERA note: number of threads when compiling
+      pool <- initPool 4
       httpManager <- Http.newManager Http.tlsManagerSettings
       let env = Env root pool httpManager tell ask
       result <- R.runReaderT (runExceptT task) env

@@ -27,7 +27,6 @@ import qualified Reporting.Exit as Exit
 import qualified Reporting.Exit.Crawl as E
 import qualified Reporting.Task as Task
 
-import qualified Elm.Package as Pkg
 
 import qualified Lamdera.Wire
 
@@ -156,6 +155,7 @@ parse project path time source =
   case Header.parse (Project.getName project) source of
     Right (maybeDecl, deps) ->
       let
+        -- @LAMDERA
         extraDeps =
           if Lamdera.Wire.shouldHaveCodecsGenerated (Project.getName project) then
             -- @TODO wire1: remove when deprecated

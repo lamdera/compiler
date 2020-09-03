@@ -63,8 +63,6 @@ newtype Name = Name { _name :: Text.Text }
 instance Plated Name where
   plate = uniplate
 
--- instance Show Name where
-  -- show n = Text.unpack $ toText n
 
 length :: Name -> Int
 length (Name name) =

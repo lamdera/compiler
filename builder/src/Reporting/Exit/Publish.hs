@@ -31,6 +31,7 @@ data Exit
   | MissingTag Pkg.Version
   | NoGit
   | LocalChanges Pkg.Version
+  -- @LAMDERA
   | LamderaPublishNeutered
 
 

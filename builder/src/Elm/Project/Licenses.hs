@@ -1,7 +1,7 @@
 {-# OPTIONS_GHC -Wall #-}
 {-# LANGUAGE OverloadedStrings #-}
 module Elm.Project.Licenses
-  ( License(License)
+  ( License
   , check
   , bsd3
   , encode

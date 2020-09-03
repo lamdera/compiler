@@ -12,6 +12,7 @@ import Text.RawString.QQ (r)
 
 import qualified Elm.Name as N
 
+
 import qualified Lamdera
 
 -- SANDWICH
@@ -19,8 +20,7 @@ import qualified Lamdera
 
 sandwich :: N.Name -> B.Builder -> B.Builder
 sandwich moduleName javascript =
-  let name = N.toBuilder moduleName
-  in
+  let name = N.toBuilder moduleName in
   [r|<!DOCTYPE HTML>
 <html>
 <head>
@@ -39,7 +39,7 @@ setupApp("|] <> name <> [r|", "elm-f0111bc4e658d0f98db96260c16f7e49")
 </body>
 </html>|]
 
-
+-- @LAMDERA original contents replaced
 -- var app = Elm.|] <> name <> [r|.init(initHandler(document.getElementById("elm-f0111bc4e658d0f98db96260c16f7e49")));
 -- if (document.getElementById("elm-f0111bc4e658d0f98db96260c16f7e49"))
 -- {

@@ -44,8 +44,10 @@ data Exit
   | Install Install.Exit
   | Publish Publish.Exit
   | BadHttp String Http.Exit
+  -- @LAMDERA
   | Check Lamdera.Exit.Exit
   | Lamdera Help.Report
+
 
 
 -- RENDERERS

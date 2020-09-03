@@ -33,6 +33,7 @@ import qualified Reporting.Task as Task
 import qualified Data.List as List
 
 
+import Lamdera
 
 -- FETCH
 
@@ -60,6 +61,7 @@ anything =
   Anything
 
 
+-- @LAMDERA
 self :: a -> Fetch a
 self =
   Self
@@ -88,7 +90,8 @@ run :: Fetch a -> Task.Task a
 run fetch =
   Task.runHttp $ \manager tell ->
     do  chan <- newChan
-        replicateM_ 4 $ forkIO $ forever $ join (readChan chan) -- number of threads when fetching dependencies from elm-package
+        -- @LAMDERA note: number of threads when fetching dependencies from elm-package
+        replicateM_ 4 $ forkIO $ forever $ join (readChan chan)
         readMVar =<< runHelp chan manager tell fetch
 
 
@@ -106,7 +109,7 @@ runHelp chan manager tell fetch =
           writeChan chan $ putMVar mvar =<< fetchSafe url manager handler
           return mvar
 
-    -- Lamdera added
+    -- @LAMDERA
     Self contents ->
       do  mvar <- newEmptyMVar
           writeChan chan $ putMVar mvar (Right contents)
@@ -163,14 +166,17 @@ makePackageUrl path params =
       else
         "?" ++ Http.urlEncodeVars params
   in
-    -- @LAMDERA This is a hack to make another hack work; if the url we got is a
-    -- valid url, use it directly instead of prefixing with package.elm-lang.org.
-    -- This is so we can fetch elm.json files from github directly for
-    -- lamdera/core and lamdera/codecs.
-    if "http" `List.isPrefixOf` path then
-      path ++ query
-    else
-      packageDomain ++ "/" ++ path ++ query
+    packageDomain ++ "/" ++ path ++ query
+      & (\original ->
+        -- @LAMDERA This is a hack to make another hack work; if the url we got is a
+        -- valid url, use it directly instead of prefixing with package.elm-lang.org.
+        -- This is so we can fetch elm.json files from github directly for
+        -- lamdera/core and lamdera/codecs.
+        if "http" `List.isPrefixOf` path then
+          path ++ query
+        else
+          original
+      )
 
 
 

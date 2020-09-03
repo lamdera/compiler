@@ -78,3 +78,30 @@ deriving instance Show AST.Optimized.Global
 -- deriving instance Functor Ann.Located
 -- deriving instance Foldable Ann.Located
 -- deriving instance Traversable Ann.Located
+
+
+-- instance Show Global where
+--   show (Global can name) = show can ++ "." ++ show name
+
+
+-- instance Show Name where
+  -- show n = Text.unpack $ toText n
+
+-- instance Show Name where
+--   show (Name toBuilder) = "Name<" ++ show (B.toLazyByteString toBuilder) ++ ">"
+
+
+-- instance Show a => Show (Point a) where
+--   show (Pt a) =
+--     unsafePerformIO $ do
+--       v <- readIORef a
+--       pure ("<Pt:" ++ show v ++ ">")
+--
+-- instance Show a => Show (PointInfo a) where
+--   show (Info w32 a) =
+--     unsafePerformIO $ do
+--       w32r <- readIORef w32
+--       a' <- readIORef a
+--       pure ("Info " ++ show w32r ++ " " ++ show a')
+--   show (Link a) =
+--     "Link (" ++ show a ++ ")"

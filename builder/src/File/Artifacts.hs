@@ -27,8 +27,6 @@ import qualified Reporting.Exit as Exit
 import qualified Reporting.Task as Task
 import qualified Stuff.Paths as Path
 
-import System.Directory (createDirectoryIfMissing)
-import System.FilePath (takeDirectory)
 
 
 -- IGNORE

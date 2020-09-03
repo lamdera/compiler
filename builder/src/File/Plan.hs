@@ -1,6 +1,5 @@
 {-# OPTIONS_GHC -Wall #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE FlexibleInstances #-}
 module File.Plan
   ( plan
   , Info(..)

@@ -1,5 +1,4 @@
 {-# OPTIONS_GHC -Wall #-}
-{-# LANGUAGE DeriveFunctor #-}
 module Reporting.Annotation
   ( Located(..)
   , at, merge
@@ -21,7 +20,6 @@ import qualified Reporting.Region as R
 
 data Located a =
   At R.Region a
-  deriving (Functor)
 
 
 

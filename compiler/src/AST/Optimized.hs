@@ -52,22 +52,31 @@ data Expr
   | VarDebug N.Name ModuleName.Canonical R.Region (Maybe N.Name)
   | VarKernel N.Name N.Name
   | List [Expr]
-  | Function [N.Name] Expr -- single-argument functions, returning functions(closures are native)
-  | Call Expr [Expr] -- just call a function, nothing special
+  -- @LAMDERA note: single-argument functions, returning functions(closures are native)
+  | Function [N.Name] Expr
+  -- @LAMDERA note: just call a function, nothing special
+  | Call Expr [Expr]
   | TailCall N.Name [(N.Name, Expr)]
   | If [(Expr, Expr)] Expr
   | Let Def Expr
   | Destruct Destructor Expr
-  | Case N.Name N.Name (Decider Choice) [(Int, Expr)] -- is each branch optimized down to an int?
-  | Accessor N.Name -- lambda
-  | Access Expr N.Name -- interface with getter function?
-  | Update Expr (Map.Map N.Name Expr) -- interface with setter function?
-  | Record (Map.Map N.Name Expr) -- struct
+  -- @LAMDERA note: is each branch optimized down to an int?
+  | Case N.Name N.Name (Decider Choice) [(Int, Expr)]
+  -- @LAMDERA note: lambda
+  | Accessor N.Name
+  -- @LAMDERA note: interface with getter function?
+  | Access Expr N.Name
+  -- @LAMDERA note: interface with setter function?
+  | Update Expr (Map.Map N.Name Expr)
+  -- @LAMDERA note: struct
+  | Record (Map.Map N.Name Expr)
   | Unit
-  | Tuple Expr Expr (Maybe Expr) -- struct with names `f0`, `f1`, ... for indices
+  -- @LAMDERA note: struct with names `f0`, `f1`, ... for indices
+  | Tuple Expr Expr (Maybe Expr)
   | Shader Text (Set.Set N.Name) (Set.Set N.Name)
 
-{-
+{- @LAMDERA notes
+
 - union types
 - functions/lambdas (closures)
 - pattern matching (destructors) js: thing.fieldname1[2].fieldname2
@@ -82,20 +91,12 @@ data Expr
   - always fetch fieldnames using functions. If they're interfaces or pure structs doesn't matter.
     - always use interfaces, otherwise we might not know when to pass pointers or not around.
 
-golang:
-- adt <-> interfaces
-  - https://blog.merovius.de/2018/02/25/persistent_datastructures_with_go.html
-
 -}
 
-
--- TODO: how do we represent boxing/unboxing?
 
 data Global = Global ModuleName.Canonical N.Name
   deriving (Eq, Ord)
 
--- instance Show Global where
---   show (Global can name) = show can ++ "." ++ show name
 
 -- Provide "List" not "Elm.Kernel.List"
 --
@@ -114,6 +115,7 @@ data Def
 
 
 data Destructor =
+  -- @LAMDERA note:
   -- let varname = this thing over at this path
   -- Destructor varname path
   Destructor N.Name Path

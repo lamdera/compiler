@@ -97,7 +97,7 @@ data Progress
   -- solver
   | UnableToLoadLatestPackages
 
-  -- Lamdera
+  -- @LAMDERA
   | LamderaProgress D.Doc
 
 

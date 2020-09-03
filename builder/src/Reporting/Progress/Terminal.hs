@@ -23,10 +23,7 @@ import Reporting.Progress (Msg(..), Progress(..), Outcome(..), PublishPhase(..),
 import qualified Reporting.Progress as Progress
 import qualified Reporting.Progress.Bar as Bar
 
-import qualified Lamdera.TypeHash
-import qualified Elm.Project as Project
-import qualified Elm.Project.Summary as Summary
-import qualified Reporting.Task as Task
+
 
 -- CREATE
 

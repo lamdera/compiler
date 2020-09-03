@@ -3,7 +3,7 @@ module Elm.Compiler.Objects
   ( JS.Output(..)
   , JS.generate
   , JS.generateForRepl
-  , Opt.Graph(..)
+  , Opt.Graph(..) -- @LAMDERA constructor exposure
   , empty
   , union
   , unions

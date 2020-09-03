@@ -1,4 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
 module File.Compile
   ( compile
   , Answer(..)
@@ -86,13 +85,14 @@ compileModule tell project maybeDocsPath answersMVar ifacesMVar name info =
                     let imports = makeImports project info
                     ifaces <- readMVar ifacesMVar
                     let source = Plan._src info
+                    -- @LAMDERA srcMVar addition
                     srcMVar <- newMVar source
-
                     case Compiler.compile docs pkg imports ifaces source srcMVar of
                       (_warnings, Left errors) ->
                         do  tell (Progress.CompileFileEnd name Progress.Bad)
                             let time = Plan._time info
                             let path = Plan._path info
+                            -- @LAMDERA srcMVar addition
                             actualSource <- readMVar srcMVar
                             putMVar mvar (Bad path time actualSource errors)
 

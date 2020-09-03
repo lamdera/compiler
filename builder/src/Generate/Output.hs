@@ -1,6 +1,5 @@
 {-# OPTIONS_GHC -Wall #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE BangPatterns #-}
 module Generate.Output
   ( Mode(..)
   , Mode.Target(..)
@@ -46,8 +45,9 @@ import qualified Reporting.Task as Task
 import qualified Stuff.Paths as Paths
 import Terminal.Args (Parser(..))
 
-import qualified Lamdera.Injection
+
 import Lamdera
+import qualified Lamdera.Injection
 import qualified Lamdera.Secrets
 
 -- GENERATE

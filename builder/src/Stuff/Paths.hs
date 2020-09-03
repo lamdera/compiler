@@ -1,5 +1,4 @@
 {-# OPTIONS_GHC -Wall #-}
-{-# LANGUAGE OverloadedStrings #-}
 module Stuff.Paths
   ( docs
   , summary
@@ -22,8 +21,7 @@ import qualified Elm.Compiler as Compiler
 import qualified Elm.Compiler.Module as Module
 import qualified Elm.Package as Pkg
 import qualified Reporting.Task as Task
-import Data.Monoid ((<>))
-import qualified Data.Text as T
+
 
 
 -- PATHS

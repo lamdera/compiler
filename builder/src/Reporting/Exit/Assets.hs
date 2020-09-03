@@ -38,9 +38,8 @@ data ElmJsonProblem
   | NoPkgCore
   | NoAppCore
   | NoAppJson
-  -- lamdera
+  -- @LAMDERA
   | NoAppLamderaCore
-  deriving (Show)
 
 
 

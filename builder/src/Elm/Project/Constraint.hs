@@ -2,7 +2,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Elm.Project.Constraint
   ( Constraint
-  , Op
   , exactly
   , anything
   , fromText
