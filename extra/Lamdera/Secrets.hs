@@ -403,6 +403,8 @@ checkUserConfig appName prodTokenM = do
          ]
         )
 
+  progress "Config items okay."
+
 
 -- Production config value injection
 injectConfig graph = do

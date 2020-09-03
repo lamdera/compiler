@@ -106,6 +106,8 @@ type Msg
     | ToggledFreezeMode
     | ToggledNetworkDelay
     | ToggledLogging
+    | QRCodeShow
+    | QRCodeHide
     | ClickedLocation
     | PersistBackend Bool
     | Reload
@@ -141,6 +143,7 @@ type alias DevBar =
     , showModeChanger : Bool
     , showResetNotification : Bool
     , versionCheck : VersionCheck
+    , qrCodeShow : Bool
     }
 
 
@@ -270,6 +273,7 @@ init flags url key =
             , showModeChanger = False
             , showResetNotification = didReset
             , versionCheck = VersionUnchecked
+            , qrCodeShow = False
             }
     in
     let
@@ -798,6 +802,30 @@ update msg m =
                     { devbar | logging = not m.devbar.logging }
             in
             ( { m | devbar = LD.debugS "d" newDevbar }
+            , Cmd.none
+            )
+
+        QRCodeShow ->
+            let
+                devbar =
+                    m.devbar
+
+                newDevbar =
+                    { devbar | qrCodeShow = True }
+            in
+            ( { m | devbar = newDevbar }
+            , Cmd.none
+            )
+
+        QRCodeHide ->
+            let
+                devbar =
+                    m.devbar
+
+                newDevbar =
+                    { devbar | qrCodeShow = False }
+            in
+            ( { m | devbar = newDevbar }
             , Cmd.none
             )
 
@@ -1396,6 +1424,25 @@ expandedUI topDown devbar =
 
             False ->
                 buttonDevOff "Logging: Off" iconLogs ToggledLogging
+        , if devbar.qrCodeShow == True then
+            div [ style "text-align" "center" ]
+                [ img
+                    [ src "https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=http://192.168.0.2:8000"
+                    , style "width" "150"
+                    , style "height" "150"
+                    ]
+                    []
+                ]
+
+          else
+            text ""
+        , div
+            [ onMouseEnter QRCodeShow
+            , onMouseLeave QRCodeHide
+            , style "cursor" "pointer"
+            , style "text-align" "center"
+            ]
+            [ text "QR Code" ]
         , if topDown then
             div [] [ envDocs, versionInfo ]
 
