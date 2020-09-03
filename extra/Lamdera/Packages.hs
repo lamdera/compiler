@@ -26,10 +26,13 @@ import qualified System.Process
 import Wire.PrettyPrint (sShow)
 
 
+-- Overrides for functions in builder/src/Deps/Website.hs
+
 
 -- LOCAL PACKAGE OVERRIDES
 
 getLamderaPkgPath = Env.lookupEnv "LOVR"
+
 
 localPackages :: Map.Map Name [Version]
 localPackages =

@@ -45,7 +45,7 @@ getElmHome :: IO FilePath
 getElmHome =
   do  maybeHome <- Env.lookupEnv "ELM_HOME"
       maybe (Dir.getAppUserDataDirectory "elm") return maybeHome
-      -- Lamdera override
+      -- @LAMDERA override
       maybe ((\v -> v </> "elm") <$> Dir.getAppUserDataDirectory "lamdera") pure maybeHome
       -- @LAMDERA revisit for IDE support: keep the root so the mapping doesn't have to be `lamdera-stuff/elm`
       -- and use LAMDERA_HOME so that choice doesn't cause clashes with usage of ELM_HOME

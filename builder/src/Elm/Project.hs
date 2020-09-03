@@ -13,7 +13,6 @@ module Elm.Project
 import qualified Data.ByteString as BS
 import Data.Map ((!))
 import System.FilePath ((</>))
-import Control.Monad.Trans (liftIO)
 
 import qualified Elm.Compiler as Compiler
 import qualified Elm.Docs as Docs
@@ -32,7 +31,6 @@ import qualified Reporting.Render.Type.Localizer as L
 import qualified Reporting.Task as Task
 import qualified Stuff.Paths as Path
 
-import qualified System.Environment as Env
 
 
 -- GET ROOT

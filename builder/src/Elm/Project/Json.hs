@@ -47,8 +47,6 @@ import qualified Reporting.Task as Task
 import Lamdera
 import qualified Lamdera.Checks
 import qualified Lamdera.Wire
-import Control.Monad.Except (liftIO)
-
 
 -- PROJECT
 
@@ -154,12 +152,17 @@ check project =
       if Map.member Pkg.core direct then
 
         if Map.member Pkg.json direct || Map.member Pkg.json indirect
-          then
-            if Map.member Pkg.lamderaCore direct || Map.member Pkg.lamderaCore indirect
-            then do
-              Lamdera.Checks.runChecks
-            else
-              throwBadJson E.NoAppLamderaCore
+          then return ()
+            & (\v -> do
+              let typedIgnore :: Task.Task ()
+                  typedIgnore = v -- compiler complains `Ambiguous type variable ‘m0’ arising from a use of ‘return’` otherwise
+              -- @LAMDERA
+              if Map.member Pkg.lamderaCore direct || Map.member Pkg.lamderaCore indirect
+                then do
+                  Lamdera.Checks.runChecks
+                else
+                 throwBadJson E.NoAppLamderaCore
+            )
           else throwBadJson E.NoAppJson
 
       else
@@ -304,22 +307,32 @@ decoder =
 
 appDecoder :: Decoder AppInfo
 appDecoder =
-  (AppInfo
+  -- @LAMDERA
+  D.map
+    (\appInfo ->
+      appInfo {_app_deps_direct = Map.insert Pkg.lamderaCodecs (Pkg.Version 1 0 0) (_app_deps_direct appInfo)}
+    ) $
+  AppInfo
     <$> D.field "elm-version" versionDecoder
     <*> D.field "source-directories" (D.list dirDecoder)
     <*> D.field "dependencies" (D.field "direct" (depsDecoder versionDecoder))
     <*> D.field "dependencies" (D.field "indirect" (depsDecoder versionDecoder))
     <*> D.field "test-dependencies" (D.field "direct" (depsDecoder versionDecoder))
     <*> D.field "test-dependencies" (D.field "indirect" (depsDecoder versionDecoder))
-  )
-  & D.map
-    (\appInfo ->
-      appInfo {_app_deps_direct = Map.insert Pkg.lamderaCodecs (Pkg.Version 1 0 0) (_app_deps_direct appInfo)}
-    )
+
+
 
 pkgDecoder :: Decoder PkgInfo
 pkgDecoder =
-  (PkgInfo
+  -- @LAMDERA
+  D.map
+    (\pkgInfo ->
+      if Lamdera.Wire.shouldHaveCodecsGenerated (_pkg_name pkgInfo) then
+          pkgInfo {_pkg_deps = Map.union (_pkg_deps pkgInfo) (Map.singleton (Pkg.lamderaCodecs) Con.anything)}
+      else
+        pkgInfo
+    ) $
+  PkgInfo
     <$> D.field "name" pkgNameDecoder
     <*> D.field "summary" summaryDecoder
     <*> D.field "license" licenseDecoder
@@ -328,14 +341,7 @@ pkgDecoder =
     <*> D.field "dependencies" (depsDecoder constraintDecoder)
     <*> D.field "test-dependencies" (depsDecoder constraintDecoder)
     <*> D.field "elm-version" constraintDecoder
-  )
-  & D.map
-    (\pkgInfo ->
-      if Lamdera.Wire.shouldHaveCodecsGenerated (_pkg_name pkgInfo) then
-          pkgInfo {_pkg_deps = Map.union (_pkg_deps pkgInfo) (Map.singleton (Pkg.lamderaCodecs) Con.anything)}
-      else
-        pkgInfo
-    )
+
 
 
 
