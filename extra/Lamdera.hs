@@ -8,6 +8,7 @@ module Lamdera
   , stdoutSetup
   , unsafePerformIO
   , liftIO
+  , alternativeImplementation
   , debug_
   , debug_note
   , debug
@@ -145,6 +146,10 @@ debug str =
 
 debugT text =
   liftIO $ debug_ (T.unpack text)
+
+
+alternativeImplementation fn ignored =
+  fn
 
 
 debug_ :: String -> IO ()

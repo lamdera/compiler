@@ -1,6 +1,5 @@
 {-# OPTIONS_GHC -Wall #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE QuasiQuotes #-}
 module Deps.Website
   ( getElmJson
   , getDocs
@@ -25,15 +24,14 @@ import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Digest.Pure.SHA as SHA
 import qualified Data.HashMap.Lazy as HashMap
 import qualified Data.Map as Map
-import qualified Data.Text as T
+import qualified Data.Text as Text
 import qualified Network.HTTP.Client as Client
 import qualified Network.HTTP.Client.MultipartFormData as Multi
 import qualified Network.HTTP.Types as Http
 import qualified System.Directory as Dir
 import System.FilePath ((</>), splitFileName)
-import qualified System.Environment as Env
 
-import Elm.Package (Name(Name), Version)
+import Elm.Package (Name, Version)
 import qualified Elm.Package as Pkg
 import qualified Json.Decode as D
 
@@ -44,10 +42,9 @@ import qualified Reporting.Task as Task
 import qualified Reporting.Task.Http as Http
 import qualified Stuff.Paths as Path
 
-import Lamdera
-import System.IO.Unsafe
-import qualified System.Process
-import Wire.PrettyPrint (sShow)
+
+import qualified Lamdera
+import qualified Lamdera.Packages
 
 -- GET PACKAGE INFO
 
@@ -63,51 +60,21 @@ getDocs name version =
   Http.run $ fetchByteString $
     "packages/" ++ Pkg.toUrl name ++ "/" ++ Pkg.versionToString version ++ "/docs.json"
 
--- LOCAL PACKAGE OVERRIDES
 
-getLamderaPkgPath = Env.lookupEnv "LOVR"
-
-localPackages :: Map.Map Name [Version]
-localPackages =
-  Map.union (Map.fromList [(Name "lamdera" "codecs", [Pkg.Version 1 0 0]), (Name "lamdera" "core", [Pkg.Version 1 0 0])])
-  $ unsafePerformIO $ do
-    env <- getLamderaPkgPath
-    case env of
-      Just path ->
-        do
-          authors <- Dir.listDirectory (path </> "packages")
-          authoredPkgs <- concat <$> mapM (\author -> do pkg <- Dir.listDirectory (path </> "packages" </> author); pure (((,) author) <$> pkg)) authors :: IO [(FilePath, FilePath)]
-          versionedAuthoredPkgs <- mapM (\(author, pkg) -> do versions <- Dir.listDirectory (path </> "packages" </> author </> pkg); pure (( author, pkg, versions))) authoredPkgs :: IO [(FilePath, FilePath, [FilePath])]
-
-          -- debug_note ("found local packages:" ++ sShow versionedAuthoredPkgs) $
-          pure $
-            catResultsOrCrashOnLeft <$> (Map.fromList $ ((\(author, pkg, versions) -> (Name (T.pack author) (T.pack pkg), versionFromText <$> T.pack <$> versions)) <$> versionedAuthoredPkgs))
-
-      Nothing ->
-        pure Map.empty
-
-versionFromText t =
-  case Pkg.versionFromText t of
-    Just v -> Right v
-    Nothing -> Left t
-
-catResultsOrCrashOnLeft (Right a:rest) = (a:catResultsOrCrashOnLeft rest)
-catResultsOrCrashOnLeft (Left a:_) = error ("pathfail:" <> T.unpack a <> ".")
-catResultsOrCrashOnLeft [] = []
 
 -- NEW PACKAGES
 
 
 getNewPackages :: Int -> Task.Task [(Name, Version)]
 getNewPackages index =
-  -- this runs when version solver tries to upgrade a dependency
+  -- @LAMDERA note: this runs when version solver tries to upgrade a dependency
   Http.run $ fetchJson "packages" E.badJsonToDocs (D.list newPkgDecoder) ("all-packages/since/" ++ show index)
 
 
 newPkgDecoder :: D.Decoder E.BadJson ( Name, Version )
 newPkgDecoder =
   do  txt <- D.text
-      case T.splitOn "@" txt of
+      case Text.splitOn "@" txt of
         [key, value] ->
           case Pkg.fromText key of
             Right pkg ->
@@ -131,8 +98,8 @@ newPkgDecoder =
 
 getAllPackages :: Task.Task (Map.Map Name [Version])
 getAllPackages =
-  Map.union localPackages <$>
-  (Http.run $ fetchJson "packages" E.badJsonToDocs allPkgsDecoder "all-packages")
+  (\v -> Map.union Lamdera.Packages.localPackages <$> v) $
+  Http.run $ fetchJson "packages" E.badJsonToDocs allPkgsDecoder "all-packages"
 
 
 allPkgsDecoder :: D.Decoder E.BadJson (Map.Map Name [Version])
@@ -159,69 +126,26 @@ allPkgsDecoder =
 -- HELPERS
 
 
-fetchLocal :: String -> IO (Maybe BS.ByteString)
-fetchLocal url =
-  do
-    -- if $LOVR is set, and `$LOVR ++ url` exists, read that and return it instead
-    env <- getLamderaPkgPath
-    case env of
-      Just path ->
-        do
-          exists <- Dir.doesFileExist (path </> url)
-          if exists then
-              -- debug_note ("using local file override at " ++ (path </> url)) $
-              Just <$> BS.readFile (path </> url)
-            else
-              -- debug_note ("using web file; no local override found at " ++ (path </> url)) $
-              pure Nothing
-      Nothing ->
-        pure $ case url of
-          "packages/lamdera/core/1.0.0/endpoint.json" ->
-            Just ("{\"url\":\"https://static.lamdera.com/r/lamdera/core/pack.zip\",\"hash\":\"ignored\"}")
-          "packages/lamdera/codecs/1.0.0/endpoint.json" ->
-            Just ("{\"url\":\"https://static.lamdera.com/r/lamdera/codecs/pack.zip\",\"hash\":\"ignored\"}")
-          _ ->
-            Nothing
-
-redirectLamderaPaths :: String -> String
-redirectLamderaPaths s =
-  -- Since package.elm-lang.org doesn't contain copies of elm.json for lamdera packages, we redirect the requests to github directly.
-  -- This is dangerous in general, since the author can change the elm.json files, but in this case we control all these packages, so we're all good.
-  case s of
-    "packages/lamdera/core/1.0.0/elm.json" ->
-      "https://static.lamdera.com/r/lamdera/core/1.0.0/elm.json"
-    "packages/lamdera/codecs/1.0.0/elm.json" ->
-      "https://static.lamdera.com/r/lamdera/codecs/1.0.0/elm.json"
-    _ ->
-      s
-
 fetchByteString :: String -> Http.Fetch BS.ByteString
 fetchByteString path =
-  case unsafePerformIO $ fetchLocal path of
-    Just bs -> Http.self bs
-    Nothing ->
-      Http.package (redirectLamderaPaths path) [] $ \request manager ->
-        do  response <- Client.httpLbs request manager
-            return $ Right $ LBS.toStrict $ Client.responseBody response
+  Lamdera.alternativeImplementation (Lamdera.Packages.fetchByteString path) $
+  Http.package path [] $ \request manager ->
+    do  response <- Client.httpLbs request manager
+        return $ Right $ LBS.toStrict $ Client.responseBody response
 
 
 fetchJson :: String -> (e -> [D.Doc]) -> D.Decoder e a -> String -> Http.Fetch a
 fetchJson rootName errorToDocs decoder path =
-  case unsafePerformIO $ fetchLocal path of
-    Just bs ->
-      case D.parse rootName errorToDocs decoder bs of
-        Right value -> Http.self value
-        Left v -> error ("fetchJson failed to decode local file: " ++ show v)
-    Nothing ->
-      Http.package (redirectLamderaPaths path) [] $ \request manager ->
-        do  response <- Client.httpLbs request manager
-            let bytes = LBS.toStrict (Client.responseBody response)
-            case D.parse rootName errorToDocs decoder bytes of
-              Right value ->
-                return $ Right value
+  Lamdera.alternativeImplementation (Lamdera.Packages.fetchJson rootName errorToDocs decoder path) $
+  Http.package path [] $ \request manager ->
+    do  response <- Client.httpLbs request manager
+        let bytes = LBS.toStrict (Client.responseBody response)
+        case D.parse rootName errorToDocs decoder bytes of
+          Right value ->
+            return $ Right value
 
-              Left jsonProblem ->
-                return $ Left $ E.BadJson path jsonProblem
+          Left jsonProblem ->
+            return $ Left $ E.BadJson path jsonProblem
 
 
 
@@ -246,52 +170,19 @@ download packages =
 
 downloadHelp :: FilePath -> (Name, Version) -> Http.Fetch ()
 downloadHelp cache (name, version) =
+  Lamdera.alternativeImplementation (Lamdera.Packages.downloadHelp cache (name, version) downloadArchive endpointDecoder) $
   let
-    fn =
-      do
-        -- if $LOVR is set, and `$LOVR ++ url` exists, read that and return it instead
-        env <- getLamderaPkgPath
-        case env of
-          Just path ->
-            do
-              let fullPath = path </> "packages" </> Pkg.toUrl name </> Pkg.versionToString version
-              exists <- Dir.doesDirectoryExist fullPath
-              if exists then
-                  --debug_note ("using local pkg override at " ++ fullPath) $
-                  -- TODO: pretend it's a zip archive, or at least put it where writeArchive would've
-                  let
-                    from = fullPath
-                    to = cache </> Pkg.toFilePath name
-                  in
-                    do
-                      (exit, stdout, stderr) <- System.Process.readProcessWithExitCode "rsync" ["-ptchr", from, to] ""
-                      debug_note ("(roughly) rsync -ptchr " ++ from ++ " " ++ to ++ "\n") $
-                      --  debug_note ("  exit code: " ++ show exit ++ "\n") $
-                      --  debug_note ("  stdout: " ++ stdout ++ "\n") $
-                      --  debug_note ("  stderr: " ++ stderr ++ "\n") $
-                        pure (Just ())
-                else
-                  --debug_note ("using web pkg; no local override found at " ++ fullPath) $
-                  pure Nothing
-          Nothing ->
-            pure Nothing
+    endpointUrl =
+      "packages/" ++ Pkg.toUrl name ++ "/" ++ Pkg.versionToString version ++ "/endpoint.json"
   in
-    case unsafePerformIO fn of
-      Just () -> Http.self ()
-      Nothing ->
-        let
-          endpointUrl =
-            "packages/" ++ Pkg.toUrl name ++ "/" ++ Pkg.versionToString version ++ "/endpoint.json"
-        in
-          fetchJson "version" id endpointDecoder endpointUrl
-          `Http.andThen` \(endpoint, hash) ->
-              let
-                start = Progress.DownloadPkgStart name version
-                toEnd = Progress.DownloadPkgEnd name version
-              in
-                Http.report start toEnd $
-                  Http.anything endpoint $ \request manager ->
-                    Client.withResponse request manager (downloadArchive cache name version hash)
+    Http.andThen (fetchJson "version" id endpointDecoder endpointUrl) $ \(endpoint, hash) ->
+      let
+        start = Progress.DownloadPkgStart name version
+        toEnd = Progress.DownloadPkgEnd name version
+      in
+        Http.report start toEnd $
+          Http.anything endpoint $ \request manager ->
+            Client.withResponse request manager (downloadArchive cache name version hash)
 
 
 endpointDecoder :: D.Decoder e (String, String)
@@ -313,6 +204,7 @@ downloadArchive cache name version expectedHash response =
           return (Left msg)
 
         Right (sha, archive) ->
+          -- @LAMDERA added "ignored" case
           if expectedHash == "ignored" || expectedHash == SHA.showDigest sha then
             Right <$> writeArchive archive (cache </> Pkg.toFilePath name) (Pkg.versionToString version)
           else

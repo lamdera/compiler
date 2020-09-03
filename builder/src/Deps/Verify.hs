@@ -44,8 +44,6 @@ import qualified Reporting.Progress as Progress
 import qualified Reporting.Task as Task
 import qualified Stuff.Paths as Paths
 
-import qualified System.Environment as Env
-
 
 -- VERIFY
 
@@ -200,8 +198,7 @@ verifyBuild pkgInfoMVar ifacesMVar name version =
 
             answer <- ifNotBlocked depAnswers $ \infos ->
               do  ifacesBefore <- readMVar ifacesMVar
-                  result <-
-                    runner (getIface name version info infos ifacesBefore)
+                  result <- runner (getIface name version info infos ifacesBefore)
                   case result of
                     Right ifaces ->
                       do  ifacesNow <- takeMVar ifacesMVar
