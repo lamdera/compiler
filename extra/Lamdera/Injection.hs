@@ -7,7 +7,6 @@ import qualified File.IO as IO
 import qualified System.Environment as Env
 import qualified Data.ByteString.Builder as B
 import Data.Monoid (mconcat)
--- import Data.Text as Text
 import System.FilePath ((</>))
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
@@ -45,10 +44,14 @@ elmPkgJs mode =
 
         wrappedPkgImports <-
           mapM
-            (\f -> do
-              contents <- IO.readUtf8 (root </> "elm-pkg-js" </> f)
-              pure $
-                "'" <> Text.encodeUtf8 (Text.pack f) <> "': function(exports){\n" <> contents <> "\nreturn exports;},\n"
+            (\f ->
+              if ".js" `Text.isSuffixOf` (Text.pack f)
+                then do
+                  contents <- IO.readUtf8 (root </> "elm-pkg-js" </> f)
+                  pure $
+                    "'" <> Text.encodeUtf8 (Text.pack f) <> "': function(exports){\n" <> contents <> "\nreturn exports;},\n"
+                else
+                  pure ""
             )
             elmPkgJsSources
 
