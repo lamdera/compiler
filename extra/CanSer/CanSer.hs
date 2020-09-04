@@ -4,10 +4,10 @@ module CanSer.CanSer (ppElm) where
 import qualified Data.Text as T
 import Data.Text (Text)
 import qualified AST.Canonical as C
-import qualified Elm.Name as N
+import qualified Data.Name as N
 import qualified Data.Map as Map
 import qualified Reporting.Annotation as A
-import qualified AST.Module.Name as ModuleName
+import qualified Elm.ModuleName as ModuleName
 import qualified AST.Utils.Binop as Binop
 import Data.String (IsString)
 import GHC.Exts(IsString(..))
@@ -314,14 +314,3 @@ instance ToElm Binop.Precedence where
 instance ToElm C.Alias where
   toElm (C.Alias names tipe) =
     leftPad " " (toElm <$> names) <> " = " <> toElm tipe
-
-
-
-
-
-
-
-
-
-
-

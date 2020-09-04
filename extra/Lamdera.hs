@@ -86,7 +86,7 @@ import Data.Text
 import qualified Data.Text.Encoding as Text
 import qualified Data.Char as Char
 
-import CanSer.CanSer (ppElm)
+-- import CanSer.CanSer (ppElm)
 
 import qualified Data.Text.Encoding as T
 import qualified Data.Text.Lazy as TL

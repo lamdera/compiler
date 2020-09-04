@@ -17,9 +17,9 @@ import Data.Maybe (fromMaybe)
 import qualified System.Environment as Env
 
 import qualified AST.Optimized as Opt
-import qualified AST.Module.Name as ModuleName
+import qualified Elm.ModuleName as ModuleName
 import qualified Elm.Package as Pkg
-import qualified Elm.Name as N
+import qualified Data.Name as N
 
 import Show
 import Lamdera

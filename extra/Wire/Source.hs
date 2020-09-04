@@ -21,7 +21,7 @@ ASSUMPTION: no user code defines any values starting with the string `evg_`
 
 import qualified AST.Canonical as Can
 import AST.Module.Name (Canonical(..))
-import qualified AST.Module.Name as ModuleName
+import qualified Elm.ModuleName as ModuleName
 import qualified AST.Utils.Type as Type
 
 import qualified Data.Char
@@ -29,12 +29,12 @@ import qualified Data.Map as Map
 import qualified Data.List as List
 import qualified Data.Text as T
 import Data.List.Index (imap)
-import qualified Elm.Name as N
+import qualified Data.Name as N
 import qualified Elm.Package as Pkg
 import qualified Reporting.Annotation as A
-import qualified Reporting.Region as R
+import qualified Reporting.Annotation as R
 
-import CanSer.CanSer as CanSer
+-- import CanSer.CanSer as CanSer
 
 import Lamdera
 

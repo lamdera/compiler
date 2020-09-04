@@ -5,7 +5,7 @@ import qualified Control.Monad.Reader as R
 import qualified Network.HTTP.Client as Http
 import qualified Network.HTTP.Client.TLS as Http
 
-import qualified Elm.PerUserCache as PerUserCache
+import qualified Stuff as PerUserCache
 import qualified Reporting.Progress as Progress
 import qualified Reporting.Exit as Exit
 import Reporting.Task

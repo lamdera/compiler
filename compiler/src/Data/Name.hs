@@ -32,6 +32,7 @@ module Data.Name
   , utils, negate, true, false, value
   , node, program, _main, _Main, dollar, identity
   , replModule, replValueToPrint
+  , toText
   )
   where
 
@@ -57,6 +58,11 @@ import GHC.Prim
 import GHC.Word (Word8(W8#))
 
 import qualified Elm.String as ES
+
+
+-- @LAMDERA TEMPORARY
+
+toText = undefined
 
 
 

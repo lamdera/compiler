@@ -7,7 +7,7 @@ module TestEvergreen where
 
 import qualified AST.Canonical as Can
 import AST.Module.Name (Canonical(..))
-import qualified AST.Module.Name as ModuleName
+import qualified Elm.ModuleName as ModuleName
 import qualified AST.Utils.Type as Type
 
 
@@ -22,10 +22,10 @@ import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Lazy.Encoding as TLE
 import qualified Data.Text.Encoding as TE
 import Data.List.Index (imap)
-import qualified Elm.Name as N
+import qualified Data.Name as N
 import qualified Elm.Package as Pkg
 import qualified Reporting.Annotation as A
-import qualified Reporting.Region as R
+import qualified Reporting.Annotation as R
 import qualified Elm.Interface as Interface
 -- import qualified Reporting.Progress as Progress
 -- import qualified Stuff.Paths as Paths
@@ -36,7 +36,7 @@ import qualified Data.ByteString.Char8 as BS8
 import Control.Monad.Trans (liftIO)
 import System.IO.Unsafe (unsafePerformIO)
 import System.FilePath ((</>))
-import CanSer.CanSer as CanSer
+-- import CanSer.CanSer as CanSer
 
 import qualified AST.Valid as Valid
 import qualified Elm.Compiler.Module as Module

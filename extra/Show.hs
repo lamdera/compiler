@@ -5,21 +5,19 @@
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE DeriveFoldable #-}
+{-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE FlexibleInstances #-}
 
 module Show where
 
+import Data.String (IsString, fromString)
+
+import qualified Data.Utf8 as Utf8
 import qualified AST.Optimized
-
-
-deriving instance Show AST.Optimized.Global
-
-
-
-
--- import qualified Elm.Name
--- import qualified Elm.Package
+import qualified Data.Name
+import qualified Elm.Package
 -- import qualified AST.Canonical as Can
--- import qualified AST.Module.Name as ModuleName
+import qualified Elm.ModuleName as ModuleName
 -- import qualified AST.Source as Src
 -- import qualified Elm.Interface as Interface
 -- import qualified AST.Utils.Binop as Binop
@@ -27,14 +25,24 @@ deriving instance Show AST.Optimized.Global
 -- import qualified File.Find as Find
 -- import qualified "elm" Reporting.Annotation as Ann
 
+deriving instance Show AST.Optimized.Global
+
+
+instance IsString (Utf8.Utf8 t) where
+  fromString = Utf8.fromChars
+
+instance Show Data.Name.Name where
+  show = Data.Name.toChars
+
+
 -- instance Show Elm.Name.Name where
 --   show = Elm.Name.toString
 --
 -- instance Show Elm.Package.Version where
 --   show = Elm.Package.versionToString
 --
--- instance Show Elm.Package.Name where
---   show = Elm.Package.toString
+instance Show Elm.Package.Name where
+  show = Elm.Package.toChars
 --
 -- instance Show Elm.Package.Package where
 --   show (Elm.Package.Package name version) = show name ++ ":" ++ show version
@@ -43,8 +51,8 @@ deriving instance Show AST.Optimized.Global
 --
 -- deriving instance Show Can.Type
 --
--- instance Show ModuleName.Canonical where
---   show (ModuleName.Canonical pkg moduleName) = show pkg ++ ":" ++ show moduleName
+instance Show ModuleName.Canonical where
+  show (ModuleName.Canonical pkg moduleName) = show pkg ++ ":" ++ show moduleName
 --
 -- instance Show Can.FieldType where
 --   show (Can.FieldType _ t) = show t

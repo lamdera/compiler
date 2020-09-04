@@ -8,7 +8,7 @@ module Lamdera.Error
 
 
 import qualified Reporting.Doc as D
-import qualified Reporting.Region as R
+import qualified Reporting.Annotation as R
 import qualified Reporting.Render.Code as Code
 import qualified Reporting.Render.Type.Localizer as L
 import qualified Reporting.Report as Report

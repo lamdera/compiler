@@ -22,7 +22,7 @@ import qualified Json.Encode as E
 import qualified Reporting.Exit
 import Lamdera.Http
 
-import qualified Elm.PerUserCache as PerUserCache
+import qualified Stuff as PerUserCache
 import System.FilePath ((</>))
 import qualified Reporting.Doc as D
 

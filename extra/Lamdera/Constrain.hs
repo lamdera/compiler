@@ -3,9 +3,9 @@
 module Lamdera.Constrain where
 
 import qualified AST.Canonical as Can
-import qualified AST.Module.Name as ModuleName
+import qualified Elm.ModuleName as ModuleName
 import qualified Elm.Package as Pkg
-import qualified Elm.Name as N
+import qualified Data.Name as N
 import Type.Type as Type hiding (Descriptor(..))
 
 import qualified Data.Text as T
