@@ -254,7 +254,7 @@ run () () = do
 
               formattedChangedTypes =
                 changedTypes
-                  & fmap (\(label, local, prod) -> D.indent 4 (D.dullyellow (D.fromString label)))
+                  & fmap (\(label, local, prod) -> D.indent 4 (D.dullyellow (D.fromChars label)))
                   & D.vcat
 
             if migrationExists

@@ -216,10 +216,10 @@ Executable elm
         -- Lamdera.Generated
         Lamdera.Hints
 
-        -- Lamdera.Injection
+        Lamdera.Injection
         -- Lamdera.Live
         -- Lamdera.Login
-        -- Lamdera.OldFeatureHelper
+        Lamdera.OldFeatureHelper
         -- Lamdera.Project
         -- Lamdera.Secrets
         -- Lamdera.TypeHash

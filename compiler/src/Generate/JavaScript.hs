@@ -32,6 +32,7 @@ import qualified Reporting.Render.Type as RT
 import qualified Reporting.Render.Type.Localizer as L
 
 
+import Lamdera.Injection
 
 -- GENERATE
 
@@ -50,8 +51,10 @@ generate mode (Opt.GlobalGraph graph _) mains =
   <> perfNote mode
   <> stateToBuilder state
   <> toMainExports mode mains
+  -- @LAMDERA future
+  -- <> Lamdera.Injection.source <>
   <> "}(this));"
-
+  <> "\n" <> Lamdera.Injection.elmPkgJs mode <> "\n"
 
 addMain :: Mode.Mode -> Graph -> ModuleName.Canonical -> Opt.Main -> State -> State
 addMain mode graph home _ state =

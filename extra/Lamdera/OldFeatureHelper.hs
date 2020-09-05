@@ -3,13 +3,8 @@
 
 module Lamdera.OldFeatureHelper where
 
-{- UNUSED
-
-Kept for reference. Search `Lamdera.OldFeatureHelper` to see commented-out inclusion points.
-
-Was added to help folks missing LocalDev deps to elm/http & elm/time have a nicer error
-message for that particular case, but in the end decided better to have Lamdera.Debug expose
-those bits and it remain an indirect dependency.
+{- Added to help people missing LocalDev deps to have a nicer error message, as
+being exposed to 'LocalDev.elm has a bad import" is quite confusing.
 
 More context:
 
@@ -19,15 +14,18 @@ https://trello.com/c/j2igqmlo/497-yak-nice-error-handling-for-additional-package
 
 import qualified Reporting.Doc as D
 import qualified Reporting.Exit.Help as Help
-import qualified Elm.Compiler.Module as Module
+import qualified Elm.ModuleName as Module
 import Data.Char (toLower)
 import Data.List (isInfixOf)
 
 import Lamdera
 
+-- @LAMDERA integration needed – unclear where integration point from last
+-- version has moved given error texts appear to have been updated. Reproduce the failure
+-- case when LocalDev.elm is a thing again, then consider putting this in.
 adviseLocalDevImport path child origin parent normalReport = do
   let
-    n = Module.nameToString child
+    n = Module.toChars child
     package =
       case n of
         "Time" -> "elm/time"
@@ -46,7 +44,7 @@ adviseLocalDevImport path child origin parent normalReport = do
       Help.report "MISSING PACKAGE" (Nothing)
         ("`lamdera live` needs certain packages to work.")
         [ D.reflow "Please run this command to add that dependency to your elm.json file:"
-        , D.indent 4 $ D.green $ D.fromString $ "lamdera install " <> package
+        , D.indent 4 $ D.green $ D.fromChars $ "lamdera install " <> package
         , D.reflow "Note: You're seeing this because it looks like you're upgrading from an older version of the Lamdera Alpha. If not, please report this issue!"
         ]
 
