@@ -1,0 +1,17 @@
+{
+  "engines": {
+    "node": ">=12"
+  },
+  "target": "node",
+  "devDependencies": {},
+  "dependencies": {
+    "js-cookie": "^2.2.1",
+    "sockette": "^2.0.6"
+  },
+  "browserslist": [
+    "Chrome 78"
+  ],
+  "comments": {
+    "browserslist": "See https://github.com/parcel-bundler/parcel/issues/871#issuecomment-453855238"
+  }
+}

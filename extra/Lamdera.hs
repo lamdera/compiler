@@ -25,7 +25,7 @@ module Lamdera
   , (&)
   , first
   , second
-  , ppElm
+  -- , ppElm
   , isDebug
   , isTypeSnapshot
   , ostype
@@ -260,11 +260,11 @@ lamderaLiveSrc =
     debug <- Lamdera.isDebug
     if debug
       then do
-        let overridePath = "/Users/mario/dev/projects/elmx/ui/browser/dist/live.js"
+        let overridePath = "/Users/mario/dev/projects/elmx/extra/dist/live.js"
         exists <- Dir.doesFileExist overridePath
         if exists
           then do
-            Lamdera.debug "Using elmx/ui/browser/dist/live.js for lamderaLive"
+            Lamdera.debug "Using elmx/extra/dist/live.js for lamderaLive"
             res <- readUtf8 overridePath
             pure (T.encodeUtf8Builder (T.decodeUtf8 res))
           else
@@ -275,7 +275,7 @@ lamderaLiveSrc =
 
 lamderaLive :: BS.ByteString
 lamderaLive =
-  $(bsToExp =<< runIO (BS.readFile ("ui" </> "browser" </> "dist" </> "live.js")))
+  $(bsToExp =<< runIO (BS.readFile ("extra" </> "dist" </> "live.js")))
 
 
 

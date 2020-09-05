@@ -206,7 +206,7 @@ Executable elm
 
 
         -- Lamdera:
-        -- Lamdera
+        Lamdera
         -- Lamdera.Check
         -- Lamdera.Checks
         -- Lamdera.Constrain
@@ -297,4 +297,30 @@ Executable elm
 
         -- @LAMDERA
         -- @TODO need to remove and use Utf8 module instead somehow? Or compat it.
-        text
+        text,
+        -- Extra
+        ilist,
+        neat-interpolation,
+        natural-sort,
+        listsafe,
+        filemanip,
+        unix-compat,
+        -- Live
+        websockets,
+        websockets-snap,
+        stm,
+        fsnotify,
+        auto-update,
+        uuid,
+        broadcast-chan,
+        timeout,
+        entropy,
+        -- Debug
+        unicode-show,
+        network-info,
+
+        -- Test
+        async,
+        random,
+        tree-diff,
+        main-tester
