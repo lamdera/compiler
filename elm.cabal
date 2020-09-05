@@ -212,25 +212,28 @@ Executable elm
         -- Lamdera.Constrain
         -- Lamdera.Deploy
         -- Lamdera.Evergreen
-        -- Lamdera.Filewatch
+        Lamdera.Filewatch
         -- Lamdera.Generated
-        -- Lamdera.Hints
-        -- Lamdera.Http
+        Lamdera.Hints
+
         -- Lamdera.Injection
         -- Lamdera.Live
         -- Lamdera.Login
         -- Lamdera.OldFeatureHelper
         -- Lamdera.Project
         -- Lamdera.Secrets
-        -- Lamdera.Task
         -- Lamdera.TypeHash
-        -- Lamdera.Types
+        Lamdera.Types
         -- Lamdera.Update
         -- Lamdera.Wire
         -- Wire.Source
         -- Wire.Source2
-        -- Lamdera.Exit
-        -- Lamdera.Error
+
+        -- Utility
+        -- Lamdera.Http
+        Lamdera.Task
+        Lamdera.Exit
+        Lamdera.Error
 
         -- SocketServer
 
@@ -250,7 +253,7 @@ Executable elm
         -- TestTypeHashes
 
         -- Debug helpers:
-        Show
+        StandaloneInstances
         -- CanSer.CanSer
         -- Sanity
         -- Wire.PrettyPrint

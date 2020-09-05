@@ -8,7 +8,7 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
 
-module Show where
+module StandaloneInstances where
 
 import Data.String (IsString, fromString)
 
@@ -25,14 +25,29 @@ import qualified Elm.ModuleName as ModuleName
 -- import qualified File.Find as Find
 -- import qualified "elm" Reporting.Annotation as Ann
 
+
+
+-- Show
+
 deriving instance Show AST.Optimized.Global
-
-
-instance IsString (Utf8.Utf8 t) where
-  fromString = Utf8.fromChars
 
 instance Show Data.Name.Name where
   show = Data.Name.toChars
+
+instance Show Elm.Package.Name where
+  show = Elm.Package.toChars
+
+instance Show ModuleName.Canonical where
+  show (ModuleName.Canonical pkg moduleName) = show pkg ++ ":" ++ show moduleName
+
+
+-- IsString
+
+instance IsString Elm.Package.Project where
+  fromString = Utf8.fromChars
+
+instance IsString Elm.Package.Author where
+  fromString = Utf8.fromChars
 
 
 -- instance Show Elm.Name.Name where
@@ -41,8 +56,6 @@ instance Show Data.Name.Name where
 -- instance Show Elm.Package.Version where
 --   show = Elm.Package.versionToString
 --
-instance Show Elm.Package.Name where
-  show = Elm.Package.toChars
 --
 -- instance Show Elm.Package.Package where
 --   show (Elm.Package.Package name version) = show name ++ ":" ++ show version
@@ -51,8 +64,6 @@ instance Show Elm.Package.Name where
 --
 -- deriving instance Show Can.Type
 --
-instance Show ModuleName.Canonical where
-  show (ModuleName.Canonical pkg moduleName) = show pkg ++ ":" ++ show moduleName
 --
 -- instance Show Can.FieldType where
 --   show (Can.FieldType _ t) = show t

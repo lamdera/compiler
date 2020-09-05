@@ -2,7 +2,7 @@
 module Lamdera.Wire where
 
 import Elm.Package
-import Show
+import StandaloneInstances
 
 
 shouldHaveCodecsGenerated :: Name -> Bool

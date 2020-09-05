@@ -4,8 +4,9 @@ module Lamdera.Hints where
 
 import qualified Reporting.Doc as D
 import qualified Elm.Package as Pkg
-import AST.Module.Name (Canonical(..))
+import Elm.ModuleName (Canonical(..))
 import qualified Type.Error as T
+import StandaloneInstances
 
 import Data.Monoid ((<>))
 import qualified Debug.Trace as DT

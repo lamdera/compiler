@@ -21,7 +21,7 @@ import qualified Elm.ModuleName as ModuleName
 import qualified Elm.Package as Pkg
 import qualified Data.Name as N
 
-import Show
+import StandaloneInstances
 import Lamdera
 import qualified Lamdera.Project
 
