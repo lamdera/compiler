@@ -217,20 +217,20 @@ Executable elm
         Lamdera.Hints
 
         Lamdera.Injection
-        -- Lamdera.Live
+        Lamdera.Live
         -- Lamdera.Login
         Lamdera.OldFeatureHelper
-        -- Lamdera.Project
+        Lamdera.Project
         -- Lamdera.Secrets
         -- Lamdera.TypeHash
         Lamdera.Types
-        -- Lamdera.Update
+        Lamdera.Update
         -- Lamdera.Wire
         -- Wire.Source
         -- Wire.Source2
 
         -- Utility
-        -- Lamdera.Http
+        Lamdera.Http
         Lamdera.Task
         Lamdera.Exit
         Lamdera.Error

@@ -68,9 +68,9 @@ getLamderaRemotes = do
     & pure
 
 
-lamderaThrowUnknownApp :: Task.Task ()
-lamderaThrowUnknownApp =
-  Task.throw $ Exit.Lamdera lamderaUnknownApp
+-- lamderaThrowUnknownApp :: Task.Task ()
+-- lamderaThrowUnknownApp =
+--   Task.throw $ Exit.Lamdera lamderaUnknownApp
 
 
 lamderaUnknownApp =

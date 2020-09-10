@@ -10,25 +10,33 @@ import qualified Data.ByteString.Builder as BS
 import qualified Network.HTTP.Client as Client
 import qualified Network.HTTP.Types as Http
 import Reporting.Exit
-import Reporting.Exit.Http
+import qualified Http
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Text.Encoding as T
-import qualified Reporting.Task.Http as Http
-import qualified Reporting.Progress as Progress
+-- import qualified Reporting.Task.Http as Http
+import qualified Stuff as Progress
 import qualified Reporting.Task as Task
 import qualified Reporting.Doc as D
 
 import Lamdera
 import qualified Lamdera.Task
 
-required :: Text -> D.Decoder e a -> D.Decoder e (a -> b) -> D.Decoder e b
-required key valDecoder decoder =
-    custom (D.field key valDecoder) decoder
+
+-- required :: Text -> D.Decoder e a -> D.Decoder e (a -> b) -> D.Decoder e b
+-- required key valDecoder decoder =
+--     custom (D.field key valDecoder) decoder
+--
+--
+-- custom :: D.Decoder e a -> D.Decoder e (a -> b) -> D.Decoder e b
+-- custom d1 d2 =
+--     map2 (\a_ fn_ -> fn_ a_) d1 d2
 
 
-custom :: D.Decoder e a -> D.Decoder e (a -> b) -> D.Decoder e b
-custom d1 d2 =
-    D.map2 (\a_ fn_ -> fn_ a_) d1 d2
+-- map2 : (a -> b -> value) -> Decoder a -> Decoder b -> Decoder value
+-- map2 fn d1 d2 =
+--
+-- map2 :: Functor f => (i -> a) -> (i -> b) -> f i -> f (a,b)
+-- map2 f1 f2 = fmap $ \i -> (f1 i, f2 i)
 
 
 data WithErrorField a
@@ -36,6 +44,8 @@ data WithErrorField a
   | ErrorField Text
 
 
+-- @LAMDERA temporary there is already a setup for user agent + headers in Http.hs,
+-- see if we can reconcile to that instead, as it includes the package
 jsonHeaders =
   [ ( Http.hUserAgent, "lamdera-cli" )
   , ( Http.hContentType, "application/json" )
@@ -43,64 +53,68 @@ jsonHeaders =
   ]
 
 
-httpGetJson manager request =
-  Client.httpLbs
-    (request
-      { Client.requestHeaders = jsonHeaders
-      , Client.method = "GET"
-      })
-    manager
+-- @LAMDERA temporary remove
+-- httpGetJson manager request =
+--   Client.httpLbs
+--     (request
+--       { Client.requestHeaders = jsonHeaders
+--       , Client.method = "GET"
+--       })
+--     manager
 
 
-normalJson debugIdentifier endpoint decoder =
-  Http.run $ Http.anything endpoint $ \request manager ->
-    do  debug $ "HTTP GET " <> endpoint <> " (" <> debugIdentifier <> ")"
-        response <- httpGetJson manager request
-        debug $ "<--- " <> (T.unpack $ T.decodeUtf8 $ LBS.toStrict $ Client.responseBody response)
+normalJson :: String -> String -> D.Decoder () a -> IO (Either Error a)
+normalJson debugIdentifier url decoder = do
+  manager <- Http.getManager
+  debug $ "HTTP GET " <> url <> " (" <> debugIdentifier <> ")"
+  Http.get manager url jsonHeaders HttpError $ \body ->
+    case D.fromByteString decoder body of
+      Right content ->
+        return $ Right content
 
-        let bytes = LBS.toStrict (Client.responseBody response)
-        case D.parse endpoint id decoder bytes of
-          Right value ->
-            return $ Right value
-
-          Left jsonProblem ->
-            return $ Left $ BadJson endpoint jsonProblem
+      Left problem ->
+        return $ Left (JsonError url problem)
 
 
-httpPostJson manager request body =
-  Client.httpLbs
-    (request
-      { Client.requestHeaders = jsonHeaders
-      , Client.method = "POST"
-      , Client.requestBody = Client.RequestBodyLBS $ BS.toLazyByteString $ E.encode body
-      })
-    manager
+data Error
+  = JsonError String (D.Error ())
+  | HttpError Http.Error
 
 
-normalRpcJson debugIdentifier body endpoint decoder =
-  Http.run $ Http.anything endpoint $ \request manager ->
-    do  debug $ "HTTP POST " <> endpoint <> " (" <> debugIdentifier <> ")\n---> " <> (
-          body
-            & E.encodeUgly
-            & BS.toLazyByteString
-            & LBS.toStrict
-            & T.decodeUtf8
-            & T.unpack
-          )
-        response <- httpPostJson manager request body
-        debug $ "<--- " <> (T.unpack $ T.decodeUtf8 $ LBS.toStrict $ Client.responseBody response)
-
-        let bytes = LBS.toStrict (Client.responseBody response)
-        case D.parse endpoint id decoder bytes of
-          Right value ->
-            return $ Right value
-
-          Left jsonProblem ->
-            return $ Left $ BadJson endpoint jsonProblem
+-- httpPostJson manager request body =
+--   Client.httpLbs
+--     (request
+--       { Client.requestHeaders = jsonHeaders
+--       , Client.method = "POST"
+--       , Client.requestBody = Client.RequestBodyLBS $ BS.toLazyByteString $ E.encode body
+--       })
+--     manager
 
 
-tryNormalRpcJson debugIdentifier body endpoint decoder =
-  Lamdera.Task.tryEither Progress.silentReporter $ normalRpcJson debugIdentifier body endpoint decoder
+-- normalRpcJson debugIdentifier body endpoint decoder =
+--   Http.run $ Http.anything endpoint $ \request manager ->
+--     do  debug $ "HTTP POST " <> endpoint <> " (" <> debugIdentifier <> ")\n---> " <> (
+--           body
+--             & E.encodeUgly
+--             & BS.toLazyByteString
+--             & LBS.toStrict
+--             & T.decodeUtf8
+--             & T.unpack
+--           )
+--         response <- httpPostJson manager request body
+--         debug $ "<--- " <> (T.unpack $ T.decodeUtf8 $ LBS.toStrict $ Client.responseBody response)
+--
+--         let bytes = LBS.toStrict (Client.responseBody response)
+--         case D.parse endpoint id decoder bytes of
+--           Right value ->
+--             return $ Right value
+--
+--           Left jsonProblem ->
+--             return $ Left $ BadJson endpoint jsonProblem
+
+
+-- tryNormalRpcJson debugIdentifier body endpoint decoder =
+--   Lamdera.Task.tryEither Progress.silentReporter $ normalRpcJson debugIdentifier body endpoint decoder
 
 
 -- Custom handler to extract message text from HTTP failures
@@ -110,29 +124,29 @@ tryNormalRpcJson debugIdentifier body endpoint decoder =
 -- Note: also tried to color the error red using Reporting.Doc, however
 -- didn't work out easily in this context as the toString renderer drops colors,
 -- seems the ANSI rendering needs to write straight out to terminal with IO ()
-errorToString err =
-  case err of
-    BadHttp str (Unknown err) ->
-      -- show err
-      if textContains "\\\"error\\\":" (T.pack err)
-        then
-          -- This looks like a LamderaRPC error, rudimentary split out the error
-          err
-            & T.pack
-            & T.splitOn "\\\""
-            & reverse
-            & flip (!!) 1
-            & (<>) "error: "
-            & T.unpack
-        else
-          -- Get the message part after the header preamble
-          err
-            & T.pack
-            & T.splitOn "HTTP/1.1\n}\n"
-            & last
-            & (<>) "error:"
-            & T.unpack
-
-    _ ->
-      -- Normal flow for everything else
-      Reporting.Exit.toString err
+-- errorToString err =
+--   case err of
+--     BadHttp str (Unknown err) ->
+--       -- show err
+--       if textContains "\\\"error\\\":" (T.pack err)
+--         then
+--           -- This looks like a LamderaRPC error, rudimentary split out the error
+--           err
+--             & T.pack
+--             & T.splitOn "\\\""
+--             & reverse
+--             & flip (!!) 1
+--             & (<>) "error: "
+--             & T.unpack
+--         else
+--           -- Get the message part after the header preamble
+--           err
+--             & T.pack
+--             & T.splitOn "HTTP/1.1\n}\n"
+--             & last
+--             & (<>) "error:"
+--             & T.unpack
+--
+--     _ ->
+--       -- Normal flow for everything else
+--       Reporting.Exit.toString err

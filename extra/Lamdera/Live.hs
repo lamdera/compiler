@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 module Lamdera.Live where
 
@@ -16,11 +17,13 @@ import System.FilePath as FP
 import Control.Applicative ((<|>))
 import Control.Concurrent.STM (atomically, newTVarIO, readTVar, writeTVar, TVar)
 import Control.Exception (finally)
+import Language.Haskell.TH (runIO)
+import Data.FileEmbed (bsToExp)
 
 import Snap.Core
 
-import Elm.Project.Json
-import Elm.Project.Summary
+-- import Elm.Project.Json
+-- import Elm.Project.Summary
 import qualified Develop.Generate.Help as Generate
 import qualified Develop.StaticFiles as StaticFiles
 import qualified Json.Decode as D
@@ -159,6 +162,11 @@ serveUnmatchedUrlsToIndex serveElm =
       -- liftIO $ callCommand $ "rm " <> harnessPath <> " || true " -- less exception-ey on double-reload!
 
 
+lamderaLocalDev :: BS.ByteString
+lamderaLocalDev =
+  $(bsToExp =<< runIO (BS.readFile ("extra" </> "LocalDev.elm")))
+
+
 normalLocalDevWrite = do
 
   root <- liftIO $ getProjectRoot
@@ -180,7 +188,7 @@ normalLocalDevWrite = do
         then do
           -- File was last modified more than 5 seconds ago, okay to rewrite
           debug $ "🚧 writing, more than 5:" <> show (diffUTCTime now modified)
-          BS.writeFile harnessPath StaticFiles.lamderaLocalDev
+          BS.writeFile harnessPath lamderaLocalDev
         else do
           -- Modified recently, don't rewrite to prevent compiler issues
           -- when multiple tabs are open for lamdera live
@@ -189,7 +197,7 @@ normalLocalDevWrite = do
     else do
       -- No file exists yet, must be a new project
       debug "🚧 🆕"
-      BS.writeFile harnessPath StaticFiles.lamderaLocalDev
+      BS.writeFile harnessPath lamderaLocalDev
 
 
 serveWebsocket (mClients, mLeader, mChan, beState) =
@@ -369,6 +377,7 @@ serveRpc (mClients, mLeader, mChan, beState) = do
         Nothing -> do
           error "invalid Content-Type"
 
+    loopRead :: IO (Either (D.Error x) B.Builder, Text)
     loopRead = do
       res <- readBChan outChan
 
@@ -380,24 +389,14 @@ serveRpc (mClients, mLeader, mChan, beState) = do
           if textContains reqId chanText
             then do
               let
+                decoder :: D.Decoder err E.Value
                 decoder =
                   D.oneOf
-                    [ D.at ["i"] (D.list D.int)
-                        & D.andThen (\intList ->
-                          let
-                            intList_ :: [Word8]
-                            intList_ = fmap fromIntegral intList
-                          in
-                          D.succeed (B.byteString $ BS.pack $ intList_)
-                        )
-
-                    , D.at ["v"] D.value
-                        & D.andThen (\json ->
-                          D.succeed (E.encode $ D.toEncodeValue json)
-                        )
+                    [ D.field "i" D.value
+                    , D.field "v" D.value
                     ]
 
-              pure (D.parse "rpc-resp" id decoder (T.encodeUtf8 chanText), chanText)
+              pure (D.fromByteString decoder (T.encodeUtf8 chanText) & fmap E.encode, chanText)
 
             else
               loopRead
@@ -432,6 +431,14 @@ serveRpc (mClients, mLeader, mChan, beState) = do
     Nothing -> do
       debug "RPC: no active leader"
       error503 "it appears no browser instances are running! Please open http://localhost:8000 in a browser."
+
+
+-- andThen :: (a -> D.Decoder e b) -> D.Decoder e a -> D.Decoder e b
+-- andThen callback (D.Decoder runA) =
+--   D.Decoder $ \value ->
+--     do  a <- runA value
+--         let (D.Decoder runB) = callback a
+--         runB value
 
 
 

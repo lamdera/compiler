@@ -25,6 +25,7 @@ module Json.Decode
   , DecodeExpectation(..)
   , ParseError(..)
   , StringProblem(..)
+  , value -- @LAMDERA
   )
   where
 
@@ -43,6 +44,7 @@ import Parse.Primitives (Row, Col)
 import qualified Reporting.Annotation as A
 
 
+import qualified Json.Encode as E -- @LAMDERA
 
 -- RUNNERS
 
@@ -797,3 +799,35 @@ chompInt pos end n =
 isDecimalDigit :: Word8 -> Bool
 isDecimalDigit word =
   word <= 0x39 {-9-} && word >= 0x30 {-0-}
+
+
+-- @LAMDERA
+
+value :: Decoder x E.Value
+value =
+  Decoder $ \ast ok err ->
+    ok $ toEncodeValue ast
+
+toEncodeValue :: A.Located AST_ -> E.Value
+toEncodeValue (A.At region ast) =
+  case ast of
+    Array ast_list ->
+      E.Array $ fmap toEncodeValue ast_list
+
+    Object keyVals ->
+      E.Object $ fmap (\(snippet, ast) -> (Json.fromSnippet snippet, toEncodeValue ast)) keyVals
+
+    String snippet ->
+      E.String $ Json.toBuilder $ Json.fromSnippet snippet
+
+    Int int ->
+      E.Integer int
+
+    TRUE ->
+      E.Boolean True
+
+    FALSE ->
+      E.Boolean False
+
+    NULL ->
+      E.Null
