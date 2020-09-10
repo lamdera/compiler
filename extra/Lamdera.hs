@@ -32,7 +32,6 @@ module Lamdera
   , env
   , unsafe
   , lamderaLiveSrc
-  , Data.List.Index.imap
   , onlyWhen
   , textContains
   , formatHaskellValue
@@ -114,7 +113,6 @@ import qualified Data.ByteString.Internal as BS
 import qualified Foreign.ForeignPtr as FPtr
 import Control.Exception (catch, throw)
 import System.IO.Error (ioeGetErrorType, annotateIOError, modifyIOError)
-import Data.List.Index
 import Text.Show.Unicode
 import qualified System.Process
 import qualified Data.Digest.Pure.SHA as SHA

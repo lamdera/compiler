@@ -2,6 +2,9 @@
 
 module Lamdera.Project where
 
+{- Project helper functions
+-}
+
 import qualified Data.Text as T
 import System.Process (readProcess)
 import System.Exit (exitFailure)
@@ -11,8 +14,9 @@ import qualified Reporting.Exit as Exit
 import qualified Reporting.Task as Task
 import qualified System.Environment as Env
 import qualified Data.List as List
-
+import qualified Elm.Package
 import Lamdera
+import StandaloneInstances
 
 
 maybeAppName :: IO (Maybe Text)
@@ -81,3 +85,15 @@ lamderaUnknownApp =
      , D.reflow "See <https://dashboard.lamdera.app/docs/deploying> for more info."
      ]
     )
+
+
+{-# NOINLINE lamderaCore #-}
+lamderaCore :: Elm.Package.Name
+lamderaCore =
+  Elm.Package.Name "lamdera" "core"
+
+
+{-# NOINLINE lamderaCodecs #-}
+lamderaCodecs :: Elm.Package.Name
+lamderaCodecs =
+  Elm.Package.Name "lamdera" "codecs"

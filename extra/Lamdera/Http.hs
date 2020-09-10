@@ -2,6 +2,9 @@
 
 module Lamdera.Http where
 
+{- HTTP helpers and wrapper
+-}
+
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Json.Decode as D
@@ -91,6 +94,19 @@ data Error
 --     manager
 
 
+normalRpcJson :: String -> E.Value -> String -> D.Decoder () a -> IO (Either Error a)
+normalRpcJson debugIdentifier body url decoder = do
+  manager <- Http.getManager
+  debug $ "HTTP GET " <> url <> " (" <> debugIdentifier <> ")"
+  Http.post manager url jsonHeaders HttpError $ \body ->
+    case D.fromByteString decoder body of
+      Right content ->
+        return $ Right content
+
+      Left problem ->
+        return $ Left (JsonError url problem)
+
+
 -- normalRpcJson debugIdentifier body endpoint decoder =
 --   Http.run $ Http.anything endpoint $ \request manager ->
 --     do  debug $ "HTTP POST " <> endpoint <> " (" <> debugIdentifier <> ")\n---> " <> (
@@ -124,29 +140,32 @@ data Error
 -- Note: also tried to color the error red using Reporting.Doc, however
 -- didn't work out easily in this context as the toString renderer drops colors,
 -- seems the ANSI rendering needs to write straight out to terminal with IO ()
--- errorToString err =
---   case err of
---     BadHttp str (Unknown err) ->
---       -- show err
---       if textContains "\\\"error\\\":" (T.pack err)
---         then
---           -- This looks like a LamderaRPC error, rudimentary split out the error
---           err
---             & T.pack
---             & T.splitOn "\\\""
---             & reverse
---             & flip (!!) 1
---             & (<>) "error: "
---             & T.unpack
---         else
---           -- Get the message part after the header preamble
---           err
---             & T.pack
---             & T.splitOn "HTTP/1.1\n}\n"
---             & last
---             & (<>) "error:"
---             & T.unpack
---
---     _ ->
---       -- Normal flow for everything else
---       Reporting.Exit.toString err
+errorToString err =
+  "TODO" -- @LAMDERA TEMPORARY
+  --  Need to find the new way Http.Error
+
+  -- case err of
+  --   BadHttp str (Unknown err) ->
+  --     -- show err
+  --     if textContains "\\\"error\\\":" (T.pack err)
+  --       then
+  --         -- This looks like a LamderaRPC error, rudimentary split out the error
+  --         err
+  --           & T.pack
+  --           & T.splitOn "\\\""
+  --           & reverse
+  --           & flip (!!) 1
+  --           & (<>) "error: "
+  --           & T.unpack
+  --       else
+  --         -- Get the message part after the header preamble
+  --         err
+  --           & T.pack
+  --           & T.splitOn "HTTP/1.1\n}\n"
+  --           & last
+  --           & (<>) "error:"
+  --           & T.unpack
+  --
+  --   _ ->
+  --     -- Normal flow for everything else
+  --     Reporting.Exit.toString err

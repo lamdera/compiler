@@ -16,8 +16,11 @@ import qualified Data.Utf8 as Utf8
 import qualified AST.Optimized
 import qualified Data.Name
 import qualified Elm.Package
--- import qualified AST.Canonical as Can
 import qualified Elm.ModuleName as ModuleName
+import qualified Json.String
+
+
+-- import qualified AST.Canonical as Can
 -- import qualified AST.Source as Src
 -- import qualified Elm.Interface as Interface
 -- import qualified AST.Utils.Binop as Binop
@@ -48,6 +51,10 @@ instance IsString Elm.Package.Project where
 
 instance IsString Elm.Package.Author where
   fromString = Utf8.fromChars
+
+instance IsString Json.String.String where
+  fromString = Json.String.fromChars
+
 
 
 -- instance Show Elm.Name.Name where

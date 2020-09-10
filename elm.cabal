@@ -209,7 +209,7 @@ Executable elm
         Lamdera
         -- Lamdera.Check
         -- Lamdera.Checks
-        -- Lamdera.Constrain
+        Lamdera.Constrain
         -- Lamdera.Deploy
         -- Lamdera.Evergreen
         Lamdera.Filewatch
@@ -218,7 +218,7 @@ Executable elm
 
         Lamdera.Injection
         Lamdera.Live
-        -- Lamdera.Login
+        Lamdera.Login
         Lamdera.OldFeatureHelper
         Lamdera.Project
         -- Lamdera.Secrets
@@ -302,7 +302,6 @@ Executable elm
         -- @TODO need to remove and use Utf8 module instead somehow? Or compat it.
         text,
         -- Extra
-        ilist,
         neat-interpolation,
         natural-sort,
         listsafe,

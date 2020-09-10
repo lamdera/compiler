@@ -3,6 +3,9 @@
 
 module Lamdera.Live where
 
+{- `lamdera live` functionalty
+-}
+
 import qualified Data.ByteString.Builder as B
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BSL

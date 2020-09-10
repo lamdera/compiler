@@ -19,15 +19,17 @@ import qualified Network.HTTP.Client as Client
 import qualified Reporting.Task as Task
 import qualified Json.Decode as D
 import qualified Json.Encode as E
+import qualified Json.String
 import qualified Reporting.Exit
-import Lamdera.Http
 
 import qualified Stuff as PerUserCache
 import System.FilePath ((</>))
 import qualified Reporting.Doc as D
 
 import Lamdera
+import qualified Lamdera.Http
 import qualified Lamdera.Project
+import StandaloneInstances
 
 
 run :: () -> () -> IO ()
@@ -126,7 +128,7 @@ validateCliToken = do
 
         Left exit -> do
           case exit of
-            Reporting.Exit.BadHttp string httpExit -> do
+            Lamdera.Http.HttpError httpExit -> do
               pDocLn $ D.fillSep [ D.red "Oops, there appears to have been a HTTP error:\n"]
               putStrLn $ Lamdera.Http.errorToString exit
               pDocLn $ D.fillSep [ D.red "\nPlease double-check your internet connection, or report this issue.\n"]
@@ -149,7 +151,7 @@ validateCliToken = do
 
 
 
-fetchApiSession :: Text -> Text -> IO (Either Reporting.Exit.Exit Text)
+fetchApiSession :: Text -> Text -> IO (Either Lamdera.Http.Error Text)
 fetchApiSession appName token =
   let
     endpoint =
@@ -161,13 +163,13 @@ fetchApiSession appName token =
           "https://dashboard.lamdera.app/_r/apiSessionJson"
 
     body =
-      E.object [ ("token", E.text token) ]
+      E.object [ ("token", E.string $ Json.String.fromChars $ T.unpack token) ]
 
     decoder =
-      D.text
+      D.string
 
   in
-  Lamdera.Http.tryNormalRpcJson "fetchApiSession" body endpoint decoder
+  (fmap $ T.pack . Json.String.toChars) <$> Lamdera.Http.normalRpcJson "fetchApiSession" body endpoint decoder
 
 
 doUntil :: (a -> Bool) -> (IO a) -> IO ()
