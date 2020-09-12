@@ -5,13 +5,13 @@ module Lamdera.Checks where
 
 import qualified Reporting.Doc as D
 import qualified Elm.Package as Pkg
-import AST.Module.Name (Canonical(..))
+import Elm.ModuleName (Canonical(..))
 import qualified Type.Error as T
 import qualified Reporting.Task as Task
-import qualified Reporting.Exit as Exit
+-- import qualified Reporting.Exit as Exit
 
 import qualified Reporting.Exit.Help as Help
-import qualified Reporting.Progress as Progress
+-- import qualified Reporting.Progress as Progress
 
 import NeatInterpolation
 import Data.Text as T
@@ -23,9 +23,32 @@ import Data.Monoid ((<>))
 import System.FilePath ((</>))
 import qualified Debug.Trace as DT
 import qualified Data.List as List
+import qualified Reporting
+import System.IO (hFlush, hPutStr, stdout)
+
 import Lamdera
+import qualified Lamdera.Exit
+
 
 type Check = ExceptT Text IO
+
+
+-- @LAMDERA temporary
+-- might be better as helpers in another file and shared
+
+flushPrintHelp doc =
+  Reporting.Key (\_ ->
+    do  Help.toStdout doc
+        hFlush stdout
+  )
+
+report doc = do
+  Reporting.report (flushPrintHelp doc) ()
+
+throw doc = do
+  Help.toStdout (Help.reportToDoc doc)
+  hFlush stdout
+  error "fail"
 
 
 runChecks = do
@@ -39,7 +62,7 @@ runChecks = do
     if List.length missingFiles == 3
       then do
 
-      initialiseLamderaFiles <- Task.getApproval $
+      initialiseLamderaFiles <- Reporting.ask $
         Help.reportToDoc $
           Help.report "MISSING FILES" (Nothing)
             ("The following files required by Lamdera are missing:")
@@ -51,16 +74,16 @@ runChecks = do
       if initialiseLamderaFiles
         then do
           liftIO $ writeDefaultImplementations
-          Task.report $ Progress.LamderaProgress $ D.green "Okay, I've generated them for you!\n"
+          report $ D.green "Okay, I've generated them for you!\n"
         else
-          Task.throw $ Exit.Lamdera
+          throw
             $ Help.report "SKIPPING AUTO-GENERATION" (Nothing)
               ("Okay, I'll let you implement them!")
               [ D.reflow "See <https://dashboard.lamdera.app/docs/building> for more."]
 
       else
 
-        Task.throw $ Exit.Lamdera
+        throw
           $ Help.report "MISSING FILES" (Nothing)
               ("The following files required by Lamdera are missing:")
               (formattedErrors ++
@@ -87,7 +110,7 @@ runChecks = do
 
 
 progressPointer t =
-    Task.report $ Progress.LamderaProgress $ D.fillSep [ D.fromText "───>", D.green $ t <> "\n" ]
+    report $ D.fillSep [ D.fromChars "───>", D.green $ t <> "\n" ]
 
 
 
@@ -303,14 +326,14 @@ defaultImplementations =
 -- system, especially now that it's highly likely we'll be auto-generating the types for the user?
 
 
-      -- Task.throw $ Exit.Lamdera
+      -- Task.throw $ Lamdera.Exit.SomeProblem
       --   $ Help.report "ERROR" (Nothing)
       --     ("Looks like some files exist already, either finish implementing them, or delete them and re-run so I can help you generate defaults.")
       --     []
 
 -- frontendAppDefined <- liftIO $ checkHasAppDefinition "src/Frontend.elm"
 -- unless frontendAppDefined $
---   Task.throw $ Exit.Lamdera
+--   Task.throw $ Lamdera.Exit.SomeProblem
 --     $ Help.report "MISSING IMPLEMENTATION" (Just "src/Frontend.elm")
 --       ("")
 --       [ D.reflow "I'm expecting to see an `app = Lamdera.frontend {...}` implementation here so I know where the app begins, similar to how Elm apps need a `main`."

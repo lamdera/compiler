@@ -18,6 +18,7 @@ import qualified Elm.Package as Pkg
 
 data Exit
   = NeedsCompilation
+  | SomeProblem
   deriving (Show)
 
 

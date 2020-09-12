@@ -8,7 +8,7 @@ module Reporting
   , attempt
   , attemptWithStyle
   --
-  , Key
+  , Key(..) -- @LAMDERA exposed
   , report
   , ignorer
   , ask

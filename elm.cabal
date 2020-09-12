@@ -208,7 +208,7 @@ Executable elm
         -- Lamdera:
         Lamdera
         -- Lamdera.Check
-        -- Lamdera.Checks
+        Lamdera.Checks
         Lamdera.Constrain
         -- Lamdera.Deploy
         -- Lamdera.Evergreen
