@@ -62,7 +62,7 @@ import qualified Elm.String as ES
 
 -- @LAMDERA TEMPORARY
 
-toText = undefined
+toText = error "Data.Name.toText temporary @LAMDERA"
 
 
 

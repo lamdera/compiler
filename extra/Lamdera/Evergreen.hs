@@ -8,60 +8,44 @@ module Lamdera.Evergreen where
 Type snapshotting for Evergreen.
 
 @TODO :
-
 - Once design settles, refactor and document the duplicate bits
 
 -}
 
 import qualified AST.Canonical as Can
-import AST.Module.Name (Canonical(..))
+import qualified AST.Source as Valid
 import qualified Elm.ModuleName as ModuleName
-import qualified AST.Utils.Type as Type
-
-import qualified Data.Digest.Pure.SHA as SHA
-import qualified Data.Char
-import qualified Data.Map as Map
-import Data.Map.Strict (unionWithKey)
-import qualified Data.Map.Merge.Strict as Map
-import qualified Data.List as List
-import qualified Data.Text as T
-import qualified Data.Text.Lazy as TL
-import qualified Data.Text.Lazy.Encoding as TLE
-import qualified Data.Text.Encoding as TE
-import Data.List.Index (imap)
-import qualified Data.Name as N
 import qualified Elm.Package as Pkg
-import qualified Reporting.Annotation as A
-import qualified Reporting.Annotation as R
 import qualified Elm.Interface as Interface
-
-import qualified Data.ByteString.Char8 as BS8
-import qualified System.Environment as Env
-import Control.Monad.Trans (liftIO)
-import System.IO.Unsafe (unsafePerformIO)
-import System.FilePath ((</>))
--- import CanSer.CanSer as CanSer
-
-import qualified AST.Valid as Valid
-import qualified Elm.Compiler.Module as Module
+import qualified Reporting.Annotation as A
 import qualified Reporting.Result as Result
-
-import qualified Reporting.Doc as D
 import qualified Reporting.Error as Error
 
---- Need to clean up the above types, many are unused.
-import Text.Read
+import qualified System.Environment as Env
 import Data.Maybe (fromMaybe)
 import System.FilePath ((</>))
-import System.Process (readProcess)
-import Data.Monoid ((<>))
 import Data.Map (Map)
 import qualified Data.Map as Map
 import qualified Data.Set as Set
+import qualified Data.List as List
+import qualified Data.Text as T
+import qualified Data.Name as N
+import Data.Map.Strict (unionWithKey)
+
+import qualified Data.Utf8 as Utf8
 
 import Lamdera
 import Lamdera.Types
+import StandaloneInstances
 
+
+-- @TEMPORARY
+type Interfaces =
+  Map.Map ModuleName.Canonical Interface.Interface
+
+
+-- type TypeIdentifier = (Text, Text, Text, Text)
+type TypeIdentifier = (Pkg.Author, Pkg.Project, N.Name, N.Name)
 
 type SnapRes = (Text, ElmImports, ElmFilesText)
 
@@ -76,13 +60,13 @@ type ElmFilesText = Map Text ElmFileText
 
 -- Map <import name> <package>
 -- @TODO in future we can use this to pin package versions and adjust import routing to those snapshots
-type ElmImports = Set.Set Module.Canonical
+type ElmImports = Set.Set ModuleName.Canonical
 
 selNames (a,b,c) = a
 selImports (a,b,c) = b
 selFts (a,b,c) = c
 
-lamderaTypes :: [Text]
+lamderaTypes :: [N.Name]
 lamderaTypes =
   [ "FrontendModel"
   , "BackendModel"
@@ -93,8 +77,8 @@ lamderaTypes =
   ]
 
 
-snapshotCurrentTypes :: Pkg.Name -> Valid.Module -> Interface.Interfaces -> Result.Result i w Error.Error ()
-snapshotCurrentTypes pkg module_@(Valid.Module name _ _ _ _ _ _ _ _ _) interfaces = do
+snapshotCurrentTypes :: Pkg.Name -> Valid.Module -> Interfaces -> Result.Result i w Error.Error ()
+snapshotCurrentTypes pkg module_@(Valid.Module name _ _ _ _ _ _ _ _) interfaces = do
   let
     !inDebug = unsafePerformIO Lamdera.isDebug
 
@@ -105,21 +89,26 @@ snapshotCurrentTypes pkg module_@(Valid.Module name _ _ _ _ _ _ _ _ _) interface
         fromMaybe ("-1") (T.pack <$> versionM)
 
 
+    moduleName =
+      case name of
+        Just (A.At _ name_) -> name_
+        _ -> toName ""
+
   onlyWhen (version == "-1") $ error "Error: Tried to snapshot types without a version number, please report this."
 
   -- This check isn't strictly required, as the callee of this function in compile only
   -- calls it when we know we've canonicalized the src/Types.elm file, but leaving it here
   -- to prevent any footguns in future testing
-  onlyWhen (pkg == (Pkg.Name "author" "project") && name == N.fromText "Types") $ do
+  onlyWhen (pkg == (Pkg.Name "author" "project") && moduleName == toName "Types") $ do
     let
       interfaceTypes_elm =
-        case Map.lookup (Module.Canonical (Pkg.Name "author" "project") "Types") interfaces of
+        case Map.lookup (ModuleName.Canonical (Pkg.Name "author" "project") "Types") interfaces of
           Just i -> i
           Nothing -> error "The impossible happened, could not find src/Types.elm"
 
       efts =
         lamderaTypes
-          & fmap (\t -> (t, ftByName version interfaces t name interfaceTypes_elm))
+          & fmap (\t -> (t, ftByName version interfaces t moduleName interfaceTypes_elm))
           -- & (\v -> unsafePerformIO $ do
           --     formatHaskellValue "ltypes-intermediary" (v) :: IO ()
           --     pure v
@@ -187,7 +176,7 @@ mergeAllImports imps =
 
 
 addImports :: ModuleName.Canonical -> ElmImports -> ElmFilesText -> ElmFilesText
-addImports scope@(ModuleName.Canonical (Pkg.Name author pkg) (N.Name module_)) imports ft =
+addImports scope@(ModuleName.Canonical (Pkg.Name author pkg) module_) imports ft =
   imports
     & foldl (\ft imp -> addImport scope imp ft) ft
 
@@ -228,14 +217,14 @@ efToText version ft =
       , if length imports > 0 then
           imports
             & Set.toList
-            & List.sortOn (\(ModuleName.Canonical (Pkg.Name author project) (N.Name module_)) -> module_)
+            & List.sortOn (\(ModuleName.Canonical (Pkg.Name author project) module_) -> module_)
             & fmap (\imp ->
                 case imp of
-                  (ModuleName.Canonical (Pkg.Name author project) (N.Name module_)) ->
+                  (ModuleName.Canonical (Pkg.Name author project) module_) ->
                     if (author == "author") then
-                      "import Evergreen.V" <> version <> "." <> module_ -- <> " as " <> module_
+                      "import Evergreen.V" <> version <> "." <> nameToText module_ -- <> " as " <> nameToText module_
                     else
-                      "import " <> module_
+                      "import " <> nameToText module_
               )
             & T.intercalate "\n"
             & (flip T.append) "\n\n\n"
@@ -246,21 +235,21 @@ efToText version ft =
       & T.concat
 
 
-ftByName :: Text -> (Map.Map Canonical Module.Interface) -> Text -> N.Name -> Interface.Interface -> ElmFilesText
+ftByName :: Text -> Interfaces -> N.Name -> N.Name -> Interface.Interface -> ElmFilesText
 ftByName version interfaces typeName name interface = do
   let
     scope =
-      (ModuleName.Canonical (Pkg.Name "author" "project") (N.Name "Types"))
+      (ModuleName.Canonical (Pkg.Name "author" "project") "Types")
 
     recursionIdentifier =
-      (scope, N.Name typeName)
+      (scope, typeName)
 
     identifier =
       case recursionIdentifier of
-        ((ModuleName.Canonical (Pkg.Name author pkg) (N.Name module_)), N.Name tipe) ->
+        ((ModuleName.Canonical (Pkg.Name author pkg) module_), tipe) ->
           (author, pkg, module_, tipe)
 
-  case Map.lookup (N.fromText typeName) $ Interface._aliases interface of
+  case Map.lookup typeName $ Interface._aliases interface of
     Just alias -> do
       let
         diffableAlias = aliasToFt version scope identifier typeName interfaces [recursionIdentifier] alias
@@ -274,7 +263,7 @@ ftByName version interfaces typeName name interface = do
 
     Nothing ->
       -- Try unions
-      case Map.lookup (N.fromText typeName) $ Interface._unions interface of
+      case Map.lookup typeName $ Interface._unions interface of
         Just union -> do
           let
             diffableUnion = unionToFt version scope identifier typeName interfaces [recursionIdentifier] [] union []
@@ -288,11 +277,11 @@ ftByName version interfaces typeName name interface = do
 
         Nothing ->
           Map.empty
-          -- DError $ "Found no type named " <> typeName <> " in " <> N.toText name
+          -- DError $ "Found no type named " <> nameToText typeName <> " in " <> N.toText name
 
 
 -- A top level Custom Type definition i.e. `type Herp = Derp ...`
-unionToFt :: Text -> ModuleName.Canonical -> (Text, Text, Text, Text) -> Text -> (Map.Map Canonical Module.Interface) -> [(ModuleName.Canonical, N.Name)] -> [(N.Name, Can.Type)] -> Interface.Union -> [Can.Type] -> SnapRes
+unionToFt :: Text -> ModuleName.Canonical -> TypeIdentifier -> N.Name -> Interfaces -> [(ModuleName.Canonical, N.Name)] -> [(N.Name, Can.Type)] -> Interface.Union -> [Can.Type] -> SnapRes
 unionToFt version scope identifier@(author, pkg, module_, tipe) typeName interfaces recursionMap tvarMap unionInterface params =
   let
     treat union =
@@ -303,7 +292,7 @@ unionToFt version scope identifier@(author, pkg, module_, tipe) typeName interfa
         tvars_ =
           tvarMap
             -- & (\v ->
-            --   debugHaskellWhen (typeName == "OptionalData") ("unionToFt:tvars:"<> typeName <> ":" <> module_) (v)
+            --   debugHaskellWhen (typeName == "OptionalData") ("unionToFt:tvars:"<> nameToText typeName <> ":" <> nameToText module_) (v)
             -- )
             & fmap (N.toText . fst)
             & T.intercalate " "
@@ -339,7 +328,7 @@ unionToFt version scope identifier@(author, pkg, module_, tipe) typeName interfa
             & mergeAllFts
 
         localScope =
-          (ModuleName.Canonical (Pkg.Name author pkg) (N.Name module_))
+          (ModuleName.Canonical (Pkg.Name author pkg) module_)
 
         constructorFts =
           Can._u_alts union
@@ -380,12 +369,12 @@ unionToFt version scope identifier@(author, pkg, module_, tipe) typeName interfa
           if moduleName == scope then
             ""
           else if isUserType identifier then
-            "Evergreen.V" <> version <> "." <> module_ <> "."
+            "Evergreen.V" <> version <> "." <> nameToText module_ <> "."
           else
-            module_ <> "."
+            nameToText module_ <> "."
 
         moduleName =
-          (ModuleName.Canonical (Pkg.Name author pkg) (N.Name module_))
+          (ModuleName.Canonical (Pkg.Name author pkg) module_)
 
         debug (t, imps, ft) =
           -- debugHaskellWhen (typeName == "RoomId") ("dunion: " <> hindentFormatValue scope) (t, imps, ft)
@@ -394,9 +383,9 @@ unionToFt version scope identifier@(author, pkg, module_, tipe) typeName interfa
       in
       -- debug $
       ( if length tvarMap > 0 then
-           "(" <> typeScope <> typeName <> " " <> usageParams <> ")" -- <> "<!2>"
+           "(" <> typeScope <> nameToText typeName <> " " <> usageParams <> ")" -- <> "<!2>"
          else
-           typeScope <> typeName -- <> "<!3>"
+           typeScope <> nameToText typeName -- <> "<!3>"
 
       , usageImports
       , (Map.singleton (moduleKey identifier) $
@@ -404,9 +393,9 @@ unionToFt version scope identifier@(author, pkg, module_, tipe) typeName interfa
             { imports = imports
             , types =
                 if length tvarMap > 0 then
-                  ["type " <> typeName <> " " <> tvars_ <> "\n    = " <> ctypes]
+                  ["type " <> nameToText typeName <> " " <> tvars_ <> "\n    = " <> ctypes]
                 else
-                  ["type " <> typeName <> "\n    = " <> ctypes]
+                  ["type " <> nameToText typeName <> "\n    = " <> ctypes]
             })
           & mergeFts fts
           & mergeFts usageFts
@@ -420,7 +409,7 @@ unionToFt version scope identifier@(author, pkg, module_, tipe) typeName interfa
 
 
 -- A top level Alias definition i.e. `type alias ...`
-aliasToFt :: Text -> ModuleName.Canonical -> (Text, Text, Text, Text) -> Text -> (Map.Map Canonical Module.Interface) -> [(ModuleName.Canonical, N.Name)] -> Interface.Alias -> SnapRes
+aliasToFt :: Text -> ModuleName.Canonical -> TypeIdentifier -> N.Name -> Interfaces -> [(ModuleName.Canonical, N.Name)] -> Interface.Alias -> SnapRes
 aliasToFt version scope identifier@(author, pkg, module_, tipe) typeName interfaces recursionMap aliasInterface =
   let
     treat a =
@@ -446,26 +435,26 @@ aliasToFt version scope identifier@(author, pkg, module_, tipe) typeName interfa
               if moduleName == scope then
                 ""
               else if isUserType identifier then
-                "Evergreen.V" <> version <> "." <> module_ <> "."
+                "Evergreen.V" <> version <> "." <> nameToText module_ <> "."
               else
-                module_ <> "."
+                nameToText module_ <> "."
 
             moduleName =
-              (ModuleName.Canonical (Pkg.Name author pkg) (N.Name module_))
+              (ModuleName.Canonical (Pkg.Name author pkg) module_)
           in
           ( if length tvars > 0 then
-               "(" <> typeScope <> typeName <> tvars_ <> ")" -- <> "<!2>"
+               "(" <> typeScope <> nameToText typeName <> tvars_ <> ")" -- <> "<!2>"
              else
-               typeScope <> typeName -- <> "<!3>"
+               typeScope <> nameToText typeName -- <> "<!3>"
           , imps
           , (Map.singleton (moduleKey identifier) $
               ElmFileText
                 { imports = imps
                 , types =
                     if length tvars > 0 then
-                      ["type alias " <> typeName <> " " <> tvars_ <> " =" <> subt]
+                      ["type alias " <> nameToText typeName <> " " <> tvars_ <> " =" <> subt]
                     else
-                      ["type alias " <> typeName <> " =" <> subt]
+                      ["type alias " <> nameToText typeName <> " =" <> subt]
                 })
               & mergeFts subft
           )
@@ -476,44 +465,44 @@ aliasToFt version scope identifier@(author, pkg, module_, tipe) typeName interfa
     Interface.PrivateAlias a -> treat a
 
 
-moduleKey :: (Text, Text, Text, Text) -> Text
+moduleKey :: TypeIdentifier -> Text
 moduleKey identifier@(author, pkg, module_, tipe) =
-  if author == "author" then
+  if utf8ToText author == "author" then
     -- Internal package, keep as is
-    module_
+    nameToText module_
   else
     -- External package
-    author <> "/" <> pkg <> ":" <> module_
+    utf8ToText author <> "/" <> utf8ToText pkg <> ":" <> nameToText module_
 
 
 moduleNameKey :: ModuleName.Canonical -> Text
 moduleNameKey moduleName =
   case moduleName of
-    (ModuleName.Canonical (Pkg.Name author pkg) (N.Name module_)) ->
+    (ModuleName.Canonical (Pkg.Name author pkg) module_) ->
       if author == "author" then
         -- Internal package, keep as is
-        module_
+        nameToText module_
       else
         -- External package
-        author <> "/" <> pkg <> ":" <> module_
+        utf8ToText author <> "/" <> utf8ToText pkg <> ":" <> nameToText module_
 
 
 getModuleNameUnkeyed :: ModuleName.Canonical -> Text
 getModuleNameUnkeyed moduleName =
   case moduleName of
-    (ModuleName.Canonical (Pkg.Name author pkg) (N.Name module_)) ->
-        module_
+    (ModuleName.Canonical (Pkg.Name author pkg) module_) ->
+        nameToText module_
 
 
-canonicalToFt :: Text -> ModuleName.Canonical -> Interface.Interfaces -> [(ModuleName.Canonical, N.Name)] -> Can.Type -> [(N.Name, Can.Type)] -> SnapRes
+canonicalToFt :: Text -> ModuleName.Canonical -> Interfaces -> [(ModuleName.Canonical, N.Name)] -> Can.Type -> [(N.Name, Can.Type)] -> SnapRes
 canonicalToFt version scope interfaces recursionMap canonical tvarMap =
   let
     scopeModule =
       case scope of
-        (ModuleName.Canonical (Pkg.Name author pkg) (N.Name module_)) -> module_
+        (ModuleName.Canonical (Pkg.Name author pkg) module_) -> module_
 
-    debug (t, imps, ft) =
-      debugHaskellWhen (textContains "OptionalData" t) ("\n✳️  inserting def for " <> t <> "\n" <> (T.pack . show $ canonical)) (t, imps, ft)
+    -- debug (t, imps, ft) =
+    --   debugHaskellWhen (textContains "OptionalData" t) ("\n✳️  inserting def for " <> t <> "\n" <> (T.pack . show $ canonical)) (t, imps, ft)
       -- debug_note ("🔵inserting def for " <> T.unpack t <> ":\n" <> ( ft)) $ (t, imps, ft)
       -- unsafePerformIO $ do
       --     formatHaskellValue ("\n🔵inserting def for " <> t) (ft) :: IO ()
@@ -529,14 +518,14 @@ canonicalToFt version scope interfaces recursionMap canonical tvarMap =
 
         identifier =
           case (moduleName, name) of
-            ((ModuleName.Canonical (Pkg.Name author pkg) (N.Name module_)), N.Name tipe) ->
+            ((ModuleName.Canonical (Pkg.Name author pkg) module_), tipe) ->
               (author, pkg, module_, tipe)
 
         kernelError =
           case identifier of
             (author, pkg, module_, tipe) ->
               ("XXXXXX Kernel error", Set.empty, Map.empty)
-              -- DError $ "must not contain kernel type `" <> tipe <> "` from " <> author <> "/" <> pkg <> ":" <> module_
+              -- DError $ "must not contain kernel type `" <> tipe <> "` from " <> author <> "/" <> pkg <> ":" <> nameToText module_
       in
 
       if (List.any ((==) recursionIdentifier) recursionMap) then
@@ -565,22 +554,22 @@ canonicalToFt version scope interfaces recursionMap canonical tvarMap =
             if moduleName == scope then
               ""
             else if isUserType identifier then
-              "Evergreen.V" <> version <> "." <> module_ <> "."
+              "Evergreen.V" <> version <> "." <> nameToText module_ <> "."
             else
-              module_ <> "."
+              nameToText module_ <> "."
 
           typeName =
             N.toText name
 
           module_ =
             case moduleName of
-              (ModuleName.Canonical (Pkg.Name author pkg) (N.Name module_)) -> module_
+              (ModuleName.Canonical (Pkg.Name author pkg) module_) -> module_
 
         in
         ( if length params > 0 then
-            "(" <> typeScope <> typeName <> " " <> usageParams <> ")" -- <> "<!R>"
+            "(" <> typeScope <> nameToText typeName <> " " <> usageParams <> ")" -- <> "<!R>"
           else
-            typeScope <> typeName -- <> "<!R>"
+            typeScope <> nameToText typeName -- <> "<!R>"
         , Set.insert moduleName usageImports
         , usageFts
         )
@@ -779,24 +768,24 @@ canonicalToFt version scope interfaces recursionMap canonical tvarMap =
 
                     Nothing ->
                       ("XXXXXX alias lookup fail", Set.empty, Map.empty)
-                      -- DError $ "❗️Failed to find either alias or custom type for type that seemingly must exist: " <> tipe <> "` from " <> author <> "/" <> pkg <> ":" <> module_ <> ". Please report this issue with your code!"
+                      -- DError $ "❗️Failed to find either alias or custom type for type that seemingly must exist: " <> tipe <> "` from " <> author <> "/" <> pkg <> ":" <> nameToText module_ <> ". Please report this issue with your code!"
 
             Nothing ->
               ("XXXXXX subi fail", Set.empty, Map.empty)
               -- let !_ = formatHaskellValue "interface modulenames" (Map.keys interfaces) :: IO ()
               -- in
-              -- DError $ "The `" <> tipe <> "` type from " <> author <> "/" <> pkg <> ":" <> module_ <> " is referenced, but I can't find it! You can try `lamdera install " <> author <> "/" <> pkg <> "`, otherwise this might be a type which has been intentionally hidden by the author, so it cannot be used!"
+              -- DError $ "The `" <> tipe <> "` type from " <> author <> "/" <> pkg <> ":" <> nameToText module_ <> " is referenced, but I can't find it! You can try `lamdera install " <> author <> "/" <> pkg <> "`, otherwise this might be a type which has been intentionally hidden by the author, so it cannot be used!"
 
 
     Can.TAlias moduleName name tvarMap_ aliasType ->
       let
         module_ =
           case moduleName of
-            (ModuleName.Canonical (Pkg.Name author pkg) (N.Name module_)) -> module_
+            (ModuleName.Canonical (Pkg.Name author pkg) module_) -> module_
 
         identifier =
           case (moduleName, name) of
-            ((ModuleName.Canonical (Pkg.Name author pkg) (N.Name module_)), N.Name tipe) ->
+            ((ModuleName.Canonical (Pkg.Name author pkg) module_), tipe) ->
               (author, pkg, module_, tipe)
       in
       case aliasType of
@@ -829,9 +818,9 @@ canonicalToFt version scope interfaces recursionMap canonical tvarMap =
               if moduleName == scope then
                 ""
               else if isUserType identifier then
-                "Evergreen.V" <> version <> "." <> module_ <> "."
+                "Evergreen.V" <> version <> "." <> nameToText module_ <> "."
               else
-                module_ <> "."
+                nameToText module_ <> "."
 
             debugIden = "" -- <> "<ah>"
 
@@ -880,9 +869,9 @@ canonicalToFt version scope interfaces recursionMap canonical tvarMap =
             if module_ == scopeModule then
               N.toText name
             else if isUserType identifier then
-              "Evergreen.V" <> version <> "." <> module_ <> "."
+              "Evergreen.V" <> version <> "." <> nameToText module_ <> "."
             else
-              module_ <> "." <> N.toText name
+              nameToText module_ <> "." <> N.toText name
           , imps
           , (Map.singleton (moduleNameKey moduleName) $
               ElmFileText
@@ -960,3 +949,15 @@ canonicalToFt version scope interfaces recursionMap canonical tvarMap =
 
 isUserType (author, pkg, module_, tipe) =
   author == "author" && pkg == "project"
+
+
+
+toName =
+  N.fromChars . T.unpack
+
+nameToText =
+  T.pack . N.toChars
+
+
+utf8ToText =
+  T.pack . Utf8.toChars

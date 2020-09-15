@@ -211,9 +211,9 @@ Executable elm
         Lamdera.Checks
         Lamdera.Constrain
         -- Lamdera.Deploy
-        -- Lamdera.Evergreen
+        Lamdera.Evergreen
         Lamdera.Filewatch
-        -- Lamdera.Generated
+        Lamdera.Generated
         Lamdera.Hints
 
         Lamdera.Injection
