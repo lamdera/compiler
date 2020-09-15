@@ -18,7 +18,7 @@ import qualified Data.Name
 import qualified Elm.Package
 import qualified Elm.ModuleName as ModuleName
 import qualified Json.String
-
+import qualified Elm.String
 
 -- import qualified AST.Canonical as Can
 -- import qualified AST.Source as Src
@@ -39,6 +39,9 @@ instance Show Data.Name.Name where
 
 instance Show Elm.Package.Name where
   show = Elm.Package.toChars
+
+instance Show (Elm.String.String) where
+  show = Elm.String.toChars
 
 instance Show ModuleName.Canonical where
   show (ModuleName.Canonical pkg moduleName) = show pkg ++ ":" ++ show moduleName

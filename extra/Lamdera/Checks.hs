@@ -8,10 +8,7 @@ import qualified Elm.Package as Pkg
 import Elm.ModuleName (Canonical(..))
 import qualified Type.Error as T
 import qualified Reporting.Task as Task
--- import qualified Reporting.Exit as Exit
-
 import qualified Reporting.Exit.Help as Help
--- import qualified Reporting.Progress as Progress
 
 import NeatInterpolation
 import Data.Text as T
@@ -24,31 +21,15 @@ import System.FilePath ((</>))
 import qualified Debug.Trace as DT
 import qualified Data.List as List
 import qualified Reporting
-import System.IO (hFlush, hPutStr, stdout)
+
 
 import Lamdera
 import qualified Lamdera.Exit
+import Lamdera.Progress
 
 
+-- @TODO reuqired?
 type Check = ExceptT Text IO
-
-
--- @LAMDERA temporary
--- might be better as helpers in another file and shared
-
-flushPrintHelp doc =
-  Reporting.Key (\_ ->
-    do  Help.toStdout doc
-        hFlush stdout
-  )
-
-report doc = do
-  Reporting.report (flushPrintHelp doc) ()
-
-throw doc = do
-  Help.toStdout (Help.reportToDoc doc)
-  hFlush stdout
-  error "fail"
 
 
 runChecks = do

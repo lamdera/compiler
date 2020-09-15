@@ -949,15 +949,3 @@ canonicalToFt version scope interfaces recursionMap canonical tvarMap =
 
 isUserType (author, pkg, module_, tipe) =
   author == "author" && pkg == "project"
-
-
-
-toName =
-  N.fromChars . T.unpack
-
-nameToText =
-  T.pack . N.toChars
-
-
-utf8ToText =
-  T.pack . Utf8.toChars

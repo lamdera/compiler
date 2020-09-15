@@ -25,7 +25,13 @@ module Json.Decode
   , DecodeExpectation(..)
   , ParseError(..)
   , StringProblem(..)
-  , value -- @LAMDERA
+  -- @LAMDERA
+  , value
+  , index
+  , succeed
+  , text
+  , required
+  , custom
   )
   where
 
@@ -45,6 +51,8 @@ import qualified Reporting.Annotation as A
 
 
 import qualified Json.Encode as E -- @LAMDERA
+import qualified Data.Text as T
+import qualified Control.Monad
 
 -- RUNNERS
 
@@ -808,6 +816,7 @@ value =
   Decoder $ \ast ok err ->
     ok $ toEncodeValue ast
 
+
 toEncodeValue :: A.Located AST_ -> E.Value
 toEncodeValue (A.At region ast) =
   case ast of
@@ -831,3 +840,52 @@ toEncodeValue (A.At region ast) =
 
     NULL ->
       E.Null
+
+
+index :: Int -> Decoder e a -> Decoder e a
+index i (Decoder decodeA) =
+  Decoder $ \(A.At region ast) ok err ->
+    case ast of
+      Array asts ->
+        case asts !!! i of
+          Just v ->
+            decodeA v ok err
+
+          Nothing ->
+            err (Expecting region (TArrayPair (length asts)))
+
+      _ ->
+        err (Expecting region TArray)
+
+
+-- Safe version of !!
+(!!!) :: [a] -> Int -> Maybe a
+(!!!) l i =
+  if Prelude.length l >= (i + 1)
+  then Just (l !! i)
+  else Nothing
+
+
+succeed :: a -> Decoder e a
+succeed a =
+  Decoder $ \(A.At region ast) ok err ->
+    ok a
+
+
+text :: Decoder e T.Text
+text = fmap (T.pack . Json.toChars) string
+
+
+map2 :: (a -> b -> value) -> Decoder e a -> Decoder e b -> Decoder e value
+map2 fn d1 d2 =
+  Control.Monad.liftM2 fn d1 d2
+
+
+required :: B.ByteString -> Decoder e a -> Decoder e (a -> b) -> Decoder e b
+required key valDecoder decoder =
+    custom (field key valDecoder) decoder
+
+
+custom :: Decoder e a -> Decoder e (a -> b) -> Decoder e b
+custom d1 d2 =
+    map2 (\a_ fn_ -> fn_ a_) d1 d2

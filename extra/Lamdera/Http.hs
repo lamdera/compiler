@@ -25,23 +25,6 @@ import Lamdera
 import qualified Lamdera.Task
 
 
--- required :: Text -> D.Decoder e a -> D.Decoder e (a -> b) -> D.Decoder e b
--- required key valDecoder decoder =
---     custom (D.field key valDecoder) decoder
---
---
--- custom :: D.Decoder e a -> D.Decoder e (a -> b) -> D.Decoder e b
--- custom d1 d2 =
---     map2 (\a_ fn_ -> fn_ a_) d1 d2
-
-
--- map2 : (a -> b -> value) -> Decoder a -> Decoder b -> Decoder value
--- map2 fn d1 d2 =
---
--- map2 :: Functor f => (i -> a) -> (i -> b) -> f i -> f (a,b)
--- map2 f1 f2 = fmap $ \i -> (f1 i, f2 i)
-
-
 data WithErrorField a
   = SuccessField a
   | ErrorField Text

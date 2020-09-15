@@ -221,7 +221,7 @@ Executable elm
         Lamdera.Login
         Lamdera.OldFeatureHelper
         Lamdera.Project
-        -- Lamdera.Secrets
+        Lamdera.AppConfig
         -- Lamdera.TypeHash
         Lamdera.Types
         Lamdera.Update
@@ -234,6 +234,7 @@ Executable elm
         Lamdera.Task
         Lamdera.Exit
         Lamdera.Error
+        Lamdera.Progress
 
         -- SocketServer
 

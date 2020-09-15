@@ -65,6 +65,10 @@ module Lamdera
   , setEnvMode
   , openUrlInBrowser
   , textSha1
+  , (!!!)
+  , toName
+  , nameToText
+  , utf8ToText
   )
   where
 
@@ -118,6 +122,8 @@ import qualified System.Process
 import qualified Data.Digest.Pure.SHA as SHA
 
 import qualified Reporting.Doc as D
+import qualified Data.Name as N
+import qualified Data.Utf8 as Utf8
 
 
 lamderaVersion :: String
@@ -635,3 +641,23 @@ openUrlInBrowser url = do
 textSha1 :: Text -> Text
 textSha1 input =
   T.pack $ SHA.showDigest $ SHA.sha1 $ TLE.encodeUtf8 $ TL.fromStrict $ input
+
+
+-- Safe version of !!
+(!!!) :: [a] -> Int -> Maybe a
+(!!!) l i =
+  if Prelude.length l >= (i + 1)
+  then Just (l !! i)
+  else Nothing
+
+
+toName =
+  N.fromChars . T.unpack
+
+
+nameToText =
+  T.pack . N.toChars
+
+
+utf8ToText =
+  T.pack . Utf8.toChars

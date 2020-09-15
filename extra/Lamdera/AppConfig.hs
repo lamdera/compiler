@@ -1,53 +1,37 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE BangPatterns #-}
 
--- @TODO rename to AppConfig or something
-module Lamdera.Secrets where
+module Lamdera.AppConfig where
 
--- Clean up these
-import AST.Module.Name (Canonical(..))
+import Elm.ModuleName (Canonical(..))
 import AST.Optimized
-import qualified Elm.Compiler.Objects as Obj
 import qualified Data.Set as Set
-import qualified Data.List as List
-
 import qualified Data.Map as Map
-import qualified Data.Set as Set
-import Data.Maybe (fromMaybe)
 import qualified System.Environment as Env
-
-import qualified AST.Optimized as Opt
-import qualified Elm.ModuleName as ModuleName
 import qualified Elm.Package as Pkg
-import qualified Data.Name as N
-
-import StandaloneInstances
-import Lamdera
-import qualified Lamdera.Project
-
--- Querying
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
-import qualified Reporting.Task as Task
 import qualified Json.Decode as D
 import qualified Json.Encode as E
-import qualified Network.HTTP.Client as Client
-import qualified Network.HTTP.Types as Http
-import qualified Reporting.Exit.Http as E
 import qualified Data.ByteString.Lazy as LBS
-import qualified Reporting.Task.Http as Http
 import qualified Data.ByteString.Builder as BS
 import System.FilePath ((</>))
-import System.Exit (exitFailure)
-
--- Check + Errors
 import qualified Reporting.Doc as D
 import qualified Reporting.Exit.Help as Help
-import qualified Reporting.Exit as Exit
-import qualified Reporting.Progress as Progress
+import qualified Data.Utf8 as Utf8
 
+import Lamdera
 import Lamdera.Http
+import Lamdera.Progress
 import qualified Lamdera.Login
+import qualified Lamdera.Project
+import StandaloneInstances
+
+
+-- @TODO generalize
+progress t = do
+  report $ D.stack [ D.fromChars t, ""]
+
 
 writeUsage rootNames graph = do
   let
@@ -56,9 +40,9 @@ writeUsage rootNames graph = do
         & Set.toList
         & fmap (\(module_, expression, secrets) ->
             E.list id
-              [ E.text module_
-              , E.text expression
-              , secrets & fmap E.text & E.list id
+              [ E.string $ Utf8.fromChars $ T.unpack module_
+              , E.string $ Utf8.fromChars $ T.unpack expression
+              , secrets & fmap (E.string . Utf8.fromChars . T.unpack) & E.list id
               ]
           )
         & E.list id
@@ -68,12 +52,12 @@ writeUsage rootNames graph = do
         & T.decodeUtf8
 
   case rootNames of
-    [N.Name "Frontend"] -> do
+    ["Frontend"] -> do
       let usages = findSecretUses graph "Frontend" "app"
       -- progress $ hindentFormatValue usages
       liftIO $ writeUtf8Root "lamdera-stuff/.lamdera-fe-config" $ prep usages
 
-    [N.Name "Backend"] -> do
+    ["Backend"] -> do
       let usages = findSecretUses graph "Backend" "app"
       -- progress $ hindentFormatValue usages
       liftIO $ writeUtf8Root "lamdera-stuff/.lamdera-be-config" $ prep usages
@@ -82,16 +66,12 @@ writeUsage rootNames graph = do
       pure ()
 
 
-progress t = do
-  Task.report $ Progress.LamderaProgress $ D.stack [ D.fromText t, ""]
-
-
 findSecretUses graph module_ expr = do
   let
     entryNode =
-      Obj._nodes graph
+      _g_nodes graph
          & Map.filterWithKey (\k a ->
-             k == Global (Canonical (Pkg.Name "author" "project") (N.Name module_)) (N.Name expr)
+             k == Global (Canonical (Pkg.Name "author" "project") (module_)) (expr)
          )
 
   if not $ Map.null entryNode
@@ -99,7 +79,7 @@ findSecretUses graph module_ expr = do
     else Set.empty
 
 
-traverse_ :: Graph -> (Global, Node) -> Set.Set (Text, Text, [Text])
+traverse_ :: GlobalGraph -> (Global, Node) -> Set.Set (Text, Text, [Text])
 traverse_ graph (global, currentNode) = do
   let
     refs =
@@ -109,7 +89,7 @@ traverse_ graph (global, currentNode) = do
     -- let
     (module_, expression) =
       case global of
-        Global (Canonical (Pkg.Name "author" "project") (N.Name module_)) (N.Name expr) ->
+        Global (Canonical (Pkg.Name "author" "project") (module_)) (expr) ->
           (module_, expr)
 
         _ ->
@@ -117,19 +97,20 @@ traverse_ graph (global, currentNode) = do
 
     extractExpr global =
        case global of
-         Global (Canonical (Pkg.Name "author" "project") _) (N.Name expr) ->
-           expr
+         Global (Canonical (Pkg.Name "author" "project") _) expr ->
+           nameToText expr
 
          _ ->
            error $ "Unexpected expression extraction. Please report this issue!\n\n" <> show global
 
-    res = Set.singleton (module_, expression, refs & Set.map extractExpr & Set.toList)
+    res :: Set.Set (Text, Text, [Text])
+    res = Set.singleton (nameToText module_, nameToText expression, refs & Set.map extractExpr & Set.toList)
 
     childResults =
       currentNode
         & selectNextDeps
         & Set.map (\global -> do
-            Obj._nodes graph
+            _g_nodes graph
                & Map.lookup global
                & (\nodeM ->
                 case nodeM of
@@ -177,8 +158,8 @@ onlyAuthorProjectDeps globalDeps =
   globalDeps
     & Set.filter (\global ->
       case global of
-        Global (Canonical (Pkg.Name "author" "project") _) (N.Name expr) ->
-          not (textContains "w2_" expr) && not (textContains "evg_" expr)
+        Global (Canonical (Pkg.Name "author" "project") _) expr ->
+          not (textContains "w2_" (nameToText expr)) && not (textContains "evg_" (nameToText expr))
         _ ->
           False
     )
@@ -190,13 +171,13 @@ nodeEnvRefs graph (global, node) =
       globalDeps
         & Set.filter (\globalDep ->
           case globalDep of
-            Global (Canonical (Pkg.Name "author" "project") (N.Name "Env")) (N.Name expr) ->
+            Global (Canonical (Pkg.Name "author" "project") "Env") expr ->
               True
             _ ->
               False
         )
         & Set.filter (\globalDep ->
-          Obj._nodes graph
+          _g_nodes graph
              & Map.lookup globalDep
              & (\nodeM ->
               case nodeM of
@@ -219,23 +200,21 @@ nodeEnvRefs graph (global, node) =
       Set.empty
 
 
-readAppConfigUses :: Task.Task [(Text, Text, Text)]
-readAppConfigUses =
-  liftIO $ do
-    root <- getProjectRoot
-    feConfig <- readUtf8Text $ root </> "lamdera-stuff/.lamdera-fe-config"
-    beConfig <- readUtf8Text $ root </> "lamdera-stuff/.lamdera-be-config"
+readAppConfigUses :: IO [(Text, Text, Text)]
+readAppConfigUses = do
+  root <- getProjectRoot
+  feConfig <- readUtf8Text $ root </> "lamdera-stuff/.lamdera-fe-config"
+  beConfig <- readUtf8Text $ root </> "lamdera-stuff/.lamdera-be-config"
 
-    pure $ extract feConfig ++ extract beConfig
+  pure $ extract feConfig ++ extract beConfig
 
 
-readAppFrontendConfigUses :: Task.Task [(Text, Text, Text)]
-readAppFrontendConfigUses =
-  liftIO $ do
-    root <- getProjectRoot
-    feConfig <- readUtf8Text $ root </> "lamdera-stuff/.lamdera-fe-config"
+readAppFrontendConfigUses :: IO [(Text, Text, Text)]
+readAppFrontendConfigUses = do
+  root <- getProjectRoot
+  feConfig <- readUtf8Text $ root </> "lamdera-stuff/.lamdera-fe-config"
 
-    pure $ extract feConfig
+  pure $ extract feConfig
 
 
 extract rawConfig = do
@@ -243,14 +222,14 @@ extract rawConfig = do
     decoder =
       D.list $
         D.succeed (,,)
-          & custom (D.index 0 D.text)
-          & custom (D.index 1 D.text)
-          & custom (D.index 2 (D.list D.text))
+          & D.custom (D.index 0 D.text)
+          & D.custom (D.index 1 D.text)
+          & D.custom (D.index 2 (D.list D.text))
 
   case rawConfig of
     Just config -> do
       let bytes = T.encodeUtf8 config
-      case D.parse "readAppConfigUses" id decoder bytes of
+      case D.fromByteString decoder bytes of
         Right values ->
           values
             & fmap (\(module_, expr, configs) ->
@@ -258,8 +237,8 @@ extract rawConfig = do
             )
             & concat
 
-        Left jsonProblem -> do
-          let !_ = debugHaskell "❌ config extraction failed" jsonProblem
+        Left problem -> do
+          -- let !_ = debugHaskell "❌ config extraction failed" problem
           []
           -- return $ Left $ E.BadJson endpoint jsonProblem
 
@@ -269,7 +248,7 @@ extract rawConfig = do
 
 
 
-fetchAppConfigItems :: Text -> Text -> Task.Task (WithErrorField [(Text, Text, Bool, Bool)])
+fetchAppConfigItems :: Text -> Text -> IO (Either Lamdera.Http.Error (WithErrorField [(Text, Text, Bool, Bool)]))
 fetchAppConfigItems appName token = do
   let
     endpoint =
@@ -282,26 +261,27 @@ fetchAppConfigItems appName token = do
 
     body =
       E.object
-        [ ("key", E.text token)
-        , ("appId", E.text appName)
+        [ ("key", E.string $ Utf8.fromChars $ T.unpack token)
+        , ("appId", E.string $ Utf8.fromChars $ T.unpack appName)
         ]
 
+    decoder :: D.Decoder err (WithErrorField [(Text, Text, Bool, Bool)])
     decoder =
       D.oneOf
-        [ D.map SuccessField $ D.list $
+        [ fmap SuccessField $ D.list $
             D.succeed (,,,)
-              & required "name" D.text
-              & required "value" D.text
-              & required "used" D.bool
-              & required "secret" D.bool
+              & D.required "name" D.text
+              & D.required "value" D.text
+              & D.required "used" D.bool
+              & D.required "secret" D.bool
         , D.field "error" D.text
-            & D.map ErrorField
+            & fmap ErrorField
         ]
 
   Lamdera.Http.normalRpcJson "fetchAppConfigItems" body endpoint decoder
 
 
-checkUserConfig :: Text -> Maybe Text -> Task.Task ()
+checkUserConfig :: Text -> Maybe Text -> IO ()
 checkUserConfig appName prodTokenM = do
 
   token <-
@@ -311,25 +291,16 @@ checkUserConfig appName prodTokenM = do
 
       Nothing ->
         -- Will throw if invalid token forcing user to auth first
-        liftIO $ Lamdera.Login.validateCliToken
+        Lamdera.Login.validateCliToken
 
   debug $ "Checking with token: " <> T.unpack token
 
   prodConfigItems <- do
-    res <- Lamdera.Secrets.fetchAppConfigItems appName token
-    case res of
-      SuccessField configItems -> pure configItems
-      ErrorField text ->
-        Task.throw $ Exit.Lamdera
-          $ Help.report "ERROR" Nothing
-            ("A HTTP request failed with the following error:")
-            [ D.reflow $ T.unpack text
-            , D.reflow $ "Please check your configuration, or report this issue."
-            ]
+    res_ <- fetchAppConfigItems appName token
+    resultOrThrow res_
 
-
-  localConfigItems <- Lamdera.Secrets.readAppConfigUses
-  localFrontendConfigItems <- Lamdera.Secrets.readAppFrontendConfigUses
+  localConfigItems <- readAppConfigUses
+  localFrontendConfigItems <- readAppFrontendConfigUses
 
   -- Alert of any usages that don't have defined values
   let
@@ -348,6 +319,7 @@ checkUserConfig appName prodTokenM = do
                 True
         )
 
+    secretBreakingConfigs :: [(Text, Text, Text)]
     secretBreakingConfigs =
       localFrontendConfigItems
         & filter (\(module_, expression, config) ->
@@ -371,10 +343,13 @@ checkUserConfig appName prodTokenM = do
       missingFormatted =
         missingConfigs
           & fmap (\(module_, expr, config) ->
-              D.indent 4 $ D.fillSep [D.yellow $ D.fromText config , "in" , D.fromText $ module_ <> "." <> expr]
+              D.indent 4 $ D.fillSep
+                [ D.yellow $ D.fromChars $ T.unpack config
+                , "in"
+                , D.fromChars $ T.unpack module_ <> "." <> T.unpack expr]
             )
 
-    Task.throw $ Exit.Lamdera
+    throw
       $ Help.report "MISSING PRODUCTION CONFIG" (Nothing)
         ("The following Env.elm config values are used but have no production value set:")
         ([ D.vcat missingFormatted
@@ -390,10 +365,13 @@ checkUserConfig appName prodTokenM = do
       missingFormatted =
         secretBreakingConfigs
           & fmap (\(module_, expr, config) ->
-              D.indent 4 $ D.fillSep [D.yellow $ D.fromText config , "in" , D.fromText $ module_ <> "." <> expr]
+              D.indent 4 $ D.fillSep
+                [ D.yellow $ D.fromChars $ T.unpack config
+                , "in"
+                , D.fromChars $ T.unpack module_ <> "." <> T.unpack expr]
             )
 
-    Task.throw $ Exit.Lamdera
+    throw
       $ Help.report "EXPOSED PRODUCTION CONFIG" (Nothing)
         ("These secret config values are being exposed by frontend code!")
         ([ D.vcat missingFormatted
@@ -439,21 +417,8 @@ injectConfig graph = do
 
 
           prodConfigItems <- do
-            res_ <- Task.try Progress.silentReporter $ fetchAppConfigItems appName (T.pack token)
-            case res_ of
-              Just res ->
-                case res of
-                  SuccessField configItems -> pure configItems
-                  ErrorField text -> do
-                    pDocLn $ Help.reportToDoc $ Help.report "ERROR" Nothing
-                        ("A HTTP request failed with the following error:")
-                        [ D.red $ D.reflow $ T.unpack text
-                        , D.reflow $ "Please check your configuration, or report this issue."
-                        ]
-                    exitFailure
-
-              Nothing ->
-                pure []
+            res_ <- fetchAppConfigItems appName (T.pack token)
+            resultOrThrow res_
 
           let
             prodConfigMap =
@@ -462,18 +427,18 @@ injectConfig graph = do
                 & Map.fromList
 
           pure $
-            graph { Obj._nodes =
-              Obj._nodes graph
+            graph { _g_nodes =
+              _g_nodes graph
                 & Map.mapWithKey (\k a ->
                   case k of
-                    Global (Canonical (Pkg.Name "author" "project") (N.Name "Env")) (N.Name name_) ->
+                    Global (Canonical (Pkg.Name "author" "project") "Env") name_ ->
                       case a of
                         Define (Str t) gDeps ->
-                          case Map.lookup name_ prodConfigMap of
+                          case Map.lookup (nameToText name_) prodConfigMap of
                             Just (name, value, used, secret) -> do
                               let !_ = debugNote ("Injecting prod value for Env." <> name) value
                               -- Exists in prod, drop
-                              Define (Str value) gDeps
+                              Define (Str (Utf8.fromChars . T.unpack $ value)) gDeps
 
                             Nothing -> do
                               let !_ = debugHaskell "impossible missing config item" (t, prodConfigMap)
@@ -490,3 +455,26 @@ injectConfig graph = do
             }
     else
       pure graph
+
+
+
+resultOrThrow res_ =
+  case res_ of
+    Right res ->
+      case res of
+        SuccessField configItems -> pure configItems
+        ErrorField text ->
+          throw
+            $ Help.report "ERROR" Nothing
+              ("A HTTP request failed with the following error:")
+              [ D.reflow $ T.unpack text
+              , D.reflow $ "Please check your configuration, or report this issue."
+              ]
+
+    Left err -> do
+      throw $
+        Help.report "ERROR" Nothing
+          ("A HTTP request failed with the following error:")
+          [ D.red $ D.reflow $ Lamdera.Http.errorToString err
+          , D.reflow $ "Please check your configuration, or report this issue."
+          ]
