@@ -24,7 +24,6 @@ import qualified Reporting
 
 
 import Lamdera
-import qualified Lamdera.Exit
 import Lamdera.Progress
 
 

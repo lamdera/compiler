@@ -232,7 +232,6 @@ Executable elm
         -- Utility
         Lamdera.Http
         Lamdera.Task
-        Lamdera.Exit
         Lamdera.Error
         Lamdera.Progress
 
