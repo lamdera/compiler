@@ -20,7 +20,11 @@ report doc = do
 
 
 throw :: Help.Report -> IO a
-throw rep = do
-  Help.toStdout (Help.reportToDoc rep)
+throw rep = throwDoc $ Help.reportToDoc rep
+
+
+throwDoc :: D.Doc -> IO a
+throwDoc doc = do
+  Help.toStdout doc
   hFlush stdout
   error "fail"

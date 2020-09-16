@@ -19,6 +19,7 @@ import qualified Elm.Package
 import qualified Elm.ModuleName as ModuleName
 import qualified Json.String
 import qualified Elm.String
+import qualified AST.Canonical
 
 -- import qualified AST.Canonical as Can
 -- import qualified AST.Source as Src
@@ -33,6 +34,10 @@ import qualified Elm.String
 -- Show
 
 deriving instance Show AST.Optimized.Global
+
+deriving instance Show AST.Canonical.Type
+deriving instance Show AST.Canonical.FieldType
+deriving instance Show AST.Canonical.AliasType
 
 instance Show Data.Name.Name where
   show = Data.Name.toChars

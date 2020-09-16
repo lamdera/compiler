@@ -39,7 +39,6 @@ import Lamdera.Types
 import StandaloneInstances
 
 
--- @TEMPORARY
 type Interfaces =
   Map.Map ModuleName.Canonical Interface.Interface
 

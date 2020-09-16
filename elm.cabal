@@ -222,7 +222,7 @@ Executable elm
         Lamdera.OldFeatureHelper
         Lamdera.Project
         Lamdera.AppConfig
-        -- Lamdera.TypeHash
+        Lamdera.TypeHash
         Lamdera.Types
         Lamdera.Update
         -- Lamdera.Wire

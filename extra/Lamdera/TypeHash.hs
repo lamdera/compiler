@@ -7,48 +7,31 @@ module Lamdera.TypeHash where
 @TODO move into Evergreen namespace
 -}
 
-import qualified AST.Canonical as Can
-import AST.Module.Name (Canonical(..))
-import qualified Elm.ModuleName as ModuleName
-import qualified AST.Utils.Type as Type
-
-
-import qualified Data.Char
 import qualified Data.Map as Map
 import qualified Data.List as List
 import qualified Data.Text as T
-import qualified Data.Text.Encoding as TE
 import qualified Data.Name as N
+
+import qualified AST.Canonical as Can
+import qualified AST.Source as Valid
+import qualified Elm.ModuleName as ModuleName
 import qualified Elm.Package as Pkg
-import qualified Reporting.Annotation as A
-import qualified Reporting.Annotation as R
 import qualified Elm.Interface as Interface
--- import qualified Reporting.Progress as Progress
--- import qualified Stuff.Paths as Paths
-
-import qualified Data.ByteString.Char8 as BS8
-
--- import qualified File.IO as File
-import Control.Monad.Trans (liftIO)
-import System.IO.Unsafe (unsafePerformIO)
-import System.FilePath ((</>))
--- import CanSer.CanSer as CanSer
-
-import qualified AST.Valid as Valid
-import qualified Elm.Compiler.Module as Module
+import qualified Reporting.Annotation as A
 import qualified Reporting.Result as Result
-
-import qualified Lamdera.Error
 import qualified Reporting.Doc as D
-import qualified Reporting.Error as Error
-
 
 import Lamdera
 import Lamdera.Types
+import Lamdera.Progress
 import qualified Lamdera.Evergreen
 
 
-lamderaTypes :: [Text]
+type Interfaces =
+  Map.Map ModuleName.Canonical Interface.Interface
+
+
+lamderaTypes :: [N.Name]
 lamderaTypes =
   [ "FrontendModel"
   , "BackendModel"
@@ -59,43 +42,56 @@ lamderaTypes =
   ]
 
 
-maybeGenHashes :: Pkg.Name -> Valid.Module -> Interface.Interfaces -> Result.Result i w Error.Error ()
-maybeGenHashes pkg module_@(Valid.Module name _ _ _ _ _ _ _ _ _) interfaces = do
+-- @TODO restore after integration
+-- maybeGenHashes :: Pkg.Name -> Valid.Module -> Interfaces -> Result.Result i w Error.Error ()
+maybeGenHashes pkg module_@(Valid.Module name _ _ _ _ _ _ _ _) interfaces = do
 
-  let !inDebug = unsafePerformIO Lamdera.isDebug
+  let
+    !inDebug = unsafePerformIO Lamdera.isDebug
+
+    moduleName =
+      case name of
+        Just (A.At _ name_) -> name_
+        _ -> toName ""
 
   -- This check isn't strictly required, as the callee of this function in compile only
   -- calls it when we know we've canonicalized the src/Types.elm file, but leaving it here
   -- to prevent any footguns in future testing
   debug_note "Generating type hashes..." $
-   onlyWhen (pkg == (Pkg.Name "author" "project") && name == N.fromText "Types") $ do
+   onlyWhen (pkg == (Pkg.Name "author" "project") && moduleName == "Types") $ do
     let
       interfaceTypes_elm =
-        case Map.lookup (Module.Canonical (Pkg.Name "author" "project") "Types") interfaces of
+        case Map.lookup (ModuleName.Canonical (Pkg.Name "author" "project") "Types") interfaces of
           Just i -> i
           Nothing -> error "The impossible happened, could not find src/Types.elm"
 
+      typediffs :: [(Text, DiffableType)]
       typediffs =
         lamderaTypes
-          & fmap (\t -> (t, diffableTypeByName interfaces t name interfaceTypes_elm))
+          & fmap (\t -> (nameToText t, diffableTypeByName interfaces t moduleName interfaceTypes_elm))
 
       -- @WARNING this may freeze for a while, hindent struggles with large haskell values
       -- !_ = formatHaskellValue "typediffs" (typediffs) :: IO ()
 
+      hashes :: [Text]
       hashes =
         typediffs
           & fmap (\(t, td) -> diffableTypeToHash td)
 
+
+      errors :: [(Text, [Text], DiffableType)]
       errors =
         typediffs
           & fmap (\(t,tds) -> (t, diffableTypeErrors tds, tds))
           & filter (\(t,errs,tds) -> List.length errs > 0)
 
+      warnings :: [(Text, [Text], DiffableType)]
       warnings =
         typediffs
           & fmap (\(t,tds) -> (t, diffableTypeExternalWarnings tds & List.nub, tds)) -- nub == unique
           & filter (\(t,errs,tds) -> List.length errs > 0)
 
+      textWarnings :: Text
       textWarnings =
         warnings
           & fmap (\(tipe, warnings_, tds) -> warnings_)
@@ -105,14 +101,14 @@ maybeGenHashes pkg module_@(Valid.Module name _ _ _ _ _ _ _ _ _) interfaces = do
           & T.intercalate "\n- "
           & (<>) "- "
 
+      formattedErrors :: [D.Doc]
       formattedErrors =
         errors
-
           & fmap (\(tipe, errors_, tds) ->
               D.stack $
-                [D.fillSep [ D.yellow $ D.fromText $ tipe <> ":" ]]
+                [D.fillSep [ D.yellow $ D.fromChars . T.unpack $ tipe <> ":" ]]
                 ++
-                (errors_ & List.nub & fmap (\e -> D.fromText $ "- " <> e) )
+                (errors_ & List.nub & fmap (\e -> D.fromChars . T.unpack $ "- " <> e) )
             )
 
     if List.length errors > 0
@@ -126,7 +122,7 @@ maybeGenHashes pkg module_@(Valid.Module name _ _ _ _ _ _ _ _ _) interfaces = do
           else
             []
       in
-      Result.throw $ Error.Lamdera $ Lamdera.Error.LamderaGenericError $
+      Result.throw $
         D.stack
           ([ D.reflow $ "I ran into the following problems when checking Lamdera core types:"
           -- , D.fillSep [ D.yellow "WARNING:","Confirm","hoist!" ]
@@ -149,13 +145,13 @@ maybeGenHashes pkg module_@(Valid.Module name _ _ _ _ _ _ _ _ _) interfaces = do
           pure $ Result.ok ()
 
 
-diffableTypeByName :: (Map.Map Canonical Module.Interface) -> Text -> N.Name -> Interface.Interface -> DiffableType
+diffableTypeByName :: (Map.Map ModuleName.Canonical Interface.Interface) -> N.Name -> N.Name -> Interface.Interface -> DiffableType
 diffableTypeByName interfaces typeName name interface = do
   let
     recursionIdentifier =
-      ((ModuleName.Canonical (Pkg.Name "author" "project") (N.Name "Types")), N.Name typeName)
+      ((ModuleName.Canonical (Pkg.Name "author" "project") "Types"), typeName)
 
-  case Map.lookup (N.fromText typeName) $ Interface._aliases interface of
+  case Map.lookup typeName $ Interface._aliases interface of
     Just alias -> do
       let
         diffableAlias = aliasToDiffableType interfaces [recursionIdentifier] [] alias []
@@ -166,17 +162,17 @@ diffableTypeByName interfaces typeName name interface = do
 
     Nothing ->
       -- Try unions
-      case Map.lookup (N.fromText typeName) $ Interface._unions interface of
+      case Map.lookup typeName $ Interface._unions interface of
         Just union -> do
           let
-            diffableUnion = unionToDiffableType typeName interfaces [recursionIdentifier] [] union []
+            diffableUnion = unionToDiffableType (nameToText typeName) interfaces [recursionIdentifier] [] union []
 
             -- !y = formatHaskellValue "diffableTypeByName.Union" diffableUnion :: IO ()
 
           diffableUnion
 
         Nothing ->
-          DError $ "Found no type named " <> typeName <> " in " <> N.toText name
+          DError $ "Found no type named " <> nameToText typeName <> " in " <> nameToText name
 
 
 
@@ -237,7 +233,7 @@ resolveTvars_ tvarMap tipe =
 
 
 -- A top level Custom Type definition i.e. `type Herp = Derp ...`
-unionToDiffableType :: Text -> (Map.Map Canonical Module.Interface) -> [(ModuleName.Canonical, N.Name)] -> [(N.Name, Can.Type)] -> Interface.Union -> [Can.Type] -> DiffableType
+unionToDiffableType :: Text -> (Map.Map ModuleName.Canonical Interface.Interface) -> [(ModuleName.Canonical, N.Name)] -> [(N.Name, Can.Type)] -> Interface.Union -> [Can.Type] -> DiffableType
 unionToDiffableType typeName interfaces recursionMap tvarMap unionInterface params =
   let
     treat union =
@@ -254,7 +250,7 @@ unionToDiffableType typeName interfaces recursionMap tvarMap unionInterface para
         -- Sort constructors by name, this allows our diff to be stable to ordering changes
         & List.sortOn
           -- Ctor N.Name Index.ZeroBased Int [Type]
-          (\(Can.Ctor name _ _ _) -> N.toString name)
+          (\(Can.Ctor name _ _ _) -> name)
         -- For each constructor
         & fmap (\(Can.Ctor name index int params_) ->
           ( N.toText name
@@ -274,7 +270,7 @@ unionToDiffableType typeName interfaces recursionMap tvarMap unionInterface para
 
 
 -- A top level Alias definition i.e. `type alias ...`
-aliasToDiffableType :: (Map.Map Canonical Module.Interface) -> [(ModuleName.Canonical, N.Name)] -> [(N.Name, Can.Type)] -> Interface.Alias -> [Can.Type] -> DiffableType
+aliasToDiffableType :: (Map.Map ModuleName.Canonical Interface.Interface) -> [(ModuleName.Canonical, N.Name)] -> [(N.Name, Can.Type)] -> Interface.Alias -> [Can.Type] -> DiffableType
 aliasToDiffableType interfaces recursionMap tvarMap aliasInterface params =
   let
     treat a =
@@ -306,7 +302,7 @@ aliasToDiffableType interfaces recursionMap tvarMap aliasInterface params =
 -- | TUnit
 -- | TTuple Type Type (Maybe Type)
 -- | TAlias ModuleName.Canonical N.Name [(N.Name, Type)] AliasType
-canonicalToDiffableType :: Interface.Interfaces -> [(ModuleName.Canonical, N.Name)] -> Can.Type -> [(N.Name, Can.Type)] -> DiffableType
+canonicalToDiffableType :: Interfaces -> [(ModuleName.Canonical, N.Name)] -> Can.Type -> [(N.Name, Can.Type)] -> DiffableType
 canonicalToDiffableType interfaces recursionMap canonical tvarMap =
   let
     debug dtype =
@@ -329,10 +325,11 @@ canonicalToDiffableType interfaces recursionMap canonical tvarMap =
         tvarResolvedParams =
           params & fmap (resolveTvars_ tvarMap)
 
+        identifier :: (Text, Text, Text, Text)
         identifier =
           case (moduleName, name) of
-            ((ModuleName.Canonical (Pkg.Name author pkg) (N.Name module_)), N.Name tipe) ->
-              (author, pkg, module_, tipe)
+            ((ModuleName.Canonical (Pkg.Name author pkg) module_), tipe) ->
+              (utf8ToText author, utf8ToText pkg, nameToText module_, nameToText tipe)
 
         kernelError =
           case identifier of
@@ -342,8 +339,8 @@ canonicalToDiffableType interfaces recursionMap canonical tvarMap =
 
       if (List.any ((==) recursionIdentifier) recursionMap) then
         DRecursion $ case (moduleName, name) of
-          ((ModuleName.Canonical (Pkg.Name pkg1 pkg2) (N.Name module_)), N.Name typename) ->
-            pkg1 <> "/" <> pkg2 <> ":" <> module_ <> "." <> typename
+          ((ModuleName.Canonical (Pkg.Name pkg1 pkg2) module_), typename) ->
+            utf8ToText pkg1 <> "/" <> utf8ToText pkg2 <> ":" <> nameToText module_ <> "." <> nameToText typename
 
       else
       case identifier of
