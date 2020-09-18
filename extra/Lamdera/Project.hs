@@ -16,6 +16,7 @@ import qualified System.Environment as Env
 import qualified Data.List as List
 import qualified Elm.Package
 import Lamdera
+import qualified Lamdera.Progress
 import StandaloneInstances
 
 
@@ -72,9 +73,9 @@ getLamderaRemotes = do
     & pure
 
 
--- lamderaThrowUnknownApp :: Task.Task ()
--- lamderaThrowUnknownApp =
---   Task.throw $ Exit.Lamdera lamderaUnknownApp
+lamderaThrowUnknownApp :: IO ()
+lamderaThrowUnknownApp =
+  Lamdera.Progress.throw lamderaUnknownApp
 
 
 lamderaUnknownApp =
