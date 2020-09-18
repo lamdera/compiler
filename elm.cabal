@@ -210,7 +210,7 @@ Executable elm
         Lamdera.Check
         Lamdera.Checks
         Lamdera.Constrain
-        -- Lamdera.Deploy
+        Lamdera.Deploy
         Lamdera.Evergreen
         Lamdera.Filewatch
         Lamdera.Generated
