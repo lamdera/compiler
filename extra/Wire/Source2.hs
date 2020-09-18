@@ -19,30 +19,35 @@ ASSUMPTION: no user code defines any values starting with the string `w2_`
 -}
 
 import qualified AST.Canonical as Can
-import AST.Module.Name (Canonical(..))
+import Elm.ModuleName (Canonical(..))
 import qualified Elm.ModuleName as ModuleName
 import qualified AST.Utils.Type as Type
 import qualified AST.Source as Src
-import qualified AST.Valid as Valid
+import qualified AST.Source as Valid
 
 import qualified Data.Char
 import qualified Data.Map as Map
 import qualified Data.List as List
 import qualified Data.Text as T
-import Data.List.Index (imap)
 import qualified Data.Name as N
 import qualified Elm.Package as Pkg
 import qualified Reporting.Annotation as A
 import qualified Reporting.Annotation as R
+import qualified Data.Utf8 as Utf8
 
 -- import CanSer.CanSer as CanSer
 
 import Lamdera
+import StandaloneInstances
+
+
+textToUf8 =
+  Utf8.fromChars . T.unpack
 
 
 addImports :: [Src.Import] -> Valid.Module -> Valid.Module
-addImports imports (Valid.Module _name _overview _docs _exports _imports _decls _unions _aliases _binop _effects) =
-  Valid.Module _name _overview _docs _exports (imports <> _imports) _decls _unions _aliases _binop _effects
+addImports imports module_@(Valid.Module _name _exports _docs _imports _values _unions _aliases _binops _effects) =
+  module_ { Valid._imports = (imports <> _imports) }
 
 
 isEvergreenCodecName :: N.Name -> Bool
@@ -57,7 +62,7 @@ isEvergreenCodecName name =
 
 
 injectEvergreenExposing :: Can.Module -> String -> String
-injectEvergreenExposing (Can.Module _ _ _exports _ _ _ _ _) s =
+injectEvergreenExposing (Can.Module _ _exports _ _ _ _ _ _) s =
   -- 1. figure out what types are exposed from `can`
   -- 2. inject the encoder/decoders for those types into the exposing statement
   --    by finding the first `)\n\n`, and injecting it before that.
@@ -67,13 +72,15 @@ injectEvergreenExposing (Can.Module _ _ _exports _ _ _ _ _) s =
   --     the last `)`, and that there are two free newlines directly after,
   --     which is what elm-format would give us.
   let
-    exposingRegion (Can.ExportEverything r) = r
-    exposingRegion (Can.Export m) =
-      case Map.elemAt 0 m of -- ASSUMPTION: Export map is non-empty, since
-                             -- parser requires exposing to be non-empty.
-        (_, A.At r _) ->
-          -- trace (sShow ("exposingRegion", Map.elemAt 0 m))
-          r
+    exposingRegion export =
+      case export of
+        Can.ExportEverything r -> r
+        Can.Export m ->
+          case Map.elemAt 0 m of -- ASSUMPTION: Export map is non-empty, since
+                                 -- parser requires exposing to be non-empty.
+            (_, A.At r _) ->
+              -- trace (sShow ("exposingRegion", Map.elemAt 0 m))
+              r
 
     startsWithUppercaseCharacter (x:_) | Data.Char.isUpper x = True
     startsWithUppercaseCharacter _ = False
@@ -89,7 +96,7 @@ injectEvergreenExposing (Can.Module _ _ _exports _ _ _ _ _) s =
         (exposingRegion _exports)
         (mapNameExport
         & Map.keys
-        & fmap N.toString
+        & fmap N.toChars
         & filter startsWithUppercaseCharacter
         & concatMap codecsFor
         & leftPadWith ", "
@@ -163,12 +170,12 @@ generateCodecs revImportDict (Can.Module _moduName _docs _exports _decls _unions
         sorted_u_alts =
           if (List.length _u_alts > 256) then
             -- @TODO put this error somewhere nicer that's not a crash!
-            error $ "Error: I ran into a custom type (" <> N.toString name <> ") with more than 256 values! Please report this!"
+            error $ "Error: I ran into a custom type (" <> N.toChars name <> ") with more than 256 values! Please report this!"
           else
             _u_alts
               & List.sortOn
                 -- Ctor N.Name Index.ZeroBased Int [Type]
-                (\(Can.Ctor name _ _ _) -> N.toString name)
+                (\(Can.Ctor name _ _ _) -> N.toChars name)
 
         encoder =
           "w2_encode_" <> N.toText name <> leftWrap (codec <$> _u_vars) <> " w2_e_val =\n" <>
@@ -441,7 +448,7 @@ evergreenCoreCodecs qualIfNeeded targs key =
 pkgFromText :: T.Text -> Pkg.Name
 pkgFromText s =
   case T.splitOn "/" s of
-    [p,m] -> Pkg.Name p m
+    [p,m] -> Pkg.Name (textToUf8 p) (textToUf8 m)
     _ -> error ("Error: ran into a strange package: " <> T.unpack s <> ". Please report this!")
 
 

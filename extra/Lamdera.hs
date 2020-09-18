@@ -69,6 +69,7 @@ module Lamdera
   , toName
   , nameToText
   , utf8ToText
+  , imap
   )
   where
 
@@ -661,3 +662,7 @@ nameToText =
 
 utf8ToText =
   T.pack . Utf8.toChars
+
+
+imap :: (Int -> a -> b) -> [a] -> [b]
+imap f l = Prelude.zipWith (\v i -> f i v) l [0..]

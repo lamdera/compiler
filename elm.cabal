@@ -225,9 +225,9 @@ Executable elm
         Lamdera.TypeHash
         Lamdera.Types
         Lamdera.Update
-        -- Lamdera.Wire
-        -- Wire.Source
-        -- Wire.Source2
+        Lamdera.Wire
+        Wire.Source
+        Wire.Source2
 
         -- Utility
         Lamdera.Http
@@ -245,7 +245,7 @@ Executable elm
         -- Fusion.Binary
 
         -- Testing:
-        -- EasyTest
+        EasyTest
         -- Test
         -- TestLamdera
         -- TestLamderaGenerated
