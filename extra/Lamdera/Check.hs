@@ -32,6 +32,7 @@ import qualified Lamdera.Http
 import qualified Lamdera.Progress as Progress
 import qualified Lamdera.Project
 import qualified Lamdera.Update
+import qualified Lamdera.Compile
 
 
 progressPointer t = do
@@ -396,7 +397,7 @@ snapshotCurrentTypesTo root version = do
   _ <- Lamdera.touch $ root </> "src" </> "Types.elm"
 
   -- Invoke compiler in snapshot mode for src/Types.elm
-  makeNull root ("src" </> "Types.elm")
+  Lamdera.Compile.makeNull root ("src" </> "Types.elm")
 
   Env.unsetEnv "LTYPESNAPSHOT"
 
@@ -467,8 +468,8 @@ checkUserProjectCompiles root = do
   -- Project.compile Output.Prod Output.Client jsOutput Nothing summary [ "src" </> "Frontend.elm" ]
   -- Project.compile Output.Prod Output.Client jsOutput Nothing summary [ "src" </> "Backend.elm" ]
 
-  makeNull root ("src" </> "Frontend.elm")
-  makeNull root ("src" </> "Backend.elm")
+  Lamdera.Compile.makeNull root ("src" </> "Frontend.elm")
+  Lamdera.Compile.makeNull root ("src" </> "Backend.elm")
 
   -- @TODO this is because the migrationCheck does weird terminal stuff that mangles the display... how to fix this?
   -- sleep 50 -- 50 milliseconds
@@ -1004,15 +1005,3 @@ temporaryCheckOldTypesNeedingMigration inProduction root = do
 
       else
         genericExit "Okay, I did not migrate."
-
-
-makeNull root path =
-  Dir.withCurrentDirectory root $
-    Make.run [path] $
-      Make.Flags
-        { _debug = False
-        , _optimize = True
-        , _output = Just Make.DevNull
-        , _report = Nothing
-        , _docs = Nothing
-        }

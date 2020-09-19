@@ -4,58 +4,13 @@
 
 module TestEvergreen where
 
-
-import qualified AST.Canonical as Can
-import AST.Module.Name (Canonical(..))
-import qualified Elm.ModuleName as ModuleName
-import qualified AST.Utils.Type as Type
-
-
-import qualified Data.Digest.Pure.SHA as SHA
-import qualified Data.Char
-import qualified Data.Map as Map
-import Data.Map.Strict (unionWithKey)
-import qualified Data.Map.Merge.Strict as Map
-import qualified Data.List as List
-import qualified Data.Text as T
-import qualified Data.Text.Lazy as TL
-import qualified Data.Text.Lazy.Encoding as TLE
-import qualified Data.Text.Encoding as TE
-import Data.List.Index (imap)
-import qualified Data.Name as N
-import qualified Elm.Package as Pkg
-import qualified Reporting.Annotation as A
-import qualified Reporting.Annotation as R
-import qualified Elm.Interface as Interface
--- import qualified Reporting.Progress as Progress
--- import qualified Stuff.Paths as Paths
-
-import qualified Data.ByteString.Char8 as BS8
-
--- import qualified File.IO as File
-import Control.Monad.Trans (liftIO)
-import System.IO.Unsafe (unsafePerformIO)
-import System.FilePath ((</>))
--- import CanSer.CanSer as CanSer
-
-import qualified AST.Valid as Valid
-import qualified Elm.Compiler.Module as Module
-import qualified Reporting.Result as Result
-
-import qualified Reporting.Doc as D
-import qualified Reporting.Error as Error
-
---- Need to clean up the above types, many are unused.
-import System.FilePath ((</>))
-import System.Process (readProcess)
-import Data.Monoid ((<>))
-import Data.Map (Map)
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 
-import Lamdera
-import Lamdera.Types
+import qualified Elm.ModuleName as ModuleName
+import qualified Elm.Package as Pkg
 
+import Lamdera
 import NeatInterpolation
 import EasyTest
 import qualified TestLamdera
@@ -80,8 +35,8 @@ generationFileCheck originalFile generatedFile expectedOutput = do
 suite :: Test ()
 suite = tests $
   let
-    derpImp = ModuleName.Canonical (Pkg.Name "author" "project") (N.Name "Derp")
-    herpImp = ModuleName.Canonical (Pkg.Name "author" "project") (N.Name "Herp")
+    derpImp = ModuleName.Canonical (Pkg.Name "author" "project") "Derp"
+    herpImp = ModuleName.Canonical (Pkg.Name "author" "project") "Herp"
   in
   [ scope "mergeAllImports" $ do
       expectEqual
@@ -90,7 +45,7 @@ suite = tests $
 
   , scope "addImports" $ do
       let
-        moduleName = (ModuleName.Canonical (Pkg.Name "author" "pkg") (N.Name "Types"))
+        moduleName = (ModuleName.Canonical (Pkg.Name "author" "pkg") "Types")
         imports = Set.singleton derpImp
 
         fts :: ElmFilesText

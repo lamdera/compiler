@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE StandaloneDeriving #-}
 
 module Lamdera.Http where
 
@@ -16,13 +17,13 @@ import Reporting.Exit
 import qualified Http
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Text.Encoding as T
--- import qualified Reporting.Task.Http as Http
 import qualified Stuff as Progress
 import qualified Reporting.Task as Task
 import qualified Reporting.Doc as D
 
 import Lamdera
 import qualified Lamdera.Task
+import StandaloneInstances
 
 
 data WithErrorField a
@@ -65,7 +66,9 @@ normalJson debugIdentifier url decoder = do
 data Error
   = JsonError String (D.Error ())
   | HttpError Http.Error
+  deriving (Show)
 
+deriving instance Show Http.Error
 
 -- httpPostJson manager request body =
 --   Client.httpLbs

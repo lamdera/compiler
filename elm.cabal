@@ -230,10 +230,11 @@ Executable elm
         Wire.Source2
 
         -- Utility
-        Lamdera.Http
-        Lamdera.Task
+        Lamdera.Compile
         Lamdera.Error
+        Lamdera.Http
         Lamdera.Progress
+        Lamdera.Task
 
         -- SocketServer
 
@@ -246,11 +247,11 @@ Executable elm
 
         -- Testing:
         EasyTest
-        -- Test
-        -- TestLamdera
-        -- TestLamderaGenerated
-        -- TestEvergreen
-        -- TestTypeHashes
+        Test
+        TestLamdera
+        TestLamderaGenerated
+        TestEvergreen
+        TestTypeHashes
 
         -- Debug helpers:
         StandaloneInstances

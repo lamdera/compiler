@@ -1,33 +1,47 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE QuasiQuotes #-}
+
 module TestLamdera where
 
-import qualified Data.ByteString as BS
 import qualified System.Directory as Dir
 import System.FilePath ((</>))
 import Data.Text as T
-
-import qualified Elm.Project as Project
-import qualified Elm.Project.Summary as Summary
-import qualified Generate.Output as Output
-import qualified Reporting.Task as Task
-import qualified Reporting.Progress.Terminal as Terminal
-
-import System.Process (callCommand)
-import System.Environment (setEnv, unsetEnv)
-import NeatInterpolation
-import Test.Main (captureProcessResult, withStdin)
-import qualified Data.ByteString.Lazy as BSL
-import qualified System.Environment as Env
+import System.Environment (setEnv, unsetEnv, lookupEnv)
 
 import Lamdera
 import EasyTest
 import qualified Init
 import qualified Lamdera.Login
 import qualified Lamdera.Check
-import qualified Lamdera.Secrets
+import qualified Lamdera.AppConfig
 import qualified Lamdera.Update
+import qualified Lamdera.Compile
 
+import Test.Main (captureProcessResult, withStdin)
+
+{-
+
+1. Put the following into ~/.ghci
+
+:set -fbyte-code
+:set -fobject-code
+:set prompt "\ESC[34mλ: \ESC[m"
+
+Last line is optional, but it's cool! Lambda prompt!
+
+2. Run `stack ghci`
+
+3. Then a feedback loop goes as follows; (@TODO this is out of date)
+
+  - Make changes to Haskell Wire code
+  - Run `:r` to typecheck + recompile & fix any issues
+  - Run `WireTest.compile`
+    - Executes shell `touch` on `extra/src/AllTypes.elm` to bust Elm compiler's cache
+    - Compiles `extra/src/AllTypes_Check.elm`
+    - Generates `extra/src/wire.html`
+  - Refresh `wire.html` in your browser – you should see big green boxes
+    - If something is red, you broke encoders/decoders!
+
+-}
 
 all = run suite
 
@@ -100,41 +114,6 @@ withStdinYesAll action =
     action
 
 
-
-
-{-
-
-This is a modified clone of ui/terminal/src/Develop/StaticFiles/Build.hs
-specifically to help with the development cycle for Evergreen.
-
-Changes are:
-- Generates `Output.Html` instead of `Output.Javascript` (so we can just refresh browser after run)
-- Uses `Output.Dev` instead of `Output.Prod` to avoid errors associated with Debug usage in AllTypes_Check
-
-Here's a suggested development flow to use this:
-
-1. Put the following into ~/.ghci
-
-:set -fbyte-code
-:set -fobject-code
-:set prompt "\ESC[34mλ: \ESC[m"
-
-Last line is optional, but it's cool! Lambda prompt!
-
-2. Run `stack ghci`
-
-3. Then a feedback loop goes as follows;
-
-  - Make changes to Haskell Wire code
-  - Run `:r` to typecheck + recompile & fix any issues
-  - Run `WireTest.compile`
-    - Executes shell `touch` on `extra/src/AllTypes.elm` to bust Elm compiler's cache
-    - Compiles `extra/src/AllTypes_Check.elm`
-    - Generates `extra/src/wire.html`
-  - Refresh `wire.html` in your browser – you should see big green boxes
-    - If something is red, you broke encoders/decoders!
-
--}
 compile :: IO ()
 compile = do
   let project = "/Users/mario/lamdera/test/v1"
@@ -160,29 +139,13 @@ compile = do
   setEnv "LDEBUG" "1"
   setEnv "ELM_HOME" "/Users/mario/elm-home-elmx-test"
 
-  let rootPaths = [ "src" </> "Frontend.elm" ]
-
-  Dir.withCurrentDirectory project $
-    do  reporter <- Terminal.create
-        Task.run reporter $
-          do  summary <- Project.getRoot
-              let jsOutput = Just (Output.Html Nothing tempFileName)
-              Project.compile Output.Dev Output.Client jsOutput Nothing summary rootPaths
-
-        _ <- BS.readFile tempFileName
-        -- seq (BS.length result) (Dir.removeFile tempFileName)
-        return ()
+  Lamdera.Compile.makeNull project ("src" </> "Frontend.elm")
 
   unsetEnv "TOKEN"
   unsetEnv "LAMDERA_APP_NAME"
   unsetEnv "LOVR"
   unsetEnv "LDEBUG"
   unsetEnv "ELM_HOME"
-
-
-tempFileName :: FilePath
-tempFileName =
-  "/dev/null"
 
 
 cp :: String -> String -> IO ()
@@ -280,20 +243,10 @@ snapshotWithParams version projectPath appName = do
 
   let rootPaths = [ "src" </> "Types.elm" ]
 
-  Dir.withCurrentDirectory projectPath $
-    do  reporter <- Terminal.create
-        Task.run reporter $
-          do  summary <- Project.getRoot
-              let root = Summary._root summary
-
-              liftIO $ Lamdera.touch $ root </> "src" </> "Types.elm"
-
-              let jsOutput = Just (Output.Html Nothing tempFileName)
-              Project.compile Output.Dev Output.Client jsOutput Nothing summary rootPaths
-
+  Lamdera.Compile.makeNull projectPath ("src" </> "Types.elm")
 
   -- @TODO this is because the migrationCheck does weird terminal stuff that mangles the display... how to fix this?
-  liftIO $ sleep 50 -- 50 milliseconds
+  -- liftIO $ sleep 50 -- 50 milliseconds
 
   unsetEnv "LAMDERA_APP_NAME"
   unsetEnv "LOVR"
@@ -328,16 +281,8 @@ testWire = do
 
   let rootPaths = [ "src" </> "Frontend.elm" ]
 
-  Dir.withCurrentDirectory project $
-    do  reporter <- Terminal.create
-        Task.run reporter $
-          do  summary <- Project.getRoot
-              let jsOutput = Just (Output.Html Nothing tempFileName)
-              Project.compile Output.Dev Output.Client jsOutput Nothing summary rootPaths
+  Lamdera.Compile.makeNull project ("src" </> "Frontend.elm")
 
-        -- _ <- BS.readFile tempFileName
-        -- seq (BS.length result) (Dir.removeFile tempFileName)
-        return ()
 
 
 config = do
@@ -345,22 +290,18 @@ config = do
   let project = "/Users/mario/lamdera/test/v1"
   -- let project = "/Users/mario/dev/projects/lamdera-test"
   Dir.withCurrentDirectory project $ do
-    reporter <- Terminal.create
     setEnv "TOKEN" "a739477eb8bd2acbc251c246438906f4"
 
-    prodTokenM <- Env.lookupEnv "TOKEN"
-    Task.run reporter $ do
-      Lamdera.Secrets.checkUserConfig "test-local" (fmap T.pack prodTokenM)
+    prodTokenM <- lookupEnv "TOKEN"
+    Lamdera.AppConfig.checkUserConfig "test-local" (fmap T.pack prodTokenM)
 
     unsetEnv "TOKEN"
     unsetEnv "LDEBUG"
 
 
 http = do
-  reporter <- Terminal.create
-  Task.run reporter $ do
-    res <- Lamdera.Update.fetchCurrentVersion
-    liftIO $ putStrLn $ show res
+  res <- Lamdera.Update.fetchCurrentVersion
+  putStrLn $ show res
 
 
 login = do

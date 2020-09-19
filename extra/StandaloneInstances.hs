@@ -18,8 +18,10 @@ import qualified Data.Name
 import qualified Elm.Package
 import qualified Elm.ModuleName as ModuleName
 import qualified Json.String
+import qualified Json.Decode
 import qualified Elm.String
 import qualified AST.Canonical
+import qualified Reporting.Annotation
 
 -- import qualified AST.Canonical as Can
 -- import qualified AST.Source as Src
@@ -30,7 +32,6 @@ import qualified AST.Canonical
 -- import qualified "elm" Reporting.Annotation as Ann
 
 
-
 -- Show
 
 deriving instance Show AST.Optimized.Global
@@ -38,6 +39,14 @@ deriving instance Show AST.Optimized.Global
 deriving instance Show AST.Canonical.Type
 deriving instance Show AST.Canonical.FieldType
 deriving instance Show AST.Canonical.AliasType
+
+deriving instance (Show x) => Show (Json.Decode.Error x)
+deriving instance (Show x) => Show (Json.Decode.Problem x)
+deriving instance Show (Json.Decode.ParseError)
+deriving instance Show (Json.Decode.StringProblem)
+deriving instance Show (Json.Decode.DecodeExpectation)
+deriving instance Show Reporting.Annotation.Region
+deriving instance Show Reporting.Annotation.Position
 
 instance Show Data.Name.Name where
   show = Data.Name.toChars
