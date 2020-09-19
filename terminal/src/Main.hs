@@ -25,6 +25,7 @@ import qualified Publish
 import qualified Repl
 
 
+import Lamdera.CLI
 
 -- MAIN
 
@@ -32,14 +33,19 @@ import qualified Repl
 main :: IO ()
 main =
   Terminal.app intro outro
-    [ repl
+    -- @LAMDERA additions + removals
+    [ live
+    , login
+    , check
+    , deploy
     , init
-    , reactor
-    , make
     , install
-    , bump
-    , diff
-    , publish
+    , make
+    , repl
+    -- , reactor
+    -- , bump
+    -- , diff
+    -- , publish
     ]
 
 

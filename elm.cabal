@@ -207,21 +207,21 @@ Executable elm
 
         -- Lamdera:
         Lamdera
+        Lamdera.AppConfig
         Lamdera.Check
         Lamdera.Checks
+        Lamdera.CLI
         Lamdera.Constrain
         Lamdera.Deploy
         Lamdera.Evergreen
         Lamdera.Filewatch
         Lamdera.Generated
         Lamdera.Hints
-
         Lamdera.Injection
         Lamdera.Live
         Lamdera.Login
         Lamdera.OldFeatureHelper
         Lamdera.Project
-        Lamdera.AppConfig
         Lamdera.TypeHash
         Lamdera.Types
         Lamdera.Update
