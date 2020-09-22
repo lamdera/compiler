@@ -10,6 +10,7 @@ import qualified Data.UUID.V4 as UUID
 import Control.Monad
 import Data.Maybe (fromMaybe)
 import System.Exit (exitFailure)
+import qualified System.IO as IO
 
 -- HTTP
 import qualified Data.Text as T
@@ -29,6 +30,7 @@ import qualified Reporting.Doc as D
 import Lamdera
 import qualified Lamdera.Http
 import qualified Lamdera.Project
+import qualified Lamdera.Progress as Progress
 import StandaloneInstances
 
 
@@ -51,10 +53,10 @@ run () () = do
         case apiSession of
           Right "success" -> do
             writeUtf8 (elmHome </> ".lamdera-cli") token
-            pDocLn $ D.fillSep ["───>", D.green "Logged in!"]
+            Progress.report $ D.fillSep ["───>", D.green "Logged in!"]
 
           _ -> do
-            pDocLn $ D.fillSep ["───>", D.red "Existing token invalid, starting again"]
+            Progress.report $ D.fillSep ["───>", D.red "Existing token invalid, starting again"]
             remove (elmHome </> ".lamdera-cli")
             checkApiLoop inProduction appName newToken
 
@@ -92,13 +94,13 @@ checkApiLoop inProduction appName token =
             pure False
 
           "invalid" -> do
-            pDocLn $ D.fillSep ["───>", D.red "Error:", D.reflow "invalid token. Please try again."]
+            Progress.report $ D.fillSep ["───>", D.red "Error:", D.reflow "invalid token. Please try again."]
             pure True
 
           "success" -> do
             elmHome <- PerUserCache.getElmHome
             writeUtf8 (elmHome </> ".lamdera-cli") token
-            pDocLn $ D.fillSep ["───>", D.green "Logged in!"]
+            Progress.report $ D.fillSep ["───>", D.green "Logged in!"]
             pure True
 
           _ -> do
@@ -129,24 +131,24 @@ validateCliToken = do
         Left exit -> do
           case exit of
             Lamdera.Http.HttpError httpExit -> do
-              pDocLn $ D.fillSep [ D.red "Oops, there appears to have been a HTTP error:\n"]
+              Progress.report $ D.fillSep [ D.red "Oops, there appears to have been a HTTP error:\n"]
               putStrLn $ Lamdera.Http.errorToString exit
-              pDocLn $ D.fillSep [ D.red "\nPlease double-check your internet connection, or report this issue.\n"]
+              Progress.report $ D.fillSep [ D.red "\nPlease double-check your internet connection, or report this issue.\n"]
               exitFailure
 
             _ -> do
-              pDocLn $ D.fillSep ["───>", D.red "Invalid CLI auth, please re-run `lamdera login`"]
+              Progress.report $ D.fillSep ["───>", D.red "Invalid CLI auth, please re-run `lamdera login`"]
               remove (elmHome </> ".lamdera-cli")
               exitFailure
 
         _ -> do
-          pDocLn $ D.fillSep ["───>", D.red "Invalid CLI auth, please re-run `lamdera login`"]
+          Progress.report $ D.fillSep ["───>", D.red "Invalid CLI auth, please re-run `lamdera login`"]
           remove (elmHome </> ".lamdera-cli")
           exitFailure
 
 
     Nothing -> do
-      pDocLn $ D.fillSep ["───>", D.red "No CLI auth, please run `lamdera login`"]
+      Progress.report $ D.fillSep ["───>", D.red "No CLI auth, please run `lamdera login`"]
       exitFailure
 
 

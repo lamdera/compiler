@@ -5,10 +5,13 @@
 module Lamdera
   ( lamderaVersion
   , inProduction
+  , getLamderaPkgPath
   , stdoutSetup
   , unsafePerformIO
   , liftIO
   , alternativeImplementation
+  , alternativeImplementationWhen
+  , atomicPutStrLn
   , debug_
   , debug_note
   , debug
@@ -16,9 +19,11 @@ module Lamdera
   , dt
   , debugTrace
   , debugNote
+  , debugPass
   , debugHaskell
+  , debugHaskellPass
   , debugHaskellWhen
-  , PP.sShow
+  -- , PP.sShow
   , T.Text
   , (<>)
   , mconcat
@@ -34,13 +39,16 @@ module Lamdera
   , lamderaLiveSrc
   , onlyWhen
   , textContains
+  , stringContains
   , formatHaskellValue
   , hindentFormatValue
+  , readUtf8
   , readUtf8Text
   , writeUtf8
   , writeUtf8Handle
   , writeUtf8Root
   , Dir.doesFileExist
+  , Dir.doesDirectoryExist
   , remove
   , rmdir
   , mkdir
@@ -56,7 +64,6 @@ module Lamdera
   , getProjectRoot
   , justs
   , lowerFirstLetter
-  , pDocLn
   , findElmFiles
   , show_
   , sleep
@@ -70,6 +77,11 @@ module Lamdera
   , nameToText
   , utf8ToText
   , imap
+  , withDefault
+  , bsToStrict
+  , bsToLazy
+  , bsReadFile
+  , callCommand
   )
   where
 
@@ -95,9 +107,11 @@ import qualified Data.Char as Char
 import qualified Data.Text.Encoding as T
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Lazy.Encoding as TLE
+import qualified Data.List as List
 
 import Prelude hiding (lookup)
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Lazy as BSL
 import Data.FileEmbed (bsToExp)
 import Language.Haskell.TH (runIO)
 import System.FilePath as FP ((</>), joinPath, splitDirectories, takeDirectory)
@@ -106,11 +120,13 @@ import Control.Monad (unless, filterM)
 import System.Info
 import System.FilePath.Find (always, directory, extension, fileName, find, (&&?), (/~?), (==?))
 import Control.Concurrent (threadDelay)
+import Control.Concurrent.MVar (newMVar, withMVar, MVar)
 import Text.Read (readMaybe)
 
 import qualified System.PosixCompat.Files
 
 -- Vendored from File.IO due to recursion errors
+import System.IO (hFlush, hPutStr, hPutStrLn, stderr, stdout)
 import qualified System.IO as IO
 import qualified System.IO.Error as Error
 import GHC.IO.Exception (IOException, IOErrorType(InvalidArgument))
@@ -122,7 +138,7 @@ import Text.Show.Unicode
 import qualified System.Process
 import qualified Data.Digest.Pure.SHA as SHA
 
-import qualified Reporting.Doc as D
+-- import qualified Reporting.Doc as D
 import qualified Data.Name as N
 import qualified Data.Utf8 as Utf8
 
@@ -144,6 +160,21 @@ inProduction = do
   pure $ (appNameEnvM /= Nothing && forceNotProd == Nothing) -- @TODO better isProd check...
 
 
+getLamderaPkgPath :: IO (Maybe String)
+getLamderaPkgPath = Env.lookupEnv "LOVR"
+
+
+-- https://stackoverflow.com/questions/16811376/simulate-global-variable trick
+{-# NOINLINE printLock #-}
+printLock :: MVar ()
+printLock = unsafePerformIO $ newMVar ()
+
+
+atomicPutStrLn :: String -> IO ()
+atomicPutStrLn str =
+  withMVar printLock (\_ -> hPutStr stdout str >> hFlush stdout)
+
+
 -- debug :: String -> Task.Task a
 debug str =
   liftIO $ debug_ str
@@ -156,12 +187,17 @@ debugT text =
 alternativeImplementation fn ignored =
   fn
 
+alternativeImplementationWhen cond fn original =
+  if cond
+    then fn
+    else original
+
 
 debug_ :: String -> IO ()
 debug_ str = do
   debugM <- Env.lookupEnv "LDEBUG"
   case debugM of
-    Just _ -> putStrLn $ "DEBUG: " ++ str
+    Just _ -> atomicPutStrLn $ "DEBUG: " ++ str ++ "\n"
     Nothing -> pure ()
 
 
@@ -203,6 +239,23 @@ debugNote msg value =
       Nothing -> pure value
 
 
+debugPass :: Show a => Text -> a -> b -> b
+debugPass label value pass =
+  unsafePerformIO $ do
+    debugM <- Env.lookupEnv "LDEBUG"
+    case debugM of
+      Just _ -> do
+        atomicPutStrLn $
+          "\n----------------------------------------------------------------------------------------------------------------"
+            <> T.unpack label
+            <> "\n"
+            <> show value
+        pure pass
+
+      Nothing ->
+        pure pass
+
+
 debugHaskell :: Show a => Text -> a -> a
 debugHaskell label value =
   unsafePerformIO $ do
@@ -214,6 +267,19 @@ debugHaskell label value =
 
       Nothing ->
         pure value
+
+
+debugHaskellPass :: Show a => Text -> a -> b -> b
+debugHaskellPass label value pass =
+  unsafePerformIO $ do
+    debugM <- Env.lookupEnv "LDEBUG"
+    case debugM of
+      Just _ -> do
+        hindentPrintValue label value
+        pure pass
+
+      Nothing ->
+        pure pass
 
 
 debugHaskellWhen :: Show a => Bool -> Text -> a -> a
@@ -352,6 +418,9 @@ onlyWhen condition io =
 textContains :: Text -> Text -> Bool
 textContains needle haystack = T.isInfixOf needle haystack
 
+stringContains :: String -> String -> Bool
+stringContains needle haystack = List.isInfixOf needle haystack
+
 
 
 {-|
@@ -381,19 +450,30 @@ formatHaskellValue label v =
 hindentPrintValue :: Show a => Text -> a -> IO a
 hindentPrintValue label v = do
   let
-    str = Text.Show.Unicode.ushow v
-    input =
-      if Prelude.length str > 10000 then
-        "err \"hindentPrintValue value was > 10,000 - skipping\" "
-      else
-        str
+    input = Text.Show.Unicode.ushow v
 
+  -- if Prelude.length input > 10000
+  --   then
+  --     atomicPutStrLn $ "❌SKIPPED display, value show > 10,000 chars, here's a clip:\n" <> Prelude.take 1000 input
+  --   else do
   (exit, stdout, stderr) <- System.Process.readProcessWithExitCode "hindent" [] input
-  _ <- putStrLn $
-    "----------------------------------------------------------------------------------------------------------------"
-      <> T.unpack label
-      <> "\n"
-      <> stdout
+  if Prelude.length stderr > 0
+    then
+      atomicPutStrLn $
+        "\n----------------------------------------------------------------------------------------------------------------"
+          <> T.unpack label
+          <> "\n"
+          <> stderr
+          <> "\n📥 for input: \n"
+          <> input
+
+    else
+      atomicPutStrLn $
+        "\n----------------------------------------------------------------------------------------------------------------"
+          <> T.unpack label
+          <> "\n"
+          <> stdout
+
 
   pure v
 
@@ -560,12 +640,6 @@ lowerFirstLetter text =
     first:rest -> T.pack $ [Char.toLower first] <> rest
 
 
-pDocLn doc =
-  liftIO $ do
-    D.toAnsi IO.stdout doc
-    putStrLn ""
-
-
 findElmFiles :: FilePath -> IO [FilePath]
 findElmFiles fp = System.FilePath.Find.find isVisible (isElmFile &&? isVisible &&? isntEvergreen) fp
     where
@@ -635,7 +709,7 @@ openUrlInBrowser url = do
 
     _ -> do
       -- We have an unexpected system...
-      putStrLn $ "ERROR: please report: skipping url open on unknown OSTYPE: " <> show ostype
+      atomicPutStrLn $ "ERROR: please report: skipping url open on unknown OSTYPE: " <> show ostype
       pure ()
 
 
@@ -666,3 +740,24 @@ utf8ToText =
 
 imap :: (Int -> a -> b) -> [a] -> [b]
 imap f l = Prelude.zipWith (\v i -> f i v) l [0..]
+
+
+withDefault :: a -> Maybe a -> a
+withDefault default_ m =
+  case m of
+    Just v -> v
+    Nothing -> default_
+
+
+bsToStrict =
+  BSL.toStrict
+
+bsToLazy =
+  BSL.fromStrict
+
+bsReadFile =
+  BS.readFile
+
+callCommand c = do
+  debug_ $ "callCommand: " <> c
+  System.Process.callCommand c

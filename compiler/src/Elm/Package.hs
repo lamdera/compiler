@@ -24,6 +24,7 @@ module Elm.Package
   , keyDecoder
   --
   , parser
+  , authorLamdera -- @LAMDERA
   )
   where
 
@@ -83,6 +84,7 @@ data Canonical =
 isKernel :: Name -> Bool
 isKernel (Name author _) =
   author == elm || author == elm_explorations
+    || author == authorLamdera
 
 
 toChars :: Name -> String
@@ -372,3 +374,11 @@ chompName isGoodChar pos end prevWasDash =
         chompName isGoodChar (plusPtr pos 1) end True
     else
       (# True, pos #)
+
+
+-- @LAMDERA
+
+{-# NOINLINE authorLamdera #-}
+authorLamdera :: Author
+authorLamdera =
+  Utf8.fromChars "lamdera"

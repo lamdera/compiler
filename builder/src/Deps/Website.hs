@@ -10,6 +10,8 @@ import qualified Elm.Package as Pkg
 import qualified Elm.Version as V
 import qualified Http
 
+import Lamdera
+import qualified Lamdera.Extensions
 
 domain :: String
 domain =
@@ -24,3 +26,4 @@ route path params =
 metadata :: Pkg.Name -> V.Version -> String -> String
 metadata name version file =
   domain ++ "/packages/" ++ Pkg.toUrl name ++ "/" ++ V.toChars version ++ "/" ++ file
+    & Lamdera.Extensions.metadata name version file

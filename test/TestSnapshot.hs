@@ -2,7 +2,7 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE QuasiQuotes #-}
 
-module TestEvergreen where
+module TestSnapshot where
 
 import qualified Data.Map as Map
 import qualified Data.Set as Set
@@ -14,7 +14,7 @@ import Lamdera
 import NeatInterpolation
 import EasyTest
 import qualified TestLamdera
-import Lamdera.Evergreen
+import Lamdera.Snapshot
 
 
 all = run suite

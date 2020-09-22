@@ -38,6 +38,7 @@ import qualified Data.Utf8 as Utf8
 -- import CanSer.CanSer as CanSer
 
 import Lamdera
+import Wire.PrettyPrint
 import StandaloneInstances
 
 

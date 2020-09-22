@@ -1,5 +1,6 @@
 {-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
 
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PackageImports #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE DeriveFunctor #-}
@@ -10,43 +11,106 @@
 
 module StandaloneInstances where
 
+import Data.ByteString.Builder as B
+import Data.ByteString.Lazy as BSL
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as T
 import Data.String (IsString, fromString)
 
-import qualified Data.Utf8 as Utf8
-import qualified AST.Optimized
-import qualified Data.Name
-import qualified Elm.Package
-import qualified Elm.ModuleName as ModuleName
-import qualified Json.String
-import qualified Json.Decode
-import qualified Elm.String
-import qualified AST.Canonical
-import qualified Reporting.Annotation
+-- Elm modules
 
--- import qualified AST.Canonical as Can
--- import qualified AST.Source as Src
--- import qualified Elm.Interface as Interface
--- import qualified AST.Utils.Binop as Binop
--- import qualified Data.Index as Index -- from elm compiler
--- import qualified File.Find as Find
--- import qualified "elm" Reporting.Annotation as Ann
+import qualified AST.Canonical
+import qualified AST.Optimized
+import qualified AST.Source
+import qualified AST.Utils.Binop
+import qualified AST.Utils.Shader
+import qualified Data.Index
+import qualified Data.Name
+import qualified Data.NonEmptyList
+import qualified Data.Utf8 as Utf8
+import qualified Elm.Constraint
+import qualified Elm.Float
+import qualified Elm.Interface
+import qualified Elm.Kernel
+import qualified Elm.Licenses
+import qualified Elm.ModuleName as ModuleName
+import qualified Elm.Outline
+import qualified Elm.Package
+import qualified Elm.String
+import qualified Elm.Version
+import qualified Http
+import qualified Json.Decode
+import qualified Json.String
+import qualified Parse.Primitives
+import qualified Reporting.Annotation
+import qualified Reporting.Exit
 
 
 -- Show
 
 deriving instance Show AST.Optimized.Global
+deriving instance Show AST.Optimized.GlobalGraph
+deriving instance Show AST.Optimized.Node
+deriving instance Show AST.Optimized.Choice
+deriving instance Show AST.Optimized.Expr
+instance (Show a) => Show (AST.Optimized.Decider a) where
+  show _ = "\"<AST.Optimized.Decider a>\""
+deriving instance Show AST.Optimized.Def
+deriving instance Show AST.Optimized.Destructor
+deriving instance Show AST.Optimized.Path
+deriving instance Show AST.Optimized.EffectsType
 
 deriving instance Show AST.Canonical.Type
 deriving instance Show AST.Canonical.FieldType
 deriving instance Show AST.Canonical.AliasType
 
-deriving instance (Show x) => Show (Json.Decode.Error x)
-deriving instance (Show x) => Show (Json.Decode.Problem x)
+deriving instance Show AST.Source.Module
+deriving instance Show AST.Source.Exposing
+deriving instance Show AST.Source.Exposed
+deriving instance Show AST.Source.Privacy
+deriving instance Show AST.Source.Docs
+deriving instance Show AST.Source.Comment
+deriving instance Show AST.Source.Import
+deriving instance Show AST.Source.Value
+deriving instance Show AST.Source.Pattern_
+deriving instance Show AST.Source.Expr_
+deriving instance Show AST.Source.Type_
+deriving instance Show AST.Source.Union
+deriving instance Show AST.Source.Alias
+deriving instance Show AST.Source.Infix
+deriving instance Show AST.Source.Effects
+deriving instance Show AST.Source.Port
+deriving instance Show AST.Source.Manager
+deriving instance Show AST.Source.VarType
+deriving instance Show AST.Source.Def
+deriving instance Show AST.Utils.Binop.Associativity
+deriving instance Show AST.Utils.Binop.Precedence
+instance Show AST.Utils.Shader.Source where
+  show _ = "<shader source>"
+deriving instance Show AST.Utils.Shader.Types
+deriving instance Show AST.Utils.Shader.Type
+deriving instance Show Parse.Primitives.Snippet
+
+instance Show Elm.Float.Float where
+  show = T.unpack . T.decodeUtf8 . BSL.toStrict . B.toLazyByteString . Elm.Float.toBuilder
+
+deriving instance (Show a) => Show (Json.Decode.Error a)
+deriving instance (Show a) => Show (Json.Decode.Problem a)
 deriving instance Show (Json.Decode.ParseError)
 deriving instance Show (Json.Decode.StringProblem)
 deriving instance Show (Json.Decode.DecodeExpectation)
 deriving instance Show Reporting.Annotation.Region
 deriving instance Show Reporting.Annotation.Position
+deriving instance (Show a) => Show (Reporting.Annotation.Located a)
+
+deriving instance Show Reporting.Exit.DetailsBadDep
+deriving instance Show Reporting.Exit.PackageProblem
+deriving instance Show Reporting.Exit.Outline
+deriving instance Show Reporting.Exit.OutlineProblem
+deriving instance Show Elm.Version.Version
+
+deriving instance Show Http.Error
+
 
 instance Show Data.Name.Name where
   show = Data.Name.toChars
@@ -54,12 +118,37 @@ instance Show Data.Name.Name where
 instance Show Elm.Package.Name where
   show = Elm.Package.toChars
 
+instance Show Elm.Interface.Interface where
+  show _ = "\"<Elm.Interface.Interface>\""
+
+instance Show Elm.Interface.DependencyInterface where
+  show _ = "\"<Elm.Interface.DependencyInterface>\""
+
+instance Show Elm.Kernel.Chunk where
+  show _ = "\"<Elm.Kernel.CHunk>\""
+
+
+deriving instance Show Elm.Constraint.Constraint
+
+deriving instance Show Elm.Constraint.Error
+
+deriving instance Show Elm.Outline.Outline
+deriving instance Show Elm.Outline.AppOutline
+deriving instance Show Elm.Outline.SrcDir
+deriving instance Show Elm.Outline.PkgOutline
+deriving instance Show Elm.Outline.Exposed
+
+instance Show Elm.Licenses.License where
+  show _ = "\"<Elm.Licenses.License>\""
+
+
+
+
 instance Show (Elm.String.String) where
   show = Elm.String.toChars
 
 instance Show ModuleName.Canonical where
   show (ModuleName.Canonical pkg moduleName) = show pkg ++ ":" ++ show moduleName
-
 
 -- IsString
 
@@ -69,8 +158,17 @@ instance IsString Elm.Package.Project where
 instance IsString Elm.Package.Author where
   fromString = Utf8.fromChars
 
+
+instance Show Json.String.String where
+  show x = "\"" <> Utf8.toChars x <> "\""
+
 instance IsString Json.String.String where
   fromString = Json.String.fromChars
+
+
+instance (Show a) => Show (Data.NonEmptyList.List a) where
+  show = show . Data.NonEmptyList.toList
+
 
 
 

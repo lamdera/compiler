@@ -60,6 +60,7 @@ import qualified Reporting.Task as Task
 import qualified Stuff
 
 
+import qualified Lamdera
 
 -- DETAILS
 
@@ -372,6 +373,7 @@ data Artifacts =
     { _ifaces :: Map.Map ModuleName.Raw I.DependencyInterface
     , _objects :: Opt.GlobalGraph
     }
+  deriving (Show)
 
 
 type Dep =
@@ -753,6 +755,8 @@ downloadPackage cache manager pkg vsn =
   do  eitherByteString <-
         Http.get manager url [] id (return . Right)
 
+      pkgsPath <- Lamdera.getLamderaPkgPath -- @LAMDERA
+
       case eitherByteString of
         Left err ->
           return $ Left $ Exit.PP_BadEndpointRequest err
@@ -766,6 +770,7 @@ downloadPackage cache manager pkg vsn =
               Http.getArchive manager endpoint Exit.PP_BadArchiveRequest (Exit.PP_BadArchiveContent endpoint) $
                 \(sha, archive) ->
                   if expectedHash == Http.shaToChars sha
+                    || pkgsPath /= Nothing -- @LAMDERA when we're debugging with a local packages path, skip hash checking
                   then Right <$> File.writePackage (Stuff.package cache pkg vsn) archive
                   else return $ Left $ Exit.PP_BadArchiveHash endpoint expectedHash (Http.shaToChars sha)
 

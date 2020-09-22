@@ -43,6 +43,7 @@ import qualified Json.Encode as Encode
 import qualified Elm.Version as V
 
 
+import Lamdera
 
 -- MANAGER
 
@@ -87,6 +88,7 @@ fetch methodVerb manager url headers onError onSuccess =
               { method = methodVerb
               , requestHeaders = addDefaultHeaders headers
               }
+      debug_ $ "HTTP:" <> BS.unpack methodVerb <> " " <> url -- @LAMDERA
       withResponse req1 manager $ \response ->
         do  chunks <- brConsume (responseBody response)
             onSuccess (BS.concat chunks)
@@ -157,6 +159,7 @@ getArchive
   -> ((Sha, Zip.Archive) -> IO (Either e a))
   -> IO (Either e a)
 getArchive manager url onError err onSuccess =
+  -- Lamdera.alternativeImplementation (lamderaGetArchive manager url onError err onSuccess) $
   handle (handleSomeException url onError) $
   handle (handleHttpException url onError) $
   do  req0 <- parseUrlThrow url
@@ -242,3 +245,47 @@ jsonPart name filePath value =
 stringPart :: String -> String -> Multi.Part
 stringPart name string =
   Multi.partBS (String.fromString name) (BS.pack string)
+
+
+-- @LAMDERA
+
+lamderaGetArchive
+  :: Manager
+  -> String
+  -> (Error -> e)
+  -> e
+  -> ((Sha, Zip.Archive) -> IO (Either e a))
+  -> IO (Either e a)
+lamderaGetArchive manager url onError err onSuccess =
+  handle (handleSomeException url onError) $
+  handle (handleHttpException url onError) $
+  do  req0 <- parseUrlThrow url
+      let req1 =
+            req0
+              { method = methodGet
+              , requestHeaders = addDefaultHeaders []
+              }
+
+      isDebug <- Lamdera.isDebug
+      pkgsPath <- Lamdera.getLamderaPkgPath
+      let
+        package = "lamdera/codecs" -- @TODO extract from URL instead of hardcoding
+        packageZip = (pkgsPath & withDefault "<no-packages-path-override-set>") <> "/packages/" <> package <> "/pack.zip"
+        packageRoot = (pkgsPath & withDefault "<no-packages-path-override-set>") <> "/packages/" <> package <> "/1.0.0"
+
+      overrideExists <- doesDirectoryExist packageRoot
+
+      if (isDebug && overrideExists && stringContains "lamdera/codecs" url) -- @TODO extract from URL instead of hardcoding
+        then do
+          debug_ $ "🔁 Using local package override: " <> packageZip
+          zipBs <- bsReadFile packageZip
+          onSuccess (SHA.sha1 $ bsToLazy zipBs, Zip.toArchive $ bsToLazy zipBs)
+
+        else do
+          debug_ $ "HTTP:GET " <> url
+
+          withResponse req1 manager $ \response ->
+            do  result <- readArchive (responseBody response)
+                case result of
+                  Nothing -> return (Left err)
+                  Just shaAndArchive -> onSuccess shaAndArchive

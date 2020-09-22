@@ -16,6 +16,8 @@ import qualified Lamdera.AppConfig
 import qualified Lamdera.Update
 import qualified Lamdera.Compile
 
+
+
 import Test.Main (captureProcessResult, withStdin)
 
 {-
@@ -44,9 +46,6 @@ Last line is optional, but it's cool! Lambda prompt!
 -}
 
 all = run suite
-
-single = EasyTest.rerunOnly 2641118768625101232 "init should write .gitignore" suite
-
 
 suite :: Test ()
 suite = tests
@@ -139,7 +138,7 @@ compile = do
   setEnv "LDEBUG" "1"
   setEnv "ELM_HOME" "/Users/mario/elm-home-elmx-test"
 
-  Lamdera.Compile.makeNull project ("src" </> "Frontend.elm")
+  Lamdera.Compile.make project ("src" </> "Frontend.elm")
 
   unsetEnv "TOKEN"
   unsetEnv "LAMDERA_APP_NAME"
@@ -241,9 +240,7 @@ snapshotWithParams version projectPath appName = do
   setEnv "LDEBUG" "1"
   setEnv "ELM_HOME" "/Users/mario/elm-home-elmx-test"
 
-  let rootPaths = [ "src" </> "Types.elm" ]
-
-  Lamdera.Compile.makeNull projectPath ("src" </> "Types.elm")
+  Lamdera.Compile.make projectPath ("src" </> "Types.elm")
 
   -- @TODO this is because the migrationCheck does weird terminal stuff that mangles the display... how to fix this?
   -- liftIO $ sleep 50 -- 50 milliseconds
@@ -281,8 +278,7 @@ testWire = do
 
   let rootPaths = [ "src" </> "Frontend.elm" ]
 
-  Lamdera.Compile.makeNull project ("src" </> "Frontend.elm")
-
+  Lamdera.Compile.make project ("src" </> "Frontend.elm")
 
 
 config = do
@@ -312,3 +308,36 @@ login = do
     Lamdera.Login.run () ()
   unsetEnv "LDEBUG"
   unsetEnv "LAMDERA_APP_NAME"
+
+
+compileCore = do
+  withDebug $ do
+    let project = "/Users/mario/lamdera/overrides/packages/lamdera/core/1.0.0"
+    aggressiveCacheClear project
+    Lamdera.Compile.make_ project
+
+
+compileCodecs =
+  withDebug $ do
+    let project = "/Users/mario/lamdera/overrides/packages/lamdera/codecs/1.0.0"
+    aggressiveCacheClear project
+    Lamdera.Compile.make_ project
+
+
+aggressiveCacheClear project = do
+  rmdir $ project </> "elm-stuff"
+  rmdir "/Users/mario/.elm"
+  rmdir "/Users/mario/elm-home-elmx-test" -- @TODO test without clean cache as well
+
+
+withDebug io = do
+  setEnv "LDEBUG" "1"
+  io
+  unsetEnv "LAMDERA_APP_NAME"
+
+withDebugPkg io = do
+  setEnv "LDEBUG" "1"
+  setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
+  io
+  unsetEnv "LAMDERA_APP_NAME"
+  unsetEnv "LOVR"

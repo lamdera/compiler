@@ -24,7 +24,7 @@ import qualified Reporting.Doc as D
 import Lamdera
 import Lamdera.Types
 import Lamdera.Progress
-import qualified Lamdera.Evergreen
+import StandaloneInstances
 
 
 type Interfaces =

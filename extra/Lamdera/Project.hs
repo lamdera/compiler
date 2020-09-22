@@ -43,7 +43,7 @@ appNameOrThrow = do
       pure appName
 
     Nothing -> do
-      pDocLn $ Help.reportToDoc lamderaUnknownApp
+      Lamdera.Progress.report $ Help.reportToDoc lamderaUnknownApp
       exitFailure
 
 

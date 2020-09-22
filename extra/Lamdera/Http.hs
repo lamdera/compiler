@@ -68,7 +68,6 @@ data Error
   | HttpError Http.Error
   deriving (Show)
 
-deriving instance Show Http.Error
 
 -- httpPostJson manager request body =
 --   Client.httpLbs

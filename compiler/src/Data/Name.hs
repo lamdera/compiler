@@ -32,7 +32,7 @@ module Data.Name
   , utils, negate, true, false, value
   , node, program, _main, _Main, dollar, identity
   , replModule, replValueToPrint
-  , toText
+  , toText -- @LAMDERA TEMPORARY
   )
   where
 

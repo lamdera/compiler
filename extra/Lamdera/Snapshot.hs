@@ -1,11 +1,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE BangPatterns #-}
 
-module Lamdera.Evergreen where
+module Lamdera.Snapshot where
 
-{-
-
-Type snapshotting for Evergreen.
+{- Type snapshotting for Evergreen.
 
 @TODO :
 - Once design settles, refactor and document the duplicate bits
@@ -128,7 +126,7 @@ snapshotCurrentTypes pkg module_@(Valid.Module name _ _ _ _ _ _ _ _) interfaces 
           & Map.toList
           & mapM (\(file, ef@(ElmFileText imports types)) ->
             let
-              output = efToText version ("Evergreen.V" <> version <> "." <> file, ef)
+              output = efToText version (file, ef)
 
               filename =
                 file
@@ -212,7 +210,7 @@ efToText :: Text -> (Text, ElmFileText) -> Text
 efToText version ft =
   case ft of
     (file, ef@(ElmFileText imports types)) ->
-      [ "module " <> file <> " exposing (..)\n\n"
+      [ "module Evergreen.V" <> version <> "." <> file <> " exposing (..)\n\n"
       , if length imports > 0 then
           imports
             & Set.toList
@@ -220,7 +218,9 @@ efToText version ft =
             & fmap (\imp ->
                 case imp of
                   (ModuleName.Canonical (Pkg.Name author project) module_) ->
-                    if (author == "author") then
+                    if (nameToText module_ == file) then
+                      ""
+                    else if (author == "author") then
                       "import Evergreen.V" <> version <> "." <> nameToText module_ -- <> " as " <> nameToText module_
                     else
                       "import " <> nameToText module_

@@ -397,7 +397,7 @@ snapshotCurrentTypesTo root version = do
   _ <- Lamdera.touch $ root </> "src" </> "Types.elm"
 
   -- Invoke compiler in snapshot mode for src/Types.elm
-  Lamdera.Compile.makeNull root ("src" </> "Types.elm")
+  Lamdera.Compile.make root ("src" </> "Types.elm")
 
   Env.unsetEnv "LTYPESNAPSHOT"
 
@@ -468,8 +468,8 @@ checkUserProjectCompiles root = do
   -- Project.compile Output.Prod Output.Client jsOutput Nothing summary [ "src" </> "Frontend.elm" ]
   -- Project.compile Output.Prod Output.Client jsOutput Nothing summary [ "src" </> "Backend.elm" ]
 
-  Lamdera.Compile.makeNull root ("src" </> "Frontend.elm")
-  Lamdera.Compile.makeNull root ("src" </> "Backend.elm")
+  Lamdera.Compile.make root ("src" </> "Frontend.elm")
+  Lamdera.Compile.make root ("src" </> "Backend.elm")
 
   -- @TODO this is because the migrationCheck does weird terminal stuff that mangles the display... how to fix this?
   -- sleep 50 -- 50 milliseconds

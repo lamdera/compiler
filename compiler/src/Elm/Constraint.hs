@@ -1,7 +1,7 @@
 {-# OPTIONS_GHC -Wall #-}
 {-# LANGUAGE OverloadedStrings #-}
 module Elm.Constraint
-  ( Constraint
+  ( Constraint(..) -- @LAMDERA exposed
   , exactly
   , anything
   , toChars
@@ -43,7 +43,7 @@ data Constraint
 data Op
   = Less
   | LessOrEqual
-  deriving (Eq)
+  deriving (Eq, Show)
 
 
 

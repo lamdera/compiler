@@ -34,7 +34,7 @@ Flag dev {
 }
 
 
-Executable elm
+Executable elmx
     if flag(dev)
         ghc-options: -O0 -Wall -Werror
     else
@@ -213,7 +213,8 @@ Executable elm
         Lamdera.CLI
         Lamdera.Constrain
         Lamdera.Deploy
-        Lamdera.Evergreen
+        Lamdera.Snapshot
+        Lamdera.Extensions
         Lamdera.Filewatch
         Lamdera.Generated
         Lamdera.Hints
@@ -236,7 +237,7 @@ Executable elm
         Lamdera.Progress
         Lamdera.Task
 
-        -- SocketServer
+        SocketServer
 
         -- Fusion
         -- Fusion.Types
@@ -250,14 +251,14 @@ Executable elm
         Test
         TestLamdera
         TestLamderaGenerated
-        TestEvergreen
+        TestSnapshot
         TestTypeHashes
 
         -- Debug helpers:
         StandaloneInstances
         -- CanSer.CanSer
         -- Sanity
-        -- Wire.PrettyPrint
+        Wire.PrettyPrint
 
 
     Build-depends:

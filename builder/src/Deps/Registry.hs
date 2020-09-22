@@ -30,6 +30,8 @@ import qualified Reporting.Exit as Exit
 import qualified Stuff
 
 
+import Lamdera
+import qualified Lamdera.Project
 
 -- REGISTRY
 
@@ -64,6 +66,7 @@ read cache =
 fetch :: Http.Manager -> Stuff.PackageCache -> IO (Either Exit.RegistryProblem Registry)
 fetch manager cache =
   post manager "/all-packages" allPkgsDecoder $
+   lamderaAddCorePackages $
     \versions ->
       do  let size = Map.foldr' addEntry 0 versions
           let registry = Registry size versions
@@ -211,3 +214,21 @@ instance Binary Registry where
 instance Binary KnownVersions where
   get = liftM2 KnownVersions get get
   put (KnownVersions a b) = put a >> put b
+
+
+
+-- @LAMDERA
+
+{- Slips inbetween the existing HTTP handler and injects lamdera core packages
+that aren't published to https://package.elm-lang.org/ -}
+lamderaAddCorePackages :: (Map.Map Pkg.Name KnownVersions -> IO Registry) -> Map.Map Pkg.Name KnownVersions -> IO Registry
+lamderaAddCorePackages originalFn versions =
+  versions
+    & Map.union
+        (Map.fromList
+          -- @LAMDERA TODO figure out if the version does get included twice or not
+          [ (Lamdera.Project.lamderaCodecs, KnownVersions { _newest = V.Version 1 0 0, _previous = [] })
+          , (Lamdera.Project.lamderaCore, KnownVersions { _newest = V.Version 1 0 0, _previous = [] })
+          ]
+        )
+    & originalFn
