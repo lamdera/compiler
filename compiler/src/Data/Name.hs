@@ -62,7 +62,9 @@ import qualified Elm.String as ES
 
 -- @LAMDERA TEMPORARY
 
-toText = error "Data.Name.toText temporary @LAMDERA"
+import qualified Data.Text
+
+toText = Data.Text.pack . toChars
 
 
 

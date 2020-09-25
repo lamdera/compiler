@@ -6,7 +6,7 @@ module Lamdera.Packages where
 import qualified Data.Text as T
 import qualified Data.Map as Map
 import qualified Elm.Package as Pkg
-import Elm.Package (Name(Name), Version)
+import Elm.Package (Name(Name))
 import qualified System.Directory as Dir
 import qualified System.Environment as Env
 import System.FilePath ((</>), splitFileName)

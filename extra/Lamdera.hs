@@ -77,6 +77,7 @@ module Lamdera
   , nameToText
   , utf8ToText
   , imap
+  , filterMap
   , withDefault
   , bsToStrict
   , bsToLazy
@@ -172,7 +173,7 @@ printLock = unsafePerformIO $ newMVar ()
 
 atomicPutStrLn :: String -> IO ()
 atomicPutStrLn str =
-  withMVar printLock (\_ -> hPutStr stdout str >> hFlush stdout)
+  withMVar printLock (\_ -> hPutStr stdout (str <> "\n") >> hFlush stdout)
 
 
 -- debug :: String -> Task.Task a
@@ -740,6 +741,22 @@ utf8ToText =
 
 imap :: (Int -> a -> b) -> [a] -> [b]
 imap f l = Prelude.zipWith (\v i -> f i v) l [0..]
+
+
+type List a = [a]
+
+filterMap :: (a -> Maybe b) -> List a -> List b
+filterMap f xs =
+  Prelude.foldr (maybeCons f) [] xs
+
+maybeCons :: (a -> Maybe b) -> a -> List b -> List b
+maybeCons f mx xs =
+  case f mx of
+    Just x ->
+      x : xs
+
+    Nothing ->
+      xs
 
 
 withDefault :: a -> Maybe a -> a

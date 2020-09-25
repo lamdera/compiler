@@ -10,14 +10,14 @@ import qualified Data.Set as Set
 import qualified Elm.ModuleName as ModuleName
 import qualified Elm.Package as Pkg
 
-import Lamdera
-import NeatInterpolation
 import EasyTest
-import qualified TestLamdera
+import Lamdera
 import Lamdera.Snapshot
+import NeatInterpolation
+import qualified TestLamdera
 
 
-all = run suite
+all = EasyTest.run suite
 
 
 generationFileCheck originalFile generatedFile expectedOutput = do
@@ -80,11 +80,11 @@ suite = tests $
           import Browser.Navigation
           import Dict
           import Evergreen.V1.Fusion
+          import Evergreen.V1.WireTypes
           import Http
           import Lamdera
           import Set
           import Time
-          import Evergreen.V1.WireTypes
 
 
           type alias FrontendModel =
@@ -197,8 +197,8 @@ suite = tests $
 
           import Array
           import Dict
-          import Set
           import Evergreen.V1.Subdir.Subsubdir.SubsubdirType
+          import Set
           import Time
 
 

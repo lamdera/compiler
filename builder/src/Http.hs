@@ -249,6 +249,15 @@ stringPart name string =
 
 -- @LAMDERA
 
+{- Alternative implementation extended with support for local source overrides
+to packages, which is helpful when doing local development of lamdera/core &
+lamdera/codecs but wanting to test with existing projects without publishing
+
+Enabled by adding `LOVR=~/lamdera/overrides` to CLI calls or via setEnv in tests
+
+@TODO hardcoded for lamdera/codecs support only right now
+
+-}
 lamderaGetArchive
   :: Manager
   -> String

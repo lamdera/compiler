@@ -19,10 +19,12 @@ import qualified Reporting.Annotation as A
 import qualified Reporting.Result as Result
 import qualified Reporting.Error as Error
 
+import qualified Reporting.Doc as D
+
 import qualified System.Environment as Env
 import Data.Maybe (fromMaybe)
 import System.FilePath ((</>))
-import Data.Map (Map)
+import Data.Map (Map, (!))
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 import qualified Data.List as List
@@ -34,11 +36,25 @@ import qualified Data.Utf8 as Utf8
 
 import Lamdera
 import Lamdera.Types
+import qualified Lamdera.Interfaces
+import qualified Lamdera.Progress as Progress
 import StandaloneInstances
 
 
+{- Attempt to load all interfaces for project in current directory and generate
+type snapshots  -}
+run :: IO ()
+run = do
+  ifaces <- Lamdera.Interfaces.all
+  case snapshotCurrentTypes ifaces (ifaces ! "Types") of
+    Left err ->
+      Progress.throwDoc $ D.stack [D.fromChars err]
+    Right _ ->
+      pure ()
+
+
 type Interfaces =
-  Map.Map ModuleName.Canonical Interface.Interface
+  Map.Map ModuleName.Raw Interface.Interface
 
 
 -- type TypeIdentifier = (Text, Text, Text, Text)
@@ -74,8 +90,12 @@ lamderaTypes =
   ]
 
 
-snapshotCurrentTypes :: Pkg.Name -> Valid.Module -> Interfaces -> Result.Result i w Error.Error ()
-snapshotCurrentTypes pkg module_@(Valid.Module name _ _ _ _ _ _ _ _) interfaces = do
+problem str =
+  Left $ str
+
+
+snapshotCurrentTypes :: Interfaces -> Interface.Interface -> Either String ()
+snapshotCurrentTypes interfaces iface_Types = do
   let
     !inDebug = unsafePerformIO Lamdera.isDebug
 
@@ -85,62 +105,51 @@ snapshotCurrentTypes pkg module_@(Valid.Module name _ _ _ _ _ _ _ _) interfaces 
       debug_note ("Starting type snapshot.." <> show versionM) $
         fromMaybe ("-1") (T.pack <$> versionM)
 
+    interfacesCombined = Map.insert "Types" iface_Types interfaces
 
-    moduleName =
-      case name of
-        Just (A.At _ name_) -> name_
-        _ -> toName ""
+  onlyWhen (version == "-1") $ problem "Error: Tried to snapshot types without a version number, please report this."
+  let
+    efts =
+      lamderaTypes
+        & fmap (\t -> (t, ftByName version interfacesCombined t iface_Types))
+        -- & (\v -> unsafePerformIO $ do
+        --     formatHaskellValue "ltypes-intermediary" (v) :: IO ()
+        --     pure v
+        --   )
+        & foldl (\acc (t, ft) -> mergeFts acc ft) Map.empty
 
-  onlyWhen (version == "-1") $ error "Error: Tried to snapshot types without a version number, please report this."
+    debugEfts =
+      efts
+        -- & Map.filterWithKey (\k eft -> k == "Types")
+        & eftToText version
 
-  -- This check isn't strictly required, as the callee of this function in compile only
-  -- calls it when we know we've canonicalized the src/Types.elm file, but leaving it here
-  -- to prevent any footguns in future testing
-  onlyWhen (pkg == (Pkg.Name "author" "project") && moduleName == toName "Types") $ do
-    let
-      interfaceTypes_elm =
-        case Map.lookup (ModuleName.Canonical (Pkg.Name "author" "project") "Types") interfaces of
-          Just i -> i
-          Nothing -> error "The impossible happened, could not find src/Types.elm"
+    !_ = unsafePerformIO $ do
+      -- formatHaskellValue "some sensible label" (efts) :: IO ()
+      -- putStrLn $ T.unpack $ debugEfts
 
-      efts =
-        lamderaTypes
-          & fmap (\t -> (t, ftByName version interfaces t moduleName interfaceTypes_elm))
-          -- & (\v -> unsafePerformIO $ do
-          --     formatHaskellValue "ltypes-intermediary" (v) :: IO ()
-          --     pure v
-          --   )
-          & foldl (\acc (t, ft) -> mergeFts acc ft) Map.empty
+      root <- getProjectRoot
+      efts
+        & Map.toList
+        & mapM (\(file, ef@(ElmFileText imports types)) ->
+          let
+            output = efToText version (file, ef)
 
-      debugEfts =
-        efts
-          -- & Map.filterWithKey (\k eft -> k == "Types")
-          & eftToText version
+            filename =
+              file
+                & T.splitOn "."
+                & foldl (\acc i -> acc </> T.unpack i) (root </> "src" </> "Evergreen" </> ("V" <> T.unpack version))
+                & (\v -> v <> ".elm")
 
-      !_ = unsafePerformIO $ do
-        -- formatHaskellValue "some sensible label" (efts) :: IO ()
-        -- putStrLn $ T.unpack $ debugEfts
+          in
+          onlyWhen (not $ textContains "/" file) $ do
+            -- putStrLn $ show $ "writing: " <> filename
+            writeUtf8 filename output
+        )
+  Right ()
 
-        root <- getProjectRoot
-        efts
-          & Map.toList
-          & mapM (\(file, ef@(ElmFileText imports types)) ->
-            let
-              output = efToText version (file, ef)
 
-              filename =
-                file
-                  & T.splitOn "."
-                  & foldl (\acc i -> acc </> T.unpack i) (root </> "src" </> "Evergreen" </> ("V" <> T.unpack version))
-                  & (\v -> v <> ".elm")
 
-            in
-            onlyWhen (not $ textContains "/" file) $ do
-              -- putStrLn $ show $ "writing: " <> filename
-              writeUtf8 filename output
-          )
 
-    Result.ok ()
 
 
 mergeElmFileText :: Text -> ElmFileText -> ElmFileText -> ElmFileText
@@ -214,17 +223,15 @@ efToText version ft =
       , if length imports > 0 then
           imports
             & Set.toList
-            & List.sortOn (\(ModuleName.Canonical (Pkg.Name author project) module_) -> module_)
-            & fmap (\imp ->
-                case imp of
-                  (ModuleName.Canonical (Pkg.Name author project) module_) ->
-                    if (nameToText module_ == file) then
-                      ""
-                    else if (author == "author") then
-                      "import Evergreen.V" <> version <> "." <> nameToText module_ -- <> " as " <> nameToText module_
-                    else
-                      "import " <> nameToText module_
-              )
+            & filterMap (\(ModuleName.Canonical (Pkg.Name author project) module_) ->
+                if (nameToText module_ == file) then
+                  Nothing
+                else if (author == "author") then
+                  Just $ "import Evergreen.V" <> version <> "." <> nameToText module_ -- <> " as " <> nameToText module_
+                else
+                  Just $ "import " <> nameToText module_
+            )
+            & List.sort
             & T.intercalate "\n"
             & (flip T.append) "\n\n\n"
         else
@@ -234,8 +241,8 @@ efToText version ft =
       & T.concat
 
 
-ftByName :: Text -> Interfaces -> N.Name -> N.Name -> Interface.Interface -> ElmFilesText
-ftByName version interfaces typeName name interface = do
+ftByName :: Text -> Interfaces -> N.Name -> Interface.Interface -> ElmFilesText
+ftByName version interfaces typeName interface = do
   let
     scope =
       (ModuleName.Canonical (Pkg.Name "author" "project") "Types")
@@ -525,6 +532,11 @@ canonicalToFt version scope interfaces recursionMap canonical tvarMap =
             (author, pkg, module_, tipe) ->
               ("XXXXXX Kernel error", Set.empty, Map.empty)
               -- DError $ "must not contain kernel type `" <> tipe <> "` from " <> author <> "/" <> pkg <> ":" <> nameToText module_
+
+        moduleNameRaw =
+          case moduleName of
+            ModuleName.Canonical (Pkg.Name author pkg) module_ ->
+              module_
       in
 
       if (List.any ((==) recursionIdentifier) recursionMap) then
@@ -566,9 +578,9 @@ canonicalToFt version scope interfaces recursionMap canonical tvarMap =
 
         in
         ( if length params > 0 then
-            "(" <> typeScope <> nameToText typeName <> " " <> usageParams <> ")" -- <> "<!R>"
+            "(" <> typeScope <> typeName <> " " <> usageParams <> ")" -- <> "<!R>"
           else
-            typeScope <> nameToText typeName -- <> "<!R>"
+            typeScope <> typeName -- <> "<!R>"
         , Set.insert moduleName usageImports
         , usageFts
         )
@@ -723,13 +735,13 @@ canonicalToFt version scope interfaces recursionMap canonical tvarMap =
         (author, pkg, module_, tipe) ->
           -- Anything else must not be a core type, recurse to find it
 
-          case Map.lookup moduleName interfaces of
+          case Map.lookup moduleNameRaw interfaces of
             Just subInterface ->
 
               -- Try unions
               case Map.lookup name $ Interface._unions subInterface of
                 Just union -> do
-                  unionToFt version scope identifier (N.toText name) interfaces newRecursionMap tvarMap union params
+                  unionToFt version scope identifier name interfaces newRecursionMap tvarMap union params
                     & (\(n, imports, subft) ->
                       ( n -- <> "<!5>"
                       , if moduleName /= scope then
@@ -749,7 +761,7 @@ canonicalToFt version scope interfaces recursionMap canonical tvarMap =
                   -- Try aliases
                   case Map.lookup name $ Interface._aliases subInterface of
                     Just alias -> do
-                      aliasToFt version scope identifier (N.toText name) interfaces newRecursionMap alias
+                      aliasToFt version scope identifier name interfaces newRecursionMap alias
                         & (\(n, imports, subft) ->
                           ( n -- <> "<!4>"
                           , if moduleName /= scope then
@@ -770,7 +782,7 @@ canonicalToFt version scope interfaces recursionMap canonical tvarMap =
                       -- DError $ "❗️Failed to find either alias or custom type for type that seemingly must exist: " <> tipe <> "` from " <> author <> "/" <> pkg <> ":" <> nameToText module_ <> ". Please report this issue with your code!"
 
             Nothing ->
-              ("XXXXXX subi fail", Set.empty, Map.empty)
+              ("XXXXXX subi fail: " <> nameToText moduleNameRaw <> " in " <> (T.pack . show $ (Map.keys interfaces)), Set.empty, Map.empty)
               -- let !_ = formatHaskellValue "interface modulenames" (Map.keys interfaces) :: IO ()
               -- in
               -- DError $ "The `" <> tipe <> "` type from " <> author <> "/" <> pkg <> ":" <> nameToText module_ <> " is referenced, but I can't find it! You can try `lamdera install " <> author <> "/" <> pkg <> "`, otherwise this might be a type which has been intentionally hidden by the author, so it cannot be used!"
@@ -942,7 +954,7 @@ canonicalToFt version scope interfaces recursionMap canonical tvarMap =
 
     Can.TLambda _ _ ->
       error "Fatal: impossible function type! Please report this."
-      ("XXXXXX TLambda", Set.empty, Map.empty)
+      -- ("XXXXXX TLambda", Set.empty, Map.empty)
       -- DError $ "must not contain functions"
 
 

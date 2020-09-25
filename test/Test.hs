@@ -12,11 +12,12 @@ all =
 
 single = do
 
-  -- rmdir "/Users/mario/lamdera/test/v1/elm-stuff"
   -- rmdir "/Users/mario/.elm"
   -- rmdir "/Users/mario/elm-home-elmx-test" -- @TODO test without clean cache as well
   -- @TODO later when we've restored
   -- rmdir "/Users/mario/.lamdera"
+
+  rmdir "/Users/mario/lamdera/test/v1/elm-stuff"
 
   EasyTest.rerunOnly 2433968847666733451 "evergreen -> type snapshots -> .alltypes e2e to disk for lamdera/test/v1/"
     allTests

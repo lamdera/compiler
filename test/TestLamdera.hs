@@ -15,6 +15,7 @@ import qualified Lamdera.Check
 import qualified Lamdera.AppConfig
 import qualified Lamdera.Update
 import qualified Lamdera.Compile
+import qualified Lamdera.Snapshot
 
 
 
@@ -240,10 +241,9 @@ snapshotWithParams version projectPath appName = do
   setEnv "LDEBUG" "1"
   setEnv "ELM_HOME" "/Users/mario/elm-home-elmx-test"
 
-  Lamdera.Compile.make projectPath ("src" </> "Types.elm")
-
-  -- @TODO this is because the migrationCheck does weird terminal stuff that mangles the display... how to fix this?
-  -- liftIO $ sleep 50 -- 50 milliseconds
+  Dir.withCurrentDirectory projectPath $ do
+    Lamdera.Compile.make projectPath ("src" </> "Types.elm")
+    Lamdera.Snapshot.run
 
   unsetEnv "LAMDERA_APP_NAME"
   unsetEnv "LOVR"

@@ -213,16 +213,17 @@ Executable elmx
         Lamdera.CLI
         Lamdera.Constrain
         Lamdera.Deploy
-        Lamdera.Snapshot
         Lamdera.Extensions
         Lamdera.Filewatch
         Lamdera.Generated
         Lamdera.Hints
         Lamdera.Injection
+        Lamdera.Interfaces
         Lamdera.Live
         Lamdera.Login
         Lamdera.OldFeatureHelper
         Lamdera.Project
+        Lamdera.Snapshot
         Lamdera.TypeHash
         Lamdera.Types
         Lamdera.Update
