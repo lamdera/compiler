@@ -16,7 +16,7 @@ import qualified Lamdera.AppConfig
 import qualified Lamdera.Update
 import qualified Lamdera.Compile
 import qualified Lamdera.Snapshot
-
+import TestHelp
 
 
 import Test.Main (captureProcessResult, withStdin)
@@ -322,22 +322,3 @@ compileCodecs =
     let project = "/Users/mario/lamdera/overrides/packages/lamdera/codecs/1.0.0"
     aggressiveCacheClear project
     Lamdera.Compile.make_ project
-
-
-aggressiveCacheClear project = do
-  rmdir $ project </> "elm-stuff"
-  rmdir "/Users/mario/.elm"
-  rmdir "/Users/mario/elm-home-elmx-test" -- @TODO test without clean cache as well
-
-
-withDebug io = do
-  setEnv "LDEBUG" "1"
-  io
-  unsetEnv "LAMDERA_APP_NAME"
-
-withDebugPkg io = do
-  setEnv "LDEBUG" "1"
-  setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
-  io
-  unsetEnv "LAMDERA_APP_NAME"
-  unsetEnv "LOVR"

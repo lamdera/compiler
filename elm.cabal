@@ -250,6 +250,7 @@ Executable elmx
         -- Testing:
         EasyTest
         Test
+        TestHelp
         TestLamdera
         TestLamderaGenerated
         TestSnapshot

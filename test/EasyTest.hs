@@ -55,11 +55,7 @@ io = liftIO
 
 atomicLogger :: IO (String -> IO ())
 atomicLogger = do
-  lock <- newMVar ()
-  pure $ \msg ->
-    -- force msg before acquiring lock
-    let dummy = foldl' (\_ ch -> ch == 'a') True msg
-    in dummy `seq` bracket (takeMVar lock) (\_ -> putMVar lock ()) (\_ -> putStrLn msg)
+  pure atomicPutStrLn
 
 expect' :: HasCallStack => Bool -> Test ()
 expect' False = crash "unexpected"

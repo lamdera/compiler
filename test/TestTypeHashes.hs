@@ -2,17 +2,40 @@
 {-# LANGUAGE QuasiQuotes #-}
 module TestTypeHashes where
 
-import Lamdera
+import qualified System.Directory as Dir
+import Data.Map ((!))
+import System.FilePath ((</>))
+
 import EasyTest
+import TestHelp
 
-import qualified Lamdera.TypeHash as TypeHash
+import Lamdera
+import NeatInterpolation
+import qualified Lamdera.Interfaces
+import qualified Lamdera.TypeHash
 
-all = run suite
-
+all = EasyTest.run suite
 
 suite :: Test ()
 suite = tests
-  [ scope "sha1 should not collide" $ do
+  [ scope "e2e test" $ do
+      let
+        project = "/Users/mario/lamdera/test/v1"
+        expected =
+          [text|
+            ["4eec3f747f65eceb7faf6683ab13e172fcef9961","bd5d1a3899a98f383b6fe3b22b3f789fc6856f30","f70ed4f411f15bf40d81b817b51d467289e2752b","aa8ea8fb987f5faa1826d1bf359529ea2fb17e51","b8e40e0502458a98f12e2ffde71ff3ddf51a7dc2","a83d62ff8afc0e6ca4b0cd6a544d023ef6718807"]
+          |]
+
+      liftIO $ withDebug $ Dir.withCurrentDirectory project $ do
+        ifaces <- Lamdera.Interfaces.all
+        Lamdera.TypeHash.run ifaces (ifaces ! "Types")
+
+      actual <- liftIO $ readUtf8Text $ project </> "lamdera-stuff/.lamdera-hashes"
+
+      expectEqualTextTrimmed expected (actual & withDefault "<failed to read file>")
+
+
+  , scope "sha1 should not collide" $ do
 
       -- This seems insane to believe it could ever fail, but let me tell you a story.
 
