@@ -465,6 +465,15 @@ error400 s =
       writeBuilder $ "error: " <> s
 
 
+passOnIndex pwd =
+  if (pwd == ".")
+    then do
+      Lamdera.debug "passing on / index"
+      pass
+    else
+      pure ()
+
+
 network = do
   ns <- getNetworkInterfaces
 
@@ -473,6 +482,7 @@ network = do
     & filter (\v -> show v /= "0.0.0.0")
     & filter (\v -> show v /= "127.0.0.1")
     & mapM_ (putStr . show)
+
 
 showInterface n = name n ++ "\n"
                ++ "  IPv4: " ++ show (ipv4 n) ++ "\n"

@@ -34,6 +34,9 @@ import qualified Reporting.Task as Task
 import qualified Stuff
 
 
+import Lamdera
+import qualified Lamdera.Live
+import qualified Lamdera.Filewatch
 
 -- RUN THE DEV SERVER
 
@@ -47,12 +50,23 @@ data Flags =
 run :: () -> Flags -> IO ()
 run () (Flags maybePort) =
   do  let port = maybe 8000 id maybePort
+      liftIO $ Lamdera.stdoutSetup
       putStrLn $ "Go to http://localhost:" ++ show port ++ " to see your project dashboard."
-      httpServe (config port) $
+
+      liveState <- liftIO $ Lamdera.Live.init
+      Lamdera.Live.normalLocalDevWrite
+      Lamdera.Filewatch.watch liveState
+
+      Lamdera.Live.withEnd liveState $
+       httpServe (config port) $
         serveFiles
         <|> serveDirectoryWith directoryConfig "."
-        <|> serveAssets
-        <|> error404
+        <|> Lamdera.Live.serveWebsocket liveState
+        <|> route [ ("_r/:endpoint", Lamdera.Live.serveRpc liveState) ]
+        <|> serveAssets -- Compiler packaged static files
+        <|> Lamdera.Live.serveLamderaPublicFiles serveElm serveFilePretty -- Add /public/* as if it were /* to mirror production
+        <|> Lamdera.Live.serveUnmatchedUrlsToIndex serveElm -- Everything else without extensions goes to Lamdera LocalDev harness
+        <|> error404 -- Will get hit for any non-matching extensioned paths i.e. /hello.blah
 
 
 config :: Int -> Config Snap a
@@ -70,7 +84,8 @@ directoryConfig =
   fancyDirectoryConfig
     { indexFiles = []
     , indexGenerator = \pwd ->
-        do  modifyResponse $ setContentType "text/html;charset=utf-8"
+        do  Lamdera.Live.passOnIndex pwd
+            modifyResponse $ setContentType "text/html;charset=utf-8"
             writeBuilder =<< liftIO (Index.generate pwd)
     }
 
