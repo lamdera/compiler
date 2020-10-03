@@ -20,6 +20,7 @@ module Lamdera
   , debugTrace
   , debugNote
   , debugPass
+  , debugPassText
   , debugHaskell
   , debugHaskellPass
   , debugHaskellWhen
@@ -83,6 +84,7 @@ module Lamdera
   , bsToLazy
   , bsReadFile
   , callCommand
+  , icdiff
   )
   where
 
@@ -127,7 +129,7 @@ import Text.Read (readMaybe)
 import qualified System.PosixCompat.Files
 
 -- Vendored from File.IO due to recursion errors
-import System.IO (hFlush, hPutStr, hPutStrLn, stderr, stdout)
+import System.IO (hFlush, hPutStr, hPutStrLn, stderr, stdout, hClose, openTempFile)
 import qualified System.IO as IO
 import qualified System.IO.Error as Error
 import GHC.IO.Exception (IOException, IOErrorType(InvalidArgument))
@@ -247,10 +249,26 @@ debugPass label value pass =
     case debugM of
       Just _ -> do
         atomicPutStrLn $
-          "\n----------------------------------------------------------------------------------------------------------------"
+          "\n🔶--------------------------------------------------------------------------------"
             <> T.unpack label
             <> "\n"
             <> show value
+        pure pass
+
+      Nothing ->
+        pure pass
+
+debugPassText :: Text -> Text -> b -> b
+debugPassText label value pass =
+  unsafePerformIO $ do
+    debugM <- Env.lookupEnv "LDEBUG"
+    case debugM of
+      Just _ -> do
+        atomicPutStrLn $
+          "\n🔶--------------------------------------------------------------------------------"
+            <> T.unpack label
+            <> "\n"
+            <> T.unpack value
         pure pass
 
       Nothing ->
@@ -457,11 +475,11 @@ hindentPrintValue label v = do
   --   then
   --     atomicPutStrLn $ "❌SKIPPED display, value show > 10,000 chars, here's a clip:\n" <> Prelude.take 1000 input
   --   else do
-  (exit, stdout, stderr) <- System.Process.readProcessWithExitCode "hindent" [] input
+  (exit, stdout, stderr) <- System.Process.readProcessWithExitCode "hindent" ["--line-length","150"] input
   if Prelude.length stderr > 0
     then
       atomicPutStrLn $
-        "\n----------------------------------------------------------------------------------------------------------------"
+        "\n🔶--------------------------------------------------------------------------------"
           <> T.unpack label
           <> "\n"
           <> stderr
@@ -470,7 +488,7 @@ hindentPrintValue label v = do
 
     else
       atomicPutStrLn $
-        "\n----------------------------------------------------------------------------------------------------------------"
+        "\n🔶--------------------------------------------------------------------------------"
           <> T.unpack label
           <> "\n"
           <> stdout
@@ -482,7 +500,7 @@ hindentPrintValue label v = do
 hindentFormatValue :: Show a => a -> Text
 hindentFormatValue v =
   unsafePerformIO $ do
-    (exit, stdout, stderr) <- System.Process.readProcessWithExitCode "hindent" [] (Text.Show.Unicode.ushow v)
+    (exit, stdout, stderr) <- System.Process.readProcessWithExitCode "hindent" ["--line-length","150"] (Text.Show.Unicode.ushow v)
     pure $ T.pack stdout
 
 
@@ -585,6 +603,7 @@ writeLineIfMissing line filename = do
 
 touch :: FilePath -> IO ()
 touch filepath = do
+  debug_ $ "touch: " ++ show filepath
   System.PosixCompat.Files.touchFile filepath
 
 
@@ -778,3 +797,29 @@ bsReadFile =
 callCommand c = do
   debug_ $ "callCommand: " <> c
   System.Process.callCommand c
+
+
+icdiff realExpected realActual = do
+  (path1, handle1) <- openTempFile "/tmp" "expected.txt"
+  (path2, handle2) <- openTempFile "/tmp" "actual.txt"
+
+  writeUtf8Handle handle1 realExpected
+  writeUtf8Handle handle2 realActual
+
+  hClose handle1
+  hClose handle2
+
+  sleep 100
+
+  -- putStrLn $ "diff -y --suppress-common-lines --width=160 " <> path1 <> " " <> path2
+  -- (exit, stdout, stderr) <- readProcessWithExitCode "diff" ["-y", "--suppress-common-lines", "--width=160", path1, path2] ""
+
+  atomicPutStrLn $ "icdiff -N " <> path1 <> " " <> path2
+  -- (exit, stdout, stderr) <- readProcessWithExitCode "icdiff" ["--cols=150", "--show-all-spaces", path1, path2] ""
+  (exit, stdout, stderr) <- System.Process.readProcessWithExitCode "icdiff" ["-N", "--cols=150", path1, path2] ""
+
+  -- @TODO try colorize vim outout. The following hangs because it's interactive
+  -- putStrLn $ "vim -d " <> path1 <> " " <> path2
+  -- (exit, stdout, stderr) <- readProcessWithExitCode "vim" ["-d", path1, path2] ""
+
+  pure stdout

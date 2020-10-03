@@ -107,29 +107,7 @@ expectEqualTextTrimmed actual expected =
       ok
     else do
       diff <- liftIO $ do
-        (path1, handle1) <- openTempFile "/tmp" "expected.txt"
-        (path2, handle2) <- openTempFile "/tmp" "actual.txt"
-
-        writeUtf8Handle handle1 realExpected
-        writeUtf8Handle handle2 realActual
-
-        hClose handle1
-        hClose handle2
-
-        sleep 100
-
-        -- putStrLn $ "diff -y --suppress-common-lines --width=160 " <> path1 <> " " <> path2
-        -- (exit, stdout, stderr) <- readProcessWithExitCode "diff" ["-y", "--suppress-common-lines", "--width=160", path1, path2] ""
-
-        putStrLn $ "icdiff -N " <> path1 <> " " <> path2
-        -- (exit, stdout, stderr) <- readProcessWithExitCode "icdiff" ["--cols=150", "--show-all-spaces", path1, path2] ""
-        (exit, stdout, stderr) <- readProcessWithExitCode "icdiff" ["-N", "--cols=150", path1, path2] ""
-
-        -- @TODO try colorize vim outout. The following hangs because it's interactive
-        -- putStrLn $ "vim -d " <> path1 <> " " <> path2
-        -- (exit, stdout, stderr) <- readProcessWithExitCode "vim" ["-d", path1, path2] ""
-
-        pure stdout
+        icdiff realExpected realActual
 
       crash $
         T.unpack $
@@ -144,6 +122,7 @@ expectEqualTextTrimmed actual expected =
           , T.pack diff
           -- , T.pack $ show $ prettyEditExpr $ ediff (realExpected) (realActual)
           ]
+
 
 expectNotEqual :: (Eq a, Show a) => a -> a -> Test ()
 expectNotEqual forbidden actual =

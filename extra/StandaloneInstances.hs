@@ -16,6 +16,7 @@ import Data.ByteString.Lazy as BSL
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import Data.String (IsString, fromString)
+import qualified Data.Map as Map
 
 -- Elm modules
 
@@ -63,6 +64,38 @@ deriving instance Show AST.Optimized.EffectsType
 deriving instance Show AST.Canonical.Type
 deriving instance Show AST.Canonical.FieldType
 deriving instance Show AST.Canonical.AliasType
+-- deriving instance Show AST.Canonical.Decls
+deriving instance Show AST.Canonical.Def
+deriving instance Show AST.Canonical.Pattern_
+deriving instance Show AST.Canonical.Union
+deriving instance Show AST.Canonical.Ctor
+deriving instance Show AST.Canonical.CtorOpts
+deriving instance Show AST.Canonical.PatternCtorArg
+deriving instance Show AST.Canonical.Expr_
+deriving instance Show AST.Canonical.CaseBranch
+deriving instance Show AST.Canonical.FieldUpdate
+instance Show AST.Canonical.Annotation where
+  -- data Annotation = Forall FreeVars Type
+  show (AST.Canonical.Forall freevars tipe) =
+    "(Forall (" ++ showMapQualified freevars ++ ") (" ++ show tipe ++ "))"
+
+
+-- deriving instance Eq AST.Canonical.Type
+-- deriving instance Eq AST.Canonical.FieldType
+-- deriving instance Eq AST.Canonical.AliasType
+-- deriving instance Eq AST.Canonical.Decls
+deriving instance Eq AST.Canonical.Def
+deriving instance Eq AST.Canonical.Pattern_
+-- deriving instance Eq AST.Canonical.Union
+-- deriving instance Eq AST.Canonical.Ctor
+-- deriving instance Eq AST.Canonical.CtorOpts
+deriving instance Eq AST.Canonical.PatternCtorArg
+deriving instance Eq AST.Canonical.Expr_
+deriving instance Eq AST.Canonical.CaseBranch
+deriving instance Eq AST.Canonical.FieldUpdate
+-- deriving instance Eq AST.Canonical.Annotation
+
+
 
 deriving instance Show AST.Source.Module
 deriving instance Show AST.Source.Exposing
@@ -91,6 +124,35 @@ deriving instance Show AST.Utils.Shader.Types
 deriving instance Show AST.Utils.Shader.Type
 deriving instance Show Parse.Primitives.Snippet
 
+-- deriving instance Eq AST.Source.Module
+-- deriving instance Eq AST.Source.Exposing
+-- deriving instance Eq AST.Source.Exposed
+-- deriving instance Eq AST.Source.Privacy
+-- deriving instance Eq AST.Source.Docs
+-- deriving instance Eq AST.Source.Comment
+-- deriving instance Eq AST.Source.Import
+-- deriving instance Eq AST.Source.Value
+-- deriving instance Eq AST.Source.Pattern_
+-- deriving instance Eq AST.Source.Expr_
+-- deriving instance Eq AST.Source.Type_
+-- deriving instance Eq AST.Source.Union
+-- deriving instance Eq AST.Source.Alias
+-- deriving instance Eq AST.Source.Infix
+-- deriving instance Eq AST.Source.Effects
+-- deriving instance Eq AST.Source.Port
+-- deriving instance Eq AST.Source.Manager
+-- deriving instance Eq AST.Source.VarType
+-- deriving instance Eq AST.Source.Def
+--
+instance Eq AST.Utils.Shader.Source where
+  (==) _ _ = False
+deriving instance Eq AST.Utils.Shader.Types
+deriving instance Eq AST.Utils.Shader.Type
+-- deriving instance Eq Parse.Primitives.Snippet
+
+
+
+
 instance Show Elm.Float.Float where
   show = T.unpack . T.decodeUtf8 . BSL.toStrict . B.toLazyByteString . Elm.Float.toBuilder
 
@@ -101,7 +163,19 @@ deriving instance Show (Json.Decode.StringProblem)
 deriving instance Show (Json.Decode.DecodeExpectation)
 deriving instance Show Reporting.Annotation.Region
 deriving instance Show Reporting.Annotation.Position
-deriving instance (Show a) => Show (Reporting.Annotation.Located a)
+
+-- deriving instance (Show a) => Show (Reporting.Annotation.Located a)
+instance (Show a) => Show (Reporting.Annotation.Located a) where
+  show (Reporting.Annotation.At region a) = "(a (" ++ show a ++ "))"
+
+instance (Eq a) => Eq (Reporting.Annotation.Located a) where
+  -- Comparison that ignores the actual regions – this is helpful to us in our generation checking
+  -- as locations are not important for now
+  (==) (Reporting.Annotation.At r1 a) (Reporting.Annotation.At r2 b) = a == b
+
+-- instance (Eq a) => Eq (Reporting.Annotation.Located a) where
+--   (==) a b = show (Reporting.Annotation.At region a) = "(a (" ++ show a ++ "))"
+
 
 deriving instance Show Reporting.Exit.DetailsBadDep
 deriving instance Show Reporting.Exit.PackageProblem
@@ -113,10 +187,12 @@ deriving instance Show Http.Error
 
 
 instance Show Data.Name.Name where
-  show = Data.Name.toChars
+  show = quoted . Data.Name.toChars
 
 instance Show Elm.Package.Name where
-  show = Elm.Package.toChars
+  -- show = Elm.Package.toChars
+  show (Elm.Package.Name author project) =
+    "Name " ++ (quoted . Utf8.toChars) author <> " " <> (quoted . Utf8.toChars) project
 
 instance Show Elm.Interface.Interface where
   show _ = "\"<Elm.Interface.Interface>\""
@@ -141,14 +217,28 @@ deriving instance Show Elm.Outline.Exposed
 instance Show Elm.Licenses.License where
   show _ = "\"<Elm.Licenses.License>\""
 
-
-
+quoted :: String -> String
+quoted s = "\"" ++ s ++ "\""
 
 instance Show (Elm.String.String) where
-  show = Elm.String.toChars
+  show = quoted . Elm.String.toChars
 
+-- deriving instance Show ModuleName.Canonical
 instance Show ModuleName.Canonical where
-  show (ModuleName.Canonical pkg moduleName) = show pkg ++ ":" ++ show moduleName
+  -- show (ModuleName.Canonical pkg moduleName) = quoted $ show pkg ++ ":" ++ Utf8.toChars moduleName
+  show (ModuleName.Canonical pkg moduleName) = "(ModuleName.Canonical (" ++ show pkg ++ ") " ++ show moduleName ++ ")"
+
+
+instance (Show a) => Show (Data.NonEmptyList.List a) where
+  show = show . Data.NonEmptyList.toList
+
+instance Show Data.Index.ZeroBased where
+  show (Data.Index.ZeroBased 0) = "Index.first"
+  show (Data.Index.ZeroBased 1) = "Index.second"
+  show (Data.Index.ZeroBased 2) = "Index.third"
+  show (Data.Index.ZeroBased n) = "(Index.ZeroBased " ++ show n ++ ")"
+
+
 
 -- IsString
 
@@ -158,91 +248,21 @@ instance IsString Elm.Package.Project where
 instance IsString Elm.Package.Author where
   fromString = Utf8.fromChars
 
-
 instance Show Json.String.String where
   show x = "\"" <> Utf8.toChars x <> "\""
 
 instance IsString Json.String.String where
   fromString = Json.String.fromChars
 
-
-instance (Show a) => Show (Data.NonEmptyList.List a) where
-  show = show . Data.NonEmptyList.toList
-
+instance IsString Elm.String.String where
+  fromString = Utf8.fromChars
 
 
 
--- instance Show Elm.Name.Name where
---   show = Elm.Name.toString
---
--- instance Show Elm.Package.Version where
---   show = Elm.Package.versionToString
---
---
--- instance Show Elm.Package.Package where
---   show (Elm.Package.Package name version) = show name ++ ":" ++ show version
---
--- deriving instance Show Can.Alias
---
--- deriving instance Show Can.Type
---
---
--- instance Show Can.FieldType where
---   show (Can.FieldType _ t) = show t
---
--- deriving instance Show Can.AliasType
--- deriving instance Show Can.Annotation
--- deriving instance Show Can.Union
--- deriving instance Show Can.Ctor
--- deriving instance Show Can.CtorOpts
---
--- deriving instance Show Interface.Union
--- deriving instance Show Interface.Alias
--- deriving instance Show Interface.Binop
--- deriving instance Show Interface.Interface
--- deriving instance Show Binop.Precedence
--- deriving instance Show Binop.Associativity
---
--- instance Show Index.ZeroBased where
---   show (Index.ZeroBased x) = show x
---
--- deriving instance Show Find.Asset
---
--- deriving instance Show Src.Exposing
--- deriving instance Show Src.Exposed
--- deriving instance Show Src.Privacy
--- deriving instance Show Src.Import
-
--- instance Show a => Show (Ann.Located a) where
---    show = show . Ann.toValue
---
--- deriving instance Functor Ann.Located
--- deriving instance Foldable Ann.Located
--- deriving instance Traversable Ann.Located
 
 
--- instance Show Global where
---   show (Global can name) = show can ++ "." ++ show name
+-- Helpers
 
-
--- instance Show Name where
-  -- show n = Text.unpack $ toText n
-
--- instance Show Name where
---   show (Name toBuilder) = "Name<" ++ show (B.toLazyByteString toBuilder) ++ ">"
-
-
--- instance Show a => Show (Point a) where
---   show (Pt a) =
---     unsafePerformIO $ do
---       v <- readIORef a
---       pure ("<Pt:" ++ show v ++ ">")
---
--- instance Show a => Show (PointInfo a) where
---   show (Info w32 a) =
---     unsafePerformIO $ do
---       w32r <- readIORef w32
---       a' <- readIORef a
---       pure ("Info " ++ show w32r ++ " " ++ show a')
---   show (Link a) =
---     "Link (" ++ show a ++ ")"
+showMapQualified :: (Show k, Show a) => Map.Map k a -> String
+showMapQualified m =
+  "Map.fromList " ++ show (Map.toList m)

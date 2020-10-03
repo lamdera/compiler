@@ -32,6 +32,7 @@ import qualified Reporting.Render.Type.Localizer as L
 import qualified Reporting.Report as Report
 
 
+import qualified Lamdera.Error
 
 -- MODULE
 
@@ -58,6 +59,7 @@ data Error
   | BadMains L.Localizer (OneOrMore.OneOrMore Main.Error)
   | BadPatterns (NE.List Pattern.Error)
   | BadDocs Docs.Error
+  | BadLamdera D.Doc
 
 
 
@@ -87,6 +89,9 @@ toReports source err =
 
     BadDocs docsErr ->
       Docs.toReports source docsErr
+
+    BadLamdera doc ->
+      NE.singleton $ Lamdera.Error.report doc
 
 
 

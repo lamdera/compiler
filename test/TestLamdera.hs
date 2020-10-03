@@ -21,28 +21,51 @@ import TestHelp
 
 import Test.Main (captureProcessResult, withStdin)
 
+-- Current target for ghci :rr command. See ~/.ghci config file, which should contain
+-- something like `:def rr const $ return $ unlines [":r","TestLamdera.target"]`
+target = wire
+
+wire :: IO ()
+wire = do
+  let project = "/Users/mario/dev/projects/elmx/test"
+
+  setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
+  setEnv "LDEBUG" "1"
+  setEnv "ELM_HOME" "/Users/mario/elm-home-elmx-test"
+
+  -- Bust Elm's caching with this one weird trick!
+  touch $ project </> "src/Test/Wire_Union2.elm"
+
+  Lamdera.Compile.make project (project </> "src/Test/Wire_Union2.elm")
+
+  unsetEnv "LOVR"
+  unsetEnv "LDEBUG"
+  unsetEnv "ELM_HOME"
+
+
 {-
 
 1. Put the following into ~/.ghci
 
 :set -fbyte-code
 :set -fobject-code
+:def rr const $ return $ unlines [":r","TestLamdera.target"]
 :set prompt "\ESC[34mλ: \ESC[m"
 
 Last line is optional, but it's cool! Lambda prompt!
 
 2. Run `stack ghci`
 
-3. Then a feedback loop goes as follows; (@TODO this is out of date)
+3. Then a feedback loop goes as follows;
 
   - Make changes to Haskell Wire code
-  - Run `:r` to typecheck + recompile & fix any issues
-  - Run `WireTest.compile`
-    - Executes shell `touch` on `extra/src/AllTypes.elm` to bust Elm compiler's cache
-    - Compiles `extra/src/AllTypes_Check.elm`
-    - Generates `extra/src/wire.html`
-  - Refresh `wire.html` in your browser – you should see big green boxes
-    - If something is red, you broke encoders/decoders!
+  - Run `:rr` to recompile + typecheck and auto-run TestLamdera.target
+  - fix any issues, then :rr again
+  - if you want to recompile without running, do :r
+
+Easier to change the target definition than constantly adjust the :def!
+
+Press up arrow to get history of prior commands.
 
 -}
 
@@ -50,7 +73,7 @@ all = run suite
 
 suite :: Test ()
 suite = tests
-  [ scope "init should write .gitignore" $
+  [ pending $ scope "init should write .gitignore" $
       let
         tmpFolder = "tmp/new"
 
@@ -82,7 +105,7 @@ suite = tests
       in
       using setup cleanup test
 
-  , scope "warning about external packages" $ do
+  , pending $ scope "warning about external packages" $ do
       actual <- catchOutput $ checkWithParamsNoDebug 1 "/Users/mario/lamdera/test/v1" "test-local"
 
       -- io $ formatHaskellValue "actual" actual
@@ -132,12 +155,14 @@ compile = do
   -- let project = "/Users/mario/dev/projects/lamdera-dashboard"
   -- setEnv "LAMDERA_APP_NAME" "dashboard"
 
-  -- Bust Elm's caching with this one weird trick!
-  touch $ project </> "src/Frontend.elm"
-
   setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
   setEnv "LDEBUG" "1"
   setEnv "ELM_HOME" "/Users/mario/elm-home-elmx-test"
+
+  -- Bust Elm's caching with this one weird trick!
+  touch $ project </> "src/Frontend.elm"
+  touch $ project </> "src/Types.elm"
+  touch $ project </> "src/WireTypes.elm"
 
   Lamdera.Compile.make project ("src" </> "Frontend.elm")
 
@@ -159,6 +184,7 @@ rm path = Lamdera.remove path
 
 {-| For quick and general local development testing via `stack ghci` as TestLamdera.check -}
 check = do
+  touch "/Users/mario/lamdera/test/v1/src/WireTypes.elm"
   checkWithParams "/Users/mario/lamdera/test/v1" "test-local"
   -- checkWithParams "/Users/mario/dev/test/ascii-art" "ascii-art-local"
   -- checkWithParams "/Users/mario/dev/test/lamdera-minilatex-app" "minilatex"

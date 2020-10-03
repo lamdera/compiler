@@ -126,7 +126,8 @@ normalRpcJson debugIdentifier body url decoder = do
 -- didn't work out easily in this context as the toString renderer drops colors,
 -- seems the ANSI rendering needs to write straight out to terminal with IO ()
 errorToString err =
-  "TODO" -- @LAMDERA TEMPORARY
+  -- @LAMDERA TEMPORARY
+  show err
   --  Need to find the new way Http.Error
 
   -- case err of

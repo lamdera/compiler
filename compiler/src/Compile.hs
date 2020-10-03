@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE BangPatterns #-}
 {-# OPTIONS_GHC -Wall -fno-warn-unused-do-bind #-}
 module Compile
   ( Artifacts(..)
@@ -27,6 +29,9 @@ import qualified Type.Solve as Type
 import System.IO.Unsafe (unsafePerformIO)
 
 
+import Lamdera
+import Lamdera.Wire
+import StandaloneInstances
 
 -- COMPILE
 
@@ -40,7 +45,20 @@ data Artifacts =
 
 
 compile :: Pkg.Name -> Map.Map ModuleName.Raw I.Interface -> Src.Module -> Either E.Error Artifacts
-compile pkg ifaces modul =
+compile pkg ifaces modul = do
+  -- We've proven we can inject dummy stubs for Src, now we try Can instead.
+  -- let modul = (Lamdera.Wire.modifyModul pkg ifaces modul_)
+  canonical_  <- canonicalize pkg ifaces modul
+  canonical   <- Lamdera.Wire.addWireGenerations canonical_ pkg ifaces modul
+  annotations <- typeCheck modul canonical
+  ()          <- nitpick canonical
+  objects     <- optimize modul annotations canonical
+  return (Artifacts canonical annotations objects)
+
+
+{- The original compile function for reference -}
+compile_ :: Pkg.Name -> Map.Map ModuleName.Raw I.Interface -> Src.Module -> Either E.Error Artifacts
+compile_ pkg ifaces modul =
   do  canonical   <- canonicalize pkg ifaces modul
       annotations <- typeCheck modul canonical
       ()          <- nitpick canonical

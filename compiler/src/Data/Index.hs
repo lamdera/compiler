@@ -1,5 +1,5 @@
 module Data.Index
-  ( ZeroBased
+  ( ZeroBased(..) -- @LAMDERA exposure
   , first
   , second
   , third
@@ -25,7 +25,7 @@ import Data.Binary
 
 
 newtype ZeroBased = ZeroBased Int
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord)
 
 
 first :: ZeroBased

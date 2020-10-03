@@ -258,7 +258,7 @@ Executable elmx
 
         -- Debug helpers:
         StandaloneInstances
-        -- CanSer.CanSer
+        CanSer.CanSer
         -- Sanity
         Wire.PrettyPrint
 

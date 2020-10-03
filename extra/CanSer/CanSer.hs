@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-module CanSer.CanSer (ppElm) where
+module CanSer.CanSer where
 
 import qualified Data.Text as T
 import Data.Text (Text)
@@ -9,8 +9,13 @@ import qualified Data.Map as Map
 import qualified Reporting.Annotation as A
 import qualified Elm.ModuleName as ModuleName
 import qualified AST.Utils.Binop as Binop
+import qualified AST.Source
 import Data.String (IsString)
 import GHC.Exts(IsString(..))
+import qualified Data.Utf8 as Utf8
+import qualified Elm.String
+
+import StandaloneInstances
 
 {-|
 Canonical ast serialization.
@@ -23,8 +28,16 @@ This is an attempt at serializing the canoncal ast back into elm code, so we can
 
 -}
 
-ppElm :: ToElm a => a -> Text
-ppElm a = pprint 0 (toList (toElm a))
+
+convert :: ToElm a => a -> Text
+convert a =
+  -- @TODO extend this to pipe through elm-format!
+  convert_ a
+
+
+convert_ :: ToElm a => a -> Text
+convert_ a = pprint 0 (toList (toElm a))
+
 
 pprint :: Int -> [Block] -> Text
 pprint i (Lit s:rest) = T.replace "\n" ("\n" <> rep i "  ") s <> pprint i rest
@@ -66,8 +79,11 @@ a <.> b = a <> "." <> b
 sp x = " " <> x <> " "
 p x = "(" <> x <> ")"
 
-instance ToElm N.Name where
-  toElm x = Lit $ N.toText x
+
+instance ToElm (Utf8.Utf8 a) where
+  toElm x = Lit $ T.pack $ Utf8.toChars x
+-- instance ToElm N.Name where
+--   toElm x = Lit $ N.toText x
 
 instance ToElm Double where
   toElm x = Lit $ T.pack $ show x
@@ -99,13 +115,13 @@ instance ToElm C.Expr_ where
       C.VarCtor _ moduName name _ _ ->
         toElm moduName <.> toElm name
       C.VarDebug moduName name _ ->
-        toElm moduName <.> toElm name
+        "Debug" <.> toElm name
       C.VarOperator op _ _ _ ->
         "(" <> toElm op <> ")"
       C.Chr text ->
-        "'" <> Lit text <> "'"
+        "'" <> Lit (fString text) <> "'"
       C.Str text ->
-        "\"" <> Lit text <> "\""
+        "\"" <> Lit (fString text) <> "\""
       C.Int i ->
         toElm i
       C.Float d ->
@@ -151,8 +167,8 @@ instance ToElm C.Expr_ where
         "()"
       C.Tuple e1 e2 Nothing -> p (intercalate ", " (toElm <$> [e1, e2]))
       C.Tuple e1 e2 (Just e3) -> p (intercalate ", " (toElm <$> [e1, e2, e3]))
-      C.Shader uid src _ ->
-        "Shader " <> Lit uid <> " " <> Lit src <> " ??? "
+      C.Shader uid src ->
+        "<Shader TODO>"-- <> Lit uid <> " " <> Lit src <> " ??? "
 
 
 tFieldUpdate (C.FieldUpdate _ e) = e
@@ -174,8 +190,8 @@ instance ToElm C.Pattern_ where
       C.PList pats -> "[" <> (intercalate "," (toElm <$> pats)) <> "]"
       C.PCons p1 p2 -> toElm p1 <> " :: " <> toElm p2
       C.PBool _ bool -> if bool then "True" else "False"
-      C.PChr text -> "'" <> Lit text <> "'"
-      C.PStr text -> "\"" <> Lit text <> "\""
+      C.PChr text -> "'" <> Lit (fString text) <> "'"
+      C.PStr text -> "\"" <> Lit (fString text) <> "\""
       C.PInt i -> toElm i
       C.PCtor _home _type _union _name _index _args ->
         -- { _p_home :: ModuleName.Canonical
@@ -190,6 +206,8 @@ instance ToElm C.Pattern_ where
 patternCtorArg (C.PatternCtorArg _ _ argPattern) = argPattern -- TODO: does index matter here? Is the list always sorted as we expect?
 
 
+fString s =
+  T.pack $ Elm.String.toChars s
 
 -- DEFINITIONS
 
@@ -258,8 +276,8 @@ instance ToElm C.Decls where
     case decls of
       C.Declare def decls ->
         toElm def <> "\n" <> toElm decls
-      C.DeclareRec defs decls ->
-        intercalate "\n" (toElm <$> defs) <> toElm decls
+      C.DeclareRec def defs decls ->
+        intercalate "\n" (toElm <$> (def : defs)) <> toElm decls
       C.SaveTheEnvironment ->
         "-- SaveTheEnvironment"
 
@@ -314,3 +332,7 @@ instance ToElm Binop.Precedence where
 instance ToElm C.Alias where
   toElm (C.Alias names tipe) =
     leftPad " " (toElm <$> names) <> " = " <> toElm tipe
+
+
+instance ToElm AST.Source.Docs where
+  toElm _ = Lit "<AST.Source.Docs>"

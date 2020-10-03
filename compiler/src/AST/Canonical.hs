@@ -28,6 +28,8 @@ module AST.Canonical
   , Effects(..)
   , Port(..)
   , Manager(..)
+  -- @LAMDERA Exposures
+  , Ctor(..)
   )
   where
 
