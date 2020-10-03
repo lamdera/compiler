@@ -46,6 +46,7 @@ data Artifacts =
 
 compile :: Pkg.Name -> Map.Map ModuleName.Raw I.Interface -> Src.Module -> Either E.Error Artifacts
 compile pkg ifaces modul = do
+  -- compile_ pkg ifaces modul
   -- We've proven we can inject dummy stubs for Src, now we try Can instead.
   -- let modul = (Lamdera.Wire.modifyModul pkg ifaces modul_)
   canonical_  <- canonicalize pkg ifaces modul
@@ -64,7 +65,6 @@ compile_ pkg ifaces modul =
       ()          <- nitpick canonical
       objects     <- optimize modul annotations canonical
       return (Artifacts canonical annotations objects)
-
 
 
 -- PHASES

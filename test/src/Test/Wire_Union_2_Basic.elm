@@ -1,15 +1,12 @@
-module Test.Wire_Union2 exposing (..)
+module Test.Wire_Union_2_Basic exposing (..)
 
 import Lamdera.Wire2
-
-
-
--- @TODO add more items here so we're longer and more complex than Union1
 
 
 type Union2
     = Reversed
     | Middle
+    | ShouldBeLast
     | Alphabetically
 
 
@@ -23,6 +20,9 @@ w2_encode_Union2 w2_e_val =
 
         Reversed ->
             Lamdera.Wire2.encodeSequenceWithoutLength [ Lamdera.Wire2.encodeUnsignedInt8 2 ]
+
+        ShouldBeLast ->
+            Lamdera.Wire2.encodeSequenceWithoutLength [ Lamdera.Wire2.encodeUnsignedInt8 3 ]
 
 
 w2_decode_Union2 =
@@ -38,6 +38,9 @@ w2_decode_Union2 =
 
                     2 ->
                         Lamdera.Wire2.succeedDecode Reversed
+
+                    3 ->
+                        Lamdera.Wire2.succeedDecode ShouldBeLast
 
                     _ ->
                         Lamdera.Wire2.failDecode

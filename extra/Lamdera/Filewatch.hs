@@ -31,7 +31,11 @@ watch (mClients, mLeader, mChan, beState) =
       (\e -> do
         let
           shouldRefresh = do
-            let check f = not (List.isInfixOf ".git" f) && not (List.isInfixOf "lamdera-stuff" f)
+            let
+              check f =
+                   not (List.isInfixOf ".git" f)
+                && not (List.isInfixOf "elm-stuff" f)
+                && not (List.isInfixOf "lamdera-stuff" f)
             check $ case e of
               Added f _ _ -> f
               Modified f _ _ -> f

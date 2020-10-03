@@ -1,4 +1,4 @@
-module Test.Wire_Union1 exposing (..)
+module Test.Wire_Union_1_Basic exposing (..)
 
 import Lamdera.Wire2
 
