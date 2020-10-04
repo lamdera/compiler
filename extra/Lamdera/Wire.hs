@@ -10,7 +10,7 @@ import qualified Data.List as List
 import Elm.Package
 import qualified AST.Source as Src
 import qualified Elm.Interface as I
-import qualified Elm.ModuleName as ModuleName
+import qualified Elm.ModuleName as Module
 import qualified Elm.Package as Pkg
 import qualified AST.Canonical as Can
 import AST.Canonical
@@ -28,7 +28,29 @@ import Lamdera
 import StandaloneInstances
 import qualified CanSer.CanSer as ToSource
 
-addWireGenerations :: Can.Module -> Pkg.Name -> Map.Map ModuleName.Raw I.Interface -> Src.Module -> Either E.Error Can.Module
+debugGeneration modul decls generatedName generated canonicalValue = do
+  case decls & findDef generatedName of
+    Just testDefinition -> do
+      if generated == testDefinition
+        then
+          debugPassText ("✅ generation for " <> show_ (Src.getName modul)) ("okay!") (pure ())
+        else do
+          debugHaskellPass "🏁 Actual value input" (canonicalValue) (pure ())
+          debugPassText ("💚 actual implementation pretty-printed " <> show_ (Src.getName modul)) (ToSource.convert generated) (pure ())
+          debugHaskellPass ("🧡 expected implementation AST.Canonical " <> show_ (Src.getName modul)) (testDefinition) (pure ())
+
+          diff <- icdiff (hindentFormatValue testDefinition) (hindentFormatValue generated)
+          diff2 <- icdiff (ToSource.convert testDefinition) (ToSource.convert generated)
+
+          atomicPutStrLn $ "❌❌❌ failed, attempting pretty-print diff:\n" ++ diff
+          atomicPutStrLn $ "❌❌❌ failed, attempting pretty-print diff:\n" ++ diff2
+          -- atomicPutStrLn $ "❌❌❌ gen does not match test definition, attempting pretty-print diff:\n <NEUTERED>"
+
+    Nothing ->
+      atomicPutStrLn $ "❌❌❌ Error: " ++ show generatedName ++ " implementation not found in " ++ show (Src.getName modul)
+
+
+addWireGenerations :: Can.Module -> Pkg.Name -> Map.Map Module.Raw I.Interface -> Src.Module -> Either E.Error Can.Module
 addWireGenerations canonical pkg ifaces modul =
   if shouldHaveCodecsGenerated pkg then
     case addWireGenerations_ canonical pkg ifaces modul of
@@ -65,7 +87,7 @@ shouldHaveCodecsGenerated name =
 -- Can.Module
 -- data Module =
 --   Module
---     { _name    :: ModuleName.Canonical
+--     { _name    :: Module.Canonical
 --     , _exports :: Exports
 --     , _docs    :: Src.Docs
 --     , _decls   :: Decls
@@ -76,7 +98,7 @@ shouldHaveCodecsGenerated name =
 --     }
 
 
-addWireGenerations_ :: Can.Module -> Pkg.Name -> Map.Map ModuleName.Raw I.Interface -> Src.Module -> Either D.Doc Can.Module
+addWireGenerations_ :: Can.Module -> Pkg.Name -> Map.Map Module.Raw I.Interface -> Src.Module -> Either D.Doc Can.Module
 addWireGenerations_ canonical pkg ifaces modul = do
   let
     !result =
@@ -149,7 +171,7 @@ encoderUnion pkg modul decls unionName union =
     !x = unsafePerformIO $ debugGeneration modul decls generatedName generated union
 
     generatedName = Data.Name.fromChars $ "w2_encode_" ++ Data.Name.toChars unionName
-    cname = ModuleName.Canonical pkg (Src.getName modul)
+    cname = Module.Canonical pkg (Src.getName modul)
 
     generated =
       Def
@@ -183,41 +205,13 @@ encoderUnion pkg modul decls unionName union =
   generated
 
 
-debugGeneration modul decls generatedName generated canonicalValue = do
-
-  debugHaskellPass "🏁 Actual value input" (canonicalValue) (pure ())
-  debugPassText ("💚 actual implementation pretty-printed " <> show_ (Src.getName modul)) (ToSource.convert generated) (pure ())
-  -- debugPassText ("💚 actual implementation source " <> show_ (Src.getName modul)) (ToSource.convert generated) (pure ())
-
-
-  atomicPutStrLn $
-    -- "\n----> 🤖 generated function pretty-printed:\n" ++ (T.unpack $ ToSource.convert generated) ++ "\n" ++
-    "----> encoder matches test definition: "
-
-  case decls & findDef generatedName of
-    Just testDefinition -> do
-      if generated == testDefinition
-        then
-          atomicPutStrLn "✅"
-        else do
-          debugHaskellPass ("🧡 expected implementation AST.Canonical " <> show_ (Src.getName modul)) (testDefinition) (pure ())
-          diff <- icdiff (hindentFormatValue testDefinition) (hindentFormatValue generated)
-          diff2 <- icdiff (ToSource.convert testDefinition) (ToSource.convert generated)
-          atomicPutStrLn $ "❌❌❌ failed, attempting pretty-print diff:\n" ++ diff
-          atomicPutStrLn $ "❌❌❌ failed, attempting pretty-print diff:\n" ++ diff2
-          -- atomicPutStrLn $ "❌❌❌ gen does not match test definition, attempting pretty-print diff:\n <NEUTERED>"
-
-    Nothing ->
-      atomicPutStrLn $ "❌❌❌ Error: " ++ show generatedName ++ " implementation not found in " ++ show (Src.getName modul)
-
-
 decoderUnion :: Pkg.Name -> Src.Module -> Decls -> Data.Name.Name -> Union -> Def
 decoderUnion pkg modul decls unionName union =
   let
-    -- !x = unsafePerformIO $ debugGeneration modul decls generatedName generated union
+    !x = unsafePerformIO $ debugGeneration modul decls generatedName generated union
 
     generatedName = Data.Name.fromChars $ "w2_decode_" ++ Data.Name.toChars unionName
-    cname = ModuleName.Canonical pkg (Src.getName modul)
+    cname = Module.Canonical pkg (Src.getName modul)
 
     generated =
       Def
@@ -272,9 +266,9 @@ namedTodo modul functionName =
       []
       (a (Call
             (a (VarDebug
-                  (ModuleName.Canonical (Name "author" "project") moduleName)
+                  (Module.Canonical (Name "author" "project") moduleName)
                   "todo"
-                  (Forall (Map.fromList [("a", ())]) (TLambda (TType (ModuleName.Canonical (Name "elm" "core") "String") "String" []) (TVar "a")))))
+                  (Forall (Map.fromList [("a", ())]) (TLambda (TType (Module.Canonical (Name "elm" "core") "String") "String" []) (TVar "a")))))
             [(a (Str functionName_))]))
 
 
@@ -356,7 +350,7 @@ encodeSequenceWithoutLength list =
                  (Map.fromList [])
                  (TLambda
                     (TType
-                       (ModuleName.Canonical (Name "elm" "core") "List")
+                       (Module.Canonical (Name "elm" "core") "List")
                        "List"
                        [ tLamdera_Wire2__Encoder
                        ])
@@ -372,7 +366,7 @@ encodeUnsignedInt8 value =
                 (Forall
                    (Map.fromList [])
                    (TLambda
-                      (TType (ModuleName.Canonical (Name "elm" "core") "Basics") "Int" [])
+                      (TType (Module.Canonical (Name "elm" "core") "Basics") "Int" [])
                       tLamdera_Wire2__Encoder))))
           [value]))
 
@@ -386,12 +380,12 @@ decodeUnsignedInt8 =
            (TAlias
               mLamdera_Wire2
               "Decoder"
-              [("a", TType (ModuleName.Canonical (Name "elm" "core") "Basics") "Int" [])]
+              [("a", TType (Module.Canonical (Name "elm" "core") "Basics") "Int" [])]
               (Filled
                  (TType
-                    (ModuleName.Canonical (Name "elm" "bytes") "Bytes.Decode")
+                    (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
                     "Decoder"
-                    [TType (ModuleName.Canonical (Name "elm" "core") "Basics") "Int" []]))))))
+                    [TType (Module.Canonical (Name "elm" "core") "Basics") "Int" []]))))))
 
 
 andThenDecode1 lambda =
@@ -408,18 +402,18 @@ andThenDecode1 lambda =
                           mLamdera_Wire2
                           "Decoder"
                           [("a", TVar "b")]
-                          (Filled (TType (ModuleName.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [TVar "b"]))))
+                          (Filled (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [TVar "b"]))))
                     (TLambda
                        (TAlias
                           mLamdera_Wire2
                           "Decoder"
                           [("a", TVar "a")]
-                          (Filled (TType (ModuleName.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [TVar "a"])))
+                          (Filled (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [TVar "a"])))
                        (TAlias
                           mLamdera_Wire2
                           "Decoder"
                           [("a", TVar "b")]
-                          (Filled (TType (ModuleName.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [TVar "b"]))))))))
+                          (Filled (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [TVar "b"]))))))))
         [ lambda
         ]))
 
@@ -427,34 +421,34 @@ andThenDecode1 lambda =
 andMapDecode1 value =
         (a (Call
               (a (VarForeign
-                    (ModuleName.Canonical (Name "lamdera" "codecs") "Lamdera.Wire2")
+                    (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire2")
                     "andMapDecode"
                     (Forall
                        (Map.fromList [("a", ()), ("b", ())])
                        (TLambda
                           (TAlias
-                             (ModuleName.Canonical (Name "lamdera" "codecs") "Lamdera.Wire2")
+                             (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire2")
                              "Decoder"
                              [("a", TVar "a")]
                              (Filled
-                                (TType (ModuleName.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [TVar "a"])))
+                                (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [TVar "a"])))
                           (TLambda
                              (TAlias
-                                (ModuleName.Canonical (Name "lamdera" "codecs") "Lamdera.Wire2")
+                                (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire2")
                                 "Decoder"
                                 [("a", TLambda (TVar "a") (TVar "b"))]
                                 (Filled
                                    (TType
-                                      (ModuleName.Canonical (Name "elm" "bytes") "Bytes.Decode")
+                                      (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
                                       "Decoder"
                                       [TLambda (TVar "a") (TVar "b")])))
                              (TAlias
-                                (ModuleName.Canonical (Name "lamdera" "codecs") "Lamdera.Wire2")
+                                (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire2")
                                 "Decoder"
                                 [("a", TVar "b")]
                                 (Filled
                                    (TType
-                                      (ModuleName.Canonical (Name "elm" "bytes") "Bytes.Decode")
+                                      (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
                                       "Decoder"
                                       [TVar "b"]))))))))
               [ value
@@ -473,7 +467,7 @@ succeedDecode value =
                        mLamdera_Wire2
                        "Decoder"
                        [("a", TVar "a")]
-                       (Filled (TType (ModuleName.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [TVar "a"])))))))
+                       (Filled (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [TVar "a"])))))))
         [ value
         ]))
 
@@ -488,7 +482,7 @@ failDecode =
               mLamdera_Wire2
               "Decoder"
               [("a", TVar "a")]
-              (Filled (TType (ModuleName.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [TVar "a"]))))))
+              (Filled (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [TVar "a"]))))))
 
 int value =
   a (Int value)
@@ -513,7 +507,7 @@ infixr 0 –>
 (|>) expr1 expr2 =
   (a (Binop
         "|>"
-        (ModuleName.Canonical (Name "elm" "core") "Basics")
+        (Module.Canonical (Name "elm" "core") "Basics")
         "apR"
         (Forall (Map.fromList [("a", ()), ("b", ())]) (TLambda (TVar "a") (TLambda (TLambda (TVar "a") (TVar "b")) (TVar "b"))))
         expr1
@@ -558,86 +552,218 @@ p_ =
 
 encoderForType tipe =
   case tipe of
-    (TType (ModuleName.Canonical (Name "elm" "core") "Basics") "Int" []) ->
-      (a (VarForeign mLamdera_Wire2 "encodeInt" (Forall (Map.fromList []) (TLambda (TType (ModuleName.Canonical (Name "elm" "core") "Basics") "Int" []) tLamdera_Wire2__Encoder))))
+    (TType (Module.Canonical (Name "elm" "core") "Basics") "Int" []) ->
+      (a (VarForeign mLamdera_Wire2 "encodeInt" (Forall (Map.fromList []) (TLambda (TType (Module.Canonical (Name "elm" "core") "Basics") "Int" []) tLamdera_Wire2__Encoder))))
 
-    (TType (ModuleName.Canonical (Name "elm" "core") "Basics") "Float" []) ->
-      (a (VarForeign mLamdera_Wire2 "encodeFloat" (Forall (Map.fromList []) (TLambda (TType (ModuleName.Canonical (Name "elm" "core") "Basics") "Float" []) tLamdera_Wire2__Encoder))))
+    (TType (Module.Canonical (Name "elm" "core") "Basics") "Float" []) ->
+      (a (VarForeign mLamdera_Wire2 "encodeFloat" (Forall (Map.fromList []) (TLambda (TType (Module.Canonical (Name "elm" "core") "Basics") "Float" []) tLamdera_Wire2__Encoder))))
 
-    (TType (ModuleName.Canonical (Name "elm" "core") "Basics") "Bool" []) ->
-      (a (VarForeign mLamdera_Wire2 "encodeBool" (Forall (Map.fromList []) (TLambda (TType (ModuleName.Canonical (Name "elm" "core") "Basics") "Bool" []) tLamdera_Wire2__Encoder))))
+    (TType (Module.Canonical (Name "elm" "core") "Basics") "Bool" []) ->
+      (a (VarForeign mLamdera_Wire2 "encodeBool" (Forall (Map.fromList []) (TLambda (TType (Module.Canonical (Name "elm" "core") "Basics") "Bool" []) tLamdera_Wire2__Encoder))))
 
-    (TType (ModuleName.Canonical (Name "elm" "core") "Basics") "Order" []) ->
-      (a (VarForeign mLamdera_Wire2 "encodeOrder" (Forall (Map.fromList []) (TLambda (TType (ModuleName.Canonical (Name "elm" "core") "Basics") "Order" []) tLamdera_Wire2__Encoder))))
+    (TType (Module.Canonical (Name "elm" "core") "Basics") "Order" []) ->
+      (a (VarForeign mLamdera_Wire2 "encodeOrder" (Forall (Map.fromList []) (TLambda (TType (Module.Canonical (Name "elm" "core") "Basics") "Order" []) tLamdera_Wire2__Encoder))))
 
-    (TType (ModuleName.Canonical (Name "elm" "core") "Basics") "Never" []) ->
-      (a (VarForeign mLamdera_Wire2 "encodeNever" (Forall (Map.fromList []) (TLambda (TType (ModuleName.Canonical (Name "elm" "core") "Basics") "Never" []) tLamdera_Wire2__Encoder))))
+    (TType (Module.Canonical (Name "elm" "core") "Basics") "Never" []) ->
+      (a (VarForeign mLamdera_Wire2 "encodeNever" (Forall (Map.fromList []) (TLambda (TType (Module.Canonical (Name "elm" "core") "Basics") "Never" []) tLamdera_Wire2__Encoder))))
 
-    (TType (ModuleName.Canonical (Name "elm" "core") "Char") "Char" []) ->
-      (a (VarForeign mLamdera_Wire2 "encodeChar" (Forall (Map.fromList []) (TLambda (TType (ModuleName.Canonical (Name "elm" "core") "Char") "Char" []) tLamdera_Wire2__Encoder))))
+    (TType (Module.Canonical (Name "elm" "core") "Char") "Char" []) ->
+      (a (VarForeign mLamdera_Wire2 "encodeChar" (Forall (Map.fromList []) (TLambda (TType (Module.Canonical (Name "elm" "core") "Char") "Char" []) tLamdera_Wire2__Encoder))))
 
-    (TType (ModuleName.Canonical (Name "elm" "core") "String") "String" []) ->
-      (a (VarForeign mLamdera_Wire2 "encodeString" (Forall (Map.fromList []) (TLambda (TType (ModuleName.Canonical (Name "elm" "core") "String") "String" []) tLamdera_Wire2__Encoder))))
+    (TType (Module.Canonical (Name "elm" "core") "String") "String" []) ->
+      (a (VarForeign mLamdera_Wire2 "encodeString" (Forall (Map.fromList []) (TLambda (TType (Module.Canonical (Name "elm" "core") "String") "String" []) tLamdera_Wire2__Encoder))))
 
     TUnit ->
       (a (VarForeign mLamdera_Wire2 "encodeUnit" (Forall (Map.fromList []) (TLambda TUnit tLamdera_Wire2__Encoder))))
 
-       -- maybe
-       -- list
-    TType (ModuleName.Canonical (Name "elm" "core") "List") "List" [ptype] ->
-      (a (VarForeign
-           mLamdera_Wire2
-           "encodeList"
+    TTuple a_ b Nothing ->
+      (a (VarForeign mLamdera_Wire2 "encodePair"
+            (Forall
+               (Map.fromList [("a", ()), ("b", ())])
+               (TLambda
+                  (TLambda (TVar "a") tLamdera_Wire2__Encoder)
+                  (TLambda
+                     (TLambda (TVar "b") tLamdera_Wire2__Encoder)
+                     (TLambda
+                        (TTuple (TVar "a") (TVar "b") Nothing)
+                        tLamdera_Wire2__Encoder))))))
+
+    TTuple a_ b (Just c) ->
+      (a (VarForeign mLamdera_Wire2 "encodeTriple"
+            (Forall
+               (Map.fromList [("a", ()), ("b", ()), ("c", ())])
+               (TLambda
+                  (TLambda (TVar "a") tLamdera_Wire2__Encoder)
+                  (TLambda
+                     (TLambda (TVar "b") tLamdera_Wire2__Encoder)
+                     (TLambda
+                        (TLambda (TVar "c") tLamdera_Wire2__Encoder)
+                        (TLambda
+                           (TTuple (TVar "a") (TVar "b") (Just (TVar "c")))
+                           tLamdera_Wire2__Encoder)))))))
+
+    TType (Module.Canonical (Name "elm" "core") "Maybe") "Maybe" [ptype] ->
+      (a (VarForeign mLamdera_Wire2 "encodeMaybe"
            (Forall
               (Map.fromList [("a", ())])
               (TLambda
                  (TLambda (TVar "a") tLamdera_Wire2__Encoder)
                  (TLambda
-                    (TType (ModuleName.Canonical (Name "elm" "core") "List") "List" [TVar "a"])
+                    (TType (Module.Canonical (Name "elm" "core") "Maybe") "Maybe" [TVar "a"])
                     tLamdera_Wire2__Encoder)))))
 
-       -- array
-       -- set
-       -- result
+    TType (Module.Canonical (Name "elm" "core") "List") "List" [ptype] ->
+      (a (VarForeign mLamdera_Wire2 "encodeList"
+           (Forall
+              (Map.fromList [("a", ())])
+              (TLambda
+                 (TLambda (TVar "a") tLamdera_Wire2__Encoder)
+                 (TLambda
+                    (TType (Module.Canonical (Name "elm" "core") "List") "List" [TVar "a"])
+                    tLamdera_Wire2__Encoder)))))
+
+    TType (Module.Canonical (Name "elm" "core") "Set") "Set" [ptype] ->
+      (a (VarForeign mLamdera_Wire2 "encodeSet"
+           (Forall
+              (Map.fromList [("value", ())])
+              (TLambda
+                 (TLambda (TVar "value") tLamdera_Wire2__Encoder)
+                 (TLambda
+                    (TType (Module.Canonical (Name "elm" "core") "Set") "Set" [TVar "value"])
+                    tLamdera_Wire2__Encoder)))))
+
+    TType (Module.Canonical (Name "elm" "core") "Array") "Array" [ptype] ->
+      (a (VarForeign mLamdera_Wire2 "encodeArray"
+           (Forall
+              (Map.fromList [("a", ())])
+              (TLambda
+                 (TLambda (TVar "a") tLamdera_Wire2__Encoder)
+                 (TLambda
+                    (TType (Module.Canonical (Name "elm" "core") "Array") "Array" [TVar "a"])
+                    tLamdera_Wire2__Encoder)))))
+
+    TType (Module.Canonical (Name "elm" "core") "Result") "Result" [err, a_] ->
+      (a (VarForeign mLamdera_Wire2 "encodeResult"
+            (Forall
+               (Map.fromList [("err", ()), ("val", ())])
+               (TLambda
+                  (TLambda (TVar "err") tLamdera_Wire2__Encoder)
+                  (TLambda (TLambda (TVar "val") tLamdera_Wire2__Encoder)
+                     (TLambda
+                        (TType (Module.Canonical (Name "elm" "core") "Result") "Result" [TVar "err", TVar "val"])
+                        tLamdera_Wire2__Encoder))))))
+
+    TType (Module.Canonical (Name "elm" "core") "Dict") "Dict" [key, value] ->
+      (a (VarForeign mLamdera_Wire2 "encodeDict"
+            (Forall
+               (Map.fromList [("key", ()), ("value", ())])
+               (TLambda
+                  (TLambda (TVar "key") tLamdera_Wire2__Encoder)
+                  (TLambda (TLambda (TVar "value") tLamdera_Wire2__Encoder)
+                     (TLambda
+                        (TType (Module.Canonical (Name "elm" "core") "Dict") "Dict" [TVar "key", TVar "value"])
+                        tLamdera_Wire2__Encoder))))))
+
+
        -- dict
 
     _ ->
       -- error $ "Not yet implemented: " ++ show tipe
-      str $ Utf8.fromChars $ "encoder not implemented! " ++ show tipe
+      str $ Utf8.fromChars $ "encoderForType not implemented! " ++ show tipe
+
+
+deepEncoderForType tipe =
+  case tipe of
+    TType (Module.Canonical (Name "elm" "core") "Basics") "Int" [] -> encoderForType tipe
+    TType (Module.Canonical (Name "elm" "core") "Basics") "Float" [] -> encoderForType tipe
+    TType (Module.Canonical (Name "elm" "core") "Basics") "Bool" [] -> encoderForType tipe
+    TType (Module.Canonical (Name "elm" "core") "Basics") "Order" [] -> encoderForType tipe
+    TType (Module.Canonical (Name "elm" "core") "Basics") "Never" [] -> encoderForType tipe
+    TType (Module.Canonical (Name "elm" "core") "Char") "Char" [] -> encoderForType tipe
+    TType (Module.Canonical (Name "elm" "core") "String") "String" [] -> encoderForType tipe
+    TUnit -> encoderForType tipe
+
+    TTuple a b Nothing ->
+      call (encoderForType tipe) [ deepEncoderForType a, deepEncoderForType b ]
+
+    TTuple a b (Just c) ->
+      call (encoderForType tipe) [ deepEncoderForType a, deepEncoderForType b, deepEncoderForType c ]
+
+    TType (Module.Canonical (Name "elm" "core") "Maybe") "Maybe" [a] ->
+      call (encoderForType tipe) [ deepEncoderForType a ]
+
+    TType (Module.Canonical (Name "elm" "core") "List") "List" [a] ->
+      call (encoderForType tipe) [ deepEncoderForType a ]
+
+    TType (Module.Canonical (Name "elm" "core") "Set") "Set" [a] ->
+      call (encoderForType tipe) [ deepEncoderForType a ]
+
+    TType (Module.Canonical (Name "elm" "core") "Array") "Array" [a] ->
+      call (encoderForType tipe) [ deepEncoderForType a ]
+
+    TType (Module.Canonical (Name "elm" "core") "Result") "Result" [err, a] ->
+      call (encoderForType tipe) [ deepEncoderForType err, deepEncoderForType a ]
+
+    TType (Module.Canonical (Name "elm" "core") "Dict") "Dict" [key, val] ->
+      call (encoderForType tipe) [ deepEncoderForType key, deepEncoderForType val ]
+
+    _ ->
+      str $ Utf8.fromChars $ "deepEncoderForType not implemented! " ++ show tipe
 
 
 encodeTypeValue tipe value =
   case tipe of
-    (TType (ModuleName.Canonical (Name "elm" "core") "Basics") "Int" []) ->
+    (TType (Module.Canonical (Name "elm" "core") "Basics") "Int" []) ->
       call (encoderForType tipe) [value]
 
-    (TType (ModuleName.Canonical (Name "elm" "core") "Basics") "Float" []) ->
+    (TType (Module.Canonical (Name "elm" "core") "Basics") "Float" []) ->
       call (encoderForType tipe) [value]
 
-    (TType (ModuleName.Canonical (Name "elm" "core") "Basics") "Bool" []) ->
+    (TType (Module.Canonical (Name "elm" "core") "Basics") "Bool" []) ->
       call (encoderForType tipe) [value]
 
-    (TType (ModuleName.Canonical (Name "elm" "core") "Basics") "Order" []) ->
+    (TType (Module.Canonical (Name "elm" "core") "Basics") "Order" []) ->
       call (encoderForType tipe) [value]
 
-    (TType (ModuleName.Canonical (Name "elm" "core") "Basics") "Never" []) ->
+    (TType (Module.Canonical (Name "elm" "core") "Basics") "Never" []) ->
       call (encoderForType tipe) [value]
 
-    (TType (ModuleName.Canonical (Name "elm" "core") "Char") "Char" []) ->
+    (TType (Module.Canonical (Name "elm" "core") "Char") "Char" []) ->
       call (encoderForType tipe) [value]
 
-    (TType (ModuleName.Canonical (Name "elm" "core") "String") "String" []) ->
+    (TType (Module.Canonical (Name "elm" "core") "String") "String" []) ->
       call (encoderForType tipe) [value]
 
     TUnit ->
       call (encoderForType tipe) [value]
 
-    TType (ModuleName.Canonical (Name "elm" "core") "List") "List" [ptype] ->
-       call
-         (encoderForType tipe)
-         [ encoderForType ptype
-         , value
-         ]
+    TTuple a b Nothing ->
+      call (encoderForType tipe) [ deepEncoderForType a, deepEncoderForType b, value ]
+
+    TTuple a b (Just c) ->
+      call (encoderForType tipe) [ deepEncoderForType a, deepEncoderForType b, deepEncoderForType c, value ]
+
+    TType (Module.Canonical (Name "elm" "core") "Maybe") "Maybe" [a] ->
+      call (encoderForType tipe) [ deepEncoderForType a , value ]
+
+    TType (Module.Canonical (Name "elm" "core") "List") "List" [a] ->
+      call (encoderForType tipe) [ deepEncoderForType a , value ]
+
+    TType (Module.Canonical (Name "elm" "core") "Set") "Set" [a] ->
+      call (encoderForType tipe) [ deepEncoderForType a , value ]
+
+    TType (Module.Canonical (Name "elm" "core") "Array") "Array" [a] ->
+      call (encoderForType tipe) [ deepEncoderForType a , value ]
+
+    TType (Module.Canonical (Name "elm" "core") "Result") "Result" [err, a] ->
+      call (encoderForType tipe) [ deepEncoderForType err, deepEncoderForType a, value ]
+
+    TType (Module.Canonical (Name "elm" "core") "Dict") "Dict" [key, val] ->
+      call (encoderForType tipe) [ deepEncoderForType key, deepEncoderForType val, value ]
+
+    _ ->
+      -- error $ "Not yet implemented: " ++ show tipe
+      str $ Utf8.fromChars $ "encodeTypeValue not implemented! " ++ show tipe
 
 
 
@@ -646,68 +772,259 @@ call fn args =
 
 decoderForType tipe =
   case tipe of
-    (TType (ModuleName.Canonical (Name "elm" "core") "Basics") "Int" []) ->
-      (a (VarForeign mLamdera_Wire2 "decodeInt" (Forall (Map.fromList []) (TAlias mLamdera_Wire2 "Decoder" [("a", tipe)] (Filled (TType (ModuleName.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [tipe]))))))
+    (TType (Module.Canonical (Name "elm" "core") "Basics") "Int" []) ->
+      (a (VarForeign mLamdera_Wire2 "decodeInt" (Forall (Map.fromList []) (TAlias mLamdera_Wire2 "Decoder" [("a", tipe)] (Filled (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [tipe]))))))
 
-    (TType (ModuleName.Canonical (Name "elm" "core") "Basics") "Float" []) ->
-      (a (VarForeign mLamdera_Wire2 "decodeFloat" (Forall (Map.fromList []) (TAlias mLamdera_Wire2 "Decoder" [("a", tipe)] (Filled (TType (ModuleName.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [tipe]))))))
+    (TType (Module.Canonical (Name "elm" "core") "Basics") "Float" []) ->
+      (a (VarForeign mLamdera_Wire2 "decodeFloat" (Forall (Map.fromList []) (TAlias mLamdera_Wire2 "Decoder" [("a", tipe)] (Filled (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [tipe]))))))
 
-    (TType (ModuleName.Canonical (Name "elm" "core") "Basics") "Bool" []) ->
-      (a (VarForeign mLamdera_Wire2 "decodeBool" (Forall (Map.fromList []) (TAlias mLamdera_Wire2 "Decoder" [("a", tipe)] (Filled (TType (ModuleName.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [tipe]))))))
+    (TType (Module.Canonical (Name "elm" "core") "Basics") "Bool" []) ->
+      (a (VarForeign mLamdera_Wire2 "decodeBool" (Forall (Map.fromList []) (TAlias mLamdera_Wire2 "Decoder" [("a", tipe)] (Filled (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [tipe]))))))
 
-    (TType (ModuleName.Canonical (Name "elm" "core") "Basics") "Order" []) ->
-      (a (VarForeign mLamdera_Wire2 "decodeOrder" (Forall (Map.fromList []) (TAlias mLamdera_Wire2 "Decoder" [("a", tipe)] (Filled (TType (ModuleName.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [tipe]))))))
+    (TType (Module.Canonical (Name "elm" "core") "Basics") "Order" []) ->
+      (a (VarForeign mLamdera_Wire2 "decodeOrder" (Forall (Map.fromList []) (TAlias mLamdera_Wire2 "Decoder" [("a", tipe)] (Filled (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [tipe]))))))
 
-    (TType (ModuleName.Canonical (Name "elm" "core") "Basics") "Never" []) ->
-      (a (VarForeign mLamdera_Wire2 "decodeNever" (Forall (Map.fromList []) (TAlias mLamdera_Wire2 "Decoder" [("a", tipe)] (Filled (TType (ModuleName.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [tipe]))))))
+    (TType (Module.Canonical (Name "elm" "core") "Basics") "Never" []) ->
+      (a (VarForeign mLamdera_Wire2 "decodeNever" (Forall (Map.fromList []) (TAlias mLamdera_Wire2 "Decoder" [("a", tipe)] (Filled (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [tipe]))))))
 
-    (TType (ModuleName.Canonical (Name "elm" "core") "Char") "Char" []) ->
-      (a (VarForeign mLamdera_Wire2 "decodeChar" (Forall (Map.fromList []) (TAlias mLamdera_Wire2 "Decoder" [("a", tipe)] (Filled (TType (ModuleName.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [tipe]))))))
+    (TType (Module.Canonical (Name "elm" "core") "Char") "Char" []) ->
+      (a (VarForeign mLamdera_Wire2 "decodeChar" (Forall (Map.fromList []) (TAlias mLamdera_Wire2 "Decoder" [("a", tipe)] (Filled (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [tipe]))))))
 
-    (TType (ModuleName.Canonical (Name "elm" "core") "String") "String" []) ->
-      (a (VarForeign mLamdera_Wire2 "decodeString" (Forall (Map.fromList []) (TAlias mLamdera_Wire2 "Decoder" [("a", tipe)] (Filled (TType (ModuleName.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [tipe]))))))
+    (TType (Module.Canonical (Name "elm" "core") "String") "String" []) ->
+      (a (VarForeign mLamdera_Wire2 "decodeString" (Forall (Map.fromList []) (TAlias mLamdera_Wire2 "Decoder" [("a", tipe)] (Filled (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [tipe]))))))
 
     TUnit ->
-      (a (VarForeign mLamdera_Wire2 "decodeUnit" (Forall (Map.fromList []) (TAlias mLamdera_Wire2 "Decoder" [("a", tipe)] (Filled (TType (ModuleName.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [tipe]))))))
+      (a (VarForeign mLamdera_Wire2 "decodeUnit" (Forall (Map.fromList []) (TAlias mLamdera_Wire2 "Decoder" [("a", tipe)] (Filled (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [tipe]))))))
 
+    TTuple a_ b Nothing ->
+        (a (Call
+              (a (VarForeign
+                    (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire2")
+                    "decodePair"
+                    (Forall
+                       (Map.fromList [("a", ()), ("b", ())])
+                       (TLambda
+                          (TAlias
+                             (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire2")
+                             "Decoder"
+                             [("a", TVar "a")]
+                             (Filled
+                                (TType
+                                   (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
+                                   "Decoder"
+                                   [TVar "a"])))
+                          (TLambda
+                             (TAlias
+                                (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire2")
+                                "Decoder"
+                                [("a", TVar "b")]
+                                (Filled
+                                   (TType
+                                      (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
+                                      "Decoder"
+                                      [TVar "b"])))
+                             (TAlias
+                                (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire2")
+                                "Decoder"
+                                [("a", TTuple (TVar "a") (TVar "b") Nothing)]
+                                (Filled
+                                   (TType
+                                      (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
+                                      "Decoder"
+                                      [TTuple (TVar "a") (TVar "b") Nothing]))))))))
+              [ decoderForType a_
+              , decoderForType b
+              ]))
 
--- maybe
--- list
-
-    TType (ModuleName.Canonical (Name "elm" "core") "List") "List" [ptype] ->
+    TTuple a_ b (Just c) ->
       (a (Call
-        (a (VarForeign
-              mLamdera_Wire2
-              "decodeList"
+             (a (VarForeign
+                   (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire2")
+                   "decodeTriple"
+                   (Forall
+                      (Map.fromList [("a", ()), ("b", ()), ("c", ())])
+                      (TLambda
+                         (TAlias (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire2") "Decoder" [("a", TVar "a")]
+                            (Filled
+                               (TType
+                                  (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
+                                  "Decoder"
+                                  [TVar "a"])))
+                         (TLambda
+                            (TAlias (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire2") "Decoder" [("a", TVar "b")]
+                               (Filled
+                                  (TType
+                                     (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
+                                     "Decoder"
+                                     [TVar "b"])))
+                            (TLambda
+                               (TAlias (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire2") "Decoder" [("a", TVar "c")]
+                                  (Filled
+                                     (TType
+                                        (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
+                                        "Decoder"
+                                        [TVar "c"])))
+                               (TAlias (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire2") "Decoder"
+                                  [("a", TTuple (TVar "a") (TVar "b") (Just (TVar "c")))]
+                                  (Filled
+                                     (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder"
+                                        [TTuple (TVar "a") (TVar "b") (Just (TVar "c"))])))))))))
+             [ decoderForType a_
+             , decoderForType b
+             , decoderForType c
+             ]))
+
+    TType (Module.Canonical (Name "elm" "core") "Maybe") "Maybe" [ptype] ->
+      (a (Call
+        (a (VarForeign mLamdera_Wire2 "decodeMaybe"
               (Forall
                  (Map.fromList [("a", ())])
                  (TLambda
+                    (TAlias mLamdera_Wire2 "Decoder" [("a", TVar "a")]
+                       (Filled (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [TVar "a"])))
                     (TAlias
                        mLamdera_Wire2
                        "Decoder"
-                       [("a", TVar "a")]
+                       [("a", TType (Module.Canonical (Name "elm" "core") "Maybe") "Maybe" [TVar "a"])]
                        (Filled
                           (TType
-                             (ModuleName.Canonical (Name "elm" "bytes") "Bytes.Decode")
+                             (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
                              "Decoder"
-                             [TVar "a"])))
-                    (TAlias
-                       mLamdera_Wire2
-                       "Decoder"
-                       [("a", TType (ModuleName.Canonical (Name "elm" "core") "List") "List" [TVar "a"])]
-                       (Filled
-                          (TType
-                             (ModuleName.Canonical (Name "elm" "bytes") "Bytes.Decode")
-                             "Decoder"
-                             [TType (ModuleName.Canonical (Name "elm" "core") "List") "List" [TVar "a"]])))))))
+                             [TType (Module.Canonical (Name "elm" "core") "Maybe") "Maybe" [TVar "a"]])))))))
         [ decoderForType ptype ]))
 
+    TType (Module.Canonical (Name "elm" "core") "List") "List" [ptype] ->
+      (a (Call
+        (a (VarForeign mLamdera_Wire2 "decodeList"
+              (Forall
+                 (Map.fromList [("a", ())])
+                 (TLambda
+                    (TAlias mLamdera_Wire2 "Decoder" [("a", TVar "a")]
+                       (Filled (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [TVar "a"])))
+                    (TAlias
+                       mLamdera_Wire2
+                       "Decoder"
+                       [("a", TType (Module.Canonical (Name "elm" "core") "List") "List" [TVar "a"])]
+                       (Filled
+                          (TType
+                             (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
+                             "Decoder"
+                             [TType (Module.Canonical (Name "elm" "core") "List") "List" [TVar "a"]])))))))
+        [ decoderForType ptype ]))
 
--- array
--- set
--- result
--- dict
+    TType (Module.Canonical (Name "elm" "core") "Set") "Set" [ptype] ->
+      (a (Call
+        (a (VarForeign mLamdera_Wire2 "decodeSet"
+              (Forall
+                 (Map.fromList [("comparable", ())])
+                 (TLambda
+                    (TAlias mLamdera_Wire2 "Decoder" [("a", TVar "comparable")]
+                        (Filled (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [TVar "comparable"])))
+                    (TAlias
+                       mLamdera_Wire2
+                       "Decoder"
+                       [("a", TType (Module.Canonical (Name "elm" "core") "Set") "Set" [TVar "comparable"])]
+                       (Filled
+                          (TType
+                             (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
+                             "Decoder"
+                             [TType (Module.Canonical (Name "elm" "core") "Set") "Set" [TVar "comparable"]])))))))
+        [ decoderForType ptype ]))
 
+    TType (Module.Canonical (Name "elm" "core") "Array") "Array" [ptype] ->
+      (a (Call
+        (a (VarForeign mLamdera_Wire2 "decodeArray"
+              (Forall
+                 (Map.fromList [("a", ())])
+                 (TLambda
+                    (TAlias mLamdera_Wire2 "Decoder" [("a", TVar "a")]
+                       (Filled (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [TVar "a"])))
+                    (TAlias
+                       mLamdera_Wire2
+                       "Decoder"
+                       [("a", TType (Module.Canonical (Name "elm" "core") "Array") "Array" [TVar "a"])]
+                       (Filled
+                          (TType
+                             (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
+                             "Decoder"
+                             [TType (Module.Canonical (Name "elm" "core") "Array") "Array" [TVar "a"]])))))))
+        [ decoderForType ptype ]))
+
+    TType (Module.Canonical (Name "elm" "core") "Result") "Result" [err, a_] ->
+        (a (Call
+              (a (VarForeign mLamdera_Wire2 "decodeResult"
+                    (Forall
+                       (Map.fromList [("err", ()), ("val", ())])
+                       (TLambda
+                          (TAlias mLamdera_Wire2 "Decoder" [("a", TVar "err")]
+                             (Filled
+                                (TType
+                                   (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
+                                   "Decoder"
+                                   [TVar "err"])))
+                          (TLambda (TAlias mLamdera_Wire2 "Decoder" [("a", TVar "val")]
+                                (Filled
+                                   (TType
+                                      (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
+                                      "Decoder"
+                                      [TVar "val"])))
+                             (TAlias mLamdera_Wire2 "Decoder" [ ( "a"
+                                  , TType
+                                      (Module.Canonical (Name "elm" "core") "Result")
+                                      "Result"
+                                      [TVar "err", TVar "val"])
+                                ]
+                                (Filled
+                                   (TType
+                                      (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
+                                      "Decoder"
+                                      [ TType
+                                          (Module.Canonical (Name "elm" "core") "Result")
+                                          "Result"
+                                          [TVar "err", TVar "val"]
+                                      ]))))))))
+              [ decoderForType err
+              , decoderForType a_
+              ]))
+
+    TType (Module.Canonical (Name "elm" "core") "Dict") "Dict" [key, val] ->
+        (a (Call
+              (a (VarForeign mLamdera_Wire2 "decodeDict"
+                    (Forall
+                       (Map.fromList [("comparable", ()), ("value", ())])
+                       (TLambda
+                          (TAlias mLamdera_Wire2 "Decoder" [("a", TVar "comparable")]
+                             (Filled
+                                (TType
+                                   (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
+                                   "Decoder"
+                                   [TVar "comparable"])))
+                          (TLambda
+                             (TAlias mLamdera_Wire2 "Decoder" [("a", TVar "value")]
+                                (Filled
+                                   (TType
+                                      (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
+                                      "Decoder"
+                                      [TVar "value"])))
+                             (TAlias mLamdera_Wire2 "Decoder"
+                                [ ( "a"
+                                  , TType
+                                      (Module.Canonical (Name "elm" "core") "Dict")
+                                      "Dict"
+                                      [TVar "comparable", TVar "value"])
+                                ]
+                                (Filled
+                                   (TType
+                                      (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
+                                      "Decoder"
+                                      [ TType
+                                          (Module.Canonical (Name "elm" "core") "Dict")
+                                          "Dict"
+                                          [TVar "comparable", TVar "value"]
+                                      ]))))))))
+              [ decoderForType key
+              , decoderForType val
+              ]))
 
     _ ->
       -- error $ "Not yet implemented: " ++ show tipe
@@ -719,8 +1036,8 @@ tLamdera_Wire2__Encoder =
      mLamdera_Wire2
      "Encoder"
      []
-       (Filled (TType (ModuleName.Canonical (Name "elm" "bytes") "Bytes.Encode") "Encoder" [])))
+       (Filled (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Encode") "Encoder" [])))
 
 
 mLamdera_Wire2 =
-  (ModuleName.Canonical (Name "lamdera" "codecs") "Lamdera.Wire2")
+  (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire2")

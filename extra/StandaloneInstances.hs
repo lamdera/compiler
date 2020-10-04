@@ -226,7 +226,7 @@ instance Show (Elm.String.String) where
 -- deriving instance Show ModuleName.Canonical
 instance Show ModuleName.Canonical where
   -- show (ModuleName.Canonical pkg moduleName) = quoted $ show pkg ++ ":" ++ Utf8.toChars moduleName
-  show (ModuleName.Canonical pkg moduleName) = "(ModuleName.Canonical (" ++ show pkg ++ ") " ++ show moduleName ++ ")"
+  show (ModuleName.Canonical pkg moduleName) = "(Module.Canonical (" ++ show pkg ++ ") " ++ show moduleName ++ ")"
 
 
 instance (Show a) => Show (Data.NonEmptyList.List a) where

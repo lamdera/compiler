@@ -813,10 +813,10 @@ icdiff realExpected realActual = do
 
   -- putStrLn $ "diff -y --suppress-common-lines --width=160 " <> path1 <> " " <> path2
   -- (exit, stdout, stderr) <- System.Process.readProcessWithExitCode "diff" ["-y", "--suppress-common-lines", "--width=160", path1, path2] ""
-  -- (exit, stdout, stderr) <- System.Process.readProcessWithExitCode "diff" ["--width=160", path1, path2] ""
+  (exit, stdout, stderr) <- System.Process.readProcessWithExitCode "diff" ["--width=160", path1, path2] ""
 
   atomicPutStrLn $ "icdiff -N " <> path1 <> " " <> path2
   -- (exit, stdout, stderr) <- readProcessWithExitCode "icdiff" ["--cols=150", "--show-all-spaces", path1, path2] ""
-  (exit, stdout, stderr) <- System.Process.readProcessWithExitCode "icdiff" ["-N", "--cols=150", path1, path2] ""
+  -- (exit, stdout, stderr) <- System.Process.readProcessWithExitCode "icdiff" ["-N", "--cols=150", path1, path2] ""
 
   pure stdout
