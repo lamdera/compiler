@@ -61,9 +61,6 @@ addWireGenerations canonical pkg ifaces modul =
   if shouldHaveCodecsGenerated pkg then
     case addWireGenerations_ canonical pkg ifaces modul of
       Right canonical_ -> do
-        _ <- unsafePerformIO $ do
-          writeUtf8 "canprinted_no_interface_impl.txt" $ hindentFormatValue canonical_
-          pure (Right canonical_)
         Right canonical_
 
       Left err ->
@@ -349,6 +346,8 @@ upsertDef newDef decls_ =
 
     SaveTheEnvironment ->
       DeclareRec newDef [] SaveTheEnvironment
+      -- @NOTE don't try to optimise to this, it breaks recursive def handling!
+      -- Declare newDef SaveTheEnvironment
 
 
 sameName d1 d2 =

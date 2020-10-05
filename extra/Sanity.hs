@@ -1,41 +1,42 @@
 module Sanity where
 
+{-
+
+Helpers for dealing with `Map.!: given key is not an element in the map` errors.
+
+To be used with ./addSanity.sh and ./removeSanity.sh bash scripts.
+
+See extra/readme.md for more info.
+
+-}
+
 import qualified Data.Map as Map
 import Wire.PrettyPrint
 import GHC.Stack (HasCallStack)
 
 
+{- An alternative version of (!) that will print where it was called from -}
 (!) :: (Ord c, HasCallStack) => Map.Map c a -> c -> a
 (!) m k =
     case Map.lookup k m of
       Just v -> v
       Nothing ->
-        error "Sanity failed!"
+        error "Sanity: (!) failed!"
 
 
-
-debug :: (Ord c, Show c, Show ctx, HasCallStack) => Map.Map c a -> c -> ctx -> a
-debug m k ctx =
+{- An alternative version of (!) that will print the keys and missing key on failure -}
+debugFind :: (Ord c, Show c, HasCallStack) => Map.Map c a -> c -> a
+debugFind m k =
   case Map.lookup k m of
     Just v -> v
     Nothing ->
-      error (sShow ("Sanity:", Map.keys m, "couldn't find key", k, "with context", ctx))
+      error (sShow ("Sanity: (!) failed", Map.keys m, "does not contain:", k))
 
 
-
--- foo :: HasCallStack => String -> String
--- foo s = let ((name, _):_) = getCallStack callStack
---          in s <> ": " <> name
-
-
--- (!) :: (Ord c, Show c, Show ctx) => (Map.Map c a, ctx) -> c -> a
--- (!) (m, ctx) k =
---   case Map.lookup k m of
---     Just v -> v
---     Nothing -> error (sShow ("Sanity:", Map.keys m, "couldn't find key", k, "in map context", ctx))
---
---
---
---
---
---
+{- An alternative version of (!) that will print the keys, missing key & some added context -}
+debugFindCtx :: (Ord c, Show c, Show ctx, HasCallStack) => Map.Map c a -> c -> ctx -> a
+debugFindCtx m k ctx =
+  case Map.lookup k m of
+    Just v -> v
+    Nothing ->
+      error (sShow ("Sanity: (!) failed", Map.keys m, "does not contain:", k, "with context:", ctx))
