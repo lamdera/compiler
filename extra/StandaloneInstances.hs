@@ -17,6 +17,7 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import Data.String (IsString, fromString)
 import qualified Data.Map as Map
+import qualified GHC.IORef
 
 -- Elm modules
 
@@ -45,7 +46,9 @@ import qualified Json.String
 import qualified Parse.Primitives
 import qualified Reporting.Annotation
 import qualified Reporting.Exit
-
+import qualified Type.Type
+import qualified Type.UnionFind
+import qualified Reporting.Error.Type
 
 -- Show
 
@@ -79,6 +82,15 @@ instance Show AST.Canonical.Annotation where
   show (AST.Canonical.Forall freevars tipe) =
     "(Forall (" ++ showMapQualified freevars ++ ") (" ++ show tipe ++ "))"
 
+deriving instance Show AST.Canonical.Module
+deriving instance Show AST.Canonical.Exports
+deriving instance Show AST.Canonical.Export
+deriving instance Show AST.Canonical.Decls
+deriving instance Show AST.Canonical.Alias
+deriving instance Show AST.Canonical.Binop
+deriving instance Show AST.Canonical.Effects
+deriving instance Show AST.Canonical.Port
+deriving instance Show AST.Canonical.Manager
 
 -- deriving instance Eq AST.Canonical.Type
 -- deriving instance Eq AST.Canonical.FieldType
@@ -238,6 +250,29 @@ instance Show Data.Index.ZeroBased where
   show (Data.Index.ZeroBased 2) = "Index.third"
   show (Data.Index.ZeroBased n) = "(Index.ZeroBased " ++ show n ++ ")"
 
+
+deriving instance Show Type.Type.Constraint
+deriving instance Show Type.Type.Type
+deriving instance Show Type.Type.Variable
+deriving instance (Show a) => Show (Reporting.Error.Type.Expected a)
+deriving instance (Show a) => Show (Reporting.Error.Type.PExpected a)
+deriving instance Show Reporting.Error.Type.Context
+deriving instance Show Reporting.Error.Type.PContext
+deriving instance Show Reporting.Error.Type.MaybeName
+deriving instance Show Reporting.Error.Type.SubContext
+deriving instance Show Reporting.Error.Type.Category
+deriving instance Show Reporting.Error.Type.PCategory
+deriving instance Show Type.Type.Descriptor
+-- deriving instance (Show a) => Show (Type.UnionFind.Point a)
+deriving instance Show Type.Type.Content
+deriving instance Show Type.Type.SuperType
+deriving instance Show Type.Type.FlatType
+deriving instance Show Type.Type.Mark
+
+
+
+instance Show (GHC.IORef.IORef a) where
+  show _ = "<IORef>"
 
 
 -- IsString

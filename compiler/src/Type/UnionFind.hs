@@ -1,7 +1,7 @@
 {-# OPTIONS_GHC -funbox-strict-fields #-}
 {-# LANGUAGE BangPatterns #-}
 module Type.UnionFind
-  ( Point
+  ( Point(..) -- @LAMDERA exposed
   , fresh
   , union
   , equivalent

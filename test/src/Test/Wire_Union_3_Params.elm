@@ -26,28 +26,6 @@ type UnionParams
     | ValueTriple ( Int, String, Bool )
 
 
-
--- Values above here are okay
---
---
---
---
---
--- | ValueTime Time.Posix
--- | ValueAliased AliasInt
--- | ValueRecursive AllUnion
---   -- | ValueSubRecursive (ExternalRecord Int) -- breaks wire
---   -- | ValueSubRecursive (ExternalRecord AllUnion) -- also breaks wire
--- | ValueSubRecursive SubRecursiveRecord -- also breaks wire
--- | ValueDeep Subdir.Subsubdir.SubsubdirType.DeepRec
--- | ValueCustom (ExternalCustom Int)
--- | ValueCustomDeep Subdir.Subsubdir.SubsubdirType.DeepCustom
--- | ValueCustomBasic ExternalCustomBasic
--- | ValuePhantom (Phantom OnlyUsedInPhantom)
--- | ValueAliasTuple ExternalAliasTuple
--- | ValueAll AllTypes
-
-
 w2_encode_UnionParams w2_e_val =
     case w2_e_val of
         ValueArrayString v0 ->

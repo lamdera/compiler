@@ -228,6 +228,7 @@ Executable elmx
         Lamdera.Types
         Lamdera.Update
         Lamdera.Wire
+        Lamdera.Wire.Interfaces
         Wire.Source
         Wire.Source2
 
@@ -259,7 +260,7 @@ Executable elmx
         -- Debug helpers:
         StandaloneInstances
         CanSer.CanSer
-        -- Sanity
+        Sanity
         Wire.PrettyPrint
 
 

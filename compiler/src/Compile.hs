@@ -29,8 +29,9 @@ import qualified Type.Solve as Type
 import System.IO.Unsafe (unsafePerformIO)
 
 
-import Lamdera.Wire
--- import Lamdera
+import qualified Lamdera.Wire
+import qualified Lamdera.Wire.Interfaces
+import Lamdera
 -- import StandaloneInstances
 
 -- COMPILE

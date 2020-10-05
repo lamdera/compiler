@@ -11,7 +11,7 @@ module Type.Type
   , SuperType(..)
   , noRank
   , outermostRank
-  , Mark
+  , Mark(..) -- @LAMDERA exposure
   , noMark
   , nextMark
   , (==>)

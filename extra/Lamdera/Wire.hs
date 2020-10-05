@@ -28,12 +28,18 @@ import Lamdera
 import StandaloneInstances
 import qualified CanSer.CanSer as ToSource
 
-debugGeneration modul decls generatedName generated canonicalValue = do
+debugGeneration debugName modul decls generatedName generated canonicalValue = do
   case decls & findDef generatedName of
     Just testDefinition -> do
+
+      debugHaskellPass ("💚 testDefinition " <> show_ (Src.getName modul)) (testDefinition) (pure ())
+      debugHaskellPass ("🧡 generated " <> show_ (Src.getName modul)) (generated) (pure ())
+      diff <- icdiff (hindentFormatValue testDefinition) (hindentFormatValue generated)
+      atomicPutStrLn $ "❌❌❌ failed, attempting pretty-print diff:\n" ++ diff
+
       if generated == testDefinition
         then
-          debugPassText ("✅ generation for " <> show_ (Src.getName modul)) ("okay!") (pure ())
+          debugPassText ("✅ gen " <> debugName <> " " <> show_ (Src.getName modul)) ("okay!") (pure ())
         else do
           debugHaskellPass "🏁 Actual value input" (canonicalValue) (pure ())
           debugPassText ("💚 actual implementation pretty-printed " <> show_ (Src.getName modul)) (ToSource.convert generated) (pure ())
@@ -54,7 +60,10 @@ addWireGenerations :: Can.Module -> Pkg.Name -> Map.Map Module.Raw I.Interface -
 addWireGenerations canonical pkg ifaces modul =
   if shouldHaveCodecsGenerated pkg then
     case addWireGenerations_ canonical pkg ifaces modul of
-      Right canonical_ ->
+      Right canonical_ -> do
+        _ <- unsafePerformIO $ do
+          writeUtf8 "canprinted_no_interface_impl.txt" $ hindentFormatValue canonical_
+          pure (Right canonical_)
         Right canonical_
 
       Left err ->
@@ -120,7 +129,7 @@ addWireGenerations_ canonical pkg ifaces modul = do
           (Source2.generateCodecs Map.empty canonical)
           (pure $ Right canonical)
 
-        -- debugPassText ("💚 actual implementation pretty-printed " <> show_ (Src.getName modul)) (ToSource.convert $ Can._decls result) (pure $ Right canonical)
+        debugPassText ("💚 actual implementation pretty-printed " <> show_ (Src.getName modul)) (ToSource.convert $ Can._decls result) (pure $ Right canonical)
         -- debugHaskellPass ("🧡 aliases " <> show_ (Src.getName modul)) (Can._unions canonical & Map.keys) (pure $ Right canonical)
 
         pure $ Right result
@@ -138,8 +147,8 @@ addWireFunctions pkg modul types encoder decoder decls_ =
   types
     & Map.foldlWithKey (\decls k v ->
       decls
-        & addDef (decoder pkg modul decls_ k v)
-        & addDef (encoder pkg modul decls_ k v)
+        & upsertDef (encoder pkg modul decls_ k v)
+        & upsertDef (decoder pkg modul decls_ k v)
     )
     decls_
 
@@ -168,7 +177,7 @@ pctorUnion cname name union tagName tagIndex args =
 encoderUnion :: Pkg.Name -> Src.Module -> Decls -> Data.Name.Name -> Union -> Def
 encoderUnion pkg modul decls unionName union =
   let
-    !x = unsafePerformIO $ debugGeneration modul decls generatedName generated union
+    -- !x = unsafePerformIO $ debugGeneration "encoderUnion" modul decls generatedName generated union
 
     generatedName = Data.Name.fromChars $ "w2_encode_" ++ Data.Name.toChars unionName
     cname = Module.Canonical pkg (Src.getName modul)
@@ -208,18 +217,21 @@ encoderUnion pkg modul decls unionName union =
 decoderUnion :: Pkg.Name -> Src.Module -> Decls -> Data.Name.Name -> Union -> Def
 decoderUnion pkg modul decls unionName union =
   let
-    !x = unsafePerformIO $ debugGeneration modul decls generatedName generated union
+    -- !x = unsafePerformIO $ debugGeneration "decoderUnion" modul decls generatedName generated union
 
     generatedName = Data.Name.fromChars $ "w2_decode_" ++ Data.Name.toChars unionName
     cname = Module.Canonical pkg (Src.getName modul)
+    unionType = TType cname unionName []
 
     generated =
       Def
+      -- TypedDef
         (a (generatedName))
+        -- (Map.fromList [])
         []
         (decodeUnsignedInt8 |> andThenDecode1
-              (lambda1 (pvar "w2_e_val") $
-                caseof (lvar "w2_e_val") $
+              (lambda1 (pvar "w2v") $
+                caseof (lvar "w2v") $
                   _u_alts union
                     & List.sortOn (\(Ctor name index_ numParams paramTypes) -> name)
                     & imap (\i (Ctor tagName tagIndex numParams paramTypes) ->
@@ -231,6 +243,11 @@ decoderUnion pkg modul decls unionName union =
                     & (\l -> l ++ [p_ –> failDecode])
               )
             )
+        -- (TAlias
+        --   (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire2")
+        --   "Decoder"
+        --   [("a", unionType)]
+        --   (Holey (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [TVar "a"])))
   in
   generated
 
@@ -282,8 +299,8 @@ a v =
 --   | SaveTheEnvironment
 
 
-instance Show (Can.Decls) where
-  show decls_ = show $ declsToList decls_
+-- instance Show (Can.Decls) where
+--   show decls_ = show $ declsToList decls_
 
 
 declsToList :: Decls -> [Def]
@@ -299,53 +316,67 @@ declsToList d =
       []
 
 
-addDef def_ decls_ =
+-- addDef def_ decls_ =
+--   case decls_ of
+--     Declare def decls ->
+--       Declare def_ (Declare def decls)
+--
+--     DeclareRec def defs decls ->
+--       Declare def_ (DeclareRec def defs decls)
+--
+--     SaveTheEnvironment ->
+--       Declare def_ SaveTheEnvironment
+
+
+upsertDef newDef decls_ =
   case decls_ of
     Declare def decls ->
-      Declare def_ (Declare def decls)
+      if sameName def newDef
+        then
+          Declare newDef decls
+        else
+          Declare def (upsertDef newDef decls)
 
     DeclareRec def defs decls ->
-      Declare def_ (DeclareRec def defs decls)
+      if sameName def newDef
+        then
+          DeclareRec newDef defs decls
+        else
+          DeclareRec
+            def
+            (defs & fmap (\d -> if sameName d newDef then newDef else d))
+            (upsertDef newDef decls)
 
     SaveTheEnvironment ->
-      Declare def_ SaveTheEnvironment
+      DeclareRec newDef [] SaveTheEnvironment
+
+
+sameName d1 d2 =
+  defName d1 == defName d2
+  -- error $ "unexpected sameName comparison: \n" ++ (T.unpack $ hindentFormatValue v1) ++ "\n" ++ (T.unpack $ hindentFormatValue v2)
 
 
 findDef name decls =
   decls
     & declsToList
     & List.find (defNameIs name)
-  -- case decls_ of
-  --   Declare def decls ->
-  --
-  --
-  --   DeclareRec def defs decls ->
-  --
-  --
-  --   SaveTheEnvironment ->
-  --     Nothing
-
 
 defNameIs name def =
+  name == defName def
+
+defName def =
   case def of
     Def (A.At region name_) _ _ ->
-      name == name_
+      name_
     TypedDef (A.At region name_) _ _ _ _ ->
-      name == name_
-
-
-
-
+      name_
 
 
 -- @TODO extract this to DSL later...?
 
 
 encodeSequenceWithoutLength list =
-  (a (Call
-        (a (VarForeign
-              mLamdera_Wire2
-              "encodeSequenceWithoutLength"
+  (a (Call (a (VarForeign mLamdera_Wire2 "encodeSequenceWithoutLength"
               (Forall
                  (Map.fromList [])
                  (TLambda
@@ -359,10 +390,7 @@ encodeSequenceWithoutLength list =
 
 
 encodeUnsignedInt8 value =
-  (a (Call
-          (a (VarForeign
-                mLamdera_Wire2
-                "encodeUnsignedInt8"
+  (a (Call (a (VarForeign mLamdera_Wire2 "encodeUnsignedInt8"
                 (Forall
                    (Map.fromList [])
                    (TLambda
@@ -372,9 +400,7 @@ encodeUnsignedInt8 value =
 
 
 decodeUnsignedInt8 =
-  (a (VarForeign
-        mLamdera_Wire2
-        "decodeUnsignedInt8"
+  (a (VarForeign mLamdera_Wire2 "decodeUnsignedInt8"
         (Forall
            (Map.fromList [])
            (TAlias
@@ -389,10 +415,7 @@ decodeUnsignedInt8 =
 
 
 andThenDecode1 lambda =
-  (a (Call
-        (a (VarForeign
-              mLamdera_Wire2
-              "andThenDecode"
+  (a (Call (a (VarForeign mLamdera_Wire2 "andThenDecode"
               (Forall
                  (Map.fromList [("a", ()), ("b", ())])
                  (TLambda
@@ -419,46 +442,43 @@ andThenDecode1 lambda =
 
 
 andMapDecode1 value =
-        (a (Call
-              (a (VarForeign
-                    (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire2")
-                    "andMapDecode"
-                    (Forall
-                       (Map.fromList [("a", ()), ("b", ())])
-                       (TLambda
-                          (TAlias
-                             (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire2")
-                             "Decoder"
-                             [("a", TVar "a")]
-                             (Filled
-                                (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [TVar "a"])))
-                          (TLambda
-                             (TAlias
-                                (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire2")
-                                "Decoder"
-                                [("a", TLambda (TVar "a") (TVar "b"))]
-                                (Filled
-                                   (TType
-                                      (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
-                                      "Decoder"
-                                      [TLambda (TVar "a") (TVar "b")])))
-                             (TAlias
-                                (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire2")
-                                "Decoder"
-                                [("a", TVar "b")]
-                                (Filled
-                                   (TType
-                                      (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
-                                      "Decoder"
-                                      [TVar "b"]))))))))
-              [ value
-              ]))
-
-succeedDecode value =
   (a (Call
         (a (VarForeign
-              mLamdera_Wire2
-              "succeedDecode"
+              (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire2")
+              "andMapDecode"
+              (Forall
+                 (Map.fromList [("a", ()), ("b", ())])
+                 (TLambda
+                    (TAlias
+                       (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire2")
+                       "Decoder"
+                       [("a", TVar "a")]
+                       (Filled
+                          (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [TVar "a"])))
+                    (TLambda
+                       (TAlias
+                          (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire2")
+                          "Decoder"
+                          [("a", TLambda (TVar "a") (TVar "b"))]
+                          (Filled
+                             (TType
+                                (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
+                                "Decoder"
+                                [TLambda (TVar "a") (TVar "b")])))
+                       (TAlias
+                          (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire2")
+                          "Decoder"
+                          [("a", TVar "b")]
+                          (Filled
+                             (TType
+                                (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
+                                "Decoder"
+                                [TVar "b"]))))))))
+        [ value
+        ]))
+
+succeedDecode value =
+  (a (Call (a (VarForeign mLamdera_Wire2 "succeedDecode"
               (Forall
                  (Map.fromList [("a", ())])
                  (TLambda
@@ -473,9 +493,7 @@ succeedDecode value =
 
 
 failDecode =
-  (a (VarForeign
-        mLamdera_Wire2
-        "failDecode"
+  (a (VarForeign mLamdera_Wire2 "failDecode"
         (Forall
            (Map.fromList [("a", ())])
            (TAlias
@@ -664,8 +682,17 @@ encoderForType tipe =
                         (TType (Module.Canonical (Name "elm" "core") "Dict") "Dict" [TVar "key", TVar "value"])
                         tLamdera_Wire2__Encoder))))))
 
+    TType (Module.Canonical (Name "elm" "core") _) _ _ ->
+      str $ Utf8.fromChars $ "encoderForType not implemented! " ++ show tipe
+    TType (Module.Canonical (Name "elm" "bytes") _) _ _ ->
+      str $ Utf8.fromChars $ "encoderForType not implemented! " ++ show tipe
 
-       -- dict
+    TType moduleName typeName params ->
+      -- str $ Utf8.fromChars $ "deepEncoderForType not implemented! " ++ show tipe
+      let
+        generatedName = Data.Name.fromChars $ "w2_encode_" ++ Data.Name.toChars typeName
+      in
+      (a (VarTopLevel moduleName generatedName))
 
     _ ->
       -- error $ "Not yet implemented: " ++ show tipe
@@ -674,32 +701,22 @@ encoderForType tipe =
 
 deepEncoderForType tipe =
   case tipe of
-    TType (Module.Canonical (Name "elm" "core") "Basics") "Int" [] -> encoderForType tipe
-    TType (Module.Canonical (Name "elm" "core") "Basics") "Float" [] -> encoderForType tipe
-    TType (Module.Canonical (Name "elm" "core") "Basics") "Bool" [] -> encoderForType tipe
-    TType (Module.Canonical (Name "elm" "core") "Basics") "Order" [] -> encoderForType tipe
-    TType (Module.Canonical (Name "elm" "core") "Basics") "Never" [] -> encoderForType tipe
-    TType (Module.Canonical (Name "elm" "core") "Char") "Char" [] -> encoderForType tipe
+    TType (Module.Canonical (Name "elm" "core") "Basics") "Int" []    -> encoderForType tipe
+    TType (Module.Canonical (Name "elm" "core") "Basics") "Float" []  -> encoderForType tipe
+    TType (Module.Canonical (Name "elm" "core") "Basics") "Bool" []   -> encoderForType tipe
+    TType (Module.Canonical (Name "elm" "core") "Basics") "Order" []  -> encoderForType tipe
+    TType (Module.Canonical (Name "elm" "core") "Basics") "Never" []  -> encoderForType tipe
+    TType (Module.Canonical (Name "elm" "core") "Char") "Char" []     -> encoderForType tipe
     TType (Module.Canonical (Name "elm" "core") "String") "String" [] -> encoderForType tipe
-    TUnit -> encoderForType tipe
+    TUnit                                                             -> encoderForType tipe
 
-    TTuple a b Nothing ->
-      call (encoderForType tipe) [ deepEncoderForType a, deepEncoderForType b ]
+    TTuple a b Nothing  -> call (encoderForType tipe) [ deepEncoderForType a, deepEncoderForType b ]
+    TTuple a b (Just c) -> call (encoderForType tipe) [ deepEncoderForType a, deepEncoderForType b, deepEncoderForType c ]
 
-    TTuple a b (Just c) ->
-      call (encoderForType tipe) [ deepEncoderForType a, deepEncoderForType b, deepEncoderForType c ]
-
-    TType (Module.Canonical (Name "elm" "core") "Maybe") "Maybe" [a] ->
-      call (encoderForType tipe) [ deepEncoderForType a ]
-
-    TType (Module.Canonical (Name "elm" "core") "List") "List" [a] ->
-      call (encoderForType tipe) [ deepEncoderForType a ]
-
-    TType (Module.Canonical (Name "elm" "core") "Set") "Set" [a] ->
-      call (encoderForType tipe) [ deepEncoderForType a ]
-
-    TType (Module.Canonical (Name "elm" "core") "Array") "Array" [a] ->
-      call (encoderForType tipe) [ deepEncoderForType a ]
+    TType (Module.Canonical (Name "elm" "core") "Maybe") "Maybe" [a] -> call (encoderForType tipe) [ deepEncoderForType a ]
+    TType (Module.Canonical (Name "elm" "core") "List") "List" [a]   -> call (encoderForType tipe) [ deepEncoderForType a ]
+    TType (Module.Canonical (Name "elm" "core") "Set") "Set" [a]     -> call (encoderForType tipe) [ deepEncoderForType a ]
+    TType (Module.Canonical (Name "elm" "core") "Array") "Array" [a] -> call (encoderForType tipe) [ deepEncoderForType a ]
 
     TType (Module.Canonical (Name "elm" "core") "Result") "Result" [err, a] ->
       call (encoderForType tipe) [ deepEncoderForType err, deepEncoderForType a ]
@@ -707,59 +724,52 @@ deepEncoderForType tipe =
     TType (Module.Canonical (Name "elm" "core") "Dict") "Dict" [key, val] ->
       call (encoderForType tipe) [ deepEncoderForType key, deepEncoderForType val ]
 
+    TType (Module.Canonical (Name "elm" "core") _) _ _ ->
+      str $ Utf8.fromChars $ "deepEncoderForType not implemented! " ++ show tipe
+
+    TType (Module.Canonical (Name "elm" "bytes") _) _ _ ->
+      str $ Utf8.fromChars $ "deepEncoderForType not implemented! " ++ show tipe
+
+    TType moduleName typeName params ->
+      str $ Utf8.fromChars $ "deepEncoderForType not implemented! " ++ show tipe
+
     _ ->
       str $ Utf8.fromChars $ "deepEncoderForType not implemented! " ++ show tipe
 
 
 encodeTypeValue tipe value =
   case tipe of
-    (TType (Module.Canonical (Name "elm" "core") "Basics") "Int" []) ->
-      call (encoderForType tipe) [value]
+    (TType (Module.Canonical (Name "elm" "core") "Basics") "Int" [])    -> call (encoderForType tipe) [ value ]
+    (TType (Module.Canonical (Name "elm" "core") "Basics") "Float" [])  -> call (encoderForType tipe) [ value ]
+    (TType (Module.Canonical (Name "elm" "core") "Basics") "Bool" [])   -> call (encoderForType tipe) [ value ]
+    (TType (Module.Canonical (Name "elm" "core") "Basics") "Order" [])  -> call (encoderForType tipe) [ value ]
+    (TType (Module.Canonical (Name "elm" "core") "Basics") "Never" [])  -> call (encoderForType tipe) [ value ]
+    (TType (Module.Canonical (Name "elm" "core") "Char") "Char" [])     -> call (encoderForType tipe) [ value ]
+    (TType (Module.Canonical (Name "elm" "core") "String") "String" []) -> call (encoderForType tipe) [ value ]
+    TUnit                                                               -> call (encoderForType tipe) [ value ]
 
-    (TType (Module.Canonical (Name "elm" "core") "Basics") "Float" []) ->
-      call (encoderForType tipe) [value]
+    TTuple a b Nothing  -> call (encoderForType tipe) [ deepEncoderForType a, deepEncoderForType b, value ]
+    TTuple a b (Just c) -> call (encoderForType tipe) [ deepEncoderForType a, deepEncoderForType b, deepEncoderForType c, value ]
 
-    (TType (Module.Canonical (Name "elm" "core") "Basics") "Bool" []) ->
-      call (encoderForType tipe) [value]
-
-    (TType (Module.Canonical (Name "elm" "core") "Basics") "Order" []) ->
-      call (encoderForType tipe) [value]
-
-    (TType (Module.Canonical (Name "elm" "core") "Basics") "Never" []) ->
-      call (encoderForType tipe) [value]
-
-    (TType (Module.Canonical (Name "elm" "core") "Char") "Char" []) ->
-      call (encoderForType tipe) [value]
-
-    (TType (Module.Canonical (Name "elm" "core") "String") "String" []) ->
-      call (encoderForType tipe) [value]
-
-    TUnit ->
-      call (encoderForType tipe) [value]
-
-    TTuple a b Nothing ->
-      call (encoderForType tipe) [ deepEncoderForType a, deepEncoderForType b, value ]
-
-    TTuple a b (Just c) ->
-      call (encoderForType tipe) [ deepEncoderForType a, deepEncoderForType b, deepEncoderForType c, value ]
-
-    TType (Module.Canonical (Name "elm" "core") "Maybe") "Maybe" [a] ->
-      call (encoderForType tipe) [ deepEncoderForType a , value ]
-
-    TType (Module.Canonical (Name "elm" "core") "List") "List" [a] ->
-      call (encoderForType tipe) [ deepEncoderForType a , value ]
-
-    TType (Module.Canonical (Name "elm" "core") "Set") "Set" [a] ->
-      call (encoderForType tipe) [ deepEncoderForType a , value ]
-
-    TType (Module.Canonical (Name "elm" "core") "Array") "Array" [a] ->
-      call (encoderForType tipe) [ deepEncoderForType a , value ]
+    TType (Module.Canonical (Name "elm" "core") "Maybe") "Maybe" [a] -> call (encoderForType tipe) [ deepEncoderForType a, value ]
+    TType (Module.Canonical (Name "elm" "core") "List") "List" [a]   -> call (encoderForType tipe) [ deepEncoderForType a, value ]
+    TType (Module.Canonical (Name "elm" "core") "Set") "Set" [a]     -> call (encoderForType tipe) [ deepEncoderForType a, value ]
+    TType (Module.Canonical (Name "elm" "core") "Array") "Array" [a] -> call (encoderForType tipe) [ deepEncoderForType a, value ]
 
     TType (Module.Canonical (Name "elm" "core") "Result") "Result" [err, a] ->
       call (encoderForType tipe) [ deepEncoderForType err, deepEncoderForType a, value ]
 
     TType (Module.Canonical (Name "elm" "core") "Dict") "Dict" [key, val] ->
       call (encoderForType tipe) [ deepEncoderForType key, deepEncoderForType val, value ]
+
+    TType (Module.Canonical (Name "elm" "core") _) _ _ ->
+      str $ Utf8.fromChars $ "encodeTypeValue not implemented! " ++ show tipe
+
+    TType (Module.Canonical (Name "elm" "bytes") _) _ _ ->
+      str $ Utf8.fromChars $ "encodeTypeValue not implemented! " ++ show tipe
+
+    TType moduleName typeName params ->
+      call (encoderForType tipe) $ fmap deepEncoderForType params ++ [ value ]
 
     _ ->
       -- error $ "Not yet implemented: " ++ show tipe
@@ -1025,6 +1035,22 @@ decoderForType tipe =
               [ decoderForType key
               , decoderForType val
               ]))
+
+    TType (Module.Canonical (Name "elm" "core") _) _ _ ->
+      str $ Utf8.fromChars $ "decoder not implemented! " ++ show tipe
+
+    TType (Module.Canonical (Name "elm" "bytes") _) _ _ ->
+      str $ Utf8.fromChars $ "decoder not implemented! " ++ show tipe
+
+    TType moduleName typeName params ->
+      let
+        generatedName = Data.Name.fromChars $ "w2_decode_" ++ Data.Name.toChars typeName
+      in
+      if length params == 0
+        then
+          (a (VarTopLevel moduleName generatedName))
+        else
+          call (a (VarTopLevel moduleName generatedName)) $ fmap decoderForType params
 
     _ ->
       -- error $ "Not yet implemented: " ++ show tipe
