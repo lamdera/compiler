@@ -39,7 +39,7 @@ debugGeneration debugName modul decls generatedName generated canonicalValue = d
 
       if generated == testDefinition
         then
-          debugPassText ("✅ gen " <> debugName <> " " <> show_ (Src.getName modul)) ("okay!") (pure ())
+          debugPassText ("✅ gen " <> debugName <> " " <> show_ (Src.getName modul)) ("implementation matches test definition") (pure ())
         else do
           debugHaskellPass "🏁 Actual value input" (canonicalValue) (pure ())
           debugPassText ("💚 actual implementation pretty-printed " <> show_ (Src.getName modul)) (ToSource.convert generated) (pure ())
@@ -249,22 +249,36 @@ decoderUnion pkg modul decls unionName union =
   generated
 
 
-foldlPairs fn list =
-  case list of
-    [] -> error "Error: foldlPairs called with no items! Please report this with your code."
-    x:[] -> x
-    x:xs ->
-      foldl (\acc item -> fn acc item ) x xs
-
-
 encoderAlias :: Pkg.Name -> Src.Module -> Decls -> Data.Name.Name -> Alias -> Def
 encoderAlias pkg modul decls aliasName alias =
-  namedTodo modul $ Utf8.fromChars $ "w2_encode_" ++ Data.Name.toChars aliasName
+  let
+    -- !x = unsafePerformIO $ debugGeneration "encoderAlias" modul decls generatedName generated alias
+
+    generatedName = Data.Name.fromChars $ "w2_encode_" ++ Data.Name.toChars aliasName
+    cname = Module.Canonical pkg (Src.getName modul)
+
+    generated_ (Alias [] tipe) =
+      Def (a (generatedName)) [] (encoderForType cname tipe)
+
+    generated = generated_ alias
+  in
+  generated
+
 
 decoderAlias :: Pkg.Name -> Src.Module -> Decls -> Data.Name.Name -> Alias -> Def
 decoderAlias pkg modul decls aliasName alias =
-  namedTodo modul $ Utf8.fromChars $ "w2_decode_" ++ Data.Name.toChars aliasName
+  let
+    !x = unsafePerformIO $ debugGeneration "decoderAlias" modul decls generatedName generated alias
 
+    generatedName = Data.Name.fromChars $ "w2_decode_" ++ Data.Name.toChars aliasName
+    cname = Module.Canonical pkg (Src.getName modul)
+
+    generated_ (Alias [] tipe) =
+      Def (a (generatedName)) [] (decoderForType cname tipe)
+
+    generated = generated_ alias
+  in
+  generated
 
 
 
@@ -1075,7 +1089,14 @@ decoderForType cname tipe =
                     (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire2")
                     "Decoder"
                     [("a", tipe)]
-                    (Holey (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [TVar "a"]))))
+
+                    -- @TODO what is the differentiator for using one vs other here?
+                    -- (Holey (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [TVar "a"]))))
+                    (Filled
+                        (TType
+                           (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
+                           "Decoder"
+                           [tipe]))))
               ))
 
       in
@@ -1100,3 +1121,11 @@ tLamdera_Wire2__Encoder =
 
 mLamdera_Wire2 =
   (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire2")
+
+
+foldlPairs fn list =
+  case list of
+    [] -> error "Error: foldlPairs called with no items! Please report this with your code."
+    x:[] -> x
+    x:xs ->
+      foldl (\acc item -> fn acc item ) x xs
