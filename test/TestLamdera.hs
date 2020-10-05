@@ -37,7 +37,8 @@ wire = do
         -- [ "src/Test/Wire_Union_1_Basic.elm",
         -- , "src/Test/Wire_Union_2_Basic.elm"
         -- ,  "src/Test/Wire_Union_3_Params.elm"
-        [ "src/Test/Wire_Union_4_Tricky.elm"
+        [ "src/Test/External.elm"
+        , "src/Test/Wire_Union_4_Tricky.elm"
         ]
 
   testFiles & mapM (\filename -> do
