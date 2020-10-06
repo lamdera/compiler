@@ -268,7 +268,7 @@ encoderAlias pkg modul decls aliasName alias =
 decoderAlias :: Pkg.Name -> Src.Module -> Decls -> Data.Name.Name -> Alias -> Def
 decoderAlias pkg modul decls aliasName alias =
   let
-    !x = unsafePerformIO $ debugGeneration "decoderAlias" modul decls generatedName generated alias
+    -- !x = unsafePerformIO $ debugGeneration "decoderAlias" modul decls generatedName generated alias
 
     generatedName = Data.Name.fromChars $ "w2_decode_" ++ Data.Name.toChars aliasName
     cname = Module.Canonical pkg (Src.getName modul)
@@ -700,6 +700,19 @@ encoderForType cname tipe =
     TType (Module.Canonical (Name "elm" "bytes") _) _ _ ->
       str $ Utf8.fromChars $ "encoderForType not implemented! " ++ show tipe
 
+    TRecord fieldMap maybeName ->
+      let
+        fields = fieldsToList fieldMap
+        fieldEncoders =
+          fields
+            & fmap (\(name, field) ->
+                encodeTypeValue cname field (a (Access (a (VarLocal "w2_rec_var0")) (a (name))))
+              )
+      in
+      (a (Lambda [(a (PVar "w2_rec_var0"))]
+        (encodeSequenceWithoutLength $ list fieldEncoders)
+      ))
+
     TType moduleName typeName params ->
       -- str $ Utf8.fromChars $ "deepEncoderForType not implemented! " ++ show tipe
       let
@@ -1072,6 +1085,29 @@ decoderForType cname tipe =
 
     TType (Module.Canonical (Name "elm" "bytes") _) _ _ ->
       str $ Utf8.fromChars $ "decoder not implemented! " ++ show tipe
+
+    TRecord fieldMap maybeName ->
+    -- | TRecord (Map.Map Name FieldType) (Maybe Name)
+      let
+        fields = fieldsToList fieldMap
+
+        pvars :: [Pattern]
+        pvars =
+          (imap (\i (name, field) -> a (PVar $ Data.Name.fromChars $ Data.Name.toChars name ++ "0")) fields)
+          -- (imap (\i (name, field) -> a (PVar $ Data.Name.fromChars $ "w_f" ++ show i)) fields) -- @TODO improve gen
+
+        newRecFields :: Map.Map Data.Name.Name Expr
+        newRecFields =
+          fields
+            & fmap (\(name, field) ->
+                (name, a (VarLocal $ Data.Name.fromChars $ Data.Name.toChars name ++ "0"))
+                -- (name, a (VarLocal $ Data.Name.fromChars $ "w_f" ++ show i)) -- @TODO improve gen
+              )
+            & Map.fromList
+      in
+      [succeedDecode (a (Lambda pvars (a (Record newRecFields ))))]
+      ++ fmap (\(name, field) -> andMapDecode1 (decoderForType cname field)) fields
+        & foldlPairs (|>)
 
     TType moduleName typeName params ->
       let

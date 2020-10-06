@@ -40,7 +40,8 @@ wire = do
         -- ,  "src/Test/Wire_Union_3_Params.elm"
         -- , "src/Test/External.elm"
         -- , "src/Test/Wire_Union_4_Tricky.elm"
-         "src/Test/Wire_Alias_1_Basic.elm"
+        -- , "src/Test/Wire_Alias_1_Basic.elm"
+         "src/Test/Wire_Alias_2_Record.elm"
         ]
 
   testFiles & mapM (\filename -> do
