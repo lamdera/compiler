@@ -35,7 +35,6 @@ generationFileCheck originalFile generatedFile expectedOutput = do
     Nothing ->
       crash $ "Could not read generated file: " <> generatedFile
 
-
 suite :: Test ()
 suite = tests $
   let
@@ -43,15 +42,9 @@ suite = tests $
     herpImp = ModuleName.Canonical (Pkg.Name "author" "project") "Herp"
   in
   [ scope "compile all Elm wire expectations" $ do
-
-      io $ wire
-
-      expectEqual
-        True
-        True
-
+      io $ wire -- Will throw exceptions on failure
+      ok
   ]
-
 
 wire :: IO ()
 wire = do

@@ -232,10 +232,9 @@ extract rawConfig = do
       case D.fromByteString decoder bytes of
         Right values ->
           values
-            & fmap (\(module_, expr, configs) ->
+            & concatMap (\(module_, expr, configs) ->
               configs & fmap (\config -> (module_, expr, config))
             )
-            & concat
 
         Left problem -> do
           -- let !_ = debugHaskell "❌ config extraction failed" problem

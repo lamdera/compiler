@@ -367,7 +367,7 @@ runWrap env t = do
   e <- try $ runReaderT t env
   case e of
     Left e -> do
-      note_ env (messages env ++ " EXCEPTION!!!: " ++ show (e :: SomeException))
+      note_ env (messages env ++ "💥💥💥 EXCEPTION!!!: " ++ show (e :: SomeException))
       runReaderT (putResult Failed) env
       pure Nothing
     Right a -> pure a

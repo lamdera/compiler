@@ -116,7 +116,7 @@ actualFreeVars t =
       [name]
 
     Can.TType _ _ types ->
-      types & fmap actualFreeVars & concat
+      types & concatMap actualFreeVars
 
     Can.TRecord keyTypes mName ->
       keyTypes & Map.map (\(Can.FieldType n t_) -> actualFreeVars t_) & Map.elems & concat

@@ -130,27 +130,27 @@ addWireGenerations_ canonical pkg ifaces modul =
     unionDefs =
       (Can._unions canonical)
         & Map.toList
-        & fmap (\(k, v) ->
+        & concatMap (\(k, v) ->
             [ (encoderUnion isTest pkg modul decls_ k v)
             , (decoderUnion isTest pkg modul decls_ k v)
             ]
         )
-        & concat
 
     aliasDefs =
       (Can._aliases canonical)
         & Map.toList
-        & fmap (\(k, v) ->
+        & concatMap (\(k, v) ->
             [ (encoderAlias isTest pkg modul decls_ k v)
             , (decoderAlias isTest pkg modul decls_ k v)
             ]
         )
-        & concat
 
-    ordered =
+    sortedDefs =
       declsToList decls_
         & List.unionBy (\a b -> defName a == defName b) (unionDefs ++ aliasDefs)
         & fmap defToNode
+        -- The Decls data structure must be topologically sorted by LocalVar refs,
+        -- otherwise type inference will throw Map.! errors and not be able to see sub-functions
         & Graph.stronglyConnComp
         & foldr (\scc decls ->
           case scc of
@@ -158,10 +158,9 @@ addWireGenerations_ canonical pkg ifaces modul =
               addDef def decls
             Graph.CyclicSCC defs ->
               addRecDef defs decls
-
         ) SaveTheEnvironment
   in
-  Right $ canonical { _decls = ordered }
+  Right $ canonical { _decls = sortedDefs }
 
 
 defToNode :: Def -> (Def, Data.Name.Name, [Data.Name.Name])
@@ -831,6 +830,31 @@ encoderForType cname tipe =
         (encodeSequenceWithoutLength $ list fieldEncoders)
       ))
 
+    TAlias moduleName typeName tvars aType ->
+      let
+        generatedName = Data.Name.fromChars $ "w2_encode_" ++ Data.Name.toChars typeName
+
+        decoder =
+          if cname == moduleName
+            -- Referenced type is defined in the current module
+            then (a (VarTopLevel moduleName generatedName))
+            -- Referenced type is defined in another module
+            else
+              (a (VarForeign moduleName generatedName
+                (Forall
+                   (Map.fromList [])
+                   (TLambda
+                      (TType moduleName typeName [])
+                      (TAlias
+                         (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire2")
+                         "Encoder"
+                         []
+                         (Filled (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Encode") "Encoder" [])))))))
+
+      in
+      decoder
+
+
     TType moduleName typeName params ->
       -- str $ Utf8.fromChars $ "deepEncoderForType not implemented! " ++ show tipe
       let
@@ -895,6 +919,9 @@ deepEncoderForType cname tipe =
     TRecord fieldMap maybeName ->
       encoderForType cname tipe
 
+    TAlias moduleName typeName tvars aType ->
+      encoderForType cname tipe
+
     TType moduleName typeName params ->
       let
         generatedName = Data.Name.fromChars $ "w2_encode_" ++ Data.Name.toChars typeName
@@ -951,6 +978,9 @@ encodeTypeValue cname tipe value =
 
     TType (Module.Canonical (Name "elm" "bytes") _) _ _ ->
       str $ Utf8.fromChars $ "encodeTypeValue not implemented! " ++ show tipe
+
+    TAlias moduleName typeName tvars aType ->
+      call (deepEncoderForType cname tipe) [ value ]
 
     TType moduleName typeName params ->
       call (encoderForType cname tipe) $ fmap (deepEncoderForType cname) params ++ [ value ]
@@ -1248,6 +1278,42 @@ decoderForType cname tipe =
       [succeedDecode (a (Lambda pvars (a (Record newRecFields ))))]
       ++ fmap (\(name, field) -> andMapDecode1 (decoderForType cname field)) fields
         & foldlPairs (|>)
+
+    TAlias moduleName typeName tvars aType ->
+      let
+        generatedName = Data.Name.fromChars $ "w2_decode_" ++ Data.Name.toChars typeName
+
+        decoder =
+          if cname == moduleName
+            -- Referenced type is defined in the current module
+            then (a (VarTopLevel moduleName generatedName))
+            -- Referenced type is defined in another module
+            else
+              (a (VarForeign moduleName generatedName
+                (Forall Map.empty
+                  (TAlias
+                    (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire2")
+                    "Decoder"
+                    [("a", tipe)]
+
+                    -- @TODO what is the differentiator for using one vs other here?
+                    -- (Holey (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [TVar "a"]))))
+                    (Filled
+                        (TType
+                           (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
+                           "Decoder"
+                           [tipe]))))
+              ))
+
+      in
+      decoder
+      -- @TODO handle tvars?
+      -- if length params == 0
+      --   then
+      --     decoder
+      --   else
+      --     call decoder $ fmap (decoderForType cname) params
+
 
     TType moduleName typeName params ->
       let

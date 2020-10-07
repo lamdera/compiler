@@ -79,22 +79,20 @@ modifyModul pkg ifaces modul =
 
 unionStubs unions =
   unions
-    & fmap (\(A.At _ (Src.Union (A.At _ name) _ _)) ->
+    & concatMap (\(A.At _ (Src.Union (A.At _ name) _ _)) ->
       [ _Debug_todo $ Data.Name.fromChars $ "w2_encode_" ++ Data.Name.toChars name
       , _Debug_todo $ Data.Name.fromChars $ "w2_decode_" ++ Data.Name.toChars name
       ]
     )
-    & concat
 
 
 aliasStubs aliases =
   aliases
-    & fmap (\(A.At _ (Src.Alias (A.At _ name) _ _)) ->
+    & concatMap (\(A.At _ (Src.Alias (A.At _ name) _ _)) ->
       [ _Debug_todo $ Data.Name.fromChars $ "w2_encode_" ++ Data.Name.toChars name
       , _Debug_todo $ Data.Name.fromChars $ "w2_decode_" ++ Data.Name.toChars name
       ]
     )
-    & concat
 
 
 -- @TODO needs to be consolidated with Wire.shouldHaveCodecsGenerated

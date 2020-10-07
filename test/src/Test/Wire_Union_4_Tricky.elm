@@ -7,8 +7,8 @@ import Set exposing (Set)
 import Test.External exposing (..)
 
 
-type AliasInt
-    = Int
+type alias AliasInt =
+    Int
 
 
 type UnionTricky
@@ -38,23 +38,12 @@ type UnionTricky
 -- | ValueAll AllTypes
 
 
-expected_w2_encode_AliasInt w2v =
-    case w2v of
-        Int ->
-            Lamdera.Wire2.encodeSequenceWithoutLength [ Lamdera.Wire2.encodeUnsignedInt8 0 ]
+expected_w2_encode_AliasInt =
+    Lamdera.Wire2.encodeInt
 
 
 expected_w2_decode_AliasInt =
-    Lamdera.Wire2.decodeUnsignedInt8
-        |> Lamdera.Wire2.andThenDecode
-            (\w2v ->
-                case w2v of
-                    0 ->
-                        Lamdera.Wire2.succeedDecode Int
-
-                    _ ->
-                        Lamdera.Wire2.failDecode
-            )
+    Lamdera.Wire2.decodeInt
 
 
 expected_w2_encode_UnionTricky w2v =
