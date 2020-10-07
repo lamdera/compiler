@@ -387,10 +387,10 @@ checkUserConfig appName prodTokenM = do
 -- Production config value injection
 injectConfig graph = do
 
-  isTypeSnapshot <- Lamdera.isTypeSnapshot
+  -- isTypeSnapshot <- Lamdera.isTypeSnapshot -- @TODO confirm this is right
   inProduction <- Lamdera.inProduction
 
-  if inProduction && not isTypeSnapshot
+  if inProduction -- && not isTypeSnapshot  -- @TODO confirm this is right
     then do
       debug "💉 Injecting production config"
 

@@ -6,6 +6,7 @@ module Lamdera.Wire where
 import System.IO.Unsafe (unsafePerformIO)
 import qualified Data.Map as Map
 import qualified Data.List as List
+import qualified Data.Graph as Graph
 
 import Elm.Package
 import qualified AST.Source as Src
@@ -28,33 +29,71 @@ import Lamdera
 import StandaloneInstances
 import qualified CanSer.CanSer as ToSource
 
-debugGeneration debugName modul decls generatedName generated canonicalValue = do
-  case decls & findDef generatedName of
-    Just testDefinition -> do
+runTests isTest debugName modul decls generatedName generated canonicalValue wire2gen =
+  if isTest
+    then
+      unsafePerformIO $ do
+      let
+        testName = Data.Name.fromChars $ "expected_" ++ Data.Name.toChars generatedName
+        withName (Def (A.At r n) p e) n_ =
+          Def (A.At r n_) p e
 
-      -- debugHaskellPass ("💚 testDefinition " <> show_ (Src.getName modul)) (testDefinition) (pure ())
-      -- debugHaskellPass ("🧡 generated " <> show_ (Src.getName modul)) (generated) (pure ())
-      -- diff <- icdiff (hindentFormatValue testDefinition) (hindentFormatValue generated)
-      -- atomicPutStrLn $ "❌❌❌ failed, attempting pretty-print diff:\n" ++ diff
+      case decls & findDef testName of
+        Just testDefinition -> do
 
-      if generated == testDefinition
-        then
-          debugPassText ("✅ gen " <> debugName <> " " <> show_ (Src.getName modul)) ("implementation matches test definition") (pure ())
-        else do
-          debugHaskellPass "🏁 Actual value input" (canonicalValue) (pure ())
-          debugPassText ("💚 actual implementation pretty-printed " <> show_ (Src.getName modul)) (ToSource.convert generated) (pure ())
-          debugHaskellPass ("🧡 expected implementation AST.Canonical " <> show_ (Src.getName modul)) (testDefinition) (pure ())
+          -- debugHaskellPass ("💚 testDefinition " <> show_ (Src.getName modul)) (testDefinition) (pure ())
+          -- debugHaskellPass ("🧡 generated " <> show_ (Src.getName modul)) (generated) (pure ())
+          -- diff <- icdiff (hindentFormatValue testDefinition) (hindentFormatValue generated)
+          -- atomicPutStrLn $ "❌❌❌ failed, attempting pretty-print diff:\n" ++ diff
 
-          diff <- icdiff (hindentFormatValue testDefinition) (hindentFormatValue generated)
-          diff2 <- icdiff (ToSource.convert testDefinition) (ToSource.convert generated)
+          if generated == testDefinition `withName` generatedName
+            then do
+              atomicPutStrLn $ "✅ gen " <> debugName <> " matches " <> Data.Name.toChars (Src.getName modul) <> "." <> Data.Name.toChars testName
+              -- debugPassText ("🧡 expected implementation pretty-printed " <> show_ (Src.getName modul)) (Source2.generateCodecs Map.empty wire2gen) (pure ())
+            else do
+              debugHaskellPass "🏁 Actual value input" (canonicalValue) (pure ())
+              debugPassText ("💚 actual implementation pretty-printed " <> show_ (Src.getName modul)) (ToSource.convert generated) (pure ())
+              debugPassText ("🧡 expected implementation pretty-printed " <> show_ (Src.getName modul)) (Source2.generateCodecs Map.empty wire2gen) (pure ())
+              debugHaskellPass ("🧡 expected implementation AST.Canonical " <> show_ (Src.getName modul)) (testDefinition) (pure ())
 
-          atomicPutStrLn $ "❌❌❌ failed, attempting pretty-print diff:\n" ++ diff
-          atomicPutStrLn $ "❌❌❌ failed, attempting pretty-print diff:\n" ++ diff2
-          -- atomicPutStrLn $ "❌❌❌ gen does not match test definition, attempting pretty-print diff:\n <NEUTERED>"
+              diff <- icdiff (hindentFormatValue testDefinition) (hindentFormatValue generated)
+              diff2 <- icdiff (ToSource.convert testDefinition) (ToSource.convert generated)
 
-    Nothing ->
-      atomicPutStrLn $ "❌❌❌ Error: " ++ show generatedName ++ " implementation not found in " ++ show (Src.getName modul)
+              atomicPutStrLn $ "❌❌❌ failed, attempting pretty-print diff:\n" ++ diff
+              atomicPutStrLn $ "❌❌❌ failed, attempting pretty-print diff:\n" ++ diff2
+              error "exiting!"
+              -- atomicPutStrLn $ "❌❌❌ gen does not match test definition, attempting pretty-print diff:\n <NEUTERED>"
 
+        Nothing -> do
+          atomicPutStrLn $ "❌ Error: test not found " ++ Data.Name.toChars (Src.getName modul) ++ "." ++ Data.Name.toChars testName
+          debugPassText ("🧡 expected implementation pretty-printed " <> show_ (Src.getName modul)) (Source2.generateCodecs Map.empty wire2gen) (pure ())
+          -- error "exiting!"
+
+      else ()
+
+unionAsModule cname name union =
+  Can.Module
+    { Can._name    = cname
+    , Can._exports = Can.ExportEverything A.zero
+    , Can._docs    = Src.NoDocs A.zero
+    , Can._decls   = Can.SaveTheEnvironment
+    , Can._unions  = Map.singleton name union
+    , Can._aliases = Map.empty
+    , Can._binops  = Map.empty
+    , Can._effects = NoEffects
+    }
+
+aliasAsModule cname name alias =
+  Can.Module
+    { Can._name    = cname
+    , Can._exports = Can.ExportEverything A.zero
+    , Can._docs    = Src.NoDocs A.zero
+    , Can._decls   = Can.SaveTheEnvironment
+    , Can._unions  = Map.empty
+    , Can._aliases = Map.singleton name alias
+    , Can._binops  = Map.empty
+    , Can._effects = NoEffects
+    }
 
 addWireGenerations :: Can.Module -> Pkg.Name -> Map.Map Module.Raw I.Interface -> Src.Module -> Either E.Error Can.Module
 addWireGenerations canonical pkg ifaces modul =
@@ -67,6 +106,114 @@ addWireGenerations canonical pkg ifaces modul =
         Left $ E.BadLamdera err
   else
     Right canonical
+
+
+addWireGenerations_ :: Can.Module -> Pkg.Name -> Map.Map Module.Raw I.Interface -> Src.Module -> Either D.Doc Can.Module
+addWireGenerations_ canonical pkg ifaces modul =
+  let
+    !isTest = unsafePerformIO Lamdera.isTest
+
+    -- !x =
+    --   if isTest then
+    --     unsafePerformIO $ do
+    --
+    --       debugHaskellPass "decls summary before" (declsToSummary decls_) (pure ())
+    --
+    --       -- debugPassText
+    --       --   ("❤️  oldcodecs " <> show_ (Src.getName modul))
+    --       --   (Source2.generateCodecs Map.empty canonical)
+    --       --   (pure ())
+    --   else ()
+
+    decls_ = Can._decls canonical
+
+    unionDefs =
+      (Can._unions canonical)
+        & Map.toList
+        & fmap (\(k, v) ->
+            [ (encoderUnion isTest pkg modul decls_ k v)
+            , (decoderUnion isTest pkg modul decls_ k v)
+            ]
+        )
+        & concat
+
+    aliasDefs =
+      (Can._aliases canonical)
+        & Map.toList
+        & fmap (\(k, v) ->
+            [ (encoderAlias isTest pkg modul decls_ k v)
+            , (decoderAlias isTest pkg modul decls_ k v)
+            ]
+        )
+        & concat
+
+    ordered =
+      declsToList decls_
+        & List.unionBy (\a b -> defName a == defName b) (unionDefs ++ aliasDefs)
+        & fmap defToNode
+        & Graph.stronglyConnComp
+        & foldr (\scc decls ->
+          case scc of
+            Graph.AcyclicSCC def ->
+              addDef def decls
+            Graph.CyclicSCC defs ->
+              addRecDef defs decls
+
+        ) SaveTheEnvironment
+  in
+  Right $ canonical { _decls = ordered }
+
+
+defToNode :: Def -> (Def, Data.Name.Name, [Data.Name.Name])
+defToNode def =
+  ( def, defName def, defGetEdges def )
+
+
+defGetEdges :: Def -> [Data.Name.Name]
+defGetEdges def =
+  case def of
+    Def (A.At region name_) pvars expr ->
+      getLvars expr
+    TypedDef (A.At region name_) freeVars pvars expr tipe ->
+      getLvars expr
+
+
+getLvars :: Expr -> [Data.Name.Name]
+getLvars (A.At _ expr) =
+  case expr of
+    VarLocal name -> []
+    VarTopLevel cname name -> [name]
+    VarKernel module_ name -> []
+    VarForeign cname name annotation -> []
+    VarCtor ctorOpts cname name index annotation -> []
+    VarDebug cname name annotation -> []
+    VarOperator name cname name2 annotation -> []
+    Chr s -> []
+    Str s -> []
+    Int i -> []
+    Float f -> []
+    List exprs -> exprs & concatMap getLvars
+    Negate expr -> getLvars expr
+    Binop name cname name2 annotation e1 e2 -> [e1, e2] & concatMap getLvars
+    Lambda pvars expr -> getLvars expr
+    Call expr params -> getLvars expr ++ concatMap getLvars params
+    If [(e1, e2)] e3 -> [e1, e2, e3] & concatMap getLvars
+    Let def expr -> defGetEdges def ++ getLvars expr
+    LetRec defs expr -> concatMap defGetEdges defs ++ getLvars expr
+    LetDestruct pat e1 e2 -> [e1, e2] & concatMap getLvars
+    Case expr branches -> branches & concatMap (\(CaseBranch pat expr) -> getLvars expr)
+    Accessor name -> []
+    Access expr aName -> getLvars expr
+    Update name expr fieldUpdates -> getLvars expr ++
+      (fieldUpdates & Map.toList & concatMap (\(n, (FieldUpdate region expr)) -> getLvars expr))
+    Record fields ->
+      fields & Map.toList & concatMap (\(n, expr) -> getLvars expr)
+    Unit -> []
+    Tuple e1 e2 me3 ->
+      case me3 of
+        Just e3 -> [e1, e2, e3] & concatMap getLvars
+        Nothing -> [e1, e2] & concatMap getLvars
+    Shader source types -> []
 
 
 shouldHaveCodecsGenerated :: Pkg.Name -> Bool
@@ -90,66 +237,6 @@ shouldHaveCodecsGenerated name =
     _ -> False -- @TODO REMOVE
 
 
--- Can.Module
--- data Module =
---   Module
---     { _name    :: Module.Canonical
---     , _exports :: Exports
---     , _docs    :: Src.Docs
---     , _decls   :: Decls
---     , _unions  :: Map.Map Name Union
---     , _aliases :: Map.Map Name Alias
---     , _binops  :: Map.Map Name Binop
---     , _effects :: Effects
---     }
-
-
-addWireGenerations_ :: Can.Module -> Pkg.Name -> Map.Map Module.Raw I.Interface -> Src.Module -> Either D.Doc Can.Module
-addWireGenerations_ canonical pkg ifaces modul = do
-  let
-    !result =
-      canonical { _decls =
-          Can._decls canonical
-            & addWireFunctions pkg modul (Can._unions canonical) encoderUnion decoderUnion
-            & addWireFunctions pkg modul (Can._aliases canonical) encoderAlias decoderAlias
-        }
-
-  unsafePerformIO $ do -- @TODO finally check whether unsafePerformIO is needed at all?
-
-    -- if (Src.getName modul == "WireTypes")
-    --   then do
-        -- debugHaskellPass ("🧡 expected implementation AST.Canonical " <> show_ (Src.getName modul)) (Can._decls canonical) (pure $ Right canonical)
-        -- debugPassText ("💙 expected implementation pretty-printed " <> show_ (Src.getName modul)) (ToSource.convert $ Can._decls canonical) (pure $ Right canonical)
-
-        debugPassText
-          ("❤️  oldcodecs " <> show_ (Src.getName modul))
-          (Source2.generateCodecs Map.empty canonical)
-          (pure $ Right canonical)
-
-        -- debugPassText ("💚 actual implementation pretty-printed " <> show_ (Src.getName modul)) (ToSource.convert $ Can._decls result) (pure $ Right canonical)
-        -- debugHaskellPass ("🧡 aliases " <> show_ (Src.getName modul)) (Can._unions canonical & Map.keys) (pure $ Right canonical)
-
-        pure $ Right result
-
-
-addWireFunctions
-  :: Pkg.Name
-  -> Src.Module
-  -> Map.Map Data.Name.Name a
-  -> (Pkg.Name -> Src.Module -> Decls -> Data.Name.Name -> a -> Def)
-  -> (Pkg.Name -> Src.Module -> Decls -> Data.Name.Name -> a -> Def)
-  -> Decls
-  -> Decls
-addWireFunctions pkg modul types encoder decoder decls_ =
-  types
-    & Map.foldlWithKey (\decls k v ->
-      decls
-        & upsertDef (encoder pkg modul decls_ k v)
-        & upsertDef (decoder pkg modul decls_ k v)
-    )
-    decls_
-
-
 pctorUnion cname name union tagName tagIndex args =
   let
     -- alts = _u_alts union
@@ -171,10 +258,10 @@ pctorUnion cname name union tagName tagIndex args =
         }))
 
 
-encoderUnion :: Pkg.Name -> Src.Module -> Decls -> Data.Name.Name -> Union -> Def
-encoderUnion pkg modul decls unionName union =
+encoderUnion :: Bool -> Pkg.Name -> Src.Module -> Decls -> Data.Name.Name -> Union -> Def
+encoderUnion isTest pkg modul decls unionName union =
   let
-    -- !x = unsafePerformIO $ debugGeneration "encoderUnion" modul decls generatedName generated union
+    !x = runTests isTest "encoderUnion" modul decls generatedName generated union (unionAsModule cname unionName union)
 
     generatedName = Data.Name.fromChars $ "w2_encode_" ++ Data.Name.toChars unionName
     cname = Module.Canonical pkg (Src.getName modul)
@@ -182,8 +269,8 @@ encoderUnion pkg modul decls unionName union =
     generated =
       Def
         (a (generatedName))
-        [ pvar "w2_e_val" ]
-        (caseof (lvar "w2_e_val") $
+        [ pvar "w2v" ]
+        (caseof (lvar "w2v") $
             _u_alts union
               & List.sortOn (\(Ctor name index_ numParams paramTypes) -> name)
               & imap (\i (Ctor tagName tagIndex numParams paramTypes) ->
@@ -211,10 +298,10 @@ encoderUnion pkg modul decls unionName union =
   generated
 
 
-decoderUnion :: Pkg.Name -> Src.Module -> Decls -> Data.Name.Name -> Union -> Def
-decoderUnion pkg modul decls unionName union =
+decoderUnion :: Bool -> Pkg.Name -> Src.Module -> Decls -> Data.Name.Name -> Union -> Def
+decoderUnion isTest pkg modul decls unionName union =
   let
-    -- !x = unsafePerformIO $ debugGeneration "decoderUnion" modul decls generatedName generated union
+    !x = runTests isTest "decoderUnion" modul decls generatedName generated union (unionAsModule cname unionName union)
 
     generatedName = Data.Name.fromChars $ "w2_decode_" ++ Data.Name.toChars unionName
     cname = Module.Canonical pkg (Src.getName modul)
@@ -249,38 +336,36 @@ decoderUnion pkg modul decls unionName union =
   generated
 
 
-encoderAlias :: Pkg.Name -> Src.Module -> Decls -> Data.Name.Name -> Alias -> Def
-encoderAlias pkg modul decls aliasName alias =
+encoderAlias :: Bool -> Pkg.Name -> Src.Module -> Decls -> Data.Name.Name -> Alias -> Def
+encoderAlias isTest pkg modul decls aliasName alias =
   let
-    -- !x = unsafePerformIO $ debugGeneration "encoderAlias" modul decls generatedName generated alias
+    !x = runTests isTest "encoderAlias" modul decls generatedName generated alias (aliasAsModule cname aliasName alias)
 
     generatedName = Data.Name.fromChars $ "w2_encode_" ++ Data.Name.toChars aliasName
     cname = Module.Canonical pkg (Src.getName modul)
 
-    generated_ (Alias [] tipe) =
-      Def (a (generatedName)) [] (encoderForType cname tipe)
+    generated_ (Alias tvars tipe) = -- @TODO tvars probs shouldn't be ignored
+      Def (a (generatedName)) [] (deepEncoderForType cname tipe)
 
     generated = generated_ alias
   in
   generated
 
 
-decoderAlias :: Pkg.Name -> Src.Module -> Decls -> Data.Name.Name -> Alias -> Def
-decoderAlias pkg modul decls aliasName alias =
+decoderAlias :: Bool -> Pkg.Name -> Src.Module -> Decls -> Data.Name.Name -> Alias -> Def
+decoderAlias isTest pkg modul decls aliasName alias =
   let
-    -- !x = unsafePerformIO $ debugGeneration "decoderAlias" modul decls generatedName generated alias
+    !x = runTests isTest "decoderAlias" modul decls generatedName generated alias (aliasAsModule cname aliasName alias)
 
     generatedName = Data.Name.fromChars $ "w2_decode_" ++ Data.Name.toChars aliasName
     cname = Module.Canonical pkg (Src.getName modul)
 
-    generated_ (Alias [] tipe) =
+    generated_ (Alias tvars tipe) = -- @TODO tvars probs shouldn't be ignored
       Def (a (generatedName)) [] (decoderForType cname tipe)
 
     generated = generated_ alias
   in
   generated
-
-
 
 
 {- Equivalent of writing `functionName = Debug.todo "functionName"` in Elm -}
@@ -304,12 +389,6 @@ a v =
   A.at (A.Position 0 0) (A.Position 0 10) v
 
 
--- data Decls
---   = Declare Def Decls
---   | DeclareRec Def [Def] Decls
---   | SaveTheEnvironment
-
-
 -- instance Show (Can.Decls) where
 --   show decls_ = show $ declsToList decls_
 
@@ -327,19 +406,58 @@ declsToList d =
       []
 
 
--- addDef def_ decls_ =
---   case decls_ of
---     Declare def decls ->
---       Declare def_ (Declare def decls)
---
---     DeclareRec def defs decls ->
---       Declare def_ (DeclareRec def defs decls)
---
---     SaveTheEnvironment ->
---       Declare def_ SaveTheEnvironment
+declsToSummary :: Decls -> [(String, Data.Name.Name)]
+declsToSummary d =
+  case d of
+    Declare def decls ->
+      ("Declare", defName def) : (declsToSummary decls)
+
+    DeclareRec def defs decls ->
+      let defs_ = fmap (\d -> ("-> DeclareRecSub", defName d)) defs
+      in
+      (("DeclareRec", defName def) : defs_) ++ declsToSummary decls
+
+    SaveTheEnvironment ->
+      []
+
+
+addDef def_ decls_ =
+  case decls_ of
+    Declare def decls ->
+      Declare def_ (Declare def decls)
+
+    DeclareRec def defs decls ->
+      Declare def_ (DeclareRec def defs decls)
+
+    SaveTheEnvironment ->
+      Declare def_ SaveTheEnvironment
+
+
+addRecDef (def_:defs) decls_ =
+  case decls_ of
+    Declare def decls ->
+      DeclareRec def_ defs (Declare def decls)
+
+    DeclareRec def defs decls ->
+      DeclareRec def_ defs (DeclareRec def defs decls)
+
+    SaveTheEnvironment ->
+      DeclareRec def_ defs SaveTheEnvironment
 
 
 upsertDef newDef decls_ =
+  case findDef (defName newDef) decls_ of
+    Just _ ->
+      replaceDef newDef decls_
+
+    Nothing ->
+      -- Inject our definitions at the head, as we know they don't rely on
+      -- anything else in the file except themselves, and this allows existing
+      -- functions to reference them (potentially..? @TODO)
+      DeclareRec newDef [] (decls_)
+
+
+replaceDef newDef decls_ =
   case decls_ of
     Declare def decls ->
       if sameName def newDef
@@ -774,8 +892,30 @@ deepEncoderForType cname tipe =
     TType (Module.Canonical (Name "elm" "bytes") _) _ _ ->
       str $ Utf8.fromChars $ "deepEncoderForType not implemented! " ++ show tipe
 
+    TRecord fieldMap maybeName ->
+      encoderForType cname tipe
+
     TType moduleName typeName params ->
-      str $ Utf8.fromChars $ "deepEncoderForType not implemented! " ++ show tipe
+      let
+        generatedName = Data.Name.fromChars $ "w2_encode_" ++ Data.Name.toChars typeName
+        decoder =
+          if cname == moduleName
+            -- Referenced type is defined in the current module
+            then (a (VarTopLevel moduleName generatedName))
+            -- Referenced type is defined in another module
+            else
+              (a (VarForeign moduleName generatedName
+                (Forall
+                   (Map.fromList [])
+                   (TLambda
+                      (TType moduleName typeName [])
+                      (TAlias
+                         (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire2")
+                         "Encoder"
+                         []
+                         (Filled (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Encode") "Encoder" [])))))))
+      in
+      decoder
 
     _ ->
       str $ Utf8.fromChars $ "deepEncoderForType not implemented! " ++ show tipe

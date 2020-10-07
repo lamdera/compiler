@@ -5,6 +5,7 @@ import Lamdera
 import qualified TestLamderaGenerated
 import qualified TestSnapshot
 import qualified TestLamdera
+import qualified TestWire
 
 all =
   EasyTest.run allTests
@@ -28,4 +29,5 @@ allTests =
     [ TestLamderaGenerated.suite
     , scope "evergreen -> type snapshots -> " $ TestSnapshot.suite
     , scope "lamdera -> " $ TestLamdera.suite
+    , scope "wire -> " $ TestWire.suite
     ]

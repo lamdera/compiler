@@ -256,6 +256,7 @@ Executable elmx
         TestLamderaGenerated
         TestSnapshot
         TestTypeHashes
+        TestWire
 
         -- Debug helpers:
         StandaloneInstances

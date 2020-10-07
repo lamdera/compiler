@@ -33,7 +33,8 @@ module Lamdera
   , second
   -- , ppElm
   , isDebug
-  , isTypeSnapshot
+  -- , isTypeSnapshot
+  , isTest
   , ostype
   , env
   , unsafe
@@ -328,6 +329,14 @@ isDebug = do
 isTypeSnapshot :: IO Bool
 isTypeSnapshot = do
   debugM <- Env.lookupEnv "LTYPESNAPSHOT"
+  case debugM of
+    Just _ -> pure True
+    Nothing -> pure False
+
+
+isTest :: IO Bool
+isTest = do
+  debugM <- Env.lookupEnv "LTEST"
   case debugM of
     Just _ -> pure True
     Nothing -> pure False
@@ -783,7 +792,6 @@ withDefault default_ m =
   case m of
     Just v -> v
     Nothing -> default_
-
 
 bsToStrict =
   BSL.toStrict

@@ -47,15 +47,27 @@ data Artifacts =
 
 compile :: Pkg.Name -> Map.Map ModuleName.Raw I.Interface -> Src.Module -> Either E.Error Artifacts
 compile pkg ifaces modul = do
-  -- compile_ pkg ifaces modul
-  -- We've proven we can inject dummy stubs for Src, now we try Can instead.
-  -- let modul = (Lamdera.Wire.modifyModul pkg ifaces modul_)
-  canonical_  <- canonicalize pkg ifaces modul
-  canonical   <- Lamdera.Wire.addWireGenerations canonical_ pkg ifaces modul
-  annotations <- typeCheck modul canonical
-  ()          <- nitpick canonical
-  objects     <- optimize modul annotations canonical
-  return (Artifacts canonical annotations objects)
+  -- Inject stub definitions for wire functions, so the canonicalize phase can run
+  -- Necessary for user-code which references yet-to-be generated functions
+  let modul_ = Lamdera.Wire.Interfaces.modifyModul pkg ifaces modul
+  -- ()          <- debugPassText "starting canonical" "" (pure ())
+  canonical  <- canonicalize pkg ifaces modul_
+  -- ()          <- debugPassText "starting canonical2" "" (pure ())
+
+  -- Add Canonical Wire gens, i.e. the `w2_[en|de]code_TYPENAME` functions
+  canonical_   <- Lamdera.Wire.addWireGenerations canonical pkg ifaces modul_
+
+  -- () <- unsafePerformIO $ do
+  --   writeUtf8 "canprinted_without.txt" (hindentFormatValue canonical_)
+  --   pure (pure ())
+
+  -- ()          <- debugPassText "starting typecheck" "" (pure ())
+  annotations <- typeCheck modul_ canonical_
+  -- ()          <- debugPassText "starting nitpick" "" (pure ())
+  ()          <- nitpick canonical_
+  -- ()          <- debugPassText "starting optimize" "" (pure ())
+  objects     <- optimize modul_ annotations canonical_
+  return (Artifacts canonical_ annotations objects)
 
 
 {- The original compile function for reference -}

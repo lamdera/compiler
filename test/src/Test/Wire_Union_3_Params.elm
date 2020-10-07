@@ -26,8 +26,8 @@ type UnionParams
     | ValueTriple ( Int, String, Bool )
 
 
-w2_encode_UnionParams w2_e_val =
-    case w2_e_val of
+expected_w2_encode_UnionParams w2v =
+    case w2v of
         ValueArrayString v0 ->
             Lamdera.Wire2.encodeSequenceWithoutLength [ Lamdera.Wire2.encodeUnsignedInt8 0, Lamdera.Wire2.encodeArray Lamdera.Wire2.encodeString v0 ]
 
@@ -80,11 +80,11 @@ w2_encode_UnionParams w2_e_val =
             Lamdera.Wire2.encodeSequenceWithoutLength [ Lamdera.Wire2.encodeUnsignedInt8 16, Lamdera.Wire2.encodeUnit v0 ]
 
 
-w2_decode_UnionParams =
+expected_w2_decode_UnionParams =
     Lamdera.Wire2.decodeUnsignedInt8
         |> Lamdera.Wire2.andThenDecode
-            (\w2_e_val ->
-                case w2_e_val of
+            (\w2v ->
+                case w2v of
                     0 ->
                         Lamdera.Wire2.succeedDecode ValueArrayString |> Lamdera.Wire2.andMapDecode (Lamdera.Wire2.decodeArray Lamdera.Wire2.decodeString)
 

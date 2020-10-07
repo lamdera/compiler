@@ -17,43 +17,13 @@ import qualified Lamdera.Update
 import qualified Lamdera.Compile
 import qualified Lamdera.Snapshot
 import TestHelp
-
+import TestWire
 
 import Test.Main (captureProcessResult, withStdin)
 
 -- Current target for ghci :rr command. See ~/.ghci config file, which should contain
 -- something like `:def rr const $ return $ unlines [":r","TestLamdera.target"]`
-target = wire
-
-wire :: IO ()
-wire = do
-  let project = "/Users/mario/dev/projects/elmx/test"
-
-  setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
-  setEnv "LDEBUG" "1"
-  setEnv "ELM_HOME" "/Users/mario/elm-home-elmx-test"
-
-  let testFiles =
-        [
-        --  "src/Test/Wire_Union_1_Basic.elm",
-        -- , "src/Test/Wire_Union_2_Basic.elm"
-        -- ,  "src/Test/Wire_Union_3_Params.elm"
-        -- , "src/Test/External.elm"
-        -- , "src/Test/Wire_Union_4_Tricky.elm"
-        -- , "src/Test/Wire_Alias_1_Basic.elm"
-         "src/Test/Wire_Alias_2_Record.elm"
-        ]
-
-  testFiles & mapM (\filename -> do
-      -- Bust Elm's caching with this one weird trick!
-      touch $ project </> filename
-      Lamdera.Compile.make project (project </> filename)
-    )
-
-  unsetEnv "LOVR"
-  unsetEnv "LDEBUG"
-  unsetEnv "ELM_HOME"
-
+target = TestWire.wire
 
 {-
 
@@ -81,7 +51,7 @@ Press up arrow to get history of prior commands.
 
 -}
 
-all = run suite
+all = run TestLamdera.suite
 
 suite :: Test ()
 suite = tests

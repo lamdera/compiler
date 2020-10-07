@@ -10,8 +10,8 @@ type Union2
     | Alphabetically
 
 
-w2_encode_Union2 w2_e_val =
-    case w2_e_val of
+expected_w2_encode_Union2 w2v =
+    case w2v of
         Alphabetically ->
             Lamdera.Wire2.encodeSequenceWithoutLength [ Lamdera.Wire2.encodeUnsignedInt8 0 ]
 
@@ -25,11 +25,11 @@ w2_encode_Union2 w2_e_val =
             Lamdera.Wire2.encodeSequenceWithoutLength [ Lamdera.Wire2.encodeUnsignedInt8 3 ]
 
 
-w2_decode_Union2 =
+expected_w2_decode_Union2 =
     Lamdera.Wire2.decodeUnsignedInt8
         |> Lamdera.Wire2.andThenDecode
-            (\w2_e_val ->
-                case w2_e_val of
+            (\w2v ->
+                case w2v of
                     0 ->
                         Lamdera.Wire2.succeedDecode Alphabetically
 
