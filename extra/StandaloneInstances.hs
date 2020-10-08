@@ -215,6 +215,10 @@ instance Show Elm.Interface.DependencyInterface where
 instance Show Elm.Kernel.Chunk where
   show _ = "\"<Elm.Kernel.CHunk>\""
 
+deriving instance Show Elm.Interface.Union
+deriving instance Show Elm.Interface.Alias
+
+
 
 deriving instance Show Elm.Constraint.Constraint
 

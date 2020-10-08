@@ -14,6 +14,7 @@ type alias AliasInt =
 type UnionTricky
     = ValueAliased AliasInt
     | ValueRecursive UnionTricky
+    | ValueCustom (ExternalCustomThreaded Int String)
 
 
 
@@ -23,12 +24,9 @@ type UnionTricky
 -- Values above here are okay
 --
 --
---
---
---
 -- | ValueTime Time.Posix
---   -- | ValueSubRecursive (ExternalRecord Int) -- breaks wire
---   -- | ValueSubRecursive (ExternalRecord AllUnion) -- also breaks wire
+--   -- | ValueSubRecursive (ExternalRecord Int) -- breaks wire w mutual recursion
+--   -- | ValueSubRecursive (ExternalRecord AllUnion) -- also breaks wire w mutual recursion
 -- | ValueSubRecursive SubRecursiveRecord -- also breaks wire
 -- | ValueDeep Subdir.Subsubdir.SubsubdirType.DeepRec
 -- | ValueCustom (ExternalCustom Int)
@@ -51,8 +49,11 @@ expected_w2_encode_UnionTricky w2v =
         ValueAliased v0 ->
             Lamdera.Wire2.encodeSequenceWithoutLength [ Lamdera.Wire2.encodeUnsignedInt8 0, w2_encode_AliasInt v0 ]
 
+        ValueCustom v0 ->
+            Lamdera.Wire2.encodeSequenceWithoutLength [ Lamdera.Wire2.encodeUnsignedInt8 1, Test.External.w2_encode_ExternalCustomThreaded Lamdera.Wire2.encodeInt Lamdera.Wire2.encodeString v0 ]
+
         ValueRecursive v0 ->
-            Lamdera.Wire2.encodeSequenceWithoutLength [ Lamdera.Wire2.encodeUnsignedInt8 1, w2_encode_UnionTricky v0 ]
+            Lamdera.Wire2.encodeSequenceWithoutLength [ Lamdera.Wire2.encodeUnsignedInt8 2, w2_encode_UnionTricky v0 ]
 
 
 expected_w2_decode_UnionTricky =
@@ -64,6 +65,9 @@ expected_w2_decode_UnionTricky =
                         Lamdera.Wire2.succeedDecode ValueAliased |> Lamdera.Wire2.andMapDecode w2_decode_AliasInt
 
                     1 ->
+                        Lamdera.Wire2.succeedDecode ValueCustom |> Lamdera.Wire2.andMapDecode (Test.External.w2_decode_ExternalCustomThreaded Lamdera.Wire2.decodeInt Lamdera.Wire2.decodeString)
+
+                    2 ->
                         Lamdera.Wire2.succeedDecode ValueRecursive |> Lamdera.Wire2.andMapDecode w2_decode_UnionTricky
 
                     _ ->

@@ -23,27 +23,10 @@ import qualified Lamdera.Compile
 
 all = EasyTest.run suite
 
-
-generationFileCheck originalFile generatedFile expectedOutput = do
-  -- original <- liftIO $ readUtf8Text originalFile
-  generatedM <- liftIO $ readUtf8Text generatedFile
-
-  case generatedM of
-    Just generated ->
-      expectEqualTextTrimmed generated expectedOutput
-
-    Nothing ->
-      crash $ "Could not read generated file: " <> generatedFile
-
 suite :: Test ()
 suite = tests $
-  let
-    derpImp = ModuleName.Canonical (Pkg.Name "author" "project") "Derp"
-    herpImp = ModuleName.Canonical (Pkg.Name "author" "project") "Herp"
-  in
   [ scope "compile all Elm wire expectations" $ do
-      io $ wire -- Will throw exceptions on failure
-      ok
+      io wire
   ]
 
 wire :: IO ()
@@ -52,6 +35,7 @@ wire = do
 
   setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
   setEnv "LTEST" "1"
+  setEnv "LDEBUG" "1"
   setEnv "ELM_HOME" "/Users/mario/elm-home-elmx-test"
 
   -- Dir.withCurrentDirectory project $
@@ -66,6 +50,7 @@ wire = do
         , "src/Test/Wire_Union_4_Tricky.elm"
         , "src/Test/Wire_Alias_1_Basic.elm"
         , "src/Test/Wire_Alias_2_Record.elm"
+        , "src/Test/Wire_Alias_3_SubAlias.elm"
         ]
 
   testFiles & mapM (\filename -> do
@@ -76,4 +61,5 @@ wire = do
 
   unsetEnv "LOVR"
   unsetEnv "LTEST"
+  unsetEnv "LDEBUG"
   unsetEnv "ELM_HOME"

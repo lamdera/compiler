@@ -229,6 +229,9 @@ Executable elmx
         Lamdera.Update
         Lamdera.Wire
         Lamdera.Wire.Interfaces
+        Lamdera.Wire.Encoder
+        Lamdera.Wire.Decoder
+        Lamdera.Wire.Helpers
         Wire.Source
         Wire.Source2
 

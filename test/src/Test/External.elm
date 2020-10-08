@@ -12,11 +12,20 @@ type ExternalCustomBasic
     | Custom2
 
 
+type ExternalCustomThreaded threadedTvar threadedTvar2
+    = AlphabeticallyLast
+    | AlphabeticallyFirst threadedTvar2
+    | AlphabeticallyKMiddleThreaded threadedTvar
 
--- type ExternalCustom threadedTvar
---     = AlphabeticallyLast
---     | AlphabeticallyFirst
---     | AlphabeticallyKMiddleThreaded threadedTvar
+
+type alias ExternalAliasThreaded threadedTvar =
+    SubSubRecordAlias threadedTvar
+
+
+type alias SubSubRecordAlias threadedTvar =
+    { subType : Int
+    , tvar : threadedTvar
+    }
 
 
 expected_w2_encode_ExternalRecordBasic =
@@ -46,6 +55,53 @@ expected_w2_decode_ExternalCustomBasic =
 
                     1 ->
                         Lamdera.Wire2.succeedDecode Custom2
+
+                    _ ->
+                        Lamdera.Wire2.failDecode
+            )
+
+
+expected_w2_encode_ExternalAliasThreaded w2_x_c_threadedTvar =
+    w2_encode_SubSubRecordAlias w2_x_c_threadedTvar
+
+
+expected_w2_decode_ExternalAliasThreaded w2_x_c_threadedTvar =
+    w2_decode_SubSubRecordAlias w2_x_c_threadedTvar
+
+
+expected_w2_encode_SubSubRecordAlias w2_x_c_threadedTvar =
+    \w2_rec_var0 -> Lamdera.Wire2.encodeSequenceWithoutLength [ Lamdera.Wire2.encodeInt w2_rec_var0.subType, w2_x_c_threadedTvar w2_rec_var0.tvar ]
+
+
+expected_w2_decode_SubSubRecordAlias w2_x_c_threadedTvar =
+    Lamdera.Wire2.succeedDecode (\subType0 tvar0 -> { subType = subType0, tvar = tvar0 }) |> Lamdera.Wire2.andMapDecode Lamdera.Wire2.decodeInt |> Lamdera.Wire2.andMapDecode w2_x_c_threadedTvar
+
+
+expected_w2_encode_ExternalCustomThreaded w2_x_c_threadedTvar w2_x_c_threadedTvar2 w2v =
+    case w2v of
+        AlphabeticallyFirst v0 ->
+            Lamdera.Wire2.encodeSequenceWithoutLength [ Lamdera.Wire2.encodeUnsignedInt8 0, w2_x_c_threadedTvar2 v0 ]
+
+        AlphabeticallyKMiddleThreaded v0 ->
+            Lamdera.Wire2.encodeSequenceWithoutLength [ Lamdera.Wire2.encodeUnsignedInt8 1, w2_x_c_threadedTvar v0 ]
+
+        AlphabeticallyLast ->
+            Lamdera.Wire2.encodeSequenceWithoutLength [ Lamdera.Wire2.encodeUnsignedInt8 2 ]
+
+
+expected_w2_decode_ExternalCustomThreaded w2_x_c_threadedTvar w2_x_c_threadedTvar2 =
+    Lamdera.Wire2.decodeUnsignedInt8
+        |> Lamdera.Wire2.andThenDecode
+            (\w2v ->
+                case w2v of
+                    0 ->
+                        Lamdera.Wire2.succeedDecode AlphabeticallyFirst |> Lamdera.Wire2.andMapDecode w2_x_c_threadedTvar2
+
+                    1 ->
+                        Lamdera.Wire2.succeedDecode AlphabeticallyKMiddleThreaded |> Lamdera.Wire2.andMapDecode w2_x_c_threadedTvar
+
+                    2 ->
+                        Lamdera.Wire2.succeedDecode AlphabeticallyLast
 
                     _ ->
                         Lamdera.Wire2.failDecode
