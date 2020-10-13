@@ -13,6 +13,7 @@ import qualified Elm.Package as Pkg
 import qualified Elm.Interface as I
 
 import Lamdera
+import qualified Lamdera.Project
 import StandaloneInstances
 
 {- Heper functions for AST.Source modifications -}
@@ -46,7 +47,7 @@ import StandaloneInstances
 
 modifyModul pkg ifaces modul =
   unsafePerformIO $ do
-    if (shouldHaveCodecsGenerated pkg)
+    if (Lamdera.Project.shouldHaveCodecsGenerated pkg)
       then do
         -- atomicPutStrLn $ tShow "🧡" $ Src.getName modul
         -- atomicPutStrLn $ tShow "💚" $ Src._exports modul
@@ -94,27 +95,6 @@ aliasStubs aliases =
       ]
     )
 
-
--- @TODO needs to be consolidated with Wire.shouldHaveCodecsGenerated
-shouldHaveCodecsGenerated :: Pkg.Name -> Bool
-shouldHaveCodecsGenerated name =
-  case name of
-    -- Some elm packages are ignored because of cyclic dependencies.
-    -- Those codecs have to be manually defined in `lamdera/codecs`.
-    -- All other packages, even if their types are defined in js, have codecs generated for their types.
-    -- Then we manually override specific types in `Wire.Source`.
-
-    -- elm deps used by lamdera/codecs
-    Name "elm" "bytes" -> False
-    Name "elm" "core" -> False
-
-    -- avoid cyclic imports; generated codecs rely on lamdera/codecs:Lamdera.Wire. This is our codec bootstrap module.
-    Name "lamdera" "codecs" -> False
-
-    -- Everything else should have codecs generated
-    -- _ -> True
-    Name "author" "project" -> True -- @TODO REMOVE
-    _ -> False -- @TODO REMOVE
 
 
 a v =

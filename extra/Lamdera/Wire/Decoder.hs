@@ -289,11 +289,6 @@ decoderForType ifaces cname tipe =
               , decoderForType ifaces cname val
               ]))
 
-    TType (Module.Canonical (Name "elm" "core") _) _ _ ->
-      str $ Utf8.fromChars $ "decoder not implemented! " ++ show tipe
-
-    TType (Module.Canonical (Name "elm" "bytes") _) _ _ ->
-      str $ Utf8.fromChars $ "decoder not implemented! " ++ show tipe
 
     TRecord fieldMap maybeName ->
     -- | TRecord (Map.Map Name FieldType) (Maybe Name)
@@ -349,7 +344,9 @@ decoderForType ifaces cname tipe =
         [] -> decoder
         _ ->
           call decoder $ fmap (\(tvarName, tvarType) ->
-            lvar $ Data.Name.fromChars $ "w2_x_c_" ++ Data.Name.toChars tvarName
+            case tvarType of
+              TVar name ->
+                lvar $ Data.Name.fromChars $ "w2_x_c_" ++ Data.Name.toChars name
           ) tvars
 
 
@@ -419,12 +416,18 @@ decoderForType ifaces cname tipe =
                 )
               ))
       in
-      case params of
-        [] -> decoder
-        _  -> call decoder $ fmap (decoderForType ifaces cname) params
+      if isUnsupportedKernelType tipe
+        then failDecode
+        else
+          case params of
+            [] -> decoder
+            _  -> call decoder $ fmap (decoderForType ifaces cname) params
 
     TVar name ->
       lvar $ Data.Name.fromChars $ "w2_x_c_" ++ Data.Name.toChars name
+
+    TLambda t1 t2 ->
+      failDecode
 
     _ ->
       -- error $ "Not yet implemented: " ++ show tipe

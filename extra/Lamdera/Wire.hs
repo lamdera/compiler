@@ -26,12 +26,15 @@ import qualified Data.Index as Index
 import qualified Wire.Source2 as Source2
 
 import Lamdera
+import qualified Lamdera.Project
 import StandaloneInstances
 import qualified CanSer.CanSer as ToSource
+
 
 import Lamdera.Wire.Helpers
 import Lamdera.Wire.Encoder
 import Lamdera.Wire.Decoder
+
 
 
 runTests isTest debugName modul decls generatedName generated canonicalValue wire2gen =
@@ -102,7 +105,7 @@ aliasAsModule cname name alias =
 
 addWireGenerations :: Can.Module -> Pkg.Name -> Map.Map Module.Raw I.Interface -> Src.Module -> Either E.Error Can.Module
 addWireGenerations canonical pkg ifaces modul =
-  if shouldHaveCodecsGenerated pkg then
+  if Lamdera.Project.shouldHaveCodecsGenerated pkg then
     case addWireGenerations_ canonical pkg ifaces modul of
       Right canonical_ -> do
         Right canonical_
@@ -137,22 +140,46 @@ addWireGenerations_ canonical pkg ifaces modul =
     unionDefs =
       (Can._unions canonical)
         & Map.toList
-        & concatMap (\(k, v) ->
-            [ (encoderUnion isTest ifaces pkg modul decls_ k v)
-            , (decoderUnion isTest ifaces pkg modul decls_ k v)
+        & concatMap (\(name, union) ->
+            [ (encoderUnion isTest ifaces pkg modul decls_ name union)
+            , (decoderUnion isTest ifaces pkg modul decls_ name union)
             ]
         )
 
     aliasDefs =
       (Can._aliases canonical)
         & Map.toList
-        & concatMap (\(k, v) ->
-            [ (encoderAlias isTest ifaces pkg modul decls_ k v)
-            , (decoderAlias isTest ifaces pkg modul decls_ k v)
+        & concatMap (\(name, alias) ->
+            [ (encoderAlias isTest ifaces pkg modul decls_ name alias)
+            , (decoderAlias isTest ifaces pkg modul decls_ name alias)
             ]
         )
 
+    newDefs =
+      (unionDefs ++ aliasDefs)
+
+    newDefsSorted =
+      newDefs
+        & fmap defToNode
+        & Graph.stronglyConnComp
+
+    existingDefs =
+      foldl (\def decls -> removeDef decls def ) decls_ newDefs
+
+      -- declsToList decls_
+        -- & List.deleteFirstsBy (\a b -> defName a == defName b) newDefs
+
     sortedDefs =
+      newDefsSorted
+        & foldr (\scc decls ->
+          case scc of
+            Graph.AcyclicSCC def ->
+              addDef def decls
+            Graph.CyclicSCC defs ->
+              addRecDef defs decls
+        ) existingDefs
+
+    oldImpl =
       declsToList decls_
         & List.unionBy (\a b -> defName a == defName b) (unionDefs ++ aliasDefs)
         & fmap defToNode
@@ -166,8 +193,10 @@ addWireGenerations_ canonical pkg ifaces modul =
             Graph.CyclicSCC defs ->
               addRecDef defs decls
         ) SaveTheEnvironment
+
   in
   Right $ canonical { _decls = sortedDefs }
+  -- Right $ canonical { _decls = oldImpl }
 
 
 defToNode :: Def -> (Def, Data.Name.Name, [Data.Name.Name])
@@ -220,27 +249,6 @@ getLvars (A.At _ expr) =
         Just e3 -> [e1, e2, e3] & concatMap getLvars
         Nothing -> [e1, e2] & concatMap getLvars
     Shader source types -> []
-
-
-shouldHaveCodecsGenerated :: Pkg.Name -> Bool
-shouldHaveCodecsGenerated name =
-  case name of
-    -- Some elm packages are ignored because of cyclic dependencies.
-    -- Those codecs have to be manually defined in `lamdera/codecs`.
-    -- All other packages, even if their types are defined in js, have codecs generated for their types.
-    -- Then we manually override specific types in `Wire.Source`.
-
-    -- elm deps used by lamdera/codecs
-    Name "elm" "bytes" -> False
-    Name "elm" "core" -> False
-
-    -- avoid cyclic imports; generated codecs rely on lamdera/codecs:Lamdera.Wire. This is our codec bootstrap module.
-    Name "lamdera" "codecs" -> False
-
-    -- Everything else should have codecs generated
-    -- _ -> True
-    Name "author" "project" -> True -- @TODO REMOVE
-    _ -> False -- @TODO REMOVE
 
 
 encoderUnion :: Bool -> Map.Map Module.Raw I.Interface -> Pkg.Name -> Src.Module -> Decls -> Data.Name.Name -> Union -> Def
@@ -425,6 +433,26 @@ addRecDef (def_:defs) decls_ =
 
     SaveTheEnvironment ->
       DeclareRec def_ defs SaveTheEnvironment
+
+
+removeDef :: Def -> Decls -> Decls
+removeDef def_ decls_ =
+  case decls_ of
+    Declare def decls ->
+      if (sameName def def_) then
+        decls
+      else
+        Declare def (removeDef def_ decls)
+
+    DeclareRec def defs decls ->
+      if (sameName def def_) then
+        decls
+      else
+        DeclareRec def (List.deleteBy sameName def_ defs) (removeDef def_ decls)
+
+    SaveTheEnvironment ->
+      SaveTheEnvironment
+
 
 sameName :: Def -> Def -> Bool
 sameName d1 d2 =

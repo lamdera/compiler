@@ -32,6 +32,7 @@ suite = tests $
 wire :: IO ()
 wire = do
   let project = "/Users/mario/dev/projects/elmx/test"
+  -- let project = "/Users/mario/dev/projects/elmx/test/elm-time"
 
   setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
   setEnv "LTEST" "1"

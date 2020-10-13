@@ -230,6 +230,13 @@ encoderForType ifaces cname tipe =
       in
       decoder
 
+    TVar name ->
+      -- Tvars should always have a local encoder in scope
+      lvar $ Data.Name.fromChars $ "w2_x_c_" ++ Data.Name.toChars name
+
+    TLambda t1 t2 ->
+      failEncode
+
     _ ->
       -- error $ "Not yet implemented: " ++ show tipe
       str $ Utf8.fromChars $ "encoderForType not implemented! " ++ show tipe
@@ -260,14 +267,16 @@ deepEncoderForType ifaces cname tipe =
     TType (Module.Canonical (Name "elm" "core") "Dict") "Dict" [key, val] ->
       call (encoderForType ifaces cname tipe) [ deepEncoderForType ifaces cname key, deepEncoderForType ifaces cname val ]
 
-    TType (Module.Canonical (Name "elm" "core") _) _ _ ->
-      str $ Utf8.fromChars $ "deepEncoderForType not implemented! " ++ show tipe
-
-    TType (Module.Canonical (Name "elm" "bytes") _) _ _ ->
-      str $ Utf8.fromChars $ "deepEncoderForType not implemented! " ++ show tipe
+    -- TType (Module.Canonical (Name "elm" "core") _) _ _ ->
+    --   str $ Utf8.fromChars $ "deepEncoderForType not implemented! " ++ show tipe
+    --
+    -- TType (Module.Canonical (Name "elm" "bytes") _) _ _ ->
+    --   str $ Utf8.fromChars $ "deepEncoderForType not implemented! " ++ show tipe
 
     TType moduleName typeName params ->
-      encoderForType ifaces cname tipe
+      if isUnsupportedKernelType tipe
+        then failEncode
+        else encoderForType ifaces cname tipe
 
     TRecord fieldMap maybeName ->
       encoderForType ifaces cname tipe
@@ -279,6 +288,9 @@ deepEncoderForType ifaces cname tipe =
           call (encoderForType ifaces cname tipe) $ fmap (\(tvarName, tvarType) ->
             lvar $ Data.Name.fromChars $ "w2_x_c_" ++ Data.Name.toChars tvarName
           ) tvars
+
+    TVar name     -> encoderForType ifaces cname tipe
+    TLambda t1 t2 -> encoderForType ifaces cname tipe
 
     _ ->
       str $ Utf8.fromChars $ "deepEncoderForType not implemented! " ++ show tipe
@@ -319,11 +331,14 @@ encodeTypeValue ifaces cname tipe value =
       call (encoderForType ifaces cname tipe) $ fmap (deepEncoderForType ifaces cname) params ++ [ value ]
 
     TAlias moduleName typeName tvars aType ->
-      call (deepEncoderForType ifaces cname tipe) [ value ]
+      call (encoderForType ifaces cname tipe) $ fmap (\(tvarName, tvarType) -> deepEncoderForType ifaces cname tvarType) tvars ++ [ value ]
 
     TVar name ->
       -- Tvars should always have a local encoder in scope
       call (lvar $ Data.Name.fromChars $ "w2_x_c_" ++ Data.Name.toChars name) [value]
+
+    TLambda t1 t2 ->
+      call failEncode [ value ]
 
     _ ->
       -- error $ "Not yet implemented: " ++ show tipe

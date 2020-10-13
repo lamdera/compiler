@@ -14,10 +14,35 @@ import qualified Reporting.Exit as Exit
 import qualified Reporting.Task as Task
 import qualified System.Environment as Env
 import qualified Data.List as List
-import qualified Elm.Package
+import Elm.Package
+
 import Lamdera
 import qualified Lamdera.Progress
 import StandaloneInstances
+
+
+
+shouldHaveCodecsGenerated :: Elm.Package.Name -> Bool
+shouldHaveCodecsGenerated name =
+  case name of
+    -- Some elm packages are ignored because of cyclic dependencies.
+    -- Those codecs have to be manually defined in `lamdera/codecs`.
+    -- All other packages, even if their types are defined in js, have codecs generated for their types.
+    -- Then we manually override specific types in `Wire.Source`.
+
+    -- elm deps used by lamdera/codecs
+    Name "elm" "bytes" -> False
+    Name "elm" "core" -> False
+
+    -- avoid cyclic imports; generated codecs rely on lamdera/codecs:Lamdera.Wire. This is our codec bootstrap module.
+    Name "lamdera" "codecs" -> False
+
+    -- Everything else should have codecs generated
+    -- _ -> True
+    Name "elm" "time" -> True -- @TODO REMOVE
+    Name "author" "project" -> True -- @TODO REMOVE
+    _ -> False -- @TODO REMOVE
+
 
 
 maybeAppName :: IO (Maybe Text)
