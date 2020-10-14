@@ -166,10 +166,7 @@ addWireGenerations_ canonical pkg ifaces modul =
     existingDefs =
       foldl (\def decls -> removeDef decls def ) decls_ newDefs
 
-      -- declsToList decls_
-        -- & List.deleteFirstsBy (\a b -> defName a == defName b) newDefs
-
-    sortedDefs =
+    extendedDecls =
       newDefsSorted
         & foldr (\scc decls ->
           case scc of
@@ -194,9 +191,32 @@ addWireGenerations_ canonical pkg ifaces modul =
               addRecDef defs decls
         ) SaveTheEnvironment
 
+    extendedExports =
+      case Can._exports canonical of
+        ExportEverything region ->
+          ExportEverything region
+
+        Export exports ->
+          newDefs
+            & foldl (\exports def ->
+                addExport def exports
+              )
+              exports
+            & Export
   in
-  Right $ canonical { _decls = sortedDefs }
-  -- Right $ canonical { _decls = oldImpl }
+  Right $ canonical
+    { _decls = extendedDecls
+    , _exports = extendedExports
+    }
+
+
+addExport :: Def -> Map.Map Data.Name.Name (A.Located Export) -> Map.Map Data.Name.Name (A.Located Export)
+addExport def exports =
+  case def of
+    Def (A.At region name_) pvars expr ->
+      Map.insert name_ (a ExportValue) exports
+    TypedDef (A.At region name_) freeVars pvars expr tipe ->
+      Map.insert name_ (a ExportValue) exports
 
 
 defToNode :: Def -> (Def, Data.Name.Name, [Data.Name.Name])
