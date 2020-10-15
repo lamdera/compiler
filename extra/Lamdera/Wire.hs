@@ -6,7 +6,6 @@ module Lamdera.Wire where
 import System.IO.Unsafe (unsafePerformIO)
 import qualified Data.Map as Map
 import qualified Data.List as List
-import qualified Data.Graph as Graph
 
 import Elm.Package
 import qualified AST.Source as Src
@@ -25,16 +24,15 @@ import qualified Data.Index as Index
 
 import qualified Wire.Source2 as Source2
 
-import Lamdera
-import qualified Lamdera.Project
 import StandaloneInstances
 import qualified CanSer.CanSer as ToSource
 
-
+import Lamdera
+import qualified Lamdera.Project
 import Lamdera.Wire.Helpers
 import Lamdera.Wire.Encoder
 import Lamdera.Wire.Decoder
-
+import Lamdera.Wire.Graph
 
 
 runTests isTest debugName modul decls generatedName generated canonicalValue wire2gen =
@@ -121,20 +119,6 @@ addWireGenerations_ canonical pkg ifaces modul =
   let
     !isTest = unsafePerformIO Lamdera.isTest
 
-    -- !x =
-    --   if isTest then
-    --     unsafePerformIO $ do
-    --
-    --       -- debugHaskellPass "decls summary before"
-    --       --   (declsToSummary decls_)
-    --       --   (pure ())
-    --
-    --       -- debugPassText
-    --       --   ("❤️  oldcodecs " <> show_ (Src.getName modul))
-    --       --   (Source2.generateCodecs Map.empty canonical)
-    --       --   (pure ())
-    --   else ()
-
     decls_ = Can._decls canonical
 
     unionDefs =
@@ -158,39 +142,26 @@ addWireGenerations_ canonical pkg ifaces modul =
     newDefs =
       (unionDefs ++ aliasDefs)
 
-    newDefsSorted =
-      newDefs
-        & fmap defToNode
-        & Graph.stronglyConnComp
-
-    existingDefs =
+    {- Existing decls, with the injected Wire.Interface placeholders removed -}
+    existingDecls =
       foldl (\def decls -> removeDef decls def ) decls_ newDefs
 
     extendedDecls =
-      newDefsSorted
-        & foldr (\scc decls ->
-          case scc of
-            Graph.AcyclicSCC def ->
-              addDef def decls
-            Graph.CyclicSCC defs ->
-              addRecDef defs decls
-        ) existingDefs
+      newDefs
+        & Lamdera.Wire.Graph.stronglyConnCompDefs
+        & Lamdera.Wire.Graph.addGraphDefsToDecls existingDecls
 
-    oldImpl =
+    {- This implementation sorted all decls, however sorting only by lvar is
+    not a valid dependency sort for all functions, only for wire functions!
+    Left here for reference temporarily in case the new approach also causes
+    issues, so we have a record of the things we've tried. -}
+    oldDeclsImpl =
       declsToList decls_
         & List.unionBy (\a b -> defName a == defName b) (unionDefs ++ aliasDefs)
-        & fmap defToNode
-        -- The Decls data structure must be topologically sorted by LocalVar refs,
-        -- otherwise type inference will throw Map.! errors and not be able to see sub-functions
-        & Graph.stronglyConnComp
-        & foldr (\scc decls ->
-          case scc of
-            Graph.AcyclicSCC def ->
-              addDef def decls
-            Graph.CyclicSCC defs ->
-              addRecDef defs decls
-        ) SaveTheEnvironment
+        & Lamdera.Wire.Graph.stronglyConnCompDefs
+        & Lamdera.Wire.Graph.addGraphDefsToDecls SaveTheEnvironment
 
+    {- For any modules that don't ExportEverything, we add our newDefs to exports -}
     extendedExports =
       case Can._exports canonical of
         ExportEverything region ->
@@ -217,58 +188,6 @@ addExport def exports =
       Map.insert name_ (a ExportValue) exports
     TypedDef (A.At region name_) freeVars pvars expr tipe ->
       Map.insert name_ (a ExportValue) exports
-
-
-defToNode :: Def -> (Def, Data.Name.Name, [Data.Name.Name])
-defToNode def =
-  ( def, defName def, defGetEdges def )
-
-
-defGetEdges :: Def -> [Data.Name.Name]
-defGetEdges def =
-  case def of
-    Def (A.At region name_) pvars expr ->
-      getLvars expr
-    TypedDef (A.At region name_) freeVars pvars expr tipe ->
-      getLvars expr
-
-
-getLvars :: Expr -> [Data.Name.Name]
-getLvars (A.At _ expr) =
-  case expr of
-    VarLocal name -> []
-    VarTopLevel cname name -> [name]
-    VarKernel module_ name -> []
-    VarForeign cname name annotation -> []
-    VarCtor ctorOpts cname name index annotation -> []
-    VarDebug cname name annotation -> []
-    VarOperator name cname name2 annotation -> []
-    Chr s -> []
-    Str s -> []
-    Int i -> []
-    Float f -> []
-    List exprs -> exprs & concatMap getLvars
-    Negate expr -> getLvars expr
-    Binop name cname name2 annotation e1 e2 -> [e1, e2] & concatMap getLvars
-    Lambda pvars expr -> getLvars expr
-    Call expr params -> getLvars expr ++ concatMap getLvars params
-    If [(e1, e2)] e3 -> [e1, e2, e3] & concatMap getLvars
-    Let def expr -> defGetEdges def ++ getLvars expr
-    LetRec defs expr -> concatMap defGetEdges defs ++ getLvars expr
-    LetDestruct pat e1 e2 -> [e1, e2] & concatMap getLvars
-    Case expr branches -> branches & concatMap (\(CaseBranch pat expr) -> getLvars expr)
-    Accessor name -> []
-    Access expr aName -> getLvars expr
-    Update name expr fieldUpdates -> getLvars expr ++
-      (fieldUpdates & Map.toList & concatMap (\(n, (FieldUpdate region expr)) -> getLvars expr))
-    Record fields ->
-      fields & Map.toList & concatMap (\(n, expr) -> getLvars expr)
-    Unit -> []
-    Tuple e1 e2 me3 ->
-      case me3 of
-        Just e3 -> [e1, e2, e3] & concatMap getLvars
-        Nothing -> [e1, e2] & concatMap getLvars
-    Shader source types -> []
 
 
 encoderUnion :: Bool -> Map.Map Module.Raw I.Interface -> Pkg.Name -> Src.Module -> Decls -> Data.Name.Name -> Union -> Def
@@ -395,103 +314,3 @@ decoderAlias isTest ifaces pkg modul decls aliasName alias@(Alias tvars tipe) =
     generated = Def (a (generatedName)) ptvars $ decoderForType ifaces cname tipe
   in
   generated
-
-
--- instance Show (Can.Decls) where
---   show decls_ = show $ declsToList decls_
-
-
-declsToList :: Decls -> [Def]
-declsToList d =
-  case d of
-    Declare def decls ->
-      def : (declsToList decls)
-
-    DeclareRec def defs decls ->
-      (def : defs) ++ declsToList decls
-
-    SaveTheEnvironment ->
-      []
-
-
-{- For debugging -}
-declsToSummary :: Decls -> [(String, Data.Name.Name)]
-declsToSummary d =
-  case d of
-    Declare def decls ->
-      ("Declare", defName def) : (declsToSummary decls)
-
-    DeclareRec def defs decls ->
-      let defs_ = fmap (\d -> ("-> DeclareRecSub", defName d)) defs
-      in
-      (("DeclareRec", defName def) : defs_) ++ declsToSummary decls
-
-    SaveTheEnvironment ->
-      []
-
-addDef :: Def -> Decls -> Decls
-addDef def_ decls_ =
-  case decls_ of
-    Declare def decls ->
-      Declare def_ (Declare def decls)
-
-    DeclareRec def defs decls ->
-      Declare def_ (DeclareRec def defs decls)
-
-    SaveTheEnvironment ->
-      Declare def_ SaveTheEnvironment
-
-
-addRecDef :: [Def] -> Decls -> Decls
-addRecDef (def_:defs) decls_ =
-  case decls_ of
-    Declare def decls ->
-      DeclareRec def_ defs (Declare def decls)
-
-    DeclareRec def defs decls ->
-      DeclareRec def_ defs (DeclareRec def defs decls)
-
-    SaveTheEnvironment ->
-      DeclareRec def_ defs SaveTheEnvironment
-
-
-removeDef :: Def -> Decls -> Decls
-removeDef def_ decls_ =
-  case decls_ of
-    Declare def decls ->
-      if (sameName def def_) then
-        decls
-      else
-        Declare def (removeDef def_ decls)
-
-    DeclareRec def defs decls ->
-      if (sameName def def_) then
-        decls
-      else
-        DeclareRec def (List.deleteBy sameName def_ defs) (removeDef def_ decls)
-
-    SaveTheEnvironment ->
-      SaveTheEnvironment
-
-
-sameName :: Def -> Def -> Bool
-sameName d1 d2 =
-  defName d1 == defName d2
-
-findDef :: Data.Name.Name -> Decls -> Maybe Def
-findDef name decls =
-  decls
-    & declsToList
-    & List.find (defNameIs name)
-
-defNameIs :: Data.Name.Name -> Def -> Bool
-defNameIs name def =
-  name == defName def
-
-defName :: Def -> Data.Name.Name
-defName def =
-  case def of
-    Def (A.At region name_) _ _ ->
-      name_
-    TypedDef (A.At region name_) _ _ _ _ ->
-      name_

@@ -72,6 +72,106 @@ isUnsupportedKernelType tipe =
 
 
 
+-- instance Show (Can.Decls) where
+--   show decls_ = show $ declsToList decls_
+
+
+declsToList :: Decls -> [Def]
+declsToList d =
+  case d of
+    Declare def decls ->
+      def : (declsToList decls)
+
+    DeclareRec def defs decls ->
+      (def : defs) ++ declsToList decls
+
+    SaveTheEnvironment ->
+      []
+
+
+{- For debugging -}
+declsToSummary :: Decls -> [(String, Data.Name.Name)]
+declsToSummary d =
+  case d of
+    Declare def decls ->
+      ("Declare", defName def) : (declsToSummary decls)
+
+    DeclareRec def defs decls ->
+      let defs_ = fmap (\d -> ("-> DeclareRecSub", defName d)) defs
+      in
+      (("DeclareRec", defName def) : defs_) ++ declsToSummary decls
+
+    SaveTheEnvironment ->
+      []
+
+addDef :: Def -> Decls -> Decls
+addDef def_ decls_ =
+  case decls_ of
+    Declare def decls ->
+      Declare def_ (Declare def decls)
+
+    DeclareRec def defs decls ->
+      Declare def_ (DeclareRec def defs decls)
+
+    SaveTheEnvironment ->
+      Declare def_ SaveTheEnvironment
+
+
+addRecDef :: [Def] -> Decls -> Decls
+addRecDef (def_:defs) decls_ =
+  case decls_ of
+    Declare def decls ->
+      DeclareRec def_ defs (Declare def decls)
+
+    DeclareRec def defs decls ->
+      DeclareRec def_ defs (DeclareRec def defs decls)
+
+    SaveTheEnvironment ->
+      DeclareRec def_ defs SaveTheEnvironment
+
+
+removeDef :: Def -> Decls -> Decls
+removeDef def_ decls_ =
+  case decls_ of
+    Declare def decls ->
+      if (sameName def def_) then
+        decls
+      else
+        Declare def (removeDef def_ decls)
+
+    DeclareRec def defs decls ->
+      if (sameName def def_) then
+        decls
+      else
+        DeclareRec def (List.deleteBy sameName def_ defs) (removeDef def_ decls)
+
+    SaveTheEnvironment ->
+      SaveTheEnvironment
+
+
+sameName :: Def -> Def -> Bool
+sameName d1 d2 =
+  defName d1 == defName d2
+
+findDef :: Data.Name.Name -> Decls -> Maybe Def
+findDef name decls =
+  decls
+    & declsToList
+    & List.find (defNameIs name)
+
+defNameIs :: Data.Name.Name -> Def -> Bool
+defNameIs name def =
+  name == defName def
+
+defName :: Def -> Data.Name.Name
+defName def =
+  case def of
+    Def (A.At region name_) _ _ ->
+      name_
+    TypedDef (A.At region name_) _ _ _ _ ->
+      name_
+
+
 foreignTypeTvars :: Module.Raw -> Data.Name.Name -> Map.Map Module.Raw I.Interface -> [Data.Name.Name]
 foreignTypeTvars module_ typeName ifaces =
   case ifaces & Map.lookup module_ of
@@ -86,11 +186,13 @@ foreignTypeTvars module_ typeName ifaces =
     Nothing ->
       []
 
+
 unionTvars union =
   case union of
     I.OpenUnion union_ -> _u_vars union_
     I.ClosedUnion union_ -> _u_vars union_
     I.PrivateUnion union_ -> _u_vars union_
+
 
 aliasTvars alias =
   case alias of
