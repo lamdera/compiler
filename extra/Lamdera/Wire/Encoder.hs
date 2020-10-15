@@ -147,10 +147,10 @@ encoderForType ifaces cname tipe =
                         (TType (Module.Canonical (Name "elm" "core") "Dict") "Dict" [TVar "key", TVar "value"])
                         tLamdera_Wire2__Encoder))))))
 
-    TType (Module.Canonical (Name "elm" "core") _) _ _ ->
-      str $ Utf8.fromChars $ "encoderForType not implemented! " ++ show tipe
-    TType (Module.Canonical (Name "elm" "bytes") _) _ _ ->
-      str $ Utf8.fromChars $ "encoderForType not implemented! " ++ show tipe
+
+    TType (Module.Canonical (Name "elm" "bytes") "Bytes") "Bytes" params ->
+      (a (VarForeign mLamdera_Wire2 "encodeBytes" (Forall Map.empty (TLambda tipe tLamdera_Wire2__Encoder))))
+
 
     TType moduleName typeName params ->
       let
@@ -267,11 +267,7 @@ deepEncoderForType ifaces cname tipe =
     TType (Module.Canonical (Name "elm" "core") "Dict") "Dict" [key, val] ->
       call (encoderForType ifaces cname tipe) [ deepEncoderForType ifaces cname key, deepEncoderForType ifaces cname val ]
 
-    -- TType (Module.Canonical (Name "elm" "core") _) _ _ ->
-    --   str $ Utf8.fromChars $ "deepEncoderForType not implemented! " ++ show tipe
-    --
-    -- TType (Module.Canonical (Name "elm" "bytes") _) _ _ ->
-    --   str $ Utf8.fromChars $ "deepEncoderForType not implemented! " ++ show tipe
+    TType (Module.Canonical (Name "elm" "bytes") "Bytes") "Bytes" params      -> encoderForType ifaces cname tipe
 
     TType moduleName typeName params ->
       if isUnsupportedKernelType tipe
@@ -321,11 +317,7 @@ encodeTypeValue ifaces cname tipe value =
     TType (Module.Canonical (Name "elm" "core") "Dict") "Dict" [key, val] ->
       call (encoderForType ifaces cname tipe) [ deepEncoderForType ifaces cname key, deepEncoderForType ifaces cname val, value ]
 
-    TType (Module.Canonical (Name "elm" "core") _) _ _ ->
-      str $ Utf8.fromChars $ "encodeTypeValue not implemented! " ++ show tipe
-
-    TType (Module.Canonical (Name "elm" "bytes") _) _ _ ->
-      str $ Utf8.fromChars $ "encodeTypeValue not implemented! " ++ show tipe
+    TType (Module.Canonical (Name "elm" "bytes") "Bytes") "Bytes" _ -> call (encoderForType ifaces cname tipe) [ value ]
 
     TType moduleName typeName params ->
       call (encoderForType ifaces cname tipe) $ fmap (deepEncoderForType ifaces cname) params ++ [ value ]

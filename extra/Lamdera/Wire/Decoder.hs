@@ -349,6 +349,9 @@ decoderForType ifaces cname tipe =
                 lvar $ Data.Name.fromChars $ "w2_x_c_" ++ Data.Name.toChars name
           ) tvars
 
+    TType (Module.Canonical (Name "elm" "bytes") "Bytes") "Bytes" params ->
+      decodeBytes
+
 
     TType moduleName typeName params ->
       let

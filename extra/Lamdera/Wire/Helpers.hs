@@ -38,35 +38,37 @@ But we still need to know about them in order to create the right wire encoder/d
 -}
 isUnsupportedKernelType tipe =
   case tipe of
+
+  -- Unconstructable
+    TType (Module.Canonical (Name "elm" "core") "Basics") "Never" _ -> True
+
+  -- Types backed by JS values
+    TType (Module.Canonical (Name "elm" "core") "Task") "Task" _ -> True
+    TType (Module.Canonical (Name "elm" "core") "Process") "Id" _ -> True -- alias of Platform.ProcessId
+    TType (Module.Canonical (Name "elm" "core") "Platform") "ProcessId" _ -> True
+    TType (Module.Canonical (Name "elm" "core") "Platform") "Program" _ -> True
+    TType (Module.Canonical (Name "elm" "core") "Platform") "Router" _ -> True
+    TType (Module.Canonical (Name "elm" "core") "Platform") "Task" _ -> True
+    TType (Module.Canonical (Name "elm" "core") "Platform.Cmd") "Cmd" _ -> True
+    TType (Module.Canonical (Name "elm" "core") "Platform.Sub") "Sub" _ -> True
+
     TType (Module.Canonical (Name "elm" "bytes") "Bytes.Encode") "Encoder" _ -> True
     TType (Module.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" _ -> True
-  -- , (("elm/bytes", "Bytes") "Endianness" _ -> True
+
     TType (Module.Canonical (Name "elm" "virtualdom") "VirtualDom") "Node" _ -> True
     TType (Module.Canonical (Name "elm" "virtualdom") "VirtualDom") "Attribute" _ -> True
     TType (Module.Canonical (Name "elm" "virtualdom") "VirtualDom") "Handler" _ -> True
-  -- Disable for now, but need to revisit these and whether we want actual proper wire support
-  -- , (("elm/browser", "Browser") "UrlRequest" _ -> True
-  -- , (("elm/browser", "Browser.Navigation") "Key" _ -> True
+
     TType (Module.Canonical (Name "elm" "file") "File") "File" _ -> True
-  -- not implemented yet, but needed by other pkgs
-    TType (Module.Canonical (Name "elm" "core") "Process") "Id" _ -> True -- alias of Platform.ProcessId
-    TType (Module.Canonical (Name "elm" "core") "Platform") "ProcessId" _ -> True -- time
-  -- not needed by anything immediately, but we don't know how to encode these anyway, so let's fail them now
-    TType (Module.Canonical (Name "elm" "core") "Platform") "Program" _ -> True -- idk
-    TType (Module.Canonical (Name "elm" "core") "Platform") "Router" _ -> True -- idk
-    TType (Module.Canonical (Name "elm" "core") "Platform") "Task" _ -> True -- idk
-    TType (Module.Canonical (Name "elm" "core") "Platform.Cmd") "Cmd" _ -> True -- idk
-    TType (Module.Canonical (Name "elm" "core") "Platform.Sub") "Sub" _ -> True
-  -- elm/json
+
     TType (Module.Canonical (Name "elm" "json") "Json.Encode") "Value" _ -> True -- js type
     TType (Module.Canonical (Name "elm" "json") "Json.Decode") "Decoder" _ -> True -- js type
     TType (Module.Canonical (Name "elm" "json") "Json.Decode") "Value" _ -> True -- js type
-  -- elm/core
-    TType (Module.Canonical (Name "elm" "core") "Task") "Task" _ -> True -- js type
+
+    -- Disable for now, but need to revisit these and whether we want actual proper wire support
+    -- , (("elm/browser", "Browser.Navigation") "Key" _ -> True -- This is a JS backed value
+
     _ -> False
-
-
-
 
 
 
@@ -154,6 +156,21 @@ decodeUnsignedInt8 =
                     (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
                     "Decoder"
                     [TType (Module.Canonical (Name "elm" "core") "Basics") "Int" []]))))))
+
+
+decodeBytes =
+ (a (VarForeign mLamdera_Wire2 "decodeBytes"
+       (Forall
+          Map.empty
+          (TAlias
+             mLamdera_Wire2
+             "Decoder"
+             [("a", TType (Module.Canonical (Name "elm" "bytes") "Bytes") "Bytes" [])]
+             (Filled
+                (TType
+                   (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
+                   "Decoder"
+                   [TType (Module.Canonical (Name "elm" "bytes") "Bytes") "Bytes" []]))))))
 
 
 andThenDecode1 lambda =
