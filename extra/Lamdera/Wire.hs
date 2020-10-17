@@ -59,20 +59,19 @@ runTests isTest debugName modul decls generatedName generated canonicalValue wir
             else do
               debugHaskellPass "🏁 Actual value input" (canonicalValue) (pure ())
               -- debugPassText ("💚 actual implementation pretty-printed " <> show_ (Src.getName modul)) (ToSource.convert generated) (pure ())
-              debugPassText ("🧡 expected implementation pretty-printed " <> show_ (Src.getName modul)) (Source2.generateCodecs Map.empty wire2gen) (pure ())
+              -- debugPassText ("🧡 expected implementation pretty-printed " <> show_ (Src.getName modul)) (Source2.generateCodecs Map.empty wire2gen) (pure ())
               -- debugHaskellPass ("🧡 expected implementation AST.Canonical " <> show_ (Src.getName modul)) (testDefinition) (pure ())
 
               diff <- icdiff (hindentFormatValue testDefinition) (hindentFormatValue generated)
               diff2 <- icdiff (ToSource.convert testDefinition) (ToSource.convert generated)
-
-              atomicPutStrLn $ "❌❌❌ failed, attempting pretty-print diff:\n" ++ diff
-              atomicPutStrLn $ "❌❌❌ failed, attempting pretty-print diff:\n" ++ diff2
+              atomicPutStrLn $ "❌❌❌ failed, attempting pretty-print diff1:\n" ++ diff
+              atomicPutStrLn $ "❌❌❌ failed, attempting pretty-print diff2:\n" ++ diff2
               -- error "exiting!"
-              -- atomicPutStrLn $ "❌❌❌ gen does not match test definition, attempting pretty-print diff:\n <NEUTERED>"
+              -- atomicPutStrLn $ "❌❌❌ " ++ Data.Name.toChars (Src.getName modul) ++ "." ++ Data.Name.toChars generatedName ++ " gen does not match test definition."
 
         Nothing -> do
-          atomicPutStrLn $ "❌ Error: test not found " ++ Data.Name.toChars (Src.getName modul) ++ "." ++ Data.Name.toChars testName
-          debugPassText ("🧡 expected implementation pretty-printed " <> show_ (Src.getName modul)) (Source2.generateCodecs Map.empty wire2gen) (pure ())
+          atomicPutStrLn $ "⚠️  Warning: test not found " ++ Data.Name.toChars (Src.getName modul) ++ "." ++ Data.Name.toChars testName -- ++ "\n" ++ show (declsToList decls & fmap defName)
+          -- debugPassText ("🧡 expected implementation pretty-printed " <> show_ (Src.getName modul)) (Source2.generateCodecs Map.empty wire2gen) (pure ())
           -- error "exiting!"
 
       else ()
@@ -103,7 +102,7 @@ aliasAsModule cname name alias =
 
 addWireGenerations :: Can.Module -> Pkg.Name -> Map.Map Module.Raw I.Interface -> Src.Module -> Either E.Error Can.Module
 addWireGenerations canonical pkg ifaces modul =
-  if Lamdera.Project.shouldHaveCodecsGenerated pkg then
+  if Lamdera.Wire.Helpers.shouldHaveCodecsGenerated pkg then
     case addWireGenerations_ canonical pkg ifaces modul of
       Right canonical_ -> do
         Right canonical_

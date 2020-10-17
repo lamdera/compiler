@@ -44,7 +44,8 @@ wire = do
   --   @TODO in future?
 
   let testFiles =
-        [ "src/Test/Wire_Union_1_Basic.elm"
+        [
+          "src/Test/Wire_Union_1_Basic.elm"
         , "src/Test/Wire_Union_2_Basic.elm"
         , "src/Test/External.elm"
         , "src/Test/Wire_Union_3_Params.elm"
@@ -52,8 +53,7 @@ wire = do
         , "src/Test/Wire_Alias_1_Basic.elm"
         , "src/Test/Wire_Alias_2_Record.elm"
         , "src/Test/Wire_Alias_3_SubAlias.elm"
-        , "src/Test/Wire_Core_Types.elm"
-        -- , "src/Time.elm"
+        ,  "src/Test/Wire_Core_Types.elm"
         ]
 
   testFiles & mapM (\filename -> do

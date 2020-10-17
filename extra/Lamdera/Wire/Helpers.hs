@@ -31,6 +31,29 @@ import StandaloneInstances
 import qualified CanSer.CanSer as ToSource
 
 
+shouldHaveCodecsGenerated :: Elm.Package.Name -> Bool
+shouldHaveCodecsGenerated name =
+  case name of
+    -- Some elm packages are ignored because of cyclic dependencies.
+    -- Those codecs have to be manually defined in `lamdera/codecs`.
+    -- All other packages, even if their types are defined in js, have codecs generated for their types.
+    -- Then we manually override specific types in `Wire.Source`.
+
+    -- elm deps used by lamdera/codecs
+    Name "elm" "bytes" -> False
+    Name "elm" "core" -> False
+
+    -- avoid cyclic imports; generated codecs rely on lamdera/codecs:Lamdera.Wire. This is our codec bootstrap module.
+    Name "lamdera" "codecs" -> False
+
+    -- Everything else should have codecs generated
+    -- _ -> True
+    Name "elm" "time" -> True -- @TODO REMOVE
+    Name "author" "project" -> True -- @TODO REMOVE
+    _ -> True -- @TODO REMOVE
+
+
+
 {- NOTE: Any recursive usage of these types in user-code will get caught in the TypeDiff,
 the mapping there has been checked extensively against types in packages that are backed by Kernel.
 
@@ -67,6 +90,10 @@ isUnsupportedKernelType tipe =
 
     -- Disable for now, but need to revisit these and whether we want actual proper wire support
     -- , (("elm/browser", "Browser.Navigation") "Key" _ -> True -- This is a JS backed value
+
+    TAlias moduleName typeName tvars (Holey tipe) -> isUnsupportedKernelType tipe
+    TAlias moduleName typeName tvars (Filled tipe) -> isUnsupportedKernelType tipe
+
 
     _ -> False
 
@@ -454,3 +481,40 @@ foldrPairs fn list =
     x:[] -> x
     x:xs ->
       fn x (foldrPairs fn xs)
+
+
+
+
+unwrapAliasesDeep t =
+  case t of
+    TLambda t1 t2 -> t -- @TODO wrong to not de-alias fns?
+
+    TVar name -> t
+
+    TType (Module.Canonical (Name "elm" "core") "Maybe") "Maybe" [a] -> TType (Module.Canonical (Name "elm" "core") "Maybe") "Maybe" [unwrapAliasesDeep a]
+    TType (Module.Canonical (Name "elm" "core") "List") "List" [a]   -> TType (Module.Canonical (Name "elm" "core") "List") "List" [unwrapAliasesDeep a]
+    TType (Module.Canonical (Name "elm" "core") "Set") "Set" [a]     -> TType (Module.Canonical (Name "elm" "core") "Set") "Set" [unwrapAliasesDeep a]
+    TType (Module.Canonical (Name "elm" "core") "Array") "Array" [a] -> TType (Module.Canonical (Name "elm" "core") "Array") "Array" [unwrapAliasesDeep a]
+
+    TType (Module.Canonical (Name "elm" "core") "Result") "Result" [err, a] ->
+      TType (Module.Canonical (Name "elm" "core") "Result") "Result" [unwrapAliasesDeep err, unwrapAliasesDeep a]
+
+    TType (Module.Canonical (Name "elm" "core") "Dict") "Dict" [key, val] ->
+      TType (Module.Canonical (Name "elm" "core") "Dict") "Dict" [unwrapAliasesDeep key, unwrapAliasesDeep val]
+
+    TType moduleName typeName params -> t -- @TODO wrong to not de-alias params?
+
+    TRecord fieldMap maybeName ->
+      fieldMap
+        & fmap (\(FieldType index tipe) ->
+            FieldType index (unwrapAliasesDeep tipe)
+          )
+        & (\newFieldMap -> TRecord newFieldMap maybeName )
+
+    TUnit -> t
+
+    TTuple a b Nothing  -> TTuple (unwrapAliasesDeep a) (unwrapAliasesDeep b) Nothing
+    TTuple a b (Just c) -> TTuple (unwrapAliasesDeep a) (unwrapAliasesDeep b) (Just $ unwrapAliasesDeep c)
+
+    TAlias moduleName typeName tvars (Holey tipe) -> unwrapAliasesDeep tipe
+    TAlias moduleName typeName tvars (Filled tipe) -> unwrapAliasesDeep tipe

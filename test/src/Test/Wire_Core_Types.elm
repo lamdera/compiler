@@ -10,6 +10,10 @@ type CoreTypes
     | ValueBytes Bytes.Bytes
 
 
+type alias Banned2ParamType msg =
+    Platform.Router msg Int
+
+
 expected_w2_encode_CoreTypes w2v =
     case w2v of
         ValueBytes v0 ->
@@ -33,3 +37,11 @@ expected_w2_decode_CoreTypes =
                     _ ->
                         Lamdera.Wire2.failDecode
             )
+
+
+expected_w2_encode_Banned2ParamType w2_x_c_msg =
+    Lamdera.Wire2.failEncode
+
+
+expected_w2_decode_Banned2ParamType w2_x_c_msg =
+    Lamdera.Wire2.failDecode

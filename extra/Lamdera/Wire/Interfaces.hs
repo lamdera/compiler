@@ -13,7 +13,7 @@ import qualified Elm.Package as Pkg
 import qualified Elm.Interface as I
 
 import Lamdera
-import qualified Lamdera.Project
+import qualified Lamdera.Wire.Helpers
 import StandaloneInstances
 
 {- Heper functions for AST.Source modifications -}
@@ -47,7 +47,7 @@ import StandaloneInstances
 
 modifyModul pkg ifaces modul =
   unsafePerformIO $ do
-    if (Lamdera.Project.shouldHaveCodecsGenerated pkg)
+    if (Lamdera.Wire.Helpers.shouldHaveCodecsGenerated pkg)
       then do
         -- atomicPutStrLn $ tShow "🧡" $ Src.getName modul
         -- atomicPutStrLn $ tShow "💚" $ Src._exports modul

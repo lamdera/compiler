@@ -33,6 +33,11 @@ import qualified CanSer.CanSer as ToSource
 import Lamdera.Wire.Helpers
 
 
+encoderNotImplemented tag tipe =
+  error $ tag ++ " not implemented! " ++ show tipe
+  -- str $ Utf8.fromChars $ tag ++ " not implemented! " ++ show tipe
+
+
 encoderForType ifaces cname tipe =
   case tipe of
     (TType (Module.Canonical (Name "elm" "core") "Basics") "Int" []) ->
@@ -156,7 +161,7 @@ encoderForType ifaces cname tipe =
       let
         generatedName = Data.Name.fromChars $ "w2_encode_" ++ Data.Name.toChars typeName
 
-        gen =
+        decoder =
           if cname == moduleName
             -- Referenced type is defined in the current module
             then (a (VarTopLevel moduleName generatedName))
@@ -165,8 +170,6 @@ encoderForType ifaces cname tipe =
               -- canonical type signature, we have to lookup the type definition to get the
               -- specific tvars for this type.
               let
-                -- !y = debugHaskellPass (T.pack $ "🅰️  " ++ ("w2_encode_" ++ Data.Name.toChars typeName)) (getTvars moduleName) ()
-
                 getTvars (Module.Canonical pkg (moduleRaw)) = foreignTypeTvars moduleRaw typeName ifaces
                 tvars = getTvars moduleName
                 tvarsForall = tvars & fmap (\tvar -> (tvar, ())) & Map.fromList
@@ -180,6 +183,7 @@ encoderForType ifaces cname tipe =
                 -- This is the signature of the end, i.e.
                 -- `encoder : (tvar1 -> Encoder) -> Type tvar1 -> Encoder`
                 --                                  ^^^^^^^^^^^^^^^^^^^^^
+                -- @TODO duplicate of same code below with exception of first param here
                 encoderEndSig = TLambda (TType moduleName typeName tvarsTypes) tLamdera_Wire2__Encoder
                 -- @TODO this might be helpful if we add explicit type signatures!
                 -- encoderEndSig = TLambda tipe tLamdera_Wire2__Encoder
@@ -191,7 +195,10 @@ encoderForType ifaces cname tipe =
                 )
               ))
       in
-      gen
+      if isUnsupportedKernelType tipe
+        then failEncode
+        else decoder
+
 
     TRecord fieldMap maybeName ->
       let
@@ -210,25 +217,42 @@ encoderForType ifaces cname tipe =
       let
         generatedName = Data.Name.fromChars $ "w2_encode_" ++ Data.Name.toChars typeName
 
-        decoder =
+        encoder =
           if cname == moduleName
             -- Referenced type is defined in the current module
             then (a (VarTopLevel moduleName generatedName))
             -- Referenced type is defined in another module
             else
-              (a (VarForeign moduleName generatedName
-                (Forall
-                   (Map.fromList [])
-                   (TLambda
-                      (TType moduleName typeName [])
-                      (TAlias
-                         (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire2")
-                         "Encoder"
-                         []
-                         (Filled (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Encode") "Encoder" [])))))))
+              let
+                getTvars (Module.Canonical pkg (moduleRaw)) = foreignTypeTvars moduleRaw typeName ifaces
+                tvars = getTvars moduleName
+                tvarsForall = tvars & fmap (\tvar -> (tvar, ())) & Map.fromList
+                tvarsTypes = tvars & fmap (\tvar -> TVar tvar)
 
+                -- These are the signatures for all tvars, i..e
+                -- `encoder : (tvar1 -> Encoder) -> Type tvar1 -> Encoder`
+                --            ^^^^^^^^^^^^^^^^^^
+                tvarsSigEncoders = tvarsTypes & fmap (\tvarType -> TLambda tvarType tLamdera_Wire2__Encoder)
+
+                -- This is the signature of the end, i.e.
+                -- `encoder : (tvar1 -> Encoder) -> Type tvar1 -> Encoder`
+                --                                  ^^^^^^^^^^^^^^^^^^^^^
+                -- encoderEndSig = TLambda (TType moduleName typeName tvarsTypes) tLamdera_Wire2__Encoder
+                -- @TODO this might be helpful if we add explicit type signatures!
+                -- @TODO duplicate of same code above with exception of first param here for alias unwrapping
+                encoderEndSig = TLambda (unwrapAliasesDeep tipe) tLamdera_Wire2__Encoder
+              in
+              (a (VarForeign moduleName generatedName
+                (Forall tvarsForall $
+                   (tvarsSigEncoders ++ [encoderEndSig])
+                      & foldrPairs TLambda
+                )
+              ))
       in
-      decoder
+      if isUnsupportedKernelType tipe
+        then failEncode
+        else encoder
+
 
     TVar name ->
       -- Tvars should always have a local encoder in scope
@@ -238,8 +262,7 @@ encoderForType ifaces cname tipe =
       failEncode
 
     _ ->
-      -- error $ "Not yet implemented: " ++ show tipe
-      str $ Utf8.fromChars $ "encoderForType not implemented! " ++ show tipe
+      encoderNotImplemented "encoderForType" tipe
 
 
 deepEncoderForType ifaces cname tipe =
@@ -272,7 +295,18 @@ deepEncoderForType ifaces cname tipe =
     TType moduleName typeName params ->
       if isUnsupportedKernelType tipe
         then failEncode
-        else encoderForType ifaces cname tipe
+        else
+          case params of
+            [] -> encoderForType ifaces cname tipe
+            _ ->
+              call (encoderForType ifaces cname tipe) $ fmap (\tvarType ->
+                case tvarType of
+                  TVar name ->
+                    lvar $ Data.Name.fromChars $ "w2_x_c_" ++ Data.Name.toChars name
+                  _ ->
+                    deepEncoderForType ifaces cname tvarType
+              ) params
+
 
     TRecord fieldMap maybeName ->
       encoderForType ifaces cname tipe
@@ -289,7 +323,7 @@ deepEncoderForType ifaces cname tipe =
     TLambda t1 t2 -> encoderForType ifaces cname tipe
 
     _ ->
-      str $ Utf8.fromChars $ "deepEncoderForType not implemented! " ++ show tipe
+      encoderNotImplemented "deepEncoderForType" tipe
 
 
 encodeTypeValue ifaces cname tipe value =
@@ -320,7 +354,12 @@ encodeTypeValue ifaces cname tipe value =
     TType (Module.Canonical (Name "elm" "bytes") "Bytes") "Bytes" _ -> call (encoderForType ifaces cname tipe) [ value ]
 
     TType moduleName typeName params ->
-      call (encoderForType ifaces cname tipe) $ fmap (deepEncoderForType ifaces cname) params ++ [ value ]
+      if isUnsupportedKernelType tipe
+        then call failEncode [ value ]
+        else call (encoderForType ifaces cname tipe) $ fmap (deepEncoderForType ifaces cname) params ++ [ value ]
+
+    TRecord fieldMap maybeName ->
+      call (encoderForType ifaces cname tipe) [ value ]
 
     TAlias moduleName typeName tvars aType ->
       call (encoderForType ifaces cname tipe) $ fmap (\(tvarName, tvarType) -> deepEncoderForType ifaces cname tvarType) tvars ++ [ value ]
@@ -333,5 +372,4 @@ encodeTypeValue ifaces cname tipe value =
       call failEncode [ value ]
 
     _ ->
-      -- error $ "Not yet implemented: " ++ show tipe
-      str $ Utf8.fromChars $ "encodeTypeValue not implemented! " ++ show tipe
+      encoderNotImplemented "encodeTypeValue" tipe
