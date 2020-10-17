@@ -12,6 +12,7 @@ import qualified Data.Name as Name
 import Text.RawString.QQ (r)
 
 
+import qualified Lamdera
 
 -- SANDWICH
 
@@ -23,6 +24,7 @@ sandwich moduleName javascript =
 <html>
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, minimum-scale=1.0">
   <title>|] <> name <> [r|</title>
   <style>body { padding: 0; margin: 0; }</style>
 </head>
@@ -34,8 +36,8 @@ sandwich moduleName javascript =
 <script>
 try {
 |] <> javascript <> [r|
-
-  var app = Elm.|] <> name <> [r|.init({ node: document.getElementById("elm") });
+|] <> Lamdera.lamderaLiveSrc <> [r|
+  setupApp("|] <> name <> [r|", "elm")
 }
 catch (e)
 {
