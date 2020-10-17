@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 module Lamdera.Wire.Graph where
 
 import qualified Data.Map as Map
@@ -19,8 +20,8 @@ stronglyConnCompDefs defs =
     & Graph.stronglyConnComp
 
 
-addGraphDefsToDecls decls defs =
-  defs
+addGraphDefsToDecls decls defsGraph =
+  defsGraph
     & foldr (\scc decls ->
         case scc of
           Graph.AcyclicSCC def ->

@@ -145,16 +145,16 @@ addDef def_ decls_ =
 
 
 addRecDef :: [Def] -> Decls -> Decls
-addRecDef (def_:defs) decls_ =
+addRecDef (def_:defs_) decls_ =
   case decls_ of
     Declare def decls ->
-      DeclareRec def_ defs (Declare def decls)
+      DeclareRec def_ defs_ (Declare def decls)
 
     DeclareRec def defs decls ->
-      DeclareRec def_ defs (DeclareRec def defs decls)
+      DeclareRec def_ defs_ (DeclareRec def defs decls)
 
     SaveTheEnvironment ->
-      DeclareRec def_ defs SaveTheEnvironment
+      DeclareRec def_ defs_ SaveTheEnvironment
 
 
 removeDef :: Def -> Decls -> Decls

@@ -316,7 +316,11 @@ deepEncoderForType ifaces cname tipe =
         [] -> encoderForType ifaces cname tipe
         _ ->
           call (encoderForType ifaces cname tipe) $ fmap (\(tvarName, tvarType) ->
-            lvar $ Data.Name.fromChars $ "w2_x_c_" ++ Data.Name.toChars tvarName
+            case tvarType of
+              TVar name ->
+                lvar $ Data.Name.fromChars $ "w2_x_c_" ++ Data.Name.toChars name
+              _ ->
+                deepEncoderForType ifaces cname tvarType
           ) tvars
 
     TVar name     -> encoderForType ifaces cname tipe

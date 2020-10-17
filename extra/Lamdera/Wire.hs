@@ -35,7 +35,7 @@ import Lamdera.Wire.Decoder
 import Lamdera.Wire.Graph
 
 
-runTests isTest debugName modul decls generatedName generated canonicalValue wire2gen =
+runTests isTest debugName pkg modul decls generatedName generated canonicalValue wire2gen =
   if isTest
     then
       unsafePerformIO $ do
@@ -68,10 +68,11 @@ runTests isTest debugName modul decls generatedName generated canonicalValue wir
               atomicPutStrLn $ "❌❌❌ failed, attempting pretty-print diff2:\n" ++ diff2
               -- error "exiting!"
               -- atomicPutStrLn $ "❌❌❌ " ++ Data.Name.toChars (Src.getName modul) ++ "." ++ Data.Name.toChars generatedName ++ " gen does not match test definition."
+              -- pure ()
 
         Nothing -> do
-          atomicPutStrLn $ "⚠️  Warning: test not found " ++ Data.Name.toChars (Src.getName modul) ++ "." ++ Data.Name.toChars testName -- ++ "\n" ++ show (declsToList decls & fmap defName)
-          -- debugPassText ("🧡 expected implementation pretty-printed " <> show_ (Src.getName modul)) (Source2.generateCodecs Map.empty wire2gen) (pure ())
+          atomicPutStrLn $ "⚠️  Warning: test not found " ++ show pkg ++ ":" ++ Data.Name.toChars (Src.getName modul) ++ "." ++ Data.Name.toChars testName -- ++ "\n" ++ show (declsToList decls & fmap defName)
+          debugPassText ("🧡 expected implementation pretty-printed " <> show_ (Src.getName modul)) (Source2.generateCodecs Map.empty wire2gen) (pure ())
           -- error "exiting!"
 
       else ()
@@ -117,6 +118,15 @@ addWireGenerations_ :: Can.Module -> Pkg.Name -> Map.Map Module.Raw I.Interface 
 addWireGenerations_ canonical pkg ifaces modul =
   let
     !isTest = unsafePerformIO Lamdera.isTest
+
+    -- !x = unsafePerformIO $ do
+    --       case (pkg, Src.getName modul) of
+    --         ((Name "elm-explorations" "test"), "Lazy.List") -> do
+    --           formatHaskellValue "declsBefore" $ declsToSummary $ Can._decls canonical
+    --           formatHaskellValue "declsAfter" $ declsToSummary $ extendedDecls
+    --
+    --         _ ->
+    --           pure ()
 
     decls_ = Can._decls canonical
 
@@ -192,7 +202,7 @@ addExport def exports =
 encoderUnion :: Bool -> Map.Map Module.Raw I.Interface -> Pkg.Name -> Src.Module -> Decls -> Data.Name.Name -> Union -> Def
 encoderUnion isTest ifaces pkg modul decls unionName union =
   let
-    !x = runTests isTest "encoderUnion" modul decls generatedName generated union (unionAsModule cname unionName union)
+    !x = runTests isTest "encoderUnion" pkg modul decls generatedName generated union (unionAsModule cname unionName union)
 
     generatedName = Data.Name.fromChars $ "w2_encode_" ++ Data.Name.toChars unionName
     cname = Module.Canonical pkg (Src.getName modul)
@@ -241,7 +251,7 @@ encoderUnion isTest ifaces pkg modul decls unionName union =
 decoderUnion :: Bool -> Map.Map Module.Raw I.Interface -> Pkg.Name -> Src.Module -> Decls -> Data.Name.Name -> Union -> Def
 decoderUnion isTest ifaces pkg modul decls unionName union =
   let
-    !x = runTests isTest "decoderUnion" modul decls generatedName generated union (unionAsModule cname unionName union)
+    !x = runTests isTest "decoderUnion" pkg modul decls generatedName generated union (unionAsModule cname unionName union)
 
     generatedName = Data.Name.fromChars $ "w2_decode_" ++ Data.Name.toChars unionName
     cname = Module.Canonical pkg (Src.getName modul)
@@ -289,7 +299,7 @@ decoderUnion isTest ifaces pkg modul decls unionName union =
 encoderAlias :: Bool -> Map.Map Module.Raw I.Interface -> Pkg.Name -> Src.Module -> Decls -> Data.Name.Name -> Alias -> Def
 encoderAlias isTest ifaces pkg modul decls aliasName alias@(Alias tvars tipe) =
   let
-    !x = runTests isTest "encoderAlias" modul decls generatedName generated alias (aliasAsModule cname aliasName alias)
+    !x = runTests isTest "encoderAlias" pkg modul decls generatedName generated alias (aliasAsModule cname aliasName alias)
 
     generatedName = Data.Name.fromChars $ "w2_encode_" ++ Data.Name.toChars aliasName
     cname = Module.Canonical pkg (Src.getName modul)
@@ -304,7 +314,7 @@ encoderAlias isTest ifaces pkg modul decls aliasName alias@(Alias tvars tipe) =
 decoderAlias :: Bool -> Map.Map Module.Raw I.Interface -> Pkg.Name -> Src.Module -> Decls -> Data.Name.Name -> Alias -> Def
 decoderAlias isTest ifaces pkg modul decls aliasName alias@(Alias tvars tipe) =
   let
-    !x = runTests isTest "decoderAlias" modul decls generatedName generated alias (aliasAsModule cname aliasName alias)
+    !x = runTests isTest "decoderAlias" pkg modul decls generatedName generated alias (aliasAsModule cname aliasName alias)
 
     generatedName = Data.Name.fromChars $ "w2_decode_" ++ Data.Name.toChars aliasName
     cname = Module.Canonical pkg (Src.getName modul)

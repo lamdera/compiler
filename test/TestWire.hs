@@ -32,20 +32,16 @@ suite = tests $
 wire :: IO ()
 wire = do
   let project = "/Users/mario/dev/projects/elmx/test"
-  -- let project = "/Users/mario/dev/projects/elmx/test/elm-time"
+  -- let project = "/Users/mario/lamdera/test/v1"
+  -- let project = "/Users/mario/dev/projects/elmx/test/elm-ui"
 
   setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
   setEnv "LTEST" "1"
   setEnv "LDEBUG" "1"
   setEnv "ELM_HOME" "/Users/mario/elm-home-elmx-test"
 
-  -- Dir.withCurrentDirectory project $
-  --   tests <- safeListDirectory "src/Test"
-  --   @TODO in future?
-
   let testFiles =
-        [
-          "src/Test/Wire_Union_1_Basic.elm"
+        [ "src/Test/Wire_Union_1_Basic.elm"
         , "src/Test/Wire_Union_2_Basic.elm"
         , "src/Test/External.elm"
         , "src/Test/Wire_Union_3_Params.elm"
@@ -54,6 +50,7 @@ wire = do
         , "src/Test/Wire_Alias_2_Record.elm"
         , "src/Test/Wire_Alias_3_SubAlias.elm"
         ,  "src/Test/Wire_Core_Types.elm"
+        , "src/Test/Wire_Recursive.elm"
         ]
 
   testFiles & mapM (\filename -> do

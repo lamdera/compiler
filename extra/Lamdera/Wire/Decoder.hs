@@ -377,6 +377,8 @@ decoderForType ifaces cname tipe =
                 case tvarType of
                   TVar name ->
                     lvar $ Data.Name.fromChars $ "w2_x_c_" ++ Data.Name.toChars name
+                  _ ->
+                    decoderForType ifaces cname tvarType
               ) tvars_
 
 
