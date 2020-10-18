@@ -91,10 +91,6 @@ isUnsupportedKernelType tipe =
     -- Disable for now, but need to revisit these and whether we want actual proper wire support
     -- , (("elm/browser", "Browser.Navigation") "Key" _ -> True -- This is a JS backed value
 
-    TAlias moduleName typeName tvars (Holey tipe) -> isUnsupportedKernelType tipe
-    TAlias moduleName typeName tvars (Filled tipe) -> isUnsupportedKernelType tipe
-
-
     _ -> False
 
 
@@ -403,6 +399,7 @@ failEncode =
                   "Encoder"
                   []
                   (Filled (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Encode") "Encoder" [])))))))
+
 
 int value =
   a (Int value)

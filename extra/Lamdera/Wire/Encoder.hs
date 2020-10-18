@@ -38,7 +38,7 @@ encoderNotImplemented tag tipe =
   -- str $ Utf8.fromChars $ tag ++ " not implemented! " ++ show tipe
 
 
-encoderForType ifaces cname tipe =
+encoderForType depth ifaces cname tipe =
   case tipe of
     (TType (Module.Canonical (Name "elm" "core") "Basics") "Int" []) ->
       (a (VarForeign mLamdera_Wire2 "encodeInt" (Forall Map.empty (TLambda tipe tLamdera_Wire2__Encoder))))
@@ -206,10 +206,10 @@ encoderForType ifaces cname tipe =
         fieldEncoders =
           fields
             & fmap (\(name, field) ->
-                encodeTypeValue ifaces cname field (a (Access (a (VarLocal "w2_rec_var0")) (a (name))))
+                encodeTypeValue (depth + 1) ifaces cname field (a (Access (a (VarLocal $ Utf8.fromChars $ "w2_rec_var" ++ show depth)) (a (name))))
               )
       in
-      (a (Lambda [(a (PVar "w2_rec_var0"))]
+      (a (Lambda [(a (PVar $ Utf8.fromChars $ "w2_rec_var" ++ show depth))]
         (encodeSequenceWithoutLength $ list fieldEncoders)
       ))
 
@@ -265,108 +265,108 @@ encoderForType ifaces cname tipe =
       encoderNotImplemented "encoderForType" tipe
 
 
-deepEncoderForType ifaces cname tipe =
+deepEncoderForType depth ifaces cname tipe =
   case tipe of
-    TType (Module.Canonical (Name "elm" "core") "Basics") "Int" []    -> encoderForType ifaces cname tipe
-    TType (Module.Canonical (Name "elm" "core") "Basics") "Float" []  -> encoderForType ifaces cname tipe
-    TType (Module.Canonical (Name "elm" "core") "Basics") "Bool" []   -> encoderForType ifaces cname tipe
-    TType (Module.Canonical (Name "elm" "core") "Basics") "Order" []  -> encoderForType ifaces cname tipe
-    TType (Module.Canonical (Name "elm" "core") "Basics") "Never" []  -> encoderForType ifaces cname tipe
-    TType (Module.Canonical (Name "elm" "core") "Char") "Char" []     -> encoderForType ifaces cname tipe
-    TType (Module.Canonical (Name "elm" "core") "String") "String" [] -> encoderForType ifaces cname tipe
-    TUnit                                                             -> encoderForType ifaces cname tipe
+    TType (Module.Canonical (Name "elm" "core") "Basics") "Int" []    -> encoderForType depth ifaces cname tipe
+    TType (Module.Canonical (Name "elm" "core") "Basics") "Float" []  -> encoderForType depth ifaces cname tipe
+    TType (Module.Canonical (Name "elm" "core") "Basics") "Bool" []   -> encoderForType depth ifaces cname tipe
+    TType (Module.Canonical (Name "elm" "core") "Basics") "Order" []  -> encoderForType depth ifaces cname tipe
+    TType (Module.Canonical (Name "elm" "core") "Basics") "Never" []  -> encoderForType depth ifaces cname tipe
+    TType (Module.Canonical (Name "elm" "core") "Char") "Char" []     -> encoderForType depth ifaces cname tipe
+    TType (Module.Canonical (Name "elm" "core") "String") "String" [] -> encoderForType depth ifaces cname tipe
+    TUnit                                                             -> encoderForType depth ifaces cname tipe
 
-    TTuple a b Nothing  -> call (encoderForType ifaces cname tipe) [ deepEncoderForType ifaces cname a, deepEncoderForType ifaces cname b ]
-    TTuple a b (Just c) -> call (encoderForType ifaces cname tipe) [ deepEncoderForType ifaces cname a, deepEncoderForType ifaces cname b, deepEncoderForType ifaces cname c ]
+    TTuple a b Nothing  -> call (encoderForType depth ifaces cname tipe) [ deepEncoderForType depth ifaces cname a, deepEncoderForType depth ifaces cname b ]
+    TTuple a b (Just c) -> call (encoderForType depth ifaces cname tipe) [ deepEncoderForType depth ifaces cname a, deepEncoderForType depth ifaces cname b, deepEncoderForType depth ifaces cname c ]
 
-    TType (Module.Canonical (Name "elm" "core") "Maybe") "Maybe" [a] -> call (encoderForType ifaces cname tipe) [ deepEncoderForType ifaces cname a ]
-    TType (Module.Canonical (Name "elm" "core") "List") "List" [a]   -> call (encoderForType ifaces cname tipe) [ deepEncoderForType ifaces cname a ]
-    TType (Module.Canonical (Name "elm" "core") "Set") "Set" [a]     -> call (encoderForType ifaces cname tipe) [ deepEncoderForType ifaces cname a ]
-    TType (Module.Canonical (Name "elm" "core") "Array") "Array" [a] -> call (encoderForType ifaces cname tipe) [ deepEncoderForType ifaces cname a ]
+    TType (Module.Canonical (Name "elm" "core") "Maybe") "Maybe" [a] -> call (encoderForType depth ifaces cname tipe) [ deepEncoderForType depth ifaces cname a ]
+    TType (Module.Canonical (Name "elm" "core") "List") "List" [a]   -> call (encoderForType depth ifaces cname tipe) [ deepEncoderForType depth ifaces cname a ]
+    TType (Module.Canonical (Name "elm" "core") "Set") "Set" [a]     -> call (encoderForType depth ifaces cname tipe) [ deepEncoderForType depth ifaces cname a ]
+    TType (Module.Canonical (Name "elm" "core") "Array") "Array" [a] -> call (encoderForType depth ifaces cname tipe) [ deepEncoderForType depth ifaces cname a ]
 
     TType (Module.Canonical (Name "elm" "core") "Result") "Result" [err, a] ->
-      call (encoderForType ifaces cname tipe) [ deepEncoderForType ifaces cname err, deepEncoderForType ifaces cname a ]
+      call (encoderForType depth ifaces cname tipe) [ deepEncoderForType depth ifaces cname err, deepEncoderForType depth ifaces cname a ]
 
     TType (Module.Canonical (Name "elm" "core") "Dict") "Dict" [key, val] ->
-      call (encoderForType ifaces cname tipe) [ deepEncoderForType ifaces cname key, deepEncoderForType ifaces cname val ]
+      call (encoderForType depth ifaces cname tipe) [ deepEncoderForType depth ifaces cname key, deepEncoderForType depth ifaces cname val ]
 
-    TType (Module.Canonical (Name "elm" "bytes") "Bytes") "Bytes" params      -> encoderForType ifaces cname tipe
+    TType (Module.Canonical (Name "elm" "bytes") "Bytes") "Bytes" params      -> encoderForType depth ifaces cname tipe
 
     TType moduleName typeName params ->
       if isUnsupportedKernelType tipe
         then failEncode
         else
           case params of
-            [] -> encoderForType ifaces cname tipe
+            [] -> encoderForType depth ifaces cname tipe
             _ ->
-              call (encoderForType ifaces cname tipe) $ fmap (\tvarType ->
+              call (encoderForType depth ifaces cname tipe) $ fmap (\tvarType ->
                 case tvarType of
                   TVar name ->
                     lvar $ Data.Name.fromChars $ "w2_x_c_" ++ Data.Name.toChars name
                   _ ->
-                    deepEncoderForType ifaces cname tvarType
+                    deepEncoderForType depth ifaces cname tvarType
               ) params
 
 
     TRecord fieldMap maybeName ->
-      encoderForType ifaces cname tipe
+      encoderForType depth ifaces cname tipe
 
     TAlias moduleName typeName tvars aType ->
       case tvars of
-        [] -> encoderForType ifaces cname tipe
+        [] -> encoderForType depth ifaces cname tipe
         _ ->
-          call (encoderForType ifaces cname tipe) $ fmap (\(tvarName, tvarType) ->
+          call (encoderForType depth ifaces cname tipe) $ fmap (\(tvarName, tvarType) ->
             case tvarType of
               TVar name ->
                 lvar $ Data.Name.fromChars $ "w2_x_c_" ++ Data.Name.toChars name
               _ ->
-                deepEncoderForType ifaces cname tvarType
+                deepEncoderForType depth ifaces cname tvarType
           ) tvars
 
-    TVar name     -> encoderForType ifaces cname tipe
-    TLambda t1 t2 -> encoderForType ifaces cname tipe
+    TVar name     -> encoderForType depth ifaces cname tipe
+    TLambda t1 t2 -> encoderForType depth ifaces cname tipe
 
     _ ->
       encoderNotImplemented "deepEncoderForType" tipe
 
 
-encodeTypeValue ifaces cname tipe value =
+encodeTypeValue depth ifaces cname tipe value =
   case tipe of
-    (TType (Module.Canonical (Name "elm" "core") "Basics") "Int" [])    -> call (encoderForType ifaces cname tipe) [ value ]
-    (TType (Module.Canonical (Name "elm" "core") "Basics") "Float" [])  -> call (encoderForType ifaces cname tipe) [ value ]
-    (TType (Module.Canonical (Name "elm" "core") "Basics") "Bool" [])   -> call (encoderForType ifaces cname tipe) [ value ]
-    (TType (Module.Canonical (Name "elm" "core") "Basics") "Order" [])  -> call (encoderForType ifaces cname tipe) [ value ]
-    (TType (Module.Canonical (Name "elm" "core") "Basics") "Never" [])  -> call (encoderForType ifaces cname tipe) [ value ]
-    (TType (Module.Canonical (Name "elm" "core") "Char") "Char" [])     -> call (encoderForType ifaces cname tipe) [ value ]
-    (TType (Module.Canonical (Name "elm" "core") "String") "String" []) -> call (encoderForType ifaces cname tipe) [ value ]
-    TUnit                                                               -> call (encoderForType ifaces cname tipe) [ value ]
+    (TType (Module.Canonical (Name "elm" "core") "Basics") "Int" [])    -> call (encoderForType depth ifaces cname tipe) [ value ]
+    (TType (Module.Canonical (Name "elm" "core") "Basics") "Float" [])  -> call (encoderForType depth ifaces cname tipe) [ value ]
+    (TType (Module.Canonical (Name "elm" "core") "Basics") "Bool" [])   -> call (encoderForType depth ifaces cname tipe) [ value ]
+    (TType (Module.Canonical (Name "elm" "core") "Basics") "Order" [])  -> call (encoderForType depth ifaces cname tipe) [ value ]
+    (TType (Module.Canonical (Name "elm" "core") "Basics") "Never" [])  -> call (encoderForType depth ifaces cname tipe) [ value ]
+    (TType (Module.Canonical (Name "elm" "core") "Char") "Char" [])     -> call (encoderForType depth ifaces cname tipe) [ value ]
+    (TType (Module.Canonical (Name "elm" "core") "String") "String" []) -> call (encoderForType depth ifaces cname tipe) [ value ]
+    TUnit                                                               -> call (encoderForType depth ifaces cname tipe) [ value ]
 
-    TTuple a b Nothing  -> call (encoderForType ifaces cname tipe) [ deepEncoderForType ifaces cname a, deepEncoderForType ifaces cname b, value ]
-    TTuple a b (Just c) -> call (encoderForType ifaces cname tipe) [ deepEncoderForType ifaces cname a, deepEncoderForType ifaces cname b, deepEncoderForType ifaces cname c, value ]
+    TTuple a b Nothing  -> call (encoderForType depth ifaces cname tipe) [ deepEncoderForType depth ifaces cname a, deepEncoderForType depth ifaces cname b, value ]
+    TTuple a b (Just c) -> call (encoderForType depth ifaces cname tipe) [ deepEncoderForType depth ifaces cname a, deepEncoderForType depth ifaces cname b, deepEncoderForType depth ifaces cname c, value ]
 
-    TType (Module.Canonical (Name "elm" "core") "Maybe") "Maybe" [a] -> call (encoderForType ifaces cname tipe) [ deepEncoderForType ifaces cname a, value ]
-    TType (Module.Canonical (Name "elm" "core") "List") "List" [a]   -> call (encoderForType ifaces cname tipe) [ deepEncoderForType ifaces cname a, value ]
-    TType (Module.Canonical (Name "elm" "core") "Set") "Set" [a]     -> call (encoderForType ifaces cname tipe) [ deepEncoderForType ifaces cname a, value ]
-    TType (Module.Canonical (Name "elm" "core") "Array") "Array" [a] -> call (encoderForType ifaces cname tipe) [ deepEncoderForType ifaces cname a, value ]
+    TType (Module.Canonical (Name "elm" "core") "Maybe") "Maybe" [a] -> call (encoderForType depth ifaces cname tipe) [ deepEncoderForType depth ifaces cname a, value ]
+    TType (Module.Canonical (Name "elm" "core") "List") "List" [a]   -> call (encoderForType depth ifaces cname tipe) [ deepEncoderForType depth ifaces cname a, value ]
+    TType (Module.Canonical (Name "elm" "core") "Set") "Set" [a]     -> call (encoderForType depth ifaces cname tipe) [ deepEncoderForType depth ifaces cname a, value ]
+    TType (Module.Canonical (Name "elm" "core") "Array") "Array" [a] -> call (encoderForType depth ifaces cname tipe) [ deepEncoderForType depth ifaces cname a, value ]
 
     TType (Module.Canonical (Name "elm" "core") "Result") "Result" [err, a] ->
-      call (encoderForType ifaces cname tipe) [ deepEncoderForType ifaces cname err, deepEncoderForType ifaces cname a, value ]
+      call (encoderForType depth ifaces cname tipe) [ deepEncoderForType depth ifaces cname err, deepEncoderForType depth ifaces cname a, value ]
 
     TType (Module.Canonical (Name "elm" "core") "Dict") "Dict" [key, val] ->
-      call (encoderForType ifaces cname tipe) [ deepEncoderForType ifaces cname key, deepEncoderForType ifaces cname val, value ]
+      call (encoderForType depth ifaces cname tipe) [ deepEncoderForType depth ifaces cname key, deepEncoderForType depth ifaces cname val, value ]
 
-    TType (Module.Canonical (Name "elm" "bytes") "Bytes") "Bytes" _ -> call (encoderForType ifaces cname tipe) [ value ]
+    TType (Module.Canonical (Name "elm" "bytes") "Bytes") "Bytes" _ -> call (encoderForType depth ifaces cname tipe) [ value ]
 
     TType moduleName typeName params ->
       if isUnsupportedKernelType tipe
         then call failEncode [ value ]
-        else call (encoderForType ifaces cname tipe) $ fmap (deepEncoderForType ifaces cname) params ++ [ value ]
+        else call (encoderForType depth ifaces cname tipe) $ fmap (deepEncoderForType depth ifaces cname) params ++ [ value ]
 
     TRecord fieldMap maybeName ->
-      call (encoderForType ifaces cname tipe) [ value ]
+      call (encoderForType depth ifaces cname tipe) [ value ]
 
     TAlias moduleName typeName tvars aType ->
-      call (encoderForType ifaces cname tipe) $ fmap (\(tvarName, tvarType) -> deepEncoderForType ifaces cname tvarType) tvars ++ [ value ]
+      call (encoderForType depth ifaces cname tipe) $ fmap (\(tvarName, tvarType) -> deepEncoderForType depth ifaces cname tvarType) tvars ++ [ value ]
 
     TVar name ->
       -- Tvars should always have a local encoder in scope

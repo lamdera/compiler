@@ -57,7 +57,7 @@ runTests isTest debugName pkg modul decls generatedName generated canonicalValue
               atomicPutStrLn $ "✅ gen " <> debugName <> " matches " <> Data.Name.toChars (Src.getName modul) <> "." <> Data.Name.toChars testName
               -- debugPassText ("🧡 expected implementation pretty-printed " <> show_ (Src.getName modul)) (Source2.generateCodecs Map.empty wire2gen) (pure ())
             else do
-              debugHaskellPass "🏁 Actual value input" (canonicalValue) (pure ())
+              -- debugHaskellPass "🏁 Actual value input" (canonicalValue) (pure ())
               -- debugPassText ("💚 actual implementation pretty-printed " <> show_ (Src.getName modul)) (ToSource.convert generated) (pure ())
               -- debugPassText ("🧡 expected implementation pretty-printed " <> show_ (Src.getName modul)) (Source2.generateCodecs Map.empty wire2gen) (pure ())
               -- debugHaskellPass ("🧡 expected implementation AST.Canonical " <> show_ (Src.getName modul)) (testDefinition) (pure ())
@@ -72,7 +72,7 @@ runTests isTest debugName pkg modul decls generatedName generated canonicalValue
 
         Nothing -> do
           atomicPutStrLn $ "⚠️  Warning: test not found " ++ show pkg ++ ":" ++ Data.Name.toChars (Src.getName modul) ++ "." ++ Data.Name.toChars testName -- ++ "\n" ++ show (declsToList decls & fmap defName)
-          debugPassText ("🧡 expected implementation pretty-printed " <> show_ (Src.getName modul)) (Source2.generateCodecs Map.empty wire2gen) (pure ())
+          -- debugPassText ("🧡 expected implementation pretty-printed " <> show_ (Src.getName modul)) (Source2.generateCodecs Map.empty wire2gen) (pure ())
           -- error "exiting!"
 
       else ()
@@ -229,7 +229,7 @@ encoderUnion isTest ifaces pkg modul decls unionName union =
 
                     paramEncoders =
                       paramTypes & imap (\i paramType ->
-                          encodeTypeValue ifaces cname paramType (lvar (Data.Name.fromChars $ "v" ++ show i))
+                          encodeTypeValue 0 ifaces cname paramType (lvar (Data.Name.fromChars $ "v" ++ show i))
                       )
                   in
                   CaseBranch
@@ -306,7 +306,7 @@ encoderAlias isTest ifaces pkg modul decls aliasName alias@(Alias tvars tipe) =
     ptvars = tvars & fmap (\tvar -> pvar $ Data.Name.fromChars $ "w2_x_c_" ++ Data.Name.toChars tvar )
     ltvars = tvars & fmap (\tvar -> lvar $ Data.Name.fromChars $ "w2_x_c_" ++ Data.Name.toChars tvar )
 
-    generated = Def (a (generatedName)) ptvars $ deepEncoderForType ifaces cname tipe
+    generated = Def (a (generatedName)) ptvars $ deepEncoderForType 0 ifaces cname tipe
   in
   generated
 
