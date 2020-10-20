@@ -524,7 +524,13 @@ resolveTvars tvarMap t =
 
     TVar a ->
       case List.find (\(t,ti) -> t == a) tvarMap of
-        Just (_,ti) -> ti
+        Just (_,ti) ->
+          case ti of
+            -- If we looked up the Tvar and got another Tvar, we've got a tvar
+            -- that's not specific higher up, so leave it be – this means the
+            -- parent type we're generating for has type variables itself
+            TVar b -> TVar a
+            _ -> ti
         Nothing -> TVar a
 
     TType modul typename tvars ->
