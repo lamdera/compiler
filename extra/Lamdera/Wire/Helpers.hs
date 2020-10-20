@@ -479,9 +479,7 @@ foldrPairs fn list =
     x:xs ->
       fn x (foldrPairs fn xs)
 
-
-
-
+unwrapAliasesDeep :: Type -> Type
 unwrapAliasesDeep t =
   case t of
     TLambda t1 t2 -> t -- @TODO wrong to not de-alias fns?
@@ -499,7 +497,9 @@ unwrapAliasesDeep t =
     TType (Module.Canonical (Name "elm" "core") "Dict") "Dict" [key, val] ->
       TType (Module.Canonical (Name "elm" "core") "Dict") "Dict" [unwrapAliasesDeep key, unwrapAliasesDeep val]
 
-    TType moduleName typeName params -> t -- @TODO wrong to not de-alias params?
+    TType moduleName typeName params ->
+      -- t -- @TODO wrong to not de-alias params?
+      TType moduleName typeName (fmap unwrapAliasesDeep params)
 
     TRecord fieldMap maybeName ->
       fieldMap
@@ -515,3 +515,40 @@ unwrapAliasesDeep t =
 
     TAlias moduleName typeName tvars (Holey tipe) -> unwrapAliasesDeep tipe
     TAlias moduleName typeName tvars (Filled tipe) -> unwrapAliasesDeep tipe
+
+
+resolveTvars :: [(Data.Name.Name, Type)] -> Type -> Type
+resolveTvars tvarMap t =
+  case t of
+    TLambda t1 t2 -> TLambda (resolveTvars tvarMap t1) (resolveTvars tvarMap t2)
+
+    TVar a ->
+      case List.find (\(t,ti) -> t == a) tvarMap of
+        Just (_,ti) -> ti
+        Nothing -> TVar a
+
+    TType modul typename tvars ->
+      tvars
+        & fmap (resolveTvars tvarMap)
+        & TType modul typename
+
+    TRecord fieldMap maybeName ->
+      fieldMap
+        & fmap (\(FieldType index tipe) ->
+            FieldType index (resolveTvars tvarMap tipe)
+          )
+        & (\newFieldMap -> TRecord newFieldMap maybeName )
+
+    TUnit -> t
+
+    TTuple a b Nothing  -> TTuple (resolveTvars tvarMap a) (resolveTvars tvarMap b) Nothing
+    TTuple a b (Just c) -> TTuple (resolveTvars tvarMap a) (resolveTvars tvarMap b) (Just $ resolveTvars tvarMap c)
+
+    TAlias moduleName typeName tvars (Holey tipe) ->
+      TAlias moduleName typeName tvars (Filled $ resolveTvars tvars tipe)
+
+    TAlias moduleName typeName tvars (Filled tipe) ->
+      TAlias moduleName typeName tvars (Filled $ resolveTvars tvars tipe)
+
+    _ ->
+      error $ "resolveTvars not implemented! " ++ show t

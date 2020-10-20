@@ -351,12 +351,12 @@ decoderForType ifaces cname tipe =
                     -- @TODO given this isn't the other definiition of
                     -- (TType moduleName typeName tvarsTypes) then it might be we're
                     -- re-introducing the bug here that the tvarsTypes injection fixed?
-                    [("a", unwrapAliasesDeep tipe)]
+                    [("a", unwrapAliasesDeep $ resolveTvars tvars_ tipe)]
                     (Filled
                         (TType
                            (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
                            "Decoder"
-                           [ unwrapAliasesDeep tipe ])))
+                           [ unwrapAliasesDeep $ resolveTvars tvars_ tipe ])))
 
 
               in
@@ -395,7 +395,75 @@ decoderForType ifaces cname tipe =
             -- Referenced type is defined in the current module
             then (a (VarTopLevel moduleName generatedName))
             -- Referenced type is defined in another module
-            else genForeignDecoder ifaces generatedName moduleName typeName
+            else
+              -- genForeignDecoder ifaces generatedName moduleName typeName
+              let
+                getTvars (Module.Canonical pkg (moduleRaw)) = foreignTypeTvars moduleRaw typeName ifaces
+                tvars = getTvars moduleName
+                tvarsForall = tvars & fmap (\tvar -> (tvar, ())) & Map.fromList
+                tvarsTypes = tvars & fmap (\tvar -> TVar tvar)
+
+                -- tvarResolvedParams =
+                --   params
+                --     & fmap (\p ->
+                --       case p of
+                --         Can.TVar a ->
+                --           case List.find (\(t,ti) -> t == a) tvarMap of
+                --             Just (_,ti) -> ti
+                --             Nothing -> p
+                --         _ -> p
+                --     )
+
+
+                -- These are the signatures for all tvars, i..e
+                -- `decoder : (Decoder tvar1) -> Decoder (Type tvar1)`
+                --            ^^^^^^^^^^^^^^^
+                tvarsSigDecoders = tvarsTypes & fmap (\tvarType ->
+                  (TAlias
+                    (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire2")
+                    "Decoder"
+                    [("a", tvarType)]
+                    (Filled
+                        (TType
+                           (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
+                           "Decoder"
+                           [tvarType])))
+                  )
+
+                -- This is the signature of the end, i.e.
+                -- `decoder : (Decoder tvar1) -> Decoder (Type tvar1)`
+                --                               ^^^^^^^^^^^^^^^^^^^^
+                decoderEndSig =
+                  (TAlias
+                    (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire2")
+                    "Decoder"
+                    [("a", (TType moduleName typeName tvarsTypes))]
+                    (Filled
+                        (TType
+                           (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
+                           "Decoder"
+                           [(TType moduleName typeName tvarsTypes)])))
+
+                -- @TODO this might be helpful if we add explicit type signatures!
+                -- decoderEndSig =
+                --   (TAlias
+                --     (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire2")
+                --     "Decoder"
+                --     [("a", tipe)]
+                --     (Filled
+                --         (TType
+                --            (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
+                --            "Decoder"
+                --            [tipe])))
+
+              in
+              (a (VarForeign moduleName generatedName
+                (Forall tvarsForall $
+                  (tvarsSigDecoders ++ [decoderEndSig])
+                     & foldrPairs TLambda
+                )
+              ))
+
       in
       if isUnsupportedKernelType tipe
         then failDecode
@@ -422,58 +490,3 @@ canonical type signature, we have to lookup the type definition to get the
 specific tvars for this type.
 
 -}
-genForeignDecoder ifaces generatedName moduleName typeName =
-  let
-    getTvars (Module.Canonical pkg (moduleRaw)) = foreignTypeTvars moduleRaw typeName ifaces
-    tvars = getTvars moduleName
-    tvarsForall = tvars & fmap (\tvar -> (tvar, ())) & Map.fromList
-    tvarsTypes = tvars & fmap (\tvar -> TVar tvar)
-
-    -- These are the signatures for all tvars, i..e
-    -- `decoder : (Decoder tvar1) -> Decoder (Type tvar1)`
-    --            ^^^^^^^^^^^^^^^
-    tvarsSigDecoders = tvarsTypes & fmap (\tvarType ->
-      (TAlias
-        (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire2")
-        "Decoder"
-        [("a", tvarType)]
-        (Filled
-            (TType
-               (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
-               "Decoder"
-               [tvarType])))
-      )
-
-    -- This is the signature of the end, i.e.
-    -- `decoder : (Decoder tvar1) -> Decoder (Type tvar1)`
-    --                               ^^^^^^^^^^^^^^^^^^^^
-    decoderEndSig =
-      (TAlias
-        (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire2")
-        "Decoder"
-        [("a", (TType moduleName typeName tvarsTypes))]
-        (Filled
-            (TType
-               (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
-               "Decoder"
-               [(TType moduleName typeName tvarsTypes)])))
-
-    -- @TODO this might be helpful if we add explicit type signatures!
-    -- decoderEndSig =
-    --   (TAlias
-    --     (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire2")
-    --     "Decoder"
-    --     [("a", tipe)]
-    --     (Filled
-    --         (TType
-    --            (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
-    --            "Decoder"
-    --            [tipe])))
-
-  in
-  (a (VarForeign moduleName generatedName
-    (Forall tvarsForall $
-      (tvarsSigDecoders ++ [decoderEndSig])
-         & foldrPairs TLambda
-    )
-  ))

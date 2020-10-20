@@ -44,6 +44,9 @@ runTests isTest debugName pkg modul decls generatedName generated canonicalValue
         withName (Def (A.At r n) p e) n_ =
           Def (A.At r n_) p e
 
+        fullTypeRef =
+          (T.pack $ Pkg.toChars pkg) <> ":" <> (T.pack $ Data.Name.toChars $ Src.getName modul) <> "." <> (T.pack $ Data.Name.toChars generatedName)
+
       case decls & findDef testName of
         Just testDefinition -> do
 
@@ -71,9 +74,10 @@ runTests isTest debugName pkg modul decls generatedName generated canonicalValue
               -- pure ()
 
         Nothing -> do
-          atomicPutStrLn $ "⚠️  Warning: test not found " ++ show pkg ++ ":" ++ Data.Name.toChars (Src.getName modul) ++ "." ++ Data.Name.toChars testName -- ++ "\n" ++ show (declsToList decls & fmap defName)
-          -- debugPassText ("🧡 expected implementation pretty-printed " <> show_ (Src.getName modul)) (Source2.generateCodecs Map.empty wire2gen) (pure ())
+          -- atomicPutStrLn $ "⚠️  Warning: test not found " ++ show pkg ++ ":" ++ Data.Name.toChars (Src.getName modul) ++ "." ++ Data.Name.toChars testName -- ++ "\n" ++ show (declsToList decls & fmap defName)
+          -- debugPassText ("🧡 expected implementation pretty-printed " <> fullTypeRef) (Source2.generateCodecs Map.empty wire2gen) (pure ())
           -- error "exiting!"
+          pure ()
 
       else ()
 

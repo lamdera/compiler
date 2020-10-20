@@ -2,6 +2,15 @@
 module Install
   ( Args(..)
   , run
+  -- @LAMDERA exposed all below
+  , Changes(..)
+  , makeAppPlan
+  , makePkgPlan
+  , viewChangeDocs
+  , Widths(..)
+  , ChangeDocs(..)
+  , addChange
+  , widen
   )
   where
 

@@ -54,6 +54,7 @@ module Lamdera
   , remove
   , rmdir
   , mkdir
+  , withCurrentDirectory
   , safeListDirectory
   , copyFile
   , replaceInFile
@@ -86,6 +87,7 @@ module Lamdera
   , bsReadFile
   , callCommand
   , icdiff
+  , withStdinYesAll
   )
   where
 
@@ -138,6 +140,7 @@ import qualified Data.ByteString.Internal as BS
 import qualified Foreign.ForeignPtr as FPtr
 import Control.Exception (catch, throw)
 import System.IO.Error (ioeGetErrorType, annotateIOError, modifyIOError)
+import Test.Main (withStdin)
 import Text.Show.Unicode
 import qualified System.Process
 import qualified Data.Digest.Pure.SHA as SHA
@@ -560,6 +563,10 @@ mkdir dir =
   Dir.createDirectoryIfMissing True dir
 
 
+withCurrentDirectory =
+  Dir.withCurrentDirectory
+
+
 safeListDirectory :: FilePath -> IO [FilePath]
 safeListDirectory dir = do
   Dir.listDirectory dir `catchError`
@@ -828,3 +835,14 @@ icdiff realExpected realActual = do
   (exit, stdout, stderr) <- System.Process.readProcessWithExitCode "icdiff" ["-N", "--cols=300", path1, path2] ""
 
   pure stdout
+
+
+withStdinYesAll :: IO a -> IO a
+withStdinYesAll action =
+  -- This doesn't work as `withStdIn` actually writes to a file to emulate stdin
+  -- withStdin (BSL.cycle "\n") action
+
+  -- So instead, expect that our CLI will be reasonable and never ask the user to confirm more than this many times...
+  withStdin
+    "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
+    action

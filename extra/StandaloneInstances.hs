@@ -49,6 +49,7 @@ import qualified Reporting.Exit
 import qualified Type.Type
 import qualified Type.UnionFind
 import qualified Reporting.Error.Type
+import qualified Deps.Registry
 
 -- Show
 
@@ -193,6 +194,12 @@ deriving instance Show Reporting.Exit.DetailsBadDep
 deriving instance Show Reporting.Exit.PackageProblem
 deriving instance Show Reporting.Exit.Outline
 deriving instance Show Reporting.Exit.OutlineProblem
+
+deriving instance Show Reporting.Exit.Install
+deriving instance Show Reporting.Exit.RegistryProblem
+deriving instance Show Reporting.Exit.Solver
+deriving instance Show Reporting.Exit.Details
+
 deriving instance Show Elm.Version.Version
 
 deriving instance Show Http.Error
@@ -277,6 +284,10 @@ deriving instance Show Type.Type.Mark
 
 instance Show (GHC.IORef.IORef a) where
   show _ = "<IORef>"
+
+
+deriving instance Show Deps.Registry.KnownVersions
+
 
 
 -- IsString

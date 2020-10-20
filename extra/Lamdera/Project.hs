@@ -14,11 +14,12 @@ import qualified Reporting.Exit as Exit
 import qualified Reporting.Task as Task
 import qualified System.Environment as Env
 import qualified Data.List as List
+import qualified Data.Utf8 as Utf8
 import Elm.Package
+
 
 import Lamdera
 import qualified Lamdera.Progress
-import StandaloneInstances
 
 
 maybeAppName :: IO (Maybe Text)
@@ -92,10 +93,10 @@ lamderaUnknownApp =
 {-# NOINLINE lamderaCore #-}
 lamderaCore :: Elm.Package.Name
 lamderaCore =
-  Elm.Package.Name "lamdera" "core"
+  Elm.Package.Name (Utf8.fromChars "lamdera") (Utf8.fromChars "core")
 
 
 {-# NOINLINE lamderaCodecs #-}
 lamderaCodecs :: Elm.Package.Name
 lamderaCodecs =
-  Elm.Package.Name "lamdera" "codecs"
+  Elm.Package.Name (Utf8.fromChars "lamdera") (Utf8.fromChars "codecs")

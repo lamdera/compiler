@@ -19,11 +19,12 @@ import qualified Lamdera.Snapshot
 import TestHelp
 import TestWire
 
-import Test.Main (captureProcessResult, withStdin)
+import Test.Main (captureProcessResult)
 
 -- Current target for ghci :rr command. See ~/.ghci config file, which should contain
 -- something like `:def rr const $ return $ unlines [":r","TestLamdera.target"]`
 target = TestWire.wire
+-- target = TestWire.buildAllPackages
 
 {-
 
@@ -107,16 +108,6 @@ catchOutput action = do
   pr <- io $ captureProcessResult action
   -- @TODO improve this to actually pull out values
   pure $ show_ pr
-
-withStdinYesAll :: IO a -> IO a
-withStdinYesAll action =
-  -- This doesn't work as `withStdIn` actually writes to a file to emulate stdin
-  -- withStdin (BSL.cycle "\n") action
-
-  -- So instead, expect that our CLI will be reasonable and never ask the user to confirm more than this many times...
-  withStdin
-    "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
-    action
 
 
 compile :: IO ()

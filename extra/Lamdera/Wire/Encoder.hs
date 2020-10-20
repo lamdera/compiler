@@ -213,7 +213,7 @@ encoderForType depth ifaces cname tipe =
         (encodeSequenceWithoutLength $ list fieldEncoders)
       ))
 
-    TAlias moduleName typeName tvars aType ->
+    TAlias moduleName typeName tvars_ aType ->
       let
         generatedName = Data.Name.fromChars $ "w2_encode_" ++ Data.Name.toChars typeName
 
@@ -240,7 +240,7 @@ encoderForType depth ifaces cname tipe =
                 -- encoderEndSig = TLambda (TType moduleName typeName tvarsTypes) tLamdera_Wire2__Encoder
                 -- @TODO this might be helpful if we add explicit type signatures!
                 -- @TODO duplicate of same code above with exception of first param here for alias unwrapping
-                encoderEndSig = TLambda (unwrapAliasesDeep tipe) tLamdera_Wire2__Encoder
+                encoderEndSig = TLambda (unwrapAliasesDeep $ resolveTvars tvars_ tipe) tLamdera_Wire2__Encoder
               in
               (a (VarForeign moduleName generatedName
                 (Forall tvarsForall $

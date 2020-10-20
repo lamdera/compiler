@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Init
   ( run
+  , init -- @LAMDERA exposed
   )
   where
 

@@ -80,7 +80,7 @@ determineTypesLocation tipe = do
             Nothing ->
               "Types"
 
-      debug $ "looked up types location for " <> T.unpack tipe <> ": " <> show res
+      -- debug $ "looked up types location for " <> T.unpack tipe <> ": " <> show res
 
       rememberTypeLocation tipe res
       pure res
