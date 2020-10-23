@@ -482,7 +482,7 @@ foldrPairs fn list =
 unwrapAliasesDeep :: Type -> Type
 unwrapAliasesDeep t =
   case t of
-    TLambda t1 t2 -> t -- @TODO wrong to not de-alias fns?
+    TLambda t1 t2 -> TLambda (unwrapAliasesDeep t1) (unwrapAliasesDeep t2)
 
     TVar name -> t
 
@@ -506,7 +506,8 @@ unwrapAliasesDeep t =
         & fmap (\(FieldType index tipe) ->
             FieldType index (unwrapAliasesDeep tipe)
           )
-        & (\newFieldMap -> TRecord newFieldMap maybeName )
+        -- @EXTENSIBLERECORDS For now we don't support extensible records, so drop the maybeExtensible
+        & (\newFieldMap -> TRecord newFieldMap Nothing )
 
     TUnit -> t
 
@@ -524,13 +525,13 @@ resolveTvars tvarMap t =
 
     TVar a ->
       case List.find (\(t,ti) -> t == a) tvarMap of
-        Just (_,ti) ->
-          case ti of
-            -- If we looked up the Tvar and got another Tvar, we've got a tvar
-            -- that's not specific higher up, so leave it be – this means the
-            -- parent type we're generating for has type variables itself
-            TVar b -> TVar a
-            _ -> ti
+        Just (_,ti) -> ti
+          -- case ti of
+          --   -- If we looked up the Tvar and got another Tvar, we've got a tvar
+          --   -- that's not specific higher up, so leave it as a tvar, but with
+          --   -- the generalised name that's come down.
+          --   TVar b -> TVar b
+          --   _ -> ti
         Nothing -> TVar a
 
     TType modul typename tvars ->
@@ -538,12 +539,28 @@ resolveTvars tvarMap t =
         & fmap (resolveTvars tvarMap)
         & TType modul typename
 
-    TRecord fieldMap maybeName ->
-      fieldMap
-        & fmap (\(FieldType index tipe) ->
-            FieldType index (resolveTvars tvarMap tipe)
-          )
-        & (\newFieldMap -> TRecord newFieldMap maybeName )
+    TRecord fieldMap maybeExtensible ->
+      case maybeExtensible of
+        Nothing ->
+          fieldMap
+            & fmap (\(FieldType index tipe) ->
+                FieldType index (resolveTvars tvarMap tipe)
+              )
+            -- @EXTENSIBLERECORDS For now we don't support extensible records, so drop the maybeExtensible
+            & (\newFieldMap -> TRecord newFieldMap Nothing )
+        Just extensibleName ->
+          case resolveTvars tvarMap (TVar extensibleName) of
+            TRecord fieldMapExtensible _ ->
+              fieldMap
+                & Map.union fieldMapExtensible
+                & fmap (\(FieldType index tipe) ->
+                    FieldType index (resolveTvars tvarMap tipe)
+                  )
+                -- @EXTENSIBLERECORDS For now we don't support extensible records, so drop the maybeExtensible
+                & (\newFieldMap -> TRecord newFieldMap Nothing )
+
+            rt -> error $ "resolveTvars: impossible extensible record with non-record type: " ++ show maybeExtensible ++ "\n\n" ++ show rt
+
 
     TUnit -> t
 
@@ -551,10 +568,52 @@ resolveTvars tvarMap t =
     TTuple a b (Just c) -> TTuple (resolveTvars tvarMap a) (resolveTvars tvarMap b) (Just $ resolveTvars tvarMap c)
 
     TAlias moduleName typeName tvars (Holey tipe) ->
-      TAlias moduleName typeName tvars (Filled $ resolveTvars tvars tipe)
+      let newResolvedTvars = tvars & fmap (\(n, t) -> (n, resolveTvars tvarMap t))
+      in TAlias moduleName typeName newResolvedTvars (Filled $ resolveTvars newResolvedTvars tipe)
 
     TAlias moduleName typeName tvars (Filled tipe) ->
-      TAlias moduleName typeName tvars (Filled $ resolveTvars tvars tipe)
+      let newResolvedTvars = tvars & fmap (\(n, t) -> (n, resolveTvars tvarMap t))
+      in TAlias moduleName typeName newResolvedTvars (Filled $ resolveTvars newResolvedTvars tipe)
 
-    _ ->
-      error $ "resolveTvars not implemented! " ++ show t
+
+resolveTvarRenames tvars tvarNames =
+  tvarNames
+    & fmap (\tvarName ->
+      case List.find (\(tvarName_,tvarType) -> tvarName_ == tvarName) tvars of
+        Just (_,tvarType) ->
+          case tvarType of
+            -- If we looked up the Tvar and got another Tvar, we've got a tvar
+            -- that's not specific higher up, but has been renamed by the parent
+            -- context, so we rename our ForAll clause and thus all the params
+            -- that reference back to it
+            TVar newName -> newName
+            _ -> tvarName
+        Nothing -> tvarName
+      )
+
+
+extractTvarsInTvars tvars =
+  tvars
+    & concatMap (\(tvarName,tvarType) ->
+      extractTvarsInTvars_ tvarType
+    )
+
+extractTvarsInTvars_ t =
+  case t of
+    TLambda t1 t2 -> [t1,t2] & concatMap extractTvarsInTvars_
+    TVar a -> [a]
+    TType modul typename tvars -> tvars & concatMap extractTvarsInTvars_
+
+    TRecord fieldMap maybeExtensible ->
+      fieldMap
+        & concatMap (\(FieldType index tipe) ->
+            extractTvarsInTvars_ tipe
+          )
+
+    TUnit -> []
+
+    TTuple a b Nothing  -> [a,b] & concatMap extractTvarsInTvars_
+    TTuple a b (Just c) -> [a,b,c] & concatMap extractTvarsInTvars_
+
+    TAlias moduleName typeName tvars (Holey tipe) -> extractTvarsInTvars_ tipe
+    TAlias moduleName typeName tvars (Filled tipe) -> extractTvarsInTvars_ tipe

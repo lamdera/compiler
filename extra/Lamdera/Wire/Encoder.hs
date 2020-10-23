@@ -225,8 +225,8 @@ encoderForType depth ifaces cname tipe =
             else
               let
                 getTvars (Module.Canonical pkg (moduleRaw)) = foreignTypeTvars moduleRaw typeName ifaces
-                tvars = getTvars moduleName
-                tvarsForall = tvars & fmap (\tvar -> (tvar, ())) & Map.fromList
+                tvars = getTvars moduleName & resolveTvarRenames tvars_
+                tvarsForall = (extractTvarsInTvars tvars_ ++ tvars) & fmap (\tvar -> (tvar, ())) & Map.fromList
                 tvarsTypes = tvars & fmap (\tvar -> TVar tvar)
 
                 -- These are the signatures for all tvars, i..e
@@ -260,9 +260,6 @@ encoderForType depth ifaces cname tipe =
 
     TLambda t1 t2 ->
       failEncode
-
-    _ ->
-      encoderNotImplemented "encoderForType" tipe
 
 
 deepEncoderForType depth ifaces cname tipe =
@@ -326,9 +323,6 @@ deepEncoderForType depth ifaces cname tipe =
     TVar name     -> encoderForType depth ifaces cname tipe
     TLambda t1 t2 -> encoderForType depth ifaces cname tipe
 
-    _ ->
-      encoderNotImplemented "deepEncoderForType" tipe
-
 
 encodeTypeValue depth ifaces cname tipe value =
   case tipe of
@@ -362,8 +356,14 @@ encodeTypeValue depth ifaces cname tipe value =
         then call failEncode [ value ]
         else call (encoderForType depth ifaces cname tipe) $ fmap (deepEncoderForType depth ifaces cname) params ++ [ value ]
 
-    TRecord fieldMap maybeName ->
-      call (encoderForType depth ifaces cname tipe) [ value ]
+    TRecord fieldMap maybeExtensible ->
+      case maybeExtensible of
+        Just extensibleName ->
+          -- @EXTENSIBLERECORDS not supported yet
+          call failEncode [ value ]
+
+        Nothing ->
+          call (encoderForType depth ifaces cname tipe) [ value ]
 
     TAlias moduleName typeName tvars aType ->
       call (encoderForType depth ifaces cname tipe) $ fmap (\(tvarName, tvarType) -> deepEncoderForType depth ifaces cname tvarType) tvars ++ [ value ]
@@ -374,6 +374,3 @@ encodeTypeValue depth ifaces cname tipe value =
 
     TLambda t1 t2 ->
       call failEncode [ value ]
-
-    _ ->
-      encoderNotImplemented "encodeTypeValue" tipe

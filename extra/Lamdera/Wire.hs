@@ -3,6 +3,15 @@
 {-# LANGUAGE BangPatterns #-}
 module Lamdera.Wire where
 
+{-
+
+All the code that does the Wire encoder/decoder code gen and injection
+
+-- @EXTENSIBLERECORDS search for this tag for issues related to skipping
+support for extensible records ATM.
+
+-}
+
 import System.IO.Unsafe (unsafePerformIO)
 import qualified Data.Map as Map
 import qualified Data.List as List
@@ -125,9 +134,9 @@ addWireGenerations_ canonical pkg ifaces modul =
 
     -- !x = unsafePerformIO $ do
     --       case (pkg, Src.getName modul) of
-    --         ((Name "elm-explorations" "test"), "Lazy.List") -> do
+    --         ((Name "author" "project"), "Test.Wire_Alias_4_TvarRename") -> do
     --           formatHaskellValue "declsBefore" $ declsToSummary $ Can._decls canonical
-    --           formatHaskellValue "declsAfter" $ declsToSummary $ extendedDecls
+    --           formatHaskellValue "declsAfter" $ extendedDecls
     --
     --         _ ->
     --           pure ()
@@ -308,7 +317,6 @@ encoderAlias isTest ifaces pkg modul decls aliasName alias@(Alias tvars tipe) =
     generatedName = Data.Name.fromChars $ "w2_encode_" ++ Data.Name.toChars aliasName
     cname = Module.Canonical pkg (Src.getName modul)
     ptvars = tvars & fmap (\tvar -> pvar $ Data.Name.fromChars $ "w2_x_c_" ++ Data.Name.toChars tvar )
-    ltvars = tvars & fmap (\tvar -> lvar $ Data.Name.fromChars $ "w2_x_c_" ++ Data.Name.toChars tvar )
 
     generated = Def (a (generatedName)) ptvars $ deepEncoderForType 0 ifaces cname tipe
   in

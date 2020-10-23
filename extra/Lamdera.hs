@@ -80,6 +80,7 @@ module Lamdera
   , nameToText
   , utf8ToText
   , imap
+  , imapM
   , filterMap
   , withDefault
   , bsToStrict
@@ -777,6 +778,17 @@ utf8ToText =
 imap :: (Int -> a -> b) -> [a] -> [b]
 imap f l = Prelude.zipWith (\v i -> f i v) l [0..]
 
+
+imapM :: Monad m => (Int -> a -> m b) -> [a] -> m [b]
+imapM f as = ifoldr k (return []) as
+  where
+    k i a r = do
+      x <- f i a
+      xs <- r
+      return (x:xs)
+
+ifoldr :: (Int -> a -> b -> b) -> b -> [a] -> b
+ifoldr f z xs = Prelude.foldr (\x g i -> f i x (g (i+1))) (const z) xs 0
 
 type List a = [a]
 

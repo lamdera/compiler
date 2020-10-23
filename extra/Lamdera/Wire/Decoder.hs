@@ -33,31 +33,20 @@ import qualified CanSer.CanSer as ToSource
 import Lamdera.Wire.Helpers
 
 
+callDecoder name tipe =
+  (a (VarForeign mLamdera_Wire2 name (Forall Map.empty (TAlias mLamdera_Wire2 "Decoder" [("a", tipe)] (Filled (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [tipe]))))))
+
 decoderForType ifaces cname tipe =
   case tipe of
-    (TType (Module.Canonical (Name "elm" "core") "Basics") "Int" []) ->
-      (a (VarForeign mLamdera_Wire2 "decodeInt" (Forall Map.empty (TAlias mLamdera_Wire2 "Decoder" [("a", tipe)] (Filled (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [tipe]))))))
+    (TType (Module.Canonical (Name "elm" "core") "Basics") "Int" [])    -> callDecoder "decodeInt" tipe
+    (TType (Module.Canonical (Name "elm" "core") "Basics") "Float" [])  -> callDecoder "decodeFloat" tipe
+    (TType (Module.Canonical (Name "elm" "core") "Basics") "Bool" [])   -> callDecoder "decodeBool" tipe
+    (TType (Module.Canonical (Name "elm" "core") "Basics") "Order" [])  -> callDecoder "decodeOrder" tipe
+    (TType (Module.Canonical (Name "elm" "core") "Basics") "Never" [])  -> callDecoder "decodeNever" tipe
+    (TType (Module.Canonical (Name "elm" "core") "Char") "Char" [])     -> callDecoder "decodeChar" tipe
+    (TType (Module.Canonical (Name "elm" "core") "String") "String" []) -> callDecoder "decodeString" tipe
 
-    (TType (Module.Canonical (Name "elm" "core") "Basics") "Float" []) ->
-      (a (VarForeign mLamdera_Wire2 "decodeFloat" (Forall Map.empty (TAlias mLamdera_Wire2 "Decoder" [("a", tipe)] (Filled (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [tipe]))))))
-
-    (TType (Module.Canonical (Name "elm" "core") "Basics") "Bool" []) ->
-      (a (VarForeign mLamdera_Wire2 "decodeBool" (Forall Map.empty (TAlias mLamdera_Wire2 "Decoder" [("a", tipe)] (Filled (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [tipe]))))))
-
-    (TType (Module.Canonical (Name "elm" "core") "Basics") "Order" []) ->
-      (a (VarForeign mLamdera_Wire2 "decodeOrder" (Forall Map.empty (TAlias mLamdera_Wire2 "Decoder" [("a", tipe)] (Filled (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [tipe]))))))
-
-    (TType (Module.Canonical (Name "elm" "core") "Basics") "Never" []) ->
-      (a (VarForeign mLamdera_Wire2 "decodeNever" (Forall Map.empty (TAlias mLamdera_Wire2 "Decoder" [("a", tipe)] (Filled (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [tipe]))))))
-
-    (TType (Module.Canonical (Name "elm" "core") "Char") "Char" []) ->
-      (a (VarForeign mLamdera_Wire2 "decodeChar" (Forall Map.empty (TAlias mLamdera_Wire2 "Decoder" [("a", tipe)] (Filled (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [tipe]))))))
-
-    (TType (Module.Canonical (Name "elm" "core") "String") "String" []) ->
-      (a (VarForeign mLamdera_Wire2 "decodeString" (Forall Map.empty (TAlias mLamdera_Wire2 "Decoder" [("a", tipe)] (Filled (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [tipe]))))))
-
-    TUnit ->
-      (a (VarForeign mLamdera_Wire2 "decodeUnit" (Forall Map.empty (TAlias mLamdera_Wire2 "Decoder" [("a", tipe)] (Filled (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [tipe]))))))
+    TUnit -> callDecoder "decodeUnit" tipe
 
     TTuple a_ b Nothing ->
         (a (Call
@@ -289,29 +278,36 @@ decoderForType ifaces cname tipe =
               , decoderForType ifaces cname val
               ]))
 
+    TType (Module.Canonical (Name "elm" "bytes") "Bytes") "Bytes" params ->
+      decodeBytes
 
-    TRecord fieldMap maybeName ->
-    -- | TRecord (Map.Map Name FieldType) (Maybe Name)
-      let
-        fields = fieldsToList fieldMap
+    TRecord fieldMap maybeExtensible ->
+      case maybeExtensible of
+        Just extensibleName ->
+          -- @EXTENSIBLERECORDS not supported yet
+          failDecode
+        Nothing ->
+        -- | TRecord (Map.Map Name FieldType) (Maybe Name)
+          let
+            fields = fieldsToList fieldMap
 
-        pvars :: [Pattern]
-        pvars =
-          (imap (\i (name, field) -> a (PVar $ Data.Name.fromChars $ Data.Name.toChars name ++ "0")) fields)
-          -- (imap (\i (name, field) -> a (PVar $ Data.Name.fromChars $ "w_f" ++ show i)) fields) -- @TODO improve gen
+            pvars :: [Pattern]
+            pvars =
+              (imap (\i (name, field) -> a (PVar $ Data.Name.fromChars $ Data.Name.toChars name ++ "0")) fields)
+              -- (imap (\i (name, field) -> a (PVar $ Data.Name.fromChars $ "w_f" ++ show i)) fields) -- @TODO improve gen
 
-        newRecFields :: Map.Map Data.Name.Name Expr
-        newRecFields =
-          fields
-            & fmap (\(name, field) ->
-                (name, a (VarLocal $ Data.Name.fromChars $ Data.Name.toChars name ++ "0"))
-                -- (name, a (VarLocal $ Data.Name.fromChars $ "w_f" ++ show i)) -- @TODO improve gen
-              )
-            & Map.fromList
-      in
-      [succeedDecode (a (Lambda pvars (a (Record newRecFields ))))]
-      ++ fmap (\(name, field) -> andMapDecode1 (decoderForType ifaces cname field)) fields
-        & foldlPairs (|>)
+            newRecFields :: Map.Map Data.Name.Name Expr
+            newRecFields =
+              fields
+                & fmap (\(name, field) ->
+                    (name, a (VarLocal $ Data.Name.fromChars $ Data.Name.toChars name ++ "0"))
+                    -- (name, a (VarLocal $ Data.Name.fromChars $ "w_f" ++ show i)) -- @TODO improve gen
+                  )
+                & Map.fromList
+          in
+          [succeedDecode (a (Lambda pvars (a (Record newRecFields ))))]
+          ++ fmap (\(name, field) -> andMapDecode1 (decoderForType ifaces cname field)) fields
+            & foldlPairs (|>)
 
     TAlias moduleName typeName tvars_ aType ->
       let
@@ -325,9 +321,9 @@ decoderForType ifaces cname tipe =
             else
               let
                 getTvars (Module.Canonical pkg (moduleRaw)) = foreignTypeTvars moduleRaw typeName ifaces
-                tvars = getTvars moduleName
-                tvarsForall = tvars & fmap (\tvar -> (tvar, ())) & Map.fromList
-                tvarsTypes = tvars & fmap (\tvar -> TVar tvar)
+                tvars = getTvars moduleName & resolveTvarRenames tvars_
+                tvarsForall = (extractTvarsInTvars tvars_ ++ tvars) & fmap (\tvar -> (tvar, ())) & Map.fromList
+                tvarsTypes = tvars & fmap (\tvar -> TVar tvar) & fmap (resolveTvars tvars_)
 
                 tvarsSigDecoders = tvarsTypes & fmap (\tvarType ->
                   (TAlias
@@ -357,8 +353,6 @@ decoderForType ifaces cname tipe =
                            (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
                            "Decoder"
                            [ unwrapAliasesDeep $ resolveTvars tvars_ tipe ])))
-
-
               in
               (a (VarForeign moduleName generatedName
                 (Forall tvarsForall $
@@ -381,11 +375,6 @@ decoderForType ifaces cname tipe =
                     decoderForType ifaces cname tvarType
               ) tvars_
 
-
-    TType (Module.Canonical (Name "elm" "bytes") "Bytes") "Bytes" params ->
-      decodeBytes
-
-
     TType moduleName typeName params ->
       let
         generatedName = Data.Name.fromChars $ "w2_decode_" ++ Data.Name.toChars typeName
@@ -394,26 +383,16 @@ decoderForType ifaces cname tipe =
           if cname == moduleName
             -- Referenced type is defined in the current module
             then (a (VarTopLevel moduleName generatedName))
-            -- Referenced type is defined in another module
             else
-              -- genForeignDecoder ifaces generatedName moduleName typeName
+              {- Referenced type is defined in another module. In order to inject the right
+                 canonical type signature, we have to lookup the type definition to get the
+                 specific tvars for this type.
+              -}
               let
                 getTvars (Module.Canonical pkg (moduleRaw)) = foreignTypeTvars moduleRaw typeName ifaces
                 tvars = getTvars moduleName
                 tvarsForall = tvars & fmap (\tvar -> (tvar, ())) & Map.fromList
                 tvarsTypes = tvars & fmap (\tvar -> TVar tvar)
-
-                -- tvarResolvedParams =
-                --   params
-                --     & fmap (\p ->
-                --       case p of
-                --         Can.TVar a ->
-                --           case List.find (\(t,ti) -> t == a) tvarMap of
-                --             Just (_,ti) -> ti
-                --             Nothing -> p
-                --         _ -> p
-                --     )
-
 
                 -- These are the signatures for all tvars, i..e
                 -- `decoder : (Decoder tvar1) -> Decoder (Type tvar1)`
@@ -443,19 +422,6 @@ decoderForType ifaces cname tipe =
                            (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
                            "Decoder"
                            [(TType moduleName typeName tvarsTypes)])))
-
-                -- @TODO this might be helpful if we add explicit type signatures!
-                -- decoderEndSig =
-                --   (TAlias
-                --     (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire2")
-                --     "Decoder"
-                --     [("a", tipe)]
-                --     (Filled
-                --         (TType
-                --            (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
-                --            "Decoder"
-                --            [tipe])))
-
               in
               (a (VarForeign moduleName generatedName
                 (Forall tvarsForall $
@@ -463,7 +429,6 @@ decoderForType ifaces cname tipe =
                      & foldrPairs TLambda
                 )
               ))
-
       in
       if isUnsupportedKernelType tipe
         then failDecode
@@ -477,16 +442,3 @@ decoderForType ifaces cname tipe =
 
     TLambda t1 t2 ->
       failDecode
-
-    _ ->
-      error $ "decoder not implemented! " ++ show tipe
-      -- str $ Utf8.fromChars $ "decoder not implemented! " ++ show tipe
-
-
-{-
-
-Referenced type is defined in another module. In order to inject the right
-canonical type signature, we have to lookup the type definition to get the
-specific tvars for this type.
-
--}

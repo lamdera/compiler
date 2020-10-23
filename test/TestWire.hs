@@ -87,10 +87,7 @@ wire = do
         , "src/Test/Wire_Core_Types.elm"
         , "src/Test/Wire_Recursive.elm"
         , "src/Test/Wire_Phantom.elm"
-        -- "src/Types.elm"
-        -- "src/ArchitectureTest.elm"
-         -- "src/Acceleration.elm"
-        -- "src/Codec.elm"
+        , "src/Test/Wire_Record_Extensible.elm"
         ]
 
   testFiles & mapM (\filename -> do
@@ -120,9 +117,10 @@ buildAllPackages = do
 
       packages
         -- & take 10
-        & mapM (\pkgRaw ->
+        & imapM (\i pkgRaw ->
             case stringToPackageName pkgRaw of
-              Just pkg ->
+              Just pkg -> do
+                putStrLn $ "🧮 " ++ show i ++ " of " ++ (show (length packages))
                 tryStandaloneInstall pkg
               Nothing ->
                 putStrLn $ "⚠️ failed to parse package name: " ++ Text.unpack pkgRaw
@@ -155,6 +153,10 @@ buildAllPackages = do
 
   unsetEnv "ELM_HOME"
 
+
+matchKnownBad pkg match =
+  onlyWhen (textContains match (Text.pack $ Pkg.toChars pkg)) $ writeUtf8 "known_bad" ""
+
 tryStandaloneInstall pkg  = do
   let
     pkgIdent =
@@ -169,45 +171,58 @@ tryStandaloneInstall pkg  = do
   mkdir root
   withCurrentDirectory root $ do
 
+    -- Known bad packages that cannot be compiled for non-code reasons
+    matchKnownBad pkg "Skinney/" -- Author renamed github name
+    matchKnownBad pkg "2426021684/" -- Renamed
+    matchKnownBad pkg "ContaSystemer/review-noregex" -- Renamed
+    matchKnownBad pkg "ContaSystemer/review-no-missing-documentation" -- SHA changed
+    matchKnownBad pkg "FabienHenon/remote-resource" -- SHA changed
+    matchKnownBad pkg "Cendrb/elm-css" -- Relies on Skinney/murmur3
+    matchKnownBad pkg "EngageSoftware/elm-engage-common" -- Relies on Skinney/murmur3
+    matchKnownBad pkg "HAN-ASD-DT/" -- Github not found
+    matchKnownBad pkg "JeremyBellows/elm-bootstrapify" -- SHA changed
+    matchKnownBad pkg "Morgan-Stanley/morphir-elm" -- renamed finos/morphir-elm
+    matchKnownBad pkg "abinayasudhir/html-parser" -- tries to call Elm.Kernel.VirtualDom
+    matchKnownBad pkg "abradley2/" -- 404
+
+    -- Pending
+
+
+
     compiledOkay <- doesFileExist "compiled_okay"
     wip <- doesFileExist "wip"
+    knownBad <- doesFileExist "known_bad"
 
-    if compiledOkay
-      then
-        putStrLn $ "⏩: skipping already checked: " ++ root
+    onlyWhen compiledOkay $ putStrLn $ "⏩: skipping already checked: " ++ root
+    onlyWhen wip $ putStrLn $ "🔶 skipping project marked wip: " ++ root
+    onlyWhen knownBad $ putStrLn $ "❌ skipping known bad project: " ++ root
 
-      else do
+    onlyWhen (not compiledOkay && not wip && not knownBad) $ do
 
-        if wip
-          then
-            putStrLn $ "🔶 skipping project marked wip: " ++ root
+      putStrLn $ "building: " ++ Pkg.toChars pkg
 
-          else do
+      hasElmJson <- doesFileExist "elm.json"
+      onlyWhen (not hasElmJson) $
+        withStdinYesAll $ do
+          _ <- Init.init
+          pure ()
 
-            putStrLn $ "building: " ++ root
+      installResult <- runInstall (Install.Install pkg) ()
+      case installResult of
+        Right _ -> do
+          -- @TODO is this needed? Does install also build the package...?
+          mkdir "src"
+          writeUtf8 "src/Test.elm" "module Test exposing (..)\n\nx = 1\n"
+          Lamdera.Compile.make "src" "Test.elm"
 
-            hasElmJson <- doesFileExist "elm.json"
-            onlyWhen (not hasElmJson) $
-              withStdinYesAll $ do
-                _ <- Init.init
-                pure ()
+          -- Write something we can use to skip this on re-runs
+          writeUtf8 "compiled_okay" ""
+          pure ()
 
-            installResult <- runInstall (Install.Install pkg) ()
-            case installResult of
-              Right _ -> do
-                -- @TODO is this needed? Does install also build the package...?
-                mkdir "src"
-                writeUtf8 "src/Test.elm" "module Test exposing (..)\n\nx = 1\n"
-                Lamdera.Compile.make "src" "Test.elm"
-
-                -- Write something we can use to skip this on re-runs
-                writeUtf8 "compiled_okay" ""
-                pure ()
-
-              Left err -> do
-                -- putStrLn $ show err
-                Exit.toStderr (Exit.installToReport err)
-                Exit.exitFailure
+        Left err -> do
+          -- putStrLn $ show err
+          Exit.toStderr (Exit.installToReport err)
+          Exit.exitFailure
 
 
 stringToPackageName :: Text -> Maybe Pkg.Name
