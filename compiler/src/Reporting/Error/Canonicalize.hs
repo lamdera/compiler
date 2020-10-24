@@ -33,6 +33,8 @@ import qualified Reporting.Report as Report
 import qualified Reporting.Suggest as Suggest
 
 
+import Lamdera
+import qualified Lamdera.Suggestions
 
 -- CANONICALIZATION ERRORS
 
@@ -315,6 +317,7 @@ toReport source err =
       let
         suggestions =
           map Name.toChars $ take 4 $
+            Lamdera.Suggestions.hideWireSuggestionsName $
             Suggest.sort (Name.toChars rawName) Name.toChars possibleNames
       in
       Report.Report "UNKNOWN EXPORT" region suggestions $
@@ -396,6 +399,7 @@ toReport source err =
       let
         suggestions =
           map Name.toChars $ take 4 $
+            Lamdera.Suggestions.hideWireSuggestionsName $
             Suggest.sort (Name.toChars home) Name.toChars possibleNames
       in
       Report.Report "BAD IMPORT" region suggestions $
@@ -1045,6 +1049,7 @@ notFound source region maybePrefix name thing (PossibleNames locals quals) =
           Set.foldr (\x xs -> toQualString prefix x : xs) allNames localSet
       in
       Map.foldrWithKey addQuals (map Name.toChars (Set.toList locals)) quals
+        & Lamdera.Suggestions.hideWireSuggestions
 
     nearbyNames =
       take 4 (Suggest.sort givenName id possibleNames)
