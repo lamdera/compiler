@@ -50,8 +50,11 @@ runTests isTest debugName pkg modul decls generatedName generated canonicalValue
       unsafePerformIO $ do
       let
         testName = Data.Name.fromChars $ "expected_" ++ Data.Name.toChars generatedName
-        withName (Def (A.At r n) p e) n_ =
-          Def (A.At r n_) p e
+
+        withName def n_ =
+          case def of
+            Def (A.At r n) p e -> Def (A.At r n_) p e
+            TypedDef (A.At r n) freeVars pts e t -> TypedDef (A.At r n_) freeVars pts e t
 
         fullTypeRef =
           (T.pack $ Pkg.toChars pkg) <> ":" <> (T.pack $ Data.Name.toChars $ Src.getName modul) <> "." <> (T.pack $ Data.Name.toChars generatedName)
@@ -134,9 +137,10 @@ addWireGenerations_ canonical pkg ifaces modul =
 
     -- !x = unsafePerformIO $ do
     --       case (pkg, Src.getName modul) of
-    --         ((Name "author" "project"), "Test.Wire_Alias_4_TvarRename") -> do
+    --         -- ((Name "Skinney" "elm-deque"), "OldDeque") -> do
+    --         ((Name "author" "project"), "Test.Wire_Recursive") -> do
     --           formatHaskellValue "declsBefore" $ declsToSummary $ Can._decls canonical
-    --           formatHaskellValue "declsAfter" $ extendedDecls
+    --           formatHaskellValue "declsAfter" $ declsToSummary $ extendedDecls
     --
     --         _ ->
     --           pure ()

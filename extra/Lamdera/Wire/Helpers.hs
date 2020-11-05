@@ -53,6 +53,36 @@ shouldHaveCodecsGenerated name =
     _ -> True -- @TODO REMOVE
 
 
+getForeignSig tipe moduleName generatedName ifaces =
+  -- debugHaskell (T.pack $ "❎❎❎❎❎ ALIAS ENCODER foreignTypeSig for " ++ (Data.Name.toChars generatedName)) $
+    case foreignTypeSig moduleName generatedName ifaces of
+      Just (Forall freeVars tipe_) ->
+        let
+          extractedFreevars = extractTvarsInType tipe_ & fmap (\t -> (t, ())) & Map.fromList
+        in
+        Forall (Map.union freeVars extractedFreevars) tipe_
+      Nothing ->
+        -- If a foreign type gen function cannot be find, it must be banned!
+        -- So add type-sig for failure encoder or decoder as appropriate.
+        if T.isPrefixOf "w2_encode_" (T.pack $ Data.Name.toChars generatedName)
+          then
+            (Forall
+               (Map.fromList [("a", ())])
+               (TLambda (TVar "a") tLamdera_Wire2__Encoder))
+
+          else if T.isPrefixOf "w2_decode_" (T.pack $ Data.Name.toChars generatedName)
+            then
+              (Forall
+                 (Map.fromList [("a", ())])
+                 (TAlias
+                    mLamdera_Wire2
+                    "Decoder"
+                    [("a", TVar "a")]
+                    (Filled (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [TVar "a"]))))
+            else
+              error $ "impossible getForeignSig on non-wire function: " ++ Data.Name.toChars generatedName
+
+
 
 {- NOTE: Any recursive usage of these types in user-code will get caught in the TypeDiff,
 the mapping there has been checked extensively against types in packages that are backed by Kernel.
@@ -87,6 +117,9 @@ isUnsupportedKernelType tipe =
     TType (Module.Canonical (Name "elm" "json") "Json.Encode") "Value" _ -> True -- js type
     TType (Module.Canonical (Name "elm" "json") "Json.Decode") "Decoder" _ -> True -- js type
     TType (Module.Canonical (Name "elm" "json") "Json.Decode") "Value" _ -> True -- js type
+
+    TAlias moduleName typeName tvars (Holey tipe) -> isUnsupportedKernelType tipe
+    TAlias moduleName typeName tvars (Filled tipe) -> isUnsupportedKernelType tipe
 
     -- Disable for now, but need to revisit these and whether we want actual proper wire support
     -- , (("elm/browser", "Browser.Navigation") "Key" _ -> True -- This is a JS backed value
@@ -208,6 +241,16 @@ foreignTypeTvars module_ typeName ifaces =
 
     Nothing ->
       []
+
+
+foreignTypeSig :: Module.Canonical -> Data.Name.Name -> Map.Map Module.Raw I.Interface -> Maybe Can.Annotation
+foreignTypeSig (Module.Canonical pkg (moduleRaw)) defName ifaces =
+  case ifaces & Map.lookup moduleRaw of
+    Just iface ->
+      I._values iface !? defName
+
+    Nothing ->
+      Nothing
 
 
 unionTvars union =
@@ -392,13 +435,7 @@ failEncode =
          "failEncode"
          (Forall
             (Map.fromList [("a", ())])
-            (TLambda
-               (TVar "a")
-               (TAlias
-                  (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire2")
-                  "Encoder"
-                  []
-                  (Filled (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Encode") "Encoder" [])))))))
+            (TLambda (TVar "a") tLamdera_Wire2__Encoder))))
 
 
 int value =
@@ -458,7 +495,7 @@ tLamdera_Wire2__Encoder =
      mLamdera_Wire2
      "Encoder"
      []
-       (Filled (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Encode") "Encoder" [])))
+     (Filled (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Encode") "Encoder" [])))
 
 
 mLamdera_Wire2 =
@@ -525,7 +562,26 @@ resolveTvars tvarMap t =
 
     TVar a ->
       case List.find (\(t,ti) -> t == a) tvarMap of
-        Just (_,ti) -> ti
+        Just (tvarName,tvarType) ->
+
+          case extractTvarsInTvars [(tvarName,tvarType)] of
+            [] -> tvarType
+            _ ->
+              {- The var we looked up itself has tvars. This means this particular function we're dealing with
+                 is used in a generic sense relative to other tvars higher up. In our current context, being
+                 'resolving tvars in type signatures for VarForeign calls', we thus have no need to specialise.
+                 See the Wire_Tvar_Ambiguous.elm test for the example, in particular:
+
+                 CustomTypeDefinition (Test.Wire_Tvar_Ambiguous2.AccessControlled (Maybe a))
+                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+                 Notice the underlined alias takes a type param of `a` – but the given param here itself is `Maybe a`,
+                 so the type signature we want to inject for the Test.Wire_Tvar_Ambiguous2.AccessControlled decoder
+                 should just be `Decoder (AccessControlled a)` - not `Decoder (AccessControlled (Maybe a))`.
+
+                 TLDR: no need to specialise this one, leave it generic! -}
+              TVar a
+
           -- case ti of
           --   -- If we looked up the Tvar and got another Tvar, we've got a tvar
           --   -- that's not specific higher up, so leave it as a tvar, but with
@@ -595,25 +651,25 @@ resolveTvarRenames tvars tvarNames =
 extractTvarsInTvars tvars =
   tvars
     & concatMap (\(tvarName,tvarType) ->
-      extractTvarsInTvars_ tvarType
+      extractTvarsInType tvarType
     )
 
-extractTvarsInTvars_ t =
+extractTvarsInType t =
   case t of
-    TLambda t1 t2 -> [t1,t2] & concatMap extractTvarsInTvars_
+    TLambda t1 t2 -> [t1,t2] & concatMap extractTvarsInType
     TVar a -> [a]
-    TType modul typename tvars -> tvars & concatMap extractTvarsInTvars_
+    TType modul typename tvars -> tvars & concatMap extractTvarsInType
 
     TRecord fieldMap maybeExtensible ->
       fieldMap
         & concatMap (\(FieldType index tipe) ->
-            extractTvarsInTvars_ tipe
+            extractTvarsInType tipe
           )
 
     TUnit -> []
 
-    TTuple a b Nothing  -> [a,b] & concatMap extractTvarsInTvars_
-    TTuple a b (Just c) -> [a,b,c] & concatMap extractTvarsInTvars_
+    TTuple a b Nothing  -> [a,b] & concatMap extractTvarsInType
+    TTuple a b (Just c) -> [a,b,c] & concatMap extractTvarsInType
 
-    TAlias moduleName typeName tvars (Holey tipe) -> extractTvarsInTvars_ tipe
-    TAlias moduleName typeName tvars (Filled tipe) -> extractTvarsInTvars_ tipe
+    TAlias moduleName typeName tvars (Holey tipe) -> extractTvarsInType tipe ++ extractTvarsInTvars tvars
+    TAlias moduleName typeName tvars (Filled tipe) -> extractTvarsInType tipe ++ extractTvarsInTvars tvars

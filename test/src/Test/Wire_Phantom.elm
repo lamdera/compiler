@@ -27,25 +27,3 @@ expected_w2_encode_Density =
 
 expected_w2_decode_Density =
     Test.Wire_Phantom2.w2_decode_CubicMeters
-
-
-
--- {-| -}
--- type Kilograms
---     = Kilograms
---
---
--- type alias CubicMeters =
---     Cubed Meters
---
---
--- type alias Cubed units =
---     Product (Product units units) units
---
---
--- type Product units1 units2
---     = Product units1 units2
---
---
--- type Meters
---     = Meters

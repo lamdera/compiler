@@ -281,6 +281,23 @@ decoderForType ifaces cname tipe =
     TType (Module.Canonical (Name "elm" "bytes") "Bytes") "Bytes" params ->
       decodeBytes
 
+    TType moduleName typeName params ->
+      let
+        generatedName = Data.Name.fromChars $ "w2_decode_" ++ Data.Name.toChars typeName
+
+        decoder =
+          if cname == moduleName
+            -- Referenced type is defined in the current module
+            then (a (VarTopLevel moduleName generatedName))
+            else (a (VarForeign moduleName generatedName (getForeignSig tipe moduleName generatedName ifaces)))
+      in
+      if isUnsupportedKernelType tipe
+        then failDecode
+        else
+          case params of
+            [] -> decoder
+            _  -> call decoder $ fmap (decoderForType ifaces cname) params
+
     TRecord fieldMap maybeExtensible ->
       case maybeExtensible of
         Just extensibleName ->
@@ -318,48 +335,8 @@ decoderForType ifaces cname tipe =
             -- Referenced type is defined in the current module
             then (a (VarTopLevel moduleName generatedName))
             -- Referenced type is defined in another module
-            else
-              let
-                getTvars (Module.Canonical pkg (moduleRaw)) = foreignTypeTvars moduleRaw typeName ifaces
-                tvars = getTvars moduleName & resolveTvarRenames tvars_
-                tvarsForall = (extractTvarsInTvars tvars_ ++ tvars) & fmap (\tvar -> (tvar, ())) & Map.fromList
-                tvarsTypes = tvars & fmap (\tvar -> TVar tvar) & fmap (resolveTvars tvars_)
+            else (a (VarForeign moduleName generatedName (getForeignSig tipe moduleName generatedName ifaces)))
 
-                tvarsSigDecoders = tvarsTypes & fmap (\tvarType ->
-                  (TAlias
-                    (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire2")
-                    "Decoder"
-                    [("a", tvarType)]
-                    (Filled
-                        (TType
-                           (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
-                           "Decoder"
-                           [tvarType])))
-                  )
-
-                -- This is the signature of the end, i.e.
-                -- `decoder : (Decoder tvar1) -> Decoder (Type tvar1)`
-                --                               ^^^^^^^^^^^^^^^^^^^^
-                decoderEndSig =
-                  (TAlias
-                    (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire2")
-                    "Decoder"
-                    -- @TODO given this isn't the other definiition of
-                    -- (TType moduleName typeName tvarsTypes) then it might be we're
-                    -- re-introducing the bug here that the tvarsTypes injection fixed?
-                    [("a", unwrapAliasesDeep $ resolveTvars tvars_ tipe)]
-                    (Filled
-                        (TType
-                           (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
-                           "Decoder"
-                           [ unwrapAliasesDeep $ resolveTvars tvars_ tipe ])))
-              in
-              (a (VarForeign moduleName generatedName
-                (Forall tvarsForall $
-                  (tvarsSigDecoders ++ [decoderEndSig])
-                     & foldrPairs TLambda
-                )
-              ))
       in
       if isUnsupportedKernelType tipe
         then failDecode
@@ -374,68 +351,6 @@ decoderForType ifaces cname tipe =
                   _ ->
                     decoderForType ifaces cname tvarType
               ) tvars_
-
-    TType moduleName typeName params ->
-      let
-        generatedName = Data.Name.fromChars $ "w2_decode_" ++ Data.Name.toChars typeName
-
-        decoder =
-          if cname == moduleName
-            -- Referenced type is defined in the current module
-            then (a (VarTopLevel moduleName generatedName))
-            else
-              {- Referenced type is defined in another module. In order to inject the right
-                 canonical type signature, we have to lookup the type definition to get the
-                 specific tvars for this type.
-              -}
-              let
-                getTvars (Module.Canonical pkg (moduleRaw)) = foreignTypeTvars moduleRaw typeName ifaces
-                tvars = getTvars moduleName
-                tvarsForall = tvars & fmap (\tvar -> (tvar, ())) & Map.fromList
-                tvarsTypes = tvars & fmap (\tvar -> TVar tvar)
-
-                -- These are the signatures for all tvars, i..e
-                -- `decoder : (Decoder tvar1) -> Decoder (Type tvar1)`
-                --            ^^^^^^^^^^^^^^^
-                tvarsSigDecoders = tvarsTypes & fmap (\tvarType ->
-                  (TAlias
-                    (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire2")
-                    "Decoder"
-                    [("a", tvarType)]
-                    (Filled
-                        (TType
-                           (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
-                           "Decoder"
-                           [tvarType])))
-                  )
-
-                -- This is the signature of the end, i.e.
-                -- `decoder : (Decoder tvar1) -> Decoder (Type tvar1)`
-                --                               ^^^^^^^^^^^^^^^^^^^^
-                decoderEndSig =
-                  (TAlias
-                    (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire2")
-                    "Decoder"
-                    [("a", (TType moduleName typeName tvarsTypes))]
-                    (Filled
-                        (TType
-                           (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
-                           "Decoder"
-                           [(TType moduleName typeName tvarsTypes)])))
-              in
-              (a (VarForeign moduleName generatedName
-                (Forall tvarsForall $
-                  (tvarsSigDecoders ++ [decoderEndSig])
-                     & foldrPairs TLambda
-                )
-              ))
-      in
-      if isUnsupportedKernelType tipe
-        then failDecode
-        else
-          case params of
-            [] -> decoder
-            _  -> call decoder $ fmap (decoderForType ifaces cname) params
 
     TVar name ->
       lvar $ Data.Name.fromChars $ "w2_x_c_" ++ Data.Name.toChars name

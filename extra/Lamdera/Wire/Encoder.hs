@@ -165,53 +165,34 @@ encoderForType depth ifaces cname tipe =
           if cname == moduleName
             -- Referenced type is defined in the current module
             then (a (VarTopLevel moduleName generatedName))
-            else
-              -- Referenced type is defined in another module. In order to inject the right
-              -- canonical type signature, we have to lookup the type definition to get the
-              -- specific tvars for this type.
-              let
-                getTvars (Module.Canonical pkg (moduleRaw)) = foreignTypeTvars moduleRaw typeName ifaces
-                tvars = getTvars moduleName
-                tvarsForall = tvars & fmap (\tvar -> (tvar, ())) & Map.fromList
-                tvarsTypes = tvars & fmap (\tvar -> TVar tvar)
+            else (a (VarForeign moduleName generatedName (getForeignSig tipe moduleName generatedName ifaces)))
 
-                -- These are the signatures for all tvars, i..e
-                -- `encoder : (tvar1 -> Encoder) -> Type tvar1 -> Encoder`
-                --            ^^^^^^^^^^^^^^^^^^
-                tvarsSigEncoders = tvarsTypes & fmap (\tvarType -> TLambda tvarType tLamdera_Wire2__Encoder)
-
-                -- This is the signature of the end, i.e.
-                -- `encoder : (tvar1 -> Encoder) -> Type tvar1 -> Encoder`
-                --                                  ^^^^^^^^^^^^^^^^^^^^^
-                -- @TODO duplicate of same code below with exception of first param here
-                encoderEndSig = TLambda (TType moduleName typeName tvarsTypes) tLamdera_Wire2__Encoder
-                -- @TODO this might be helpful if we add explicit type signatures!
-                -- encoderEndSig = TLambda tipe tLamdera_Wire2__Encoder
-              in
-              (a (VarForeign moduleName generatedName
-                (Forall tvarsForall $
-                   (tvarsSigEncoders ++ [encoderEndSig])
-                      & foldrPairs TLambda
-                )
-              ))
       in
       if isUnsupportedKernelType tipe
         then failEncode
         else decoder
 
 
-    TRecord fieldMap maybeName ->
-      let
-        fields = fieldsToList fieldMap
-        fieldEncoders =
-          fields
-            & fmap (\(name, field) ->
-                encodeTypeValue (depth + 1) ifaces cname field (a (Access (a (VarLocal $ Utf8.fromChars $ "w2_rec_var" ++ show depth)) (a (name))))
-              )
-      in
-      (a (Lambda [(a (PVar $ Utf8.fromChars $ "w2_rec_var" ++ show depth))]
-        (encodeSequenceWithoutLength $ list fieldEncoders)
-      ))
+    TRecord fieldMap maybeExtensible ->
+      case maybeExtensible of
+        Just extensibleName ->
+          -- @EXTENSIBLERECORDS not supported yet
+          failEncode
+
+        Nothing ->
+          let
+            fields = fieldsToList fieldMap
+            fieldEncoders =
+              fields
+                & fmap (\(name, field) ->
+                    encodeTypeValue (depth + 1) ifaces cname field (a (Access (a (VarLocal $ Utf8.fromChars $ "w2_rec_var" ++ show depth)) (a (name))))
+                  )
+          in
+          (a (Lambda [(a (PVar $ Utf8.fromChars $ "w2_rec_var" ++ show depth))]
+            (encodeSequenceWithoutLength $ list fieldEncoders)
+          ))
+
+
 
     TAlias moduleName typeName tvars_ aType ->
       let
@@ -222,32 +203,7 @@ encoderForType depth ifaces cname tipe =
             -- Referenced type is defined in the current module
             then (a (VarTopLevel moduleName generatedName))
             -- Referenced type is defined in another module
-            else
-              let
-                getTvars (Module.Canonical pkg (moduleRaw)) = foreignTypeTvars moduleRaw typeName ifaces
-                tvars = getTvars moduleName & resolveTvarRenames tvars_
-                tvarsForall = (extractTvarsInTvars tvars_ ++ tvars) & fmap (\tvar -> (tvar, ())) & Map.fromList
-                tvarsTypes = tvars & fmap (\tvar -> TVar tvar)
-
-                -- These are the signatures for all tvars, i..e
-                -- `encoder : (tvar1 -> Encoder) -> Type tvar1 -> Encoder`
-                --            ^^^^^^^^^^^^^^^^^^
-                tvarsSigEncoders = tvarsTypes & fmap (\tvarType -> TLambda tvarType tLamdera_Wire2__Encoder)
-
-                -- This is the signature of the end, i.e.
-                -- `encoder : (tvar1 -> Encoder) -> Type tvar1 -> Encoder`
-                --                                  ^^^^^^^^^^^^^^^^^^^^^
-                -- encoderEndSig = TLambda (TType moduleName typeName tvarsTypes) tLamdera_Wire2__Encoder
-                -- @TODO this might be helpful if we add explicit type signatures!
-                -- @TODO duplicate of same code above with exception of first param here for alias unwrapping
-                encoderEndSig = TLambda (unwrapAliasesDeep $ resolveTvars tvars_ tipe) tLamdera_Wire2__Encoder
-              in
-              (a (VarForeign moduleName generatedName
-                (Forall tvarsForall $
-                   (tvarsSigEncoders ++ [encoderEndSig])
-                      & foldrPairs TLambda
-                )
-              ))
+            else (a (VarForeign moduleName generatedName (getForeignSig tipe moduleName generatedName ifaces)))
       in
       if isUnsupportedKernelType tipe
         then failEncode
@@ -309,16 +265,19 @@ deepEncoderForType depth ifaces cname tipe =
       encoderForType depth ifaces cname tipe
 
     TAlias moduleName typeName tvars aType ->
-      case tvars of
-        [] -> encoderForType depth ifaces cname tipe
-        _ ->
-          call (encoderForType depth ifaces cname tipe) $ fmap (\(tvarName, tvarType) ->
-            case tvarType of
-              TVar name ->
-                lvar $ Data.Name.fromChars $ "w2_x_c_" ++ Data.Name.toChars name
-              _ ->
-                deepEncoderForType depth ifaces cname tvarType
-          ) tvars
+      if isUnsupportedKernelType tipe
+        then failEncode
+        else
+          case tvars of
+            [] -> encoderForType depth ifaces cname tipe
+            _ ->
+              call (encoderForType depth ifaces cname tipe) $ fmap (\(tvarName, tvarType) ->
+                case tvarType of
+                  TVar name ->
+                    lvar $ Data.Name.fromChars $ "w2_x_c_" ++ Data.Name.toChars name
+                  _ ->
+                    deepEncoderForType depth ifaces cname tvarType
+              ) tvars
 
     TVar name     -> encoderForType depth ifaces cname tipe
     TLambda t1 t2 -> encoderForType depth ifaces cname tipe
@@ -353,24 +312,26 @@ encodeTypeValue depth ifaces cname tipe value =
 
     TType moduleName typeName params ->
       if isUnsupportedKernelType tipe
-        then call failEncode [ value ]
+        then call failEncode [ a Unit ]
         else call (encoderForType depth ifaces cname tipe) $ fmap (deepEncoderForType depth ifaces cname) params ++ [ value ]
 
     TRecord fieldMap maybeExtensible ->
       case maybeExtensible of
         Just extensibleName ->
           -- @EXTENSIBLERECORDS not supported yet
-          call failEncode [ value ]
+          call failEncode [ a Unit ]
 
         Nothing ->
           call (encoderForType depth ifaces cname tipe) [ value ]
 
     TAlias moduleName typeName tvars aType ->
-      call (encoderForType depth ifaces cname tipe) $ fmap (\(tvarName, tvarType) -> deepEncoderForType depth ifaces cname tvarType) tvars ++ [ value ]
+      if isUnsupportedKernelType tipe
+        then call failEncode [ a Unit ]
+        else call (encoderForType depth ifaces cname tipe) $ fmap (\(tvarName, tvarType) -> deepEncoderForType depth ifaces cname tvarType) tvars ++ [ value ]
 
     TVar name ->
       -- Tvars should always have a local encoder in scope
       call (lvar $ Data.Name.fromChars $ "w2_x_c_" ++ Data.Name.toChars name) [value]
 
     TLambda t1 t2 ->
-      call failEncode [ value ]
+      call failEncode [ a Unit ]
