@@ -22,7 +22,6 @@ import qualified Debug.Trace as DT
 import qualified Data.List as List
 import qualified Reporting
 
-
 import Lamdera
 import Lamdera.Progress
 
@@ -31,6 +30,7 @@ import Lamdera.Progress
 type Check = ExceptT Text IO
 
 
+runChecks :: IO ()
 runChecks = do
 
   missingFiles <- liftIO $ checkMissingFiles ["src/Frontend.elm", "src/Backend.elm", "src/Types.elm"]
@@ -54,6 +54,18 @@ runChecks = do
       if initialiseLamderaFiles
         then do
           liftIO $ writeDefaultImplementations
+          -- @TODO future
+          -- It would be nice if when coming from an existing elm project, we installed the missing
+          -- deps as well, but the UI impact is a little bit weird as it's not transparent to the user
+          -- whats happening, and at the same time the runInstall headless helper we have causes cyclic
+          -- deps so can't really use that until we unravel things...
+          -- liftIO $ callCommand "elm install elm/url"
+          -- This would be much better but we have cyclic dep issues
+          -- Install.run (Install.Install (Package.Name.toName Package.Name.elm "url")) ()
+          --
+          -- Not a huge deal though, the user error explains that elm/url is missing so overall
+          -- users should be able to unblock albeit it being a bit ugly a process.
+
           report $ D.green "Okay, I've generated them for you!\n"
         else
           throw

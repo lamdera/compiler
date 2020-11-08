@@ -144,7 +144,7 @@ readOutline (Env maybeRoot _ _ registry) =
       Task.throw $ Exit.DiffNoOutline
 
     Just root ->
-      do  result <- Task.io $ Outline.read root
+      do  result <- Task.io $ Outline.read root False
           case result of
             Left err ->
               Task.throw $ Exit.DiffBadOutline err

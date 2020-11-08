@@ -9,7 +9,7 @@ import Control.Monad
 import NeatInterpolation
 import qualified Data.Text as T
 import Lamdera
-import Lamdera.Generated
+import Lamdera.Evergreen
 import System.Environment (setEnv, unsetEnv)
 
 all = do

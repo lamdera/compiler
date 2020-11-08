@@ -41,6 +41,8 @@ import qualified Parse.Primitives as P
 import qualified Reporting.Exit as Exit
 
 
+import Lamdera
+import qualified Lamdera.Checks
 
 -- OUTLINE
 
@@ -185,8 +187,8 @@ encodeSrcDir srcDir =
 -- PARSE AND VERIFY
 
 
-read :: FilePath -> IO (Either Exit.Outline Outline)
-read root =
+read :: FilePath -> Bool -> IO (Either Exit.Outline Outline)
+read root shouldCheckLamdera =
   do  bytes <- File.readUtf8 (root </> "elm.json")
       case D.fromByteString decoder bytes of
         Left err ->
@@ -217,7 +219,14 @@ read root =
                           do  maybeDups <- detectDuplicates root (NE.toList srcDirs)
                               case maybeDups of
                                 Nothing ->
-                                  return $ Right outline
+                                  if Map.member Pkg.lamderaCore direct || Map.member Pkg.lamderaCore indirect
+                                  then do
+                                    onlyWhen shouldCheckLamdera Lamdera.Checks.runChecks
+                                    return $ Right outline
+                                  else
+                                    if shouldCheckLamdera
+                                      then return $ Left Exit.OutlineLamderaMissingDeps
+                                      else return $ Right outline
 
                                 Just (canonicalDir, (dir1,dir2)) ->
                                   return $ Left (Exit.OutlineHasDuplicateSrcDirs canonicalDir dir1 dir2)

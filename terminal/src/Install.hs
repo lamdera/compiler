@@ -61,7 +61,7 @@ run args () =
               Install pkg ->
                 Task.run $
                   do  env <- Task.eio Exit.InstallBadRegistry $ Solver.initEnv
-                      oldOutline <- Task.eio Exit.InstallBadOutline $ Outline.read root
+                      oldOutline <- Task.eio Exit.InstallBadOutline $ Outline.read root False
                       case oldOutline of
                         Outline.App outline ->
                           do  changes <- makeAppPlan env pkg outline

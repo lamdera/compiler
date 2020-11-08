@@ -15,7 +15,7 @@ import qualified Lamdera.Check
 import qualified Lamdera.AppConfig
 import qualified Lamdera.Update
 import qualified Lamdera.Compile
-import qualified Lamdera.Snapshot
+import qualified Lamdera.Evergreen.Snapshot
 import TestHelp
 import TestWire
 
@@ -242,7 +242,7 @@ snapshotWithParams version projectPath appName = do
 
   Dir.withCurrentDirectory projectPath $ do
     Lamdera.Compile.make projectPath ("src" </> "Types.elm")
-    Lamdera.Snapshot.run
+    Lamdera.Evergreen.Snapshot.run
 
   unsetEnv "LAMDERA_APP_NAME"
   unsetEnv "LOVR"

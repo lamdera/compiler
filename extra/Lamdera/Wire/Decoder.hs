@@ -24,7 +24,6 @@ import qualified Reporting.Doc as D
 import qualified Data.Text as T
 import qualified Data.Index as Index
 
-import qualified Wire.Source2 as Source2
 
 import Lamdera
 import StandaloneInstances

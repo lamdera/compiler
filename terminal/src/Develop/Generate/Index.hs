@@ -137,7 +137,7 @@ getOutline =
           return Nothing
 
         Just root ->
-          do  result <- Outline.read root
+          do  result <- Outline.read root True
               case result of
                 Left _        -> return Nothing
                 Right outline -> return (Just outline)

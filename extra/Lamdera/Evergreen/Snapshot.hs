@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE BangPatterns #-}
 
-module Lamdera.Snapshot where
+module Lamdera.Evergreen.Snapshot where
 
 {- Type snapshotting for Evergreen.
 

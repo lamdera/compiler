@@ -21,18 +21,22 @@ import qualified File as IO
 import qualified Json.Decode as D
 import qualified Reporting
 import qualified Reporting.Doc as D
+import qualified Reporting.Exit
 import qualified Reporting.Exit.Help as Help
 import Make (Flags(..))
 import qualified Make
 
+import qualified Elm.Outline
+
 import Lamdera
-import Lamdera.Generated (VersionInfo(..), createLamderaGenerated, vinfoVersion, getLastLocalTypeChangeVersion)
+import Lamdera.Evergreen (VersionInfo(..), createLamderaGenerated, vinfoVersion, getLastLocalTypeChangeVersion)
 import qualified Lamdera.AppConfig
 import qualified Lamdera.Http
 import qualified Lamdera.Progress as Progress
 import qualified Lamdera.Project
 import qualified Lamdera.Update
 import qualified Lamdera.Compile
+import qualified Lamdera.Checks
 
 
 progressPointer t = do
@@ -252,7 +256,7 @@ run () () = do
 
               _ <- mkdir $ root </> "src/Evergreen/Migrate"
 
-              lastLocalTypeChangeVersion <- Lamdera.Generated.getLastLocalTypeChangeVersion root
+              lastLocalTypeChangeVersion <- Lamdera.Evergreen.getLastLocalTypeChangeVersion root
 
               let defaultMigrations = defaultMigrationFile lastLocalTypeChangeVersion nextVersion typeCompares
 
@@ -462,6 +466,17 @@ fetchLocalTypes root = do
 
 checkUserProjectCompiles :: FilePath -> IO ()
 checkUserProjectCompiles root = do
+
+  eitherOutline <- Elm.Outline.read root True
+  case eitherOutline of
+    Left problem ->
+      Progress.throw
+        $ Reporting.Exit.toDetailsReport $
+          Reporting.Exit.DetailsBadOutline problem
+
+    Right outline ->
+      pure ()
+
   _ <- Lamdera.touch $ root </> "src" </> "Types.elm"
 
   -- let jsOutput = Just (Output.Html Nothing "/dev/null")
@@ -493,7 +508,7 @@ migrationCheck root nextVersion = do
 
   mkdir $ root </> "lamdera-stuff/alpha"
 
-  gen <- Lamdera.Generated.createLamderaGenerated root nextVersion
+  gen <- Lamdera.Evergreen.createLamderaGenerated root nextVersion
 
   let lamderaCheckBothPath = "lamdera-stuff/alpha/LamderaCheckBoth.elm"
 
@@ -835,7 +850,7 @@ firstTwoChars str =
 writeLamderaGenerated :: FilePath -> Bool -> VersionInfo -> IO ()
 writeLamderaGenerated root inProduction nextVersion =
   onlyWhen inProduction $ do
-    gen <- Lamdera.Generated.createLamderaGenerated root nextVersion
+    gen <- Lamdera.Evergreen.createLamderaGenerated root nextVersion
     writeUtf8 (root </> "src/LamderaGenerated.elm") gen
 
 

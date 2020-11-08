@@ -205,7 +205,7 @@ Executable elmx
         Paths_elm
 
 
-        -- Lamdera:
+        -- Lamdera --
         Lamdera
         Lamdera.AppConfig
         Lamdera.Check
@@ -213,9 +213,10 @@ Executable elmx
         Lamdera.CLI
         Lamdera.Constrain
         Lamdera.Deploy
+        Lamdera.Evergreen
+        Lamdera.Evergreen.Snapshot
         Lamdera.Extensions
         Lamdera.Filewatch
-        Lamdera.Generated
         Lamdera.Hints
         Lamdera.Injection
         Lamdera.Interfaces
@@ -223,7 +224,7 @@ Executable elmx
         Lamdera.Login
         Lamdera.OldFeatureHelper
         Lamdera.Project
-        Lamdera.Snapshot
+        Lamdera.Suggestions
         Lamdera.TypeHash
         Lamdera.Types
         Lamdera.Update
@@ -233,15 +234,17 @@ Executable elmx
         Lamdera.Wire.Graph
         Lamdera.Wire.Helpers
         Lamdera.Wire.Interfaces
-        Wire.Source
-        Wire.Source2
 
-        -- Utility
+        -- Lamdera Utility --
         Lamdera.Compile
         Lamdera.Error
         Lamdera.Http
         Lamdera.Progress
         Lamdera.Task
+
+        -- Lamdera Legacy --
+        -- Wire.Source
+        -- Wire.Source2
 
         SocketServer
 
@@ -262,7 +265,7 @@ Executable elmx
         TestTypeHashes
         TestWire
 
-        -- Debug helpers:
+        -- Debug helpers --
         StandaloneInstances
         CanSer.CanSer
         Sanity

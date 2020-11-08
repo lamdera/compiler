@@ -2,7 +2,7 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE BangPatterns #-}
 
-module Lamdera.Generated where
+module Lamdera.Evergreen where
 
 import Prelude hiding (init)
 import qualified System.Directory as Dir

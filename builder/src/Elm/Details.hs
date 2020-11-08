@@ -208,7 +208,7 @@ data Env =
 initEnv :: Reporting.DKey -> BW.Scope -> FilePath -> IO (Either Exit.Details (Env, Outline.Outline))
 initEnv key scope root =
   do  mvar <- fork Solver.initEnv
-      eitherOutline <- Outline.read root
+      eitherOutline <- Outline.read root True
       case eitherOutline of
         Left problem ->
           return $ Left $ Exit.DetailsBadOutline problem
@@ -430,7 +430,7 @@ type Fingerprint =
 
 build :: Reporting.DKey -> Stuff.PackageCache -> MVar (Map.Map Pkg.Name (MVar Dep)) -> Pkg.Name -> Solver.Details -> Fingerprint -> Set.Set Fingerprint -> IO Dep
 build key cache depsMVar pkg (Solver.Details vsn _) f fs =
-  do  eitherOutline <- Outline.read (Stuff.package cache pkg vsn)
+  do  eitherOutline <- Outline.read (Stuff.package cache pkg vsn) True
       case eitherOutline of
         Left _ ->
           do  Reporting.report key Reporting.DBroken

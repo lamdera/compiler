@@ -17,7 +17,7 @@ import System.FilePath ((</>))
 
 import EasyTest
 import Lamdera
-import Lamdera.Snapshot
+import Lamdera.Evergreen.Snapshot
 import NeatInterpolation
 -- import qualified TestLamdera
 import qualified Lamdera.Compile
@@ -327,7 +327,7 @@ runInstall args () =
               Install.Install pkg ->
                 Task.run $
                   do  env <- Task.eio Exit.InstallBadRegistry $ Solver.initEnv
-                      oldOutline <- Task.eio Exit.InstallBadOutline $ Outline.read root
+                      oldOutline <- Task.eio Exit.InstallBadOutline $ Outline.read root False
                       case oldOutline of
                         Outline.App outline ->
                           do  changes <- Install.makeAppPlan env pkg outline

@@ -24,7 +24,10 @@ module Elm.Package
   , keyDecoder
   --
   , parser
-  , authorLamdera -- @LAMDERA
+  -- @LAMDERA
+  , authorLamdera
+  , lamderaCore
+  , lamderaCodecs
   )
   where
 
@@ -382,3 +385,15 @@ chompName isGoodChar pos end prevWasDash =
 authorLamdera :: Author
 authorLamdera =
   Utf8.fromChars "lamdera"
+
+
+{-# NOINLINE lamderaCore #-}
+lamderaCore :: Name
+lamderaCore =
+  toName (Utf8.fromChars "lamdera") "core"
+
+
+{-# NOINLINE lamderaCodecs #-}
+lamderaCodecs :: Name
+lamderaCodecs =
+  toName (Utf8.fromChars "lamdera") "codecs"

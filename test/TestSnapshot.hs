@@ -12,7 +12,7 @@ import qualified Elm.Package as Pkg
 
 import EasyTest
 import Lamdera
-import Lamdera.Snapshot
+import Lamdera.Evergreen.Snapshot
 import NeatInterpolation
 import qualified TestLamdera
 

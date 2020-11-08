@@ -25,6 +25,7 @@ module Reporting.Exit
   , toString
   , toStderr
   , toJson
+  , toDetailsReport -- @LAMDERA exposed
   )
   where
 
@@ -952,6 +953,7 @@ data Outline
   | OutlineNoPkgCore
   | OutlineNoAppCore
   | OutlineNoAppJson
+  | OutlineLamderaMissingDeps
 
 
 data OutlineProblem
@@ -1042,6 +1044,14 @@ toOutlineReport problem =
             "If you modified your elm.json by hand, try to change it back! And if you are\
             \ having trouble getting back to a working elm.json, it may be easier to delete it\
             \ and use `elm init` to start fresh."
+        ]
+
+    OutlineLamderaMissingDeps ->
+      Help.report "MISSING DEPENDENCY" (Just "elm.json")
+        "A Lamdera application must have \"lamdera/core\" as a dependency."
+        [ D.reflow "You can install it with:"
+        , D.indent 4 $ D.green $ "lamdera install lamdera/core"
+        , D.reflow "Note: if you're trying to run a normal Elm app, use the elm binary instead."
         ]
 
 

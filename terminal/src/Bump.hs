@@ -63,7 +63,7 @@ getEnv =
           do  cache <- Task.io $ Stuff.getPackageCache
               manager <- Task.io $ Http.getManager
               registry <- Task.eio Exit.BumpMustHaveLatestRegistry $ Registry.latest manager cache
-              outline <- Task.eio Exit.BumpBadOutline $ Outline.read root
+              outline <- Task.eio Exit.BumpBadOutline $ Outline.read root False
               case outline of
                 Outline.App _ ->
                   Task.throw Exit.BumpApplication

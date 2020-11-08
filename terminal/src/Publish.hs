@@ -76,7 +76,7 @@ getEnv =
       cache <- Task.io $ Stuff.getPackageCache
       manager <- Task.io $ Http.getManager
       registry <- Task.eio Exit.PublishMustHaveLatestRegistry $ Registry.latest manager cache
-      outline <- Task.eio Exit.PublishBadOutline $ Outline.read root
+      outline <- Task.eio Exit.PublishBadOutline $ Outline.read root False
       return $ Env root cache manager registry outline
 
 
