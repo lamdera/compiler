@@ -52,7 +52,7 @@ lamderaGenerated nextVersion migrationFilepaths = do
 
   supportingCode <- genSupportingCode
 
-  debug_ $ "Generated source for LamderaGenerated"
+  debug_ $ "Generated source for Evergreen type snapshot"
 
   pure $ [text|
     module LamderaGenerated exposing (..)

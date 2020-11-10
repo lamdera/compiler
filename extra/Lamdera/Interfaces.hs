@@ -44,7 +44,7 @@ data Artifacts =
 allDeps :: IO Artifacts
 allDeps =
   BW.withScope $ \scope ->
-  do  putStrLn $ "Loading elm.json"
+  do  debug "Loading elm.json"
       style <- Reporting.terminal
       root <- getProjectRoot
       result <- Details.load style scope root

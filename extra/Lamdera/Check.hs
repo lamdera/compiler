@@ -37,6 +37,8 @@ import qualified Lamdera.Project
 import qualified Lamdera.Update
 import qualified Lamdera.Compile
 import qualified Lamdera.Checks
+import qualified Lamdera.Evergreen.Snapshot
+import qualified Lamdera.TypeHash
 
 
 progressPointer t = do
@@ -90,7 +92,10 @@ run () () = do
   progressPointer  "Checking Evergreen migrations...\n"
   debug $ "app name:" ++ show appName
 
-  localTypes <- fetchLocalTypes root
+  -- @TODO old file based read, needed anymore?
+  -- localTypes <- fetchLocalTypes root
+  localTypes <- Lamdera.TypeHash.calculateHashes
+
 
   (prodVersion, productionTypes) <-
     if isHoistRebuild
@@ -174,7 +179,7 @@ run () () = do
   if nextVersion == 1
     then do
       -- Always snapshot types for the first version, we need a starting point
-      _ <- snapshotCurrentTypesTo root nextVersion
+      _ <- Lamdera.Evergreen.Snapshot.run nextVersion
 
       writeLamderaGenerated root inProduction nextVersionInfo
       buildProductionJsFiles root inProduction nextVersionInfo
@@ -202,7 +207,7 @@ run () () = do
         then do
           debug $ "Local and production types differ"
 
-          _ <- snapshotCurrentTypesTo root nextVersion
+          _ <- Lamdera.Evergreen.Snapshot.run nextVersion
 
           let
             typeCompares = zipWith3
@@ -385,29 +390,6 @@ buildProductionJsFiles root inProduction versionInfo = do
 replaceSnapshotTypeReferences migrationPath version = do
   debug $ "Replacing " <> "Evergreen.V" <> show version <> " type references in " <> migrationPath
   replaceInFile ("Evergreen.V" <> show_ version <> ".") "" migrationPath
-
-
-
--- @TODO drop this entire type down to Task then we don't need the wrapping of IO
-snapshotCurrentTypesTo :: FilePath -> Int -> IO String
-snapshotCurrentTypesTo root version = do
-  -- Snapshot the current types, and rename the module for the snapshot
-
-  debug_ "Executing in type snapshot mode..."
-
-  Env.setEnv "LTYPESNAPSHOT" (show version)
-
-  -- Elm's caches will mean Types.elm won't get recompiled without 'changes', so we touch it
-  _ <- Lamdera.touch $ root </> "src" </> "Types.elm"
-
-  -- Invoke compiler in snapshot mode for src/Types.elm
-  Lamdera.Compile.make root ("src" </> "Types.elm")
-
-  Env.unsetEnv "LTYPESNAPSHOT"
-
-  pure ""
-
-
 
 
 lamderaThrowUnimplementedMigration nextMigrationPath formattedChangedTypes prodVersion nextMigrationPathBare = do

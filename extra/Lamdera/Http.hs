@@ -82,8 +82,8 @@ data Error
 normalRpcJson :: String -> E.Value -> String -> D.Decoder () a -> IO (Either Error a)
 normalRpcJson debugIdentifier body url decoder = do
   manager <- Http.getManager
-  debug $ "HTTP GET " <> url <> " (" <> debugIdentifier <> ")"
-  Http.post manager url jsonHeaders HttpError $ \body ->
+  debug $ "POSTING   " <> url <> " (" <> debugIdentifier <> ", " <> show body <> ")"
+  Http.postBody manager url jsonHeaders body HttpError $ \body ->
     case D.fromByteString decoder body of
       Right content ->
         return $ Right content

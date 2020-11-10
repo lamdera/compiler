@@ -32,9 +32,11 @@ import StandaloneInstances
 
 {- Attempt to load all interfaces for project in current directory and generate
 type snapshots  -}
-run :: Interfaces -> Interface.Interface -> IO ()
-run ifaces ifaces_Types = do
-  tryGenerateHashes ifaces ifaces_Types
+calculateAndWrite :: IO ()
+calculateAndWrite = do
+  hashes <- calculateHashes
+  root <- getProjectRoot
+  writeUtf8 (lamderaHashesPath root) $ show_ hashes
 
 
 type Interfaces =
@@ -57,86 +59,90 @@ lamderaTypes =
   ]
 
 
-tryGenerateHashes :: Interfaces -> Interface.Interface -> IO ()
-tryGenerateHashes interfaces iface_Types = do
+calculateHashes :: IO [Text]
+calculateHashes = do
+
+  interfaces <- Lamdera.Interfaces.all
+  inDebug <- Lamdera.isDebug
+
   let
-    !inDebug = unsafePerformIO Lamdera.isDebug
+    iface_Types = (interfaces ! "Types")
 
-  debug_note "Generating type hashes..." $ do
+    typediffs :: [(Text, DiffableType)]
+    typediffs =
+      lamderaTypes
+        & fmap (\t -> (nameToText t, diffableTypeByName interfaces t "Types" iface_Types))
+
+
+    hashes :: [Text]
+    hashes =
+      typediffs
+        & fmap (\(t, td) -> diffableTypeToHash td)
+
+
+    errors :: [(Text, [Text], DiffableType)]
+    errors =
+      typediffs
+        & fmap (\(t,tds) -> (t, diffableTypeErrors tds, tds))
+        & filter (\(t,errs,tds) -> List.length errs > 0)
+
+    warnings :: [(Text, [Text], DiffableType)]
+    warnings =
+      typediffs
+        & fmap (\(t,tds) -> (t, diffableTypeExternalWarnings tds & List.nub, tds)) -- nub == unique
+        & filter (\(t,errs,tds) -> List.length errs > 0)
+
+    textWarnings :: Text
+    textWarnings =
+      warnings
+        & fmap (\(tipe, warnings_, tds) -> warnings_)
+        & List.concat
+        & List.nub
+        & List.sort
+        & T.intercalate "\n- "
+        & (<>) "- "
+
+    formattedErrors :: [D.Doc]
+    formattedErrors =
+      errors
+        & fmap (\(tipe, errors_, tds) ->
+            D.stack $
+              [D.fillSep [ D.yellow $ D.fromChars . T.unpack $ tipe <> ":" ]]
+              ++
+              (errors_ & List.nub & fmap (\e -> D.fromChars . T.unpack $ "- " <> e) )
+          )
+
+  debug "Generating type hashes..."
+
+  if List.length errors > 0
+    then
     let
-      typediffs :: [(Text, DiffableType)]
-      typediffs =
-        lamderaTypes
-          & fmap (\t -> (nameToText t, diffableTypeByName interfaces t "Types" iface_Types))
+      !x = onlyWhen inDebug $ formatHaskellValue "diffHasErrors:" typediffs :: IO ()
 
+      notifyWarnings =
+        if List.length warnings > 0 then
+          [ D.reflow $ "Alpha warning: also, a number of types outside Types.elm are referenced, see `lamdera check` for more info." ]
+        else
+          []
+    in
+    throwDoc $
+      D.stack
+        ([ D.reflow $ "I ran into the following problems when checking Lamdera core types:"
+        ] ++ formattedErrors ++
+        [ D.reflow "See <https://dashboard.lamdera.app/docs/wire> for more info."
+        ] ++ notifyWarnings)
 
-      hashes :: [Text]
-      hashes =
-        typediffs
-          & fmap (\(t, td) -> diffableTypeToHash td)
+    else do
+      root <- getProjectRoot
 
+      -- @LAMDERA TEMPORARY these external warnings might not need to be written to disk?
+      if (List.length warnings > 0)
+        then do
+          writeUtf8 (lamderaExternalWarningsPath root) $ textWarnings
+        else
+          remove (lamderaExternalWarningsPath root)
 
-      errors :: [(Text, [Text], DiffableType)]
-      errors =
-        typediffs
-          & fmap (\(t,tds) -> (t, diffableTypeErrors tds, tds))
-          & filter (\(t,errs,tds) -> List.length errs > 0)
-
-      warnings :: [(Text, [Text], DiffableType)]
-      warnings =
-        typediffs
-          & fmap (\(t,tds) -> (t, diffableTypeExternalWarnings tds & List.nub, tds)) -- nub == unique
-          & filter (\(t,errs,tds) -> List.length errs > 0)
-
-      textWarnings :: Text
-      textWarnings =
-        warnings
-          & fmap (\(tipe, warnings_, tds) -> warnings_)
-          & List.concat
-          & List.nub
-          & List.sort
-          & T.intercalate "\n- "
-          & (<>) "- "
-
-      formattedErrors :: [D.Doc]
-      formattedErrors =
-        errors
-          & fmap (\(tipe, errors_, tds) ->
-              D.stack $
-                [D.fillSep [ D.yellow $ D.fromChars . T.unpack $ tipe <> ":" ]]
-                ++
-                (errors_ & List.nub & fmap (\e -> D.fromChars . T.unpack $ "- " <> e) )
-            )
-
-    if List.length errors > 0
-      then
-      let
-        !x = onlyWhen inDebug $ formatHaskellValue "diffHasErrors:" typediffs :: IO ()
-
-        notifyWarnings =
-          if List.length warnings > 0 then
-            [ D.reflow $ "Alpha warning: also, a number of types outside Types.elm are referenced, see `lamdera check` for more info." ]
-          else
-            []
-      in
-      throwDoc $
-        D.stack
-          ([ D.reflow $ "I ran into the following problems when checking Lamdera core types:"
-          ] ++ formattedErrors ++
-          [ D.reflow "See <https://dashboard.lamdera.app/docs/wire> for more info."
-          ] ++ notifyWarnings)
-
-      else do
-          root <- getProjectRoot
-          writeUtf8 (lamderaHashesPath root) $ show_ hashes
-
-          if (List.length warnings > 0)
-            then do
-              writeUtf8 (lamderaExternalWarningsPath root) $ textWarnings
-            else
-              remove (lamderaExternalWarningsPath root)
-
-          pure ()
+      pure hashes
 
 
 diffableTypeByName :: Interfaces -> N.Name -> N.Name -> Interface.Interface -> DiffableType

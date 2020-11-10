@@ -23,7 +23,8 @@ import Test.Main (captureProcessResult)
 
 -- Current target for ghci :rr command. See ~/.ghci config file, which should contain
 -- something like `:def rr const $ return $ unlines [":r","TestLamdera.target"]`
-target = TestWire.wire
+-- target = TestWire.wire
+target = check
 -- target = TestWire.buildAllPackages
 
 {-
@@ -158,7 +159,7 @@ rm path = Lamdera.remove path
 {-| For quick and general local development testing via `stack ghci` as TestLamdera.check -}
 check = do
   touch "/Users/mario/lamdera/test/v1/src/WireTypes.elm"
-  checkWithParams "/Users/mario/lamdera/test/v1" "test-local"
+  checkWithParams "/Users/mario/lamdera/test/v1" "always-v0"
   -- checkWithParams "/Users/mario/dev/test/ascii-art" "ascii-art-local"
   -- checkWithParams "/Users/mario/dev/test/lamdera-minilatex-app" "minilatex"
   -- checkWithParams "/Users/mario/dev/lamdera-user-projects/beat-the-big-two" "beat-the-big-two"
@@ -178,8 +179,8 @@ checkWithParams projectPath appName = do
   -- setEnv "HOIST_REBUILD" "1"
   -- setEnv "VERSION" "1"
 
-  -- cp "/Users/mario/lamdera/runtime/src/LBR.elm" (projectPath ++ "/src/LBR.elm")
-  -- cp "/Users/mario/lamdera/runtime/src/LFR.elm" (projectPath ++ "/src/LFR.elm")
+  cp "/Users/mario/lamdera/runtime/src/LBR.elm" (projectPath ++ "/src/LBR.elm")
+  cp "/Users/mario/lamdera/runtime/src/LFR.elm" (projectPath ++ "/src/LFR.elm")
   -- cp "/Users/mario/lamdera/runtime/src/RPC.elm" (projectPath ++ "/src/RPC.elm")
   cp "/Users/mario/lamdera/runtime/src/LamderaHelpers.elm" (projectPath ++ "/src/LamderaHelpers.elm")
 
@@ -234,7 +235,6 @@ checkWithParamsNoDebug version projectPath appName = do
 {-| Run the type snapshot part of `lamdera check` only, with specific params -}
 snapshotWithParams :: Int -> FilePath -> String -> IO ()
 snapshotWithParams version projectPath appName = do
-  setEnv "LTYPESNAPSHOT" (show version)
   setEnv "LAMDERA_APP_NAME" appName
   setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
   setEnv "LDEBUG" "1"
@@ -242,13 +242,12 @@ snapshotWithParams version projectPath appName = do
 
   Dir.withCurrentDirectory projectPath $ do
     Lamdera.Compile.make projectPath ("src" </> "Types.elm")
-    Lamdera.Evergreen.Snapshot.run
+    Lamdera.Evergreen.Snapshot.run version
 
   unsetEnv "LAMDERA_APP_NAME"
   unsetEnv "LOVR"
   unsetEnv "LDEBUG"
   unsetEnv "ELM_HOME"
-  unsetEnv "LTYPESNAPSHOT"
 
 
 {-| Another test harness for local development -}

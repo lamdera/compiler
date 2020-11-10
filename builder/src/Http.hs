@@ -18,6 +18,7 @@ module Http
   , filePart
   , jsonPart
   , stringPart
+  , postBody -- @LAMDERA
   )
   where
 
@@ -91,7 +92,24 @@ fetch methodVerb manager url headers onError onSuccess =
       debug_ $ "HTTP:" <> BS.unpack methodVerb <> " " <> url -- @LAMDERA
       withResponse req1 manager $ \response ->
         do  chunks <- brConsume (responseBody response)
-            onSuccess (BS.concat chunks)
+            onSuccess (debugNote "-->" $ BS.concat chunks)
+
+
+postBody :: Manager -> String -> [Header] -> Encode.Value -> (Error -> e) -> (BS.ByteString -> IO (Either e a)) -> IO (Either e a)
+postBody manager url headers request onError onSuccess =
+  handle (handleSomeException url onError) $
+  handle (handleHttpException url onError) $
+  do  req0 <- parseUrlThrow url
+      let req1 =
+            req0
+              { method = methodPost
+              , requestBody = RequestBodyLBS $ B.toLazyByteString $ Encode.encodeUgly request
+              , requestHeaders = addDefaultHeaders headers
+              }
+      debug_ $ "HTTP:POST " <> url -- @LAMDERA
+      withResponse req1 manager $ \response ->
+        do  chunks <- brConsume (responseBody response)
+            onSuccess (debugPass "-->" (BS.concat chunks) (BS.concat chunks))
 
 
 addDefaultHeaders :: [Header] -> [Header]

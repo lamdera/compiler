@@ -330,14 +330,6 @@ isDebug = do
     Nothing -> pure False
 
 
-isTypeSnapshot :: IO Bool
-isTypeSnapshot = do
-  debugM <- Env.lookupEnv "LTYPESNAPSHOT"
-  case debugM of
-    Just _ -> pure True
-    Nothing -> pure False
-
-
 isTest :: IO Bool
 isTest = do
   debugM <- Env.lookupEnv "LTEST"

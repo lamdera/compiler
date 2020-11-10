@@ -19,12 +19,15 @@ import System.FilePath ((</>))
 import qualified Reporting.Doc as D
 import qualified Reporting.Exit.Help as Help
 import qualified Data.Utf8 as Utf8
+import qualified Data.Name
+
 
 import Lamdera
 import Lamdera.Http
 import Lamdera.Progress
 import qualified Lamdera.Login
 import qualified Lamdera.Project
+import qualified Lamdera.Interfaces
 import StandaloneInstances
 
 
@@ -65,7 +68,7 @@ writeUsage rootNames graph = do
     _ ->
       pure ()
 
-
+findSecretUses :: GlobalGraph -> Data.Name.Name -> Data.Name.Name -> Set.Set (Text, Text, [Text])
 findSecretUses graph module_ expr = do
   let
     entryNode =
@@ -298,8 +301,30 @@ checkUserConfig appName prodTokenM = do
     res_ <- fetchAppConfigItems appName token
     resultOrThrow res_
 
-  localConfigItems <- readAppConfigUses
-  localFrontendConfigItems <- readAppFrontendConfigUses
+  artifacts <- Lamdera.Interfaces.allDeps
+
+  let
+    graph = Lamdera.Interfaces._graph artifacts
+
+    secretsNormalized secrets =
+      secrets
+        & Set.toList
+        & concatMap (\(module_, expr, configs) ->
+          configs & fmap (\config -> (module_, expr, config))
+        )
+
+    localFrontendConfigItems =
+      findSecretUses graph "Frontend" "app"
+        & secretsNormalized
+
+    localConfigItems =
+      findSecretUses graph "Backend" "app"
+        & secretsNormalized
+        & (++) localFrontendConfigItems
+
+  -- @TODO old method writing to disk, needed anymore?
+  -- localConfigItems <- readAppConfigUses
+  -- localFrontendConfigItems <- readAppFrontendConfigUses
 
   -- Alert of any usages that don't have defined values
   let
@@ -336,22 +361,21 @@ checkUserConfig appName prodTokenM = do
                 False
         )
 
+    formatSecrets secrets =
+      secrets
+        & fmap (\(module_, expr, config) ->
+            D.indent 4 $ D.fillSep
+              [ D.yellow $ D.fromChars $ T.unpack config
+              , "in"
+              , D.fromChars $ T.unpack module_ <> "." <> T.unpack expr]
+          )
+        & D.vcat
 
   onlyWhen (length missingConfigs > 0) $ do
-    let
-      missingFormatted =
-        missingConfigs
-          & fmap (\(module_, expr, config) ->
-              D.indent 4 $ D.fillSep
-                [ D.yellow $ D.fromChars $ T.unpack config
-                , "in"
-                , D.fromChars $ T.unpack module_ <> "." <> T.unpack expr]
-            )
-
     throw
       $ Help.report "MISSING PRODUCTION CONFIG" (Nothing)
         ("The following Env.elm config values are used but have no production value set:")
-        ([ D.vcat missingFormatted
+        ([ formatSecrets missingConfigs
          , D.reflow "I need you to set a production value here before I can deploy:"
          , D.reflow $ "<https://dashboard.lamdera.app/app/" <> T.unpack appName <> ">"
          , D.reflow "See <https://dashboard.lamdera.app/docs/environment> more info."
@@ -360,20 +384,10 @@ checkUserConfig appName prodTokenM = do
 
   -- Alert of any Frontend usages of secret config
   onlyWhen (length secretBreakingConfigs > 0) $ do
-    let
-      missingFormatted =
-        secretBreakingConfigs
-          & fmap (\(module_, expr, config) ->
-              D.indent 4 $ D.fillSep
-                [ D.yellow $ D.fromChars $ T.unpack config
-                , "in"
-                , D.fromChars $ T.unpack module_ <> "." <> T.unpack expr]
-            )
-
     throw
       $ Help.report "EXPOSED PRODUCTION CONFIG" (Nothing)
         ("These secret config values are being exposed by frontend code!")
-        ([ D.vcat missingFormatted
+        ([ formatSecrets secretBreakingConfigs
          , D.reflow "Remove these uses, or make config items public here:"
          , D.reflow $ "<https://dashboard.lamdera.app/app/" <> T.unpack appName <> ">"
          , D.reflow "See <https://dashboard.lamdera.app/docs/environment> more info."
@@ -461,19 +475,20 @@ resultOrThrow res_ =
   case res_ of
     Right res ->
       case res of
-        SuccessField configItems -> pure configItems
+        SuccessField configItems ->
+          pure configItems
+
         ErrorField text ->
-          throw
-            $ Help.report "ERROR" Nothing
-              ("A HTTP request failed with the following error:")
-              [ D.reflow $ T.unpack text
-              , D.reflow $ "Please check your configuration, or report this issue."
-              ]
+          throwRequestFail $ T.unpack text
 
     Left err -> do
-      throw $
-        Help.report "ERROR" Nothing
-          ("A HTTP request failed with the following error:")
-          [ D.red $ D.reflow $ Lamdera.Http.errorToString err
-          , D.reflow $ "Please check your configuration, or report this issue."
-          ]
+      throwRequestFail $ Lamdera.Http.errorToString err
+
+
+throwRequestFail text =
+  throw $
+    Help.report "ERROR" Nothing
+      ("A HTTP request failed with the following error:")
+      [ D.red $ D.reflow $ text
+      , D.reflow $ "Please check your configuration, or report this issue."
+      ]

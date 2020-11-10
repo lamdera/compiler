@@ -43,14 +43,46 @@ import StandaloneInstances
 
 {- Attempt to load all interfaces for project in current directory and generate
 type snapshots  -}
-run :: IO ()
-run = do
+run :: Int -> IO ()
+run version = do
   ifaces <- Lamdera.Interfaces.all
-  case snapshotCurrentTypes ifaces (ifaces ! "Types") of
-    Left err ->
-      Progress.throwDoc $ D.stack [D.fromChars err]
-    Right _ ->
-      pure ()
+  snapshotCurrentTypes version ifaces (ifaces ! "Types")
+
+
+snapshotCurrentTypes :: Int -> Interfaces -> Interface.Interface -> IO ()
+snapshotCurrentTypes version interfaces iface_Types = do
+  let
+    efts =
+      lamderaTypes
+        & fmap (\t -> (t, ftByName version interfaces t iface_Types))
+        & foldl (\acc (t, ft) -> mergeFts acc ft) Map.empty
+
+    debugEfts =
+      efts
+        & eftToText version
+
+  inDebug <- Lamdera.isDebug
+  root <- getProjectRoot
+
+  efts
+    & Map.toList
+    & mapM (\(file, ef@(ElmFileText imports types)) ->
+      let
+        output = efToText version (file, ef)
+
+        filename =
+          file
+            & T.splitOn "."
+            & foldl (\acc i -> acc </> T.unpack i) (root </> "src" </> "Evergreen" </> ("V" <> show version))
+            & (\v -> v <> ".elm")
+
+      in
+      onlyWhen (not $ textContains "/" file) $ do
+        writeUtf8 filename output
+    )
+
+  pure ()
+
 
 
 type Interfaces =
@@ -92,55 +124,6 @@ lamderaTypes =
   , "BackendMsg"
   , "ToFrontend"
   ]
-
-
-problem str =
-  Left $ str
-
-
-snapshotCurrentTypes :: Interfaces -> Interface.Interface -> Either String ()
-snapshotCurrentTypes interfaces iface_Types = do
-  let
-    !inDebug = unsafePerformIO Lamdera.isDebug
-
-    versionM = unsafePerformIO $ Env.lookupEnv "LTYPESNAPSHOT"
-
-    version =
-      debug_note ("Starting type snapshot.." <> show versionM) $
-        fromMaybe ("-1") (T.pack <$> versionM)
-
-    interfacesCombined = Map.insert "Types" iface_Types interfaces
-
-  onlyWhen (version == "-1") $ problem "Error: Tried to snapshot types without a version number, please report this."
-  let
-    efts =
-      lamderaTypes
-        & fmap (\t -> (t, ftByName version interfacesCombined t iface_Types))
-        & foldl (\acc (t, ft) -> mergeFts acc ft) Map.empty
-
-    debugEfts =
-      efts
-        & eftToText version
-
-    !_ = unsafePerformIO $ do
-      root <- getProjectRoot
-      efts
-        & Map.toList
-        & mapM (\(file, ef@(ElmFileText imports types)) ->
-          let
-            output = efToText version (file, ef)
-
-            filename =
-              file
-                & T.splitOn "."
-                & foldl (\acc i -> acc </> T.unpack i) (root </> "src" </> "Evergreen" </> ("V" <> T.unpack version))
-                & (\v -> v <> ".elm")
-
-          in
-          onlyWhen (not $ textContains "/" file) $ do
-            writeUtf8 filename output
-        )
-  Right ()
 
 
 mergeElmFileText :: Text -> ElmFileText -> ElmFileText -> ElmFileText
@@ -195,7 +178,7 @@ addImport moduleName imp ft =
     ) (moduleNameKey moduleName)
 
 
-eftToText :: Text -> ElmFilesText -> Text
+eftToText :: Int -> ElmFilesText -> Text
 eftToText version ft =
   ft
     & Map.toList
@@ -206,11 +189,11 @@ eftToText version ft =
     & T.concat
 
 
-efToText :: Text -> (Text, ElmFileText) -> Text
+efToText :: Int -> (Text, ElmFileText) -> Text
 efToText version ft =
   case ft of
     (file, ef@(ElmFileText imports types)) ->
-      [ "module Evergreen.V" <> version <> "." <> file <> " exposing (..)\n\n"
+      [ "module Evergreen.V" <> show_ version <> "." <> file <> " exposing (..)\n\n"
       , if length imports > 0 then
           imports
             & Set.toList
@@ -218,7 +201,7 @@ efToText version ft =
                 if (nameToText module_ == file) then
                   Nothing
                 else if (author == "author") then
-                  Just $ "import Evergreen.V" <> version <> "." <> nameToText module_ -- <> " as " <> nameToText module_
+                  Just $ "import Evergreen.V" <> show_ version <> "." <> nameToText module_ -- <> " as " <> nameToText module_
                 else
                   Just $ "import " <> nameToText module_
             )
@@ -232,7 +215,7 @@ efToText version ft =
       & T.concat
 
 
-ftByName :: Text -> Interfaces -> N.Name -> Interface.Interface -> ElmFilesText
+ftByName :: Int -> Interfaces -> N.Name -> Interface.Interface -> ElmFilesText
 ftByName version interfaces typeName interface = do
   let
     scope =
@@ -272,7 +255,7 @@ ftByName version interfaces typeName interface = do
 
 
 -- A top level Custom Type definition i.e. `type Herp = Derp ...`
-unionToFt :: Text -> ModuleName.Canonical -> TypeIdentifier -> N.Name -> Interfaces -> RecursionSet -> [(N.Name, Can.Type)] -> Interface.Union -> [Can.Type] -> SnapRes
+unionToFt :: Int -> ModuleName.Canonical -> TypeIdentifier -> N.Name -> Interfaces -> RecursionSet -> [(N.Name, Can.Type)] -> Interface.Union -> [Can.Type] -> SnapRes
 unionToFt version scope identifier@(author, pkg, module_, tipe) typeName interfaces recursionSet tvarMap unionInterface params =
   let
     treat union =
@@ -352,7 +335,7 @@ unionToFt version scope identifier@(author, pkg, module_, tipe) typeName interfa
           if moduleName == scope then
             ""
           else if isUserType identifier then
-            "Evergreen.V" <> version <> "." <> nameToText module_ <> "."
+            "Evergreen.V" <> show_ version <> "." <> nameToText module_ <> "."
           else
             nameToText module_ <> "."
 
@@ -392,7 +375,7 @@ unionToFt version scope identifier@(author, pkg, module_, tipe) typeName interfa
 
 
 -- A top level Alias definition i.e. `type alias ...`
-aliasToFt :: Text -> ModuleName.Canonical -> TypeIdentifier -> N.Name -> Interfaces -> RecursionSet -> Interface.Alias -> SnapRes
+aliasToFt :: Int -> ModuleName.Canonical -> TypeIdentifier -> N.Name -> Interfaces -> RecursionSet -> Interface.Alias -> SnapRes
 aliasToFt version scope identifier@(author, pkg, module_, tipe) typeName interfaces recursionSet aliasInterface =
   let
     treat a =
@@ -415,7 +398,7 @@ aliasToFt version scope identifier@(author, pkg, module_, tipe) typeName interfa
               if moduleName == scope then
                 ""
               else if isUserType identifier then
-                "Evergreen.V" <> version <> "." <> nameToText module_ <> "."
+                "Evergreen.V" <> show_ version <> "." <> nameToText module_ <> "."
               else
                 nameToText module_ <> "."
 
@@ -474,7 +457,7 @@ getModuleNameUnkeyed moduleName =
         nameToText module_
 
 
-canonicalToFt :: Text -> ModuleName.Canonical -> Interfaces -> RecursionSet -> Can.Type -> [(N.Name, Can.Type)] -> SnapRes
+canonicalToFt :: Int -> ModuleName.Canonical -> Interfaces -> RecursionSet -> Can.Type -> [(N.Name, Can.Type)] -> SnapRes
 canonicalToFt version scope interfaces recursionSet canonical tvarMap =
   let
     scopeModule =
@@ -539,7 +522,7 @@ canonicalToFt version scope interfaces recursionSet canonical tvarMap =
             if moduleName == scope then
               ""
             else if isUserType identifier then
-              "Evergreen.V" <> version <> "." <> nameToText module_ <> "."
+              "Evergreen.V" <> show_ version <> "." <> nameToText module_ <> "."
             else
               nameToText module_ <> "."
 
@@ -775,7 +758,7 @@ canonicalToFt version scope interfaces recursionSet canonical tvarMap =
               if moduleName == scope then
                 ""
               else if isUserType identifier then
-                "Evergreen.V" <> version <> "." <> nameToText module_ <> "."
+                "Evergreen.V" <> show_ version <> "." <> nameToText module_ <> "."
               else
                 nameToText module_ <> "."
 
@@ -826,7 +809,7 @@ canonicalToFt version scope interfaces recursionSet canonical tvarMap =
             if module_ == scopeModule then
               N.toText name
             else if isUserType identifier then
-              "Evergreen.V" <> version <> "." <> nameToText module_ <> "."
+              "Evergreen.V" <> show_ version <> "." <> nameToText module_ <> "."
             else
               nameToText module_ <> "." <> N.toText name
           , imps
