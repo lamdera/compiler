@@ -217,6 +217,7 @@ Executable elmx
         Lamdera.Evergreen.Snapshot
         Lamdera.Extensions
         Lamdera.Filewatch
+        Lamdera.Graph
         Lamdera.Hints
         Lamdera.Injection
         Lamdera.Interfaces

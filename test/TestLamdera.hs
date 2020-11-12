@@ -24,8 +24,9 @@ import Test.Main (captureProcessResult)
 -- Current target for ghci :rr command. See ~/.ghci config file, which should contain
 -- something like `:def rr const $ return $ unlines [":r","TestLamdera.target"]`
 -- target = TestWire.wire
-target = check
+-- target = checkUserConfig
 -- target = TestWire.buildAllPackages
+target = check
 
 {-
 
@@ -159,6 +160,7 @@ rm path = Lamdera.remove path
 {-| For quick and general local development testing via `stack ghci` as TestLamdera.check -}
 check = do
   touch "/Users/mario/lamdera/test/v1/src/WireTypes.elm"
+  touch "/Users/mario/lamdera/test/v1/src/Env.elm"
   checkWithParams "/Users/mario/lamdera/test/v1" "always-v0"
   -- checkWithParams "/Users/mario/dev/test/ascii-art" "ascii-art-local"
   -- checkWithParams "/Users/mario/dev/test/lamdera-minilatex-app" "minilatex"
@@ -320,3 +322,18 @@ compileCodecs =
     let project = "/Users/mario/lamdera/overrides/packages/lamdera/codecs/1.0.0"
     aggressiveCacheClear project
     Lamdera.Compile.make_ project
+
+
+checkUserConfig = do
+  let projectPath = "/Users/mario/lamdera/test/v1"
+      appName = "always-v0"
+
+  setEnv "LDEBUG" "1"
+
+  Dir.withCurrentDirectory projectPath $
+    do
+        Lamdera.Compile.make projectPath "src/Backend.elm"
+        Lamdera.Compile.make projectPath "src/Frontend.elm"
+        Lamdera.AppConfig.checkUserConfig appName (Just "a739477eb8bd2acbc251c246438906f4")
+
+  unsetEnv "LDEBUG"

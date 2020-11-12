@@ -11,6 +11,7 @@ import qualified Data.Map as Map
 import Elm.Package
 import qualified Elm.Package as Pkg
 import qualified Elm.Interface as I
+import qualified Elm.ModuleName as ModuleName
 
 import Lamdera
 import qualified Lamdera.Wire.Helpers
@@ -44,7 +45,7 @@ import StandaloneInstances
 --       }
 --     deriving (Eq)
 
-
+modifyModul :: Name -> Map.Map ModuleName.Raw I.Interface -> Module -> Module
 modifyModul pkg ifaces modul =
   unsafePerformIO $ do
     if (Lamdera.Wire.Helpers.shouldHaveCodecsGenerated pkg)
@@ -73,9 +74,47 @@ modifyModul pkg ifaces modul =
         -- atomicPutStrLn $ tShow "💙" $ newModul
         -- debugHaskellPass "💙" newModul (pure newModul)
 
-        pure newModul
+        if (pkg == (Pkg.Name "author" "project") && (getName modul == "Env"))
+          then do
+            -- We are in the Env.elm module, inject the `type Mode = ...` and
+            -- `mode = ...` code if it is not already defined.
+            -- NOTE: this should be part of AppConfig but for simplicity it's here so all injections are together.
+
+            envMode <- Lamdera.getEnvMode
+            pure $
+              newModul
+                { Src._unions =
+                    if hasModeDef (Src._unions newModul)
+                      then Src._unions newModul
+                      else Src._unions newModul ++ [(a (Union (a ("Mode")) [] [((a ("Production")), []), ((a ("Development")), [])]))]
+                , Src._values =
+                    if hasModeValue (Src._values newModul)
+                      then Src._values newModul
+                      else Src._values newModul ++ [(a (Value (a ("mode")) [] (a (Var CapVar (Data.Name.fromChars $ show envMode))) Nothing))]
+                }
+
+          else pure newModul
 
       else pure modul
+
+
+hasModeDef unions =
+  unions
+    & any (\union ->
+      case union of
+        A.At _ (Union (A.At _ name) params constructors) ->
+          name == "Mode"
+        _ -> False
+    )
+
+hasModeValue values =
+  values
+    & any (\value ->
+      case value of
+        A.At _ (Value (A.At _ name) params value typeAnnotation) ->
+          name == "mode"
+        _ -> False
+    )
 
 
 unionStubs unions =

@@ -52,6 +52,7 @@ import qualified Reporting.Error.Type
 import qualified Deps.Registry
 import qualified Json.Encode
 
+
 -- Show
 
 deriving instance Show AST.Optimized.Global
@@ -294,6 +295,7 @@ deriving instance Show Json.Encode.Value
 
 instance Show B.Builder where
   show = T.unpack . T.decodeUtf8 . BSL.toStrict . B.toLazyByteString
+
 
 
 -- IsString

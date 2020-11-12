@@ -3,39 +3,37 @@
 
 module Lamdera.AppConfig where
 
-import Elm.ModuleName (Canonical(..))
-import AST.Optimized
-import qualified Data.Set as Set
+import qualified Data.ByteString.Builder as BS
+import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Map as Map
-import qualified System.Environment as Env
-import qualified Elm.Package as Pkg
+import qualified Data.Set as Set
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
+import qualified System.Environment as Env
+import System.FilePath ((</>))
+
+import AST.Optimized
+import Elm.ModuleName (Canonical(..))
+import qualified Data.Name
+import qualified Data.Utf8 as Utf8
+import qualified Elm.Package as Pkg
 import qualified Json.Decode as D
 import qualified Json.Encode as E
-import qualified Data.ByteString.Lazy as LBS
-import qualified Data.ByteString.Builder as BS
-import System.FilePath ((</>))
 import qualified Reporting.Doc as D
+import qualified Reporting.Exit
 import qualified Reporting.Exit.Help as Help
-import qualified Data.Utf8 as Utf8
-import qualified Data.Name
-
 
 import Lamdera
 import Lamdera.Http
 import Lamdera.Progress
+import qualified Lamdera.Graph
+import qualified Lamdera.Interfaces
 import qualified Lamdera.Login
 import qualified Lamdera.Project
-import qualified Lamdera.Interfaces
 import StandaloneInstances
 
 
--- @TODO generalize
-progress t = do
-  report $ D.stack [ D.fromChars t, ""]
-
-
+writeUsage :: [FilePath] -> GlobalGraph -> IO ()
 writeUsage rootNames graph = do
   let
     prep usages =
@@ -67,6 +65,7 @@ writeUsage rootNames graph = do
 
     _ ->
       pure ()
+
 
 findSecretUses :: GlobalGraph -> Data.Name.Name -> Data.Name.Name -> Set.Set (Text, Text, [Text])
 findSecretUses graph module_ expr = do
@@ -128,6 +127,7 @@ traverse_ graph (global, currentNode) = do
     else Set.union res childResults
 
 
+selectNextDeps :: Node -> Set.Set Global
 selectNextDeps node =
   case node of
     Define expr globalDeps ->
@@ -157,6 +157,7 @@ selectNextDeps node =
       globalDeps & onlyAuthorProjectDeps
 
 
+onlyAuthorProjectDeps :: Set.Set Global -> Set.Set Global
 onlyAuthorProjectDeps globalDeps =
   globalDeps
     & Set.filter (\global ->
@@ -168,6 +169,7 @@ onlyAuthorProjectDeps globalDeps =
     )
 
 
+nodeEnvRefs :: GlobalGraph -> (a, Node) -> Set.Set Global
 nodeEnvRefs graph (global, node) =
   case node of
     Define expr globalDeps ->
@@ -285,7 +287,6 @@ fetchAppConfigItems appName token = do
 
 checkUserConfig :: Text -> Maybe Text -> IO ()
 checkUserConfig appName prodTokenM = do
-
   token <-
     case prodTokenM of
       Just token ->
@@ -301,11 +302,16 @@ checkUserConfig appName prodTokenM = do
     res_ <- fetchAppConfigItems appName token
     resultOrThrow res_
 
-  artifacts <- Lamdera.Interfaces.allDeps
+  graph <- do
+    graph_ <- Lamdera.Graph.fullGraph ["src/Frontend.elm", "src/Backend.elm"]
+    case graph_ of
+      Left err ->
+        throw $ Reporting.Exit.makeToReport err
+
+      Right graph ->
+        pure graph
 
   let
-    graph = Lamdera.Interfaces._graph artifacts
-
     secretsNormalized secrets =
       secrets
         & Set.toList
@@ -327,7 +333,6 @@ checkUserConfig appName prodTokenM = do
   -- localFrontendConfigItems <- readAppFrontendConfigUses
 
   -- Alert of any usages that don't have defined values
-  let
     prodConfigMap = prodConfigItems & fmap (\v@(e1,e2,e3,e4) -> (e1, v) ) & Map.fromList
 
     missingConfigs =
@@ -398,6 +403,7 @@ checkUserConfig appName prodTokenM = do
 
 
 -- Production config value injection
+injectConfig :: GlobalGraph -> IO GlobalGraph
 injectConfig graph = do
 
   -- isTypeSnapshot <- Lamdera.isTypeSnapshot -- @TODO confirm this is right
@@ -427,7 +433,6 @@ injectConfig graph = do
               Nothing ->
                 -- There must be a token present in production
                 error "Error: could not generate production config, please report this."
-
 
           prodConfigItems <- do
             res_ <- fetchAppConfigItems appName (T.pack token)
@@ -470,7 +475,7 @@ injectConfig graph = do
       pure graph
 
 
-
+resultOrThrow :: Either Error (WithErrorField a) -> IO a
 resultOrThrow res_ =
   case res_ of
     Right res ->
@@ -485,6 +490,7 @@ resultOrThrow res_ =
       throwRequestFail $ Lamdera.Http.errorToString err
 
 
+throwRequestFail :: String -> IO a
 throwRequestFail text =
   throw $
     Help.report "ERROR" Nothing

@@ -34,6 +34,8 @@ import qualified Reporting.Task as Task
 import qualified Stuff
 
 
+import qualified Lamdera.AppConfig
+
 -- NOTE: This is used by Make, Repl, and Reactor right now. But it may be
 -- desireable to have Repl and Reactor to keep foreign objects in memory
 -- to make things a bit faster?
@@ -53,7 +55,8 @@ debug root details (Build.Artifacts pkg ifaces roots modules) =
       types   <- loadTypes root ifaces modules
       objects <- finalizeObjects loading
       let mode = Mode.Dev (Just types)
-      let graph = objectsToGlobalGraph objects
+      let graph_ = objectsToGlobalGraph objects
+      graph <- Task.io $ Lamdera.AppConfig.injectConfig graph_
       let mains = gatherMains pkg objects roots
       return $ JS.generate mode graph mains
 
@@ -62,7 +65,8 @@ dev :: FilePath -> Details.Details -> Build.Artifacts -> Task B.Builder
 dev root details (Build.Artifacts pkg _ roots modules) =
   do  objects <- finalizeObjects =<< loadObjects root details modules
       let mode = Mode.Dev Nothing
-      let graph = objectsToGlobalGraph objects
+      let graph_ = objectsToGlobalGraph objects
+      graph <- Task.io $ Lamdera.AppConfig.injectConfig graph_
       let mains = gatherMains pkg objects roots
       return $ JS.generate mode graph mains
 
@@ -71,7 +75,8 @@ prod :: FilePath -> Details.Details -> Build.Artifacts -> Task B.Builder
 prod root details (Build.Artifacts pkg _ roots modules) =
   do  objects <- finalizeObjects =<< loadObjects root details modules
       checkForDebugUses objects
-      let graph = objectsToGlobalGraph objects
+      let graph_ = objectsToGlobalGraph objects
+      graph <- Task.io $ Lamdera.AppConfig.injectConfig graph_
       let mode = Mode.Prod (Mode.shortenFieldNames graph)
       let mains = gatherMains pkg objects roots
       return $ JS.generate mode graph mains
@@ -80,7 +85,8 @@ prod root details (Build.Artifacts pkg _ roots modules) =
 repl :: FilePath -> Details.Details -> Bool -> Build.ReplArtifacts -> N.Name -> Task B.Builder
 repl root details ansi (Build.ReplArtifacts home modules localizer annotations) name =
   do  objects <- finalizeObjects =<< loadObjects root details modules
-      let graph = objectsToGlobalGraph objects
+      let graph_ = objectsToGlobalGraph objects
+      graph <- Task.io $ Lamdera.AppConfig.injectConfig graph_
       return $ JS.generateForRepl ansi localizer graph home name (annotations ! name)
 
 

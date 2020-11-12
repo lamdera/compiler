@@ -28,8 +28,8 @@ import Lamdera
 
 all :: IO (Map.Map ModuleName.Raw I.Interface)
 all = do
-  artifactsDeps <- allDeps
-  ifacesProject <- allProject
+  artifactsDeps <- allDepArtifacts
+  ifacesProject <- allProjectInterfaces
   pure $ Map.union ifacesProject (_ifaces artifactsDeps)
 
 
@@ -40,11 +40,13 @@ data Artifacts =
     }
 
 
-{- Appropriated from worker/src/Artifacts.hs -}
-allDeps :: IO Artifacts
-allDeps =
+{- Appropriated from worker/src/Artifacts.hs
+   WARNING: does not load any user code!!!
+-}
+allDepArtifacts :: IO Artifacts
+allDepArtifacts =
   BW.withScope $ \scope ->
-  do  debug "Loading elm.json"
+  do  debug "Loading allDeps"
       style <- Reporting.terminal
       root <- getProjectRoot
       result <- Details.load style scope root
@@ -85,8 +87,8 @@ toUnique oneOrMore =
     OneOrMore.More _ _  -> Nothing
 
 
-allProject :: IO (Map.Map ModuleName.Raw I.Interface)
-allProject =
+allProjectInterfaces :: IO (Map.Map ModuleName.Raw I.Interface)
+allProjectInterfaces =
   BW.withScope $ \scope -> do
     root <- Lamdera.getProjectRoot
     runTaskUnsafe $

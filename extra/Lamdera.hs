@@ -71,6 +71,8 @@ module Lamdera
   , show_
   , sleep
   , getVersion
+  , Env.setEnv
+  , Env.unsetEnv
   , getEnvMode
   , setEnvMode
   , openUrlInBrowser

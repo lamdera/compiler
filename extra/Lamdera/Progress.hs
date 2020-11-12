@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Lamdera.Progress where
 
 import qualified Reporting
@@ -13,6 +15,11 @@ flushPrintHelp doc =
     do  Help.toStdout doc
         hFlush stdout
   )
+
+
+progress :: String -> IO ()
+progress t = do
+  report $ D.stack [ D.fromChars t, "" ]
 
 
 report :: D.Doc -> IO ()
