@@ -26,7 +26,7 @@ import qualified Reporting.Render.Type.Localizer as Localizer
 import qualified Type.Constrain.Module as Type
 import qualified Type.Solve as Type
 
-import System.IO.Unsafe (unsafePerformIO)
+-- import System.IO.Unsafe (unsafePerformIO)
 
 
 import qualified Lamdera.Wire

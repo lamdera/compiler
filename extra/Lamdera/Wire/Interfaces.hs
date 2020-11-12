@@ -84,13 +84,16 @@ modifyModul pkg ifaces modul =
             pure $
               newModul
                 { Src._unions =
+                    -- Source for `type Mode = Production | Development`
                     if hasModeDef (Src._unions newModul)
                       then Src._unions newModul
                       else Src._unions newModul ++ [(a (Union (a ("Mode")) [] [((a ("Production")), []), ((a ("Development")), [])]))]
                 , Src._values =
-                    if hasModeValue (Src._values newModul)
-                      then Src._values newModul
-                      else Src._values newModul ++ [(a (Value (a ("mode")) [] (a (Var CapVar (Data.Name.fromChars $ show envMode))) Nothing))]
+                    -- Source for `mode = Development`
+                    Src._values newModul
+                      & listUpsert
+                          isModeValue
+                          (a (Value (a ("mode")) [] (a (Var CapVar (Data.Name.fromChars $ show envMode))) Nothing))
                 }
 
           else pure newModul
@@ -98,25 +101,37 @@ modifyModul pkg ifaces modul =
       else pure modul
 
 
+listUpsert :: (a -> Bool) -> a -> [a] -> [a]
+listUpsert check item collection =
+    if any check collection then
+      fmap (\v ->
+        if check v then
+          item
+        else
+          v
+      )
+      collection
+    else
+      collection ++ [item]
+
+
+hasModeDef :: [Located Union] -> Bool
 hasModeDef unions =
   unions
     & any (\union ->
       case union of
         A.At _ (Union (A.At _ name) params constructors) ->
           name == "Mode"
-        _ -> False
-    )
-
-hasModeValue values =
-  values
-    & any (\value ->
-      case value of
-        A.At _ (Value (A.At _ name) params value typeAnnotation) ->
-          name == "mode"
-        _ -> False
     )
 
 
+isModeValue :: Located Value -> Bool
+isModeValue value =
+  case value of
+    A.At _ (Value (A.At _ name) params value typeAnnotation) -> name == "mode"
+
+
+unionStubs :: [Located Union] -> [Located Value]
 unionStubs unions =
   unions
     & concatMap (\(A.At _ (Src.Union (A.At _ name) _ _)) ->
@@ -126,6 +141,7 @@ unionStubs unions =
     )
 
 
+aliasStubs :: [Located Alias] -> [Located Value]
 aliasStubs aliases =
   aliases
     & concatMap (\(A.At _ (Src.Alias (A.At _ name) _ _)) ->
@@ -133,7 +149,6 @@ aliasStubs aliases =
       , _Debug_todo $ Data.Name.fromChars $ "w2_decode_" ++ Data.Name.toChars name
       ]
     )
-
 
 
 a v =
