@@ -94,7 +94,7 @@ run () () = do
 
   -- @TODO old file based read, needed anymore?
   -- localTypes <- fetchLocalTypes root
-  localTypes <- Lamdera.TypeHash.calculateHashes
+  localTypes <- Lamdera.TypeHash.calculateAndWrite
 
 
   (prodVersion, productionTypes) <-

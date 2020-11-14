@@ -827,7 +827,7 @@ toEncodeValue (A.At region ast) =
       E.Object $ fmap (\(snippet, ast) -> (Json.fromSnippet snippet, toEncodeValue ast)) keyVals
 
     String snippet ->
-      E.String $ Json.toBuilder $ Json.fromSnippet snippet
+      E.string $ Json.fromSnippet snippet
 
     Int int ->
       E.Integer int

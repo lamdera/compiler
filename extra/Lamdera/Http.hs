@@ -29,6 +29,7 @@ import StandaloneInstances
 data WithErrorField a
   = SuccessField a
   | ErrorField Text
+  deriving (Show)
 
 
 -- @LAMDERA temporary there is already a setup for user agent + headers in Http.hs,

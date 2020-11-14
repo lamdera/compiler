@@ -27,7 +27,6 @@ suite = tests
           |]
 
       liftIO $ withDebug $ Dir.withCurrentDirectory project $ do
-        ifaces <- Lamdera.Interfaces.all
         Lamdera.TypeHash.calculateAndWrite
 
       actual <- liftIO $ readUtf8Text $ project </> "lamdera-stuff/.lamdera-hashes"

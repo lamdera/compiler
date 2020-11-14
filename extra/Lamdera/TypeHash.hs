@@ -32,11 +32,12 @@ import StandaloneInstances
 
 {- Attempt to load all interfaces for project in current directory and generate
 type snapshots  -}
-calculateAndWrite :: IO ()
+calculateAndWrite :: IO [Text]
 calculateAndWrite = do
   hashes <- calculateHashes
   root <- getProjectRoot
   writeUtf8 (lamderaHashesPath root) $ show_ hashes
+  pure hashes
 
 
 type Interfaces =

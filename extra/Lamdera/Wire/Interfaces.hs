@@ -115,6 +115,7 @@ listUpsert check item collection =
       collection ++ [item]
 
 
+
 hasModeDef :: [Located Union] -> Bool
 hasModeDef unions =
   unions

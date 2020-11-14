@@ -26,10 +26,6 @@ import Lamdera
 import Lamdera.Progress
 
 
--- @TODO reuqired?
-type Check = ExceptT Text IO
-
-
 runChecks :: IO ()
 runChecks = do
 
