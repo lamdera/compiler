@@ -21,6 +21,7 @@ import qualified Reporting.Doc as D
 import qualified Reporting.Exit as Exit
 
 
+import qualified Lamdera.Checks
 
 -- RUN
 
@@ -45,18 +46,18 @@ question =
   D.stack
     [ D.fillSep
         ["Hello!"
-        ,"Elm","projects","always","start","with","an",D.green "elm.json","file."
-        ,"I","can","create","them!"
+        ,"Lamdera","projects","always","start","with","an",D.green "elm.json","file,"
+        ,"as","well","as","three","source","files:",D.green "Frontend.elm",",",D.green "Backend.elm","and",D.green "Types.elm"
         ]
-    , D.reflow
-        "Now you may be wondering, what will be in this file? How do I add Elm files to\
-        \ my project? How do I see it in the browser? How will my code grow? Do I need\
-        \ more directories? What about tests? Etc."
     , D.fillSep
-        ["Check","out",D.cyan (D.fromChars (D.makeLink "init"))
-        ,"for","all","the","answers!"
+        ["If","you're","new","to","Elm,","the","best","starting","point","is"
+        , D.cyan (D.fromChars (D.makeLink "init"))
         ]
-    , "Knowing all that, would you like me to create an elm.json file now? [Y/n]: "
+    , D.fillSep
+        ["Otherwise","check","out",D.cyan ("<https://dashboard.lamdera.app/docs/starting>")
+        ,"for","Lamdera","specific","information!"
+        ]
+    , "Knowing all that, would you like me to create a starter implementation? [Y/n]: "
     ]
 
 
@@ -92,6 +93,7 @@ init =
                   do  Dir.createDirectoryIfMissing True "src"
                       Outline.write "." $ Outline.App $
                         Outline.AppOutline V.compiler (NE.List (Outline.RelativeSrcDir "src") []) directs indirects Map.empty Map.empty
+                      Lamdera.Checks.writeDefaultImplementations
                       putStrLn "Okay, I created it. Now read that link!"
                       return (Right ())
 
@@ -102,4 +104,11 @@ defaults =
     [ (Pkg.core, Con.anything)
     , (Pkg.browser, Con.anything)
     , (Pkg.html, Con.anything)
+    -- @LAMDERA
+    , (Pkg.url, Con.anything)
+    , (Pkg.http, Con.anything)
+    , (Pkg.json, Con.anything)
+    , (Pkg.time, Con.anything)
+    , (Pkg.lamderaCore, Con.exactly (V.Version 1 0 0))
+    , (Pkg.lamderaCodecs, Con.exactly (V.Version 1 0 0))
     ]

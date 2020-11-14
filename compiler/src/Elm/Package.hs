@@ -28,6 +28,7 @@ module Elm.Package
   , authorLamdera
   , lamderaCore
   , lamderaCodecs
+  , time
   )
   where
 
@@ -397,3 +398,9 @@ lamderaCore =
 lamderaCodecs :: Name
 lamderaCodecs =
   toName (Utf8.fromChars "lamdera") "codecs"
+
+
+{-# NOINLINE time #-}
+time :: Name
+time =
+  toName elm "time"

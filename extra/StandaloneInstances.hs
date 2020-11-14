@@ -29,6 +29,7 @@ import qualified AST.Utils.Shader
 import qualified Data.Index
 import qualified Data.Name
 import qualified Data.NonEmptyList
+import qualified Data.OneOrMore
 import qualified Data.Utf8 as Utf8
 import qualified Elm.Constraint
 import qualified Elm.Float
@@ -46,11 +47,23 @@ import qualified Json.String
 import qualified Parse.Primitives
 import qualified Reporting.Annotation
 import qualified Reporting.Exit
+import qualified Reporting.Exit.Help
+import qualified Reporting.Error
+import qualified Reporting.Error.Syntax
+import qualified Reporting.Error.Import
+import qualified Reporting.Error.Canonicalize
+import qualified Reporting.Error.Type
+import qualified Reporting.Error.Main
+import qualified Reporting.Error.Docs
+import qualified Reporting.Render.Type.Localizer
+import qualified Nitpick.PatternMatches
+import qualified Parse.Symbol
 import qualified Type.Type
 import qualified Type.UnionFind
 import qualified Reporting.Error.Type
 import qualified Deps.Registry
 import qualified Json.Encode
+import qualified File
 
 
 -- Show
@@ -202,6 +215,74 @@ deriving instance Show Reporting.Exit.RegistryProblem
 deriving instance Show Reporting.Exit.Solver
 deriving instance Show Reporting.Exit.Details
 
+
+deriving instance Show Reporting.Exit.Help.Report
+
+deriving instance Show Reporting.Error.Module
+deriving instance Show Reporting.Error.Error
+
+deriving instance Show Reporting.Error.Syntax.Error
+deriving instance Show Reporting.Error.Syntax.Module
+deriving instance Show Reporting.Error.Syntax.Space
+deriving instance Show Reporting.Error.Syntax.Exposing
+-- deriving instance Show Reporting.Error.Syntax.BadOperator
+deriving instance Show Reporting.Error.Syntax.Decl
+deriving instance Show Reporting.Error.Syntax.Port
+deriving instance Show Reporting.Error.Syntax.Type
+deriving instance Show Reporting.Error.Syntax.DeclType
+deriving instance Show Reporting.Error.Syntax.TRecord
+deriving instance Show Reporting.Error.Syntax.TypeAlias
+deriving instance Show Reporting.Error.Syntax.CustomType
+deriving instance Show Reporting.Error.Syntax.TTuple
+deriving instance Show Reporting.Error.Syntax.DeclDef
+deriving instance Show Reporting.Error.Syntax.Pattern
+deriving instance Show Reporting.Error.Syntax.PRecord
+deriving instance Show Reporting.Error.Syntax.PTuple
+deriving instance Show Reporting.Error.Syntax.Char
+deriving instance Show Reporting.Error.Syntax.Escape
+deriving instance Show Reporting.Error.Syntax.PList
+deriving instance Show Reporting.Error.Syntax.Expr
+deriving instance Show Reporting.Error.Syntax.Let
+deriving instance Show Reporting.Error.Syntax.String
+deriving instance Show Reporting.Error.Syntax.Def
+deriving instance Show Reporting.Error.Syntax.Case
+deriving instance Show Reporting.Error.Syntax.Number
+deriving instance Show Reporting.Error.Syntax.Destruct
+deriving instance Show Reporting.Error.Syntax.If
+deriving instance Show Reporting.Error.Syntax.List
+deriving instance Show Reporting.Error.Syntax.Record
+deriving instance Show Reporting.Error.Syntax.Tuple
+deriving instance Show Reporting.Error.Syntax.Func
+
+deriving instance Show Reporting.Error.Import.Error
+deriving instance Show Reporting.Error.Import.Problem
+
+-- deriving instance
+
+deriving instance Show Parse.Symbol.BadOperator
+
+instance Show Reporting.Error.Canonicalize.Error where
+  show _ = "\"<Reporting.Error.Canonicalize.Error>\""
+
+instance Show Reporting.Render.Type.Localizer.Localizer where
+  show _ = "\"<Reporting.Render.Type.Localizer.Localizer>\""
+
+instance Show Reporting.Error.Type.Error where
+  show _ = "\"<Reporting.Error.Type.Error>\""
+
+instance Show Reporting.Error.Main.Error where
+  show _ = "\"<Reporting.Error.Main.Error>\""
+
+instance Show Reporting.Error.Docs.Error where
+  show _ = "\"<Reporting.Error.Docs.Error>\""
+
+instance Show Nitpick.PatternMatches.Error where
+  show _ = "\"<Nitpick.PatternMatches.Error>\""
+
+instance Show File.Time where
+  show _ = "\"<File.Time>\""
+
+
 deriving instance Show Elm.Version.Version
 
 deriving instance Show Http.Error
@@ -257,6 +338,11 @@ instance Show ModuleName.Canonical where
 instance (Show a) => Show (Data.NonEmptyList.List a) where
   show = show . Data.NonEmptyList.toList
 
+instance (Show a) => Show (Data.OneOrMore.OneOrMore a) where
+  show = show . Data.OneOrMore.destruct (\v acc -> acc ++ [v])
+
+
+
 instance Show Data.Index.ZeroBased where
   show (Data.Index.ZeroBased 0) = "Index.first"
   show (Data.Index.ZeroBased 1) = "Index.second"
@@ -285,7 +371,7 @@ deriving instance Show Type.Type.Mark
 
 
 instance Show (GHC.IORef.IORef a) where
-  show _ = "<IORef>"
+  show _ = "\"<IORef>\""
 
 
 deriving instance Show Deps.Registry.KnownVersions

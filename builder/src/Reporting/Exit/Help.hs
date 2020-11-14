@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Reporting.Exit.Help
-  ( Report
+  ( Report(..) -- @LAMDERA exposed
   , report
   , docReport
   , jsonReport

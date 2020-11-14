@@ -37,6 +37,7 @@ import qualified Stuff
 import Lamdera
 import qualified Lamdera.Live
 import qualified Lamdera.Filewatch
+import StandaloneInstances
 
 -- RUN THE DEV SERVER
 
@@ -159,7 +160,15 @@ serveElm path =
         Right builder ->
           writeBuilder builder
 
-        Left exit ->
+        Left exit -> do
+          -- @LAMDERA because we do AST injection, sometimes we might get
+          -- an error that actually cannot be displayed, i.e, the reactorToReport
+          -- function itself throws an exception, mainly due to use of unsafe
+          -- functions like Prelude.last and invariants that for some reason haven't
+          -- held with our generated code (usually related to subsequent type inference)
+          -- We print out a less-processed version here in debug mode to aid with
+          -- debugging in these scenarios, as the browser will just get zero bytes
+          debugPass "serveElm error" (Exit.reactorToReport exit) (pure ())
           writeBuilder $ Help.makePageHtml "Errors" $ Just $
             Exit.toJson $ Exit.reactorToReport exit
 
