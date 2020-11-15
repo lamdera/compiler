@@ -85,15 +85,7 @@ runChecks = do
   envExists <- liftIO $ doesFileExist "src/Env.elm"
 
   onlyWhen (not envExists) $ do
-    liftIO $ writeUtf8 "src/Env.elm"
-      [text|
-        module Env exposing (..)
-
-        -- The Env.elm file is for per-environment configuration.
-        -- See https://dashboard.lamdera.app/docs/environment for more info.
-
-        dummyConfigItem = ""
-      |]
+    liftIO $ writeUtf8 "src/Env.elm" emptyEnv
     progressPointer "Created empty Env.elm"
 
 
@@ -306,6 +298,7 @@ defaultImplementations =
           = NoOpToFrontend
 
   |])
+  , ("src/Env.elm", emptyEnv)
   ]
 
 
@@ -357,3 +350,15 @@ defaultImplementations =
 
 
 -- pure True
+
+emptyEnv =
+  [text|
+    module Env exposing (..)
+
+    -- The Env.elm file is for per-environment configuration.
+    -- See https://dashboard.lamdera.app/docs/environment for more info.
+
+
+    dummyConfigItem =
+      ""
+  |]

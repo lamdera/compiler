@@ -16,6 +16,7 @@ import Text.RawString.QQ (r)
 import qualified Json.Encode as Encode
 
 
+import Lamdera
 
 -- PAGES
 
@@ -26,12 +27,14 @@ makePageHtml moduleName maybeFlags =
 <html>
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, minimum-scale=1.0">
   <link type="text/css" rel="stylesheet" href="/_elm/styles.css">
   <script src="/_elm/elm.js"></script>
 </head>
 <body>
 <script>
 Elm.|] <> Name.toBuilder moduleName <> [r|.init({ flags: |] <> maybe "undefined" Encode.encode maybeFlags <> [r| });
+|] <> Lamdera.lamderaLiveSrc <> [r|
 </script>
 </body>
 </html>
@@ -48,6 +51,7 @@ makeCodeHtml title code =
 <html>
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, minimum-scale=1.0">
   <title>|] <> B.stringUtf8 title <> [r|</title>
   <style type="text/css">
     @import url(/_elm/source-code-pro.ttf);
