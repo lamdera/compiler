@@ -759,7 +759,7 @@ installToReport exit =
     InstallNoOutline ->
       Help.report "NEW PROJECT?" Nothing
         "Are you trying to start a new project? Try this command instead:"
-        [ D.indent 4 $ D.green "elm init"
+        [ D.indent 4 $ D.green "lamdera init"
         , D.reflow "It will help you get started!"
         ]
 
@@ -774,9 +774,9 @@ installToReport exit =
       Help.report "INSTALL WHAT?" Nothing
         "I am expecting commands like:"
         [ D.green $ D.indent 4 $ D.vcat $
-            [ "elm install elm/http"
-            , "elm install elm/json"
-            , "elm install elm/random"
+            [ "lamdera install elm/http"
+            , "lamdera install elm/json"
+            , "lamdera install elm/random"
             ]
         , D.toFancyHint
             ["In","JavaScript","folks","run","`npm install`","to","start","projects."
@@ -787,9 +787,9 @@ installToReport exit =
             ,"Elm","projects","check","that","cache","before","trying","the","internet."
             ,"This","reduces","build","times,","reduces","server","costs,","and","makes","it"
             ,"easier","to","work","offline.","As","a","result"
-            ,D.dullcyan "elm install","is","only","for","adding","dependencies","to","elm.json,"
-            ,"whereas",D.dullcyan "elm make","is","in","charge","of","gathering","dependencies"
-            ,"and","building","everything.","So","maybe","try",D.green "elm make","instead?"
+            ,D.dullcyan "lamdera install","is","only","for","adding","dependencies","to","elm.json,"
+            ,"whereas",D.dullcyan "lamdera make","is","in","charge","of","gathering","dependencies"
+            ,"and","building","everything.","So","maybe","try",D.green "lamdera make","instead?"
             ]
         ]
 
@@ -1037,7 +1037,7 @@ toOutlineReport problem =
         [ D.reflow $
             "If you modified your elm.json by hand, try to change it back! And if you are\
             \ having trouble getting back to a working elm.json, it may be easier to delete it\
-            \ and use `elm init` to start fresh."
+            \ and use `lamdera init` to start fresh."
         ]
 
     OutlineNoAppJson ->
@@ -1047,7 +1047,7 @@ toOutlineReport problem =
         [ D.reflow $
             "If you modified your elm.json by hand, try to change it back! And if you are\
             \ having trouble getting back to a working elm.json, it may be easier to delete it\
-            \ and use `elm init` to start fresh."
+            \ and use `lamdera init` to start fresh."
         ]
 
     OutlineLamderaMissingDeps ->
@@ -1216,7 +1216,7 @@ toOutlineProblemReport path source _ region problem =
             , D.fillSep $
                 ["I","generally","recommend","finding","the","package","you","want","on"
                 ,"the","package","website,","and","installing","it","with","the"
-                ,D.green "elm install","command!"
+                ,D.green "lamdera install","command!"
                 ]
             ]
         )
@@ -1296,7 +1296,7 @@ toDetailsReport details =
         "The dependencies in your elm.json are not compatible."
         [ D.fillSep
             ["Did","you","change","them","by","hand?","Try","to","change","it","back!"
-            ,"It","is","much","more","reliable","to","add","dependencies","with",D.green "elm install" <> "."
+            ,"It","is","much","more","reliable","to","add","dependencies","with",D.green "lamdera install" <> "."
             ]
         , D.reflow $
             "Please ask for help on the community forums if you try those paths and are still\
@@ -1313,7 +1313,7 @@ toDetailsReport details =
             \ get access to the registry!"
         , D.toFancyNote
             ["If","you","changed","your","dependencies","by","hand,","try","to","change","them","back!"
-            ,"It","is","much","more","reliable","to","add","dependencies","with",D.green "elm install" <> "."
+            ,"It","is","much","more","reliable","to","add","dependencies","with",D.green "lamdera install" <> "."
             ]
         ]
 
@@ -1351,7 +1351,7 @@ toDetailsReport details =
         \ party tool) leaving them in an invalid state."
         [ D.fillSep
             ["Try","to","change","them","back","to","what","they","were","before!"
-            ,"It","is","much","more","reliable","to","add","dependencies","with",D.green "elm install" <> "."
+            ,"It","is","much","more","reliable","to","add","dependencies","with",D.green "lamdera install" <> "."
             ]
         , D.reflow $
             "Please ask for help on the community forums if you try those paths and are still\
@@ -1619,8 +1619,8 @@ makeToReport make =
   case make of
     MakeNoOutline ->
       Help.report "NO elm.json FILE" Nothing
-        "It looks like you are starting a new Elm project. Very exciting! Try running:"
-        [ D.indent 4 $ D.green $ "elm init"
+        "It looks like you are starting a new Lamdera Elm project. Very exciting! Try running:"
+        [ D.indent 4 $ D.green $ "lamdera init"
         , D.reflow $
             "It will help you get set up. It is really simple!"
         ]
@@ -1645,8 +1645,8 @@ makeToReport make =
       Help.report "NO INPUT" Nothing
         "What should I make though? I need specific files like:"
         [ D.vcat
-            [ D.indent 4 $ D.green "elm make src/Main.elm"
-            , D.indent 4 $ D.green "elm make src/This.elm src/That.elm"
+            [ D.indent 4 $ D.green "lamdera make src/Main.elm"
+            , D.indent 4 $ D.green "lamdera make src/This.elm src/That.elm"
             ]
         , D.reflow $
             "I recommend reading through https://guide.elm-lang.org for guidance on what to\
@@ -1657,8 +1657,8 @@ makeToReport make =
       Help.report "NO INPUT" Nothing
         "What should I make though? I need specific files like:"
         [ D.vcat
-            [ D.indent 4 $ D.green "elm make src/Main.elm"
-            , D.indent 4 $ D.green "elm make src/This.elm src/That.elm"
+            [ D.indent 4 $ D.green "lamdera make src/Main.elm"
+            , D.indent 4 $ D.green "lamdera make src/This.elm src/That.elm"
             ]
         , D.reflow $
             "You can also entries to the \"exposed-modules\" list in your elm.json file, and\
@@ -2032,7 +2032,7 @@ reactorToReport problem =
     ReactorNoOutline ->
       Help.report "NEW PROJECT?" Nothing
         "Are you trying to start a new project? Try this command in the terminal:"
-        [ D.indent 4 $ D.green "elm init"
+        [ D.indent 4 $ D.green "lamdera init"
         , D.reflow "It will help you get started!"
         ]
 

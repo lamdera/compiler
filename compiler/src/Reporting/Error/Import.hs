@@ -75,7 +75,7 @@ toReport source (Error region name unimportedModules problem) =
                       ,"module","defined","in","the"
                       ,D.fromChars (Pkg.toChars dependency)
                       ,"package?","Running"
-                      ,D.green (D.fromChars ("elm install " ++ Pkg.toChars dependency))
+                      ,D.green (D.fromChars ("lamdera install " ++ Pkg.toChars dependency))
                       ,"should","make","it","available!"
                       ]
               ]

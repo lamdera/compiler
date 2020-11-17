@@ -188,7 +188,7 @@ make =
       stack
         [ reflow
             "For example:"
-        , P.indent 4 $ P.green "elm make src/Main.elm"
+        , P.indent 4 $ P.green "lamdera make src/Main.elm"
         , reflow
             "This tries to compile an Elm file named src/Main.elm, generating an index.html\
             \ file if possible."
@@ -221,8 +221,8 @@ install =
         [ reflow
             "For example, if you want to get packages for HTTP and JSON, you would say:"
         , P.indent 4 $ P.green $ P.vcat $
-              [ "elm install elm/http"
-              , "elm install elm/json"
+              [ "lamdera install elm/http"
+              , "lamdera install elm/json"
               ]
         , reflow
             "Notice that you must say the AUTHOR name and PROJECT name! After running those\
