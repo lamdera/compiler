@@ -63,6 +63,8 @@ import qualified Reporting.Error as Error
 import qualified Reporting.Render.Code as Code
 
 
+import Lamdera
+import qualified Lamdera.Error
 
 -- RENDERERS
 
@@ -865,6 +867,7 @@ installToReport exit =
       toSolverReport solver
 
     InstallUnknownPackageOnline pkg suggestions ->
+      alternativeImplementationWhen (pkg == Pkg.lamderaCore || pkg == Pkg.lamderaCodecs) (Lamdera.Error.corruptCaches Help.docReport) $
       Help.docReport "UNKNOWN PACKAGE" Nothing
         (
           D.fillSep
@@ -878,6 +881,7 @@ installToReport exit =
         ]
 
     InstallUnknownPackageOffline pkg suggestions ->
+      alternativeImplementationWhen (pkg == Pkg.lamderaCore || pkg == Pkg.lamderaCodecs) (Lamdera.Error.corruptCachesOffline Help.docReport) $
       Help.docReport "UNKNOWN PACKAGE" Nothing
         (
           D.fillSep
