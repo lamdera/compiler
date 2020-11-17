@@ -6,23 +6,14 @@ module Lamdera.Http where
 {- HTTP helpers and wrapper
 -}
 
-import Data.Text (Text)
-import qualified Data.Text as T
 import qualified Json.Decode as D
 import qualified Json.Encode as E
-import qualified Data.ByteString.Builder as BS
-import qualified Network.HTTP.Client as Client
-import qualified Network.HTTP.Types as Http
+import qualified Network.HTTP.Types.Header as Http
 import Reporting.Exit
 import qualified Http
-import qualified Data.ByteString.Lazy as LBS
-import qualified Data.Text.Encoding as T
-import qualified Stuff as Progress
-import qualified Reporting.Task as Task
-import qualified Reporting.Doc as D
+import qualified Data.ByteString.Char8 as BS
 
 import Lamdera
-import qualified Lamdera.Task
 import StandaloneInstances
 
 
@@ -32,23 +23,13 @@ data WithErrorField a
   deriving (Show)
 
 
--- @LAMDERA temporary there is already a setup for user agent + headers in Http.hs,
--- see if we can reconcile to that instead, as it includes the package
+jsonHeaders :: [Http.Header]
 jsonHeaders =
-  [ ( Http.hUserAgent, "lamdera-cli" )
+  [ ( Http.hUserAgent, "lamdera-" <> BS.pack lamderaVersion )
   , ( Http.hContentType, "application/json" )
   , ( Http.hAccept, "application/json" )
+  , ( Http.hAcceptEncoding, "gzip")
   ]
-
-
--- @LAMDERA temporary remove
--- httpGetJson manager request =
---   Client.httpLbs
---     (request
---       { Client.requestHeaders = jsonHeaders
---       , Client.method = "GET"
---       })
---     manager
 
 
 normalJson :: String -> String -> D.Decoder () a -> IO (Either Error a)
@@ -70,16 +51,6 @@ data Error
   deriving (Show)
 
 
--- httpPostJson manager request body =
---   Client.httpLbs
---     (request
---       { Client.requestHeaders = jsonHeaders
---       , Client.method = "POST"
---       , Client.requestBody = Client.RequestBodyLBS $ BS.toLazyByteString $ E.encode body
---       })
---     manager
-
-
 normalRpcJson :: String -> E.Value -> String -> D.Decoder () a -> IO (Either Error a)
 normalRpcJson debugIdentifier body url decoder = do
   manager <- Http.getManager
@@ -91,32 +62,6 @@ normalRpcJson debugIdentifier body url decoder = do
 
       Left problem ->
         return $ Left (JsonError url problem)
-
-
--- normalRpcJson debugIdentifier body endpoint decoder =
---   Http.run $ Http.anything endpoint $ \request manager ->
---     do  debug $ "HTTP POST " <> endpoint <> " (" <> debugIdentifier <> ")\n---> " <> (
---           body
---             & E.encodeUgly
---             & BS.toLazyByteString
---             & LBS.toStrict
---             & T.decodeUtf8
---             & T.unpack
---           )
---         response <- httpPostJson manager request body
---         debug $ "<--- " <> (T.unpack $ T.decodeUtf8 $ LBS.toStrict $ Client.responseBody response)
---
---         let bytes = LBS.toStrict (Client.responseBody response)
---         case D.parse endpoint id decoder bytes of
---           Right value ->
---             return $ Right value
---
---           Left jsonProblem ->
---             return $ Left $ BadJson endpoint jsonProblem
-
-
--- tryNormalRpcJson debugIdentifier body endpoint decoder =
---   Lamdera.Task.tryEither Progress.silentReporter $ normalRpcJson debugIdentifier body endpoint decoder
 
 
 -- Custom handler to extract message text from HTTP failures

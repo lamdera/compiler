@@ -47,6 +47,7 @@ data Artifacts =
 
 compile :: Pkg.Name -> Map.Map ModuleName.Raw I.Interface -> Src.Module -> Either E.Error Artifacts
 compile pkg ifaces modul = do
+  -- @TEMPORARY debugging
   -- Inject stub definitions for wire functions, so the canonicalize phase can run
   -- Necessary for user-code which references yet-to-be generated functions
   let modul_ = Lamdera.Wire.Interfaces.modifyModul pkg ifaces modul

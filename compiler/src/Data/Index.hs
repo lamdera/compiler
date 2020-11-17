@@ -1,5 +1,5 @@
 module Data.Index
-  ( ZeroBased(..) -- @LAMDERA exposure
+  ( ZeroBased(..) -- @LAMDERA exposed
   , first
   , second
   , third

@@ -241,7 +241,6 @@ Executable elmx
         Lamdera.Error
         Lamdera.Http
         Lamdera.Progress
-        Lamdera.Task
 
         -- Lamdera Legacy --
         -- Wire.Source

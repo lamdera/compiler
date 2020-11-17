@@ -39,6 +39,7 @@ import qualified Lamdera.Compile
 import qualified Lamdera.Checks
 import qualified Lamdera.Evergreen.Snapshot
 import qualified Lamdera.TypeHash
+import qualified Lamdera.Types
 
 
 progressPointer t = do
@@ -54,8 +55,6 @@ progressDoc d =
 run :: () -> () -> IO ()
 run () () = do
   debug_ "Starting check..."
-
-  -- reporter <- Terminal.create
 
   appNameEnvM <- Env.lookupEnv "LAMDERA_APP_NAME"
   hoistRebuild <- Env.lookupEnv "HOIST_REBUILD"
@@ -76,7 +75,6 @@ run () () = do
   debug $ "hoist rebuild:" ++ show isHoistRebuild
   debug $ "force version:" ++ show forceVersion
 
-  -- summary <- Project.getRoot
   root <- getProjectRoot
 
   temporaryCheckOldTypesNeedingMigration inProduction root
@@ -92,10 +90,7 @@ run () () = do
   progressPointer  "Checking Evergreen migrations...\n"
   debug $ "app name:" ++ show appName
 
-  -- @TODO old file based read, needed anymore?
-  -- localTypes <- fetchLocalTypes root
-  localTypes <- Lamdera.TypeHash.calculateAndWrite
-
+  (localTypes, externalTypeWarnings) <- Lamdera.TypeHash.calculateAndWrite
 
   (prodVersion, productionTypes) <-
     if isHoistRebuild
@@ -122,7 +117,6 @@ run () () = do
                 genericExit "FATAL: application info could not be obtained. Please report this to support."
 
               else do
-                -- See commented out code at bottom re prior "assume version when offline"
                 Progress.throw $
                   Help.report "ERROR" Nothing
                     ("I normally check for production info here but the request failed.")
@@ -184,7 +178,7 @@ run () () = do
       writeLamderaGenerated root inProduction nextVersionInfo
       buildProductionJsFiles root inProduction nextVersionInfo
 
-      onlyWhen (not inProduction) $ possiblyShowExternalTypeWarnings
+      onlyWhen (not inProduction) $ showExternalTypeWarnings externalTypeWarnings
 
       progressDoc $ D.green (D.reflow $ "It appears you're all set to deploy the first version of '" <> T.unpack appName <> "'!")
 
@@ -199,7 +193,6 @@ run () () = do
       let
         nextMigrationPathBare = ("src/Evergreen/Migrate/V") <> (show nextVersion) <> ".elm"
         nextMigrationPath = root </> nextMigrationPathBare
-        -- lastTypesPath = (root </> "src/Evergreen/Type/V") <> (show prodVersion) <> ".elm"
 
       migrationExists <- Dir.doesFileExist $ nextMigrationPath
 
@@ -207,7 +200,7 @@ run () () = do
         then do
           debug $ "Local and production types differ"
 
-          _ <- Lamdera.Evergreen.Snapshot.run nextVersion
+          Lamdera.Evergreen.Snapshot.run nextVersion
 
           let
             typeCompares = zipWith3
@@ -238,11 +231,18 @@ run () () = do
 
               if textContains "Unimplemented" migrationSource
                 then do
-                  lamderaThrowUnimplementedMigration nextMigrationPath formattedChangedTypes prodVersion nextMigrationPathBare
+                  Progress.throw $
+                    Help.report "UNIMPLEMENTED MIGRATION" (Just nextMigrationPathBare)
+                      ("The following types have changed since last deploy (v" <> show prodVersion <> ") and require migrations:")
+                      [ formattedChangedTypes
+                      , D.reflow $ "There are still migration placeholders that need implementing here:"
+                      , D.reflow $ nextMigrationPath
+                      , D.fillSep ["See",D.cyan ("<https://dashboard.lamdera.app/docs/evergreen>"),"for more info."]
+                      ]
 
                 else do
                   migrationCheck root nextVersionInfo
-                  onlyWhen (not inProduction) $ possiblyShowExternalTypeWarnings
+                  onlyWhen (not inProduction) $ showExternalTypeWarnings externalTypeWarnings
 
                   progressDoc $ D.green $ D.reflow $ "\nIt appears you're all set to deploy v" <> (show nextVersion) <> " of '" <> T.unpack appName <> "'."
 
@@ -267,7 +267,7 @@ run () () = do
 
               writeUtf8 nextMigrationPath defaultMigrations
 
-              onlyWhen (not inProduction) $ possiblyShowExternalTypeWarnings
+              onlyWhen (not inProduction) $ showExternalTypeWarnings externalTypeWarnings
 
               Progress.throw $
                 Help.report "UNIMPLEMENTED MIGRATION" (Just nextMigrationPathBare)
@@ -277,7 +277,6 @@ run () () = do
                   , D.reflow $ nextMigrationPath
                   , D.reflow "See <https://dashboard.lamdera.app/docs/evergreen> for more info."
                   ]
-
 
         else do
           -- Types are the same.
@@ -297,7 +296,7 @@ run () () = do
                 ]
 
           migrationCheck root nextVersionInfo
-          onlyWhen (not inProduction) $ possiblyShowExternalTypeWarnings
+          onlyWhen (not inProduction) $ showExternalTypeWarnings externalTypeWarnings
 
           progressDoc $ D.green $ D.reflow $ "\nIt appears you're all set to deploy v" <> (show nextVersion) <> " of '" <> T.unpack appName <> "'."
           progressDoc $ D.reflow $ "\nThere are no Evergreen type changes for this version."
@@ -328,7 +327,6 @@ buildProductionJsFiles root inProduction versionInfo = do
   let version = vinfoVersion versionInfo
 
   onlyWhen inProduction $ do
-    -- summary <- Project.getRoot @REMOVE
     root <- getProjectRoot
 
     debug $ "Compiling JS for production v" <> show (vinfoVersion versionInfo)
@@ -392,18 +390,6 @@ replaceSnapshotTypeReferences migrationPath version = do
   replaceInFile ("Evergreen.V" <> show_ version <> ".") "" migrationPath
 
 
-lamderaThrowUnimplementedMigration nextMigrationPath formattedChangedTypes prodVersion nextMigrationPathBare = do
-  Progress.throw
-    $ Help.report "UNIMPLEMENTED MIGRATION" (Just nextMigrationPathBare)
-      ("The following types have changed since last deploy (v" <> show prodVersion <> ") and require migrations:")
-      [ formattedChangedTypes
-      , D.reflow $ "There are still migration placeholders that need implementing here:"
-      , D.reflow $ nextMigrationPath
-      , D.fillSep ["See",D.cyan ("<https://dashboard.lamdera.app/docs/evergreen>"),"for more info."]
-      ]
-
-
-
 fetchProductionInfo :: Text -> Bool -> IO (Either Lamdera.Http.Error (Int, [Text]))
 fetchProductionInfo appName useLocal =
   let
@@ -423,47 +409,20 @@ fetchProductionInfo appName useLocal =
   Lamdera.Http.normalJson "lamdera-info" endpoint decoder
 
 
-fetchLocalTypes :: FilePath -> IO [Text]
-fetchLocalTypes root = do
-
-  debug $ "Reading local types from " <> lamderaHashesPath root
-
-  -- This could fail normally but we're using this function after
-  -- we've already checked it exists
-  hashString <- IO.readUtf8 (lamderaHashesPath root)
-
-  let
-    decoder =
-      (D.list D.text)
-
-  case D.fromByteString decoder hashString of
-    Right value ->
-      return $ value
-
-    Left jsonProblem ->
-      -- @TODO fix this - what should happen here?
-      error "fetchLocalTypes decode failed"
-      -- return $ error $ show jsonProblem --Left $ E.BadJson "github.json" jsonProblem
-
-
 checkUserProjectCompiles :: FilePath -> IO ()
 checkUserProjectCompiles root = do
 
+  -- Make sure we catch project outline issues first
   eitherOutline <- Elm.Outline.read root True
   case eitherOutline of
     Left problem ->
       Progress.throw
         $ Reporting.Exit.toDetailsReport $
           Reporting.Exit.DetailsBadOutline problem
-
     Right outline ->
       pure ()
 
   _ <- Lamdera.touch $ root </> "src" </> "Types.elm"
-
-  -- let jsOutput = Just (Output.Html Nothing "/dev/null")
-  -- Project.compile Output.Prod Output.Client jsOutput Nothing summary [ "src" </> "Frontend.elm" ]
-  -- Project.compile Output.Prod Output.Client jsOutput Nothing summary [ "src" </> "Backend.elm" ]
 
   Lamdera.Compile.make root ("src" </> "Frontend.elm")
   Lamdera.Compile.make root ("src" </> "Backend.elm")
@@ -517,7 +476,6 @@ migrationCheck root nextVersion = do
         copyFile migrationPathBk migrationPath
         remove migrationPathBk
 
-      -- putStrLn $ show err
       throwError err
     )
 
@@ -536,35 +494,34 @@ migrationCheck root nextVersion = do
 
 committedCheck :: FilePath -> VersionInfo -> IO ()
 committedCheck root versionInfo = do
-
-  let version = vinfoVersion versionInfo
-
   debug $ "Commit-checking migration and types files"
 
-  let migrationPath = (root </> "src/Evergreen/Migrate/V") <> show version <> ".elm"
-  migrations <- gitStatus migrationPath
+  let
+    version = vinfoVersion versionInfo
+    migrationPath = (root </> "src/Evergreen/Migrate/V") <> show version <> ".elm"
+    typesPath = (root </> "src/Evergreen/V") <> show version <> "/*.elm"
 
-  let typesPath = (root </> "src/Evergreen/V") <> show version <> "/*.elm"
+  migrations <- gitStatus migrationPath
   types <- gitStatus typesPath
 
-  let missingPaths =
-        [ if (migrations /= Committed && version > 1 && versionInfo == WithMigrations version) then
-            -- Bare non-root path intentional otherwise UI is pretty ugly...
-            Just $ "src/Evergreen/Migrate/V" <> show version <> ".elm"
-          else
-            Nothing
-        , if types /= Committed then
-            -- Bare non-root path intentional otherwise UI is pretty ugly...
-            Just $ "src/Evergreen/V" <> show version <> "/*"
-          else
-            Nothing
-        ]
-        & justs
+  let
+    missingPaths =
+      [ if (migrations /= Committed && version > 1 && versionInfo == WithMigrations version) then
+          -- Bare non-root path intentional otherwise UI is pretty ugly...
+          Just $ "src/Evergreen/Migrate/V" <> show version <> ".elm"
+        else
+          Nothing
+      , if types /= Committed then
+          -- Bare non-root path intentional otherwise UI is pretty ugly...
+          Just $ "src/Evergreen/V" <> show version <> "/*"
+        else
+          Nothing
+      ]
+      & justs
 
   -- On first version, we have no migrations
   onlyWhen (missingPaths /= []) $ do
 
-    -- pDocLn $ D.green (D.reflow $ "It appears you're all set to deploy the first version of ''!")
     Progress.report $
       Help.reportToDoc $
       Help.report "UNCOMMITTED FILES" (Just "src/Evergreen/")
@@ -635,48 +592,30 @@ defaultMigrationFile oldVersion newVersion typeCompares = do
 
       migrationWrapperForType t =
         case t of
-          "BackendModel" ->
-            "ModelMigration"
-          "FrontendModel" ->
-            "ModelMigration"
-          "FrontendMsg" ->
-            "MsgMigration"
-          "ToBackend" ->
-            "MsgMigration"
-          "BackendMsg" ->
-            "MsgMigration"
-          "ToFrontend" ->
-            "MsgMigration"
+          "BackendModel" -> "ModelMigration"
+          "FrontendModel" -> "ModelMigration"
+          "FrontendMsg" -> "MsgMigration"
+          "ToBackend" -> "MsgMigration"
+          "BackendMsg" -> "MsgMigration"
+          "ToFrontend" -> "MsgMigration"
 
       msgForType t =
         case t of
-          "BackendModel" ->
-            "BackendMsg"
-          "FrontendModel" ->
-            "FrontendMsg"
-          "FrontendMsg" ->
-            "FrontendMsg"
-          "ToBackend" ->
-            "BackendMsg"
-          "BackendMsg" ->
-            "BackendMsg"
-          "ToFrontend" ->
-            "FrontendMsg"
+          "BackendModel" -> "BackendMsg"
+          "FrontendModel" -> "FrontendMsg"
+          "FrontendMsg" -> "FrontendMsg"
+          "ToBackend" -> "BackendMsg"
+          "BackendMsg" -> "BackendMsg"
+          "ToFrontend" -> "FrontendMsg"
 
       unchangedForType t =
         case t of
-          "BackendModel" ->
-            "ModelUnchanged"
-          "FrontendModel" ->
-            "ModelUnchanged"
-          "FrontendMsg" ->
-            "MsgUnchanged"
-          "ToBackend" ->
-            "MsgUnchanged"
-          "BackendMsg" ->
-            "MsgUnchanged"
-          "ToFrontend" ->
-            "MsgUnchanged"
+          "BackendModel" -> "ModelUnchanged"
+          "FrontendModel" -> "ModelUnchanged"
+          "FrontendMsg" -> "MsgUnchanged"
+          "ToBackend" -> "MsgUnchanged"
+          "BackendMsg" -> "MsgUnchanged"
+          "ToFrontend" -> "MsgUnchanged"
 
   let header = [text|
 
@@ -836,43 +775,36 @@ writeLamderaGenerated root inProduction nextVersion =
     writeUtf8 (root </> "src/LamderaGenerated.elm") gen
 
 
-possiblyShowExternalTypeWarnings :: IO ()
-possiblyShowExternalTypeWarnings = do
+showExternalTypeWarnings :: [(Text, [Text], Lamdera.Types.DiffableType)] -> IO ()
+showExternalTypeWarnings warnings = do
+  let
+    textWarnings :: Text
+    textWarnings =
+      warnings
+        & fmap (\(tipe, warnings_, tds) -> warnings_)
+        & List.concat
+        & List.nub
+        & List.sort
+        & T.intercalate "\n- "
+        & (<>) "- "
 
-  root <- getProjectRoot
-  warnings_ <- maybeReadUtf8 $ lamderaExternalWarningsPath root
-
-  case warnings_ of
-    Just warnings -> do
-
+  if length warnings > 0
+    then do
       debug "Printing out external type warnings"
-
       progressDoc $
         D.stack
           (
           [ D.red $ D.reflow $ "WARNING: Evergreen Alpha does not cover type changes outside your project"
           , D.reflow $ "You are referencing the following in your core types:"
-          , D.vcat [ D.fromChars . T.unpack $ warnings ]
+          , D.vcat [ D.fromChars . T.unpack $ textWarnings ]
           , D.red $ D.reflow $ "Package upgrades that change these types won't get covered by Evergreen migrations currently!"
           , D.reflow "See <https://dashboard.lamdera.app/docs/evergreen> for more info."
           ]
           )
 
-    Nothing -> do
+    else do
       debug "No external type warnings found."
-
       pure ()
-
-
-maybeReadUtf8 :: FilePath -> IO (Maybe Text)
-maybeReadUtf8 filePath =
-  do  exists_ <- Dir.doesFileExist filePath
-      if exists_
-        then
-          Just <$> T.decodeUtf8 <$> IO.readUtf8 filePath
-          -- pure $ Just $
-        else
-          pure Nothing
 
 
 genericExit :: String -> IO a
@@ -881,9 +813,6 @@ genericExit str =
     $ Help.report "ERROR" Nothing
       (str)
       []
-
-
-
 
 
 

@@ -32,12 +32,12 @@ import StandaloneInstances
 
 {- Attempt to load all interfaces for project in current directory and generate
 type snapshots  -}
-calculateAndWrite :: IO [Text]
+calculateAndWrite :: IO ([Text], [(Text, [Text], DiffableType)])
 calculateAndWrite = do
-  hashes <- calculateHashes
+  (hashes, warnings) <- calculateHashes
   root <- getProjectRoot
   writeUtf8 (lamderaHashesPath root) $ show_ hashes
-  pure hashes
+  pure (hashes, warnings)
 
 
 type Interfaces =
@@ -60,7 +60,7 @@ lamderaTypes =
   ]
 
 
-calculateHashes :: IO [Text]
+calculateHashes :: IO ([Text], [(Text, [Text], DiffableType)])
 calculateHashes = do
 
   interfaces <- Lamdera.Interfaces.all
@@ -93,16 +93,6 @@ calculateHashes = do
         & fmap (\(t,tds) -> (t, diffableTypeExternalWarnings tds & List.nub, tds)) -- nub == unique
         & filter (\(t,errs,tds) -> List.length errs > 0)
 
-    textWarnings :: Text
-    textWarnings =
-      warnings
-        & fmap (\(tipe, warnings_, tds) -> warnings_)
-        & List.concat
-        & List.nub
-        & List.sort
-        & T.intercalate "\n- "
-        & (<>) "- "
-
     formattedErrors :: [D.Doc]
     formattedErrors =
       errors
@@ -134,16 +124,17 @@ calculateHashes = do
         ] ++ notifyWarnings)
 
     else do
-      root <- getProjectRoot
-
-      -- @LAMDERA TEMPORARY these external warnings might not need to be written to disk?
-      if (List.length warnings > 0)
-        then do
-          writeUtf8 (lamderaExternalWarningsPath root) $ textWarnings
-        else
-          remove (lamderaExternalWarningsPath root)
-
-      pure hashes
+      -- -- These external warnings no longer need to be written to disk, but
+      -- -- we might find it useful to evaluate the scope of external types that
+      -- -- users are using in their projects?
+      -- root <- getProjectRoot
+      --
+      -- if (List.length warnings > 0)
+      --   then do
+      --     writeUtf8 (lamderaExternalWarningsPath root) $ textWarnings
+      --   else
+      --     remove (lamderaExternalWarningsPath root)
+      pure (hashes, warnings)
 
 
 diffableTypeByName :: Interfaces -> N.Name -> N.Name -> Interface.Interface -> DiffableType

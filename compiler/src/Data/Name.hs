@@ -32,7 +32,7 @@ module Data.Name
   , utils, negate, true, false, value
   , node, program, _main, _Main, dollar, identity
   , replModule, replValueToPrint
-  , toText -- @LAMDERA TEMPORARY
+  , toText -- @LAMDERA
   )
   where
 
@@ -60,7 +60,7 @@ import GHC.Word (Word8(W8#))
 import qualified Elm.String as ES
 
 
--- @LAMDERA TEMPORARY
+-- @LAMDERA
 
 import qualified Data.Text
 
