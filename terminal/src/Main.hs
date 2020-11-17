@@ -25,6 +25,7 @@ import qualified Publish
 import qualified Repl
 
 
+import qualified Lamdera
 import Lamdera.CLI
 
 -- MAIN
@@ -54,6 +55,9 @@ intro =
   P.vcat
     [ P.fillSep
         ["Hi,","thank","you","for","trying","out"
+        ,P.green "Lamdera"
+        ,P.green (P.text Lamdera.lamderaVersion)
+        ,"on"
         ,P.green "Elm"
         ,P.green (P.text (V.toChars V.compiler)) <> "."
         ,"I hope you like it!"

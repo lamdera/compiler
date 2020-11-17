@@ -30,6 +30,7 @@ import qualified Terminal.Chomp as Chomp
 import qualified Terminal.Error as Error
 
 
+import qualified Lamdera
 
 -- COMMAND
 
@@ -40,7 +41,7 @@ _command details example args_ flags_ callback =
       argStrings <- Env.getArgs
       case argStrings of
         ["--version"] ->
-          do  hPutStrLn stdout (V.toChars V.compiler)
+          do  hPutStrLn stdout (Lamdera.lamderaVersion ++ "-" ++ V.toChars V.compiler)
               Exit.exitSuccess
 
         chunks ->
@@ -72,7 +73,7 @@ app intro outro commands =
           Error.exitWithOverview intro outro commands
 
         ["--version"] ->
-          do  hPutStrLn stdout (V.toChars V.compiler)
+          do  hPutStrLn stdout (Lamdera.lamderaVersion ++ "-" ++ V.toChars V.compiler)
               Exit.exitSuccess
 
         command : chunks ->
@@ -372,4 +373,3 @@ isPossibleSuggestion extensions start dir path =
 isOkayExtension :: FilePath -> [String] -> Bool
 isOkayExtension path extensions =
   null extensions || elem (FP.takeExtension path) extensions
-
