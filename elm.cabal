@@ -223,7 +223,6 @@ Executable elmx
         Lamdera.Interfaces
         Lamdera.Live
         Lamdera.Login
-        Lamdera.OldFeatureHelper
         Lamdera.Project
         Lamdera.Suggestions
         Lamdera.TypeHash
