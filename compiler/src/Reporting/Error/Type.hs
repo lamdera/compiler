@@ -36,6 +36,7 @@ import qualified Reporting.Suggest as Suggest
 import qualified Type.Error as T
 
 
+import qualified Lamdera.Hints
 
 -- ERRORS
 
@@ -679,7 +680,7 @@ toExprReport source localizer exprRegion category tipe expected =
           , typeComparison localizer tipe expectedType
               (addCategory itIs category)
               ("But the type annotation on `" <> Name.toChars name <> "` says it should be:")
-              []
+              (Lamdera.Hints.contextHintsWhenTypeMismatch tipe)
           )
 
     FromContext region context expectedType ->

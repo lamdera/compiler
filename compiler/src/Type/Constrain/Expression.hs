@@ -22,6 +22,8 @@ import qualified Type.Instantiate as Instantiate
 import Type.Type as Type hiding (Descriptor(..))
 
 
+import qualified Lamdera
+import qualified Lamdera.Constrain
 
 -- CONSTRAIN
 
@@ -49,8 +51,8 @@ constrain rtv (A.At region expression) expected =
     Can.VarKernel _ _ ->
       return CTrue
 
-    Can.VarForeign _ name annotation ->
-      return $ CForeign region name annotation expected
+    Can.VarForeign (ModuleName.Canonical pkg modu) name annotation ->
+      Lamdera.Constrain.constrain pkg modu name annotation region expected
 
     Can.VarCtor _ _ name _ annotation ->
       return $ CForeign region name annotation expected

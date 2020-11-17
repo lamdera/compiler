@@ -20,7 +20,7 @@ import Lamdera
 import Lamdera.Project (lamderaCore)
 
 
-constrain pkg modu name freevars t region expected =
+constrain pkg modu name annotation@(Can.Forall freevars t) region expected =
   if pkg == lamderaCore && modu == "Lamdera" && name == "sendToBackend" then
     do
       sourcePkg <- determineTypesLocation "ToBackend"
@@ -45,14 +45,18 @@ constrain pkg modu name freevars t region expected =
         fn x = x
       pure $ CForeign region name (Can.Forall freevars (mapTvars fn t)) expected
 
+  else
+    pure $ CForeign region name annotation expected
+
+  -- @LEGACY, left here in case we run into issues, but likely no longer needed.
   -- Since we don't have type annotations on codecs, we have exposed top-level
   -- things without type annotations, which means that we see bugs in the type
   -- inference engine that shouldn't be there. This is a hotfix for such a bug,
   -- where the forall. part of the type doesn't hold all the tvars used in the
   -- type, so we inject any missning tvars and hope it works out.
   -- @LAMDERA todo legacy from Haskell transpilation, re-evalutate and remove
-  else
-    pure $ CForeign region name (Can.Forall (freevars <> getFreevars t) t) expected -- NOTE: prefer freevars over getFreevars if there's a conflict
+  -- else
+  --   pure $ CForeign region name (Can.Forall (freevars <> getFreevars t) t) expected -- NOTE: prefer freevars over getFreevars if there's a conflict
 
 
 determineTypesLocation :: Text -> IO N.Name
