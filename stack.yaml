@@ -1,5 +1,4 @@
-resolver: lts-16.15
-flags: {}
+resolver: lts-16.22
 packages:
 - '.'
 extra-deps:

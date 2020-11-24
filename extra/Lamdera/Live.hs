@@ -25,8 +25,7 @@ import Data.FileEmbed (bsToExp)
 
 import Snap.Core
 
--- import Elm.Project.Json
--- import Elm.Project.Summary
+
 import qualified Develop.Generate.Help as Generate
 import qualified Develop.StaticFiles as StaticFiles
 import qualified Json.Decode as D
@@ -44,19 +43,14 @@ import SocketServer
 import Data.Word (Word8)
 import System.Process
 import Network.Info
-
--- Bytes
 import System.Entropy
-
--- import Snap.Http.Server
 import Snap.Util.FileServe
 import Control.Monad (guard, void)
-import Lamdera.Filewatch
 
 
 type LiveState = (TVar [Client], TVar (Maybe ClientId), BroadcastChan In Text, TVar Text)
 
--- (mClients, mLeader, mChan, beState)
+
 init :: IO LiveState
 init = do
   mClients <- liftIO $ SocketServer.clientsInit

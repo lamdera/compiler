@@ -36,7 +36,8 @@ import qualified Stuff
 
 import Lamdera
 import qualified Lamdera.Live
-import qualified Lamdera.Filewatch
+import qualified Lamdera.Filewatch as Filewatch
+
 import StandaloneInstances
 
 -- RUN THE DEV SERVER
@@ -56,7 +57,7 @@ run () (Flags maybePort) =
 
       liveState <- liftIO $ Lamdera.Live.init
       Lamdera.Live.normalLocalDevWrite
-      Lamdera.Filewatch.watch liveState
+      Filewatch.watch liveState
 
       Lamdera.Live.withEnd liveState $
        httpServe (config port) $

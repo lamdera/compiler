@@ -50,9 +50,6 @@ Executable elmx
         extra
         test
 
-    other-extensions:
-        TemplateHaskell
-
     Main-Is:
         Main.hs
 
@@ -323,7 +320,6 @@ Executable elmx
         websockets,
         websockets-snap,
         stm,
-        fsnotify,
         auto-update,
         uuid,
         broadcast-chan,
@@ -338,3 +334,15 @@ Executable elmx
         random,
         tree-diff,
         main-tester
+
+
+    -- @TODO remove when Big Sur supported
+    if os(darwin)
+      CPP-Options: -DOS_Mac
+      Build-depends: directory-tree
+      Other-Modules: Lamdera.Filewatch_Brute
+
+    else
+      CPP-Options: -DOS_Other
+      Build-Depends: fsnotify
+      Other-Modules: Lamdera.Filewatch_FSNotify
