@@ -14,6 +14,7 @@ import qualified System.Environment as Env
 import qualified System.Process as System
 import qualified Text.Read
 import System.FilePath ((</>))
+import System.Exit (exitFailure)
 
 import qualified Data.NonEmptyList as NE
 import qualified Data.Text as T
@@ -121,13 +122,8 @@ run () () = do
                 genericExit "FATAL: application info could not be obtained. Please report this to support."
 
               else do
-                Progress.throw $
-                  Help.report "ERROR" Nothing
-                    ("I normally check for production info here but the request failed.")
-                    [ D.reflow $ "Please check your connection and try again, or contact support."
-                    , D.fromChars $ Lamdera.Http.errorToString err
-                    ]
-
+                Lamdera.Http.printHttpError err "I needed to query production application info"
+                exitFailure
 
   let
     localTypesChangedFromProduction =
@@ -351,8 +347,7 @@ run () () = do
             ]
 
     Left err ->
-      debug $ Lamdera.Http.errorToString err
-
+      onlyWhen (inDebug) $ Lamdera.Http.printHttpError err "I needed to check the release version"
 
 
 buildProductionJsFiles :: FilePath -> Bool -> VersionInfo -> IO ()

@@ -11,6 +11,7 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import qualified System.Environment as Env
 import System.FilePath ((</>))
+import System.Exit (exitFailure)
 
 import AST.Optimized
 import Elm.ModuleName (Canonical(..))
@@ -285,6 +286,32 @@ fetchAppConfigItems appName token = do
   Lamdera.Http.normalRpcJson "fetchAppConfigItems" body endpoint decoder
 
 
+resultOrThrow :: Either Error (WithErrorField a) -> String -> IO a
+resultOrThrow res_ reason =
+  case res_ of
+    Right res ->
+      case res of
+        SuccessField configItems ->
+          pure configItems
+
+        ErrorField text ->
+          throwRequestFail $ T.unpack text
+
+    Left err -> do
+      Lamdera.Http.printHttpError err reason
+      exitFailure
+
+
+throwRequestFail :: String -> IO a
+throwRequestFail text =
+  throw $
+    Help.report "ERROR" Nothing
+      ("A HTTP request failed with the following error:")
+      [ D.red $ D.reflow $ text
+      , D.reflow $ "Please check your configuration, or report this issue."
+      ]
+
+
 checkUserConfig :: Text -> Maybe Text -> IO ()
 checkUserConfig appName prodTokenM = do
   token <-
@@ -300,7 +327,7 @@ checkUserConfig appName prodTokenM = do
 
   prodConfigItems <- do
     res_ <- fetchAppConfigItems appName token
-    resultOrThrow res_
+    resultOrThrow res_ "I needed to get production app config info"
 
   graph <- do
     graph_ <- Lamdera.Graph.fullGraph ["src/Frontend.elm", "src/Backend.elm"]
@@ -436,7 +463,7 @@ injectConfig graph = do
 
           prodConfigItems <- do
             res_ <- fetchAppConfigItems appName (T.pack token)
-            resultOrThrow res_
+            resultOrThrow res_ "I needed to get production app config info"
 
           let
             prodConfigMap =
@@ -473,28 +500,3 @@ injectConfig graph = do
             }
     else
       pure graph
-
-
-resultOrThrow :: Either Error (WithErrorField a) -> IO a
-resultOrThrow res_ =
-  case res_ of
-    Right res ->
-      case res of
-        SuccessField configItems ->
-          pure configItems
-
-        ErrorField text ->
-          throwRequestFail $ T.unpack text
-
-    Left err -> do
-      throwRequestFail $ Lamdera.Http.errorToString err
-
-
-throwRequestFail :: String -> IO a
-throwRequestFail text =
-  throw $
-    Help.report "ERROR" Nothing
-      ("A HTTP request failed with the following error:")
-      [ D.red $ D.reflow $ text
-      , D.reflow $ "Please check your configuration, or report this issue."
-      ]

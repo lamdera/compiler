@@ -55,10 +55,15 @@ run () () = do
             writeUtf8 (elmHome </> ".lamdera-cli") token
             Progress.report $ D.fillSep ["───>", D.green "Logged in!"]
 
-          _ -> do
-            Progress.report $ D.fillSep ["───>", D.red "Existing token invalid, starting again"]
-            remove (elmHome </> ".lamdera-cli")
-            checkApiLoop inProduction appName newToken
+          Left err -> do
+            if Lamdera.Http.isOfflineError err
+              then do
+                Lamdera.Http.printHttpError err "I needed to poll for the CLI session approval status"
+                exitFailure
+              else do
+                Progress.report $ D.fillSep ["───>", D.red "Existing token invalid, starting again"]
+                remove (elmHome </> ".lamdera-cli")
+                checkApiLoop inProduction appName newToken
 
       Nothing -> do
         checkApiLoop inProduction appName newToken
@@ -109,7 +114,7 @@ checkApiLoop inProduction appName token =
             pure False
 
       Left err -> do
-        putStrLn $ Lamdera.Http.errorToString err
+        Lamdera.Http.printHttpError err "I needed to poll for the CLI session approval status"
         pure True
 
 
@@ -128,12 +133,10 @@ validateCliToken = do
         Right "success" -> do
           pure token
 
-        Left exit -> do
-          case exit of
+        Left error -> do
+          case error of
             Lamdera.Http.HttpError httpExit -> do
-              Progress.report $ D.fillSep [ D.red "Oops, there appears to have been a HTTP error:\n"]
-              putStrLn $ Lamdera.Http.errorToString exit
-              Progress.report $ D.fillSep [ D.red "\nPlease double-check your internet connection, or report this issue.\n"]
+              Lamdera.Http.printHttpError error "I need to validate the CLI session"
               exitFailure
 
             _ -> do

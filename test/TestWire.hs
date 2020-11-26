@@ -130,7 +130,7 @@ buildAllPackages = do
       pure ()
 
     Left err ->
-      putStrLn $ Lamdera.Http.errorToString err
+      Lamdera.Http.printHttpError err "I needed to get all current elm packages"
 
   -- Task.run $
   --   do  env <- Task.eio Exit.InstallBadRegistry $ Solver.initEnv

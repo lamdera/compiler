@@ -12,8 +12,10 @@ import qualified Network.HTTP.Types.Header as Http
 import Reporting.Exit
 import qualified Http
 import qualified Data.ByteString.Char8 as BS
+import qualified Network.HTTP.Client as HTTP
 
 import Lamdera
+import Lamdera.Progress
 import StandaloneInstances
 
 
@@ -64,40 +66,38 @@ normalRpcJson debugIdentifier body url decoder = do
         return $ Left (JsonError url problem)
 
 
--- Custom handler to extract message text from HTTP failures
--- The error handling in Elm is pretty deeply nested to throw away things
--- see `handleAnyError` function and follow it back.
--- This seemed the most pragmatic workaround.
--- Note: also tried to color the error red using Reporting.Doc, however
--- didn't work out easily in this context as the toString renderer drops colors,
--- seems the ANSI rendering needs to write straight out to terminal with IO ()
-errorToString err =
-  -- @LAMDERA TEMPORARY
-  show err
-  --  Need to find the new way Http.Error
+printHttpError :: Error -> String -> IO ()
+printHttpError error reason =
+  case error of
+    JsonError string dError -> putStrLn $ show error
 
-  -- case err of
-  --   BadHttp str (Unknown err) ->
-  --     -- show err
-  --     if textContains "\\\"error\\\":" (T.pack err)
-  --       then
-  --         -- This looks like a LamderaRPC error, rudimentary split out the error
-  --         err
-  --           & T.pack
-  --           & T.splitOn "\\\""
-  --           & reverse
-  --           & flip (!!) 1
-  --           & (<>) "error: "
-  --           & T.unpack
-  --       else
-  --         -- Get the message part after the header preamble
-  --         err
-  --           & T.pack
-  --           & T.splitOn "HTTP/1.1\n}\n"
-  --           & last
-  --           & (<>) "error:"
-  --           & T.unpack
-  --
-  --   _ ->
-  --     -- Normal flow for everything else
-  --     Reporting.Exit.toString err
+    HttpError httpError ->
+      throw $ toHttpErrorReport "HTTP PROBLEM" httpError reason
+
+
+-- Going based off the error outlines in `toHttpErrorReport`,
+-- this function helps us avoid certain actions if it looks like the
+-- HTTP request failed because of network errors
+isOfflineError :: Error -> Bool
+isOfflineError error =
+  case error of
+    JsonError string dError -> False
+
+    HttpError httpError ->
+      case httpError of
+        Http.BadUrl url reason ->
+          False
+
+        Http.BadHttp url httpExceptionContent ->
+          case httpExceptionContent of
+            HTTP.StatusCodeException response body ->
+              False
+
+            HTTP.TooManyRedirects responses ->
+              False
+
+            otherException ->
+              True
+
+        Http.BadMystery url someException ->
+          True

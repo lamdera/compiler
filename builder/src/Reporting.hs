@@ -45,6 +45,7 @@ import qualified Reporting.Exit as Exit
 import qualified Reporting.Exit.Help as Help
 
 
+-- import Lamdera
 
 -- STYLE
 
@@ -243,6 +244,7 @@ detailsStep msg (DState total cached rqst rcvd failed built broken) =
 
     DRequested ->
       do  when (rqst == 0) (putStrLn "Starting downloads...\n")
+            -- & Lamdera.alternativeImplementation (when (rqst == 0) (atomicPutStrLn "Starting downloads...\n"))
           return (DState total cached (rqst + 1) rcvd failed built broken)
 
     DReceived pkg vsn ->
@@ -432,6 +434,7 @@ vbottom = if isWindows then '+' else '┘'
 putStrFlush :: String -> IO ()
 putStrFlush str =
   hPutStr stdout str >> hFlush stdout
+    -- & Lamdera.alternativeImplementation (atomicPutStrLn str)
 
 
 

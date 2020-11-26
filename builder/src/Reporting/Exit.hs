@@ -25,7 +25,9 @@ module Reporting.Exit
   , toString
   , toStderr
   , toJson
-  , toDetailsReport -- @LAMDERA exposed
+  -- @LAMDERA exposed
+  , toDetailsReport
+  , toHttpErrorReport
   )
   where
 
