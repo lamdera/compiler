@@ -28,7 +28,7 @@ import Lamdera.Http
 import Lamdera.Progress
 import qualified Lamdera.Graph
 import qualified Lamdera.Interfaces
-import qualified Lamdera.Login
+import qualified Lamdera.CLI.Login
 import qualified Lamdera.Project
 import StandaloneInstances
 
@@ -294,7 +294,7 @@ checkUserConfig appName prodTokenM = do
 
       Nothing ->
         -- Will throw if invalid token forcing user to auth first
-        Lamdera.Login.validateCliToken
+        Lamdera.CLI.Login.validateCliToken
 
   debug $ "Checking with token: " <> T.unpack token
 

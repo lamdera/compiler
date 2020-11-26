@@ -1,17 +1,17 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Lamdera.Deploy where
+module Lamdera.CLI.Deploy where
 
 import Lamdera
 import System.Process
 
-import qualified Lamdera.Check
+import qualified Lamdera.CLI.Check
 
 run :: () -> () -> IO ()
 run () () = do
   debug_ "Starting check..."
 
-  Lamdera.Check.run () ()
+  Lamdera.CLI.Check.run () ()
 
   _ <- readProcess "git" ["push", "lamdera", "master"] ""
 

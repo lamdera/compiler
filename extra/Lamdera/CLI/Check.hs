@@ -2,7 +2,7 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Lamdera.Check where
+module Lamdera.CLI.Check where
 
 import Control.Monad.Except (catchError, throwError)
 import Data.Maybe (fromMaybe)
@@ -43,13 +43,16 @@ import qualified Lamdera.Types
 
 
 progressPointer t = do
-  Progress.report $ D.fillSep [ D.fromChars "───>", D.blue $ t <> "\n" ]
+  Progress.report $ D.fillSep [ D.fromChars "\n───>", D.blue $ t ]
+
+progressPointer_ t = do
+  Progress.report $ D.fillSep [ D.fromChars "───>", D.blue $ t ]
 
 progress t = do
-  Progress.report $ D.stack [D.reflow t, ""]
+  Progress.report $ D.stack [D.reflow t]
 
 progressDoc d =
-  Progress.report $ D.stack [d, ""]
+  Progress.report $ D.stack [d]
 
 
 run :: () -> () -> IO ()
@@ -79,7 +82,7 @@ run () () = do
 
   temporaryCheckOldTypesNeedingMigration inProduction root
 
-  progressPointer "Checking project compiles..."
+  progressPointer_ "Checking project compiles..."
   checkUserProjectCompiles root
 
   lamderaRemotes <- Lamdera.Project.getLamderaRemotes
@@ -87,7 +90,7 @@ run () () = do
   -- Prior `onlyWhen` guards against situation where no name is determinable
   let appName = Lamdera.Project.certainAppName lamderaRemotes appNameEnvM
 
-  progressPointer  "Checking Evergreen migrations...\n"
+  progressPointer  "Checking Evergreen migrations..."
   debug $ "app name:" ++ show appName
 
   (localTypes, externalTypeWarnings) <- Lamdera.TypeHash.calculateAndWrite
@@ -113,7 +116,8 @@ run () () = do
 
           Left err ->
             if (inProduction)
-              then
+              then do
+                debug_ $ show err
                 genericExit "FATAL: application info could not be obtained. Please report this to support."
 
               else do
@@ -185,6 +189,7 @@ run () () = do
       -- This is the first version, we don't need any migration checking.
       onlyWhen (not inProduction) $ committedCheck root nextVersionInfo
 
+      -- @TEMPORARY
       putStrLn ""
 
     else do
@@ -299,24 +304,52 @@ run () () = do
           onlyWhen (not inProduction) $ showExternalTypeWarnings externalTypeWarnings
 
           progressDoc $ D.green $ D.reflow $ "\nIt appears you're all set to deploy v" <> (show nextVersion) <> " of '" <> T.unpack appName <> "'."
-          progressDoc $ D.reflow $ "\nThere are no Evergreen type changes for this version."
+          progressDoc $ D.reflow $ "There are no Evergreen type changes for this version."
 
           buildProductionJsFiles root inProduction nextVersionInfo
 
   progressPointer "Checking config..."
   Lamdera.AppConfig.checkUserConfig appName (fmap T.pack prodTokenM)
 
-  version_ <- Lamdera.Update.fetchCurrentVersion
-  case version_ of
-    Right version ->
-      onlyWhen (version /= "skip" && (not $ textContains version (T.pack Lamdera.lamderaVersion))) $ do
+  latestVersion_ <- Lamdera.Update.fetchCurrentVersion
+  case latestVersion_ of
+    Right latestVersion -> do
+      let
+        toIntCertain :: Text -> Int
+        toIntCertain t =
+          t & T.unpack
+            & Text.Read.readMaybe
+            & withDefault 0
+
+        latestNumeric =
+          latestVersion
+            & T.replace "alpha" "001"
+            & toIntCertain
+
+        localNumeric =
+          Lamdera.lamderaVersion
+            & T.pack
+            & T.replace "-alpha" ""
+            & T.replace "." ""
+            & toIntCertain
+
+      debug $ "comparing remote:" <> show latestVersion <> " local:" <> show Lamdera.lamderaVersion
+      debug $ "comparing remote:" <> show latestNumeric <> " local:" <> show localNumeric
+
+      onlyWhen (latestVersion /= "skip" && latestNumeric > localNumeric) $ do
           progressPointer "Checking version..."
           progressDoc $ D.stack
             [ D.red $ D.reflow $ "NOTE: There is a new alpha version, please upgrade before you deploy."
             , D.reflow $ "Current: " <> Lamdera.lamderaVersion
-            , D.reflow $ "New:     " <> T.unpack version
+            , D.reflow $ "New:     " <> T.unpack latestVersion
             , D.reflow $ "You can download it here: <https://dashboard.lamdera.app/docs/download>"
             ]
+
+      onlyWhen (latestNumeric < localNumeric) $ do
+          progressDoc $ D.stack
+            [ D.magenta $ D.reflow $ "\nWarning: this is a pre-release compiler " <> Lamdera.lamderaVersion <> " (latest is " <> T.unpack latestVersion <> ")"
+            ]
+
     Left err ->
       debug $ Lamdera.Http.errorToString err
 
@@ -448,17 +481,13 @@ migrationCheck root nextVersion = do
     replaceSnapshotTypeReferences migrationPath version
 
   mkdir $ root </> "lamdera-stuff/alpha"
-
-  gen <- Lamdera.Evergreen.createLamderaGenerated root nextVersion
-
   let lamderaCheckBothPath = "lamdera-stuff/alpha/LamderaCheckBoth.elm"
 
+  gen <- Lamdera.Evergreen.createLamderaGenerated root nextVersion
   writeUtf8 (root </> lamderaCheckBothPath) (gen)
-  -- let jsOutput = Just (Output.Html Nothing "/dev/null")
-  -- Project.compile Output.Dev Output.Client jsOutput Nothing summary [ lamderaCheckBothPath ]
 
   (Dir.withCurrentDirectory root $
-    Make.run ["src" </> "LFR.elm"] $
+    Make.run [ lamderaCheckBothPath ] $
         Make.Flags
           { _debug = False
           , _optimize = False

@@ -43,6 +43,7 @@ main =
     , install
     , make
     , repl
+    , reset
     -- , reactor
     -- , bump
     -- , diff

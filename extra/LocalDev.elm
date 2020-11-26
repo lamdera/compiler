@@ -1304,10 +1304,23 @@ pill devbar nodeType =
                 text ""
 
             VersionCheckSucceeded version time ->
-                if String.contains "wip" lamderaVersion then
+                let
+                    versionInt =
+                        version
+                            |> String.replace "alpha" ""
+                            |> String.toInt
+                            |> Maybe.withDefault 0
+
+                    lamderaVersionInt =
+                        lamderaVersion
+                            |> String.replace "alpha" ""
+                            |> String.toInt
+                            |> Maybe.withDefault 0
+                in
+                if String.contains "wip" version then
                     text ""
 
-                else if version /= lamderaVersion then
+                else if versionInt /= lamderaVersionInt && versionInt > lamderaVersionInt then
                     div
                         [ style "text-align" "center"
                         , style "font-size" "10px"

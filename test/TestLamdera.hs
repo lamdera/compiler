@@ -10,8 +10,8 @@ import System.Environment (setEnv, unsetEnv, lookupEnv)
 import Lamdera
 import EasyTest
 import qualified Init
-import qualified Lamdera.Login
-import qualified Lamdera.Check
+import qualified Lamdera.CLI.Login
+import qualified Lamdera.CLI.Check
 import qualified Lamdera.AppConfig
 import qualified Lamdera.Update
 import qualified Lamdera.Compile
@@ -183,12 +183,15 @@ checkWithParams projectPath appName = do
 
   cp "/Users/mario/lamdera/runtime/src/LBR.elm" (projectPath ++ "/src/LBR.elm")
   cp "/Users/mario/lamdera/runtime/src/LFR.elm" (projectPath ++ "/src/LFR.elm")
-  -- cp "/Users/mario/lamdera/runtime/src/RPC.elm" (projectPath ++ "/src/RPC.elm")
+
+  rpcExists <- doesFileExist (projectPath ++ "/src/RPC.elm")
+  onlyWhen (not rpcExists) $
+    cp "/Users/mario/lamdera/runtime/src/RPC_Empty.elm" (projectPath ++ "/src/RPC.elm")
   cp "/Users/mario/lamdera/runtime/src/LamderaHelpers.elm" (projectPath ++ "/src/LamderaHelpers.elm")
 
   Dir.withCurrentDirectory projectPath $
     do
-        Lamdera.Check.run () ()
+        Lamdera.CLI.Check.run () ()
 
   -- rm (projectPath ++ "/src/LBR.elm")
   -- rm (projectPath ++ "/src/LFR.elm")
@@ -220,7 +223,7 @@ checkWithParamsNoDebug version projectPath appName = do
   cp "/Users/mario/lamdera/runtime/src/RPC.elm" (projectPath ++ "/src/RPC.elm")
   cp "/Users/mario/lamdera/runtime/src/LamderaHelpers.elm" (projectPath ++ "/src/LamderaHelpers.elm")
 
-  Dir.withCurrentDirectory projectPath $ Lamdera.Check.run () ()
+  Dir.withCurrentDirectory projectPath $ Lamdera.CLI.Check.run () ()
 
   rm (projectPath ++ "/src/LBR.elm")
   rm (projectPath ++ "/src/LFR.elm")
@@ -305,7 +308,7 @@ login = do
   setEnv "LDEBUG" "1"
   -- setEnv "LAMDERA_APP_NAME" "test-local"
   Dir.withCurrentDirectory project $
-    Lamdera.Login.run () ()
+    Lamdera.CLI.Login.run () ()
   unsetEnv "LDEBUG"
   unsetEnv "LAMDERA_APP_NAME"
 

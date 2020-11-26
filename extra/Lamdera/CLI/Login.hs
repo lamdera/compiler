@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
 
-module Lamdera.Login where
+module Lamdera.CLI.Login where
 
 import Prelude hiding (init)
 

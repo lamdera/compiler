@@ -73,7 +73,7 @@ checkForChanges root callback =
   modifyMVar_ lastDirTree
     (\lastTree -> do
       nowTree <- getDirTree root
-      onlyWhen (lastTree == nowTree) callback
+      onlyWhen (lastTree /= nowTree) callback
       -- if (lastTree == nowTree)
       --   then do
       --     putStrLn "no changes!"

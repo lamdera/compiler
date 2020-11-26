@@ -13,13 +13,14 @@ flushPrintHelp :: D.Doc -> Reporting.Key ()
 flushPrintHelp doc =
   Reporting.Key (\_ ->
     do  Help.toStdout doc
+        hPutStr stdout "\n"
         hFlush stdout
   )
 
 
 progress :: String -> IO ()
 progress t = do
-  report $ D.stack [ D.fromChars t, "" ]
+  report $ D.stack [ D.fromChars t ]
 
 
 report :: D.Doc -> IO ()

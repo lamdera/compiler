@@ -205,11 +205,8 @@ Executable elmx
         -- Lamdera --
         Lamdera
         Lamdera.AppConfig
-        Lamdera.Check
         Lamdera.Checks
-        Lamdera.CLI
         Lamdera.Constrain
-        Lamdera.Deploy
         Lamdera.Evergreen
         Lamdera.Evergreen.Snapshot
         Lamdera.Extensions
@@ -218,8 +215,6 @@ Executable elmx
         Lamdera.Hints
         Lamdera.Injection
         Lamdera.Interfaces
-        Lamdera.Live
-        Lamdera.Login
         Lamdera.Project
         Lamdera.Suggestions
         Lamdera.TypeHash
@@ -231,6 +226,13 @@ Executable elmx
         Lamdera.Wire.Graph
         Lamdera.Wire.Helpers
         Lamdera.Wire.Interfaces
+
+        Lamdera.CLI
+        Lamdera.CLI.Live
+        Lamdera.CLI.Login
+        Lamdera.CLI.Check
+        Lamdera.CLI.Deploy
+        Lamdera.CLI.Reset
 
         -- Lamdera Utility --
         Lamdera.Compile

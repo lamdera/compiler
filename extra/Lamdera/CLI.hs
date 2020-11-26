@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Lamdera.CLI (live, login, check, deploy) where
+module Lamdera.CLI (live, login, check, deploy, reset) where
 
 import Text.Read (readMaybe)
 import qualified Text.PrettyPrint.ANSI.Leijen as P
@@ -8,9 +8,10 @@ import qualified Data.List as List
 
 import Terminal
 import qualified Develop -- has Develop.run for live
-import qualified Lamdera.Login
-import qualified Lamdera.Check
-import qualified Lamdera.Deploy
+import qualified Lamdera.CLI.Login
+import qualified Lamdera.CLI.Check
+import qualified Lamdera.CLI.Deploy
+import qualified Lamdera.CLI.Reset
 
 
 live :: Terminal.Command
@@ -61,7 +62,7 @@ login =
         "It will open the Dashboard to authenticate you and use the\
         \ established session for other CLI operations requiring Dashboard info."
   in
-  Terminal.Command "login" (Common summary) details example noArgs noFlags Lamdera.Login.run
+  Terminal.Command "login" (Common summary) details example noArgs noFlags Lamdera.CLI.Login.run
 
 
 check :: Terminal.Command
@@ -79,7 +80,7 @@ check =
         "It will query the production environment and supply\
         \ information about the next version and required migrations."
   in
-  Terminal.Command "check" (Common summary) details example noArgs noFlags Lamdera.Check.run
+  Terminal.Command "check" (Common summary) details example noArgs noFlags Lamdera.CLI.Check.run
 
 
 deploy :: Terminal.Command
@@ -97,7 +98,25 @@ deploy =
         \ information about the next version and required migrations, \
         \ and then attempt to deploy."
   in
-  Terminal.Command "deploy" (Common summary) details example noArgs noFlags Lamdera.Deploy.run
+  Terminal.Command "deploy" (Common summary) details example noArgs noFlags Lamdera.CLI.Deploy.run
+
+
+reset :: Terminal.Command
+reset =
+  let
+    summary =
+      "Delete all compiler caches, useful for cache issues or new releases requiring it"
+
+    details =
+      "The `reset` command is equivalent to `rm -rf $ELM_HOME elm-stuff`"
+
+    example =
+      reflow
+        "It will find the location of your configured ELM_HOME directory,\
+        \ as well as your current project's elm-stuff cache, \
+        \ and then attempt to remove them."
+  in
+  Terminal.Command "reset" (Common summary) details example noArgs noFlags Lamdera.CLI.Reset.run
 
 
 -- HELPERS

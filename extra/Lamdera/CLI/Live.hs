@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module Lamdera.Live where
+module Lamdera.CLI.Live where
 
 {- `lamdera live` functionalty
 -}
@@ -108,10 +108,10 @@ serveUnmatchedUrlsToIndex serveElm =
 
       liftIO $ do
         onlyWhen isDebug $ do
-          let overridePath = "/Users/mario/dev/projects/elmx/ui/browser/src/LocalDev.elm"
+          let overridePath = "/Users/mario/dev/projects/elmx/extra/LocalDev.elm"
           overrideExists <- Lamdera.doesFileExist overridePath
           onlyWhen overrideExists $ do
-            debug $ "🚧 OVERRIDE from elmx/ui/browser/src/LocalDev.elm"
+            debug $ "🚧 OVERRIDE from elmx/extra/LocalDev.elm"
             Lamdera.copyFile overridePath harnessPath
 
           rpcExists <- Lamdera.doesFileExist $ root </> "src" </> "RPC.elm"
@@ -151,7 +151,7 @@ serveUnmatchedUrlsToIndex serveElm =
                 \            {-}"
                 harnessPath
 
-
+      debug "serving elm..."
       serveElm harnessPath
       -- Cleanup causes issues because we might have a slew of tabs
       -- We can restore this when we further optimise `serveElm` to have a debounce cache!

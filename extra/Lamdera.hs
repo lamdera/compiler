@@ -109,8 +109,9 @@ import qualified Debug.Trace as DT
 import Data.Text
 import qualified Data.Text.Encoding as Text
 import qualified Data.Char as Char
+import System.Exit (exitFailure)
 
--- import CanSer.CanSer (ppElm)
+
 
 import qualified Data.Text.Encoding as T
 import qualified Data.Text.Lazy as TL
@@ -146,11 +147,10 @@ import Test.Main (withStdin)
 import Text.Show.Unicode
 import qualified System.Process
 import qualified Data.Digest.Pure.SHA as SHA
-
--- import qualified Reporting.Doc as D
 import qualified Data.Name as N
 import qualified Data.Utf8 as Utf8
 
+-- import CanSer.CanSer (ppElm)
 
 lamderaVersion :: String
 lamderaVersion = "0.0.1-alpha10"
@@ -645,7 +645,9 @@ getProjectRoot = do
   res <- findHelp "elm.json" (FP.splitDirectories subDir)
   case res of
     Just filepath -> pure filepath
-    Nothing -> error "Error: could not determine project root while looking for elm.json. Please report this issue."
+    Nothing -> do
+      putStrLn "Cannot find an elm.json! Make sure you're in a project folder, or run `lamdera init` to start a new one."
+      exitFailure
 
 
 findHelp :: FilePath -> [String] -> IO (Maybe FilePath)
