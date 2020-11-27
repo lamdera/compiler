@@ -96,7 +96,6 @@ progressPointer t =
 
 writeDefaultImplementations = do
   root <- getProjectRoot
-  writeLineIfMissing "lamdera-stuff" (root </> ".gitignore")
   defaultImplementations
     & mapM (\(filename, implementation) ->
         writeUtf8 (root </> filename) implementation

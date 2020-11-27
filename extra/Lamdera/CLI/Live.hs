@@ -72,7 +72,7 @@ withEnd :: LiveState -> IO () -> IO ()
 withEnd (mClients, mLeader, mChan, beState) io = do
   let
     end = do
-      Lamdera.debug "[backendSt] 🧠"
+      debug "[backendSt] 🧠"
       text <- atomically $ readTVar beState
       bePath <- lamderaBackendDevSnapshotPath
       writeUtf8 bePath text
@@ -88,7 +88,7 @@ serveLamderaPublicFiles serveElm serveFilePretty =
   do  file <- getSafePath
       let pubFile = "public" </> file
       guard =<< liftIO (Dir.doesFileExist pubFile)
-      -- Lamdera.debug $ "serving lamdera public files: " <> file
+      -- debug $ "serving lamdera public files: " <> file
       serveElm pubFile <|> serveFilePretty pubFile
 
 
@@ -102,19 +102,22 @@ serveUnmatchedUrlsToIndex serveElm =
       guard (takeExtension file == "")
 
       root <- liftIO $ getProjectRoot
-      let harnessPath = root </> "lamdera-stuff/alpha/LocalDev.elm"
 
-      isDebug <- liftIO $ Lamdera.isDebug
+      let
+        cache = lamderaCache root
+        harnessPath = cache </> "LocalDev.elm"
+
+      isDebug <- liftIO $ isDebug
 
       liftIO $ do
         onlyWhen isDebug $ do
           let overridePath = "/Users/mario/dev/projects/elmx/extra/LocalDev.elm"
-          overrideExists <- Lamdera.doesFileExist overridePath
+          overrideExists <- doesFileExist overridePath
           onlyWhen overrideExists $ do
             debug $ "🚧 OVERRIDE from elmx/extra/LocalDev.elm"
-            Lamdera.copyFile overridePath harnessPath
+            copyFile overridePath harnessPath
 
-          rpcExists <- Lamdera.doesFileExist $ root </> "src" </> "RPC.elm"
+          rpcExists <- doesFileExist $ root </> "src" </> "RPC.elm"
 
           onlyWhen rpcExists $ do
 
@@ -166,11 +169,14 @@ lamderaLocalDev =
 
 normalLocalDevWrite = do
 
-  root <- liftIO $ getProjectRoot
-  let harnessPath = root </> "lamdera-stuff/alpha/LocalDev.elm"
-  liftIO $ Lamdera.mkdir $ root </> "lamdera-stuff/alpha"
+  root <- getProjectRoot
 
-  harnessExists <- Lamdera.doesFileExist harnessPath
+  let
+    cache = lamderaCache root
+    harnessPath = cache </> "LocalDev.elm"
+  mkdir cache
+
+  harnessExists <- doesFileExist harnessPath
   if harnessExists
     then do
       now <- getCurrentTime
@@ -256,10 +262,10 @@ serveWebsocket (mClients, mLeader, mChan, beState) =
                   then do
                     root <- liftIO $ getProjectRoot
                     -- This is a bit dodge, but avoids needing to pull in all of Aeson
-                    Lamdera.setEnvMode root $ (Text.splitOn "\"" text) !! 7
+                    setEnvMode root $ (Text.splitOn "\"" text) !! 7
 
                     -- Touch the src/Env.elm file to make sure it gets recompiled
-                    Lamdera.touch $ root </> "src" </> "Env.elm"
+                    touch $ root </> "src" </> "Env.elm"
 
                     -- Mode has changed, force a refresh
                     -- Actually not needed, because the touch will do this for us!
@@ -267,10 +273,10 @@ serveWebsocket (mClients, mLeader, mChan, beState) =
 
                   else if Text.isPrefixOf "{\"t\":\"BackendModel\"," text
                     then do
-                      Lamdera.debug "[backendSt] 💾"
+                      debug "[backendSt] 💾"
                       atomically $ writeTVar beState text
                       onlyWhen (textContains "force" text) $ do
-                        Lamdera.debug "[refresh  ] 🔄 "
+                        debug "[refresh  ] 🔄 "
                         -- Force due to backend reset, force a refresh
                         SocketServer.broadcastImpl mClients "{\"t\":\"r\"}"
 
@@ -284,7 +290,7 @@ serveWebsocket (mClients, mLeader, mChan, beState) =
 
                       then do
 
-                        Lamdera.debugT $ "🍕  rpc response:" <> text
+                        debugT $ "🍕  rpc response:" <> text
                         -- Query response, send it to the chan for pickup by awaiting HTTP endpoint
                         liftIO $ writeBChan mChan text
                         pure ()
@@ -416,12 +422,12 @@ serveRpc (mClients, mLeader, mChan, beState) = do
                 writeBuilder value
 
             Left jsonProblem -> do
-              Lamdera.debugT $ "😢 rpc response decoding failed for " <> chanText
+              debugT $ "😢 rpc response decoding failed for " <> chanText
               writeBuilder $ B.byteString $ "rpc response decoding failed for " <> T.encodeUtf8 chanText
 
 
         Nothing -> do
-          Lamdera.debugT $ "⏰ RPC timed out for:" <> payload
+          debugT $ "⏰ RPC timed out for:" <> payload
           writeBuilder "error:timeout"
 
 
@@ -462,7 +468,7 @@ error400 s =
 passOnIndex pwd =
   if (pwd == ".")
     then do
-      Lamdera.debug "passing on / index"
+      debug "passing on / index"
       pass
     else
       pure ()

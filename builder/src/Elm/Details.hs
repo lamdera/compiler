@@ -208,7 +208,7 @@ data Env =
 initEnv :: Reporting.DKey -> BW.Scope -> FilePath -> IO (Either Exit.Details (Env, Outline.Outline))
 initEnv key scope root =
   do  mvar <- fork Solver.initEnv
-      eitherOutline <- Outline.read root True
+      eitherOutline <- Outline.read root False
       case eitherOutline of
         Left problem ->
           return $ Left $ Exit.DetailsBadOutline problem

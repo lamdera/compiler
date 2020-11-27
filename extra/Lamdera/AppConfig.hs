@@ -53,16 +53,18 @@ writeUsage rootNames graph = do
         & LBS.toStrict
         & T.decodeUtf8
 
+  cache <- lamderaCache_
+
   case rootNames of
     ["Frontend"] -> do
       let usages = findSecretUses graph "Frontend" "app"
       -- progress $ hindentFormatValue usages
-      liftIO $ writeUtf8Root "lamdera-stuff/.lamdera-fe-config" $ prep usages
+      writeUtf8 (cache </> ".lamdera-fe-config") $ prep usages
 
     ["Backend"] -> do
       let usages = findSecretUses graph "Backend" "app"
       -- progress $ hindentFormatValue usages
-      liftIO $ writeUtf8Root "lamdera-stuff/.lamdera-be-config" $ prep usages
+      writeUtf8 (cache </> ".lamdera-be-config") $ prep usages
 
     _ ->
       pure ()
@@ -208,17 +210,17 @@ nodeEnvRefs graph (global, node) =
 
 readAppConfigUses :: IO [(Text, Text, Text)]
 readAppConfigUses = do
-  root <- getProjectRoot
-  feConfig <- readUtf8Text $ root </> "lamdera-stuff/.lamdera-fe-config"
-  beConfig <- readUtf8Text $ root </> "lamdera-stuff/.lamdera-be-config"
+  cache <- lamderaCache_
+  feConfig <- readUtf8Text $ cache </> ".lamdera-fe-config"
+  beConfig <- readUtf8Text $ cache </> ".lamdera-be-config"
 
   pure $ extract feConfig ++ extract beConfig
 
 
 readAppFrontendConfigUses :: IO [(Text, Text, Text)]
 readAppFrontendConfigUses = do
-  root <- getProjectRoot
-  feConfig <- readUtf8Text $ root </> "lamdera-stuff/.lamdera-fe-config"
+  cache <- lamderaCache_
+  feConfig <- readUtf8Text $ cache </> ".lamdera-fe-config"
 
   pure $ extract feConfig
 

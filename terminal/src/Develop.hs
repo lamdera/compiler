@@ -56,7 +56,7 @@ run () (Flags maybePort) =
       putStrLn $ "Go to http://localhost:" ++ show port ++ " to see your project dashboard."
 
       liveState <- liftIO $ Live.init
-      Live.normalLocalDevWrite
+      liftIO $ Live.normalLocalDevWrite
       Filewatch.watch liveState
 
       Live.withEnd liveState $

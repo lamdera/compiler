@@ -12,6 +12,7 @@ import EasyTest
 import qualified Init
 import qualified Lamdera.CLI.Login
 import qualified Lamdera.CLI.Check
+import qualified Lamdera.CLI.Reset
 import qualified Lamdera.AppConfig
 import qualified Lamdera.Update
 import qualified Lamdera.Compile
@@ -26,7 +27,9 @@ import Test.Main (captureProcessResult)
 -- target = TestWire.wire
 -- target = checkUserConfig
 -- target = TestWire.buildAllPackages
-target = check
+-- target = check
+-- target = Lamdera.CLI.Login.run () ()
+target = Dir.withCurrentDirectory "/Users/mario/dev/projects/lamdera-test" $ Lamdera.CLI.Reset.run () ()
 
 {-
 
@@ -77,15 +80,6 @@ suite = tests
 
           expectTextContains actual
             "Hello! Lamdera projects always start with an elm.json file, as well as three\\nsource files: Frontend.elm , Backend.elm and Types.elm\\n\\nIf you're new to Elm, the best starting point is\\n<https://elm-lang.org/0.19.0/init>\\n\\nOtherwise check out <https://dashboard.lamdera.app/docs/building> for Lamdera\\nspecific information!\\n\\nKnowing all that, would you like me to create a starter implementation? [Y/n]: Okay, I created it! Now read those links, or get going with `lamdera live`.\\n"
-
-          ignoreM <- io $ readUtf8Text $ tmpFolder </> ".gitignore"
-
-          case ignoreM of
-            Just ignore ->
-              expectTextContains ignore "lamdera-stuff"
-
-            Nothing ->
-              crash $ "Expected to find " <> tmpFolder <> "/.gitignore but didn't."
 
       in
       using setup cleanup test
@@ -159,14 +153,14 @@ rm path = Lamdera.remove path
 
 {-| For quick and general local development testing via `stack ghci` as TestLamdera.check -}
 check = do
-  touch "/Users/mario/lamdera/test/v1/src/WireTypes.elm"
-  touch "/Users/mario/lamdera/test/v1/src/Env.elm"
-  checkWithParams "/Users/mario/lamdera/test/v1" "always-v0"
+  -- touch "/Users/mario/lamdera/test/v1/src/WireTypes.elm"
+  -- touch "/Users/mario/lamdera/test/v1/src/Env.elm"
+  -- checkWithParams "/Users/mario/lamdera/test/v1" "always-v0"
   -- checkWithParams "/Users/mario/dev/test/ascii-art" "ascii-art-local"
   -- checkWithParams "/Users/mario/dev/test/lamdera-minilatex-app" "minilatex"
   -- checkWithParams "/Users/mario/dev/lamdera-user-projects/beat-the-big-two" "beat-the-big-two"
   -- checkWithParams "/Users/mario/dev/projects/lamdera-dashboard" "dashboard"
-  -- checkWithParams "/Users/mario/dev/projects/lamdera-mogee" "mogee"
+  checkWithParams "/Users/mario/dev/projects/lamdera-test" "testapp"
   -- checkWithParams "/Users/mario/lamdera/tmp/elm-audio-test0" "elm-audio-test0"
 
 

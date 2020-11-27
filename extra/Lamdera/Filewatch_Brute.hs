@@ -55,7 +55,7 @@ removeIgnoredDirectories ((:/) anchor dirTree) =
         Dir name contents -> do
               not (List.isInfixOf ".git" name)
            && not (List.isInfixOf "elm-stuff" name)
-           && not (List.isInfixOf "lamdera-stuff" name)
+           && not (List.isInfixOf "lamdera-stuff" name) -- @LEGACY
         File name file -> True
     )
 
@@ -95,8 +95,10 @@ test = do
     False -> putStrLn "test1 diff"
 
   res3 <- getDirTree root
-  touch "/Users/mario/dev/projects/lamdera-test/lamdera-stuff/testing"
+  touch "/Users/mario/dev/projects/lamdera-test/testing"
   res4 <- getDirTree root
   case res3 == res4 of
     True -> putStrLn "test2 equal"
     False -> putStrLn "test2 diff"
+
+  removeFile "/Users/mario/dev/projects/lamdera-test/testing"

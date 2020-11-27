@@ -29,7 +29,7 @@ suite = tests
       liftIO $ withDebug $ Dir.withCurrentDirectory project $ do
         Lamdera.TypeHash.calculateAndWrite
 
-      actual <- liftIO $ readUtf8Text $ project </> "lamdera-stuff/.lamdera-hashes"
+      actual <- liftIO $ readUtf8Text $ lamderaHashesPath project
 
       expectEqualTextTrimmed expected (actual & withDefault "<failed to read file>")
 

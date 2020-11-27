@@ -36,7 +36,7 @@ watch (mClients, mLeader, mChan, beState) =
               check f =
                    not (List.isInfixOf ".git" f)
                 && not (List.isInfixOf "elm-stuff" f)
-                && not (List.isInfixOf "lamdera-stuff" f)
+                && not (List.isInfixOf "lamdera-stuff" f) -- @LEGACY
             check $ case e of
               Added f _ _ -> f
               Modified f _ _ -> f

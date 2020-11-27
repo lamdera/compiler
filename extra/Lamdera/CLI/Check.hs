@@ -91,7 +91,7 @@ run () () = do
   -- Prior `onlyWhen` guards against situation where no name is determinable
   let appName = Lamdera.Project.certainAppName lamderaRemotes appNameEnvM
 
-  progressPointer  "Checking Evergreen migrations..."
+  progressPointer "Checking Evergreen migrations..."
   debug $ "app name:" ++ show appName
 
   (localTypes, externalTypeWarnings) <- Lamdera.TypeHash.calculateAndWrite
@@ -352,6 +352,9 @@ run () () = do
 
 buildProductionJsFiles :: FilePath -> Bool -> VersionInfo -> IO ()
 buildProductionJsFiles root inProduction versionInfo = do
+
+  progressPointer "Compiling production code..."
+
   let version = vinfoVersion versionInfo
 
   onlyWhen inProduction $ do
@@ -475,11 +478,12 @@ migrationCheck root nextVersion = do
     copyFile migrationPath migrationPathBk
     replaceSnapshotTypeReferences migrationPath version
 
-  mkdir $ root </> "lamdera-stuff/alpha"
-  let lamderaCheckBothPath = "lamdera-stuff/alpha/LamderaCheckBoth.elm"
+  let cache = lamderaCache root
+  let lamderaCheckBothPath = cache </> "LamderaCheckBoth.elm"
+  mkdir cache
 
   gen <- Lamdera.Evergreen.createLamderaGenerated root nextVersion
-  writeUtf8 (root </> lamderaCheckBothPath) (gen)
+  writeUtf8 lamderaCheckBothPath gen
 
   (Dir.withCurrentDirectory root $
     Make.run [ lamderaCheckBothPath ] $
@@ -493,7 +497,7 @@ migrationCheck root nextVersion = do
     `catchError` (\err -> do
       debug "catchError: Cleaning up build scaffold"
       -- Remove our temporarily checker file
-      remove $ root </> lamderaCheckBothPath
+      remove lamderaCheckBothPath
 
       -- Restore backed up unaltered migration file
       onlyWhen migrationExists $ do

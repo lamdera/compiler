@@ -39,6 +39,7 @@ module Lamdera
   , unsafe
   , lamderaLiveSrc
   , onlyWhen
+  , onlyWhen_
   , textContains
   , stringContains
   , formatHaskellValue
@@ -59,6 +60,8 @@ module Lamdera
   , replaceInFile
   , writeLineIfMissing
   , touch
+  , lamderaCache
+  , lamderaCache_
   , lamderaHashesPath
   , lamderaEnvModePath
   , lamderaExternalWarningsPath
@@ -436,8 +439,15 @@ encodingError filePath ioErr =
 
 
 -- Inversion of `unless` that runs IO only when condition is True
+onlyWhen :: Monad f => Bool -> f () -> f ()
 onlyWhen condition io =
   unless (not condition) io
+
+-- Same but evaluates the IO
+onlyWhen_ :: Monad f => f Bool -> f () -> f ()
+onlyWhen_ condition io = do
+  res <- condition
+  unless (not res) io
 
 
 textContains :: Text -> Text -> Bool
@@ -614,28 +624,43 @@ writeLineIfMissing line filename = do
 touch :: FilePath -> IO ()
 touch filepath = do
   debug_ $ "touch: " ++ show filepath
-  System.PosixCompat.Files.touchFile filepath
+  exists_ <- Dir.doesFileExist filepath
+  if exists_
+    then System.PosixCompat.Files.touchFile filepath
+    else do
+      writeUtf8 filepath ""
+      System.PosixCompat.Files.touchFile filepath
+
+
+lamderaCache :: FilePath -> FilePath
+lamderaCache root =
+  root </> "elm-stuff" </> "lamdera"
+
+
+lamderaCache_ :: IO FilePath
+lamderaCache_ =
+  lamderaCache <$> getProjectRoot
 
 
 lamderaHashesPath :: FilePath -> FilePath
 lamderaHashesPath root =
-  root </> "lamdera-stuff" </> ".lamdera-hashes"
+  lamderaCache root </> ".lamdera-hashes"
 
 
 lamderaEnvModePath :: FilePath -> FilePath
 lamderaEnvModePath root =
-  root </> "lamdera-stuff" </> ".lamdera-mode"
+  lamderaCache root </> ".lamdera-mode"
 
 
 lamderaExternalWarningsPath :: FilePath -> FilePath
 lamderaExternalWarningsPath root =
-  root </> "lamdera-stuff" </> ".lamdera-external-warnings"
+  lamderaCache root </> ".lamdera-external-warnings"
 
 
 lamderaBackendDevSnapshotPath :: IO FilePath
 lamderaBackendDevSnapshotPath = do
   root <- getProjectRoot
-  pure $ root </> "lamdera-stuff" </> ".lamdera-bem-dev"
+  pure $ lamderaCache root </> ".lamdera-bem-dev"
 
 
 -- Copy of combined internals of Project.getRoot as it seems to notoriously cause cyclic wherever imported
