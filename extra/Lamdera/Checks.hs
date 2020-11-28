@@ -100,6 +100,7 @@ writeDefaultImplementations = do
     & mapM (\(filename, implementation) ->
         writeUtf8 (root </> filename) implementation
       )
+  writeLineIfMissing "elm-stuff" (root </> ".gitignore")
 
 
 checkMissingFiles :: [FilePath] -> IO [FilePath]
