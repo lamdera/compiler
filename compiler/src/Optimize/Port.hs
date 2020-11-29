@@ -51,6 +51,7 @@ toEncoder tipe =
           | name == Name.bool   -> encode "bool"
           | name == Name.string -> encode "string"
           | name == Name.value  -> Names.registerGlobal ModuleName.basics Name.identity
+          | name == Name.bytes  -> Names.registerGlobal ModuleName.basics Name.identity
 
         [arg]
           | name == Name.maybe -> encodeMaybe arg

@@ -32,7 +32,9 @@ module Data.Name
   , utils, negate, true, false, value
   , node, program, _main, _Main, dollar, identity
   , replModule, replValueToPrint
-  , toText -- @LAMDERA
+  -- @LAMDERA
+  , toText
+  , bytes
   )
   where
 
@@ -616,3 +618,10 @@ replModule = fromChars "Elm_Repl"
 {-# NOINLINE replValueToPrint #-}
 replValueToPrint :: Name
 replValueToPrint = fromChars "repl_input_value_"
+
+
+-- @LAMDERA
+
+{-# NOINLINE bytes #-}
+bytes :: Name
+bytes = fromChars "Bytes"

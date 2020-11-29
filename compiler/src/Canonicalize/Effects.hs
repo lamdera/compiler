@@ -169,6 +169,7 @@ checkPayload tipe =
           | isJson home name -> Right ()
           | isString home name -> Right ()
           | isIntFloatBool home name -> Right ()
+          | isBytes home name -> Right ()
 
         [arg]
           | isList  home name -> checkPayload arg
@@ -249,3 +250,12 @@ isArray home name =
   home == ModuleName.array
   &&
   name == Name.array
+
+
+-- @LAMDERA
+
+isBytes :: ModuleName.Canonical -> Name.Name -> Bool
+isBytes home name =
+  home == ModuleName.bytes
+  &&
+  name == Name.bytes

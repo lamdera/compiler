@@ -17,6 +17,8 @@ module Elm.ModuleName
   , virtualDom
   , jsonDecode, jsonEncode
   , webgl, texture, vector2, vector3, vector4, matrix4
+  -- @LAMDERA
+  , bytes
   )
   where
 
@@ -281,3 +283,11 @@ vector4 = Canonical Pkg.linearAlgebra "Math.Vector4"
 {-# NOINLINE matrix4 #-}
 matrix4 :: Canonical
 matrix4 = Canonical Pkg.linearAlgebra "Math.Matrix4"
+
+
+
+-- @LAMDERA
+
+{-# NOINLINE bytes #-}
+bytes :: Canonical
+bytes = Canonical Pkg.bytes "Bytes"

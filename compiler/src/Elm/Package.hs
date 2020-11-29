@@ -29,6 +29,7 @@ module Elm.Package
   , lamderaCore
   , lamderaCodecs
   , time
+  , bytes
   )
   where
 
@@ -404,3 +405,9 @@ lamderaCodecs =
 time :: Name
 time =
   toName elm "time"
+
+
+{-# NOINLINE bytes #-}
+bytes :: Name
+bytes =
+  toName elm "bytes"
