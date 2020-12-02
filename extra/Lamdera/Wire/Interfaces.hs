@@ -101,20 +101,6 @@ modifyModul pkg ifaces modul =
       else pure modul
 
 
-listUpsert :: (a -> Bool) -> a -> [a] -> [a]
-listUpsert check item collection =
-    if any check collection then
-      fmap (\v ->
-        if check v then
-          item
-        else
-          v
-      )
-      collection
-    else
-      collection ++ [item]
-
-
 
 hasModeDef :: [Located Union] -> Bool
 hasModeDef unions =

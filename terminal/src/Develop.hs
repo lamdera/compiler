@@ -37,6 +37,7 @@ import qualified Stuff
 import Lamdera
 import qualified Lamdera.CLI.Live as Live
 import qualified Lamdera.Filewatch as Filewatch
+import qualified Lamdera.ReverseProxy
 
 import StandaloneInstances
 
@@ -57,7 +58,9 @@ run () (Flags maybePort) =
 
       liveState <- liftIO $ Live.init
       liftIO $ Live.normalLocalDevWrite
+
       Filewatch.watch liveState
+      Lamdera.ReverseProxy.start
 
       Live.withEnd liveState $
        httpServe (config port) $

@@ -87,12 +87,16 @@ module Lamdera
   , imapM
   , filterMap
   , withDefault
+  , listUpsert
   , bsToStrict
   , bsToLazy
   , bsReadFile
   , callCommand
   , icdiff
   , withStdinYesAll
+  , ghciThreads
+  , trackGhciThread
+  , killGhciThreads
   )
   where
 
@@ -131,8 +135,8 @@ import qualified System.Directory as Dir
 import Control.Monad (unless, filterM)
 import System.Info
 import System.FilePath.Find (always, directory, extension, fileName, find, (&&?), (/~?), (==?))
-import Control.Concurrent (threadDelay)
-import Control.Concurrent.MVar (newMVar, withMVar, MVar)
+import Control.Concurrent
+import Control.Concurrent.MVar
 import Text.Read (readMaybe)
 
 import qualified System.PosixCompat.Files
@@ -832,6 +836,21 @@ withDefault default_ m =
     Just v -> v
     Nothing -> default_
 
+
+listUpsert :: (a -> Bool) -> a -> [a] -> [a]
+listUpsert check item collection =
+  if Prelude.any check collection then
+    collection
+      & fmap (\v ->
+          if check v then
+            item
+          else
+            v
+        )
+  else
+    collection ++ [item]
+
+
 bsToStrict =
   BSL.toStrict
 
@@ -878,3 +897,34 @@ withStdinYesAll action =
   withStdin
     "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
     action
+
+
+
+-- https://stackoverflow.com/questions/16811376/simulate-global-variable trick
+{-# NOINLINE ghciThreads #-}
+ghciThreads :: MVar [ThreadId]
+ghciThreads = unsafePerformIO $ newMVar []
+
+
+trackGhciThread :: ThreadId -> IO ()
+trackGhciThread threadId =
+  modifyMVar_ ghciThreads
+    (\threads -> do
+      putStrLn $ "Tracking GHCI thread:" ++ show threadId
+      pure $ threadId:threads
+    )
+
+
+killGhciThreads :: IO ()
+killGhciThreads = do
+  modifyMVar_ ghciThreads
+    (\threads -> do
+      case threads of
+        [] -> do
+          putStrLn $ "No tracked GHCI threads to kill."
+          pure []
+        threads -> do
+          putStrLn $ "Killing tracked GHCI threads: " ++ show threads
+          mapM killThread threads
+          pure []
+    )

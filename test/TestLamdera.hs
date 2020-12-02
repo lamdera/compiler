@@ -13,6 +13,9 @@ import qualified Init
 import qualified Lamdera.CLI.Login
 import qualified Lamdera.CLI.Check
 import qualified Lamdera.CLI.Reset
+import qualified Lamdera.CLI.Live
+import qualified Lamdera.ReverseProxy
+import qualified Lamdera.Diff
 import qualified Lamdera.AppConfig
 import qualified Lamdera.Update
 import qualified Lamdera.Compile
@@ -24,12 +27,16 @@ import Test.Main (captureProcessResult)
 
 -- Current target for ghci :rr command. See ~/.ghci config file, which should contain
 -- something like `:def rr const $ return $ unlines [":r","TestLamdera.target"]`
--- target = TestWire.wire
+target = TestWire.wire
 -- target = checkUserConfig
 -- target = TestWire.buildAllPackages
--- target = check
 -- target = Lamdera.CLI.Login.run () ()
-target = Dir.withCurrentDirectory "/Users/mario/dev/projects/lamdera-test" $ Lamdera.CLI.Reset.run () ()
+-- target = Dir.withCurrentDirectory "/Users/mario/dev/projects/lamdera-test" $ Lamdera.CLI.Reset.run () ()
+-- target = Lamdera.Diff.run
+-- target = check
+-- target = Lamdera.ReverseProxy.start
+
+
 
 {-
 
@@ -169,8 +176,9 @@ check = do
   -- checkWithParams "/Users/mario/dev/test/lamdera-minilatex-app" "minilatex"
   -- checkWithParams "/Users/mario/dev/lamdera-user-projects/beat-the-big-two" "beat-the-big-two"
   -- checkWithParams "/Users/mario/dev/projects/lamdera-dashboard" "dashboard"
-  checkWithParams "/Users/mario/dev/projects/lamdera-test" "testapp"
+  -- checkWithParams "/Users/mario/dev/projects/lamdera-test" "testapp"
   -- checkWithParams "/Users/mario/lamdera/tmp/elm-audio-test0" "elm-audio-test0"
+  checkWithParams "/Users/mario/lamdera-builds/build-test-local/staging" "test-local"
 
 
 {-| Run the `lamdera check` pipeline with specific params -}

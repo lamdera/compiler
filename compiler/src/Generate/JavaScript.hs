@@ -52,7 +52,7 @@ generate mode (Opt.GlobalGraph graph _) mains =
   <> stateToBuilder state
   <> toMainExports mode mains
   -- @LAMDERA future
-  -- <> Lamdera.Injection.source <>
+  <> Lamdera.Injection.source
   <> "}(this));"
   <> "\n" <> Lamdera.Injection.elmPkgJs mode <> "\n"
 

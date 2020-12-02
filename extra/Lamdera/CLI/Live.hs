@@ -19,7 +19,7 @@ import qualified System.Directory as Dir
 import System.FilePath as FP
 import Control.Applicative ((<|>))
 import Control.Concurrent.STM (atomically, newTVarIO, readTVar, writeTVar, TVar)
-import Control.Exception (finally)
+import Control.Exception (finally, throw)
 import Language.Haskell.TH (runIO)
 import Data.FileEmbed (bsToExp)
 

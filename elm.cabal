@@ -239,12 +239,15 @@ Executable elmx
         Lamdera.Error
         Lamdera.Http
         Lamdera.Progress
+        SocketServer
+
+        -- Future --
+        Lamdera.ReverseProxy
+        Network.HTTP.ReverseProxy
 
         -- Lamdera Legacy --
         -- Wire.Source
         -- Wire.Source2
-
-        SocketServer
 
         -- Fusion
         -- Fusion.Types
@@ -330,6 +333,21 @@ Executable elmx
         -- Debug
         unicode-show,
         network-info,
+
+        -- Future
+        conduit-extra,
+        warp,
+        wai,
+        stringsearch,
+
+        -- Vendor http-reverse-proxy
+        wai-logger,
+        unliftio,
+        streaming-commons,
+        conduit,
+        word8,
+        case-insensitive,
+        blaze-builder,
 
         -- Test
         async,
