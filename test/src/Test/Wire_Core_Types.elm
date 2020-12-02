@@ -20,7 +20,7 @@ expected_w2_encode_CoreTypes w2v =
             Lamdera.Wire2.encodeSequenceWithoutLength [ Lamdera.Wire2.encodeUnsignedInt8 0, Lamdera.Wire2.encodeBytes v0 ]
 
         ValueTime v0 ->
-            Lamdera.Wire2.encodeSequenceWithoutLength [ Lamdera.Wire2.encodeUnsignedInt8 1, Time.w2_encode_Posix v0 ]
+            Lamdera.Wire2.encodeSequenceWithoutLength [ Lamdera.Wire2.encodeUnsignedInt8 1, (\t -> Lamdera.Wire2.encodeInt (Time.posixToMillis t)) v0 ]
 
 
 expected_w2_decode_CoreTypes =
@@ -32,7 +32,7 @@ expected_w2_decode_CoreTypes =
                         Lamdera.Wire2.succeedDecode ValueBytes |> Lamdera.Wire2.andMapDecode Lamdera.Wire2.decodeBytes
 
                     1 ->
-                        Lamdera.Wire2.succeedDecode ValueTime |> Lamdera.Wire2.andMapDecode Time.w2_decode_Posix
+                        Lamdera.Wire2.succeedDecode ValueTime |> Lamdera.Wire2.andMapDecode (Lamdera.Wire2.decodeInt |> Lamdera.Wire2.andThenDecode (\t -> Lamdera.Wire2.succeedDecode (Time.millisToPosix t)))
 
                     _ ->
                         Lamdera.Wire2.failDecode

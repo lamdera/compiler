@@ -280,6 +280,9 @@ decoderForType ifaces cname tipe =
     TType (Module.Canonical (Name "elm" "bytes") "Bytes") "Bytes" params ->
       decodeBytes
 
+    TType (Module.Canonical (Name "elm" "time") "Time") "Posix" params ->
+      decodeTime
+
     TType moduleName typeName params ->
       let
         generatedName = Data.Name.fromChars $ "w2_decode_" ++ Data.Name.toChars typeName

@@ -340,6 +340,69 @@ decodeBytes =
                    [TType (Module.Canonical (Name "elm" "bytes") "Bytes") "Bytes" []]))))))
 
 
+decodeTime =
+  (a (Binop
+    "|>"
+    (Module.Canonical (Name "elm" "core") "Basics")
+    "apR"
+    (Forall
+       (Map.fromList [("a", ()), ("b", ())])
+       (TLambda (TVar "a") (TLambda (TLambda (TVar "a") (TVar "b")) (TVar "b"))))
+    (a (VarForeign
+          mLamdera_Wire2
+          "decodeInt"
+          (Forall
+             (Map.fromList [])
+             (TAlias
+                mLamdera_Wire2
+                "Decoder"
+                [("a", TType (Module.Canonical (Name "elm" "core") "Basics") "Int" [])]
+                (Filled
+                   (TType
+                      (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
+                      "Decoder"
+                      [TType (Module.Canonical (Name "elm" "core") "Basics") "Int" []]))))))
+    (andThenDecode1
+           (a (Lambda
+                  [(a (PVar "t"))]
+                  (a (Call
+                        (a (VarForeign
+                              mLamdera_Wire2
+                              "succeedDecode"
+                              (Forall
+                                 (Map.fromList [("a", ())])
+                                 (TLambda
+                                    (TVar "a")
+                                    (TAlias
+                                       mLamdera_Wire2
+                                       "Decoder"
+                                       [("a", TVar "a")]
+                                       (Filled
+                                          (TType
+                                             (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
+                                             "Decoder"
+                                             [TVar "a"])))))))
+                        [ (a (Call
+                                (a (VarForeign
+                                      (Module.Canonical (Name "elm" "time") "Time")
+                                      "millisToPosix"
+                                      (Forall
+                                         (Map.fromList [])
+                                         (TLambda
+                                            (TType
+                                               (Module.Canonical (Name "elm" "core") "Basics")
+                                               "Int"
+                                               [])
+                                            (TType
+                                               (Module.Canonical (Name "elm" "time") "Time")
+                                               "Posix"
+                                               [])))))
+                                [(a (VarLocal "t"))]))
+                        ]))))
+          )))
+
+
+
 andThenDecode1 lambda =
   (a (Call (a (VarForeign mLamdera_Wire2 "andThenDecode"
               (Forall
@@ -370,20 +433,20 @@ andThenDecode1 lambda =
 andMapDecode1 value =
   (a (Call
         (a (VarForeign
-              (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire2")
+              mLamdera_Wire2
               "andMapDecode"
               (Forall
                  (Map.fromList [("a", ()), ("b", ())])
                  (TLambda
                     (TAlias
-                       (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire2")
+                       mLamdera_Wire2
                        "Decoder"
                        [("a", TVar "a")]
                        (Filled
                           (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [TVar "a"])))
                     (TLambda
                        (TAlias
-                          (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire2")
+                          mLamdera_Wire2
                           "Decoder"
                           [("a", TLambda (TVar "a") (TVar "b"))]
                           (Filled
@@ -392,7 +455,7 @@ andMapDecode1 value =
                                 "Decoder"
                                 [TLambda (TVar "a") (TVar "b")])))
                        (TAlias
-                          (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire2")
+                          mLamdera_Wire2
                           "Decoder"
                           [("a", TVar "b")]
                           (Filled
@@ -430,7 +493,7 @@ failDecode =
 
 failEncode =
    (a (VarForeign
-         (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire2")
+         mLamdera_Wire2
          "failEncode"
          (Forall
             (Map.fromList [("a", ())])
