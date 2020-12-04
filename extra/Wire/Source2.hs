@@ -140,7 +140,8 @@ generateCodecs revImportDict (Can.Module _moduName _docs _exports _decls _unions
     qualIfNeeded moduName@(Canonical _ n) =
       case revImportDict Map.!? n of
         Just v -> N.toText v <> "."
-        Nothing -> debug_note (sShow ("Error: qualIfNeeded import not found, please report this!", moduName)) (N.toText n <> ".")
+        Nothing -> (N.toText n <> ".")
+          -- debug_note (sShow ("Error: qualIfNeeded import not found, please report this!", moduName)) (N.toText n <> ".")
 
     evergreenCoreEncoder tipes = fmap fst <$> evergreenCoreCodecs qualIfNeeded tipes
     evergreenCoreDecoder tipes = fmap snd <$> evergreenCoreCodecs qualIfNeeded tipes
@@ -151,11 +152,11 @@ generateCodecs revImportDict (Can.Module _moduName _docs _exports _decls _unions
         tName = N.toText name <> leftWrap (N.toText <$> names)
         encoder =
           --"w2_encode_" <> N.toText name <> " : " <> T.intercalate " -> " (((\v -> "(" <> v <> " -> Lamdera.Wire2.Encoder)") <$> N.toText <$> names) ++ [tName, "Lamdera.Wire2.Encoder"]) <> "\n" <>
-          "w2_encode_" <> N.toText name <> leftWrap (codec <$> names) <> " =\n" <>
+          "expected_w2_encode_" <> N.toText name <> leftWrap (codec <$> names) <> " =\n" <>
           "  " <> encoderForType Map.empty t
         decoder =
           --"w2_decode_" <> N.toText name <> " : " <> T.intercalate " -> " (((\v -> "(Lamdera.Wire2.Decoder " <> v <> ")") <$> N.toText  <$> names) ++ ["Lamdera.Wire2.Decoder (" <> tName <> ")"]) <> "\n" <>
-          "w2_decode_" <> N.toText name <> leftWrap (codec <$> names) <> " =\n"
+          "expected_w2_decode_" <> N.toText name <> leftWrap (codec <$> names) <> " =\n"
           <> (ifDebugT $
              "  let _ = Debug.log \"w2_decode_" <> N.toText name <> "\" \"called\"\n"
           <> "  in\n")
@@ -179,8 +180,8 @@ generateCodecs revImportDict (Can.Module _moduName _docs _exports _decls _unions
                 (\(Can.Ctor name _ _ _) -> N.toChars name)
 
         encoder =
-          "w2_encode_" <> N.toText name <> leftWrap (codec <$> _u_vars) <> " w2_e_val =\n" <>
-          "  case w2_e_val of\n    "
+          "expected_w2_encode_" <> N.toText name <> leftWrap (codec <$> _u_vars) <> " w2v =\n" <>
+          "  case w2v of\n    "
           <> T.intercalate "\n    "
             (case _u_opts of
               _ -> encodeUnion _u_vars sorted_u_alts
@@ -197,12 +198,12 @@ generateCodecs revImportDict (Can.Module _moduName _docs _exports _decls _unions
               N.toText name <> leftWrap (fst <$> nargs tipes) <> " -> " <> sequenceEncWithoutLength (("Lamdera.Wire2.encodeUnsignedInt8 " <> (T.pack $ show i)) : ((\(var, t) -> encoderForType Map.empty t <> " " <> var) <$> nargs tipes)))
 
         decoder =
-          "w2_decode_" <> N.toText name <> leftWrap (codec <$> _u_vars) <> " =\n"
-          <> "  Lamdera.Wire2.decodeUnsignedInt8 |> Lamdera.Wire2.andThenDecode (\\w2_e_val ->\n"
+          "expected_w2_decode_" <> N.toText name <> leftWrap (codec <$> _u_vars) <> " =\n"
+          <> "  Lamdera.Wire2.decodeUnsignedInt8 |> Lamdera.Wire2.andThenDecode (\\w2v ->\n"
           <> (ifDebugT $
-             "    let _ = Debug.log \"w2_decode_" <> N.toText name <> "\" w2_e_val\n"
+             "    let _ = Debug.log \"w2_decode_" <> N.toText name <> "\" w2v\n"
           <> "    in\n")
-          <> "    case w2_e_val of\n      "
+          <> "    case w2v of\n      "
           <> T.intercalate "\n      " (decodeUnion _u_vars sorted_u_alts)
           -- <> "\n      _ -> Lamdera.Wire2.failDecode \"" <> N.toText name <> "\""
           <> "\n      _ -> Lamdera.Wire2.failDecode"
@@ -523,12 +524,13 @@ typedFailEncode qualIfNeeded targs (can, name) =
   T.replace "%CanType%" (T.intercalate " " ([qualIfNeeded can <> N.toText name] <> (toElm <$> targs))) $
   T.replace "%Lambda%" (failEnc (length targs)) $
   -- 8 space indentation to be indented more than body of case branches in generated code
-  "(\n\
-  \        let\n\
-  \          w2_typed_failure : (%CanType%) -> Lamdera.Wire2.Encoder\n\
-  \          w2_typed_failure = Lamdera.Wire2.failEncode\n\
-  \        in %Lambda%\n\
-  \        )"
+  -- "(\n\
+  -- \        let\n\
+  -- \          w2_typed_failure : (%CanType%) -> Lamdera.Wire2.Encoder\n\
+  -- \          w2_typed_failure = Lamdera.Wire2.failEncode\n\
+  -- \        in %Lambda%\n\
+  -- \        )"
+  "Lamdera.Wire2.failEncode"
 
 typedFailDecode :: (Canonical -> T.Text) -> [Can.Type] -> (Canonical, N.Name) -> T.Text
 typedFailDecode qualIfNeeded targs (can, name) =
@@ -569,9 +571,4 @@ typedFailDecode qualIfNeeded targs (can, name) =
   -- \          w2_typed_failure = Lamdera.Wire2.failDecode \"%Name%\"\n\
   -- \        in %Lambda%\n\
   -- \        )"
-  "(\n\
-  \        let\n\
-  \          w2_typed_failure : Lamdera.Wire2.Decoder (%CanType%)\n\
-  \          w2_typed_failure = Lamdera.Wire2.failDecode\n\
-  \        in %Lambda%\n\
-  \        )"
+  "Lamdera.Wire2.failDecode"
