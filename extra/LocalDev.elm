@@ -208,25 +208,6 @@ init flags url key =
                 Err err ->
                     Debug.todo "Flags parse failed; this should be impossible! Please report this issue."
 
-        devbar =
-            case LD.debugR "d" devbarInit of
-                Nothing ->
-                    devbarInit
-
-                Just restoredDevbar ->
-                    { restoredDevbar
-                      -- Avoid scenario where we persisted while expanded and now
-                      -- every refresh it's opening up again without cursor
-                        | expanded = False
-
-                        -- If we've just loaded the page, then we must have connectivity,
-                        -- so avoid an odd scenario where we persisted debvar while disconnected
-                        , liveStatus = Online
-
-                        -- Data might have reset since our last refresh
-                        , showResetNotification = didReset
-                    }
-
         ( ifem, iFeCmds ) =
             userFrontendApp.init url key
 
@@ -275,6 +256,25 @@ init flags url key =
             , versionCheck = VersionUnchecked
             , qrCodeShow = False
             }
+
+        devbar =
+            case LD.debugR "d" devbarInit of
+                Nothing ->
+                    devbarInit
+
+                Just restoredDevbar ->
+                    { restoredDevbar
+                      -- Avoid scenario where we persisted while expanded and now
+                      -- every refresh it's opening up again without cursor
+                        | expanded = False
+
+                        -- If we've just loaded the page, then we must have connectivity,
+                        -- so avoid an odd scenario where we persisted debvar while disconnected
+                        , liveStatus = Online
+
+                        -- Data might have reset since our last refresh
+                        , showResetNotification = didReset
+                    }
     in
     let
         x =

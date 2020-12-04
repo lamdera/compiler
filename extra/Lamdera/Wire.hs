@@ -289,7 +289,8 @@ decoderUnion isTest ifaces pkg modul decls unionName union =
       -- TypedDef
         (a (generatedName))
         -- Map.empty
-        ptvars
+        ptvars $
+        -- addLetLog cname generatedNameString (Utf8.fromChars $ "w2_decode_" ++ Data.Name.toChars unionName)
         (decodeUnsignedInt8 |> andThenDecode1
               (lambda1 (pvar "w2v") $
                 caseof (lvar "w2v") $
@@ -311,6 +312,40 @@ decoderUnion isTest ifaces pkg modul decls unionName union =
         --   (Holey (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [TVar "a"])))
   in
   generated
+
+
+{-
+
+Equivalent of making
+
+x = 1
+
+into
+
+x =
+  let _ = Debug.log "identifier" ()
+  in
+  1
+
+Helpful for tracing evaluation of function calls as a rudimentary decoder debugger!
+
+-}
+addLetLog cname identifier functionBody =
+  (a (Let
+        (Def
+           (a ("_"))
+           []
+           (a (Call
+                 (a (VarDebug
+                       cname
+                       "log"
+                       (Forall
+                          (Map.fromList [("a", ())])
+                          (TLambda (TType (Module.Canonical (Name "elm" "core") "String") "String" []) (TLambda (TVar "a") (TVar "a"))))))
+                 [(a (Str $ identifier)), (a (Unit))])))
+
+         functionBody
+  ))
 
 
 encoderAlias :: Bool -> Map.Map Module.Raw I.Interface -> Pkg.Name -> Src.Module -> Decls -> Data.Name.Name -> Alias -> Def
