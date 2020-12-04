@@ -60,7 +60,7 @@ run () (Flags maybePort) =
       liftIO $ Live.normalLocalDevWrite
 
       Filewatch.watch liveState
-      Lamdera.ReverseProxy.start
+      -- Lamdera.ReverseProxy.start
 
       Live.withEnd liveState $
        httpServe (config port) $

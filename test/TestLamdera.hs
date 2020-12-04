@@ -15,7 +15,7 @@ import qualified Lamdera.CLI.Check
 import qualified Lamdera.CLI.Reset
 import qualified Lamdera.CLI.Live
 import qualified Lamdera.ReverseProxy
-import qualified Lamdera.Diff
+-- import qualified Lamdera.Diff
 import qualified Lamdera.AppConfig
 import qualified Lamdera.Update
 import qualified Lamdera.Compile
