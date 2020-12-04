@@ -910,7 +910,7 @@ trackGhciThread :: ThreadId -> IO ()
 trackGhciThread threadId =
   modifyMVar_ ghciThreads
     (\threads -> do
-      putStrLn $ "Tracking GHCI thread:" ++ show threadId
+      debug_ $ "Tracking GHCI thread:" ++ show threadId
       pure $ threadId:threads
     )
 
@@ -921,10 +921,10 @@ killGhciThreads = do
     (\threads -> do
       case threads of
         [] -> do
-          putStrLn $ "No tracked GHCI threads to kill."
+          debug_ $ "No tracked GHCI threads to kill."
           pure []
         threads -> do
-          putStrLn $ "Killing tracked GHCI threads: " ++ show threads
+          debug_ $ "Killing tracked GHCI threads: " ++ show threads
           mapM killThread threads
           pure []
     )

@@ -441,7 +441,7 @@ waiProxyToSettings getDest wps' manager req0 sendResponse = do
                                 & filter (\(key, _) -> not $ key `Set.member` strippedHeaders)
                                 & addCors req
                               )
-                        putStrLn $ "⬅️  " ++ show (responseStatus, responseHeaders)
+                        debug_ $ "⬅️  " ++ show (responseStatus, responseHeaders)
                         sendResponse $ WAI.responseStream
                             responseStatus
                             responseHeaders
