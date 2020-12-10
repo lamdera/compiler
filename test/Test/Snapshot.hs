@@ -2,7 +2,7 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE QuasiQuotes #-}
 
-module TestSnapshot where
+module Test.Snapshot where
 
 import qualified Data.Map as Map
 import qualified Data.Set as Set
@@ -14,7 +14,7 @@ import EasyTest
 import Lamdera
 import Lamdera.Evergreen.Snapshot
 import NeatInterpolation
-import qualified TestLamdera
+import qualified Test.Lamdera
 
 
 all = EasyTest.run suite
@@ -68,7 +68,7 @@ suite = tests $
 
   , scope "alltypes e2e to disk for lamdera/test/v1/" $ do
 
-      liftIO $ TestLamdera.snapshotWithParams 1 "/Users/mario/lamdera/test/v1" "test-local"
+      liftIO $ Test.Lamdera.snapshotWithParams 1 "/Users/mario/lamdera/test/v1" "test-local"
 
       scope "-> Types.elm" $
         generationFileCheck

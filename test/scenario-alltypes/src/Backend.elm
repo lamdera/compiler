@@ -1,5 +1,6 @@
 module Backend exposing (..)
 
+import Env
 import Html
 import Lamdera exposing (ClientId, SessionId)
 import Types exposing (..)
@@ -20,7 +21,11 @@ app =
 
 init : ( Model, Cmd BackendMsg )
 init =
-    ( { message = "Hello!" }
+    let
+        _ =
+            Env.configBoth
+    in
+    ( { message = Env.configBEOnly }
     , Cmd.none
     )
 

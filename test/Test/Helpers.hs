@@ -1,9 +1,11 @@
-module TestHelp where
+module Test.Helpers where
+
 
 import Lamdera
 import System.Environment (setEnv, unsetEnv, lookupEnv)
 import System.FilePath ((</>))
 import Data.Text as T
+
 
 aggressiveCacheClear project = do
   rmdir $ project </> "elm-stuff"
@@ -16,9 +18,18 @@ withDebug io = do
   io
   unsetEnv "LAMDERA_APP_NAME"
 
+
 withDebugPkg io = do
   setEnv "LDEBUG" "1"
   setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
   io
   unsetEnv "LAMDERA_APP_NAME"
   unsetEnv "LOVR"
+
+
+cp :: String -> String -> IO ()
+cp = Lamdera.copyFile
+
+
+rm :: String -> IO ()
+rm path = Lamdera.remove path

@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module TestLamdera where
+module Test.Lamdera where
 
 import qualified System.Directory as Dir
 import System.FilePath ((</>))
@@ -9,62 +9,26 @@ import System.Environment (setEnv, unsetEnv, lookupEnv)
 
 import Lamdera
 import EasyTest
+
 import qualified Init
 import qualified Lamdera.CLI.Login
-import qualified Lamdera.CLI.Check
-import qualified Lamdera.CLI.Reset
-import qualified Lamdera.CLI.Live
-import qualified Lamdera.ReverseProxy
--- import qualified Lamdera.Diff
 import qualified Lamdera.AppConfig
 import qualified Lamdera.Update
 import qualified Lamdera.Compile
 import qualified Lamdera.Evergreen.Snapshot
-import TestHelp
-import TestWire
+import Test.Helpers
+import Test.Check
+
+-- import qualified Lamdera.CLI.Check
+-- import qualified Lamdera.CLI.Reset
+-- import qualified Lamdera.CLI.Live
+-- import qualified Lamdera.ReverseProxy
+-- import Test.Wire
+
 
 import Test.Main (captureProcessResult)
 
--- Current target for ghci :rr command. See ~/.ghci config file, which should contain
--- something like `:def rr const $ return $ unlines [":r","TestLamdera.target"]`
-target = TestWire.wire
--- target = checkUserConfig
--- target = TestWire.buildAllPackages
--- target = Lamdera.CLI.Login.run () ()
--- target = Dir.withCurrentDirectory "/Users/mario/dev/projects/lamdera-test" $ Lamdera.CLI.Reset.run () ()
--- target = Lamdera.Diff.run
--- target = check
--- target = Lamdera.ReverseProxy.start
-
-
-
-{-
-
-1. Put the following into ~/.ghci
-
-:set -fbyte-code
-:set -fobject-code
-:def rr const $ return $ unlines [":r","TestLamdera.target"]
-:set prompt "\ESC[34mλ: \ESC[m"
-
-Last line is optional, but it's cool! Lambda prompt!
-
-2. Run `stack ghci`
-
-3. Then a feedback loop goes as follows;
-
-  - Make changes to Haskell Wire code
-  - Run `:rr` to recompile + typecheck and auto-run TestLamdera.target
-  - fix any issues, then :rr again
-  - if you want to recompile without running, do :r
-
-Easier to change the target definition than constantly adjust the :def!
-
-Press up arrow to get history of prior commands.
-
--}
-
-all = run TestLamdera.suite
+all = run Test.Lamdera.suite
 
 suite :: Test ()
 suite = tests
@@ -101,7 +65,7 @@ suite = tests
       using setup cleanup test
 
   , pending $ scope "warning about external packages" $ do
-      actual <- catchOutput $ checkWithParamsNoDebug 1 "/Users/mario/lamdera/test/v1" "test-local"
+      actual <- catchOutput $ Test.Check.checkWithParamsNoDebug 1 "/Users/mario/lamdera/test/v1" "test-local"
 
       -- io $ formatHaskellValue "actual" actual
 
@@ -157,95 +121,6 @@ compile = do
   unsetEnv "LDEBUG"
   unsetEnv "ELM_HOME"
 
-
-cp :: String -> String -> IO ()
-cp = Lamdera.copyFile
-
-
-rm :: String -> IO ()
-rm path = Lamdera.remove path
-
-
-
-{-| For quick and general local development testing via `stack ghci` as TestLamdera.check -}
-check = do
-  -- touch "/Users/mario/lamdera/test/v1/src/WireTypes.elm"
-  -- touch "/Users/mario/lamdera/test/v1/src/Env.elm"
-  -- checkWithParams "/Users/mario/lamdera/test/v1" "always-v0"
-  -- checkWithParams "/Users/mario/dev/test/ascii-art" "ascii-art-local"
-  -- checkWithParams "/Users/mario/dev/test/lamdera-minilatex-app" "minilatex"
-  -- checkWithParams "/Users/mario/dev/lamdera-user-projects/beat-the-big-two" "beat-the-big-two"
-  -- checkWithParams "/Users/mario/dev/projects/lamdera-dashboard" "dashboard"
-  -- checkWithParams "/Users/mario/dev/projects/lamdera-test" "testapp"
-  -- checkWithParams "/Users/mario/lamdera/tmp/elm-audio-test0" "elm-audio-test0"
-  checkWithParams "/Users/mario/lamdera-builds/build-test-local/staging" "test-local"
-
-
-{-| Run the `lamdera check` pipeline with specific params -}
-checkWithParams projectPath appName = do
-  setEnv "LAMDERA_APP_NAME" appName
-  setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
-  setEnv "LDEBUG" "1"
-  setEnv "ELM_HOME" "/Users/mario/elm-home-elmx-test"
-  -- setEnv "NOTPROD" "1"
-  setEnv "TOKEN" "a739477eb8bd2acbc251c246438906f4"
-  -- setEnv "HOIST_REBUILD" "1"
-  -- setEnv "VERSION" "1"
-
-  cp "/Users/mario/lamdera/runtime/src/LBR.elm" (projectPath ++ "/src/LBR.elm")
-  cp "/Users/mario/lamdera/runtime/src/LFR.elm" (projectPath ++ "/src/LFR.elm")
-
-  rpcExists <- doesFileExist (projectPath ++ "/src/RPC.elm")
-  onlyWhen (not rpcExists) $
-    cp "/Users/mario/lamdera/runtime/src/RPC_Empty.elm" (projectPath ++ "/src/RPC.elm")
-  cp "/Users/mario/lamdera/runtime/src/LamderaHelpers.elm" (projectPath ++ "/src/LamderaHelpers.elm")
-
-  Dir.withCurrentDirectory projectPath $
-    do
-        Lamdera.CLI.Check.run () ()
-
-  -- rm (projectPath ++ "/src/LBR.elm")
-  -- rm (projectPath ++ "/src/LFR.elm")
-  -- rm (projectPath ++ "/src/RPC.elm")
-  -- rm (projectPath ++ "/src/LamderaHelpers.elm")
-
-  unsetEnv "LAMDERA_APP_NAME"
-  unsetEnv "LOVR"
-  unsetEnv "LDEBUG"
-  unsetEnv "ELM_HOME"
-  unsetEnv "NOTPROD"
-  unsetEnv "TOKEN"
-  unsetEnv "VERSION"
-
-
-
-{-| Run the `lamdera check` pipeline with specific params -}
-checkWithParamsNoDebug version projectPath appName = do
-  unsetEnv "LDEBUG"
-
-  setEnv "LAMDERA_APP_NAME" appName
-  setEnv "VERSION" $ show version
-  setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
-  setEnv "ELM_HOME" "/Users/mario/elm-home-elmx-test"
-  setEnv "NOTPROD" "1"
-
-  cp "/Users/mario/lamdera/runtime/src/LBR.elm" (projectPath ++ "/src/LBR.elm")
-  cp "/Users/mario/lamdera/runtime/src/LFR.elm" (projectPath ++ "/src/LFR.elm")
-  cp "/Users/mario/lamdera/runtime/src/RPC.elm" (projectPath ++ "/src/RPC.elm")
-  cp "/Users/mario/lamdera/runtime/src/LamderaHelpers.elm" (projectPath ++ "/src/LamderaHelpers.elm")
-
-  Dir.withCurrentDirectory projectPath $ Lamdera.CLI.Check.run () ()
-
-  rm (projectPath ++ "/src/LBR.elm")
-  rm (projectPath ++ "/src/LFR.elm")
-  rm (projectPath ++ "/src/RPC.elm")
-  rm (projectPath ++ "/src/LamderaHelpers.elm")
-
-  unsetEnv "LAMDERA_APP_NAME"
-  unsetEnv "VERSION"
-  unsetEnv "LOVR"
-  unsetEnv "ELM_HOME"
-  unsetEnv "NOTPROD"
 
 
 {-| Run the type snapshot part of `lamdera check` only, with specific params -}

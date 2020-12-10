@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
 
-module TestLamderaGenerated where
+module Test.LamderaGenerated where
 
 import EasyTest
 import Control.Applicative

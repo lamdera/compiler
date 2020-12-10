@@ -2,7 +2,7 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE QuasiQuotes #-}
 
-module TestWire where
+module Test.Wire where
 
 import qualified Data.Map as Map
 import qualified Data.Set as Set
