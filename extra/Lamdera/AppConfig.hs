@@ -34,8 +34,8 @@ import qualified Lamdera.Project
 import StandaloneInstances
 
 
-writeUsage :: [FilePath] -> GlobalGraph -> IO ()
-writeUsage rootNames graph = do
+writeUsage :: IO ()
+writeUsage = do
   let
     prep usages =
       usages
@@ -54,20 +54,26 @@ writeUsage rootNames graph = do
         & T.decodeUtf8
 
   cache <- lamderaCache_
+  graph <- loadLamderaAppGraph
 
-  case rootNames of
-    ["Frontend"] -> do
-      let usages = findSecretUses graph "Frontend" "app"
-      -- progress $ hindentFormatValue usages
-      writeUtf8 (cache </> ".lamdera-fe-config") $ prep usages
+  findSecretUses graph "Frontend" "app"
+    & prep
+    & writeUtf8 (cache </> ".lamdera-fe-config")
 
-    ["Backend"] -> do
-      let usages = findSecretUses graph "Backend" "app"
-      -- progress $ hindentFormatValue usages
-      writeUtf8 (cache </> ".lamdera-be-config") $ prep usages
+  findSecretUses graph "Backend" "app"
+    & prep
+    & writeUtf8 (cache </> ".lamdera-be-config")
 
-    _ ->
-      pure ()
+
+loadLamderaAppGraph :: IO GlobalGraph
+loadLamderaAppGraph = do
+  graph_ <- Lamdera.Graph.fullGraph ["src/Frontend.elm", "src/Backend.elm"]
+  case graph_ of
+    Left err ->
+      throw $ Reporting.Exit.makeToReport err
+
+    Right graph ->
+      pure graph
 
 
 findSecretUses :: GlobalGraph -> Data.Name.Name -> Data.Name.Name -> Set.Set (Text, Text, [Text])
@@ -331,14 +337,7 @@ checkUserConfig appName prodTokenM = do
     res_ <- fetchAppConfigItems appName token
     resultOrThrow res_ "I needed to get production app config info"
 
-  graph <- do
-    graph_ <- Lamdera.Graph.fullGraph ["src/Frontend.elm", "src/Backend.elm"]
-    case graph_ of
-      Left err ->
-        throw $ Reporting.Exit.makeToReport err
-
-      Right graph ->
-        pure graph
+  graph <- loadLamderaAppGraph
 
   let
     secretsNormalized secrets =

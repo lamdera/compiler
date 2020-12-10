@@ -22,6 +22,7 @@ module Reporting
   , trackBuild
   --
   , reportGenerate
+  , attemptWithStyle_cleanup -- @LAMDERA
   )
   where
 
@@ -475,3 +476,32 @@ putException e = do
         \ hard to change, so even when we have a couple good examples, it can take some\
         \ time to resolve in a solid way."
     ]
+
+
+
+-- @LAMDERA
+
+-- Clone of Reporting.attemptWithStyle that allows for consistent cleanup
+attemptWithStyle_cleanup :: IO () -> Style -> (x -> Help.Report) -> IO (Either x a) -> IO a
+attemptWithStyle_cleanup cleanup style toReport work =
+  do  result <- work `catch` reportExceptionsNicely
+      case result of
+        Right a ->
+          return a
+
+        Left x ->
+          case style of
+            Silent ->
+              do  cleanup
+                  Exit.exitFailure
+
+            Json ->
+              do  B.hPutBuilder stderr (Encode.encodeUgly (Exit.toJson (toReport x)))
+                  cleanup
+                  Exit.exitFailure
+
+            Terminal mvar ->
+              do  readMVar mvar
+                  Exit.toStderr (toReport x)
+                  cleanup
+                  Exit.exitFailure

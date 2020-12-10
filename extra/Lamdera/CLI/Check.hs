@@ -41,6 +41,7 @@ import qualified Lamdera.Checks
 import qualified Lamdera.Evergreen.Snapshot
 import qualified Lamdera.TypeHash
 import qualified Lamdera.Types
+import qualified Lamdera.Legacy
 
 
 progressPointer t = do
@@ -81,7 +82,7 @@ run () () = do
 
   root <- getProjectRoot
 
-  temporaryCheckOldTypesNeedingMigration inProduction root
+  Lamdera.Legacy.temporaryCheckOldTypesNeedingMigration inProduction root
 
   progressPointer_ "Checking project compiles..."
   checkUserProjectCompiles root
@@ -352,12 +353,11 @@ run () () = do
 
 buildProductionJsFiles :: FilePath -> Bool -> VersionInfo -> IO ()
 buildProductionJsFiles root inProduction versionInfo = do
-
-  progressPointer "Compiling production code..."
-
-  let version = vinfoVersion versionInfo
-
   onlyWhen inProduction $ do
+    let version = vinfoVersion versionInfo
+
+    progressPointer "Compiling production code..."
+
     root <- getProjectRoot
 
     debug $ "Compiling JS for production v" <> show (vinfoVersion versionInfo)
@@ -365,10 +365,6 @@ buildProductionJsFiles root inProduction versionInfo = do
     onlyWhen (version /= 1 && versionInfo == WithMigrations version) $ do
       let migrationPath = root </> "src/Evergreen/Migrate/V" <> show version <> ".elm"
       replaceSnapshotTypeReferences migrationPath version
-
-    -- debug $ "Injecting BACKENDINJECTION " <> (root </> "elm-backend-overrides.js")
-    -- Env.setEnv "BACKENDINJECTION" (root </> "elm-backend-overrides.js")
-    -- _ <- System.readProcess "touch" [root </> "src" </> "Types.elm"] ""
 
     Make.run ["src" </> "LBR.elm"] $
       Make.Flags
@@ -388,32 +384,7 @@ buildProductionJsFiles root inProduction versionInfo = do
         , _docs = Nothing
         }
 
-    -- Project.compile
-    --   Output.Prod
-    --   Output.Client
-    --   (Just (Output.JavaScript Nothing "backend-app.js"))
-    --   Nothing
-    --   summary
-    --   [ "src" </> "LBR.elm" ]
-
-    -- debug $ "Unsetting BACKENDINJECTION"
-    -- Env.unsetEnv "BACKENDINJECTION"
-
-    -- @TODO this is because the migrationCheck does weird terminal stuff that mangles the display... how to fix this?
-    -- sleep 50 -- 50 milliseconds
-
-    -- Project.compile
-    --   Output.Prod
-    --   Output.Client
-    --   (Just (Output.JavaScript Nothing "frontend-app.js"))
-    --   Nothing
-    --   summary
-    --   [ "src" </> "LFR.elm" ]
-
-
-    -- @TODO this is because the migrationCheck does weird terminal stuff that mangles the display... how to fix this?
-    -- sleep 50 -- 50 milliseconds
-
+    Lamdera.AppConfig.writeUsage
 
 
 replaceSnapshotTypeReferences migrationPath version = do
@@ -458,9 +429,6 @@ checkUserProjectCompiles root = do
   Lamdera.Compile.make root ("src" </> "Frontend.elm")
   Lamdera.Compile.make root ("src" </> "Backend.elm")
 
-  -- @TODO this is because the migrationCheck does weird terminal stuff that mangles the display... how to fix this?
-  -- sleep 50 -- 50 milliseconds
-
 
 migrationCheck :: FilePath -> VersionInfo -> IO ()
 migrationCheck root nextVersion = do
@@ -485,17 +453,9 @@ migrationCheck root nextVersion = do
   gen <- Lamdera.Evergreen.createLamderaGenerated root nextVersion
   writeUtf8 lamderaCheckBothPath gen
 
-  (Dir.withCurrentDirectory root $
-    Make.run [ lamderaCheckBothPath ] $
-        Make.Flags
-          { _debug = False
-          , _optimize = False
-          , _output = Just (Make.DevNull)
-          , _report = Nothing
-          , _docs = Nothing
-          })
-    `catchError` (\err -> do
-      debug "catchError: Cleaning up build scaffold"
+  let
+    cleanup = do
+      debug "make_cleanup: Cleaning up build scaffold"
       -- Remove our temporarily checker file
       remove lamderaCheckBothPath
 
@@ -504,8 +464,17 @@ migrationCheck root nextVersion = do
         copyFile migrationPathBk migrationPath
         remove migrationPathBk
 
-      throwError err
-    )
+      pure ()
+
+  Dir.withCurrentDirectory root $
+    Make.run_cleanup cleanup [ lamderaCheckBothPath ] $
+        Make.Flags
+          { _debug = False
+          , _optimize = False
+          , _output = Just (Make.DevNull)
+          , _report = Nothing
+          , _docs = Nothing
+          }
 
   -- @TODO this is because the migrationCheck does weird terminal stuff that mangles the display... how to fix this?
   sleep 50 -- 50 milliseconds

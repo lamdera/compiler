@@ -7,6 +7,7 @@ module Make
   , reportType
   , output
   , docsFile
+  , run_cleanup -- @LAMDERA
   )
   where
 
@@ -317,3 +318,18 @@ hasExt ext path =
 isDevNull :: String -> Bool
 isDevNull name =
   name == "/dev/null" || name == "NUL" || name == "$null"
+
+
+
+-- @LAMDERA
+
+
+-- Clone of run that uses attemptWithStyle_cleanup
+run_cleanup :: IO () -> [FilePath] -> Flags -> IO ()
+run_cleanup cleanup paths flags@(Flags _ _ _ report _) =
+  do  style <- getStyle report
+      maybeRoot <- Stuff.findRoot
+      Reporting.attemptWithStyle_cleanup cleanup style Exit.makeToReport $
+        case maybeRoot of
+          Just root -> runHelp root paths style flags
+          Nothing   -> return $ Left $ Exit.MakeNoOutline

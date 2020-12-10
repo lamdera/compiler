@@ -62,7 +62,6 @@ expectFileContains needle file =
         ok
 
 
-
 {-| For quick and general local development testing via `stack ghci` as TestLamdera.check -}
 check = do
   -- touch "/Users/mario/lamdera/test/v1/src/WireTypes.elm"
@@ -78,13 +77,14 @@ check = do
 
 asUser projectPath appName = do
   setEnv "LAMDERA_APP_NAME" appName
+  setEnv "NOTPROD" "1"
   setEnv "ELM_HOME" "/Users/mario/elm-home-elmx-test"
 
   Dir.withCurrentDirectory projectPath $
-    do
-        Lamdera.CLI.Check.run () ()
+    Lamdera.CLI.Check.run () ()
 
   unsetEnv "LAMDERA_APP_NAME"
+  unsetEnv "NOTPROD"
   unsetEnv "ELM_HOME"
 
 

@@ -42,9 +42,6 @@ import qualified Elm.Constraint as C
 import qualified Stuff
 import qualified Reporting
 
-
-
-
 import qualified Init
 import qualified Make
 
@@ -62,11 +59,7 @@ suite = tests $
 
 wire :: IO ()
 wire = do
-  let project = "/Users/mario/dev/projects/elmx/test"
-  -- let project = "/Users/mario/lamdera/test/v1"
-  -- let project = "/Users/mario/dev/projects/elmx/test/architecture-test"
-  -- let project = "/Users/mario/dev/projects/elmx/test/elm-units"
-  -- let project = "/Users/mario/dev/projects/lamdera-dashboard"
+  let project = "/Users/mario/dev/projects/elmx/test/scenario-alltypes"
 
   setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
   setEnv "LTEST" "1"

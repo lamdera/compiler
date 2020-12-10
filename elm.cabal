@@ -246,6 +246,7 @@ Executable elmx
         Network.HTTP.ReverseProxy
 
         -- Lamdera Legacy --
+        Lamdera.Legacy
         -- Wire.Source
         -- Wire.Source2
 
@@ -255,16 +256,18 @@ Executable elmx
         -- Fusion.Bytes
         -- Fusion.Encode
         -- Fusion.Binary
+        -- Lamdera.Diff
 
         -- Testing:
         EasyTest
         Test
-        TestHelp
-        TestLamdera
-        TestLamderaGenerated
-        TestSnapshot
-        TestTypeHashes
-        TestWire
+        Test.Helpers
+        Test.Check
+        Test.Lamdera
+        Test.LamderaGenerated
+        Test.Snapshot
+        Test.TypeHashes
+        Test.Wire
 
         -- Debug helpers --
         StandaloneInstances
