@@ -1552,7 +1552,7 @@ toHttpErrorReport title err context =
             , D.reflow $
                 "This may mean some online endpoint changed in an unexpected way, so if does not\
                 \ seem like something on your side is causing this (e.g. firewall) please report\
-                \ this to https://github.com/elm/compiler/issues with your operating system, Elm\
+                \ this to Discord with your operating system, Elm\
                 \ version, the command you ran, the terminal output, and any additional information\
                 \ that can help others reproduce the error!"
             ]

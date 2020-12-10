@@ -1,5 +1,6 @@
-
 ## Lamdera
+
+### Development approach
 
 The `/extra` folder contains all the Lamdera extension code integrated into the Elm compiler.
 
@@ -8,16 +9,37 @@ The integration philosophy is:
 - Inject as small a surface area into actual compiler code as feasibly possible
   - You'll see this done with certain tricks using `&` and `$` to, wherever possible, only add additional lines to source, without modifying any existing lines
   - This means merge conflicts are minimized when trying to stay up to date with upstream Elm Compiler
+  - Sometimes entire functions are added to the bottom of files, usually when the current file defines a bunch of types that are needed and it's messier to have it external
 
-- Otherwise use Elm compiler source liberally inside `/extra`
-  - We don't want to reinvent the wheel on core compiler concepts, and can lean heavily on Haskell's type system to tell us when there are problems due to core type changes upstream
+The idea is that searching the project for `import.*Lamdera` and `@LAMDERA` will reveal every single `/builder` and `/compiler` core file that has some Lamdera related modification.
 
-The idea is that searching the project for `import Lamdera` will reveal every single `/builder` and `/compiler` core file that has some Lamdera related modification.
+Alternatively the [diff of `master` and `lamdera` branches](https://github.com/lamdera/compiler/compare/master...lamdera) gives a nice overview of all modifications in the "Files Changed" view.
 
+Otherwise:
+
+  - Use Elm compiler source liberally inside `/extra`
+  - We don't want to reinvent the wheel on core compiler concepts, and can lean heavily on Haskell's type system to tell us when there are problems due to core type changes upstream in future
+  - Future developers might find things might seem obviously duplicated - if there's no comment and blame history is not helpful, it was likely accidental (didn't know compiler already had that functionality/code) or transient (i.e. features carried up from 0.19 over the years)
+
+If in doubt, please ask!
+
+
+### Tests
+
+The `test` folder contains tests for aspects of the additional functionality. Most are at the acceptance test level, these have been the most useful so far.
+
+The test framework is a very lightweight vendored copy of `EasyTest.hs`, defined entirely in that one file. There are some `test/Test/Helpers.hs` too.
+
+The easiest way to run is from the project root:
+
+```
+$ stack ghci
+λ: Tests.all
+```
 
 ### Lamdera.hs
 
-This File acts as our custom Prelude. There is some duplication of core compiler functions to avoid cyclic import issues.
+This File acts as a rudimentary custom Prelude. There is some duplication of core compiler functions to avoid cyclic import issues, mainly File IO helpers.
 
 
 ### `Sanity` (or, how to deal with `Map.!: given key is not an element in the map`)
@@ -41,7 +63,7 @@ CallStack (from HasCallStack):
   !, called at /Users/mario/dev/projects/elmx/compiler/src/Type/Solve.hs:100:42 in main:Type.Solve
 ```
 
-Now we have the actual usage point where it failed. If we want to debug it, `Sanity.debug` helps:
+Now we have the actual usage point where it failed. If we want to debug it, `Sanity.debugFind` and `Sanity.debugFindCtx` help:
 
 ```
 do  actual <- makeCopy rank pools (env ! name)
@@ -61,10 +83,12 @@ Run `./removeSanity.sh` to revert the debugging changes!
 
 Used by `lamdera live`, this file needs to be packaged with parcel into `/extra/dist/live.js` and then inlined by the compiler.
 
-To package:
+To package whenever changes are made to this file:
 
 ```
 cd extra
 npm i
 parcel build live.js --no-source-maps
 ```
+
+Then re-run the main build with `stack install`.
