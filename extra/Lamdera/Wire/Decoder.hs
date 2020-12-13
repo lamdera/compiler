@@ -277,11 +277,16 @@ decoderForType ifaces cname tipe =
               , decoderForType ifaces cname val
               ]))
 
-    TType (Module.Canonical (Name "elm" "bytes") "Bytes") "Bytes" params ->
-      decodeBytes
+    TType (Module.Canonical (Name "elm" "bytes") "Bytes") "Bytes" _ ->
+      callDecoder "decodeBytes" tipe
 
     TType (Module.Canonical (Name "elm" "time") "Time") "Posix" params ->
       decodeTime
+
+
+    -- Frontend only JS reference types
+    TType (Module.Canonical (Name "elm" "file") "File") "File" params -> callDecoder "decodeRef" tipe
+
 
     TType moduleName typeName params ->
       let

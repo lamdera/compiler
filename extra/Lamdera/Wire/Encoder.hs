@@ -153,11 +153,11 @@ encoderForType depth ifaces cname tipe =
                         tLamdera_Wire2__Encoder))))))
 
 
-    TType (Module.Canonical (Name "elm" "bytes") "Bytes") "Bytes" params ->
+    TType (Module.Canonical (Name "elm" "bytes") "Bytes") "Bytes" _ ->
       (a (VarForeign mLamdera_Wire2 "encodeBytes" (Forall Map.empty (TLambda tipe tLamdera_Wire2__Encoder))))
 
 
-    TType (Module.Canonical (Name "elm" "time") "Time") "Posix" params ->
+    TType (Module.Canonical (Name "elm" "time") "Time") "Posix" _ ->
       (a (Lambda
             [(a (PVar "t"))]
             (a (Call
@@ -184,6 +184,11 @@ encoderForType depth ifaces cname tipe =
                                       (TType (Module.Canonical (Name "elm" "core") "Basics") "Int" [])))))
                           [(a (VarLocal "t"))]))
                   ]))))
+
+
+    -- Frontend only JS reference types
+    TType (Module.Canonical (Name "elm" "file") "File") "File" _ ->
+      (a (VarForeign mLamdera_Wire2 "encodeRef" (Forall Map.empty (TLambda tipe tLamdera_Wire2__Encoder))))
 
 
     TType moduleName typeName params ->
@@ -272,8 +277,12 @@ deepEncoderForType depth ifaces cname tipe =
     TType (Module.Canonical (Name "elm" "core") "Dict") "Dict" [key, val] ->
       call (encoderForType depth ifaces cname tipe) [ deepEncoderForType depth ifaces cname key, deepEncoderForType depth ifaces cname val ]
 
-    TType (Module.Canonical (Name "elm" "bytes") "Bytes") "Bytes" params -> encoderForType depth ifaces cname tipe
-    TType (Module.Canonical (Name "elm" "time") "Time") "Posix" params -> encoderForType depth ifaces cname tipe
+    TType (Module.Canonical (Name "elm" "bytes") "Bytes") "Bytes" _ -> encoderForType depth ifaces cname tipe
+    TType (Module.Canonical (Name "elm" "time") "Time") "Posix" _ -> encoderForType depth ifaces cname tipe
+
+    -- Frontend only JS reference types
+    TType (Module.Canonical (Name "elm" "file") "File") "File" _ -> encoderForType depth ifaces cname tipe
+
 
     TType moduleName typeName params ->
       if isUnsupportedKernelType tipe
@@ -340,6 +349,10 @@ encodeTypeValue depth ifaces cname tipe value =
 
     TType (Module.Canonical (Name "elm" "bytes") "Bytes") "Bytes" _ -> call (encoderForType depth ifaces cname tipe) [ value ]
     TType (Module.Canonical (Name "elm" "time") "Time") "Posix" _ -> call (encoderForType depth ifaces cname tipe) [ value ]
+
+    -- Frontend only JS reference types
+    TType (Module.Canonical (Name "elm" "file") "File") "File" _ -> call (encoderForType depth ifaces cname tipe) [ value ]
+
 
     TType moduleName typeName params ->
       if isUnsupportedKernelType tipe

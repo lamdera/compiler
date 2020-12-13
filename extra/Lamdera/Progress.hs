@@ -35,5 +35,6 @@ throw rep = throwDoc $ Help.reportToDoc rep
 throwDoc :: D.Doc -> IO a
 throwDoc doc = do
   Help.toStdout doc
+  hPutStr stdout "\n"
   hFlush stdout
   exitFailure

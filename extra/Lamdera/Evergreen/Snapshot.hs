@@ -626,7 +626,6 @@ canonicalToFt version scope interfaces recursionSet canonical tvarMap =
         ("elm", "virtual-dom", "VirtualDom", "Node")      -> kernelError
         ("elm", "virtual-dom", "VirtualDom", "Attribute") -> kernelError
         ("elm", "virtual-dom", "VirtualDom", "Handler")   -> kernelError
-        ("elm", "file", "File", "File")                   -> kernelError
         ("elm", "core", "Process", "Id")                  -> kernelError
         ("elm", "core", "Platform", "ProcessId")          -> kernelError
         ("elm", "core", "Platform", "Program")            -> kernelError
@@ -650,6 +649,11 @@ canonicalToFt version scope interfaces recursionSet canonical tvarMap =
         -- @TODO remove once we add test for functions in custom types
         ("elm", "url", "Url.Parser", "Parser") -> kernelError
         ("elm", "url", "Url.Parser.Internal", "QueryParser") -> kernelError
+
+
+        -- Kernel concessions for Frontend Model and Msg
+        ("elm", "file", "File", "File") -> ("File", Set.singleton moduleName, Map.empty)
+
 
         -- @TODO improve; These aliases will show up as VirtualDom errors which might confuse users
         -- ("elm", "svg", "Svg", "Svg") -> kernelError

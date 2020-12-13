@@ -83,7 +83,7 @@ getForeignSig tipe moduleName generatedName ifaces =
 
 
 
-{- NOTE: Any recursive usage of these types in user-code will get caught in the TypeDiff,
+{- NOTE: Any recursive usage of these types in user-code will get caught in the TypeHash first,
 the mapping there has been checked extensively against types in packages that are backed by Kernel.
 
 But we still need to know about them in order to create the right wire encoder/decoder injections
@@ -111,11 +111,15 @@ isUnsupportedKernelType tipe =
     TType (Module.Canonical (Name "elm" "virtualdom") "VirtualDom") "Attribute" _ -> True
     TType (Module.Canonical (Name "elm" "virtualdom") "VirtualDom") "Handler" _ -> True
 
-    TType (Module.Canonical (Name "elm" "file") "File") "File" _ -> True
-
     TType (Module.Canonical (Name "elm" "json") "Json.Encode") "Value" _ -> True -- js type
     TType (Module.Canonical (Name "elm" "json") "Json.Decode") "Decoder" _ -> True -- js type
     TType (Module.Canonical (Name "elm" "json") "Json.Decode") "Value" _ -> True -- js type
+
+
+    -- JS types we are supporting through JS ref encodings. These serialisations
+    -- CANNOT BE DECODED OUTSIDE OF THE JS SCOPE THEY WERE ENCODED IN!
+    TType (Module.Canonical (Name "elm" "file") "File") "File" _ -> False
+
 
     TAlias moduleName typeName tvars (Holey tipe) -> isUnsupportedKernelType tipe
     TAlias moduleName typeName tvars (Filled tipe) -> isUnsupportedKernelType tipe
@@ -325,19 +329,6 @@ decodeUnsignedInt8 =
                     [TType (Module.Canonical (Name "elm" "core") "Basics") "Int" []]))))))
 
 
-decodeBytes =
- (a (VarForeign mLamdera_Wire2 "decodeBytes"
-       (Forall
-          Map.empty
-          (TAlias
-             mLamdera_Wire2
-             "Decoder"
-             [("a", TType (Module.Canonical (Name "elm" "bytes") "Bytes") "Bytes" [])]
-             (Filled
-                (TType
-                   (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
-                   "Decoder"
-                   [TType (Module.Canonical (Name "elm" "bytes") "Bytes") "Bytes" []]))))))
 
 
 decodeTime =

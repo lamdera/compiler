@@ -21,6 +21,7 @@ data DiffableType
   | DTuple DiffableType DiffableType
   | DUnit
   | DRecursion Text
+  | DKernelBrowser Text
   | DError Text
   | DExternalWarning (Text, Text, Text, Text) DiffableType
   deriving (Show)
