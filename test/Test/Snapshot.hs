@@ -81,6 +81,7 @@ suite = tests $
           import Dict
           import Evergreen.V1.Fusion
           import Evergreen.V1.WireTypes
+          import File
           import Http
           import Lamdera
           import Set
@@ -156,6 +157,8 @@ suite = tests $
               | RPCRes (Result Http.Error Int)
               | EditLocal Evergreen.V1.Fusion.FType
               | FusionQuery (List Evergreen.V1.Fusion.FType)
+              | ClickedSelectFile
+              | FileSelected File
 
 
           type ToBackend

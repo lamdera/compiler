@@ -37,4 +37,6 @@ expected_w2_encode_AliasResult =
 
 
 expected_w2_decode_AliasResult =
-    Lamdera.Wire2.decodeResult Lamdera.Wire2.decodeString Lamdera.Wire2.decodeInt
+    Lamdera.Wire2.decodeResult
+        Lamdera.Wire2.decodeString
+        Lamdera.Wire2.decodeInt

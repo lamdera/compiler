@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Test where
 
 import EasyTest
@@ -7,6 +9,15 @@ import qualified Test.Snapshot
 import qualified Test.Lamdera
 import qualified Test.Check
 import qualified Test.Wire
+
+import qualified Lamdera.Compile
+import qualified Lamdera.Canonical
+import qualified Lamdera.Evaluate
+
+import Develop
+
+import qualified System.Directory as Dir
+import System.FilePath ((</>))
 
 {-
 
@@ -43,7 +54,53 @@ Press up arrow to get history of prior commands.
 -- target = Dir.withCurrentDirectory "/Users/mario/dev/projects/lamdera-test" $ Lamdera.CLI.Reset.run () ()
 -- target = Lamdera.Diff.run
 -- target = Lamdera.ReverseProxy.start
-target = Test.Check.asUser "/Users/mario/dev/projects/lamdera-dashboard" "dashboard"
+-- target = Test.Check.asUser "/Users/mario/dev/projects/lamdera-dashboard" "dashboard"
+
+target = do
+  setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
+  setEnv "LDEBUG" "1"
+  setEnv "ELM_HOME" "/Users/mario/elm-home-elmx-test"
+  let project = "/Users/mario/lamdera/test/v1"
+  -- let project = "/Users/mario/dev/test/elm-color"
+  -- let project = "/Users/mario/dev/test/json"
+  -- Bust Elm's caching with this one weird trick!
+  Dir.removeDirectoryRecursive $ project </> "/Users/mario/elm-home-elmx-test"
+  Dir.removeDirectoryRecursive $ project </> "elm-stuff"
+  -- touch $ project </> "src/Frontend.elm"
+  -- touch $ project </> "src/Backend.elm"
+  -- Lamdera.Compile.make_ project
+  Lamdera.Compile.makeDev project "src/Frontend.elm"
+  Lamdera.Compile.makeDev project "src/Backend.elm"
+  unsetEnv "LOVR"
+  unsetEnv "LDEBUG"
+  unsetEnv "ELM_HOME"
+
+{- Dynamic testing of lamdera live with managed thread kill + reload -}
+-- target = do
+--   setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
+--   setEnv "LDEBUG" "1"
+--
+--   let p = "/Users/mario/lamdera/test/v1"
+--   Dir.setCurrentDirectory p
+--   withCurrentDirectory p $ asGhciThread $ withCurrentDirectory p $ Develop.run () (Develop.Flags Nothing)
+--
+--   unsetEnv "LOVR"
+--   unsetEnv "LDEBUG"
+
+
+{- WIP interpreter -}
+-- target =
+--   Lamdera.Evaluate.exec
+
+-- target = do
+--   let project = "/Users/mario/dev/projects/lamdera/overrides/packages/elm/bytes/1.0.8"
+--   Lamdera.Compile.make_ project
+  -- Lamdera.Canonical.showDef
+  --   project
+  --   "src/Bytes/Encode.elm"
+  --   "withDebug"
+
+
 
 
 all =
