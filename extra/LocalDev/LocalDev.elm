@@ -30,7 +30,7 @@ import Json.Decode as D
 import Json.Encode as E
 import Lamdera exposing (ClientId, Key, SessionId, Url)
 import Lamdera.Debug as LD
-import Lamdera.Wire2 as Wire
+import Lamdera.Wire3 as Wire
 import Process
 import Task
 import Time
@@ -42,7 +42,7 @@ import Types exposing (BackendModel, BackendMsg, FrontendModel, FrontendMsg, ToB
 
 
 lamderaVersion =
-    "alpha11"
+    "alpha12"
 
 
 port sendToBackend : E.Value -> Cmd msg
@@ -499,15 +499,24 @@ update msg m =
 
             else
                 let
+                    bytes_encode =
+                        Wire.bytesEncode (Types.w2_encode_ToBackend toBackend)
+
+                    int_list =
+                        Wire.intListFromBytes bytes_encode
+
                     _ =
-                        log "F▶️  " toBackend
+                        log "F▶️  " ( toBackend, bytes_encode, int_list )
 
                     payload =
                         E.object
                             [ ( "t", E.string "ToBackend" )
                             , ( "s", E.string m.sessionId )
                             , ( "c", E.string m.clientId )
-                            , ( "i", E.list E.int (Wire.intListFromBytes (Wire.bytesEncode (Types.w2_encode_ToBackend toBackend))) )
+                            , ( "i"
+                              , E.list E.int
+                                    int_list
+                              )
                             ]
                 in
                 ( m

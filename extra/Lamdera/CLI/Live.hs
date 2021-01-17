@@ -164,7 +164,7 @@ serveUnmatchedUrlsToIndex serveElm =
 
 lamderaLocalDev :: BS.ByteString
 lamderaLocalDev =
-  $(bsToExp =<< runIO (BS.readFile ("extra" </> "LocalDev.elm")))
+  $(bsToExp =<< runIO (BS.readFile ("extra" </> "LocalDev" </> "LocalDev.elm")))
 
 
 normalLocalDevWrite = do

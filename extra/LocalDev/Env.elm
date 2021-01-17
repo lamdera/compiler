@@ -1,0 +1,5 @@
+module Env exposing (..)
+
+
+empty =
+    ""
