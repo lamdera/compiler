@@ -45,7 +45,7 @@ import StandaloneInstances
 type snapshots  -}
 run :: Int -> IO ()
 run version = do
-  ifaces <- Lamdera.Interfaces.all
+  ifaces <- Lamdera.Interfaces.all [ "src/Types.elm" ]
   snapshotCurrentTypes version ifaces (ifaces ! "Types")
 
 

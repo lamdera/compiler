@@ -26,10 +26,14 @@ import qualified Stuff
 import Lamdera
 
 
-all :: IO (Map.Map ModuleName.Raw I.Interface)
-all = do
+all :: [FilePath] -> IO (Map.Map ModuleName.Raw I.Interface)
+all paths = do
   artifactsDeps <- allDepArtifacts
-  ifacesProject <- allProjectInterfaces
+  ifacesProject <-
+    case paths of
+      [] -> error "Lamdera.Interfaces.all must have at least one path specified!"
+      path:paths -> allProjectInterfaces (NE.List path paths)
+
   pure $ Map.union ifacesProject (_ifaces artifactsDeps)
 
 
@@ -87,14 +91,13 @@ toUnique oneOrMore =
     OneOrMore.More _ _  -> Nothing
 
 
-allProjectInterfaces :: IO (Map.Map ModuleName.Raw I.Interface)
-allProjectInterfaces =
+allProjectInterfaces :: NE.List FilePath -> IO (Map.Map ModuleName.Raw I.Interface)
+allProjectInterfaces paths =
   BW.withScope $ \scope -> do
     root <- Lamdera.getProjectRoot
     runTaskUnsafe $
       do  details    <- Task.eio Exit.ReactorBadDetails $ Details.load Reporting.silent scope root
-          artifacts  <- Task.eio Exit.ReactorBadBuild $ Build.fromPaths Reporting.silent root details
-            (NE.singleton $ "src" </> "Types.elm")
+          artifacts  <- Task.eio Exit.ReactorBadBuild $ Build.fromPaths Reporting.silent root details paths
 
           -- Task.io $ putStrLn $ show $ fmap (moduleName) (Build._modules artifacts)
           Task.io $ extractInterfaces $ Build._modules artifacts

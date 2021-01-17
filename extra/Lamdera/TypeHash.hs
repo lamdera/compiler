@@ -63,7 +63,7 @@ lamderaTypes =
 calculateHashes :: IO ([Text], [(Text, [Text], DiffableType)])
 calculateHashes = do
 
-  interfaces <- Lamdera.Interfaces.all
+  interfaces <- Lamdera.Interfaces.all [ "src/Types.elm" ]
   inDebug <- Lamdera.isDebug
 
   let
