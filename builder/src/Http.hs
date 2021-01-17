@@ -45,6 +45,7 @@ import qualified Elm.Version as V
 
 
 import Lamdera
+import qualified Data.Text as T
 
 -- MANAGER
 
@@ -177,7 +178,7 @@ getArchive
   -> ((Sha, Zip.Archive) -> IO (Either e a))
   -> IO (Either e a)
 getArchive manager url onError err onSuccess =
-  -- Lamdera.alternativeImplementation (lamderaGetArchive manager url onError err onSuccess) $
+  Lamdera.alternativeImplementation (lamderaGetArchive manager url onError err onSuccess) $
   handle (handleSomeException url onError) $
   handle (handleHttpException url onError) $
   do  req0 <- parseUrlThrow url
@@ -296,13 +297,30 @@ lamderaGetArchive manager url onError err onSuccess =
       isDebug <- Lamdera.isDebug
       pkgsPath <- Lamdera.getLamderaPkgPath
       let
-        package = "lamdera/codecs" -- @TODO extract from URL instead of hardcoding
+        (package, version) =
+          if stringContains "static.lamdera.com" url then
+            ("lamdera/codecs", "1.0.0")
+          else
+            url
+              & T.pack
+              & T.replace "https://github.com/" ""
+              & T.splitOn "/zipball/"
+              & (\x ->
+                  case x of
+                    package:version:_ ->
+                      (T.unpack package, T.unpack version)
+                    _ ->
+                      error $ "unexpected URL parts: " <> show x
+              )
+
         packageZip = (pkgsPath & withDefault "<no-packages-path-override-set>") <> "/packages/" <> package <> "/pack.zip"
-        packageRoot = (pkgsPath & withDefault "<no-packages-path-override-set>") <> "/packages/" <> package <> "/1.0.0"
+        packageRoot = (pkgsPath & withDefault "<no-packages-path-override-set>") <> "/packages/" <> package <> "/" <> version
 
       overrideExists <- doesDirectoryExist packageRoot
 
-      if (isDebug && overrideExists && stringContains "lamdera/codecs" url) -- @TODO extract from URL instead of hardcoding
+      -- debug_ $ "🔥: " <> show (package, packageZip, packageRoot)
+
+      if (isDebug && overrideExists && stringContains package url)
         then do
           debug_ $ "🔁 Using local package override: " <> packageZip
           zipBs <- bsReadFile packageZip
