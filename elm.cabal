@@ -250,6 +250,8 @@ Executable elmx
         -- Future --
         Lamdera.ReverseProxy
         Network.HTTP.ReverseProxy
+        Lamdera.Evaluate
+        Lamdera.Canonical
 
         -- Lamdera Legacy --
         Lamdera.Legacy

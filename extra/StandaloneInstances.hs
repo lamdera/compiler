@@ -79,6 +79,8 @@ deriving instance Show AST.Optimized.Def
 deriving instance Show AST.Optimized.Destructor
 deriving instance Show AST.Optimized.Path
 deriving instance Show AST.Optimized.EffectsType
+deriving instance Show AST.Optimized.LocalGraph
+deriving instance Show AST.Optimized.Main
 
 deriving instance Show AST.Canonical.Type
 deriving instance Show AST.Canonical.FieldType
@@ -296,8 +298,10 @@ instance Show Elm.Package.Name where
   show (Elm.Package.Name author project) =
     "Name " ++ (quoted . Utf8.toChars) author <> " " <> (quoted . Utf8.toChars) project
 
-instance Show Elm.Interface.Interface where
-  show _ = "\"<Elm.Interface.Interface>\""
+deriving instance Show Elm.Interface.Interface
+
+instance Show Elm.Interface.Binop where
+  show _ = "\"<Elm.Interface.Binop>\""
 
 instance Show Elm.Interface.DependencyInterface where
   show _ = "\"<Elm.Interface.DependencyInterface>\""
