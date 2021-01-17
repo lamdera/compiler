@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Lamdera.Wire.Graph where
+module Lamdera.Wire2.Graph where
 
 import qualified Data.Map as Map
 import qualified Data.Graph as Graph
@@ -9,7 +9,7 @@ import AST.Canonical
 import qualified Reporting.Annotation as A
 
 import Lamdera
-import Lamdera.Wire.Helpers
+import Lamdera.Wire2.Helpers
 
 
 -- The Decls data structure must be topologically sorted by LocalVar refs,

@@ -29,9 +29,17 @@ import qualified Type.Solve as Type
 -- import System.IO.Unsafe (unsafePerformIO)
 
 
-import qualified Lamdera.Wire
-import qualified Lamdera.Wire.Interfaces
+-- @DEPRECATED for alpha12 release migration only
+import qualified Lamdera.Wire2.Core
+import qualified Lamdera.Wire2.Interfaces
+
+import qualified Lamdera.Wire3.Core
+import qualified Lamdera.Wire3.Interfaces
+import qualified Lamdera.Wire3.Helpers as Lamdera.Wire
 import Lamdera
+import qualified CanSer.CanSer as ToSource
+import qualified Data.Text as T
+
 -- import StandaloneInstances
 
 -- COMPILE
@@ -50,25 +58,41 @@ compile pkg ifaces modul = do
   -- @TEMPORARY debugging
   -- Inject stub definitions for wire functions, so the canonicalize phase can run
   -- Necessary for user-code which references yet-to-be generated functions
-  let modul_ = Lamdera.Wire.Interfaces.modifyModul pkg ifaces modul
+  let modul_ =
+        modul
+          & Lamdera.Wire3.Interfaces.modifyModul pkg ifaces
+          & Lamdera.Wire2.Interfaces.modifyModul pkg ifaces
+
   -- ()          <- debugPassText "starting canonical" "" (pure ())
-  canonical  <- canonicalize pkg ifaces modul_
+  canonical0  <- canonicalize pkg ifaces modul_
   -- ()          <- debugPassText "starting canonical2" "" (pure ())
 
   -- Add Canonical Wire gens, i.e. the `w2_[en|de]code_TYPENAME` functions
-  canonical_   <- Lamdera.Wire.addWireGenerations canonical pkg ifaces modul_
+  canonical1 <- Lamdera.Wire3.Core.addWireGenerations canonical0 pkg ifaces modul_
+  canonical2 <- Lamdera.Wire2.Core.addWireGenerations canonical1 pkg ifaces modul_
 
   -- () <- unsafePerformIO $ do
-  --   writeUtf8 "canprinted_without.txt" (hindentFormatValue canonical_)
+  --   case (pkg, Src.getName modul) of
+  --     ((Pkg.Name "elm" "bytes"), "Bytes.Decode") -> do
+  --       canonical_
+  --         & Can._decls
+  --         & Lamdera.Wire.Helpers.findDef "testing"
+  --         & formatHaskellValue "Compile.findDef"
+  --
+  --       -- atomicPutStrLn $ T.unpack $  ToSource.convert canonical
+  --       pure ()
+  --     _ ->
+  --       pure ()
+  --   -- writeUtf8 "canprinted_without.txt" (hindentFormatValue canonical_)
   --   pure (pure ())
 
   -- ()          <- debugPassText "starting typecheck" "" (pure ())
-  annotations <- typeCheck modul_ canonical_
+  annotations <- typeCheck modul_ canonical2
   -- ()          <- debugPassText "starting nitpick" "" (pure ())
-  ()          <- nitpick canonical_
+  ()          <- nitpick canonical2
   -- ()          <- debugPassText "starting optimize" "" (pure ())
-  objects     <- optimize modul_ annotations canonical_
-  return (Artifacts canonical_ annotations objects)
+  objects     <- optimize modul_ annotations canonical2
+  return (Artifacts canonical2 annotations objects)
 
 
 {- The original compile function for reference -}

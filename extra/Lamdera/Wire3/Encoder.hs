@@ -2,7 +2,7 @@
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE BangPatterns #-}
 
-module Lamdera.Wire.Encoder where
+module Lamdera.Wire3.Encoder where
 
 import System.IO.Unsafe (unsafePerformIO)
 import qualified Data.Map as Map
@@ -29,7 +29,7 @@ import Lamdera
 import StandaloneInstances
 import qualified CanSer.CanSer as ToSource
 
-import Lamdera.Wire.Helpers
+import Lamdera.Wire3.Helpers
 
 
 encoderNotImplemented tag tipe =
@@ -40,121 +40,121 @@ encoderNotImplemented tag tipe =
 encoderForType depth ifaces cname tipe =
   case tipe of
     (TType (Module.Canonical (Name "elm" "core") "Basics") "Int" []) ->
-      (a (VarForeign mLamdera_Wire2 "encodeInt" (Forall Map.empty (TLambda tipe tLamdera_Wire2__Encoder))))
+      (a (VarForeign mLamdera_Wire "encodeInt" (Forall Map.empty (TLambda tipe tLamdera_Wire_Encoder))))
 
     (TType (Module.Canonical (Name "elm" "core") "Basics") "Float" []) ->
-      (a (VarForeign mLamdera_Wire2 "encodeFloat" (Forall Map.empty (TLambda tipe tLamdera_Wire2__Encoder))))
+      (a (VarForeign mLamdera_Wire "encodeFloat" (Forall Map.empty (TLambda tipe tLamdera_Wire_Encoder))))
 
     (TType (Module.Canonical (Name "elm" "core") "Basics") "Bool" []) ->
-      (a (VarForeign mLamdera_Wire2 "encodeBool" (Forall Map.empty (TLambda tipe tLamdera_Wire2__Encoder))))
+      (a (VarForeign mLamdera_Wire "encodeBool" (Forall Map.empty (TLambda tipe tLamdera_Wire_Encoder))))
 
     (TType (Module.Canonical (Name "elm" "core") "Basics") "Order" []) ->
-      (a (VarForeign mLamdera_Wire2 "encodeOrder" (Forall Map.empty (TLambda tipe tLamdera_Wire2__Encoder))))
+      (a (VarForeign mLamdera_Wire "encodeOrder" (Forall Map.empty (TLambda tipe tLamdera_Wire_Encoder))))
 
     (TType (Module.Canonical (Name "elm" "core") "Basics") "Never" []) ->
       -- @OPTIMIZE remove this, should just encodeFail...
-      (a (VarForeign mLamdera_Wire2 "encodeNever" (Forall Map.empty (TLambda tipe tLamdera_Wire2__Encoder))))
+      (a (VarForeign mLamdera_Wire "encodeNever" (Forall Map.empty (TLambda tipe tLamdera_Wire_Encoder))))
 
     (TType (Module.Canonical (Name "elm" "core") "Char") "Char" []) ->
-      (a (VarForeign mLamdera_Wire2 "encodeChar" (Forall Map.empty (TLambda tipe tLamdera_Wire2__Encoder))))
+      (a (VarForeign mLamdera_Wire "encodeChar" (Forall Map.empty (TLambda tipe tLamdera_Wire_Encoder))))
 
     (TType (Module.Canonical (Name "elm" "core") "String") "String" []) ->
-      (a (VarForeign mLamdera_Wire2 "encodeString" (Forall Map.empty (TLambda tipe tLamdera_Wire2__Encoder))))
+      (a (VarForeign mLamdera_Wire "encodeString" (Forall Map.empty (TLambda tipe tLamdera_Wire_Encoder))))
 
     TUnit ->
-      (a (VarForeign mLamdera_Wire2 "encodeUnit" (Forall Map.empty (TLambda TUnit tLamdera_Wire2__Encoder))))
+      (a (VarForeign mLamdera_Wire "encodeUnit" (Forall Map.empty (TLambda TUnit tLamdera_Wire_Encoder))))
 
     TTuple a_ b Nothing ->
-      (a (VarForeign mLamdera_Wire2 "encodePair"
+      (a (VarForeign mLamdera_Wire "encodePair"
             (Forall
                (Map.fromList [("a", ()), ("b", ())])
                (TLambda
-                  (TLambda (TVar "a") tLamdera_Wire2__Encoder)
+                  (TLambda (TVar "a") tLamdera_Wire_Encoder)
                   (TLambda
-                     (TLambda (TVar "b") tLamdera_Wire2__Encoder)
+                     (TLambda (TVar "b") tLamdera_Wire_Encoder)
                      (TLambda
                         (TTuple (TVar "a") (TVar "b") Nothing)
-                        tLamdera_Wire2__Encoder))))))
+                        tLamdera_Wire_Encoder))))))
 
     TTuple a_ b (Just c) ->
-      (a (VarForeign mLamdera_Wire2 "encodeTriple"
+      (a (VarForeign mLamdera_Wire "encodeTriple"
             (Forall
                (Map.fromList [("a", ()), ("b", ()), ("c", ())])
                (TLambda
-                  (TLambda (TVar "a") tLamdera_Wire2__Encoder)
+                  (TLambda (TVar "a") tLamdera_Wire_Encoder)
                   (TLambda
-                     (TLambda (TVar "b") tLamdera_Wire2__Encoder)
+                     (TLambda (TVar "b") tLamdera_Wire_Encoder)
                      (TLambda
-                        (TLambda (TVar "c") tLamdera_Wire2__Encoder)
+                        (TLambda (TVar "c") tLamdera_Wire_Encoder)
                         (TLambda
                            (TTuple (TVar "a") (TVar "b") (Just (TVar "c")))
-                           tLamdera_Wire2__Encoder)))))))
+                           tLamdera_Wire_Encoder)))))))
 
     TType (Module.Canonical (Name "elm" "core") "Maybe") "Maybe" [ptype] ->
-      (a (VarForeign mLamdera_Wire2 "encodeMaybe"
+      (a (VarForeign mLamdera_Wire "encodeMaybe"
            (Forall
               (Map.fromList [("a", ())])
               (TLambda
-                 (TLambda (TVar "a") tLamdera_Wire2__Encoder)
+                 (TLambda (TVar "a") tLamdera_Wire_Encoder)
                  (TLambda
                     (TType (Module.Canonical (Name "elm" "core") "Maybe") "Maybe" [TVar "a"])
-                    tLamdera_Wire2__Encoder)))))
+                    tLamdera_Wire_Encoder)))))
 
     TType (Module.Canonical (Name "elm" "core") "List") "List" [ptype] ->
-      (a (VarForeign mLamdera_Wire2 "encodeList"
+      (a (VarForeign mLamdera_Wire "encodeList"
            (Forall
               (Map.fromList [("a", ())])
               (TLambda
-                 (TLambda (TVar "a") tLamdera_Wire2__Encoder)
+                 (TLambda (TVar "a") tLamdera_Wire_Encoder)
                  (TLambda
                     (TType (Module.Canonical (Name "elm" "core") "List") "List" [TVar "a"])
-                    tLamdera_Wire2__Encoder)))))
+                    tLamdera_Wire_Encoder)))))
 
     TType (Module.Canonical (Name "elm" "core") "Set") "Set" [ptype] ->
-      (a (VarForeign mLamdera_Wire2 "encodeSet"
+      (a (VarForeign mLamdera_Wire "encodeSet"
            (Forall
               (Map.fromList [("value", ())])
               (TLambda
-                 (TLambda (TVar "value") tLamdera_Wire2__Encoder)
+                 (TLambda (TVar "value") tLamdera_Wire_Encoder)
                  (TLambda
                     (TType (Module.Canonical (Name "elm" "core") "Set") "Set" [TVar "value"])
-                    tLamdera_Wire2__Encoder)))))
+                    tLamdera_Wire_Encoder)))))
 
     TType (Module.Canonical (Name "elm" "core") "Array") "Array" [ptype] ->
-      (a (VarForeign mLamdera_Wire2 "encodeArray"
+      (a (VarForeign mLamdera_Wire "encodeArray"
            (Forall
               (Map.fromList [("a", ())])
               (TLambda
-                 (TLambda (TVar "a") tLamdera_Wire2__Encoder)
+                 (TLambda (TVar "a") tLamdera_Wire_Encoder)
                  (TLambda
                     (TType (Module.Canonical (Name "elm" "core") "Array") "Array" [TVar "a"])
-                    tLamdera_Wire2__Encoder)))))
+                    tLamdera_Wire_Encoder)))))
 
     TType (Module.Canonical (Name "elm" "core") "Result") "Result" [err, a_] ->
-      (a (VarForeign mLamdera_Wire2 "encodeResult"
+      (a (VarForeign mLamdera_Wire "encodeResult"
             (Forall
                (Map.fromList [("err", ()), ("val", ())])
                (TLambda
-                  (TLambda (TVar "err") tLamdera_Wire2__Encoder)
-                  (TLambda (TLambda (TVar "val") tLamdera_Wire2__Encoder)
+                  (TLambda (TVar "err") tLamdera_Wire_Encoder)
+                  (TLambda (TLambda (TVar "val") tLamdera_Wire_Encoder)
                      (TLambda
                         (TType (Module.Canonical (Name "elm" "core") "Result") "Result" [TVar "err", TVar "val"])
-                        tLamdera_Wire2__Encoder))))))
+                        tLamdera_Wire_Encoder))))))
 
     TType (Module.Canonical (Name "elm" "core") "Dict") "Dict" [key, value] ->
-      (a (VarForeign mLamdera_Wire2 "encodeDict"
+      (a (VarForeign mLamdera_Wire "encodeDict"
             (Forall
                (Map.fromList [("key", ()), ("value", ())])
                (TLambda
-                  (TLambda (TVar "key") tLamdera_Wire2__Encoder)
-                  (TLambda (TLambda (TVar "value") tLamdera_Wire2__Encoder)
+                  (TLambda (TVar "key") tLamdera_Wire_Encoder)
+                  (TLambda (TLambda (TVar "value") tLamdera_Wire_Encoder)
                      (TLambda
                         (TType (Module.Canonical (Name "elm" "core") "Dict") "Dict" [TVar "key", TVar "value"])
-                        tLamdera_Wire2__Encoder))))))
+                        tLamdera_Wire_Encoder))))))
 
 
     TType (Module.Canonical (Name "elm" "bytes") "Bytes") "Bytes" _ ->
-      (a (VarForeign mLamdera_Wire2 "encodeBytes" (Forall Map.empty (TLambda tipe tLamdera_Wire2__Encoder))))
+      (a (VarForeign mLamdera_Wire "encodeBytes" (Forall Map.empty (TLambda tipe tLamdera_Wire_Encoder))))
 
 
     TType (Module.Canonical (Name "elm" "time") "Time") "Posix" _ ->
@@ -162,14 +162,14 @@ encoderForType depth ifaces cname tipe =
             [(a (PVar "t"))]
             (a (Call
                   (a (VarForeign
-                        (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire2")
+                        mLamdera_Wire
                         "encodeInt"
                         (Forall
                            (Map.fromList [])
                            (TLambda
                               (TType (Module.Canonical (Name "elm" "core") "Basics") "Int" [])
                               (TAlias
-                                 (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire2")
+                                 mLamdera_Wire
                                  "Encoder"
                                  []
                                  (Filled (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Encode") "Encoder" [])))))))
@@ -188,12 +188,12 @@ encoderForType depth ifaces cname tipe =
 
     -- Frontend only JS reference types
     TType (Module.Canonical (Name "elm" "file") "File") "File" _ ->
-      (a (VarForeign mLamdera_Wire2 "encodeRef" (Forall Map.empty (TLambda tipe tLamdera_Wire2__Encoder))))
+      (a (VarForeign mLamdera_Wire "encodeRef" (Forall Map.empty (TLambda tipe tLamdera_Wire_Encoder))))
 
 
     TType moduleName typeName params ->
       let
-        generatedName = Data.Name.fromChars $ "w2_encode_" ++ Data.Name.toChars typeName
+        generatedName = Data.Name.fromChars $ "w3_encode_" ++ Data.Name.toChars typeName
 
         decoder =
           if cname == moduleName
@@ -215,14 +215,15 @@ encoderForType depth ifaces cname tipe =
 
         Nothing ->
           let
-            fields = fieldsToList fieldMap
+            fields = fieldMap & fieldsToList & List.sortOn (\(name, field) -> name)
             fieldEncoders =
               fields
                 & fmap (\(name, field) ->
-                    encodeTypeValue (depth + 1) ifaces cname field (a (Access (a (VarLocal $ Utf8.fromChars $ "w2_rec_var" ++ show depth)) (a (name))))
+                    debugEncoder_ (Utf8.fromChars $ "." <> Data.Name.toChars name) $
+                      encodeTypeValue (depth + 1) ifaces cname field (a (Access (a (VarLocal $ Utf8.fromChars $ "w3_rec_var" ++ show depth)) (a (name))))
                   )
           in
-          (a (Lambda [(a (PVar $ Utf8.fromChars $ "w2_rec_var" ++ show depth))]
+          (a (Lambda [(a (PVar $ Utf8.fromChars $ "w3_rec_var" ++ show depth))]
             (encodeSequenceWithoutLength $ list fieldEncoders)
           ))
 
@@ -230,7 +231,7 @@ encoderForType depth ifaces cname tipe =
 
     TAlias moduleName typeName tvars_ aType ->
       let
-        generatedName = Data.Name.fromChars $ "w2_encode_" ++ Data.Name.toChars typeName
+        generatedName = Data.Name.fromChars $ "w3_encode_" ++ Data.Name.toChars typeName
 
         encoder =
           if cname == moduleName
@@ -246,7 +247,7 @@ encoderForType depth ifaces cname tipe =
 
     TVar name ->
       -- Tvars should always have a local encoder in scope
-      lvar $ Data.Name.fromChars $ "w2_x_c_" ++ Data.Name.toChars name
+      lvar $ Data.Name.fromChars $ "w3_x_c_" ++ Data.Name.toChars name
 
     TLambda t1 t2 ->
       failEncode
@@ -294,7 +295,7 @@ deepEncoderForType depth ifaces cname tipe =
               call (encoderForType depth ifaces cname tipe) $ fmap (\tvarType ->
                 case tvarType of
                   TVar name ->
-                    lvar $ Data.Name.fromChars $ "w2_x_c_" ++ Data.Name.toChars name
+                    lvar $ Data.Name.fromChars $ "w3_x_c_" ++ Data.Name.toChars name
                   _ ->
                     deepEncoderForType depth ifaces cname tvarType
               ) params
@@ -313,7 +314,7 @@ deepEncoderForType depth ifaces cname tipe =
               call (encoderForType depth ifaces cname tipe) $ fmap (\(tvarName, tvarType) ->
                 case tvarType of
                   TVar name ->
-                    lvar $ Data.Name.fromChars $ "w2_x_c_" ++ Data.Name.toChars name
+                    lvar $ Data.Name.fromChars $ "w3_x_c_" ++ Data.Name.toChars name
                   _ ->
                     deepEncoderForType depth ifaces cname tvarType
               ) tvars
@@ -375,7 +376,7 @@ encodeTypeValue depth ifaces cname tipe value =
 
     TVar name ->
       -- Tvars should always have a local encoder in scope
-      call (lvar $ Data.Name.fromChars $ "w2_x_c_" ++ Data.Name.toChars name) [value]
+      call (lvar $ Data.Name.fromChars $ "w3_x_c_" ++ Data.Name.toChars name) [value]
 
     TLambda t1 t2 ->
       call failEncode [ a Unit ]

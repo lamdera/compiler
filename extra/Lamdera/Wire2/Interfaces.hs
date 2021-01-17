@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Lamdera.Wire.Interfaces where
+module Lamdera.Wire2.Interfaces where
 
 import qualified AST.Source as Src
 import AST.Source
@@ -14,7 +14,7 @@ import qualified Elm.Interface as I
 import qualified Elm.ModuleName as ModuleName
 
 import Lamdera
-import qualified Lamdera.Wire.Helpers
+import qualified Lamdera.Wire2.Helpers
 import StandaloneInstances
 
 {- Heper functions for AST.Source modifications -}
@@ -48,7 +48,7 @@ import StandaloneInstances
 modifyModul :: Name -> Map.Map ModuleName.Raw I.Interface -> Module -> Module
 modifyModul pkg ifaces modul =
   unsafePerformIO $ do
-    if (Lamdera.Wire.Helpers.shouldHaveCodecsGenerated pkg)
+    if (Lamdera.Wire2.Helpers.shouldHaveCodecsGenerated pkg)
       then do
         -- atomicPutStrLn $ tShow "🧡" $ Src.getName modul
         -- atomicPutStrLn $ tShow "💚" $ Src._exports modul

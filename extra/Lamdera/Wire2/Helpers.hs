@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE BangPatterns #-}
-module Lamdera.Wire.Helpers where
+module Lamdera.Wire2.Helpers where
 
 import System.IO.Unsafe (unsafePerformIO)
 import qualified Data.Map as Map
@@ -23,7 +23,7 @@ import qualified Reporting.Error as E
 import qualified Reporting.Doc as D
 import qualified Data.Text as T
 import qualified Data.Index as Index
-
+import qualified Elm.String as ES
 
 import Lamdera
 import StandaloneInstances
@@ -36,20 +36,17 @@ shouldHaveCodecsGenerated name =
     -- Some elm packages are ignored because of cyclic dependencies.
     -- Those codecs have to be manually defined in `lamdera/codecs`.
     -- All other packages, even if their types are defined in js, have codecs generated for their types.
-    -- Then we manually override specific types in `Wire.Source`.
+    -- Then we manually override specific types in `Lamdera.Wire.[En|De]coder`.
 
-    -- elm deps used by lamdera/codecs
+    -- Elm deps used by lamdera/codecs
     Name "elm" "bytes" -> False
     Name "elm" "core" -> False
 
-    -- avoid cyclic imports; generated codecs rely on lamdera/codecs:Lamdera.Wire. This is our codec bootstrap module.
+    -- Avoid cyclic imports; generated codecs rely on lamdera/codecs:Lamdera.Wire. This is our codec bootstrap module.
     Name "lamdera" "codecs" -> False
 
     -- Everything else should have codecs generated
-    -- _ -> True
-    Name "elm" "time" -> True -- @TODO REMOVE
-    Name "author" "project" -> True -- @TODO REMOVE
-    _ -> True -- @TODO REMOVE
+    _ -> True
 
 
 getForeignSig tipe moduleName generatedName ifaces =
@@ -472,7 +469,9 @@ succeedDecode value =
         ]))
 
 
-failDecode =
+failDecode identifier =
+  -- addLetLog (Utf8.fromChars $ "failDecode:" ++ identifier) $
+  debugDecoder (Utf8.fromChars $ "failDecode:" ++ identifier) $
   (a (VarForeign mLamdera_Wire2 "failDecode"
         (Forall
            (Map.fromList [("a", ())])
@@ -481,6 +480,7 @@ failDecode =
               "Decoder"
               [("a", TVar "a")]
               (Filled (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [TVar "a"]))))))
+
 
 failEncode =
    (a (VarForeign
@@ -506,10 +506,6 @@ lambda1 pattern expr =
 caseof pattern branches =
   a (Case pattern branches)
 
-(–>) pattern expr =
-  CaseBranch pattern expr
-
-infixr 0 –>
 
 (|>) expr1 expr2 =
   (a (Binop
@@ -536,7 +532,7 @@ pint i =
 pvar n =
   a (PVar n)
 
-p_ =
+pAny_ =
   a (PAnything)
 
 call fn args =
@@ -726,3 +722,126 @@ extractTvarsInType t =
 
     TAlias moduleName typeName tvars (Holey tipe) -> extractTvarsInType tipe ++ extractTvarsInTvars tvars
     TAlias moduleName typeName tvars (Filled tipe) -> extractTvarsInType tipe ++ extractTvarsInTvars tvars
+
+
+
+{-
+
+Equivalent of making
+
+x = 1
+
+into
+
+x =
+  let _ = Debug.log "identifier" ()
+  in
+  1
+
+Helpful for tracing evaluation of function calls as a rudimentary decoder debugger!
+
+-}
+-- addLetLog cname identifier functionBody =
+--   (a (Let
+--         (Def
+--            (a ("_"))
+--            []
+--            (a (Call
+--                  (a (VarDebug
+--                        cname
+--                        "log"
+--                        (Forall
+--                           (Map.fromList [("a", ())])
+--                           (TLambda (TType (Module.Canonical (Name "elm" "core") "String") "String" []) (TLambda (TVar "a") (TVar "a"))))))
+--                  [(a (Str $ identifier)), (a (Unit))])))
+--
+--          functionBody
+--   ))
+
+addLetLog :: ES.String -> Expr -> Expr
+addLetLog identifier functionBody =
+  (a (Let
+        (Def
+           (a ("_"))
+           []
+           (a (Call
+                 (a (VarForeign (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire2") "debug"
+                   (Forall
+                     (Map.fromList [("a", ())])
+                     (TLambda (TType (Module.Canonical (Name "elm" "core") "String") "String" []) (TVar "a")))
+                 ))
+
+                 [(a (Str $ identifier))]
+              )
+           ))
+         functionBody
+  ))
+
+
+debugEncoder :: ES.String -> Expr -> Expr
+debugEncoder identifier encoder =
+  -- encoder
+  (a (Call
+        (a (VarForeign (Module.Canonical (Name "elm" "bytes") "Bytes.Encode") "debugEncoder"
+          (Forall
+            (Map.fromList [("a", ())])
+            (TLambda
+               (TType (Module.Canonical (Name "elm" "core") "String") "String" [])
+               (TLambda
+                  (TLambda (TVar "a") (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Encode") "Encoder" []))
+                  (TLambda (TVar "a") (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Encode") "Encoder" []))))
+        )))
+        [(a (Str $ identifier)), encoder]
+     )
+  )
+
+
+debugEncoder_ :: ES.String -> Expr -> Expr
+debugEncoder_ identifier encoder =
+  (a (Call
+        (a (VarForeign (Module.Canonical (Name "elm" "bytes") "Bytes.Encode") "debugEncoder_"
+          (Forall
+            (Map.empty)
+            (TLambda
+               (TType (Module.Canonical (Name "elm" "core") "String") "String" [])
+               (TLambda
+                  (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Encode") "Encoder" [])
+                  (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Encode") "Encoder" [])
+               ))
+        )))
+        [(a (Str $ identifier)), encoder]
+     )
+  )
+
+
+debugDecoder :: ES.String -> Expr -> Expr
+debugDecoder identifier decoder =
+  (a (Call (a (VarForeign (Module.Canonical (Name "elm" "bytes") "Bytes.Decode") "debugDecoder"
+              (Forall
+                 (Map.fromList [("a", ())])
+                 (TLambda
+                    (TType (Module.Canonical (Name "elm" "core") "String") "String" [])
+                    (TLambda
+                      (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [TVar "a"])
+                      (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [TVar "a"])
+                    )))))
+        [(a (Str $ identifier)), decoder]
+        ))
+
+
+oneOf :: [Expr] -> Expr
+oneOf decoders =
+  (a (Call (a (VarForeign (Module.Canonical (Name "elm" "bytes") "Bytes.Decode") "oneOf"
+              (Forall
+                 (Map.fromList [("a", ())])
+                 (TLambda
+                    (TType
+                       (Module.Canonical (Name "elm" "core") "List")
+                       "List"
+                       [TType (Module.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [TVar "a"]])
+                    (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [TVar "a"])
+                 )
+              )
+              ))
+        [a $ List decoders]
+        ))

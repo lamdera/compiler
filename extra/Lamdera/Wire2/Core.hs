@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE BangPatterns #-}
-module Lamdera.Wire where
+module Lamdera.Wire2.Core where
 
 {-
 
@@ -38,10 +38,10 @@ import qualified CanSer.CanSer as ToSource
 
 import Lamdera
 import qualified Lamdera.Project
-import Lamdera.Wire.Helpers
-import Lamdera.Wire.Encoder
-import Lamdera.Wire.Decoder
-import Lamdera.Wire.Graph
+import Lamdera.Wire2.Helpers
+import Lamdera.Wire2.Encoder
+import Lamdera.Wire2.Decoder
+import Lamdera.Wire2.Graph
 
 
 runTests isTest debugName pkg modul decls generatedName generated canonicalValue wire2gen =
@@ -81,11 +81,11 @@ runTests isTest debugName pkg modul decls generatedName generated canonicalValue
 
               diff <- icdiff (hindentFormatValue testDefinition) (hindentFormatValue generated)
               diff2 <- icdiff (ToSource.convert testDefinition) (ToSource.convert generated)
-              atomicPutStrLn $ "❌❌❌ failed, attempting pretty-print diff1:\n" ++ diff
+              -- atomicPutStrLn $ "❌❌❌ failed, attempting pretty-print diff1:\n" ++ diff
               atomicPutStrLn $ "❌❌❌ failed, attempting pretty-print diff2:\n" ++ diff2
               -- error "exiting!"
               -- atomicPutStrLn $ "❌❌❌ " ++ Data.Name.toChars (Src.getName modul) ++ "." ++ Data.Name.toChars generatedName ++ " gen does not match test definition."
-              -- pure ()
+              pure ()
 
         Nothing -> do
           -- atomicPutStrLn $ "⚠️  Warning: test not found " ++ show pkg ++ ":" ++ Data.Name.toChars (Src.getName modul) ++ "." ++ Data.Name.toChars testName -- ++ "\n" ++ show (declsToList decls & fmap defName)
@@ -121,7 +121,7 @@ aliasAsModule cname name alias =
 
 addWireGenerations :: Can.Module -> Pkg.Name -> Map.Map Module.Raw I.Interface -> Src.Module -> Either E.Error Can.Module
 addWireGenerations canonical pkg ifaces modul =
-  if Lamdera.Wire.Helpers.shouldHaveCodecsGenerated pkg then
+  if Lamdera.Wire2.Helpers.shouldHaveCodecsGenerated pkg then
     case addWireGenerations_ canonical pkg ifaces modul of
       Right canonical_ -> do
         Right canonical_
@@ -143,6 +143,20 @@ addWireGenerations_ canonical pkg ifaces modul =
     --         ((Name "author" "project"), "Test.Wire_Recursive") -> do
     --           formatHaskellValue "declsBefore" $ declsToSummary $ Can._decls canonical
     --           formatHaskellValue "declsAfter" $ declsToSummary $ extendedDecls
+    --
+    --         _ ->
+    --           pure ()
+
+    -- !x = unsafePerformIO $ do
+    --       case (pkg, Src.getName modul) of
+    --         ((Name "elm" "regex"), "Regex") -> do
+    --         -- ((Name "author" "project"), "Subdir.Subsubdir.SubsubdirType") -> do
+    --
+    --           newDefs
+    --             & fmap ToSource.convert
+    --             & mapM (atomicPutStrLn . T.unpack)
+    --           -- formatHaskellValue "declsAfter" $ declsToSummary $ extendedDecls
+    --           pure ()
     --
     --         _ ->
     --           pure ()
@@ -176,8 +190,8 @@ addWireGenerations_ canonical pkg ifaces modul =
 
     extendedDecls =
       newDefs
-        & Lamdera.Wire.Graph.stronglyConnCompDefs
-        & Lamdera.Wire.Graph.addGraphDefsToDecls existingDecls
+        & Lamdera.Wire2.Graph.stronglyConnCompDefs
+        & Lamdera.Wire2.Graph.addGraphDefsToDecls existingDecls
 
     {- This implementation sorted all decls, however sorting only by lvar is
     not a valid dependency sort for all functions, only for wire functions!
@@ -186,8 +200,8 @@ addWireGenerations_ canonical pkg ifaces modul =
     oldDeclsImpl =
       declsToList decls_
         & List.unionBy (\a b -> defName a == defName b) (unionDefs ++ aliasDefs)
-        & Lamdera.Wire.Graph.stronglyConnCompDefs
-        & Lamdera.Wire.Graph.addGraphDefsToDecls SaveTheEnvironment
+        & Lamdera.Wire2.Graph.stronglyConnCompDefs
+        & Lamdera.Wire2.Graph.addGraphDefsToDecls SaveTheEnvironment
 
     {- For any modules that don't ExportEverything, we add our newDefs to exports -}
     extendedExports =
@@ -231,7 +245,8 @@ encoderUnion isTest ifaces pkg modul decls unionName union =
     generated =
       Def
         (a (generatedName))
-        (ptvars ++ [ pvar "w2v" ])
+        (ptvars ++ [ pvar "w2v" ]) $
+        debugEncoder_ (Data.Name.toElmString unionName)
         (caseof (lvar "w2v") $
             _u_alts union
               & List.sortOn (\(Ctor name index_ numParams paramTypes) -> name)
@@ -292,19 +307,20 @@ decoderUnion isTest ifaces pkg modul decls unionName union =
         (a (generatedName))
         -- Map.empty
         ptvars $
-        -- addLetLog cname generatedNameString (Utf8.fromChars $ "w2_decode_" ++ Data.Name.toChars unionName)
+        -- addLetLog (Utf8.fromChars $ "w2_decode_" ++ Data.Name.toChars unionName)
+        debugDecoder (Data.Name.toElmString unionName)
         (decodeUnsignedInt8 |> andThenDecode1
               (lambda1 (pvar "w2v") $
                 caseof (lvar "w2v") $
                   _u_alts union
                     & List.sortOn (\(Ctor name index_ numParams paramTypes) -> name)
                     & imap (\i (Ctor tagName tagIndex numParams paramTypes) ->
-                        (pint i) –>
+                        CaseBranch (pint i) $
                           ([(succeedDecode (vctor tagName tagIndex paramTypes))]
                           ++ fmap (\paramType -> andMapDecode1 ((decoderForType ifaces cname paramType))) paramTypes)
                             & foldlPairs (|>)
                     )
-                    & (\l -> l ++ [p_ –> failDecode])
+                    & (\l -> l ++ [CaseBranch pAny_ $ failDecode (Data.Name.toChars generatedName <> " unexpected union tag index")])
               )
             )
         -- (TAlias
@@ -316,40 +332,6 @@ decoderUnion isTest ifaces pkg modul decls unionName union =
   generated
 
 
-{-
-
-Equivalent of making
-
-x = 1
-
-into
-
-x =
-  let _ = Debug.log "identifier" ()
-  in
-  1
-
-Helpful for tracing evaluation of function calls as a rudimentary decoder debugger!
-
--}
-addLetLog cname identifier functionBody =
-  (a (Let
-        (Def
-           (a ("_"))
-           []
-           (a (Call
-                 (a (VarDebug
-                       cname
-                       "log"
-                       (Forall
-                          (Map.fromList [("a", ())])
-                          (TLambda (TType (Module.Canonical (Name "elm" "core") "String") "String" []) (TLambda (TVar "a") (TVar "a"))))))
-                 [(a (Str $ identifier)), (a (Unit))])))
-
-         functionBody
-  ))
-
-
 encoderAlias :: Bool -> Map.Map Module.Raw I.Interface -> Pkg.Name -> Src.Module -> Decls -> Data.Name.Name -> Alias -> Def
 encoderAlias isTest ifaces pkg modul decls aliasName alias@(Alias tvars tipe) =
   let
@@ -359,7 +341,9 @@ encoderAlias isTest ifaces pkg modul decls aliasName alias@(Alias tvars tipe) =
     cname = Module.Canonical pkg (Src.getName modul)
     ptvars = tvars & fmap (\tvar -> pvar $ Data.Name.fromChars $ "w2_x_c_" ++ Data.Name.toChars tvar )
 
-    generated = Def (a (generatedName)) ptvars $ deepEncoderForType 0 ifaces cname tipe
+    generated = Def (a (generatedName)) ptvars $
+      debugEncoder (Data.Name.toElmString aliasName) $
+      deepEncoderForType 0 ifaces cname tipe
   in
   generated
 
@@ -373,6 +357,9 @@ decoderAlias isTest ifaces pkg modul decls aliasName alias@(Alias tvars tipe) =
     cname = Module.Canonical pkg (Src.getName modul)
     ptvars = tvars & fmap (\tvar -> pvar $ Data.Name.fromChars $ "w2_x_c_" ++ Data.Name.toChars tvar )
 
-    generated = Def (a (generatedName)) ptvars $ decoderForType ifaces cname tipe
+    generated = Def (a (generatedName)) ptvars $
+      -- addLetLog (Utf8.fromChars $ "w2_decode_" ++ Data.Name.toChars aliasName) $
+      debugDecoder (Data.Name.toElmString aliasName) $
+      decoderForType ifaces cname tipe
   in
   generated

@@ -2,7 +2,7 @@
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE BangPatterns #-}
 
-module Lamdera.Wire.Decoder where
+module Lamdera.Wire2.Decoder where
 
 import System.IO.Unsafe (unsafePerformIO)
 import qualified Data.Map as Map
@@ -29,12 +29,15 @@ import Lamdera
 import StandaloneInstances
 import qualified CanSer.CanSer as ToSource
 
-import Lamdera.Wire.Helpers
+import Lamdera.Wire2.Helpers
 
 
+callDecoder :: Data.Name.Name -> Type -> Expr
 callDecoder name tipe =
   (a (VarForeign mLamdera_Wire2 name (Forall Map.empty (TAlias mLamdera_Wire2 "Decoder" [("a", tipe)] (Filled (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [tipe]))))))
 
+
+decoderForType :: Map.Map Module.Raw I.Interface -> Module.Canonical -> Type -> Expr
 decoderForType ifaces cname tipe =
   case tipe of
     (TType (Module.Canonical (Name "elm" "core") "Basics") "Int" [])    -> callDecoder "decodeInt" tipe
@@ -299,39 +302,22 @@ decoderForType ifaces cname tipe =
             else (a (VarForeign moduleName generatedName (getForeignSig tipe moduleName generatedName ifaces)))
       in
       if isUnsupportedKernelType tipe
-        then failDecode
+        then failDecode (Data.Name.toChars generatedName <> " isUnsupportedKernelType")
         else
           case params of
             [] -> decoder
             _  -> call decoder $ fmap (decoderForType ifaces cname) params
 
     TRecord fieldMap maybeExtensible ->
+      -- | TRecord (Map.Map Name FieldType) (Maybe Name)
       case maybeExtensible of
         Just extensibleName ->
           -- @EXTENSIBLERECORDS not supported yet
-          failDecode
+          failDecode $ "extensible record" -- <> Data.Name.toChars extensibleName
         Nothing ->
-        -- | TRecord (Map.Map Name FieldType) (Maybe Name)
-          let
-            fields = fieldsToList fieldMap
-
-            pvars :: [Pattern]
-            pvars =
-              (imap (\i (name, field) -> a (PVar $ Data.Name.fromChars $ Data.Name.toChars name ++ "0")) fields)
-              -- (imap (\i (name, field) -> a (PVar $ Data.Name.fromChars $ "w_f" ++ show i)) fields) -- @TODO improve gen
-
-            newRecFields :: Map.Map Data.Name.Name Expr
-            newRecFields =
-              fields
-                & fmap (\(name, field) ->
-                    (name, a (VarLocal $ Data.Name.fromChars $ Data.Name.toChars name ++ "0"))
-                    -- (name, a (VarLocal $ Data.Name.fromChars $ "w_f" ++ show i)) -- @TODO improve gen
-                  )
-                & Map.fromList
+          let fields = fieldMap & fieldsToList
           in
-          [succeedDecode (a (Lambda pvars (a (Record newRecFields ))))]
-          ++ fmap (\(name, field) -> andMapDecode1 (decoderForType ifaces cname field)) fields
-            & foldlPairs (|>)
+          decodeRecord ifaces cname fields
 
     TAlias moduleName typeName tvars_ aType ->
       let
@@ -346,7 +332,7 @@ decoderForType ifaces cname tipe =
 
       in
       if isUnsupportedKernelType tipe
-        then failDecode
+        then failDecode (Data.Name.toChars generatedName <> " isUnsupportedKernelType")
         else
           case tvars_ of
             [] -> decoder
@@ -363,4 +349,30 @@ decoderForType ifaces cname tipe =
       lvar $ Data.Name.fromChars $ "w2_x_c_" ++ Data.Name.toChars name
 
     TLambda t1 t2 ->
-      failDecode
+      failDecode "lambda"
+
+
+decodeRecord :: Map.Map Module.Raw I.Interface -> Module.Canonical -> [(Data.Name.Name, Type)] -> Expr
+decodeRecord ifaces cname fields =
+  let
+    pvars :: [Pattern]
+    pvars =
+      (imap (\i (name, field) -> a (PVar $ Data.Name.fromChars $ Data.Name.toChars name ++ "0")) fields)
+
+    newRecFields :: Map.Map Data.Name.Name Expr
+    newRecFields =
+      fields
+        & fmap (\(name, field) ->
+            (name, a (VarLocal $ Data.Name.fromChars $ Data.Name.toChars name ++ "0"))
+          )
+        & Map.fromList
+  in
+  -- addLetLog (Utf8.fromChars $ "-- record!") $
+  [succeedDecode (a (Lambda pvars (a (Record newRecFields ))))]
+  ++ fmap (\(name, field) ->
+                andMapDecode1 (
+                  debugDecoder (Utf8.fromChars $ "." <> Data.Name.toChars name) $
+                    decoderForType ifaces cname field
+                )
+          ) fields
+    & foldlPairs (|>)
