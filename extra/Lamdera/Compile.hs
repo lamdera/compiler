@@ -13,7 +13,7 @@ import Lamdera
 -- Runs `lamdera make` of given files with no output
 make :: FilePath -> FilePath -> IO ()
 make root path = do
-  debug $ "🏗   lamdera make " <> root <> "/" <> path
+  debug $ "🏗   lamdera make --optimze " <> root <> "/" <> path
 
   r <- async $
     Dir.withCurrentDirectory root $
@@ -36,7 +36,7 @@ make root path = do
 -- Runs `lamdera make` of given files with no output
 make_cleanup :: IO () -> FilePath -> FilePath -> IO ()
 make_cleanup cleanup root path = do
-  debug $ "🏗   lamdera make " <> root <> "/" <> path
+  debug $ "🏗   lamdera make --optimze " <> root <> "/" <> path
 
   r <- async $
     Dir.withCurrentDirectory root $
@@ -67,6 +67,30 @@ make_ root = do
         Make.Flags
           { _debug = False
           , _optimize = True
+          , _output = Just Make.DevNull
+          , _report = Nothing
+          , _docs = Nothing
+          }
+  wait r
+  -- The compilation process ends by printing to terminal in a way that overwrites
+  -- the progress bar – which messes with subsequent output if it gets written to
+  -- stdout too quickly, as it doesn't seem to flush fast enough. Adding a small
+  -- delay seems to solve the problem.
+  sleep 10
+
+
+
+-- Runs `lamdera make` of given files with no output
+makeDev :: FilePath -> FilePath -> IO ()
+makeDev root path = do
+  debug $ "🏗   lamdera make --debug " <> root <> "/" <> path
+
+  r <- async $
+    Dir.withCurrentDirectory root $
+      Make.run [path] $
+        Make.Flags
+          { _debug = True
+          , _optimize = False
           , _output = Just Make.DevNull
           , _report = Nothing
           , _docs = Nothing
