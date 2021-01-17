@@ -13,6 +13,7 @@ import qualified Data.Text.Encoding as T
 import qualified Data.Text.IO as T
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Lazy.Encoding as TL
+import Text.Read (readMaybe)
 
 import Network.HTTP.ReverseProxy
 import Control.Concurrent
@@ -72,10 +73,20 @@ startReverseProxy_ = do
 
                   _ -> do
                     case pathInfo request of
-                      "http:":"":hostname:rest ->
+                      "http:":"":hostname:rest -> do
+                        let
+                          (hostnameClean, port) =
+                            case Text.splitOn ":" hostname of
+                              hostnameClean:port:[] ->
+                                (hostnameClean, port & Text.unpack & readMaybe & withDefault 80)
+
+                              _ ->
+                                (hostname, 80)
+
+
                         pure $ WPRModifiedRequest
-                          (modReq rest hostname request)
-                          (ProxyDest (T.encodeUtf8 hostname) 80)
+                          (modReq rest hostnameClean request)
+                          (ProxyDest (T.encodeUtf8 hostnameClean) port)
 
                       "https:":"":hostname:rest ->
                         pure $ WPRModifiedRequestSecure
