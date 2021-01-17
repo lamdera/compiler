@@ -158,7 +158,7 @@ broadcastImpl mClients message = do
 talk :: OnReceive -> WS.Connection -> TVar [Client] -> Client -> IO ()
 talk onReceive conn _ (clientId, _) = forever $ do
   msg <- WS.receiveData conn
-  Lamdera.debugT ("[websocket] ▶️  " <> T.pack (show clientId) <> ":" <> T.take 70 msg)
+  Lamdera.debugT ("[websocket] ▶️  " <> T.pack (show clientId) <> ":" <> T.take 130 msg)
   onReceive clientId msg
 
 
@@ -187,5 +187,5 @@ send_ clients clientId text =
 
 broadcast_ :: [Client] -> T.Text -> IO ()
 broadcast_ clients message = do
-  Lamdera.debugT ("[websocket] ◀️  " <> T.pack (show $ length clients) <> ":" <> T.take 70 message)
+  Lamdera.debugT ("[websocket] ◀️  " <> T.pack (show $ length clients) <> ":" <> T.take 130 message)
   forM_ clients $ \(_, conn) -> WS.sendTextData conn message

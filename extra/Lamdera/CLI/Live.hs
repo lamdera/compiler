@@ -111,10 +111,10 @@ serveUnmatchedUrlsToIndex serveElm =
 
       liftIO $ do
         onlyWhen isDebug $ do
-          let overridePath = "/Users/mario/dev/projects/elmx/extra/LocalDev.elm"
+          let overridePath = "/Users/mario/dev/projects/elmx/extra/LocalDev/LocalDev.elm"
           overrideExists <- doesFileExist overridePath
           onlyWhen overrideExists $ do
-            debug $ "🚧 OVERRIDE from elmx/extra/LocalDev.elm"
+            debug $ "🚧 OVERRIDE from elmx/extra/LocalDev/LocalDev.elm"
             copyFile overridePath harnessPath
 
           rpcExists <- doesFileExist $ root </> "src" </> "RPC.elm"

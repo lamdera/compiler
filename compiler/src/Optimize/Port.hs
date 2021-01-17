@@ -51,7 +51,7 @@ toEncoder tipe =
           | name == Name.bool   -> encode "bool"
           | name == Name.string -> encode "string"
           | name == Name.value  -> Names.registerGlobal ModuleName.basics Name.identity
-          | name == Name.bytes  -> Names.registerGlobal ModuleName.basics Name.identity
+          | name == Name.bytes  -> Names.registerGlobal ModuleName.lamderaWire3 "encodeBytes_"
 
         [arg]
           | name == Name.maybe -> encodeMaybe arg
@@ -180,6 +180,7 @@ toDecoder tipe =
           | name == Name.bool   -> decode "bool"
           | name == Name.string -> decode "string"
           | name == Name.value  -> decode "value"
+          | name == Name.bytes  -> Names.registerGlobal ModuleName.lamderaWire3 "decodeBytes_"
 
         [arg]
           | name == Name.maybe -> decodeMaybe arg
