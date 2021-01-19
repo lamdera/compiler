@@ -14,41 +14,167 @@ import Data.Monoid (mconcat)
 import System.FilePath ((</>))
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
+import qualified Data.Map as Map
 import NeatInterpolation
 
 import qualified Generate.Mode as Mode
+import qualified Elm.Package as Pkg
+import qualified Elm.ModuleName as ModuleName
+import qualified AST.Optimized as Opt
 
 import Lamdera
 
 
-source :: B.Builder
-source =
-  {- Approach taken from cors-anywhere:
-  https://github.com/Rob--W/cors-anywhere/blame/master/README.md#L56
+type Mains = Map.Map ModuleName.Canonical Opt.Main
 
-  Rewrites all XHR requests from {url} to http://localhost:9000/{url}
 
-  See extra/Lamdera/ReverseProxy.hs for the proxy itself
-  -}
-  ""
-  -- [text|
-  --   (function() {
-  --     var cors_api_host = 'localhost:9000';
-  --     var cors_api_url = 'http://' + cors_api_host + '/';
-  --     var slice = [].slice;
-  --     var origin = window.location.protocol + '//' + window.location.host;
-  --     var open = XMLHttpRequest.prototype.open;
-  --     XMLHttpRequest.prototype.open = function() {
-  --       var args = slice.call(arguments);
-  --       var targetOrigin = /^https?:\/\/([^\/]+)/i.exec(args[1]);
-  --       if (targetOrigin && targetOrigin[0].toLowerCase() !== origin &&
-  --           targetOrigin[1] !== cors_api_host) {
-  --           args[1] = cors_api_url + args[1];
-  --       }
-  --       return open.apply(this, args);
-  --     };
-  --   })();
-  -- |]
+source :: Mode.Mode -> Mains -> B.Builder
+source mode mains =
+  case mode of
+    Mode.Dev _ ->
+      [injections, corsAnywhere]
+      -- [injections]
+        & Text.concat
+        & Text.encodeUtf8
+        & B.byteString
+
+    Mode.Prod _ ->
+      case mains & Map.toList of
+        ((ModuleName.Canonical (Pkg.Name author pkg) "Backend"),_):[] ->
+          [injections, backendLogging]
+            & Text.concat
+            & Text.encodeUtf8
+            & B.byteString
+
+        _ ->
+          injections
+            & Text.encodeUtf8
+            & B.byteString
+
+
+backendLogging =
+  "console.log('backend logging!');"
+
+
+injections :: Text
+injections =
+  [text|
+    function _Platform_initialize(flagDecoder, args, init, update, subscriptions, stepperBuilder)
+      {
+        var result = A2(_Json_run, flagDecoder, _Json_wrap(args ? args['flags'] : undefined));
+        $$elm$$core$$Result$$isOk(result) || _Debug_crash(2 /**/, _Json_errorToString(result.a) /**/);
+        var managers = {};
+        var initPair = init(result.a);
+        var model = args['model'] || initPair.a;
+
+        var stepper = stepperBuilder(sendToApp, model);
+        var ports = _Platform_setupEffects(managers, sendToApp);
+
+        var pos = 0;
+
+        //console.log('managers', managers)
+        //console.log('ports', ports)
+
+        // @TODO LocalDev hardcoding needs to go
+        var upgradeMode = false;
+
+        function mtime() {
+          if (typeof window !== 'undefined') { return 0; }
+          const hrTime = process.hrtime();
+          return hrTime[0] * 1000000 + hrTime[1] / 1000;
+        }
+
+        function sendToApp(msg, viewMetadata)
+        {
+          if (upgradeMode) {
+            // console.log('sendToApp.inactive',msg)
+            // No more messages should run in upgrade mode
+            // @TODO redirect messages somewhere
+            _Platform_enqueueEffects(managers, $$elm$$core$$Platform$$Cmd$$none, $$elm$$core$$Platform$$Sub$$none);
+            return;
+          }
+          //console.log('sendToApp.active',msg)
+
+          var start = mtime()
+          var serializeDuration, logDuration = null
+
+          if (typeof window == 'undefined') {
+            pos = pos + 1;
+            const s = $$author$$project$$LBR$$serialize(msg);
+            serializeDuration = mtime() - start
+            start = mtime()
+            insertLog(global.config.appname, global.config.version, pos, s.a, new Date(), s.b)
+            logDuration = mtime() - start
+          }
+
+          start = mtime()
+          var pair = A2(update, msg, model);
+
+          const updateDuration = mtime() - start
+          start = mtime()
+
+          stepper(model = pair.a, viewMetadata);
+          //console.log('cmds', pair.b);
+          _Platform_enqueueEffects(managers, pair.b, subscriptions(model));
+
+          const stepEnqueueDuration = mtime() - start
+
+          if (typeof window == 'undefined') {
+            //console.log({serialize: serializeDuration, log: logDuration, update: updateDuration, stepEnqueue: stepEnqueueDuration})
+          }
+        }
+
+        if (args['model'] === undefined) {
+          _Platform_enqueueEffects(managers, initPair.b, subscriptions(model));
+        }
+
+        return ports ? { ports: ports, gm: function() { return model }, eum: function() { upgradeMode = true } } : {};
+      }
+
+    _Bytes_read_string = F3(function (len, bytes, offset) {
+      var decoder = new TextDecoder('utf8', { fatal:  true});
+      var sliceView = new DataView(bytes.buffer, bytes.byteOffset + offset, len);
+
+      return _Utils_Tuple2(offset + len, decoder.decode(sliceView));
+    });
+
+  |]
+
+  -- var model = null
+  -- window.addEventListener('bem', function (e) {
+  --   model = e.detail
+  -- }, false);
+  -- window.dispatchEvent(new Event('rbem'));
+
+
+{- Approach taken from cors-anywhere:
+https://github.com/Rob--W/cors-anywhere/blame/master/README.md#L56
+
+Rewrites all XHR requests from {url} to http://localhost:9000/{url}
+
+See extra/Lamdera/ReverseProxy.hs for the proxy itself
+-}
+corsAnywhere :: Text
+corsAnywhere =
+  [text|
+    (function() {
+      if (typeof window == 'undefined') { return 0; } // skip for node.js
+      var cors_api_host = 'localhost:9000';
+      var cors_api_url = 'http://' + cors_api_host + '/';
+      var slice = [].slice;
+      var origin = window.location.protocol + '//' + window.location.host;
+      var open = XMLHttpRequest.prototype.open;
+      XMLHttpRequest.prototype.open = function() {
+        var args = slice.call(arguments);
+        var targetOrigin = /^https?:\/\/([^\/]+)/i.exec(args[1]);
+        if (targetOrigin && targetOrigin[0].toLowerCase() !== origin &&
+            targetOrigin[1] !== cors_api_host) {
+            args[1] = cors_api_url + args[1];
+        }
+        return open.apply(this, args);
+      };
+    })();
+  |]
   -- & Text.encodeUtf8
   -- & B.byteString
 
@@ -95,10 +221,12 @@ elmPkgJs mode =
 
         pure $ B.byteString $ mconcat
           [ "const pkgExports = {\n" <> mconcat wrappedPkgImports <> "\n}\n"
-          , "window.elmPkgJsInit = function(app) {"
-          , "  for (var pkgId in pkgExports) {"
-          , "    if (pkgExports.hasOwnProperty(pkgId)) {"
-          , "      pkgExports[pkgId]({}).init(app)"
+          , "if (typeof window !== 'undefined') {"
+          , "  window.elmPkgJsInit = function(app) {"
+          , "    for (var pkgId in pkgExports) {"
+          , "      if (pkgExports.hasOwnProperty(pkgId)) {"
+          , "        pkgExports[pkgId]({}).init(app)"
+          , "      }"
           , "    }"
           , "  }"
           , "}"
