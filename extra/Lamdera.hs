@@ -97,6 +97,7 @@ module Lamdera
   , ghciThreads
   , trackGhciThread
   , killGhciThreads
+  , asGhciThread
   )
   where
 
@@ -928,3 +929,10 @@ killGhciThreads = do
           mapM killThread threads
           pure []
     )
+
+
+asGhciThread :: IO () -> IO ()
+asGhciThread io = do
+  debug_ "Starting as ghci thread..."
+  threadId <- forkIO io
+  trackGhciThread threadId
