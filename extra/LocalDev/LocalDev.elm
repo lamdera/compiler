@@ -30,7 +30,7 @@ import Json.Decode as D
 import Json.Encode as E
 import Lamdera exposing (ClientId, Key, SessionId, Url)
 import Lamdera.Debug as LD
-import Lamdera.Wire3 as Wire
+import Lamdera.Wire3 as Wire exposing (Bytes)
 import Process
 import Task
 import Time
@@ -45,19 +45,38 @@ lamderaVersion =
     "alpha12"
 
 
-port sendToBackend : E.Value -> Cmd msg
+port send_ToBackend : Bytes -> Cmd msg
 
 
-port sendToFrontend : E.Value -> Cmd msg
+port receive_ToBackend : (( SessionId, ClientId, Bytes ) -> msg) -> Sub msg
 
 
-port receiveFromBackend : (E.Value -> msg) -> Sub msg
+port save_BackendModel : Bytes -> Cmd msg
 
 
-port receiveFromFrontend : (E.Value -> msg) -> Sub msg
+port send_SystemMessage : E.Value -> Cmd msg
+
+
+type alias WireMsg =
+    { t : String, s : String, c : String, b : Bytes }
+
+
+port send_ToFrontend : WireMsg -> Cmd msg
+
+
+port receive_ToFrontend : (WireMsg -> msg) -> Sub msg
+
+
+
+-- @LEGCACY
+-- @TODO this isn't used currently but needs to adapt for state restore functions?
 
 
 port receiveBackendModel : (E.Value -> msg) -> Sub msg
+
+
+
+-- @LEGCACY END
 
 
 port setNodeTypeLeader : (Bool -> msg) -> Sub msg
@@ -91,8 +110,8 @@ type Msg
     | FENewUrl Url
     | OnConnection E.Value
     | OnDisconnection E.Value
-    | ReceivedFromFrontend E.Value
-    | ReceivedFromBackend E.Value
+    | ReceivedToBackend ( SessionId, ClientId, Bytes )
+    | ReceivedToFrontend WireMsg
     | ReceivedBackendModel E.Value
     | RPCIn E.Value
     | SetNodeTypeLeader Bool
@@ -183,7 +202,11 @@ userBackendApp =
     Backend.app
 
 
-init : E.Value -> Url -> Key -> ( Model, Cmd Msg )
+type alias Flags =
+    { s : String, c : String, nt : String, b : Maybe Bytes }
+
+
+init : Flags -> Url -> Key -> ( Model, Cmd Msg )
 init flags url key =
     let
         log t v =
@@ -192,21 +215,6 @@ init flags url key =
 
             else
                 v
-
-        flagsDecoder =
-            D.succeed NodeInitArgs
-                |> required "c" D.string
-                |> required "s" D.string
-                |> required "nt" decodeNodeType
-                |> required "i" (D.list D.int)
-
-        args =
-            case D.decodeValue flagsDecoder flags of
-                Ok r ->
-                    r
-
-                Err err ->
-                    Debug.todo "Flags parse failed; this should be impossible! Please report this issue."
 
         ( ifem, iFeCmds ) =
             userFrontendApp.init url key
@@ -227,13 +235,17 @@ init flags url key =
                         ( ifem, iFeCmds )
 
         ( bem, newBeCmds, didReset ) =
-            case args.backendModelIntList of
-                [] ->
+            case flags.b of
+                Nothing ->
+                    let
+                        _ =
+                            Debug.log "☀️ Initializing new app" ""
+                    in
                     -- No intList, brand new app
                     ( ibem, iBeCmds, False )
 
-                backendModelIntList ->
-                    case Wire.bytesDecode Types.w2_decode_BackendModel (Wire.intListToBytes args.backendModelIntList) of
+                Just backendModelBytes ->
+                    case Wire.bytesDecode Types.w2_decode_BackendModel backendModelBytes of
                         Just restoredBem ->
                             ( restoredBem
                             , Cmd.none
@@ -283,20 +295,35 @@ init flags url key =
 
             else
                 log "☀️ Restored BackendModel" bem
+
+        nodeType =
+            case flags.nt of
+                "l" ->
+                    Leader
+
+                "f" ->
+                    Follower
+
+                _ ->
+                    let
+                        _ =
+                            Debug.log "error" ("decodeNodeType saw an unexpected value: " ++ flags.nt)
+                    in
+                    Follower
     in
     ( { fem = fem
       , bem = bem
       , bemDirty = True
       , originalKey = key
       , originalUrl = url
-      , nodeType = args.nodeType
-      , sessionId = args.sessionId
-      , clientId = args.clientId
+      , nodeType = nodeType
+      , sessionId = flags.s
+      , clientId = flags.c
       , devbar = devbar
       }
     , Cmd.batch
         [ Cmd.map FEMsg newFeCmds
-        , if args.nodeType == Leader then
+        , if nodeType == Leader then
             Cmd.map BEMsg newBeCmds
 
           else
@@ -334,27 +361,6 @@ nodeTypeToString nodeType =
 
         Leader ->
             "Leader"
-
-
-decodeNodeType : D.Decoder NodeType
-decodeNodeType =
-    D.string
-        |> D.map
-            (\v ->
-                case v of
-                    "l" ->
-                        Leader
-
-                    "f" ->
-                        Follower
-
-                    _ ->
-                        let
-                            x =
-                                Debug.log "error" ("decodeNodeType saw an unexpected value: " ++ v)
-                        in
-                        Follower
-            )
 
 
 type LiveStatus
@@ -439,29 +445,18 @@ update msg m =
                     ( m, Cmd.none )
 
                 Leader ->
+                    let
+                        _ =
+                            log " ◀️B " toFrontend
+                    in
                     if m.devbar.networkDelay then
                         ( m, delay 500 (BEtoFEDelayed clientId toFrontend) )
 
                     else
-                        let
-                            payload =
-                                E.object
-                                    [ ( "t", E.string "ToFrontend" )
-                                    , ( "i"
-                                      , toFrontend
-                                            |> log " ◀️B "
-                                            |> Types.w2_encode_ToFrontend
-                                            |> Wire.bytesEncode
-                                            |> Wire.intListFromBytes
-                                            |> E.list E.int
-                                      )
-                                    , ( "s", E.string "" )
-                                    , ( "c", E.string clientId )
-                                    ]
-                        in
                         ( m
                         , Cmd.batch
-                            [ sendToFrontend payload
+                            [ send_ToFrontend
+                                { t = "ToFrontend", b = toFrontend |> Types.w2_encode_ToFrontend |> Wire.bytesEncode, s = "", c = clientId }
                             ]
                         )
 
@@ -471,25 +466,10 @@ update msg m =
                     ( m, Cmd.none )
 
                 Leader ->
-                    let
-                        payload =
-                            E.object
-                                [ ( "t", E.string "ToFrontend" )
-                                , ( "i"
-                                  , toFrontend
-                                        |> log " ◀️B⏱"
-                                        |> Types.w2_encode_ToFrontend
-                                        |> Wire.bytesEncode
-                                        |> Wire.intListFromBytes
-                                        |> E.list E.int
-                                  )
-                                , ( "s", E.string "" )
-                                , ( "c", E.string clientId )
-                                ]
-                    in
                     ( m
                     , Cmd.batch
-                        [ sendToFrontend payload
+                        [ send_ToFrontend
+                            { t = "ToFrontend", b = toFrontend |> Types.w2_encode_ToFrontend |> Wire.bytesEncode, s = "", c = clientId }
                         ]
                     )
 
@@ -499,50 +479,17 @@ update msg m =
 
             else
                 let
-                    bytes_encode =
-                        Wire.bytesEncode (Types.w2_encode_ToBackend toBackend)
-
-                    int_list =
-                        Wire.intListFromBytes bytes_encode
-
                     _ =
-                        log "F▶️  " ( toBackend, bytes_encode, int_list )
-
-                    payload =
-                        E.object
-                            [ ( "t", E.string "ToBackend" )
-                            , ( "s", E.string m.sessionId )
-                            , ( "c", E.string m.clientId )
-                            , ( "i"
-                              , E.list E.int
-                                    int_list
-                              )
-                            ]
+                        log "F▶️  " toBackend
                 in
-                ( m
-                , Cmd.batch
-                    [ sendToBackend payload
-                    ]
-                )
+                ( m, Cmd.batch [ send_ToBackend (Wire.bytesEncode (Types.w2_encode_ToBackend toBackend)) ] )
 
         FEtoBEDelayed toBackend ->
             let
                 _ =
                     log "F▶️ ⏱" toBackend
-
-                payload =
-                    E.object
-                        [ ( "t", E.string "ToBackend" )
-                        , ( "s", E.string m.sessionId )
-                        , ( "c", E.string m.clientId )
-                        , ( "i", E.list E.int (Wire.intListFromBytes (Wire.bytesEncode (Types.w2_encode_ToBackend toBackend))) )
-                        ]
             in
-            ( m
-            , Cmd.batch
-                [ sendToBackend payload
-                ]
-            )
+            ( m, Cmd.batch [ send_ToBackend (Wire.bytesEncode (Types.w2_encode_ToBackend toBackend)) ] )
 
         FENewUrl url ->
             let
@@ -575,71 +522,53 @@ update msg m =
                     in
                     ( m, Cmd.none )
 
-        ReceivedFromFrontend payload ->
+        ReceivedToBackend ( s, c, bytes ) ->
             case m.nodeType of
                 Follower ->
                     -- Followers don't run BE messages
                     ( m, Cmd.none )
 
                 Leader ->
-                    case D.decodeValue payloadDecoder payload of
-                        Ok args ->
-                            case Wire.bytesDecode Types.w2_decode_ToBackend (Wire.intListToBytes args.i) of
-                                Just toBackend ->
-                                    let
-                                        _ =
-                                            log " ▶️B " toBackend
-
-                                        ( newBem, newBeCmds ) =
-                                            userBackendApp.updateFromFrontend args.s args.c toBackend m.bem
-                                    in
-                                    ( { m | bem = newBem, bemDirty = True }
-                                    , Cmd.batch
-                                        [ Cmd.map BEMsg newBeCmds
-                                        ]
-                                    )
-
-                                Nothing ->
-                                    let
-                                        x =
-                                            log "❌ ReceivedFromFrontend" "failed to decode provided msg!"
-                                    in
-                                    ( m, Cmd.none )
-
-                        Err err ->
+                    case Wire.bytesDecode Types.w2_decode_ToBackend bytes of
+                        Just toBackend ->
                             let
-                                x =
-                                    log "❌ ReceivedFromFrontend decoding error" (D.errorToString err)
-                            in
-                            ( m, Cmd.none )
+                                _ =
+                                    log " ▶️B " toBackend
 
-        ReceivedFromBackend payload ->
-            case D.decodeValue payloadDecoder payload of
-                Ok args ->
-                    case Wire.bytesDecode Types.w2_decode_ToFrontend (Wire.intListToBytes args.i) of
-                        Just toFrontend ->
-                            let
-                                x =
-                                    log "F◀️  " toFrontend
-
-                                ( newFem, newFeCmds ) =
-                                    userFrontendApp.updateFromBackend toFrontend m.fem
+                                ( newBem, newBeCmds ) =
+                                    userBackendApp.updateFromFrontend s c toBackend m.bem
                             in
-                            ( { m | fem = storeFE m newFem }
-                            , Cmd.map FEMsg newFeCmds
+                            ( { m | bem = newBem, bemDirty = True }
+                            , Cmd.batch
+                                [ Cmd.map BEMsg newBeCmds
+                                ]
                             )
 
                         Nothing ->
                             let
                                 x =
-                                    log "❌ ReceivedFromBackend" "failed to decode provided msg!"
+                                    log "❌ ReceivedToBackend" "failed to decode provided msg!"
                             in
                             ( m, Cmd.none )
 
-                Err err ->
+        ReceivedToFrontend args ->
+            case Wire.bytesDecode Types.w2_decode_ToFrontend args.b of
+                Just toFrontend ->
                     let
                         x =
-                            log "❌ ReceivedFromBackend decoding error" (D.errorToString err)
+                            log "F◀️  " toFrontend
+
+                        ( newFem, newFeCmds ) =
+                            userFrontendApp.updateFromBackend toFrontend m.fem
+                    in
+                    ( { m | fem = storeFE m newFem }
+                    , Cmd.map FEMsg newFeCmds
+                    )
+
+                Nothing ->
+                    let
+                        x =
+                            log "❌ ReceivedToFrontend" "failed to decode provided msg!"
                     in
                     ( m, Cmd.none )
 
@@ -858,9 +787,7 @@ update msg m =
                             Cmd.none
 
                         Leader ->
-                            [ ( "t", E.string "BackendModel" )
-                            , ( "s", E.string "system" )
-                            , ( "c", E.string "system" )
+                            [ ( "t", E.string "persistBackendModel" )
                             , ( "f"
                               , if reload then
                                     E.string "force"
@@ -868,10 +795,10 @@ update msg m =
                                 else
                                     E.string ""
                               )
-                            , ( "i", E.list E.int (Wire.intListFromBytes (Wire.bytesEncode (Types.w2_encode_BackendModel bem))) )
+                            , ( "b", Wire.encodeBytes_ (Wire.bytesEncode (Types.w2_encode_BackendModel bem)) )
                             ]
                                 |> E.object
-                                |> sendToBackend
+                                |> send_SystemMessage
             in
             if m.bemDirty then
                 ( { m | bemDirty = False }
@@ -904,7 +831,7 @@ update msg m =
               , ( "v", E.string env )
               ]
                 |> E.object
-                |> sendToBackend
+                |> send_SystemMessage
             )
 
         EnvCleared ->
@@ -989,8 +916,8 @@ subscriptions { nodeType, fem, bem, bemDirty } =
         , setNodeTypeLeader SetNodeTypeLeader
         , setLiveStatus SetLiveStatus
         , setClientId ReceivedClientId
-        , receiveFromFrontend ReceivedFromFrontend
-        , receiveFromBackend ReceivedFromBackend
+        , receive_ToBackend ReceivedToBackend
+        , receive_ToFrontend ReceivedToFrontend
         , receiveBackendModel ReceivedBackendModel
         , rpcIn RPCIn
         , onConnection OnConnection
@@ -1658,7 +1585,7 @@ charcoal =
     "#2e3335"
 
 
-main : Program E.Value Model Msg
+main : Program Flags Model Msg
 main =
     Browser.application
         { init = init

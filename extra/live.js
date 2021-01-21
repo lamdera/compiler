@@ -17,7 +17,7 @@ var nodeType = "f"
 // Null checking as we might be on an error page, which doesn't initiate an app
 // but we still want the livereload to function
 var app = null
-var initBackendModel = []
+var initBackendModel = null
 
 var msgHandler = function(e) {
   const d = JSON.parse(e.data)
@@ -99,18 +99,25 @@ setupApp = function(name, elid) {
 
     app = Elm[name].init({
       node: document.getElementById(elid),
-      flags: { c: clientId, s: sessionId, nt: nodeType, i: initBackendModel }
+      flags: { c: clientId, s: sessionId, nt: nodeType, b: initBackendModel }
     })
     if (document.getElementById(elid))
     {
       document.getElementById(elid).innerText = 'This is a headless program, meaning there is nothing to show here.\n\nI started the program anyway though, and you can access it as `app` in the developer console.'
     }
 
-    app.ports.sendToFrontend.subscribe(function (payload) {
+    app.ports.send_ToFrontend.subscribe(function (payload) {
+      if (payload.b !== null) {
+        payload.b = bytesToBase64(payload.b)
+      }
+      console.log(`[S] ToFrontend`, payload)
       msgEmitter(payload)
     })
 
-    app.ports.sendToBackend.subscribe(function (payload) {
+    app.ports.send_SystemMessage.subscribe(function (payload) {
+      if (payload.b !== null) {
+          payload.b = bytesToBase64(payload.b)
+      }
       msgEmitter(payload)
     })
 
@@ -164,29 +171,27 @@ setupApp = function(name, elid) {
         break;
 
       case "ToBackend":
-        if (d.b) {
-          app.ports.receive_ToBackend.send([d.s, d.c, base64ToBytes(d.b)])
-        } else {
-          // @LEGACY remove
-          app.ports.receiveFromFrontend.send(d)
-        }
-
+        console.log(`[R] ToBackend`, d)
+        app.ports.receive_ToBackend.send([d.s, d.c, base64ToBytes(d.b)])
         break;
 
       case "ToFrontend":
         // Only process messages for our clientId, or a broadcast
         if (d.c == clientId || d.c == sessionId || d.c == "b") {
           d.c = clientId
-          app.ports.receiveFromBackend.send(d)
+          if (d.b !== null) {
+            d.b = base64ToBytes(d.b)
+          }
+          app.ports.receive_ToFrontend.send(d)
         } else {
           // console.log(`dropped message`, d)
         }
         break;
 
-      case "BackendModel":
+      case "persistBackendModel":
         if (app === null) {
           // We're being given a backend state to boot up with
-          initBackendModel = d.i
+          initBackendModel = base64ToBytes(d.b)
         } else {
           // We're already live and being given a new backend state
           app.ports.receiveBackendModel.send(d)
