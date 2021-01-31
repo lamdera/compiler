@@ -105,24 +105,29 @@ setupApp = function(name, elid) {
     {
       document.getElementById(elid).innerText = 'This is a headless program, meaning there is nothing to show here.\n\nI started the program anyway though, and you can access it as `app` in the developer console.'
     }
+    // window.app = app
 
     app.ports.send_ToFrontend.subscribe(function (payload) {
       if (payload.b !== null) {
         payload.b = bytesToBase64(payload.b)
       }
-      console.log(`[S] ToFrontend`, payload)
+      // console.log(`[S] ToFrontend`, payload)
       msgEmitter(payload)
     })
 
-    app.ports.send_SystemMessage.subscribe(function (payload) {
-      if (payload.b !== null) {
-          payload.b = bytesToBase64(payload.b)
-      }
+    app.ports.save_BackendModel.subscribe(function (payload) {
+      payload.b = bytesToBase64(payload.b)
+      payload.f = (payload.f) ? "force" : ""
+      msgEmitter(payload)
+    })
+
+    app.ports.send_EnvMode.subscribe(function (payload) {
       msgEmitter(payload)
     })
 
     app.ports.send_ToBackend.subscribe(function (bytes) {
       var b64 = bytesToBase64(bytes)
+      // console.log(`[S] ToBackend`, { t:"ToBackend", s: sessionId, c: clientId, b: b64 })
       msgEmitter({ t:"ToBackend", s: sessionId, c: clientId, b: b64 })
     })
 
@@ -171,13 +176,14 @@ setupApp = function(name, elid) {
         break;
 
       case "ToBackend":
-        console.log(`[R] ToBackend`, d)
+        // console.log(`[R] ToBackend`, d)
         app.ports.receive_ToBackend.send([d.s, d.c, base64ToBytes(d.b)])
         break;
 
       case "ToFrontend":
         // Only process messages for our clientId, or a broadcast
         if (d.c == clientId || d.c == sessionId || d.c == "b") {
+          // console.log(`[R] ToFrontend`, d)
           d.c = clientId
           if (d.b !== null) {
             d.b = base64ToBytes(d.b)
@@ -188,13 +194,14 @@ setupApp = function(name, elid) {
         }
         break;
 
-      case "persistBackendModel":
+      case "p":
         if (app === null) {
           // We're being given a backend state to boot up with
           initBackendModel = base64ToBytes(d.b)
         } else {
           // We're already live and being given a new backend state
-          app.ports.receiveBackendModel.send(d)
+          // @TODO this isn't used currently but needs to adapt for state restore functions?
+          app.ports.receive_BackendModel.send(base64ToBytes(d.b))
         }
         break;
 

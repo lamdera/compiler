@@ -307,8 +307,7 @@ decoderUnion isTest ifaces pkg modul decls unionName union =
         (a (generatedName))
         -- Map.empty
         ptvars $
-        -- addLetLog (Utf8.fromChars $ "w3_decode_" ++ Data.Name.toChars unionName)
-        debugDecoder (Data.Name.toElmString unionName)
+        -- debugDecoder (Data.Name.toElmString unionName)
         (decodeUnsignedInt8 |> andThenDecode1
               (lambda1 (pvar "w3v") $
                 caseof (lvar "w3v") $
@@ -358,8 +357,7 @@ decoderAlias isTest ifaces pkg modul decls aliasName alias@(Alias tvars tipe) =
     ptvars = tvars & fmap (\tvar -> pvar $ Data.Name.fromChars $ "w3_x_c_" ++ Data.Name.toChars tvar )
 
     generated = Def (a (generatedName)) ptvars $
-      -- addLetLog (Utf8.fromChars $ "w3_decode_" ++ Data.Name.toChars aliasName) $
-      debugDecoder (Data.Name.toElmString aliasName) $
+      -- debugDecoder (Data.Name.toElmString aliasName) $
       decoderForType ifaces cname tipe
   in
   generated

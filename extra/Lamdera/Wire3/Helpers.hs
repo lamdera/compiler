@@ -470,7 +470,6 @@ succeedDecode value =
 
 
 failDecode identifier =
-  -- addLetLog (Utf8.fromChars $ "failDecode:" ++ identifier) $
   debugDecoder (Utf8.fromChars $ "failDecode:" ++ identifier) $
   (a (VarForeign mLamdera_Wire "failDecode"
         (Forall

@@ -271,7 +271,7 @@ serveWebsocket (mClients, mLeader, mChan, beState) =
                     -- Actually not needed, because the touch will do this for us!
                     -- SocketServer.broadcastImpl mClients "{\"t\":\"r\"}"
 
-                  else if Text.isPrefixOf "{\"t\":\"persistBackendModel\"," text
+                  else if Text.isSuffixOf "\"t\":\"p\"}" text
                     then do
                       debug "[backendSt] 💾"
                       atomically $ writeTVar beState text

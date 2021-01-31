@@ -51,14 +51,10 @@ port send_ToBackend : Bytes -> Cmd msg
 port receive_ToBackend : (( SessionId, ClientId, Bytes ) -> msg) -> Sub msg
 
 
-port save_BackendModel : Bytes -> Cmd msg
+port save_BackendModel : { t : String, f : Bool, b : Bytes } -> Cmd msg
 
 
-port send_SystemMessage : E.Value -> Cmd msg
-
-
-type alias WireMsg =
-    { t : String, s : String, c : String, b : Bytes }
+port send_EnvMode : { t : String, v : String } -> Cmd msg
 
 
 port send_ToFrontend : WireMsg -> Cmd msg
@@ -67,12 +63,15 @@ port send_ToFrontend : WireMsg -> Cmd msg
 port receive_ToFrontend : (WireMsg -> msg) -> Sub msg
 
 
+type alias WireMsg =
+    { t : String, s : String, c : String, b : Bytes }
 
--- @LEGCACY
+
+
 -- @TODO this isn't used currently but needs to adapt for state restore functions?
 
 
-port receiveBackendModel : (E.Value -> msg) -> Sub msg
+port receive_BackendModel : (Bytes -> msg) -> Sub msg
 
 
 
@@ -94,10 +93,14 @@ port rpcIn : (E.Value -> msg) -> Sub msg
 port rpcOut : E.Value -> Cmd msg
 
 
-port onConnection : (E.Value -> msg) -> Sub msg
+port onConnection : (ConnectionMsg -> msg) -> Sub msg
 
 
-port onDisconnection : (E.Value -> msg) -> Sub msg
+port onDisconnection : (ConnectionMsg -> msg) -> Sub msg
+
+
+type alias ConnectionMsg =
+    { s : SessionId, c : ClientId }
 
 
 type Msg
@@ -108,11 +111,11 @@ type Msg
     | FEtoBE Types.ToBackend
     | FEtoBEDelayed Types.ToBackend
     | FENewUrl Url
-    | OnConnection E.Value
-    | OnDisconnection E.Value
+    | OnConnection ConnectionMsg
+    | OnDisconnection ConnectionMsg
     | ReceivedToBackend ( SessionId, ClientId, Bytes )
     | ReceivedToFrontend WireMsg
-    | ReceivedBackendModel E.Value
+    | ReceivedBackendModel Bytes
     | RPCIn E.Value
     | SetNodeTypeLeader Bool
     | SetLiveStatus Bool
@@ -241,7 +244,7 @@ init flags url key =
                         _ =
                             Debug.log "☀️ Initializing new app" ""
                     in
-                    -- No intList, brand new app
+                    -- No existing model, brand new app
                     ( ibem, iBeCmds, False )
 
                 Just backendModelBytes ->
@@ -384,16 +387,6 @@ payloadDecoder =
         |> required "i" (D.list D.int)
 
 
-type alias ClientJson =
-    { sessionId : SessionId, clientId : ClientId }
-
-
-clientJsonDecoder =
-    D.succeed ClientJson
-        |> required "s" D.string
-        |> required "c" D.string
-
-
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg m =
     let
@@ -498,29 +491,11 @@ update msg m =
             in
             ( { newModel | originalUrl = url }, newCmds )
 
-        OnConnection json ->
-            case D.decodeValue clientJsonDecoder json of
-                Ok c ->
-                    ( m, Lamdera.clientConnected_ c.sessionId c.clientId )
+        OnConnection d ->
+            ( m, Lamdera.clientConnected_ d.s d.c )
 
-                Err err ->
-                    let
-                        _ =
-                            log "❌" "Connect parse failed; this should be impossible! Please report this issue."
-                    in
-                    ( m, Cmd.none )
-
-        OnDisconnection json ->
-            case D.decodeValue clientJsonDecoder json of
-                Ok c ->
-                    ( m, Lamdera.clientDisconnected_ c.sessionId c.clientId )
-
-                Err err ->
-                    let
-                        _ =
-                            log "❌" "Disconnect parse failed; this should be impossible! Please report this issue."
-                    in
-                    ( m, Cmd.none )
+        OnDisconnection d ->
+            ( m, Lamdera.clientDisconnected_ d.s d.c )
 
         ReceivedToBackend ( s, c, bytes ) ->
             case m.nodeType of
@@ -572,30 +547,21 @@ update msg m =
                     in
                     ( m, Cmd.none )
 
-        ReceivedBackendModel payload ->
-            case D.decodeValue payloadDecoder payload of
-                Ok args ->
-                    case Wire.bytesDecode Types.w2_decode_BackendModel (Wire.intListToBytes args.i) of
-                        Just newBem ->
-                            let
-                                x =
-                                    log "❇️ ReceivedBackendModel" newBem
-                            in
-                            ( { m | bem = newBem }
-                            , Cmd.none
-                            )
-
-                        Nothing ->
-                            let
-                                x =
-                                    log "❌ ReceivedBackendModel" "failed to decode provided msg!"
-                            in
-                            ( m, Cmd.none )
-
-                Err err ->
+        ReceivedBackendModel bytes ->
+            case Wire.bytesDecode Types.w2_decode_BackendModel bytes of
+                Just newBem ->
                     let
                         x =
-                            log "❌ ReceivedBackendModel decoding error" (D.errorToString err)
+                            log "❇️ ReceivedBackendModel" newBem
+                    in
+                    ( { m | bem = newBem }
+                    , Cmd.none
+                    )
+
+                Nothing ->
+                    let
+                        x =
+                            log "❌ ReceivedBackendModel" "failed to decode provided msg!"
                     in
                     ( m, Cmd.none )
 
@@ -787,18 +753,7 @@ update msg m =
                             Cmd.none
 
                         Leader ->
-                            [ ( "t", E.string "persistBackendModel" )
-                            , ( "f"
-                              , if reload then
-                                    E.string "force"
-
-                                else
-                                    E.string ""
-                              )
-                            , ( "b", Wire.encodeBytes_ (Wire.bytesEncode (Types.w2_encode_BackendModel bem)) )
-                            ]
-                                |> E.object
-                                |> send_SystemMessage
+                            save_BackendModel { t = "p", f = reload, b = Wire.bytesEncode (Types.w2_encode_BackendModel bem) }
             in
             if m.bemDirty then
                 ( { m | bemDirty = False }
@@ -826,13 +781,7 @@ update msg m =
             ( { m | devbar = { devbar | showModeChanger = not devbar.showModeChanger } }, Cmd.none )
 
         EnvModeSelected env ->
-            ( m
-            , [ ( "t", E.string "envMode" )
-              , ( "v", E.string env )
-              ]
-                |> E.object
-                |> send_SystemMessage
-            )
+            ( m, send_EnvMode { t = "e", v = env } )
 
         EnvCleared ->
             let
@@ -918,7 +867,7 @@ subscriptions { nodeType, fem, bem, bemDirty } =
         , setClientId ReceivedClientId
         , receive_ToBackend ReceivedToBackend
         , receive_ToFrontend ReceivedToFrontend
-        , receiveBackendModel ReceivedBackendModel
+        , receive_BackendModel ReceivedBackendModel
         , rpcIn RPCIn
         , onConnection OnConnection
         , onDisconnection OnDisconnection

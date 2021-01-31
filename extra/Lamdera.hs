@@ -161,7 +161,7 @@ import qualified Data.Utf8 as Utf8
 -- import CanSer.CanSer (ppElm)
 
 lamderaVersion :: String
-lamderaVersion = "0.0.1-alpha11"
+lamderaVersion = "0.0.1-alpha12"
 
 
 stdoutSetup :: IO ()

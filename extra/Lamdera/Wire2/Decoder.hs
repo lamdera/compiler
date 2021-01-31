@@ -367,11 +367,10 @@ decodeRecord ifaces cname fields =
           )
         & Map.fromList
   in
-  -- addLetLog (Utf8.fromChars $ "-- record!") $
   [succeedDecode (a (Lambda pvars (a (Record newRecFields ))))]
   ++ fmap (\(name, field) ->
                 andMapDecode1 (
-                  debugDecoder (Utf8.fromChars $ "." <> Data.Name.toChars name) $
+                  -- debugDecoder (Utf8.fromChars $ "." <> Data.Name.toChars name) $
                     decoderForType ifaces cname field
                 )
           ) fields
