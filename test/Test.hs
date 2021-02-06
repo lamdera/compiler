@@ -47,6 +47,8 @@ Press up arrow to get history of prior commands.
 
 -- Current target for ghci :rr command. See ~/.ghci config file, which should contain
 -- something like `:def rr const $ return $ unlines [":r","Test.target"]`
+
+target = Test.all
 -- target = Test.Wire.wire
 -- target = checkUserConfig
 -- target = TestWire.buildAllPackages
@@ -56,24 +58,24 @@ Press up arrow to get history of prior commands.
 -- target = Lamdera.ReverseProxy.start
 -- target = Test.Check.asUser "/Users/mario/dev/projects/lamdera-dashboard" "dashboard"
 
-target = do
-  setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
-  setEnv "LDEBUG" "1"
-  setEnv "ELM_HOME" "/Users/mario/elm-home-elmx-test"
-  let project = "/Users/mario/lamdera/test/v1"
-  -- let project = "/Users/mario/dev/test/elm-color"
-  -- let project = "/Users/mario/dev/test/json"
-  -- Bust Elm's caching with this one weird trick!
-  Dir.removeDirectoryRecursive $ project </> "/Users/mario/elm-home-elmx-test"
-  Dir.removeDirectoryRecursive $ project </> "elm-stuff"
-  -- touch $ project </> "src/Frontend.elm"
-  -- touch $ project </> "src/Backend.elm"
-  -- Lamdera.Compile.make_ project
-  Lamdera.Compile.makeDev project "src/Frontend.elm"
-  Lamdera.Compile.makeDev project "src/Backend.elm"
-  unsetEnv "LOVR"
-  unsetEnv "LDEBUG"
-  unsetEnv "ELM_HOME"
+-- target = do
+--   setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
+--   setEnv "LDEBUG" "1"
+--   setEnv "ELM_HOME" "/Users/mario/elm-home-elmx-test"
+--   let project = "/Users/mario/lamdera/test/v1"
+--   -- let project = "/Users/mario/dev/test/elm-color"
+--   -- let project = "/Users/mario/dev/test/elm-regex"
+--   -- Bust Elm's caching with this one weird trick!
+--   Dir.removeDirectoryRecursive $ project </> "/Users/mario/elm-home-elmx-test"
+--   Dir.removeDirectoryRecursive $ project </> "elm-stuff"
+--   -- touch $ project </> "src/Frontend.elm"
+--   -- touch $ project </> "src/Backend.elm"
+--   -- Lamdera.Compile.make_ project
+--   Lamdera.Compile.makeDev project "src/Frontend.elm"
+--   Lamdera.Compile.makeDev project "src/Backend.elm"
+--   unsetEnv "LOVR"
+--   unsetEnv "LDEBUG"
+--   unsetEnv "ELM_HOME"
 
 {- Dynamic testing of lamdera live with managed thread kill + reload -}
 -- target = do

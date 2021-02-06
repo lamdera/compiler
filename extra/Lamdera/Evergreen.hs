@@ -30,6 +30,7 @@ createLamderaGenerated root nextVersion = do
   lamderaGenerated nextVersion migrationFilepaths
 
 
+lamderaGenerated :: VersionInfo -> [FilePath] -> IO Text
 lamderaGenerated nextVersion migrationFilepaths = do
   migrationSequence <- liftIO $ getMigrationsSequence migrationFilepaths nextVersion 3 `catchError`
     (\err -> do
@@ -42,13 +43,25 @@ lamderaGenerated nextVersion migrationFilepaths = do
   debug_ $ "Next version: " ++ show nextVersion
 
   let
-    importMigrations = generateImportMigrations migrationSequence
-
-    importTypes_ = importTypes migrationSequence nextVersion
-
-    historicMigrations_ = historicMigrations migrationSequence nextVersion
+    decodeAndUpgrades =
+      coreTypes
+        & fmap (\tipe -> decodeAndUpgradeFor migrationSequence nextVersion tipe)
+        & T.intercalate "\n\n"
 
     nextVersion_ = show_ $ vinfoVersion nextVersion
+
+    imports =
+      (generateImportMigrations migrationSequence
+        <> importTypes migrationSequence nextVersion
+        <> [ "import Lamdera.Migrations exposing (..)"
+           , "import Lamdera.Wire3 exposing (Bytes, Decoder, Encoder, bytesDecode, bytesEncode)"
+           , "import LamderaHelpers exposing (..)"
+           , "import Types as T" <> nextVersion_
+           ]
+      )
+        & List.filter ((/=) "")
+        & List.sort
+        & T.intercalate "\n"
 
   supportingCode <- genSupportingCode
 
@@ -57,12 +70,7 @@ lamderaGenerated nextVersion migrationFilepaths = do
   pure $ [text|
     module LamderaGenerated exposing (..)
 
-    $importMigrations
-    $importTypes_
-    import Lamdera.Migrations exposing (..)
-    import Types as T$nextVersion_
-    import Lamdera.Wire2 exposing (Decoder, Encoder, bytesDecode, bytesEncode, intListFromBytes, intListToBytes)
-    $supportingCode
+    $imports
 
 
     currentVersion : Int
@@ -70,58 +78,55 @@ lamderaGenerated nextVersion migrationFilepaths = do
         $nextVersion_
 
 
-    decodeAndUpgrade : Int -> String -> List Int -> UpgradeResult T$nextVersion_.BackendModel T$nextVersion_.FrontendModel T$nextVersion_.FrontendMsg T$nextVersion_.ToBackend T$nextVersion_.BackendMsg T$nextVersion_.ToFrontend
-    decodeAndUpgrade version tipe intList =
-        case version of
-            $historicMigrations_
+    $decodeAndUpgrades
 
-
-            $nextVersion_ ->
-                case tipe of
-                    "BackendModel" ->
-                        decodeType "BackendModel" version intList T$nextVersion_.w2_decode_BackendModel
-                            |> upgradeIsCurrent CurrentBackendModel
-                            |> otherwiseError
-
-
-                    "FrontendModel" ->
-                        decodeType "FrontendModel" version intList T$nextVersion_.w2_decode_FrontendModel
-                            |> upgradeIsCurrent CurrentFrontendModel
-                            |> otherwiseError
-
-
-                    "FrontendMsg" ->
-                        decodeType "FrontendMsg" version intList T$nextVersion_.w2_decode_FrontendMsg
-                            |> upgradeIsCurrent CurrentFrontendMsg
-                            |> otherwiseError
-
-
-                    "ToBackend" ->
-                        decodeType "ToBackend" version intList T$nextVersion_.w2_decode_ToBackend
-                            |> upgradeIsCurrent CurrentToBackend
-                            |> otherwiseError
-
-
-                    "BackendMsg" ->
-                        decodeType "BackendMsg" version intList T$nextVersion_.w2_decode_BackendMsg
-                            |> upgradeIsCurrent CurrentBackendMsg
-                            |> otherwiseError
-
-
-                    "ToFrontend" ->
-                        decodeType "ToFrontend" version intList T$nextVersion_.w2_decode_ToFrontend
-                            |> upgradeIsCurrent CurrentToFrontend
-                            |> otherwiseError
-
-
-                    _ ->
-                        UnknownType tipe
-
-            _ ->
-                UnknownVersion ( version, tipe, intList )
   |]
 
 
+
+decodeAndUpgradeFor migrationSequence nextVersion valueType = do
+  let
+    nextVersion_ = show_ $ vinfoVersion nextVersion
+
+    historicMigrations_ = historicMigrations migrationSequence nextVersion valueType
+
+    cmdMsgType =
+      case valueType of
+        "BackendModel"  -> "BackendMsg"
+        "FrontendModel" -> "FrontendMsg"
+        "FrontendMsg"   -> "FrontendMsg"
+        "ToBackend"     -> "BackendMsg"
+        "BackendMsg"    -> "BackendMsg"
+        "ToFrontend"    -> "FrontendMsg"
+
+    caseAll =
+      if historicMigrations_ /= "" then
+        [ historicMigrations migrationSequence nextVersion valueType
+        , caseNext
+        ] & T.intercalate "\n\n"
+      else
+        caseNext
+
+    caseNext =
+      [text|
+          $nextVersion_ ->
+              decodeType "$valueType" version bytes T$nextVersion_.w2_decode_$valueType
+                  |> upgradeIsCurrent
+                  |> otherwiseError
+      |]
+
+  [text|
+    decodeAndUpgrade$valueType : Int -> Bytes -> UpgradeResult T$nextVersion_.$valueType T$nextVersion_.$cmdMsgType
+    decodeAndUpgrade$valueType version bytes =
+        case version of
+            $caseAll
+
+            _ ->
+                UnknownVersion ( version, "$valueType", bytes )
+  |]
+
+
+importTypes :: [(a, [VersionInfo])] -> VersionInfo -> [Text]
 importTypes migrationSequence nextVersion =
   migrationSequence
     & List.head
@@ -136,16 +141,16 @@ importTypes migrationSequence nextVersion =
         WithoutMigrations _ ->
           list
       )
-    & T.concat
 
 
 importType :: Int -> Text
 importType version =
-  let versionT = show_ version
+  let version_ = show_ version
   in
-  [text|import Evergreen.V$versionT.Types as T$versionT|]
+  "import Evergreen.V" <> version_ <> ".Types as T" <> version_
 
-generateImportMigrations :: [(Int, [VersionInfo])] -> Text
+
+generateImportMigrations :: [(Int, [VersionInfo])] -> [Text]
 generateImportMigrations migrationSequence =
   case migrationSequence of
     firstMigration:_ ->
@@ -153,27 +158,26 @@ generateImportMigrations migrationSequence =
         & (\(v, (_:actualMigrations)) ->
             fmap generateImportMigration (justWithMigrationVersions actualMigrations)
           )
-        & T.concat
 
     _ ->
-      ""
+      []
 
 
 generateImportMigration :: Int -> Text
 generateImportMigration version =
-  let versionT = show_ version
+  let version_ = show_ version
   in
-  [text|import Evergreen.Migrate.V$versionT as M$versionT|]
+  "import Evergreen.Migrate.V" <> version_ <> " as M" <> version_
 
 
 -- Generate the migration funnel for the set of consequetive
 -- app versions leading up to the current version.
-historicMigrations :: [(Int,[VersionInfo])] -> VersionInfo -> Text
-historicMigrations migrationSequence finalVersion =
+historicMigrations :: [(Int,[VersionInfo])] -> VersionInfo -> Text -> Text
+historicMigrations migrationSequence finalVersion tipe =
   migrationSequence
     -- & dt "historicMigratoins:migrationSequence"
     & fmap (\(forVersion, migrationsForVersion) ->
-      historicMigration migrationSequence forVersion migrationsForVersion finalVersion
+      historicMigration migrationSequence forVersion migrationsForVersion finalVersion tipe
     )
     & (\list ->
         case list of
@@ -183,28 +187,24 @@ historicMigrations migrationSequence finalVersion =
     & T.intercalate "\n"
 
 
+coreTypes = [ "BackendModel", "FrontendModel", "FrontendMsg", "ToBackend", "BackendMsg", "ToFrontend"]
+
+
 -- Generate migration funnel for a single app version entrypoint
-historicMigration :: [(Int, [VersionInfo])] -> Int -> [VersionInfo] -> VersionInfo -> Text
-historicMigration migrationSequence forVersion migrationsForVersion finalVersion =
+historicMigration :: [(Int, [VersionInfo])] -> Int -> [VersionInfo] -> VersionInfo -> Text -> Text
+historicMigration migrationSequence forVersion migrationsForVersion finalVersion tipe =
   let
     (startVersion:subsequentVersions) = migrationsForVersion
-    types = [ "BackendModel", "FrontendModel", "FrontendMsg", "ToBackend", "BackendMsg", "ToFrontend"]
 
-    typeMigrations =
-      types
-        & fmap (migrationForType migrationSequence migrationsForVersion startVersion finalVersion)
-        & T.intercalate "\n"
+    typeMigration =
+      migrationForType migrationSequence migrationsForVersion startVersion finalVersion tipe
 
     forVersion_ = show_ $ forVersion
 
   in
   [text|
     $forVersion_ ->
-        case tipe of
-            $typeMigrations
-
-            _ ->
-                UnknownType tipe
+        $typeMigration
   |]
 
 
@@ -231,19 +231,17 @@ migrationForType migrationSequence migrationsForVersion startVersion finalVersio
 
     decodeAsLatest =
       [text|
-        "$tipe" ->
-            decodeType "$tipe" $finalVersion_ intList T$finalVersion_.w2_decode_$tipe
-                |> upgradeSucceeds Current$tipe
-                |> otherwiseError
+        decodeType "$tipe" $finalVersion_ bytes T$finalVersion_.w2_decode_$tipe
+            |> upgradeSucceeds
+            |> otherwiseError
       |]
 
     migrateNext =
       [text|
-        "$tipe" ->
-            decodeType "$tipe" $startVersion_ intList T$startVersion_.w2_decode_$tipe
-                $intermediateMigrationsFormatted
-                |> upgradeSucceeds Current$tipe
-                |> otherwiseError
+        decodeType "$tipe" $startVersion_ bytes T$startVersion_.w2_decode_$tipe
+            $intermediateMigrationsFormatted
+            |> upgradeSucceeds
+            |> otherwiseError
       |]
 
   case intermediateMigrations of

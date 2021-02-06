@@ -38,134 +38,33 @@ suite = tests
   , scope "historicMigrations: no deploys" $ do
       let nextVersion = (WithoutMigrations 1)
       migrations <- io $ getMigrationsSequence [] nextVersion 3
-      expectEqualTextTrimmed (historicMigrations migrations nextVersion) ""
+      expectEqualTextTrimmed (historicMigrations migrations nextVersion "BackendModel") ""
 
   , scope "historicMigrations: 1 deploy" $ do
       let nextVersion = (WithoutMigrations 2)
       migrations <- io $ getMigrationsSequence [] nextVersion 3
-      expectEqualTextTrimmed (historicMigrations migrations nextVersion) [text|
+      expectEqualTextTrimmed (historicMigrations migrations nextVersion "BackendModel") [text|
         1 ->
-            case tipe of
-                "BackendModel" ->
-                    decodeType "BackendModel" 2 intList T2.w2_decode_BackendModel
-                        |> upgradeSucceeds CurrentBackendModel
-                        |> otherwiseError
-
-                "FrontendModel" ->
-                    decodeType "FrontendModel" 2 intList T2.w2_decode_FrontendModel
-                        |> upgradeSucceeds CurrentFrontendModel
-                        |> otherwiseError
-
-                "FrontendMsg" ->
-                    decodeType "FrontendMsg" 2 intList T2.w2_decode_FrontendMsg
-                        |> upgradeSucceeds CurrentFrontendMsg
-                        |> otherwiseError
-
-                "ToBackend" ->
-                    decodeType "ToBackend" 2 intList T2.w2_decode_ToBackend
-                        |> upgradeSucceeds CurrentToBackend
-                        |> otherwiseError
-
-                "BackendMsg" ->
-                    decodeType "BackendMsg" 2 intList T2.w2_decode_BackendMsg
-                        |> upgradeSucceeds CurrentBackendMsg
-                        |> otherwiseError
-
-                "ToFrontend" ->
-                    decodeType "ToFrontend" 2 intList T2.w2_decode_ToFrontend
-                        |> upgradeSucceeds CurrentToFrontend
-                        |> otherwiseError
-
-                _ ->
-                    UnknownType tipe
-
+            decodeType "BackendModel" 2 bytes T2.w2_decode_BackendModel
+                |> upgradeSucceeds
+                |> otherwiseError
       |]
 
   , scope "historicMigrations: 3rd deploy after migrations" $ do
       let nextVersion = (WithoutMigrations 3)
       migrations <- io $ getMigrationsSequence ["V2.elm"] nextVersion 3
-      expectEqualTextTrimmed (historicMigrations migrations nextVersion) [text|
+      expectEqualTextTrimmed (historicMigrations migrations nextVersion "BackendModel") [text|
         1 ->
-            case tipe of
-                "BackendModel" ->
-                    decodeType "BackendModel" 1 intList T1.w2_decode_BackendModel
-                        |> thenMigrateModel "BackendModel" M2.backendModel T1.w2_encode_BackendModel T2.w2_decode_BackendModel 2
-                        |> thenMigrateModel "BackendModel" (always ModelUnchanged) T2.w2_encode_BackendModel T3.w2_decode_BackendModel 3
-                        |> upgradeSucceeds CurrentBackendModel
-                        |> otherwiseError
-
-                "FrontendModel" ->
-                    decodeType "FrontendModel" 1 intList T1.w2_decode_FrontendModel
-                        |> thenMigrateModel "FrontendModel" M2.frontendModel T1.w2_encode_FrontendModel T2.w2_decode_FrontendModel 2
-                        |> thenMigrateModel "FrontendModel" (always ModelUnchanged) T2.w2_encode_FrontendModel T3.w2_decode_FrontendModel 3
-                        |> upgradeSucceeds CurrentFrontendModel
-                        |> otherwiseError
-
-                "FrontendMsg" ->
-                    decodeType "FrontendMsg" 1 intList T1.w2_decode_FrontendMsg
-                        |> thenMigrateMsg "FrontendMsg" M2.frontendMsg T1.w2_encode_FrontendMsg T2.w2_decode_FrontendMsg 2
-                        |> thenMigrateMsg "FrontendMsg" (always MsgUnchanged) T2.w2_encode_FrontendMsg T3.w2_decode_FrontendMsg 3
-                        |> upgradeSucceeds CurrentFrontendMsg
-                        |> otherwiseError
-
-                "ToBackend" ->
-                    decodeType "ToBackend" 1 intList T1.w2_decode_ToBackend
-                        |> thenMigrateMsg "ToBackend" M2.toBackend T1.w2_encode_ToBackend T2.w2_decode_ToBackend 2
-                        |> thenMigrateMsg "ToBackend" (always MsgUnchanged) T2.w2_encode_ToBackend T3.w2_decode_ToBackend 3
-                        |> upgradeSucceeds CurrentToBackend
-                        |> otherwiseError
-
-                "BackendMsg" ->
-                    decodeType "BackendMsg" 1 intList T1.w2_decode_BackendMsg
-                        |> thenMigrateMsg "BackendMsg" M2.backendMsg T1.w2_encode_BackendMsg T2.w2_decode_BackendMsg 2
-                        |> thenMigrateMsg "BackendMsg" (always MsgUnchanged) T2.w2_encode_BackendMsg T3.w2_decode_BackendMsg 3
-                        |> upgradeSucceeds CurrentBackendMsg
-                        |> otherwiseError
-
-                "ToFrontend" ->
-                    decodeType "ToFrontend" 1 intList T1.w2_decode_ToFrontend
-                        |> thenMigrateMsg "ToFrontend" M2.toFrontend T1.w2_encode_ToFrontend T2.w2_decode_ToFrontend 2
-                        |> thenMigrateMsg "ToFrontend" (always MsgUnchanged) T2.w2_encode_ToFrontend T3.w2_decode_ToFrontend 3
-                        |> upgradeSucceeds CurrentToFrontend
-                        |> otherwiseError
-
-                _ ->
-                    UnknownType tipe
+            decodeType "BackendModel" 1 bytes T1.w2_decode_BackendModel
+                |> thenMigrateModel "BackendModel" M2.backendModel T1.w2_encode_BackendModel T2.w2_decode_BackendModel 2
+                |> thenMigrateModel "BackendModel" (always ModelUnchanged) T2.w2_encode_BackendModel T3.w2_decode_BackendModel 3
+                |> upgradeSucceeds
+                |> otherwiseError
 
         2 ->
-            case tipe of
-                "BackendModel" ->
-                    decodeType "BackendModel" 3 intList T3.w2_decode_BackendModel
-                        |> upgradeSucceeds CurrentBackendModel
-                        |> otherwiseError
-
-                "FrontendModel" ->
-                    decodeType "FrontendModel" 3 intList T3.w2_decode_FrontendModel
-                        |> upgradeSucceeds CurrentFrontendModel
-                        |> otherwiseError
-
-                "FrontendMsg" ->
-                    decodeType "FrontendMsg" 3 intList T3.w2_decode_FrontendMsg
-                        |> upgradeSucceeds CurrentFrontendMsg
-                        |> otherwiseError
-
-                "ToBackend" ->
-                    decodeType "ToBackend" 3 intList T3.w2_decode_ToBackend
-                        |> upgradeSucceeds CurrentToBackend
-                        |> otherwiseError
-
-                "BackendMsg" ->
-                    decodeType "BackendMsg" 3 intList T3.w2_decode_BackendMsg
-                        |> upgradeSucceeds CurrentBackendMsg
-                        |> otherwiseError
-
-                "ToFrontend" ->
-                    decodeType "ToFrontend" 3 intList T3.w2_decode_ToFrontend
-                        |> upgradeSucceeds CurrentToFrontend
-                        |> otherwiseError
-
-                _ ->
-                    UnknownType tipe
+            decodeType "BackendModel" 3 bytes T3.w2_decode_BackendModel
+                |> upgradeSucceeds
+                |> otherwiseError
       |]
 
 
@@ -181,184 +80,295 @@ suite = tests
         expectEqualTextTrimmed (show migrations & T.pack) "[(60,[WithMigrations 57,WithoutMigrations 62]),(61,[WithMigrations 57,WithoutMigrations 62]),(62,[WithoutMigrations 62])]"
 
       scope "type imports" $
-        expectEqualTextTrimmed (importTypes migrations nextVersion) "import Evergreen.V57.Types as T57"
+        expectEqualTextTrimmed (importTypes migrations nextVersion & T.intercalate "\n") "import Evergreen.V57.Types as T57"
 
       scope "historic migrations" $
-        expectEqualTextTrimmed (historicMigrations migrations nextVersion)
+        expectEqualTextTrimmed (historicMigrations migrations nextVersion "BackendModel")
         [text|
           60 ->
-              case tipe of
-                  "BackendModel" ->
-                      decodeType "BackendModel" 62 intList T62.w2_decode_BackendModel
-                          |> upgradeSucceeds CurrentBackendModel
-                          |> otherwiseError
-
-                  "FrontendModel" ->
-                      decodeType "FrontendModel" 62 intList T62.w2_decode_FrontendModel
-                          |> upgradeSucceeds CurrentFrontendModel
-                          |> otherwiseError
-
-                  "FrontendMsg" ->
-                      decodeType "FrontendMsg" 62 intList T62.w2_decode_FrontendMsg
-                          |> upgradeSucceeds CurrentFrontendMsg
-                          |> otherwiseError
-
-                  "ToBackend" ->
-                      decodeType "ToBackend" 62 intList T62.w2_decode_ToBackend
-                          |> upgradeSucceeds CurrentToBackend
-                          |> otherwiseError
-
-                  "BackendMsg" ->
-                      decodeType "BackendMsg" 62 intList T62.w2_decode_BackendMsg
-                          |> upgradeSucceeds CurrentBackendMsg
-                          |> otherwiseError
-
-                  "ToFrontend" ->
-                      decodeType "ToFrontend" 62 intList T62.w2_decode_ToFrontend
-                          |> upgradeSucceeds CurrentToFrontend
-                          |> otherwiseError
-
-                  _ ->
-                      UnknownType tipe
+              decodeType "BackendModel" 62 bytes T62.w2_decode_BackendModel
+                  |> upgradeSucceeds
+                  |> otherwiseError
 
           61 ->
-              case tipe of
-                  "BackendModel" ->
-                      decodeType "BackendModel" 62 intList T62.w2_decode_BackendModel
-                          |> upgradeSucceeds CurrentBackendModel
-                          |> otherwiseError
-
-                  "FrontendModel" ->
-                      decodeType "FrontendModel" 62 intList T62.w2_decode_FrontendModel
-                          |> upgradeSucceeds CurrentFrontendModel
-                          |> otherwiseError
-
-                  "FrontendMsg" ->
-                      decodeType "FrontendMsg" 62 intList T62.w2_decode_FrontendMsg
-                          |> upgradeSucceeds CurrentFrontendMsg
-                          |> otherwiseError
-
-                  "ToBackend" ->
-                      decodeType "ToBackend" 62 intList T62.w2_decode_ToBackend
-                          |> upgradeSucceeds CurrentToBackend
-                          |> otherwiseError
-
-                  "BackendMsg" ->
-                      decodeType "BackendMsg" 62 intList T62.w2_decode_BackendMsg
-                          |> upgradeSucceeds CurrentBackendMsg
-                          |> otherwiseError
-
-                  "ToFrontend" ->
-                      decodeType "ToFrontend" 62 intList T62.w2_decode_ToFrontend
-                          |> upgradeSucceeds CurrentToFrontend
-                          |> otherwiseError
-
-                  _ ->
-                      UnknownType tipe
+              decodeType "BackendModel" 62 bytes T62.w2_decode_BackendModel
+                  |> upgradeSucceeds
+                  |> otherwiseError
         |]
 
 
 
   , scope "migration 62 after migrate 57" $ do
 
-      let nextVersion = (WithMigrations 62)
-      migrations <- io $ getMigrationsSequence
-        ["V17.elm","V28.elm","V13.elm","V40.elm","V42.elm","V56.elm","V57.elm","V43.elm","V52.elm","V45.elm","V22.elm","V3.elm","V2.elm","V34.elm","V20.elm","V18.elm","V6.elm","V26.elm", "V62.elm"]
-        nextVersion
-        3
+      let
+        nextVersion = (WithMigrations 62)
+        migrationsFilenames = ["V17.elm","V28.elm","V13.elm","V40.elm","V42.elm","V56.elm","V57.elm","V43.elm","V52.elm","V45.elm","V22.elm","V3.elm","V2.elm","V34.elm","V20.elm","V18.elm","V6.elm","V26.elm", "V62.elm"]
+      migrations <- io $ getMigrationsSequence migrationsFilenames nextVersion 3
 
       scope "migrations" $
         expectEqualTextTrimmed (show migrations & T.pack) "[(60,[WithMigrations 57,WithMigrations 62]),(61,[WithMigrations 57,WithMigrations 62]),(62,[WithMigrations 62])]"
 
       scope "type imports" $
-        expectEqualTextTrimmed (importTypes migrations nextVersion) "import Evergreen.V57.Types as T57"
+        expectEqualTextTrimmed (importTypes migrations nextVersion & T.intercalate "\n") "import Evergreen.V57.Types as T57"
 
       scope "historic migrations" $
-        expectEqualTextTrimmed (historicMigrations migrations nextVersion)
+        expectEqualTextTrimmed (historicMigrations migrations nextVersion "BackendModel")
         [text|
           60 ->
-              case tipe of
-                  "BackendModel" ->
-                      decodeType "BackendModel" 57 intList T57.w2_decode_BackendModel
-                          |> thenMigrateModel "BackendModel" M62.backendModel T57.w2_encode_BackendModel T62.w2_decode_BackendModel 62
-                          |> upgradeSucceeds CurrentBackendModel
-                          |> otherwiseError
-
-                  "FrontendModel" ->
-                      decodeType "FrontendModel" 57 intList T57.w2_decode_FrontendModel
-                          |> thenMigrateModel "FrontendModel" M62.frontendModel T57.w2_encode_FrontendModel T62.w2_decode_FrontendModel 62
-                          |> upgradeSucceeds CurrentFrontendModel
-                          |> otherwiseError
-
-                  "FrontendMsg" ->
-                      decodeType "FrontendMsg" 57 intList T57.w2_decode_FrontendMsg
-                          |> thenMigrateMsg "FrontendMsg" M62.frontendMsg T57.w2_encode_FrontendMsg T62.w2_decode_FrontendMsg 62
-                          |> upgradeSucceeds CurrentFrontendMsg
-                          |> otherwiseError
-
-                  "ToBackend" ->
-                      decodeType "ToBackend" 57 intList T57.w2_decode_ToBackend
-                          |> thenMigrateMsg "ToBackend" M62.toBackend T57.w2_encode_ToBackend T62.w2_decode_ToBackend 62
-                          |> upgradeSucceeds CurrentToBackend
-                          |> otherwiseError
-
-                  "BackendMsg" ->
-                      decodeType "BackendMsg" 57 intList T57.w2_decode_BackendMsg
-                          |> thenMigrateMsg "BackendMsg" M62.backendMsg T57.w2_encode_BackendMsg T62.w2_decode_BackendMsg 62
-                          |> upgradeSucceeds CurrentBackendMsg
-                          |> otherwiseError
-
-                  "ToFrontend" ->
-                      decodeType "ToFrontend" 57 intList T57.w2_decode_ToFrontend
-                          |> thenMigrateMsg "ToFrontend" M62.toFrontend T57.w2_encode_ToFrontend T62.w2_decode_ToFrontend 62
-                          |> upgradeSucceeds CurrentToFrontend
-                          |> otherwiseError
-
-                  _ ->
-                      UnknownType tipe
+              decodeType "BackendModel" 57 bytes T57.w2_decode_BackendModel
+                  |> thenMigrateModel "BackendModel" M62.backendModel T57.w2_encode_BackendModel T62.w2_decode_BackendModel 62
+                  |> upgradeSucceeds
+                  |> otherwiseError
 
           61 ->
-              case tipe of
-                  "BackendModel" ->
-                      decodeType "BackendModel" 57 intList T57.w2_decode_BackendModel
-                          |> thenMigrateModel "BackendModel" M62.backendModel T57.w2_encode_BackendModel T62.w2_decode_BackendModel 62
-                          |> upgradeSucceeds CurrentBackendModel
-                          |> otherwiseError
+              decodeType "BackendModel" 57 bytes T57.w2_decode_BackendModel
+                  |> thenMigrateModel "BackendModel" M62.backendModel T57.w2_encode_BackendModel T62.w2_decode_BackendModel 62
+                  |> upgradeSucceeds
+                  |> otherwiseError
+        |]
 
-                  "FrontendModel" ->
-                      decodeType "FrontendModel" 57 intList T57.w2_decode_FrontendModel
-                          |> thenMigrateModel "FrontendModel" M62.frontendModel T57.w2_encode_FrontendModel T62.w2_decode_FrontendModel 62
-                          |> upgradeSucceeds CurrentFrontendModel
-                          |> otherwiseError
 
-                  "FrontendMsg" ->
-                      decodeType "FrontendMsg" 57 intList T57.w2_decode_FrontendMsg
-                          |> thenMigrateMsg "FrontendMsg" M62.frontendMsg T57.w2_encode_FrontendMsg T62.w2_decode_FrontendMsg 62
-                          |> upgradeSucceeds CurrentFrontendMsg
-                          |> otherwiseError
+  , scope "full first - (WithoutMigrations 1)" $ do
 
-                  "ToBackend" ->
-                      decodeType "ToBackend" 57 intList T57.w2_decode_ToBackend
-                          |> thenMigrateMsg "ToBackend" M62.toBackend T57.w2_encode_ToBackend T62.w2_decode_ToBackend 62
-                          |> upgradeSucceeds CurrentToBackend
-                          |> otherwiseError
+      let
+        nextVersion = (WithoutMigrations 1)
+        migrationsFilenames = []
+      migrations <- io $ getMigrationsSequence migrationsFilenames nextVersion 1
+      result <- io $ lamderaGenerated nextVersion migrationsFilenames
 
-                  "BackendMsg" ->
-                      decodeType "BackendMsg" 57 intList T57.w2_decode_BackendMsg
-                          |> thenMigrateMsg "BackendMsg" M62.backendMsg T57.w2_encode_BackendMsg T62.w2_decode_BackendMsg 62
-                          |> upgradeSucceeds CurrentBackendMsg
-                          |> otherwiseError
+      scope "full" $
+        expectEqualTextTrimmed result
+        [text|
 
-                  "ToFrontend" ->
-                      decodeType "ToFrontend" 57 intList T57.w2_decode_ToFrontend
-                          |> thenMigrateMsg "ToFrontend" M62.toFrontend T57.w2_encode_ToFrontend T62.w2_decode_ToFrontend 62
-                          |> upgradeSucceeds CurrentToFrontend
+          module LamderaGenerated exposing (..)
+
+          import Lamdera.Migrations exposing (..)
+          import Lamdera.Wire3 exposing (Bytes, Decoder, Encoder, bytesDecode, bytesEncode)
+          import LamderaHelpers exposing (..)
+          import Types as T1
+
+
+          currentVersion : Int
+          currentVersion =
+              1
+
+
+          decodeAndUpgradeBackendModel : Int -> Bytes -> UpgradeResult T1.BackendModel T1.BackendMsg
+          decodeAndUpgradeBackendModel version bytes =
+              case version of
+                  1 ->
+                      decodeType "BackendModel" version bytes T1.w2_decode_BackendModel
+                          |> upgradeIsCurrent
                           |> otherwiseError
 
                   _ ->
-                      UnknownType tipe
+                      UnknownVersion ( version, "BackendModel", bytes )
+
+
+          decodeAndUpgradeFrontendModel : Int -> Bytes -> UpgradeResult T1.FrontendModel T1.FrontendMsg
+          decodeAndUpgradeFrontendModel version bytes =
+              case version of
+                  1 ->
+                      decodeType "FrontendModel" version bytes T1.w2_decode_FrontendModel
+                          |> upgradeIsCurrent
+                          |> otherwiseError
+
+                  _ ->
+                      UnknownVersion ( version, "FrontendModel", bytes )
+
+
+          decodeAndUpgradeFrontendMsg : Int -> Bytes -> UpgradeResult T1.FrontendMsg T1.FrontendMsg
+          decodeAndUpgradeFrontendMsg version bytes =
+              case version of
+                  1 ->
+                      decodeType "FrontendMsg" version bytes T1.w2_decode_FrontendMsg
+                          |> upgradeIsCurrent
+                          |> otherwiseError
+
+                  _ ->
+                      UnknownVersion ( version, "FrontendMsg", bytes )
+
+
+          decodeAndUpgradeToBackend : Int -> Bytes -> UpgradeResult T1.ToBackend T1.BackendMsg
+          decodeAndUpgradeToBackend version bytes =
+              case version of
+                  1 ->
+                      decodeType "ToBackend" version bytes T1.w2_decode_ToBackend
+                          |> upgradeIsCurrent
+                          |> otherwiseError
+
+                  _ ->
+                      UnknownVersion ( version, "ToBackend", bytes )
+
+
+          decodeAndUpgradeBackendMsg : Int -> Bytes -> UpgradeResult T1.BackendMsg T1.BackendMsg
+          decodeAndUpgradeBackendMsg version bytes =
+              case version of
+                  1 ->
+                      decodeType "BackendMsg" version bytes T1.w2_decode_BackendMsg
+                          |> upgradeIsCurrent
+                          |> otherwiseError
+
+                  _ ->
+                      UnknownVersion ( version, "BackendMsg", bytes )
+
+
+          decodeAndUpgradeToFrontend : Int -> Bytes -> UpgradeResult T1.ToFrontend T1.FrontendMsg
+          decodeAndUpgradeToFrontend version bytes =
+              case version of
+                  1 ->
+                      decodeType "ToFrontend" version bytes T1.w2_decode_ToFrontend
+                          |> upgradeIsCurrent
+                          |> otherwiseError
+
+                  _ ->
+                      UnknownVersion ( version, "ToFrontend", bytes )
+
         |]
 
+
+  , scope "full first - (WithMigrations 2)" $ do
+
+      let
+        nextVersion = (WithMigrations 2)
+        migrationsFilenames = ["V2.elm"]
+      migrations <- io $ getMigrationsSequence migrationsFilenames nextVersion 2
+      result <- io $ lamderaGenerated nextVersion migrationsFilenames
+
+      scope "full" $
+        expectEqualTextTrimmed result
+        [text|
+
+          module LamderaGenerated exposing (..)
+
+          import Evergreen.Migrate.V2 as M2
+          import Evergreen.V1.Types as T1
+          import Lamdera.Migrations exposing (..)
+          import Lamdera.Wire3 exposing (Bytes, Decoder, Encoder, bytesDecode, bytesEncode)
+          import LamderaHelpers exposing (..)
+          import Types as T2
+
+
+          currentVersion : Int
+          currentVersion =
+              2
+
+
+          decodeAndUpgradeBackendModel : Int -> Bytes -> UpgradeResult T2.BackendModel T2.BackendMsg
+          decodeAndUpgradeBackendModel version bytes =
+              case version of
+                  1 ->
+                      decodeType "BackendModel" 1 bytes T1.w2_decode_BackendModel
+                          |> thenMigrateModel "BackendModel" M2.backendModel T1.w2_encode_BackendModel T2.w2_decode_BackendModel 2
+                          |> upgradeSucceeds
+                          |> otherwiseError
+
+
+                  2 ->
+                      decodeType "BackendModel" version bytes T2.w2_decode_BackendModel
+                          |> upgradeIsCurrent
+                          |> otherwiseError
+
+                  _ ->
+                      UnknownVersion ( version, "BackendModel", bytes )
+
+
+          decodeAndUpgradeFrontendModel : Int -> Bytes -> UpgradeResult T2.FrontendModel T2.FrontendMsg
+          decodeAndUpgradeFrontendModel version bytes =
+              case version of
+                  1 ->
+                      decodeType "FrontendModel" 1 bytes T1.w2_decode_FrontendModel
+                          |> thenMigrateModel "FrontendModel" M2.frontendModel T1.w2_encode_FrontendModel T2.w2_decode_FrontendModel 2
+                          |> upgradeSucceeds
+                          |> otherwiseError
+
+
+                  2 ->
+                      decodeType "FrontendModel" version bytes T2.w2_decode_FrontendModel
+                          |> upgradeIsCurrent
+                          |> otherwiseError
+
+                  _ ->
+                      UnknownVersion ( version, "FrontendModel", bytes )
+
+
+          decodeAndUpgradeFrontendMsg : Int -> Bytes -> UpgradeResult T2.FrontendMsg T2.FrontendMsg
+          decodeAndUpgradeFrontendMsg version bytes =
+              case version of
+                  1 ->
+                      decodeType "FrontendMsg" 1 bytes T1.w2_decode_FrontendMsg
+                          |> thenMigrateMsg "FrontendMsg" M2.frontendMsg T1.w2_encode_FrontendMsg T2.w2_decode_FrontendMsg 2
+                          |> upgradeSucceeds
+                          |> otherwiseError
+
+
+                  2 ->
+                      decodeType "FrontendMsg" version bytes T2.w2_decode_FrontendMsg
+                          |> upgradeIsCurrent
+                          |> otherwiseError
+
+                  _ ->
+                      UnknownVersion ( version, "FrontendMsg", bytes )
+
+
+          decodeAndUpgradeToBackend : Int -> Bytes -> UpgradeResult T2.ToBackend T2.BackendMsg
+          decodeAndUpgradeToBackend version bytes =
+              case version of
+                  1 ->
+                      decodeType "ToBackend" 1 bytes T1.w2_decode_ToBackend
+                          |> thenMigrateMsg "ToBackend" M2.toBackend T1.w2_encode_ToBackend T2.w2_decode_ToBackend 2
+                          |> upgradeSucceeds
+                          |> otherwiseError
+
+
+                  2 ->
+                      decodeType "ToBackend" version bytes T2.w2_decode_ToBackend
+                          |> upgradeIsCurrent
+                          |> otherwiseError
+
+                  _ ->
+                      UnknownVersion ( version, "ToBackend", bytes )
+
+
+          decodeAndUpgradeBackendMsg : Int -> Bytes -> UpgradeResult T2.BackendMsg T2.BackendMsg
+          decodeAndUpgradeBackendMsg version bytes =
+              case version of
+                  1 ->
+                      decodeType "BackendMsg" 1 bytes T1.w2_decode_BackendMsg
+                          |> thenMigrateMsg "BackendMsg" M2.backendMsg T1.w2_encode_BackendMsg T2.w2_decode_BackendMsg 2
+                          |> upgradeSucceeds
+                          |> otherwiseError
+
+
+                  2 ->
+                      decodeType "BackendMsg" version bytes T2.w2_decode_BackendMsg
+                          |> upgradeIsCurrent
+                          |> otherwiseError
+
+                  _ ->
+                      UnknownVersion ( version, "BackendMsg", bytes )
+
+
+          decodeAndUpgradeToFrontend : Int -> Bytes -> UpgradeResult T2.ToFrontend T2.FrontendMsg
+          decodeAndUpgradeToFrontend version bytes =
+              case version of
+                  1 ->
+                      decodeType "ToFrontend" 1 bytes T1.w2_decode_ToFrontend
+                          |> thenMigrateMsg "ToFrontend" M2.toFrontend T1.w2_encode_ToFrontend T2.w2_decode_ToFrontend 2
+                          |> upgradeSucceeds
+                          |> otherwiseError
+
+
+                  2 ->
+                      decodeType "ToFrontend" version bytes T2.w2_decode_ToFrontend
+                          |> upgradeIsCurrent
+                          |> otherwiseError
+
+                  _ ->
+                      UnknownVersion ( version, "ToFrontend", bytes )
+
+
+        |]
   ]
 
 
