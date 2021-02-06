@@ -1,6 +1,6 @@
 module Test.Wire_Record_Extensible exposing (..)
 
-import Lamdera.Wire2
+import Lamdera.Wire3
 import Test.Wire_Record_Extensible2 exposing (..)
 
 
@@ -23,11 +23,11 @@ type alias Config =
 --
 --
 -- expected_w2_encode_Config =
---     \w2_rec_var0 -> Lamdera.Wire2.encodeSequenceWithoutLength [ Test.Wire_Record_Extensible2.w2_encode_Color w2_rec_var0.overlayColor ]
+--     \w2_rec_var0 -> Lamdera.Wire3.encodeSequenceWithoutLength [ Test.Wire_Record_Extensible2.w2_encode_Color w2_rec_var0.overlayColor ]
 --
 --
 -- expected_w2_decode_Config =
---     Lamdera.Wire2.succeedDecode (\overlayColor0 -> { overlayColor = overlayColor0 }) |> Lamdera.Wire2.andMapDecode Test.Wire_Record_Extensible2.w2_decode_Color
+--     Lamdera.Wire3.succeedDecode (\overlayColor0 -> { overlayColor = overlayColor0 }) |> Lamdera.Wire3.andMapDecode Test.Wire_Record_Extensible2.w2_decode_Color
 --
 --
 --
@@ -52,17 +52,17 @@ type alias Config_ otherConfig msg =
 expected_w2_encode_Type w2_x_c_msg w2v =
     case w2v of
         DateType v0 ->
-            Lamdera.Wire2.encodeSequenceWithoutLength [ Lamdera.Wire2.encodeUnsignedInt8 0, w2_encode_Config_ Lamdera.Wire2.encodeString w2_x_c_msg v0 ]
+            Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeUnsignedInt8 0, w2_encode_Config_ Lamdera.Wire3.encodeString w2_x_c_msg v0 ]
 
 
 expected_w2_decode_Type w2_x_c_msg =
-    Lamdera.Wire2.decodeUnsignedInt8
-        |> Lamdera.Wire2.andThenDecode
+    Lamdera.Wire3.decodeUnsignedInt8
+        |> Lamdera.Wire3.andThenDecode
             (\w2v ->
                 case w2v of
                     0 ->
-                        Lamdera.Wire2.succeedDecode DateType |> Lamdera.Wire2.andMapDecode (w2_decode_Config_ Lamdera.Wire2.decodeString w2_x_c_msg)
+                        Lamdera.Wire3.succeedDecode DateType |> Lamdera.Wire3.andMapDecode (w2_decode_Config_ Lamdera.Wire3.decodeString w2_x_c_msg)
 
                     _ ->
-                        Lamdera.Wire2.failDecode
+                        Lamdera.Wire3.failDecode
             )

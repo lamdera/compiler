@@ -1,6 +1,6 @@
 module Test.Wire_Phantom2 exposing (..)
 
-import Lamdera.Wire2
+import Lamdera.Wire3
 
 
 

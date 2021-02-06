@@ -2,7 +2,7 @@ module Test.Wire_Alias_2_Record exposing (..)
 
 import Array exposing (Array)
 import Dict exposing (Dict)
-import Lamdera.Wire2
+import Lamdera.Wire3
 import Set exposing (Set)
 import Test.External exposing (..)
 import Time
@@ -31,36 +31,36 @@ type alias AllTypes =
 
 expected_w2_encode_AllTypes =
     \w2_rec_var0 ->
-        Lamdera.Wire2.encodeSequenceWithoutLength
-            [ Lamdera.Wire2.encodeInt w2_rec_var0.int
-            , Lamdera.Wire2.encodeFloat w2_rec_var0.float
-            , Lamdera.Wire2.encodeBool w2_rec_var0.bool
-            , Lamdera.Wire2.encodeChar w2_rec_var0.char
-            , Lamdera.Wire2.encodeString w2_rec_var0.string
-            , Lamdera.Wire2.encodeList Lamdera.Wire2.encodeInt w2_rec_var0.listInt
-            , Lamdera.Wire2.encodeSet Lamdera.Wire2.encodeFloat w2_rec_var0.setFloat
-            , Lamdera.Wire2.encodeArray Lamdera.Wire2.encodeString w2_rec_var0.arrayString
-            , Lamdera.Wire2.encodeDict Lamdera.Wire2.encodeString (Lamdera.Wire2.encodeList Lamdera.Wire2.encodeInt) w2_rec_var0.dict
-            , (\t -> Lamdera.Wire2.encodeInt (Time.posixToMillis t)) w2_rec_var0.time
-            , Lamdera.Wire2.encodeOrder w2_rec_var0.order
-            , Lamdera.Wire2.encodeUnit w2_rec_var0.unit
+        Lamdera.Wire3.encodeSequenceWithoutLength
+            [ Lamdera.Wire3.encodeInt w2_rec_var0.int
+            , Lamdera.Wire3.encodeFloat w2_rec_var0.float
+            , Lamdera.Wire3.encodeBool w2_rec_var0.bool
+            , Lamdera.Wire3.encodeChar w2_rec_var0.char
+            , Lamdera.Wire3.encodeString w2_rec_var0.string
+            , Lamdera.Wire3.encodeList Lamdera.Wire3.encodeInt w2_rec_var0.listInt
+            , Lamdera.Wire3.encodeSet Lamdera.Wire3.encodeFloat w2_rec_var0.setFloat
+            , Lamdera.Wire3.encodeArray Lamdera.Wire3.encodeString w2_rec_var0.arrayString
+            , Lamdera.Wire3.encodeDict Lamdera.Wire3.encodeString (Lamdera.Wire3.encodeList Lamdera.Wire3.encodeInt) w2_rec_var0.dict
+            , (\t -> Lamdera.Wire3.encodeInt (Time.posixToMillis t)) w2_rec_var0.time
+            , Lamdera.Wire3.encodeOrder w2_rec_var0.order
+            , Lamdera.Wire3.encodeUnit w2_rec_var0.unit
             ]
 
 
 expected_w2_decode_AllTypes =
-    Lamdera.Wire2.succeedDecode
+    Lamdera.Wire3.succeedDecode
         (\int0 float0 bool0 char0 string0 listInt0 setFloat0 arrayString0 dict0 time0 order0 unit0 ->
             { int = int0, float = float0, bool = bool0, char = char0, string = string0, listInt = listInt0, setFloat = setFloat0, arrayString = arrayString0, dict = dict0, time = time0, order = order0, unit = unit0 }
         )
-        |> Lamdera.Wire2.andMapDecode Lamdera.Wire2.decodeInt
-        |> Lamdera.Wire2.andMapDecode Lamdera.Wire2.decodeFloat
-        |> Lamdera.Wire2.andMapDecode Lamdera.Wire2.decodeBool
-        |> Lamdera.Wire2.andMapDecode Lamdera.Wire2.decodeChar
-        |> Lamdera.Wire2.andMapDecode Lamdera.Wire2.decodeString
-        |> Lamdera.Wire2.andMapDecode (Lamdera.Wire2.decodeList Lamdera.Wire2.decodeInt)
-        |> Lamdera.Wire2.andMapDecode (Lamdera.Wire2.decodeSet Lamdera.Wire2.decodeFloat)
-        |> Lamdera.Wire2.andMapDecode (Lamdera.Wire2.decodeArray Lamdera.Wire2.decodeString)
-        |> Lamdera.Wire2.andMapDecode (Lamdera.Wire2.decodeDict Lamdera.Wire2.decodeString (Lamdera.Wire2.decodeList Lamdera.Wire2.decodeInt))
-        |> Lamdera.Wire2.andMapDecode (Lamdera.Wire2.decodeInt |> Lamdera.Wire2.andThenDecode (\t -> Lamdera.Wire2.succeedDecode (Time.millisToPosix t)))
-        |> Lamdera.Wire2.andMapDecode Lamdera.Wire2.decodeOrder
-        |> Lamdera.Wire2.andMapDecode Lamdera.Wire2.decodeUnit
+        |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeInt
+        |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeFloat
+        |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeBool
+        |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeChar
+        |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeString
+        |> Lamdera.Wire3.andMapDecode (Lamdera.Wire3.decodeList Lamdera.Wire3.decodeInt)
+        |> Lamdera.Wire3.andMapDecode (Lamdera.Wire3.decodeSet Lamdera.Wire3.decodeFloat)
+        |> Lamdera.Wire3.andMapDecode (Lamdera.Wire3.decodeArray Lamdera.Wire3.decodeString)
+        |> Lamdera.Wire3.andMapDecode (Lamdera.Wire3.decodeDict Lamdera.Wire3.decodeString (Lamdera.Wire3.decodeList Lamdera.Wire3.decodeInt))
+        |> Lamdera.Wire3.andMapDecode (Lamdera.Wire3.decodeInt |> Lamdera.Wire3.andThenDecode (\t -> Lamdera.Wire3.succeedDecode (Time.millisToPosix t)))
+        |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeOrder
+        |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeUnit
