@@ -34,12 +34,64 @@ The easiest way to run is from the project root:
 
 ```
 $ stack ghci
-λ: Tests.all
+λ: Test.all
 ```
 
-### Lamdera.hs
+### Developing
+
+I've found the fastest way to develop is using ghci with a little harness to invoke target code.
+
+1. Put the following into `~/.ghci`
+
+```
+:set -fbyte-code
+:set -fobject-code
+:def rr const $ return $ unlines [":r","Test.target"]
+:set prompt "\ESC[34mλ: \ESC[m"
+```
+
+Last line is optional, but it's cool! Lambda prompt!
+
+2. Run `stack ghci`
+
+3. Then the dev feedback loop goes as follows:
+
+- Make changes to Haskell code
+- Run `:rr` to recompile + typecheck, and re-run `Test.target`
+- Fix any issues, then `:rr` again
+- If you want to just type-check _without_ running, use `:r`
+
+Easier to change the target definition than constantly adjust the `:def` in `~/.ghci`!
+
+The [target is defined here](https://github.com/lamdera/compiler/blob/lamdera/test/Test.hs#L37), it can be any Haskell expression you wish. See the commented examples for various things manually tested in the past / for debugging user issues.
+
+By default it's `target = Test.all`, so `:rr` will recompile and run all tests.
+
+Press up arrow to get history of prior commands!
+
+#### Testing functions directly
+
+Sometimes you might want to test some function directly with different inputs. It's nice already being in GHCI without having to go elsewhere.
+
+```
+$ stack ghci
+λ: :set -XOverloadedStrings
+λ: import Lamdera.Canonical
+λ: showDefAnnotation "/Users/mario/dev/projects/elmx/test/scenario-interpreter" "src/Test/Basic.elm" "gimmeTheAnnotationMan"
+```
+
+#### IDE Integration
+
+Personally every single time I've tried to add Haskell IDE integration over the past ~5 years, it's sucked really badly.
+
+I'm sure the situation is better and with enough effort you could make it work, but Haskell is not Elm, there are so many moving parts and approaches and tools and methods, I just find the above is the least bad option. 🤷🏻‍♂️ YMMV.
+
+
+### `extra/Lamdera.hs`
 
 This File acts as a rudimentary custom Prelude. There is some duplication of core compiler functions to avoid cyclic import issues, mainly File IO helpers.
+
+It probably seems like a bad name, but it does allow for a search of `import Lamdera` to reveal all the integration points in the compiler in one hit, given everything is scoped under `Lamdera`.
 
 
 ### `Sanity` (or, how to deal with `Map.!: given key is not an element in the map`)
@@ -92,3 +144,15 @@ parcel build live.js --no-source-maps
 ```
 
 Then re-run the main build with `stack install`.
+
+This inlining happens like this:
+
+```
+lamderaLive :: BS.ByteString
+lamderaLive =
+  $(bsToExp =<< runIO (BS.readFile ("extra" </> "dist" </> "live.js")))
+```
+
+The `$(...)` syntax is invoking Template Haskell.
+
+⚠️ Because unchanged files aren't recompiled, you might need to add an `x = 1` to the bottom of the `.hs` file to force a change, and thus the expression to be re-evaluated. If you find you've updated a static file, but the complied binary still has the old one, this is likely the reason why.

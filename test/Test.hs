@@ -35,7 +35,7 @@ Last line is optional, but it's cool! Lambda prompt!
 3. Then a feedback loop goes as follows;
 
   - Make changes to Haskell Wire code
-  - Run `:rr` to recompile + typecheck and auto-run TestLamdera.target
+  - Run `:rr` to recompile + typecheck and auto-run Test.target
   - fix any issues, then :rr again
   - if you want to recompile without running, do :r
 
