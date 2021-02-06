@@ -44,6 +44,7 @@ main =
     , make
     , repl
     , reset
+    , annotate
     -- , reactor
     -- , bump
     -- , diff

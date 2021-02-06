@@ -239,6 +239,8 @@ Executable elmx
         Lamdera.CLI.Check
         Lamdera.CLI.Deploy
         Lamdera.CLI.Reset
+        -- CLI Experimental
+        Lamdera.CLI.Annotate
 
         -- Lamdera Utility --
         Lamdera.Compile
