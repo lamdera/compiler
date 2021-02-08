@@ -41,17 +41,19 @@ run (Args file expressionName) () = do
 
   elmHome <- PerUserCache.getElmHome
   root <- getProjectRoot
+  printAnnotations root file expressionName
 
-  -- let
-  --   expressionName = "" -- @TODO get from args
 
+printAnnotations :: FilePath -> FilePath -> Name.Name -> IO ()
+printAnnotations root file expressionName = do
   withCurrentDirectory root $ do
     debug_ "Getting artifacts..."
 
     (Compile.Artifacts canonical annotations objects) <- Lamdera.Canonical.loadSingleArtifacts file
 
     case annotations & Map.lookup expressionName of
-      Just annotation ->
+      Just annotation -> do
+        formatHaskellValue ("debug AST") annotation
         putStrLn $ T.unpack $ canonicalTypeToString annotation
 
       Nothing ->
