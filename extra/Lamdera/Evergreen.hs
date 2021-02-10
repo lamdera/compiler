@@ -24,7 +24,10 @@ createLamderaGenerated root nextVersion = do
 
   debug_ $ "Reading src/Evergreen/Migrate to determine migrationSequence"
 
-  migrationFilepaths <- safeListDirectory $ root </> "src/Evergreen/Migrate"
+  paths <- safeListDirectory $ root </> "src/Evergreen/Migrate"
+
+  let migrationFilepaths = paths & filter (\p -> not $ ".bk" `isInfixOf` p)
+
   debug_ $ "migrationFilepaths:" <> show migrationFilepaths
 
   lamderaGenerated nextVersion migrationFilepaths
@@ -110,7 +113,7 @@ decodeAndUpgradeFor migrationSequence nextVersion valueType = do
     caseNext =
       [text|
           $nextVersion_ ->
-              decodeType "$valueType" version bytes T$nextVersion_.w2_decode_$valueType
+              decodeType "$valueType" version bytes T$nextVersion_.w3_decode_$valueType
                   |> upgradeIsCurrent
                   |> otherwiseError
       |]
@@ -231,14 +234,14 @@ migrationForType migrationSequence migrationsForVersion startVersion finalVersio
 
     decodeAsLatest =
       [text|
-        decodeType "$tipe" $finalVersion_ bytes T$finalVersion_.w2_decode_$tipe
+        decodeType "$tipe" $finalVersion_ bytes T$finalVersion_.w3_decode_$tipe
             |> upgradeSucceeds
             |> otherwiseError
       |]
 
     migrateNext =
       [text|
-        decodeType "$tipe" $startVersion_ bytes T$startVersion_.w2_decode_$tipe
+        decodeType "$tipe" $startVersion_ bytes T$startVersion_.w3_decode_$tipe
             $intermediateMigrationsFormatted
             |> upgradeSucceeds
             |> otherwiseError
@@ -301,16 +304,16 @@ intermediateMigration allMigrations tipe from to finalVersion =
           migrationFn = [text|M$to_.$typenameCamel|]
       in
       [text|
-        |> $thenMigrateForType "$tipe" $migrationFn T$from_.w2_encode_$tipe T$to_.w2_decode_$tipe $to_
+        |> $thenMigrateForType "$tipe" $migrationFn T$from_.w3_encode_$tipe T$to_.w3_decode_$tipe $to_
       |]
 
     WithoutMigrations v ->
       {- It might seem like this is uneeded, but it's for when there's a migration in our chain, yet
          the last version has no migrations. I.e.:
 
-         decodeType "BackendModel" 1 intList T1.w2_decode_BackendModel
-             |> thenMigrateModel "BackendModel" M2.backendModel T1.w2_encode_BackendModel T2.w2_decode_BackendModel 2
-             |> thenMigrateModel "BackendModel" (always ModelUnchanged) T2.w2_encode_BackendModel T3.w2_decode_BackendModel 3
+         decodeType "BackendModel" 1 intList T1.w3_decode_BackendModel
+             |> thenMigrateModel "BackendModel" M2.backendModel T1.w3_encode_BackendModel T2.w3_decode_BackendModel 2
+             |> thenMigrateModel "BackendModel" (always ModelUnchanged) T2.w3_encode_BackendModel T3.w3_decode_BackendModel 3
              |> upgradeSucceeds CurrentBackendModel
              |> otherwiseError
 
@@ -320,7 +323,7 @@ intermediateMigration allMigrations tipe from to finalVersion =
           migrationFn = "(always " <> kindForType <> "Unchanged)"
       in
       [text|
-        |> $thenMigrateForType "$tipe" $migrationFn T$from_.w2_encode_$tipe T$to_.w2_decode_$tipe $to_
+        |> $thenMigrateForType "$tipe" $migrationFn T$from_.w3_encode_$tipe T$to_.w3_decode_$tipe $to_
       |]
 
 

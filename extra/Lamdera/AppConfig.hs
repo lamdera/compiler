@@ -171,8 +171,10 @@ onlyAuthorProjectDeps globalDeps =
   globalDeps
     & Set.filter (\global ->
       case global of
-        Global (Canonical (Pkg.Name "author" "project") _) expr ->
-          not (textContains "w2_" (nameToText expr)) && not (textContains "evg_" (nameToText expr))
+        Global (Canonical (Pkg.Name "author" "project") _) name ->
+          not (textHasPrefix "w2_" (nameToText name))
+          && not (textHasPrefix "w3_" (nameToText name))
+          && not (textHasPrefix "evg_" (nameToText name))
         _ ->
           False
     )

@@ -62,7 +62,11 @@ injections =
     function _Platform_initialize(flagDecoder, args, init, update, subscriptions, stepperBuilder)
       {
         var result = A2(_Json_run, flagDecoder, _Json_wrap(args ? args['flags'] : undefined));
-        $$elm$$core$$Result$$isOk(result) || _Debug_crash(2 /**/, _Json_errorToString(result.a) /**/);
+  
+        // @TODO need to figure out how to get this to automatically escape by mode?
+        //$$elm$$core$$Result$$isOk(result) || _Debug_crash(2 /**/, _Json_errorToString(result.a) /**/);
+        $$elm$$core$$Result$$isOk(result) || _Debug_crash(2 /**_UNUSED/, _Json_errorToString(result.a) /**/);
+
         var managers = {};
         var initPair = init(result.a);
         var model = args['model'] || initPair.a;
@@ -130,15 +134,18 @@ injections =
 
         return ports ? { ports: ports, gm: function() { return model }, eum: function() { upgradeMode = true } } : {};
       }
-
-    _Bytes_read_string = F3(function (len, bytes, offset) {
-      var decoder = new TextDecoder('utf8', { fatal:  true});
-      var sliceView = new DataView(bytes.buffer, bytes.byteOffset + offset, len);
-
-      return _Utils_Tuple2(offset + len, decoder.decode(sliceView));
-    });
-
   |]
+  --   // https://github.com/elm/bytes/issues/20
+  --   // but the fix below as suggested causes this problem:
+  --   // https://github.com/nodejs/node/issues/26115
+  --   _Bytes_read_string = F3(function (len, bytes, offset) {
+  --     var decoder = new TextDecoder('utf8', { fatal:  true});
+  --     var sliceView = new DataView(bytes.buffer, bytes.byteOffset + offset, len);
+  --
+  --     return _Utils_Tuple2(offset + len, decoder.decode(sliceView));
+  --   });
+  --
+  -- |]
 
   -- var model = null
   -- window.addEventListener('bem', function (e) {

@@ -41,6 +41,7 @@ module Lamdera
   , onlyWhen
   , onlyWhen_
   , textContains
+  , textHasPrefix
   , stringContains
   , formatHaskellValue
   , hindentFormatValue
@@ -457,6 +458,9 @@ onlyWhen_ condition io = do
 
 textContains :: Text -> Text -> Bool
 textContains needle haystack = T.isInfixOf needle haystack
+
+textHasPrefix :: Text -> Text -> Bool
+textHasPrefix needle haystack = T.isPrefixOf needle haystack
 
 stringContains :: String -> String -> Bool
 stringContains needle haystack = List.isInfixOf needle haystack

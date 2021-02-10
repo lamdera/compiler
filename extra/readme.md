@@ -39,6 +39,10 @@ $ stack ghci
 
 ### Developing
 
+First, make sure you have deps installed:
+
+- `stack install hindent`
+
 I've found the fastest way to develop is using ghci with a little harness to invoke target code.
 
 1. Put the following into `~/.ghci`

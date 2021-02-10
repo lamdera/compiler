@@ -11,10 +11,10 @@ definition.
 
 These names seem close though:
 
-    w2_decode_SectionConfig
-    w2_encode_SectionConfig
-    w2_decode_SectionNode
-    w2_encode_SectionNode
+    w3_decode_SectionConfig
+    w3_encode_SectionConfig
+    w3_decode_SectionNode
+    w3_encode_SectionNode
 
 -}
 
@@ -26,12 +26,13 @@ import Lamdera
 hideWireSuggestions suggestions =
   suggestions
     -- & debugHaskell "suggestions"
-    & filter (\x -> not $ List.isInfixOf "w2_" x)
-    & filter (\x -> not $ List.isInfixOf "evg_" x)
-
+    & filter (\x ->
+      (not $ List.isPrefixOf "w3_" x)
+      && (not $ List.isPrefixOf "w2_" x)
+    )
 
 hideWireSuggestionsName suggestions =
   suggestions
-    -- & debugHaskellPass "suggestions" (suggestions & fmap Name.toChars)
-    & filter (\x -> not $ List.isInfixOf "w2_" $ Name.toChars x)
-    & filter (\x -> not $ List.isInfixOf "evg_" $ Name.toChars x)
+    & filter (\x -> (not $ List.isPrefixOf "w3_" $ Name.toChars x)
+      && (not $ List.isPrefixOf "w2_" $ Name.toChars x)
+    )
