@@ -1,7 +1,7 @@
 {-# OPTIONS_GHC -Wall #-}
 {-# LANGUAGE OverloadedStrings #-}
 module Reporting.Render.Code
-  ( Source
+  ( Source(..)  -- @LAMDERA exposed
   , toSource
   , toSnippet
   , toPair

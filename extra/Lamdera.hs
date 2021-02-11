@@ -68,6 +68,7 @@ module Lamdera
   , lamderaExternalWarningsPath
   , lamderaBackendDevSnapshotPath
   , getProjectRoot
+  , getProjectRootFor
   , justs
   , lowerFirstLetter
   , findElmFiles
@@ -694,6 +695,18 @@ findHelp name dirs =
         if exists_
           then return (Just (FP.joinPath dirs))
           else findHelp name (Prelude.init dirs)
+
+
+-- Find the project root from an arbitrary fle path
+getProjectRootFor :: FilePath -> IO FilePath
+getProjectRootFor path = do
+  res <- findHelp "elm.json" (FP.splitDirectories $ takeDirectory path)
+  case res of
+    Just filepath -> pure filepath
+    Nothing -> do
+      putStrLn "Cannot find an elm.json! Make sure you're in a project folder, or run `lamdera init` to start a new one."
+      exitFailure
+
 
 
 justs :: [Maybe a] -> [a]
