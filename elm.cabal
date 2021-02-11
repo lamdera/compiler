@@ -253,6 +253,8 @@ Executable elmx
         Lamdera.ReverseProxy
         Network.HTTP.ReverseProxy
         Lamdera.Evaluate
+        Lamdera.Evaluate.Canonical
+        Lamdera.Evaluate.Optimized
         Lamdera.Canonical
 
         -- Lamdera Legacy --

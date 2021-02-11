@@ -82,6 +82,12 @@ deriving instance Show AST.Optimized.EffectsType
 deriving instance Show AST.Optimized.LocalGraph
 deriving instance Show AST.Optimized.Main
 
+deriving instance Eq AST.Optimized.Choice
+deriving instance Eq AST.Optimized.Expr
+deriving instance Eq AST.Optimized.Def
+deriving instance Eq AST.Optimized.Destructor
+deriving instance Eq AST.Optimized.Path
+
 deriving instance Show AST.Canonical.Type
 deriving instance Show AST.Canonical.FieldType
 deriving instance Show AST.Canonical.AliasType
