@@ -8,8 +8,8 @@ type Union1
     | World
 
 
-expected_w2_encode_Union1 w2v =
-    case w2v of
+expected_w3_encode_Union1 w3v =
+    case w3v of
         Hello ->
             Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeUnsignedInt8 0 ]
 
@@ -17,11 +17,11 @@ expected_w2_encode_Union1 w2v =
             Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeUnsignedInt8 1 ]
 
 
-expected_w2_decode_Union1 =
+expected_w3_decode_Union1 =
     Lamdera.Wire3.decodeUnsignedInt8
         |> Lamdera.Wire3.andThenDecode
-            (\w2v ->
-                case w2v of
+            (\w3v ->
+                case w3v of
                     0 ->
                         Lamdera.Wire3.succeedDecode Hello
 

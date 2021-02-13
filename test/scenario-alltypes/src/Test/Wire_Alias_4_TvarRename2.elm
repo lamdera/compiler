@@ -8,12 +8,12 @@ type alias Config element msg =
     ( element, msg )
 
 
-expected_w2_encode_Config w2_x_c_element w2_x_c_msg =
-    Lamdera.Wire3.encodePair w2_x_c_element w2_x_c_msg
+expected_w3_encode_Config w3_x_c_element w3_x_c_msg =
+    Lamdera.Wire3.encodePair w3_x_c_element w3_x_c_msg
 
 
-expected_w2_decode_Config w2_x_c_element w2_x_c_msg =
-    Lamdera.Wire3.decodePair w2_x_c_element w2_x_c_msg
+expected_w3_decode_Config w3_x_c_element w3_x_c_msg =
+    Lamdera.Wire3.decodePair w3_x_c_element w3_x_c_msg
 
 
 type alias OnGrid thing =

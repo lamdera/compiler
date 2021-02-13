@@ -25,25 +25,25 @@ type Definition a
     | TypeAliasDefinition (Maybe a)
 
 
-expected_w2_encode_Definition w2_x_c_a w2v =
-    case w2v of
+expected_w3_encode_Definition w3_x_c_a w3v =
+    case w3v of
         CustomTypeDefinition v0 ->
-            Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeUnsignedInt8 0, Test.Wire_Tvar_Ambiguous2.w2_encode_AccessControlled (Lamdera.Wire3.encodeMaybe w2_x_c_a) v0 ]
+            Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeUnsignedInt8 0, Test.Wire_Tvar_Ambiguous2.w3_encode_AccessControlled (Lamdera.Wire3.encodeMaybe w3_x_c_a) v0 ]
 
         TypeAliasDefinition v0 ->
-            Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeUnsignedInt8 1, Lamdera.Wire3.encodeMaybe w2_x_c_a v0 ]
+            Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeUnsignedInt8 1, Lamdera.Wire3.encodeMaybe w3_x_c_a v0 ]
 
 
-expected_w2_decode_Definition w2_x_c_a =
+expected_w3_decode_Definition w3_x_c_a =
     Lamdera.Wire3.decodeUnsignedInt8
         |> Lamdera.Wire3.andThenDecode
-            (\w2v ->
-                case w2v of
+            (\w3v ->
+                case w3v of
                     0 ->
-                        Lamdera.Wire3.succeedDecode CustomTypeDefinition |> Lamdera.Wire3.andMapDecode (Test.Wire_Tvar_Ambiguous2.w2_decode_AccessControlled (Lamdera.Wire3.decodeMaybe w2_x_c_a))
+                        Lamdera.Wire3.succeedDecode CustomTypeDefinition |> Lamdera.Wire3.andMapDecode (Test.Wire_Tvar_Ambiguous2.w3_decode_AccessControlled (Lamdera.Wire3.decodeMaybe w3_x_c_a))
 
                     1 ->
-                        Lamdera.Wire3.succeedDecode TypeAliasDefinition |> Lamdera.Wire3.andMapDecode (Lamdera.Wire3.decodeMaybe w2_x_c_a)
+                        Lamdera.Wire3.succeedDecode TypeAliasDefinition |> Lamdera.Wire3.andMapDecode (Lamdera.Wire3.decodeMaybe w3_x_c_a)
 
                     _ ->
                         Lamdera.Wire3.failDecode

@@ -14,8 +14,8 @@ type alias Banned2ParamType msg =
     Platform.Router msg Int
 
 
-expected_w2_encode_CoreTypes w2v =
-    case w2v of
+expected_w3_encode_CoreTypes w3v =
+    case w3v of
         ValueBytes v0 ->
             Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeUnsignedInt8 0, Lamdera.Wire3.encodeBytes v0 ]
 
@@ -23,11 +23,11 @@ expected_w2_encode_CoreTypes w2v =
             Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeUnsignedInt8 1, (\t -> Lamdera.Wire3.encodeInt (Time.posixToMillis t)) v0 ]
 
 
-expected_w2_decode_CoreTypes =
+expected_w3_decode_CoreTypes =
     Lamdera.Wire3.decodeUnsignedInt8
         |> Lamdera.Wire3.andThenDecode
-            (\w2v ->
-                case w2v of
+            (\w3v ->
+                case w3v of
                     0 ->
                         Lamdera.Wire3.succeedDecode ValueBytes |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeBytes
 
@@ -39,9 +39,9 @@ expected_w2_decode_CoreTypes =
             )
 
 
-expected_w2_encode_Banned2ParamType w2_x_c_msg =
+expected_w3_encode_Banned2ParamType w3_x_c_msg =
     Lamdera.Wire3.failEncode
 
 
-expected_w2_decode_Banned2ParamType w2_x_c_msg =
+expected_w3_decode_Banned2ParamType w3_x_c_msg =
     Lamdera.Wire3.failDecode

@@ -27,8 +27,8 @@ type UnionParams
     | ValueRecord { field1 : Int, field2 : String }
 
 
-expected_w2_encode_UnionParams w2v =
-    case w2v of
+expected_w3_encode_UnionParams w3v =
+    case w3v of
         ValueArrayString v0 ->
             Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeUnsignedInt8 0, Lamdera.Wire3.encodeArray Lamdera.Wire3.encodeString v0 ]
 
@@ -57,7 +57,7 @@ expected_w2_encode_UnionParams w2v =
             Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeUnsignedInt8 8, Lamdera.Wire3.encodeOrder v0 ]
 
         ValueRecord v0 ->
-            Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeUnsignedInt8 9, (\w2_rec_var0 -> Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeInt w2_rec_var0.field1, Lamdera.Wire3.encodeString w2_rec_var0.field2 ]) v0 ]
+            Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeUnsignedInt8 9, (\w3_rec_var0 -> Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeInt w3_rec_var0.field1, Lamdera.Wire3.encodeString w3_rec_var0.field2 ]) v0 ]
 
         ValueResult v0 ->
             Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeUnsignedInt8 10, Lamdera.Wire3.encodeResult Lamdera.Wire3.encodeString Lamdera.Wire3.encodeInt v0 ]
@@ -84,11 +84,11 @@ expected_w2_encode_UnionParams w2v =
             Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeUnsignedInt8 17, Lamdera.Wire3.encodeUnit v0 ]
 
 
-expected_w2_decode_UnionParams =
+expected_w3_decode_UnionParams =
     Lamdera.Wire3.decodeUnsignedInt8
         |> Lamdera.Wire3.andThenDecode
-            (\w2v ->
-                case w2v of
+            (\w3v ->
+                case w3v of
                     0 ->
                         Lamdera.Wire3.succeedDecode ValueArrayString |> Lamdera.Wire3.andMapDecode (Lamdera.Wire3.decodeArray Lamdera.Wire3.decodeString)
 

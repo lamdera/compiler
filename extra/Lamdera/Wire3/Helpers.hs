@@ -470,7 +470,7 @@ succeedDecode value =
 
 
 failDecode identifier =
-  debugDecoder (Utf8.fromChars $ "failDecode:" ++ identifier) $
+  -- debugDecoder (Utf8.fromChars $ "failDecode:" ++ identifier) $
   (a (VarForeign mLamdera_Wire "failDecode"
         (Forall
            (Map.fromList [("a", ())])

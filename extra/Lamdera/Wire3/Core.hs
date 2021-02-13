@@ -246,7 +246,7 @@ encoderUnion isTest ifaces pkg modul decls unionName union =
       Def
         (a (generatedName))
         (ptvars ++ [ pvar "w3v" ]) $
-        debugEncoder_ (Data.Name.toElmString unionName)
+        -- debugEncoder_ (Data.Name.toElmString unionName)
         (caseof (lvar "w3v") $
             _u_alts union
               & List.sortOn (\(Ctor name index_ numParams paramTypes) -> name)
@@ -341,7 +341,7 @@ encoderAlias isTest ifaces pkg modul decls aliasName alias@(Alias tvars tipe) =
     ptvars = tvars & fmap (\tvar -> pvar $ Data.Name.fromChars $ "w3_x_c_" ++ Data.Name.toChars tvar )
 
     generated = Def (a (generatedName)) ptvars $
-      debugEncoder (Data.Name.toElmString aliasName) $
+      -- debugEncoder (Data.Name.toElmString aliasName) $
       deepEncoderForType 0 ifaces cname tipe
   in
   generated

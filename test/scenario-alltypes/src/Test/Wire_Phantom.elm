@@ -21,9 +21,9 @@ type alias Density =
     CubicMeters
 
 
-expected_w2_encode_Density =
-    Test.Wire_Phantom2.w2_encode_CubicMeters
+expected_w3_encode_Density =
+    Test.Wire_Phantom2.w3_encode_CubicMeters
 
 
-expected_w2_decode_Density =
-    Test.Wire_Phantom2.w2_decode_CubicMeters
+expected_w3_decode_Density =
+    Test.Wire_Phantom2.w3_decode_CubicMeters
