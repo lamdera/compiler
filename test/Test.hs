@@ -51,7 +51,7 @@ Press up arrow to get history of prior commands.
 target = Test.all
 -- target = Test.Wire.wire
 -- target = checkUserConfig
--- target = TestWire.buildAllPackages
+-- target = Test.Wire.buildAllPackages
 -- target = Lamdera.CLI.Login.run () ()
 -- target = Dir.withCurrentDirectory "/Users/mario/dev/projects/lamdera-test" $ Lamdera.CLI.Reset.run () ()
 -- target = Lamdera.Diff.run
@@ -92,7 +92,10 @@ target = Test.all
 
 {- WIP interpreter -}
 -- target =
---   Lamdera.Evaluate.exec
+--   withDebug $ do
+--     -- Lamdera.Evaluate.exec
+--     Lamdera.Canonical.loadFileSourceValue "/Users/mario/dev/projects/elmx/test/scenario-interpreter/src/Test/Basic.elm" "suite"
+
 
 -- target = do
 --   let project = "/Users/mario/dev/projects/lamdera/overrides/packages/elm/bytes/1.0.8"
@@ -124,7 +127,8 @@ single = do
 
 allTests =
   tests
-    [ scope "Test.Lamdera -> " $ Test.Lamdera.suite
+    [
+    scope "Test.Lamdera -> " $ Test.Lamdera.suite
     , scope "Test.Snapshot -> " $ Test.Snapshot.suite
     , scope "Test.Wire -> " $ Test.Wire.suite
     , Test.LamderaGenerated.suite

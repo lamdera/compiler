@@ -45,7 +45,7 @@ suite = tests
       migrations <- io $ getMigrationsSequence [] nextVersion 3
       expectEqualTextTrimmed (historicMigrations migrations nextVersion "BackendModel") [text|
         1 ->
-            decodeType "BackendModel" 2 bytes T2.w2_decode_BackendModel
+            decodeType 5 2 bytes T2.w3_decode_BackendModel
                 |> upgradeSucceeds
                 |> otherwiseError
       |]
@@ -55,14 +55,14 @@ suite = tests
       migrations <- io $ getMigrationsSequence ["V2.elm"] nextVersion 3
       expectEqualTextTrimmed (historicMigrations migrations nextVersion "BackendModel") [text|
         1 ->
-            decodeType "BackendModel" 1 bytes T1.w2_decode_BackendModel
-                |> thenMigrateModel "BackendModel" M2.backendModel T1.w2_encode_BackendModel T2.w2_decode_BackendModel 2
-                |> thenMigrateModel "BackendModel" (always ModelUnchanged) T2.w2_encode_BackendModel T3.w2_decode_BackendModel 3
+            decodeType 5 1 bytes T1.w3_decode_BackendModel
+                |> thenMigrateModel "BackendModel" M2.backendModel T1.w3_encode_BackendModel T2.w3_decode_BackendModel 2
+                |> thenMigrateModel "BackendModel" (always ModelUnchanged) T2.w3_encode_BackendModel T3.w3_decode_BackendModel 3
                 |> upgradeSucceeds
                 |> otherwiseError
 
         2 ->
-            decodeType "BackendModel" 3 bytes T3.w2_decode_BackendModel
+            decodeType 5 3 bytes T3.w3_decode_BackendModel
                 |> upgradeSucceeds
                 |> otherwiseError
       |]
@@ -86,12 +86,12 @@ suite = tests
         expectEqualTextTrimmed (historicMigrations migrations nextVersion "BackendModel")
         [text|
           60 ->
-              decodeType "BackendModel" 62 bytes T62.w2_decode_BackendModel
+              decodeType 5 62 bytes T62.w3_decode_BackendModel
                   |> upgradeSucceeds
                   |> otherwiseError
 
           61 ->
-              decodeType "BackendModel" 62 bytes T62.w2_decode_BackendModel
+              decodeType 5 62 bytes T62.w3_decode_BackendModel
                   |> upgradeSucceeds
                   |> otherwiseError
         |]
@@ -115,14 +115,14 @@ suite = tests
         expectEqualTextTrimmed (historicMigrations migrations nextVersion "BackendModel")
         [text|
           60 ->
-              decodeType "BackendModel" 57 bytes T57.w2_decode_BackendModel
-                  |> thenMigrateModel "BackendModel" M62.backendModel T57.w2_encode_BackendModel T62.w2_decode_BackendModel 62
+              decodeType 5 57 bytes T57.w3_decode_BackendModel
+                  |> thenMigrateModel "BackendModel" M62.backendModel T57.w3_encode_BackendModel T62.w3_decode_BackendModel 62
                   |> upgradeSucceeds
                   |> otherwiseError
 
           61 ->
-              decodeType "BackendModel" 57 bytes T57.w2_decode_BackendModel
-                  |> thenMigrateModel "BackendModel" M62.backendModel T57.w2_encode_BackendModel T62.w2_decode_BackendModel 62
+              decodeType 5 57 bytes T57.w3_decode_BackendModel
+                  |> thenMigrateModel "BackendModel" M62.backendModel T57.w3_encode_BackendModel T62.w3_decode_BackendModel 62
                   |> upgradeSucceeds
                   |> otherwiseError
         |]
@@ -157,7 +157,7 @@ suite = tests
           decodeAndUpgradeBackendModel version bytes =
               case version of
                   1 ->
-                      decodeType "BackendModel" version bytes T1.w2_decode_BackendModel
+                      decodeType 5 version bytes T1.w3_decode_BackendModel
                           |> upgradeIsCurrent
                           |> otherwiseError
 
@@ -169,7 +169,7 @@ suite = tests
           decodeAndUpgradeFrontendModel version bytes =
               case version of
                   1 ->
-                      decodeType "FrontendModel" version bytes T1.w2_decode_FrontendModel
+                      decodeType 4 version bytes T1.w3_decode_FrontendModel
                           |> upgradeIsCurrent
                           |> otherwiseError
 
@@ -181,7 +181,7 @@ suite = tests
           decodeAndUpgradeFrontendMsg version bytes =
               case version of
                   1 ->
-                      decodeType "FrontendMsg" version bytes T1.w2_decode_FrontendMsg
+                      decodeType 0 version bytes T1.w3_decode_FrontendMsg
                           |> upgradeIsCurrent
                           |> otherwiseError
 
@@ -193,7 +193,7 @@ suite = tests
           decodeAndUpgradeToBackend version bytes =
               case version of
                   1 ->
-                      decodeType "ToBackend" version bytes T1.w2_decode_ToBackend
+                      decodeType 1 version bytes T1.w3_decode_ToBackend
                           |> upgradeIsCurrent
                           |> otherwiseError
 
@@ -205,7 +205,7 @@ suite = tests
           decodeAndUpgradeBackendMsg version bytes =
               case version of
                   1 ->
-                      decodeType "BackendMsg" version bytes T1.w2_decode_BackendMsg
+                      decodeType 2 version bytes T1.w3_decode_BackendMsg
                           |> upgradeIsCurrent
                           |> otherwiseError
 
@@ -217,7 +217,7 @@ suite = tests
           decodeAndUpgradeToFrontend version bytes =
               case version of
                   1 ->
-                      decodeType "ToFrontend" version bytes T1.w2_decode_ToFrontend
+                      decodeType 3 version bytes T1.w3_decode_ToFrontend
                           |> upgradeIsCurrent
                           |> otherwiseError
 
@@ -258,14 +258,14 @@ suite = tests
           decodeAndUpgradeBackendModel version bytes =
               case version of
                   1 ->
-                      decodeType "BackendModel" 1 bytes T1.w2_decode_BackendModel
-                          |> thenMigrateModel "BackendModel" M2.backendModel T1.w2_encode_BackendModel T2.w2_decode_BackendModel 2
+                      decodeType 5 1 bytes T1.w3_decode_BackendModel
+                          |> thenMigrateModel "BackendModel" M2.backendModel T1.w3_encode_BackendModel T2.w3_decode_BackendModel 2
                           |> upgradeSucceeds
                           |> otherwiseError
 
 
                   2 ->
-                      decodeType "BackendModel" version bytes T2.w2_decode_BackendModel
+                      decodeType 5 version bytes T2.w3_decode_BackendModel
                           |> upgradeIsCurrent
                           |> otherwiseError
 
@@ -277,14 +277,14 @@ suite = tests
           decodeAndUpgradeFrontendModel version bytes =
               case version of
                   1 ->
-                      decodeType "FrontendModel" 1 bytes T1.w2_decode_FrontendModel
-                          |> thenMigrateModel "FrontendModel" M2.frontendModel T1.w2_encode_FrontendModel T2.w2_decode_FrontendModel 2
+                      decodeType 4 1 bytes T1.w3_decode_FrontendModel
+                          |> thenMigrateModel "FrontendModel" M2.frontendModel T1.w3_encode_FrontendModel T2.w3_decode_FrontendModel 2
                           |> upgradeSucceeds
                           |> otherwiseError
 
 
                   2 ->
-                      decodeType "FrontendModel" version bytes T2.w2_decode_FrontendModel
+                      decodeType 4 version bytes T2.w3_decode_FrontendModel
                           |> upgradeIsCurrent
                           |> otherwiseError
 
@@ -296,14 +296,14 @@ suite = tests
           decodeAndUpgradeFrontendMsg version bytes =
               case version of
                   1 ->
-                      decodeType "FrontendMsg" 1 bytes T1.w2_decode_FrontendMsg
-                          |> thenMigrateMsg "FrontendMsg" M2.frontendMsg T1.w2_encode_FrontendMsg T2.w2_decode_FrontendMsg 2
+                      decodeType 0 1 bytes T1.w3_decode_FrontendMsg
+                          |> thenMigrateMsg "FrontendMsg" M2.frontendMsg T1.w3_encode_FrontendMsg T2.w3_decode_FrontendMsg 2
                           |> upgradeSucceeds
                           |> otherwiseError
 
 
                   2 ->
-                      decodeType "FrontendMsg" version bytes T2.w2_decode_FrontendMsg
+                      decodeType 0 version bytes T2.w3_decode_FrontendMsg
                           |> upgradeIsCurrent
                           |> otherwiseError
 
@@ -315,14 +315,14 @@ suite = tests
           decodeAndUpgradeToBackend version bytes =
               case version of
                   1 ->
-                      decodeType "ToBackend" 1 bytes T1.w2_decode_ToBackend
-                          |> thenMigrateMsg "ToBackend" M2.toBackend T1.w2_encode_ToBackend T2.w2_decode_ToBackend 2
+                      decodeType 1 1 bytes T1.w3_decode_ToBackend
+                          |> thenMigrateMsg "ToBackend" M2.toBackend T1.w3_encode_ToBackend T2.w3_decode_ToBackend 2
                           |> upgradeSucceeds
                           |> otherwiseError
 
 
                   2 ->
-                      decodeType "ToBackend" version bytes T2.w2_decode_ToBackend
+                      decodeType 1 version bytes T2.w3_decode_ToBackend
                           |> upgradeIsCurrent
                           |> otherwiseError
 
@@ -334,14 +334,14 @@ suite = tests
           decodeAndUpgradeBackendMsg version bytes =
               case version of
                   1 ->
-                      decodeType "BackendMsg" 1 bytes T1.w2_decode_BackendMsg
-                          |> thenMigrateMsg "BackendMsg" M2.backendMsg T1.w2_encode_BackendMsg T2.w2_decode_BackendMsg 2
+                      decodeType 2 1 bytes T1.w3_decode_BackendMsg
+                          |> thenMigrateMsg "BackendMsg" M2.backendMsg T1.w3_encode_BackendMsg T2.w3_decode_BackendMsg 2
                           |> upgradeSucceeds
                           |> otherwiseError
 
 
                   2 ->
-                      decodeType "BackendMsg" version bytes T2.w2_decode_BackendMsg
+                      decodeType 2 version bytes T2.w3_decode_BackendMsg
                           |> upgradeIsCurrent
                           |> otherwiseError
 
@@ -353,14 +353,14 @@ suite = tests
           decodeAndUpgradeToFrontend version bytes =
               case version of
                   1 ->
-                      decodeType "ToFrontend" 1 bytes T1.w2_decode_ToFrontend
-                          |> thenMigrateMsg "ToFrontend" M2.toFrontend T1.w2_encode_ToFrontend T2.w2_decode_ToFrontend 2
+                      decodeType 3 1 bytes T1.w3_decode_ToFrontend
+                          |> thenMigrateMsg "ToFrontend" M2.toFrontend T1.w3_encode_ToFrontend T2.w3_decode_ToFrontend 2
                           |> upgradeSucceeds
                           |> otherwiseError
 
 
                   2 ->
-                      decodeType "ToFrontend" version bytes T2.w2_decode_ToFrontend
+                      decodeType 3 version bytes T2.w3_decode_ToFrontend
                           |> upgradeIsCurrent
                           |> otherwiseError
 

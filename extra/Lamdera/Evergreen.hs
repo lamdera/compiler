@@ -101,6 +101,10 @@ decodeAndUpgradeFor migrationSequence nextVersion valueType = do
         "ToBackend"     -> "BackendMsg"
         "BackendMsg"    -> "BackendMsg"
         "ToFrontend"    -> "FrontendMsg"
+        _               ->
+          error $ "Evergreen.Generation: impossible value type: " <> show valueType
+
+    valueTypeInt = show_ $ tipeStringToInt valueType
 
     caseAll =
       if historicMigrations_ /= "" then
@@ -113,7 +117,7 @@ decodeAndUpgradeFor migrationSequence nextVersion valueType = do
     caseNext =
       [text|
           $nextVersion_ ->
-              decodeType "$valueType" version bytes T$nextVersion_.w3_decode_$valueType
+              decodeType $valueTypeInt version bytes T$nextVersion_.w3_decode_$valueType
                   |> upgradeIsCurrent
                   |> otherwiseError
       |]
@@ -232,16 +236,18 @@ migrationForType migrationSequence migrationsForVersion startVersion finalVersio
     startVersion_ = show_ $ vinfoVersion startVersion
     finalVersion_ = show_ $ vinfoVersion finalVersion
 
+    valueTypeInt = show_ $ tipeStringToInt tipe
+
     decodeAsLatest =
       [text|
-        decodeType "$tipe" $finalVersion_ bytes T$finalVersion_.w3_decode_$tipe
+        decodeType $valueTypeInt $finalVersion_ bytes T$finalVersion_.w3_decode_$tipe
             |> upgradeSucceeds
             |> otherwiseError
       |]
 
     migrateNext =
       [text|
-        decodeType "$tipe" $startVersion_ bytes T$startVersion_.w3_decode_$tipe
+        decodeType $valueTypeInt $startVersion_ bytes T$startVersion_.w3_decode_$tipe
             $intermediateMigrationsFormatted
             |> upgradeSucceeds
             |> otherwiseError
@@ -409,6 +415,19 @@ takeWhileInclusive p (x:xs) = x : if p x then takeWhileInclusive p xs
 
 pairs :: [a] -> [(a,a)]
 pairs xs = zip xs (tail xs)
+
+
+tipeStringToInt :: Text -> Int
+tipeStringToInt tipe =
+  case tipe of
+    "FrontendMsg"   -> 0
+    "ToBackend"     -> 1
+    "BackendMsg"    -> 2
+    "ToFrontend"    -> 3
+    "FrontendModel" -> 4
+    "BackendModel"  -> 5
+    _               ->
+      error $ "Evergreen.Generation: unsupported type: " <> show tipe
 
 
 getLastLocalTypeChangeVersion :: FilePath -> IO Int

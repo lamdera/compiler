@@ -181,6 +181,7 @@ applyVarLocals locals expr =
     _ ->
       error $ "applyVarLocals missing coverage: " <> show expr
 
+
 getDef global globals =
   -- @TODO currently actually local file objects, but need to expand to full project
     case Map.lookup global globals of
@@ -194,7 +195,6 @@ getDef global globals =
 
       Nothing ->
         error $ "Global not found in globals:\n"<> show global <> "\n\n "-- <> show globals
-
 
 
 zipRem l1 l2 =
