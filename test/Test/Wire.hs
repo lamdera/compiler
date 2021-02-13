@@ -87,6 +87,7 @@ wire = do
         ]
 
   testFiles & mapM (\filename -> do
+      putStrLn $ "testing: " <> show filename
       -- Bust Elm's caching with this one weird trick!
       touch $ project </> filename
       Lamdera.Compile.make project (project </> filename)
@@ -104,6 +105,7 @@ buildAllPackages = do
   mkdir buildAllPackagesRoot
 
   setEnv "ELM_HOME" "/Users/mario/elm-home-all-packages"
+  setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
 
   res <- searchAllCurrentElmPackages
 
@@ -146,9 +148,10 @@ buildAllPackages = do
   --       pure ()
 
   unsetEnv "ELM_HOME"
+  unsetEnv "LOVR"
 
 
-matchKnownBad pkg match =
+markKnownBad pkg match =
   onlyWhen (textContains match (Text.pack $ Pkg.toChars pkg)) $ writeUtf8 "known_bad" ""
 
 tryStandaloneInstall pkg  = do
@@ -166,56 +169,65 @@ tryStandaloneInstall pkg  = do
   withCurrentDirectory root $ do
 
     -- Known bad packages that cannot be compiled for non-code reasons
-    matchKnownBad pkg "Skinney/" -- Author renamed github name
-    matchKnownBad pkg "2426021684/" -- Renamed
-    matchKnownBad pkg "ContaSystemer/review-noregex" -- Renamed
-    matchKnownBad pkg "HAN-ASD-DT/" -- Github not found
-    matchKnownBad pkg "Morgan-Stanley/morphir-elm" -- renamed finos/morphir-elm
-    matchKnownBad pkg "abinayasudhir/html-parser" -- tries to call Elm.Kernel.VirtualDom
-    matchKnownBad pkg "abradley2/" -- 404
-    matchKnownBad pkg "altjsus/elm-airtable" -- 404, renamed to shegeley/elmtable
-    matchKnownBad pkg "anatol-1988/measurement" -- 404, renamed to rielas/measurement
-    matchKnownBad pkg "getto-systems/getto-elm-command" -- renamed, archived
-    matchKnownBad pkg "jasonliang512/elm-heroicons" -- renamed to jasonliang-dev/elm-heroicons
-    matchKnownBad pkg "jmg-duarte/group-list" -- "elm-version": "0.17.1 <= v <= 0.19.0",
-    matchKnownBad pkg "jwheeler-cp/elm-form" -- 404
-    matchKnownBad pkg "m-mullins/elm-console" -- 404
-    matchKnownBad pkg "nathanjohnson320/elm-ui-components" -- 404
-    matchKnownBad pkg "nik-garmash/elm-test" -- 404
-    matchKnownBad pkg "not1602/elm-feather" -- 404
-    matchKnownBad pkg "ozyinc/elm-sortable-table-with-row-id" -- 404
-    matchKnownBad pkg "pascallemerrer/elm-advanced-grid" -- renamed to Orange-OpenSource/elm-advanced-grid
-    matchKnownBad pkg "proda-ai/elm-logger" -- 404
-    matchKnownBad pkg "reserve-protocol/elm-i3166-data" -- renamed to reserve-protocol/elm-iso3166-data
+    markKnownBad pkg "Skinney/" -- Author renamed github name
+    markKnownBad pkg "2426021684/" -- Renamed
+    markKnownBad pkg "ContaSystemer/review-noregex" -- Renamed
+    markKnownBad pkg "HAN-ASD-DT/" -- Github not found
+    markKnownBad pkg "Morgan-Stanley/morphir-elm" -- renamed finos/morphir-elm
+    markKnownBad pkg "abinayasudhir/html-parser" -- tries to call Elm.Kernel.VirtualDom
+    markKnownBad pkg "abradley2/" -- 404
+    markKnownBad pkg "altjsus/elm-airtable" -- 404, renamed to shegeley/elmtable
+    markKnownBad pkg "anatol-1988/measurement" -- 404, renamed to rielas/measurement
+    markKnownBad pkg "getto-systems/getto-elm-command" -- renamed, archived
+    markKnownBad pkg "jasonliang512/elm-heroicons" -- renamed to jasonliang-dev/elm-heroicons
+    markKnownBad pkg "jmg-duarte/group-list" -- "elm-version": "0.17.1 <= v <= 0.19.0",
+    markKnownBad pkg "jwheeler-cp/elm-form" -- 404
+    markKnownBad pkg "m-mullins/elm-console" -- 404
+    markKnownBad pkg "nathanjohnson320/elm-ui-components" -- 404
+    markKnownBad pkg "nik-garmash/elm-test" -- 404
+    markKnownBad pkg "not1602/elm-feather" -- 404
+    markKnownBad pkg "ozyinc/elm-sortable-table-with-row-id" -- 404
+    markKnownBad pkg "pascallemerrer/elm-advanced-grid" -- renamed to Orange-OpenSource/elm-advanced-grid
+    markKnownBad pkg "proda-ai/elm-logger" -- 404
+    markKnownBad pkg "reserve-protocol/elm-i3166-data" -- renamed to reserve-protocol/elm-iso3166-data
 
-    matchKnownBad pkg "Cendrb/elm-css" -- Relies on Skinney/murmur3
-    matchKnownBad pkg "EngageSoftware/elm-engage-common" -- Relies on Skinney/murmur3
-    matchKnownBad pkg "peterszerzo/elm-natural-ui" -- Relies on Skinney/murmur3
-    matchKnownBad pkg "the-sett/salix" -- Relies on Skinney/murmur3
-    matchKnownBad pkg "the-sett/the-sett-laf" -- Relies on Skinney/murmur3
+    markKnownBad pkg "Cendrb/elm-css" -- Relies on Skinney/murmur3
+    markKnownBad pkg "EngageSoftware/elm-engage-common" -- Relies on Skinney/murmur3
+    markKnownBad pkg "peterszerzo/elm-natural-ui" -- Relies on Skinney/murmur3
+    markKnownBad pkg "the-sett/salix" -- Relies on Skinney/murmur3
+    markKnownBad pkg "the-sett/the-sett-laf" -- Relies on Skinney/murmur3
 
-    matchKnownBad pkg "altjsus/elmtable" -- SHA changed
-    matchKnownBad pkg "arsduo/elm-ui-drag-drop" -- SHA changed
-    matchKnownBad pkg "burnable-tech/elm-ethereum" -- SHA changed
-    matchKnownBad pkg "chemirea/bulma-classes" -- SHA changed
-    matchKnownBad pkg "ContaSystemer/review-no-missing-documentation" -- SHA changed
-    matchKnownBad pkg "doanythingfordethklok/snackbar" -- SHA changed
-    matchKnownBad pkg "FabienHenon/remote-resource" -- SHA changed
-    matchKnownBad pkg "JeremyBellows/elm-bootstrapify" -- SHA changed
-    matchKnownBad pkg "maca/crdt-replicated-graph" -- SHA changed
-    matchKnownBad pkg "special-elektronik/elm-autocomplete" -- SHA changed
-    matchKnownBad pkg "tricycle/elm-infnite-gallery" -- SHA changed
-    matchKnownBad pkg "valentinomicko/test-forms" -- SHA changed
-    matchKnownBad pkg "waratuman/elm-json-extra" -- SHA changed
-    matchKnownBad pkg "xdelph/elm-slick-grid" -- SHA changed
+    markKnownBad pkg "altjsus/elmtable" -- SHA changed
+    markKnownBad pkg "arsduo/elm-ui-drag-drop" -- SHA changed
+    markKnownBad pkg "burnable-tech/elm-ethereum" -- SHA changed
+    markKnownBad pkg "chemirea/bulma-classes" -- SHA changed
+    markKnownBad pkg "ContaSystemer/review-no-missing-documentation" -- SHA changed
+    markKnownBad pkg "doanythingfordethklok/snackbar" -- SHA changed
+    markKnownBad pkg "FabienHenon/remote-resource" -- SHA changed
+    markKnownBad pkg "JeremyBellows/elm-bootstrapify" -- SHA changed
+    markKnownBad pkg "maca/crdt-replicated-graph" -- SHA changed
+    markKnownBad pkg "special-elektronik/elm-autocomplete" -- SHA changed
+    markKnownBad pkg "tricycle/elm-infnite-gallery" -- SHA changed
+    markKnownBad pkg "valentinomicko/test-forms" -- SHA changed
+    markKnownBad pkg "waratuman/elm-json-extra" -- SHA changed
+    markKnownBad pkg "xdelph/elm-slick-grid" -- SHA changed
+
+    markKnownBad pkg "IzumiSy/elm-consistent-hashing" -- "elm/core": "1.0.4 <= v < 1.0.5",
+
+
+    markKnownBad pkg "ivadzy/bbase64" -- renamed to "chelovek0v/bbase64"
+    markKnownBad pkg "jaredramirez/elm-s3" -- relies on "ivadzy/bbase64"
+    markKnownBad pkg "malinoff/elm-jwt" -- relies on "ivadzy/bbase64"
+
+
+    markKnownBad pkg "lnkr-a/tailwindcss-typed" -- renamed to "laniakea-landscape/tailwindcss-typed"
 
 
     -- @TODO issues that might be resolveable
-    matchKnownBad pkg "robinheghan/elm-deque" -- Has a type Deque a = Deque (Deque (Maybe a)) type which seems inexpressible as an encoder/decoder...?!?!
+    markKnownBad pkg "robinheghan/elm-deque" -- Has a type Deque a = Deque (Deque (Maybe a)) type which seems inexpressible as an encoder/decoder...?!?!
+    markKnownBad pkg "finos/morphir-elm" -- should have worked before?
 
-
-
-    matchKnownBad pkg "evelios/elm-geometry-quadtree" -- strange exception, when using compiled binary lamdera install works... but strange error when part of this script...
+    markKnownBad pkg "evelios/elm-geometry-quadtree" -- strange exception, when using compiled binary lamdera install works... but strange error when part of this script...
     -- building: evelios/elm-geometry-quadtree
     -- Okay, I created it. Now read that link!
     -- -- CANNOT FIND COMPATIBLE VERSION ------------------------------------- elm.json
@@ -242,7 +254,9 @@ tryStandaloneInstall pkg  = do
     --
     -- *** Exception: ExitFailure 1
 
-    -- Pending
+    -- 🚧🚧🚧🚧 Pending
+
+    markKnownBad pkg "bburdette/cellme" -- looks like wire error, prelude last empty list
 
 
 
