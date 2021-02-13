@@ -4,6 +4,7 @@
 
 module Test.Wire where
 
+
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 import qualified Data.Text as Text
@@ -12,6 +13,8 @@ import qualified Data.Utf8 as Utf8
 import qualified Elm.ModuleName as ModuleName
 import qualified Elm.Package as Pkg
 
+import Control.Concurrent.MVar
+import Control.Exception (SomeException, AsyncException(UserInterrupt), catch, fromException, throw)
 import System.Environment (setEnv, unsetEnv, lookupEnv)
 import System.FilePath ((</>))
 
@@ -53,50 +56,70 @@ all = EasyTest.run suite
 
 suite :: Test ()
 suite = tests $
-  [ scope "compile all Elm wire expectations" $ do
-      io wire
+  [ scope "compile all Elm wire expectations" wire
   ]
 
-wire :: IO ()
+wire :: Test ()
 wire = do
-  let project = "/Users/mario/dev/projects/elmx/test/scenario-alltypes"
 
-  setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
-  setEnv "LTEST" "1"
-  setEnv "LDEBUG" "1"
-  setEnv "ELM_HOME" "/Users/mario/elm-home-elmx-test"
+  failuresM <- io $ newMVar []
 
-  let testFiles =
-        [
-          "src/Test/Wire_Union_1_Basic.elm"
-        , "src/Test/Wire_Union_2_Basic.elm"
-        , "src/Test/External.elm"
-        , "src/Test/Wire_Union_3_Params.elm"
-        , "src/Test/Wire_Union_4_Tricky.elm"
-        , "src/Test/Wire_Alias_1_Basic.elm"
-        , "src/Test/Wire_Alias_2_Record.elm"
-        , "src/Test/Wire_Alias_3_SubAlias.elm"
-        , "src/Test/Wire_Alias_4_TvarRename.elm"
-        , "src/Test/Wire_Tvar_Ambiguous.elm"
-        , "src/Test/Wire_Core_Types.elm"
-        , "src/Test/Wire_Recursive.elm"
-        , "src/Test/Wire_Record_Extensible.elm"
-        , "src/Test/Wire_Phantom.elm"
-        , "src/Test/Wire_Tvar_Deep.elm"
+  io $ do
+    let project = "/Users/mario/dev/projects/elmx/test/scenario-alltypes"
 
-        ]
+    setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
+    setEnv "LTEST" "1"
+    setEnv "LDEBUG" "1"
+    setEnv "ELM_HOME" "/Users/mario/elm-home-elmx-test"
 
-  testFiles & mapM (\filename -> do
-      putStrLn $ "testing: " <> show filename
-      -- Bust Elm's caching with this one weird trick!
-      touch $ project </> filename
-      Lamdera.Compile.make project (project </> filename)
-    )
+    let testFiles =
+          [
+            "src/Test/Wire_Union_1_Basic.elm"
+          , "src/Test/Wire_Union_2_Basic.elm"
+          , "src/Test/External.elm"
+          , "src/Test/Wire_Union_3_Params.elm"
+          , "src/Test/Wire_Union_4_Tricky.elm"
+          , "src/Test/Wire_Alias_1_Basic.elm"
+          , "src/Test/Wire_Alias_2_Record.elm"
+          , "src/Test/Wire_Alias_3_SubAlias.elm"
+          , "src/Test/Wire_Alias_4_TvarRename.elm"
+          , "src/Test/Wire_Tvar_Ambiguous.elm"
+          , "src/Test/Wire_Core_Types.elm"
+          , "src/Test/Wire_Recursive.elm"
+          , "src/Test/Wire_Record_Extensible.elm"
+          , "src/Test/Wire_Phantom.elm"
+          , "src/Test/Wire_Tvar_Deep.elm"
 
-  unsetEnv "LOVR"
-  unsetEnv "LTEST"
-  unsetEnv "LDEBUG"
-  unsetEnv "ELM_HOME"
+          ]
+
+    let
+      catchTestException :: FilePath -> SomeException -> IO a
+      catchTestException filename e = do
+        modifyMVar_ failuresM (\failures -> pure $ failures ++ filename)
+        putStrLn "🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥"
+        throw e
+
+
+    testFiles & mapM (\filename -> do
+        putStrLn $ "testing: " <> show filename
+        -- Bust Elm's caching with this one weird trick!
+        touch $ project </> filename
+        Lamdera.Compile.make project (project </> filename) `catch` catchTestException filename
+      )
+
+    unsetEnv "LOVR"
+    unsetEnv "LTEST"
+    unsetEnv "LDEBUG"
+    unsetEnv "ELM_HOME"
+
+  failures <- io $ readMVar failuresM
+  if length failures > 0 then
+    crash failures
+  else
+    scope "senarios-alltypes no exceptions" $ ok
+
+
+
 
 
 buildAllPackagesRoot = "/Users/mario/lamdera-build-all-packages"

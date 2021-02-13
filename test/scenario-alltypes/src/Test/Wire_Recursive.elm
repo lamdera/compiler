@@ -52,7 +52,7 @@ expected_w3_encode_Lazy w3_x_c_a w3v =
             Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeUnsignedInt8 0, w3_x_c_a v0 ]
 
         Lazy v0 ->
-            Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeUnsignedInt8 1, Lamdera.Wire3.failEncode v0 ]
+            Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeUnsignedInt8 1, Lamdera.Wire3.failEncode () ]
 
 
 expected_w3_decode_Lazy w3_x_c_a =
