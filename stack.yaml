@@ -1,11 +1,10 @@
-resolver: lts-16.22
+resolver: lts-17.4
 packages:
 - '.'
 extra-deps:
 - language-glsl-0.3.0
-- zip-archive-0.3.3
-- broadcast-chan-0.2.1@sha256:44add065c6b654a4677a9d77033977063c5cc596173b798bd56e4b88ae23e71e,6128
 - timeout-0.1.1@sha256:56c1d3321d7139d1f7ebf04d46c95d3a3f1c8c9e0f15666ae3ccd6bae6204b6e,1427
+
 # Required to build on windows
 - regex-posix-clib-2.7
 flags:

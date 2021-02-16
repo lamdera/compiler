@@ -12,20 +12,6 @@ packages:
   original:
     hackage: language-glsl-0.3.0
 - completed:
-    hackage: zip-archive-0.3.3@sha256:53f871653059f87285f434319598f380d986cd7fd9219de555dcafc496121a7c,2688
-    pantry-tree:
-      size: 743
-      sha256: 8bda87a02ae07faa2eb683899d8f69a1a5d58cca0263b58d0e5c7d4413e4fc64
-  original:
-    hackage: zip-archive-0.3.3
-- completed:
-    hackage: broadcast-chan-0.2.1@sha256:44add065c6b654a4677a9d77033977063c5cc596173b798bd56e4b88ae23e71e,6128
-    pantry-tree:
-      size: 755
-      sha256: 20c61679c2789457b146c4f79ec1583377a031282cb56a82ca00fe89b53a2cf2
-  original:
-    hackage: broadcast-chan-0.2.1@sha256:44add065c6b654a4677a9d77033977063c5cc596173b798bd56e4b88ae23e71e,6128
-- completed:
     hackage: timeout-0.1.1@sha256:56c1d3321d7139d1f7ebf04d46c95d3a3f1c8c9e0f15666ae3ccd6bae6204b6e,1427
     pantry-tree:
       size: 437
@@ -41,7 +27,7 @@ packages:
     hackage: regex-posix-clib-2.7
 snapshots:
 - completed:
-    size: 532414
-    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/16/22.yaml
-    sha256: e483fb88549fc0f454c190979bf35ac91c7aceff2c0e71e7d8edd11842d772d8
-  original: lts-16.22
+    size: 563103
+    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/17/4.yaml
+    sha256: f11e2153044f5f71ea7b1c9398f4721f517c9bd37642ed769647b896564021f3
+  original: lts-17.4
