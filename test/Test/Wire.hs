@@ -113,12 +113,11 @@ wire = do
     unsetEnv "ELM_HOME"
 
   failures <- io $ readMVar failuresM
-  if length failures > 0 then
-    crash failures
-  else
-    scope "senarios-alltypes no exceptions" $ ok
-
-
+  if length failures > 0
+    then
+      crash failures
+    else
+      scope "senarios-alltypes no exceptions" $ ok
 
 
 

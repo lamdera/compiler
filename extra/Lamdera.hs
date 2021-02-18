@@ -96,10 +96,6 @@ module Lamdera
   , callCommand
   , icdiff
   , withStdinYesAll
-  , ghciThreads
-  , trackGhciThread
-  , killGhciThreads
-  , asGhciThread
   )
   where
 
@@ -917,39 +913,4 @@ withStdinYesAll action =
     action
 
 
-
--- https://stackoverflow.com/questions/16811376/simulate-global-variable trick
-{-# NOINLINE ghciThreads #-}
-ghciThreads :: MVar [ThreadId]
-ghciThreads = unsafePerformIO $ newMVar []
-
-
-trackGhciThread :: ThreadId -> IO ()
-trackGhciThread threadId =
-  modifyMVar_ ghciThreads
-    (\threads -> do
-      debug_ $ "Tracking GHCI thread:" ++ show threadId
-      pure $ threadId:threads
-    )
-
-
-killGhciThreads :: IO ()
-killGhciThreads = do
-  modifyMVar_ ghciThreads
-    (\threads -> do
-      case threads of
-        [] -> do
-          debug_ $ "No tracked GHCI threads to kill."
-          pure []
-        threads -> do
-          debug_ $ "Killing tracked GHCI threads: " ++ show threads
-          mapM killThread threads
-          pure []
-    )
-
-
-asGhciThread :: IO () -> IO ()
-asGhciThread io = do
-  debug_ "Starting as ghci thread..."
-  threadId <- forkIO io
-  trackGhciThread threadId
+x = 2

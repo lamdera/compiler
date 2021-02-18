@@ -47,8 +47,12 @@ Executable elmx
         builder/src
         terminal/impl
         terminal/src
+        -- Lamdera
         extra
         test
+        -- Elmx
+        ext-common
+        ext-sentry
 
     Main-Is:
         Main.hs
@@ -210,7 +214,6 @@ Executable elmx
         Lamdera.Evergreen
         Lamdera.Evergreen.Snapshot
         Lamdera.Extensions
-        Lamdera.Filewatch
         Lamdera.Graph
         Lamdera.Hints
         Lamdera.Injection
@@ -287,6 +290,10 @@ Executable elmx
         Sanity
         Wire.PrettyPrint
 
+        -- Elmx extensions --
+        Ext.Common
+        Ext.Sentry
+        Ext.Filewatch
 
     Build-depends:
         ansi-terminal,
@@ -340,7 +347,6 @@ Executable elmx
         websockets,
         websockets-snap,
         stm,
-        auto-update,
         uuid,
         broadcast-chan,
         timeout,
@@ -368,16 +374,11 @@ Executable elmx
         async,
         random,
         tree-diff,
-        main-tester
+        main-tester,
 
-
-    -- @TODO remove when Big Sur supported
-    if os(darwin)
-      CPP-Options: -DOS_Mac
-      Build-depends: directory-tree
-      Other-Modules: Lamdera.Filewatch_Brute
-
-    else
-      CPP-Options: -DOS_Other
-      Build-Depends: fsnotify
-      Other-Modules: Lamdera.Filewatch_FSNotify
+        -- Sentry
+        fsnotify,
+        -- @TODO move to common
+        clock,
+        formatting,
+        fold-debounce

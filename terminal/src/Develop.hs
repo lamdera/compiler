@@ -11,6 +11,7 @@ import Control.Monad (guard)
 import Control.Monad.Trans (MonadIO(liftIO))
 import qualified Data.ByteString.Builder as B
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Lazy as BSL
 import qualified Data.HashMap.Strict as HashMap
 import Data.Monoid ((<>))
 import qualified Data.NonEmptyList as NE
@@ -36,8 +37,12 @@ import qualified Stuff
 
 import Lamdera
 import qualified Lamdera.CLI.Live as Live
-import qualified Lamdera.Filewatch as Filewatch
 import qualified Lamdera.ReverseProxy
+
+import Ext.Common (trackedForkIO)
+import qualified Ext.Filewatch as Filewatch
+import qualified Ext.Sentry as Sentry
+import Control.Concurrent.STM (atomically, newTVarIO, readTVar, writeTVar, TVar)
 
 import StandaloneInstances
 
@@ -59,18 +64,36 @@ run () (Flags maybePort) =
       liveState <- liftIO $ Live.init
       liftIO $ Live.normalLocalDevWrite
 
-      Filewatch.watch liveState
+      root <- getProjectRoot
+
+      sentryCache <- liftIO $ Sentry.init
+
+      let
+        recompile :: [String] -> IO ()
+        recompile events = do
+          debug_ $ "🛫  recompile starting: " ++ show events
+          trackedForkIO $ do
+            Sentry.updateJsOutput sentryCache $ do
+              harness <- Live.prepareLocalDev
+              compileToBuilder harness
+          Live.refreshClients liveState
+          debug_ "🛬  recompile done... "
+
+      -- Warm the cache
+      recompile []
+
+      Filewatch.watch root recompile
       Lamdera.ReverseProxy.start
 
       Live.withEnd liveState $
        httpServe (config port) $
-        serveFiles
+        (serveFiles sentryCache)
         <|> serveDirectoryWith directoryConfig "."
         <|> Live.serveWebsocket liveState
         <|> route [ ("_r/:endpoint", Live.serveRpc liveState) ]
         <|> serveAssets -- Compiler packaged static files
-        <|> Live.serveLamderaPublicFiles serveElm serveFilePretty -- Add /public/* as if it were /* to mirror production
-        <|> Live.serveUnmatchedUrlsToIndex serveElm -- Everything else without extensions goes to Lamdera LocalDev harness
+        <|> Live.serveLamderaPublicFiles (serveElm sentryCache) serveFilePretty -- Add /public/* as if it were /* to mirror production
+        <|> Live.serveUnmatchedUrlsToIndex (serveElm sentryCache) -- Everything else without extensions goes to Lamdera LocalDev harness
         <|> error404 -- Will get hit for any non-matching extensioned paths i.e. /hello.blah
 
 
@@ -110,11 +133,11 @@ error404 =
 -- SERVE FILES
 
 
-serveFiles :: Snap ()
-serveFiles =
+serveFiles :: Sentry.Cache -> Snap ()
+serveFiles sentryCache =
   do  path <- getSafePath
       guard =<< liftIO (Dir.doesFileExist path)
-      serveElm path <|> serveFilePretty path
+      serveElm sentryCache path <|> serveFilePretty path
 
 
 
@@ -154,9 +177,44 @@ serveCode path =
 
 -- SERVE ELM
 
+serveElm :: Sentry.Cache -> FilePath -> Snap ()
+serveElm sentryCache path =
+  do  guard (takeExtension path == ".elm")
+      modifyResponse (setContentType "text/html")
 
-serveElm :: FilePath -> Snap ()
-serveElm path =
+      js <- liftIO $ Sentry.getJsOutput sentryCache
+
+      writeBS js
+
+
+compileToBuilder :: FilePath -> IO BS.ByteString
+compileToBuilder path =
+  do
+      result <- compile path
+
+      pure $
+        BSL.toStrict $
+          B.toLazyByteString $
+            case result of
+                Right builder ->
+                  builder
+
+                Left exit -> do
+                  -- @LAMDERA because we do AST injection, sometimes we might get
+                  -- an error that actually cannot be displayed, i.e, the reactorToReport
+                  -- function itself throws an exception, mainly due to use of unsafe
+                  -- functions like Prelude.last and invariants that for some reason haven't
+                  -- held with our generated code (usually related to subsequent type inference)
+                  -- We print out a less-processed version here in debug mode to aid with
+                  -- debugging in these scenarios, as the browser will just get zero bytes
+                  -- debugPass "serveElm error" (Exit.reactorToReport exit) (pure ())
+                  Help.makePageHtml "Errors" $ Just $
+                    Exit.toJson $ Exit.reactorToReport exit
+
+
+
+serveElm_ :: FilePath -> Snap ()
+serveElm_ path =
   do  guard (takeExtension path == ".elm")
       modifyResponse (setContentType "text/html")
       result <- liftIO $ compile path

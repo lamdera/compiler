@@ -27,6 +27,7 @@ import Data.CaseInsensitive
 
 import Http
 import Lamdera
+import Ext.Common (trackGhciThread)
 
 {- Rough implementation of a reverse proxy, mirroring some of the techniques from cors-anywhere:
 

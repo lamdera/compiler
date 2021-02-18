@@ -107,59 +107,70 @@ serveUnmatchedUrlsToIndex serveElm =
         cache = lamderaCache root
         harnessPath = cache </> "LocalDev.elm"
 
-      isDebug <- liftIO $ isDebug
-
-      liftIO $ do
-        onlyWhen isDebug $ do
-          let overridePath = "/Users/mario/dev/projects/elmx/extra/LocalDev/LocalDev.elm"
-          overrideExists <- doesFileExist overridePath
-          onlyWhen overrideExists $ do
-            debug $ "🚧 OVERRIDE from elmx/extra/LocalDev/LocalDev.elm"
-            copyFile overridePath harnessPath
-
-          rpcExists <- doesFileExist $ root </> "src" </> "RPC.elm"
-
-          onlyWhen rpcExists $ do
-
-            -- Inject missing imports
-            liftIO $
-              replaceInFile
-                "-- MKRRI"
-                "import RPC\n\
-                \import LamderaRPC"
-                harnessPath
-            -- Replace body implementation
-            liftIO $
-              replaceInFile
-                "-- MKRRC"
-                "let\n\
-                \                model =\n\
-                \                    { userModel = m.bem }\n\
-                \\n\
-                \                ( newModel, newBeCmds ) =\n\
-                \                    LamderaRPC.process\n\
-                \                        (\\k v ->\n\
-                \                            let\n\
-                \                                x =\n\
-                \                                    log k v\n\
-                \                            in\n\
-                \                            Cmd.none\n\
-                \                        )\n\
-                \                        rpcOut\n\
-                \                        rpcArgsJson\n\
-                \                        RPC.lamdera_handleEndpoints\n\
-                \                        model\n\
-                \            in\n\
-                \            ( { m | bem = newModel.userModel, bemDirty = True }, Cmd.map BEMsg newBeCmds )\n\
-                \            {-}"
-                harnessPath
-
-      debug "serving elm..."
       serveElm harnessPath
       -- Cleanup causes issues because we might have a slew of tabs
       -- We can restore this when we further optimise `serveElm` to have a debounce cache!
       -- liftIO $ Dir.removeFile harnessPath
       -- liftIO $ callCommand $ "rm " <> harnessPath <> " || true " -- less exception-ey on double-reload!
+
+
+prepareLocalDev = do
+  root <- getProjectRoot
+
+  let
+    cache = lamderaCache root
+    harnessPath = cache </> "LocalDev.elm"
+
+  isDebug <- isDebug
+  pure harnessPath
+
+
+skip harnessPath root isDebug = do
+  onlyWhen isDebug $ do
+    let overridePath = "/Users/mario/dev/projects/elmx/extra/LocalDev/LocalDev.elm"
+    overrideExists <- doesFileExist overridePath
+    onlyWhen overrideExists $ do
+      debug $ "🚧 OVERRIDE from elmx/extra/LocalDev/LocalDev.elm"
+      copyFile overridePath harnessPath
+
+    rpcExists <- doesFileExist $ root </> "src" </> "RPC.elm"
+
+    onlyWhen rpcExists $ do
+
+      -- Inject missing imports
+        replaceInFile
+          "-- MKRRI"
+          "import RPC\n\
+          \import LamderaRPC"
+          harnessPath
+
+      -- Replace body implementation
+        replaceInFile
+          "-- MKRRC"
+          "let\n\
+          \                model =\n\
+          \                    { userModel = m.bem }\n\
+          \\n\
+          \                ( newModel, newBeCmds ) =\n\
+          \                    LamderaRPC.process\n\
+          \                        (\\k v ->\n\
+          \                            let\n\
+          \                                x =\n\
+          \                                    log k v\n\
+          \                            in\n\
+          \                            Cmd.none\n\
+          \                        )\n\
+          \                        rpcOut\n\
+          \                        rpcArgsJson\n\
+          \                        RPC.lamdera_handleEndpoints\n\
+          \                        model\n\
+          \            in\n\
+          \            ( { m | bem = newModel.userModel, bemDirty = True }, Cmd.map BEMsg newBeCmds )\n\
+          \            {-}"
+          harnessPath
+
+  pure harnessPath
+
 
 
 lamderaLocalDev :: BS.ByteString
@@ -183,24 +194,28 @@ normalLocalDevWrite = do
       modified <- Dir.getModificationTime harnessPath
       accessed <- Dir.getAccessTime harnessPath
 
-      debug $ "🚧 n:" <> show now
-      debug $ "🚧 a:" <> show accessed
-      debug $ "🚧 m:" <> show modified
+      -- debug $ "🚧 n:" <> show now
+      -- debug $ "🚧 a:" <> show accessed
+      -- debug $ "🚧 m:" <> show modified
 
       if diffUTCTime now modified > 60
         then do
           -- File was last modified more than 5 seconds ago, okay to rewrite
-          debug $ "🚧 writing, more than 5:" <> show (diffUTCTime now modified)
+          -- debug $ "🚧 writing, more than 5:" <> show (diffUTCTime now modified)
           BS.writeFile harnessPath lamderaLocalDev
         else do
           -- Modified recently, don't rewrite to prevent compiler issues
           -- when multiple tabs are open for lamdera live
-          debug $ "🚧 skipping write! "  <> show (diffUTCTime now modified)
+          -- debug $ "🚧 skipping write! "  <> show (diffUTCTime now modified)
           pure ()
     else do
       -- No file exists yet, must be a new project
       debug "🚧 🆕"
       BS.writeFile harnessPath lamderaLocalDev
+
+
+refreshClients (mClients, mLeader, mChan, beState) =
+  SocketServer.broadcastImpl mClients "{\"t\":\"r\"}" -- r is refresh, see live.js
 
 
 serveWebsocket (mClients, mLeader, mChan, beState) =
@@ -273,7 +288,7 @@ serveWebsocket (mClients, mLeader, mChan, beState) =
 
                   else if Text.isSuffixOf "\"t\":\"p\"}" text
                     then do
-                      debug "[backendSt] 💾"
+                      -- debug "[backendSt] 💾"
                       atomically $ writeTVar beState text
                       onlyWhen (textContains "force" text) $ do
                         debug "[refresh  ] 🔄 "
