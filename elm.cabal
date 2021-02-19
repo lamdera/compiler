@@ -290,8 +290,12 @@ Executable elmx
         Sanity
         Wire.PrettyPrint
 
-        -- Elmx extensions --
+        -- Elmx extensions
+        -- Ext Common --
         Ext.Common
+        Ext.ElmFormat
+
+        -- Ext-sentry
         Ext.Sentry
         Ext.Filewatch
 

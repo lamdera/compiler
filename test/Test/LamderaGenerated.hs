@@ -60,7 +60,6 @@ suite = tests
                 |> thenMigrateModel "BackendModel" (always ModelUnchanged) T2.w3_encode_BackendModel T3.w3_decode_BackendModel 3
                 |> upgradeSucceeds
                 |> otherwiseError
-
         2 ->
             decodeType 5 3 bytes T3.w3_decode_BackendModel
                 |> upgradeSucceeds
@@ -89,7 +88,6 @@ suite = tests
               decodeType 5 62 bytes T62.w3_decode_BackendModel
                   |> upgradeSucceeds
                   |> otherwiseError
-
           61 ->
               decodeType 5 62 bytes T62.w3_decode_BackendModel
                   |> upgradeSucceeds
@@ -119,7 +117,6 @@ suite = tests
                   |> thenMigrateModel "BackendModel" M62.backendModel T57.w3_encode_BackendModel T62.w3_decode_BackendModel 62
                   |> upgradeSucceeds
                   |> otherwiseError
-
           61 ->
               decodeType 5 57 bytes T57.w3_decode_BackendModel
                   |> thenMigrateModel "BackendModel" M62.backendModel T57.w3_encode_BackendModel T62.w3_decode_BackendModel 62
@@ -164,7 +161,6 @@ suite = tests
                   _ ->
                       UnknownVersion ( version, "BackendModel", bytes )
 
-
           decodeAndUpgradeFrontendModel : Int -> Bytes -> UpgradeResult T1.FrontendModel T1.FrontendMsg
           decodeAndUpgradeFrontendModel version bytes =
               case version of
@@ -175,7 +171,6 @@ suite = tests
 
                   _ ->
                       UnknownVersion ( version, "FrontendModel", bytes )
-
 
           decodeAndUpgradeFrontendMsg : Int -> Bytes -> UpgradeResult T1.FrontendMsg T1.FrontendMsg
           decodeAndUpgradeFrontendMsg version bytes =
@@ -188,7 +183,6 @@ suite = tests
                   _ ->
                       UnknownVersion ( version, "FrontendMsg", bytes )
 
-
           decodeAndUpgradeToBackend : Int -> Bytes -> UpgradeResult T1.ToBackend T1.BackendMsg
           decodeAndUpgradeToBackend version bytes =
               case version of
@@ -200,7 +194,6 @@ suite = tests
                   _ ->
                       UnknownVersion ( version, "ToBackend", bytes )
 
-
           decodeAndUpgradeBackendMsg : Int -> Bytes -> UpgradeResult T1.BackendMsg T1.BackendMsg
           decodeAndUpgradeBackendMsg version bytes =
               case version of
@@ -211,7 +204,6 @@ suite = tests
 
                   _ ->
                       UnknownVersion ( version, "BackendMsg", bytes )
-
 
           decodeAndUpgradeToFrontend : Int -> Bytes -> UpgradeResult T1.ToFrontend T1.FrontendMsg
           decodeAndUpgradeToFrontend version bytes =
@@ -263,7 +255,6 @@ suite = tests
                           |> upgradeSucceeds
                           |> otherwiseError
 
-
                   2 ->
                       decodeType 5 version bytes T2.w3_decode_BackendModel
                           |> upgradeIsCurrent
@@ -271,7 +262,6 @@ suite = tests
 
                   _ ->
                       UnknownVersion ( version, "BackendModel", bytes )
-
 
           decodeAndUpgradeFrontendModel : Int -> Bytes -> UpgradeResult T2.FrontendModel T2.FrontendMsg
           decodeAndUpgradeFrontendModel version bytes =
@@ -282,7 +272,6 @@ suite = tests
                           |> upgradeSucceeds
                           |> otherwiseError
 
-
                   2 ->
                       decodeType 4 version bytes T2.w3_decode_FrontendModel
                           |> upgradeIsCurrent
@@ -290,7 +279,6 @@ suite = tests
 
                   _ ->
                       UnknownVersion ( version, "FrontendModel", bytes )
-
 
           decodeAndUpgradeFrontendMsg : Int -> Bytes -> UpgradeResult T2.FrontendMsg T2.FrontendMsg
           decodeAndUpgradeFrontendMsg version bytes =
@@ -301,7 +289,6 @@ suite = tests
                           |> upgradeSucceeds
                           |> otherwiseError
 
-
                   2 ->
                       decodeType 0 version bytes T2.w3_decode_FrontendMsg
                           |> upgradeIsCurrent
@@ -309,7 +296,6 @@ suite = tests
 
                   _ ->
                       UnknownVersion ( version, "FrontendMsg", bytes )
-
 
           decodeAndUpgradeToBackend : Int -> Bytes -> UpgradeResult T2.ToBackend T2.BackendMsg
           decodeAndUpgradeToBackend version bytes =
@@ -320,7 +306,6 @@ suite = tests
                           |> upgradeSucceeds
                           |> otherwiseError
 
-
                   2 ->
                       decodeType 1 version bytes T2.w3_decode_ToBackend
                           |> upgradeIsCurrent
@@ -328,7 +313,6 @@ suite = tests
 
                   _ ->
                       UnknownVersion ( version, "ToBackend", bytes )
-
 
           decodeAndUpgradeBackendMsg : Int -> Bytes -> UpgradeResult T2.BackendMsg T2.BackendMsg
           decodeAndUpgradeBackendMsg version bytes =
@@ -339,7 +323,6 @@ suite = tests
                           |> upgradeSucceeds
                           |> otherwiseError
 
-
                   2 ->
                       decodeType 2 version bytes T2.w3_decode_BackendMsg
                           |> upgradeIsCurrent
@@ -347,7 +330,6 @@ suite = tests
 
                   _ ->
                       UnknownVersion ( version, "BackendMsg", bytes )
-
 
           decodeAndUpgradeToFrontend : Int -> Bytes -> UpgradeResult T2.ToFrontend T2.FrontendMsg
           decodeAndUpgradeToFrontend version bytes =
@@ -358,7 +340,6 @@ suite = tests
                           |> upgradeSucceeds
                           |> otherwiseError
 
-
                   2 ->
                       decodeType 3 version bytes T2.w3_decode_ToFrontend
                           |> upgradeIsCurrent
@@ -366,8 +347,6 @@ suite = tests
 
                   _ ->
                       UnknownVersion ( version, "ToFrontend", bytes )
-
-
         |]
   ]
 

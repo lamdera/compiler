@@ -44,6 +44,7 @@ module Lamdera
   , textHasPrefix
   , stringContains
   , formatHaskellValue
+  , hindentPrintValue
   , hindentFormatValue
   , readUtf8
   , readUtf8Text
@@ -678,6 +679,7 @@ getProjectRoot = do
     Just filepath -> pure filepath
     Nothing -> do
       putStrLn "Cannot find an elm.json! Make sure you're in a project folder, or run `lamdera init` to start a new one."
+      debug_ $ "current directory was: " <> subDir
       exitFailure
 
 

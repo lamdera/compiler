@@ -38,6 +38,7 @@ import Lamdera
 import Lamdera.Types
 import qualified Lamdera.Interfaces
 import qualified Lamdera.Progress as Progress
+import qualified Ext.ElmFormat
 import StandaloneInstances
 
 
@@ -68,8 +69,6 @@ snapshotCurrentTypes version interfaces iface_Types = do
     & Map.toList
     & mapM (\(file, ef@(ElmFileText imports types)) ->
       let
-        output = efToText version (file, ef)
-
         filename =
           file
             & T.splitOn "."
@@ -78,6 +77,7 @@ snapshotCurrentTypes version interfaces iface_Types = do
 
       in
       onlyWhen (not $ textContains "/" file) $ do
+        output <- Ext.ElmFormat.formatOrPassthrough $ efToText version (file, ef)
         writeUtf8 filename output
     )
 

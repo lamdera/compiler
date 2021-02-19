@@ -49,7 +49,7 @@ Press up arrow to get history of prior commands.
 -- Current target for ghci :rr command. See ~/.ghci config file, which should contain
 -- something like `:def rr const $ return $ unlines [":r","Test.target"]`
 
--- target = Test.all
+target = Test.all
 -- target = Test.Wire.wire
 -- target = checkUserConfig
 -- target = Test.Wire.buildAllPackages
@@ -79,13 +79,13 @@ Press up arrow to get history of prior commands.
 --   unsetEnv "ELM_HOME"
 
 {- Dynamic testing of lamdera live with managed thread kill + reload -}
-target = do
-  setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
-  setEnv "LDEBUG" "1"
-
-  let p = "/Users/mario/lamdera/test/v1"
-  Dir.setCurrentDirectory p
-  withCurrentDirectory p $ trackedForkIO $ withCurrentDirectory p $ Develop.run () (Develop.Flags Nothing)
+-- target = do
+--   setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
+--   setEnv "LDEBUG" "1"
+--
+--   let p = "/Users/mario/lamdera/test/v1"
+--   Dir.setCurrentDirectory p
+--   withCurrentDirectory p $ trackedForkIO $ withCurrentDirectory p $ Develop.run () (Develop.Flags Nothing)
 
   -- Doing this actually makes no sense in the :rr context, as the thread is long-running so it's the same as
   -- disabling the ENV vars mid-run! But leaving it here as a reminder, because it _does_ pollute the ENV

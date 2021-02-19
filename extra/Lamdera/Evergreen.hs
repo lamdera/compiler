@@ -17,6 +17,7 @@ import Data.Maybe (fromMaybe)
 import Data.List
 
 import Lamdera
+import qualified Ext.ElmFormat
 
 
 createLamderaGenerated :: FilePath -> VersionInfo -> IO Text
@@ -231,7 +232,7 @@ migrationForType migrationSequence migrationsForVersion startVersion finalVersio
     intermediateMigrationsFormatted =
       intermediateMigrations
         & fmap (\(from,to) -> intermediateMigration allMigrations tipe from to finalVersion)
-        & T.concat
+        & T.intercalate "\n"
 
     startVersion_ = show_ $ vinfoVersion startVersion
     finalVersion_ = show_ $ vinfoVersion finalVersion

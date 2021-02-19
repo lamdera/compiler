@@ -41,7 +41,11 @@ $ stack ghci
 
 First, make sure you have deps installed:
 
-- `stack install hindent`
+```
+stack install hindent # used for debugging haskell values
+brew install icdiff   # used for nice side-by-side diffs in test output
+```
+
 
 I've found the fastest way to develop is using ghci with a little harness to invoke target code.
 
@@ -72,6 +76,13 @@ The [target is defined here](https://github.com/lamdera/compiler/blob/lamdera/te
 By default it's `target = Test.all`, so `:rr` will recompile and run all tests.
 
 Press up arrow to get history of prior commands!
+
+#### Tests
+
+`test/Test.hs` is the entrypoint for all tests. Use `Test.all` in ghci to run everything (it is also the `:rr` target by default).
+
+Using the test framework in `test/EasyTest`, a vendored version of [easytest](https://github.com/joelburget/easytest) back when it had fun emojis! It's only a single file and easy to read.
+
 
 #### Testing functions directly
 
