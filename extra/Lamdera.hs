@@ -68,9 +68,9 @@ module Lamdera
   , lamderaEnvModePath
   , lamderaExternalWarningsPath
   , lamderaBackendDevSnapshotPath
-  , getProjectRoot
-  , getProjectRootFor
-  , justs
+  , Ext.Common.getProjectRoot
+  , Ext.Common.getProjectRootFor
+  , Ext.Common.justs
   , lowerFirstLetter
   , findElmFiles
   , show_
@@ -118,8 +118,6 @@ import qualified Data.Text.Encoding as Text
 import qualified Data.Char as Char
 import System.Exit (exitFailure)
 
-
-
 import qualified Data.Text.Encoding as T
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Lazy.Encoding as TLE
@@ -156,6 +154,9 @@ import qualified System.Process
 import qualified Data.Digest.Pure.SHA as SHA
 import qualified Data.Name as N
 import qualified Data.Utf8 as Utf8
+
+import qualified Ext.Common
+import Ext.Common (getProjectRoot, getProjectRootFor)
 
 -- import CanSer.CanSer (ppElm)
 
@@ -363,11 +364,11 @@ lamderaLiveSrc =
     debug <- Lamdera.isDebug
     if debug
       then do
-        let overridePath = "/Users/mario/dev/projects/elmx/extra/dist/live.js"
+        let overridePath = "/Users/mario/dev/projects/lamdera-compiler/extra/dist/live.js"
         exists <- Dir.doesFileExist overridePath
         if exists
           then do
-            Lamdera.debug "Using elmx/extra/dist/live.js for lamderaLive"
+            Lamdera.debug "Using extra/dist/live.js for lamderaLive"
             res <- readUtf8 overridePath
             pure (T.encodeUtf8Builder (T.decodeUtf8 res))
           else
@@ -515,7 +516,6 @@ hindentPrintValue label v = do
           <> T.unpack label
           <> "\n"
           <> stdout
-
 
   pure v
 
@@ -670,45 +670,9 @@ lamderaBackendDevSnapshotPath = do
   pure $ lamderaCache root </> ".lamdera-bem-dev"
 
 
--- Copy of combined internals of Project.getRoot as it seems to notoriously cause cyclic wherever imported
-getProjectRoot :: IO FilePath
-getProjectRoot = do
-  subDir <- Dir.getCurrentDirectory
-  res <- findHelp "elm.json" (FP.splitDirectories subDir)
-  case res of
-    Just filepath -> pure filepath
-    Nothing -> do
-      putStrLn "Cannot find an elm.json! Make sure you're in a project folder, or run `lamdera init` to start a new one."
-      debug_ $ "current directory was: " <> subDir
-      exitFailure
-
-
-findHelp :: FilePath -> [String] -> IO (Maybe FilePath)
-findHelp name dirs =
-  if Prelude.null dirs then
-    return Nothing
-
-  else
-    do  exists_ <- Dir.doesFileExist (FP.joinPath dirs </> name)
-        if exists_
-          then return (Just (FP.joinPath dirs))
-          else findHelp name (Prelude.init dirs)
-
-
--- Find the project root from an arbitrary fle path
-getProjectRootFor :: FilePath -> IO FilePath
-getProjectRootFor path = do
-  res <- findHelp "elm.json" (FP.splitDirectories $ takeDirectory path)
-  case res of
-    Just filepath -> pure filepath
-    Nothing -> do
-      putStrLn "Cannot find an elm.json! Make sure you're in a project folder, or run `lamdera init` to start a new one."
-      exitFailure
 
 
 
-justs :: [Maybe a] -> [a]
-justs xs = [ x | Just x <- xs ]
 
 
 lowerFirstLetter :: String -> Text

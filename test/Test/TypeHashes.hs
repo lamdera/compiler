@@ -11,7 +11,7 @@ import Test.Helpers
 
 import Lamdera
 import NeatInterpolation
-import qualified Lamdera.Interfaces
+import qualified Ext.Query.Interfaces as Interfaces
 import qualified Lamdera.TypeHash
 
 all = EasyTest.run suite

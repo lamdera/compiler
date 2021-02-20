@@ -12,8 +12,8 @@ import Lamdera
 import Lamdera.Wire3.Helpers
 import StandaloneInstances
 
-import qualified Lamdera.Interfaces
-import qualified Lamdera.Canonical
+-- import qualified Lamdera.Interfaces
+import qualified Ext.Query.Canonical
 import Lamdera
 import Data.Map ((!))
 import qualified Data.Map as Map
@@ -30,11 +30,11 @@ import qualified Lamdera.Evaluate.Canonical
 import qualified Lamdera.Evaluate.Optimized
 
 exec = do
-  let project = "/Users/mario/dev/projects/elmx/test/scenario-interpreter"
+  let project = "/Users/mario/dev/projects/lamdera-compiler/test/scenario-interpreter"
   withCurrentDirectory project $ do
 
-    canonical <- Lamdera.Canonical.loadSingleCanonical "src/Test/Basic.elm"
-    objects <- Lamdera.Canonical.loadSingleObjects "src/Test/Basic.elm"
+    canonical <- Ext.Query.Canonical.loadSingleCanonical "src/Test/Basic.elm"
+    objects <- Ext.Query.Canonical.loadSingleObjects "src/Test/Basic.elm"
 
     -- objects
     --   & _l_nodes

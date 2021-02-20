@@ -16,8 +16,6 @@ import Lamdera
 import Lamdera.Wire3.Helpers
 import StandaloneInstances
 
-import qualified Lamdera.Interfaces
-import qualified Lamdera.Canonical
 import Lamdera
 import Data.Map ((!))
 import Data.Set (fromList)

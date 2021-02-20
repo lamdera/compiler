@@ -34,7 +34,7 @@ Flag dev {
 }
 
 
-Executable elmx
+Executable lamdera
     if flag(dev)
         ghc-options: -O0 -Wall -Werror
     else
@@ -217,7 +217,7 @@ Executable elmx
         Lamdera.Graph
         Lamdera.Hints
         Lamdera.Injection
-        Lamdera.Interfaces
+
         Lamdera.Project
         Lamdera.Suggestions
         Lamdera.TypeHash
@@ -258,7 +258,6 @@ Executable elmx
         Lamdera.Evaluate
         Lamdera.Evaluate.Canonical
         Lamdera.Evaluate.Optimized
-        Lamdera.Canonical
 
         -- Lamdera Legacy --
         Lamdera.Legacy
@@ -294,6 +293,9 @@ Executable elmx
         -- Ext Common --
         Ext.Common
         Ext.ElmFormat
+        Ext.Query.Canonical
+        Ext.Query.Interfaces
+
 
         -- Ext-sentry
         Ext.Sentry
@@ -380,9 +382,8 @@ Executable elmx
         tree-diff,
         main-tester,
 
-        -- Sentry
-        fsnotify,
-        -- @TODO move to common
+        -- elmx
         clock,
+        fold-debounce,
         formatting,
-        fold-debounce
+        fsnotify

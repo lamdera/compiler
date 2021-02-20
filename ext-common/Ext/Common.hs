@@ -2,17 +2,70 @@ module Ext.Common where
 
 import Control.Concurrent
 import Control.Concurrent.MVar
-import qualified System.Environment as Env
+
+import System.Exit (exitFailure)
+import System.FilePath as FP ((</>), joinPath, splitDirectories, takeDirectory)
 import System.IO.Unsafe (unsafePerformIO)
 import System.IO (hFlush, hPutStr, hPutStrLn, stderr, stdout, hClose, openTempFile)
+import qualified System.Directory as Dir
+import qualified System.Environment as Env
+
+-- Re-exports
+import qualified Data.Function
+
+
+-- Copy of combined internals of Project.getRoot as it seems to notoriously cause cyclic wherever imported
+getProjectRoot :: IO FilePath
+getProjectRoot = do
+  subDir <- Dir.getCurrentDirectory
+  res <- findHelp "elm.json" (FP.splitDirectories subDir)
+  case res of
+    Just filepath -> pure filepath
+    Nothing -> do
+      binName <- Env.getProgName
+      putStrLn $ "Cannot find an elm.json! Make sure you're in a project folder, or run `" <> binName <> " init` to start a new one."
+      debug $ "current directory was: " <> subDir
+      exitFailure
+
+
+findHelp :: FilePath -> [String] -> IO (Maybe FilePath)
+findHelp name dirs =
+  if Prelude.null dirs then
+    return Nothing
+
+  else
+    do  exists_ <- Dir.doesFileExist (FP.joinPath dirs </> name)
+        if exists_
+          then return (Just (FP.joinPath dirs))
+          else findHelp name (Prelude.init dirs)
+
+
+-- Find the project root from an arbitrary fle path
+getProjectRootFor :: FilePath -> IO FilePath
+getProjectRootFor path = do
+  res <- findHelp "elm.json" (FP.splitDirectories $ takeDirectory path)
+  case res of
+    Just filepath -> pure filepath
+    Nothing -> do
+      binName <- Env.getProgName
+      putStrLn $ "Cannot find an elm.json! Make sure you're in a project folder, or run `" <> binName <> " init` to start a new one."
+      exitFailure
+
+
+{- Helpers -}
+
+justs :: [Maybe a] -> [a]
+justs xs = [ x | Just x <- xs ]
+
+
 
 
 {- Concurrent debugging
 -}
 
 
-debug_ :: String -> IO ()
-debug_ str = do
+debug :: String -> IO ()
+debug str = do
   debugM <- Env.lookupEnv "LDEBUG"
   case debugM of
     Just _ -> atomicPutStrLn $ "DEBUG: " ++ str ++ "\n"
@@ -59,7 +112,7 @@ trackGhciThread :: ThreadId -> IO ()
 trackGhciThread threadId =
   modifyMVar_ ghciThreads
     (\threads -> do
-      debug_ $ "Tracking GHCI thread:" ++ show threadId
+      debug $ "Tracking GHCI thread:" ++ show threadId
       pure $ threadId:threads
     )
 
@@ -70,10 +123,10 @@ killTrackedThreads = do
     (\threads -> do
       case threads of
         [] -> do
-          debug_ $ "No tracked GHCI threads to kill."
+          debug $ "No tracked GHCI threads to kill."
           pure []
         threads -> do
-          debug_ $ "Killing tracked GHCI threads: " ++ show threads
+          debug $ "Killing tracked GHCI threads: " ++ show threads
           mapM killThread threads
           pure []
     )
@@ -83,3 +136,9 @@ killTrackedThreads = do
 {-# NOINLINE ghciThreads #-}
 ghciThreads :: MVar [ThreadId]
 ghciThreads = unsafePerformIO $ newMVar []
+
+
+
+-- Re-exports
+
+(&) = (Data.Function.&)

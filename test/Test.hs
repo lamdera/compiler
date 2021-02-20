@@ -11,8 +11,8 @@ import qualified Test.Check
 import qualified Test.Wire
 
 import qualified Lamdera.Compile
-import qualified Lamdera.Canonical
 import qualified Lamdera.Evaluate
+import qualified Ext.Query.Canonical
 
 import Develop
 
@@ -98,7 +98,7 @@ target = Test.all
 -- target =
 --   withDebug $ do
 --     -- Lamdera.Evaluate.exec
---     Lamdera.Canonical.loadFileSourceValue "/Users/mario/dev/projects/elmx/test/scenario-interpreter/src/Test/Basic.elm" "suite"
+--     Lamdera.Canonical.loadFileSourceValue "/Users/mario/dev/projects/lamdera-compiler/test/scenario-interpreter/src/Test/Basic.elm" "suite"
 
 
 -- target = do

@@ -93,14 +93,15 @@ suite = tests $
               , counter : Int
               , sessionId : String
               , clientId : String
-              , timestamps : (List
-              { label : String
-              , time : Time.Posix
-              })
+              , timestamps :
+                  List
+                      { label : String
+                      , time : Time.Posix
+                      }
               , lastReceived : Time.Posix
               , subCounter : Int
-              , rpcRes : (Result Http.Error Int)
-              , backendTtype : (Maybe Evergreen.V1.Fusion.TType)
+              , rpcRes : Result Http.Error Int
+              , backendTtype : Maybe Evergreen.V1.Fusion.TType
               , backendVal : Evergreen.V1.Fusion.VType
               }
 
@@ -113,16 +114,16 @@ suite = tests $
           type alias Record =
               { name : String
               , age : Int
-              , roles : (List Role)
+              , roles : List Role
               }
 
 
           type alias BackendModel =
               { counter : Int
-              , clients : (Set.Set Lamdera.ClientId)
+              , clients : Set.Set Lamdera.ClientId
               , currentTime : Time.Posix
-              , benchList : (List Int)
-              , benchDictRec : (Dict.Dict String Record)
+              , benchList : List Int
+              , benchDictRec : Dict.Dict String Record
               , allTypes : Evergreen.V1.WireTypes.AllTypes
               }
 
@@ -186,8 +187,8 @@ suite = tests $
               | BackendModelTypeInfo Evergreen.V1.Fusion.TType
               | ReceivedBackendLType Evergreen.V1.Fusion.VType
               | BenchStats
-              { benchListSize : Int
-              }
+                  { benchListSize : Int
+                  }
 
         |]
 
@@ -205,7 +206,8 @@ suite = tests $
           import Time
 
 
-          type alias AliasInt = Int
+          type alias AliasInt =
+              Int
 
 
           type ExternalCustom threadedTvar
@@ -215,7 +217,7 @@ suite = tests $
 
 
           type alias Emoji =
-              { available : (OptionalData Bool)
+              { available : OptionalData Bool
               }
 
 
@@ -229,16 +231,16 @@ suite = tests $
               , bool : Bool
               , char : Char
               , string : String
-              , listInt : (List Int)
-              , setFloat : (Set.Set Float)
-              , arrayString : (Array.Array String)
-              , dict : (Dict.Dict String (List Int))
+              , listInt : List Int
+              , setFloat : Set.Set Float
+              , arrayString : Array.Array String
+              , dict : Dict.Dict String (List Int)
               , time : Time.Posix
               , order : Order
               , union : AllUnion
               , unit : ()
-              , externalCustom : (ExternalCustom Int)
-              , reactions : (OptionalData (List Emoji))
+              , externalCustom : ExternalCustom Int
+              , reactions : OptionalData (List Emoji)
               }
 
 
@@ -260,7 +262,8 @@ suite = tests $
               = Phantom String
 
 
-          type alias ExternalAliasTuple = (Float, Bool)
+          type alias ExternalAliasTuple =
+              ( Float, Bool )
 
 
           type AllUnion
@@ -282,8 +285,8 @@ suite = tests $
               | ValueSubRecursive SubRecursiveRecord
               | ValueDeep Evergreen.V1.Subdir.Subsubdir.SubsubdirType.DeepRec
               | ValueTwoParams Bool Char
-              | ValueTuple (Int, String)
-              | ValueTriple (Int, String)
+              | ValueTuple ( Int, String )
+              | ValueTriple ( Int, String )
               | ValueResult (Result String Int)
               | ValueCustom (ExternalCustom Int)
               | ValueCustomDeep Evergreen.V1.Subdir.Subsubdir.SubsubdirType.DeepCustom
@@ -304,15 +307,17 @@ suite = tests $
               }
 
 
-          type alias SubSubRecordAlias threadedTvar = (SubRecord threadedTvar)
+          type alias SubSubRecordAlias threadedTvar =
+              SubRecord threadedTvar
 
 
-          type alias SubRecordAlias threadedTvar = (SubSubRecordAlias threadedTvar)
+          type alias SubRecordAlias threadedTvar =
+              SubSubRecordAlias threadedTvar
 
 
           type alias ExternalRecord threadedTvar =
-              { ext : (ExternalCustom threadedTvar)
-              , sub : (SubRecordAlias threadedTvar)
+              { ext : ExternalCustom threadedTvar
+              , sub : SubRecordAlias threadedTvar
               , alphaFirst : Int
               , allUnion : AllUnion
               }

@@ -17,8 +17,8 @@ import AST.Canonical (Type(..))
 import qualified Compile
 
 import Lamdera
-import Lamdera.Canonical
 import Lamdera.Progress
+import qualified Ext.Query.Canonical
 
 {-
 
@@ -49,7 +49,7 @@ printAnnotations root file expressionName = do
   withCurrentDirectory root $ do
     debug_ "Getting artifacts..."
 
-    (Compile.Artifacts canonical annotations objects) <- Lamdera.Canonical.loadSingleArtifacts file
+    (Compile.Artifacts canonical annotations objects) <- Ext.Query.Canonical.loadSingleArtifacts file
 
     case annotations & Map.lookup expressionName of
       Just annotation -> do

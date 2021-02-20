@@ -26,7 +26,7 @@ import qualified Reporting.Doc as D
 import Lamdera
 import Lamdera.Types
 import Lamdera.Progress
-import Lamdera.Interfaces
+import qualified Ext.Query.Interfaces as Interfaces
 import StandaloneInstances
 
 
@@ -63,7 +63,7 @@ lamderaTypes =
 calculateHashes :: IO ([Text], [(Text, [Text], DiffableType)])
 calculateHashes = do
 
-  interfaces <- Lamdera.Interfaces.all [ "src/Types.elm" ]
+  interfaces <- Interfaces.all [ "src/Types.elm" ]
   inDebug <- Lamdera.isDebug
 
   let

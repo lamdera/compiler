@@ -1,48 +1,36 @@
 {-# OPTIONS_GHC -Wall #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Lamdera.Canonical where
+module Ext.Query.Canonical where
 
 {- Helpers for loading cached interfaces after/outside compilation process -}
 
-import Control.Monad (liftM2)
+-- import Control.Monad (liftM2)
 import qualified Data.Map as Map
-import qualified Data.OneOrMore as OneOrMore
-import System.FilePath ((</>))
-import Control.Concurrent.MVar
-import qualified Data.Text as T
-import qualified Data.Name
 import qualified Data.List as List
 import qualified Data.ByteString as BS
 import Data.Word (Word16)
+import qualified System.Directory as Dir
 
-import qualified AST.Optimized as Opt
-import qualified AST.Canonical as Can
+-- elm/compiler
+import qualified Data.Name
 import qualified AST.Source as Src
-import qualified BackgroundWriter as BW
-import qualified Build
-import qualified Data.NonEmptyList as NE
-import qualified Elm.Details as Details
-import qualified Elm.Interface as I
-import qualified Elm.ModuleName as ModuleName
-import qualified File
-import qualified Reporting
-import qualified Reporting.Exit as Exit
-import qualified Reporting.Task as Task
-import qualified Stuff
+import qualified AST.Canonical as Can
+import qualified AST.Optimized as Opt
 import qualified Elm.ModuleName as Module
-import Reporting.Annotation
-
 import qualified Elm.Package as Pkg
-import qualified Compile
 import qualified Parse.Module as Parse
-
-import qualified Lamdera.Interfaces
-import qualified Lamdera.Progress as Progress
+import Reporting.Annotation
 import qualified Reporting.Render.Code as Code
-import Lamdera
+import qualified Reporting.Annotation as A
+import qualified Compile
+import qualified File
 
-import Lamdera.Wire3.Helpers (findDef)
+-- elmx
+import qualified Ext.Query.Interfaces
+
+-- import Lamdera
+import Ext.Common
 
 -- @TODO
 -- Lamdera.Canonical.loadDef "src/Test/Basic.elm" "exampleFunction"
@@ -62,7 +50,7 @@ loadSingleObjects path = do
 
 loadSingleArtifacts :: FilePath -> IO Compile.Artifacts
 loadSingleArtifacts path = do
-  ifaces <- Lamdera.Interfaces.all [path]
+  ifaces <- Ext.Query.Interfaces.all [path]
   source <- File.readUtf8 path
   case Parse.fromByteString Parse.Application source of
     Right modul ->
@@ -80,7 +68,7 @@ loadFileSource :: FilePath -> IO (BS.ByteString, Src.Module)
 loadFileSource path = do
   project <- getProjectRootFor path
 
-  withCurrentDirectory project $ do
+  Dir.withCurrentDirectory project $ do
     source <- File.readUtf8 path
     case Parse.fromByteString Parse.Application source of
       Right modul -> do
@@ -112,8 +100,8 @@ loadFileSourceValue path name = do
 
     code = Code.toSource source
 
-  hindentPrintValue "1. module imports" imports
-  hindentPrintValue "2. value location" valueLocation
+  -- hindentPrintValue "1. module imports" imports
+  -- hindentPrintValue "2. value location" valueLocation
 
   putStrLn "3. print found definition:\n"
 
@@ -159,11 +147,11 @@ render (Code.Source sourceLines) region@(Region (Position startLine _) (Position
 
 showDefOptimized :: FilePath -> FilePath -> Data.Name.Name -> IO ()
 showDefOptimized project file name = do
-  withCurrentDirectory project $ do
+  Dir.withCurrentDirectory project $ do
 
-    -- canonical <- Lamdera.Canonical.loadSingleCanonical file
+    -- canonical <- loadSingleCanonical file
 
-    objects <- Lamdera.Canonical.loadSingleObjects file
+    objects <- loadSingleObjects file
 
         -- objects
         --   & _l_nodes
@@ -177,14 +165,16 @@ showDefOptimized project file name = do
             Opt.Global (Module.Canonical (Pkg.Name _ _) _) name_ ->
               name_ == name
         )
-      & formatHaskellValue ("found")
+      & show
+      & putStrLn
+      -- & formatHaskellValue ("found")
 
 
 showDefCanonical :: FilePath -> FilePath -> Data.Name.Name -> IO ()
 showDefCanonical project file name = do
-  withCurrentDirectory project $ do
-    canonical <- Lamdera.Canonical.loadSingleCanonical file
-    -- objects <- Lamdera.Canonical.loadSingleObjects file
+  Dir.withCurrentDirectory project $ do
+    canonical <- loadSingleCanonical file
+    -- objects <- loadSingleObjects file
 
     -- objects
     --   & Opt._l_nodes
@@ -201,7 +191,8 @@ showDefCanonical project file name = do
     --
     case canonical & Can._decls & findDef name of
       Just def -> do
-        formatHaskellValue "suite def" def
+        -- formatHaskellValue "suite def" def
+        putStrLn $ "suite def" ++ show def
         -- formatHaskellValue "suite:" $ run def Map.empty
 
       Nothing ->
@@ -210,15 +201,51 @@ showDefCanonical project file name = do
     pure ()
 
 
+findDef :: Data.Name.Name -> Can.Decls -> Maybe Can.Def
+findDef name decls =
+  decls
+    & declsToList
+    & List.find (defNameIs name)
+
+
+declsToList :: Can.Decls -> [Can.Def]
+declsToList d =
+  case d of
+    Can.Declare def decls ->
+      def : (declsToList decls)
+
+    Can.DeclareRec def defs decls ->
+      (def : defs) ++ declsToList decls
+
+    Can.SaveTheEnvironment ->
+      []
+
+
+defNameIs :: Data.Name.Name -> Can.Def -> Bool
+defNameIs name def =
+  name == defName def
+
+
+defName :: Can.Def -> Data.Name.Name
+defName def =
+  case def of
+    Can.Def (A.At region name_) _ _ ->
+      name_
+    Can.TypedDef (A.At region name_) _ _ _ _ ->
+      name_
+
+
 showDefAnnotation :: FilePath -> FilePath -> Data.Name.Name -> IO ()
 showDefAnnotation project file name = do
-  withCurrentDirectory project $ do
+  Dir.withCurrentDirectory project $ do
     (Compile.Artifacts canonical annotations objects) <- loadSingleArtifacts file
 
     -- , _types :: Map.Map Name.Name Can.Annotation
 
     annotations
       & Map.lookup name
-      & formatHaskellValue ("found")
+      & show
+      & putStrLn
+      -- & formatHaskellValue ("found")
 
     pure ()

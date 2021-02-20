@@ -17,7 +17,6 @@ import Data.Maybe (fromMaybe)
 import Data.List
 
 import Lamdera
-import qualified Ext.ElmFormat
 
 
 createLamderaGenerated :: FilePath -> VersionInfo -> IO Text

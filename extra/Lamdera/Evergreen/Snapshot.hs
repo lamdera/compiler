@@ -36,7 +36,7 @@ import qualified Data.Utf8 as Utf8
 
 import Lamdera
 import Lamdera.Types
-import qualified Lamdera.Interfaces
+import qualified Ext.Query.Interfaces as Interfaces
 import qualified Lamdera.Progress as Progress
 import qualified Ext.ElmFormat
 import StandaloneInstances
@@ -46,7 +46,7 @@ import StandaloneInstances
 type snapshots  -}
 run :: Int -> IO ()
 run version = do
-  ifaces <- Lamdera.Interfaces.all [ "src/Types.elm" ]
+  ifaces <- Interfaces.all [ "src/Types.elm" ]
   snapshotCurrentTypes version ifaces (ifaces ! "Types")
 
 

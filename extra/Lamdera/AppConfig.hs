@@ -28,9 +28,9 @@ import Lamdera
 import Lamdera.Http
 import Lamdera.Progress
 import qualified Lamdera.Graph
-import qualified Lamdera.Interfaces
 import qualified Lamdera.CLI.Login
 import qualified Lamdera.Project
+import qualified Ext.Query.Interfaces as Interfaces
 import StandaloneInstances
 
 

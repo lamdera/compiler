@@ -65,7 +65,7 @@ wire = do
   failuresM <- io $ newMVar []
 
   io $ do
-    let project = "/Users/mario/dev/projects/elmx/test/scenario-alltypes"
+    let project = "/Users/mario/dev/projects/lamdera-compiler/test/scenario-alltypes"
 
     setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
     setEnv "LTEST" "1"
@@ -126,7 +126,7 @@ buildAllPackagesRoot = "/Users/mario/lamdera-build-all-packages"
 buildAllPackages = do
   mkdir buildAllPackagesRoot
 
-  setEnv "ELM_HOME" "/Users/mario/elm-home-all-packages"
+  setEnv "ELM_HOME" "/Users/mario/dev/projects/lamdera-compiler/ext-package-cache/dist/elm-package-cache"
   setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
 
   res <- searchAllCurrentElmPackages

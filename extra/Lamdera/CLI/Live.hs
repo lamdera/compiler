@@ -127,10 +127,10 @@ prepareLocalDev = do
 
 skip harnessPath root isDebug = do
   onlyWhen isDebug $ do
-    let overridePath = "/Users/mario/dev/projects/elmx/extra/LocalDev/LocalDev.elm"
+    let overridePath = "/Users/mario/dev/projects/lamdera-compiler/extra/LocalDev/LocalDev.elm"
     overrideExists <- doesFileExist overridePath
     onlyWhen overrideExists $ do
-      debug $ "🚧 OVERRIDE from elmx/extra/LocalDev/LocalDev.elm"
+      debug $ "🚧 OVERRIDE from extra/LocalDev/LocalDev.elm"
       copyFile overridePath harnessPath
 
     rpcExists <- doesFileExist $ root </> "src" </> "RPC.elm"
@@ -175,7 +175,9 @@ skip harnessPath root isDebug = do
 
 lamderaLocalDev :: BS.ByteString
 lamderaLocalDev =
-  $(bsToExp =<< runIO (BS.readFile ("extra" </> "LocalDev" </> "LocalDev.elm")))
+  -- @TODO fix this back later... conflicts with the change directory command in ghci live reload
+  -- $(bsToExp =<< runIO (BS.readFile ("extra/LocalDev/LocalDev.elm")))
+  $(bsToExp =<< runIO (BS.readFile ("/Users/mario/dev/projects/lamdera-compiler/extra/LocalDev/LocalDev.elm")))
 
 
 normalLocalDevWrite = do

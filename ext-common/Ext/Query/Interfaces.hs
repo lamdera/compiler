@@ -1,29 +1,29 @@
 {-# OPTIONS_GHC -Wall #-}
 
-module Lamdera.Interfaces where
+module Ext.Query.Interfaces where
 
 {- Helpers for loading cached interfaces after/outside compilation process -}
 
 import Control.Monad (liftM2)
 import qualified Data.Map as Map
 import qualified Data.OneOrMore as OneOrMore
-import System.FilePath ((</>))
 import Control.Concurrent.MVar
 
-import qualified AST.Optimized as Opt
-import qualified BackgroundWriter as BW
-import qualified Build
 import qualified Data.NonEmptyList as NE
+import qualified BackgroundWriter as BW
+import qualified AST.Optimized as Opt
 import qualified Elm.Details as Details
 import qualified Elm.Interface as I
 import qualified Elm.ModuleName as ModuleName
-import qualified File
 import qualified Reporting
 import qualified Reporting.Exit as Exit
 import qualified Reporting.Task as Task
+import qualified Build
+import qualified File
 import qualified Stuff
 
-import Lamdera
+
+import Ext.Common
 
 
 all :: [FilePath] -> IO (Map.Map ModuleName.Raw I.Interface)
@@ -31,7 +31,7 @@ all paths = do
   artifactsDeps <- allDepArtifacts
   ifacesProject <-
     case paths of
-      [] -> error "Lamdera.Interfaces.all must have at least one path specified!"
+      [] -> error "Ext.Query.Interfaces.all must have at least one path specified!"
       path:paths -> allProjectInterfaces (NE.List path paths)
 
   pure $ Map.union ifacesProject (_ifaces artifactsDeps)
@@ -94,7 +94,7 @@ toUnique oneOrMore =
 allProjectInterfaces :: NE.List FilePath -> IO (Map.Map ModuleName.Raw I.Interface)
 allProjectInterfaces paths =
   BW.withScope $ \scope -> do
-    root <- Lamdera.getProjectRoot
+    root <- getProjectRoot
     runTaskUnsafe $
       do  details    <- Task.eio Exit.ReactorBadDetails $ Details.load Reporting.silent scope root
           artifacts  <- Task.eio Exit.ReactorBadBuild $ Build.fromPaths Reporting.silent root details paths
@@ -146,7 +146,7 @@ cachedHelp name ciMvar = do
           return (Just (name, iface))
 
     Build.Unneeded ->
-      do  root <- Lamdera.getProjectRoot
+      do  root <- getProjectRoot
           maybeIface <- File.readBinary (Stuff.elmi root name)
           case maybeIface of
             Nothing ->
