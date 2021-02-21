@@ -9,13 +9,8 @@ import Control.Concurrent.MVar
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Builder as B
 
-
-import Control.Exception
-import Formatting
-import Formatting.Clock
-import System.Clock
-
 import Lamdera
+import Ext.Common
 
 data Cache =
   Cache
@@ -47,17 +42,3 @@ updateJsOutput (Cache mJsOutput) recompile = do
   -- debug_ $ "updateJsOutput: " <> show duration
   -- pure (Cache mJsOutput)
   pure ()
-
-
-track label io = do
-  m <- getTime Monotonic
-  p <- getTime ProcessCPUTime
-  t <- getTime ThreadCPUTime
-  res <- io
-  m_ <- getTime Monotonic
-  p_ <- getTime ProcessCPUTime
-  t_ <- getTime ThreadCPUTime
-  fprint ("⏱  " % label % ": " % timeSpecs % " " % timeSpecs % " " % timeSpecs % "\n") m m_ p p_ t t_
-  -- fprint (timeSpecs % "\n") p p_
-  -- fprint (timeSpecs % "\n") t t_
-  pure res

@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Ext.Common where
 
 import Control.Concurrent
@@ -9,6 +11,13 @@ import System.IO.Unsafe (unsafePerformIO)
 import System.IO (hFlush, hPutStr, hPutStrLn, stderr, stdout, hClose, openTempFile)
 import qualified System.Directory as Dir
 import qualified System.Environment as Env
+
+
+import Control.Exception ()
+import Formatting (fprint, (%))
+import Formatting.Clock (timeSpecs)
+import System.Clock (Clock(..), getTime)
+
 
 -- Re-exports
 import qualified Data.Function
@@ -58,9 +67,7 @@ justs :: [Maybe a] -> [a]
 justs xs = [ x | Just x <- xs ]
 
 
-
-
-{- Concurrent debugging
+{- Debugging
 -}
 
 
@@ -87,6 +94,25 @@ atomicPutStrLn str =
   withMVar printLock (\_ -> hPutStr stdout (str <> "\n") >> hFlush stdout)
 
 
+{- Wrap an IO in basic runtime information
+   Note: this is a very naive implementation and may not always work right,
+   i.e. if the IO value is not fully evaluated
+-}
+-- track :: _ -> IO a -> IO a
+track label io = do
+  m <- getTime Monotonic
+  p <- getTime ProcessCPUTime
+  t <- getTime ThreadCPUTime
+  res <- io
+  m_ <- getTime Monotonic
+  p_ <- getTime ProcessCPUTime
+  t_ <- getTime ThreadCPUTime
+  fprint ("⏱  " % label % ": " % timeSpecs % " " % timeSpecs % " " % timeSpecs % "\n") m m_ p p_ t t_
+  -- fprint (timeSpecs % "\n") p p_
+  -- fprint (timeSpecs % "\n") t t_
+  pure res
+
+
 
 {- GHCI thread management
 
@@ -100,7 +126,6 @@ replacement for `forkIO`, which paired with `killTrackedThreads` lets us cleanup
 after a `:r` and avoid issues like a socket port already being in use!
 
 -}
-
 
 trackedForkIO :: IO () -> IO ()
 trackedForkIO io = do

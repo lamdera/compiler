@@ -59,5 +59,8 @@ addOne x =
 
 
 suite =
-    test "addOne adds one" <|
-        equals (addOne 123) 124
+    [ test "addOne adds one" <|
+        equals (addOne 1) 2
+    , test "addOne adds float" <|
+        equals (addOne 1.5) 2.5
+    ]

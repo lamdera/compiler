@@ -367,6 +367,9 @@ Executable lamdera
         wai,
         stringsearch,
 
+        -- Interpreter
+
+
         -- Vendor http-reverse-proxy
         wai-logger,
         unliftio,

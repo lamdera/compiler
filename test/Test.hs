@@ -9,6 +9,7 @@ import qualified Test.Snapshot
 import qualified Test.Lamdera
 import qualified Test.Check
 import qualified Test.Wire
+import Test.Helpers
 
 import qualified Lamdera.Compile
 import qualified Lamdera.Evaluate

@@ -1,8 +1,11 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DataKinds #-}
 
 module Lamdera.Evaluate.Optimized where
 
 import qualified Data.List as List
+import Data.Int (Int64)
+import Text.Read (readMaybe)
 
 import AST.Optimized
 import qualified Elm.ModuleName as Module
@@ -29,6 +32,7 @@ import qualified Data.Name
 import qualified Data.Text as T
 import qualified AST.Optimized as Opt
 
+import qualified Elm.Float
 
 {-
 
@@ -77,8 +81,26 @@ evaluate_ expr locals globals =
     --     evaluate_ (Call inlined args_) (locals) globals
 
     (Call (VarGlobal (Global (Module.Canonical (Name "elm" "core") "Basics") "add")) [arg1, arg2]) ->
+      let
+        pFloat :: Elm.Float.Float -> Maybe Double
+        pFloat = readMaybe . Utf8.toChars
+      in
       case [evaluate_ arg1 locals globals, evaluate_ arg2 locals globals] of
         [Int a, Int b] -> Int $ a + b
+        [Float a, Float b] -> do
+          case (pFloat a, pFloat b) of
+            (Just a_, Just b_) -> Float $ Utf8.fromChars $ show $ a_ + b_
+            _ -> error $ "impossible failure to parse floats: " <> show a <> ", " <> show b
+        [Int a, Float b] -> do
+          case pFloat b of
+            Just b_ -> Float $ Utf8.fromChars $ show $ (fromIntegral a) + b_
+            _ -> error $ "impossible failure to parse float: " <> show b
+        [Float a, Int b] -> do
+          case pFloat a of
+            Just a_ -> Float $ Utf8.fromChars $ show $ a_ + (fromIntegral b)
+            _ -> error $ "impossible failure to parse float: " <> show a
+
+        evaled -> error $ "unhandled Basics.add: " <> show evaled
 
     (Call (VarGlobal (Global (Module.Canonical (Name "elm" "core") "Basics") "eq")) [arg1, arg2]) ->
       case [evaluate_ arg1 locals globals, evaluate_ arg2 locals globals] of
@@ -131,8 +153,11 @@ evaluate_ expr locals globals =
           -- error $ "'VarLocal "<> show n <> "' not found in locals: " <> show locals
 
     Int n -> expr
+    Float n -> expr
     Str s -> expr
     Bool b -> expr
+
+    List exprs -> exprs & fmap (\expr -> evaluate_ expr locals globals) & List
 
     If conditionBranches elseBranch ->
       conditionBranches

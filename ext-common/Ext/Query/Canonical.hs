@@ -29,7 +29,7 @@ import qualified File
 -- elmx
 import qualified Ext.Query.Interfaces
 
--- import Lamdera
+import Lamdera (hindentPrintValue)
 import Ext.Common
 
 -- @TODO
@@ -85,12 +85,16 @@ loadFileSourceValue path name = do
 
   let
     imports = modul & Src._imports
-    valueLocation =
+
+    value =
       modul
         & Src._values
         & List.find (\(At region (Src.Value (At _ name_) params expr typeM)) ->
           name == name_
         )
+
+    valueLocation =
+      value
         & (\v ->
           case v of
             Just (At region (Src.Value (At _ name_) params expr typeM)) -> region
