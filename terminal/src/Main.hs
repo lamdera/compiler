@@ -26,7 +26,7 @@ import qualified Repl
 
 
 import qualified Lamdera
-import Lamdera.CLI
+import qualified Lamdera.CLI
 
 -- MAIN
 
@@ -35,16 +35,17 @@ main :: IO ()
 main =
   Terminal.app intro outro
     -- @LAMDERA additions + removals
-    [ live
-    , login
-    , check
-    , deploy
+    [ Lamdera.CLI.live
+    , Lamdera.CLI.login
+    , Lamdera.CLI.check
+    , Lamdera.CLI.deploy
     , init
     , install
     , make
     , repl
-    , reset
-    , annotate
+    , Lamdera.CLI.reset
+    , Lamdera.CLI.annotate
+    , Lamdera.CLI.eval
     -- , reactor
     -- , bump
     -- , diff

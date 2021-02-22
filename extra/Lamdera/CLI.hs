@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Lamdera.CLI (live, login, check, deploy, reset, annotate) where
+module Lamdera.CLI (live, login, check, deploy, reset, annotate, eval) where
 
 import Text.Read (readMaybe)
 import qualified Text.PrettyPrint.ANSI.Leijen as P
@@ -14,6 +14,7 @@ import qualified Lamdera.CLI.Check
 import qualified Lamdera.CLI.Deploy
 import qualified Lamdera.CLI.Reset
 import qualified Lamdera.CLI.Annotate
+import qualified Lamdera.CLI.Interpreter
 
 
 live :: Terminal.Command
@@ -143,6 +144,28 @@ annotate =
         ]
   in
   Terminal.Command "annotate" (Common summary) details example args noFlags Lamdera.CLI.Annotate.run
+
+
+eval :: Terminal.Command
+eval =
+  let
+    summary =
+      "Lookup and evaluate the given file:expression."
+
+    details =
+      "This uses a native interpreter for Elm, implemented in Haskell."
+
+    example =
+      reflow
+        "It will attempt to find the given filename:expression, and then evaluate it \
+        \ until it is fully reduced to a value."
+
+    args =
+      oneOf
+        [ require2 Lamdera.CLI.Interpreter.Args elmFile Lamdera.CLI.Interpreter.expressionName
+        ]
+  in
+  Terminal.Command "eval" (Common summary) details example args noFlags Lamdera.CLI.Interpreter.run
 
 
 -- HELPERS

@@ -109,6 +109,9 @@ loadFileSourceValue path name = do
 
   putStrLn "3. print found definition:\n"
 
+  hindentPrintValue "4. value" value
+  hindentPrintValue "4. docs" (modul & Src._docs)
+
   render code valueLocation Nothing
     & mapM_ (putStrLn . snd)
 

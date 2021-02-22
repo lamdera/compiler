@@ -32,20 +32,17 @@ import qualified Lamdera.Evaluate.Canonical
 import qualified Lamdera.Evaluate.Optimized
 import System.Directory
 
-exec = do
+exec path name = do
   let project = "/Users/mario/dev/projects/lamdera-compiler/test/scenario-interpreter"
-  withCurrentDirectory project $ track "load+exec suite" $ do
 
-    canonical <- Ext.Query.Canonical.loadSingleCanonical "src/Test/Basic.elm"
-    objects <- Ext.Query.Canonical.loadSingleObjects "src/Test/Basic.elm"
+  root <- getProjectRootFor path
 
-    -- objects
-    --   & _l_nodes
-    --   &
+  withCurrentDirectory root $ track "load+exec suite" $ do
 
-    let name = "suite"
+    canonical <- Ext.Query.Canonical.loadSingleCanonical path
+    objects <- Ext.Query.Canonical.loadSingleObjects path
 
-
+    let
         def =
           objects
             & Opt._l_nodes
@@ -57,7 +54,6 @@ exec = do
               )
             & Map.elemAt 0
             & snd
-
 
     -- def & formatHaskellValue ("suite")
 

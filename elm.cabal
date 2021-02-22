@@ -244,6 +244,7 @@ Executable lamdera
         Lamdera.CLI.Reset
         -- CLI Experimental
         Lamdera.CLI.Annotate
+        Lamdera.CLI.Interpreter
 
         -- Lamdera Utility --
         Lamdera.Compile
