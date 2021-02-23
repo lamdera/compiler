@@ -55,7 +55,7 @@ startReverseProxy_ = do
     let
       settings =
         defaultSettings
-          & setPort 9000
+          & setPort 8001
           -- Proxy should be for local access only
           & setHost "127.0.0.1"
 
@@ -109,7 +109,7 @@ startReverseProxy_ = do
         manager
 
 
-{- Adjust the request to remove the effects of the http://localhost:9000 URL prefix -}
+{- Adjust the request to remove the effects of the http://localhost:8001 URL prefix -}
 modReq :: [Text] -> Text -> Network.Wai.Request -> Network.Wai.Request
 modReq newPathInfo hostname request =
   request

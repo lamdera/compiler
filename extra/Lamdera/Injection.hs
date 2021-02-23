@@ -157,7 +157,7 @@ injections =
 {- Approach taken from cors-anywhere:
 https://github.com/Rob--W/cors-anywhere/blame/master/README.md#L56
 
-Rewrites all XHR requests from {url} to http://localhost:9000/{url}
+Rewrites all XHR requests from {url} to http://localhost:8001/{url}
 
 See extra/Lamdera/ReverseProxy.hs for the proxy itself
 -}
@@ -166,7 +166,7 @@ corsAnywhere =
   [text|
     (function() {
       if (typeof window == 'undefined') { return 0; } // skip for node.js
-      var cors_api_host = 'localhost:9000';
+      var cors_api_host = 'localhost:8001';
       var cors_api_url = 'http://' + cors_api_host + '/';
       var slice = [].slice;
       var origin = window.location.protocol + '//' + window.location.host;
