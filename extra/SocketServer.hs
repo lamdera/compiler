@@ -27,7 +27,7 @@ leaderInit = newTVarIO Nothing
 socketHandler :: TVar [Client] -> TVar (Maybe ClientId) -> TVar Text -> OnJoined -> OnReceive -> T.Text -> T.Text -> WS.ServerApp
 socketHandler mClients mLeader beState onJoined onReceive clientId sessionId pending = do
 
-  Lamdera.debugT $ "[websocket] ❇️  " <> clientId
+  -- Lamdera.debugT $ "[websocket] ❇️  " <> clientId
   conn <- WS.acceptRequest pending
 
   let client     = (clientId, conn)
@@ -58,7 +58,7 @@ socketHandler mClients mLeader beState onJoined onReceive clientId sessionId pen
 
           pure changed
 
-        Lamdera.debugT ("[websocket] 🚫 " <> clientId)
+        -- Lamdera.debugT ("[websocket] 🚫 " <> clientId)
         SocketServer.broadcastImpl mClients $ "{\"t\":\"d\",\"s\":\"" <> sessionId <> "\",\"c\":\""<> clientId <> "\"}"
 
         onlyWhen leaderChanged $ do
@@ -158,7 +158,7 @@ broadcastImpl mClients message = do
 talk :: OnReceive -> WS.Connection -> TVar [Client] -> Client -> IO ()
 talk onReceive conn _ (clientId, _) = forever $ do
   msg <- WS.receiveData conn
-  Lamdera.debugT ("[websocket] ▶️  " <> T.pack (show clientId) <> ":" <> T.take 130 msg)
+  -- Lamdera.debugT ("[websocket] ▶️  " <> T.pack (show clientId) <> ":" <> T.take 130 msg)
   onReceive clientId msg
 
 
@@ -187,5 +187,5 @@ send_ clients clientId text =
 
 broadcast_ :: [Client] -> T.Text -> IO ()
 broadcast_ clients message = do
-  Lamdera.debugT ("[websocket] ◀️  " <> T.pack (show $ length clients) <> ":" <> T.take 130 message)
+  -- Lamdera.debugT ("[websocket] ◀️  " <> T.pack (show $ length clients) <> ":" <> T.take 130 message)
   forM_ clients $ \(_, conn) -> WS.sendTextData conn message

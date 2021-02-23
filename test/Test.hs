@@ -97,9 +97,10 @@ target = Test.all
 
 {- WIP interpreter -}
 -- target =
---   withDebug $ do
---     -- Lamdera.Evaluate.exec
---     Lamdera.Canonical.loadFileSourceValue "/Users/mario/dev/projects/lamdera-compiler/test/scenario-interpreter/src/Test/Basic.elm" "suite"
+--   withDebug $ Lamdera.Evaluate.exec "src/Test/Basic.elm" "suite"
+    -- Ext.Query.Canonical.loadFileSourceValue
+    --   "/Users/mario/dev/projects/lamdera-compiler/test/scenario-interpreter/src/Test/Basic.elm"
+    --   "suite"
 
 
 -- target = do
@@ -132,8 +133,7 @@ single = do
 
 allTests =
   tests
-    [
-    scope "Test.Lamdera -> " $ Test.Lamdera.suite
+    [ scope "Test.Lamdera -> " $ Test.Lamdera.suite
     , scope "Test.Snapshot -> " $ Test.Snapshot.suite
     , scope "Test.Wire -> " $ Test.Wire.suite
     , Test.LamderaGenerated.suite

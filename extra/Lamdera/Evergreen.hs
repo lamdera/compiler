@@ -302,6 +302,8 @@ intermediateMigration allMigrations tipe from to finalVersion =
           )
         & fmap vinfoVersion
         & fromMaybe (-1) -- Should be impossible because v1 is always WithMigrations
+
+    valueTypeInt = show_ $ tipeStringToInt tipe
   in
   case to of
     WithMigrations v ->
@@ -310,7 +312,7 @@ intermediateMigration allMigrations tipe from to finalVersion =
           migrationFn = [text|M$to_.$typenameCamel|]
       in
       [text|
-        |> $thenMigrateForType "$tipe" $migrationFn T$from_.w3_encode_$tipe T$to_.w3_decode_$tipe $to_
+        |> $thenMigrateForType $valueTypeInt $migrationFn T$from_.w3_encode_$tipe T$to_.w3_decode_$tipe $to_
       |]
 
     WithoutMigrations v ->
@@ -329,7 +331,7 @@ intermediateMigration allMigrations tipe from to finalVersion =
           migrationFn = "(always " <> kindForType <> "Unchanged)"
       in
       [text|
-        |> $thenMigrateForType "$tipe" $migrationFn T$from_.w3_encode_$tipe T$to_.w3_decode_$tipe $to_
+        |> $thenMigrateForType $valueTypeInt $migrationFn T$from_.w3_encode_$tipe T$to_.w3_decode_$tipe $to_
       |]
 
 

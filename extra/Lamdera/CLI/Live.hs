@@ -122,10 +122,7 @@ prepareLocalDev = do
     harnessPath = cache </> "LocalDev.elm"
 
   isDebug <- isDebug
-  pure harnessPath
 
-
-skip harnessPath root isDebug = do
   onlyWhen isDebug $ do
     let overridePath = "/Users/mario/dev/projects/lamdera-compiler/extra/LocalDev/LocalDev.elm"
     overrideExists <- doesFileExist overridePath
