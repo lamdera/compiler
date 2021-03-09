@@ -219,7 +219,7 @@ encoderForType depth ifaces cname tipe =
             fieldEncoders =
               fields
                 & fmap (\(name, field) ->
-                    debugEncoder_ (Utf8.fromChars $ "." <> Data.Name.toChars name) $
+                    -- debugEncoder_ (Utf8.fromChars $ "." <> Data.Name.toChars name) $
                       encodeTypeValue (depth + 1) ifaces cname field (a (Access (a (VarLocal $ Utf8.fromChars $ "w2_rec_var" ++ show depth)) (a (name))))
                   )
           in

@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Lamdera.CLI.Live where
 
@@ -457,6 +458,11 @@ serveRpc (mClients, mLeader, mChan, beState) = do
 --         let (D.Decoder runB) = callback a
 --         runB value
 
+
+logger =
+  (\bs ->
+    atomicPutStrLn $ Text.unpack $ T.decodeUtf8 bs
+  )
 
 
 error500 :: B.Builder -> Snap ()

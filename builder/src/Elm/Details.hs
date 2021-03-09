@@ -61,6 +61,8 @@ import qualified Stuff
 
 
 import qualified Lamdera
+import Lamdera ((&))
+import qualified Lamdera.Extensions
 
 -- DETAILS
 
@@ -754,6 +756,7 @@ downloadPackage cache manager pkg vsn =
   in
   do  eitherByteString <-
         Http.get manager url [] id (return . Right)
+          & Lamdera.alternativeImplementationPassthrough (Lamdera.Extensions.endpointJsonOverride pkg vsn)
 
       pkgsPath <- Lamdera.getLamderaPkgPath -- @LAMDERA
 

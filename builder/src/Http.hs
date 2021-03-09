@@ -274,8 +274,6 @@ lamdera/codecs but wanting to test with existing projects without publishing
 
 Enabled by adding `LOVR=~/lamdera/overrides` to CLI calls or via setEnv in tests
 
-@TODO hardcoded for lamdera/codecs support only right now
-
 -}
 lamderaGetArchive
   :: Manager
@@ -299,7 +297,18 @@ lamderaGetArchive manager url onError err onSuccess =
       let
         (package, version) =
           if stringContains "static.lamdera.com" url then
-            ("lamdera/codecs", "1.0.0")
+            url
+              & T.pack
+              & T.replace "https://static.lamdera.com/r/" ""
+              & T.splitOn "/"
+              & (\x ->
+                  case x of
+                    author:package:version:_ ->
+                      -- All overrides hardcoded to 1.0.0 for now, improve in future
+                      ("lamdera/" <> T.unpack package, T.unpack version)
+                    _ ->
+                      error $ "unexpected URL parts: " <> show x
+              )
           else
             url
               & T.pack
@@ -316,7 +325,8 @@ lamderaGetArchive manager url onError err onSuccess =
         packageZip = (pkgsPath & withDefault "<no-packages-path-override-set>") <> "/packages/" <> package <> "/pack.zip"
         packageRoot = (pkgsPath & withDefault "<no-packages-path-override-set>") <> "/packages/" <> package <> "/" <> version
 
-      overrideExists <- doesDirectoryExist packageRoot
+      -- overrideExists <- doesDirectoryExist packageRoot
+      overrideExists <- doesFileExist packageZip
 
       -- debug_ $ "🔥: " <> show (package, packageZip, packageRoot)
 

@@ -87,10 +87,7 @@ run () () = do
   progressPointer_ "Checking project compiles..."
   checkUserProjectCompiles root
 
-  lamderaRemotes <- Lamdera.Project.getLamderaRemotes
-  onlyWhen (lamderaRemotes == [] && appNameEnvM == Nothing) Lamdera.Project.lamderaThrowUnknownApp
-  -- Prior `onlyWhen` guards against situation where no name is determinable
-  let appName = Lamdera.Project.certainAppName lamderaRemotes appNameEnvM
+  appName <- Lamdera.Project.appNameOrThrow
 
   progressPointer "Checking Evergreen migrations..."
   debug $ "app name:" ++ show appName
@@ -628,7 +625,7 @@ defaultMigrationFile oldVersion newVersion typeCompares = do
   typeCompares
     & fmap typeCompareMigration
     & (<>) [header]
-    & T.intercalate "\n\n"
+    & T.intercalate "\n\n\n"
 
 
 lamderaCheckBothFileContents :: Int -> Text

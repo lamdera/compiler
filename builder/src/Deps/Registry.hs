@@ -220,9 +220,13 @@ instance Binary KnownVersions where
 -- @LAMDERA
 
 {- Slips inbetween the existing HTTP handler and injects lamdera core packages
-that aren't published to https://package.elm-lang.org/ -}
+that aren't published to https://package.elm-lang.org/
+
+Note: cannot extract this package as it depends on types defined in this file
+-}
 lamderaAddCorePackages :: (Map.Map Pkg.Name KnownVersions -> IO Registry) -> Map.Map Pkg.Name KnownVersions -> IO Registry
-lamderaAddCorePackages originalFn versions =
+lamderaAddCorePackages originalFn versions = do
+  overridePackages <- Lamdera.Project.findOverridePackages
   versions
     & Map.union
         (Map.fromList
@@ -230,4 +234,10 @@ lamderaAddCorePackages originalFn versions =
           , (Lamdera.Project.lamderaCore, KnownVersions { _newest = V.Version 1 0 0, _previous = [] })
           ]
         )
+    & (\packages ->
+      overridePackages
+        & fmap (\(pkg, major, minor, patch) -> (pkg, KnownVersions { _newest = V.Version major minor patch, _previous = [] }))
+        & Map.fromList
+        & Map.union packages
+      )
     & originalFn

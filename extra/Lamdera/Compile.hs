@@ -13,7 +13,7 @@ import Lamdera
 -- Runs `lamdera make` of given files with no output
 make :: FilePath -> FilePath -> IO ()
 make root path = do
-  debug $ "🏗   lamdera make --optimze " <> root <> "/" <> path
+  debug $ "🏗   lamdera make --optimize " <> root <> "/" <> path
 
   r <- async $
     Dir.withCurrentDirectory root $
@@ -36,7 +36,7 @@ make root path = do
 -- Runs `lamdera make` of given files with no output
 make_cleanup :: IO () -> FilePath -> FilePath -> IO ()
 make_cleanup cleanup root path = do
-  debug $ "🏗   lamdera make --optimze " <> root <> "/" <> path
+  debug $ "🏗   lamdera make --optimize " <> root <> "/" <> path
 
   r <- async $
     Dir.withCurrentDirectory root $

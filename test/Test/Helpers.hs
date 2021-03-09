@@ -16,7 +16,7 @@ aggressiveCacheClear project = do
 withDebug io = do
   setEnv "LDEBUG" "1"
   io
-  unsetEnv "LAMDERA_APP_NAME"
+  unsetEnv "LDEBUG"
 
 
 withDebugPkg io = do

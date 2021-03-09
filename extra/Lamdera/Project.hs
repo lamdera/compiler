@@ -17,6 +17,7 @@ import qualified Data.List as List
 import qualified Data.Utf8 as Utf8
 import Elm.Package
 
+import Data.Word (Word16)
 
 import Lamdera
 import qualified Lamdera.Progress
@@ -24,9 +25,8 @@ import qualified Lamdera.Progress
 
 maybeAppName :: IO (Maybe Text)
 maybeAppName = do
-
-  appNameEnvM <- liftIO $ Env.lookupEnv "LAMDERA_APP_NAME"
-  lamderaRemotes <- liftIO getLamderaRemotes
+  appNameEnvM <- Env.lookupEnv "LAMDERA_APP_NAME"
+  lamderaRemotes <- getLamderaRemotes
 
   if (lamderaRemotes == [] && appNameEnvM == Nothing)
     then
@@ -70,7 +70,7 @@ getLamderaRemotes = do
   gitRemotes
     & T.pack
     & T.splitOn "\n"
-    & filter (textContains "apps.lamdera.com")
+    & filter (\t -> textContains "apps.lamdera.com" t || textHasPrefix "lamdera" t)
     & filter (textContains "(push)")
     & pure
 
@@ -100,3 +100,9 @@ lamderaCore =
 lamderaCodecs :: Elm.Package.Name
 lamderaCodecs =
   Elm.Package.Name (Utf8.fromChars "lamdera") (Utf8.fromChars "codecs")
+
+
+findOverridePackages :: IO [(Elm.Package.Name, Word16, Word16, Word16)]
+findOverridePackages =
+  -- @STUB todo: make this actually find override packages dynamically
+  pure [(Elm.Package.Name (Utf8.fromChars "lamdera") (Utf8.fromChars "websocket"), 1,0,0)]

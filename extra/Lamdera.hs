@@ -10,6 +10,7 @@ module Lamdera
   , liftIO
   , alternativeImplementation
   , alternativeImplementationWhen
+  , alternativeImplementationPassthrough
   , atomicPutStrLn
   , debug_
   , debug_note
@@ -209,6 +210,8 @@ alternativeImplementationWhen cond fn original =
     then fn
     else original
 
+alternativeImplementationPassthrough fn original =
+  fn original
 
 debug_ :: String -> IO ()
 debug_ str = do
@@ -859,11 +862,11 @@ icdiff realExpected realActual = do
 
   -- putStrLn $ "diff -y --suppress-common-lines --width=160 " <> path1 <> " " <> path2
   -- (exit, stdout, stderr) <- System.Process.readProcessWithExitCode "diff" ["-y", "--suppress-common-lines", "--width=160", path1, path2] ""
-  -- (exit, stdout, stderr) <- System.Process.readProcessWithExitCode "diff" ["--width=160", path1, path2] ""
+  -- (exit, stdout, stderr) <- System.Process.readProcessWithExitCode "diff" ["--width=200", path1, path2] ""
 
   atomicPutStrLn $ "icdiff -N " <> path1 <> " " <> path2
-  -- (exit, stdout, stderr) <- readProcessWithExitCode "icdiff" ["--cols=150", "--show-all-spaces", path1, path2] ""
-  (exit, stdout, stderr) <- System.Process.readProcessWithExitCode "icdiff" ["-N", "--cols=300", path1, path2] ""
+  -- (exit, stdout, stderr) <- System.Process.readProcessWithExitCode "icdiff" ["--cols=150", "--show-all-spaces", path1, path2] ""
+  (exit, stdout, stderr) <- System.Process.readProcessWithExitCode "icdiff" ["-N", "--cols=200", path1, path2] ""
 
   pure stdout
 

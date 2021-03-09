@@ -36,6 +36,9 @@ import qualified Reporting.Exit as Exit
 import qualified Stuff
 
 
+import qualified Lamdera
+import Lamdera ((&))
+import qualified Lamdera.Extensions
 
 -- SOLVER
 
@@ -315,6 +318,7 @@ getConstraints pkg vsn =
                       Online manager ->
                         do  let url = Website.metadata pkg vsn "elm.json"
                             result <- Http.get manager url [] id (return . Right)
+                                        & Lamdera.alternativeImplementationPassthrough (Lamdera.Extensions.elmJsonOverride pkg vsn)
                             case result of
                               Left httpProblem ->
                                 err (Exit.SolverBadHttp pkg vsn httpProblem)

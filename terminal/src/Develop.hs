@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+
 module Develop
   ( Flags(..)
   , run
@@ -71,13 +72,13 @@ run () (Flags maybePort) =
       let
         recompile :: [String] -> IO ()
         recompile events = do
-          debug_ $ "🛫  recompile starting: " ++ show events
           trackedForkIO $ do
             Sentry.updateJsOutput sentryCache $ do
+              debug_ $ "🛫  recompile starting: " ++ show events
               harness <- Live.prepareLocalDev
               compileToBuilder harness
-          Live.refreshClients liveState
           debug_ "🛬  recompile done... "
+          Live.refreshClients liveState
 
       -- Warm the cache
       recompile []
@@ -97,11 +98,13 @@ run () (Flags maybePort) =
         <|> error404 -- Will get hit for any non-matching extensioned paths i.e. /hello.blah
 
 
+
 config :: Int -> Config Snap a
 config port =
   setVerbose False $ setPort port $
-    setAccessLog ConfigNoLog $ setErrorLog ConfigNoLog $ defaultConfig
-
+    -- setAccessLog ConfigNoLog $ setErrorLog ConfigNoLog $ defaultConfig
+    -- Unsure why errors aren't logged in original impl, exceptions get eaten otherwise...
+    setAccessLog ConfigNoLog $ setErrorLog (ConfigIoLog Live.logger) $ defaultConfig
 
 
 -- INDEX
@@ -181,9 +184,7 @@ serveElm :: Sentry.Cache -> FilePath -> Snap ()
 serveElm sentryCache path =
   do  guard (takeExtension path == ".elm")
       modifyResponse (setContentType "text/html")
-
       js <- liftIO $ Sentry.getJsOutput sentryCache
-
       writeBS js
 
 
@@ -210,7 +211,6 @@ compileToBuilder path =
                   -- debugPass "serveElm error" (Exit.reactorToReport exit) (pure ())
                   Help.makePageHtml "Errors" $ Just $
                     Exit.toJson $ Exit.reactorToReport exit
-
 
 
 serveElm_ :: FilePath -> Snap ()
