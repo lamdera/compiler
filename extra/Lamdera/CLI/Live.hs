@@ -174,8 +174,8 @@ prepareLocalDev = do
 lamderaLocalDev :: BS.ByteString
 lamderaLocalDev =
   -- @TODO fix this back later... conflicts with the change directory command in ghci live reload
-  -- $(bsToExp =<< runIO (BS.readFile ("extra/LocalDev/LocalDev.elm")))
-  $(bsToExp =<< runIO (BS.readFile ("/Users/mario/dev/projects/lamdera-compiler/extra/LocalDev/LocalDev.elm")))
+  $(bsToExp =<< runIO (BS.readFile ("extra/LocalDev/LocalDev.elm")))
+  -- $(bsToExp =<< runIO (BS.readFile ("/Users/mario/dev/projects/lamdera-compiler/extra/LocalDev/LocalDev.elm")))
 
 
 normalLocalDevWrite = do
