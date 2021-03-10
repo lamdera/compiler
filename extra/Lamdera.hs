@@ -98,6 +98,7 @@ module Lamdera
   , callCommand
   , icdiff
   , withStdinYesAll
+  , launchAppZero
   )
   where
 
@@ -882,4 +883,7 @@ withStdinYesAll action =
     action
 
 
-x = 2
+launchAppZero :: Text -> IO ()
+launchAppZero appId = do
+  callCommand $ "~/lamdera/scripts/launchAppZero.sh " <> unpack appId
+  atomicPutStrLn $ "✨ Called launchAppZero.sh"

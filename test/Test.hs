@@ -50,7 +50,7 @@ Press up arrow to get history of prior commands.
 -- Current target for ghci :rr command. See ~/.ghci config file, which should contain
 -- something like `:def rr const $ return $ unlines [":r","Test.target"]`
 
-target = Test.all
+-- target = Test.all
 -- target = Test.Wire.wire
 -- target = checkUserConfig
 -- target = Test.Wire.buildAllPackages
@@ -58,7 +58,7 @@ target = Test.all
 -- target = Dir.withCurrentDirectory "/Users/mario/dev/projects/lamdera-test" $ Lamdera.CLI.Reset.run () ()
 -- target = Lamdera.Diff.run
 -- target = Lamdera.ReverseProxy.start
--- target = Test.Check.asUser "/Users/mario/dev/projects/lamdera-dashboard" "dashboard"
+target = Test.Check.asUser "/Users/mario/lamdera-deploys/test-local-v1" "test-local"
 
 -- target = do
 --   setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"

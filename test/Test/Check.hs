@@ -75,17 +75,68 @@ check = do
   -- checkWithParams "/Users/mario/lamdera/tmp/elm-audio-test0" "elm-audio-test0"
   -- checkWithParams "/Users/mario/lamdera-builds/build-test-local/staging" "test-local"
 
-asUser projectPath appName = do
-  setEnv "LAMDERA_APP_NAME" appName
-  setEnv "NOTPROD" "1"
-  setEnv "ELM_HOME" "/Users/mario/elm-home-elmx-test"
 
+asUser projectPath appName = do
+
+  setEnv "FORCEVERSION" "1"
+  setEnv "LDEBUG" "1"
+  setEnv "TOKEN" "a739477eb8bd2acbc251c246438906f4"
+  setEnv "LOVR" "/Users/mario/lamdera/overrides"
+  setEnv "LAMDERA_APP_NAME" appName
+  setEnv "ELM_HOME" "/Users/mario/elm-home-elmx-test"
+  -- setEnv "NOTPROD" "1"
+
+  clearSnapshots
+  copyRuntimeFiles projectPath
+  -- npmInstall projectPath
+  -- rebuildLamderaCheckProd projectPath appName
+  clearEnv
+  bootNodejsApp projectPath appName
+
+
+clearSnapshots = do
+  c "rm -rf ~/lamdera-snapshots/test-local"
+
+copyRuntimeFiles projectPath = do
+  c $ "cp -rp ~/lamdera/runtime/src/* " <> projectPath <> "/src/"
+  c $ "cp -rp ~/lamdera/runtime/package.json " <> projectPath <> "/package.json"
+  c $ "cp -rp ~/lamdera/runtime/package-lock.json " <> projectPath <> "/package-lock.json"
+  c $ "cp -rp ~/lamdera/runtime/backend.js " <> projectPath <> "/backend.js"
+  c $ "cp -rp ~/lamdera/runtime/xhr2.js " <> projectPath <> "/xhr2.js"
+  c $ "cp -rp ~/lamdera/runtime/b64.js " <> projectPath <> "/b64.js"
+  c $ "cp -rp ~/lamdera/runtime/oracle.js " <> projectPath <> "/oracle.js"
+  c $ "cp -rp ~/lamdera/runtime/frontend.js " <> projectPath <> "/frontend.js"
+  c $ "cp -rp ~/lamdera/runtime/index.html " <> projectPath <> "/index.html"
+
+npmInstall projectPath = do
+  c $ "cd " <> projectPath <> " && npm i --production"
+
+rebuildLamderaCheckProd projectPath appName = do
+  c $ "pm2 delete " <> appName <> " || true"
+  c $ "pm2 delete " <> appName <> "-zero || true"
+  launchAppZero $ T.pack appName
+
+  -- FORCEVERSION=1 LDEBUG=1 TOKEN=$TOKEN LOVR=${LOVR} ELM_HOME=$ELM_HOME_ LAMDERA_APP_NAME=${APP} $LAMDERA_COMPILER check # >> $LOG 2>&1
   Dir.withCurrentDirectory projectPath $
     Lamdera.CLI.Check.run () ()
 
+  c $ "pm2 delete " <> appName <> "-zero || true"
+
+clearEnv = do
+  unsetEnv "FORCEVERSION"
+  unsetEnv "LDEBUG"
+  unsetEnv "TOKEN"
+  unsetEnv "LOVR"
   unsetEnv "LAMDERA_APP_NAME"
-  unsetEnv "NOTPROD"
   unsetEnv "ELM_HOME"
+
+bootNodejsApp projectPath appName = do
+  c $ "cd " <> projectPath <> " && APPNAME=" <> appName <> " node --inspect --max-old-space-size=3072 --expose-gc oracle.js"
+
+
+
+c = callCommand
+
 
 
 {-| Run the `lamdera check` pipeline with specific params -}

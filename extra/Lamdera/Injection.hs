@@ -62,7 +62,7 @@ injections =
     function _Platform_initialize(flagDecoder, args, init, update, subscriptions, stepperBuilder)
       {
         var result = A2(_Json_run, flagDecoder, _Json_wrap(args ? args['flags'] : undefined));
-  
+
         // @TODO need to figure out how to get this to automatically escape by mode?
         //$$elm$$core$$Result$$isOk(result) || _Debug_crash(2 /**/, _Json_errorToString(result.a) /**/);
         $$elm$$core$$Result$$isOk(result) || _Debug_crash(2 /**_UNUSED/, _Json_errorToString(result.a) /**/);
@@ -85,7 +85,7 @@ injections =
         function mtime() {
           if (typeof window !== 'undefined') { return 0; }
           const hrTime = process.hrtime();
-          return hrTime[0] * 1000000 + hrTime[1] / 1000;
+          return Math.floor(hrTime[0] * 1000000 + hrTime[1] / 1000);
         }
 
         function sendToApp(msg, viewMetadata)
@@ -102,20 +102,24 @@ injections =
           var start = mtime()
           var serializeDuration, logDuration = null
 
-          if (typeof window == 'undefined') {
-            pos = pos + 1;
-            const s = $$author$$project$$LBR$$serialize(msg);
-            serializeDuration = mtime() - start
-            start = mtime()
-            insertLog(global.config.appname, global.config.version, pos, s.a, new Date(), s.b)
-            logDuration = mtime() - start
-          }
-
           start = mtime()
           var pair = A2(update, msg, model);
 
           const updateDuration = mtime() - start
           start = mtime()
+
+          if (typeof window == 'undefined') {
+            pos = pos + 1;
+            const s = $$author$$project$$LBR$$serialize(msg);
+            serializeDuration = mtime() - start
+            start = mtime()
+            console.log(s)
+            insertLog(pos, global.config.version, s.a, new Date(), updateDuration, serializeDuration, A2($$elm$$core$$Maybe$$withDefault, null, s.b))
+            logDuration = mtime() - start
+          }
+
+          // console.log(`model size: ${global.sizeof(pair.a)}`)
+          // console.log(pair.a)
 
           stepper(model = pair.a, viewMetadata);
           //console.log('cmds', pair.b);
