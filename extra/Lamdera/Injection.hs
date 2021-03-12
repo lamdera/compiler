@@ -32,7 +32,7 @@ source :: Mode.Mode -> Mains -> B.Builder
 source mode mains =
   case mode of
     Mode.Dev _ ->
-      [injections, corsAnywhere]
+      [injections False, corsAnywhere]
       -- [injections]
         & Text.concat
         & Text.encodeUtf8
@@ -40,14 +40,19 @@ source mode mains =
 
     Mode.Prod _ ->
       case mains & Map.toList of
-        ((ModuleName.Canonical (Pkg.Name author pkg) "Backend"),_):[] ->
-          [injections, backendLogging]
-            & Text.concat
-            & Text.encodeUtf8
-            & B.byteString
-
+        ((ModuleName.Canonical (Pkg.Name author pkg) modul),_):[] ->
+          if modul `elem` ["Backend", "LBR"]
+            then
+              [injections True, backendLogging]
+                & Text.concat
+                & Text.encodeUtf8
+                & B.byteString
+            else
+              injections False
+                & Text.encodeUtf8
+                & B.byteString
         _ ->
-          injections
+          injections False
             & Text.encodeUtf8
             & B.byteString
 
@@ -56,8 +61,20 @@ backendLogging =
   "console.log('backend logging!');"
 
 
-injections :: Text
-injections =
+injections :: Bool -> Text
+injections isBackend =
+  let
+    conditional =
+      if isBackend
+        then
+          [text|
+            var fns = { decodeAnalytics: $$author$$project$$LamderaHelpers$$decodeAnalytics }
+          |]
+        else
+          [text|
+            var fns = {}
+          |]
+  in
   [text|
     function _Platform_initialize(flagDecoder, args, init, update, subscriptions, stepperBuilder)
       {
@@ -135,7 +152,9 @@ injections =
           _Platform_enqueueEffects(managers, initPair.b, subscriptions(model));
         }
 
-        return ports ? { ports: ports, gm: function() { return model }, eum: function() { upgradeMode = true } } : {};
+        $conditional
+
+        return ports ? { ports: ports, gm: function() { return model }, eum: function() { upgradeMode = true }, fns: fns } : {};
       }
   |]
   --   // https://github.com/elm/bytes/issues/20
