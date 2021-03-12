@@ -88,32 +88,43 @@ asUser projectPath appName = do
 
   clearSnapshots
   copyRuntimeFiles projectPath
+  injectFrontendAppConfig projectPath appName "1"
+  killPm2Instances appName
   -- npmInstall projectPath
   -- rebuildLamderaCheckProd projectPath appName
+  -- parcelFrontendNoMinify projectPath
+  -- parcelFrontendMinify projectPath
   clearEnv
   bootNodejsApp projectPath appName
-
 
 clearSnapshots = do
   c "rm -rf ~/lamdera-snapshots/test-local"
 
 copyRuntimeFiles projectPath = do
   c $ "cp -rp ~/lamdera/runtime/src/* " <> projectPath <> "/src/"
+  c $ "mkdir -p " <> projectPath <> "/js/"
+  c $ "cp -rp ~/lamdera/runtime/js/* " <> projectPath <> "/js/"
   c $ "cp -rp ~/lamdera/runtime/package.json " <> projectPath <> "/package.json"
   c $ "cp -rp ~/lamdera/runtime/package-lock.json " <> projectPath <> "/package-lock.json"
   c $ "cp -rp ~/lamdera/runtime/backend.js " <> projectPath <> "/backend.js"
-  c $ "cp -rp ~/lamdera/runtime/xhr2.js " <> projectPath <> "/xhr2.js"
-  c $ "cp -rp ~/lamdera/runtime/b64.js " <> projectPath <> "/b64.js"
   c $ "cp -rp ~/lamdera/runtime/oracle.js " <> projectPath <> "/oracle.js"
   c $ "cp -rp ~/lamdera/runtime/frontend.js " <> projectPath <> "/frontend.js"
   c $ "cp -rp ~/lamdera/runtime/index.html " <> projectPath <> "/index.html"
 
+injectFrontendAppConfig projectPath appName version = do
+  replaceInFile
+    "/*INLINE_LAMDERA_CONFIG*/"
+    (T.pack $ "window['lamdera']['conf'] = { appId: '" <> appName <> "', appVersion: " <> version <> " }" )
+    (projectPath <> "/frontend.js")
+
 npmInstall projectPath = do
   c $ "cd " <> projectPath <> " && npm i --production"
 
-rebuildLamderaCheckProd projectPath appName = do
+killPm2Instances appName = do
   c $ "pm2 delete " <> appName <> " || true"
   c $ "pm2 delete " <> appName <> "-zero || true"
+
+rebuildLamderaCheckProd projectPath appName = do
   launchAppZero $ T.pack appName
 
   -- FORCEVERSION=1 LDEBUG=1 TOKEN=$TOKEN LOVR=${LOVR} ELM_HOME=$ELM_HOME_ LAMDERA_APP_NAME=${APP} $LAMDERA_COMPILER check # >> $LOG 2>&1
@@ -121,6 +132,12 @@ rebuildLamderaCheckProd projectPath appName = do
     Lamdera.CLI.Check.run () ()
 
   c $ "pm2 delete " <> appName <> "-zero || true"
+
+parcelFrontendNoMinify projectPath = do
+  c $ "cd " <> projectPath <> " && parcel build index.html --no-minify --no-source-maps --cache-dir ../cache/parcel"
+
+parcelFrontendMinify projectPath = do
+  c $ "cd " <> projectPath <> " && parcel build index.html --no-source-maps --cache-dir ../cache/parcel"
 
 clearEnv = do
   unsetEnv "FORCEVERSION"
