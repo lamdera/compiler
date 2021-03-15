@@ -30,35 +30,26 @@ type Mains = Map.Map ModuleName.Canonical Opt.Main
 
 source :: Mode.Mode -> Mains -> B.Builder
 source mode mains =
-  case mode of
-    Mode.Dev _ ->
-      [injections False, corsAnywhere]
-      -- [injections]
-        & Text.concat
-        & Text.encodeUtf8
-        & B.byteString
-
-    Mode.Prod _ ->
+  let
+    isBackend =
       case mains & Map.toList of
         ((ModuleName.Canonical (Pkg.Name author pkg) modul),_):[] ->
           if modul `elem` ["Backend", "LBR"]
-            then
-              [injections True, backendLogging]
-                & Text.concat
-                & Text.encodeUtf8
-                & B.byteString
-            else
-              injections False
-                & Text.encodeUtf8
-                & B.byteString
+            then True
+            else False
         _ ->
-          injections False
-            & Text.encodeUtf8
-            & B.byteString
+          False
+  in
+  B.byteString $
+  Text.encodeUtf8 $
+  Text.concat $
+  case mode of
+    Mode.Dev _ ->
+      [injections isBackend, corsAnywhere]
+      -- [injections isBackend]
 
-
-backendLogging =
-  "console.log('backend logging!');"
+    Mode.Prod _ ->
+      [injections isBackend]
 
 
 injections :: Bool -> Text
@@ -68,7 +59,10 @@ injections isBackend =
       if isBackend
         then
           [text|
-            var fns = { decodeAnalytics: $$author$$project$$LamderaHelpers$$decodeAnalytics }
+            var fns =
+              { decodeWirePayloadHeader: $$author$$project$$LamderaHelpers$$decodeWirePayloadHeader
+              , decodeWireAnalytics: $$author$$project$$LamderaHelpers$$decodeWireAnalytics
+              }
           |]
         else
           [text|

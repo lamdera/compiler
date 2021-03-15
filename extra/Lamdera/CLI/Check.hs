@@ -305,6 +305,12 @@ run () () = do
   progressPointer "Checking config..."
   Lamdera.AppConfig.checkUserConfig appName (fmap T.pack prodTokenM)
 
+  checkForLatestBinaryVersion inDebug
+
+  pure ()
+
+
+checkForLatestBinaryVersion inDebug = do
   latestVersion_ <- Lamdera.Update.fetchCurrentVersion
   case latestVersion_ of
     Right latestVersion -> do
@@ -346,6 +352,7 @@ run () () = do
 
     Left err ->
       onlyWhen (inDebug) $ Lamdera.Http.printHttpError err "I needed to check the release version"
+
 
 
 buildProductionJsFiles :: FilePath -> Bool -> VersionInfo -> IO ()
