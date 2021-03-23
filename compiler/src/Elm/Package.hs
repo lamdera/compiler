@@ -225,6 +225,9 @@ suggestions =
     , "Time" ==> time
     , "Url.Parser" ==> url
     , "Url" ==> url
+    , "Lamdera" ==> lamderaCore
+    , "Lamdera.Debug" ==> lamderaCore
+    , "Lamdera.Wire3" ==> lamderaCodecs
     ]
 
 

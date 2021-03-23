@@ -3,14 +3,7 @@
 
 module Lamdera.Checks where
 
-import qualified Reporting.Doc as D
-import qualified Elm.Package as Pkg
-import Elm.ModuleName (Canonical(..))
-import qualified Type.Error as T
-import qualified Reporting.Task as Task
-import qualified Reporting.Exit.Help as Help
-
-import NeatInterpolation
+import qualified Data.Map as Map
 import Data.Text as T
 import Data.Text.IO as TIO
 import qualified System.Directory as Dir
@@ -20,7 +13,18 @@ import Data.Monoid ((<>))
 import System.FilePath ((</>))
 import qualified Debug.Trace as DT
 import qualified Data.List as List
+
+import qualified Reporting.Doc as D
+import qualified Elm.Package as Pkg
+import Elm.ModuleName (Canonical(..))
+import qualified Type.Error as T
 import qualified Reporting
+import qualified Reporting.Task as Task
+import qualified Reporting.Exit as Exit
+import qualified Reporting.Exit.Help as Help
+import qualified Elm.Version as V
+
+import NeatInterpolation
 
 import Lamdera
 import Lamdera.Progress

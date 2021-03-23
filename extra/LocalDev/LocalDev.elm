@@ -25,15 +25,12 @@ import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events exposing (onClick, onMouseEnter, onMouseLeave)
 import Html.Lazy
-import Http
-import Json.Decode as D
-import Json.Encode as E
 import Lamdera exposing (ClientId, Key, SessionId, Url)
 import Lamdera.Debug as LD
+import Lamdera.Json as Json
 import Lamdera.Wire3 as Wire exposing (Bytes)
 import Process
 import Task
-import Time
 import Types exposing (BackendModel, BackendMsg, FrontendModel, FrontendMsg, ToBackend, ToFrontend)
 
 
@@ -87,10 +84,10 @@ port setLiveStatus : (Bool -> msg) -> Sub msg
 port setClientId : (String -> msg) -> Sub msg
 
 
-port rpcIn : (E.Value -> msg) -> Sub msg
+port rpcIn : (Json.Value -> msg) -> Sub msg
 
 
-port rpcOut : E.Value -> Cmd msg
+port rpcOut : Json.Value -> Cmd msg
 
 
 port onConnection : (ConnectionMsg -> msg) -> Sub msg
@@ -116,7 +113,7 @@ type Msg
     | ReceivedToBackend ( SessionId, ClientId, Bytes )
     | ReceivedToFrontend WireMsg
     | ReceivedBackendModel Bytes
-    | RPCIn E.Value
+    | RPCIn Json.Value
     | SetNodeTypeLeader Bool
     | SetLiveStatus Bool
     | ReceivedClientId String
@@ -137,8 +134,8 @@ type Msg
     | EnvModeSelected String
     | EnvCleared
     | ModelResetCleared
-    | VersionCheck Time.Posix
-    | VersionCheckResult (Result Http.Error VersionCheck)
+    | VersionCheck LD.Posix
+    | VersionCheckResult (Result LD.HttpError VersionCheck)
     | Noop
 
 
@@ -171,8 +168,8 @@ type alias DevBar =
 
 type VersionCheck
     = VersionUnchecked
-    | VersionCheckFailed Time.Posix
-    | VersionCheckSucceeded String Time.Posix
+    | VersionCheckFailed LD.Posix
+    | VersionCheckSucceeded String LD.Posix
 
 
 type Location
@@ -331,7 +328,7 @@ init flags url key =
 
           else
             Cmd.none
-        , Time.now |> Task.perform VersionCheck
+        , LD.now |> Task.perform VersionCheck
         ]
     )
 
@@ -380,11 +377,11 @@ type alias Payload =
 
 
 payloadDecoder =
-    D.succeed Payload
-        |> required "t" D.string
-        |> required "s" D.string
-        |> required "c" D.string
-        |> required "i" (D.list D.int)
+    Json.succeed Payload
+        |> required "t" Json.decoderString
+        |> required "s" Json.decoderString
+        |> required "c" Json.decoderString
+        |> required "i" (Json.decoderList Json.decoderInt)
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -807,7 +804,7 @@ update msg m =
                     )
 
                 recheckIfLongerThanHours hours timeOld =
-                    if (Time.posixToMillis timeCurrent - Time.posixToMillis timeOld) > (hours * 1000 * 60 * 60) then
+                    if (LD.posixToMillis timeCurrent - LD.posixToMillis timeOld) > (hours * 1000 * 60 * 60) then
                         check
 
                     else
@@ -871,7 +868,7 @@ subscriptions { nodeType, fem, bem, bemDirty } =
         , rpcIn RPCIn
         , onConnection OnConnection
         , onDisconnection OnDisconnection
-        , Time.every (10 * 60 * 1000) VersionCheck
+        , LD.every (10 * 60 * 1000) VersionCheck
         ]
 
 
@@ -1556,53 +1553,28 @@ trigger msg =
     Process.sleep 0 |> Task.perform (always msg)
 
 
-required : String -> D.Decoder a -> D.Decoder (a -> b) -> D.Decoder b
+required : String -> Json.Decoder a -> Json.Decoder (a -> b) -> Json.Decoder b
 required key valDecoder decoder =
-    custom (D.field key valDecoder) decoder
+    custom (Json.field key valDecoder) decoder
 
 
-custom : D.Decoder a -> D.Decoder (a -> b) -> D.Decoder b
+custom : Json.Decoder a -> Json.Decoder (a -> b) -> Json.Decoder b
 custom =
-    D.map2 (|>)
+    Json.map2 (|>)
 
 
 getLatestVersion time =
-    Http.task
+    LD.task
         { method = "GET"
         , headers = []
         , url = "https://lamdera.com/current-version.json"
-        , body = Http.emptyBody
-        , resolver = Http.stringResolver <| handleJsonResponse <| decodeVersionCheck time
+        , body = LD.emptyBody
+        , resolver = LD.stringResolver <| LD.handleJsonResponse <| decodeVersionCheck time
         , timeout = Nothing
         }
 
 
-decodeVersionCheck : Time.Posix -> D.Decoder VersionCheck
+decodeVersionCheck : LD.Posix -> Json.Decoder VersionCheck
 decodeVersionCheck time =
-    D.string
-        |> D.andThen
-            (\v -> D.succeed <| VersionCheckSucceeded v time)
-
-
-handleJsonResponse : D.Decoder a -> Http.Response String -> Result Http.Error a
-handleJsonResponse decoder response =
-    case response of
-        Http.BadUrl_ url ->
-            Err (Http.BadUrl url)
-
-        Http.Timeout_ ->
-            Err Http.Timeout
-
-        Http.BadStatus_ { statusCode } _ ->
-            Err (Http.BadStatus statusCode)
-
-        Http.NetworkError_ ->
-            Err Http.NetworkError
-
-        Http.GoodStatus_ _ body ->
-            case D.decodeString decoder body of
-                Err _ ->
-                    Err (Http.BadBody body)
-
-                Ok result ->
-                    Ok result
+    Json.decoderString
+        |> Json.map (\v -> VersionCheckSucceeded v time)

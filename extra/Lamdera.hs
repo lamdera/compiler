@@ -202,7 +202,6 @@ debug str =
 debugT text =
   liftIO $ debug_ (T.unpack text)
 
-
 alternativeImplementation fn ignored =
   fn
 
