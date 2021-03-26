@@ -30,8 +30,21 @@ import Lamdera
 import Lamdera.Progress
 
 
-runChecks :: IO ()
-runChecks = do
+runChecks :: Bool -> Map.Map Pkg.Name V.Version -> IO (Either Exit.Outline outline) -> IO (Either Exit.Outline outline)
+runChecks shouldCheckLamdera direct default_ = do
+  atomicPutStrLn $ "runchecks but with " <> show shouldCheckLamdera
+  if Map.member Pkg.lamderaCore direct
+    then do
+      onlyWhen shouldCheckLamdera Lamdera.Checks.runChecks_
+      default_
+    else
+      if shouldCheckLamdera
+        then return $ Left Exit.OutlineLamderaMissingDeps
+        else default_
+
+
+runChecks_ :: IO ()
+runChecks_ = do
 
   missingFiles <- liftIO $ checkMissingFiles ["src/Frontend.elm", "src/Backend.elm", "src/Types.elm"]
   unless (missingFiles == []) $ do

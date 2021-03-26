@@ -428,3 +428,14 @@ attemptChangesHelp root env oldOutline newOutline question =
         Right () ->
           do  putStrLn "Success!"
               return (Right ())
+
+
+installHelper pkg = do
+  installResult <- runInstall (Install.Install pkg) ()
+  case installResult of
+    Right _ -> do
+      pure ()
+
+    Left err -> do
+      Exit.toStderr (Exit.installToReport err)
+      Exit.exitFailure

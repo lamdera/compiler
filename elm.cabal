@@ -208,6 +208,17 @@ Executable lamdera
 
         -- Lamdera --
         Lamdera
+
+        Lamdera.CLI
+        Lamdera.CLI.Live
+        Lamdera.CLI.Login
+        Lamdera.CLI.Check
+        Lamdera.CLI.Deploy
+        Lamdera.CLI.Reset
+        -- CLI Experimental
+        Lamdera.CLI.Annotate
+        Lamdera.CLI.Interpreter
+
         Lamdera.AppConfig
         Lamdera.Checks
         Lamdera.Constrain
@@ -235,16 +246,6 @@ Executable lamdera
         Lamdera.Wire3.Graph
         Lamdera.Wire3.Helpers
         Lamdera.Wire3.Interfaces
-
-        Lamdera.CLI
-        Lamdera.CLI.Live
-        Lamdera.CLI.Login
-        Lamdera.CLI.Check
-        Lamdera.CLI.Deploy
-        Lamdera.CLI.Reset
-        -- CLI Experimental
-        Lamdera.CLI.Annotate
-        Lamdera.CLI.Interpreter
 
         -- Lamdera Utility --
         Lamdera.Compile

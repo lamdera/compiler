@@ -328,7 +328,7 @@ lamderaGetArchive manager url onError err onSuccess =
       -- overrideExists <- doesDirectoryExist packageRoot
       overrideExists <- doesFileExist packageZip
 
-      -- debug_ $ "🔥: " <> show (package, packageZip, packageRoot)
+      -- debug_ $ "🔥: " <> show (package, packageZip, packageRoot, overrideExists, url)
 
       if (isDebug && overrideExists && stringContains package url)
         then do

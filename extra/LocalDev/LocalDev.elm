@@ -209,6 +209,9 @@ type alias Flags =
 init : Flags -> Url -> Key -> ( Model, Cmd Msg )
 init flags url key =
     let
+        ensureOutputInclusion =
+            shouldProxy
+
         log t v =
             if devbar.logging then
                 Debug.log t v
@@ -341,14 +344,6 @@ storeFE m newFem =
         newFem
 
 
-type alias NodeInitArgs =
-    { clientId : String
-    , sessionId : String
-    , nodeType : NodeType
-    , backendModelIntList : List Int
-    }
-
-
 type NodeType
     = Follower
     | Leader
@@ -366,22 +361,6 @@ nodeTypeToString nodeType =
 type LiveStatus
     = Online
     | Offline
-
-
-type alias Payload =
-    { t : String
-    , s : String
-    , c : String
-    , i : List Int
-    }
-
-
-payloadDecoder =
-    Json.succeed Payload
-        |> required "t" Json.decoderString
-        |> required "s" Json.decoderString
-        |> required "c" Json.decoderString
-        |> required "i" (Json.decoderList Json.decoderInt)
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -1578,3 +1557,22 @@ decodeVersionCheck : LD.Posix -> Json.Decoder VersionCheck
 decodeVersionCheck time =
     Json.decoderString
         |> Json.map (\v -> VersionCheckSucceeded v time)
+
+
+shouldProxy : Msg -> Bool
+shouldProxy msg =
+    case msg of
+        BEMsg _ ->
+            True
+
+        FEtoBE _ ->
+            True
+
+        FEtoBEDelayed _ ->
+            True
+
+        ReceivedToBackend _ ->
+            True
+
+        _ ->
+            False

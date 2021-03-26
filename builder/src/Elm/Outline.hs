@@ -219,14 +219,8 @@ read root shouldCheckLamdera =
                           do  maybeDups <- detectDuplicates root (NE.toList srcDirs)
                               case maybeDups of
                                 Nothing ->
-                                  if Map.member Pkg.lamderaCore direct || Map.member Pkg.lamderaCore indirect
-                                  then do
-                                    onlyWhen shouldCheckLamdera Lamdera.Checks.runChecks
-                                    return $ Right outline
-                                  else
-                                    if shouldCheckLamdera
-                                      then return $ Left Exit.OutlineLamderaMissingDeps
-                                      else return $ Right outline
+                                  Lamdera.alternativeImplementationPassthrough (Lamdera.Checks.runChecks shouldCheckLamdera direct) $
+                                  return $ Right outline
 
                                 Just (canonicalDir, (dir1,dir2)) ->
                                   return $ Left (Exit.OutlineHasDuplicateSrcDirs canonicalDir dir1 dir2)

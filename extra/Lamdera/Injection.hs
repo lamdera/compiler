@@ -39,23 +39,19 @@ source mode mains =
             else False
         _ ->
           False
+
+    isProd =
+      case mode of
+        Mode.Dev _ -> False
+        Mode.Prod _ -> True
   in
-  B.byteString $
-  Text.encodeUtf8 $
-  Text.concat $
-  case mode of
-    Mode.Dev _ ->
-      [injections isBackend, corsAnywhere]
-      -- [injections isBackend]
-
-    Mode.Prod _ ->
-      [injections isBackend]
+  B.byteString $ Text.encodeUtf8 $ injections isBackend isProd
 
 
-injections :: Bool -> Text
-injections isBackend =
+injections :: Bool -> Bool -> Text
+injections isBackend isProd =
   let
-    conditional =
+    exportFns =
       if isBackend
         then
           [text|
@@ -68,8 +64,82 @@ injections isBackend =
           [text|
             var fns = {}
           |]
+
+    shouldProxy =
+      onlyIf (not isProd)
+        [text|
+          shouldProxy = $$author$$project$$LocalDev$$shouldProxy(msg)
+        |]
+
+    {- Approach taken from cors-anywhere:
+    https://github.com/Rob--W/cors-anywhere/blame/master/README.md#L56
+
+    Rewrites XHR request URLs from {url} to http://localhost:8001/{url}
+
+    Refined to use the shouldProxy global in context of the current msg type
+    being handled, so we can identify and proxy only BackendMsg task cmds,
+    leaving Frontend HTTP to still function as normal, including browser CORS
+    behaviors and limitations.
+
+    See extra/Lamdera/ReverseProxy.hs for the proxy itself
+    -}
+    proxyHttpToTask =
+      onlyIf (not isProd)
+        -- Identical to original except for alterIfProxyRequired addition
+        [text|
+
+          var shouldProxy = false;
+
+          var _Http_toTask = F3(function(router, toTask, request)
+          {
+            var shouldProxy_ = shouldProxy
+            return _Scheduler_binding(function(callback)
+            {
+              function done(response) {
+                callback(toTask(request.expect.a(response)));
+              }
+
+              var xhr = new XMLHttpRequest();
+              xhr.addEventListener('error', function() { done($$elm$$http$$Http$$NetworkError_); });
+              xhr.addEventListener('timeout', function() { done($$elm$$http$$Http$$Timeout_); });
+              xhr.addEventListener('load', function() { done(_Http_toResponse(request.expect.b, xhr)); });
+              $$elm$$core$$Maybe$$isJust(request.tracker) && _Http_track(router, xhr, request.tracker.a);
+
+              try {
+                request.url = alterIfProxyRequired(shouldProxy_, request.url)
+                xhr.open(request.method, request.url, true);
+              } catch (e) {
+                return done($$elm$$http$$Http$$BadUrl_(request.url));
+              }
+
+              _Http_configureRequest(xhr, request);
+
+              request.body.a && xhr.setRequestHeader('Content-Type', request.body.a);
+              xhr.send(request.body.b);
+
+              return function() { xhr.c = true; xhr.abort(); };
+            });
+          });
+
+          var alterIfProxyRequired = function(shouldProxy_, url) {
+            if (shouldProxy_) {
+              var cors_api_host = 'localhost:8001'
+              var cors_api_url = 'http://' + cors_api_host + '/'
+              var origin = window.location.protocol + '//' + window.location.host
+              var targetOrigin = /^https?:\/\/([^\/]+)/i.exec(url)
+              if (targetOrigin && targetOrigin[0].toLowerCase() !== origin &&
+                  targetOrigin[1] !== cors_api_host) {
+                  url = cors_api_url + url;
+              }
+              return url
+            } else {
+              return url
+            }
+          }
+        |]
   in
   [text|
+
     function _Platform_initialize(flagDecoder, args, init, update, subscriptions, stepperBuilder)
       {
         var result = A2(_Json_run, flagDecoder, _Json_wrap(args ? args['flags'] : undefined));
@@ -90,7 +160,7 @@ injections isBackend =
         //console.log('managers', managers)
         //console.log('ports', ports)
 
-        // @TODO LocalDev hardcoding needs to go
+        var dead = false;
         var upgradeMode = false;
 
         function mtime() {
@@ -101,6 +171,7 @@ injections isBackend =
 
         function sendToApp(msg, viewMetadata)
         {
+          if(dead){ return }
           if (upgradeMode) {
             // console.log('sendToApp.inactive',msg)
             // No more messages should run in upgrade mode
@@ -109,6 +180,8 @@ injections isBackend =
             return;
           }
           //console.log('sendToApp.active',msg)
+
+          $shouldProxy
 
           var start = mtime()
           var serializeDuration, logDuration = null
@@ -146,11 +219,22 @@ injections isBackend =
           _Platform_enqueueEffects(managers, initPair.b, subscriptions(model));
         }
 
-        $conditional
+        $exportFns
 
-        return ports ? { ports: ports, gm: function() { return model }, eum: function() { upgradeMode = true }, fns: fns } : {};
+        const die = function() {
+          console.log('App dying')
+          managers = null
+          model = null
+          stepper = null
+          ports = null
+        }
+
+        return ports ? { ports: ports, gm: function() { return model }, eum: function() { upgradeMode = true }, die: die, fns: fns } : {};
       }
+
+      $proxyHttpToTask
   |]
+
   --   // https://github.com/elm/bytes/issues/20
   --   // but the fix below as suggested causes this problem:
   --   // https://github.com/nodejs/node/issues/26115
@@ -168,39 +252,6 @@ injections isBackend =
   --   model = e.detail
   -- }, false);
   -- window.dispatchEvent(new Event('rbem'));
-
-
-{- Approach taken from cors-anywhere:
-https://github.com/Rob--W/cors-anywhere/blame/master/README.md#L56
-
-Rewrites all XHR requests from {url} to http://localhost:8001/{url}
-
-See extra/Lamdera/ReverseProxy.hs for the proxy itself
--}
-corsAnywhere :: Text
-corsAnywhere =
-  [text|
-    (function() {
-      if (typeof window == 'undefined') { return 0; } // skip for node.js
-      var cors_api_host = 'localhost:8001';
-      var cors_api_url = 'http://' + cors_api_host + '/';
-      var slice = [].slice;
-      var origin = window.location.protocol + '//' + window.location.host;
-      var open = XMLHttpRequest.prototype.open;
-      XMLHttpRequest.prototype.open = function() {
-        var args = slice.call(arguments);
-        var targetOrigin = /^https?:\/\/([^\/]+)/i.exec(args[1]);
-        if (targetOrigin && targetOrigin[0].toLowerCase() !== origin &&
-            targetOrigin[1] !== cors_api_host) {
-            args[1] = cors_api_url + args[1];
-        }
-        return open.apply(this, args);
-      };
-    })();
-  |]
-  -- & Text.encodeUtf8
-  -- & B.byteString
-
 
   -- unsafePerformIO $ do
   --
@@ -257,3 +308,9 @@ elmPkgJs mode =
 
     _ ->
       ""
+
+onlyIf :: Bool -> Text -> Text
+onlyIf cond text =
+  if cond
+    then text
+    else ""

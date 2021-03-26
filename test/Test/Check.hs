@@ -20,6 +20,8 @@ import NeatInterpolation
 import qualified Lamdera.CLI.Check
 import qualified System.Directory as Dir
 
+import qualified Test.Wire
+
 all = EasyTest.run suite
 
 
@@ -76,7 +78,11 @@ check = do
   -- checkWithParams "/Users/mario/lamdera-builds/build-test-local/staging" "test-local"
 
 
-asUser projectPath appName = do
+mockBuildSh projectPath appName = do
+
+  -- @TODO this doesn't yet fully replicate the build.sh script!
+  -- if extracting this for https://trello.com/c/BcomTNnd, make
+  -- sure to step through build.sh step-by-step.
 
   setEnv "FORCEVERSION" "1"
   setEnv "LDEBUG" "1"
@@ -86,19 +92,31 @@ asUser projectPath appName = do
   setEnv "ELM_HOME" "/Users/mario/elm-home-elmx-test"
   -- setEnv "NOTPROD" "1"
 
-  clearSnapshots
+  -- clearPriorBuilds
+  -- clearPriorDeploys
+  -- clearSnapshots
+
   copyRuntimeFiles projectPath
+  injectElmPkgJsIncludesDefaultIfMissing projectPath
   injectFrontendAppConfig projectPath appName "1"
   killPm2Instances appName
-  -- npmInstall projectPath
-  -- rebuildLamderaCheckProd projectPath appName
-  -- parcelFrontendNoMinify projectPath
+  npmInstall projectPath
+  addRPCDefaultIfMissing projectPath
+  installElmHttpForRPC projectPath
+  rebuildLamderaCheckProd projectPath appName
+  parcelFrontendNoMinify projectPath
   -- parcelFrontendMinify projectPath
   clearEnv
   bootNodejsApp projectPath appName
 
+clearPriorBuilds = do
+  c "rm -rf ~/lamdera-builds/build-test-local || true"
+
+clearPriorDeploys = do
+  c "rm -rf ~/lamdera-deploys/test-local-v* || true"
+
 clearSnapshots = do
-  c "rm -rf ~/lamdera-snapshots/test-local"
+  c "rm -rf ~/lamdera-snapshots/test-local || true"
 
 copyRuntimeFiles projectPath = do
   c $ "cp -rp ~/lamdera/runtime/src/* " <> projectPath <> "/src/"
@@ -110,6 +128,17 @@ copyRuntimeFiles projectPath = do
   c $ "cp -rp ~/lamdera/runtime/oracle.js " <> projectPath <> "/oracle.js"
   c $ "cp -rp ~/lamdera/runtime/frontend.js " <> projectPath <> "/frontend.js"
   c $ "cp -rp ~/lamdera/runtime/index.html " <> projectPath <> "/index.html"
+
+injectElmPkgJsIncludesDefaultIfMissing projectPath = do
+  pkgJsIncludesExists <- Dir.doesFileExist $ projectPath <> "/elm-pkg-js-includes.js"
+  if pkgJsIncludesExists
+    then
+      -- No problem
+      pure ()
+    else
+      -- No includes file, add the default
+      c $ "cp -rp ~/lamdera/runtime/elm-pkg-js-includes-empty.js " <> projectPath <> "/elm-pkg-js-includes.js"
+
 
 injectFrontendAppConfig projectPath appName version = do
   replaceInFile
@@ -123,6 +152,20 @@ npmInstall projectPath = do
 killPm2Instances appName = do
   c $ "pm2 delete " <> appName <> " || true"
   c $ "pm2 delete " <> appName <> "-zero || true"
+
+addRPCDefaultIfMissing projectRoot = do
+  rpcExists <- Dir.doesFileExist $ projectRoot <> "/src/RPC.elm"
+  if rpcExists
+    then
+      -- No problem
+      c $ "rm " <> projectRoot <> "/src/RPC_Empty.elm"
+    else
+      -- No RPC implementation, set the default empty one
+      c $ "cp " <> projectRoot <> "/src/RPC_Empty.elm " <> projectRoot <> "/src/RPC.elm"
+
+installElmHttpForRPC projectPath = do
+  withCurrentDirectory projectPath $ do
+    Test.Wire.installHelper Pkg.http
 
 rebuildLamderaCheckProd projectPath appName = do
   launchAppZero $ T.pack appName

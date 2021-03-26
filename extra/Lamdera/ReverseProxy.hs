@@ -64,8 +64,8 @@ startReverseProxy_ = do
         (\request ->
           case requestHeaderHost request of
             Just host -> do
-              debug "------"
-              debug_ $ show request
+              -- debug "------"
+              -- debug_ $ show request
 
               res <-
                 case requestMethod request of
@@ -97,7 +97,7 @@ startReverseProxy_ = do
                       _ ->
                         error "bad path"
 
-              debug_ $ "\n➡️  proxying with: " ++ show res
+              -- debug_ $ "\n➡️  proxying with: " ++ show res
               pure res
 
             Nothing ->
