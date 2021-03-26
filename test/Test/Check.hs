@@ -84,17 +84,22 @@ mockBuildSh projectPath appName = do
   -- if extracting this for https://trello.com/c/BcomTNnd, make
   -- sure to step through build.sh step-by-step.
 
+  -- c "~/lamdera/scripts/makeDevPackages.sh"
+
+
   setEnv "FORCEVERSION" "1"
   setEnv "LDEBUG" "1"
   setEnv "TOKEN" "a739477eb8bd2acbc251c246438906f4"
   setEnv "LOVR" "/Users/mario/lamdera/overrides"
   setEnv "LAMDERA_APP_NAME" appName
-  setEnv "ELM_HOME" "/Users/mario/elm-home-elmx-test"
+  -- setEnv "ELM_HOME" "/Users/mario/elm-home-elmx-test"
   -- setEnv "NOTPROD" "1"
 
   -- clearPriorBuilds
   -- clearPriorDeploys
   -- clearSnapshots
+
+  clearBuildCache projectPath
 
   copyRuntimeFiles projectPath
   injectElmPkgJsIncludesDefaultIfMissing projectPath
@@ -117,6 +122,9 @@ clearPriorDeploys = do
 
 clearSnapshots = do
   c "rm -rf ~/lamdera-snapshots/test-local || true"
+
+clearBuildCache projectPath =
+  c $ "rm -rf " <> projectPath <> "/elm-stuff || true"
 
 copyRuntimeFiles projectPath = do
   c $ "cp -rp ~/lamdera/runtime/src/* " <> projectPath <> "/src/"

@@ -11,8 +11,7 @@ import Data.Monoid ((<>))
 import qualified Data.Name as Name
 import Text.RawString.QQ (r)
 
-
-import qualified Lamdera
+import qualified Lamdera.Live
 
 -- SANDWICH
 
@@ -36,7 +35,7 @@ sandwich moduleName javascript =
 <script>
 try {
 |] <> javascript <> [r|
-|] <> Lamdera.lamderaLiveSrc <> [r|
+|] <> Lamdera.Live.lamderaLiveSrc <> [r|
   setupApp("|] <> name <> [r|", "elm")
 }
 catch (e)

@@ -248,7 +248,7 @@ init flags url key =
                     ( ibem, iBeCmds, False )
 
                 Just backendModelBytes ->
-                    case Wire.bytesDecode Types.w2_decode_BackendModel backendModelBytes of
+                    case Wire.bytesDecode Types.w3_decode_BackendModel backendModelBytes of
                         Just restoredBem ->
                             ( restoredBem
                             , Cmd.none
@@ -425,7 +425,7 @@ update msg m =
                         ( m
                         , Cmd.batch
                             [ send_ToFrontend
-                                { t = "ToFrontend", b = toFrontend |> Types.w2_encode_ToFrontend |> Wire.bytesEncode, s = "", c = clientId }
+                                { t = "ToFrontend", b = toFrontend |> Types.w3_encode_ToFrontend |> Wire.bytesEncode, s = "", c = clientId }
                             ]
                         )
 
@@ -438,7 +438,7 @@ update msg m =
                     ( m
                     , Cmd.batch
                         [ send_ToFrontend
-                            { t = "ToFrontend", b = toFrontend |> Types.w2_encode_ToFrontend |> Wire.bytesEncode, s = "", c = clientId }
+                            { t = "ToFrontend", b = toFrontend |> Types.w3_encode_ToFrontend |> Wire.bytesEncode, s = "", c = clientId }
                         ]
                     )
 
@@ -451,14 +451,14 @@ update msg m =
                     _ =
                         log "F▶️  " toBackend
                 in
-                ( m, Cmd.batch [ send_ToBackend (Wire.bytesEncode (Types.w2_encode_ToBackend toBackend)) ] )
+                ( m, Cmd.batch [ send_ToBackend (Wire.bytesEncode (Types.w3_encode_ToBackend toBackend)) ] )
 
         FEtoBEDelayed toBackend ->
             let
                 _ =
                     log "F▶️ ⏱" toBackend
             in
-            ( m, Cmd.batch [ send_ToBackend (Wire.bytesEncode (Types.w2_encode_ToBackend toBackend)) ] )
+            ( m, Cmd.batch [ send_ToBackend (Wire.bytesEncode (Types.w3_encode_ToBackend toBackend)) ] )
 
         FENewUrl url ->
             let
@@ -480,7 +480,7 @@ update msg m =
                     ( m, Cmd.none )
 
                 Leader ->
-                    case Wire.bytesDecode Types.w2_decode_ToBackend bytes of
+                    case Wire.bytesDecode Types.w3_decode_ToBackend bytes of
                         Just toBackend ->
                             let
                                 _ =
@@ -503,7 +503,7 @@ update msg m =
                             ( m, Cmd.none )
 
         ReceivedToFrontend args ->
-            case Wire.bytesDecode Types.w2_decode_ToFrontend args.b of
+            case Wire.bytesDecode Types.w3_decode_ToFrontend args.b of
                 Just toFrontend ->
                     let
                         x =
@@ -524,7 +524,7 @@ update msg m =
                     ( m, Cmd.none )
 
         ReceivedBackendModel bytes ->
-            case Wire.bytesDecode Types.w2_decode_BackendModel bytes of
+            case Wire.bytesDecode Types.w3_decode_BackendModel bytes of
                 Just newBem ->
                     let
                         x =
@@ -729,7 +729,7 @@ update msg m =
                             Cmd.none
 
                         Leader ->
-                            save_BackendModel { t = "p", f = reload, b = Wire.bytesEncode (Types.w2_encode_BackendModel bem) }
+                            save_BackendModel { t = "p", f = reload, b = Wire.bytesEncode (Types.w3_encode_BackendModel bem) }
             in
             if m.bemDirty then
                 ( { m | bemDirty = False }

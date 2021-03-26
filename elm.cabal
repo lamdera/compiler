@@ -228,7 +228,7 @@ Executable lamdera
         Lamdera.Graph
         Lamdera.Hints
         Lamdera.Injection
-
+        Lamdera.Live
         Lamdera.Project
         Lamdera.Suggestions
         Lamdera.TypeHash

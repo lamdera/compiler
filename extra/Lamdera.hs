@@ -38,7 +38,6 @@ module Lamdera
   , ostype
   , env
   , unsafe
-  , lamderaLiveSrc
   , onlyWhen
   , onlyWhen_
   , textContains
@@ -360,30 +359,6 @@ env =
 
 
 unsafe = unsafePerformIO
-
-
-lamderaLiveSrc =
-  Lamdera.unsafe $ do
-    debug <- Lamdera.isDebug
-    if debug
-      then do
-        let overridePath = "/Users/mario/dev/projects/lamdera-compiler/extra/dist/live.js"
-        exists <- Dir.doesFileExist overridePath
-        if exists
-          then do
-            Lamdera.debug "Using extra/dist/live.js for lamderaLive"
-            res <- readUtf8 overridePath
-            pure (T.encodeUtf8Builder (T.decodeUtf8 res))
-          else
-            pure (T.encodeUtf8Builder (T.decodeUtf8 lamderaLive))
-      else
-        pure (T.encodeUtf8Builder (T.decodeUtf8 lamderaLive))
-
-
-lamderaLive :: BS.ByteString
-lamderaLive =
-  $(bsToExp =<< runIO (BS.readFile ("extra" </> "dist" </> "live.js")))
-
 
 
 -- Vendored from File.IO due to recursion errors

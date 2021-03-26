@@ -396,34 +396,33 @@ function bytesToBase64(bytes_) {
 }
 
 function base64ToBytes(b64) {
-   return new DataView(Base64Binary.decodeArrayBuffer(b64))
+  return new DataView(Base64Binary.decodeArrayBuffer(b64))
 }
-
 
 var Base64Binary = {
 	_keyStr : "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=",
 
 	/* will return a  Uint8Array type */
-	decodeArrayBuffer: function(input) {
-		var bytes = (input.length/4) * 3;
-		var ab = new ArrayBuffer(bytes);
-		this.decode(input, ab);
+  decodeArrayBuffer: function(input) {
+    input = this.removePaddingChars(input);
+    var bytes = (input.length/4) * 3;
+    var ab = new ArrayBuffer(bytes);
+    this.decode(input, ab);
+    return ab;
+  },
 
-		return ab;
-	},
-
-	removePaddingChars: function(input){
-		var lkey = this._keyStr.indexOf(input.charAt(input.length - 1));
-		if(lkey == 64){
-			return input.substring(0,input.length - 1);
-		}
-		return input;
-	},
+  removePaddingChars: function(input){
+    var lkey = this._keyStr.indexOf(input.charAt(input.length - 1));
+		var lkey2 = this._keyStr.indexOf(input.charAt(input.length - 2));
+		if(lkey2 == 64 && lkey == 64){
+      return input.substring(0,input.length - 2);
+		} else if(lkey == 64){
+      return input.substring(0,input.length - 1);
+    }
+    return input;
+  },
 
 	decode: function (input, arrayBuffer) {
-		//get last chars to see if are valid
-		input = this.removePaddingChars(input);
-		input = this.removePaddingChars(input);
 
 		var bytes = parseInt((input.length / 4) * 3, 10);
 

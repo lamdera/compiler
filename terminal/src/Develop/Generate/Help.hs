@@ -15,8 +15,7 @@ import Text.RawString.QQ (r)
 
 import qualified Json.Encode as Encode
 
-
-import Lamdera
+import qualified Lamdera.Live
 
 -- PAGES
 
@@ -34,7 +33,7 @@ makePageHtml moduleName maybeFlags =
 <body>
 <script>
 Elm.|] <> Name.toBuilder moduleName <> [r|.init({ flags: |] <> maybe "undefined" Encode.encode maybeFlags <> [r| });
-|] <> Lamdera.lamderaLiveSrc <> [r|
+|] <> Lamdera.Live.lamderaLiveSrc <> [r|
 </script>
 </body>
 </html>
