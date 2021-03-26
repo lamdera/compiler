@@ -8,6 +8,7 @@ const Cookie = require('js-cookie')
 var clientId = ""
 const sessionId = getSessionId()
 var connected = false
+var disconnectedTime = null
 var bufferOutbound = []
 var bufferInbound = []
 
@@ -32,7 +33,13 @@ const ws = Sockette.default(((window.location.protocol === "https:") ? "wss://" 
   timeout: 2e3,
   maxAttempts: Infinity,
   onopen: e => {
-    if (clientId !== "") { connected = true }
+    if (clientId !== "") {
+      connected = true
+      // If we've been disconnected longer than 10s, refresh entirely, as it's likely
+      // in such a long time we changed live to a new project, or other things may have changed
+      if (disconnectedTime !== null && disconnectedTime - new Date() < -10e3) { window.location.reload() }
+      disconnectedTime = null
+    }
     if (app !== null) { app.ports.setLiveStatus.send(connected) }
     flushOutbound()
   },
@@ -48,11 +55,13 @@ const ws = Sockette.default(((window.location.protocol === "https:") ? "wss://" 
   onclose: e => { // Called whenever the connection is terminated
     // console.log(`ws closed`, e)
     connected = false
+    disconnectedTime = disconnectedTime || new Date()
     if (app !== null) { app.ports.setLiveStatus.send(connected) }
   },
   onerror: e => { //
     // console.log(`ws error`, e)
     connected = false
+    disconnectedTime = disconnectedTime || new Date()
     if (app !== null) { app.ports.setLiveStatus.send(connected) }
   }
 })
@@ -96,7 +105,7 @@ setupApp = function(name, elid) {
 
   function initApp() {
     if (app !== null) { return } // Don't init when already initialised
-
+    // console.log(`booting with`, { c: clientId, s: sessionId, nt: nodeType, b: initBackendModel })
     app = Elm[name].init({
       node: document.getElementById(elid),
       flags: { c: clientId, s: sessionId, nt: nodeType, b: initBackendModel }
