@@ -94,7 +94,13 @@ run () () = do
   progressPointer "Checking Evergreen migrations..."
   debug $ "app name:" ++ show appName
 
-  (localTypes, externalTypeWarnings) <- Lamdera.TypeHash.calculateAndWrite
+  hashesResult <- Lamdera.TypeHash.calculateAndWrite
+  (localTypes, externalTypeWarnings) <- do
+    case hashesResult of
+      Left problem ->
+        Progress.throw $ Reporting.Exit.reactorToReport $ Reporting.Exit.ReactorBadBuild $ problem
+      Right (localTypes, externalTypeWarnings) ->
+        pure (localTypes, externalTypeWarnings)
 
   (prodVersion, productionTypes) <-
     if isHoistRebuild

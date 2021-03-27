@@ -8,15 +8,17 @@ import Control.Applicative
 import Control.Monad
 import NeatInterpolation
 import qualified Data.Text as T
-import Lamdera
-import Lamdera.Evergreen
 import System.Environment (setEnv, unsetEnv)
 
+import Test.Helpers
+
+import Lamdera
+import Lamdera.Evergreen
+
+
 all = do
-  -- setEnv "LDEBUG" "1"
   run suite
   -- runOnly "migration 62 after migrate 57" suite
-  -- unsetEnv "LDEBUG"
 
 
 suite :: Test ()
@@ -131,7 +133,7 @@ suite = tests
         nextVersion = (WithoutMigrations 1)
         migrationsFilenames = []
       migrations <- io $ getMigrationsSequence migrationsFilenames nextVersion 1
-      result <- io $ lamderaGenerated nextVersion migrationsFilenames
+      result <- io $ withProdMode $ lamderaGenerated nextVersion migrationsFilenames
 
       scope "full" $
         expectEqualTextTrimmed result
@@ -161,6 +163,7 @@ suite = tests
                   _ ->
                       UnknownVersion ( version, "BackendModel", bytes )
 
+
           decodeAndUpgradeFrontendModel : Int -> Bytes -> UpgradeResult T1.FrontendModel T1.FrontendMsg
           decodeAndUpgradeFrontendModel version bytes =
               case version of
@@ -171,6 +174,7 @@ suite = tests
 
                   _ ->
                       UnknownVersion ( version, "FrontendModel", bytes )
+
 
           decodeAndUpgradeFrontendMsg : Int -> Bytes -> UpgradeResult T1.FrontendMsg T1.FrontendMsg
           decodeAndUpgradeFrontendMsg version bytes =
@@ -183,6 +187,7 @@ suite = tests
                   _ ->
                       UnknownVersion ( version, "FrontendMsg", bytes )
 
+
           decodeAndUpgradeToBackend : Int -> Bytes -> UpgradeResult T1.ToBackend T1.BackendMsg
           decodeAndUpgradeToBackend version bytes =
               case version of
@@ -194,6 +199,7 @@ suite = tests
                   _ ->
                       UnknownVersion ( version, "ToBackend", bytes )
 
+
           decodeAndUpgradeBackendMsg : Int -> Bytes -> UpgradeResult T1.BackendMsg T1.BackendMsg
           decodeAndUpgradeBackendMsg version bytes =
               case version of
@@ -204,6 +210,7 @@ suite = tests
 
                   _ ->
                       UnknownVersion ( version, "BackendMsg", bytes )
+
 
           decodeAndUpgradeToFrontend : Int -> Bytes -> UpgradeResult T1.ToFrontend T1.FrontendMsg
           decodeAndUpgradeToFrontend version bytes =
@@ -225,7 +232,7 @@ suite = tests
         nextVersion = (WithMigrations 2)
         migrationsFilenames = ["V2.elm"]
       migrations <- io $ getMigrationsSequence migrationsFilenames nextVersion 2
-      result <- io $ lamderaGenerated nextVersion migrationsFilenames
+      result <- io $ withProdMode $ lamderaGenerated nextVersion migrationsFilenames
 
       scope "full" $
         expectEqualTextTrimmed result
@@ -263,6 +270,7 @@ suite = tests
                   _ ->
                       UnknownVersion ( version, "BackendModel", bytes )
 
+
           decodeAndUpgradeFrontendModel : Int -> Bytes -> UpgradeResult T2.FrontendModel T2.FrontendMsg
           decodeAndUpgradeFrontendModel version bytes =
               case version of
@@ -279,6 +287,7 @@ suite = tests
 
                   _ ->
                       UnknownVersion ( version, "FrontendModel", bytes )
+
 
           decodeAndUpgradeFrontendMsg : Int -> Bytes -> UpgradeResult T2.FrontendMsg T2.FrontendMsg
           decodeAndUpgradeFrontendMsg version bytes =
@@ -297,6 +306,7 @@ suite = tests
                   _ ->
                       UnknownVersion ( version, "FrontendMsg", bytes )
 
+
           decodeAndUpgradeToBackend : Int -> Bytes -> UpgradeResult T2.ToBackend T2.BackendMsg
           decodeAndUpgradeToBackend version bytes =
               case version of
@@ -314,6 +324,7 @@ suite = tests
                   _ ->
                       UnknownVersion ( version, "ToBackend", bytes )
 
+
           decodeAndUpgradeBackendMsg : Int -> Bytes -> UpgradeResult T2.BackendMsg T2.BackendMsg
           decodeAndUpgradeBackendMsg version bytes =
               case version of
@@ -330,6 +341,7 @@ suite = tests
 
                   _ ->
                       UnknownVersion ( version, "BackendMsg", bytes )
+
 
           decodeAndUpgradeToFrontend : Int -> Bytes -> UpgradeResult T2.ToFrontend T2.FrontendMsg
           decodeAndUpgradeToFrontend version bytes =

@@ -39,6 +39,7 @@ import qualified Stuff
 import Lamdera
 import qualified Lamdera.CLI.Live as Live
 import qualified Lamdera.ReverseProxy
+import qualified Lamdera.TypeHash
 
 import Ext.Common (trackedForkIO)
 import qualified Ext.Filewatch as Filewatch
@@ -246,6 +247,9 @@ compile path =
           BW.withScope $ \scope -> Stuff.withRootLock root $ Task.run $
             do  details <- Task.eio Exit.ReactorBadDetails $ Details.load Reporting.silent scope root
                 artifacts <- Task.eio Exit.ReactorBadBuild $ Build.fromPaths Reporting.silent root details (NE.List path [])
+
+                Lamdera.TypeHash.buildCheckHashes
+
                 javascript <- Task.mapError Exit.ReactorBadGenerate $ Generate.dev root details artifacts
                 let (NE.List name _) = Build.getRootNames artifacts
                 return $ Html.sandwich name javascript

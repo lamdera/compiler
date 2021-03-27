@@ -22,6 +22,8 @@ import qualified Elm.Interface as Interface
 import qualified Reporting.Annotation as A
 import qualified Reporting.Result as Result
 import qualified Reporting.Doc as D
+import qualified Reporting.Task as Task
+import qualified Reporting.Exit as Exit
 
 import Lamdera
 import Lamdera.Types
@@ -32,13 +34,19 @@ import StandaloneInstances
 
 {- Attempt to load all interfaces for project in current directory and generate
 type snapshots  -}
-calculateAndWrite :: IO ([Text], [(Text, [Text], DiffableType)])
+calculateAndWrite :: IO (Either Exit.BuildProblem ([Text], [(Text, [Text], DiffableType)]))
 calculateAndWrite = do
-  (hashes, warnings) <- calculateHashes
-  root <- getProjectRoot
-  writeUtf8 (lamderaHashesPath root) $ show_ hashes
-  pure (hashes, warnings)
+  res <- calculateHashes
+  case res of
+    Right (hashes, warnings) -> do
+      root <- getProjectRoot
+      writeUtf8 (lamderaHashesPath root) $ show_ hashes
+      pure res
+    Left err ->
+      pure res
 
+buildCheckHashes = do
+  Task.eio Exit.ReactorBadBuild $ calculateHashes
 
 type Interfaces =
   Map.Map ModuleName.Raw Interface.Interface
@@ -60,7 +68,7 @@ lamderaTypes =
   ]
 
 
-calculateHashes :: IO ([Text], [(Text, [Text], DiffableType)])
+calculateHashes :: IO (Either Exit.BuildProblem ([Text], [(Text, [Text], DiffableType)]))
 calculateHashes = do
 
   interfaces <- Interfaces.all [ "src/Types.elm" ]
@@ -107,21 +115,21 @@ calculateHashes = do
 
   if List.length errors > 0
     then
-    let
-      !x = onlyWhen inDebug $ formatHaskellValue "diffHasErrors:" typediffs :: IO ()
+      let
+        -- !x = onlyWhen inDebug $ formatHaskellValue "diffHasErrors:" typediffs :: IO ()
 
-      notifyWarnings =
-        if List.length warnings > 0 then
-          [ D.reflow $ "Alpha warning: also, a number of types outside Types.elm are referenced, see `lamdera check` for more info." ]
-        else
-          []
-    in
-    throwDoc $
-      D.stack
-        ([ D.reflow $ "I ran into the following problems when checking Lamdera core types:"
-        ] ++ formattedErrors ++
-        [ D.reflow "See <https://dashboard.lamdera.app/docs/wire> for more info."
-        ] ++ notifyWarnings)
+        notifyWarnings =
+          if List.length warnings > 0 then
+            [ D.reflow $ "Alpha warning: also, a number of types outside Types.elm are referenced, see `lamdera check` for more info." ]
+          else
+            []
+      in
+      pure $ Left $
+        Exit.BuildLamderaProblem "WIRE ISSUES"
+          "I ran into the following problems when checking Lamdera core types:"
+          (formattedErrors ++
+          [ D.reflow "See <https://dashboard.lamdera.app/docs/wire> for more info."
+          ] ++ notifyWarnings)
 
     else do
       -- -- These external warnings no longer need to be written to disk, but
@@ -134,7 +142,7 @@ calculateHashes = do
       --     writeUtf8 (lamderaExternalWarningsPath root) $ textWarnings
       --   else
       --     remove (lamderaExternalWarningsPath root)
-      pure (hashes, warnings)
+      pure $ Right (hashes, warnings)
 
 
 diffableTypeByName :: Interfaces -> N.Name -> N.Name -> Interface.Interface -> DiffableType

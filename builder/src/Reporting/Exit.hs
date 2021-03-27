@@ -1776,6 +1776,7 @@ makeToReport make =
 data BuildProblem
   = BuildBadModules FilePath Error.Module [Error.Module]
   | BuildProjectProblem BuildProjectProblem
+  | BuildLamderaProblem String String [D.Doc]
 
 
 data BuildProjectProblem
@@ -1799,6 +1800,8 @@ toBuildProblemReport problem =
     BuildProjectProblem projectProblem ->
       toProjectProblemReport projectProblem
 
+    BuildLamderaProblem title topline ddoc ->
+      Help.report title Nothing topline ddoc
 
 toProjectProblemReport :: BuildProjectProblem -> Help.Report
 toProjectProblemReport projectProblem =

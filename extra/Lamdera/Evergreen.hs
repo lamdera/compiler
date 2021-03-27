@@ -17,6 +17,7 @@ import Data.Maybe (fromMaybe)
 import Data.List
 
 import Lamdera
+import qualified Ext.ElmFormat
 
 
 createLamderaGenerated :: FilePath -> VersionInfo -> IO Text
@@ -69,21 +70,25 @@ lamderaGenerated nextVersion migrationFilepaths = do
 
   debug_ $ "Generated source for Evergreen type snapshot"
 
-  pure $ [text|
-    module LamderaGenerated exposing (..)
+  let
+    final =
+      [text|
+        module LamderaGenerated exposing (..)
 
-    $imports
+        $imports
 
-    $supportingCode
+        $supportingCode
 
-    currentVersion : Int
-    currentVersion =
-        $nextVersion_
+        currentVersion : Int
+        currentVersion =
+            $nextVersion_
 
 
-    $decodeAndUpgrades
+        $decodeAndUpgrades
 
-  |]
+      |]
+
+  Ext.ElmFormat.formatOrPassthrough final
 
 
 
@@ -459,7 +464,6 @@ genSupportingCode = do
       -- also reference to share types and type check everything together
       pure "import LamderaHelpers exposing (..)\n"
     else
-      -- @TODO update when LamderaHelpers new version is settled
       -- In development, we aren't building with the harnesses, so rather than an extra
       -- file dependency, just inject the additional helpers we need to type check our migrations
       pure [text|
