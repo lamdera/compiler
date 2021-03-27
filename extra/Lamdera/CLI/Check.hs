@@ -15,6 +15,7 @@ import qualified System.Process as System
 import qualified Text.Read
 import System.FilePath ((</>))
 import System.Exit (exitFailure)
+import System.IO (hFlush, hPutStr, hPutStrLn, stderr, stdout)
 
 import qualified Data.NonEmptyList as NE
 import qualified Data.Text as T
@@ -81,6 +82,7 @@ run () () = do
   debug $ "force version:" ++ show forceVersion
 
   root <- getProjectRoot
+  checkGitInitialised root
 
   Lamdera.Legacy.temporaryCheckOldTypesNeedingMigration inProduction root
 
@@ -808,9 +810,47 @@ showExternalTypeWarnings warnings = do
       pure ()
 
 
+checkGitInitialised :: FilePath -> IO ()
+checkGitInitialised root = do
+  gitInitialised <- Dir.doesDirectoryExist $ root </> ".git"
+  onlyWhen (not gitInitialised) $ do
+    appName <- getInput $
+      D.vcat
+        [ "It looks like your project is missing a git repository!"
+        , "I can initialize it for you."
+        , "What is your Lamdera app name? [enter to skip]: "
+        ]
+
+    if appName == ""
+      then do
+        Progress.throw
+          $ Help.report "SKIPPING GIT INITIALISATION" (Nothing)
+            ("Okay, I'll let you set it up then!")
+            [ D.reflow "See <https://dashboard.lamdera.app/docs/building> for more."]
+      else do
+        progressPointer_ "Initialising git..."
+        callCommand $ "cd " <> root <> " && git init"
+        let gitAddRemoteCmd = "git remote add lamdera git@apps.lamdera.com:" <> appName <> ".git"
+        atomicPutStrLn $ "Adding remote: " <> gitAddRemoteCmd
+        callCommand $ "cd " <> root <> " && " <> gitAddRemoteCmd
+
+
 genericExit :: String -> IO a
 genericExit str =
   Progress.throw
     $ Help.report "ERROR" Nothing
       (str)
       []
+
+
+{-| Derived from Reporting.ask -}
+getInput :: D.Doc -> IO String
+getInput doc =
+  do  Help.toStdout doc
+      getInputHelp
+
+
+getInputHelp :: IO String
+getInputHelp =
+  do  hFlush stdout
+      getLine

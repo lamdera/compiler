@@ -32,7 +32,7 @@ import Lamdera.Progress
 
 runChecks :: Bool -> Map.Map Pkg.Name V.Version -> IO (Either Exit.Outline outline) -> IO (Either Exit.Outline outline)
 runChecks shouldCheckLamdera direct default_ = do
-  atomicPutStrLn $ "runchecks but with " <> show shouldCheckLamdera
+  -- atomicPutStrLn $ "runchecks but with " <> show shouldCheckLamdera
   if Map.member Pkg.lamderaCore direct
     then do
       onlyWhen shouldCheckLamdera Lamdera.Checks.runChecks_
