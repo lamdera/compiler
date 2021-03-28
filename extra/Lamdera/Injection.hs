@@ -197,7 +197,7 @@ injections isBackend isProd =
             const s = $$author$$project$$LBR$$serialize(msg);
             serializeDuration = mtime() - start
             start = mtime()
-            insertLog(pos, global.config.version, s.a, new Date(), updateDuration, serializeDuration, A2($$elm$$core$$Maybe$$withDefault, null, s.b))
+            insertEvent(pos, global.config.version, s.a, new Date(), updateDuration, serializeDuration, A2($$elm$$core$$Maybe$$withDefault, null, s.b))
             logDuration = mtime() - start
           }
 
