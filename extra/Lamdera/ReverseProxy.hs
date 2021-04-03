@@ -2,29 +2,20 @@
 
 module Lamdera.ReverseProxy where
 
-import Control.Exception (finally, throw)
+import Control.Concurrent
+import Control.Exception (throw)
 import Data.Text (Text)
-import qualified Data.ByteString as BS
-import qualified Data.ByteString.Builder as B
-import qualified Data.ByteString.Lazy as BSL
-import qualified Data.List as List
+import Network.HTTP.Client (newManager)
+import Network.HTTP.Client.TLS (tlsManagerSettings)
+import Network.HTTP.Types.Header
+import Network.HTTP.Types.Status
+import Network.Wai
+import Network.Wai.Handler.Warp
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as T
-import qualified Data.Text.IO as T
-import qualified Data.Text.Lazy as TL
-import qualified Data.Text.Lazy.Encoding as TL
 import Text.Read (readMaybe)
 
 import Network.HTTP.ReverseProxy
-import Control.Concurrent
-import Control.Concurrent.MVar
-import Network.HTTP.Types.Header
-import Network.HTTP.Types.Status
-import Network.Wai.Handler.Warp
-import Network.Wai
-import Data.ByteString.Search
-import Data.CaseInsensitive
-
 import Http
 import Lamdera
 import Ext.Common (trackGhciThread)

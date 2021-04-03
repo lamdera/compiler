@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE BangPatterns #-}
 
 module Ext.Common where
 
@@ -11,10 +12,13 @@ import System.IO.Unsafe (unsafePerformIO)
 import System.IO (hFlush, hPutStr, hPutStrLn, stderr, stdout, hClose, openTempFile)
 import qualified System.Directory as Dir
 import qualified System.Environment as Env
-
+import qualified System.Mem as Mem
+import System.Process
+import System.Process.Internals
+import Data.Char
 
 import Control.Exception ()
-import Formatting (fprint, (%))
+import Formatting (fprint, (%), int, string)
 import Formatting.Clock (timeSpecs)
 import System.Clock (Clock(..), getTime)
 
@@ -100,18 +104,66 @@ atomicPutStrLn str =
 -}
 -- track :: _ -> IO a -> IO a
 track label io = do
+  pid <- getPid_
+
+  m1 <- getPidMem pid
+  -- a1 <- Mem.getAllocationCounter
   m <- getTime Monotonic
   p <- getTime ProcessCPUTime
   t <- getTime ThreadCPUTime
-  res <- io
+  !res <- io
   m_ <- getTime Monotonic
   p_ <- getTime ProcessCPUTime
   t_ <- getTime ThreadCPUTime
-  fprint ("⏱  " % label % ": " % timeSpecs % " " % timeSpecs % " " % timeSpecs % "\n") m m_ p p_ t t_
+  -- a2 <- Mem.getAllocationCounter
+
+  m2 <- getPidMem pid
+
+  fprint ("⏱  " % label % ": " % timeSpecs % " " % timeSpecs % " " % timeSpecs % " (" % string % ", " % string % ", " % string % ")\n") m m_ p p_ t t_ m1 m2 (show pid)
   -- fprint (timeSpecs % "\n") p p_
   -- fprint (timeSpecs % "\n") t t_
   pure res
 
+
+
+-- | returns Just pid or Nothing if process has already exited
+-- https://stackoverflow.com/questions/27388099/how-to-get-the-process-id-of-a-created-process-in-haskell
+getPid_ = do
+  -- (_,_,_,ph) <- createProcess $ shell "echo $$"
+  (_,_,_,ph) <- createProcess $ shell "echo $$"
+  getPid ph
+
+  -- withProcessHandle ph go
+  -- where
+  --   go ph_ = case ph_ of
+  --              OpenHandle x   -> return $ Just x
+  --              ClosedHandle _ -> return Nothing
+
+
+getPidMem pid =
+  case pid of
+    Just pid_ -> do
+      (exit, stdout, stderr) <- System.Process.readProcessWithExitCode "ps" ["-o", "rss=", "-o", "vsz=", "-o", "pid=", show pid_] ""
+      pure $ trim $ remdups stdout
+
+    Nothing ->
+      pure "x"
+
+
+remdups :: String -> String
+remdups [] = []
+remdups [x] = [x]
+remdups (x1:x2:xs)
+        | x1==x2 = remdups (x2:xs)
+        | otherwise = x1:remdups (x2:xs)
+
+trim xs = dropSpaceTail "" $ dropWhile isSpace xs
+
+dropSpaceTail maybeStuff "" = ""
+dropSpaceTail maybeStuff (x:xs)
+        | isSpace x = dropSpaceTail (x:maybeStuff) xs
+        | null maybeStuff = x : dropSpaceTail "" xs
+        | otherwise       = reverse maybeStuff ++ x : dropSpaceTail "" xs
 
 
 {- GHCI thread management

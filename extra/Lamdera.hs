@@ -509,7 +509,7 @@ hindentFormatValue v =
 writeUtf8 :: FilePath -> Text -> IO ()
 writeUtf8 filePath content = do
   createDirIfMissing filePath
-  debug_ $ "writeUtf8: " ++ show filePath
+  debug_ $ "✍️  writeUtf8: " ++ show filePath
   withUtf8 filePath IO.WriteMode $ \handle ->
     BS.hPut handle (Text.encodeUtf8 content)
 
@@ -530,7 +530,7 @@ writeUtf8Root filePath content = do
 
 remove :: FilePath -> IO ()
 remove filepath =
-  do  debug_ $ "remove: " ++ show filepath
+  do  debug_ $ "🗑  remove: " ++ show filepath
       exists_ <- Dir.doesFileExist filepath
       if exists_
         then Dir.removeFile filepath
@@ -543,7 +543,9 @@ rmdir :: FilePath -> IO ()
 rmdir filepath = do
   exists_ <- Dir.doesDirectoryExist filepath
   if exists_
-    then Dir.removeDirectoryRecursive filepath
+    then do
+      debug_ $ "🗑  rmdir: " ++ show filepath
+      Dir.removeDirectoryRecursive filepath
     else pure ()
 
 
@@ -575,7 +577,7 @@ createDirIfMissing filepath =
 
 copyFile :: FilePath -> FilePath -> IO ()
 copyFile source dest = do
-  debug_ $ "copy: " ++ show source ++ " -> " ++ show dest
+  debug_ $ "✂️  copy: " ++ show source ++ " -> " ++ show dest
   createDirIfMissing dest
   Dir.copyFileWithMetadata source dest
 
@@ -608,7 +610,7 @@ writeLineIfMissing line filename = do
 
 touch :: FilePath -> IO ()
 touch filepath = do
-  debug_ $ "touch: " ++ show filepath
+  debug_ $ "👆🏻  touch: " ++ show filepath
   exists_ <- Dir.doesFileExist filepath
   if exists_
     then System.PosixCompat.Files.touchFile filepath
@@ -819,7 +821,7 @@ bsReadFile =
   BS.readFile
 
 callCommand c = do
-  debug_ $ "callCommand: " <> c
+  debug_ $ "🤖  callCommand: " <> c
   System.Process.callCommand c
 
 
@@ -840,8 +842,8 @@ icdiff realExpected realActual = do
   -- (exit, stdout, stderr) <- System.Process.readProcessWithExitCode "diff" ["--width=200", path1, path2] ""
 
   atomicPutStrLn $ "icdiff -N " <> path1 <> " " <> path2
-  -- (exit, stdout, stderr) <- System.Process.readProcessWithExitCode "icdiff" ["--cols=150", "--show-all-spaces", path1, path2] ""
-  (exit, stdout, stderr) <- System.Process.readProcessWithExitCode "icdiff" ["-N", "--cols=200", path1, path2] ""
+  (exit, stdout, stderr) <- System.Process.readProcessWithExitCode "icdiff" ["--cols=150", "--show-all-spaces", path1, path2] ""
+  -- (exit, stdout, stderr) <- System.Process.readProcessWithExitCode "icdiff" ["-N", "--cols=200", path1, path2] ""
 
   pure stdout
 

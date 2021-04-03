@@ -48,6 +48,8 @@ import qualified Reporting.Error.Docs as E
 import qualified Reporting.Result as Result
 
 
+import Lamdera
+import qualified Lamdera.Suggestions
 
 -- DOCUMENTATION
 
@@ -413,12 +415,13 @@ untilDocs pos end row col =
 
 
 checkNames :: Map.Map Name.Name (A.Located Can.Export) -> [A.Located Name.Name] -> Either E.Error ()
-checkNames exports names =
+checkNames exports_ names =
   let
     docs       = List.foldl' addName Map.empty names
     loneDoc    = Map.traverseMissing onlyInDocs
     loneExport = Map.traverseMissing onlyInExports
     checkBoth  = Map.zipWithAMatched (\n _ r -> isUnique n r)
+    exports    = Lamdera.Suggestions.hideWireExports exports_
   in
   case Result.run (Map.mergeA loneExport loneDoc checkBoth exports docs) of
     (_, Right _) -> Right ()
@@ -461,10 +464,11 @@ onlyInExports name (A.At region _) =
 
 
 checkDefs :: Map.Map Name.Name (A.Located Can.Export) -> Src.Comment -> Map.Map Name.Name Src.Comment -> Can.Module -> Either E.Error Module
-checkDefs exportDict overview comments (Can.Module name _ _ decls unions aliases infixes effects) =
+checkDefs exportDict_ overview comments (Can.Module name _ _ decls unions aliases infixes effects) =
   let
     types = gatherTypes decls Map.empty
     info = Info comments types unions aliases infixes effects
+    exportDict = Lamdera.Suggestions.hideWireExports exportDict_
   in
   case Result.run (Map.traverseWithKey (checkExport info) exportDict) of
     (_, Left  problems ) -> Left  $ E.DefProblems (OneOrMore.destruct NE.List problems)

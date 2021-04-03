@@ -73,12 +73,15 @@ run () (Flags maybePort) =
       let
         recompile :: [String] -> IO ()
         recompile events = do
-          trackedForkIO $ do
-            Sentry.updateJsOutput sentryCache $ do
-              debug_ $ "🛫  recompile starting: " ++ show events
-              harness <- Live.prepareLocalDev
-              compileToBuilder harness
-          debug_ "🛬  recompile done... "
+          -- Fork a recompile+cache update
+          Sentry.asyncUpdateJsOutput sentryCache $ do
+            debug_ $ "🛫  recompile starting: " ++ show events
+            harness <- Live.prepareLocalDev
+            compileToBuilder harness
+          -- Simultaneously tell all clients to refresh. All those HTTP
+          -- requests will open but block on the cache mVar, and then release
+          -- immediately when compilation is finished, effectively "pushing"
+          -- the result to waiting browsers without paying the TCP+HTTP cost again
           Live.refreshClients liveState
 
       -- Warm the cache
