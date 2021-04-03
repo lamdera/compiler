@@ -121,14 +121,15 @@ injections isBackend isProd =
             });
           });
 
+          window.cors_api_host = 'localhost:8001'
+
           var alterIfProxyRequired = function(shouldProxy_, url) {
             if (shouldProxy_) {
-              var cors_api_host = 'localhost:8001'
-              var cors_api_url = 'http://' + cors_api_host + '/'
+              var cors_api_url = 'http://' + window.cors_api_host + '/'
               var origin = window.location.protocol + '//' + window.location.host
               var targetOrigin = /^https?:\/\/([^\/]+)/i.exec(url)
               if (targetOrigin && targetOrigin[0].toLowerCase() !== origin &&
-                  targetOrigin[1] !== cors_api_host) {
+                  targetOrigin[1] !== window.cors_api_host) {
                   url = cors_api_url + url;
               }
               return url
@@ -140,6 +141,8 @@ injections isBackend isProd =
   in
   [text|
 
+    var isBackend = typeof window == 'undefined' && typeof isLamdera !== 'undefined'
+
     function _Platform_initialize(flagDecoder, args, init, update, subscriptions, stepperBuilder)
       {
         var result = A2(_Json_run, flagDecoder, _Json_wrap(args ? args['flags'] : undefined));
@@ -150,7 +153,7 @@ injections isBackend isProd =
 
         var managers = {};
         var initPair = init(result.a);
-        var model = args['model'] || initPair.a;
+        var model = (args && args['model']) || initPair.a;
 
         var stepper = stepperBuilder(sendToApp, model);
         var ports = _Platform_setupEffects(managers, sendToApp);
@@ -164,7 +167,7 @@ injections isBackend isProd =
         var upgradeMode = false;
 
         function mtime() {
-          if (typeof window !== 'undefined') { return 0; }
+          if (!isBackend) { return 0; }
           const hrTime = process.hrtime();
           return Math.floor(hrTime[0] * 1000000 + hrTime[1] / 1000);
         }
@@ -192,7 +195,7 @@ injections isBackend isProd =
           const updateDuration = mtime() - start
           start = mtime()
 
-          if (typeof window == 'undefined') {
+          if (isBackend) {
             pos = pos + 1;
             const s = $$author$$project$$LBR$$serialize(msg);
             serializeDuration = mtime() - start
@@ -210,12 +213,12 @@ injections isBackend isProd =
 
           const stepEnqueueDuration = mtime() - start
 
-          if (typeof window == 'undefined') {
+          if (isBackend) {
             //console.log({serialize: serializeDuration, log: logDuration, update: updateDuration, stepEnqueue: stepEnqueueDuration})
           }
         }
 
-        if (args['model'] === undefined) {
+        if ((args && args['model']) === undefined) {
           _Platform_enqueueEffects(managers, initPair.b, subscriptions(model));
         }
 
