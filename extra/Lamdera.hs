@@ -44,6 +44,8 @@ module Lamdera
   , textHasPrefix
   , stringContains
   , formatHaskellValue
+  , hindent
+  , hindent_
   , hindentPrintValue
   , hindentFormatValue
   , readUtf8
@@ -481,28 +483,43 @@ hindentPrintValue label v = do
   if Prelude.length stderr > 0
     then
       atomicPutStrLn $
-        "\n🔶--------------------------------------------------------------------------------"
+        "\n🔶 "
           <> T.unpack label
-          <> "\n"
+          <> "\n->"
           <> stderr
           <> "\n📥 for input: \n"
           <> input
 
     else
       atomicPutStrLn $
-        "\n🔶--------------------------------------------------------------------------------"
+        "\n🔶 "
           <> T.unpack label
-          <> "\n"
+          <> "\n->"
           <> stdout
 
   pure v
 
 
+hindent :: Show a => a -> IO Text
+hindent v =
+  hindent_ (Text.Show.Unicode.ushow v)
+
+
+hindent_ :: String -> IO Text
+hindent_ s = do
+  (exit, stdout, stderr) <- System.Process.readProcessWithExitCode "hindent" ["--line-length","150"] s
+  if Prelude.length stderr > 0
+    then
+      pure $ T.pack stderr
+    else
+      pure $ T.pack stdout
+
+
 hindentFormatValue :: Show a => a -> Text
 hindentFormatValue v =
   unsafePerformIO $ do
-    (exit, stdout, stderr) <- System.Process.readProcessWithExitCode "hindent" ["--line-length","150"] (Text.Show.Unicode.ushow v)
-    pure $ T.pack stdout
+    t <- hindent v
+    pure t
 
 
 -- Copied from File.IO due to cyclic imports and adjusted for Text

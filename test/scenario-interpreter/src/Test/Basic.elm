@@ -54,6 +54,10 @@ equals v1 v2 =
     v1 == v2
 
 
+notEquals v1 v2 =
+    v1 /= v2
+
+
 addOne x =
     x + 1
 
@@ -63,4 +67,11 @@ suite =
         equals (addOne 1) 2
     , test "addOne adds float" <|
         equals (addOne 1.5) 2.5
+    , test "List.repeat 0 0" <|
+        equals (List.repeat 0 0) []
+    , test "List.repeat 2 0" <|
+        equals (List.repeat 2 0) [ 0, 0 ]
+    , test "List.repeat 10M" <|
+        -- Just a performance test
+        notEquals (List.repeat 10000000 0) []
     ]

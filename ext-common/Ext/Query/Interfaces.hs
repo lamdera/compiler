@@ -37,6 +37,12 @@ all paths = do
   pure $ Map.union ifacesProject (_ifaces artifactsDeps)
 
 
+allGraph :: IO Opt.GlobalGraph
+allGraph = do
+  artifactsDeps <- allDepArtifacts
+  pure $ _graph artifactsDeps
+
+
 data Artifacts =
   Artifacts
     { _ifaces :: Map.Map ModuleName.Raw I.Interface

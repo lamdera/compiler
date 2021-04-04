@@ -58,7 +58,9 @@ Press up arrow to get history of prior commands.
 -- target = Dir.withCurrentDirectory "/Users/mario/dev/projects/lamdera-test" $ Lamdera.CLI.Reset.run () ()
 -- target = Lamdera.Diff.run
 -- target = Lamdera.ReverseProxy.start
-target = Test.Check.asUser "/Users/mario/lamdera-deploys/test-local-v1" "test-local"
+
+-- target = Test.Check.mockBuildSh "/Users/mario/lamdera-deploys/test-local-v1" "test-local"
+-- target = Test.Check.mockBuildSh "/Users/mario/dev/test/lamdera-init" "test-local"
 
 -- target = do
 --   setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
@@ -80,13 +82,22 @@ target = Test.Check.asUser "/Users/mario/lamdera-deploys/test-local-v1" "test-lo
 --   unsetEnv "ELM_HOME"
 
 {- Dynamic testing of lamdera live with managed thread kill + reload -}
--- target = do
---   setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
---   setEnv "LDEBUG" "1"
---
---   let p = "/Users/mario/lamdera/test/v1"
---   Dir.setCurrentDirectory p
---   withCurrentDirectory p $ trackedForkIO $ withCurrentDirectory p $ Develop.run () (Develop.Flags Nothing)
+target1 = do
+
+  setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
+  setEnv "LDEBUG" "1"
+
+  let p = "/Users/mario/lamdera/test/v1"
+  -- let p = "/Users/mario/dev/test/lamdera-init"
+  -- let p = "/Users/mario/dev/test/nu-ashworld-lamdera"
+  -- let p = "/Users/mario/dev/projects/otstats"
+
+  -- rmdir "/Users/mario/.elm"
+  -- rmdir $ p <> "/elm-stuff"
+
+
+  Dir.setCurrentDirectory p
+  withCurrentDirectory p $ trackedForkIO $ withCurrentDirectory p $ Develop.run () (Develop.Flags Nothing)
 
   -- Doing this actually makes no sense in the :rr context, as the thread is long-running so it's the same as
   -- disabling the ENV vars mid-run! But leaving it here as a reminder, because it _does_ pollute the ENV
@@ -96,8 +107,12 @@ target = Test.Check.asUser "/Users/mario/lamdera-deploys/test-local-v1" "test-lo
 
 
 {- WIP interpreter -}
--- target =
---   withDebug $ Lamdera.Evaluate.exec "src/Test/Basic.elm" "suite"
+target = do
+  withDebug $
+    Lamdera.Evaluate.exec
+      "/Users/mario/dev/projects/lamdera-compiler/test/scenario-interpreter/src/Test/Basic.elm"
+      "suite"
+
     -- Ext.Query.Canonical.loadFileSourceValue
     --   "/Users/mario/dev/projects/lamdera-compiler/test/scenario-interpreter/src/Test/Basic.elm"
     --   "suite"

@@ -104,9 +104,8 @@ atomicPutStrLn str =
 -}
 -- track :: _ -> IO a -> IO a
 track label io = do
-  pid <- getPid_
-
-  m1 <- getPidMem pid
+  -- pid <- getPid_
+  -- m1 <- getPidMem pid
   -- a1 <- Mem.getAllocationCounter
   m <- getTime Monotonic
   p <- getTime ProcessCPUTime
@@ -116,14 +115,12 @@ track label io = do
   p_ <- getTime ProcessCPUTime
   t_ <- getTime ThreadCPUTime
   -- a2 <- Mem.getAllocationCounter
+  -- m2 <- getPidMem pid
 
-  m2 <- getPidMem pid
+  -- fprint ("⏱  " % label % ": " % timeSpecs % " " % timeSpecs % " " % timeSpecs % " (" % string % ", " % string % ", " % string % ")\n") m m_ p p_ t t_ m1 m2 (show pid)
+  fprint ("⏱  " % label % ": " % timeSpecs % " " % timeSpecs % " " % timeSpecs % "\n") m m_ p p_ t t_
 
-  fprint ("⏱  " % label % ": " % timeSpecs % " " % timeSpecs % " " % timeSpecs % " (" % string % ", " % string % ", " % string % ")\n") m m_ p p_ t t_ m1 m2 (show pid)
-  -- fprint (timeSpecs % "\n") p p_
-  -- fprint (timeSpecs % "\n") t t_
   pure res
-
 
 
 -- | returns Just pid or Nothing if process has already exited

@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE BangPatterns #-}
 
 module Lamdera.Evaluate where
 
@@ -14,6 +15,7 @@ import StandaloneInstances
 
 -- import qualified Lamdera.Interfaces
 import qualified Ext.Query.Canonical
+import qualified Ext.Query.Interfaces
 import Data.Map ((!))
 import qualified Data.Map as Map
 
@@ -25,7 +27,7 @@ import qualified Data.Name
 import qualified Data.Text as T
 import qualified AST.Optimized as Opt
 
-import Lamdera (formatHaskellValue)
+import Lamdera (formatHaskellValue, hindent_)
 import qualified Lamdera.Compile
 import Ext.Common
 import qualified Lamdera.Evaluate.Canonical
@@ -39,12 +41,18 @@ exec path name = do
 
   withCurrentDirectory root $ track "load+exec suite" $ do
 
-    canonical <- Ext.Query.Canonical.loadSingleCanonical path
-    objects <- Ext.Query.Canonical.loadSingleObjects path
+    (canonical, objectsLocal, graph) <-
+      track "load" $ do
+        !canonical <- Ext.Query.Canonical.loadSingleCanonical path
+        !objects <- Ext.Query.Canonical.loadSingleObjects path
+
+        !graph <- Ext.Query.Interfaces.allGraph
+
+        pure (canonical, objects, graph)
 
     let
         def =
-          objects
+          objectsLocal
             & Opt._l_nodes
             -- & Map.lookup name
             & Map.filterWithKey (\k _ ->
@@ -59,10 +67,15 @@ exec path name = do
 
     -- formatHaskellValue "objects Test.Basic" objects
     -- formatHaskellValue "def" def
-
     -- formatHaskellValue "🚀" $ Lamdera.Evaluate.Optimized.test 123
 
-    formatHaskellValue "🚀" $ Lamdera.Evaluate.Optimized.run def Map.empty (objects & Opt._l_nodes)
+
+    force <- track "exec" $ do
+      let !force = show $ Lamdera.Evaluate.Optimized.run def Map.empty (Opt._g_nodes $ Opt.addLocalGraph objectsLocal graph)
+      pure force
+
+    formatted <- hindent_ force
+    atomicPutStrLn $ T.unpack $ formatted
 
 
     -- formatHaskellValue "canonical Test.Basic" canonical
