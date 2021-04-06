@@ -921,14 +921,27 @@ envModeChanger showModeChanger =
                 , style "color" white
                 , style "background-color" charcoal
                 , style "border-radius" "5px"
+                , id "lamdera-env"
                 ]
-                [ div [ style "padding" "2px" ] [ text "Select `Env.mode` value:" ]
+                [ div [] [ Html.node "style" [] [ text """
+                    #lamdera-env .lamdera-dev:hover {
+                      background-color: #85BC7A20
+                    }
+                    #lamdera-env .lamdera-staging:hover {
+                      background-color: #4196ad20
+                    }
+                    #lamdera-env .lamdera-prod:hover {
+                      background-color: #E06C7520
+                    }
+                  """ ] ]
+                , div [ style "padding" "2px" ] [ text "Select `Env.mode` value:" ]
                 , div
                     [ onClick (EnvModeSelected "Development")
                     , style "cursor" "pointer"
                     , style "padding" "6px 6px"
                     , style "margin" "4px 2px"
                     , style "border-left" "3px solid #85BC7A"
+                    , class "lamdera-dev"
                     ]
                     [ text "Development" ]
 
@@ -938,6 +951,7 @@ envModeChanger showModeChanger =
                 --     , style "padding" "6px 6px"
                 --     , style "margin" "4px 2px"
                 --     , style "border-left" "3px solid #4196ad"
+                --     , class "lamdera-staging"
                 --     ]
                 --     [ text "Review" ]
                 , div
@@ -946,6 +960,7 @@ envModeChanger showModeChanger =
                     , style "padding" "6px 6px"
                     , style "margin" "4px 2px"
                     , style "border-left" "3px solid #E06C75"
+                    , class "lamdera-prod"
                     ]
                     [ text "Production" ]
                 ]

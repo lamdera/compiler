@@ -328,7 +328,7 @@ error404 =
       writeBuilder $ Generate.makePageHtml "NotFound" Nothing
 
 
-serveRpc (mClients, mLeader, mChan, beState) = do
+serveRpc (mClients, mLeader, mChan, beState) port = do
 
   mEndpoint <- getParam "endpoint"
   rbody <- readRequestBody 10000000 -- 10MB limit
@@ -449,7 +449,7 @@ serveRpc (mClients, mLeader, mChan, beState) = do
 
     Nothing -> do
       debug "RPC: no active leader"
-      error503 "it appears no browser instances are running! Please open http://localhost:8000 in a browser."
+      error503 $ B.string8 $ "it appears no browser instances are running! Please open http://localhost:" <> show port <> " in a browser."
 
 
 -- andThen :: (a -> D.Decoder e b) -> D.Decoder e a -> D.Decoder e b

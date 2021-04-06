@@ -284,6 +284,7 @@ Executable lamdera
         Test.Snapshot
         Test.TypeHashes
         Test.Wire
+        LamderaSharedBuildHelpers
 
         -- Debug helpers --
         StandaloneInstances

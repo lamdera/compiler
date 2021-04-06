@@ -95,7 +95,7 @@ run () (Flags maybePort) =
         (serveFiles sentryCache)
         <|> serveDirectoryWith directoryConfig "."
         <|> Live.serveWebsocket liveState
-        <|> route [ ("_r/:endpoint", Live.serveRpc liveState) ]
+        <|> route [ ("_r/:endpoint", Live.serveRpc liveState port) ]
         <|> serveAssets -- Compiler packaged static files
         <|> Live.serveLamderaPublicFiles (serveElm sentryCache) serveFilePretty -- Add /public/* as if it were /* to mirror production
         <|> Live.serveUnmatchedUrlsToIndex (serveElm sentryCache) -- Everything else without extensions goes to Lamdera LocalDev harness

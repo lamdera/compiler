@@ -81,7 +81,7 @@ suite = tests
         expectEqualTextTrimmed (show migrations & T.pack) "[(60,[WithMigrations 57,WithoutMigrations 62]),(61,[WithMigrations 57,WithoutMigrations 62]),(62,[WithoutMigrations 62])]"
 
       scope "type imports" $
-        expectEqualTextTrimmed (importTypes migrations nextVersion & T.intercalate "\n") "import Evergreen.V57.Types as T57"
+        expectEqualTextTrimmed (typeImports migrations nextVersion & T.intercalate "\n") "import Evergreen.V57.Types as T57"
 
       scope "historic migrations" $
         expectEqualTextTrimmed (historicMigrations migrations nextVersion "BackendModel")
@@ -109,7 +109,7 @@ suite = tests
         expectEqualTextTrimmed (show migrations & T.pack) "[(60,[WithMigrations 57,WithMigrations 62]),(61,[WithMigrations 57,WithMigrations 62]),(62,[WithMigrations 62])]"
 
       scope "type imports" $
-        expectEqualTextTrimmed (importTypes migrations nextVersion & T.intercalate "\n") "import Evergreen.V57.Types as T57"
+        expectEqualTextTrimmed (typeImports migrations nextVersion & T.intercalate "\n") "import Evergreen.V57.Types as T57"
 
       scope "historic migrations" $
         expectEqualTextTrimmed (historicMigrations migrations nextVersion "BackendModel")

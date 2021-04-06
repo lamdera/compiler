@@ -276,14 +276,25 @@ run () () = do
 
               onlyWhen (not inProduction) $ showExternalTypeWarnings externalTypeWarnings
 
-              Progress.throw $
-                Help.report "UNIMPLEMENTED MIGRATION" (Just nextMigrationPathBare)
-                  ("The following types have changed since last deploy (v" <> show prodVersion <> ") and require migrations:")
-                  [ formattedChangedTypes
-                  , D.reflow $ "I've generated a placeholder migration file to help you get started:"
-                  , D.reflow $ nextMigrationPath
-                  , D.reflow "See <https://dashboard.lamdera.app/docs/evergreen> for more info."
-                  ]
+              if inProduction
+                then
+                  Progress.throw $
+                    Help.report "UNIMPLEMENTED MIGRATION" (Just nextMigrationPathBare)
+                      ("The following types have changed since last deploy (v" <> show prodVersion <> ") and require migrations:")
+                      [ formattedChangedTypes
+                      , D.reflow $ "Please run `lamdera check` locally to get started."
+                      , D.reflow "See <https://dashboard.lamdera.app/docs/evergreen> for more info."
+                      ]
+
+                else
+                  Progress.throw $
+                    Help.report "UNIMPLEMENTED MIGRATION" (Just nextMigrationPathBare)
+                      ("The following types have changed since last deploy (v" <> show prodVersion <> ") and require migrations:")
+                      [ formattedChangedTypes
+                      , D.reflow $ "I've generated a placeholder migration file to help you get started:"
+                      , D.reflow $ nextMigrationPath
+                      , D.reflow "See <https://dashboard.lamdera.app/docs/evergreen> for more info."
+                      ]
 
         else do
           -- Types are the same.
@@ -461,7 +472,6 @@ migrationCheck root nextVersion = do
   let cache = lamderaCache root
   let lamderaCheckBothPath = cache </> "LamderaCheckBoth.elm"
   mkdir cache
-
   gen <- Lamdera.Evergreen.createLamderaGenerated root nextVersion
   writeUtf8 lamderaCheckBothPath gen
 

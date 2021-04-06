@@ -55,8 +55,8 @@ lamderaGenerated nextVersion migrationFilepaths = do
     nextVersion_ = show_ $ vinfoVersion nextVersion
 
     imports =
-      (generateImportMigrations migrationSequence
-        <> importTypes migrationSequence nextVersion
+      (migrationImports migrationSequence
+        <> typeImports migrationSequence nextVersion
         <> [ "import Lamdera.Migrations exposing (..)"
            , "import Lamdera.Wire3 exposing (Bytes, Decoder, Encoder, bytesDecode, bytesEncode)"
            , "import Types as T" <> nextVersion_
@@ -138,8 +138,8 @@ decodeAndUpgradeFor migrationSequence nextVersion valueType = do
   |]
 
 
-importTypes :: [(a, [VersionInfo])] -> VersionInfo -> [Text]
-importTypes migrationSequence nextVersion =
+typeImports :: [(a, [VersionInfo])] -> VersionInfo -> [Text]
+typeImports migrationSequence nextVersion =
   migrationSequence
     & List.head
     & (\(v,l) -> justWithMigrationVersions l)
@@ -162,8 +162,8 @@ importType version =
   "import Evergreen.V" <> version_ <> ".Types as T" <> version_
 
 
-generateImportMigrations :: [(Int, [VersionInfo])] -> [Text]
-generateImportMigrations migrationSequence =
+migrationImports :: [(Int, [VersionInfo])] -> [Text]
+migrationImports migrationSequence =
   case migrationSequence of
     firstMigration:_ ->
       firstMigration

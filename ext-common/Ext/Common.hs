@@ -83,6 +83,14 @@ debug str = do
     Nothing -> pure ()
 
 
+whenDebug :: IO () -> IO ()
+whenDebug io = do
+  debugM <- Env.lookupEnv "LDEBUG"
+  case debugM of
+    Just _ -> io
+    Nothing -> pure ()
+
+
 -- https://stackoverflow.com/questions/16811376/simulate-global-variable trick
 {-# NOINLINE printLock #-}
 printLock :: MVar ()
@@ -118,7 +126,7 @@ track label io = do
   -- m2 <- getPidMem pid
 
   -- fprint ("⏱  " % label % ": " % timeSpecs % " " % timeSpecs % " " % timeSpecs % " (" % string % ", " % string % ", " % string % ")\n") m m_ p p_ t t_ m1 m2 (show pid)
-  fprint ("⏱  " % label % ": " % timeSpecs % " " % timeSpecs % " " % timeSpecs % "\n") m m_ p p_ t t_
+  whenDebug $ fprint ("⏱  " % label % ": " % timeSpecs % " " % timeSpecs % " " % timeSpecs % "\n") m m_ p p_ t t_
 
   pure res
 

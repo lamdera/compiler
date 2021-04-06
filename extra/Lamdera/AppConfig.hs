@@ -269,7 +269,7 @@ fetchAppConfigItems appName token = do
     endpoint =
       if textContains "-local" appName
         then
-          "http://localhost:8000/_r/configItemsJson"
+          "http://localhost:8082/_r/configItemsJson"
           -- "https://" <> T.unpack appName <> ".lamdera.test/_i"
         else
           "https://dashboard.lamdera.app/_r/configItemsJson"
