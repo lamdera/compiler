@@ -1298,25 +1298,26 @@ expandedUI topDown devbar =
 
             False ->
                 buttonDevOff "Logging: Off" iconLogs ToggledLogging
-        , if devbar.qrCodeShow == True then
-            div [ style "text-align" "center" ]
-                [ img
-                    [ src "https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=http://192.168.0.2:8000"
-                    , style "width" "150"
-                    , style "height" "150"
-                    ]
-                    []
-                ]
 
-          else
-            text ""
-        , div
-            [ onMouseEnter QRCodeShow
-            , onMouseLeave QRCodeHide
-            , style "cursor" "pointer"
-            , style "text-align" "center"
-            ]
-            [ text "QR Code" ]
+        -- , if devbar.qrCodeShow == True then
+        --     div [ style "text-align" "center" ]
+        --         [ img
+        --             [ src "https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=http://192.168.0.2:8000"
+        --             , style "width" "150"
+        --             , style "height" "150"
+        --             ]
+        --             []
+        --         ]
+        --
+        --   else
+        --     text ""
+        -- , div
+        --     [ onMouseEnter QRCodeShow
+        --     , onMouseLeave QRCodeHide
+        --     , style "cursor" "pointer"
+        --     , style "text-align" "center"
+        --     ]
+        --     [ text "QR Code" ]
         , if topDown then
             div [] [ envDocs, versionInfo ]
 
