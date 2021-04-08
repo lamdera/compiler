@@ -51,6 +51,11 @@ source mode mains =
 injections :: Bool -> Bool -> Text
 injections isBackend isProd =
   let
+    isBackend_ =
+      if isBackend
+        then "true"
+        else "false"
+
     exportFns =
       if isBackend
         then
@@ -141,7 +146,7 @@ injections isBackend isProd =
   in
   [text|
 
-    var isBackend = typeof window == 'undefined' && typeof isLamdera !== 'undefined'
+    var isBackend = $isBackend_ && typeof isLamdera !== 'undefined'
 
     function _Platform_initialize(flagDecoder, args, init, update, subscriptions, stepperBuilder)
       {

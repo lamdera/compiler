@@ -577,20 +577,23 @@ bodyReaderSource br =
 
 
 
-
-
 ------------------------------------------------------------------ Modifications
+
 
 -- Based on https://github.com/Rob--W/cors-anywhere/blob/master/lib/cors-anywhere.js#L53
 addCors req responseHeaders =
   let headers = WAI.requestHeaders req
   in
   responseHeaders
-    & listUpsert (hasHeader_ "Access-Control-Allow-Origin") ("Access-Control-Allow-Origin", "*")
-    & addIf (hasHeader "Access-Control-Request-Method" headers)
-        "Access-Control-Allow-Methods" (header_ "Access-Control-Request-Method" headers)
-    & addIf (hasHeader "Access-Control-Request-Headers" headers)
-        "Access-Control-Allow-Headers" (header_ "Access-Control-Request-Headers" headers)
+    & updateIf
+        (hasHeader_ "Access-Control-Allow-Origin")
+        ("Access-Control-Allow-Origin", "*")
+    & addIf
+        (hasHeader "Access-Control-Request-Method" headers)
+        ("Access-Control-Allow-Methods", (headerValue "Access-Control-Request-Method" headers))
+    & addIf
+        (hasHeader "Access-Control-Request-Headers" headers)
+        ("Access-Control-Allow-Headers", (headerValue "Access-Control-Request-Headers" headers))
 
   -- @TODO future, needed?
   -- & addIf (WAI.requestMethod req == "OPTIONS")
@@ -600,16 +603,19 @@ addCors req responseHeaders =
 add k v l =
   (k,v):l
 
-addIf bool k v l =
+addIf bool (k, v) l =
   if bool then
     (k,v):l
   else
     l
 
-header_ name headers =
+updateIf c v l =
+  listUpsert c v l
+
+headerValue name headers =
   case List.find (\(k,v) -> k == name) headers of
     Just (_,v) -> v
-    Nothing -> error $ "header_ not found: " <> show name
+    Nothing -> error $ "headerValue not found: " <> show name
 
 hasHeader name headers =
   case List.find (\(k,v) -> k == name) headers of

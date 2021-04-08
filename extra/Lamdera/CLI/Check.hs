@@ -110,7 +110,7 @@ run () () = do
             genericExit "ERROR: Hoist rebuild got -1 for version, check your usage."
 
           else do
-            progress $ "❗️Gen with forced version: " <> show forceVersion
+            debug_ $ "❗️Gen with forced version: " <> show forceVersion
             pure (forceVersion, localTypes)
 
       else do

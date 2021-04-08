@@ -574,7 +574,7 @@ genSupportingCode = do
                 Nothing ->
                     -- This would mean data has been manipulated or corrupted,
                     -- or we have a bug in our encoder/decoder generation
-                    Err <| "[decodeType] the impossible happened; failed to decode " ++ tipeIntToString tipe ++ ".v" ++ String.fromInt version ++ " bytes length " ++ (String.fromInt <| Bytes.width bytes)
+                    Err <| "[decodeType] the impossible happened; failed to decode " ++ tipeIntToString tipe ++ ".v" ++ String.fromInt version
 
 
         tipeIntToString tipe =

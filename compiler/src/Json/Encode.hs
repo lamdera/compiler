@@ -36,6 +36,7 @@ import qualified File
 import qualified Json.String as Json
 
 
+import Lamdera
 
 -- VALUES
 
@@ -142,7 +143,9 @@ write path value =
 
 
 writeUgly :: FilePath -> Value -> IO ()
-writeUgly path value =
+writeUgly path value = do
+  -- debug_ $ "✍️  writeUgly: " <> path
+  -- debug_ $ "    -> " <> (encodeUgly value)
   File.writeBuilder path (encodeUgly value)
 
 
