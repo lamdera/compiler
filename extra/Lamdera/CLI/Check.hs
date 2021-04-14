@@ -115,7 +115,7 @@ run () () = do
 
       else do
 
-        prodInfo_ <- fetchProductionInfo appName (inDebug || forceNotProd /= Nothing)
+        prodInfo_ <- fetchProductionInfo appName (forceNotProd /= Nothing)
         case prodInfo_ of
           Right (pv, pt) ->
             -- Everything is as it should be
@@ -419,7 +419,7 @@ fetchProductionInfo :: Text -> Bool -> IO (Either Lamdera.Http.Error (Int, [Text
 fetchProductionInfo appName useLocal =
   let
     endpoint =
-      if textContains "-local" appName && useLocal
+      if (textContains "-local" appName && ostype == "darwin") || useLocal
         then
           "https://" <> T.unpack appName <> ".lamdera.test/_i"
 
