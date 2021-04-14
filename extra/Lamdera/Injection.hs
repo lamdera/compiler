@@ -200,12 +200,12 @@ injections isBackend isProd =
           const updateDuration = mtime() - start
           start = mtime()
 
-          if (isBackend) {
+          if (isBackend && loggingEnabled) {
             pos = pos + 1;
             const s = $$author$$project$$LBR$$serialize(msg);
             serializeDuration = mtime() - start
             start = mtime()
-            insertEvent(pos, global.config.version, s.a, new Date(), updateDuration, serializeDuration, A2($$elm$$core$$Maybe$$withDefault, null, s.b))
+            insertEvent(pos, global.config.version, s.a, updateDuration, serializeDuration, A2($$elm$$core$$Maybe$$withDefault, null, s.b))
             logDuration = mtime() - start
           }
 
