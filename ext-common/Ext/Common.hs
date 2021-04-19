@@ -32,7 +32,7 @@ import qualified Data.Function
 getProjectRoot :: IO FilePath
 getProjectRoot = do
   subDir <- Dir.getCurrentDirectory
-  res <- findHelp "elm.json" (FP.splitDirectories subDir)
+  res <- getProjectRootMaybe
   case res of
     Just filepath -> pure filepath
     Nothing -> do
@@ -40,6 +40,13 @@ getProjectRoot = do
       putStrLn $ "Cannot find an elm.json! Make sure you're in a project folder, or run `" <> binName <> " init` to start a new one."
       debug $ "current directory was: " <> subDir
       exitFailure
+
+
+getProjectRootMaybe :: IO (Maybe FilePath)
+getProjectRootMaybe = do
+  subDir <- Dir.getCurrentDirectory
+  findHelp "elm.json" (FP.splitDirectories subDir)
+
 
 
 findHelp :: FilePath -> [String] -> IO (Maybe FilePath)

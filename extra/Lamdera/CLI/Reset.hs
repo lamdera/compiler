@@ -20,15 +20,18 @@ run () () = do
   debug_ "Starting reset..."
 
   elmHome <- PerUserCache.getElmHome
-  root <- getProjectRoot
+  root <- getProjectRootMaybe
+
   let
-    elmStuff = root </> "elm-stuff"
-    lamderaLegacy = root </> "lamdera-stuff"
+    elmStuff = (root & withDefault "./") </> "elm-stuff"
+    lamderaLegacy = (root & withDefault "./") </> "lamdera-stuff"
 
   progress "Here is the plan:\n"
 
-  report $ D.fillSep ["-", D.red "Remove", D.fromChars elmStuff]
   report $ D.fillSep ["-", D.red "Remove", D.fromChars elmHome]
+
+  onlyWhen_ (doesDirectoryExist elmStuff) $ do
+    report $ D.fillSep ["-", D.red "Remove", D.fromChars elmStuff]
 
   onlyWhen_ (doesDirectoryExist lamderaLegacy) $
     report $ D.fillSep ["-", D.red "Remove", D.fromChars lamderaLegacy, "(legacy)"]
@@ -39,15 +42,21 @@ run () () = do
 
   progress ""
 
+  onlyWhen_ (not <$> doesDirectoryExist elmStuff) $ do
+    report $ D.fillSep [D.red "Warning:", "you're","not","in","an","Elm","project","folder,", "so","I","can","only","reset","the","global","Elm","cache."]
+    progress ""
+
   approveReset <- Reporting.ask $
     D.fillSep [ "Shall I proceed?", D.red "(this cannot be undone)", "[Y/n]: " ]
 
   if approveReset
     then do
-      progress $ "\nRemoving " <> elmStuff
-      rmdir elmStuff
       progress $ "Removing " <> elmHome
       rmdir elmHome
+
+      onlyWhen_ (doesDirectoryExist elmStuff) $ do
+        progress $ "Removing " <> elmStuff
+        rmdir elmStuff
 
       onlyWhen_ (doesDirectoryExist lamderaLegacy) $ do
         progress $ "Removing " <> lamderaLegacy

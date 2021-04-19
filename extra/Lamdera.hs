@@ -72,6 +72,7 @@ module Lamdera
   , lamderaBackendDevSnapshotPath
   , Ext.Common.getProjectRoot
   , Ext.Common.getProjectRootFor
+  , Ext.Common.getProjectRootMaybe
   , Ext.Common.justs
   , lowerFirstLetter
   , findElmFiles
@@ -159,7 +160,7 @@ import qualified Data.Name as N
 import qualified Data.Utf8 as Utf8
 
 import qualified Ext.Common
-import Ext.Common (getProjectRoot, getProjectRootFor)
+import Ext.Common (getProjectRoot, getProjectRootFor, getProjectRootMaybe)
 
 -- import CanSer.CanSer (ppElm)
 
