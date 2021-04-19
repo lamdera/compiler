@@ -1,5 +1,7 @@
 module Test.Basic exposing (..)
 
+import Eval
+
 
 type Test
     = UnitTest (() -> List Expectation)
@@ -43,11 +45,12 @@ type InvalidReason
 
 
 test desc bool =
-    if bool then
-        "✅ " ++ desc
+    Eval.timed <|
+        if bool then
+            "✅ " ++ desc
 
-    else
-        "❌ " ++ desc
+        else
+            "❌ " ++ desc
 
 
 equals v1 v2 =

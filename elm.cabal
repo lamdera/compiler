@@ -371,7 +371,7 @@ Executable lamdera
         stringsearch,
 
         -- Interpreter
-
+        deepseq,
 
         -- Vendor http-reverse-proxy
         wai-logger,

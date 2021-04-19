@@ -8,6 +8,8 @@
 {-# LANGUAGE DeriveFoldable #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE DeriveGeneric #-}
+
 
 module StandaloneInstances where
 
@@ -18,11 +20,14 @@ import qualified Data.Text.Encoding as T
 import Data.String (IsString, fromString)
 import qualified Data.Map as Map
 import qualified GHC.IORef
+import GHC.Generics (Generic)
+import Control.DeepSeq (NFData(..))
 
 -- Elm modules
 
 import qualified AST.Canonical
 import qualified AST.Optimized
+import qualified Optimize.DecisionTree
 import qualified AST.Source
 import qualified AST.Utils.Binop
 import qualified AST.Utils.Shader
@@ -411,6 +416,48 @@ instance IsString Json.String.String where
 instance IsString Elm.String.String where
   fromString = Utf8.fromChars
 
+
+
+-- NFData
+
+instance NFData (Utf8.Utf8 a) where
+  rnf x = ()
+
+
+deriving instance Generic AST.Optimized.Expr
+deriving instance Generic AST.Optimized.Choice
+deriving instance Generic (AST.Optimized.Decider a)
+deriving instance Generic AST.Optimized.Global
+deriving instance Generic AST.Optimized.Def
+deriving instance Generic AST.Optimized.Destructor
+deriving instance Generic AST.Optimized.Path
+deriving instance Generic Data.Index.ZeroBased
+deriving instance Generic ModuleName.Canonical
+deriving instance Generic Elm.Package.Name
+
+
+
+instance NFData AST.Optimized.Expr
+instance NFData AST.Optimized.Choice
+instance (NFData a) => NFData (AST.Optimized.Decider a)
+instance NFData AST.Optimized.Global
+instance NFData AST.Optimized.Def
+instance NFData AST.Optimized.Destructor
+instance NFData AST.Optimized.Path
+instance NFData Data.Index.ZeroBased
+instance NFData ModuleName.Canonical
+instance NFData Elm.Package.Name
+
+instance NFData (Reporting.Annotation.Located a) where
+  rnf x = ()
+instance NFData (Reporting.Annotation.Region) where
+  rnf x = ()
+instance NFData (AST.Utils.Shader.Source) where
+  rnf x = ()
+
+-- @TODO probably not good to skip?
+instance NFData (Optimize.DecisionTree.Path) where rnf x = ()
+instance NFData (Optimize.DecisionTree.Test) where rnf x = ()
 
 
 

@@ -28,6 +28,7 @@ import Data.Map ((!))
 import Data.Set (fromList)
 import qualified Data.Map as Map
 import qualified Lamdera.Compile
+import Ext.Common hiding ((&), atomicPutStrLn)
 
 import qualified Elm.ModuleName as Module
 
@@ -90,6 +91,15 @@ evalExpr expr locals globals =
     --       inlined = (Function ["x"] (Call (VarGlobal (Global (Module.Canonical (Name "elm" "core") "Basics") "add")) [VarLocal "x", Int 1]))
     --     in
     --     evalExpr (Call inlined args_) (locals) globals
+
+    (VarGlobal (Global (Module.Canonical (Name "author" "project") "Eval") "timed")) ->
+      -- @TODO Can we shortcut unecessary redirects/inlinings?
+      VarKernel "Eval" "timed"
+
+    (Call (VarKernel "Eval" "timed") [arg1]) ->
+      let (s, Str v) = track_ "timed" arg1
+      in
+      Str $ Utf8.join 0x20 [v, Utf8.fromChars s]
 
     (Call (VarGlobal (Global (Module.Canonical (Name "elm" "core") "Basics") "add")) [arg1, arg2]) ->
       case [evalExpr arg1 locals globals, evalExpr arg2 locals globals] of
@@ -368,6 +378,7 @@ instance Ord Expr where
       _ -> EQ
 
       -- @TODO missing Time.Posix?
+
 
 
 handleCyclePlain :: Node -> [Expr] -> Globals -> Expr

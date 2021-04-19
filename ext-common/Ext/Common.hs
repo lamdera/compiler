@@ -18,9 +18,10 @@ import System.Process.Internals
 import Data.Char
 
 import Control.Exception ()
-import Formatting (fprint, (%), int, string)
+import Formatting (fprint, (%), int, string, formatToString)
 import Formatting.Clock (timeSpecs)
 import System.Clock (Clock(..), getTime)
+import Control.DeepSeq (force, deepseq, NFData)
 
 
 -- Re-exports
@@ -129,6 +130,32 @@ track label io = do
   whenDebug $ fprint ("⏱  " % label % ": " % timeSpecs % " " % timeSpecs % " " % timeSpecs % "\n") m m_ p p_ t t_
 
   pure res
+
+
+{-| Experimental: "pure" version of track that attempts to calculate the time to fully evaluate a lazy value
+
+This may be completely misguided, I don't understand Haskell laziness deeply enough yet, so this is more
+and exploration than something that can be relied on.
+
+The problem this is trying to solve is having more detailed breakdowns of timing within Eval test suite,
+given that `track` is for top level IO currently.
+
+What is unclear though is whether given all the laziness involved, whether this procedural _looking_ code
+actually _behaves_ with the implied semantics of how its written, or not.
+
+-}
+track_ :: (NFData a) => String -> a -> (String, a)
+track_ label value = do
+  unsafePerformIO $ do
+    m <- getTime Monotonic
+    p <- getTime ProcessCPUTime
+    t <- getTime ThreadCPUTime
+    !x <- deepseq value (pure 1)
+    m_ <- getTime Monotonic
+    p_ <- getTime ProcessCPUTime
+    t_ <- getTime ThreadCPUTime
+    let s = formatToString ("(" % timeSpecs % " " % timeSpecs % " " % timeSpecs % ")\n") m m_ p p_ t t_
+    pure (s, value)
 
 
 -- | returns Just pid or Nothing if process has already exited
