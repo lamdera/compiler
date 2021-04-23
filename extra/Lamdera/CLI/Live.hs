@@ -104,18 +104,10 @@ serveUnmatchedUrlsToIndex serveElm =
       guard (takeExtension file == "")
 
       root <- liftIO $ getProjectRoot
-
-      let
-        cache = lamderaCache root
-        harnessPath = cache </> "LocalDev.elm"
-
-      serveElm harnessPath
-      -- Cleanup causes issues because we might have a slew of tabs
-      -- We can restore this when we further optimise `serveElm` to have a debounce cache!
-      -- liftIO $ Dir.removeFile harnessPath
-      -- liftIO $ callCommand $ "rm " <> harnessPath <> " || true " -- less exception-ey on double-reload!
+      serveElm (lamderaCache root </> "LocalDev.elm")
 
 
+prepareLocalDev :: FilePath -> IO FilePath
 prepareLocalDev root = do
   let
     cache = lamderaCache root
@@ -123,111 +115,85 @@ prepareLocalDev root = do
     overridePath = "/Users/mario/dev/projects/lamdera-compiler/extra/LocalDev/LocalDev.elm"
 
   isDebug <- isDebug
-
   overrideM <- readUtf8Text overridePath
 
-  onlyWhen isDebug $ do
-    case overrideM of
-      Just override -> do
-        currentLocalDevM <- readUtf8Text harnessPath
+  if isDebug
+    then do
+      rpcExists <- doesFileExist $ root </> "src" </> "RPC.elm"
 
-        case currentLocalDevM of
-          Just currentLocalDev -> do
-            rpcExists <- doesFileExist $ root </> "src" </> "RPC.elm"
+      case overrideM of
+        Just override -> do
+          writeIfDifferent harnessPath (override & replaceRpcMarkers rpcExists)
 
-            let
-              overrideLocalDev =
-                if rpcExists
-                  then replaceRpcMarkers override
-                  else override
+        Nothing ->
+          writeIfDifferent harnessPath (lamderaLocalDev & replaceRpcMarkers rpcExists)
 
-            if overrideLocalDev /= currentLocalDev
-              then do
-                debug $ "🚧 OVERRIDE from extra/LocalDev/LocalDev.elm"
-                writeUtf8 harnessPath overrideLocalDev
-              else
-                -- Contents are already as they should be! Skip writing.
-                pure ()
-
-          Nothing -> do
-            debug $ "🚧 INIT missing LocalDev from extra/LocalDev/LocalDev.elm"
-            copyFile overridePath harnessPath
-
-      Nothing ->
-        -- No override, nothing to do
-        pure ()
+    else do
+      writeIfDifferent harnessPath lamderaLocalDev
 
   pure harnessPath
 
 
-replaceRpcMarkers localdev =
-  localdev
-    & T.replace
-      "-- MKRRI"
-      "import RPC\n\
-      \import LamderaRPC"
-    & T.replace
-      "-- MKRRC"
-      "let\n\
-      \                model =\n\
-      \                    { userModel = m.bem }\n\
-      \\n\
-      \                ( newModel, newBeCmds ) =\n\
-      \                    LamderaRPC.process\n\
-      \                        (\\k v ->\n\
-      \                            let\n\
-      \                                x =\n\
-      \                                    log k v\n\
-      \                            in\n\
-      \                            Cmd.none\n\
-      \                        )\n\
-      \                        rpcOut\n\
-      \                        rpcArgsJson\n\
-      \                        RPC.lamdera_handleEndpoints\n\
-      \                        model\n\
-      \            in\n\
-      \            ( { m | bem = newModel.userModel, bemDirty = True }, Cmd.map BEMsg newBeCmds )\n\
-      \            {-}"
+writeIfDifferent :: FilePath -> Text -> IO ()
+writeIfDifferent filepath newContent = do
+  currentM <- readUtf8Text filepath
+  case currentM of
+    Just currentContent ->
+      if currentContent /= newContent
+        then do
+          debug_ $ "✅  writeIfDifferent: " ++ show filepath
+          putStrLn $ show (T.length currentContent) <> "-" <> show (T.length newContent)
+          putStrLn <$> icdiff currentContent newContent
+          writeUtf8 filepath newContent
+        else
+          debug_ $ "⏩  writeIfDifferent skipped unchanged: " ++ show filepath
+
+    Nothing ->
+      -- File missing, write
+      writeUtf8 filepath newContent
 
 
-lamderaLocalDev :: BS.ByteString
+replaceRpcMarkers :: Bool -> Text -> Text
+replaceRpcMarkers shouldReplace localdev =
+  if not shouldReplace
+    then localdev
+    else
+      localdev
+        & T.replace
+          "-- MKRRI"
+          "import RPC\n\
+          \import LamderaRPC"
+        & T.replace
+          "-- MKRRC"
+          "let\n\
+          \                model =\n\
+          \                    { userModel = m.bem }\n\
+          \\n\
+          \                ( newModel, newBeCmds ) =\n\
+          \                    LamderaRPC.process\n\
+          \                        (\\k v ->\n\
+          \                            let\n\
+          \                                x =\n\
+          \                                    log k v\n\
+          \                            in\n\
+          \                            Cmd.none\n\
+          \                        )\n\
+          \                        rpcOut\n\
+          \                        rpcArgsJson\n\
+          \                        RPC.lamdera_handleEndpoints\n\
+          \                        model\n\
+          \            in\n\
+          \            ( { m | bem = newModel.userModel, bemDirty = True }, Cmd.map BEMsg newBeCmds )\n\
+          \            {-}"
+
+
+lamderaLocalDev :: Text
 lamderaLocalDev =
   -- @TODO fix this back later... conflicts with the change directory command in ghci live reload
-  $(bsToExp =<< runIO (BS.readFile ("extra/LocalDev/LocalDev.elm")))
+  T.decodeUtf8 $(bsToExp =<< runIO (BS.readFile ("extra/LocalDev/LocalDev.elm")))
+
   -- $(bsToExp =<< runIO (BS.readFile ("/Users/mario/dev/projects/lamdera-compiler/extra/LocalDev/LocalDev.elm")))
 
-
-normalLocalDevWrite root = do
-  let
-    cache = lamderaCache root
-    harnessPath = cache </> "LocalDev.elm"
-  mkdir cache
-
-  harnessExists <- doesFileExist harnessPath
-  if harnessExists
-    then do
-      now <- getCurrentTime
-      modified <- Dir.getModificationTime harnessPath
-      accessed <- Dir.getAccessTime harnessPath
-
-      -- debug $ "🚧 n:" <> show now
-      -- debug $ "🚧 a:" <> show accessed
-      -- debug $ "🚧 m:" <> show modified
-
-      if diffUTCTime now modified > 60
-        then do
-          -- File was last modified more than 5 seconds ago, okay to rewrite
-          -- debug $ "🚧 writing, more than 5:" <> show (diffUTCTime now modified)
-          BS.writeFile harnessPath lamderaLocalDev
-        else do
-          -- Modified recently, don't rewrite to prevent compiler issues
-          -- when multiple tabs are open for lamdera live
-          -- debug $ "🚧 skipping write! "  <> show (diffUTCTime now modified)
-          pure ()
-    else do
-      -- No file exists yet, must be a new project
-      debug "🚧 🆕"
-      BS.writeFile harnessPath lamderaLocalDev
 
 
 refreshClients (mClients, mLeader, mChan, beState) =

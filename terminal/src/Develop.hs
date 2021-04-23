@@ -66,7 +66,6 @@ run () (Flags maybePort) =
       root <- getProjectRoot
 
       liveState <- liftIO $ Live.init
-      liftIO $ Live.normalLocalDevWrite root
 
       sentryCache <- liftIO $ Sentry.init
 
@@ -75,7 +74,7 @@ run () (Flags maybePort) =
         recompile events = do
           -- Fork a recompile+cache update
           Sentry.asyncUpdateJsOutput sentryCache $ do
-            debug_ $ "🛫  recompile starting: " ++ show events
+            debug_ $ "🛫  recompile triggered by: " ++ show events
             harness <- Live.prepareLocalDev root
             compileToBuilder harness
           -- Simultaneously tell all clients to refresh. All those HTTP
