@@ -31,17 +31,26 @@ hideWireSuggestions suggestions =
   suggestions
     -- & debugHaskell "suggestions"
     & filter (\x ->
-      (not $ List.isPrefixOf "w3_" x) && (not $ List.isPrefixOf "w2_" x)
+      (not $ List.isPrefixOf "w3_" x)
+        && (not $ List.isPrefixOf "w2_" x)
+        && (not $ List.isInfixOf ".w3_" x)
+        && (not $ List.isInfixOf ".w2_" x)
     )
 
 hideWireSuggestionsName suggestions =
   suggestions
     & filter (\x ->
-      (not $ List.isPrefixOf "w3_" $ Name.toChars x) && (not $ List.isPrefixOf "w2_" $ Name.toChars x)
+      (not $ List.isPrefixOf "w3_" $ Name.toChars x)
+        && (not $ List.isPrefixOf "w2_" $ Name.toChars x)
+        && (not $ List.isInfixOf ".w3_" $ Name.toChars x)
+        && (not $ List.isInfixOf ".w2_" $ Name.toChars x)
     )
 
 hideWireExports exports =
   exports
     & Map.filterWithKey (\x _ ->
-      (not $ List.isPrefixOf "w3_" $ Name.toChars x) && (not $ List.isPrefixOf "w2_" $ Name.toChars x)
+      (not $ List.isPrefixOf "w3_" $ Name.toChars x)
+        && (not $ List.isPrefixOf "w2_" $ Name.toChars x)
+        && (not $ List.isInfixOf ".w2_" $ Name.toChars x)
+        && (not $ List.isInfixOf ".w2_" $ Name.toChars x)
     )

@@ -7,6 +7,7 @@ import qualified Data.Utf8 as Utf8
 import qualified Elm.Version as V
 import qualified Elm.Package as Pkg
 import qualified Data.ByteString.Char8 as BS
+import qualified Data.Text.Encoding as TE
 
 import Lamdera
 import Lamdera.Project
