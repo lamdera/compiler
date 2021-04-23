@@ -48,7 +48,7 @@ module Lamdera
   , hindent_
   , hindentPrintValue
   , hindentFormatValue
-  , readUtf8
+  -- , readUtf8
   , readUtf8Text
   , writeUtf8
   , writeUtf8Handle
@@ -117,14 +117,17 @@ import qualified System.Environment as Env
 import Control.Monad.Except (liftIO, catchError)
 import System.IO.Unsafe (unsafePerformIO)
 import qualified Debug.Trace as DT
-import Data.Text
-import qualified Data.Text.Encoding as Text
-import qualified Data.Char as Char
-import System.Exit (exitFailure)
 
-import qualified Data.Text.Encoding as T
+import Data.Text
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Lazy.Encoding as TLE
+import qualified Data.Text.IO
+
+import qualified Data.Char as Char
+
+import System.Exit (exitFailure)
+
+
 import qualified Data.List as List
 
 import Prelude hiding (lookup)
@@ -143,17 +146,13 @@ import Text.Read (readMaybe)
 
 import qualified System.PosixCompat.Files
 
--- Vendored from File.IO due to recursion errors
-import System.IO (hFlush, hPutStr, hPutStrLn, stderr, stdout, hClose, openTempFile)
+import System.IO (hFlush, hPutStr, stdout, hClose, openTempFile)
 import qualified System.IO as IO
 import qualified System.IO.Error as Error
-import GHC.IO.Exception (IOException, IOErrorType(InvalidArgument))
-import qualified Data.ByteString.Internal as BS
-import qualified Foreign.ForeignPtr as FPtr
 import Control.Exception (catch, throw)
-import System.IO.Error (ioeGetErrorType, annotateIOError, modifyIOError)
 import Test.Main (withStdin)
 import Text.Show.Unicode
+
 import qualified System.Process
 import qualified Data.Digest.Pure.SHA as SHA
 import qualified Data.Name as N
@@ -364,64 +363,17 @@ env =
 unsafe = unsafePerformIO
 
 
--- Vendored from File.IO due to recursion errors
-
-readUtf8 :: FilePath -> IO BS.ByteString
-readUtf8 filePath = do
-  debug $ "readUtf8:" <> filePath
-  withUtf8 filePath IO.ReadMode $ \handle ->
-    modifyIOError (encodingError filePath) $
-      do  fileSize <- catch (IO.hFileSize handle) useZeroIfNotRegularFile
-          let readSize = max 0 (fromIntegral fileSize) + 1
-          hGetContentsSizeHint handle readSize (max 255 readSize)
-
-
 readUtf8Text :: FilePath -> IO (Maybe Text)
 readUtf8Text filePath =
   do  exists_ <- Dir.doesFileExist filePath
       if exists_
         then
-          Just <$> Text.decodeUtf8 <$> readUtf8 filePath
+          Just <$> Data.Text.IO.readFile filePath
         else
           pure Nothing
 
 
-withUtf8 :: FilePath -> IO.IOMode -> (IO.Handle -> IO a) -> IO a
-withUtf8 filePath mode callback =
-  IO.withFile filePath mode $ \handle ->
-    do  IO.hSetEncoding handle IO.utf8
-        callback handle
 
-
-useZeroIfNotRegularFile :: IOException -> IO Integer
-useZeroIfNotRegularFile _ =
-  return 0
-
-
-hGetContentsSizeHint :: IO.Handle -> Int -> Int -> IO BS.ByteString
-hGetContentsSizeHint handle =
-    readChunks []
-  where
-    readChunks chunks readSize incrementSize =
-      do  fp <- BS.mallocByteString readSize
-          readCount <- FPtr.withForeignPtr fp $ \buf -> IO.hGetBuf handle buf readSize
-          let chunk = BS.PS fp 0 readCount
-          if readCount < readSize && readSize > 0
-            then return $! BS.concat (Prelude.reverse (chunk:chunks))
-            else readChunks (chunk:chunks) incrementSize (min 32752 (readSize + incrementSize))
-
-encodingError :: FilePath -> IOError -> IOError
-encodingError filePath ioErr =
-  case ioeGetErrorType ioErr of
-    InvalidArgument ->
-      annotateIOError
-        (userError "Bad encoding; the file must be valid UTF-8")
-        ""
-        Nothing
-        (Just filePath)
-
-    _ ->
-      ioErr
 
 
 -- Inversion of `unless` that runs IO only when condition is True
@@ -519,24 +471,21 @@ hindent_ s = do
 hindentFormatValue :: Show a => a -> Text
 hindentFormatValue v =
   unsafePerformIO $ do
-    t <- hindent v
+    t <- hindent v `catchError` (\_ -> pure "hindent failed to format")
     pure t
 
 
--- Copied from File.IO due to cyclic imports and adjusted for Text
 writeUtf8 :: FilePath -> Text -> IO ()
 writeUtf8 filePath content = do
   createDirIfMissing filePath
   debug_ $ "✍️  writeUtf8: " ++ show filePath
-  withUtf8 filePath IO.WriteMode $ \handle ->
-    BS.hPut handle (Text.encodeUtf8 content)
+  Data.Text.IO.writeFile filePath content
 
 
 -- Write directly to handle
 writeUtf8Handle :: IO.Handle -> Text -> IO ()
 writeUtf8Handle handle content = do
-  IO.hSetEncoding handle IO.utf8
-  BS.hPut handle (Text.encodeUtf8 content)
+  Data.Text.IO.hPutStr handle content
 
 
 -- Copied from File.IO due to cyclic imports and adjusted for Text

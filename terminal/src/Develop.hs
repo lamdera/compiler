@@ -63,10 +63,10 @@ run () (Flags maybePort) =
       liftIO $ Lamdera.stdoutSetup
       putStrLn $ "Go to http://localhost:" ++ show port ++ " to see your project dashboard."
 
-      liveState <- liftIO $ Live.init
-      liftIO $ Live.normalLocalDevWrite
-
       root <- getProjectRoot
+
+      liveState <- liftIO $ Live.init
+      liftIO $ Live.normalLocalDevWrite root
 
       sentryCache <- liftIO $ Sentry.init
 
@@ -76,7 +76,7 @@ run () (Flags maybePort) =
           -- Fork a recompile+cache update
           Sentry.asyncUpdateJsOutput sentryCache $ do
             debug_ $ "🛫  recompile starting: " ++ show events
-            harness <- Live.prepareLocalDev
+            harness <- Live.prepareLocalDev root
             compileToBuilder harness
           -- Simultaneously tell all clients to refresh. All those HTTP
           -- requests will open but block on the cache mVar, and then release

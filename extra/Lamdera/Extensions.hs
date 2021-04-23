@@ -39,14 +39,13 @@ elmJsonOverride pkg@(Pkg.Name author project) vsn original =
             packageRoot = (pkgsPath & withDefault "<no-packages-path-override-set>") <> "/packages/" <> Pkg.toUrl pkg ++ "/" ++ V.toChars vsn
             elmJson = packageRoot <> "/elm.json"
 
-          exists <- Dir.doesFileExist elmJson
-          if exists
-            then do
-              res <- readUtf8 elmJson
+          resM <- readUtf8Text elmJson
+          case resM of
+            Just res -> do
               debug $ "🔁  Serving local elm.json: " <> elmJson
-              pure (Right res)
-
-            else original
+              pure $ Right $ TE.encodeUtf8 res
+            Nothing ->
+              original
 
         else
           original
@@ -66,15 +65,13 @@ endpointJsonOverride pkg@(Pkg.Name author project) vsn original =
             packageRoot = (pkgsPath & withDefault "<no-packages-path-override-set>") <> "/packages/" <> Pkg.toUrl pkg ++ "/" ++ V.toChars vsn
             endpointJson = packageRoot <> "/endpoint.json"
 
-          exists <- Dir.doesFileExist endpointJson
-          if exists
-            then do
-              res <- readUtf8 endpointJson
+          resM <- readUtf8Text endpointJson
+          case resM of
+            Just res -> do
               debug $ "🔁  Serving local endpoint.json: " <> endpointJson
-              pure (Right res)
-
-            else original
-
+              pure $ Right $ TE.encodeUtf8 res
+            Nothing ->
+              original
         else
           original
 

@@ -20,13 +20,13 @@ lamderaLiveSrc =
     if debug
       then do
         let overridePath = "/Users/mario/dev/projects/lamdera-compiler/extra/dist/live.js"
-        exists <- Dir.doesFileExist overridePath
-        if exists
-          then do
+
+        overrideM <- readUtf8Text overridePath
+        case overrideM of
+          Just override -> do
             Lamdera.debug "Using extra/dist/live.js for lamderaLive"
-            res <- readUtf8 overridePath
-            pure (T.encodeUtf8Builder (T.decodeUtf8 res))
-          else
+            pure (T.encodeUtf8Builder override)
+          Nothing ->
             pure (T.encodeUtf8Builder (T.decodeUtf8 lamderaLive))
       else
         pure (T.encodeUtf8Builder (T.decodeUtf8 lamderaLive))

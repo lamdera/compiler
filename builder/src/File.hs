@@ -35,6 +35,7 @@ import qualified System.IO as IO
 import System.IO.Error (ioeGetErrorType, annotateIOError, modifyIOError)
 
 
+import Lamdera ((&), alternativeImplementation)
 
 -- TIME
 
@@ -103,6 +104,8 @@ readBinary path =
 
 writeUtf8 :: FilePath -> BS.ByteString -> IO ()
 writeUtf8 path content =
+  -- Try solve "resource exhausted (Too many open files)" issues on OS X by using strict IO functions
+  alternativeImplementation (BS.writeFile path content) $
   withUtf8 path IO.WriteMode $ \handle ->
     BS.hPut handle content
 
@@ -120,6 +123,8 @@ withUtf8 path mode callback =
 
 readUtf8 :: FilePath -> IO BS.ByteString
 readUtf8 path =
+  -- Try solve "resource exhausted (Too many open files)" issues on OS X by using strict IO functions
+  alternativeImplementation (BS.readFile path) $
   withUtf8 path IO.ReadMode $ \handle ->
     modifyIOError (encodingError path) $
       do  fileSize <- catch (IO.hFileSize handle) useZeroIfNotRegularFile

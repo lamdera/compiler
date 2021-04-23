@@ -10,7 +10,7 @@ module Lamdera.CLI.Live where
 import qualified Data.ByteString.Builder as B
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BSL
-import qualified Data.Text as Text
+import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.IO as T
 import qualified Data.Text.Encoding as T
@@ -116,60 +116,78 @@ serveUnmatchedUrlsToIndex serveElm =
       -- liftIO $ callCommand $ "rm " <> harnessPath <> " || true " -- less exception-ey on double-reload!
 
 
-prepareLocalDev = do
-  root <- getProjectRoot
-
+prepareLocalDev root = do
   let
     cache = lamderaCache root
     harnessPath = cache </> "LocalDev.elm"
+    overridePath = "/Users/mario/dev/projects/lamdera-compiler/extra/LocalDev/LocalDev.elm"
 
   isDebug <- isDebug
 
+  overrideM <- readUtf8Text overridePath
+
   onlyWhen isDebug $ do
-    let overridePath = "/Users/mario/dev/projects/lamdera-compiler/extra/LocalDev/LocalDev.elm"
-    overrideExists <- doesFileExist overridePath
-    onlyWhen overrideExists $ do
-      debug $ "🚧 OVERRIDE from extra/LocalDev/LocalDev.elm"
-      copyFile overridePath harnessPath
+    case overrideM of
+      Just override -> do
+        currentLocalDevM <- readUtf8Text harnessPath
 
-    rpcExists <- doesFileExist $ root </> "src" </> "RPC.elm"
+        case currentLocalDevM of
+          Just currentLocalDev -> do
+            rpcExists <- doesFileExist $ root </> "src" </> "RPC.elm"
 
-    onlyWhen rpcExists $ do
+            let
+              overrideLocalDev =
+                if rpcExists
+                  then replaceRpcMarkers override
+                  else override
 
-      -- Inject missing imports
-        replaceInFile
-          "-- MKRRI"
-          "import RPC\n\
-          \import LamderaRPC"
-          harnessPath
+            if overrideLocalDev /= currentLocalDev
+              then do
+                debug $ "🚧 OVERRIDE from extra/LocalDev/LocalDev.elm"
+                writeUtf8 harnessPath overrideLocalDev
+              else
+                -- Contents are already as they should be! Skip writing.
+                pure ()
 
-      -- Replace body implementation
-        replaceInFile
-          "-- MKRRC"
-          "let\n\
-          \                model =\n\
-          \                    { userModel = m.bem }\n\
-          \\n\
-          \                ( newModel, newBeCmds ) =\n\
-          \                    LamderaRPC.process\n\
-          \                        (\\k v ->\n\
-          \                            let\n\
-          \                                x =\n\
-          \                                    log k v\n\
-          \                            in\n\
-          \                            Cmd.none\n\
-          \                        )\n\
-          \                        rpcOut\n\
-          \                        rpcArgsJson\n\
-          \                        RPC.lamdera_handleEndpoints\n\
-          \                        model\n\
-          \            in\n\
-          \            ( { m | bem = newModel.userModel, bemDirty = True }, Cmd.map BEMsg newBeCmds )\n\
-          \            {-}"
-          harnessPath
+          Nothing -> do
+            debug $ "🚧 INIT missing LocalDev from extra/LocalDev/LocalDev.elm"
+            copyFile overridePath harnessPath
+
+      Nothing ->
+        -- No override, nothing to do
+        pure ()
 
   pure harnessPath
 
+
+replaceRpcMarkers localdev =
+  localdev
+    & T.replace
+      "-- MKRRI"
+      "import RPC\n\
+      \import LamderaRPC"
+    & T.replace
+      "-- MKRRC"
+      "let\n\
+      \                model =\n\
+      \                    { userModel = m.bem }\n\
+      \\n\
+      \                ( newModel, newBeCmds ) =\n\
+      \                    LamderaRPC.process\n\
+      \                        (\\k v ->\n\
+      \                            let\n\
+      \                                x =\n\
+      \                                    log k v\n\
+      \                            in\n\
+      \                            Cmd.none\n\
+      \                        )\n\
+      \                        rpcOut\n\
+      \                        rpcArgsJson\n\
+      \                        RPC.lamdera_handleEndpoints\n\
+      \                        model\n\
+      \            in\n\
+      \            ( { m | bem = newModel.userModel, bemDirty = True }, Cmd.map BEMsg newBeCmds )\n\
+      \            {-}"
 
 
 lamderaLocalDev :: BS.ByteString
@@ -179,10 +197,7 @@ lamderaLocalDev =
   -- $(bsToExp =<< runIO (BS.readFile ("/Users/mario/dev/projects/lamdera-compiler/extra/LocalDev/LocalDev.elm")))
 
 
-normalLocalDevWrite = do
-
-  root <- getProjectRoot
-
+normalLocalDevWrite root = do
   let
     cache = lamderaCache root
     harnessPath = cache </> "LocalDev.elm"
@@ -274,11 +289,11 @@ serveWebsocket (mClients, mLeader, mChan, beState) =
                     pure Nothing
 
               onReceive clientId text = do
-                if Text.isPrefixOf "{\"t\":\"envMode\"," text
+                if T.isPrefixOf "{\"t\":\"envMode\"," text
                   then do
                     root <- liftIO $ getProjectRoot
                     -- This is a bit dodge, but avoids needing to pull in all of Aeson
-                    setEnvMode root $ (Text.splitOn "\"" text) !! 7
+                    setEnvMode root $ (T.splitOn "\"" text) !! 7
 
                     -- Touch the src/Env.elm file to make sure it gets recompiled
                     touch $ root </> "src" </> "Env.elm"
@@ -287,7 +302,7 @@ serveWebsocket (mClients, mLeader, mChan, beState) =
                     -- Actually not needed, because the touch will do this for us!
                     -- SocketServer.broadcastImpl mClients "{\"t\":\"r\"}"
 
-                  else if Text.isSuffixOf "\"t\":\"p\"}" text
+                  else if T.isSuffixOf "\"t\":\"p\"}" text
                     then do
                       -- debug "[backendSt] 💾"
                       atomically $ writeTVar beState text
@@ -296,13 +311,13 @@ serveWebsocket (mClients, mLeader, mChan, beState) =
                         -- Force due to backend reset, force a refresh
                         SocketServer.broadcastImpl mClients "{\"t\":\"r\"}"
 
-                    else if Text.isPrefixOf "{\"t\":\"ToBackend\"," text
+                    else if T.isPrefixOf "{\"t\":\"ToBackend\"," text
 
                       then do
                         sendToLeader mClients mLeader (\l -> pure text)
 
 
-                    else if Text.isPrefixOf "{\"t\":\"qr\"," text
+                    else if T.isPrefixOf "{\"t\":\"qr\"," text
 
                       then do
 
@@ -375,7 +390,7 @@ serveRpc (mClients, mLeader, mChan, beState) port = do
       case contentType of
         Just "application/octet-stream" ->
           let
-            body = Text.pack $ show $ BSL.unpack rbody
+            body = T.pack $ show $ BSL.unpack rbody
           in
           -- t s e r i j
           "{\"t\":\"q\",\"s\":\""<> sid <>
@@ -462,7 +477,7 @@ serveRpc (mClients, mLeader, mChan, beState) port = do
 
 logger =
   (\bs ->
-    atomicPutStrLn $ Text.unpack $ T.decodeUtf8 bs
+    atomicPutStrLn $ T.unpack $ T.decodeUtf8 bs
   )
 
 
