@@ -455,7 +455,7 @@ injectConfig graph = do
 
           prodTokenM <- Env.lookupEnv "TOKEN"
 
-          token <-
+          !token <-
             case prodTokenM of
               Just token ->
                 pure token
