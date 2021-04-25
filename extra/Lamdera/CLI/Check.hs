@@ -809,14 +809,13 @@ showExternalTypeWarnings warnings = do
 
   if length warnings > 0
     then do
-      debug "Printing out external type warnings"
       progressDoc $
         D.stack
           (
-          [ D.red $ D.reflow $ "WARNING: Evergreen Alpha does not cover type changes outside your project"
+          [ D.yellow $ D.reflow $ "WARNING: Evergreen Alpha does not cover type changes outside your project"
           , D.reflow $ "You are referencing the following in your core types:"
           , D.vcat [ D.fromChars . T.unpack $ textWarnings ]
-          , D.red $ D.reflow $ "Package upgrades that change these types won't get covered by Evergreen migrations currently!"
+          , D.yellow $ D.reflow $ "Package upgrades that change these types won't get covered by Evergreen migrations currently!"
           , D.reflow "See <https://dashboard.lamdera.app/docs/evergreen> for more info."
           ]
           )
