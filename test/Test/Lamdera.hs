@@ -19,6 +19,8 @@ import qualified Lamdera.Evergreen.Snapshot
 import Test.Helpers
 import Test.Check
 
+import LamderaSharedBuildHelpers (adminToken)
+
 -- import qualified Lamdera.CLI.Check
 -- import qualified Lamdera.CLI.Reset
 -- import qualified Lamdera.CLI.Live
@@ -90,7 +92,7 @@ compile :: IO ()
 compile = do
   let project = "/Users/mario/lamdera/test/v1"
   -- setEnv "LAMDERA_APP_NAME" "testapp"
-  setEnv "TOKEN" "2208a6c7449d3a98b76ce2f1745cbb43"
+  setEnv "TOKEN" adminToken
 
   -- let project = "/Users/mario/dev/projects/elm-spa-example"
   -- setEnv "LAMDERA_APP_NAME" "realworldish"
@@ -175,7 +177,7 @@ config = do
   let project = "/Users/mario/lamdera/test/v1"
   -- let project = "/Users/mario/dev/projects/lamdera-test"
   Dir.withCurrentDirectory project $ do
-    setEnv "TOKEN" "2208a6c7449d3a98b76ce2f1745cbb43"
+    setEnv "TOKEN" adminToken
 
     prodTokenM <- lookupEnv "TOKEN"
     Lamdera.AppConfig.checkUserConfig "test-local" (fmap T.pack prodTokenM)
@@ -223,6 +225,6 @@ checkUserConfig = do
     do
         Lamdera.Compile.make projectPath "src/Backend.elm"
         Lamdera.Compile.make projectPath "src/Frontend.elm"
-        Lamdera.AppConfig.checkUserConfig appName (Just "2208a6c7449d3a98b76ce2f1745cbb43")
+        Lamdera.AppConfig.checkUserConfig appName (Just (T.pack adminToken))
 
   unsetEnv "LDEBUG"

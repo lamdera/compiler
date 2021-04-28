@@ -91,7 +91,7 @@ mockBuildSh projectPath appName = do
 
   setEnv "FORCEVERSION" "1"
   setEnv "LDEBUG" "1"
-  setEnv "TOKEN" "2208a6c7449d3a98b76ce2f1745cbb43"
+  setEnv "TOKEN" adminToken
   setEnv "LOVR" "/Users/mario/lamdera/overrides"
   setEnv "LAMDERA_APP_NAME" appName
   -- setEnv "ELM_HOME" "/Users/mario/elm-home-elmx-test"
@@ -140,7 +140,7 @@ checkWithParams projectPath appName = do
   setEnv "LDEBUG" "1"
   setEnv "ELM_HOME" "/Users/mario/elm-home-elmx-test"
   -- setEnv "NOTPROD" "1"
-  setEnv "TOKEN" "2208a6c7449d3a98b76ce2f1745cbb43"
+  setEnv "TOKEN" adminToken
   -- setEnv "HOIST_REBUILD" "1"
   -- setEnv "VERSION" "1"
 

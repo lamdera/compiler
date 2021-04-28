@@ -2,9 +2,12 @@
 
 module LamderaSharedBuildHelpers where
 
+import System.Process (readProcessWithExitCode)
 import qualified System.Directory as Dir
 import qualified Data.Text as T
 import Lamdera
+
+adminToken = "ntil6p9l4i1zylcreuisd0ncrf17xxko"
 
 clearPriorBuilds = do
   c "rm -rf ~/lamdera-builds/build-test-local || true"
@@ -17,6 +20,17 @@ clearSnapshots = do
 
 clearBuildCache projectPath =
   c $ "rm -rf " <> projectPath <> "/elm-stuff || true"
+
+
+rebootTestBuildServices = do
+  putStrLn "➡️  Rebooting test build services..."
+  rebootConfigurator
+  c "~/lamdera/logging/reboot.sh"
+  c "~/dev/projects/lamdera-dashboard/reboot.sh"
+  pure ()
+
+rebootConfigurator = c "~/lamdera/configurator/reboot.sh"
+
 
 copyRuntimeFiles projectPath = do
   c $ "cp -rp ~/lamdera/runtime/src/* " <> projectPath <> "/src/"
@@ -81,6 +95,5 @@ clearEnv = do
 
 bootNodejsApp projectPath appName = do
   c $ "cd " <> projectPath <> " && APPNAME=" <> appName <> " node --inspect --max-old-space-size=3072 --expose-gc oracle.js"
-
 
 c = callCommand
