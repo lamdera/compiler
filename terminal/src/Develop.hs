@@ -41,7 +41,7 @@ import qualified Lamdera.CLI.Live as Live
 import qualified Lamdera.ReverseProxy
 import qualified Lamdera.TypeHash
 
-import Ext.Common (trackedForkIO)
+import Ext.Common (trackedForkIO, whenDebug)
 import qualified Ext.Filewatch as Filewatch
 import qualified Ext.Sentry as Sentry
 import Control.Concurrent.STM (atomically, newTVarIO, readTVar, writeTVar, TVar)
@@ -87,6 +87,14 @@ run () (Flags maybePort) =
       recompile []
 
       Filewatch.watch root recompile
+
+      whenDebug $ do
+        -- Watch LocalDev.elm changes when in Debug mode to assist with development
+        home <- Dir.getHomeDirectory
+        let override = home <> "/dev/projects/lamdera-compiler/extra/LocalDev/LocalDev.elm"
+        onlyWhen_ (doesFileExist override) $ do
+          Filewatch.watchFile override recompile
+
       Lamdera.ReverseProxy.start
 
       Live.withEnd liveState $

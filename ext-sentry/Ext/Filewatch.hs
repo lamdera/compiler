@@ -8,7 +8,8 @@ import Control.Concurrent (threadDelay, forkIO)
 import Control.Monad (forever)
 import qualified Data.List as List
 import qualified Control.FoldDebounce as Debounce
-
+import qualified System.Directory as Dir
+import qualified System.FilePath as FP
 
 watch root action =
   trackedForkIO $ withManager $ \mgr -> do
@@ -41,12 +42,11 @@ watch root action =
                 not (List.isInfixOf ".git" f)
              && not (List.isInfixOf "elm-stuff" f)
 
-        if shouldRefresh
-          then do
-            Debounce.send trigger f
-          else
-            pure ()
+        onlyWhen shouldRefresh $ Debounce.send trigger f
       )
 
     -- sleep forever (until interrupted)
     forever $ threadDelay 1000000
+
+watchFile file action =
+  watch (FP.takeDirectory file) action

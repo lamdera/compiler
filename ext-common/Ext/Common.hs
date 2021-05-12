@@ -5,6 +5,7 @@ module Ext.Common where
 
 import Control.Concurrent
 import Control.Concurrent.MVar
+import Control.Monad (unless)
 
 import System.Exit (exitFailure)
 import System.FilePath as FP ((</>), joinPath, splitDirectories, takeDirectory)
@@ -97,6 +98,20 @@ whenDebug io = do
   case debugM of
     Just _ -> io
     Nothing -> pure ()
+
+
+-- Inversion of `unless` that runs IO only when condition is True
+onlyWhen :: Monad f => Bool -> f () -> f ()
+onlyWhen condition io =
+  unless (not condition) io
+
+
+-- Same but evaluates the IO
+onlyWhen_ :: Monad f => f Bool -> f () -> f ()
+onlyWhen_ condition io = do
+  res <- condition
+  unless (not res) io
+
 
 
 -- https://stackoverflow.com/questions/16811376/simulate-global-variable trick
