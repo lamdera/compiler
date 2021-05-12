@@ -255,7 +255,7 @@ serveWebsocket (mClients, mLeader, mChan, beState) =
                     pure Nothing
 
               onReceive clientId text = do
-                if T.isPrefixOf "{\"t\":\"envMode\"," text
+                if T.isPrefixOf "{\"t\":\"env\"," text
                   then do
                     root <- liftIO $ getProjectRoot
                     -- This is a bit dodge, but avoids needing to pull in all of Aeson

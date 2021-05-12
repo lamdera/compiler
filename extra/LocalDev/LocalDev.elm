@@ -757,7 +757,7 @@ update msg m =
             ( { m | devbar = { devbar | showModeChanger = not devbar.showModeChanger } }, Cmd.none )
 
         EnvModeSelected env ->
-            ( m, send_EnvMode { t = "e", v = env } )
+            ( m, send_EnvMode { t = "env", v = env } )
 
         EnvCleared ->
             let
