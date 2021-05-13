@@ -39,6 +39,7 @@ import qualified Lamdera.Project
 import qualified Lamdera.Update
 import qualified Lamdera.Compile
 import qualified Lamdera.Checks
+import qualified Lamdera.Evergreen
 import qualified Lamdera.Evergreen.Snapshot
 import qualified Lamdera.TypeHash
 import qualified Lamdera.Types
@@ -62,20 +63,13 @@ run :: () -> () -> IO ()
 run () () = do
   debug_ "Starting check..."
 
-  appNameEnvM <- Env.lookupEnv "LAMDERA_APP_NAME"
-  hoistRebuild <- Env.lookupEnv "HOIST_REBUILD"
-  forceVersionM <- Env.lookupEnv "VERSION"
+  -- appNameEnvM <- Env.lookupEnv "LAMDERA_APP_NAME"
+
   forceNotProd <- Env.lookupEnv "NOTPROD"
   inDebug <- Lamdera.isDebug
-  prodTokenM <- Env.lookupEnv "TOKEN"
-
+  isHoistRebuild <- isHoistRebuild_
+  forceVersion <- forceVersion_
   inProduction <- Lamdera.inProduction
-
-  let isHoistRebuild = (hoistRebuild /= Nothing)
-      forceVersion = fromMaybe (-1) $
-        case forceVersionM of
-          Just fv -> Text.Read.readMaybe fv
-          Nothing -> Nothing
 
   debug $ "production:" ++ show inProduction
   debug $ "hoist rebuild:" ++ show isHoistRebuild
@@ -94,76 +88,13 @@ run () () = do
   progressPointer "Checking Evergreen migrations..."
   debug $ "app name:" ++ show appName
 
-  hashesResult <- Lamdera.TypeHash.calculateAndWrite
-  (localTypes, externalTypeWarnings) <- do
-    case hashesResult of
-      Left problem ->
-        Progress.throw $ Reporting.Exit.reactorToReport $ Reporting.Exit.ReactorBadBuild $ problem
-      Right (localTypes, externalTypeWarnings) ->
-        pure (localTypes, externalTypeWarnings)
-
-  (prodVersion, productionTypes) <-
-    if isHoistRebuild
-      then do
-        if (forceVersion == (-1))
-          then
-            genericExit "ERROR: Hoist rebuild got -1 for version, check your usage."
-
-          else do
-            debug_ $ "❗️Gen with forced version: " <> show forceVersion
-            pure (forceVersion, localTypes)
-
-      else do
-
-        prodInfo_ <- fetchProductionInfo appName (forceNotProd /= Nothing)
-        case prodInfo_ of
-          Right (pv, pt) ->
-            -- Everything is as it should be
-            pure (pv, pt)
-
-          Left err ->
-            if (inProduction)
-              then do
-                debug_ $ show err
-                genericExit "FATAL: application info could not be obtained. Please report this to support."
-
-              else do
-                Lamdera.Http.printHttpError err "I needed to query production application info"
-                exitFailure
+  (localTypes, externalTypeWarnings) <- getLocalInfo
+  (prodVersion, productionTypes, nextVersion) <- getProdInfo appName inProduction forceNotProd forceVersion isHoistRebuild localTypes
 
   let
-    localTypesChangedFromProduction =
-      productionTypes /= localTypes
+    localTypesChangedFromProduction = productionTypes /= localTypes
 
-    nextVersion =
-      if isHoistRebuild then
-        -- No version bump, the stated version will be the prod version
-        prodVersion
-      else if forceVersion /= (-1) then
-        forceVersion
-      else
-        (prodVersion + 1)
-
-  nextVersionInfo <-
-    if prodVersion == 0 then
-      pure $ WithoutMigrations 1
-    else
-      if isHoistRebuild
-        then do
-          -- Hoist case
-          hoistMigrationExists <- Dir.doesFileExist $ "src/Evergreen/Migrate/V" <> show prodVersion <> ".elm"
-          if hoistMigrationExists
-            then
-              pure $ WithMigrations prodVersion
-            else
-              pure $ WithoutMigrations prodVersion
-
-        else
-          -- Normal case
-          if localTypesChangedFromProduction then
-            pure $ WithMigrations nextVersion
-          else
-            pure $ WithoutMigrations nextVersion
+  nextVersionInfo <- getNextVersionInfo_ nextVersion prodVersion isHoistRebuild localTypesChangedFromProduction
 
   debug $ "Continuing with (prodV,nextV,nextVInfo) " ++ show (prodVersion, nextVersion, nextVersionInfo)
 
@@ -322,11 +253,134 @@ run () () = do
           buildProductionJsFiles root inProduction nextVersionInfo
 
   progressPointer "Checking config..."
+  prodTokenM <- Env.lookupEnv "TOKEN"
   Lamdera.AppConfig.checkUserConfig appName (fmap T.pack prodTokenM)
 
   checkForLatestBinaryVersion inDebug
 
   pure ()
+
+
+isHoistRebuild_ :: IO Bool
+isHoistRebuild_ = do
+  hoistRebuild <- Env.lookupEnv "HOIST_REBUILD"
+  pure (hoistRebuild /= Nothing)
+
+
+forceVersion_ :: IO Int
+forceVersion_ = do
+  forceVersionM <- Env.lookupEnv "VERSION"
+  pure $ fromMaybe (-1) $
+    case forceVersionM of
+      Just fv -> Text.Read.readMaybe fv
+      Nothing -> Nothing
+
+
+getNextVersionInfo :: FilePath -> IO VersionInfo
+getNextVersionInfo root = do
+
+  hoistRebuild <- Env.lookupEnv "HOIST_REBUILD"
+  forceVersionM <- Env.lookupEnv "VERSION"
+  forceNotProd <- Env.lookupEnv "NOTPROD"
+  inProduction <- Lamdera.inProduction
+
+  let isHoistRebuild = (hoistRebuild /= Nothing)
+      forceVersion = fromMaybe (-1) $
+        case forceVersionM of
+          Just fv -> Text.Read.readMaybe fv
+          Nothing -> Nothing
+
+  -- Lamdera.Legacy.temporaryCheckOldTypesNeedingMigration inProduction root
+
+  -- progressPointer_ "Checking project compiles..."
+  -- checkUserProjectCompiles root
+
+  appName <- Lamdera.Project.appNameOrThrow
+
+  (localTypes, externalTypeWarnings) <- getLocalInfo
+  (prodVersion, productionTypes, nextVersion) <- getProdInfo appName inProduction forceNotProd forceVersion isHoistRebuild localTypes
+
+  let
+    localTypesChangedFromProduction = productionTypes /= localTypes
+
+  nextVersionInfo <- getNextVersionInfo_ nextVersion prodVersion isHoistRebuild localTypesChangedFromProduction
+
+  pure nextVersionInfo
+
+
+
+getLocalInfo = do
+  hashesResult <- Lamdera.TypeHash.calculateAndWrite
+  case hashesResult of
+    Left problem ->
+      Progress.throw $ Reporting.Exit.reactorToReport $ Reporting.Exit.ReactorBadBuild $ problem
+    Right (localTypes, externalTypeWarnings) ->
+      pure (localTypes, externalTypeWarnings)
+
+
+getProdInfo appName inProduction forceNotProd forceVersion isHoistRebuild localTypes = do
+  (prodVersion, productionTypes) <-
+    if isHoistRebuild
+      then do
+        if (forceVersion == (-1))
+          then
+            genericExit "ERROR: Hoist rebuild got -1 for version, check your usage."
+
+          else do
+            debug_ $ "❗️Gen with forced version: " <> show forceVersion
+            pure (forceVersion, localTypes)
+
+      else do
+
+        prodInfo_ <- fetchProductionInfo appName (forceNotProd /= Nothing)
+        case prodInfo_ of
+          Right (pv, pt) ->
+            -- Everything is as it should be
+            pure (pv, pt)
+
+          Left err ->
+            if (inProduction)
+              then do
+                debug_ $ show err
+                genericExit "FATAL: application info could not be obtained. Please report this to support."
+
+              else do
+                Lamdera.Http.printHttpError err "I needed to query production application info"
+                exitFailure
+  let
+    nextVersion =
+      if isHoistRebuild then
+        -- No version bump, the stated version will be the prod version
+        prodVersion
+      else if forceVersion /= (-1) then
+        forceVersion
+      else
+        (prodVersion + 1)
+
+  pure (prodVersion, productionTypes, nextVersion)
+
+
+getNextVersionInfo_ nextVersion prodVersion isHoistRebuild localTypesChangedFromProduction =
+  if prodVersion == 0 then
+    pure $ WithoutMigrations 1
+  else
+    if isHoistRebuild
+      then do
+        -- Hoist case
+        hoistMigrationExists <- Dir.doesFileExist $ "src/Evergreen/Migrate/V" <> show prodVersion <> ".elm"
+        if hoistMigrationExists
+          then
+            pure $ WithMigrations prodVersion
+          else
+            pure $ WithoutMigrations prodVersion
+
+      else
+        -- Normal case
+        if localTypesChangedFromProduction then
+          pure $ WithMigrations nextVersion
+        else
+          pure $ WithoutMigrations nextVersion
+
 
 
 checkForLatestBinaryVersion inDebug = do
@@ -791,7 +845,7 @@ writeLamderaGenerated :: FilePath -> Bool -> VersionInfo -> IO ()
 writeLamderaGenerated root inProduction nextVersion =
   onlyWhen inProduction $ do
     gen <- Lamdera.Evergreen.createLamderaGenerated root nextVersion
-    writeUtf8 (root </> "src/LamderaGenerated.elm") gen
+    writeIfDifferent (root </> "src/LamderaGenerated.elm") gen
 
 
 showExternalTypeWarnings :: [(Text, [Text], Lamdera.Types.DiffableType)] -> IO ()

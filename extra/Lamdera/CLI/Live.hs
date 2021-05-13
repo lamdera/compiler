@@ -49,6 +49,8 @@ import System.Entropy
 import Snap.Util.FileServe
 import Control.Monad (guard, void)
 
+import qualified Lamdera.CLI.Check
+
 
 type LiveState = (TVar [Client], TVar (Maybe ClientId), BroadcastChan In Text, TVar Text)
 
@@ -117,6 +119,10 @@ prepareLocalDev root = do
   isDebug <- isDebug
   overrideM <- readUtf8Text overridePath
 
+  nextVersionInfo <- Lamdera.CLI.Check.getNextVersionInfo root
+
+  Lamdera.CLI.Check.writeLamderaGenerated root True nextVersionInfo
+
   if isDebug
     then do
       rpcExists <- doesFileExist $ root </> "src" </> "RPC.elm"
@@ -132,25 +138,6 @@ prepareLocalDev root = do
       writeIfDifferent harnessPath lamderaLocalDev
 
   pure harnessPath
-
-
-writeIfDifferent :: FilePath -> Text -> IO ()
-writeIfDifferent filepath newContent = do
-  currentM <- readUtf8Text filepath
-  case currentM of
-    Just currentContent ->
-      if currentContent /= newContent
-        then do
-          debug_ $ "✅  writeIfDifferent: " ++ show filepath
-          putStrLn $ show (T.length currentContent) <> "-" <> show (T.length newContent)
-          putStrLn <$> icdiff currentContent newContent
-          writeUtf8 filepath newContent
-        else
-          debug_ $ "⏩  writeIfDifferent skipped unchanged: " ++ show filepath
-
-    Nothing ->
-      -- File missing, write
-      writeUtf8 filepath newContent
 
 
 replaceRpcMarkers :: Bool -> Text -> Text

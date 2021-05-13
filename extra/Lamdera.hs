@@ -53,6 +53,7 @@ module Lamdera
   , writeUtf8
   , writeUtf8Handle
   , writeUtf8Root
+  , writeIfDifferent
   , Dir.doesFileExist
   , Dir.doesDirectoryExist
   , remove
@@ -493,6 +494,25 @@ writeUtf8Root :: FilePath -> Text -> IO ()
 writeUtf8Root filePath content = do
   root <- getProjectRoot
   writeUtf8 (root </> filePath) content
+
+
+writeIfDifferent :: FilePath -> Text -> IO ()
+writeIfDifferent filepath newContent = do
+  currentM <- readUtf8Text filepath
+  case currentM of
+    Just currentContent ->
+      if currentContent /= newContent
+        then do
+          debug_ $ "✅  writeIfDifferent: " ++ show filepath
+          putStrLn $ show (T.length currentContent) <> "-" <> show (T.length newContent)
+          putStrLn <$> icdiff currentContent newContent
+          writeUtf8 filepath newContent
+        else
+          debug_ $ "⏩  writeIfDifferent skipped unchanged: " ++ show filepath
+
+    Nothing ->
+      -- File missing, write
+      writeUtf8 filepath newContent
 
 
 remove :: FilePath -> IO ()

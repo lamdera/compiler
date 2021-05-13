@@ -25,12 +25,14 @@ import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events exposing (onClick, onMouseEnter, onMouseLeave)
 import Html.Lazy
+import Http
 import Lamdera exposing (ClientId, Key, SessionId, Url)
 import Lamdera.Debug as LD
 import Lamdera.Json as Json
 import Lamdera.Wire3 as Wire exposing (Bytes)
+import LamderaGenerated
 import Process
-import Task
+import Task exposing (Task)
 import Types exposing (BackendModel, BackendMsg, FrontendModel, FrontendMsg, ToBackend, ToFrontend)
 
 
@@ -136,6 +138,11 @@ type Msg
     | ModelResetCleared
     | VersionCheck LD.Posix
     | VersionCheckResult (Result LD.HttpError VersionCheck)
+      -- Snapshots
+    | LoadLatestSnapshotFilename
+    | LoadLatestSnapshotFilenamesResult (Result LD.HttpError (List String))
+    | LoadSnapshot String
+    | LoadedSnapshot (Result LD.HttpError Bytes)
     | Noop
 
 
@@ -163,6 +170,7 @@ type alias DevBar =
     , showResetNotification : Bool
     , versionCheck : VersionCheck
     , qrCodeShow : Bool
+    , snapshotFilenames : List String
     }
 
 
@@ -270,6 +278,7 @@ init flags url key =
             , showResetNotification = didReset
             , versionCheck = VersionUnchecked
             , qrCodeShow = False
+            , snapshotFilenames = []
             }
 
         devbar =
@@ -821,6 +830,60 @@ update msg m =
                     -- Not possible, errors remapped to VersionCheckFailed
                     ( m, Cmd.none )
 
+        LoadLatestSnapshotFilename ->
+            ( m
+            , getAppSnapshotFilenames "dashboard-local"
+                |> Task.attempt LoadLatestSnapshotFilenamesResult
+            )
+
+        LoadLatestSnapshotFilenamesResult res ->
+            case res of
+                Ok filenames ->
+                    let
+                        devbar =
+                            m.devbar
+                    in
+                    ( { m | devbar = { devbar | snapshotFilenames = filenames } }, Cmd.none )
+
+                Err error ->
+                    let
+                        _ =
+                            Debug.log "LoadLatestSnapshotFilenamesResult" error
+                    in
+                    ( m, Cmd.none )
+
+        LoadSnapshot filename ->
+            ( m, getAppSnapshot "dashboard-local" filename |> Task.attempt LoadedSnapshot )
+
+        LoadedSnapshot res ->
+            let
+                evergreenTest =
+                    case res of
+                        Ok bytes ->
+                            case LamderaGenerated.decodeAndUpgradeBackendModel 72 bytes of
+                                LamderaGenerated.AlreadyCurrent ( valueType, cmds ) ->
+                                    "AlreadyCurrent"
+
+                                LamderaGenerated.Upgraded ( valueType, cmds ) ->
+                                    "Upgraded"
+
+                                LamderaGenerated.UnknownVersion ( int, string, bytes_ ) ->
+                                    "UnknownVersion: " ++ String.fromInt int ++ ", " ++ string
+
+                                LamderaGenerated.UnknownType string ->
+                                    "UnknownType: " ++ string
+
+                                LamderaGenerated.DecoderError string ->
+                                    "DecoderError: " ++ string
+
+                        Err err ->
+                            Debug.toString err
+
+                _ =
+                    Debug.log "evergreenResult" evergreenTest
+            in
+            ( m, Cmd.none )
+
         Noop ->
             ( m, Cmd.none )
 
@@ -1341,6 +1404,14 @@ expandedUI topDown devbar =
         ]
 
 
+lamderaSnapshots devbar =
+    Html.div []
+        ([ Html.div [ onClick LoadLatestSnapshotFilename ] [ Html.text "Load latest snapshot" ]
+         ]
+            ++ List.map (\f -> Html.div [ onClick (LoadSnapshot f) ] [ Html.text f ]) devbar.snapshotFilenames
+        )
+
+
 buttonDev label msg =
     div
         [ style "color" white
@@ -1427,7 +1498,8 @@ mapDocument : Model -> (FrontendMsg -> Msg) -> Browser.Document FrontendMsg -> B
 mapDocument model msg { title, body } =
     { title = title
     , body =
-        List.map (Html.map msg) body
+        [ lamderaSnapshots model.devbar ]
+            ++ List.map (Html.map msg) body
             ++ lamderaUI
                 model.devbar
                 model.nodeType
@@ -1558,6 +1630,7 @@ custom =
     Json.map2 (|>)
 
 
+getLatestVersion : LD.Posix -> Task LD.HttpError VersionCheck
 getLatestVersion time =
     LD.task
         { method = "GET"
@@ -1575,6 +1648,41 @@ decodeVersionCheck time =
         |> Json.map (\v -> VersionCheckSucceeded v time)
 
 
+getAppSnapshotFilenames : String -> Task LD.HttpError (List String)
+getAppSnapshotFilenames appId =
+    LD.task
+        { method = "GET"
+        , headers = []
+
+        -- , url = "http://apps.lamdera.com:8080/v1/app/" ++ appId ++ "/snapshots"
+        , url = "http://localhost:8080/v1/app/" ++ appId ++ "/snapshots"
+        , body = LD.emptyBody
+        , resolver = LD.stringResolver <| LD.handleJsonResponse <| Json.decoderList Json.decoderString
+        , timeout = Nothing
+        }
+
+
+getAppSnapshot : String -> String -> Task LD.HttpError Wire.Bytes
+getAppSnapshot appId snapshot =
+    let
+        token =
+            "abc123 todo"
+    in
+    LD.task
+        { method = "GET"
+        , headers = []
+
+        -- , url = "http://apps.lamdera.com:8080/v1/app/" ++ appId ++ "/snapshots"
+        , url = "http://localhost:8080/v1/app/" ++ appId ++ "/snapshot-retrieve/" ++ snapshot ++ "/" ++ token
+        , body = LD.emptyBody
+        , resolver = LD.bytesResolver LD.handleBytesResponse
+        , timeout = Nothing
+        }
+
+
+{-| Used directly by the core CORS modification to decide which Msg types need
+the CORS flag set for subsequent Cmd's they'll initiate
+-}
 shouldProxy : Msg -> Bool
 shouldProxy msg =
     case msg of
