@@ -210,8 +210,13 @@ resolveTvars_ tvarMap tipe =
           in
           Can.TRecord newFieldMap isPartial
 
-    Can.TTuple firstType secondType maybeType_whatisthisfor ->
-      Can.TTuple (resolveTvars_ tvarMap firstType) (resolveTvars_ tvarMap secondType) maybeType_whatisthisfor
+    Can.TTuple t1 t2 mt3 ->
+      case mt3 of
+        Just t3 ->
+          Can.TTuple (resolveTvars_ tvarMap t1) (resolveTvars_ tvarMap t2) (Just $ resolveTvars_ tvarMap t3)
+
+        Nothing ->
+          Can.TTuple (resolveTvars_ tvarMap t1) (resolveTvars_ tvarMap t2) Nothing
 
     Can.TUnit ->
       Can.TUnit
@@ -556,7 +561,8 @@ diffableTypeToText dtype =
     DSet tipe            -> "S["<> diffableTypeToText tipe <>"]"
     DResult err result   -> "Res["<> diffableTypeToText err <>","<> diffableTypeToText result <>"]"
     DDict key value      -> "D["<> diffableTypeToText key <>","<> diffableTypeToText value <>"]"
-    DTuple first second  -> "T["<> diffableTypeToText first <>","<> diffableTypeToText second <>"]"
+    DTuple t1 t2         -> "T["<> diffableTypeToText t1 <>","<> diffableTypeToText t2 <>"]"
+    DTriple t1 t2 t3     -> "T["<> diffableTypeToText t1 <>","<> diffableTypeToText t2 <>","<> diffableTypeToText t3 <>"]"
     DUnit                -> "()"
 
     DRecursion name ->
@@ -601,7 +607,8 @@ diffableTypeErrors dtype =
     DSet tipe           -> diffableTypeErrors tipe
     DResult err result  -> diffableTypeErrors err ++ diffableTypeErrors result
     DDict key value     -> diffableTypeErrors key ++ diffableTypeErrors value
-    DTuple first second -> diffableTypeErrors first ++ diffableTypeErrors second
+    DTuple t1 t2        -> diffableTypeErrors t1 ++ diffableTypeErrors t2
+    DTriple t1 t2 t3    -> diffableTypeErrors t1 ++ diffableTypeErrors t2 ++ diffableTypeErrors t3
     DUnit               -> []
     DRecursion name     -> []
     DKernelBrowser name -> []
@@ -642,7 +649,8 @@ diffableTypeExternalWarnings dtype =
     DSet tipe           -> diffableTypeExternalWarnings tipe
     DResult err result  -> diffableTypeExternalWarnings err ++ diffableTypeExternalWarnings result
     DDict key value     -> diffableTypeExternalWarnings key ++ diffableTypeExternalWarnings value
-    DTuple first second -> diffableTypeExternalWarnings first ++ diffableTypeExternalWarnings second
+    DTuple t1 t2        -> diffableTypeExternalWarnings t1 ++ diffableTypeExternalWarnings t2
+    DTriple t1 t2 t3    -> diffableTypeExternalWarnings t1 ++ diffableTypeExternalWarnings t2 ++ diffableTypeExternalWarnings t3
     DUnit               -> []
     DRecursion name     -> []
     DKernelBrowser name -> []

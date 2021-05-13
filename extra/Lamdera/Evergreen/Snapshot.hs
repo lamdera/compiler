@@ -865,13 +865,21 @@ canonicalToFt version scope interfaces recursionSet canonical tvarMap =
           in
           result
 
-    Can.TTuple firstType secondType maybeType_whatisthisfor ->
+    Can.TTuple t1 t2 mt3 ->
       let
-        (subt, imps, subft) = (canonicalToFt version scope interfaces recursionSet firstType tvarMap)
-        (subt2, imps2, subft2) = (canonicalToFt version scope interfaces recursionSet secondType tvarMap)
+        (subt, imps, subft) = (canonicalToFt version scope interfaces recursionSet t1 tvarMap)
+        (subt2, imps2, subft2) = (canonicalToFt version scope interfaces recursionSet t2 tvarMap)
       in
-      ("(" <> subt <> ", " <> subt2 <> ")", mergeImports imps imps2, mergeFts subft subft2)
-      -- DTuple (canonicalToFt version scope interfaces recursionSet firstType tvarMap) (canonicalToFt version scope interfaces recursionSet secondType tvarMap)
+      case mt3 of
+        Just t3 ->
+          let
+            (subt3, imps3, subft3) = (canonicalToFt version scope interfaces recursionSet t3 tvarMap)
+          in
+          ("(" <> subt <> ", " <> subt2 <> ", " <> subt3 <> ")", mergeAllImports [imps,imps2,imps3], mergeAllFts [subft,subft2,subft3])
+
+        Nothing ->
+          ("(" <> subt <> ", " <> subt2 <> ")", mergeImports imps imps2, mergeFts subft subft2)
+      -- DTuple (canonicalToFt version scope interfaces recursionSet t1 tvarMap) (canonicalToFt version scope interfaces recursionSet t2 tvarMap)
 
     Can.TUnit ->
       ("()", Set.empty, Map.empty)

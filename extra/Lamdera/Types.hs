@@ -19,6 +19,7 @@ data DiffableType
   | DResult DiffableType DiffableType
   | DDict DiffableType DiffableType
   | DTuple DiffableType DiffableType
+  | DTriple DiffableType DiffableType DiffableType
   | DUnit
   | DRecursion Text
   | DKernelBrowser Text
