@@ -52,10 +52,19 @@ Uncommenting the line will mean all alias decodings will now log the alias name.
 Recompile the lamdera compiler after this adding the debugging you desire, and ensure you're using that binary to test.
 
 
-### Observing debugging output
+### Using the debugging
 
-In its current form, when the decoder is finished, it will call [`writeLog`](https://github.com/lamdera/elm-bytes/blob/master/src/Elm/Kernel/Bytes.js#L57).
+:warning: Debugging does not work in `--optimize` currently as it relies on `Debug.toString`.
 
-Output will go to a `window.*` var in browser, or written to disk for noedjs.
+By default, `elm/bytes` failures use a JS `throw`, meaning we lose all current progress and just get `Nothing`.
+
+Our modified `elm/bytes` doesn't throw, instead it starts returning the `!DECODEFAILED!` as the decoded value and attempts to keep decoding.
+
+This means we should always get an Elm value result, and can inspect it to see where decoding issues are, as a starting point to debugging.
+
+
+When the decoder is finished, it will call [`writeLog`](https://github.com/lamdera/elm-bytes/blob/master/src/Elm/Kernel/Bytes.js#L57).
+
+Debug output will go to a `window.*` var in browser, or written to disk for noedjs.
 
 Sometimes it's easier to just edit the custom package with some `console.log` and poke around that way, depending on the nature of the bug. Don't forget to repackage and nuke caches if you do.
