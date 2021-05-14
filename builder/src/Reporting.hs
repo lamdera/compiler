@@ -393,7 +393,8 @@ reportGenerate style names output =
     Terminal mvar ->
       do  readMVar mvar
           let cnames = fmap ModuleName.toChars names
-          putStrLn ('\n' : toGenDiagram cnames output)
+          alternativeImplementation (pure ()) $
+           putStrLn ('\n' : toGenDiagram cnames output)
 
 
 toGenDiagram :: NE.List [Char] -> FilePath -> [Char]
