@@ -66,7 +66,7 @@ load dir =
       result <- Details.load style scope root
       case result of
         Left _ ->
-          error $ "Ran into some problem loading elm.json\nTry running `elm make` in: " ++ dir
+          error $ "Ran into some problem loading elm.json\nTry running `lamdera make` in: " ++ dir
 
         Right details ->
           do  omvar <- Details.loadObjects root details
@@ -75,7 +75,7 @@ load dir =
               mobjs <- readMVar omvar
               case liftM2 (,) mdeps mobjs of
                 Nothing ->
-                  error $ "Ran into some weird problem loading elm.json\nTry running `elm make` in: " ++ dir
+                  error $ "Ran into some weird problem loading elm.json\nTry running `lamdera make` in: " ++ dir
 
                 Just (deps, objs) ->
                   return $ Artifacts (toInterfaces deps) objs
