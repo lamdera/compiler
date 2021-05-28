@@ -967,6 +967,7 @@ lamderaUI devbar nodeType =
                     , style "color" white
                     , style "background-color" charcoal
                     , style "border-radius" "5px"
+                    , style "z-index" "1000"
                     ]
                     [ icon iconWarning 18 yellow
                     , spacer 8
