@@ -200,7 +200,7 @@ defaultImplementations =
                   case urlRequest of
                       Internal url ->
                           ( model
-                          , Cmd.batch [ Nav.pushUrl model.key (Url.toString url) ]
+                          , Nav.pushUrl model.key (Url.toString url)
                           )
 
                       External url ->
@@ -222,6 +222,7 @@ defaultImplementations =
                   ( model, Cmd.none )
 
 
+      view : Model -> Browser.Document FrontendMsg
       view model =
           { title = ""
           , body =
