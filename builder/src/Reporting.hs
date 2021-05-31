@@ -46,7 +46,7 @@ import qualified Reporting.Exit as Exit
 import qualified Reporting.Exit.Help as Help
 
 
--- import Lamdera
+import Lamdera
 
 -- STYLE
 
