@@ -68,7 +68,7 @@ lamderaGenerated nextVersion migrationFilepaths = do
 
   supportingCode <- genSupportingCode
 
-  debug_ $ "Generated source for Evergreen type snapshot"
+  debug_ $ "Generated source for LamderaGenerated"
 
   let
     final =
@@ -120,12 +120,22 @@ decodeAndUpgradeFor migrationSequence nextVersion valueType = do
         caseNext
 
     caseNext =
-      [text|
-          $nextVersion_ ->
-              decodeType $valueTypeInt version bytes T$nextVersion_.w3_decode_$valueType
-                  |> upgradeIsCurrent
-                  |> otherwiseError
-      |]
+      if valueType == "BackendModel" then
+        [text|
+            $nextVersion_ ->
+                decodeType $valueTypeInt version bytes T$nextVersion_.w3_decode_$valueType
+                    |> fallback (\_ -> decodeType $valueTypeInt version bytes T$nextVersion_.w2_decode_$valueType)
+                    |> upgradeIsCurrent
+                    |> otherwiseError
+        |]
+      else
+        [text|
+            $nextVersion_ ->
+                decodeType $valueTypeInt version bytes T$nextVersion_.w3_decode_$valueType
+                    |> upgradeIsCurrent
+                    |> otherwiseError
+        |]
+
 
   [text|
     decodeAndUpgrade$valueType : Int -> Bytes -> UpgradeResult T$nextVersion_.$valueType T$nextVersion_.$cmdMsgType
@@ -244,19 +254,38 @@ migrationForType migrationSequence migrationsForVersion startVersion finalVersio
     valueTypeInt = show_ $ tipeStringToInt tipe
 
     decodeAsLatest =
-      [text|
-        decodeType $valueTypeInt $finalVersion_ bytes T$finalVersion_.w3_decode_$tipe
-            |> upgradeSucceeds
-            |> otherwiseError
-      |]
+      if tipe == "BackendModel"
+        then
+          [text|
+            decodeType $valueTypeInt $finalVersion_ bytes T$finalVersion_.w3_decode_$tipe
+                |> fallback (\_ -> decodeType $valueTypeInt $finalVersion_ bytes T$finalVersion_.w2_decode_$tipe)
+                |> upgradeSucceeds
+                |> otherwiseError
+          |]
+        else
+          [text|
+            decodeType $valueTypeInt $finalVersion_ bytes T$finalVersion_.w3_decode_$tipe
+                |> upgradeSucceeds
+                |> otherwiseError
+          |]
 
     migrateNext =
-      [text|
-        decodeType $valueTypeInt $startVersion_ bytes T$startVersion_.w3_decode_$tipe
-            $intermediateMigrationsFormatted
-            |> upgradeSucceeds
-            |> otherwiseError
-      |]
+      if tipe == "BackendModel"
+        then
+          [text|
+            decodeType $valueTypeInt $startVersion_ bytes T$startVersion_.w3_decode_$tipe
+                |> fallback (\_ -> decodeType $valueTypeInt $startVersion_ bytes T$startVersion_.w2_decode_$tipe)
+                $intermediateMigrationsFormatted
+                |> upgradeSucceeds
+                |> otherwiseError
+          |]
+        else
+          [text|
+            decodeType $valueTypeInt $startVersion_ bytes T$startVersion_.w3_decode_$tipe
+                $intermediateMigrationsFormatted
+                |> upgradeSucceeds
+                |> otherwiseError
+          |]
 
   case intermediateMigrations of
     single:[] ->
@@ -510,6 +539,16 @@ genSupportingCode = do
         upgradeIsCurrent : Result String ( newModel, Cmd msg ) -> Result String (UpgradeResult newModel msg)
         upgradeIsCurrent priorResult =
             priorResult |> Result.map AlreadyCurrent
+
+
+        fallback : (() -> Result String ( newModel, Cmd msg )) -> Result String ( newModel, Cmd msg ) -> Result String ( newModel, Cmd msg )
+        fallback res priorResult =
+            case priorResult of
+                Ok v ->
+                    Ok v
+
+                Err _ ->
+                    res ()
 
 
         otherwiseError : Result String (UpgradeResult valueType msgType) -> UpgradeResult valueType msgType
