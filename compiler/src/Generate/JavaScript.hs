@@ -48,7 +48,7 @@ generate mode (Opt.GlobalGraph graph _) mains =
   in
   "(function(scope){\n'use strict';"
   <> Functions.functions
-  <> perfNote mode
+  -- <> perfNote mode -- @NOTE given user never manages JS generation in Lamdera, hide the perf note
   <> stateToBuilder state
   <> toMainExports mode mains
   <> Lamdera.Injection.source mode mains
