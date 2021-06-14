@@ -151,7 +151,7 @@ serveFiles :: Sentry.Cache -> Snap ()
 serveFiles sentryCache =
   do  path <- getSafePath
       guard =<< liftIO (Dir.doesFileExist path)
-      serveElm sentryCache path <|> serveFilePretty path
+      serveElm_ path <|> serveFilePretty path
 
 
 
@@ -248,7 +248,7 @@ serveElm_ path =
 
 compile :: FilePath -> IO (Either Exit.Reactor B.Builder)
 compile path =
-  do  maybeRoot <- Stuff.findRoot
+  do  maybeRoot <- Stuff.findRootHelp $ FP.splitDirectories $ FP.takeDirectory path
       case maybeRoot of
         Nothing ->
           return $ Left $ Exit.ReactorNoOutline

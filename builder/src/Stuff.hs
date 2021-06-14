@@ -8,6 +8,7 @@ module Stuff
   , elmo
   , temp
   , findRoot
+  , findRootHelp
   , withRootLock
   , withRegistryLock
   , PackageCache

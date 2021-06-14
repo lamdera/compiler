@@ -318,7 +318,20 @@ instance Show Elm.Interface.DependencyInterface where
   show _ = "\"<Elm.Interface.DependencyInterface>\""
 
 instance Show Elm.Kernel.Chunk where
-  show _ = "\"<Elm.Kernel.CHunk>\""
+  show v =
+    case v of
+      Elm.Kernel.JS bs -> quoted $ "Chunk:JS: " <> (T.unpack $ T.decodeUtf8 bs)
+      Elm.Kernel.ElmVar moduleName name -> quoted $ "Chunk:ElmVar:" <> show moduleName <> ":" <> show name
+      Elm.Kernel.JsVar name name2 -> quoted $ "Chunk:JsVar:" <> show name <> ":" <> show name2
+      Elm.Kernel.ElmField name -> quoted $ "Chunk:ElmField:" <> show name
+      Elm.Kernel.JsField int -> quoted $ "Chunk:JsField:" <> show int
+      Elm.Kernel.JsEnum int -> quoted $ "Chunk:JsEnum:" <> show int
+      Elm.Kernel.Debug -> quoted $ "Chunk:Debug"
+      Elm.Kernel.Prod -> quoted $ "Chunk:Prod"
+
+
+      -- "\"<Elm.Kernel.CHunk>\""
+
 
 deriving instance Show Elm.Interface.Union
 deriving instance Show Elm.Interface.Alias
@@ -337,9 +350,6 @@ deriving instance Show Elm.Outline.Exposed
 
 instance Show Elm.Licenses.License where
   show _ = "\"<Elm.Licenses.License>\""
-
-quoted :: String -> String
-quoted s = "\"" ++ s ++ "\""
 
 instance Show (Elm.String.String) where
   show = quoted . Elm.String.toChars
@@ -467,3 +477,6 @@ instance NFData (Optimize.DecisionTree.Test) where rnf x = ()
 showMapQualified :: (Show k, Show a) => Map.Map k a -> String
 showMapQualified m =
   "Map.fromList " ++ show (Map.toList m)
+
+quoted :: String -> String
+quoted s = "\"" ++ s ++ "\""

@@ -101,17 +101,26 @@ const msgInbound = function(portname, arg) {
   }
 }
 
-setupApp = function(name, elid) {
+window.setupApp = function(name, elid) {
 
   function initApp() {
     if (app !== null) { return } // Don't init when already initialised
     // console.log(`booting with`, { c: clientId, s: sessionId, nt: nodeType, b: initBackendModel })
+
+    if (name !== "LocalDev") {
+      console.warn('Not a Lamdera app, loading as normal Elm.')
+      app = Elm[name].init({ node: document.getElementById(elid) })
+      if (document.getElementById(elid)) {
+        document.getElementById(elid).innerText = 'This is a headless program, meaning there is nothing to show here.\n\nI started the program anyway though, and you can access it as `app` in the developer console.'
+      }
+      return;
+    }
+
     app = Elm[name].init({
       node: document.getElementById(elid),
       flags: { c: clientId, s: sessionId, nt: nodeType, b: initBackendModel }
     })
-    if (document.getElementById(elid))
-    {
+    if (document.getElementById(elid)) {
       document.getElementById(elid).innerText = 'This is a headless program, meaning there is nothing to show here.\n\nI started the program anyway though, and you can access it as `app` in the developer console.'
     }
     // window.app = app
@@ -337,7 +346,7 @@ function waitUntil(
       reject(new Error('Timed out after waiting for ' + timerTimeout + 'ms'));
     }, timerTimeout);
   });
-};
+}
 
 
 function bytesToBase64(bytes_) {

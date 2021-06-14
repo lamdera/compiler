@@ -171,3 +171,5 @@ lamderaLive =
 The `$(...)` syntax is invoking Template Haskell.
 
 ⚠️ Because unchanged files aren't recompiled, you might need to add an `x = 1` to the bottom of the `.hs` file to force a change, and thus the expression to be re-evaluated. If you find you've updated a static file, but the complied binary still has the old one, this is likely the reason why.
+
+In development, using `LDEBUG=1` will cause `extra/dist/live.js` to be dynamically included on first binary boot (so a kill+reboot+refresh will get the latest local live.js, but you still have to remember to `parcel build` it first).
