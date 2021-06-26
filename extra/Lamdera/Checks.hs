@@ -110,12 +110,14 @@ progressPointer t =
     report $ D.fillSep [ D.fromChars "───>", D.green $ t <> "\n" ]
 
 
-
 writeDefaultImplementations = do
   root <- getProjectRoot
   defaultImplementations
-    & mapM (\(filename, implementation) ->
-        writeUtf8 (root </> filename) implementation
+    & mapM (\(filename, implementation) -> do
+        exists <- doesFileExist (root </> filename)
+        if exists
+          then atomicPutStrLn $ "  Skipping " <> (root </> filename) <> ", already exists"
+          else writeUtf8 (root </> filename) implementation
       )
   writeLineIfMissing "elm-stuff" (root </> ".gitignore")
 
