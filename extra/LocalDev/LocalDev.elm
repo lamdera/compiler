@@ -142,7 +142,9 @@ type Msg
     | LoadLatestSnapshotFilename
     | LoadLatestSnapshotFilenamesResult (Result LD.HttpError (List String))
     | LoadSnapshot String
-    | LoadedSnapshot (Result LD.HttpError Bytes)
+    | LoadSnapshotLegacy String
+    | LoadedSnapshot (Result LD.HttpError ( Bytes, Int ))
+    | LoadedSnapshotLegacy (Result LD.HttpError ( List Int, Int ))
     | Noop
 
 
@@ -832,18 +834,16 @@ update msg m =
 
         LoadLatestSnapshotFilename ->
             ( m
-            , getAppSnapshotFilenames "dashboard-local"
+            , getAppSnapshotFilenames "dashboard"
                 |> Task.attempt LoadLatestSnapshotFilenamesResult
             )
 
         LoadLatestSnapshotFilenamesResult res ->
             case res of
                 Ok filenames ->
-                    let
-                        devbar =
-                            m.devbar
-                    in
-                    ( { m | devbar = { devbar | snapshotFilenames = filenames } }, Cmd.none )
+                    ( { m | devbar = m.devbar |> (\d -> { d | snapshotFilenames = filenames |> List.take 1 }) }
+                    , Cmd.none
+                    )
 
                 Err error ->
                     let
@@ -853,37 +853,101 @@ update msg m =
                     ( m, Cmd.none )
 
         LoadSnapshot filename ->
-            ( m, getAppSnapshot "dashboard-local" filename |> Task.attempt LoadedSnapshot )
+            ( m, getAppSnapshot "dashboard" filename |> Task.attempt LoadedSnapshot )
+
+        LoadSnapshotLegacy filename ->
+            ( m, getAppSnapshotLegacy "ascii-collab" filename |> Task.attempt LoadedSnapshotLegacy )
 
         LoadedSnapshot res ->
-            let
-                evergreenTest =
-                    case res of
-                        Ok bytes ->
-                            case LamderaGenerated.decodeAndUpgradeBackendModel 72 bytes of
-                                LamderaGenerated.AlreadyCurrent ( valueType, cmds ) ->
-                                    "AlreadyCurrent"
+            Debug.todo "neutered"
 
-                                LamderaGenerated.Upgraded ( valueType, cmds ) ->
-                                    "Upgraded"
+        -- let
+        --     evergreenResult =
+        --         case res of
+        --             Ok ( bytes, version ) ->
+        --                 LamderaGenerated.decodeAndUpgradeBackendModel version bytes
+        --
+        --             Err err ->
+        --                 DecoderError <| Debug.toString err
+        --
+        --     evergreenTest =
+        --         case evergreenResult of
+        --             AlreadyCurrent ( valueType, cmds ) ->
+        --                 "AlreadyCurrent"
+        --
+        --             Upgraded ( valueType, cmds ) ->
+        --                 "Upgraded"
+        --
+        --             UnknownVersion ( int, string, bytes_ ) ->
+        --                 "UnknownVersion: " ++ String.fromInt int ++ ", " ++ string
+        --
+        --             UnknownType string ->
+        --                 "UnknownType: " ++ string
+        --
+        --             DecoderError string ->
+        --                 "DecoderError: " ++ string
+        --
+        --     _ =
+        --         Debug.log "evergreenResult" evergreenTest
+        -- in
+        -- case evergreenResult of
+        --     AlreadyCurrent ( valueType, cmds ) ->
+        --         ( { m | bem = valueType }, Cmd.none )
+        --
+        --     Upgraded ( valueType, cmds ) ->
+        --         let
+        --             _ =
+        --                 Debug.log "RESTORING SUCCESS DECODE!!!!!" ()
+        --         in
+        --         ( { m | bem = valueType }, Cmd.none )
+        --
+        --     _ ->
+        --         ( m, Cmd.none )
+        LoadedSnapshotLegacy res ->
+            Debug.todo "neutered"
 
-                                LamderaGenerated.UnknownVersion ( int, string, bytes_ ) ->
-                                    "UnknownVersion: " ++ String.fromInt int ++ ", " ++ string
-
-                                LamderaGenerated.UnknownType string ->
-                                    "UnknownType: " ++ string
-
-                                LamderaGenerated.DecoderError string ->
-                                    "DecoderError: " ++ string
-
-                        Err err ->
-                            Debug.toString err
-
-                _ =
-                    Debug.log "evergreenResult" evergreenTest
-            in
-            ( m, Cmd.none )
-
+        -- let
+        --     evergreenResult =
+        --         case res of
+        --             Ok ( intList, version ) ->
+        --                 LamderaGenerated.decodeAndUpgradeBackendModel version (Wire2.intListToBytes intList)
+        --
+        --             Err err ->
+        --                 DecoderError <| Debug.toString err
+        --
+        --     evergreenTest =
+        --         case evergreenResult of
+        --             AlreadyCurrent ( valueType, cmds ) ->
+        --                 "AlreadyCurrent"
+        --
+        --             Upgraded ( valueType, cmds ) ->
+        --                 "Upgraded"
+        --
+        --             UnknownVersion ( int, string, bytes_ ) ->
+        --                 "UnknownVersion: " ++ String.fromInt int ++ ", " ++ string
+        --
+        --             UnknownType string ->
+        --                 "UnknownType: " ++ string
+        --
+        --             DecoderError string ->
+        --                 "DecoderError: " ++ string
+        --
+        --     _ =
+        --         Debug.log "evergreenResult" evergreenTest
+        -- in
+        -- case evergreenResult of
+        --     AlreadyCurrent ( valueType, cmds ) ->
+        --         ( { m | bem = valueType }, Cmd.none )
+        --
+        --     Upgraded ( valueType, cmds ) ->
+        --         let
+        --             _ =
+        --                 Debug.log "RESTORING SUCCESS DECODE!!!!!" ()
+        --         in
+        --         ( { m | bem = valueType }, Cmd.none )
+        --
+        --     _ ->
+        --         ( m, Cmd.none )
         Noop ->
             ( m, Cmd.none )
 
@@ -1402,14 +1466,23 @@ expandedUI topDown devbar =
 
           else
             text ""
+        , lamderaSnapshots devbar
         ]
 
 
 lamderaSnapshots devbar =
     Html.div []
-        ([ Html.div [ onClick LoadLatestSnapshotFilename ] [ Html.text "Load latest snapshot" ]
+        ([ Html.div [ onClick LoadLatestSnapshotFilename ] [ Html.text "Load latest snapshots" ]
          ]
             ++ List.map (\f -> Html.div [ onClick (LoadSnapshot f) ] [ Html.text f ]) devbar.snapshotFilenames
+            ++ List.map
+                (\f ->
+                    Html.div
+                        [ onClick (LoadSnapshotLegacy f)
+                        ]
+                        [ Html.text <| "LEGACY: " ++ f ]
+                )
+                [ "ascii-collab-v67-1622398980511.json" ]
         )
 
 
@@ -1499,8 +1572,7 @@ mapDocument : Model -> (FrontendMsg -> Msg) -> Browser.Document FrontendMsg -> B
 mapDocument model msg { title, body } =
     { title = title
     , body =
-        [ lamderaSnapshots model.devbar ]
-            ++ List.map (Html.map msg) body
+        List.map (Html.map msg) body
             ++ lamderaUI
                 model.devbar
                 model.nodeType
@@ -1654,31 +1726,102 @@ getAppSnapshotFilenames appId =
     LD.task
         { method = "GET"
         , headers = []
+        , url = "http://apps.lamdera.com:8080/v1/app/" ++ appId ++ "/snapshots"
 
-        -- , url = "http://apps.lamdera.com:8080/v1/app/" ++ appId ++ "/snapshots"
-        , url = "http://localhost:8080/v1/app/" ++ appId ++ "/snapshots"
+        -- , url = "http://localhost:8080/v1/app/" ++ appId ++ "/snapshots"
         , body = LD.emptyBody
         , resolver = LD.stringResolver <| LD.handleJsonResponse <| Json.decoderList Json.decoderString
         , timeout = Nothing
         }
 
 
-getAppSnapshot : String -> String -> Task LD.HttpError Wire.Bytes
+getAppSnapshot : String -> String -> Task LD.HttpError ( Wire.Bytes, Int )
 getAppSnapshot appId snapshot =
     let
         token =
-            "abc123 todo"
+            "XXXXX"
+
+        version =
+            snapshot
+                |> String.replace (appId ++ "_v") ""
+                |> String.split "_"
+                |> List.head
+                |> Maybe.andThen String.toInt
+                |> Debug.log "parsed version as:"
+                |> Maybe.withDefault -1
     in
     LD.task
         { method = "GET"
         , headers = []
+        , url = "http://apps.lamdera.com:8080/v1/app/" ++ appId ++ "/snapshot-retrieve/" ++ snapshot ++ "/" ++ token
 
-        -- , url = "http://apps.lamdera.com:8080/v1/app/" ++ appId ++ "/snapshots"
-        , url = "http://localhost:8080/v1/app/" ++ appId ++ "/snapshot-retrieve/" ++ snapshot ++ "/" ++ token
+        -- , url = "http://localhost:8080/v1/app/" ++ appId ++ "/snapshot-retrieve/" ++ snapshot ++ "/" ++ token
         , body = LD.emptyBody
         , resolver = LD.bytesResolver LD.handleBytesResponse
         , timeout = Nothing
         }
+        |> Task.map (\bytes -> ( bytes, version ))
+
+
+getAppSnapshotLegacy : String -> String -> Task LD.HttpError ( List Int, Int )
+getAppSnapshotLegacy appId snapshot =
+    Debug.todo "neutered"
+
+
+
+-- let
+--     token =
+--         "XXXXX"
+--
+--     version =
+--         snapshot
+--             |> String.replace (appId ++ "-v") ""
+--             |> String.split "-"
+--             |> List.head
+--             |> Maybe.andThen String.toInt
+--             |> Debug.log "parsed version as:"
+--             |> Maybe.withDefault -1
+-- in
+-- LD.task
+--     { method = "GET"
+--     , headers = []
+--     , url = "http://apps.lamdera.com:8080/v1/app/" ++ appId ++ "/snapshot-retrieve-legacy/" ++ snapshot ++ "/" ++ token
+--
+--     -- , url = "http://localhost:8080/v1/app/" ++ appId ++ "/snapshot-retrieve-legacy/" ++ snapshot ++ "/" ++ token
+--     , body = LD.emptyBody
+--     , resolver =
+--         LD.stringResolver
+--             (\response ->
+--                 case response of
+--                     Http.BadUrl_ urlString ->
+--                         Err <| Http.BadUrl urlString
+--
+--                     Http.Timeout_ ->
+--                         Err <| Http.Timeout
+--
+--                     Http.NetworkError_ ->
+--                         Err <| Http.NetworkError
+--
+--                     Http.BadStatus_ metadata body ->
+--                         -- @TODO use metadata better here
+--                         Err <| Http.BadStatus metadata.statusCode
+--
+--                     Http.GoodStatus_ metadata text ->
+--                         case Json.decodeString Json.decoderString text of
+--                             Ok s ->
+--                                 case Json.decodeString (Json.decoderList Json.decoderInt) s of
+--                                     Ok x ->
+--                                         Ok x
+--
+--                                     Err err ->
+--                                         Err <| Http.BadBody <| "Failed to decode response: " ++ Json.errorToString err
+--
+--                             Err _ ->
+--                                 Err <| Http.BadBody <| "Failed to decode response"
+--             )
+--     , timeout = Nothing
+--     }
+--     |> Task.map (\v -> ( v, version ))
 
 
 {-| Used directly by the core CORS modification to decide which Msg types need
