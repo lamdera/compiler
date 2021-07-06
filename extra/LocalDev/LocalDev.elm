@@ -40,8 +40,8 @@ import Types exposing (BackendModel, BackendMsg, FrontendModel, FrontendMsg, ToB
 -- MKRRI
 
 
-lamderaVersion =
-    "alpha12"
+currentVersion =
+    ( 0, 0, 1 )
 
 
 port send_ToBackend : Bytes -> Cmd msg
@@ -1309,36 +1309,56 @@ pill devbar nodeType =
 
             VersionCheckSucceeded version time ->
                 let
-                    versionInt =
+                    latestVersion =
                         version
-                            |> String.replace "alpha" ""
-                            |> String.toInt
-                            |> Maybe.withDefault 0
+                            |> Debug.log "version"
+                            |> String.split "-"
+                            |> (\p ->
+                                    case p of
+                                        ev :: lv :: [] ->
+                                            lv
+                                                |> Debug.log "lv"
+                                                |> String.split "."
+                                                |> List.map String.toInt
+                                                |> justs
+                                                |> Debug.log "justs"
+                                                |> (\parts ->
+                                                        case parts of
+                                                            v1 :: v2 :: v3 :: [] ->
+                                                                ( v1, v2, v3 )
 
-                    lamderaVersionInt =
-                        lamderaVersion
-                            |> String.replace "alpha" ""
-                            |> String.toInt
-                            |> Maybe.withDefault 0
+                                                            _ ->
+                                                                ( 0, 0, 0 )
+                                                   )
+
+                                        _ ->
+                                            ( 0, 0, 0 )
+                               )
+                            |> Debug.log "latest"
+
+                    newVersionUi =
+                        div
+                            [ style "text-align" "center"
+                            , style "font-size" "10px"
+                            , style "background-color" "#8E4CD0"
+                            , style "padding" "4px"
+                            , style "border-radius" "0 0 5px 5px"
+                            , style "box-shadow" "inset 0px 3px 3px -3px rgba(0,0,0,1)"
+                            , style "border-top" "1px solid #555"
+                            ]
+                            [ buttonDevLink "New version!" "https://dashboard.lamdera.app/docs/download" white
+                            ]
                 in
                 if String.contains "wip" version then
                     text ""
 
-                else if versionInt /= lamderaVersionInt && versionInt > lamderaVersionInt then
-                    div
-                        [ style "text-align" "center"
-                        , style "font-size" "10px"
-                        , style "background-color" "#8E4CD0"
-                        , style "padding" "4px"
-                        , style "border-radius" "0 0 5px 5px"
-                        , style "box-shadow" "inset 0px 3px 3px -3px rgba(0,0,0,1)"
-                        , style "border-top" "1px solid #555"
-                        ]
-                        [ buttonDevLink "New version!" "https://dashboard.lamdera.app/docs/download" white
-                        ]
-
                 else
-                    text ""
+                    case compareVersion currentVersion latestVersion of
+                        LT ->
+                            newVersionUi
+
+                        _ ->
+                            text ""
         ]
 
 
@@ -1402,7 +1422,7 @@ expandedUI topDown devbar =
                 , style "padding" "4px"
                 , style borderPos "1px solid #393939"
                 ]
-                [ text <| "Version: " ++ lamderaVersion
+                [ text <| "Version: " ++ showVersion currentVersion
                 ]
     in
     div [ style "width" "175px" ]
@@ -1708,7 +1728,7 @@ getLatestVersion time =
     LD.task
         { method = "GET"
         , headers = []
-        , url = "https://lamdera.com/current-version.json"
+        , url = "http://localhost:8001/https://static.lamdera.com/bin/latest-version.json"
         , body = LD.emptyBody
         , resolver = LD.stringResolver <| LD.handleJsonResponse <| decodeVersionCheck time
         , timeout = Nothing
@@ -1737,30 +1757,34 @@ getAppSnapshotFilenames appId =
 
 getAppSnapshot : String -> String -> Task LD.HttpError ( Wire.Bytes, Int )
 getAppSnapshot appId snapshot =
-    let
-        token =
-            "XXXXX"
+    Debug.todo "neutered"
 
-        version =
-            snapshot
-                |> String.replace (appId ++ "_v") ""
-                |> String.split "_"
-                |> List.head
-                |> Maybe.andThen String.toInt
-                |> Debug.log "parsed version as:"
-                |> Maybe.withDefault -1
-    in
-    LD.task
-        { method = "GET"
-        , headers = []
-        , url = "http://apps.lamdera.com:8080/v1/app/" ++ appId ++ "/snapshot-retrieve/" ++ snapshot ++ "/" ++ token
 
-        -- , url = "http://localhost:8080/v1/app/" ++ appId ++ "/snapshot-retrieve/" ++ snapshot ++ "/" ++ token
-        , body = LD.emptyBody
-        , resolver = LD.bytesResolver LD.handleBytesResponse
-        , timeout = Nothing
-        }
-        |> Task.map (\bytes -> ( bytes, version ))
+
+-- let
+--     token =
+--         "XXXXX"
+--
+--     version =
+--         snapshot
+--             |> String.replace (appId ++ "_v") ""
+--             |> String.split "_"
+--             |> List.head
+--             |> Maybe.andThen String.toInt
+--             |> Debug.log "parsed version as:"
+--             |> Maybe.withDefault -1
+-- in
+-- LD.task
+--     { method = "GET"
+--     , headers = []
+--     , url = "http://apps.lamdera.com:8080/v1/app/" ++ appId ++ "/snapshot-retrieve/" ++ snapshot ++ "/" ++ token
+--
+--     -- , url = "http://localhost:8080/v1/app/" ++ appId ++ "/snapshot-retrieve/" ++ snapshot ++ "/" ++ token
+--     , body = LD.emptyBody
+--     , resolver = LD.bytesResolver LD.handleBytesResponse
+--     , timeout = Nothing
+--     }
+--     |> Task.map (\bytes -> ( bytes, version ))
 
 
 getAppSnapshotLegacy : String -> String -> Task LD.HttpError ( List Int, Int )
@@ -1844,3 +1868,31 @@ shouldProxy msg =
 
         _ ->
             False
+
+
+showVersion ( major, minor, patch ) =
+    [ major, minor, patch ] |> List.map String.fromInt |> String.join "."
+
+
+compareVersion ( a1, a2, a3 ) ( b1, b2, b3 ) =
+    if a1 == b1 && a2 == b2 && a3 == b3 then
+        EQ
+
+    else if a1 <= b1 && a2 <= b2 && a3 <= b3 then
+        LT
+
+    else
+        GT
+
+
+justs =
+    List.foldr
+        (\v acc ->
+            case v of
+                Just el ->
+                    el :: acc
+
+                Nothing ->
+                    acc
+        )
+        []
