@@ -57,6 +57,7 @@ data KnownVersions =
 read :: Stuff.PackageCache -> IO (Maybe Registry)
 read cache =
   File.readBinary (Stuff.registry cache)
+    & registryAddLamderaCoreDeps
 
 
 
@@ -228,12 +229,7 @@ lamderaAddCorePackages :: (Map.Map Pkg.Name KnownVersions -> IO Registry) -> Map
 lamderaAddCorePackages originalFn versions = do
   overridePackages <- Lamdera.Project.findOverridePackages
   versions
-    & Map.union
-        (Map.fromList
-          [ (Lamdera.Project.lamderaCodecs, KnownVersions { _newest = V.Version 1 0 0, _previous = [] })
-          , (Lamdera.Project.lamderaCore, KnownVersions { _newest = V.Version 1 0 0, _previous = [] })
-          ]
-        )
+    & Map.union lamderaCoreDeps
     & (\packages ->
       overridePackages
         & fmap (\(pkg, major, minor, patch) -> (pkg, KnownVersions { _newest = V.Version major minor patch, _previous = [] }))
@@ -241,3 +237,21 @@ lamderaAddCorePackages originalFn versions = do
         & Map.union packages
       )
     & originalFn
+
+
+registryAddLamderaCoreDeps :: IO (Maybe Registry) -> IO (Maybe Registry)
+registryAddLamderaCoreDeps registry =
+  registry
+    & (fmap . fmap) (\r ->
+       _versions r
+         & Map.union lamderaCoreDeps
+         & (\new -> r { _versions = new })
+     )
+
+
+lamderaCoreDeps :: Map.Map Pkg.Name KnownVersions
+lamderaCoreDeps =
+  Map.fromList
+    [ (Lamdera.Project.lamderaCodecs, KnownVersions { _newest = V.Version 1 0 0, _previous = [] })
+    , (Lamdera.Project.lamderaCore, KnownVersions { _newest = V.Version 1 0 0, _previous = [] })
+    ]
