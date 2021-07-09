@@ -1,0 +1,13 @@
+on: [push]
+name: build
+jobs:
+  runhaskell:
+    name: Build Windows Executable
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: haskell/actions/setup@v1
+        with:
+          enable-stack: true
+          stack-version: 'latest'
+      - run: stack install
