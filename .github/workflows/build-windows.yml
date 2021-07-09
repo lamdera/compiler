@@ -11,3 +11,5 @@ jobs:
           enable-stack: true
           stack-version: 'latest'
       - run: stack build --only-dependencies
+      - run: stack build
+      - run: stack build --copy-bins
