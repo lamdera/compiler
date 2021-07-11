@@ -49,3 +49,9 @@ jobs:
           timeout_minutes: 5
           max_attempts: 2
           command: stack install
+
+      - name: Archive lamdera.exe artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: lamdera-next-win
+          path: ~\AppData\Roaming\local\bin\lamdera.exe
