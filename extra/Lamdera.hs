@@ -165,7 +165,7 @@ import Ext.Common (getProjectRoot, getProjectRootFor, getProjectRootMaybe)
 -- import CanSer.CanSer (ppElm)
 
 lamderaVersion :: String
-lamderaVersion = "0.0.1-alpha12"
+lamderaVersion = "0.0.1"
 
 
 stdoutSetup :: IO ()
