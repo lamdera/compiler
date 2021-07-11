@@ -1,8 +1,8 @@
 on: [push]
 name: build
 jobs:
-  runhaskell:
-    name: Build Windows Executable
+  build-packages:
+    name: Build Windows Libraries
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v2
@@ -11,7 +11,16 @@ jobs:
           enable-stack: true
           stack-version: 'latest'
       - run: stack build --only-dependencies
+  install:
+    name: Build Windows Executable
+    runs-on: windows-latest
+    needs: build-packages
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v2
+      - uses: haskell/actions/setup@v1
+        with:
+          enable-stack: true
+          stack-version: 'latest'
       - run: stack build
-          timeout-minutes: 10
       - run: stack build --copy-bins
-          timeout-minutes: 1
