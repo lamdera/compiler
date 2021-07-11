@@ -12,4 +12,6 @@ jobs:
           stack-version: 'latest'
       - run: stack build --only-dependencies
       - run: stack build
+          timeout-minutes: 10
       - run: stack build --copy-bins
+          timeout-minutes: 1
