@@ -10,18 +10,38 @@ jobs:
         with:
           enable-stack: true
           stack-version: 'latest'
-          ghc: '8.10.4'
-      - run: stack build --system-ghc --only-dependencies
+      - uses: actions/cache@v2
+        with:
+          path: |
+            ~\AppData\Local\Programs\stack
+            .stack-work
+          key: ${{ runner.os }}-${{ hashFiles('stack.yaml.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-
+      - run: stack path
+      - run: stack build --only-dependencies
+
   install:
     name: Build Windows Executable
     runs-on: windows-latest
     needs: build-packages
-    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v2
       - uses: haskell/actions/setup@v1
         with:
           enable-stack: true
           stack-version: 'latest'
-      - run: stack build --system-ghc
-      - run: stack build --system-ghc --copy-bins
+      - uses: actions/cache@v2
+        with:
+          path: |
+            ~\AppData\Local\Programs\stack
+            .stack-work
+          key: ${{ runner.os }}-${{ hashFiles('stack.yaml.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-
+      # We use a retry action because inexplicably sometimes stack install stalls after linking on windows
+      - uses: nick-invision/retry@v2
+        with:
+          timeout_minutes: 5
+          max_attempts: 2
+          command: stack install
