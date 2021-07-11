@@ -15,11 +15,14 @@ jobs:
           path: |
             ~\AppData\Local\Programs\stack
             .stack-work
+            C:\sr
           key: ${{ runner.os }}-${{ hashFiles('stack.yaml.lock') }}
           restore-keys: |
             ${{ runner.os }}-
+      - name: Install Dependencies
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: stack build --only-dependencies
       - run: stack path
-      - run: stack build --only-dependencies
 
   install:
     name: Build Windows Executable
@@ -36,6 +39,7 @@ jobs:
           path: |
             ~\AppData\Local\Programs\stack
             .stack-work
+            C:\sr
           key: ${{ runner.os }}-${{ hashFiles('stack.yaml.lock') }}
           restore-keys: |
             ${{ runner.os }}-
