@@ -10,7 +10,8 @@ jobs:
         with:
           enable-stack: true
           stack-version: 'latest'
-      - run: stack build --only-dependencies
+          ghc: '8.10.4'
+      - run: stack build --system-ghc --only-dependencies
   install:
     name: Build Windows Executable
     runs-on: windows-latest
@@ -22,5 +23,5 @@ jobs:
         with:
           enable-stack: true
           stack-version: 'latest'
-      - run: stack build
-      - run: stack build --copy-bins
+      - run: stack build --system-ghc
+      - run: stack build --system-ghc --copy-bins
