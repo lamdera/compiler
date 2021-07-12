@@ -1,0 +1,60 @@
+on:
+  push:
+    branches:
+      - windows
+name: build
+jobs:
+  build-packages:
+    name: Build Windows Libraries
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: haskell/actions/setup@v1
+        with:
+          enable-stack: true
+          stack-version: 'latest'
+      - uses: actions/cache@v2
+        with:
+          path: |
+            ~\AppData\Local\Programs\stack
+            .stack-work
+            C:\sr
+          key: ${{ runner.os }}-${{ hashFiles('stack.yaml.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-
+      - name: Install Dependencies
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: stack build --only-dependencies
+      - run: stack path
+
+  install:
+    name: Build Windows Executable
+    runs-on: windows-latest
+    needs: build-packages
+    steps:
+      - uses: actions/checkout@v2
+      - uses: haskell/actions/setup@v1
+        with:
+          enable-stack: true
+          stack-version: 'latest'
+      - uses: actions/cache@v2
+        with:
+          path: |
+            ~\AppData\Local\Programs\stack
+            .stack-work
+            C:\sr
+          key: ${{ runner.os }}-${{ hashFiles('stack.yaml.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-
+      # We use a retry action because inexplicably sometimes stack install stalls after linking on windows
+      - uses: nick-invision/retry@v2
+        with:
+          timeout_minutes: 5
+          max_attempts: 2
+          command: stack install
+
+      - name: Archive lamdera.exe artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: lamdera-next-win
+          path: ~\AppData\Roaming\local\bin\lamdera.exe
