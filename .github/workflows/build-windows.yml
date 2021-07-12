@@ -56,5 +56,5 @@ jobs:
       - name: Archive lamdera.exe artifact
         uses: actions/upload-artifact@v2
         with:
-          name: lamdera-next-win
+          name: lamdera-next.exe
           path: ~\AppData\Roaming\local\bin\lamdera.exe
