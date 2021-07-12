@@ -1,4 +1,7 @@
-on: [push]
+on:
+  push:
+    branches:
+      - windows
 name: build
 jobs:
   build-packages:
