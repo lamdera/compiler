@@ -85,8 +85,8 @@ startReverseProxy_ = do
                           (modReq rest hostname request)
                           (ProxyDest (T.encodeUtf8 hostname) 443)
 
-                      _ ->
-                        error "bad path"
+                      path ->
+                        pure $ WPRProxyFail $ "url missing http or https prefix: " <> Text.unpack (Text.intercalate "," path)
 
               -- debug_ $ "\n➡️  proxying with: " ++ show res
               pure res

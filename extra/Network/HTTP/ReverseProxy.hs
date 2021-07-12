@@ -192,6 +192,7 @@ data WaiProxyResponse = WPRResponse WAI.Response
                         -- ^ Respond with the given WAI Application.
                         --
                         -- Since 0.4.0
+                      | WPRProxyFail String
 
 
 instance Show WaiProxyResponse where
@@ -203,6 +204,7 @@ instance Show WaiProxyResponse where
       WPRModifiedRequest request proxyDest -> "WPRModifiedRequest " ++ show request ++ ", " ++ show proxyDest
       WPRModifiedRequestSecure request proxyDest -> "WPRModifiedRequestSecure " ++ show request ++ ", " ++ show proxyDest
       WPRApplication application -> "WPRApplication WAI.Application"
+      WPRProxyFail err -> "WPRProxyFail " ++ show err
 
 
 
@@ -391,6 +393,13 @@ waiProxyToSettings getDest wps' manager req0 sendResponse = do
                 WPRModifiedRequest req pd -> Right (pd, req, False)
                 WPRModifiedRequestSecure req pd -> Right (pd, req, True)
                 WPRApplication app -> Left app
+                WPRProxyFail err ->
+                  Left $ \_req sr ->
+                    sr $ WAI.responseLBS
+                      HT.status400
+                      [("content-type", "text/plain")]
+                      ("Proxy error: " <> TLE.encodeUtf8 (TL.pack err))
+
         timeBound us f =
             timeout us f >>= \case
                 Just res -> return res
