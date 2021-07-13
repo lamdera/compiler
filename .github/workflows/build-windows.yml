@@ -2,7 +2,7 @@ on:
   push:
     branches:
       - windows
-name: build
+name: Build Lamdera Compiler for Windows
 jobs:
   build-packages:
     name: Build Windows Libraries
@@ -13,7 +13,23 @@ jobs:
         with:
           enable-stack: true
           stack-version: 'latest'
+
+      # First, check if the specific cache exists, so we don't waste ~3m of build
+      # time restoring the 1.5GB cache for no reason. See https://github.com/actions/cache/pull/420
+      # as this functionality may become part of actions/cache in future.
+      - uses: bowd/cache@v3
+        with:
+          only-check-key: true
+          path: |
+            ~\AppData\Local\Programs\stack
+            .stack-work
+            C:\sr
+          key: ${{ runner.os }}-${{ hashFiles('stack.yaml.lock') }}
+
+      # If it doesn't exist, setup our cache action, while also trying to restore
+      # a prior broader matching cache if it exists (saves a lot of time if just modifying a few packages)
       - uses: actions/cache@v2
+        if: steps.cache.outputs.cache-hit != 'true'
         with:
           path: |
             ~\AppData\Local\Programs\stack
@@ -22,10 +38,12 @@ jobs:
           key: ${{ runner.os }}-${{ hashFiles('stack.yaml.lock') }}
           restore-keys: |
             ${{ runner.os }}-
+
+      # Install just our dependencies, this can take ~30m from scratch and is the most part valuable to cache
       - name: Install Dependencies
         if: steps.cache.outputs.cache-hit != 'true'
         run: stack build --only-dependencies
-      - run: stack path
+
 
   install:
     name: Build Windows Executable
@@ -46,6 +64,7 @@ jobs:
           key: ${{ runner.os }}-${{ hashFiles('stack.yaml.lock') }}
           restore-keys: |
             ${{ runner.os }}-
+
       # We use a retry action because inexplicably sometimes stack install stalls after linking on windows
       - uses: nick-invision/retry@v2
         with:
