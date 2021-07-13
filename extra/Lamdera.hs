@@ -504,8 +504,8 @@ writeIfDifferent filepath newContent = do
       if currentContent /= newContent
         then do
           debug_ $ "✅  writeIfDifferent: " ++ show filepath
-          putStrLn $ show (T.length currentContent) <> "-" <> show (T.length newContent)
-          putStrLn <$> icdiff currentContent newContent
+          -- putStrLn $ show (T.length currentContent) <> "-" <> show (T.length newContent)
+          -- putStrLn <$> icdiff currentContent newContent
           writeUtf8 filepath newContent
         else
           debug_ $ "⏩  writeIfDifferent skipped unchanged: " ++ show filepath
@@ -828,11 +828,17 @@ icdiff realExpected realActual = do
   -- (exit, stdout, stderr) <- System.Process.readProcessWithExitCode "diff" ["-y", "--suppress-common-lines", "--width=160", path1, path2] ""
   -- (exit, stdout, stderr) <- System.Process.readProcessWithExitCode "diff" ["--width=200", path1, path2] ""
 
-  atomicPutStrLn $ "icdiff -N " <> path1 <> " " <> path2
-  (exit, stdout, stderr) <- System.Process.readProcessWithExitCode "icdiff" ["--cols=150", "--show-all-spaces", path1, path2] ""
-  -- (exit, stdout, stderr) <- System.Process.readProcessWithExitCode "icdiff" ["-N", "--cols=200", path1, path2] ""
+  icdiffPath_ <- Dir.findExecutable "icdiff"
+  case icdiffPath_ of
+    Just icdiffPath -> do
+      atomicPutStrLn $ "icdiff -N " <> path1 <> " " <> path2
+      (exit, stdout, stderr) <- System.Process.readProcessWithExitCode "icdiff" ["--cols=150", "--show-all-spaces", path1, path2] ""
+      -- (exit, stdout, stderr) <- System.Process.readProcessWithExitCode "icdiff" ["-N", "--cols=200", path1, path2] ""
+      pure stdout
 
-  pure stdout
+    Nothing -> do
+      atomicPutStrLn $ "No icdiff found, skipping, try manually with: diff " <> path1 <> " " <> path2
+      pure ""
 
 
 withStdinYesAll :: IO a -> IO a

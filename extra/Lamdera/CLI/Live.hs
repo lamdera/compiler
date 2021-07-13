@@ -119,9 +119,10 @@ prepareLocalDev root = do
   isDebug <- isDebug
   overrideM <- readUtf8Text overridePath
 
-  nextVersionInfo <- Lamdera.CLI.Check.getNextVersionInfo root
-
-  Lamdera.CLI.Check.writeLamderaGenerated root True nextVersionInfo
+  -- This needs to be moved to an on-demand action, as it has to query production and
+  -- thus isn't appropriate to run on every single recompile
+  -- nextVersionInfo <- Lamdera.CLI.Check.getNextVersionInfo root
+  -- Lamdera.CLI.Check.writeLamderaGenerated root True nextVersionInfo
 
   if isDebug
     then do

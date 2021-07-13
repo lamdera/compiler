@@ -16,6 +16,9 @@ port module LocalDev exposing (main)
    be relied on in any way.
 
 -}
+-- import Http
+-- import LamderaGenerated
+-- import LamderaHelpers exposing (..)
 
 import Backend
 import Browser
@@ -25,12 +28,11 @@ import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events exposing (onClick, onMouseEnter, onMouseLeave)
 import Html.Lazy
-import Http
 import Lamdera exposing (ClientId, Key, SessionId, Url)
 import Lamdera.Debug as LD
 import Lamdera.Json as Json
+import Lamdera.Wire2 as Wire2
 import Lamdera.Wire3 as Wire exposing (Bytes)
-import LamderaGenerated
 import Process
 import Task exposing (Task)
 import Types exposing (BackendModel, BackendMsg, FrontendModel, FrontendMsg, ToBackend, ToFrontend)
@@ -1486,7 +1488,8 @@ expandedUI topDown devbar =
 
           else
             text ""
-        , lamderaSnapshots devbar
+
+        -- , lamderaSnapshots devbar
         ]
 
 
