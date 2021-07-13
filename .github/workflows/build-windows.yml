@@ -2,6 +2,7 @@ on:
   push:
     branches:
       - windows
+
 name: Build Lamdera Compiler for Windows
 jobs:
   build-packages:
@@ -28,7 +29,8 @@ jobs:
           key: ${{ runner.os }}-${{ hashFiles('stack.yaml.lock') }}
 
       # If it doesn't exist, setup our cache action, while also trying to restore
-      # a prior broader matching cache if it exists (saves a lot of time if just modifying a few packages)
+      # a prior broader matching cache if it exists (saves a lot of time if just
+      # modifying a few packages).
       - uses: actions/cache@v2
         if: steps.cache.outputs.cache-hit != 'true'
         with:
@@ -40,12 +42,18 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-
 
-      # Install just our dependencies, this can take ~30m from scratch and is the most part valuable to cache
+      # Install just our dependencies, this can take ~30m from scratch and is the
+      # most part valuable to cache.
       - name: Install Dependencies
         if: steps.cache.outputs.cache-hit != 'true'
         run: stack build --only-dependencies
 
-
+  # The install step is split to a separate job, so that if the we were building
+  # from scratch and just spent 30 minutes building all the libraries, but then
+  # the actual compile failed, we wouldn't throw away all that hard work without
+  # caching it first. On a clean compile this means we'll save+restore the cache
+  # unecessarily once (+~3m), but over all subsequent runs with a cache hit the
+  # whole lib step will be skipped almost immediately so its worth it.
   install:
     name: Build Windows Executable
     runs-on: windows-latest
@@ -66,7 +74,9 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-
 
-      # We use a retry action because inexplicably sometimes stack install stalls after linking on windows
+      # Use a retry action because inexplicably sometimes stack install stalls
+      # indefinitely after the `compiling Main` step, but then succeeds immediately
+      # with a second stack install. 🤷🏻‍♂️
       - uses: nick-invision/retry@v2
         with:
           timeout_minutes: 5
