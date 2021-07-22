@@ -13,6 +13,7 @@ import Test.Helpers
 
 import qualified Lamdera.Compile
 import qualified Lamdera.Evaluate
+import qualified Lamdera.CLI.Check
 import qualified Ext.Query.Canonical
 
 import Develop
@@ -50,8 +51,12 @@ Press up arrow to get history of prior commands.
 -- Current target for ghci :rr command. See ~/.ghci config file, which should contain
 -- something like `:def rr const $ return $ unlines [":r","Test.target"]`
 
-target =
-  buildTestHarnessToProductionJs
+-- target = buildTestHarnessToProductionJs
+target = do
+
+  setEnv "LDEBUG" "1"
+  Lamdera.CLI.Check.checkUserProjectCompiles "/Users/mario/dev/test/lamdera-init"
+
 
 -- target = Test.all
 -- target = Test.Wire.all
@@ -86,11 +91,12 @@ target =
 
 
 buildTestHarnessToProductionJs = do
-  setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
+  -- setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
   setEnv "LDEBUG" "1"
 
   -- let p = "/Users/mario/lamdera/test/v1"
-  let p = "/Users/mario/dev/projects/lamdera-dashboard"
+  -- let p = "/Users/mario/dev/projects/lamdera-dashboard"
+  let p = "/Users/mario/dev/test/lamdera-init"
 
   Lamdera.Compile.makeHarnessDevJs p
 

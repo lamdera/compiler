@@ -652,7 +652,7 @@ canonicalToFt version scope interfaces recursionSet canonical tvarMap =
 
 
         -- Kernel concessions for Frontend Model and Msg
-        ("elm", "file", "File", "File") -> ("File", Set.singleton moduleName, Map.empty)
+        ("elm", "file", "File", "File") -> ("File.File", Set.singleton moduleName, Map.empty)
 
 
         -- @TODO improve; These aliases will show up as VirtualDom errors which might confuse users

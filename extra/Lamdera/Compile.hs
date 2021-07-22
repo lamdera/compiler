@@ -98,6 +98,11 @@ makeDev root path = do
   sleep 10
 
 
+makeDev_ :: FilePath -> IO ()
+makeDev_ path =
+  makeDev (FP.takeDirectory path) path
+
+
 -- Runs `lamdera make` of harness file with JS output
 makeHarnessDevJs :: FilePath -> IO ()
 makeHarnessDevJs root = do

@@ -15,6 +15,7 @@ import Lamdera
 import Lamdera.Evergreen.Snapshot
 import NeatInterpolation
 import qualified Test.Lamdera
+import qualified Lamdera.Compile
 
 
 all = EasyTest.run suite
@@ -25,8 +26,11 @@ generationFileCheck originalFile generatedFile expectedOutput = do
   generatedM <- liftIO $ readUtf8Text generatedFile
 
   case generatedM of
-    Just generated ->
+    Just generated -> do
+      -- Make sure our generation is as expected
       expectEqualTextTrimmed generated expectedOutput
+      -- Make sure we compile the file to catch any bad generations as well
+      io $ Lamdera.Compile.makeDev_ generatedFile
 
     Nothing ->
       crash $ "Could not read generated file: " <> generatedFile
@@ -159,7 +163,7 @@ suite = tests $
               | EditLocal Evergreen.V1.Fusion.FType
               | FusionQuery (List Evergreen.V1.Fusion.FType)
               | ClickedSelectFile
-              | FileSelected File
+              | FileSelected File.File
 
 
           type ToBackend
