@@ -468,11 +468,17 @@ build key cache depsMVar pkg (Solver.Details vsn _) f fs =
                         Just statuses ->
                           do  rmvar <- newEmptyMVar
                               rmvars <- traverse (fork . compile pkg rmvar) statuses
+
                               putMVar rmvar rmvars
                               maybeResults <- traverse readMVar rmvars
                               case sequence maybeResults of
                                 Nothing ->
                                   do  Reporting.report key Reporting.DBroken
+                                      -- @LAMDERA the corrupt cache that lamdera reset is required for happens here.
+                                      -- @TODO need to figure out a nice way to add support for revealing the compilation
+                                      -- error failure from the `compile` above, which _should_ be present here, but seems
+                                      -- that Elm doesn't show it because in theory it _should_ be impossible (i.e. packages
+                                      -- must compile to be published)
                                       return $ Left $ Just $ Exit.BD_BadBuild pkg vsn f
 
                                 Just results ->

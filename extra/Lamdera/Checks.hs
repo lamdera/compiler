@@ -30,12 +30,12 @@ import Lamdera
 import Lamdera.Progress
 
 
-runChecks :: Bool -> Map.Map Pkg.Name V.Version -> IO (Either Exit.Outline outline) -> IO (Either Exit.Outline outline)
-runChecks shouldCheckLamdera direct default_ = do
+runChecks :: FilePath -> Bool -> Map.Map Pkg.Name V.Version -> IO (Either Exit.Outline outline) -> IO (Either Exit.Outline outline)
+runChecks root shouldCheckLamdera direct default_ = do
   -- atomicPutStrLn $ "runchecks but with " <> show shouldCheckLamdera
   if Map.member Pkg.lamderaCore direct
     then do
-      onlyWhen shouldCheckLamdera Lamdera.Checks.runChecks_
+      onlyWhen shouldCheckLamdera (Lamdera.Checks.runChecks_ root)
       default_
     else
       if shouldCheckLamdera
@@ -43,10 +43,10 @@ runChecks shouldCheckLamdera direct default_ = do
         else default_
 
 
-runChecks_ :: IO ()
-runChecks_ = do
+runChecks_ :: FilePath -> IO ()
+runChecks_ root = do
 
-  missingFiles <- liftIO $ checkMissingFiles ["src/Frontend.elm", "src/Backend.elm", "src/Types.elm"]
+  missingFiles <- liftIO $ checkMissingFiles root ["src/Frontend.elm", "src/Backend.elm", "src/Types.elm"]
   unless (missingFiles == []) $ do
 
     let
@@ -122,10 +122,10 @@ writeDefaultImplementations = do
   writeLineIfMissing "elm-stuff" (root </> ".gitignore")
 
 
-checkMissingFiles :: [FilePath] -> IO [FilePath]
-checkMissingFiles paths = do
+checkMissingFiles :: FilePath -> [FilePath] -> IO [FilePath]
+checkMissingFiles root paths = do
   exists <- mapM (\path -> do
-      exist <- Dir.doesFileExist path
+      exist <- Dir.doesFileExist (root </> path)
       if exist then pure (True, path) else pure (False, path)
     ) paths
 
