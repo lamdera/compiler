@@ -322,55 +322,6 @@ defaultImplementations =
   ]
 
 
-
--- @TODO are the following checks useful? Maybe it's better to rely on docs and the type
--- system, especially now that it's highly likely we'll be auto-generating the types for the user?
-
-
-      -- Task.throw $ Lamdera.Exit.SomeProblem
-      --   $ Help.report "ERROR" (Nothing)
-      --     ("Looks like some files exist already, either finish implementing them, or delete them and re-run so I can help you generate defaults.")
-      --     []
-
--- frontendAppDefined <- liftIO $ checkHasAppDefinition "src/Frontend.elm"
--- unless frontendAppDefined $
---   Task.throw $ Lamdera.Exit.SomeProblem
---     $ Help.report "MISSING IMPLEMENTATION" (Just "src/Frontend.elm")
---       ("")
---       [ D.reflow "I'm expecting to see an `app = Lamdera.frontend {...}` implementation here so I know where the app begins, similar to how Elm apps need a `main`."
---       [ D.reflow "See <https://dashboard.lamdera.app/docs/building> for a guide on how to implement these."
---       ]
---
---   throwError
---     "src/Frontend.elm is missing an `app` definition. \n\
---     \\n\
---     \Lamdera apps need an `app =` definition in Frontend.elm and Backend.elm so I know where the app begins, similar to how Elm apps need a `main`.\n\
---     \\n\
---     \Please see https://alpha.lamdera.app/development for how to set up a Lamdera app."
---
---
--- backendAppDefined <- liftIO $ checkHasAppDefinition "src/Backend.elm"
--- unless backendAppDefined $
---   throwError
---     "src/Backend.elm is missing an `app` definition. \n\
---     \\n\
---     \Lamdera apps need an `app =` definition in Frontend.elm and Backend.elm so I know where the app begins, similar to how Elm apps need a `main`.\n\
---     \\n\
---     \Please see https://alpha.lamdera.app/development for how to set up a Lamdera app."
---
---
--- msgHasTypes <- liftIO $ checkMsgHasTypes ["FrontendMsg", "ToBackend", "BackendMsg", "ToFrontend"]
--- unless (msgHasTypes == True) $
---   throwError
---     "src/Types.elm is missing some type definitions.\n\
---     \\n\
---     \Lamdera apps need FrontendMsg, ToBackend, BackendMsg and ToFrontend types defined in Types.elm.\n\
---     \\n\
---     \Please see https://alpha.lamdera.app/development for how to set up a Lamdera app."
-
-
--- pure True
-
 emptyEnv =
   [text|
     module Env exposing (..)

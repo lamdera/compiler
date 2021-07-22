@@ -19,7 +19,6 @@ makeOptimized root path = do
 
 
 -- Runs `lamdera make --optimize` of given files with no output, followed by the cleanup IO
--- @TODO this will fail for any Nested/Module.elm, only works for first level modules ATM (takeFileName is the issue)
 makeOptimizedWithCleanup :: IO () -> FilePath -> FilePath -> IO ()
 makeOptimizedWithCleanup cleanup root path = do
   debug $ "🏗   lamdera make --optimize " <> root <> "/" <> path
@@ -27,7 +26,7 @@ makeOptimizedWithCleanup cleanup root path = do
     tmp = lamderaCache root <> "/tmp.js"
     scaffold = lamderaCache root <> "/Main.elm"
 
-  writeUtf8 scaffold $ "module Main exposing (..)\n\nimport " <> (T.pack $ FP.takeFileName path) <> "\nimport Html\n\nmain = Html.text \"\""
+  writeUtf8 scaffold $ "module Main exposing (..)\n\nimport " <> (T.pack $ FP.takeFileName $ FP.dropExtensions path) <> "\nimport Html\n\nmain = Html.text \"\""
 
   r <- async $
     Dir.withCurrentDirectory root $
