@@ -503,8 +503,8 @@ checkUserProjectCompiles root = do
 
   _ <- Lamdera.touch $ root </> "src" </> "Types.elm"
 
-  Lamdera.Compile.make root ("src" </> "Frontend.elm")
-  Lamdera.Compile.make root ("src" </> "Backend.elm")
+  Lamdera.Compile.makeOptimized root ("src" </> "Frontend.elm")
+  Lamdera.Compile.makeOptimized root ("src" </> "Backend.elm")
 
 
 migrationCheck :: FilePath -> VersionInfo -> IO ()

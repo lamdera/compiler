@@ -75,7 +75,7 @@ suite = tests
         "It appears you're all set to deploy the first version of 'test-local'!"
 
       expectTextContains actual
-        "WARNING: Evergreen Alpha does not cover type changes outside your project\\ESC[0m\\n\\nYou are referencing the following in your core types:\\n\\n- Browser.Navigation.Key (elm/browser)\\n- Http.Error (elm/http)\\n- Time.Posix (elm/time)\\n\\n\\ESC[91mPackage upgrades that change these types won't get covered by Evergreen\\nmigrations currently!\\ESC[0m\\n\\nSee <https://dashboard.lamdera.app/docs/evergreen> for more info."
+        "WARNING: Evergreen does not cover type changes outside your project yet\\ESC[0m\\n\\nYou are referencing the following in your core types:\\n\\n- Browser.Navigation.Key (elm/browser)\\n- Http.Error (elm/http)\\n- Time.Posix (elm/time)\\n\\n\\ESC[91mPackage upgrades that change these types won't get covered by Evergreen\\nmigrations currently!\\ESC[0m\\n\\nSee <https://dashboard.lamdera.app/docs/evergreen> for more info."
 
   ]
 
@@ -115,7 +115,7 @@ compile = do
   touch $ project </> "src/Types.elm"
   touch $ project </> "src/WireTypes.elm"
 
-  Lamdera.Compile.make project ("src" </> "Frontend.elm")
+  Lamdera.Compile.makeDev project ("src" </> "Frontend.elm")
 
   unsetEnv "TOKEN"
   unsetEnv "LAMDERA_APP_NAME"
@@ -134,7 +134,7 @@ snapshotWithParams version projectPath appName = do
   setEnv "ELM_HOME" "/Users/mario/elm-home-elmx-test"
 
   Dir.withCurrentDirectory projectPath $ do
-    Lamdera.Compile.make projectPath ("src" </> "Types.elm")
+    Lamdera.Compile.makeDev projectPath ("src" </> "Types.elm")
     Lamdera.Evergreen.Snapshot.run version
 
   unsetEnv "LAMDERA_APP_NAME"
@@ -169,7 +169,7 @@ testWire = do
 
   let rootPaths = [ "src" </> "Frontend.elm" ]
 
-  Lamdera.Compile.make project ("src" </> "Frontend.elm")
+  Lamdera.Compile.makeDev project ("src" </> "Frontend.elm")
 
 
 config = do
@@ -223,8 +223,7 @@ checkUserConfig = do
 
   Dir.withCurrentDirectory projectPath $
     do
-        Lamdera.Compile.make projectPath "src/Backend.elm"
-        Lamdera.Compile.make projectPath "src/Frontend.elm"
+        Lamdera.Compile.makeHarnessDevJs projectPath
         Lamdera.AppConfig.checkUserConfig appName (Just (T.pack adminToken))
 
   unsetEnv "LDEBUG"

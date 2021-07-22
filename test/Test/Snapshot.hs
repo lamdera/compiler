@@ -286,7 +286,7 @@ suite = tests $
               | ValueDeep Evergreen.V1.Subdir.Subsubdir.SubsubdirType.DeepRec
               | ValueTwoParams Bool Char
               | ValueTuple ( Int, String )
-              | ValueTriple ( Int, String )
+              | ValueTriple ( Int, String, Bool )
               | ValueResult (Result String Int)
               | ValueCustom (ExternalCustom Int)
               | ValueCustomDeep Evergreen.V1.Subdir.Subsubdir.SubsubdirType.DeepCustom

@@ -104,7 +104,7 @@ wire = do
         putStrLn $ "testing: " <> show filename
         -- Bust Elm's caching with this one weird trick!
         touch $ project </> filename
-        Lamdera.Compile.make project (project </> filename) `catch` catchTestException filename
+        Lamdera.Compile.makeDev project (project </> filename) `catch` catchTestException filename
       )
 
     unsetEnv "LOVR"

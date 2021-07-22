@@ -48,6 +48,7 @@ suite = tests
       expectEqualTextTrimmed (historicMigrations migrations nextVersion "BackendModel") [text|
         1 ->
             decodeType 5 2 bytes T2.w3_decode_BackendModel
+                |> fallback (\_ -> decodeType 5 2 bytes T2.w2_decode_BackendModel)
                 |> upgradeSucceeds
                 |> otherwiseError
       |]
@@ -58,12 +59,14 @@ suite = tests
       expectEqualTextTrimmed (historicMigrations migrations nextVersion "BackendModel") [text|
         1 ->
             decodeType 5 1 bytes T1.w3_decode_BackendModel
+                |> fallback (\_ -> decodeType 5 1 bytes T1.w2_decode_BackendModel)
                 |> thenMigrateModel 5 M2.backendModel T1.w3_encode_BackendModel T2.w3_decode_BackendModel 2
                 |> thenMigrateModel 5 (always ModelUnchanged) T2.w3_encode_BackendModel T3.w3_decode_BackendModel 3
                 |> upgradeSucceeds
                 |> otherwiseError
         2 ->
             decodeType 5 3 bytes T3.w3_decode_BackendModel
+                |> fallback (\_ -> decodeType 5 3 bytes T3.w2_decode_BackendModel)
                 |> upgradeSucceeds
                 |> otherwiseError
       |]
@@ -88,10 +91,12 @@ suite = tests
         [text|
           60 ->
               decodeType 5 62 bytes T62.w3_decode_BackendModel
+                  |> fallback (\_ -> decodeType 5 62 bytes T62.w2_decode_BackendModel)
                   |> upgradeSucceeds
                   |> otherwiseError
           61 ->
               decodeType 5 62 bytes T62.w3_decode_BackendModel
+                  |> fallback (\_ -> decodeType 5 62 bytes T62.w2_decode_BackendModel)
                   |> upgradeSucceeds
                   |> otherwiseError
         |]
@@ -116,11 +121,13 @@ suite = tests
         [text|
           60 ->
               decodeType 5 57 bytes T57.w3_decode_BackendModel
+                  |> fallback (\_ -> decodeType 5 57 bytes T57.w2_decode_BackendModel)
                   |> thenMigrateModel 5 M62.backendModel T57.w3_encode_BackendModel T62.w3_decode_BackendModel 62
                   |> upgradeSucceeds
                   |> otherwiseError
           61 ->
               decodeType 5 57 bytes T57.w3_decode_BackendModel
+                  |> fallback (\_ -> decodeType 5 57 bytes T57.w2_decode_BackendModel)
                   |> thenMigrateModel 5 M62.backendModel T57.w3_encode_BackendModel T62.w3_decode_BackendModel 62
                   |> upgradeSucceeds
                   |> otherwiseError
@@ -157,6 +164,7 @@ suite = tests
               case version of
                   1 ->
                       decodeType 5 version bytes T1.w3_decode_BackendModel
+                          |> fallback (\_ -> decodeType 5 version bytes T1.w2_decode_BackendModel)
                           |> upgradeIsCurrent
                           |> otherwiseError
 
@@ -258,12 +266,14 @@ suite = tests
               case version of
                   1 ->
                       decodeType 5 1 bytes T1.w3_decode_BackendModel
+                          |> fallback (\_ -> decodeType 5 1 bytes T1.w2_decode_BackendModel)
                           |> thenMigrateModel 5 M2.backendModel T1.w3_encode_BackendModel T2.w3_decode_BackendModel 2
                           |> upgradeSucceeds
                           |> otherwiseError
 
                   2 ->
                       decodeType 5 version bytes T2.w3_decode_BackendModel
+                          |> fallback (\_ -> decodeType 5 version bytes T2.w2_decode_BackendModel)
                           |> upgradeIsCurrent
                           |> otherwiseError
 

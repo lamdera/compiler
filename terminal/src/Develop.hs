@@ -99,15 +99,14 @@ run () (Flags maybePort) =
 
       Live.withEnd liveState $
        httpServe (config port) $
-        (serveFiles sentryCache)
+        Live.serveLamderaPublicFiles (serveElm sentryCache) serveFilePretty -- Add /public/* as if it were /* to mirror production
+        <|> (serveFiles sentryCache)
         <|> serveDirectoryWith directoryConfig "."
         <|> Live.serveWebsocket liveState
         <|> route [ ("_r/:endpoint", Live.serveRpc liveState port) ]
         <|> serveAssets -- Compiler packaged static files
-        <|> Live.serveLamderaPublicFiles (serveElm sentryCache) serveFilePretty -- Add /public/* as if it were /* to mirror production
         <|> Live.serveUnmatchedUrlsToIndex (serveElm sentryCache) -- Everything else without extensions goes to Lamdera LocalDev harness
         <|> error404 -- Will get hit for any non-matching extensioned paths i.e. /hello.blah
-
 
 
 config :: Int -> Config Snap a

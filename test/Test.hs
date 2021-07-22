@@ -50,8 +50,11 @@ Press up arrow to get history of prior commands.
 -- Current target for ghci :rr command. See ~/.ghci config file, which should contain
 -- something like `:def rr const $ return $ unlines [":r","Test.target"]`
 
+target =
+  buildTestHarnessToProductionJs
+
 -- target = Test.all
--- target = Test.Wire.wire
+-- target = Test.Wire.all
 -- target = checkUserConfig
 -- target = Test.Wire.buildAllPackages
 -- target = Lamdera.CLI.Login.run () ()
@@ -81,8 +84,19 @@ Press up arrow to get history of prior commands.
 --   unsetEnv "LDEBUG"
 --   unsetEnv "ELM_HOME"
 
+
+buildTestHarnessToProductionJs = do
+  setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
+  setEnv "LDEBUG" "1"
+
+  -- let p = "/Users/mario/lamdera/test/v1"
+  let p = "/Users/mario/dev/projects/lamdera-dashboard"
+
+  Lamdera.Compile.makeHarnessDevJs p
+
+
 {- Dynamic testing of lamdera live with managed thread kill + reload -}
-target1 = do
+target2 = do
 
   setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
   setEnv "LDEBUG" "1"
@@ -107,7 +121,7 @@ target1 = do
 
 
 {- WIP interpreter -}
-target = do
+target1 = do
   withDebug $
     Lamdera.Evaluate.exec
       "/Users/mario/dev/projects/lamdera-compiler/test/scenario-interpreter/src/Test/Basic.elm"
