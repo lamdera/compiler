@@ -93,7 +93,7 @@ deploy =
       "Deploy Lamdera app after a successful `lamdera check`"
 
     details =
-      "The `deploy` command is equivalent to `lamdera check && git push lamdera master`"
+      "The `deploy` command is equivalent to `lamdera check && git push lamdera main`"
 
     example =
       reflow

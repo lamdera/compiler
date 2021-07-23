@@ -4,6 +4,9 @@ module Lamdera.CLI.Deploy where
 
 import Lamdera
 import System.Process
+import Data.List
+import Data.Text (pack, strip, unpack)
+
 
 import qualified Lamdera.CLI.Check
 
@@ -13,6 +16,20 @@ run () () = do
 
   Lamdera.CLI.Check.run () ()
 
-  _ <- readProcess "git" ["push", "lamdera", "master"] ""
+  (exit, stdout, stderr) <- System.Process.readProcessWithExitCode "git" ["branch","--show-current"] ""
+
+  let branch = stdout & pack & strip & unpack
+
+  case branch of
+    "main" -> do
+      _ <- readProcess "git" ["push", "lamdera", "main"] ""
+      pure ()
+
+    "master" -> do
+      _ <- readProcess "git" ["push", "lamdera", "master"] ""
+      pure ()
+
+    _ ->
+      atomicPutStrLn $ "Error: deploys must be from a main or master branch. You are on branch " <> branch <> "."
 
   pure ()
