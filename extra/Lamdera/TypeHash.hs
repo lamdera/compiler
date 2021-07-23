@@ -120,7 +120,7 @@ calculateHashes = do
 
         notifyWarnings =
           if List.length warnings > 0 then
-            [ D.reflow $ "Alpha warning: also, a number of types outside Types.elm are referenced, see `lamdera check` for more info." ]
+            [ D.reflow $ "Warning: also, a number of types outside Types.elm are referenced, see `lamdera check` for more info." ]
           else
             []
       in

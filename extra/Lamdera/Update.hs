@@ -16,9 +16,9 @@ fetchCurrentVersion :: IO (Either Lamdera.Http.Error Text)
 fetchCurrentVersion = do
   let
     endpoint =
-      "https://lamdera.com/current-version.json"
+      "https://static.lamdera.com/bin/latest-version.json"
 
     decoder =
       D.string
 
-  fmap (T.pack . Json.String.toChars) <$> Lamdera.Http.normalJson "fetchAppConfigItems" endpoint decoder
+  fmap (T.pack . Json.String.toChars) <$> Lamdera.Http.normalJson "fetchCurrentVersion" endpoint decoder

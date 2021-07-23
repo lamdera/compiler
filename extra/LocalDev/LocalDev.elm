@@ -1317,13 +1317,12 @@ pill devbar nodeType =
                             |> String.split "-"
                             |> (\p ->
                                     case p of
-                                        ev :: lv :: [] ->
+                                        ev :: lv :: _ ->
                                             lv
                                                 |> Debug.log "lv"
                                                 |> String.split "."
                                                 |> List.map String.toInt
                                                 |> justs
-                                                |> Debug.log "justs"
                                                 |> (\parts ->
                                                         case parts of
                                                             v1 :: v2 :: v3 :: [] ->
@@ -1336,8 +1335,8 @@ pill devbar nodeType =
                                         _ ->
                                             ( 0, 0, 0 )
                                )
-                            |> Debug.log "latest"
 
+                    -- |> Debug.log "latest"
                     newVersionUi =
                         div
                             [ style "text-align" "center"
@@ -1354,13 +1353,11 @@ pill devbar nodeType =
                 if String.contains "wip" version then
                     text ""
 
-                else
-                    case compareVersion currentVersion latestVersion of
-                        LT ->
-                            newVersionUi
+                else if latestVersion > currentVersion then
+                    newVersionUi
 
-                        _ ->
-                            text ""
+                else
+                    text ""
         ]
 
 
@@ -1875,17 +1872,6 @@ shouldProxy msg =
 
 showVersion ( major, minor, patch ) =
     [ major, minor, patch ] |> List.map String.fromInt |> String.join "."
-
-
-compareVersion ( a1, a2, a3 ) ( b1, b2, b3 ) =
-    if a1 == b1 && a2 == b2 && a3 == b3 then
-        EQ
-
-    else if a1 <= b1 && a2 <= b2 && a3 <= b3 then
-        LT
-
-    else
-        GT
 
 
 justs =

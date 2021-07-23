@@ -41,7 +41,7 @@ _command details example args_ flags_ callback =
       argStrings <- Env.getArgs
       case argStrings of
         ["--version"] ->
-          do  hPutStrLn stdout (V.toChars V.compiler ++ "-" ++ Lamdera.lamderaVersion)
+          do  hPutStrLn stdout (V.toChars V.compiler ++ "-" ++ Lamdera.lamderaVersionString)
               Exit.exitSuccess
 
         chunks ->
@@ -73,7 +73,7 @@ app intro outro commands =
           Error.exitWithOverview intro outro commands
 
         ["--version"] ->
-          do  hPutStrLn stdout (V.toChars V.compiler ++ "-" ++ Lamdera.lamderaVersion)
+          do  hPutStrLn stdout (V.toChars V.compiler ++ "-" ++ Lamdera.lamderaVersionString)
               Exit.exitSuccess
 
         command : chunks ->

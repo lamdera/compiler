@@ -382,11 +382,10 @@ getNextVersionInfo_ nextVersion prodVersion isHoistRebuild localTypesChangedFrom
           pure $ WithoutMigrations nextVersion
 
 
-
 checkForLatestBinaryVersion inDebug = do
-  latestVersion_ <- Lamdera.Update.fetchCurrentVersion
-  case latestVersion_ of
-    Right latestVersion -> do
+  latestVersionText_ <- Lamdera.Update.fetchCurrentVersion
+  case latestVersionText_ of
+    Right latestVersionText -> do
       let
         toIntCertain :: Text -> Int
         toIntCertain t =
@@ -394,33 +393,47 @@ checkForLatestBinaryVersion inDebug = do
             & Text.Read.readMaybe
             & withDefault 0
 
-        latestNumeric =
-          latestVersion
-            & T.replace "alpha" "001"
-            & toIntCertain
+        latestVersion =
+          latestVersionText
+            & T.splitOn "-"
+            & (\parts ->
+                  case parts of
+                    ev:lv:_ ->
+                      lv
+                        & T.splitOn "."
+                        & fmap toIntCertain
+                        & (\parts ->
+                                case parts of
+                                    v1 : v2 : v3 : [] ->
+                                        Just ( v1, v2, v3 )
 
-        localNumeric =
+                                    _ ->
+                                        Nothing
+                           )
+
+                    _ -> Nothing
+
+              )
+            & withDefault ( 0, 0, 0 )
+
+        localVersion =
           Lamdera.lamderaVersion
-            & T.pack
-            & T.replace "-alpha" ""
-            & T.replace "." ""
-            & toIntCertain
 
-      debug $ "comparing remote:" <> show latestVersion <> " local:" <> show Lamdera.lamderaVersion
-      debug $ "comparing remote:" <> show latestNumeric <> " local:" <> show localNumeric
+      debug $ "comparing remote:" <> show latestVersionText <> " local:" <> show Lamdera.lamderaVersion
+      debug $ "comparing remote:" <> show latestVersion <> " local:" <> show localVersion
 
-      onlyWhen (latestVersion /= "skip" && latestNumeric > localNumeric) $ do
+      onlyWhen (latestVersionText /= "skip" && latestVersion > localVersion) $ do
           progressPointer "Checking version..."
           progressDoc $ D.stack
-            [ D.red $ D.reflow $ "NOTE: There is a new alpha version, please upgrade before you deploy."
-            , D.reflow $ "Current: " <> Lamdera.lamderaVersion
-            , D.reflow $ "New:     " <> T.unpack latestVersion
+            [ D.red $ D.reflow $ "NOTE: There is a new lamdera version, please upgrade before you deploy."
+            , D.reflow $ "Current: " <> Lamdera.lamderaVersionString
+            , D.reflow $ "New:     " <> T.unpack latestVersionText
             , D.reflow $ "You can download it here: <https://dashboard.lamdera.app/docs/download>"
             ]
 
-      onlyWhen (latestNumeric < localNumeric) $ do
+      onlyWhen (latestVersion < localVersion) $ do
           progressDoc $ D.stack
-            [ D.magenta $ D.reflow $ "\nWarning: this is a pre-release compiler " <> Lamdera.lamderaVersion <> " (latest is " <> T.unpack latestVersion <> ")"
+            [ D.magenta $ D.reflow $ "\nWarning: this is a pre-release compiler v" <> versionToString localVersion <> " (latest is v" <> versionToString latestVersion <> ")"
             ]
 
     Left err ->
@@ -866,7 +879,7 @@ showExternalTypeWarnings warnings = do
       progressDoc $
         D.stack
           (
-          [ D.yellow $ D.reflow $ "WARNING: Evergreen Alpha does not cover type changes outside your project"
+          [ D.yellow $ D.reflow $ "WARNING: Evergreen does not cover type changes outside your project yet"
           , D.reflow $ "You are referencing the following in your core types:"
           , D.vcat [ D.fromChars . T.unpack $ textWarnings ]
           , D.yellow $ D.reflow $ "Package upgrades that change these types won't get covered by Evergreen migrations currently!"

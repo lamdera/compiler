@@ -90,7 +90,7 @@ fetch methodVerb manager url headers onError onSuccess =
               { method = methodVerb
               , requestHeaders = addDefaultHeaders headers
               }
-      debug_ $ "HTTP:" <> BS.unpack methodVerb <> " " <> url -- @LAMDERA
+      -- debug_ $ "HTTP:" <> BS.unpack methodVerb <> " " <> url -- @LAMDERA
       withResponse req1 manager $ \response ->
         do  chunks <- brConsume (responseBody response)
             onSuccess (debugNote "-->" $ BS.concat chunks)
@@ -107,7 +107,7 @@ postBody manager url headers request onError onSuccess =
               , requestBody = RequestBodyLBS $ B.toLazyByteString $ Encode.encodeUgly request
               , requestHeaders = addDefaultHeaders headers
               }
-      debug_ $ "HTTP:POST " <> url -- @LAMDERA
+      -- debug_ $ "HTTP:POST " <> url -- @LAMDERA
       withResponse req1 manager $ \response ->
         do  chunks <- brConsume (responseBody response)
             onSuccess (debugPass "-->" (BS.concat chunks) (BS.concat chunks))

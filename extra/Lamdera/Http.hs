@@ -27,7 +27,7 @@ data WithErrorField a
 
 jsonHeaders :: [Http.Header]
 jsonHeaders =
-  [ ( Http.hUserAgent, "lamdera-" <> BS.pack lamderaVersion )
+  [ ( Http.hUserAgent, "lamdera-" <> BS.pack lamderaVersionString )
   , ( Http.hContentType, "application/json" )
   , ( Http.hAccept, "application/json" )
   , ( Http.hAcceptEncoding, "gzip")

@@ -59,7 +59,7 @@ intro =
     [ P.fillSep
         ["Hi,","thank","you","for","trying","out"
         ,P.green "Lamdera"
-        ,P.green (P.text Lamdera.lamderaVersion)
+        ,P.green (P.text Lamdera.lamderaVersionString)
         ,"on"
         ,P.green "Elm"
         ,P.green (P.text (V.toChars V.compiler)) <> "."

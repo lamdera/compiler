@@ -3,6 +3,8 @@
 
 module Lamdera
   ( lamderaVersion
+  , lamderaVersionString
+  , versionToString
   , inProduction
   , getLamderaPkgPath
   , stdoutSetup
@@ -164,9 +166,15 @@ import Ext.Common (getProjectRoot, getProjectRootFor, getProjectRootMaybe)
 
 -- import CanSer.CanSer (ppElm)
 
-lamderaVersion :: String
-lamderaVersion = "0.0.1"
+lamderaVersion :: (Int, Int, Int)
+lamderaVersion = (1,0,0)
 
+lamderaVersionString :: String
+lamderaVersionString = versionToString lamderaVersion
+
+versionToString :: (Int, Int, Int) -> String
+versionToString (m,mi,p) =
+  show m <> "." <> show mi <> "." <> show p
 
 stdoutSetup :: IO ()
 stdoutSetup = do
