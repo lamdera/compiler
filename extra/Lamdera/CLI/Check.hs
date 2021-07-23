@@ -879,11 +879,12 @@ showExternalTypeWarnings warnings = do
       progressDoc $
         D.stack
           (
-          [ D.yellow $ D.reflow $ "WARNING: Evergreen does not cover type changes outside your project yet"
+          [ D.dullYellow $ D.reflow $ "WARNING: Evergreen does not cover type changes outside your project yet"
           , D.reflow $ "You are referencing the following in your core types:"
           , D.vcat [ D.fromChars . T.unpack $ textWarnings ]
-          , D.yellow $ D.reflow $ "Package upgrades that change these types won't get covered by Evergreen migrations currently!"
+          , D.dullYellow $ D.reflow $ "Package upgrades that change these types won't get covered by Evergreen migrations currently!"
           , D.reflow "See <https://dashboard.lamdera.app/docs/evergreen> for more info."
+          , D.reflow ""
           ]
           )
 

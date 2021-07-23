@@ -53,7 +53,11 @@ Press up arrow to get history of prior commands.
 
 -- target = buildTestHarnessToProductionJs
 target = do
+  Dir.withCurrentDirectory "/Users/mario/dev/projects/lamdera-dashboard" $ Lamdera.CLI.Check.run () ()
 
+
+
+checkProjectCompiles = do
   setEnv "LDEBUG" "1"
   Lamdera.CLI.Check.checkUserProjectCompiles "/Users/mario/dev/test/lamdera-init"
 
