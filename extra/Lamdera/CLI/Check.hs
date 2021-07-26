@@ -182,13 +182,15 @@ run () () = do
                   migrationCheck root nextVersionInfo
                   onlyWhen (not inProduction) $ showExternalTypeWarnings externalTypeWarnings
 
-                  progressDoc $ D.green $ D.reflow $ "\nIt appears you're all set to deploy v" <> (show nextVersion) <> " of '" <> T.unpack appName <> "'."
-
-                  mapM progressDoc $
-                    ([ D.reflow "Evergreen migrations will be applied to the following types:"
-                     , formattedChangedTypes
-                     , D.reflow "See <https://dashboard.lamdera.app/docs/evergreen> for more info." ]
-                    )
+                  progressDoc $
+                    D.stack
+                      (
+                      [ D.green $ D.reflow $ "\nIt appears you're all set to deploy v" <> (show nextVersion) <> " of '" <> T.unpack appName <> "'."
+                      , D.reflow "Evergreen migrations will be applied to the following types:"
+                      , formattedChangedTypes
+                      , D.reflow "See <https://dashboard.lamdera.app/docs/evergreen> for more info."
+                      ]
+                      )
 
                   onlyWhen (not inProduction) $ committedCheck root nextVersionInfo
 
@@ -879,10 +881,10 @@ showExternalTypeWarnings warnings = do
       progressDoc $
         D.stack
           (
-          [ D.dullYellow $ D.reflow $ "WARNING: Evergreen does not cover type changes outside your project yet"
+          [ D.dullyellow $ D.reflow $ "WARNING: Evergreen does not cover type changes outside your project yet"
           , D.reflow $ "You are referencing the following in your core types:"
           , D.vcat [ D.fromChars . T.unpack $ textWarnings ]
-          , D.dullYellow $ D.reflow $ "Package upgrades that change these types won't get covered by Evergreen migrations currently!"
+          , D.dullyellow $ D.reflow $ "Package upgrades that change these types won't get covered by Evergreen migrations currently!"
           , D.reflow "See <https://dashboard.lamdera.app/docs/evergreen> for more info."
           , D.reflow ""
           ]
