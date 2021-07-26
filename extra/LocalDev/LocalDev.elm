@@ -1313,13 +1313,11 @@ pill devbar nodeType =
                 let
                     latestVersion =
                         version
-                            |> Debug.log "version"
                             |> String.split "-"
                             |> (\p ->
                                     case p of
                                         ev :: lv :: _ ->
                                             lv
-                                                |> Debug.log "lv"
                                                 |> String.split "."
                                                 |> List.map String.toInt
                                                 |> justs
@@ -1336,7 +1334,6 @@ pill devbar nodeType =
                                             ( 0, 0, 0 )
                                )
 
-                    -- |> Debug.log "latest"
                     newVersionUi =
                         div
                             [ style "text-align" "center"
