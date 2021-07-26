@@ -1303,10 +1303,7 @@ toDetailsReport details =
         , D.reflow $
             "Please ask for help on the community forums if you try those paths and are still\
             \ having problems!"
-        , D.toFancyNote
-            [D.yellow "NOTE:","Sometimes","`lamdera reset`","can","fix","this","problem","by","rebuilding",
-            "caches,","so","give","that","a","try","first."
-            ]
+        , D.dullyellow $ D.reflow "Note: Sometimes `lamdera reset` can fix this problem by rebuilding caches, so give that a try first."
         ]
 
     DetailsNoOfflineSolution ->
@@ -1409,10 +1406,7 @@ toDetailsReport details =
                     "If you want to help out even more, try building the package locally. That should\
                     \ give you much more specific information about why this package is failing to\
                     \ build, which will in turn make it easier for the package author to fix it!"
-                , D.toFancyNote
-                    [D.yellow "NOTE:","Sometimes","`lamdera reset`","can","fix","this","problem","by","rebuilding",
-                    "caches,","so","give","that","a","try","first."
-                    ]
+                , D.dullyellow $ D.reflow "Note: Sometimes `lamdera reset` can fix this problem by rebuilding caches, so give that a try first."
                 ]
 
 
