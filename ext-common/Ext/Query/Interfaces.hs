@@ -102,9 +102,10 @@ allProjectInterfaces :: NE.List FilePath -> IO (Map.Map ModuleName.Raw I.Interfa
 allProjectInterfaces paths =
   BW.withScope $ \scope -> do
     root <- getProjectRoot
+    let paths_ = paths & fmap (\p -> root <> "/" <> p)
     runTaskUnsafe $
       do  details    <- Task.eio Exit.ReactorBadDetails $ Details.load Reporting.silent scope root
-          artifacts  <- Task.eio Exit.ReactorBadBuild $ Build.fromPaths Reporting.silent root details paths
+          artifacts  <- Task.eio Exit.ReactorBadBuild $ Build.fromPaths Reporting.silent root details paths_
 
           -- Task.io $ putStrLn $ show $ fmap (moduleName) (Build._modules artifacts)
           Task.io $ extractInterfaces $ Build._modules artifacts
