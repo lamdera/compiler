@@ -102,7 +102,7 @@ lamderaCodecs =
   Elm.Package.Name (Utf8.fromChars "lamdera") (Utf8.fromChars "codecs")
 
 
-{-# NOINLINE lamderaCodecs #-}
+{-# NOINLINE lamderaProgramTest #-}
 lamderaProgramTest :: Elm.Package.Name
 lamderaProgramTest =
   Elm.Package.Name (Utf8.fromChars "lamdera") (Utf8.fromChars "program-test")
