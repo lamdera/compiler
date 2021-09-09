@@ -254,4 +254,5 @@ lamderaCoreDeps =
   Map.fromList
     [ (Lamdera.Project.lamderaCodecs, KnownVersions { _newest = V.Version 1 0 0, _previous = [] })
     , (Lamdera.Project.lamderaCore, KnownVersions { _newest = V.Version 1 0 0, _previous = [] })
+    , (Lamdera.Project.lamderaProgramTest, KnownVersions { _newest = V.Version 1 0 0, _previous = [] })
     ]

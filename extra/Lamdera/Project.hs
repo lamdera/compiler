@@ -102,6 +102,12 @@ lamderaCodecs =
   Elm.Package.Name (Utf8.fromChars "lamdera") (Utf8.fromChars "codecs")
 
 
+{-# NOINLINE lamderaCodecs #-}
+lamderaProgramTest :: Elm.Package.Name
+lamderaProgramTest =
+  Elm.Package.Name (Utf8.fromChars "lamdera") (Utf8.fromChars "program-test")
+
+
 findOverridePackages :: IO [(Elm.Package.Name, Word16, Word16, Word16)]
 findOverridePackages =
   -- @STUB todo: make this actually find override packages dynamically
