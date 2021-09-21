@@ -29,7 +29,7 @@ import qualified File
 -- elmx
 import qualified Ext.Query.Interfaces
 
-import Lamdera (hindentPrintValue)
+import Lamdera (hindentPrintValue, last_)
 import Ext.Common
 
 -- @TODO
@@ -143,7 +143,7 @@ render (Code.Source sourceLines) region@(Region (Position startLine _) (Position
         & take (fromIntegral (1 + endLine - startLine))
 
     width =
-      length (show (fst (last relevantLines)))
+      length (show (fst (last_ relevantLines (0, ""))))
 
     smallerRegion =
       maybe region id maybeSubRegion

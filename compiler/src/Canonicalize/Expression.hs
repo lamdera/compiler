@@ -32,7 +32,7 @@ import qualified Reporting.Error.Canonicalize as Error
 import qualified Reporting.Result as Result
 import qualified Reporting.Warning as W
 
-
+import qualified Sanity
 
 -- RESULTS
 
@@ -507,7 +507,7 @@ gatherTypedArgs env name srcArgs tipe index revTypedArgs =
                 (arg, argType) : revTypedArgs
 
         _ ->
-          let (A.At start _, A.At end _) = (head srcArgs, last srcArgs) in
+          let (A.At start _, A.At end _) = (head srcArgs, Sanity.last "gatherTypedArgs" srcArgs) in
           Result.throw $
             Error.AnnotationTooShort (A.mergeRegions start end) name index (length srcArgs)
 

@@ -60,7 +60,7 @@ import Json.Encode ((==>))
 import qualified Json.Encode as E
 import qualified Json.String as Json
 
-
+import Lamdera
 
 -- FROM
 
@@ -136,7 +136,7 @@ commaSep conjunction addStyle names =
       map (\name -> addStyle name <> ",") (init names)
       ++
       [ conjunction
-      , addStyle (last names)
+      , addStyle (last_ names (P.text "[empty names list!]"))
       ]
 
 

@@ -24,6 +24,14 @@ import GHC.Stack (HasCallStack)
         error "Sanity: (!) failed!"
 
 
+{- An alternative version of (!) that will print where it was called from -}
+last :: String -> [a] -> a
+last identifier list =
+  case list of
+    [] -> error $ "last called on empty list in " <> identifier
+    _ -> Prelude.last list
+
+
 {- An alternative version of (!) that will print the keys and missing key on failure -}
 debugFind :: (Ord c, Show c, HasCallStack) => Map.Map c a -> c -> a
 debugFind m k =

@@ -31,6 +31,7 @@ import qualified Terminal.Error as Error
 
 
 import qualified Lamdera
+import qualified Sanity
 
 -- COMMAND
 
@@ -153,7 +154,7 @@ findIndex index point chunks =
     chunk:cs ->
       let
         lo = snd (head chunk)
-        hi = snd (last chunk)
+        hi = snd (Sanity.last "Terminal.findIndex" chunk)
       in
       if point < lo then
         0

@@ -68,7 +68,7 @@ import qualified Reporting.Report as Report
 import qualified Reporting.Task as Task
 import qualified Stuff
 
-
+import qualified Sanity
 
 -- RUN
 
@@ -216,7 +216,7 @@ stripLegacyBackslash chars =
       []
 
     _:_ ->
-      if last chars == '\\'
+      if Sanity.last "stripLegacyBackslash" chars == '\\'
       then init chars
       else chars
 

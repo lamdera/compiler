@@ -104,6 +104,8 @@ module Lamdera
   , icdiff
   , withStdinYesAll
   , launchAppZero
+  , head_
+  , last_
   )
   where
 
@@ -120,6 +122,8 @@ import qualified System.Environment as Env
 import Control.Monad.Except (liftIO, catchError)
 import System.IO.Unsafe (unsafePerformIO)
 import qualified Debug.Trace as DT
+
+import qualified Safe
 
 import Data.Text
 import qualified Data.Text.Lazy as TL
@@ -867,3 +871,11 @@ launchAppZero :: Text -> IO ()
 launchAppZero appId = do
   callCommand $ "~/lamdera/scripts/launchAppZero.sh " <> unpack appId
   atomicPutStrLn $ "✨ Called launchAppZero.sh"
+
+head_ :: [a] -> a -> a
+head_ list default_ =
+  Safe.headMay list & withDefault default_
+
+last_ :: [a] -> a -> a
+last_ list default_ =
+  Safe.lastMay list & withDefault default_

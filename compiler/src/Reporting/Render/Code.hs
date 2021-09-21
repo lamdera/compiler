@@ -29,7 +29,7 @@ import Parse.Primitives (Row, Col)
 import Parse.Symbol (binopCharSet)
 import Parse.Variable (reservedWords)
 
-
+import Lamdera
 
 -- CODE
 
@@ -99,7 +99,7 @@ render (Source sourceLines) region@(A.Region (A.Position startLine _) (A.Positio
         |> take (fromIntegral (1 + endLine - startLine))
 
     width =
-      length (show (fst (last relevantLines)))
+      length (show (fst (last_ relevantLines (0,""))))
 
     smallerRegion =
       maybe region id maybeSubRegion

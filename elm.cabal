@@ -350,6 +350,7 @@ Executable lamdera
         neat-interpolation,
         natural-sort,
         listsafe,
+        safe,
         filemanip,
         unix-compat,
         -- Live

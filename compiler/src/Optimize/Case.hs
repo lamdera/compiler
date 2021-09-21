@@ -15,7 +15,7 @@ import qualified AST.Canonical as Can
 import qualified AST.Optimized as Opt
 import qualified Optimize.DecisionTree as DT
 
-
+import qualified Sanity
 
 -- OPTIMIZE A CASE EXPRESSION
 
@@ -79,7 +79,7 @@ treeToDecider tree =
     DT.Decision path edges Nothing ->
         let
           (necessaryTests, fallback) =
-              (init edges, snd (last edges))
+              (init edges, snd (Sanity.last "treeToDecider" edges))
         in
           Opt.FanOut
             path
@@ -158,4 +158,3 @@ insertChoices choiceDict decider =
 
       Opt.FanOut path tests fallback ->
           Opt.FanOut path (map (second go) tests) (go fallback)
-
