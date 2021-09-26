@@ -6,6 +6,7 @@ module Ext.Sentry where
 import Control.Concurrent.MVar
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Builder as B
+import qualified System.Mem
 
 import Lamdera
 import Ext.Common
@@ -34,4 +35,5 @@ asyncUpdateJsOutput (Cache mJsOutput) recompile = do
     takeMVar mJsOutput
     !bs <- track "recompile" $ recompile
     putMVar mJsOutput bs
+    System.Mem.performMajorGC
     pure ()
