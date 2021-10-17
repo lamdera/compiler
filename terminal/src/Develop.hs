@@ -227,7 +227,9 @@ serveElm_ :: FilePath -> Snap ()
 serveElm_ path =
   do  guard (takeExtension path == ".elm")
       modifyResponse (setContentType "text/html")
-      result <- liftIO $ compile path
+      liftIO $ atomicPutStrLn $ "⛑  manually compiling: " <> path
+      root <- liftIO $ getProjectRoot
+      result <- liftIO $ compile (root </> path)
       case result of
         Right builder ->
           writeBuilder builder
