@@ -35,6 +35,7 @@ module Lamdera
   , second
   -- , ppElm
   , isDebug
+  , isDebug_
   -- , isTypeSnapshot
   , isTest
   , ostype
@@ -354,6 +355,11 @@ isDebug = do
   case debugM of
     Just _ -> pure True
     Nothing -> pure False
+
+
+{-# NOINLINE isDebug_ #-}
+isDebug_ :: Bool
+isDebug_ = unsafePerformIO $ isDebug
 
 
 isTest :: IO Bool

@@ -1305,9 +1305,13 @@ toDetailsReport details =
             "Please ask for help on Discord if you try those paths and are still\
             \ having problems!"
         , D.dullyellow $ D.reflow "Note: Sometimes `lamdera reset` can fix this problem by rebuilding caches, so give that a try first."
-        , D.reflow "Here are the constraints I was trying to solve:"
-        , D.reflow $ show constraints
-        ]
+        ] ++ (if Lamdera.isDebug_
+                then [ D.reflow "Here are the constraints I was trying to solve:"
+                     , D.reflow $ show constraints
+                     ]
+                else []
+             )
+        )
 
     DetailsNoOfflineSolution ->
       Help.report "TROUBLE VERIFYING DEPENDENCIES" (Just "elm.json")
