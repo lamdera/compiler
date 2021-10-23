@@ -297,18 +297,11 @@ instance Show File.Time where
   show _ = "\"<File.Time>\""
 
 
-deriving instance Show Elm.Version.Version
-
 deriving instance Show Http.Error
 
 
 instance Show Data.Name.Name where
   show = quoted . Data.Name.toChars
-
-instance Show Elm.Package.Name where
-  -- show = Elm.Package.toChars
-  show (Elm.Package.Name author project) =
-    "Name " ++ (quoted . Utf8.toChars) author <> " " <> (quoted . Utf8.toChars) project
 
 deriving instance Show Elm.Interface.Interface
 
@@ -336,13 +329,7 @@ instance Show Elm.Kernel.Chunk where
 
 deriving instance Show Elm.Interface.Union
 deriving instance Show Elm.Interface.Alias
-
-
-
-deriving instance Show Elm.Constraint.Constraint
-
 deriving instance Show Elm.Constraint.Error
-
 deriving instance Show Elm.Outline.Outline
 deriving instance Show Elm.Outline.AppOutline
 deriving instance Show Elm.Outline.SrcDir
@@ -360,21 +347,17 @@ instance Show ModuleName.Canonical where
   -- show (ModuleName.Canonical pkg moduleName) = quoted $ show pkg ++ ":" ++ Utf8.toChars moduleName
   show (ModuleName.Canonical pkg moduleName) = "(Module.Canonical (" ++ show pkg ++ ") " ++ show moduleName ++ ")"
 
-
 instance (Show a) => Show (Data.NonEmptyList.List a) where
   show = show . Data.NonEmptyList.toList
 
 instance (Show a) => Show (Data.OneOrMore.OneOrMore a) where
   show = show . Data.OneOrMore.destruct (\v acc -> acc ++ [v])
 
-
-
 instance Show Data.Index.ZeroBased where
   show (Data.Index.ZeroBased 0) = "Index.first"
   show (Data.Index.ZeroBased 1) = "Index.second"
   show (Data.Index.ZeroBased 2) = "Index.third"
   show (Data.Index.ZeroBased n) = "(Index.ZeroBased " ++ show n ++ ")"
-
 
 deriving instance Show Type.Type.Constraint
 deriving instance Show Type.Type.Type

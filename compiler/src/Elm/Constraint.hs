@@ -37,7 +37,7 @@ import Parse.Primitives (Row, Col)
 
 data Constraint
     = Range V.Version Op Op V.Version
-    deriving (Eq)
+    deriving (Eq, Show)
 
 
 data Op

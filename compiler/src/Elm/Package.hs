@@ -66,6 +66,14 @@ data Name =
     }
     deriving (Ord)
 
+instance Show Name where
+  -- show = Elm.Package.toChars
+  show (Elm.Package.Name author project) =
+    "Name " ++ (quoted . Utf8.toChars) author <> " " <> (quoted . Utf8.toChars) project
+
+quoted :: String -> String
+quoted s = "\"" ++ s ++ "\""
+
 
 type Author = Utf8.Utf8 AUTHOR
 type Project = Utf8.Utf8 PROJECT

@@ -273,7 +273,7 @@ verifyConstraints (Env _ _ _ cache _ connection registry) constraints =
   do  result <- Task.io $ Solver.verify cache connection registry constraints
       case result of
         Solver.Ok details        -> return details
-        Solver.NoSolution        -> Task.throw $ Exit.DetailsNoSolution
+        Solver.NoSolution        -> Task.throw $ Exit.DetailsNoSolution constraints
         Solver.NoOfflineSolution -> Task.throw $ Exit.DetailsNoOfflineSolution
         Solver.Err exit          -> Task.throw $ Exit.DetailsSolverProblem exit
 

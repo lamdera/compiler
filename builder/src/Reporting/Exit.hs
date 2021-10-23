@@ -67,6 +67,7 @@ import qualified Reporting.Render.Code as Code
 
 import Lamdera
 import qualified Lamdera.Error
+import qualified Elm.Constraint as Con
 
 -- RENDERERS
 
@@ -1274,7 +1275,7 @@ toOutlineProblemReport path source _ region problem =
 
 
 data Details
-  = DetailsNoSolution
+  = DetailsNoSolution (Map.Map Pkg.Name Con.Constraint)
   | DetailsNoOfflineSolution
   | DetailsSolverProblem Solver
   | DetailsBadElmInPkg C.Constraint
@@ -1293,7 +1294,7 @@ data DetailsBadDep
 toDetailsReport :: Details -> Help.Report
 toDetailsReport details =
   case details of
-    DetailsNoSolution ->
+    DetailsNoSolution constraints ->
       Help.report "INCOMPATIBLE DEPENDENCIES" (Just "elm.json")
         "The dependencies in your elm.json are not compatible."
         [ D.fillSep
@@ -1301,9 +1302,11 @@ toDetailsReport details =
             ,"It","is","much","more","reliable","to","add","dependencies","with",D.green "lamdera install" <> "."
             ]
         , D.reflow $
-            "Please ask for help on the community forums if you try those paths and are still\
+            "Please ask for help on Discord if you try those paths and are still\
             \ having problems!"
         , D.dullyellow $ D.reflow "Note: Sometimes `lamdera reset` can fix this problem by rebuilding caches, so give that a try first."
+        , D.reflow "Here are the constraints I was trying to solve:"
+        , D.reflow $ show constraints
         ]
 
     DetailsNoOfflineSolution ->

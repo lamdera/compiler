@@ -258,7 +258,7 @@ run () () = do
   prodTokenM <- Env.lookupEnv "TOKEN"
   Lamdera.AppConfig.checkUserConfig appName (fmap T.pack prodTokenM)
 
-  checkForLatestBinaryVersion inDebug
+  onlyWhen (not inProduction) $ checkForLatestBinaryVersion inDebug
 
   pure ()
 
