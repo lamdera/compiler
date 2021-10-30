@@ -1297,6 +1297,7 @@ toDetailsReport details =
     DetailsNoSolution constraints ->
       Help.report "INCOMPATIBLE DEPENDENCIES" (Just "elm.json")
         "The dependencies in your elm.json are not compatible."
+        (
         [ D.fillSep
             ["Did","you","change","them","by","hand?","Try","to","change","it","back!"
             ,"It","is","much","more","reliable","to","add","dependencies","with",D.green "lamdera install" <> "."
