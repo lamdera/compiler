@@ -74,29 +74,8 @@ modifyModul pkg ifaces modul =
         -- atomicPutStrLn $ tShow "💙" $ newModul
         -- debugHaskellPass "💙" newModul (pure newModul)
 
-        if (pkg == (Pkg.Name "author" "project") && (getName modul == "Env"))
-          then do
-            -- We are in the Env.elm module, inject the `type Mode = ...` and
-            -- `mode = ...` code if it is not already defined.
-            -- NOTE: this should be part of AppConfig but for simplicity it's here so all injections are together.
-
-            envMode <- Lamdera.getEnvMode
-            pure $
-              newModul
-                { Src._unions =
-                    -- Source for `type Mode = Production | Development`
-                    if hasModeDef (Src._unions newModul)
-                      then Src._unions newModul
-                      else Src._unions newModul ++ [(a (Union (a ("Mode")) [] [((a ("Production")), []), ((a ("Development")), [])]))]
-                , Src._values =
-                    -- Source for `mode = Development`
-                    Src._values newModul
-                      & listUpsert
-                          isModeValue
-                          (a (Value (a ("mode")) [] (a (Var CapVar (Data.Name.fromChars $ show envMode))) Nothing))
-                }
-
-          else pure newModul
+        -- Note: Env insertion disabled in Wire2, now handled by Wire3
+        pure newModul
 
       else pure modul
 

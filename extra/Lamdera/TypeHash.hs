@@ -54,7 +54,7 @@ type Interfaces =
 
 {- Tracks types that have already been seen to ensure we can break cycles -}
 type RecursionSet =
-  Set.Set (ModuleName.Raw, N.Name)
+  Set.Set (ModuleName.Raw, N.Name, [Can.Type])
 
 
 lamderaTypes :: [ModuleName.Raw]
@@ -148,7 +148,7 @@ calculateHashes = do
 diffableTypeByName :: Interfaces -> N.Name -> N.Name -> Interface.Interface -> DiffableType
 diffableTypeByName interfaces targetName moduleName interface = do
   let
-    recursionSet = Set.singleton (moduleName, targetName)
+    recursionSet = Set.singleton (moduleName, targetName, [])
 
   case Map.lookup targetName $ Interface._aliases interface of
     Just alias -> do
@@ -290,7 +290,7 @@ canonicalToDiffableType targetName interfaces recursionSet canonical tvarMap =
   case canonical of
     Can.TType moduleName name params ->
       let
-        recursionIdentifier = (nameRaw moduleName, name)
+        recursionIdentifier = (nameRaw moduleName, name, tvarResolvedParams)
 
         newRecursionSet = Set.insert recursionIdentifier recursionSet
 

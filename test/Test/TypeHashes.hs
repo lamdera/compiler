@@ -80,3 +80,19 @@ suite = tests
 
       expect $ sha_first /= sha_second
   ]
+
+
+
+debugProject project = do
+  withDebug $ Dir.withCurrentDirectory project $ do
+    res <- Lamdera.TypeHash.calculateHashes
+    case res of
+      Right hashes -> do
+        -- hindentPrintValue "hash" hashes
+        atomicPutStrLn $ show hashes
+        pure ()
+      Left err -> do
+        -- hindentPrintValue "hash-err" err
+        pure ()
+
+    pure ()

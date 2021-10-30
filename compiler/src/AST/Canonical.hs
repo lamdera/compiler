@@ -198,17 +198,17 @@ data Type
   | TUnit
   | TTuple Type Type (Maybe Type)
   | TAlias ModuleName.Canonical Name [(Name, Type)] AliasType
-  deriving (Eq)
+  deriving (Eq, Ord)
 
 
 data AliasType
   = Holey Type
   | Filled Type
-  deriving (Eq)
+  deriving (Eq, Ord)
 
 
 data FieldType = FieldType {-# UNPACK #-} !Word16 Type
-  deriving (Eq)
+  deriving (Eq, Ord)
 
 
 -- NOTE: The Word16 marks the source order, but it may not be available
