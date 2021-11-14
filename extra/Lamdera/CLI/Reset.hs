@@ -10,6 +10,7 @@ import qualified System.Directory as Dir
 import qualified Stuff as PerUserCache
 import qualified Reporting
 import qualified Reporting.Doc as D
+import LamderaSharedBuildHelpers
 
 import Lamdera
 import Lamdera.Progress
@@ -28,7 +29,11 @@ run () () = do
 
   progress "Here is the plan:\n"
 
-  report $ D.fillSep ["-", D.red "Remove", D.fromChars elmHome]
+  if List.isInfixOf [ostype] [MacOS, Linux]
+    then
+      report $ D.fillSep ["-", D.yellow "Remove artifacts in", D.fromChars elmHome]
+    else
+      report $ D.fillSep ["-", D.red "Remove", D.fromChars elmHome]
 
   onlyWhen_ (doesDirectoryExist elmStuff) $ do
     report $ D.fillSep ["-", D.red "Remove", D.fromChars elmStuff]
@@ -51,8 +56,14 @@ run () () = do
 
   if approveReset
     then do
-      progress $ "Removing " <> elmHome
-      rmdir elmHome
+      if List.isInfixOf [ostype] [MacOS, Linux]
+        then do
+          progress $ "Removing artifacts in " <> elmHome
+          c $ "find " <> elmHome <> "/0.19.1/packages | grep artifacts.dat | xargs rm"
+
+        else do
+          progress $ "Removing " <> elmHome
+          rmdir elmHome
 
       onlyWhen_ (doesDirectoryExist elmStuff) $ do
         progress $ "Removing " <> elmStuff

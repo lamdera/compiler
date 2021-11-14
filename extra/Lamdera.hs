@@ -39,6 +39,7 @@ module Lamdera
   -- , isTypeSnapshot
   , isTest
   , ostype
+  , OSType(..)
   , env
   , unsafe
   , onlyWhen
@@ -370,9 +371,17 @@ isTest = do
     Nothing -> pure False
 
 
-ostype :: String
+ostype :: OSType
 ostype = do
-  dt "OSTYPE:" System.Info.os
+  -- case dt "OSTYPE:" System.Info.os of
+  case System.Info.os of
+    "darwin" -> MacOS
+    "linux" -> Linux
+    "mingw32" -> Windows
+    _ -> UnknownOS System.Info.os
+
+
+data OSType = Windows | MacOS | Linux | UnknownOS String deriving (Eq, Show)
 
 
 env =
@@ -727,18 +736,18 @@ setEnvMode root mode = do
 openUrlInBrowser :: Text -> IO ()
 openUrlInBrowser url = do
   case ostype of
-    "mingw32" -> do
-      System.Process.callCommand $ "start " <> T.unpack url
-
-    "darwin" -> do
+    MacOS -> do
       System.Process.callCommand $ "open " <> T.unpack url
 
-    "linux" -> do
+    Linux -> do
       System.Process.callCommand $ "xdg-open " <> T.unpack url
 
-    _ -> do
+    Windows -> do
+      System.Process.callCommand $ "start " <> T.unpack url
+
+    UnknownOS name -> do
       -- We have an unexpected system...
-      atomicPutStrLn $ "ERROR: please report: skipping url open on unknown OSTYPE: " <> show ostype
+      atomicPutStrLn $ "ERROR: please report: skipping url open on unknown OSTYPE: " <> show name
       pure ()
 
 

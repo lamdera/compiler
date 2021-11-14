@@ -488,7 +488,7 @@ fetchProductionInfo :: Text -> Bool -> IO (Either Lamdera.Http.Error (Int, [Text
 fetchProductionInfo appName useLocal =
   let
     endpoint =
-      if (textContains "-local" appName && ostype == "darwin") || useLocal
+      if (textContains "-local" appName && ostype == MacOS) || useLocal
         then
           "https://" <> T.unpack appName <> ".lamdera.test/_i"
 
