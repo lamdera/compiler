@@ -16,9 +16,10 @@ run () () = do
 
   Lamdera.CLI.Check.run () ()
 
-  (exit, stdout, stderr) <- System.Process.readProcessWithExitCode "git" ["branch","--show-current"] ""
-
-  let branch = stdout & pack & strip & unpack
+  -- This invocation doesn't appear to work on older git versions, left for posterity
+  -- (exit, stdout, stderr) <- System.Process.readProcessWithExitCode "git" ["branch","--show-current"] ""
+  (exit, stdout, stderr) <- System.Process.readProcessWithExitCode "git" ["symbolic-ref", "--short", "-q", "HEAD"] ""
+  let branch = stdout & pack & strip
 
   case branch of
     "main" -> do
@@ -30,6 +31,6 @@ run () () = do
       pure ()
 
     _ ->
-      atomicPutStrLn $ "Error: deploys must be from a main or master branch. You are on branch " <> branch <> "."
+      atomicPutStrLn $ "Error: deploys must be from a main or master branch. You are on branch " <> unpack branch <> "."
 
   pure ()
