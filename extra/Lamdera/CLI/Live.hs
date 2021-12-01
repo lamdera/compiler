@@ -15,6 +15,7 @@ import qualified Data.Text.Lazy as TL
 import qualified Data.Text.IO as T
 import qualified Data.Text.Encoding as T
 import qualified Data.Text.Lazy.Encoding as TL
+import qualified Data.Map as Map
 
 import qualified System.Directory as Dir
 import System.FilePath as FP
@@ -361,6 +362,46 @@ serveRpc (mClients, mLeader, mChan, beState) port = do
           "\",\"e\":\"" <> T.decodeUtf8 endpoint <>
           "\",\"r\":\""<> reqId <>
           "\",\"i\":[],\"j\":" <> body <> "}"
+
+        Just "application/x-www-form-urlencoded" ->
+          let
+            escapeJsonString = T.replace "\"" "\\\""
+
+            body = T.pack $ show $ BSL.unpack rbody
+
+            body2 =
+              Snap.Core.parseUrlEncoded (BSL.toStrict rbody)
+                & Map.toList
+                & fmap (\(key, vals) ->
+                  let
+                    values =
+                      case vals of
+                        [] -> "null"
+                        val:[] -> "\"" <> (T.decodeUtf8 val & escapeJsonString) <> "\""
+                        _ ->
+                          vals
+                            & fmap (\v -> "\"" <> (T.decodeUtf8 v & escapeJsonString) <> "\"")
+                            & T.intercalate ","
+                            & (\v -> "[" <> v <> "]")
+                  in
+                  "\"" <> T.decodeUtf8 key <> "\":" <> values
+                )
+                & (\v ->
+                  "{" <> (v & T.intercalate ",") <> "}"
+                    -- & T.encodeUtf8
+                    -- & Snap.Core.urlEncode
+                    -- & T.decodeUtf8
+                )
+                -- & (\v ->
+                --   "\"" <> v <> "\""
+                -- )
+
+          in
+          -- t s e r i j
+          "{\"t\":\"q\",\"s\":\""<> sid <>
+          "\",\"e\":\"" <> T.decodeUtf8 endpoint <>
+          "\",\"r\":\""<> reqId <>
+          "\",\"i\":[],\"j\":" <> body2 <> "}"
 
         Nothing -> do
           error "invalid Content-Type"
