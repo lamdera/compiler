@@ -121,7 +121,7 @@ target2 = do
 
 
   Dir.setCurrentDirectory p
-  withCurrentDirectory p $ trackedForkIO $ withCurrentDirectory p $ Develop.run () (Develop.Flags Nothing)
+  withCurrentDirectory p $ trackedForkIO "Test.liveReloadLive" $ withCurrentDirectory p $ Develop.run () (Develop.Flags Nothing)
 
   -- Doing this actually makes no sense in the :rr context, as the thread is long-running so it's the same as
   -- disabling the ENV vars mid-run! But leaving it here as a reminder, because it _does_ pollute the ENV

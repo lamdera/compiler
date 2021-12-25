@@ -35,7 +35,7 @@ start :: IO ()
 start = do
   debug_ "Starting proxy..."
   threadId <- startReverseProxy_
-  trackGhciThread threadId
+  trackGhciThread "Lamdera.ReverseProxy.start" threadId
 
 
 startReverseProxy_ :: IO ThreadId
@@ -96,7 +96,9 @@ startReverseProxy_ = do
               -- debug_ "HTTP request without host... dropping"
               pure $ WPRProxyDestSecure (ProxyDest "lamdera.com" 80)
         )
-        (\exception -> throw exception )
+        (\exception ->
+          debug_note ("\n➡️❌  proxy error: " ++ show exception) defaultOnExc exception
+        )
         manager
 
 

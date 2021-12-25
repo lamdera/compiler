@@ -31,7 +31,7 @@ getJsOutput cache =
 
 asyncUpdateJsOutput :: Cache -> IO BS.ByteString -> IO ()
 asyncUpdateJsOutput (Cache mJsOutput) recompile = do
-  trackedForkIO $ do
+  trackedForkIO "Ext.Sentry.asyncUpdateJsOutput" $ do
     takeMVar mJsOutput
     !bs <- track "recompile" $ recompile
     putMVar mJsOutput bs

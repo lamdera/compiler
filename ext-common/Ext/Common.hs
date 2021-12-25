@@ -233,17 +233,17 @@ after a `:r` and avoid issues like a socket port already being in use!
 
 -}
 
-trackedForkIO :: IO () -> IO ()
-trackedForkIO io = do
+trackedForkIO :: String -> IO () -> IO ()
+trackedForkIO label io = do
   threadId <- forkIO io
-  trackGhciThread threadId
+  trackGhciThread label threadId
 
 
-trackGhciThread :: ThreadId -> IO ()
-trackGhciThread threadId =
+trackGhciThread :: String -> ThreadId -> IO ()
+trackGhciThread label threadId =
   modifyMVar_ ghciThreads
     (\threads -> do
-      debug $ "Tracking GHCI thread:" ++ show threadId
+      debug $ "Tracking GHCI thread '" ++ label ++ "':" ++ show threadId
       pure $ threadId:threads
     )
 

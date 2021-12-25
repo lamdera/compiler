@@ -12,7 +12,7 @@ import qualified System.Directory as Dir
 import qualified System.FilePath as FP
 
 watch root action =
-  trackedForkIO $ withManager $ \mgr -> do
+  trackedForkIO "Ext.Filewatch.watch" $ withManager $ \mgr -> do
     trigger <-
       Debounce.new
         Debounce.Args
