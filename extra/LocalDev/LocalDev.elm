@@ -43,7 +43,7 @@ import Types exposing (BackendModel, BackendMsg, FrontendModel, FrontendMsg, ToB
 
 
 currentVersion =
-    ( 1, 0, 0 )
+    ( 1, 0, 1 )
 
 
 port send_ToBackend : Bytes -> Cmd msg

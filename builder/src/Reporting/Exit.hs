@@ -1396,6 +1396,22 @@ toDetailsReport details =
               toPackageProblemReport pkg vsn packageProblem
 
             BD_BadBuild pkg vsn fingerprint ->
+              -- let
+              --   deps_ :: [String]
+              --   deps_ =
+              --       deps & fmap (\d ->
+              --         case d of
+              --           -- BD_BadDownload _ _ _ -> "BD_BadDownload"
+              --           -- BD_BadBuild _ _ _ -> "BD_BadBuild"
+              --
+              --           BD_BadDownload pkg version problem ->
+              --             "BD_BadDownload"
+              --           BD_BadBuild pkg version mapPackages ->
+              --             show (Pkg.toChars pkg, V.toChars version, Map.toList mapPackages & fmap (\(p,v) -> (V.toChars v, Pkg.toChars p)))
+              --
+              --         )
+              -- in
+              -- debugPass "toDetailsReport" (cacheDir, Pkg.toChars pkg, V.toChars vsn, deps_) $
               Help.report "PROBLEM BUILDING DEPENDENCIES" Nothing
                 "I ran into a compilation error when trying to build the following package:"
                 [ D.indent 4 $ D.red $ D.fromChars $ Pkg.toChars pkg ++ " " ++ V.toChars vsn
