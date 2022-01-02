@@ -7,6 +7,7 @@ import qualified Data.ByteString.Builder as BS
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Map as Map
 import qualified Data.Set as Set
+import qualified Data.List as List
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import qualified System.Environment as Env
@@ -377,6 +378,7 @@ checkUserConfig appName prodTokenM = do
                 -- Missing in prod, keep
                 True
         )
+      & List.nub
 
     secretBreakingConfigs :: [(Text, Text, Text)]
     secretBreakingConfigs =

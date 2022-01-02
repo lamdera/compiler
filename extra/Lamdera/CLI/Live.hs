@@ -16,6 +16,8 @@ import qualified Data.Text.IO as T
 import qualified Data.Text.Encoding as T
 import qualified Data.Text.Lazy.Encoding as TL
 import qualified Data.Map as Map
+import qualified Data.List as List
+import GHC.Word (Word64)
 
 import qualified System.Directory as Dir
 import System.FilePath as FP
@@ -33,6 +35,7 @@ import qualified Develop.Generate.Help as Generate
 import qualified Develop.StaticFiles as StaticFiles
 import qualified Json.Decode as D
 import qualified Json.Encode as E
+import qualified Data.Utf8 as Utf8
 
 import Lamdera
 import qualified Data.UUID as UUID
@@ -102,11 +105,9 @@ serveLamderaPublicFiles serveElm serveFilePretty =
 -- harness as we're local in the reactor). Extensioned paths will continue to
 -- the next handler, namely `error404` (see `run` fn at top of file)
 -- serveUnmatchedUrlsToIndex :: Snap ()
-serveUnmatchedUrlsToIndex serveElm =
+serveUnmatchedUrlsToIndex root serveElm =
   do  file <- getSafePath
       guard (takeExtension file == "")
-
-      root <- liftIO $ getProjectRoot
       serveElm (lamderaCache root </> "LocalDev.elm")
 
 
@@ -286,22 +287,85 @@ serveWebsocket (mClients, mLeader, mChan, beState) =
 
           WS.runWebSocketsSnap $ SocketServer.socketHandler mClients mLeader beState onJoined onReceive (T.decodeUtf8 key) sessionId
 
-
         Nothing ->
-          error404
+          error404 "missing sec-websocket-key header"
+
+serveExperimental :: FilePath -> Snap ()
+serveExperimental root = do
+  returnIfNotExperimentalMode
+
+  fullpath <- T.pack <$> getSafePath
+  let
+    handlers =
+      [ ("_x/read", serveExperimentalRead root)
+      , ("_x/write", serveExperimentalWrite root)
+      , ("_x/list", serveExperimentalList root)
+      ]
+  handlers
+    & List.find (\(prefix, handler) ->
+      prefix `T.isPrefixOf` fullpath
+    )
+    & fmap (\(prefix, handler) -> do
+      let path =
+            fullpath & T.replace (prefix <>  "/") "" -- Strip when sub-dirs
+                     & T.replace prefix ""           -- Strip when root dir
+      handler path
+    )
+    & withDefault pass
 
 
-error404 :: Snap ()
-error404 =
-  do  modifyResponse $ setResponseStatus 404 "Not Found"
-      modifyResponse $ setContentType "text/html; charset=utf-8"
-      writeBuilder $ Generate.makePageHtml "NotFound" Nothing
+serveExperimentalRead :: FilePath -> Text -> Snap ()
+serveExperimentalRead root path = do
+  debug $ "_x/read received: " ++ show path
+  let
+    fullpath :: FilePath
+    fullpath = root </> (T.unpack path)
+  debug $ "_x/read: " ++ show fullpath
+  exists_ <- liftIO $ Dir.doesFileExist fullpath
+  if exists_
+    then do
+      sendFile fullpath
+    else do
+      error404 "file not found"
+
+
+serveExperimentalWrite :: FilePath -> Text -> Snap ()
+serveExperimentalWrite root path = do
+  rbody <- readRequestBody _10MB
+  debug $ "_x/write received: " ++ show path
+  let
+    fullpath :: FilePath
+    fullpath = root </> (T.unpack path)
+  debug $ "_x/write: " ++ show fullpath
+
+  liftIO $ writeUtf8 fullpath (TL.toStrict $ TL.decodeUtf8 rbody)
+  jsonResponse $ B.byteString $ "{ written: '" <> T.encodeUtf8 (T.pack fullpath) <> "'}"
+
+
+serveExperimentalList :: FilePath -> Text -> Snap ()
+serveExperimentalList root path = do
+  debug $ "_x/list received: " ++ show path
+  let
+    fullpath :: FilePath
+    fullpath = root </> (T.unpack path)
+  debug $ "_x/list: " ++ show fullpath
+  exists_ <- liftIO $ Dir.doesDirectoryExist fullpath
+  if exists_
+    then do
+      files <- liftIO $ Dir.getDirectoryContents fullpath
+      files
+        & E.list (E.string . Utf8.fromChars)
+        & E.encode
+        & jsonResponse
+
+    else do
+      error404 "folder not found"
 
 
 serveRpc (mClients, mLeader, mChan, beState) port = do
 
   mEndpoint <- getParam "endpoint"
-  rbody <- readRequestBody 10000000 -- 10MB limit
+  rbody <- readRequestBody _10MB
   mSid <- getCookie "sid"
   contentType <- getHeader "Content-Type" <$> getRequest
 
@@ -469,6 +533,9 @@ serveRpc (mClients, mLeader, mChan, beState) port = do
 --         let (D.Decoder runB) = callback a
 --         runB value
 
+_10MB :: Word64
+_10MB =
+  10000000 -- 10MB limit
 
 logger =
   (\bs ->
@@ -476,24 +543,50 @@ logger =
   )
 
 
+jsonResponse :: B.Builder -> Snap ()
+jsonResponse s =
+  do  modifyResponse $ setContentType "application/json; charset=utf-8"
+      writeBuilder s
+      r <- getResponse
+      finishWith r
+
+error404 :: B.Builder -> Snap ()
+error404 s =
+  do  modifyResponse $ setResponseStatus 404 "Not Found"
+      modifyResponse $ setContentType "application/json; charset=utf-8"
+      -- writeBuilder $ Generate.makePageHtml "NotFound" Nothing
+      writeBuilder $ "{\"error\":\"" <> s <> "\"}"
+      r <- getResponse
+      finishWith r
+
 error500 :: B.Builder -> Snap ()
 error500 s =
   do  modifyResponse $ setResponseStatus 500 "Internal server error"
-      modifyResponse $ setContentType "text/html; charset=utf-8"
-      writeBuilder $ "error:" <> s
+      modifyResponse $ setContentType "application/json; charset=utf-8"
+      writeBuilder $ "{\"error\":\"" <> s <> "\"}"
+      r <- getResponse
+      finishWith r
 
 error503 :: B.Builder -> Snap ()
 error503 s =
   do  modifyResponse $ setResponseStatus 503 "Service Unavailable"
-      modifyResponse $ setContentType "text/html; charset=utf-8"
-      writeBuilder $ "error: " <> s
-
+      modifyResponse $ setContentType "application/json; charset=utf-8"
+      writeBuilder $ "{\"error\":\"" <> s <> "\"}"
+      r <- getResponse
+      finishWith r
 
 error400 :: B.Builder -> Snap ()
 error400 s =
   do  modifyResponse $ setResponseStatus 400 "Bad Request"
-      modifyResponse $ setContentType "text/html; charset=utf-8"
-      writeBuilder $ "error: " <> s
+      modifyResponse $ setContentType "application/json; charset=utf-8"
+      writeBuilder $ "{\"error\":\"" <> s <> "\"}"
+      r <- getResponse
+      finishWith r
+
+
+returnIfNotExperimentalMode :: Snap ()
+returnIfNotExperimentalMode =
+  onlyWhen (not isExperimental_) $ error503 "Only available with EXPERIMENTAL=1"
 
 
 passOnIndex pwd =

@@ -36,6 +36,8 @@ module Lamdera
   -- , ppElm
   , isDebug
   , isDebug_
+  , isExperimental
+  , isExperimental_
   -- , isTypeSnapshot
   , isTest
   , ostype
@@ -361,6 +363,19 @@ isDebug = do
 {-# NOINLINE isDebug_ #-}
 isDebug_ :: Bool
 isDebug_ = unsafePerformIO $ isDebug
+
+
+isExperimental :: IO Bool
+isExperimental = do
+  experimentalM <- Env.lookupEnv "EXPERIMENTAL"
+  case experimentalM of
+    Just _ -> pure True
+    Nothing -> pure False
+
+
+{-# NOINLINE isExperimental_ #-}
+isExperimental_ :: Bool
+isExperimental_ = unsafePerformIO $ isExperimental
 
 
 isTest :: IO Bool
