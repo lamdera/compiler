@@ -44,6 +44,12 @@ type InvalidReason
     | DuplicatedName
 
 
+type CustomType
+    = Custom1
+    | Custom2
+    | CustomParam Int
+
+
 test desc bool =
     Eval.timed <|
         if bool then
@@ -74,7 +80,16 @@ suite =
         equals (List.repeat 0 0) []
     , test "List.repeat 2 0" <|
         equals (List.repeat 2 0) [ 0, 0 ]
-    , test "List.repeat 10M" <|
-        -- Just a performance test
-        notEquals (List.repeat 10000000 0) []
+
+    -- , test "List.repeat 10M" <|
+    --     -- Just a performance test
+    --     notEquals (List.repeat 10000000 0) []
+    , test "Custom type equality" <|
+        equals Custom1 Custom1
+    , test "Custom type inequality" <|
+        notEquals Custom1 Custom2
+    , test "Custom type param equality" <|
+        equals (CustomParam 123) (CustomParam 123)
+    , test "Custom type param inequality" <|
+        notEquals (CustomParam 123) (CustomParam 321)
     ]

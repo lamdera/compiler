@@ -11,6 +11,9 @@ import qualified Test.Check
 import qualified Test.Wire
 import Test.Helpers
 
+import qualified Make
+import Make (Flags(..))
+
 import qualified Lamdera.Compile
 import qualified Lamdera.Evaluate
 import qualified Lamdera.CLI.Check
@@ -46,20 +49,70 @@ Easier to change the target definition than constantly adjust the :def!
 
 Press up arrow to get history of prior commands.
 
+
+### Debugging
+
+
+λ: :set -fbreak-on-error    -- break on exceptions
+λ: :trace checkProjectCompiles  -- some function to trace
+Stopped at <exception thrown>
+_exception :: e = _
+
+We've stopped at an exception. Let's try to look at the code with :list.
+
+[<exception thrown>] λ: :list
+Unable to list source for <exception thrown>
+Try :back then :list
+Because the exception happened in Prelude.head, we can't look at the source directly. But as GHCi informs us, we can go :back and try to list what happened before in the trace.
+
+[<exception thrown>] λ: :back
+Logged breakpoint at Broken.hs:2:23-42
+_result :: [Integer]
+[-1: Broken.hs:2:23-42] λ: :list
+1
+2  main = print $ head $ filter odd [2, 4, 6]
+3
+In the terminal, the offending expression filter odd [2, 4, 6] is highlighted in bold font. So this is the expression that evaluated to the empty list in this case.
+
+For more information on how to use the GHCi debugger, see the GHC User's Guide.
+
 -}
+
+
 
 -- Current target for ghci :rr command. See ~/.ghci config file, which should contain
 -- something like `:def rr const $ return $ unlines [":r","Test.target"]`
 
 -- target = buildTestHarnessToProductionJs
-target = do
-  Dir.withCurrentDirectory "/Users/mario/dev/projects/lamdera-dashboard" $ Lamdera.CLI.Check.run () ()
+-- target = checkProjectCompiles
+target = liveReloadLive
 
+-- target = do
+--   Dir.withCurrentDirectory "/Users/mario/dev/projects/lamdera-dashboard" $ Lamdera.CLI.Check.run () ()
 
 
 checkProjectCompiles = do
   setEnv "LDEBUG" "1"
-  Lamdera.CLI.Check.checkUserProjectCompiles "/Users/mario/dev/test/lamdera-init"
+  -- Lamdera.CLI.Check.checkUserProjectCompiles "/Users/mario/dev/test/lamdera-init"
+  -- Lamdera.CLI.Check.checkUserProjectCompiles "/Users/mario/dev/projects/lamdera-dashboard"
+
+
+  --  Lamdera.CLI.Check.checkUserProjectCompiles runs in async so we don't get the trace
+  let root = "/Users/mario/dev/projects/lamdera-dashboard"
+      scaffold = "src/Frontend.elm"
+      tmp = lamderaCache root <> "/tmp.js"
+
+  Dir.withCurrentDirectory root $
+    Make.run_cleanup (pure ()) [scaffold] $
+      Make.Flags
+        { _debug = False
+        , _optimize = True
+        -- We don't use Make.DevNull as it does not actually compile to JS,
+        -- thus we never get warnings about Debug.* usage which we want.
+        , _output = Just (Make.JS tmp)
+        , _report = Nothing
+        , _docs = Nothing
+        }
 
 
 -- target = Test.all
@@ -106,19 +159,19 @@ buildTestHarnessToProductionJs = do
 
 
 {- Dynamic testing of lamdera live with managed thread kill + reload -}
-target2 = do
+liveReloadLive = do
 
   setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
   setEnv "LDEBUG" "1"
 
-  let p = "/Users/mario/lamdera/test/v1"
+  -- let p = "/Users/mario/lamdera/test/v1"
   -- let p = "/Users/mario/dev/test/lamdera-init"
   -- let p = "/Users/mario/dev/test/nu-ashworld-lamdera"
   -- let p = "/Users/mario/dev/projects/otstats"
+  let p = "/Users/mario/work/codespecs"
 
   -- rmdir "/Users/mario/.elm"
   -- rmdir $ p <> "/elm-stuff"
-
 
   Dir.setCurrentDirectory p
   withCurrentDirectory p $ trackedForkIO "Test.liveReloadLive" $ withCurrentDirectory p $ Develop.run () (Develop.Flags Nothing)
@@ -131,15 +184,16 @@ target2 = do
 
 
 {- WIP interpreter -}
-target1 = do
-  withDebug $
-    Lamdera.Evaluate.exec
-      "/Users/mario/dev/projects/lamdera-compiler/test/scenario-interpreter/src/Test/Basic.elm"
-      "suite"
-
-    -- Ext.Query.Canonical.loadFileSourceValue
-    --   "/Users/mario/dev/projects/lamdera-compiler/test/scenario-interpreter/src/Test/Basic.elm"
-    --   "suite"
+-- target = do
+--   withDebug $
+--     Lamdera.Evaluate.exec
+--       "/Users/mario/dev/projects/lamdera-compiler/test/scenario-interpreter/"
+--       "src/Test/Basic.elm"
+--       "suite"
+--
+--     -- Ext.Query.Canonical.loadFileSourceValue
+--     --   "/Users/mario/dev/projects/lamdera-compiler/test/scenario-interpreter/src/Test/Basic.elm"
+--     --   "suite"
 
 
 -- target = do

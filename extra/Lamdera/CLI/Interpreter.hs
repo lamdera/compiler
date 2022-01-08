@@ -26,8 +26,9 @@ import qualified Lamdera.Evaluate
 -}
 run :: Args -> () -> IO ()
 run (Args file expressionName) () = do
+  root <- getProjectRootFor file
   debug_ "Starting interpreter..."
-  Lamdera.Evaluate.exec file expressionName
+  Lamdera.Evaluate.exec root file expressionName
 
 
 

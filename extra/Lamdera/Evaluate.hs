@@ -34,10 +34,10 @@ import qualified Lamdera.Evaluate.Canonical
 import qualified Lamdera.Evaluate.Optimized
 import System.Directory
 
-exec path name = do
-  let project = "/Users/mario/dev/projects/lamdera-compiler/test/scenario-interpreter"
+exec root path name = do
+  -- let project = "/Users/mario/dev/projects/lamdera-compiler/test/scenario-interpreter"
 
-  root <- getProjectRootFor path
+  -- root <- getProjectRootFor path
 
   withCurrentDirectory root $ track "load+exec suite" $ do
 

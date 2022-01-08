@@ -185,8 +185,16 @@ evalExpr expr locals globals =
             Cycle [name] _unknown [TailDef name_ pnames expr_] _funcDeps ->
               handleCyclePlain node args globals
 
+            Ctor index numParams ->
+              -- We've got a custom type constructor with args, so just apply the args and return
+              -- as there's no other way to represent an applied constructor...
+              -- @TODO this seems bad.
+              (Call (VarGlobal global) args)
+
             _ ->
-              error $ "unimplemented VarGlobal lookup:\n" <> T.unpack (hindentFormatValue (node, locals, args_))
+              error $ "unimplemented VarGlobal lookup:\n" <> T.unpack (hindentFormatValue (node, locals, args_)) <>
+                      "\nin the expression:\n" <> T.unpack (hindentFormatValue expr)
+
 
         Nothing ->
           error $ "Global not found in globals:\n"<> show global <> "\n\n "-- <> show globals
@@ -245,6 +253,9 @@ evalExpr expr locals globals =
           expr
           -- error $ "'VarLocal "<> show n <> "' not found in locals: " <> show locals
 
+    VarGlobal global ->
+      expr
+
     Int n -> expr
     Float n -> expr
     Str s -> expr
@@ -273,6 +284,9 @@ evalExpr expr locals globals =
       args
         & fmap (\(name, expr) -> (name, evalExpr expr locals globals))
         & TailCall name
+
+    VarEnum global index ->
+      expr
 
     _ ->
       error $ "evaluate unimplemented:\n" <> (T.unpack $ hindentFormatValue expr)
@@ -311,6 +325,10 @@ applyVarLocals locals expr =
 
     TailCall name args ->
       TailCall name (args & fmap (\(n,v) -> (n, applyVarLocals locals v)))
+
+    -- | VarEnum Global Index.ZeroBased
+    -- VarEnum global index ->
+    --   expr
 
     _ ->
       error $ "applyVarLocals missing coverage: " <> show expr

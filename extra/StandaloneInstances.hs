@@ -67,6 +67,7 @@ import qualified Type.Type
 import qualified Type.UnionFind
 import qualified Reporting.Error.Type
 import qualified Deps.Registry
+import qualified Deps.Solver
 import qualified Json.Encode
 import qualified File
 
@@ -384,6 +385,7 @@ instance Show (GHC.IORef.IORef a) where
 
 
 deriving instance Show Deps.Registry.KnownVersions
+deriving instance Show Deps.Solver.Details
 
 
 deriving instance Show Json.Encode.Value
