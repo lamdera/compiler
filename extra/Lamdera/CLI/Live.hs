@@ -292,8 +292,6 @@ serveWebsocket (mClients, mLeader, mChan, beState) =
 
 serveExperimental :: FilePath -> Snap ()
 serveExperimental root = do
-  returnIfNotExperimentalMode
-
   fullpath <- T.pack <$> getSafePath
   let
     handlers =
@@ -309,7 +307,7 @@ serveExperimental root = do
       let path =
             fullpath & T.replace (prefix <>  "/") "" -- Strip when sub-dirs
                      & T.replace prefix ""           -- Strip when root dir
-      handler path
+      failIfNotExperimentalMode (handler path)
     )
     & withDefault pass
 
@@ -584,9 +582,11 @@ error400 s =
       finishWith r
 
 
-returnIfNotExperimentalMode :: Snap ()
-returnIfNotExperimentalMode =
-  onlyWhen (not isExperimental_) $ error503 "Only available with EXPERIMENTAL=1"
+failIfNotExperimentalMode :: Snap () -> Snap ()
+failIfNotExperimentalMode handler =
+  if isExperimental_
+    then handler
+    else error503 "Only available with EXPERIMENTAL=1"
 
 
 passOnIndex pwd =
