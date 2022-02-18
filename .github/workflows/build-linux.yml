@@ -1,0 +1,86 @@
+on:
+  push:
+    branches:
+      - lamdera-next
+
+name: Build Lamdera Compiler for Linux
+jobs:
+  build-packages:
+    name: Build Libraries
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: haskell/actions/setup@v1
+        with:
+          enable-stack: true
+          stack-version: 'latest'
+
+      # First, check if the specific cache exists, so we don't waste ~3m of build
+      # time restoring the 1.5GB cache for no reason. See https://github.com/actions/cache/pull/420
+      # as this functionality may become part of actions/cache in future.
+      - uses: bowd/cache@v3
+        id: cache
+        with:
+          only-check-key: true
+          path: |
+            ~/.stack
+            .stack-work
+          key: ${{ runner.os }}-${{ hashFiles('stack.yaml.lock') }}
+
+      # If it doesn't exist, setup our cache action, while also trying to restore
+      # a prior broader matching cache if it exists (saves a lot of time if just
+      # modifying a few packages).
+      - uses: actions/cache@v2
+        if: steps.cache.outputs.cache-hit != 'true'
+        with:
+          path: |
+            ~/.stack
+            .stack-work
+          key: ${{ runner.os }}-${{ hashFiles('stack.yaml.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-
+
+      # Install just our dependencies, this can take ~30m from scratch and is the
+      # most part valuable to cache.
+      - name: Install Dependencies
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: stack build --only-dependencies
+
+  # The install step is split to a separate job, so that if the we were building
+  # from scratch and just spent 30 minutes building all the libraries, but then
+  # the actual compile failed, we wouldn't throw away all that hard work without
+  # caching it first. On a clean compile this means we'll save+restore the cache
+  # unecessarily once (+~3m), but over all subsequent runs with a cache hit the
+  # whole lib step will be skipped almost immediately so its worth it.
+  install:
+    name: Build Linux Executable
+    runs-on: ubuntu-latest
+    needs: build-packages
+    steps:
+      - uses: actions/checkout@v2
+      - uses: haskell/actions/setup@v1
+        with:
+          enable-stack: true
+          stack-version: 'latest'
+      - uses: actions/cache@v2
+        with:
+          path: |
+            ~/.stack
+            .stack-work
+          key: ${{ runner.os }}-${{ hashFiles('stack.yaml.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-
+
+      # The retry is here because of the windows build issues, but doesn't
+      # hurt to leave it, worst case it never retries
+      - uses: nick-invision/retry@v2
+        with:
+          timeout_minutes: 5
+          max_attempts: 3
+          command: stack install
+
+      - name: Archive lamdera.exe artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: lamdera-next
+          path: ~/.local/bin/lamdera
