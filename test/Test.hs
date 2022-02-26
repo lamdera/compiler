@@ -17,6 +17,7 @@ import Make (Flags(..))
 import qualified Lamdera.Compile
 import qualified Lamdera.Evaluate
 import qualified Lamdera.CLI.Check
+import qualified Lamdera.CLI.CheckElmPages
 import qualified Ext.Query.Canonical
 
 import Develop
@@ -204,6 +205,9 @@ liveReloadLive = do
   --   "src/Bytes/Encode.elm"
   --   "withDebug"
 
+
+-- target = do
+--   Dir.withCurrentDirectory "/Users/mario/dev/projects/elmcraft" $ Lamdera.CLI.CheckElmPages.run () ()
 
 
 

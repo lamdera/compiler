@@ -44,6 +44,7 @@ main =
     , make
     , repl
     , Lamdera.CLI.reset
+    , Lamdera.CLI.checkElmPages
     , Lamdera.CLI.annotate
     , Lamdera.CLI.eval
     -- , reactor
