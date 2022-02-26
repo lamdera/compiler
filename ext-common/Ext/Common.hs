@@ -243,7 +243,7 @@ trackGhciThread :: String -> ThreadId -> IO ()
 trackGhciThread label threadId =
   modifyMVar_ ghciThreads
     (\threads -> do
-      debug $ "Tracking GHCI thread '" ++ label ++ "':" ++ show threadId
+      debug $ "👀  Tracking GHCI thread '" ++ label ++ "':" ++ show threadId
       pure $ threadId:threads
     )
 

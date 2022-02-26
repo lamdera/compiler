@@ -175,7 +175,7 @@ import Ext.Common (getProjectRoot, getProjectRootFor, getProjectRootMaybe)
 -- import CanSer.CanSer (ppElm)
 
 lamderaVersion :: (Int, Int, Int)
-lamderaVersion = (1,0,1)
+lamderaVersion = (1,0,2)
 
 lamderaVersionString :: String
 lamderaVersionString = versionToString lamderaVersion
