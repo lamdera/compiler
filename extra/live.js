@@ -293,7 +293,7 @@ function getSessionId() {
   if (typeof sid == 'undefined') {
     // Make the cid look similar to production sec-websocket-key clientIds
     const newSid = getRandomInt(1000000,10000).toString().padEnd(40,"c04b8f7b594cdeedebc2a8029b82943b0a620815")
-    Cookie.set('sid', newSid)
+    Cookie.set('sid', newSid, { sameSite: 'lax' })
     return newSid
   } else {
     return sid
