@@ -24,9 +24,9 @@ makeOptimizedWithCleanup cleanup root path = do
   debug $ "🏗   lamdera make --optimize " <> root <> "/" <> path
   let
     tmp = lamderaCache root <> "/tmp.js"
-    scaffold = lamderaCache root <> "/Main.elm"
+    scaffold = lamderaCache root <> "/Main_.elm"
 
-  writeUtf8 scaffold $ "module Main exposing (..)\n\nimport " <> (T.pack $ FP.takeFileName $ FP.dropExtensions path) <> "\nimport Html\n\nmain = Html.text \"\""
+  writeUtf8 scaffold $ "module Main_ exposing (..)\n\nimport " <> (T.pack $ FP.takeFileName $ FP.dropExtensions path) <> "\nimport Html\n\nmain = Html.text \"\""
 
   r <- async $
     Dir.withCurrentDirectory root $
@@ -107,11 +107,11 @@ makeHarnessDevJs :: FilePath -> IO ()
 makeHarnessDevJs root = do
   let
     tmp = lamderaCache root <> "/tmp.js"
-    scaffold = lamderaCache root <> "/Main.elm"
+    scaffold = lamderaCache root <> "/Main_.elm"
 
   debug $ "🏗   lamdera make " <> scaffold
 
-  writeUtf8 scaffold "module Main exposing (..)\n\nimport Frontend\nimport Backend\nimport Types\nimport Html\n\nmain = Html.text \"\""
+  writeUtf8 scaffold "module Main_ exposing (..)\n\nimport Frontend\nimport Backend\nimport Types\nimport Html\n\nmain = Html.text \"\""
 
   r <- async $
     Dir.withCurrentDirectory root $
