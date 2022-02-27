@@ -44,6 +44,7 @@ import qualified Lamdera.Evergreen.Snapshot
 import qualified Lamdera.TypeHash
 import qualified Lamdera.Types
 import qualified Lamdera.Legacy
+import qualified Network.Status
 
 
 progressPointer t = do
@@ -89,6 +90,67 @@ run () () = do
   debug $ "app name:" ++ show appName
 
   (localTypes, externalTypeWarnings) <- getLocalInfo
+
+  ips <- Network.Status.ips
+
+  if ips == []
+    then offlineCheck root
+    else onlineCheck root appName inDebug localTypes externalTypeWarnings isHoistRebuild forceVersion forceNotProd inProduction
+
+
+offlineCheck root = do
+  progressDoc $ D.stack
+    [ D.red $ D.reflow $ "--- OFFLINE MODE ---"
+    , D.red $ D.reflow $ "It appears you are offline, continuing with limited checks."
+    , D.red $ D.reflow $ "Note: being offline and continuing can cause serious confusion when returning offline, in particular:"
+    , D.red $ D.reflow $ "- I have no idea what's in production, so I can only guess no types have changed."
+    , D.red $ D.reflow $ "- This means I won't make any new snapshots"
+    , D.red $ D.reflow $ "- I will assume the latest current migration on disk is the real latest migration"
+    , D.red $ D.reflow $ "- I will type check that migration under Evergreen"
+    ]
+
+  shouldContinue <- Reporting.ask $
+    D.stack [ D.reflow $ "Do you want me to continue despite this? [Y/n]: " ]
+
+  if shouldContinue
+    then do
+      migrationFilePaths <- Lamdera.Evergreen.findMigrationFilePaths root
+
+      let
+        nextVersionInfo =
+          case last_ (debugNote "migrationVersions" $ Lamdera.Evergreen.migrationVersions migrationFilePaths) 1 of
+            1 -> WithoutMigrations 1
+            x -> WithMigrations x
+
+        nextVersion = vinfoVersion nextVersionInfo
+
+        nextMigrationPathBare = ("src/Evergreen/Migrate/V") <> (show nextVersion) <> ".elm"
+        nextMigrationPath = root </> nextMigrationPathBare
+
+      debug_ $ "nextVersionInfo" ++ show nextVersionInfo
+
+      debug $ "Reading migration source..."
+      migrationSource <- T.decodeUtf8 <$> IO.readUtf8 nextMigrationPath
+
+      if textContains "Unimplemented" migrationSource
+        then do
+          Progress.throw $
+            Help.report "UNIMPLEMENTED MIGRATION" (Just nextMigrationPathBare)
+              ("The latest migration still has migration placeholders that need implementing:")
+              [ D.reflow $ nextMigrationPathBare
+              , D.fillSep ["See",D.cyan ("<https://dashboard.lamdera.app/docs/evergreen>"),"for more info."]
+              ]
+
+        else do
+          migrationCheck root nextVersionInfo
+    else do
+      pure ()
+
+  pure ()
+
+
+onlineCheck root appName inDebug localTypes externalTypeWarnings isHoistRebuild forceVersion forceNotProd inProduction  = do
+
   (prodVersion, productionTypes, nextVersion) <- getProdInfo appName inProduction forceNotProd forceVersion isHoistRebuild localTypes
 
   let
@@ -278,39 +340,39 @@ forceVersion_ = do
       Nothing -> Nothing
 
 
-getNextVersionInfo :: FilePath -> IO VersionInfo
-getNextVersionInfo root = do
+-- getNextVersionInfo :: FilePath -> IO VersionInfo
+-- getNextVersionInfo root = do
+--
+--   hoistRebuild <- Env.lookupEnv "HOIST_REBUILD"
+--   forceVersionM <- Env.lookupEnv "VERSION"
+--   forceNotProd <- Env.lookupEnv "NOTPROD"
+--   inProduction <- Lamdera.inProduction
+--
+--   let isHoistRebuild = (hoistRebuild /= Nothing)
+--       forceVersion = fromMaybe (-1) $
+--         case forceVersionM of
+--           Just fv -> Text.Read.readMaybe fv
+--           Nothing -> Nothing
+--
+--   -- Lamdera.Legacy.temporaryCheckOldTypesNeedingMigration inProduction root
+--
+--   -- progressPointer_ "Checking project compiles..."
+--   -- checkUserProjectCompiles root
+--
+--   appName <- Lamdera.Project.appNameOrThrow
+--
+--   (localTypes, externalTypeWarnings) <- getLocalInfo
+--   (prodVersion, productionTypes, nextVersion) <- getProdInfo appName inProduction forceNotProd forceVersion isHoistRebuild localTypes
+--
+--   let
+--     localTypesChangedFromProduction = productionTypes /= localTypes
+--
+--   nextVersionInfo <- getNextVersionInfo_ nextVersion prodVersion isHoistRebuild localTypesChangedFromProduction
+--
+--   pure nextVersionInfo
 
-  hoistRebuild <- Env.lookupEnv "HOIST_REBUILD"
-  forceVersionM <- Env.lookupEnv "VERSION"
-  forceNotProd <- Env.lookupEnv "NOTPROD"
-  inProduction <- Lamdera.inProduction
 
-  let isHoistRebuild = (hoistRebuild /= Nothing)
-      forceVersion = fromMaybe (-1) $
-        case forceVersionM of
-          Just fv -> Text.Read.readMaybe fv
-          Nothing -> Nothing
-
-  -- Lamdera.Legacy.temporaryCheckOldTypesNeedingMigration inProduction root
-
-  -- progressPointer_ "Checking project compiles..."
-  -- checkUserProjectCompiles root
-
-  appName <- Lamdera.Project.appNameOrThrow
-
-  (localTypes, externalTypeWarnings) <- getLocalInfo
-  (prodVersion, productionTypes, nextVersion) <- getProdInfo appName inProduction forceNotProd forceVersion isHoistRebuild localTypes
-
-  let
-    localTypesChangedFromProduction = productionTypes /= localTypes
-
-  nextVersionInfo <- getNextVersionInfo_ nextVersion prodVersion isHoistRebuild localTypesChangedFromProduction
-
-  pure nextVersionInfo
-
-
-
+getLocalInfo :: IO (([Text], [(Text, [Text], Lamdera.Types.DiffableType)]))
 getLocalInfo = do
   hashesResult <- Lamdera.TypeHash.calculateAndWrite
   case hashesResult of
@@ -320,6 +382,7 @@ getLocalInfo = do
       pure (localTypes, externalTypeWarnings)
 
 
+getProdInfo :: Text -> Bool -> Maybe String -> Int -> Bool -> [Text] -> IO (Int, [Text], Int)
 getProdInfo appName inProduction forceNotProd forceVersion isHoistRebuild localTypes = do
   (prodVersion, productionTypes) <-
     if isHoistRebuild

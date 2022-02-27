@@ -22,16 +22,17 @@ import qualified Ext.ElmFormat
 
 createLamderaGenerated :: FilePath -> VersionInfo -> IO Text
 createLamderaGenerated root nextVersion = do
-
-  debug_ $ "Reading src/Evergreen/Migrate to determine migrationSequence"
-
-  paths <- safeListDirectory $ root </> "src/Evergreen/Migrate"
-
-  let migrationFilepaths = paths & filter (\p -> not $ ".bk" `isInfixOf` p)
-
-  debug_ $ "migrationFilepaths:" <> show migrationFilepaths
-
+  migrationFilepaths <- findMigrationFilePaths root
   lamderaGenerated nextVersion migrationFilepaths
+
+
+findMigrationFilePaths :: FilePath -> IO [FilePath]
+findMigrationFilePaths root = do
+  debug_ $ "Reading src/Evergreen/Migrate to determine migrationSequence"
+  paths <- safeListDirectory $ root </> "src/Evergreen/Migrate"
+  let migrationFilePaths = paths & filter (\p -> not $ ".bk" `isInfixOf` p)
+  debug_ $ "migrationFilePaths:" <> show migrationFilePaths
+  pure migrationFilePaths
 
 
 lamderaGenerated :: VersionInfo -> [FilePath] -> IO Text

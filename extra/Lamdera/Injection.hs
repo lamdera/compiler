@@ -206,7 +206,7 @@ injections isBackend isLocalDev =
         var dead = false;
         var upgradeMode = false;
 
-        function mtime() {
+        function mtime() { // microseconds
           if (!isBackend) { return 0; }
           const hrTime = process.hrtime();
           return Math.floor(hrTime[0] * 1000000 + hrTime[1] / 1000);
