@@ -1,6 +1,14 @@
 module Lamdera.Types where
 
+import qualified Data.Map as Map
+import qualified Elm.Interface as Interface
+import qualified Elm.ModuleName as ModuleName
+
 import Lamdera
+
+type Interfaces =
+  Map.Map ModuleName.Raw Interface.Interface
+
 
 data DiffableType
   = DRecord [(Text, DiffableType)]

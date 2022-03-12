@@ -1,11 +1,16 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE BangPatterns #-}
 
-module Lamdera.TypeHash where
+module Ext.TypeHash where
 
-{- Hashes for Elm types
-@TODO move into Evergreen namespace
--}
+import qualified Data.List as List
+import qualified Data.Text as T
+
+import qualified Reporting.Exit as Exit
+import qualified Reporting.Doc as D
+
+
+
 
 import qualified Data.Map as Map
 import qualified Data.List as List
@@ -25,29 +30,17 @@ import qualified Reporting.Doc as D
 import qualified Reporting.Task as Task
 import qualified Reporting.Exit as Exit
 
-import Lamdera
-import Lamdera.Types
-import Lamdera.Progress
-import qualified Ext.Query.Interfaces as Interfaces
+-- import Lamdera
+-- import Lamdera.Types
+-- import Lamdera.Progress
+-- import qualified Ext.Query.Interfaces as Interfaces
 import StandaloneInstances
 
 
-{- Attempt to load all interfaces for project in current directory and generate
-type snapshots  -}
-calculateAndWrite :: IO (Either Exit.BuildProblem ([Text], [(Text, [Text], DiffableType)]))
-calculateAndWrite = do
-  res <- calculateLamderaHashes
-  case res of
-    Right (hashes, warnings) -> do
-      root <- getProjectRoot
-      writeUtf8 (lamderaHashesPath root) $ show_ hashes
-      pure res
-    Left err ->
-      pure res
 
-buildCheckHashes = do
-  Task.eio Exit.ReactorBadBuild $ calculateLamderaHashes
 
+import Lamdera
+import Lamdera.Types
 
 
 {- Tracks types that have already been seen to ensure we can break cycles -}
@@ -55,32 +48,23 @@ type RecursionSet =
   Set.Set (ModuleName.Raw, N.Name, [Can.Type])
 
 
-lamderaTypes :: [ModuleName.Raw]
-lamderaTypes =
-  [ "FrontendModel"
-  , "BackendModel"
-  , "FrontendMsg"
-  , "ToBackend"
-  , "BackendMsg"
-  , "ToFrontend"
-  ]
 
-calculateLamderaHashes :: IO (Either Exit.BuildProblem ([Text], [(Text, [Text], DiffableType)]))
-calculateLamderaHashes = do
-  interfaces <- Interfaces.all [ "src/Types.elm" ]
-  inDebug <- Lamdera.isDebug
-  calculateHashes interfaces inDebug
+-- calculateHashes :: Interfaces -> Bool -> Either Exit.BuildProblem ([Text], [(Text, [Text], DiffableType)])
+-- calculateHashes interfaces inDebug = do
+--   error "todo"
 
 
-calculateHashes :: Interfaces -> Bool -> IO (Either Exit.BuildProblem ([Text], [(Text, [Text], DiffableType)]))
-calculateHashes interfaces inDebug = do
+
+
+calculateHashes :: [ModuleName.Raw] -> Interfaces -> Bool -> Either Exit.BuildProblem ([Text], [(Text, [Text], DiffableType)])
+calculateHashes targetTypes interfaces inDebug = do
 
   let
     iface_Types = (interfaces ! "Types")
 
     typediffs :: [(Text, DiffableType)]
     typediffs =
-      lamderaTypes
+      targetTypes
         & fmap (\t -> (nameToText t, diffableTypeByName interfaces t "Types" iface_Types))
 
 
@@ -112,7 +96,7 @@ calculateHashes interfaces inDebug = do
               (errors_ & List.nub & fmap (\e -> D.fromChars . T.unpack $ "- " <> e) )
           )
 
-  debug "Generating type hashes..."
+  debug_note "Generating type hashes..." (Right ())
 
   if List.length errors > 0
     then
@@ -125,7 +109,7 @@ calculateHashes interfaces inDebug = do
           else
             []
       in
-      pure $ Left $
+      Left $
         Exit.BuildLamderaProblem "WIRE ISSUES"
           "I ran into the following problems when checking Lamdera core types:"
           (formattedErrors ++
@@ -143,7 +127,8 @@ calculateHashes interfaces inDebug = do
       --     writeUtf8 (lamderaExternalWarningsPath root) $ textWarnings
       --   else
       --     remove (lamderaExternalWarningsPath root)
-      pure $ Right (hashes, warnings)
+      Right (hashes, warnings)
+
 
 
 diffableTypeByName :: Interfaces -> N.Name -> N.Name -> Interface.Interface -> DiffableType

@@ -68,7 +68,7 @@ compile pkg ifaces modul = do
   canonical0  <- canonicalize pkg ifaces modul_
   -- ()          <- debugPassText "starting canonical2" "" (pure ())
 
-  onlyWhen (Src.getName modul == "Main") $ Ext.ElmPages.Check.isWireCompatible canonical0 ifaces
+  onlyWhen (Src.getName modul == "Main") $ Ext.ElmPages.Check.isWireCompatible "PageData" ifaces False
 
   -- Add Canonical Wire gens, i.e. the `w2_[en|de]code_TYPENAME` functions
   canonical1 <- Lamdera.Wire3.Core.addWireGenerations canonical0 pkg ifaces modul_
