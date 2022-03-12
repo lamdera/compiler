@@ -86,7 +86,8 @@ For more information on how to use the GHCi debugger, see the GHC User's Guide.
 
 -- target = buildTestHarnessToProductionJs
 -- target = checkProjectCompiles
-target = liveReloadLive
+-- target = liveReloadLive
+target = Lamdera.Compile.makeDev_ "/Users/mario/dev/projects/lamdera-compiler/test/scenario-elm-pages-incompatible-wire/.elm-pages/Main.elm"
 
 -- target = do
 --   Dir.withCurrentDirectory "/Users/mario/dev/projects/lamdera-dashboard" $ Lamdera.CLI.Check.run () ()

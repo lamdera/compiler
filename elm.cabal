@@ -53,6 +53,7 @@ Executable lamdera
         -- Elmx
         ext-common
         ext-sentry
+        ext-elm-pages
 
     Main-Is:
         Main.hs
@@ -293,16 +294,18 @@ Executable lamdera
         Wire.PrettyPrint
 
         -- Elmx extensions
-        -- Ext Common --
+        -- ext-common
         Ext.Common
         Ext.ElmFormat
         Ext.Query.Canonical
         Ext.Query.Interfaces
 
-
-        -- Ext-sentry
+        -- ext-sentry
         Ext.Sentry
         Ext.Filewatch
+
+        -- ext-elm-pages
+        Ext.ElmPages.Check
 
     Build-depends:
         ansi-terminal,
