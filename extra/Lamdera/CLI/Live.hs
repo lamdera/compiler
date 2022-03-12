@@ -336,7 +336,7 @@ serveExperimentalWrite root path = do
     fullpath = root </> (T.unpack path)
   debug $ "_x/write: " ++ show fullpath
 
-  liftIO $ writeUtf8 fullpath (TL.toStrict $ TL.decodeUtf8 rbody)
+  liftIO $ writeIfDifferent fullpath (TL.toStrict $ TL.decodeUtf8 rbody)
   jsonResponse $ B.byteString $ "{ written: '" <> T.encodeUtf8 (T.pack fullpath) <> "'}"
 
 
