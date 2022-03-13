@@ -25,7 +25,7 @@ type alias RouteParams =
 
 
 type alias Data =
-    {}
+    { unserialisableValue : Int -> Int }
 
 
 route : StatelessRoute RouteParams Data
@@ -39,7 +39,7 @@ route =
 
 data : DataSource Data
 data =
-    DataSource.succeed Data
+    DataSource.succeed <| Data (\i -> i)
 
 
 head :

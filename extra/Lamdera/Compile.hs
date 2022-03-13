@@ -79,8 +79,10 @@ makeDev :: FilePath -> FilePath -> IO ()
 makeDev root path = do
   debug $ "🏗   lamdera make " <> root <> "/" <> path
 
+  absRoot <- Dir.makeAbsolute root
+
   r <- async $
-    Dir.withCurrentDirectory root $
+    Dir.withCurrentDirectory absRoot $
       Make.run [path] $
         Make.Flags
           { _debug = True
