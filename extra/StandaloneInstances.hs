@@ -227,6 +227,7 @@ deriving instance Show Reporting.Exit.PackageProblem
 deriving instance Show Reporting.Exit.Outline
 deriving instance Show Reporting.Exit.OutlineProblem
 deriving instance Show Reporting.Exit.BuildProjectProblem
+deriving instance Show Reporting.Exit.BuildProblem
 
 deriving instance Show Reporting.Exit.Install
 deriving instance Show Reporting.Exit.RegistryProblem

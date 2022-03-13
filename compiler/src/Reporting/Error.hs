@@ -59,6 +59,7 @@ data Error
   | BadMains L.Localizer (OneOrMore.OneOrMore Main.Error)
   | BadPatterns (NE.List Pattern.Error)
   | BadDocs Docs.Error
+  | BadLamderaWireIncompatible D.Doc
   | BadLamdera D.Doc
 
 
@@ -89,6 +90,9 @@ toReports source err =
 
     BadDocs docsErr ->
       Docs.toReports source docsErr
+
+    BadLamderaWireIncompatible doc ->
+      NE.singleton $ Lamdera.Error.report doc
 
     BadLamdera doc ->
       NE.singleton $ Lamdera.Error.report doc

@@ -9,6 +9,7 @@ import qualified Test.Snapshot
 import qualified Test.Lamdera
 import qualified Test.Check
 import qualified Test.Wire
+import qualified Test.Ext.ElmPages.Check
 import Test.Helpers
 
 import qualified Make
@@ -18,6 +19,7 @@ import qualified Lamdera.Compile
 import qualified Lamdera.Evaluate
 import qualified Lamdera.CLI.Check
 import qualified Lamdera.CLI.CheckElmPages
+
 import qualified Ext.Query.Canonical
 
 import Develop
@@ -84,13 +86,23 @@ For more information on how to use the GHCi debugger, see the GHC User's Guide.
 -- Current target for ghci :rr command. See ~/.ghci config file, which should contain
 -- something like `:def rr const $ return $ unlines [":r","Test.target"]`
 
+target = Test.all
+
+
 -- target = buildTestHarnessToProductionJs
 -- target = checkProjectCompiles
 -- target = liveReloadLive
-target = Lamdera.Compile.makeDev_ "/Users/mario/dev/projects/lamdera-compiler/test/scenario-elm-pages-incompatible-wire/.elm-pages/Main.elm"
-
 -- target = do
 --   Dir.withCurrentDirectory "/Users/mario/dev/projects/lamdera-dashboard" $ Lamdera.CLI.Check.run () ()
+-- target = Test.Wire.all
+-- target = checkUserConfig
+-- target = Test.Wire.buildAllPackages
+-- target = Lamdera.CLI.Login.run () ()
+-- target = Dir.withCurrentDirectory "/Users/mario/dev/projects/lamdera-test" $ Lamdera.CLI.Reset.run () ()
+-- target = Lamdera.Diff.run
+-- target = Lamdera.ReverseProxy.start
+-- target = Test.Check.mockBuildSh "/Users/mario/lamdera-deploys/test-local-v1" "test-local"
+-- target = Test.Check.mockBuildSh "/Users/mario/dev/test/lamdera-init" "test-local"
 
 
 checkProjectCompiles = do
@@ -116,18 +128,6 @@ checkProjectCompiles = do
         , _docs = Nothing
         }
 
-
--- target = Test.all
--- target = Test.Wire.all
--- target = checkUserConfig
--- target = Test.Wire.buildAllPackages
--- target = Lamdera.CLI.Login.run () ()
--- target = Dir.withCurrentDirectory "/Users/mario/dev/projects/lamdera-test" $ Lamdera.CLI.Reset.run () ()
--- target = Lamdera.Diff.run
--- target = Lamdera.ReverseProxy.start
-
--- target = Test.Check.mockBuildSh "/Users/mario/lamdera-deploys/test-local-v1" "test-local"
--- target = Test.Check.mockBuildSh "/Users/mario/dev/test/lamdera-init" "test-local"
 
 -- target = do
 --   setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
@@ -211,9 +211,14 @@ liveReloadLive = do
 --   Dir.withCurrentDirectory "/Users/mario/dev/projects/elmcraft" $ Lamdera.CLI.CheckElmPages.run () ()
 
 
-
 all =
   EasyTest.run allTests
+
+rerun seed =
+  EasyTest.rerun seed allTests
+
+rerunOnly seed label =
+  EasyTest.rerunOnly seed label allTests
 
 
 single = do
@@ -234,5 +239,6 @@ allTests =
     [ scope "Test.Lamdera -> " $ Test.Lamdera.suite
     , scope "Test.Snapshot -> " $ Test.Snapshot.suite
     , scope "Test.Wire -> " $ Test.Wire.suite
+    , scope "Test.Ext.ElmPages.Check -> " $ Test.Ext.ElmPages.Check.suite
     , Test.LamderaGenerated.suite
     ]

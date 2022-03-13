@@ -4,21 +4,12 @@
 module Ext.TypeHash where
 
 import qualified Data.List as List
-import qualified Data.Text as T
-
-import qualified Reporting.Exit as Exit
-import qualified Reporting.Doc as D
-
-
-
-
 import qualified Data.Map as Map
-import qualified Data.List as List
 import qualified Data.Text as T
-import qualified Data.Name as N
 import qualified Data.Set as Set
 import Data.Map ((!))
 
+import qualified Data.Name as N
 import qualified AST.Canonical as Can
 import qualified AST.Source as Valid
 import qualified Elm.ModuleName as ModuleName
@@ -30,14 +21,7 @@ import qualified Reporting.Doc as D
 import qualified Reporting.Task as Task
 import qualified Reporting.Exit as Exit
 
--- import Lamdera
--- import Lamdera.Types
--- import Lamdera.Progress
--- import qualified Ext.Query.Interfaces as Interfaces
 import StandaloneInstances
-
-
-
 
 import Lamdera
 import Lamdera.Types
@@ -48,24 +32,27 @@ type RecursionSet =
   Set.Set (ModuleName.Raw, N.Name, [Can.Type])
 
 
+extendInterfacesWithCanonicalModule :: Pkg.Name -> ModuleName.Raw -> Can.Module -> Interfaces -> Interfaces
+extendInterfacesWithCanonicalModule pkg moduleName modul ifaces =
+  ifaces & Map.insert moduleName (Interface.Interface pkg Map.empty
+    (Can._unions modul & fmap Interface.OpenUnion)
+    (Can._aliases modul & fmap Interface.PublicAlias)
+    Map.empty
+  )
 
--- calculateHashes :: Interfaces -> Bool -> Either Exit.BuildProblem ([Text], [(Text, [Text], DiffableType)])
--- calculateHashes interfaces inDebug = do
---   error "todo"
 
-
-
-
-calculateHashes :: [ModuleName.Raw] -> Interfaces -> Bool -> Either Exit.BuildProblem ([Text], [(Text, [Text], DiffableType)])
-calculateHashes targetTypes interfaces inDebug = do
+calculateHashes :: Pkg.Name -> ModuleName.Raw -> [ModuleName.Raw] -> Can.Module -> Interfaces -> Bool -> Either Exit.BuildProblem ([Text], [(Text, [Text], DiffableType)])
+calculateHashes pkg modul targetTypes canonical interfaces inDebug = do
 
   let
-    iface_Types = (interfaces ! "Types")
+    ifacesExtended = extendInterfacesWithCanonicalModule pkg modul canonical interfaces
+
+    iface_Types = (ifacesExtended ! modul)
 
     typediffs :: [(Text, DiffableType)]
     typediffs =
       targetTypes
-        & fmap (\t -> (nameToText t, diffableTypeByName interfaces t "Types" iface_Types))
+        & fmap (\targetType -> (nameToText targetType, diffableTypeByName ifacesExtended targetType modul iface_Types))
 
 
     hashes :: [Text]
@@ -117,16 +104,6 @@ calculateHashes targetTypes interfaces inDebug = do
           ] ++ notifyWarnings)
 
     else do
-      -- -- These external warnings no longer need to be written to disk, but
-      -- -- we might find it useful to evaluate the scope of external types that
-      -- -- users are using in their projects?
-      -- root <- getProjectRoot
-      --
-      -- if (List.length warnings > 0)
-      --   then do
-      --     writeUtf8 (lamderaExternalWarningsPath root) $ textWarnings
-      --   else
-      --     remove (lamderaExternalWarningsPath root)
       Right (hashes, warnings)
 
 

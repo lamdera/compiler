@@ -1,10 +1,13 @@
 module Test.Helpers where
 
-
-import Lamdera
 import System.Environment (setEnv, unsetEnv, lookupEnv)
 import System.FilePath ((</>))
 import Data.Text as T
+
+import EasyTest
+
+import Lamdera
+import Test.Main (captureProcessResult)
 
 
 aggressiveCacheClear :: FilePath -> IO ()
@@ -48,3 +51,11 @@ cp = Lamdera.copyFile
 
 rm :: String -> IO ()
 rm path = Lamdera.remove path
+
+
+catchOutput :: IO () -> Test Text
+catchOutput action = do
+  -- https://hackage.haskell.org/package/main-tester-0.2.0.1/docs/Test-Main.html
+  pr <- io $ captureProcessResult action
+  -- @TODO improve this to actually pull out values
+  pure $ show_ pr
