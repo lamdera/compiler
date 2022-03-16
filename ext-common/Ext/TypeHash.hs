@@ -87,21 +87,12 @@ calculateHashes pkg modul targetTypes canonical interfaces inDebug = do
 
   if List.length errors > 0
     then
-      let
-        -- !x = onlyWhen inDebug $ formatHaskellValue "diffHasErrors:" typediffs :: IO ()
-
-        notifyWarnings =
-          if List.length warnings > 0 then
-            [ D.reflow $ "Warning: also, a number of types outside Types.elm are referenced, see `lamdera check` for more info." ]
-          else
-            []
-      in
       Left $
         Exit.BuildLamderaProblem "WIRE ISSUES"
-          "I ran into the following problems when checking Lamdera core types:"
+          "I found one or more Route Modules with Data types that contain functions."
           (formattedErrors ++
           [ D.reflow "See <https://dashboard.lamdera.app/docs/wire> for more info."
-          ] ++ notifyWarnings)
+          ])
 
     else do
       Right (hashes, warnings)
@@ -546,13 +537,24 @@ diffableTypeErrors dtype =
   case dtype of
     DRecord fields ->
       fields
-        & fmap (\(n, tipe) -> diffableTypeErrors tipe)
+        & fmap (\(n, tipe) -> do
+            let errors = diffableTypeErrors tipe
+            case errors of
+              [] -> []
+              xs -> errors & fmap (\err -> "{ " <> n <> " } " <> err )
+          )
         & List.concat
 
     DCustom name constructors ->
       constructors
         & fmap (\(n, params) ->
-            fmap diffableTypeErrors params
+            params
+              & fmap (\param -> do
+                  let errors = diffableTypeErrors param
+                  case errors of
+                    [] -> []
+                    xs -> errors & fmap (\err -> n <> " " <> err)
+                )
               & List.concat
           )
         & List.concat

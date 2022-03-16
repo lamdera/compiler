@@ -82,7 +82,8 @@ makeDev root path = do
   absRoot <- Dir.makeAbsolute root
 
   r <- async $
-    Dir.withCurrentDirectory absRoot $
+    Dir.withCurrentDirectory absRoot $ do
+      touch path
       Make.run [path] $
         Make.Flags
           { _debug = True
