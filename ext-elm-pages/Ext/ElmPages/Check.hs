@@ -22,12 +22,12 @@ import StandaloneInstances
 
 isWireCompatible :: Pkg.Name -> ModuleName.Raw -> ModuleName.Raw -> Can.Module -> Interfaces -> Bool -> Either E.Error ()
 isWireCompatible pkg moduleName target canonical ifaces inDebug = do
-  case Ext.TypeHash.calculateHashes pkg moduleName [target] canonical ifaces inDebug of
+  case Ext.TypeHash.checkElmPagesTypes canonical ifaces inDebug of
     Right _ -> Right ()
 
     Left err ->
       case err of
         Exit.BuildLamderaProblem title topline ddoc ->
-          Left $ E.BadLamderaWireIncompatible $ Help.reportToDoc $ Help.report title Nothing topline ddoc
+          Left $ E.BadLamderaWireIncompatible title $ D.stack [D.reflow topline, D.stack ddoc]
 
         _ -> error "todo: remove the impossible states"

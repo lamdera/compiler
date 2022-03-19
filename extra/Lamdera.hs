@@ -779,10 +779,12 @@ textSha1 input =
   else Nothing
 
 
+toName :: Text -> N.Name
 toName =
   N.fromChars . T.unpack
 
 
+nameToText :: N.Name -> Text
 nameToText =
   T.pack . N.toChars
 
