@@ -164,6 +164,12 @@ evalExpr expr locals globals =
         [Int a, b] -> List $ take a $ repeat b
 
 
+    -- (Call (VarGlobal (Global (Module.Canonical (Name "elm" "core") "List") "foldl")) [arg1, arg2, arg3]) ->
+    --   error "got it!"
+    --
+    --   foldl
+
+
     (Call (VarGlobal global) args_) ->
 
       let args = args_ & fmap (applyVarLocals locals)
@@ -287,6 +293,37 @@ evalExpr expr locals globals =
 
     VarEnum global index ->
       expr
+
+    -- Case Name Name (Decider Choice) [(Int, Expr)]
+    -- data Choice
+    --   = Inline Expr
+    --   | Jump Int
+    -- data Decider a
+    --   = Leaf a
+    --   | Chain
+    --       { _testChain :: [(DT.Path, DT.Test)]
+    --       , _success :: Decider a
+    --       , _failure :: Decider a
+    --       }
+    --   | FanOut
+    --       { _path :: DT.Path
+    --       , _tests :: [(DT.Test, Decider a)]
+    --       , _fallback :: Decider a
+    --       }
+    --   deriving (Eq)
+    Case var name decider jumps ->
+      error $ "case statement:\n" <> (T.unpack $ hindentFormatValue expr)
+
+
+    -- case blah of
+    --   0 ->
+      -- (x,y) ->
+      -- (x, x:xs) ->
+      -- (x, (y,z,k)) ->
+      -- SomeType x y z p "x" f k y (",") n a b ->
+      -- (x, (y,z, (y,z,""), (y,z,""), (y,z,""), (y,z,""), (y,z,""), (y,z,""), (y,z,""), (y,z,""))) ->
+      -- x:xs ->
+      -- x:xs:[] ->
 
     _ ->
       error $ "evaluate unimplemented:\n" <> (T.unpack $ hindentFormatValue expr)

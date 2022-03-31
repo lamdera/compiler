@@ -88,6 +88,9 @@ deriving instance Show AST.Optimized.EffectsType
 deriving instance Show AST.Optimized.LocalGraph
 deriving instance Show AST.Optimized.Main
 
+deriving instance Show (Optimize.DecisionTree.Path)
+deriving instance Show (Optimize.DecisionTree.Test)
+
 deriving instance Eq AST.Optimized.Choice
 deriving instance Eq AST.Optimized.Expr
 deriving instance Eq AST.Optimized.Def

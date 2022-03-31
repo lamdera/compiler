@@ -71,6 +71,11 @@ addOne x =
     x + 1
 
 
+add x y =
+    x + y
+
+
+suite : List String
 suite =
     [ test "addOne adds one" <|
         equals (addOne 1) 2
@@ -81,9 +86,12 @@ suite =
     , test "List.repeat 2 0" <|
         equals (List.repeat 2 0) [ 0, 0 ]
 
-    -- , test "List.repeat 10M" <|
-    --     -- Just a performance test
-    --     notEquals (List.repeat 10000000 0) []
+    --
+    , test "List.repeat 10M" <|
+        -- Just a performance test
+        notEquals (List.repeat 10000000 0) []
+    , test "folding with a plus" <|
+        equals (List.foldl (+) 0 [ 1, 2, 3 ]) 6
     , test "Custom type equality" <|
         equals Custom1 Custom1
     , test "Custom type inequality" <|
