@@ -44,7 +44,7 @@ jobs:
       # most part valuable to cache.
       - name: Install Dependencies
         if: steps.cache.outputs.cache-hit != 'true'
-        run: stack build --only-dependencies
+        run: stack build --ghc-options='-optl-static -optl-pthread' --only-dependencies
 
   # The install step is split to a separate job, so that if the we were building
   # from scratch and just spent 30 minutes building all the libraries, but then
@@ -77,7 +77,7 @@ jobs:
         with:
           timeout_minutes: 5
           max_attempts: 3
-          command: stack install
+          command: stack install --ghc-options='-optl-static -optl-pthread' --force-dirty
 
       - name: Archive lamdera.exe artifact
         uses: actions/upload-artifact@v2
