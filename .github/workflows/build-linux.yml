@@ -25,7 +25,7 @@ jobs:
           path: |
             ~/.stack
             .stack-work
-          key: ${{ runner.os }}-${{ hashFiles('stack.yaml.lock') }}
+          key: ${{ runner.os }}-${{ hashFiles('stack.yaml.lock') }}-${{ hashFiles('elm.cabal') }}
 
       # If it doesn't exist, setup our cache action, while also trying to restore
       # a prior broader matching cache if it exists (saves a lot of time if just
@@ -36,7 +36,7 @@ jobs:
           path: |
             ~/.stack
             .stack-work
-          key: ${{ runner.os }}-${{ hashFiles('stack.yaml.lock') }}
+          key: ${{ runner.os }}-${{ hashFiles('stack.yaml.lock') }}-${{ hashFiles('elm.cabal') }}
           restore-keys: |
             ${{ runner.os }}-
 
@@ -67,7 +67,7 @@ jobs:
           path: |
             ~/.stack
             .stack-work
-          key: ${{ runner.os }}-${{ hashFiles('stack.yaml.lock') }}
+          key: ${{ runner.os }}-${{ hashFiles('stack.yaml.lock') }}-${{ hashFiles('elm.cabal') }}
           restore-keys: |
             ${{ runner.os }}-
 
