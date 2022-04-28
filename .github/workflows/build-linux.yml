@@ -1,7 +1,7 @@
 on:
   push:
     branches:
-      - lamdera-next
+      - lamdera-next-temporarilydisabled
 
 name: Build Lamdera Compiler for Linux
 jobs:
