@@ -22,7 +22,8 @@ main = do
       shakeVersion = shakefilesHash
     } $ do
 
-    StdoutTrim gitDescribe <- liftIO $ cmd "git" [ "describe", "--abbrev=8", "--match", "[0-9]*", "--always" ]
+    -- StdoutTrim gitDescribe <- liftIO $ cmd "git" [ "describe", "--abbrev=8", "--match", "[0-9]*", "--always" ]\
+    let gitDescribe = "0.19.1-20-gd87b2f0d"
     StdoutTrim gitSha <- liftIO $ cmd "git" [ "describe", "--always", "--match", "NOT A TAG", "--dirty" ]
 
     let lamdera = "_build" </> "lamdera" <.> exe
@@ -77,12 +78,12 @@ main = do
             , "gitDescribe = " ++ show (gitDescribe :: String)
             ]
 
-    Shakefiles.Haskell.cabalProject "avh4-lib"
-        [ "avh4-lib/avh4-lib.cabal" ]
-        [ "avh4-lib/src//*.hs" ]
-        []
-        [ "avh4-lib/test//*.hs" ]
-        []
+    -- Shakefiles.Haskell.cabalProject "avh4-lib"
+    --     [ "avh4-lib/avh4-lib.cabal" ]
+    --     [ "avh4-lib/src//*.hs" ]
+    --     []
+    --     [ "avh4-lib/test//*.hs" ]
+    --     []
 
     -- Shakefiles.Haskell.cabalProject "elm-format-markdown"
     --     [ "elm-format-markdown/elm-format-markdown.cabal" ]

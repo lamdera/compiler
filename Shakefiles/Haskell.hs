@@ -11,6 +11,9 @@ import Data.Char (isSpace)
 import Data.List (dropWhileEnd, stripPrefix)
 import Shakefiles.Extra
 
+-- --ghc-option required because of https://gitlab.haskell.org/ghc/ghc/-/issues/20592
+ghcOptionFFI = "--ghc-option=-I/Library/Developer/CommandLineTools/SDKs/MacOSX11.sdk/usr/include/ffi"
+
 
 cabalProject :: String -> [String] -> [String] -> [String] -> [String] -> [String] -> Rules ()
 cabalProject name sourceFiles sourcePatterns deps testPatterns testDeps =
@@ -35,16 +38,16 @@ cabalProject name sourceFiles sourcePatterns deps testPatterns testDeps =
     do
         "_build/cabal/" </> name </> "build.ok" %> \out -> do
             hash <- needProjectFiles
-            cmd_ "cabal" "v2-build" "-O0"  (name ++ ":libs") "--enable-tests"
+            cmd_ "cabal" "v2-build" ghcOptionFFI "-O0"  (cabalName name ++ ":libs") "--enable-tests"
             writeFile' out hash
 
         cabalBinPath name "noopt" %> \out -> do
             _ <- needProjectFiles
-            cmd_ "cabal" "v2-build" "-O0" (name ++ ":exes") "--enable-tests"
+            cmd_ "cabal" "v2-build" ghcOptionFFI "-O0" (cabalName name ++ ":exes") "--enable-tests"
 
         cabalBinPath name "opt" %> \out -> do
             _ <- needProjectFiles
-            cmd_ "cabal" "v2-build" "-O2" (name ++ ":exes")
+            cmd_ "cabal" "v2-build" ghcOptionFFI "-O2" (cabalName name ++ ":exes")
 
         "_build/cabal/" </> name </> "test.ok" %> \out -> do
             need globalConfig
@@ -55,7 +58,7 @@ cabalProject name sourceFiles sourcePatterns deps testPatterns testDeps =
             need sourceFilesFromPatterns
             testFiles <- getDirectoryFiles "" testPatterns
             need testFiles
-            cmd_ "cabal" "v2-test" "-O0" (name ++ ":tests") "--test-show-details=streaming"
+            cmd_ "cabal" "v2-test" "-O0" (cabalName name ++ ":tests") "--test-show-details=streaming" ghcOptionFFI
             writeFile' out ""
 
 
@@ -64,11 +67,21 @@ cabalBinPath projectName opt =
     let
         version =
             case projectName of
-                "elm" -> "0.8.5"
+                "elm-format" -> "0.8.5"
+                "lamdera" -> "0.19.1"
+                "elm" -> "0.19.1"
                 _ -> "0.0.0"
     in
-    "dist-newstyle/build" </> Shakefiles.Platform.cabalInstallOs </> "ghc-9.0.2" </> projectName ++ "-" ++ version </> "x" </> projectName </> opt </> "build" </> projectName </> projectName <.> exe
+    -- dist-newstyle/build/aarch64-osx/ghc-9.0.2/elm-0.19.1/x/lamdera/opt/build/lamdera/lamdera
+    "dist-newstyle/build" </> Shakefiles.Platform.cabalInstallOs </> "ghc-9.0.2" </> cabalName projectName ++ "-" ++ version </> "x" </> projectName </> opt </> "build" </> projectName </> projectName <.> exe
 
+
+cabalName :: String -> String
+cabalName projectName =
+    case projectName of
+        "lamdera" -> "elm"
+        "elm" -> "elm"
+        _ -> projectName
 
 executable :: FilePath -> String -> String -> Rules ()
 executable target projectName gitDescribe =

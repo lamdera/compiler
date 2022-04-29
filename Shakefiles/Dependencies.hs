@@ -9,6 +9,9 @@ import Development.Shake.Util
 localBinDir :: String
 localBinDir = "bin"
 
+--ghc-option required because of https://gitlab.haskell.org/ghc/ghc/-/issues/20592
+ghcOptionFFI = "--ghc-option=-I/Library/Developer/CommandLineTools/SDKs/MacOSX11.sdk/usr/include/ffi"
+
 
 cabalInstallExe :: String -> Action ()
 cabalInstallExe package =
@@ -19,6 +22,7 @@ cabalInstallExe package =
         -- these are currently needed because Windows doesn't support the default symlink method
         , "--install-method=copy"
         , "--overwrite-policy=always"
+        , ghcOptionFFI
         ]
 
 
@@ -41,7 +45,7 @@ rules = do
             , "cabal.project"
             , "cabal.project.freeze"
             ]
-        cmd_ "cabal" [ "v2-build", "--only-dependencies" ]
+        cmd_ "cabal" [ "v2-build", "--only-dependencies", ghcOptionFFI ]
         writeFile' out ""
 
     "_build/cabal-test-dependencies.ok" %> \out -> do
@@ -50,7 +54,7 @@ rules = do
             , "cabal.project"
             , "cabal.project.freeze"
             ]
-        cmd_ "cabal" [ "v2-build", "--only-dependencies", "--enable-tests" ]
+        cmd_ "cabal" [ "v2-build", "--only-dependencies", "--enable-tests", ghcOptionFFI ]
         writeFile' out ""
 
     shellcheck %> \out -> do

@@ -24,6 +24,7 @@ platform =
     case (System.Info.os, System.Info.arch) of
         ("linux", "x86_64") -> Linux
         ("darwin", "x86_64") -> Mac
+        ("darwin", "aarch64") -> Mac
         ("osx", "x86_64") -> Mac
         ("mingw32", "x86_64") -> Windows
         ("win32", "x86_64") -> Windows
