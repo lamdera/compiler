@@ -11,9 +11,6 @@ import Data.Char (isSpace)
 import Data.List (dropWhileEnd, stripPrefix)
 import Shakefiles.Extra
 
--- --ghc-option required because of https://gitlab.haskell.org/ghc/ghc/-/issues/20592
-ghcOptionFFI = "--ghc-option=-I/Library/Developer/CommandLineTools/SDKs/MacOSX11.sdk/usr/include/ffi"
-
 
 cabalProject :: String -> [String] -> [String] -> [String] -> [String] -> [String] -> Rules ()
 cabalProject name sourceFiles sourcePatterns deps testPatterns testDeps =
@@ -38,16 +35,16 @@ cabalProject name sourceFiles sourcePatterns deps testPatterns testDeps =
     do
         "_build/cabal/" </> name </> "build.ok" %> \out -> do
             hash <- needProjectFiles
-            cmd_ "cabal" "v2-build" ghcOptionFFI "-O0"  (cabalName name ++ ":libs") "--enable-tests"
+            cmd_ "cabal" $ addGhcOptionFFI ["v2-build", "-O0",  (cabalName name ++ ":libs"), "--enable-tests" ]
             writeFile' out hash
 
         cabalBinPath name "noopt" %> \out -> do
             _ <- needProjectFiles
-            cmd_ "cabal" "v2-build" ghcOptionFFI "-O0" (cabalName name ++ ":exes") "--enable-tests"
+            cmd_ "cabal" $ addGhcOptionFFI ["v2-build", "-O0", (cabalName name ++ ":exes"), "--enable-tests" ]
 
         cabalBinPath name "opt" %> \out -> do
             _ <- needProjectFiles
-            cmd_ "cabal" "v2-build" ghcOptionFFI "-O2" (cabalName name ++ ":exes")
+            cmd_ "cabal" $ addGhcOptionFFI ["v2-build", "-O2", (cabalName name ++ ":exes") ]
 
         "_build/cabal/" </> name </> "test.ok" %> \out -> do
             need globalConfig
@@ -58,7 +55,7 @@ cabalProject name sourceFiles sourcePatterns deps testPatterns testDeps =
             need sourceFilesFromPatterns
             testFiles <- getDirectoryFiles "" testPatterns
             need testFiles
-            cmd_ "cabal" "v2-test" "-O0" (cabalName name ++ ":tests") "--test-show-details=streaming" ghcOptionFFI
+            cmd_ "cabal" $ addGhcOptionFFI ["v2-test", "-O0", (cabalName name ++ ":tests"), "--test-show-details=streaming" ]
             writeFile' out ""
 
 
