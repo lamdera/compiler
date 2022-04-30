@@ -112,10 +112,11 @@ executable target projectName gitDescribe =
             need $
                 concatMap (\target ->
                     [ "publish" </> version </> projectName ++ "-" ++ version ++ "-" ++ show target <.> Shakefiles.Platform.zipFormatFor target
-                    , "publish" </> version </> projectName ++ "-" ++ version ++ "-" ++ show target <.> Shakefiles.Platform.zipFormatFor target <.> "asc"
+                    -- , "publish" </> version </> projectName ++ "-" ++ version ++ "-" ++ show target <.> Shakefiles.Platform.zipFormatFor target <.> "asc"
                     ]
                 )
-                Shakefiles.Platform.all
+                -- Shakefiles.Platform.all
+                [ Shakefiles.Platform.Linux ]
 
         let buildInDocker =
                 [ Shakefiles.Platform.Linux

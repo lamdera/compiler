@@ -47,8 +47,8 @@ main = do
     --     ]
     -- phony "profile" $ need [ "_build/tests/test-files/prof.ok" ]
     phony "dist" $ need [ "dist-lamdera" ]
-    -- phonyPrefix "publish-" $ \version ->
-    --     need [ "elm-format-publish-" ++ version ]
+    phonyPrefix "publish-" $ \version ->
+        need [ "lamdera-publish-" ++ version ]
 
     phony "clean" $ do
         removeFilesAfter "dist-newstyle" [ "//*" ]

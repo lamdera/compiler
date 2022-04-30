@@ -51,8 +51,12 @@ jobs:
         path: ${{ steps.setup-haskell.outputs.cabal-store }}
         key: cabal-release-v1-${{ runner.os }}-${{ hashFiles('cabal.project.freeze') }}
     - run: cabal v2-update
-    - run: ./build.sh -- dist-dependencies
-    - run: ./build.sh -- dist
+    - uses: satackey/action-docker-layer-caching@v0.0.11
+      # Ignore the failure of a step and avoid terminating the job.
+      continue-on-error: true
+    - run: ./build.sh --verbose --verbose -- publish-1.0.2
+    # - run: ./build.sh -- dist-dependencies
+    # - run: ./build.sh -- dist
     # - name: Sign artifacts
     #   run: |
     #     for i in dist/*; do
