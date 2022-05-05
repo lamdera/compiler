@@ -32,6 +32,7 @@ import qualified Reporting.Render.Type.Localizer as L
 import qualified Reporting.Report as Report
 
 
+import Lamdera
 import qualified Lamdera.Error
 
 -- MODULE
@@ -59,7 +60,8 @@ data Error
   | BadMains L.Localizer (OneOrMore.OneOrMore Main.Error)
   | BadPatterns (NE.List Pattern.Error)
   | BadDocs Docs.Error
-  | BadLamdera D.Doc
+  | BadLamderaWireIncompatible String D.Doc
+  | BadLamdera String D.Doc
 
 
 
@@ -90,8 +92,11 @@ toReports source err =
     BadDocs docsErr ->
       Docs.toReports source docsErr
 
-    BadLamdera doc ->
-      NE.singleton $ Lamdera.Error.report doc
+    BadLamderaWireIncompatible title doc ->
+      NE.singleton $ Lamdera.Error.report title doc
+
+    BadLamdera title doc ->
+      NE.singleton $ Lamdera.Error.report title doc
 
 
 
@@ -152,13 +157,14 @@ moduleToDoc root (Module _ absolutePath _ source err) =
 
 
 reportToDoc :: FilePath -> Report.Report -> D.Doc
-reportToDoc relativePath (Report.Report title _ _ message) =
+reportToDoc relativePath report@(Report.Report title _ _ message) =
   D.vcat
     [ toMessageBar title relativePath
     , ""
     , message
     , ""
     ]
+    & Lamdera.alternativeImplementationPassthrough (Lamdera.Error.reportToDoc relativePath report)
 
 
 toMessageBar :: String -> FilePath -> D.Doc

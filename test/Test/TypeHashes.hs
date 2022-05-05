@@ -85,7 +85,7 @@ suite = tests
 
 debugProject project = do
   withDebug $ Dir.withCurrentDirectory project $ do
-    res <- Lamdera.TypeHash.calculateHashes
+    res <- Lamdera.TypeHash.calculateLamderaHashes
     case res of
       Right hashes -> do
         -- hindentPrintValue "hash" hashes

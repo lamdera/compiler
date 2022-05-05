@@ -65,7 +65,7 @@ wire = do
   failuresM <- io $ newMVar []
 
   io $ do
-    let project = "/Users/mario/dev/projects/lamdera-compiler/test/scenario-alltypes"
+    let project = "./test/scenario-alltypes"
 
     setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
     setEnv "LTEST" "1"
@@ -104,7 +104,7 @@ wire = do
         putStrLn $ "testing: " <> show filename
         -- Bust Elm's caching with this one weird trick!
         touch $ project </> filename
-        Lamdera.Compile.makeDev project (project </> filename) `catch` catchTestException filename
+        Lamdera.Compile.makeDev project filename `catch` catchTestException filename
       )
 
     unsetEnv "LOVR"

@@ -39,6 +39,7 @@ import qualified Lamdera.Wire3.Helpers as Lamdera.Wire
 import Lamdera
 import qualified CanSer.CanSer as ToSource
 import qualified Data.Text as T
+import qualified Ext.ElmPages.Check
 
 -- import StandaloneInstances
 
@@ -66,6 +67,8 @@ compile pkg ifaces modul = do
   -- ()          <- debugPassText "starting canonical" "" (pure ())
   canonical0  <- canonicalize pkg ifaces modul_
   -- ()          <- debugPassText "starting canonical2" "" (pure ())
+
+  _ <- onlyWhen (Src.getName modul == "Main") $ Ext.ElmPages.Check.isWireCompatible pkg (Src.getName modul) "PageData" canonical0 ifaces False
 
   -- Add Canonical Wire gens, i.e. the `w2_[en|de]code_TYPENAME` functions
   canonical1 <- Lamdera.Wire3.Core.addWireGenerations canonical0 pkg ifaces modul_

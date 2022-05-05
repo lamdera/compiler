@@ -84,11 +84,6 @@ snapshotCurrentTypes version interfaces iface_Types = do
   pure ()
 
 
-
-type Interfaces =
-  Map.Map ModuleName.Raw Interface.Interface
-
-
 type RecursionSet =
   -- [(ModuleName.Raw, N.Name)]
   Set.Set (ModuleName.Canonical, N.Name)

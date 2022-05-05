@@ -182,7 +182,7 @@ suite = tests $
           type BackendMsg
               = NewTime Time.Posix
               | DelayedNewValue Lamdera.SessionId Lamdera.ClientId
-              | HttpResult (Result Http.Error ())
+              | HttpResult (Result Http.Error String)
               | Noop
 
 

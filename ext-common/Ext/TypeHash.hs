@@ -1,19 +1,15 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE BangPatterns #-}
 
-module Lamdera.TypeHash where
+module Ext.TypeHash where
 
-{- Hashes for Elm types
-@TODO move into Evergreen namespace
--}
-
-import qualified Data.Map as Map
 import qualified Data.List as List
+import qualified Data.Map as Map
 import qualified Data.Text as T
-import qualified Data.Name as N
 import qualified Data.Set as Set
 import Data.Map ((!))
 
+import qualified Data.Name as N
 import qualified AST.Canonical as Can
 import qualified AST.Source as Valid
 import qualified Elm.ModuleName as ModuleName
@@ -25,29 +21,36 @@ import qualified Reporting.Doc as D
 import qualified Reporting.Task as Task
 import qualified Reporting.Exit as Exit
 
-import Lamdera
-import Lamdera.Types
-import Lamdera.Progress
-import qualified Ext.Query.Interfaces as Interfaces
 import StandaloneInstances
 
+import Lamdera
+import Lamdera.Types (Interfaces)
 
-{- Attempt to load all interfaces for project in current directory and generate
-type snapshots  -}
-calculateAndWrite :: IO (Either Exit.BuildProblem ([Text], [(Text, [Text], DiffableType)]))
-calculateAndWrite = do
-  res <- calculateLamderaHashes
-  case res of
-    Right (hashes, warnings) -> do
-      root <- getProjectRoot
-      writeUtf8 (lamderaHashesPath root) $ show_ hashes
-      pure res
-    Left err ->
-      pure res
 
-buildCheckHashes = do
-  Task.eio Exit.ReactorBadBuild $ calculateLamderaHashes
-
+data DiffableType
+  = DRecord ModuleName.Canonical Text [(Text, DiffableType)]
+  | DCustom Text [(Text, [DiffableType])]
+  | DString
+  | DInt
+  | DFloat
+  | DBool
+  | DOrder
+  | DNever
+  | DChar
+  | DMaybe DiffableType
+  | DList DiffableType
+  | DArray DiffableType
+  | DSet DiffableType
+  | DResult DiffableType DiffableType
+  | DDict DiffableType DiffableType
+  | DTuple DiffableType DiffableType
+  | DTriple DiffableType DiffableType DiffableType
+  | DUnit
+  | DRecursion Text
+  | DKernelBrowser Text
+  | DError Text
+  | DExternalWarning (Text, Text, Text, Text) DiffableType
+  deriving (Show)
 
 
 {- Tracks types that have already been seen to ensure we can break cycles -}
@@ -55,33 +58,43 @@ type RecursionSet =
   Set.Set (ModuleName.Raw, N.Name, [Can.Type])
 
 
-lamderaTypes :: [ModuleName.Raw]
-lamderaTypes =
-  [ "FrontendModel"
-  , "BackendModel"
-  , "FrontendMsg"
-  , "ToBackend"
-  , "BackendMsg"
-  , "ToFrontend"
-  ]
+moduleNameRaw :: Can.Module -> ModuleName.Raw
+moduleNameRaw modul =
+  ModuleName._module (Can._name modul)
 
-calculateLamderaHashes :: IO (Either Exit.BuildProblem ([Text], [(Text, [Text], DiffableType)]))
-calculateLamderaHashes = do
-  interfaces <- Interfaces.all [ "src/Types.elm" ]
-  inDebug <- Lamdera.isDebug
-  calculateHashes interfaces inDebug
+modulePkg :: Can.Module -> Pkg.Name
+modulePkg modul =
+  ModuleName._package (Can._name modul)
+
+nameRaw :: ModuleName.Canonical -> ModuleName.Raw
+nameRaw (ModuleName.Canonical (Pkg.Name author pkg) module_) = module_
 
 
-calculateHashes :: Interfaces -> Bool -> IO (Either Exit.BuildProblem ([Text], [(Text, [Text], DiffableType)]))
-calculateHashes interfaces inDebug = do
+extendInterfacesWithModule :: Can.Module -> Interfaces -> Interfaces
+extendInterfacesWithModule modul ifaces =
+  ifaces & Map.insert (moduleNameRaw modul) (Interface.Interface (modulePkg modul) Map.empty
+    (Can._unions modul & fmap Interface.OpenUnion)
+    (Can._aliases modul & fmap Interface.PublicAlias)
+    Map.empty
+  )
 
+
+checkElmPagesTypes :: Can.Module -> Interfaces -> Bool -> Either Exit.BuildProblem ([Text], [(Text, [Text], DiffableType)])
+checkElmPagesTypes canonical interfaces inDebug = do
   let
-    iface_Types = (interfaces ! "Types")
+    pkg = modulePkg canonical
+    modul = moduleNameRaw canonical
+    currentModule = (Can._name canonical)
+
+    ifacesExtended = extendInterfacesWithModule canonical interfaces
+
+    iface_Types = (ifacesExtended ! modul)
 
     typediffs :: [(Text, DiffableType)]
     typediffs =
-      lamderaTypes
-        & fmap (\t -> (nameToText t, diffableTypeByName interfaces t "Types" iface_Types))
+      case diffableTypeByName ifacesExtended (toName "PageData") currentModule iface_Types of
+        DCustom name variants ->
+          variants & fmap (\(n, fs) -> fs & fmap (\f -> (n,f))) & List.concat
 
 
     hashes :: [Text]
@@ -107,59 +120,40 @@ calculateHashes interfaces inDebug = do
       errors
         & fmap (\(tipe, errors_, tds) ->
             D.stack $
-              [D.fillSep [ D.yellow $ D.fromChars . T.unpack $ tipe <> ":" ]]
-              ++
               (errors_ & List.nub & fmap (\e -> D.fromChars . T.unpack $ "- " <> e) )
           )
 
-  debug "Generating type hashes..."
+  debug_note "Generating type hashes..." (Right ())
 
   if List.length errors > 0
     then
-      let
-        -- !x = onlyWhen inDebug $ formatHaskellValue "diffHasErrors:" typediffs :: IO ()
-
-        notifyWarnings =
-          if List.length warnings > 0 then
-            [ D.reflow $ "Warning: also, a number of types outside Types.elm are referenced, see `lamdera check` for more info." ]
-          else
-            []
-      in
-      pure $ Left $
+      Left $
         Exit.BuildLamderaProblem "WIRE ISSUES"
-          "I ran into the following problems when checking Lamdera core types:"
+          "I found one or more Route Modules with Data types that contain functions."
           (formattedErrors ++
           [ D.reflow "See <https://dashboard.lamdera.app/docs/wire> for more info."
-          ] ++ notifyWarnings)
+          ])
 
     else do
-      -- -- These external warnings no longer need to be written to disk, but
-      -- -- we might find it useful to evaluate the scope of external types that
-      -- -- users are using in their projects?
-      -- root <- getProjectRoot
-      --
-      -- if (List.length warnings > 0)
-      --   then do
-      --     writeUtf8 (lamderaExternalWarningsPath root) $ textWarnings
-      --   else
-      --     remove (lamderaExternalWarningsPath root)
-      pure $ Right (hashes, warnings)
+      Right (hashes, warnings)
 
 
-diffableTypeByName :: Interfaces -> N.Name -> N.Name -> Interface.Interface -> DiffableType
-diffableTypeByName interfaces targetName moduleName interface = do
+diffableTypeByName :: Interfaces -> N.Name -> ModuleName.Canonical -> Interface.Interface -> DiffableType
+diffableTypeByName interfaces targetName modul interface = do
   let
+    moduleName = ModuleName._module modul
+    currentModule = modul
     recursionSet = Set.singleton (moduleName, targetName, [])
 
   case Map.lookup targetName $ Interface._aliases interface of
     Just alias -> do
-      aliasToDiffableType targetName interfaces recursionSet [] alias []
+      aliasToDiffableType targetName currentModule interfaces recursionSet [] alias []
 
     Nothing ->
       -- Try unions
       case Map.lookup targetName $ Interface._unions interface of
         Just union ->
-          unionToDiffableType targetName (nameToText targetName) interfaces recursionSet [] union []
+          unionToDiffableType targetName currentModule (nameToText targetName) interfaces recursionSet [] union []
 
         Nothing ->
           DError $ "Found no type named " <> nameToText targetName <> " in " <> nameToText moduleName
@@ -227,43 +221,46 @@ resolveTvars_ tvarMap tipe =
 
 
 -- A top level Custom Type definition i.e. `type Herp = Derp ...`
-unionToDiffableType :: N.Name -> Text -> Interfaces -> RecursionSet -> [(N.Name, Can.Type)] -> Interface.Union -> [Can.Type] -> DiffableType
-unionToDiffableType targetName typeName interfaces recursionSet tvarMap unionInterface params =
+unionToDiffableType :: N.Name -> ModuleName.Canonical -> Text -> Interfaces -> RecursionSet -> [(N.Name, Can.Type)] -> Interface.Union -> [Can.Type] -> DiffableType
+unionToDiffableType targetName currentModule typeName interfaces recursionSet tvarMap unionInterface params =
   let
-    treat union =
-      let
-        newTvarMap = tvarMap <> zip (Can._u_vars union) params
-
-        debug dtype =
-          debugHaskell ("\n✴️ inserting for union " <> typeName) (newTvarMap, dtype)
-            & snd
-      in
-      Can._u_alts union
-        -- Sort constructors by name, this allows our diff to be stable to ordering changes
-        & List.sortOn
-          -- Ctor N.Name Index.ZeroBased Int [Type]
-          (\(Can.Ctor name _ _ _) -> name)
-        -- For each constructor
-        & fmap (\(Can.Ctor name index int params_) ->
-          ( N.toText name
-          , -- For each constructor type param
-            params_
-              -- Swap any `TVar (Name {_name = "a"})` for the actual injected params
-              & fmap (resolveTvars_ newTvarMap)
-              & fmap (\resolvedParam -> canonicalToDiffableType targetName interfaces recursionSet resolvedParam newTvarMap )
-          )
-        )
-        & DCustom typeName
+    treat union = unionConstructorsToDiffableTypes union targetName currentModule typeName interfaces recursionSet tvarMap unionInterface params
   in
   case unionInterface of
-    Interface.OpenUnion u -> treat u
-    Interface.ClosedUnion u -> treat u
-    Interface.PrivateUnion u -> treat u
+    Interface.OpenUnion u    -> DCustom typeName $ treat u
+    Interface.ClosedUnion u  -> DCustom typeName $ treat u
+    Interface.PrivateUnion u -> DCustom typeName $ treat u
+
+
+unionConstructorsToDiffableTypes :: Can.Union -> N.Name -> ModuleName.Canonical -> Text -> Interfaces -> RecursionSet -> [(N.Name, Can.Type)] -> Interface.Union -> [Can.Type] -> [(Text, [DiffableType])]
+unionConstructorsToDiffableTypes union targetName currentModule typeName interfaces recursionSet tvarMap unionInterface params =
+  let
+    newTvarMap = tvarMap <> zip (Can._u_vars union) params
+
+    debug dtype =
+      debugHaskell ("\n✴️ inserting for union " <> typeName) (newTvarMap, dtype)
+        & snd
+  in
+  Can._u_alts union
+    -- Sort constructors by name, this allows our diff to be stable to ordering changes
+    & List.sortOn
+      -- Ctor N.Name Index.ZeroBased Int [Type]
+      (\(Can.Ctor name _ _ _) -> name)
+    -- For each constructor
+    & fmap (\(Can.Ctor name index int params_) ->
+      ( N.toText name
+      , -- For each constructor type param
+        params_
+          -- Swap any `TVar (Name {_name = "a"})` for the actual injected params
+          & fmap (resolveTvars_ newTvarMap)
+          & fmap (\resolvedParam -> canonicalToDiffableType targetName currentModule interfaces recursionSet resolvedParam newTvarMap )
+      )
+    )
 
 
 -- A top level Alias definition i.e. `type alias ...`
-aliasToDiffableType :: N.Name -> Interfaces -> RecursionSet -> [(N.Name, Can.Type)] -> Interface.Alias -> [Can.Type] -> DiffableType
-aliasToDiffableType targetName interfaces recursionSet tvarMap aliasInterface params =
+aliasToDiffableType :: N.Name -> ModuleName.Canonical -> Interfaces -> RecursionSet -> [(N.Name, Can.Type)] -> Interface.Alias -> [Can.Type] -> DiffableType
+aliasToDiffableType targetName currentModule interfaces recursionSet tvarMap aliasInterface params =
   let
     treat a =
       case a of
@@ -271,13 +268,12 @@ aliasToDiffableType targetName interfaces recursionSet tvarMap aliasInterface pa
           -- @TODO couldn't force an issue here but it seems wrong to ignore the tvars...
           -- why is aliasToDiffableType never called recursively from canonicalToDiffableType?
           -- it seems like it should be.
-          canonicalToDiffableType targetName interfaces recursionSet tipe tvarMap
+          canonicalToDiffableType targetName currentModule interfaces recursionSet tipe tvarMap
   in
   case aliasInterface of
     Interface.PublicAlias a -> treat a
     Interface.PrivateAlias a -> treat a
 
-nameRaw (ModuleName.Canonical (Pkg.Name author pkg) module_) = module_
 
 -- = TLambda Type Type
 -- | TVar N.Name
@@ -286,11 +282,13 @@ nameRaw (ModuleName.Canonical (Pkg.Name author pkg) module_) = module_
 -- | TUnit
 -- | TTuple Type Type (Maybe Type)
 -- | TAlias ModuleName.Canonical N.Name [(N.Name, Type)] AliasType
-canonicalToDiffableType :: N.Name -> Interfaces -> RecursionSet -> Can.Type -> [(N.Name, Can.Type)] -> DiffableType
-canonicalToDiffableType targetName interfaces recursionSet canonical tvarMap =
+canonicalToDiffableType :: N.Name -> ModuleName.Canonical -> Interfaces -> RecursionSet -> Can.Type -> [(N.Name, Can.Type)] -> DiffableType
+canonicalToDiffableType targetName currentModule interfaces recursionSet canonical tvarMap =
   case canonical of
     Can.TType moduleName name params ->
       let
+        currentModule = moduleName
+
         recursionIdentifier = (nameRaw moduleName, name, tvarResolvedParams)
 
         newRecursionSet = Set.insert recursionIdentifier recursionSet
@@ -309,10 +307,6 @@ canonicalToDiffableType targetName interfaces recursionSet canonical tvarMap =
             (author, pkg, module_, tipe) ->
               DError $ "must not contain kernel type `" <> tipe <> "` from " <> author <> "/" <> pkg <> ":" <> module_
 
-        kernelErrorBrowserOnly =
-          case identifier of
-            (author, pkg, module_, tipe) ->
-              DError $ "must not contain the Frontent-only type `" <> tipe <> "` from " <> author <> "/" <> pkg <> ":" <> module_
       in
 
       if (Set.member recursionIdentifier recursionSet) then
@@ -333,7 +327,7 @@ canonicalToDiffableType targetName interfaces recursionSet canonical tvarMap =
         ("elm", "core", "Maybe", "Maybe") ->
           case tvarResolvedParams of
             p:[] ->
-              DMaybe (canonicalToDiffableType targetName interfaces recursionSet p tvarMap)
+              DMaybe (canonicalToDiffableType targetName currentModule interfaces recursionSet p tvarMap)
 
             _ ->
               DError "❗️impossible multi-param Maybe"
@@ -341,28 +335,28 @@ canonicalToDiffableType targetName interfaces recursionSet canonical tvarMap =
         ("elm", "core", "List", "List") ->
           case tvarResolvedParams of
             p:[] ->
-              DList (canonicalToDiffableType targetName interfaces recursionSet p tvarMap)
+              DList (canonicalToDiffableType targetName currentModule interfaces recursionSet p tvarMap)
             _ ->
               DError "❗️impossible multi-param List"
 
         ("elm", "core", "Array", "Array") ->
           case tvarResolvedParams of
             p:[] ->
-              DArray (canonicalToDiffableType targetName interfaces recursionSet p tvarMap)
+              DArray (canonicalToDiffableType targetName currentModule interfaces recursionSet p tvarMap)
             _ ->
               DError "❗️impossible multi-param Array"
 
         ("elm", "core", "Set", "Set") ->
           case tvarResolvedParams of
             p:[] ->
-              DSet (canonicalToDiffableType targetName interfaces recursionSet p tvarMap)
+              DSet (canonicalToDiffableType targetName currentModule interfaces recursionSet p tvarMap)
             _ ->
               DError "❗️impossible multi-param Set"
 
         ("elm", "core", "Result", "Result") ->
           case tvarResolvedParams of
             result:err:_ ->
-              DResult (canonicalToDiffableType targetName interfaces recursionSet result tvarMap) (canonicalToDiffableType targetName interfaces recursionSet err tvarMap)
+              DResult (canonicalToDiffableType targetName currentModule interfaces recursionSet result tvarMap) (canonicalToDiffableType targetName currentModule interfaces recursionSet err tvarMap)
             _ ->
               DError "❗️impossible !2 param Result type"
 
@@ -370,7 +364,7 @@ canonicalToDiffableType targetName interfaces recursionSet canonical tvarMap =
         ("elm", "core", "Dict", "Dict") ->
           case tvarResolvedParams of
             result:err:_ ->
-              DDict (canonicalToDiffableType targetName interfaces recursionSet result tvarMap) (canonicalToDiffableType targetName interfaces recursionSet err tvarMap)
+              DDict (canonicalToDiffableType targetName currentModule interfaces recursionSet result tvarMap) (canonicalToDiffableType targetName currentModule interfaces recursionSet err tvarMap)
             _ ->
               DError "❗️impossible !2 param Dict type"
 
@@ -406,12 +400,7 @@ canonicalToDiffableType targetName interfaces recursionSet canonical tvarMap =
 
 
         -- Frontend JS Kernel types
-        ("elm", "file", "File", "File") ->
-          if targetName `elem` ["FrontendMsg", "FrontendModel"] then
-            DKernelBrowser "File.File"
-          else
-            kernelErrorBrowserOnly
-
+        ("elm", "file", "File", "File") -> kernelError
 
         -- @TODO improve; These aliases will show up as VirtualDom errors which might confuse users
         -- ("elm", "svg", "Svg", "Svg") -> kernelError
@@ -432,14 +421,14 @@ canonicalToDiffableType targetName interfaces recursionSet canonical tvarMap =
               -- Try unions
               case Map.lookup name $ Interface._unions subInterface of
                 Just union -> do
-                  unionToDiffableType targetName (N.toText name) interfaces newRecursionSet tvarMap union tvarResolvedParams
+                  unionToDiffableType targetName currentModule (N.toText name) interfaces newRecursionSet tvarMap union tvarResolvedParams
                     & addExternalWarning (author, pkg, module_, tipe)
 
                 Nothing ->
                   -- Try aliases
                   case Map.lookup name $ Interface._aliases subInterface of
                     Just alias -> do
-                      aliasToDiffableType targetName interfaces newRecursionSet tvarMap alias tvarResolvedParams
+                      aliasToDiffableType targetName currentModule interfaces newRecursionSet tvarMap alias tvarResolvedParams
                         & addExternalWarning (author, pkg, module_, tipe)
 
                     Nothing ->
@@ -450,6 +439,12 @@ canonicalToDiffableType targetName interfaces recursionSet canonical tvarMap =
 
 
     Can.TAlias moduleName name tvarMap_ aliasType ->
+      let
+        addRecordName n t =
+          case t of
+            DRecord currentModule _ fields -> DRecord currentModule (nameToText n) fields
+            _ -> t
+      in
       case aliasType of
         Can.Holey cType ->
           let
@@ -464,13 +459,15 @@ canonicalToDiffableType targetName interfaces recursionSet canonical tvarMap =
                     _ -> (n,p)
                 )
           in
-          canonicalToDiffableType targetName interfaces recursionSet cType tvarResolvedMap
+          canonicalToDiffableType targetName moduleName interfaces recursionSet cType tvarResolvedMap
+            & addRecordName name
 
         Can.Filled cType ->
           -- @TODO hypothesis...
           -- If an alias is filled, then it can't have any open holes within it either?
           -- So we can take this opportunity to reset tvars to reduce likeliness of naming conflicts?
-          canonicalToDiffableType targetName interfaces recursionSet cType []
+          canonicalToDiffableType targetName moduleName interfaces recursionSet cType []
+            & addRecordName name
 
     Can.TRecord fieldMap isPartial ->
       case isPartial of
@@ -484,12 +481,12 @@ canonicalToDiffableType targetName interfaces recursionSet canonical tvarMap =
           fieldMap
             & Map.toList
             & fmap (\(name,(Can.FieldType index tipe)) ->
-              (N.toText name, canonicalToDiffableType targetName interfaces recursionSet tipe tvarMap)
+              (N.toText name, canonicalToDiffableType targetName currentModule interfaces recursionSet tipe tvarMap)
             )
-            & DRecord
+            & DRecord currentModule "unknown"
 
     Can.TTuple firstType secondType maybeType_whatisthisfor ->
-      DTuple (canonicalToDiffableType targetName interfaces recursionSet firstType tvarMap) (canonicalToDiffableType targetName interfaces recursionSet secondType tvarMap)
+      DTuple (canonicalToDiffableType targetName currentModule interfaces recursionSet firstType tvarMap) (canonicalToDiffableType targetName currentModule interfaces recursionSet secondType tvarMap)
 
     Can.TUnit ->
       DUnit
@@ -498,7 +495,7 @@ canonicalToDiffableType targetName interfaces recursionSet canonical tvarMap =
       -- Swap any `TVar (Name {_name = "a"})` for the actual injected params
       case List.find (\(t,ti) -> t == name) tvarMap of
         Just (_,ti) ->
-          canonicalToDiffableType targetName interfaces recursionSet ti tvarMap
+          canonicalToDiffableType targetName currentModule interfaces recursionSet ti tvarMap
 
         Nothing ->
           let
@@ -532,7 +529,7 @@ diffableTypeToHash dtype =
 diffableTypeToText :: DiffableType -> Text
 diffableTypeToText dtype =
   case dtype of
-    DRecord fields ->
+    DRecord moduleName name fields ->
       fields
         & fmap (\(n, tipe) -> diffableTypeToText tipe)
         & T.intercalate ""
@@ -582,15 +579,26 @@ diffableTypeToText dtype =
 diffableTypeErrors :: DiffableType -> [Text]
 diffableTypeErrors dtype =
   case dtype of
-    DRecord fields ->
+    DRecord moduleName name fields ->
       fields
-        & fmap (\(n, tipe) -> diffableTypeErrors tipe)
+        & fmap (\(n, tipe) -> do
+            let errors = diffableTypeErrors tipe
+            case errors of
+              [] -> []
+              xs -> errors & fmap (\err -> nameToText (ModuleName._module moduleName) <> "." <> name <> "." <> n <> " " <> err )
+          )
         & List.concat
 
     DCustom name constructors ->
       constructors
         & fmap (\(n, params) ->
-            fmap diffableTypeErrors params
+            params
+              & fmap (\param -> do
+                  let errors = diffableTypeErrors param
+                  case errors of
+                    [] -> []
+                    xs -> errors & fmap (\err -> n <> " " <> err)
+                )
               & List.concat
           )
         & List.concat
@@ -624,7 +632,7 @@ diffableTypeErrors dtype =
 diffableTypeExternalWarnings :: DiffableType -> [Text]
 diffableTypeExternalWarnings dtype =
   case dtype of
-    DRecord fields ->
+    DRecord moduleName name fields ->
       fields
         & fmap (\(n, tipe) -> diffableTypeExternalWarnings tipe)
         & List.concat

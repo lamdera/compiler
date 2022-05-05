@@ -127,7 +127,7 @@ addWireGenerations canonical pkg ifaces modul =
         Right canonical_
 
       Left err ->
-        Left $ E.BadLamdera err
+        Left $ E.BadLamdera "WIRE ERROR" err
   else
     Right canonical
 

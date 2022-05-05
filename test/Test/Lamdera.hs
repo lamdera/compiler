@@ -28,8 +28,6 @@ import LamderaSharedBuildHelpers (adminToken)
 -- import Test.Wire
 
 
-import Test.Main (captureProcessResult)
-
 all = run Test.Lamdera.suite
 
 suite :: Test ()
@@ -78,14 +76,6 @@ suite = tests
         "WARNING: Evergreen does not cover type changes outside your project yet\\ESC[0m\\n\\nYou are referencing the following in your core types:\\n\\n- Browser.Navigation.Key (elm/browser)\\n- Http.Error (elm/http)\\n- Time.Posix (elm/time)\\n\\n\\ESC[91mPackage upgrades that change these types won't get covered by Evergreen\\nmigrations currently!\\ESC[0m\\n\\nSee <https://dashboard.lamdera.app/docs/evergreen> for more info."
 
   ]
-
-
-catchOutput :: IO () -> Test Text
-catchOutput action = do
-  -- https://hackage.haskell.org/package/main-tester-0.2.0.1/docs/Test-Main.html
-  pr <- io $ captureProcessResult action
-  -- @TODO improve this to actually pull out values
-  pure $ show_ pr
 
 
 compile :: IO ()
