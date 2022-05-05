@@ -24,5 +24,5 @@ suite = tests $
       io $ atomicPutStrLn $ T.unpack actual
 
       expectTextContains actual
-        "PageData:\\n\\n- must not contain functions"
+        "Route.Index.Data.unserialisableValue must not contain functions"
   ]
