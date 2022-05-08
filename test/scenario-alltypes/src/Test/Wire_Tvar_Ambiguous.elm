@@ -25,6 +25,7 @@ type Definition a
     | TypeAliasDefinition (Maybe a)
 
 
+expected_w3_encode_Definition : (a -> Lamdera.Wire3.Encoder) -> Definition a -> Lamdera.Wire3.Encoder
 expected_w3_encode_Definition w3_x_c_a w3v =
     case w3v of
         CustomTypeDefinition v0 ->

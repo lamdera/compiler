@@ -43,6 +43,7 @@ import Lamdera.Wire3.Encoder
 import Lamdera.Wire3.Decoder
 import Lamdera.Wire3.Graph
 
+import qualified Ext.ElmFormat
 
 runTests isTest debugName pkg modul decls generatedName generated canonicalValue wiregen =
   if isTest
@@ -75,13 +76,27 @@ runTests isTest debugName pkg modul decls generatedName generated canonicalValue
 
             else do
               -- debugHaskellPass ("🏁 Actual value input for " <> (T.pack $ Data.Name.toChars generatedName)) (canonicalValue) (pure ())
-              -- debugPassText ("💚 actual implementation pretty-printed " <> show_ (Src.getName modul)) (ToSource.convert generated) (pure ())
+              formatted <- Ext.ElmFormat.format $ ToSource.convert generated
+              case formatted of
+                Right t ->
+                  debugPassText ("💚 actual implementation pretty-printed " <> show_ (Src.getName modul)) (t) (pure ())
+                Left err ->
+                  debugPassText ("❌❌❌ actual implementation pretty-printed something went wrong with formatting " <> show_ (Src.getName modul)) (err) (pure ())
+
               -- debugPassText ("🧡 expected implementation pretty-printed " <> show_ (Src.getName modul)) (Source2.generateCodecs Map.empty wiregen) (pure ())
               -- debugHaskellPass ("🧡 expected implementation AST.Canonical " <> show_ (Src.getName modul)) (testDefinition) (pure ())
 
               diff <- icdiff (hindentFormatValue testDefinition) (hindentFormatValue generated)
               diff2 <- icdiff (ToSource.convert testDefinition) (ToSource.convert generated)
-              -- atomicPutStrLn $ "❌❌❌ failed, attempting pretty-print diff1:\n" ++ diff
+              -- diff2 <- do
+              --   l <- Ext.ElmFormat.format $ ToSource.convert testDefinition
+              --   r <- Ext.ElmFormat.format $ ToSource.convert generated
+              --   let withDefault x =
+              --         case x of
+              --           Left err -> show_ err
+              --           Right t  -> t
+              --   icdiff (withDefault l) (withDefault r)
+              atomicPutStrLn $ "❌❌❌ failed, attempting pretty-print diff1:\n" ++ diff
               atomicPutStrLn $ "❌❌❌ failed, attempting pretty-print diff2:\n" ++ diff2
               -- error "exiting!"
               -- atomicPutStrLn $ "❌❌❌ " ++ Data.Name.toChars (Src.getName modul) ++ "." ++ Data.Name.toChars generatedName ++ " gen does not match test definition."
@@ -235,17 +250,18 @@ addExport def exports =
 encoderUnion :: Bool -> Map.Map Module.Raw I.Interface -> Pkg.Name -> Src.Module -> Decls -> Data.Name.Name -> Union -> Def
 encoderUnion isTest ifaces pkg modul decls unionName union =
   let
-    !x = runTests isTest "encoderUnion" pkg modul decls generatedName generated union (unionAsModule cname unionName union)
+    !x = runTests isTest "encoderUnion" pkg modul decls generatedName finalGen union (unionAsModule cname unionName union)
 
     generatedName = Data.Name.fromChars $ "w3_encode_" ++ Data.Name.toChars unionName
     cname = Module.Canonical pkg (Src.getName modul)
     tvars = _u_vars union
     ptvars = tvars & fmap (\tvar -> pvar $ Data.Name.fromChars $ "w3_x_c_" ++ Data.Name.toChars tvar )
 
-    generated =
-      Def
-        (a (generatedName))
-        (ptvars ++ [ pvar "w3v" ]) $
+    ptvarsTyped = tvars & fmap (\tvar ->
+        (pvar $ Data.Name.fromChars $ "w3_x_c_" ++ Data.Name.toChars tvar, TLambda (TVar tvar) tLamdera_Wire_Encoder_Holey)
+      )
+
+    generatedBody =
         -- debugEncoder_ (Data.Name.toElmString unionName)
         (caseof (lvar "w3v") $
             _u_alts union
@@ -278,14 +294,36 @@ encoderUnion isTest ifaces pkg modul decls unionName union =
                     (encodeSequenceWithoutLength $ list $ [ encodeUnsignedInt8 (int i) ] ++ paramEncoders)
               )
             )
+
+    -- = Def (A.Located Name) [Pattern] Expr
+    generated = Def (a (generatedName)) (ptvars ++ [ pvar "w3v" ]) generatedBody
+
+    -- | TypedDef (A.Located Name) FreeVars [(Pattern, Type)] Expr Type
+    -- generatedTyped = Def (a (generatedName)) (ptvars ++ [ pvar "w3v" ]) generatedBody
+
+    ttype = (TType cname unionName (tvars & fmap TVar))
+
+    namedThingiesFigureThisOut = tvars & fmap (\tvar -> (tvar, ())) & Map.fromList
+
+    generatedTyped = TypedDef (a (generatedName)) namedThingiesFigureThisOut (ptvarsTyped ++ [(pvar "w3v", ttype)]) generatedBody $
+      -- @NOTE: unlike Def, with a TypedDef only the final type is annotated here, the rest of the types
+      -- seem to be draw from the Pattern collection.
+      (TAlias
+            (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire3")
+            "Encoder"
+            []
+            (Holey (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Encode") "Encoder" [])))
+
+
+    finalGen = generatedTyped
   in
-  generated
+  finalGen
 
 
 decoderUnion :: Bool -> Map.Map Module.Raw I.Interface -> Pkg.Name -> Src.Module -> Decls -> Data.Name.Name -> Union -> Def
 decoderUnion isTest ifaces pkg modul decls unionName union =
   let
-    !x = runTests isTest "decoderUnion" pkg modul decls generatedName generated union (unionAsModule cname unionName union)
+    -- !x = runTests isTest "decoderUnion" pkg modul decls generatedName generated union (unionAsModule cname unionName union)
 
     generatedName = Data.Name.fromChars $ "w3_decode_" ++ Data.Name.toChars unionName
     cname = Module.Canonical pkg (Src.getName modul)
@@ -334,23 +372,67 @@ decoderUnion isTest ifaces pkg modul decls unionName union =
 encoderAlias :: Bool -> Map.Map Module.Raw I.Interface -> Pkg.Name -> Src.Module -> Decls -> Data.Name.Name -> Alias -> Def
 encoderAlias isTest ifaces pkg modul decls aliasName alias@(Alias tvars tipe) =
   let
-    !x = runTests isTest "encoderAlias" pkg modul decls generatedName generated alias (aliasAsModule cname aliasName alias)
+    !x = runTests isTest "encoderAlias" pkg modul decls generatedName finalGen alias (aliasAsModule cname aliasName alias)
 
     generatedName = Data.Name.fromChars $ "w3_encode_" ++ Data.Name.toChars aliasName
     cname = Module.Canonical pkg (Src.getName modul)
     ptvars = tvars & fmap (\tvar -> pvar $ Data.Name.fromChars $ "w3_x_c_" ++ Data.Name.toChars tvar )
 
+    ptvarsTyped = tvars & fmap (\tvar ->
+        (pvar $ Data.Name.fromChars $ "w3_x_c_" ++ Data.Name.toChars tvar, TLambda (TVar tvar) tLamdera_Wire_Encoder_Holey)
+      )
+
+    tvarsNameTyped = tvars & fmap (\tvar ->
+        (Data.Name.fromChars $ Data.Name.toChars tvar, TVar tvar)
+      )
+
+    generatedBody = deepEncoderForType 0 ifaces cname tipe
+
+    aliasType = case tipe of
+                  TAlias _moduleNameCanonical _aliasName _aliasParams _aliasType -> _aliasType
+
+    -- = Def (A.Located Name) [Pattern] Expr
     generated = Def (a (generatedName)) ptvars $
       -- debugEncoder (Data.Name.toElmString aliasName) $
-      deepEncoderForType 0 ifaces cname tipe
+      generatedBody
+
+    ttype = (TType cname aliasName (tvars & fmap TVar))
+
+    namedThingiesFigureThisOut = tvars & fmap (\tvar -> (tvar, ())) & Map.fromList
+
+    -- | TypedDef (A.Located Name) FreeVars [(Pattern, Type)] Expr Type
+    generatedTyped = TypedDef (a (generatedName)) namedThingiesFigureThisOut (ptvarsTyped) generatedBody $
+      (TLambda
+        (TAlias
+            -- (Module.Canonical (Name "author" "project") "Test.Wire_Alias_1_Basic")
+            cname
+            -- "AliasExternal"
+            aliasName
+            tvarsNameTyped
+            (Holey
+              -- (TType
+              --     (Module.Canonical (Name "elm" "core") "Maybe")
+              --     "Maybe"
+              --     [TType (Module.Canonical (Name "author" "project") "Test.External") "ExternalCustomBasic" []])
+              tipe
+              )
+        )
+        -- tipe
+        (TAlias
+            (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire3")
+            "Encoder"
+            []
+            (Holey (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Encode") "Encoder" []))))
+
+    finalGen = generatedTyped
   in
-  generated
+  finalGen
 
 
 decoderAlias :: Bool -> Map.Map Module.Raw I.Interface -> Pkg.Name -> Src.Module -> Decls -> Data.Name.Name -> Alias -> Def
 decoderAlias isTest ifaces pkg modul decls aliasName alias@(Alias tvars tipe) =
   let
-    !x = runTests isTest "decoderAlias" pkg modul decls generatedName generated alias (aliasAsModule cname aliasName alias)
+    -- !x = runTests isTest "decoderAlias" pkg modul decls generatedName generated alias (aliasAsModule cname aliasName alias)
 
     generatedName = Data.Name.fromChars $ "w3_decode_" ++ Data.Name.toChars aliasName
     cname = Module.Canonical pkg (Src.getName modul)

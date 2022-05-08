@@ -8,6 +8,7 @@ type Union1
     | World
 
 
+expected_w3_encode_Union1 : Union1 -> Lamdera.Wire3.Encoder
 expected_w3_encode_Union1 w3v =
     case w3v of
         Hello ->

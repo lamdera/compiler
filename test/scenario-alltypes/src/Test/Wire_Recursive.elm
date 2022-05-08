@@ -7,6 +7,7 @@ type Recursive a
     = Recurse (Recursive a)
 
 
+expected_w3_encode_Recursive : (a -> Lamdera.Wire3.Encoder) -> Recursive a -> Lamdera.Wire3.Encoder
 expected_w3_encode_Recursive w3_x_c_a w3v =
     case w3v of
         Recurse v0 ->
@@ -46,6 +47,7 @@ type alias LazyList a =
     Lazy (LazyListView a)
 
 
+expected_w3_encode_Lazy : (a -> Lamdera.Wire3.Encoder) -> Lazy a -> Lamdera.Wire3.Encoder
 expected_w3_encode_Lazy w3_x_c_a w3v =
     case w3v of
         Evaluated v0 ->
@@ -71,6 +73,7 @@ expected_w3_decode_Lazy w3_x_c_a =
             )
 
 
+expected_w3_encode_LazyListView : (a -> Lamdera.Wire3.Encoder) -> LazyListView a -> Lamdera.Wire3.Encoder
 expected_w3_encode_LazyListView w3_x_c_a w3v =
     case w3v of
         Cons v0 v1 ->
@@ -96,6 +99,7 @@ expected_w3_decode_LazyListView w3_x_c_a =
             )
 
 
+expected_w3_encode_LazyList : (a -> Lamdera.Wire3.Encoder) -> LazyList a -> Lamdera.Wire3.Encoder
 expected_w3_encode_LazyList w3_x_c_a =
     w3_encode_Lazy (w3_encode_LazyListView w3_x_c_a)
 

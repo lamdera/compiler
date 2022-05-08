@@ -27,6 +27,7 @@ type UnionParams
     | ValueRecord { field1 : Int, field2 : String }
 
 
+expected_w3_encode_UnionParams : UnionParams -> Lamdera.Wire3.Encoder
 expected_w3_encode_UnionParams w3v =
     case w3v of
         ValueArrayString v0 ->

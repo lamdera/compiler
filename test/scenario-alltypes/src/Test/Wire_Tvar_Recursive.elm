@@ -20,10 +20,12 @@ type alias Replay model =
 
 
 
-{- The addition of this function causes the type solver to no longer crash,
-   even though it's not used. So this point to an Elm type solver issue.
-   Probably the only way we can solve this is to start adding generated type
-   signatures to the generated wire encoders.
+{- The addition of this function used to cause the type solver to crash,
+   even though it's not used. So this pointed to an Elm type solver issue.
+
+   We solved this by implementing generated type signatures to the generated
+   wire encoders, but leaving this here for future refence to the original
+   note living in Test.Wire_Tvar_Recursive_Reference.
 -}
 -- completelyIrrelevantAndUnused : AdminModel -> Lamdera.Wire3.Encoder
 -- completelyIrrelevantAndUnused model =

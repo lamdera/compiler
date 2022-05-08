@@ -11,6 +11,7 @@ type alias Config data msg =
     }
 
 
+expected_w3_encode_Config : (data -> Lamdera.Wire3.Encoder) -> (msg -> Lamdera.Wire3.Encoder) -> Config data msg -> Lamdera.Wire3.Encoder
 expected_w3_encode_Config w3_x_c_data w3_x_c_msg =
     \w3_rec_var0 -> Lamdera.Wire3.encodeSequenceWithoutLength [ Test.Wire_Alias_4_TvarRename2.w3_encode_Config w3_x_c_data w3_x_c_msg w3_rec_var0.junk ]
 
@@ -25,6 +26,7 @@ type alias Grid msg =
     Test.Wire_Alias_4_TvarRename2.OnGrid (Maybe msg)
 
 
+expected_w3_encode_Grid : (msg -> Lamdera.Wire3.Encoder) -> Grid msg -> Lamdera.Wire3.Encoder
 expected_w3_encode_Grid w3_x_c_msg =
     Test.Wire_Alias_4_TvarRename2.w3_encode_OnGrid (Lamdera.Wire3.encodeMaybe w3_x_c_msg)
 
@@ -37,6 +39,7 @@ type Also msg
     = Tag (Test.Wire_Alias_4_TvarRename2.OnGrid (Maybe msg))
 
 
+expected_w3_encode_Also : (msg -> Lamdera.Wire3.Encoder) -> Also msg -> Lamdera.Wire3.Encoder
 expected_w3_encode_Also w3_x_c_msg w3v =
     case w3v of
         Tag v0 ->

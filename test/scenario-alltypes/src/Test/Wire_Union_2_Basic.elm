@@ -10,6 +10,7 @@ type Union2
     | Alphabetically
 
 
+expected_w3_encode_Union2 : Union2 -> Lamdera.Wire3.Encoder
 expected_w3_encode_Union2 w3v =
     case w3v of
         Alphabetically ->

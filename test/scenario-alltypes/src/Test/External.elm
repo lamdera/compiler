@@ -28,6 +28,7 @@ type alias SubSubRecordAlias threadedTvar =
     }
 
 
+expected_w3_encode_ExternalRecordBasic : ExternalRecordBasic -> Lamdera.Wire3.Encoder
 expected_w3_encode_ExternalRecordBasic =
     \w3_rec_var0 -> Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeInt w3_rec_var0.int ]
 
@@ -36,6 +37,7 @@ expected_w3_decode_ExternalRecordBasic =
     Lamdera.Wire3.succeedDecode (\int0 -> { int = int0 }) |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeInt
 
 
+expected_w3_encode_ExternalCustomBasic : ExternalCustomBasic -> Lamdera.Wire3.Encoder
 expected_w3_encode_ExternalCustomBasic w3v =
     case w3v of
         Custom1 ->
@@ -61,6 +63,7 @@ expected_w3_decode_ExternalCustomBasic =
             )
 
 
+expected_w3_encode_ExternalAliasThreaded : (threadedTvar -> Lamdera.Wire3.Encoder) -> ExternalAliasThreaded threadedTvar -> Lamdera.Wire3.Encoder
 expected_w3_encode_ExternalAliasThreaded w3_x_c_threadedTvar =
     w3_encode_SubSubRecordAlias w3_x_c_threadedTvar
 
@@ -69,6 +72,7 @@ expected_w3_decode_ExternalAliasThreaded w3_x_c_threadedTvar =
     w3_decode_SubSubRecordAlias w3_x_c_threadedTvar
 
 
+expected_w3_encode_SubSubRecordAlias : (threadedTvar -> Lamdera.Wire3.Encoder) -> SubSubRecordAlias threadedTvar -> Lamdera.Wire3.Encoder
 expected_w3_encode_SubSubRecordAlias w3_x_c_threadedTvar =
     \w3_rec_var0 -> Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeInt w3_rec_var0.subType, w3_x_c_threadedTvar w3_rec_var0.tvar ]
 
@@ -77,6 +81,7 @@ expected_w3_decode_SubSubRecordAlias w3_x_c_threadedTvar =
     Lamdera.Wire3.succeedDecode (\subType0 tvar0 -> { subType = subType0, tvar = tvar0 }) |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeInt |> Lamdera.Wire3.andMapDecode w3_x_c_threadedTvar
 
 
+expected_w3_encode_ExternalCustomThreaded : (threadedTvar -> Lamdera.Wire3.Encoder) -> (threadedTvar2 -> Lamdera.Wire3.Encoder) -> ExternalCustomThreaded threadedTvar threadedTvar2 -> Lamdera.Wire3.Encoder
 expected_w3_encode_ExternalCustomThreaded w3_x_c_threadedTvar w3_x_c_threadedTvar2 w3v =
     case w3v of
         AlphabeticallyFirst v0 ->

@@ -21,6 +21,7 @@ type alias Density =
     CubicMeters
 
 
+expected_w3_encode_Density : Density -> Lamdera.Wire3.Encoder
 expected_w3_encode_Density =
     Test.Wire_Phantom2.w3_encode_CubicMeters
 

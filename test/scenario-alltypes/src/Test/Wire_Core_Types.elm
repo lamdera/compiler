@@ -14,6 +14,7 @@ type alias Banned2ParamType msg =
     Platform.Router msg Int
 
 
+expected_w3_encode_CoreTypes : CoreTypes -> Lamdera.Wire3.Encoder
 expected_w3_encode_CoreTypes w3v =
     case w3v of
         ValueBytes v0 ->
@@ -39,6 +40,7 @@ expected_w3_decode_CoreTypes =
             )
 
 
+expected_w3_encode_Banned2ParamType : (msg -> Lamdera.Wire3.Encoder) -> Banned2ParamType msg -> Lamdera.Wire3.Encoder
 expected_w3_encode_Banned2ParamType w3_x_c_msg =
     Lamdera.Wire3.failEncode
 

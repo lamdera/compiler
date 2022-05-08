@@ -8,6 +8,7 @@ type alias Config element msg =
     ( element, msg )
 
 
+expected_w3_encode_Config : (element -> Lamdera.Wire3.Encoder) -> (msg -> Lamdera.Wire3.Encoder) -> Config element msg -> Lamdera.Wire3.Encoder
 expected_w3_encode_Config w3_x_c_element w3_x_c_msg =
     Lamdera.Wire3.encodePair w3_x_c_element w3_x_c_msg
 

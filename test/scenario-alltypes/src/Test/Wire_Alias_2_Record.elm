@@ -29,6 +29,7 @@ type alias AllTypes =
     }
 
 
+expected_w3_encode_AllTypes : AllTypes -> Lamdera.Wire3.Encoder
 expected_w3_encode_AllTypes =
     \w3_rec_var0 ->
         Lamdera.Wire3.encodeSequenceWithoutLength

@@ -36,6 +36,7 @@ type UnionTricky
 -- | ValueAll AllTypes
 
 
+expected_w3_encode_AliasInt : AliasInt -> Lamdera.Wire3.Encoder
 expected_w3_encode_AliasInt =
     Lamdera.Wire3.encodeInt
 
@@ -44,6 +45,7 @@ expected_w3_decode_AliasInt =
     Lamdera.Wire3.decodeInt
 
 
+expected_w3_encode_UnionTricky : UnionTricky -> Lamdera.Wire3.Encoder
 expected_w3_encode_UnionTricky w3v =
     case w3v of
         ValueAliased v0 ->

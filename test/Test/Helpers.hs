@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Test.Helpers where
 
 import System.Environment (setEnv, unsetEnv, lookupEnv)
@@ -60,7 +62,8 @@ catchOutput action = do
   -- https://hackage.haskell.org/package/main-tester-0.2.0.1/docs/Test-Main.html
   pr <- io $ captureProcessResult action
   -- @TODO improve this to actually pull out values
-  pure $ show_ pr
+  pure $ T.decodeUtf8 $ "stdout:\n" <> Test.Main.prStdout pr <> "\nstderr:\n" <> Test.Main.prStderr pr
+
 
 catchOutputStdErr :: IO () -> Test Text
 catchOutputStdErr action = do

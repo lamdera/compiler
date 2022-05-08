@@ -545,6 +545,15 @@ tLamdera_Wire_Encoder =
      []
      (Filled (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Encode") "Encoder" [])))
 
+-- @TODO What's the difference between the Filled and Holey variants? Why does Elm infer
+-- this type as Holey only in the context of wire encoder type signatures?
+tLamdera_Wire_Encoder_Holey =
+  (TAlias
+     mLamdera_Wire
+     "Encoder"
+     []
+     (Holey (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Encode") "Encoder" [])))
+
 
 mLamdera_Wire =
   (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire3")
