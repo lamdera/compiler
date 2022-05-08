@@ -56,14 +56,14 @@ RUN cabal v2-update
 # RUN cabal v2-build --only-dependencies
 # RUN cabal v2-build --only-dependencies --enable-tests
 # RUN cabal v2-install ShellCheck
-RUN cabal v2-build --ghc-option=-optl=-static --ghc-option=-split-sections -O0 --only-dependencies
+RUN cabal v2-build --ghc-option=-optl=-static --ghc-option=-split-sections -O2 --only-dependencies
 
 # Build lamdera
 COPY ./ .
 
 ARG ELM_FORMAT_VERSION="unknown"
 RUN mkdir generated && echo -e "module Build_lamdera where\n\ngitDescribe :: String\ngitDescribe = \"$ELM_FORMAT_VERSION\"\n" > generated/Build_lamdera.hs
-RUN cabal v2-build --ghc-option=-optl=-static --ghc-option=-split-sections -O0
+RUN cabal v2-build --ghc-option=-optl=-static --ghc-option=-split-sections -O2
 RUN cp dist-newstyle/build/x86_64-linux/ghc-*/elm-*/x/lamdera/*opt/build/lamdera/lamdera ./
 RUN strip -s ./lamdera
 
