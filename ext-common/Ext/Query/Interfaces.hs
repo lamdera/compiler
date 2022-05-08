@@ -38,6 +38,17 @@ all paths = do
   pure $ Map.union ifacesProject (_ifaces artifactsDeps)
 
 
+-- Takes Build.Artifacts and extracts project interfaces, loads all package dep interfaces, and merges them
+artifactsToFullInterfaces :: Build.Artifacts -> IO (Map.Map ModuleName.Raw I.Interface)
+artifactsToFullInterfaces artifacts = do
+
+  ifaces <- extractInterfaces $ Build._modules artifacts
+
+  artifactsDeps <- allDepArtifacts
+  pure $ Map.union ifaces (_ifaces artifactsDeps)
+
+
+
 allGraph :: IO Opt.GlobalGraph
 allGraph = do
   artifactsDeps <- allDepArtifacts

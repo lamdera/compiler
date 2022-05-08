@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE BangPatterns #-}
 
-module Ext.TypeHash where
+module Ext.ElmPages where
 
 import qualified Data.List as List
 import qualified Data.Map as Map
@@ -11,14 +11,10 @@ import Data.Map ((!))
 
 import qualified Data.Name as N
 import qualified AST.Canonical as Can
-import qualified AST.Source as Valid
 import qualified Elm.ModuleName as ModuleName
 import qualified Elm.Package as Pkg
 import qualified Elm.Interface as Interface
-import qualified Reporting.Annotation as A
-import qualified Reporting.Result as Result
 import qualified Reporting.Doc as D
-import qualified Reporting.Task as Task
 import qualified Reporting.Exit as Exit
 
 import StandaloneInstances
@@ -49,70 +45,31 @@ data DiffableType
   | DRecursion Text
   | DKernelBrowser Text
   | DError Text
+  -- Unused but kept for now to potentially merge with Lamdera's DiffableType in future
   | DExternalWarning (Text, Text, Text, Text) DiffableType
   deriving (Show)
 
 
-{- Tracks types that have already been seen to ensure we can break cycles -}
-type RecursionSet =
-  Set.Set (ModuleName.Raw, N.Name, [Can.Type])
-
-
-moduleNameRaw :: Can.Module -> ModuleName.Raw
-moduleNameRaw modul =
-  ModuleName._module (Can._name modul)
-
-modulePkg :: Can.Module -> Pkg.Name
-modulePkg modul =
-  ModuleName._package (Can._name modul)
-
-nameRaw :: ModuleName.Canonical -> ModuleName.Raw
-nameRaw (ModuleName.Canonical (Pkg.Name author pkg) module_) = module_
-
-
-extendInterfacesWithModule :: Can.Module -> Interfaces -> Interfaces
-extendInterfacesWithModule modul ifaces =
-  ifaces & Map.insert (moduleNameRaw modul) (Interface.Interface (modulePkg modul) Map.empty
-    (Can._unions modul & fmap Interface.OpenUnion)
-    (Can._aliases modul & fmap Interface.PublicAlias)
-    Map.empty
-  )
-
-
-checkElmPagesTypes :: Can.Module -> Interfaces -> Bool -> Either Exit.BuildProblem ([Text], [(Text, [Text], DiffableType)])
-checkElmPagesTypes canonical interfaces inDebug = do
+checkPageDataType :: Interfaces -> Bool -> Either Exit.BuildProblem ()
+checkPageDataType interfaces inDebug = do
   let
-    pkg = modulePkg canonical
-    modul = moduleNameRaw canonical
-    currentModule = (Can._name canonical)
+    targetModule =
+      (ModuleName.Canonical (Pkg.Name "author" "project") "Main")
 
-    ifacesExtended = extendInterfacesWithModule canonical interfaces
-
-    iface_Types = (ifacesExtended ! modul)
+    targetInterface = interfaces ! "Main"
 
     typediffs :: [(Text, DiffableType)]
     typediffs =
-      case diffableTypeByName ifacesExtended (toName "PageData") currentModule iface_Types of
+      case diffableTypeByName interfaces (toName "PageData") targetModule targetInterface of
         DCustom name variants ->
           variants & fmap (\(n, fs) -> fs & fmap (\f -> (n,f))) & List.concat
-
-
-    hashes :: [Text]
-    hashes =
-      typediffs
-        & fmap (\(t, td) -> diffableTypeToHash td)
-
+        _ ->
+          error "checkPageDataType: unexpected typeDiff for PageData. Please report this issue."
 
     errors :: [(Text, [Text], DiffableType)]
     errors =
       typediffs
         & fmap (\(t,tds) -> (t, diffableTypeErrors tds, tds))
-        & filter (\(t,errs,tds) -> List.length errs > 0)
-
-    warnings :: [(Text, [Text], DiffableType)]
-    warnings =
-      typediffs
-        & fmap (\(t,tds) -> (t, diffableTypeExternalWarnings tds & List.nub, tds)) -- nub == unique
         & filter (\(t,errs,tds) -> List.length errs > 0)
 
     formattedErrors :: [D.Doc]
@@ -123,19 +80,32 @@ checkElmPagesTypes canonical interfaces inDebug = do
               (errors_ & List.nub & fmap (\e -> D.fromChars . T.unpack $ "- " <> e) )
           )
 
-  debug_note "Generating type hashes..." (Right ())
+  debug_note "Checking elm-pages PageData type..." (Right ())
 
   if List.length errors > 0
     then
-      Left $
+      wireError formattedErrors
+
+    else do
+      Right ()
+
+
+wireError formattedErrors =
+  Left $
         Exit.BuildLamderaProblem "WIRE ISSUES"
           "I found one or more Route Modules with Data types that contain functions."
           (formattedErrors ++
           [ D.reflow "See <https://dashboard.lamdera.app/docs/wire> for more info."
           ])
 
-    else do
-      Right (hashes, warnings)
+
+{- Tracks types that have already been seen to ensure we can break cycles -}
+type RecursionSet =
+  Set.Set (ModuleName.Raw, N.Name, [Can.Type])
+
+
+nameRaw :: ModuleName.Canonical -> ModuleName.Raw
+nameRaw (ModuleName.Canonical (Pkg.Name author pkg) module_) = module_
 
 
 diffableTypeByName :: Interfaces -> N.Name -> ModuleName.Canonical -> Interface.Interface -> DiffableType
@@ -193,7 +163,7 @@ resolveTvars_ tvarMap tipe =
     Can.TRecord fieldMap isPartial ->
       case isPartial of
         Just whatIsThis ->
-          error $ "Error: tvar lookup encountered unsupported partial record, please report this issue."
+          error $ "Error: checkPageDataType: tvar lookup encountered unsupported partial record, please report this issue."
 
         Nothing ->
           let
@@ -422,14 +392,12 @@ canonicalToDiffableType targetName currentModule interfaces recursionSet canonic
               case Map.lookup name $ Interface._unions subInterface of
                 Just union -> do
                   unionToDiffableType targetName currentModule (N.toText name) interfaces newRecursionSet tvarMap union tvarResolvedParams
-                    & addExternalWarning (author, pkg, module_, tipe)
 
                 Nothing ->
                   -- Try aliases
                   case Map.lookup name $ Interface._aliases subInterface of
                     Just alias -> do
                       aliasToDiffableType targetName currentModule interfaces newRecursionSet tvarMap alias tvarResolvedParams
-                        & addExternalWarning (author, pkg, module_, tipe)
 
                     Nothing ->
                       DError $ "❗️Failed to find either alias or custom type for type that seemingly must exist: " <> tipe <> "` from " <> author <> "/" <> pkg <> ":" <> module_ <> ". Please report this issue with your code!"
@@ -510,72 +478,6 @@ canonicalToDiffableType targetName currentModule interfaces recursionSet canonic
       DError $ "must not contain functions"
 
 
--- Any types that are outside user's project need a warning currently
-addExternalWarning :: (Text,Text,Text,Text) -> DiffableType -> DiffableType
-addExternalWarning (author, pkg, module_, tipe) dtype =
-  case (author, pkg, module_, tipe) of
-    ("author", "project", _, _) ->
-      dtype
-
-    _ ->
-      DExternalWarning (author, pkg, module_, tipe) dtype
-
-
-diffableTypeToHash :: DiffableType -> Text
-diffableTypeToHash dtype =
-  textSha1 $ diffableTypeToText dtype
-
-
-diffableTypeToText :: DiffableType -> Text
-diffableTypeToText dtype =
-  case dtype of
-    DRecord moduleName name fields ->
-      fields
-        & fmap (\(n, tipe) -> diffableTypeToText tipe)
-        & T.intercalate ""
-        & (\v -> "R["<> v <>"]")
-
-    DCustom name constructors ->
-      constructors
-        & fmap (\(n, params) ->
-            params
-              & fmap diffableTypeToText
-              & T.intercalate ""
-              & (\t -> "["<> t <> "]")
-          )
-        & T.intercalate ""
-        & (\v -> "C["<> v <>"]")
-
-    DString              -> "S"
-    DInt                 -> "I"
-    DFloat               -> "F"
-    DBool                -> "B"
-    DOrder               -> "Ord"
-    DNever               -> "Never"
-    DChar                -> "Ch"
-    DMaybe tipe          -> "M["<> diffableTypeToText tipe <>"]"
-    DList tipe           -> "L["<> diffableTypeToText tipe <>"]"
-    DArray tipe          -> "A["<> diffableTypeToText tipe <>"]"
-    DSet tipe            -> "S["<> diffableTypeToText tipe <>"]"
-    DResult err result   -> "Res["<> diffableTypeToText err <>","<> diffableTypeToText result <>"]"
-    DDict key value      -> "D["<> diffableTypeToText key <>","<> diffableTypeToText value <>"]"
-    DTuple t1 t2         -> "T["<> diffableTypeToText t1 <>","<> diffableTypeToText t2 <>"]"
-    DTriple t1 t2 t3     -> "T["<> diffableTypeToText t1 <>","<> diffableTypeToText t2 <>","<> diffableTypeToText t3 <>"]"
-    DUnit                -> "()"
-
-    DRecursion name ->
-      -- Ideally recursion should be stable to name changes, but right now we
-      -- have no easy way of knowing here if a name change coincided with a type
-      -- change also, so for now name changes to recursive values count as "changed"
-      "Recursion[" <> name <> "]"
-
-    DKernelBrowser name ->
-      "KB[" <> name <> "]"
-
-    DError err -> "[ERROR]"
-    DExternalWarning _ tipe -> diffableTypeToText tipe
-
-
 diffableTypeErrors :: DiffableType -> [Text]
 diffableTypeErrors dtype =
   case dtype of
@@ -627,44 +529,3 @@ diffableTypeErrors dtype =
       -- [ author <> "/" <> pkg <> ":" <> module_ <> "." <> tipe <> " is outside Types.elm and won't get caught by Evergreen!"]
       --   ++ diffableTypeErrors realtipe
       diffableTypeErrors realtipe
-
-
-diffableTypeExternalWarnings :: DiffableType -> [Text]
-diffableTypeExternalWarnings dtype =
-  case dtype of
-    DRecord moduleName name fields ->
-      fields
-        & fmap (\(n, tipe) -> diffableTypeExternalWarnings tipe)
-        & List.concat
-
-    DCustom name constructors ->
-      constructors
-        & fmap (\(n, params) ->
-            fmap diffableTypeExternalWarnings params
-              & List.concat
-          )
-        & List.concat
-
-    DString             -> []
-    DInt                -> []
-    DFloat              -> []
-    DBool               -> []
-    DOrder              -> []
-    DNever              -> []
-    DChar               -> []
-    DMaybe tipe         -> diffableTypeExternalWarnings tipe
-    DList tipe          -> diffableTypeExternalWarnings tipe
-    DArray tipe         -> diffableTypeExternalWarnings tipe
-    DSet tipe           -> diffableTypeExternalWarnings tipe
-    DResult err result  -> diffableTypeExternalWarnings err ++ diffableTypeExternalWarnings result
-    DDict key value     -> diffableTypeExternalWarnings key ++ diffableTypeExternalWarnings value
-    DTuple t1 t2        -> diffableTypeExternalWarnings t1 ++ diffableTypeExternalWarnings t2
-    DTriple t1 t2 t3    -> diffableTypeExternalWarnings t1 ++ diffableTypeExternalWarnings t2 ++ diffableTypeExternalWarnings t3
-    DUnit               -> []
-    DRecursion name     -> []
-    DKernelBrowser name -> []
-    DError err          -> []
-
-    DExternalWarning (author, pkg, module_, tipe) realtipe ->
-      [ module_ <> "." <> tipe <> " (" <> author <> "/" <> pkg <> ")"]
-        ++ diffableTypeExternalWarnings realtipe

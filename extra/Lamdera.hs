@@ -49,6 +49,7 @@ module Lamdera
   , textContains
   , textHasPrefix
   , stringContains
+  , fileContains
   , formatHaskellValue
   , hindent
   , hindent_
@@ -440,6 +441,15 @@ textHasPrefix needle haystack = T.isPrefixOf needle haystack
 stringContains :: String -> String -> Bool
 stringContains needle haystack = List.isInfixOf needle haystack
 
+fileContains :: FilePath -> Text -> IO Bool
+fileContains filename needle = do
+  textM <- readUtf8Text filename
+  case textM of
+    Just text ->
+      pure $ text `textContains` needle
+
+    Nothing ->
+      pure False
 
 
 {-|

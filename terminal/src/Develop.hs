@@ -40,6 +40,7 @@ import Lamdera
 import qualified Lamdera.CLI.Live as Live
 import qualified Lamdera.ReverseProxy
 import qualified Lamdera.TypeHash
+import qualified Lamdera.PostCompile
 
 import Ext.Common (trackedForkIO, whenDebug)
 import qualified Ext.Filewatch as Filewatch
@@ -260,6 +261,7 @@ compile path =
             do  details <- Task.eio Exit.ReactorBadDetails $ Details.load Reporting.silent scope root
                 artifacts <- Task.eio Exit.ReactorBadBuild $ Build.fromPaths Reporting.silent root details (NE.List path [])
 
+                Lamdera.PostCompile.check artifacts Exit.ReactorBadBuild
                 Lamdera.TypeHash.buildCheckHashes
 
                 javascript <- Task.mapError Exit.ReactorBadGenerate $ Generate.dev root details artifacts

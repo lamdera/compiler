@@ -33,6 +33,7 @@ import qualified Stuff
 import Terminal (Parser(..))
 
 
+import qualified Lamdera.PostCompile
 
 -- FLAGS
 
@@ -87,6 +88,7 @@ runHelp root paths style (Flags debug optimize maybeOutput _ maybeDocs) =
 
         p:ps ->
           do  artifacts <- buildPaths style root details (NE.List p ps)
+              Lamdera.PostCompile.check artifacts Exit.MakeCannotBuild
               case maybeOutput of
                 Nothing ->
                   case getMains artifacts of

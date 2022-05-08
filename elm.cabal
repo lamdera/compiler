@@ -305,7 +305,7 @@ Executable lamdera
         Ext.Filewatch
 
         -- ext-elm-pages
-        Ext.ElmPages.Check
+        Ext.ElmPages
 
     Build-depends:
         ansi-terminal,
