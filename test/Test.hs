@@ -93,7 +93,7 @@ target = Test.all
 -- target = checkProjectCompiles
 -- target = liveReloadLive
 -- target = do
---   Dir.withCurrentDirectory "/Users/mario/dev/projects/lamdera-dashboard" $ Lamdera.CLI.Check.run () ()
+  -- Dir.withCurrentDirectory "/Users/mario/dev/projects/lamdera-dashboard" $ Lamdera.CLI.Check.run () ()
 -- target = Test.Wire.all
 -- target = checkUserConfig
 -- target = Test.Wire.buildAllPackages
@@ -110,23 +110,28 @@ checkProjectCompiles = do
   -- Lamdera.CLI.Check.checkUserProjectCompiles "/Users/mario/dev/test/lamdera-init"
   -- Lamdera.CLI.Check.checkUserProjectCompiles "/Users/mario/dev/projects/lamdera-dashboard"
 
-
   --  Lamdera.CLI.Check.checkUserProjectCompiles runs in async so we don't get the trace
-  let root = "/Users/mario/dev/projects/lamdera-dashboard"
+  let root = "/Users/mario/dev/projects/lamdera-website"
       scaffold = "src/Frontend.elm"
+  -- let root = "/Users/mario/dev/test/realia/staging"
+  --     scaffold = "src/LFR.elm"
+  -- let root = "/Users/mario/dev/projects/elmcraft"
+  --     scaffold = "elm-stuff/elm-pages/.elm-pages/Main.elm"
       tmp = lamderaCache root <> "/tmp.js"
 
-  Dir.withCurrentDirectory root $
-    Make.run_cleanup (pure ()) [scaffold] $
-      Make.Flags
-        { _debug = False
-        , _optimize = True
-        -- We don't use Make.DevNull as it does not actually compile to JS,
-        -- thus we never get warnings about Debug.* usage which we want.
-        , _output = Just (Make.JS tmp)
-        , _report = Nothing
-        , _docs = Nothing
-        }
+  Lamdera.Compile.makeDev root scaffold
+
+  -- Dir.withCurrentDirectory root $
+  --   Make.run_cleanup (pure ()) [scaffold] $
+  --     Make.Flags
+  --       { _debug = False
+  --       , _optimize = True
+  --       -- We don't use Make.DevNull as it does not actually compile to JS,
+  --       -- thus we never get warnings about Debug.* usage which we want.
+  --       , _output = Just (Make.JS tmp)
+  --       , _report = Nothing
+  --       , _docs = Nothing
+  --       }
 
 
 -- target = do

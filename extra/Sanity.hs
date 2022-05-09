@@ -24,7 +24,7 @@ import GHC.Stack (HasCallStack)
         error "Sanity: (!) failed!"
 
 
-{- An alternative version of (!) that will print where it was called from -}
+{- An alternative version of (Prelude.last) that will print where it was called from -}
 last :: String -> [a] -> a
 last identifier list =
   case list of

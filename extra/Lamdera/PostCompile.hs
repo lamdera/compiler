@@ -15,7 +15,11 @@ import Lamdera
 check :: Build.Artifacts -> (Exit.BuildProblem -> b) -> Task.Task b ()
 check artifacts errorWrapper =
   Task.eio errorWrapper $ do
-    checkElmPagesTypes artifacts
+    hasElmPagesPageData <- fileContains ".elm-pages/Main.elm" "type PageData"
+    if hasElmPagesPageData
+      then checkElmPagesTypes artifacts
+      else pure $ Right ()
+
 
 
 checkElmPagesTypes :: Build.Artifacts -> IO (Either Exit.BuildProblem ())
