@@ -62,7 +62,7 @@ jobs:
     #     for i in dist/*; do
     #       gpg --verbose --local-user 1508E30E65C8C21F --output "$i".sig --detach-sig "$i"
     #     done
-    - uses: actions/upload-artifact@v2
+    - uses: actions/upload-artifact@v3
       with:
         name: lamdera
-        path: dist/
+        path: publish/
