@@ -230,31 +230,42 @@ injections isBackend isLocalDev =
           var serializeDuration, logDuration = null
 
           start = mtime()
-          var pair = A2(update, msg, model);
 
-          const updateDuration = mtime() - start
-          start = mtime()
+          try {
+            var pair = A2(update, msg, model);
 
-          if (isBackend && loggingEnabled) {
-            pos = pos + 1;
-            const s = $$author$$project$$LBR$$serialize(msg);
-            serializeDuration = mtime() - start
+            const updateDuration = mtime() - start
             start = mtime()
+
+            if (isBackend && loggingEnabled) {
+              pos = pos + 1;
+              const s = $$author$$project$$LBR$$serialize(msg);
+              serializeDuration = mtime() - start
+              start = mtime()
+              insertEvent(pos, global.config.version, s.a, updateDuration, serializeDuration, A2($$elm$$core$$Maybe$$withDefault, null, s.b))
+              logDuration = mtime() - start
+            }
+
+            // console.log(`model size: ${global.sizeof(pair.a)}`)
+            // console.log(pair.a)
+
+            stepper(model = pair.a, viewMetadata);
+            //console.log('cmds', pair.b);
+            _Platform_enqueueEffects(managers, pair.b, subscriptions(model));
+
+            const stepEnqueueDuration = mtime() - start
+
+            if (isBackend) {
+              //console.log({serialize: serializeDuration, log: logDuration, update: updateDuration, stepEnqueue: stepEnqueueDuration})
+            }
+          } catch(err) {
+            console.trace('caught exception in app update handler', err);
+
+            // @TODO even though our suspicion is that the `A2(update, msg, model)` will be the source of exceptions,
+            // things could fail at any stage of the code block, because Javascript. Might be nice to try somewhat
+            // intelligently reconstruct what stage we got to using the timers, or by stacking multiple exception handlers?
             insertEvent(pos, global.config.version, s.a, updateDuration, serializeDuration, A2($$elm$$core$$Maybe$$withDefault, null, s.b))
-            logDuration = mtime() - start
-          }
 
-          // console.log(`model size: ${global.sizeof(pair.a)}`)
-          // console.log(pair.a)
-
-          stepper(model = pair.a, viewMetadata);
-          //console.log('cmds', pair.b);
-          _Platform_enqueueEffects(managers, pair.b, subscriptions(model));
-
-          const stepEnqueueDuration = mtime() - start
-
-          if (isBackend) {
-            //console.log({serialize: serializeDuration, log: logDuration, update: updateDuration, stepEnqueue: stepEnqueueDuration})
           }
         }
 
