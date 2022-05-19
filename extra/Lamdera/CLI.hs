@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Lamdera.CLI (live, login, check, deploy, reset, checkElmPages, annotate, eval) where
+module Lamdera.CLI (live, login, check, deploy, reset, annotate, eval) where
 
 import Text.Read (readMaybe)
 import qualified Text.PrettyPrint.ANSI.Leijen as P
@@ -13,7 +13,6 @@ import qualified Lamdera.CLI.Login
 import qualified Lamdera.CLI.Check
 import qualified Lamdera.CLI.Deploy
 import qualified Lamdera.CLI.Reset
-import qualified Lamdera.CLI.CheckElmPages
 import qualified Lamdera.CLI.Annotate
 import qualified Lamdera.CLI.Interpreter
 
@@ -122,21 +121,6 @@ reset =
   in
   Terminal.Command "reset" (Common summary) details example noArgs noFlags Lamdera.CLI.Reset.run
 
-
-checkElmPages :: Terminal.Command
-checkElmPages =
-  let
-    summary =
-      "Compile an elm-pages project and type-check all Data types for wire compatibility."
-
-    details =
-      "This is an elm-pages specific command."
-
-    example =
-      reflow
-        "It will type-check all Data types for wire compatibility"
-  in
-  Terminal.Command "check-elm-pages" (Common summary) details example noArgs noFlags Lamdera.CLI.CheckElmPages.run
 
 
 annotate :: Terminal.Command
