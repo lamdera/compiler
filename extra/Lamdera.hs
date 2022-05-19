@@ -443,10 +443,12 @@ stringContains needle haystack = List.isInfixOf needle haystack
 
 fileContains :: FilePath -> Text -> IO Bool
 fileContains filename needle = do
+  current <- Dir.getCurrentDirectory
+  debug_ $ "🔎 fileContains: " <> show current <> " " <> show filename <> " : " <> show needle
   textM <- readUtf8Text filename
   case textM of
-    Just text ->
-      pure $ text `textContains` needle
+    Just haystack ->
+      pure $ textContains needle haystack
 
     Nothing ->
       pure False
