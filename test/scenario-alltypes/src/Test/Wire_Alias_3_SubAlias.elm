@@ -51,11 +51,15 @@ expected_w3_decode_SubRecordAlias w3_x_c_threadedTvar =
 
 expected_w3_encode_RecordThreadedWrap : (threadedTvar -> Lamdera.Wire3.Encoder) -> RecordThreadedWrap threadedTvar -> Lamdera.Wire3.Encoder
 expected_w3_encode_RecordThreadedWrap w3_x_c_threadedTvar =
-    \w3_rec_var0 -> Lamdera.Wire3.encodeSequenceWithoutLength [ w3_encode_BannedTypeDeepAlias w3_x_c_threadedTvar w3_rec_var0.tvar ]
+    \w3_rec_var0 ->
+        Lamdera.Wire3.encodeSequenceWithoutLength
+            [ w3_encode_BannedTypeDeepAlias w3_x_c_threadedTvar w3_rec_var0.tvar
+            ]
 
 
 expected_w3_decode_RecordThreadedWrap w3_x_c_threadedTvar =
-    Lamdera.Wire3.succeedDecode (\tvar0 -> { tvar = tvar0 }) |> Lamdera.Wire3.andMapDecode (w3_decode_BannedTypeDeepAlias w3_x_c_threadedTvar)
+    Lamdera.Wire3.succeedDecode (\tvar0 -> { tvar = tvar0 })
+        |> Lamdera.Wire3.andMapDecode (w3_decode_BannedTypeDeepAlias w3_x_c_threadedTvar)
 
 
 expected_w3_encode_BannedTypeDeepAlias : (msg -> Lamdera.Wire3.Encoder) -> BannedTypeDeepAlias msg -> Lamdera.Wire3.Encoder

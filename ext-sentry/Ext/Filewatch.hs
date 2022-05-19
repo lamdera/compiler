@@ -38,6 +38,8 @@ watch root action =
                 Removed f _ _ -> f
                 Unknown f _ _ -> f
 
+          -- @TODO it would be better to not listen to these folders in the `watchTree` when available
+          -- https://github.com/haskell-fswatch/hfsnotify/issues/101
           shouldRefresh = do
                 not (List.isInfixOf ".git" f)
              && not (List.isInfixOf "elm-stuff" f)

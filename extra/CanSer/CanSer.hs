@@ -31,7 +31,6 @@ This is an attempt at serializing the canoncal ast back into elm code, so we can
 
 convert :: ToElm a => a -> Text
 convert a =
-  -- @TODO extend this to pipe through elm-format!
   convert_ a
 
 

@@ -312,8 +312,8 @@ decoderForType ifaces cname tipe =
       -- | TRecord (Map.Map Name FieldType) (Maybe Name)
       case maybeExtensible of
         Just extensibleName ->
-          -- @EXTENSIBLERECORDS not supported yet
-          failDecode $ "extensible record" -- <> Data.Name.toChars extensibleName
+          failDecode $ "extensible record type defs are never encoded/decoded directly" -- <> Data.Name.toChars extensibleName
+
         Nothing ->
           let fields = fieldMap & fieldsToList & List.sortOn (\(name, field) -> name)
           in
@@ -330,20 +330,45 @@ decoderForType ifaces cname tipe =
             -- Referenced type is defined in another module
             else (a (VarForeign moduleName generatedName (getForeignSig tipe moduleName generatedName ifaces)))
 
-      in
-      if isUnsupportedKernelType tipe
-        then failDecode (Data.Name.toChars generatedName <> " isUnsupportedKernelType")
-        else
+        normalDecoder =
           case tvars_ of
             [] -> decoder
             _ ->
-              call decoder $ fmap (\(tvarName, tvarType) ->
-                case tvarType of
-                  TVar name ->
-                    lvar $ Data.Name.fromChars $ "w3_x_c_" ++ Data.Name.toChars name
-                  _ ->
-                    decoderForType ifaces cname tvarType
-              ) tvars_
+               call decoder $ fmap (\(tvarName, tvarType) ->
+                  case tvarType of
+                     TVar name ->
+                        lvar $ Data.Name.fromChars $ "w3_x_c_" ++ Data.Name.toChars name
+                     _ ->
+                        decoderForType ifaces cname tvarType
+               ) tvars_
+      in
+      if isUnsupportedKernelType tipe
+      then failDecode (Data.Name.toChars generatedName <> " isUnsupportedKernelType")
+      else
+         case aType of
+            Holey tipe ->
+              case tipe of
+                TRecord fieldMap maybeName ->
+                  case maybeName of
+                    Just extensibleName ->
+                      case List.find (\(n,_) -> n == extensibleName) tvars_ of
+                        Just (extensibleName, extensibleType) ->
+                          case resolvedExtensibleType extensibleType of
+                            TRecord fieldMapExtended maybeNameExtended ->
+                              let extendedRecord = TRecord (fieldMap <> fieldMapExtended) Nothing  & resolveTvars tvars_
+                              in decoderForType ifaces cname extendedRecord
+
+                            _ -> error "Impossible: resolvedExtensibleType did not resolve to a TRecord."
+
+                        Nothing ->
+                          --   failDecode ""
+                          error $ "No tvar found for extensible record with extensible name: " <> show extensibleName
+
+                    _ ->
+                      normalDecoder
+
+                _ ->
+                  normalDecoder
 
     TVar name ->
       lvar $ Data.Name.fromChars $ "w3_x_c_" ++ Data.Name.toChars name

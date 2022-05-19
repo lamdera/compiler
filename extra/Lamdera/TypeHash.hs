@@ -198,8 +198,15 @@ resolveTvars_ tvarMap tipe =
 
     Can.TRecord fieldMap isPartial ->
       case isPartial of
-        Just whatIsThis ->
-          error $ "Error: tvar lookup encountered unsupported partial record, please report this issue."
+        Just extensibleName ->
+          let
+            newFieldMap =
+              fieldMap
+                & Map.map (\(Can.FieldType index tipe) ->
+                  Can.FieldType index (resolveTvars_ tvarMap tipe)
+                )
+          in
+          Can.TRecord newFieldMap isPartial
 
         Nothing ->
           let
@@ -474,8 +481,13 @@ canonicalToDiffableType targetName interfaces recursionSet canonical tvarMap =
 
     Can.TRecord fieldMap isPartial ->
       case isPartial of
-        Just whatIsThis ->
-          DError "must not contain partial records"
+        Just extensibleName ->
+          fieldMap
+            & Map.toList
+            & fmap (\(name,(Can.FieldType index tipe)) ->
+              (N.toText name, canonicalToDiffableType targetName interfaces recursionSet tipe tvarMap)
+            )
+            & DRecord
 
         Nothing ->
           let
@@ -509,8 +521,8 @@ canonicalToDiffableType targetName interfaces recursionSet canonical tvarMap =
             <> " in tvarMap "
             <>  (T.pack $ show tvarMap)
 
-    Can.TLambda _ _ ->
-      DError $ "must not contain functions"
+    Can.TLambda t1 t2 ->
+      DError $ "must not contain functions: " <> show_ t1 <> "\n" <> show_ t2
 
 
 -- Any types that are outside user's project need a warning currently

@@ -39,6 +39,7 @@ import qualified Lamdera.Wire3.Helpers as Lamdera.Wire
 import Lamdera
 import qualified CanSer.CanSer as ToSource
 import qualified Data.Text as T
+import qualified Data.Utf8
 
 -- import StandaloneInstances
 
@@ -62,10 +63,11 @@ compile pkg ifaces modul = do
         modul
           & Lamdera.Wire3.Interfaces.modifyModul pkg ifaces
           & Lamdera.Wire2.Interfaces.modifyModul pkg ifaces
+      moduleName = T.pack $ Data.Utf8.toChars $ Src.getName modul
 
   -- ()          <- debugPassText "starting canonical" "" (pure ())
   canonical0  <- canonicalize pkg ifaces modul_
-  -- ()          <- debugPassText "starting canonical2" "" (pure ())
+  -- ()          <- debugPassText "starting canonical2" moduleName (pure ())
 
   -- Add Canonical Wire gens, i.e. the `w2_[en|de]code_TYPENAME` functions
   canonical1 <- Lamdera.Wire3.Core.addWireGenerations canonical0 pkg ifaces modul_
@@ -86,11 +88,11 @@ compile pkg ifaces modul = do
   --   -- writeUtf8 "canprinted_without.txt" (hindentFormatValue canonical_)
   --   pure (pure ())
 
-  -- ()          <- debugPassText "starting typecheck" "" (pure ())
+  -- ()          <- debugPassText "starting typecheck" moduleName (pure ())
   annotations <- typeCheck modul_ canonical2
-  -- ()          <- debugPassText "starting nitpick" "" (pure ())
+  -- ()          <- debugPassText "starting nitpick" moduleName (pure ())
   ()          <- nitpick canonical2
-  -- ()          <- debugPassText "starting optimize" "" (pure ())
+  -- ()          <- debugPassText "starting optimize" moduleName (pure ())
   objects     <- optimize modul_ annotations canonical2
   return (Artifacts canonical2 annotations objects)
 

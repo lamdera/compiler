@@ -15,6 +15,8 @@ import qualified Elm.Interface as I
 import qualified Elm.ModuleName as Module
 import qualified Elm.Package as Pkg
 import qualified AST.Canonical as Can
+import qualified Elm.Interface as Interface
+import qualified Elm.ModuleName as ModuleName
 import AST.Canonical
 import qualified Data.Name
 import qualified Data.Utf8 as Utf8
@@ -31,13 +33,19 @@ import qualified CanSer.CanSer as ToSource
 
 import Lamdera.Wire3.Helpers
 
+type Interfaces =
+  Map.Map ModuleName.Raw Interface.Interface
 
+
+encoderNotImplemented :: String -> Type -> error
 encoderNotImplemented tag tipe =
   error $ tag ++ " not implemented! " ++ show tipe
   -- str $ Utf8.fromChars $ tag ++ " not implemented! " ++ show tipe
 
 
+encoderForType :: Int -> Interfaces -> ModuleName.Canonical -> Type -> A.Located Expr_
 encoderForType depth ifaces cname tipe =
+  -- debugHaskellPass "encoderForType" tipe $
   case tipe of
     (TType (Module.Canonical (Name "elm" "core") "Basics") "Int" []) ->
       (a (VarForeign mLamdera_Wire "encodeInt" (Forall Map.empty (TLambda tipe tLamdera_Wire_Encoder))))
@@ -210,7 +218,10 @@ encoderForType depth ifaces cname tipe =
     TRecord fieldMap maybeExtensible ->
       case maybeExtensible of
         Just extensibleName ->
-          -- @EXTENSIBLERECORDS not supported yet
+          -- If we've arrived at a record that still has an extensible name, that means
+          -- this is a type that was not reified. These only exist at compile time, never runtime
+          -- (as in order for an extensible type to be _used_, it must be _filled_).
+          -- So we'll still generate the def for ease but it will never be called, and will get DCE'd.
           failEncode
 
         Nothing ->
@@ -253,6 +264,7 @@ encoderForType depth ifaces cname tipe =
       failEncode
 
 
+deepEncoderForType :: Int -> Interfaces -> ModuleName.Canonical -> Type -> A.Located Expr_
 deepEncoderForType depth ifaces cname tipe =
   case tipe of
     TType (Module.Canonical (Name "elm" "core") "Basics") "Int" []    -> encoderForType depth ifaces cname tipe
@@ -307,22 +319,61 @@ deepEncoderForType depth ifaces cname tipe =
     TAlias moduleName typeName tvars aType ->
       if isUnsupportedKernelType tipe
         then failEncode
-        else
-          case tvars of
-            [] -> encoderForType depth ifaces cname tipe
-            _ ->
-              call (encoderForType depth ifaces cname tipe) $ fmap (\(tvarName, tvarType) ->
-                case tvarType of
-                  TVar name ->
-                    lvar $ Data.Name.fromChars $ "w3_x_c_" ++ Data.Name.toChars name
-                  _ ->
-                    deepEncoderForType depth ifaces cname tvarType
-              ) tvars
+        else inlineIfRecordOrCall depth ifaces cname tipe tvars aType
 
     TVar name     -> encoderForType depth ifaces cname tipe
     TLambda t1 t2 -> encoderForType depth ifaces cname tipe
 
 
+inlineIfRecordOrCall depth ifaces cname tipe tvars aType =
+  let
+    normalEncoder =
+      case tvars of
+        [] -> encoderForType depth ifaces cname tipe
+        _ ->
+          call (encoderForType depth ifaces cname tipe) $ fmap (\(tvarName, tvarType) ->
+            case tvarType of
+              TVar name ->
+                lvar $ Data.Name.fromChars $ "w3_x_c_" ++ Data.Name.toChars name
+              _ ->
+                deepEncoderForType depth ifaces cname tvarType
+          ) tvars
+  in
+  case aType of
+    Holey tipe ->
+      case tipe of
+        TRecord fieldMap maybeName ->
+          case maybeName of
+            Just extensibleName ->
+              case List.find (\(n,_) -> n == extensibleName) tvars of
+                Just (extensibleName, extensibleType) ->
+                  case resolvedExtensibleType extensibleType of
+                    TRecord fieldMapExtended maybeNameExtended ->
+                      let extendedRecord = TRecord (fieldMap <> fieldMapExtended) Nothing  & resolveTvars tvars
+                      in deepEncoderForType depth ifaces cname extendedRecord
+
+                    _ -> error "Impossible: resolvedExtensibleType did not resolve to a TRecord."
+
+                Nothing ->
+                  error $ "No tvar found for extensible record with extensible name: " <> show extensibleName
+                  -- failEncode
+
+            _ ->
+              normalEncoder
+
+        _ ->
+          normalEncoder
+
+    Filled tipe ->
+      normalEncoder
+
+
+{-| Called for encoding tvar type values, i.e.
+    SomeThing (Config { bob : String })
+              ^^^^^^^^^^^^^^^^^^^^^^^^^
+-}
+
+encodeTypeValue :: Int -> Interfaces -> ModuleName.Canonical -> Type -> Expr -> A.Located Expr_
 encodeTypeValue depth ifaces cname tipe value =
   case tipe of
     (TType (Module.Canonical (Name "elm" "core") "Basics") "Int" [])    -> call (encoderForType depth ifaces cname tipe) [ value ]
@@ -363,8 +414,7 @@ encodeTypeValue depth ifaces cname tipe value =
     TRecord fieldMap maybeExtensible ->
       case maybeExtensible of
         Just extensibleName ->
-          -- @EXTENSIBLERECORDS not supported yet
-          call failEncode [ a Unit ]
+          (lvar $ Data.Name.fromChars $ "w3_x_c_" ++ Data.Name.toChars extensibleName)
 
         Nothing ->
           call (encoderForType depth ifaces cname tipe) [ value ]
@@ -372,7 +422,40 @@ encodeTypeValue depth ifaces cname tipe value =
     TAlias moduleName typeName tvars aType ->
       if isUnsupportedKernelType tipe
         then call failEncode [ a Unit ]
-        else call (encoderForType depth ifaces cname tipe) $ fmap (\(tvarName, tvarType) -> deepEncoderForType depth ifaces cname tvarType) tvars ++ [ value ]
+        else
+          let
+            normalEncoder =
+              call (encoderForType depth ifaces cname tipe) $
+                fmap (\(tvarName, tvarType) -> deepEncoderForType depth ifaces cname tvarType) tvars ++ [ value ]
+          in
+          case aType of
+            Holey tipe ->
+              case tipe of
+                TRecord fieldMap maybeName ->
+                  case maybeName of
+                    Just extensibleName ->
+                      case List.find (\(n,_) -> n == extensibleName) tvars of
+                        Just (extensibleName, extensibleType) ->
+                          case resolvedExtensibleType extensibleType of
+                            TRecord fieldMapExtended maybeNameExtended ->
+                              let extendedRecord = TRecord (fieldMap <> fieldMapExtended) Nothing  & resolveTvars tvars
+                              in
+                              call (encoderForType depth ifaces cname extendedRecord) [ value ]
+
+                            _ -> error "Impossible: resolvedExtensibleType did not resolve to a TRecord."
+
+                        Nothing ->
+                          error $ "No tvar found for extensible record with extensible name: " <> show extensibleName
+                          -- failEncode
+
+                    _ ->
+                      normalEncoder
+
+                _ ->
+                  normalEncoder
+
+            Filled tipe ->
+              normalEncoder
 
     TVar name ->
       -- Tvars should always have a local encoder in scope

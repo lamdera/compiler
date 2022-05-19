@@ -127,6 +127,18 @@ isUnsupportedKernelType tipe =
     _ -> False
 
 
+resolvedExtensibleType :: Type -> Type
+resolvedExtensibleType tipe =
+  -- @TODO will probably require tvar resolution to be holistic!
+  -- Try force the failure with some mult-nested tvar'ed extensible types
+  case tipe of
+    TRecord _ _ -> tipe
+    TAlias moduleName typeName tvars aType ->
+      case aType of
+        Holey t -> t
+        Filled t -> t
+    _ -> error $ "unimplmeneted resolvedExtensibleType: \n" <> show tipe
+
 
 -- instance Show (Can.Decls) where
 --   show decls_ = show $ declsToList decls_
@@ -853,3 +865,16 @@ oneOf decoders =
               ))
         [a $ List decoders]
         ))
+
+
+identity :: Expr
+identity =
+  -- a (Call
+      (a (VarForeign
+            (Module.Canonical (Name "elm" "core") "Basics")
+            "identity"
+            (Forall (Map.fromList [("a", ())]) (TLambda (TVar "a") (TVar "a")))
+         )
+      )
+      -- [v]
+    -- )
