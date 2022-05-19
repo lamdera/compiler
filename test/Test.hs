@@ -10,6 +10,7 @@ import qualified Test.Lamdera
 import qualified Test.Check
 import qualified Test.Wire
 import qualified Test.Ext.ElmPages.Check
+import qualified Test.TypeHashes
 import Test.Helpers
 
 import qualified Make
@@ -241,9 +242,11 @@ single = do
 
 allTests =
   tests
-    [ scope "Test.Lamdera -> " $ Test.Lamdera.suite
+    [ tests []
+    , scope "Test.Lamdera -> " $ Test.Lamdera.suite
     , scope "Test.Snapshot -> " $ Test.Snapshot.suite
     , scope "Test.Wire -> " $ Test.Wire.suite
     , scope "Test.Ext.ElmPages.Check -> " $ Test.Ext.ElmPages.Check.suite
-    , Test.LamderaGenerated.suite
+    , scope "Test.LamderaGenerated.suite -> " $ Test.LamderaGenerated.suite
+    , scope "Test.TypeHashes -> " $ Test.TypeHashes.suite
     ]

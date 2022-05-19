@@ -23,7 +23,7 @@ suite = tests
         project = "/Users/mario/lamdera/test/v1"
         expected =
           [text|
-            ["4eec3f747f65eceb7faf6683ab13e172fcef9961","bd5d1a3899a98f383b6fe3b22b3f789fc6856f30","f70ed4f411f15bf40d81b817b51d467289e2752b","aa8ea8fb987f5faa1826d1bf359529ea2fb17e51","b8e40e0502458a98f12e2ffde71ff3ddf51a7dc2","a83d62ff8afc0e6ca4b0cd6a544d023ef6718807"]
+            ["7f1c52d2bffce369e8b63a8cbb09ca699d27bf34","c6705c231ea1753f3bfc4e54191ddde603bac315","58eb2f4581bd8b817277e80693bd0704b0845d0e","aa8ea8fb987f5faa1826d1bf359529ea2fb17e51","a6b615774ea87d310518531985a84cb7b8c9bb75","a83d62ff8afc0e6ca4b0cd6a544d023ef6718807"]
           |]
 
       liftIO $ withDebug $ Dir.withCurrentDirectory project $ do
@@ -31,7 +31,7 @@ suite = tests
 
       actual <- liftIO $ readUtf8Text $ lamderaHashesPath project
 
-      expectEqualTextTrimmed expected (actual & withDefault "<failed to read file>")
+      expectEqualTextTrimmed (actual & withDefault "<failed to read file>") expected
 
 
   , scope "sha1 should not collide" $ do

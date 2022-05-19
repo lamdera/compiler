@@ -107,6 +107,7 @@ suite = tests $
               , rpcRes : Result Http.Error Int
               , backendTtype : Maybe Evergreen.V1.Fusion.TType
               , backendVal : Evergreen.V1.Fusion.VType
+              , theta : Float
               }
 
 
@@ -164,6 +165,7 @@ suite = tests $
               | FusionQuery (List Evergreen.V1.Fusion.FType)
               | ClickedSelectFile
               | FileSelected File.File
+              | AnimationFrameDelta Float
 
 
           type ToBackend
