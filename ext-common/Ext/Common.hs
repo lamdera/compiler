@@ -38,7 +38,7 @@ getProjectRoot = do
     Just filepath -> pure filepath
     Nothing -> do
       binName <- Env.getProgName
-      putStrLn $ "Cannot find an elm.json! Make sure you're in a project folder, or run `" <> binName <> " init` to start a new one."
+      putStrLn $ "Cannot find an elm.json! Make sure you're in a project folder, or run `" <> binName <> " init` to start a new one. (I started searching from " <> subDir <> ")"
       debug $ "current directory was: " <> subDir
       exitFailure
 
@@ -70,7 +70,7 @@ getProjectRootFor path = do
     Just filepath -> pure filepath
     Nothing -> do
       binName <- Env.getProgName
-      putStrLn $ "Cannot find an elm.json! Make sure you're in a project folder, or run `" <> binName <> " init` to start a new one."
+      putStrLn $ "Cannot find an elm.json! Make sure you're in a project folder, or run `" <> binName <> " init` to start a new one. (I started searching from " <> path <> ")"
       exitFailure
 
 

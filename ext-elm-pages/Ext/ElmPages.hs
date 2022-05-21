@@ -20,6 +20,7 @@ import qualified Reporting.Exit as Exit
 import StandaloneInstances
 
 import Lamdera
+import Lamdera.Wire3.Helpers
 import Lamdera.Types (Interfaces)
 
 
@@ -129,66 +130,6 @@ diffableTypeByName interfaces targetName modul interface = do
           DError $ "Found no type named " <> nameToText targetName <> " in " <> nameToText moduleName
 
 
--- Recursively resolve any tvars in the given type using the given tvarMap
-resolveTvars_ :: [(N.Name, Can.Type)] -> Can.Type -> Can.Type
-resolveTvars_ tvarMap tipe =
-  case tipe of
-    Can.TVar a ->
-      -- We've found a tvar, attempt to make a replacement
-      case List.find (\(t,ti) -> t == a) (tvarMap) of
-        Just (t,ti) ->
-          ti
-
-        Nothing ->
-          -- Note: this used to seem an error, but throwing an error broke cases
-          -- and this makes sense – a tvar might not get resolved till a higher
-          -- up usage provide the type param. So recursively searching to resolve
-          -- makes sense.
-          -- @TODO performance might be impacted here on large types
-          tipe
-
-    Can.TType moduleName name params ->
-      Can.TType moduleName name (params & fmap (resolveTvars_ tvarMap))
-
-    Can.TAlias moduleName name tvarMap_ aliasType ->
-      case aliasType of
-        Can.Holey cType ->
-          Can.TAlias moduleName name tvarMap_
-            (Can.Holey (resolveTvars_ tvarMap cType))
-
-        Can.Filled cType ->
-          Can.TAlias moduleName name tvarMap_
-            (Can.Filled (resolveTvars_ tvarMap cType))
-
-    Can.TRecord fieldMap isPartial ->
-      case isPartial of
-        Just whatIsThis ->
-          error $ "Error: checkPageDataType: tvar lookup encountered unsupported partial record, please report this issue."
-
-        Nothing ->
-          let
-            newFieldMap =
-              fieldMap
-                & Map.map (\(Can.FieldType index tipe) ->
-                  Can.FieldType index (resolveTvars_ tvarMap tipe)
-                )
-          in
-          Can.TRecord newFieldMap isPartial
-
-    Can.TTuple t1 t2 mt3 ->
-      case mt3 of
-        Just t3 ->
-          Can.TTuple (resolveTvars_ tvarMap t1) (resolveTvars_ tvarMap t2) (Just $ resolveTvars_ tvarMap t3)
-
-        Nothing ->
-          Can.TTuple (resolveTvars_ tvarMap t1) (resolveTvars_ tvarMap t2) Nothing
-
-    Can.TUnit ->
-      Can.TUnit
-
-    Can.TLambda a b ->
-      Can.TLambda a b
-
 
 -- A top level Custom Type definition i.e. `type Herp = Derp ...`
 unionToDiffableType :: N.Name -> ModuleName.Canonical -> Text -> Interfaces -> RecursionSet -> [(N.Name, Can.Type)] -> Interface.Union -> [Can.Type] -> DiffableType
@@ -222,7 +163,7 @@ unionConstructorsToDiffableTypes union targetName currentModule typeName interfa
       , -- For each constructor type param
         params_
           -- Swap any `TVar (Name {_name = "a"})` for the actual injected params
-          & fmap (resolveTvars_ newTvarMap)
+          & fmap (resolveTvars newTvarMap)
           & fmap (\resolvedParam -> canonicalToDiffableType targetName currentModule interfaces recursionSet resolvedParam newTvarMap )
       )
     )
@@ -264,7 +205,7 @@ canonicalToDiffableType targetName currentModule interfaces recursionSet canonic
         newRecursionSet = Set.insert recursionIdentifier recursionSet
 
         tvarResolvedParams =
-          params & fmap (resolveTvars_ tvarMap)
+          params & fmap (resolveTvars tvarMap)
 
         identifier :: (Text, Text, Text, Text)
         identifier =

@@ -649,7 +649,7 @@ resolveTvars tvarMap t =
                  should just be `Decoder (AccessControlled a)` - not `Decoder (AccessControlled (Maybe a))`.
 
                  TLDR: no need to specialise this one, leave it generic! -}
-              TVar a
+              t
 
           -- case ti of
           --   -- If we looked up the Tvar and got another Tvar, we've got a tvar
@@ -671,7 +671,6 @@ resolveTvars tvarMap t =
             & fmap (\(FieldType index tipe) ->
                 FieldType index (resolveTvars tvarMap tipe)
               )
-            -- @EXTENSIBLERECORDS For now we don't support extensible records, so drop the maybeExtensible
             & (\newFieldMap -> TRecord newFieldMap Nothing )
         Just extensibleName ->
           case resolveTvars tvarMap (TVar extensibleName) of
@@ -681,7 +680,7 @@ resolveTvars tvarMap t =
                 & fmap (\(FieldType index tipe) ->
                     FieldType index (resolveTvars tvarMap tipe)
                   )
-                -- @EXTENSIBLERECORDS For now we don't support extensible records, so drop the maybeExtensible
+                -- Now the extensible record has been reified, we can drop the extensible part
                 & (\newFieldMap -> TRecord newFieldMap Nothing )
 
             rt -> error $ "resolveTvars: impossible extensible record with non-record type: " ++ show maybeExtensible ++ "\n\n" ++ show rt

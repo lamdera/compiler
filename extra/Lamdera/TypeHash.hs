@@ -14,7 +14,7 @@ import qualified Data.Name as N
 import qualified Data.Set as Set
 import Data.Map ((!))
 
-import qualified AST.Canonical as Can
+import AST.Canonical
 import qualified AST.Source as Valid
 import qualified Elm.ModuleName as ModuleName
 import qualified Elm.Package as Pkg
@@ -28,6 +28,7 @@ import qualified Reporting.Exit as Exit
 import Lamdera
 import Lamdera.Types
 import Lamdera.Progress
+import Lamdera.Wire3.Helpers
 import qualified Ext.Query.Interfaces as Interfaces
 import StandaloneInstances
 
@@ -52,11 +53,11 @@ buildCheckHashes = do
 
 {- Tracks types that have already been seen to ensure we can break cycles -}
 type RecursionSet =
-  Set.Set (ModuleName.Raw, N.Name, [Can.Type])
+  Set.Set (ModuleName.Raw, N.Name, [Type])
 
 
-lamderaTypes :: [ModuleName.Raw]
-lamderaTypes =
+lamderaCoreTypes :: [ModuleName.Raw]
+lamderaCoreTypes =
   [ "FrontendModel"
   , "BackendModel"
   , "FrontendMsg"
@@ -65,22 +66,33 @@ lamderaTypes =
   , "ToFrontend"
   ]
 
+
+calculateHashPair :: FilePath -> N.Name -> N.Name -> IO (Text, Text)
+calculateHashPair path modulename typename = do
+  interfaces <- Interfaces.all [ path ]
+  let
+    interfaceModule = (interfaces ! modulename)
+    dt = diffableTypeByName interfaces typename modulename interfaceModule
+
+  pure $ (diffableTypeToHash dt, diffableTypeToText dt)
+
+
 calculateLamderaHashes :: IO (Either Exit.BuildProblem ([Text], [(Text, [Text], DiffableType)]))
 calculateLamderaHashes = do
   interfaces <- Interfaces.all [ "src/Types.elm" ]
   inDebug <- Lamdera.isDebug
-  calculateHashes interfaces inDebug
+  calculateLamderaHashes_ interfaces inDebug
 
 
-calculateHashes :: Interfaces -> Bool -> IO (Either Exit.BuildProblem ([Text], [(Text, [Text], DiffableType)]))
-calculateHashes interfaces inDebug = do
+calculateLamderaHashes_ :: Interfaces -> Bool -> IO (Either Exit.BuildProblem ([Text], [(Text, [Text], DiffableType)]))
+calculateLamderaHashes_ interfaces inDebug = do
 
   let
     iface_Types = (interfaces ! "Types")
 
     typediffs :: [(Text, DiffableType)]
     typediffs =
-      lamderaTypes
+      lamderaCoreTypes
         & fmap (\t -> (nameToText t, diffableTypeByName interfaces t "Types" iface_Types))
 
 
@@ -165,98 +177,31 @@ diffableTypeByName interfaces targetName moduleName interface = do
           DError $ "Found no type named " <> nameToText targetName <> " in " <> nameToText moduleName
 
 
--- Recursively resolve any tvars in the given type using the given tvarMap
-resolveTvars_ :: [(N.Name, Can.Type)] -> Can.Type -> Can.Type
-resolveTvars_ tvarMap tipe =
-  case tipe of
-    Can.TVar a ->
-      -- We've found a tvar, attempt to make a replacement
-      case List.find (\(t,ti) -> t == a) (tvarMap) of
-        Just (t,ti) ->
-          ti
-
-        Nothing ->
-          -- Note: this used to seem an error, but throwing an error broke cases
-          -- and this makes sense – a tvar might not get resolved till a higher
-          -- up usage provide the type param. So recursively searching to resolve
-          -- makes sense.
-          -- @TODO performance might be impacted here on large types
-          tipe
-
-    Can.TType moduleName name params ->
-      Can.TType moduleName name (params & fmap (resolveTvars_ tvarMap))
-
-    Can.TAlias moduleName name tvarMap_ aliasType ->
-      case aliasType of
-        Can.Holey cType ->
-          Can.TAlias moduleName name tvarMap_
-            (Can.Holey (resolveTvars_ tvarMap cType))
-
-        Can.Filled cType ->
-          Can.TAlias moduleName name tvarMap_
-            (Can.Filled (resolveTvars_ tvarMap cType))
-
-    Can.TRecord fieldMap isPartial ->
-      case isPartial of
-        Just extensibleName ->
-          let
-            newFieldMap =
-              fieldMap
-                & Map.map (\(Can.FieldType index tipe) ->
-                  Can.FieldType index (resolveTvars_ tvarMap tipe)
-                )
-          in
-          Can.TRecord newFieldMap isPartial
-
-        Nothing ->
-          let
-            newFieldMap =
-              fieldMap
-                & Map.map (\(Can.FieldType index tipe) ->
-                  Can.FieldType index (resolveTvars_ tvarMap tipe)
-                )
-          in
-          Can.TRecord newFieldMap isPartial
-
-    Can.TTuple t1 t2 mt3 ->
-      case mt3 of
-        Just t3 ->
-          Can.TTuple (resolveTvars_ tvarMap t1) (resolveTvars_ tvarMap t2) (Just $ resolveTvars_ tvarMap t3)
-
-        Nothing ->
-          Can.TTuple (resolveTvars_ tvarMap t1) (resolveTvars_ tvarMap t2) Nothing
-
-    Can.TUnit ->
-      Can.TUnit
-
-    Can.TLambda a b ->
-      Can.TLambda a b
-
 
 -- A top level Custom Type definition i.e. `type Herp = Derp ...`
-unionToDiffableType :: N.Name -> Text -> Interfaces -> RecursionSet -> [(N.Name, Can.Type)] -> Interface.Union -> [Can.Type] -> DiffableType
+unionToDiffableType :: N.Name -> Text -> Interfaces -> RecursionSet -> [(N.Name, Type)] -> Interface.Union -> [Type] -> DiffableType
 unionToDiffableType targetName typeName interfaces recursionSet tvarMap unionInterface params =
   let
     treat union =
       let
-        newTvarMap = tvarMap <> zip (Can._u_vars union) params
+        newTvarMap = tvarMap <> zip (_u_vars union) params
 
         debug dtype =
           debugHaskell ("\n✴️ inserting for union " <> typeName) (newTvarMap, dtype)
             & snd
       in
-      Can._u_alts union
+      _u_alts union
         -- Sort constructors by name, this allows our diff to be stable to ordering changes
         & List.sortOn
           -- Ctor N.Name Index.ZeroBased Int [Type]
-          (\(Can.Ctor name _ _ _) -> name)
+          (\(Ctor name _ _ _) -> name)
         -- For each constructor
-        & fmap (\(Can.Ctor name index int params_) ->
+        & fmap (\(Ctor name index int params_) ->
           ( N.toText name
           , -- For each constructor type param
             params_
               -- Swap any `TVar (Name {_name = "a"})` for the actual injected params
-              & fmap (resolveTvars_ newTvarMap)
+              & fmap (resolveTvars newTvarMap)
               & fmap (\resolvedParam -> canonicalToDiffableType targetName interfaces recursionSet resolvedParam newTvarMap )
           )
         )
@@ -269,12 +214,12 @@ unionToDiffableType targetName typeName interfaces recursionSet tvarMap unionInt
 
 
 -- A top level Alias definition i.e. `type alias ...`
-aliasToDiffableType :: N.Name -> Interfaces -> RecursionSet -> [(N.Name, Can.Type)] -> Interface.Alias -> [Can.Type] -> DiffableType
+aliasToDiffableType :: N.Name -> Interfaces -> RecursionSet -> [(N.Name, Type)] -> Interface.Alias -> [Type] -> DiffableType
 aliasToDiffableType targetName interfaces recursionSet tvarMap aliasInterface params =
   let
     treat a =
       case a of
-        Can.Alias tvars tipe ->
+        Alias tvars tipe ->
           -- @TODO couldn't force an issue here but it seems wrong to ignore the tvars...
           -- why is aliasToDiffableType never called recursively from canonicalToDiffableType?
           -- it seems like it should be.
@@ -293,17 +238,17 @@ nameRaw (ModuleName.Canonical (Pkg.Name author pkg) module_) = module_
 -- | TUnit
 -- | TTuple Type Type (Maybe Type)
 -- | TAlias ModuleName.Canonical N.Name [(N.Name, Type)] AliasType
-canonicalToDiffableType :: N.Name -> Interfaces -> RecursionSet -> Can.Type -> [(N.Name, Can.Type)] -> DiffableType
+canonicalToDiffableType :: N.Name -> Interfaces -> RecursionSet -> Type -> [(N.Name, Type)] -> DiffableType
 canonicalToDiffableType targetName interfaces recursionSet canonical tvarMap =
   case canonical of
-    Can.TType moduleName name params ->
+    TType moduleName name params ->
       let
         recursionIdentifier = (nameRaw moduleName, name, tvarResolvedParams)
 
         newRecursionSet = Set.insert recursionIdentifier recursionSet
 
         tvarResolvedParams =
-          params & fmap (resolveTvars_ tvarMap)
+          params & fmap (resolveTvars tvarMap)
 
         identifier :: (Text, Text, Text, Text)
         identifier =
@@ -456,15 +401,15 @@ canonicalToDiffableType targetName interfaces recursionSet canonical tvarMap =
               DError $ "The `" <> tipe <> "` type from " <> author <> "/" <> pkg <> ":" <> module_ <> " is referenced, but I can't find it! You can try `lamdera install " <> author <> "/" <> pkg <> "`, otherwise this might be a type which has been intentionally hidden by the author, so it cannot be used!"
 
 
-    Can.TAlias moduleName name tvarMap_ aliasType ->
+    TAlias moduleName name tvarMap_ aliasType ->
       case aliasType of
-        Can.Holey cType ->
+        Holey cType ->
           let
             tvarResolvedMap =
               tvarMap_
                 & fmap (\(n,p) ->
                   case p of
-                    Can.TVar a ->
+                    TVar a ->
                       case List.find (\(t,ti) -> t == a) tvarMap of
                         Just (_,ti) -> (n,ti)
                         Nothing -> (n,p)
@@ -473,40 +418,49 @@ canonicalToDiffableType targetName interfaces recursionSet canonical tvarMap =
           in
           canonicalToDiffableType targetName interfaces recursionSet cType tvarResolvedMap
 
-        Can.Filled cType ->
+        Filled cType ->
           -- @TODO hypothesis...
           -- If an alias is filled, then it can't have any open holes within it either?
           -- So we can take this opportunity to reset tvars to reduce likeliness of naming conflicts?
           canonicalToDiffableType targetName interfaces recursionSet cType []
 
-    Can.TRecord fieldMap isPartial ->
-      case isPartial of
-        Just extensibleName ->
-          fieldMap
-            & Map.toList
-            & fmap (\(name,(Can.FieldType index tipe)) ->
-              (N.toText name, canonicalToDiffableType targetName interfaces recursionSet tipe tvarMap)
-            )
-            & DRecord
+    TRecord fieldMap isPartial ->
+      let
+        trueFieldMap =
+          case isPartial of
+            Just extensibleName ->
+              case List.find (\(n,_) -> n == extensibleName) tvarMap of
+                Just (extensibleName, extensibleType) ->
+                  case resolvedExtensibleType extensibleType of
+                    TRecord fieldMapExtended maybeNameExtended ->
+                      fieldMap <> fieldMapExtended
 
-        Nothing ->
-          let
-            -- !_ = formatHaskellValue "Can.TRecord" (fieldMap, tvarMap) :: IO ()
-          in
-          fieldMap
-            & Map.toList
-            & fmap (\(name,(Can.FieldType index tipe)) ->
-              (N.toText name, canonicalToDiffableType targetName interfaces recursionSet tipe tvarMap)
-            )
-            & DRecord
+                    _ -> error "Impossible: canonicalToDiffableType could not resolve extensible record to a TRecord."
 
-    Can.TTuple firstType secondType maybeType_whatisthisfor ->
+                Nothing ->
+                  error $ "canonicalToDiffableType: No tvar found for extensible record with extensible name: " <> show extensibleName
+
+            Nothing ->
+              let
+                -- !_ = formatHaskellValue "TRecord" (fieldMap, tvarMap) :: IO ()
+              in
+              fieldMap
+      in
+      trueFieldMap
+        & Map.toList
+        & List.sortOn (\(name, field) -> name)
+        & fmap (\(name,(FieldType index tipe)) ->
+          (N.toText name, canonicalToDiffableType targetName interfaces recursionSet tipe tvarMap)
+        )
+        & DRecord
+
+    TTuple firstType secondType maybeType_whatisthisfor ->
       DTuple (canonicalToDiffableType targetName interfaces recursionSet firstType tvarMap) (canonicalToDiffableType targetName interfaces recursionSet secondType tvarMap)
 
-    Can.TUnit ->
+    TUnit ->
       DUnit
 
-    Can.TVar name ->
+    TVar name ->
       -- Swap any `TVar (Name {_name = "a"})` for the actual injected params
       case List.find (\(t,ti) -> t == name) tvarMap of
         Just (_,ti) ->
@@ -514,14 +468,14 @@ canonicalToDiffableType targetName interfaces recursionSet canonical tvarMap =
 
         Nothing ->
           let
-            !_ = formatHaskellValue "Can.Tvar not found:" name :: IO ()
+            !_ = formatHaskellValue "Tvar not found:" name :: IO ()
           in
           DError $ "Error: tvar lookup failed, please report this issue: cannot find "
             <> N.toText name
             <> " in tvarMap "
             <>  (T.pack $ show tvarMap)
 
-    Can.TLambda t1 t2 ->
+    TLambda t1 t2 ->
       DError $ "must not contain functions: " <> show_ t1 <> "\n" <> show_ t2
 
 
