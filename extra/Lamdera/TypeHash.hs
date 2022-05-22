@@ -424,29 +424,8 @@ canonicalToDiffableType targetName interfaces recursionSet canonical tvarMap =
           -- So we can take this opportunity to reset tvars to reduce likeliness of naming conflicts?
           canonicalToDiffableType targetName interfaces recursionSet cType []
 
-    TRecord fieldMap isPartial ->
-      let
-        trueFieldMap =
-          case isPartial of
-            Just extensibleName ->
-              case List.find (\(n,_) -> n == extensibleName) tvarMap of
-                Just (extensibleName, extensibleType) ->
-                  case resolvedExtensibleType extensibleType of
-                    TRecord fieldMapExtended maybeNameExtended ->
-                      fieldMap <> fieldMapExtended
-
-                    _ -> error "Impossible: canonicalToDiffableType could not resolve extensible record to a TRecord."
-
-                Nothing ->
-                  error $ "canonicalToDiffableType: No tvar found for extensible record with extensible name: " <> show extensibleName
-
-            Nothing ->
-              let
-                -- !_ = formatHaskellValue "TRecord" (fieldMap, tvarMap) :: IO ()
-              in
-              fieldMap
-      in
-      trueFieldMap
+    TRecord fieldMap extensibleName ->
+      resolvedRecordFieldMap fieldMap extensibleName tvarMap
         & Map.toList
         & List.sortOn (\(name, field) -> name)
         & fmap (\(name,(FieldType index tipe)) ->

@@ -78,9 +78,7 @@ expected_w3_decode_Type w3_x_c_msg =
 
 
 type alias Config_ otherConfig msg =
-    { otherConfig
-        | attributes : List msg
-    }
+    { otherConfig | attributes : List msg }
 
 
 {-| Again, extensible record alias encoders never actually get used
@@ -92,3 +90,54 @@ expected_w3_encode_Config_ w3_x_c_otherConfig w3_x_c_msg =
 
 expected_w3_decode_Config_ w3_x_c_otherConfig w3_x_c_msg =
     Lamdera.Wire3.failDecode
+
+
+
+-- Double param'd
+
+
+type alias Record a =
+    { a | field : a }
+
+
+expected_w3_encode_Record : (a -> Lamdera.Wire3.Encoder) -> Record a -> Lamdera.Wire3.Encoder
+expected_w3_encode_Record w3_x_c_a =
+    Lamdera.Wire3.failEncode
+
+
+expected_w3_decode_Record w3_x_c_a =
+    Lamdera.Wire3.failDecode
+
+
+type alias DoubleParamed =
+    Record { b : String }
+
+
+expected_w3_encode_DoubleParamed : DoubleParamed -> Lamdera.Wire3.Encoder
+expected_w3_encode_DoubleParamed =
+    \w3_rec_var0 ->
+        Lamdera.Wire3.encodeSequenceWithoutLength
+            [ Lamdera.Wire3.encodeString w3_rec_var0.b
+            , (\w3_rec_var1 ->
+                Lamdera.Wire3.encodeSequenceWithoutLength
+                    [ Lamdera.Wire3.encodeString w3_rec_var1.b ]
+              )
+                w3_rec_var0.field
+            ]
+
+
+expected_w3_decode_DoubleParamed =
+    Lamdera.Wire3.succeedDecode
+        (\b0 field0 -> { b = b0, field = field0 })
+        |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeString
+        |> Lamdera.Wire3.andMapDecode
+            (Lamdera.Wire3.succeedDecode
+                (\b0 -> { b = b0 })
+                |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeString
+            )
+
+
+
+-- This fails on "error "Used toAnnotation on a type that is not well-formed"" from Type.hs
+-- type alias Blah =
+--     Record Int

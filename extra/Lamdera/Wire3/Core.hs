@@ -323,7 +323,7 @@ encoderUnion isTest ifaces pkg modul decls unionName union =
 decoderUnion :: Bool -> Map.Map Module.Raw I.Interface -> Pkg.Name -> Src.Module -> Decls -> Data.Name.Name -> Union -> Def
 decoderUnion isTest ifaces pkg modul decls unionName union =
   let
-    -- !x = runTests isTest "decoderUnion" pkg modul decls generatedName generated union (unionAsModule cname unionName union)
+    !x = runTests isTest "decoderUnion" pkg modul decls generatedName generated union (unionAsModule cname unionName union)
 
     generatedName = Data.Name.fromChars $ "w3_decode_" ++ Data.Name.toChars unionName
     cname = Module.Canonical pkg (Src.getName modul)
@@ -432,7 +432,7 @@ encoderAlias isTest ifaces pkg modul decls aliasName alias@(Alias tvars tipe) =
 decoderAlias :: Bool -> Map.Map Module.Raw I.Interface -> Pkg.Name -> Src.Module -> Decls -> Data.Name.Name -> Alias -> Def
 decoderAlias isTest ifaces pkg modul decls aliasName alias@(Alias tvars tipe) =
   let
-    -- !x = runTests isTest "decoderAlias" pkg modul decls generatedName generated alias (aliasAsModule cname aliasName alias)
+    !x = runTests isTest "decoderAlias" pkg modul decls generatedName generated alias (aliasAsModule cname aliasName alias)
 
     generatedName = Data.Name.fromChars $ "w3_decode_" ++ Data.Name.toChars aliasName
     cname = Module.Canonical pkg (Src.getName modul)

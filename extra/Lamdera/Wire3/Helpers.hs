@@ -129,15 +129,52 @@ isUnsupportedKernelType tipe =
 
 resolvedExtensibleType :: Type -> Type
 resolvedExtensibleType tipe =
-  -- @TODO will probably require tvar resolution to be holistic!
-  -- Try force the failure with some mult-nested tvar'ed extensible types
   case tipe of
     TRecord _ _ -> tipe
     TAlias moduleName typeName tvars aType ->
       case aType of
         Holey t -> t
         Filled t -> t
-    _ -> error $ "unimplmeneted resolvedExtensibleType: \n" <> show tipe
+    _ ->
+      {-|
+        This should be impossible, but can happen with code like this:
+
+        type alias Record a =
+            { a | field : a }
+
+        type alias Blah =
+            Record Int
+
+        And it seems Elm's type checker doesn't pick it up.
+
+      -}
+      tipe
+
+
+resolvedRecordFieldMap :: (Map.Map Data.Name.Name FieldType) -> (Maybe Data.Name.Name) -> [(Data.Name.Name, Type)] -> (Map.Map Data.Name.Name FieldType)
+resolvedRecordFieldMap fieldMap extensibleName tvarMap =
+  case resolvedRecordFieldMapM fieldMap extensibleName tvarMap of
+    Just extendedFieldMap -> extendedFieldMap
+    Nothing -> fieldMap
+
+
+resolvedRecordFieldMapM :: (Map.Map Data.Name.Name FieldType) -> (Maybe Data.Name.Name) -> [(Data.Name.Name, Type)] -> Maybe (Map.Map Data.Name.Name FieldType)
+resolvedRecordFieldMapM fieldMap extensibleName tvarMap =
+  case extensibleName of
+    Just extensibleName ->
+      case List.find (\(n,_) -> n == extensibleName) tvarMap of
+        Just (extensibleName, extensibleType) ->
+          case resolvedExtensibleType extensibleType of
+            TRecord fieldMapExtended maybeNameExtended ->
+              Just $ fieldMap <> fieldMapExtended
+            -- Should Impossible, canonicalToDiffableType could not resolve extensible record to a TRecord.
+            _ -> Nothing
+
+        -- No tvar found for extensible record with extensible name...
+        Nothing -> Nothing
+
+    -- Not an extensible record
+    Nothing -> Nothing
 
 
 -- instance Show (Can.Decls) where

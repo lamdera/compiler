@@ -342,31 +342,15 @@ inlineIfRecordOrCall depth ifaces cname tipe tvars aType =
   case aType of
     Holey tipe ->
       case tipe of
-        TRecord fieldMap maybeName ->
-          case maybeName of
-            Just extensibleName ->
-              case List.find (\(n,_) -> n == extensibleName) tvars of
-                Just (extensibleName, extensibleType) ->
-                  case resolvedExtensibleType extensibleType of
-                    TRecord fieldMapExtended maybeNameExtended ->
-                      let extendedRecord = TRecord (fieldMap <> fieldMapExtended) Nothing  & resolveTvars tvars
-                      in deepEncoderForType depth ifaces cname extendedRecord
+        TRecord fieldMap extensibleName ->
+          case resolvedRecordFieldMapM fieldMap extensibleName tvars of
+            Just extendedFields ->
+              let extendedRecord = TRecord (extendedFields) Nothing & resolveTvars tvars
+              in deepEncoderForType depth ifaces cname extendedRecord
+            Nothing -> normalEncoder
 
-                    _ -> error "Impossible: resolvedExtensibleType did not resolve to a TRecord."
-
-                Nothing ->
-                  error $ "No tvar found for extensible record with extensible name: " <> show extensibleName
-                  -- failEncode
-
-            _ ->
-              normalEncoder
-
-        _ ->
-          normalEncoder
-
-    Filled tipe ->
-      normalEncoder
-
+        otherTypes -> normalEncoder
+    Filled _ -> normalEncoder
 
 {-| Called for encoding tvar type values, i.e.
     SomeThing (Config { bob : String })
@@ -431,31 +415,15 @@ encodeTypeValue depth ifaces cname tipe value =
           case aType of
             Holey tipe ->
               case tipe of
-                TRecord fieldMap maybeName ->
-                  case maybeName of
-                    Just extensibleName ->
-                      case List.find (\(n,_) -> n == extensibleName) tvars of
-                        Just (extensibleName, extensibleType) ->
-                          case resolvedExtensibleType extensibleType of
-                            TRecord fieldMapExtended maybeNameExtended ->
-                              let extendedRecord = TRecord (fieldMap <> fieldMapExtended) Nothing  & resolveTvars tvars
-                              in
-                              call (encoderForType depth ifaces cname extendedRecord) [ value ]
-
-                            _ -> error "Impossible: resolvedExtensibleType did not resolve to a TRecord."
-
-                        Nothing ->
-                          error $ "No tvar found for extensible record with extensible name: " <> show extensibleName
-                          -- failEncode
-
-                    _ ->
-                      normalEncoder
-
-                _ ->
-                  normalEncoder
-
-            Filled tipe ->
-              normalEncoder
+                TRecord fieldMap extensibleName ->
+                  case resolvedRecordFieldMapM fieldMap extensibleName tvars of
+                    Just resolved ->
+                        let extendedRecord = TRecord resolved extensibleName & resolveTvars tvars
+                        in
+                        call (encoderForType depth ifaces cname extendedRecord) [ value ]
+                    Nothing -> normalEncoder
+                otherTypes -> normalEncoder
+            Filled _ -> normalEncoder
 
     TVar name ->
       -- Tvars should always have a local encoder in scope

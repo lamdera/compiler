@@ -348,27 +348,14 @@ decoderForType ifaces cname tipe =
          case aType of
             Holey tipe ->
               case tipe of
-                TRecord fieldMap maybeName ->
-                  case maybeName of
-                    Just extensibleName ->
-                      case List.find (\(n,_) -> n == extensibleName) tvars_ of
-                        Just (extensibleName, extensibleType) ->
-                          case resolvedExtensibleType extensibleType of
-                            TRecord fieldMapExtended maybeNameExtended ->
-                              let extendedRecord = TRecord (fieldMap <> fieldMapExtended) Nothing  & resolveTvars tvars_
-                              in decoderForType ifaces cname extendedRecord
-
-                            _ -> error "Impossible: resolvedExtensibleType did not resolve to a TRecord."
-
-                        Nothing ->
-                          --   failDecode ""
-                          error $ "No tvar found for extensible record with extensible name: " <> show extensibleName
-
-                    _ ->
-                      normalDecoder
-
-                _ ->
-                  normalDecoder
+                TRecord fieldMap extensibleName ->
+                  case resolvedRecordFieldMapM fieldMap extensibleName tvars_ of
+                    Just resolved ->
+                     let extendedRecord = TRecord resolved Nothing  & resolveTvars tvars_
+                     in decoderForType ifaces cname extendedRecord
+                    Nothing -> normalDecoder
+                otherTypes -> normalDecoder
+            Filled _ -> normalDecoder
 
     TVar name ->
       lvar $ Data.Name.fromChars $ "w3_x_c_" ++ Data.Name.toChars name
