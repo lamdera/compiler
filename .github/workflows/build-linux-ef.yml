@@ -46,12 +46,15 @@ jobs:
         ghc --version
         [[ $(ghc --numeric-version) == 9.0.2 ]]
     - uses: actions/cache@v2
-      name: Cache cabal-release-v1-${{ runner.os }}-${{ hashFiles('Dockerfile') }}-${{ hashFiles('cabal.project.freeze') }}
+      name: Cache cabal-release-v1-${{ runner.os }}-${{ hashFiles('Dockerfile') }}
       with:
         path: |
           ${{ steps.setup-haskell.outputs.cabal-store }}
           /tmp/docker-registry
-        key: cabal-release-v1-${{ runner.os }}-${{ hashFiles('Dockerfile') }}-${{ hashFiles('cabal.project.freeze') }}
+        key: cabal-release-v1-${{ runner.os }}-${{ hashFiles('Dockerfile') }}
+        restore-keys: |
+          cabal-release-v1-${{ runner.os }}-
+
     - run: cabal v2-update
 
     # https://github.com/dtinth/github-actions-docker-layer-caching-poc/blob/master/.github/workflows/dockerimage.yml
@@ -63,7 +66,7 @@ jobs:
     - run: ./build.sh --verbose --verbose -- publish-1.0.2
 
     - run: docker tag lamdera-next-linux localhost:5000/lamdera-next-linux && docker push localhost:5000/lamdera-next-linux || true
-      if: steps.cache.outputs.cache-hit != 'true'
+      # if: steps.cache.outputs.cache-hit != 'true'
 
     # - run: ./build.sh -- dist-dependencies
     # - run: ./build.sh -- dist
