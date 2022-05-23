@@ -31,5 +31,9 @@ echo "Building with Dest: $DEST"
 
 rm -Rf "$DEST"
 git archive --format=tar.gz "$SHA" | \
-    docker build -t lamdera-next-linux --build-arg "ELM_FORMAT_VERSION=$VERSION" --target artifact --output type=local,dest="$DEST/" "$CONTEXT"
+    docker build -t lamdera-next-linux \
+        --build-arg "ELM_FORMAT_VERSION=$VERSION" \
+        --target artifact \
+        --output type=local,dest="$DEST/" "$CONTEXT" \
+        --build-arg BUILDKIT_INLINE_CACHE=1
 "$DEST/lamdera" --help
