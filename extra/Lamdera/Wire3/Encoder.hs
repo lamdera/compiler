@@ -37,15 +37,12 @@ type Interfaces =
   Map.Map ModuleName.Raw Interface.Interface
 
 
-encoderNotImplemented :: String -> Type -> error
-encoderNotImplemented tag tipe =
-  error $ tag ++ " not implemented! " ++ show tipe
-  -- str $ Utf8.fromChars $ tag ++ " not implemented! " ++ show tipe
-
-
 encoderForType :: Int -> Interfaces -> ModuleName.Canonical -> Type -> A.Located Expr_
 encoderForType depth ifaces cname tipe =
   -- debugHaskellPass "encoderForType" tipe $
+  if containsUnsupportedTypes tipe then
+    failEncode -- "contains unsupported types"
+  else
   case tipe of
     (TType (Module.Canonical (Name "elm" "core") "Basics") "Int" []) ->
       (a (VarForeign mLamdera_Wire "encodeInt" (Forall Map.empty (TLambda tipe tLamdera_Wire_Encoder))))
@@ -239,7 +236,6 @@ encoderForType depth ifaces cname tipe =
           ))
 
 
-
     TAlias moduleName typeName tvars_ aType ->
       let
         generatedName = Data.Name.fromChars $ "w3_encode_" ++ Data.Name.toChars typeName
@@ -313,7 +309,7 @@ deepEncoderForType depth ifaces cname tipe =
               ) params
 
 
-    TRecord fieldMap maybeName ->
+    TRecord fieldMap extensibleName ->
       encoderForType depth ifaces cname tipe
 
     TAlias moduleName typeName tvars aType ->

@@ -39,6 +39,9 @@ callDecoder name tipe =
 
 decoderForType :: Map.Map Module.Raw I.Interface -> Module.Canonical -> Type -> Expr
 decoderForType ifaces cname tipe =
+   if containsUnsupportedTypes tipe then
+    failDecode "contains unsupported types"
+  else
   case tipe of
     (TType (Module.Canonical (Name "elm" "core") "Basics") "Int" [])    -> callDecoder "decodeInt" tipe
     (TType (Module.Canonical (Name "elm" "core") "Basics") "Float" [])  -> callDecoder "decodeFloat" tipe

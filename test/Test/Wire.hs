@@ -92,6 +92,7 @@ wire = do
           , "src/Test/Wire_Phantom.elm"
           , "src/Test/Wire_Tvar_Deep.elm"
           , "src/Test/Wire_Tvar_Recursive_Reference.elm"
+          , "src/Test/Wire_Unsupported.elm"
           ]
 
     let

@@ -85,6 +85,7 @@ the mapping there has been checked extensively against types in packages that ar
 
 But we still need to know about them in order to create the right wire encoder/decoder injections
 -}
+isUnsupportedKernelType :: Type -> Bool
 isUnsupportedKernelType tipe =
   case tipe of
 
@@ -125,6 +126,21 @@ isUnsupportedKernelType tipe =
     -- , (("elm/browser", "Browser.Navigation") "Key" _ -> True -- This is a JS backed value
 
     _ -> False
+
+
+containsUnsupportedTypes :: Type -> Bool
+containsUnsupportedTypes tipe =
+  case tipe of
+    TRecord fieldMap maybeExtensible ->
+      fieldMap
+        & fieldsToList
+        & any (\(name, field) ->
+          containsUnsupportedTypes field
+        )
+
+    TLambda t1 t2 -> True
+
+    _ -> isUnsupportedKernelType tipe
 
 
 resolvedExtensibleType :: Type -> Type

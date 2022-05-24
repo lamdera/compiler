@@ -75,13 +75,12 @@ compile pkg ifaces modul = do
 
   -- () <- unsafePerformIO $ do
   --   case (pkg, Src.getName modul) of
-  --     ((Pkg.Name "elm" "bytes"), "Bytes.Decode") -> do
-  --       canonical_
-  --         & Can._decls
-  --         & Lamdera.Wire.Helpers.findDef "testing"
-  --         & formatHaskellValue "Compile.findDef"
-  --
-  --       -- atomicPutStrLn $ T.unpack $  ToSource.convert canonical
+  --     ((Pkg.Name "author" "project"), "Page") -> do
+  --       -- canonical_
+  --       --   & Can._decls
+  --       --   & Lamdera.Wire.Helpers.findDef "testing"
+  --       --   & formatHaskellValue "Compile.findDef"
+  --       atomicPutStrLn $ T.unpack $ T.take 5000 $ ToSource.convert canonical2
   --       pure ()
   --     _ ->
   --       pure ()
