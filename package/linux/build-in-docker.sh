@@ -45,7 +45,7 @@ git ls-files | tar -cf - -T - | docker build - \
     --tag $CACHE_IMAGE:latest \
     --cache-from $CACHE_IMAGE:latest \
     --build-arg "ELM_FORMAT_VERSION=$VERSION" \
-    --build-arg "BUILDKIT_INLINE_CACHE=1"
+    --build-arg "BUILDKIT_INLINE_CACHE=1" \
     --target artifact \
     --output type=local,dest="$DEST/"
 
