@@ -30,10 +30,23 @@ echo "Building with Context: $CONTEXT"
 echo "Building with Dest: $DEST"
 
 rm -Rf "$DEST"
-git archive --format=tar.gz "$SHA" | \
-    docker build -t lamdera-next-linux \
-        --build-arg "ELM_FORMAT_VERSION=$VERSION" \
-        --target artifact \
-        --output type=local,dest="$DEST/" "$CONTEXT" \
-        --build-arg BUILDKIT_INLINE_CACHE=1
+
+CACHE_IMAGE=lamdera/compiler-linux
+
+# First time to build the docker image so we have something to cache
+git ls-files | tar -cf - -T - | docker build - \
+    --tag $CACHE_IMAGE:latest \
+    --cache-from $CACHE_IMAGE:latest \
+    --build-arg "ELM_FORMAT_VERSION=$VERSION" \
+    --build-arg "BUILDKIT_INLINE_CACHE=1"
+
+# Second time to get the artifacts
+git ls-files | tar -cf - -T - | docker build - \
+    --tag $CACHE_IMAGE:latest \
+    --cache-from $CACHE_IMAGE:latest \
+    --build-arg "ELM_FORMAT_VERSION=$VERSION" \
+    --build-arg "BUILDKIT_INLINE_CACHE=1"
+    --target artifact \
+    --output type=local,dest="$DEST/"
+
 "$DEST/lamdera" --help
