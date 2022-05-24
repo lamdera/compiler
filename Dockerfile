@@ -1,4 +1,4 @@
-FROM alpine:latest as build
+FROM alpine:3.15 as build
 
 ENV GHC_VERSION 9.0.2
 
@@ -17,7 +17,7 @@ RUN apk add --no-cache \
         gmp-dev \
         libffi \
         libffi-dev \
-        llvm11 \
+        llvm10 \
         make \
         musl-dev \
         ncurses-dev \
