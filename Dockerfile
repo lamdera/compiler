@@ -17,7 +17,7 @@ RUN apk add --no-cache \
         gmp-dev \
         libffi \
         libffi-dev \
-        llvm10 \
+        llvm11 \
         make \
         musl-dev \
         ncurses-dev \
