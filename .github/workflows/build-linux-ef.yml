@@ -61,12 +61,12 @@ jobs:
     # https://dev.to/dtinth/caching-docker-builds-in-github-actions-which-approach-is-the-fastest-a-research-18ei
     - run: docker run -d -p 5000:5000 --restart=always --name registry -v /tmp/docker-registry:/var/lib/registry registry:2 && npx wait-on tcp:5000
 
-    # - run: docker pull localhost:5000/lamdera-next-linux || true
-    # - run: docker build . -t lamdera-next-linux --cache-from=localhost:5000/lamdera-next-linux
+    # - run: docker pull localhost:5000/lamdera/compiler-linux || true
+    # - run: docker build . -t lamdera/compiler-linux --cache-from=localhost:5000/lamdera/compiler-linux
 
     - run: ./build.sh --verbose --verbose -- publish-1.0.2
 
-    - run: docker tag lamdera-next-linux localhost:5000/lamdera-next-linux && docker push localhost:5000/lamdera-next-linux || true
+    - run: docker tag lamdera/compiler-linux localhost:5000/lamdera/compiler-linux && docker push localhost:5000/lamdera/compiler-linux || true
       # if: steps.cache.outputs.cache-hit != 'true'
 
     - name: Setup upterm session
