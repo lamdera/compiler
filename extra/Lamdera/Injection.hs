@@ -226,11 +226,15 @@ injections isBackend isLocalDev =
 
           $shouldProxy
 
-          var start = mtime()
-          var serializeDuration, logDuration = null
+          var serializeDuration, logDuration = null;
+          var start = mtime();
 
-          start = mtime()
-          var pair = A2(update, msg, model);
+          try {
+            var pair = A2(update, msg, model);
+          } catch(err) {
+            if (isBackend) { bugsnag.notify(err); }
+            return;
+          }
 
           const updateDuration = mtime() - start
           start = mtime()
