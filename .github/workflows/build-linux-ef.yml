@@ -1,7 +1,7 @@
 on:
   push:
     branches:
-      - lamdera-next
+      - lamdera-next-disabled
 
 name: Build Lamdera Compiler for Linux
 defaults:
