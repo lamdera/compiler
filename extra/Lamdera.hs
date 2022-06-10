@@ -80,6 +80,7 @@ module Lamdera
   , Ext.Common.getProjectRootMaybe
   , Ext.Common.justs
   , lowerFirstLetter
+  , lowerFirstLetter_
   , findElmFiles
   , show_
   , sleep
@@ -97,6 +98,7 @@ module Lamdera
   , imap
   , imapM
   , filterMap
+  , zipFull
   , withDefault
   , listUpsert
   , bsToStrict
@@ -666,6 +668,11 @@ lowerFirstLetter text =
   case text of
     first:rest -> T.pack $ [Char.toLower first] <> rest
 
+lowerFirstLetter_ :: Text -> Text
+lowerFirstLetter_ text =
+  case T.unpack text of
+    first:rest -> T.pack $ [Char.toLower first] <> rest
+
 
 findElmFiles :: FilePath -> IO [FilePath]
 findElmFiles fp = System.FilePath.Find.find isVisible (isElmFile &&? isVisible &&? isntEvergreen) fp
@@ -802,13 +809,18 @@ maybeCons f mx xs =
     Nothing ->
       xs
 
+zipFull :: [a] -> [b] -> [(Maybe a, Maybe b)]
+zipFull l1 l2 =
+  let lx = Prelude.maximum [Prelude.length l1, Prelude.length l2]
+  in
+  Prelude.replicate lx ()
+    & imap (\i _ -> (Safe.atMay l1 i, Safe.atMay l2 i) )
 
 withDefault :: a -> Maybe a -> a
 withDefault default_ m =
   case m of
     Just v -> v
     Nothing -> default_
-
 
 listUpsert :: (a -> Bool) -> a -> [a] -> [a]
 listUpsert check item collection =
@@ -858,7 +870,8 @@ icdiff realExpected realActual = do
   case icdiffPath_ of
     Just icdiffPath -> do
       atomicPutStrLn $ "icdiff -N " <> path1 <> " " <> path2
-      (exit, stdout, stderr) <- System.Process.readProcessWithExitCode "icdiff" ["--cols=150", "--show-all-spaces", path1, path2] ""
+      -- (exit, stdout, stderr) <- System.Process.readProcessWithExitCode "icdiff" ["--cols=150", "--show-all-spaces", path1, path2] ""
+      (exit, stdout, stderr) <- System.Process.readProcessWithExitCode "icdiff" ["--cols=180", path1, path2] ""
       -- (exit, stdout, stderr) <- System.Process.readProcessWithExitCode "icdiff" ["-N", "--cols=200", path1, path2] ""
       pure stdout
 

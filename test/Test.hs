@@ -4,13 +4,16 @@ module Test where
 
 import EasyTest
 import Lamdera
-import qualified Test.LamderaGenerated
 import qualified Test.Snapshot
 import qualified Test.Lamdera
 import qualified Test.Check
 import qualified Test.Wire
 import qualified Test.Ext.ElmPages.Check
 import qualified Test.TypeHashes
+
+import qualified Lamdera.Evergreen.TestMigrationHarness
+import qualified Lamdera.Evergreen.TestMigrationGenerator
+
 import Test.Helpers
 
 import qualified Make
@@ -126,7 +129,7 @@ checkProjectCompiles = do
   -- Lamdera.CLI.Check.checkUserProjectCompiles "/Users/mario/dev/projects/lamdera-dashboard"
 
   --  Lamdera.CLI.Check.checkUserProjectCompiles runs in async so we don't get the trace
-  let root = "/Users/mario/dev/projects/lamdera-website"
+  let root = "/Users/mario/work/codespecs"
       scaffold = "src/Frontend.elm"
   -- let root = "/Users/mario/dev/test/realia/staging"
   --     scaffold = "src/LFR.elm"
@@ -134,7 +137,7 @@ checkProjectCompiles = do
   --     scaffold = "elm-stuff/elm-pages/.elm-pages/Main.elm"
       tmp = lamderaCache root <> "/tmp.js"
 
-  Lamdera.Compile.makeDev root scaffold
+  Lamdera.Compile.makeDev root [scaffold]
 
   -- Dir.withCurrentDirectory root $
   --   Make.run_cleanup (pure ()) [scaffold] $
@@ -263,10 +266,11 @@ single = do
 allTests =
   tests
     [ tests []
-    , scope "Test.Lamdera -> " $ Test.Lamdera.suite
-    , scope "Test.Snapshot -> " $ Test.Snapshot.suite
-    , scope "Test.Wire -> " $ Test.Wire.suite
-    , scope "Test.Ext.ElmPages.Check -> " $ Test.Ext.ElmPages.Check.suite
-    , scope "Test.LamderaGenerated.suite -> " $ Test.LamderaGenerated.suite
-    , scope "Test.TypeHashes -> " $ Test.TypeHashes.suite
+    -- , scope "Test.Lamdera -> " $ Test.Lamdera.suite
+    -- , scope "Test.Snapshot -> " $ Test.Snapshot.suite
+    -- , scope "Test.Wire -> " $ Test.Wire.suite
+    -- , scope "Test.Ext.ElmPages.Check -> " $ Test.Ext.ElmPages.Check.suite
+    -- , scope "Test.TypeHashes -> " $ Test.TypeHashes.suite
+    -- , scope "Lamdera.Evergreen.TestMigrationHarness -> " $ Lamdera.Evergreen.TestMigrationHarness.suite
+    , scope "Lamdera.Evergreen.TestMigrationGenerator -> " $ Lamdera.Evergreen.TestMigrationGenerator.suite
     ]

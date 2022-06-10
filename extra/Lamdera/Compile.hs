@@ -75,16 +75,16 @@ make_ root = do
 
 
 -- Runs `lamdera make` of given files with no output
-makeDev :: FilePath -> FilePath -> IO ()
-makeDev root path = do
-  debug $ "🏗   lamdera make " <> root <> "/" <> path
+makeDev :: FilePath -> [FilePath] -> IO ()
+makeDev root paths = do
+  debug $ "🏗   lamdera make " <> root <> "/" <> show paths
 
   absRoot <- Dir.makeAbsolute root
 
   r <- async $
     Dir.withCurrentDirectory absRoot $ do
-      touch path
-      Make.run [path] $
+      mapM touch paths
+      Make.run paths $
         Make.Flags
           { _debug = True
           , _optimize = False
@@ -102,7 +102,7 @@ makeDev root path = do
 
 makeDev_ :: FilePath -> IO ()
 makeDev_ path =
-  makeDev (FP.takeDirectory path) path
+  makeDev (FP.takeDirectory path) [path]
 
 
 -- Runs `lamdera make` of harness file with JS output

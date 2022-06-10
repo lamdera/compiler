@@ -31,7 +31,10 @@ import qualified Make
 import qualified Elm.Outline
 
 import Lamdera
-import Lamdera.Evergreen (VersionInfo(..), createLamderaGenerated, vinfoVersion, getLastLocalTypeChangeVersion)
+
+import qualified Lamdera.Evergreen.MigrationHarness
+import Lamdera.Evergreen.MigrationHarness (VersionInfo(..), createLamderaGenerated, vinfoVersion, getLastLocalTypeChangeVersion)
+
 import qualified Lamdera.AppConfig
 import qualified Lamdera.Checks
 import qualified Lamdera.Compile
@@ -115,11 +118,11 @@ offlineCheck root = do
 
   if shouldContinue
     then do
-      migrationFilePaths <- Lamdera.Evergreen.findMigrationFilePaths root
+      migrationFilePaths <- Lamdera.Evergreen.MigrationHarness.findMigrationFilePaths root
 
       let
         nextVersionInfo =
-          case last_ (debugNote "migrationVersions" $ Lamdera.Evergreen.migrationVersions migrationFilePaths) 1 of
+          case last_ (debugNote "migrationVersions" $ Lamdera.Evergreen.MigrationHarness.migrationVersions migrationFilePaths) 1 of
             1 -> WithoutMigrations 1
             x -> WithMigrations x
 
@@ -264,9 +267,10 @@ onlineCheck root appName inDebug localTypes externalTypeWarnings isHoistRebuild 
 
               _ <- mkdir $ root </> "src/Evergreen/Migrate"
 
-              lastLocalTypeChangeVersion <- Lamdera.Evergreen.getLastLocalTypeChangeVersion root
+              lastLocalTypeChangeVersion <- Lamdera.Evergreen.MigrationHarness.getLastLocalTypeChangeVersion root
 
-              let defaultMigrations = defaultMigrationFile lastLocalTypeChangeVersion nextVersion typeCompares
+              -- let defaultMigrations = defaultMigrationFile lastLocalTypeChangeVersion nextVersion typeCompares
+              let defaultMigrations = generateMigrationFile lastLocalTypeChangeVersion nextVersion typeCompares
 
               writeUtf8 nextMigrationPath defaultMigrations
 
@@ -607,7 +611,7 @@ migrationCheck root nextVersion = do
   let cache = lamderaCache root
   let lamderaCheckBothPath = cache </> "LamderaCheckBoth.elm"
   mkdir cache
-  gen <- Lamdera.Evergreen.createLamderaGenerated root nextVersion
+  gen <- Lamdera.Evergreen.MigrationHarness.createLamderaGenerated root nextVersion
   writeUtf8 lamderaCheckBothPath gen
 
   let
@@ -707,85 +711,17 @@ committedCheck root versionInfo = do
         progress "Okay, I did not add it."
 
 
-defaultMigrationFile :: Int -> Int -> [(String, String, String)] -> Text
-defaultMigrationFile oldVersion newVersion typeCompares = do
-  let old = show_ oldVersion
-      new = show_ newVersion
+generateMigrationFile :: Int -> Int -> [(String, String, String)] -> Text
+--  :: Int -> IO Text
+generateMigrationFile oldVersion newVersion typeCompares = do
+  --oldVersion = do
+  -- @NEXT
 
-      typeCompareMigration :: (String, String, String) -> Text
-      typeCompareMigration (typename, oldhash, newhash) = do
-        let implementation =
-              if oldhash == newhash then
-                unchangedForType typename
-              else
-                "Unimplemented"
-                -- @TODO when working on more intelligent auto-generations...
-                -- if typename == "BackendModel" || typename == "FrontendModel" then
-                --   [text|
-                --     ModelMigrated
-                --         ( Unimplemented
-                --         , Cmd.none
-                --         )
-                --   |]
-                -- else
-                --   "Unimplemented"
+  -- Get the typediffs for old/new types, per type
 
-            msgType = msgForType typename
+  -- Recurse on the differences together somehow, writing out migration functions for each type encountered
 
-            typenameCamel = lowerFirstLetter typename
-
-            typenameT = T.pack typename
-
-            migrationType = migrationWrapperForType typename
-
-        [text|
-          $typenameCamel : Old.$typenameT -> $migrationType New.$typenameT New.$msgType
-          $typenameCamel old =
-              $implementation
-        |]
-
-      migrationWrapperForType t =
-        case t of
-          "BackendModel" -> "ModelMigration"
-          "FrontendModel" -> "ModelMigration"
-          "FrontendMsg" -> "MsgMigration"
-          "ToBackend" -> "MsgMigration"
-          "BackendMsg" -> "MsgMigration"
-          "ToFrontend" -> "MsgMigration"
-
-      msgForType t =
-        case t of
-          "BackendModel" -> "BackendMsg"
-          "FrontendModel" -> "FrontendMsg"
-          "FrontendMsg" -> "FrontendMsg"
-          "ToBackend" -> "BackendMsg"
-          "BackendMsg" -> "BackendMsg"
-          "ToFrontend" -> "FrontendMsg"
-
-      unchangedForType t =
-        case t of
-          "BackendModel" -> "ModelUnchanged"
-          "FrontendModel" -> "ModelUnchanged"
-          "FrontendMsg" -> "MsgUnchanged"
-          "ToBackend" -> "MsgUnchanged"
-          "BackendMsg" -> "MsgUnchanged"
-          "ToFrontend" -> "MsgUnchanged"
-
-  let header = [text|
-
-    module Evergreen.Migrate.V$new exposing (..)
-
-    import Evergreen.V$old.Types as Old
-    import Evergreen.V$new.Types as New
-    import Lamdera.Migrations exposing (..)
-
-
-  |]
-
-  typeCompares
-    & fmap typeCompareMigration
-    & (<>) [header]
-    & T.intercalate "\n\n\n"
+  ""
 
 
 lamderaCheckBothFileContents :: Int -> Text
@@ -925,7 +861,7 @@ firstTwoChars str =
 writeLamderaGenerated :: FilePath -> Bool -> VersionInfo -> IO ()
 writeLamderaGenerated root inProduction nextVersion =
   onlyWhen inProduction $ do
-    gen <- Lamdera.Evergreen.createLamderaGenerated root nextVersion
+    gen <- Lamdera.Evergreen.MigrationHarness.createLamderaGenerated root nextVersion
     writeIfDifferent (root </> "src/LamderaGenerated.elm") gen
 
 

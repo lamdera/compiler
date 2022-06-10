@@ -26,7 +26,7 @@ suite = tests $
         bash $ "npm run build"
 
       actual <- catchOutput $
-        Lamdera.Compile.makeDev "./" ".elm-pages/Main.elm"
+        Lamdera.Compile.makeDev "./test/scenario-elm-pages-incompatible-wire/.elm-pages" ["Main.elm"]
 
       io $ Dir.setCurrentDirectory "../.."
 

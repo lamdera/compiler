@@ -222,7 +222,8 @@ Executable lamdera
         Lamdera.AppConfig
         Lamdera.Checks
         Lamdera.Constrain
-        Lamdera.Evergreen
+        Lamdera.Evergreen.MigrationHarness
+        Lamdera.Evergreen.MigrationGenerator
         Lamdera.Evergreen.Snapshot
         Lamdera.Extensions
         Lamdera.Graph
@@ -281,14 +282,16 @@ Executable lamdera
         -- Testing:
         EasyTest
         Test
+        LamderaSharedBuildHelpers
         Test.Helpers
         Test.Check
         Test.Lamdera
-        Test.LamderaGenerated
         Test.Snapshot
         Test.TypeHashes
         Test.Wire
-        LamderaSharedBuildHelpers
+        Lamdera.Evergreen.TestMigrationHarness
+        Lamdera.Evergreen.TestMigrationGenerator
+
 
         -- Debug helpers --
         StandaloneInstances
