@@ -19,6 +19,8 @@ import qualified Elm.Interface as Interface
 -- import Data.List
 import qualified Data.Map as Map
 
+import qualified Data.Name as N
+
 import Lamdera
 import qualified Lamdera.Compile
 import qualified Ext.Query.Interfaces
@@ -31,7 +33,7 @@ generateFor typename oldVersion newVersion = do
 
     let
         project = "/Users/mario/dev/projects/lamdera-compiler/test/scenario-migration-generate"
-        paths = ["src/Evergreen/V1/Types.elm", "src/Evergreen/V2/Types.elm"]
+        paths = ["src/Evergreen/V" <> show oldVersion <> "/Types.elm", "src/Evergreen/V" <> show newVersion <> "/Types.elm"]
 
     Lamdera.Compile.makeDev project paths
 
@@ -39,7 +41,7 @@ generateFor typename oldVersion newVersion = do
     res <- withCurrentDirectory project $ do
         interfaces <- Ext.Query.Interfaces.all paths
 
-        Lamdera.Evergreen.MigrationGenX.dothewholething 2 interfaces (interfaces Map.! "Evergreen.V2.Types")
+        Lamdera.Evergreen.MigrationGenX.dothewholething 2 interfaces (interfaces Map.! (N.fromChars $ "Evergreen.V" <> show newVersion <> ".Types"))
 
         -- let
         --   -- !_ = debugHaskell "keys" (Map.keys interfaces)

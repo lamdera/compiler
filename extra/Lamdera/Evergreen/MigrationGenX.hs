@@ -38,43 +38,95 @@ import StandaloneInstances
 dothewholething :: Int -> Interfaces -> Interface.Interface -> IO Text
 dothewholething version interfaces iface_Types = do
   let
-    moduleName = (ModuleName.Canonical (Pkg.Name "author" "project") "Evergreen.V2.Types")
+    moduleName = (ModuleName.Canonical (Pkg.Name "author" "project") (N.fromChars $ "Evergreen.V" <> show version <> ".Types"))
 
     efts =
       lamderaTypes
         & fmap (\t -> (t, ftByName version interfaces moduleName t iface_Types))
         & foldl (\acc (t, ft) -> mergeFts acc ft) Map.empty
 
-    debugEfts =
-      efts
-        & eftToText version
+    -- debugEfts = efts & eftToText version
+
+    addImports imports =
+      imports
+            & Set.toList
+            & filterMap (\(ModuleName.Canonical (Pkg.Name author project) module_) ->
+              Just $ "import " <> nameToText module_
+            )
+            & List.sort
+              & T.intercalate "\n"
+            & (flip T.append) "\n\n"
+
+    addMigrations migrations = migrations & T.intercalate "\n\n"
 
   inDebug <- Lamdera.isDebug
   root <- getProjectRoot
 
-  efts
-    & Map.toList
-    & mapM (\(file, ef@(ElmFileText imports types)) ->
-      let
-        filename =
-          file
-            & T.splitOn "."
-            & foldl (\acc i -> acc </> T.unpack i) (root </> "src" </> "Evergreen" </> ("V" <> show version))
-            & (\v -> v <> ".elm")
+  moduleScopedMigrations <-
+    efts
+      & Map.toList
+      & foldl (\acc (file, ef@(ElmFileText imports migrations)) ->
+          addImports imports <> acc <> addMigrations migrations
+        ) ""
+      & pure
 
-      in
-      if (not $ textContains "/" file)
-        then do Ext.ElmFormat.formatOrPassthrough $ efToText version (file, ef)
-        else pure ""
+  moduleScopedMigrations
+    & (<>) ("module Evergreen.Migrate.V" <> show_ version <> " exposing (..)\n\n")
+    & pure -- @TODO restore elm format
+    -- & Ext.ElmFormat.formatOrPassthrough
 
-    --   onlyWhen (not $ textContains "/" file) $ do
-    --     output <- Ext.ElmFormat.formatOrPassthrough $ efToText version (file, ef)
-    --     output
-        -- writeUtf8 filename output
-    )
-    & fmap (T.intercalate "------ and another one here:\n")
-    -- & fmap T.concat
 
+-- dothewholethingOriginalPerFileVersion :: Int -> Interfaces -> Interface.Interface -> IO Text
+-- dothewholethingOriginalPerFileVersion version interfaces iface_Types = do
+--   let
+--     moduleName = (ModuleName.Canonical (Pkg.Name "author" "project") (N.fromChars $ "Evergreen.V" <> show version <> ".Types"))
+
+--     efts =
+--       lamderaTypes
+--         & fmap (\t -> (t, ftByName version interfaces moduleName t iface_Types))
+--         & foldl (\acc (t, ft) -> mergeFts acc ft) Map.empty
+
+--     debugEfts =
+--       efts
+--         & eftToText version
+
+
+--   inDebug <- Lamdera.isDebug
+--   root <- getProjectRoot
+
+--   moduleScopedMigrations <-
+--     efts
+--       & Map.toList
+
+--       & mapM (\(file, ef@(ElmFileText imports types)) ->
+--         let
+--           filename =
+--             file
+--               & T.splitOn "."
+--               & foldl (\acc i -> acc </> T.unpack i) (root </> "src" </> "Evergreen" </> ("V" <> show version))
+--               & (\v -> v <> ".elm")
+
+--         in
+--         if (not $ textContains "/" file)
+--           then do pure $ efToText version (file, ef)
+--           else pure ""
+
+--       --   onlyWhen (not $ textContains "/" file) $ do
+--       --     output <- Ext.ElmFormat.formatOrPassthrough $ efToText version (file, ef)
+--       --     output
+--           -- writeUtf8 filename output
+--       )
+--       -- & fmap (T.intercalate "------ and another one here:\n")
+--     -- & fmap T.concat
+
+
+--   moduleScopedMigrations
+--     & (++) ["module Evergreen.Migrate.V" <> show_ version <> " exposing (..)\n\n"]
+--     & T.intercalate "\n"
+--     & Ext.ElmFormat.formatOrPassthrough
+
+
+  -- pure moduleScopedMigrations
 --   pure ()
 
 
@@ -100,9 +152,9 @@ type ElmFilesText = Map Text ElmFileText
 -- @TODO in future we can use this to pin package versions and adjust import routing to those snapshots
 type ElmImports = Set.Set ModuleName.Canonical
 
-selNames (a,b,c) = a
-selImports (a,b,c) = b
-selFts (a,b,c) = c
+selectNames (a,b,c) = a
+selectImports (a,b,c) = b
+selectFts (a,b,c) = c
 
 lamderaTypes :: [N.Name]
 lamderaTypes =
@@ -123,32 +175,20 @@ mergeElmFileText k ft1 ft2 =
     }
 
 mergeFts :: ElmFilesText -> ElmFilesText -> ElmFilesText
-mergeFts ft1 ft2 =
-  unionWithKey mergeElmFileText ft1 ft2
-
+mergeFts ft1 ft2 = unionWithKey mergeElmFileText ft1 ft2
 
 mergeAllFts :: [ElmFilesText] -> ElmFilesText
-mergeAllFts ftss =
-  ftss
-    & foldl (\acc fts -> mergeFts acc fts) Map.empty
-
+mergeAllFts ftss = ftss & foldl (\acc fts -> mergeFts acc fts) Map.empty
 
 mergeImports :: ElmImports -> ElmImports -> ElmImports
-mergeImports i1 i2 =
-  Set.union i1 i2
-
+mergeImports i1 i2 = Set.union i1 i2
 
 mergeAllImports :: [ElmImports] -> ElmImports
-mergeAllImports imps =
-  imps
-    & foldl (\acc elmImport -> mergeImports acc elmImport) Set.empty
-
+mergeAllImports imps = imps & foldl (\acc elmImport -> mergeImports acc elmImport) Set.empty
 
 addImports :: ModuleName.Canonical -> ElmImports -> ElmFilesText -> ElmFilesText
 addImports scope@(ModuleName.Canonical (Pkg.Name author pkg) module_) imports ft =
-  imports
-    & foldl (\ft imp -> addImport scope imp ft) ft
-
+  imports & foldl (\ft imp -> addImport scope imp ft) ft
 
 addImport :: ModuleName.Canonical -> ModuleName.Canonical -> ElmFilesText -> ElmFilesText
 addImport moduleName imp ft =
@@ -167,41 +207,40 @@ addImport moduleName imp ft =
     ) (moduleNameKey moduleName)
 
 
-eftToText :: Int -> ElmFilesText -> Text
-eftToText version ft =
-  ft
-    & Map.toList
-    & List.map (\(file, ef@(ElmFileText imports types)) ->
-      "\n\n---------------------------------------------------------------------------------\n" <>
-      efToText version (file, ef)
-    )
-    & T.concat
+-- eftToText :: Int -> ElmFilesText -> Text
+-- eftToText version ft =
+--   ft
+--     & Map.toList
+--     & List.map (\(file, ef@(ElmFileText imports types)) ->
+--       "\n\n---------------------------------------------------------------------------------\n" <>
+--       efToText version (file, ef)
+--     )
+--     & T.concat
 
 
-efToText :: Int -> (Text, ElmFileText) -> Text
-efToText version ft =
-  case ft of
-    (file, ef@(ElmFileText imports types)) ->
-      [ "module Evergreen.Migrate.V" <> show_ version <> " exposing (..)\n\n"
-      , if length imports > 0 then
-          imports
-            & Set.toList
-            & filterMap (\(ModuleName.Canonical (Pkg.Name author project) module_) ->
-                if (nameToText module_ == file) then
-                  Nothing
-                else if (author == "author") then
-                  Just $ "import " <> nameToText module_ -- <> " as " <> nameToText module_
-                else
-                  Just $ "import " <> nameToText module_
-            )
-            & List.sort
-            & T.intercalate "\n"
-            & (flip T.append) "\n\n\n"
-        else
-          ""
-      , T.intercalate "\n\n\n" types
-      ]
-      & T.concat
+-- efToText :: Int -> (Text, ElmFileText) -> Text
+-- efToText version ft =
+--   case ft of
+--     (file, ef@(ElmFileText imports types)) ->
+--       [ if length imports > 0 then
+--           imports
+--             & Set.toList
+--             & filterMap (\(ModuleName.Canonical (Pkg.Name author project) module_) ->
+--                 if (nameToText module_ == file) then
+--                   Nothing
+--                 else if (author == "author") then
+--                   Just $ "import " <> nameToText module_ -- <> " as " <> nameToText module_
+--                 else
+--                   Just $ "import " <> nameToText module_
+--             )
+--             & List.sort
+--             & T.intercalate "\n"
+--             & (flip T.append) "\n\n\n"
+--         else
+--           ""
+--       , T.intercalate "\n\n\n" types
+--       ]
+--       & T.concat
 
 
 ftByName :: Int -> Interfaces -> ModuleName.Canonical -> N.Name -> Interface.Interface -> ElmFilesText
@@ -218,7 +257,7 @@ ftByName version interfaces moduleName typeName interface = do
         diffableAlias = aliasToFt version scope identifier typeName interfaces recursionSet alias
         (subt, imps, subft) = diffableAlias
 
-      subft
+      subft & addImports moduleName imps
 
     Nothing ->
       -- Try unions
@@ -228,7 +267,7 @@ ftByName version interfaces moduleName typeName interface = do
             diffableUnion = unionToFt version scope identifier typeName interfaces recursionSet [] union []
             (subt, imps, subft) = diffableUnion
 
-          subft
+          subft & addImports moduleName imps
 
         Nothing ->
           -- DError $ "Found no type named " <> nameToText typeName <> " in " <> N.toText name
@@ -239,28 +278,41 @@ ftByName version interfaces moduleName typeName interface = do
 unionToFt :: Int -> ModuleName.Canonical -> TypeIdentifier -> N.Name -> Interfaces -> RecursionSet -> [(N.Name, Can.Type)] -> Interface.Union -> [Can.Type] -> SnapRes
 unionToFt version scope identifier@(author, pkg, module_, tipe) typeName interfaces recursionSet tvarMap unionInterface params =
   let
+    oldVersion = 1 -- @TODO
+    newVersion = 2 -- @TODO
 
-    moduleScopeOld = "Evergreen.V1.Types." -- @TODO
+    oldModuleName =
+      module_
+        & N.toText
+        & T.replace ("Evergreen.V" <> show_ newVersion <> ".") ("Evergreen.V" <> show_ oldVersion <> ".")
+        & N.fromText
 
-    oldModuleInterface = interfaces Map.! "Evergreen.V1.Types" -- @TODO
+    oldModuleNameCanonical =
+      (ModuleName.Canonical (Pkg.Name "author" "project") oldModuleName)
 
     tipeOld =
-      case Map.lookup typeName $ Interface._aliases oldModuleInterface of
-        Just aliasInterface ->
-            case aliasInterface of
-              Interface.PublicAlias a -> Alias a
-              Interface.PrivateAlias a -> Alias a
-
-        Nothing ->
-          case Map.lookup typeName $ Interface._unions oldModuleInterface of
-            Just unionInterface -> do
-              case unionInterface of
-                Interface.OpenUnion u -> Union u
-                Interface.ClosedUnion u -> Union u
-                Interface.PrivateUnion u -> Union u
+      case Map.lookup oldModuleName interfaces of
+        Just oldModuleInterface ->
+          case Map.lookup typeName $ Interface._aliases oldModuleInterface of
+            Just aliasInterface ->
+                case aliasInterface of
+                  Interface.PublicAlias a -> Alias a
+                  Interface.PrivateAlias a -> Alias a
 
             Nothing ->
-              error $ "could not find old type at all: " <> show (module_, tipe)
+              case Map.lookup typeName $ Interface._unions oldModuleInterface of
+                Just unionInterface -> do
+                  case unionInterface of
+                    Interface.OpenUnion u -> Union u
+                    Interface.ClosedUnion u -> Union u
+                    Interface.PrivateUnion u -> Union u
+
+                Nothing ->
+                  error $ "could not find old type at all: " <> show (module_, tipe)
+        Nothing ->
+          -- error $ "could not find old module at all: " <> show (module_, tipe)
+          error $ "could not find '" <> N.toChars oldModuleName <> "' old module at all: " <> show (Map.keys interfaces)
+
 
     treat union =
       let
@@ -289,17 +341,18 @@ unionToFt version scope identifier@(author, pkg, module_, tipe) typeName interfa
 
         usageParams =
           usageSnapRes
-            & fmap selNames
+            & fmap selectNames
             & T.intercalate " "
 
         usageImports =
           usageSnapRes
-            & fmap selImports
+            & fmap selectImports
             & mergeAllImports
+            & Set.insert oldModuleNameCanonical
 
         usageFts =
           usageSnapRes
-            & fmap selFts
+            & fmap selectFts
             & mergeAllFts
 
         localScope =
@@ -360,13 +413,15 @@ unionToFt version scope identifier@(author, pkg, module_, tipe) typeName interfa
                           "Unimplemented"
                     in
                     if List.length cparamsOld > 0 then
-                      "    " <> moduleScopeOld <> N.toText name <> " " <> (imap (\i _ -> "p" <> show_ i) paramsOld & T.intercalate " ") <> " -> " <> migration <> "\n"
+                      "    " <> N.toText oldModuleName <> "." <> N.toText name <> " " <> (imap (\i _ -> "p" <> show_ i) paramsOld & T.intercalate " ") <> " -> " <> migration <> "\n"
                     else
-                      "    " <> moduleScopeOld <> N.toText name <> " -> " <> moduleScope <> N.toText name <> "\n"
+                      "    " <> N.toText oldModuleName <> "." <> N.toText name <> " -> " <> moduleScope <> N.toText name <> "\n"
+
                   Nothing ->
                     -- No old constructor with same name, so this is a new/renamed constructor
                     -- Leave blank for now until we have some sort of fuzzy matcher guessing
                     "todoNewConstructor"
+
               , foldl (\acc (st, imps, ft) -> mergeImports acc imps) Set.empty cparams
               , foldl (\acc (st, imps, ft) -> mergeFts acc ft) Map.empty cparams
               )
@@ -398,13 +453,17 @@ unionToFt version scope identifier@(author, pkg, module_, tipe) typeName interfa
           -- debugHaskellWhen (typeName == "RoomId") ("dunion: " <> hindentFormatValue scope) (t, imps, ft)
           debugNote ("\n✴️  inserting def for " <> t) (t, imps, ft)
 
+        underscoredModule = module_ & N.toText & T.replace "." "_"
+
+        migration =
+          if length tvarMap > 0 then
+            "(migrate_" <> underscoredModule <> "_" <> nameToText typeName <> " " <> usageParams <> ")" -- <> "<!2>"
+          else
+            "migrate_" <> underscoredModule <> "_" <> nameToText typeName -- <> "<!3>"
+
       in
       -- debug $
-      ( if length tvarMap > 0 then
-           "(" <> typeScope <> nameToText typeName <> " " <> usageParams <> ")" -- <> "<!2>"
-         else
-           typeScope <> nameToText typeName -- <> "<!3>"
-
+      ( migration
       , usageImports
       , (Map.singleton (moduleKey identifier) $
           ElmFileText
@@ -498,7 +557,7 @@ aliasToFt version scope identifier@(author, pkg, module_, tipe) typeName interfa
                   ElmFileText
                     { imports = imps
                     , types = [
-                        (lowerFirstLetter_ $ nameToText typeName) <> " : Old." <> nameToText typeName <> " -> ModelMigration New." <> nameToText typeName <> " New.TODOTYPEMsg" <> "\n" <>
+                        "\n" <> (lowerFirstLetter_ $ nameToText typeName) <> " : Old." <> nameToText typeName <> " -> ModelMigration New." <> nameToText typeName <> " New." <> msgForType (nameToText typeName) <> "\n" <>
                         (lowerFirstLetter_ $ nameToText typeName) <> " old = " <> migration
                       ]
                     })
@@ -522,8 +581,8 @@ canonicalToFt version scope interfaces recursionSet tipe tipeOldM tvarMap =
       -- debugHaskellWhen (textContains "OptionalData" t) ("\n✳️  inserting def for " <> t <> "\n" <> (T.pack . show $ canonical)) (t, imps, ft)
       -- debug_note ("🔵inserting def for " <> T.unpack t <> ":\n" <> ( ft)) $ (t, imps, ft)
       unsafePerformIO $ do
-          formatHaskellValue ("\n🔵inserting def for " <> t) (ft) :: IO ()
-          formatHaskellValue ("\n🟠 which had oldtype: " <> t) (tipeOldM) :: IO ()
+          formatHaskellValue ("\n🔵inserting def for " <> (show_ tipeOldM)) (t, ft) :: IO ()
+          -- formatHaskellValue ("\n🟠 which had oldtype: " <> t) (tipeOldM) :: IO ()
           pure (t, imps, ft)
   in
   debug $
@@ -557,17 +616,17 @@ canonicalToFt version scope interfaces recursionSet tipe tipeOldM tvarMap =
 
           usageParams =
             usageSnapRes
-              & fmap selNames
+              & fmap selectNames
               & T.intercalate " "
 
           usageImports =
             usageSnapRes
-              & fmap selImports
+              & fmap selectImports
               & mergeAllImports
 
           usageFts =
             usageSnapRes
-              & fmap selFts
+              & fmap selectFts
               & mergeAllFts
 
           typeScope =
@@ -670,7 +729,8 @@ canonicalToFt version scope interfaces recursionSet tipe tipeOldM tvarMap =
 
                 _ -> error "unexpected type"
             Nothing ->
-              error "got nothing but shouldn't have"
+              ("BLAH", Set.empty, Map.empty)
+              -- error "got nothing but shouldn't have"
 
 
         ("elm", "core", "Dict", "Dict") ->
@@ -741,7 +801,7 @@ canonicalToFt version scope interfaces recursionSet tipe tipeOldM tvarMap =
                   if isUserType_ tipe then
                     unionToFt version scope identifier name interfaces newRecursionSet tvarMap union params
                       & (\(n, imports, subft) ->
-                        ( n -- <> "<!5>"
+                        ( n
                         , if moduleName /= scope then
                             imports & Set.insert moduleName
                           else
@@ -819,12 +879,12 @@ canonicalToFt version scope interfaces recursionSet tipe tipeOldM tvarMap =
 
             usageParamNames =
               usageParamFts
-                & fmap selNames
+                & fmap selectNames
                 & T.intercalate " "
 
             usageParamImports =
               usageParamFts
-                & fmap selImports
+                & fmap selectImports
                 & mergeAllImports
 
             tvars =
@@ -850,9 +910,9 @@ canonicalToFt version scope interfaces recursionSet tipe tipeOldM tvarMap =
             debugIden = "" -- <> "<ah>"
 
             scopeImports =
-              if moduleName == scope then
-                usageParamImports
-              else
+              -- if moduleName == scope then
+              --   usageParamImports
+              -- else
                 usageParamImports & Set.insert moduleName
 
             typeDef =
@@ -873,7 +933,7 @@ canonicalToFt version scope interfaces recursionSet tipe tipeOldM tvarMap =
                       , types = typeDef
                       })
                     & mergeFts subft
-                    & mergeFts (mergeAllFts (fmap selFts usageParamFts))
+                    & mergeFts (mergeAllFts (fmap selectFts usageParamFts))
 
             -- !_ = formatHaskellValue "Can.TAlias.Holey:" (name, cType, tvarMap_, moduleName, scope) :: IO ()
           in
@@ -885,7 +945,7 @@ canonicalToFt version scope interfaces recursionSet tipe tipeOldM tvarMap =
                 ("SAMETYPES", scopeImports, thing)
               else
                 (
-                  debugIden <>
+                  debugIden <> "🔵" <>
                   if length tvarMap_ > 0 then
                     "(" <> typeScope <> N.toText name <> " " <> usageParamNames <> ")"
                   else
@@ -906,7 +966,7 @@ canonicalToFt version scope interfaces recursionSet tipe tipeOldM tvarMap =
             debugIden = "" -- <> "<af>"
           in
           (
-            debugIden <>
+            debugIden <> "🔴" <>
             if module_ == scopeModule then
               N.toText name
             else if isUserType identifier then
@@ -948,23 +1008,38 @@ canonicalToFt version scope interfaces recursionSet tipe tipeOldM tvarMap =
                 -- Restore user's field code-ordering to keep types looking familiar
                 & List.sortOn (\(name, (Can.FieldType index tipe)) -> index)
                 & fmap (\(name, (Can.FieldType index tipe)) ->
+                    case Map.lookup name fieldMapOld of
+                      Just (Can.FieldType index_ tipeOld) ->
+                        if tipeOld == tipe then
+                          (N.toText name, ("old." <> N.toText name, Set.empty, Map.empty))
+                        else
+                          -- @TODO NEXT
+                          -- this shoudl generate a migrate<NewTypeName> function – but maybe that comes from the canonicalToFt?
+                          -- at the least we can thread the tipeOld type in here now!
+                          let (st,imps,ft) = canonicalToFt version scope interfaces recursionSet tipe (Just (tipeOld)) tvarMap
+                          in
+                          (N.toText name, ("old." <> N.toText name <> " |> " <> st, imps, ft))
+                          -- (N.toText name, canonicalToFt version scope interfaces recursionSet tipe nothingTODO tvarMap)
 
-                  case Map.lookup name fieldMapOld of
-                    Just (Can.FieldType index_ tipeOld) ->
-                      if tipeOld == tipe then
-                        (N.toText name, ("old." <> N.toText name, Set.empty, Map.empty))
-                      else
-                        -- @TODO NEXT
-                        -- this shoudl generate a migrate<NewTypeName> function – but maybe that comes from the canonicalToFt?
-                        -- at the least we can thread the tipeOld type in here now!
-                        let (st,imps,ft) = canonicalToFt version scope interfaces recursionSet tipe (Just (tipeOld)) tvarMap
+                      Nothing ->
+                        -- This field did not exist in the old version. We need an init! @TODO
+                        let (st,imps,ft) = canonicalToFt version scope interfaces recursionSet tipe nothingTODO tvarMap
                         in
-                        (N.toText name, ("old." <> N.toText name <> " |> " <> st, imps, ft))
-                        -- (N.toText name, canonicalToFt version scope interfaces recursionSet tipe nothingTODO tvarMap)
+                        ( N.toText name, ("Unimplemented -- new field of type: " <> qualifiedTypeName tipe, imps, ft) )
+                )
+                & (\v -> v ++ missingFields)
 
+            missingFields =
+              fieldMapOld
+                & Map.toList
+                & filterMap (\(name, (Can.FieldType index tipe)) ->
+                  case Map.lookup name fieldMap of
+                    Just (Can.FieldType index_ tipeOld) ->
+                      Nothing
                     Nothing ->
-                      -- This field did not exist in the old version. We need an init! @TODO
-                      ("mISSINGPATH7"<>N.toText name, canonicalToFt version scope interfaces recursionSet tipe nothingTODO tvarMap)
+                      let (st,imps,ft) = canonicalToFt version scope interfaces recursionSet tipe nothingTODO tvarMap
+                      in
+                      Just ( N.toText name, ("Warning -- " <> qualifiedTypeName tipe <> " field removed. either remove this line (data dropped) or migrate into another field.", imps, ft) )
                 )
 
             fieldsFormatted =
@@ -1023,9 +1098,9 @@ basicUnimplemented tipeOldM tipe =
       if tipeOld /= tipe then
         ("Unimplemented -- expecting: " <> (qualifiedTypeName tipeOld) <> " -> " <> qualifiedTypeName tipe, Set.empty, Map.empty)
       else
-        ("", Set.empty, Map.empty)
+        ("UHHHH1", Set.empty, Map.empty)
     Nothing ->
-      ("", Set.empty, Map.empty)
+      ("UHHHH2", Set.empty, Map.empty)
 
 
 
@@ -1123,6 +1198,33 @@ isUserModule moduleName =
     case moduleName of
         (ModuleName.Canonical (Pkg.Name author pkg) module_) ->
             author == "author" && pkg == "project"
+
+migrationWrapperForType t =
+  case t of
+    "BackendModel" -> "ModelMigration"
+    "FrontendModel" -> "ModelMigration"
+    "FrontendMsg" -> "MsgMigration"
+    "ToBackend" -> "MsgMigration"
+    "BackendMsg" -> "MsgMigration"
+    "ToFrontend" -> "MsgMigration"
+
+msgForType t =
+  case t of
+    "BackendModel" -> "BackendMsg"
+    "FrontendModel" -> "FrontendMsg"
+    "FrontendMsg" -> "FrontendMsg"
+    "ToBackend" -> "BackendMsg"
+    "BackendMsg" -> "BackendMsg"
+    "ToFrontend" -> "FrontendMsg"
+
+unchangedForType t =
+  case t of
+    "BackendModel" -> "ModelUnchanged"
+    "FrontendModel" -> "ModelUnchanged"
+    "FrontendMsg" -> "MsgUnchanged"
+    "ToBackend" -> "MsgUnchanged"
+    "BackendMsg" -> "MsgUnchanged"
+    "ToFrontend" -> "MsgUnchanged"
 
 
 nothingTODO = Nothing

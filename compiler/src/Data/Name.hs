@@ -34,6 +34,7 @@ module Data.Name
   , replModule, replValueToPrint
   -- @LAMDERA
   , toText
+  , fromText
   , bytes
   )
   where
@@ -67,6 +68,7 @@ import qualified Elm.String as ES
 import qualified Data.Text
 
 toText = Data.Text.pack . toChars
+fromText = fromChars . Data.Text.unpack
 
 
 
