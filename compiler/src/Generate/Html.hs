@@ -26,6 +26,7 @@ sandwich moduleName javascript =
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, minimum-scale=1.0">
   <title>|] <> name <> [r|</title>
   <style>body { padding: 0; margin: 0; }</style>
+|] <> Lamdera.Live.lamderaLiveHead <> [r|
 </head>
 
 <body>
