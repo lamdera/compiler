@@ -354,11 +354,19 @@ decoderForType ifaces cname tipe =
                 TRecord fieldMap extensibleName ->
                   case resolvedRecordFieldMapM fieldMap extensibleName tvars_ of
                     Just resolved ->
-                     let extendedRecord = TRecord resolved Nothing  & resolveTvars tvars_
+                     let extendedRecord = TRecord resolved Nothing & resolveTvars tvars_
                      in decoderForType ifaces cname extendedRecord
                     Nothing -> normalDecoder
                 otherTypes -> normalDecoder
-            Filled _ -> normalDecoder
+            Filled tipe ->
+              case tipe of
+                TRecord fieldMap extensibleName ->
+                    case resolvedRecordFieldMapM fieldMap extensibleName tvars_ of
+                    Just resolved ->
+                      let extendedRecord = TRecord resolved Nothing & resolveTvars tvars_
+                      in decoderForType ifaces cname extendedRecord
+                    Nothing -> normalDecoder
+                otherTypes -> normalDecoder
 
     TVar name ->
       lvar $ Data.Name.fromChars $ "w3_x_c_" ++ Data.Name.toChars name

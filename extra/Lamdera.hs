@@ -303,7 +303,7 @@ debugPassText label value pass =
         atomicPutStrLn $
           "\n🔶--------------------------------------------------------------------------------"
             <> T.unpack label
-            <> "\n"
+            <> "\n\n"
             <> T.unpack value
         pure pass
 

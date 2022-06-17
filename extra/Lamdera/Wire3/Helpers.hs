@@ -143,30 +143,6 @@ containsUnsupportedTypes tipe =
     _ -> isUnsupportedKernelType tipe
 
 
-resolvedExtensibleType :: Type -> Type
-resolvedExtensibleType tipe =
-  case tipe of
-    TRecord _ _ -> tipe
-    TAlias moduleName typeName tvars aType ->
-      case aType of
-        Holey t -> t
-        Filled t -> t
-    _ ->
-      {-|
-        This should be impossible, but can happen with code like this:
-
-        type alias Record a =
-            { a | field : a }
-
-        type alias Blah =
-            Record Int
-
-        And it seems Elm's type checker doesn't pick it up.
-
-      -}
-      tipe
-
-
 resolvedRecordFieldMap :: (Map.Map Data.Name.Name FieldType) -> (Maybe Data.Name.Name) -> [(Data.Name.Name, Type)] -> (Map.Map Data.Name.Name FieldType)
 resolvedRecordFieldMap fieldMap extensibleName tvarMap =
   case resolvedRecordFieldMapM fieldMap extensibleName tvarMap of
@@ -180,10 +156,46 @@ resolvedRecordFieldMapM fieldMap extensibleName tvarMap =
     Just extensibleName ->
       case List.find (\(n,_) -> n == extensibleName) tvarMap of
         Just (extensibleName, extensibleType) ->
-          case resolvedExtensibleType extensibleType of
+          case extensibleType of
             TRecord fieldMapExtended maybeNameExtended ->
               Just $ fieldMap <> fieldMapExtended
-            -- Should Impossible, canonicalToDiffableType could not resolve extensible record to a TRecord.
+
+            TAlias moduleName typeName tvars (Holey tipe) -> do
+              let newResolvedTvars = tvars & fmap (\(n, t) -> (n, resolveTvars tvarMap t))
+              case resolveTvars newResolvedTvars tipe of
+                TRecord fieldMapExtensible _ ->
+                  fieldMap
+                    & Map.union fieldMapExtensible
+                    & fmap (\(FieldType index tipe) ->
+                        FieldType index (resolveTvars newResolvedTvars tipe)
+                      )
+                    & Just
+                _ -> Nothing
+
+            TAlias moduleName typeName tvars (Filled tipe) -> do
+              let newResolvedTvars = tvars & fmap (\(n, t) -> (n, resolveTvars tvarMap t))
+              case resolveTvars newResolvedTvars tipe of
+                TRecord fieldMapExtensible _ ->
+                  fieldMap
+                    & Map.union fieldMapExtensible
+                    & fmap (\(FieldType index tipe) ->
+                        FieldType index (resolveTvars newResolvedTvars tipe)
+                      )
+                    & Just
+                _ -> Nothing
+
+            {-|
+              This should be impossible, but can happen with code like this:
+
+              type alias Record a =
+                  { a | field : a }
+
+              type alias Blah =
+                  Record Int
+
+              And it seems Elm's type checker doesn't pick it up.
+
+            -}
             _ -> Nothing
 
         -- No tvar found for extensible record with extensible name...
@@ -725,8 +737,9 @@ resolveTvars tvarMap t =
                 FieldType index (resolveTvars tvarMap tipe)
               )
             & (\newFieldMap -> TRecord newFieldMap Nothing )
-        Just extensibleName ->
-          case resolveTvars tvarMap (TVar extensibleName) of
+        Just extensibleName -> do
+          let resolvedExtension = resolveTvars tvarMap (TVar extensibleName)
+          case resolvedExtension of
             TRecord fieldMapExtensible _ ->
               fieldMap
                 & Map.union fieldMapExtensible
@@ -736,7 +749,35 @@ resolveTvars tvarMap t =
                 -- Now the extensible record has been reified, we can drop the extensible part
                 & (\newFieldMap -> TRecord newFieldMap Nothing )
 
-            rt -> error $ "resolveTvars: impossible extensible record with non-record type: " ++ show maybeExtensible ++ "\n\n" ++ show rt
+            TAlias moduleName typeName tvars (Holey tipe) -> do
+              let newResolvedTvars = tvars & fmap (\(n, t) -> (n, resolveTvars tvarMap t))
+              case resolveTvars newResolvedTvars tipe of
+                TRecord fieldMapExtensible _ ->
+                  fieldMap
+                    & Map.union fieldMapExtensible
+                    & fmap (\(FieldType index tipe) ->
+                        FieldType index (resolveTvars newResolvedTvars tipe)
+                      )
+                    -- Now the extensible record has been reified, we can drop the extensible part
+                    & (\newFieldMap -> TRecord newFieldMap Nothing )
+                _ -> error $ "bad nesting Holey" ++ show tipe
+
+            TAlias moduleName typeName tvars (Filled tipe) -> do
+              let newResolvedTvars = tvars & fmap (\(n, t) -> (n, resolveTvars tvarMap t))
+              case resolveTvars newResolvedTvars tipe of
+                TRecord fieldMapExtensible _ ->
+                  fieldMap
+                    & Map.union fieldMapExtensible
+                    & fmap (\(FieldType index tipe) ->
+                        FieldType index (resolveTvars newResolvedTvars tipe)
+                      )
+                    -- Now the extensible record has been reified, we can drop the extensible part
+                    & (\newFieldMap -> TRecord newFieldMap Nothing )
+                _ -> error $ "bad nesting Holey" ++ show tipe
+
+            rt ->
+              -- resolveTvars tvarMap rt
+              error $ "resolveTvars: impossible extensible record with non-record type: " ++ show maybeExtensible ++ "\n\n" ++ show rt
 
 
     TUnit -> t
