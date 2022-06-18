@@ -36,30 +36,3 @@ testMigrationGeneration scenario oldVersion newVersion = do
   result <- io $ betweenVersions oldVersion newVersion [("BackendModel", "oldhash", "newhash")]
 
   expectEqualTextTrimmed (mock & withDefault "failed to load file") result
-
-
-
---     nextVersion = (WithMigrations 2)
---     migrationsFilenames = ["V2.elm"]
---   migrations <- io $ getMigrationsSequence migrationsFilenames nextVersion 2
---   result <- io $ withProdMode $ lamderaGenerated nextVersion migrationsFilenames
-
-  -- expectEqualTextTrimmed result
-  --   [text|
-  --     module Evergreen.Migrate.V2 exposing (..)
-
-  --     import Browser
-  --     import Http
-  --     import Lamdera
-  --     import Url
-
-
-  --     frontendModel : Old.FrontendModel -> ModelMigration New.FrontendModel New.FrontendMsg
-  --     frontendModel old = ModelUnchanged
-
-
-  --     backendModel : Old.BackendModel -> ModelMigration New.BackendModel New.BackendMsg
-  --     backendModel old =
-  --         ...
-
-  --   |]

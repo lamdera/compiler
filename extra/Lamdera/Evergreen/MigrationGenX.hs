@@ -35,14 +35,14 @@ import qualified Ext.ElmFormat
 import StandaloneInstances
 
 
-dothewholething :: Int -> Interfaces -> Interface.Interface -> IO Text
-dothewholething version interfaces iface_Types = do
+dothewholething :: Int -> Int -> Interfaces -> Interface.Interface -> IO Text
+dothewholething oldVersion newVersion interfaces iface_Types = do
   let
-    moduleName = (ModuleName.Canonical (Pkg.Name "author" "project") (N.fromChars $ "Evergreen.V" <> show version <> ".Types"))
+    moduleName = (ModuleName.Canonical (Pkg.Name "author" "project") (N.fromChars $ "Evergreen.V" <> show newVersion <> ".Types"))
 
     efts =
       lamderaTypes
-        & fmap (\t -> (t, ftByName version interfaces moduleName t iface_Types))
+        & fmap (\t -> (t, ftByName oldVersion newVersion interfaces moduleName t iface_Types))
         & foldl (\acc (t, ft) -> mergeFts acc ft) Map.empty
         -- a little weird but ensures current version of types, our entry point, is added to final migration imports...
         & addImport moduleName moduleName
@@ -82,7 +82,7 @@ dothewholething version interfaces iface_Types = do
           & List.sort
           & T.intercalate "\n"
 
-  pure $ ("module Evergreen.Migrate.V" <> show_ version <> " exposing (..)\n\n")
+  pure $ ("module Evergreen.Migrate.V" <> show_ newVersion <> " exposing (..)\n\n")
     <> allImports
     <> "\n\n"
     <> allMigrations
@@ -201,8 +201,8 @@ addImport moduleName imp ft =
 --       & T.concat
 
 
-ftByName :: Int -> Interfaces -> ModuleName.Canonical -> N.Name -> Interface.Interface -> ElmFilesText
-ftByName version interfaces moduleName typeName interface = do
+ftByName :: Int -> Int -> Interfaces -> ModuleName.Canonical -> N.Name -> Interface.Interface -> ElmFilesText
+ftByName oldVersion newVersion interfaces moduleName typeName interface = do
   let
     scope = moduleName
     recursionIdentifier = (scope, typeName)
@@ -212,7 +212,7 @@ ftByName version interfaces moduleName typeName interface = do
   case Map.lookup typeName $ Interface._aliases interface of
     Just alias -> do
       let
-        diffableAlias = aliasToFt version scope identifier typeName interfaces recursionSet alias
+        diffableAlias = aliasToFt oldVersion newVersion scope identifier typeName interfaces recursionSet alias
         (subt, imps, subft) = diffableAlias
 
       subft & addImports moduleName imps
@@ -222,7 +222,7 @@ ftByName version interfaces moduleName typeName interface = do
       case Map.lookup typeName $ Interface._unions interface of
         Just union -> do
           let
-            diffableUnion = unionToFt version scope identifier typeName interfaces recursionSet [] union []
+            diffableUnion = unionToFt oldVersion newVersion scope identifier typeName interfaces recursionSet [] union []
             (subt, imps, subft) = diffableUnion
 
           subft & addImports moduleName imps
@@ -233,14 +233,11 @@ ftByName version interfaces moduleName typeName interface = do
 
 
 -- A top level Custom Type definition i.e. `type Herp = Derp ...`
-unionToFt :: Int -> ModuleName.Canonical -> TypeIdentifier -> N.Name -> Interfaces -> RecursionSet -> [(N.Name, Can.Type)] -> Interface.Union -> [Can.Type] -> SnapRes
-unionToFt version scope identifier@(author, pkg, module_, tipe) typeName interfaces recursionSet tvarMap unionInterface params =
+unionToFt :: Int -> Int -> ModuleName.Canonical -> TypeIdentifier -> N.Name -> Interfaces -> RecursionSet -> [(N.Name, Can.Type)] -> Interface.Union -> [Can.Type] -> SnapRes
+unionToFt oldVersion newVersion scope identifier@(author, pkg, newModule, tipe) typeName interfaces recursionSet tvarMap unionInterface params =
   let
-    oldVersion = 1 -- @TODO
-    newVersion = 2 -- @TODO
-
     oldModuleName =
-      module_
+      newModule
         & N.toText
         & T.replace ("Evergreen.V" <> show_ newVersion <> ".") ("Evergreen.V" <> show_ oldVersion <> ".")
         & N.fromText
@@ -254,28 +251,41 @@ unionToFt version scope identifier@(author, pkg, module_, tipe) typeName interfa
           case Map.lookup typeName $ Interface._aliases oldModuleInterface of
             Just aliasInterface ->
                 case aliasInterface of
-                  Interface.PublicAlias a -> Alias a
-                  Interface.PrivateAlias a -> Alias a
+                  Interface.PublicAlias a -> Just $ Alias a
+                  Interface.PrivateAlias a -> Just $ Alias a
 
             Nothing ->
               case Map.lookup typeName $ Interface._unions oldModuleInterface of
                 Just unionInterface -> do
                   case unionInterface of
-                    Interface.OpenUnion u -> Union u
-                    Interface.ClosedUnion u -> Union u
-                    Interface.PrivateUnion u -> Union u
+                    Interface.OpenUnion u -> Just $ Union u
+                    Interface.ClosedUnion u -> Just $ Union u
+                    Interface.PrivateUnion u -> Just $ Union u
 
                 Nothing ->
-                  error $ "could not find old type at all: " <> show (module_, tipe)
+                  -- error $ "could not find old type at all: " <> show (module_, tipe)
+                  Nothing
+
         Nothing ->
+          Nothing
           -- error $ "could not find old module at all: " <> show (module_, tipe)
-          error $ "could not find '" <> N.toChars oldModuleName <> "' old module at all: " <> show (Map.keys interfaces)
+          -- error $ "could not find '" <> N.toChars oldModuleName <> "' old module at all: " <> show (Map.keys interfaces)
 
 
-    treat union =
+    mainLogic =
+      case tipeOld of
+        Nothing        -> ("Unimplemented -- Cannot find any old type with same name as new type", Set.empty, Map.empty)
+        Just (Alias a) -> ("Unimplemented -- Old type was an Custom type, new type is an Alias", Set.empty, Map.empty)
+        Just (Union oldUnion) ->
+          case unionInterface of
+            Interface.OpenUnion newUnion -> migrateUnion oldUnion newUnion
+            Interface.ClosedUnion newUnion -> migrateUnion oldUnion newUnion
+            Interface.PrivateUnion newUnion -> migrateUnion oldUnion newUnion
+
+    migrateUnion oldUnion newUnion =
       let
         tvarMap =
-          zip (Can._u_vars union) params
+          zip (Can._u_vars newUnion) params
 
         tvars_ =
           tvarMap
@@ -295,7 +305,7 @@ unionToFt version scope identifier@(author, pkg, module_, tipe) typeName interfa
 
         usageSnapRes =
           tvarResolvedParams
-            & fmap (\param -> canonicalToFt version scope interfaces recursionSet param nothingTODO tvarMap)
+            & fmap (\param -> canonicalToFt oldVersion newVersion scope interfaces recursionSet param nothingTODO tvarMap)
 
         usageParams =
           usageSnapRes
@@ -314,35 +324,33 @@ unionToFt version scope identifier@(author, pkg, module_, tipe) typeName interfa
             & mergeAllFts
 
         localScope =
-          (ModuleName.Canonical (Pkg.Name author pkg) module_)
+          (ModuleName.Canonical (Pkg.Name author pkg) newModule)
 
-        constructorFts =
-          Can._u_alts union
-            & fmap (\(Can.Ctor name index int params_) ->
-              -- For each constructor type param
+        oldConstructorFts =
+          Can._u_alts oldUnion
+            & fmap (\(Can.Ctor oldConstructor index int oldParams) ->
+              -- For each OLD constructor type param
               let
                 cparams =
-                  params_ &
+                  -- @TODO we need to include new params here as well?
+                  oldParams &
                     fmap (\param ->
-                      canonicalToFt version localScope interfaces recursionSet param nothingTODO tvarMap
+                      canonicalToFt oldVersion newVersion localScope interfaces recursionSet param nothingTODO tvarMap
                       )
 
-                oldCtorM =
-                  case tipeOld of
-                    Union unionOld ->
-                      Can._u_alts union & List.find (\(Can.Ctor nameOld _ _ _) -> nameOld == name )
+                newCtorM = Can._u_alts newUnion & List.find (\(Can.Ctor newConstructor _ _ _) -> newConstructor == oldConstructor )
 
               in
-              ( case oldCtorM of
-                  Just (Can.Ctor nameOld _ _ paramsOld) ->
+              ( case newCtorM of
+                  Just (Can.Ctor newConstructor _ _ newParams) ->
                     let
-                      cparamsOld =
-                        zipFull paramsOld params_
+                      paramsZipped =
+                        zipFull oldParams newParams
                           & imap (\i (paramOldM, paramNewM) ->
                             case (paramOldM, paramNewM) of
                               (Just paramOld, Just paramNew) ->
                                 let ft@(subt, imps, subft) =
-                                      canonicalToFt version localScope interfaces recursionSet paramOld (Just paramNew) tvarMap
+                                      canonicalToFt oldVersion newVersion localScope interfaces recursionSet paramOld (Just paramNew) tvarMap
                                 in
                                 if paramOld == paramNew then
                                   "p" <> show_ i
@@ -362,65 +370,86 @@ unionToFt version scope identifier@(author, pkg, module_, tipe) typeName interfa
                           )
 
                       migration =
-                        if paramsOld == params_ then
-                          moduleScope <> N.toText name <> " " <>
-                            (cparamsOld
+                        if oldParams == newParams then
+                          moduleScope <> N.toText newConstructor <> " " <>
+                            (paramsZipped
                               & T.intercalate " "
                             )
                         else
                           "Unimplemented"
                     in
-                    if List.length cparamsOld > 0 then
-                      "    " <> N.toText oldModuleName <> "." <> N.toText name <> " " <> (imap (\i _ -> "p" <> show_ i) paramsOld & T.intercalate " ") <> " -> " <> migration <> "\n"
+                    if List.length oldParams > 0 then
+                      "    " <> N.toText oldModuleName <> "." <> N.toText oldConstructor <> " " <> (imap (\i _ -> "p" <> show_ i) oldParams & T.intercalate " ") <> " -> " <> migration <> "\n"
                     else
-                      "    " <> N.toText oldModuleName <> "." <> N.toText name <> " -> " <> moduleScope <> N.toText name <> "\n"
+                      "    " <> N.toText oldModuleName <> "." <> N.toText oldConstructor <> " -> " <> moduleScope <> N.toText newConstructor <> "\n"
 
-                  Nothing ->
+                  Nothing -> do
                     -- No old constructor with same name, so this is a new/renamed constructor
-                    -- Leave blank for now until we have some sort of fuzzy matcher guessing
-                    "todoNewConstructor"
+                    let unimplemented =
+                          " ->\n" <>
+                          "           {- `" <> N.toText oldConstructor <> "` doesn't exist in " <> moduleScope <> N.toText typeName <> " so I couldn't figure out how to migrate it!\n" <>
+                          "           You'll need to decide what happens to " <> N.toText oldModuleName <> "." <> N.toText oldConstructor <> " values in a migration.\n" <>
+                          "           See https://lamdera.com/tips/modified-custom-type for more info. -}\n" <>
+                          "           Unimplemented\n"
+                    if List.length oldParams > 0 then
+                      "    " <> N.toText oldModuleName <> "." <> N.toText oldConstructor <> " " <> (imap (\i _ -> "p" <> show_ i) oldParams & T.intercalate " ") <> unimplemented
+                    else
+                      "    " <> N.toText oldModuleName <> "." <> N.toText oldConstructor <> unimplemented
 
               , foldl (\acc (st, imps, ft) -> mergeImports acc imps) Set.empty cparams
               , foldl (\acc (st, imps, ft) -> mergeFts acc ft) Map.empty cparams
               )
             )
 
+        newConstructorWarnings =
+          Can._u_alts newUnion
+            & filterMap (\(Can.Ctor newConstructor index int newParams) -> do
+              case Can._u_alts oldUnion & List.find (\(Can.Ctor oldConstructor _ _ _) -> newConstructor == oldConstructor ) of
+                Nothing ->
+                  -- This constructor is missing a match in the old type, warn the user this new constructor exists
+                  Just $
+                    "    notices ->\n" <>
+                    "        {- `" <> N.toText newConstructor <> "` doesn't exist in " <> moduleScope <> N.toText typeName <> ".\n" <>
+                    "        This is just a reminder in case migrating some subset of the old data to this new value was important.\n" <>
+                    "        See https://lamdera.com/tips/modified-custom-type for more info. -}\n" <>
+                    "        Notice"
+                Just _ ->
+                  -- This constructor has a match in the old type, so skip it
+                  Nothing
+            )
+
+
         ctypes =
-          constructorFts
+          oldConstructorFts
             & fmap (\(t,imps,ft) -> t)
             -- & T.intercalate " -> todo \n"
+            & flip (++) newConstructorWarnings
             & T.concat
 
-        imports = constructorFts & foldl (\acc (st, imps, ft) -> mergeImports acc imps) Set.empty
+        imports = oldConstructorFts & foldl (\acc (st, imps, ft) -> mergeImports acc imps) Set.empty
 
-        fts = constructorFts & foldl (\acc (st, imps, ft) -> mergeFts acc ft) Map.empty
+        fts = oldConstructorFts & foldl (\acc (st, imps, ft) -> mergeFts acc ft) Map.empty
 
-        moduleScope =
-          nameToText module_ <> "."
+        moduleScope = nameToText newModule <> "."
+        typeScope = nameToText newModule <> "."
+        typeScopeOld = nameToText newModule <> "."
 
-        typeScope =
-          nameToText module_ <> "."
-
-        typeScopeOld =
-          nameToText module_ <> "."
-
-        moduleName =
-          (ModuleName.Canonical (Pkg.Name author pkg) module_)
+        moduleName = (ModuleName.Canonical (Pkg.Name author pkg) newModule)
 
         debug (t, imps, ft) =
           -- debugHaskellWhen (typeName == "RoomId") ("dunion: " <> hindentFormatValue scope) (t, imps, ft)
           debugNote ("\n✴️  inserting def for " <> t) (t, imps, ft)
 
-        underscoredModule = module_
+        migrationNameUnderscored = newModule
           & N.toText
-          & T.replace ("Evergreen.V" <> show_ version <> ".") ""
+          & T.replace ("Evergreen.V" <> show_ newVersion <> ".") ""
           & T.replace "." "_"
 
         migration =
           if length tvarMap > 0 then
-            "(migrate_" <> underscoredModule <> "_" <> nameToText typeName <> " " <> usageParams <> ")" -- <> "<!2>"
+            "(migrate_" <> migrationNameUnderscored <> "_" <> nameToText typeName <> " " <> usageParams <> ")" -- <> "<!2>"
           else
-            "migrate_" <> underscoredModule <> "_" <> nameToText typeName -- <> "<!3>"
+            "migrate_" <> migrationNameUnderscored <> "_" <> nameToText typeName -- <> "<!3>"
 
       in
       -- debug $
@@ -429,34 +458,25 @@ unionToFt version scope identifier@(author, pkg, module_, tipe) typeName interfa
       , (Map.singleton (moduleKey identifier) $
           ElmFileText
             { imports = imports
-            , types = [ "migrate_" <> underscoredModule <> "_" <> nameToText typeName <> " old =\n" <>
+            , types = [ "migrate_" <> migrationNameUnderscored <> "_" <> nameToText typeName <> " old =\n" <>
                         "  case old of\n" <>
                         ctypes
                       ]
-                -- if length tvarMap > 0 then
-                --   ["migrate" <> nameToText typeName <> " " <> tvars_ <> "old = " <> ctypes]
-                --   -- ["TODOUNION"]
-                -- else
-                --   ["migrate" <> nameToText typeName <> "old = " <> ctypes]
-                --   -- ["TODOUNION"]
             })
           & mergeFts fts
           & mergeFts usageFts
       )
 
   in
-  case unionInterface of
-    Interface.OpenUnion u -> treat u
-    Interface.ClosedUnion u -> treat u
-    Interface.PrivateUnion u -> treat u
+  mainLogic
 
 
 data OldDef = Alias Can.Alias | Union Can.Union deriving (Show)
 
 
 -- A top level Alias definition i.e. `type alias ...`
-aliasToFt :: Int -> ModuleName.Canonical -> TypeIdentifier -> N.Name -> Interfaces -> RecursionSet -> Interface.Alias -> SnapRes
-aliasToFt version scope identifier@(author, pkg, module_, tipe) typeName interfaces recursionSet aliasInterface =
+aliasToFt :: Int -> Int -> ModuleName.Canonical -> TypeIdentifier -> N.Name -> Interfaces -> RecursionSet -> Interface.Alias -> SnapRes
+aliasToFt oldVersion newVersion scope identifier@(author, pkg, module_, tipe) typeName interfaces recursionSet aliasInterface =
   let
 
     oldModuleInterface = interfaces Map.! "Evergreen.V1.Types" -- @TODO
@@ -488,7 +508,7 @@ aliasToFt version scope identifier@(author, pkg, module_, tipe) typeName interfa
           case tipeOld of
             Alias (Can.Alias tvarsOld tipeOld) ->
               let
-                (subt, imps, subft) = canonicalToFt version scope interfaces recursionSet tipe (Just tipeOld) []
+                (subt, imps, subft) = canonicalToFt oldVersion newVersion scope interfaces recursionSet tipe (Just tipeOld) []
 
                 tvars_ = tvars & fmap N.toText & T.intercalate " "
 
@@ -531,8 +551,8 @@ aliasToFt version scope identifier@(author, pkg, module_, tipe) typeName interfa
     Interface.PrivateAlias a -> treat a
 
 
-canonicalToFt :: Int -> ModuleName.Canonical -> Interfaces -> RecursionSet -> Can.Type -> Maybe Can.Type -> [(N.Name, Can.Type)] -> SnapRes
-canonicalToFt version scope interfaces recursionSet tipe tipeOldM tvarMap =
+canonicalToFt :: Int -> Int -> ModuleName.Canonical -> Interfaces -> RecursionSet -> Can.Type -> Maybe Can.Type -> [(N.Name, Can.Type)] -> SnapRes
+canonicalToFt oldVersion newVersion scope interfaces recursionSet tipe tipeOldM tvarMap =
   let
     scopeModule =
       case scope of
@@ -573,7 +593,7 @@ canonicalToFt version scope interfaces recursionSet tipe tipeOldM tvarMap =
         let
           usageSnapRes =
             params
-              & fmap (\param -> canonicalToFt version scope interfaces recursionSet param Nothing tvarMap)
+              & fmap (\param -> canonicalToFt oldVersion newVersion scope interfaces recursionSet param Nothing tvarMap)
 
           usageParams =
             usageSnapRes
@@ -628,10 +648,10 @@ canonicalToFt version scope interfaces recursionSet tipe tipeOldM tvarMap =
           case params of
             p:[] ->
               let
-                (subt, imps, subft) = (canonicalToFt version scope interfaces recursionSet p nothingTODO tvarMap)
+                (subt, imps, subft) = (canonicalToFt oldVersion newVersion scope interfaces recursionSet p nothingTODO tvarMap)
               in
               ("(Maybe " <> subt <> ")", imps, subft)
-              -- DMaybe (canonicalToFt version scope interfaces recursionSet p tvarMap)
+              -- DMaybe (canonicalToFt oldVersion newVersion scope interfaces recursionSet p tvarMap)
             _ ->
               error "Fatal: impossible multi-param Maybe! Please report this."
 
@@ -639,10 +659,10 @@ canonicalToFt version scope interfaces recursionSet tipe tipeOldM tvarMap =
           case params of
             p:[] ->
               let
-                (subt, imps, subft) = (canonicalToFt version scope interfaces recursionSet p nothingTODO tvarMap)
+                (subt, imps, subft) = (canonicalToFt oldVersion newVersion scope interfaces recursionSet p nothingTODO tvarMap)
               in
               ("(List " <> subt <> ")", imps, subft)
-              -- DList (canonicalToFt version scope interfaces recursionSet p tvarMap)
+              -- DList (canonicalToFt oldVersion newVersion scope interfaces recursionSet p tvarMap)
             _ ->
               error "Fatal: impossible multi-param List! Please report this."
 
@@ -650,10 +670,10 @@ canonicalToFt version scope interfaces recursionSet tipe tipeOldM tvarMap =
           case params of
             p:[] ->
               let
-                (subt, imps, subft) = (canonicalToFt version scope interfaces recursionSet p nothingTODO tvarMap)
+                (subt, imps, subft) = (canonicalToFt oldVersion newVersion scope interfaces recursionSet p nothingTODO tvarMap)
               in
               ("(Array.Array " <> subt <> ")", imps & Set.insert moduleName, subft)
-              -- DArray (canonicalToFt version scope interfaces recursionSet p tvarMap)
+              -- DArray (canonicalToFt oldVersion newVersion scope interfaces recursionSet p tvarMap)
             _ ->
               error "Fatal: impossible multi-param Array! Please report this."
 
@@ -661,10 +681,10 @@ canonicalToFt version scope interfaces recursionSet tipe tipeOldM tvarMap =
           case params of
             p:[] ->
               let
-                (subt, imps, subft) = (canonicalToFt version scope interfaces recursionSet p nothingTODO tvarMap)
+                (subt, imps, subft) = (canonicalToFt oldVersion newVersion scope interfaces recursionSet p nothingTODO tvarMap)
               in
               ("(Set.Set " <> subt <> ")", imps & Set.insert moduleName, subft)
-              -- DSet (canonicalToFt version scope interfaces recursionSet p tvarMap)
+              -- DSet (canonicalToFt oldVersion newVersion scope interfaces recursionSet p tvarMap)
             _ ->
               error "Fatal: impossible multi-param Set! Please report this."
 
@@ -678,11 +698,11 @@ canonicalToFt version scope interfaces recursionSet tipe tipeOldM tvarMap =
                     case p of
                       (Just resultOld,Just result):(Just errOld,Just err):_ ->
                         let
-                          (subt, imps, subft) = (canonicalToFt version scope interfaces recursionSet result (Just resultOld) tvarMap)
-                          (subt2, imps2, subft2) = (canonicalToFt version scope interfaces recursionSet err (Just errOld) tvarMap)
+                          (subt, imps, subft) = (canonicalToFt oldVersion newVersion scope interfaces recursionSet result (Just resultOld) tvarMap)
+                          (subt2, imps2, subft2) = (canonicalToFt oldVersion newVersion scope interfaces recursionSet err (Just errOld) tvarMap)
                         in
                         ("(Result " <> subt <> " " <> subt2 <> ")", mergeImports imps imps2, mergeFts subft subft2)
-                        -- DResult (canonicalToFt version scope interfaces recursionSet result tvarMap) (canonicalToFt version scope interfaces recursionSet err tvarMap)
+                        -- DResult (canonicalToFt oldVersion newVersion scope interfaces recursionSet result tvarMap) (canonicalToFt oldVersion newVersion scope interfaces recursionSet err tvarMap)
                       _ ->
                         error "Fatal: impossible !2 param Result type! Please report this."
 
@@ -698,11 +718,11 @@ canonicalToFt version scope interfaces recursionSet tipe tipeOldM tvarMap =
           case params of
             result:err:_ ->
               let
-                (subt, imps, subft) = (canonicalToFt version scope interfaces recursionSet result nothingTODO tvarMap)
-                (subt2, imps2, subft2) = (canonicalToFt version scope interfaces recursionSet err nothingTODO tvarMap)
+                (subt, imps, subft) = (canonicalToFt oldVersion newVersion scope interfaces recursionSet result nothingTODO tvarMap)
+                (subt2, imps2, subft2) = (canonicalToFt oldVersion newVersion scope interfaces recursionSet err nothingTODO tvarMap)
               in
               ("(Dict.Dict " <> subt <> " " <> subt2 <> ")", mergeImports imps imps2 & Set.insert moduleName, mergeFts subft subft2)
-              -- DDict (canonicalToFt version scope interfaces recursionSet result tvarMap) (canonicalToFt version scope interfaces recursionSet err tvarMap)
+              -- DDict (canonicalToFt oldVersion newVersion scope interfaces recursionSet result tvarMap) (canonicalToFt oldVersion newVersion scope interfaces recursionSet err tvarMap)
             _ ->
               error "Fatal: impossible !2 param Dict type! Please report this."
 
@@ -761,7 +781,7 @@ canonicalToFt version scope interfaces recursionSet tipe tipeOldM tvarMap =
                 Just union -> do
                   if isUserType_ tipe
                     then
-                      unionToFt version scope identifier name interfaces newRecursionSet tvarMap union params
+                      unionToFt oldVersion newVersion scope identifier name interfaces newRecursionSet tvarMap union params
                         & (\(n, imports, subft) ->
                           ( n
                           , if moduleName /= scope then
@@ -794,7 +814,7 @@ canonicalToFt version scope interfaces recursionSet tipe tipeOldM tvarMap =
                   -- Try aliases
                   case Map.lookup name $ Interface._aliases subInterface of
                     Just alias -> do
-                      aliasToFt version scope identifier name interfaces newRecursionSet alias
+                      aliasToFt oldVersion newVersion scope identifier name interfaces newRecursionSet alias
                         & (\(n, imports, subft) ->
                           ( n -- <> "<!4>"
                           , if moduleName /= scope then
@@ -836,7 +856,7 @@ canonicalToFt version scope interfaces recursionSet tipe tipeOldM tvarMap =
             usageParamFts =
               tvarMap_
                 & fmap (\(n, paramType) ->
-                  canonicalToFt version scope interfaces recursionSet paramType nothingTODO tvarMap_
+                  canonicalToFt oldVersion newVersion scope interfaces recursionSet paramType nothingTODO tvarMap_
                 )
 
             usageParamNames =
@@ -857,9 +877,9 @@ canonicalToFt version scope interfaces recursionSet tipe tipeOldM tvarMap =
             (subt, imps, subft) =
               case tipeOldM of
                 Just tipeOld ->
-                  canonicalToFt version moduleName interfaces recursionSet cType (Just tipeOld) tvarMap_
+                  canonicalToFt oldVersion newVersion moduleName interfaces recursionSet cType (Just tipeOld) tvarMap_
                 Nothing ->
-                  canonicalToFt version moduleName interfaces recursionSet cType nothingTODO tvarMap_
+                  canonicalToFt oldVersion newVersion moduleName interfaces recursionSet cType nothingTODO tvarMap_
 
             typeScope =
               if moduleName == scope then
@@ -923,7 +943,7 @@ canonicalToFt version scope interfaces recursionSet tipe tipeOldM tvarMap =
           -- If an alias is filled, then it can't have any open holes within it either?
           -- So we can take this opportunity to reset tvars to reduce likeliness of naming conflicts?
           let
-            (subt, imps, subft) = canonicalToFt version moduleName interfaces recursionSet cType nothingTODO []
+            (subt, imps, subft) = canonicalToFt oldVersion newVersion moduleName interfaces recursionSet cType nothingTODO []
 
             debugIden = "" -- <> "<af>"
           in
@@ -978,14 +998,14 @@ canonicalToFt version scope interfaces recursionSet tipe tipeOldM tvarMap =
                           -- @TODO NEXT
                           -- this shoudl generate a migrate<NewTypeName> function – but maybe that comes from the canonicalToFt?
                           -- at the least we can thread the tipeOld type in here now!
-                          let (st,imps,ft) = canonicalToFt version scope interfaces recursionSet tipe (Just (tipeOld)) tvarMap
+                          let (st,imps,ft) = canonicalToFt oldVersion newVersion scope interfaces recursionSet tipe (Just (tipeOld)) tvarMap
                           in
                           (N.toText name, ("old." <> N.toText name <> " |> " <> st, imps, ft))
-                          -- (N.toText name, canonicalToFt version scope interfaces recursionSet tipe nothingTODO tvarMap)
+                          -- (N.toText name, canonicalToFt oldVersion newVersion scope interfaces recursionSet tipe nothingTODO tvarMap)
 
                       Nothing ->
                         -- This field did not exist in the old version. We need an init! @TODO
-                        let (st,imps,ft) = canonicalToFt version scope interfaces recursionSet tipe nothingTODO tvarMap
+                        let (st,imps,ft) = canonicalToFt oldVersion newVersion scope interfaces recursionSet tipe nothingTODO tvarMap
                         in
                         ( N.toText name, ("Unimplemented -- new field of type: " <> qualifiedTypeName tipe, imps, ft) )
                 )
@@ -999,7 +1019,7 @@ canonicalToFt version scope interfaces recursionSet tipe tipeOldM tvarMap =
                     Just (Can.FieldType index_ tipeOld) ->
                       Nothing
                     Nothing ->
-                      let (st,imps,ft) = canonicalToFt version scope interfaces recursionSet tipe nothingTODO tvarMap
+                      let (st,imps,ft) = canonicalToFt oldVersion newVersion scope interfaces recursionSet tipe nothingTODO tvarMap
                       in
                       Just ( N.toText name, ("Warning -- " <> qualifiedTypeName tipe <> " field removed. either remove this line (data dropped) or migrate into another field.", imps, ft) )
                 )
@@ -1028,19 +1048,19 @@ canonicalToFt version scope interfaces recursionSet tipe tipeOldM tvarMap =
 
     Can.TTuple t1 t2 mt3 ->
       let
-        (subt, imps, subft) = (canonicalToFt version scope interfaces recursionSet t1 nothingTODO tvarMap)
-        (subt2, imps2, subft2) = (canonicalToFt version scope interfaces recursionSet t2 nothingTODO tvarMap)
+        (subt, imps, subft) = (canonicalToFt oldVersion newVersion scope interfaces recursionSet t1 nothingTODO tvarMap)
+        (subt2, imps2, subft2) = (canonicalToFt oldVersion newVersion scope interfaces recursionSet t2 nothingTODO tvarMap)
       in
       case mt3 of
         Just t3 ->
           let
-            (subt3, imps3, subft3) = (canonicalToFt version scope interfaces recursionSet t3 nothingTODO tvarMap)
+            (subt3, imps3, subft3) = (canonicalToFt oldVersion newVersion scope interfaces recursionSet t3 nothingTODO tvarMap)
           in
           ("(" <> subt <> ", " <> subt2 <> ", " <> subt3 <> ")", mergeAllImports [imps,imps2,imps3], mergeAllFts [subft,subft2,subft3])
 
         Nothing ->
           ("(" <> subt <> ", " <> subt2 <> ")", mergeImports imps imps2, mergeFts subft subft2)
-      -- DTuple (canonicalToFt version scope interfaces recursionSet t1 tvarMap) (canonicalToFt version scope interfaces recursionSet t2 tvarMap)
+      -- DTuple (canonicalToFt oldVersion newVersion scope interfaces recursionSet t1 tvarMap) (canonicalToFt oldVersion newVersion scope interfaces recursionSet t2 tvarMap)
 
     Can.TUnit ->
       ("()", Set.empty, Map.empty)
@@ -1163,30 +1183,30 @@ isUserModule moduleName =
 
 migrationWrapperForType t =
   case t of
-    "BackendModel" -> "ModelMigration"
+    "BackendModel"  -> "ModelMigration"
     "FrontendModel" -> "ModelMigration"
-    "FrontendMsg" -> "MsgMigration"
-    "ToBackend" -> "MsgMigration"
-    "BackendMsg" -> "MsgMigration"
-    "ToFrontend" -> "MsgMigration"
+    "FrontendMsg"   -> "MsgMigration"
+    "ToBackend"     -> "MsgMigration"
+    "BackendMsg"    -> "MsgMigration"
+    "ToFrontend"    -> "MsgMigration"
 
 msgForType t =
   case t of
-    "BackendModel" -> "BackendMsg"
+    "BackendModel"  -> "BackendMsg"
     "FrontendModel" -> "FrontendMsg"
-    "FrontendMsg" -> "FrontendMsg"
-    "ToBackend" -> "BackendMsg"
-    "BackendMsg" -> "BackendMsg"
-    "ToFrontend" -> "FrontendMsg"
+    "FrontendMsg"   -> "FrontendMsg"
+    "ToBackend"     -> "BackendMsg"
+    "BackendMsg"    -> "BackendMsg"
+    "ToFrontend"    -> "FrontendMsg"
 
 unchangedForType t =
   case t of
-    "BackendModel" -> "ModelUnchanged"
+    "BackendModel"  -> "ModelUnchanged"
     "FrontendModel" -> "ModelUnchanged"
-    "FrontendMsg" -> "MsgUnchanged"
-    "ToBackend" -> "MsgUnchanged"
-    "BackendMsg" -> "MsgUnchanged"
-    "ToFrontend" -> "MsgUnchanged"
+    "FrontendMsg"   -> "MsgUnchanged"
+    "ToBackend"     -> "MsgUnchanged"
+    "BackendMsg"    -> "MsgUnchanged"
+    "ToFrontend"    -> "MsgUnchanged"
 
 
 nothingTODO = Nothing

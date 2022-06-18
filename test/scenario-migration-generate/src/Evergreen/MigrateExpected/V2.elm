@@ -61,3 +61,17 @@ migrate_Types_UserType old =
 
         Evergreen.V1.Types.UserSecond ->
             Evergreen.V2.Types.UserSecond
+
+        Evergreen.V1.Types.UserRemoved ->
+            {- `UserRemoved` doesn't exist in Evergreen.V2.Types.UserType so I couldn't figure out how to migrate it!
+               You'll need to decide what happens to Evergreen.V1.Types.UserRemoved values in a migration.
+               See https://lamdera.com/tips/modified-custom-type for more info.
+            -}
+            Unimplemented
+
+        notices ->
+            {- `UserAdded` doesn't exist in Evergreen.V2.Types.UserType.
+               This is just a reminder in case migrating some subset of the old data to this new value was important.
+               See https://lamdera.com/tips/modified-custom-type for more info.
+            -}
+            Notice

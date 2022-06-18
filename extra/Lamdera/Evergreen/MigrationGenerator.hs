@@ -41,7 +41,7 @@ generateFor typename oldVersion newVersion = do
     res <- withCurrentDirectory project $ do
         interfaces <- Ext.Query.Interfaces.all paths
 
-        Lamdera.Evergreen.MigrationGenX.dothewholething newVersion interfaces (interfaces Map.! (N.fromChars $ "Evergreen.V" <> show newVersion <> ".Types"))
+        Lamdera.Evergreen.MigrationGenX.dothewholething oldVersion newVersion interfaces (interfaces Map.! (N.fromChars $ "Evergreen.V" <> show newVersion <> ".Types"))
 
         -- let
         --   -- !_ = debugHaskell "keys" (Map.keys interfaces)

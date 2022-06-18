@@ -14,6 +14,7 @@ type alias BackendModel =
 type UserType
     = UserFirst
     | UserSecond
+    | UserAdded
 
 
 type alias FrontendModel =
