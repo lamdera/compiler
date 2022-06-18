@@ -44,90 +44,48 @@ dothewholething version interfaces iface_Types = do
       lamderaTypes
         & fmap (\t -> (t, ftByName version interfaces moduleName t iface_Types))
         & foldl (\acc (t, ft) -> mergeFts acc ft) Map.empty
+        -- a little weird but ensures current version of types, our entry point, is added to final migration imports...
+        & addImport moduleName moduleName
 
     -- debugEfts = efts & eftToText version
 
-    addImports imports =
+    importsToText :: Set.Set ModuleName.Canonical -> [Text]
+    importsToText imports =
       imports
             & Set.toList
             & filterMap (\(ModuleName.Canonical (Pkg.Name author project) module_) ->
               Just $ "import " <> nameToText module_
             )
             & List.sort
-              & T.intercalate "\n"
-            & (flip T.append) "\n\n"
 
-    addMigrations migrations = migrations & T.intercalate "\n\n"
+    addMigrations migrations = migrations & List.sort & T.intercalate "\n\n"
 
   inDebug <- Lamdera.isDebug
   root <- getProjectRoot
 
-  moduleScopedMigrations <-
-    efts
-      & Map.toList
-      & foldl (\acc (file, ef@(ElmFileText imports migrations)) ->
-          addImports imports <> acc <> addMigrations migrations
-        ) ""
-      & pure
+  let
+    allMigrations :: Text
+    allMigrations =
+        efts
+          & Map.toList
+          & fmap (\(file, ef@(ElmFileText imports migrations)) -> migrations )
+          & List.concat
+          & List.sort
+          & T.intercalate "\n\n"
 
-  moduleScopedMigrations
-    & (<>) ("module Evergreen.Migrate.V" <> show_ version <> " exposing (..)\n\n")
-    & pure -- @TODO restore elm format
-    -- & Ext.ElmFormat.formatOrPassthrough
+    allImports :: Text
+    allImports =
+        efts
+          & Map.toList
+          & fmap (\(file, ef@(ElmFileText imports migrations)) -> importsToText imports )
+          & List.concat
+          & List.sort
+          & T.intercalate "\n"
 
-
--- dothewholethingOriginalPerFileVersion :: Int -> Interfaces -> Interface.Interface -> IO Text
--- dothewholethingOriginalPerFileVersion version interfaces iface_Types = do
---   let
---     moduleName = (ModuleName.Canonical (Pkg.Name "author" "project") (N.fromChars $ "Evergreen.V" <> show version <> ".Types"))
-
---     efts =
---       lamderaTypes
---         & fmap (\t -> (t, ftByName version interfaces moduleName t iface_Types))
---         & foldl (\acc (t, ft) -> mergeFts acc ft) Map.empty
-
---     debugEfts =
---       efts
---         & eftToText version
-
-
---   inDebug <- Lamdera.isDebug
---   root <- getProjectRoot
-
---   moduleScopedMigrations <-
---     efts
---       & Map.toList
-
---       & mapM (\(file, ef@(ElmFileText imports types)) ->
---         let
---           filename =
---             file
---               & T.splitOn "."
---               & foldl (\acc i -> acc </> T.unpack i) (root </> "src" </> "Evergreen" </> ("V" <> show version))
---               & (\v -> v <> ".elm")
-
---         in
---         if (not $ textContains "/" file)
---           then do pure $ efToText version (file, ef)
---           else pure ""
-
---       --   onlyWhen (not $ textContains "/" file) $ do
---       --     output <- Ext.ElmFormat.formatOrPassthrough $ efToText version (file, ef)
---       --     output
---           -- writeUtf8 filename output
---       )
---       -- & fmap (T.intercalate "------ and another one here:\n")
---     -- & fmap T.concat
-
-
---   moduleScopedMigrations
---     & (++) ["module Evergreen.Migrate.V" <> show_ version <> " exposing (..)\n\n"]
---     & T.intercalate "\n"
---     & Ext.ElmFormat.formatOrPassthrough
-
-
-  -- pure moduleScopedMigrations
---   pure ()
+  pure $ ("module Evergreen.Migrate.V" <> show_ version <> " exposing (..)\n\n")
+    <> allImports
+    <> "\n\n"
+    <> allMigrations
 
 
 type RecursionSet =
@@ -453,7 +411,10 @@ unionToFt version scope identifier@(author, pkg, module_, tipe) typeName interfa
           -- debugHaskellWhen (typeName == "RoomId") ("dunion: " <> hindentFormatValue scope) (t, imps, ft)
           debugNote ("\n✴️  inserting def for " <> t) (t, imps, ft)
 
-        underscoredModule = module_ & N.toText & T.replace "." "_"
+        underscoredModule = module_
+          & N.toText
+          & T.replace ("Evergreen.V" <> show_ version <> ".") ""
+          & T.replace "." "_"
 
         migration =
           if length tvarMap > 0 then
@@ -468,7 +429,7 @@ unionToFt version scope identifier@(author, pkg, module_, tipe) typeName interfa
       , (Map.singleton (moduleKey identifier) $
           ElmFileText
             { imports = imports
-            , types = [ "migrate" <> nameToText typeName <> " old =\n" <>
+            , types = [ "migrate_" <> underscoredModule <> "_" <> nameToText typeName <> " old =\n" <>
                         "  case old of\n" <>
                         ctypes
                       ]
@@ -798,35 +759,36 @@ canonicalToFt version scope interfaces recursionSet tipe tipeOldM tvarMap =
               -- Try unions
               case Map.lookup name $ Interface._unions subInterface of
                 Just union -> do
-                  if isUserType_ tipe then
-                    unionToFt version scope identifier name interfaces newRecursionSet tvarMap union params
-                      & (\(n, imports, subft) ->
-                        ( n
-                        , if moduleName /= scope then
-                            imports & Set.insert moduleName
-                          else
-                            imports
-                        , subft
-                            & addImports scope imports
-                            & if moduleName /= scope then
-                                addImport scope (moduleName) -- <> "(utop)")
-                              else
-                                id
+                  if isUserType_ tipe
+                    then
+                      unionToFt version scope identifier name interfaces newRecursionSet tvarMap union params
+                        & (\(n, imports, subft) ->
+                          ( n
+                          , if moduleName /= scope then
+                              imports & Set.insert moduleName
+                            else
+                              imports
+                          , subft
+                              & addImports scope imports
+                              & if moduleName /= scope then
+                                  addImport scope (moduleName) -- <> "(utop)")
+                                else
+                                  id
+                          )
                         )
-                      )
-                  else
-                    ( "old55" -- <> "<!5>"
-                        , if moduleName /= scope then
-                            Set.empty & Set.insert moduleName
-                          else
-                            Set.empty
-                        , Map.empty
-                            & addImports scope Set.empty
-                            & if moduleName /= scope then
-                                addImport scope (moduleName) -- <> "(utop)")
-                              else
-                                id
-                        )
+                    else
+                      ( "old55" -- <> "<!5>"
+                          , if moduleName /= scope then
+                              Set.empty & Set.insert moduleName
+                            else
+                              Set.empty
+                          , Map.empty
+                              & addImports scope Set.empty
+                              & if moduleName /= scope then
+                                  addImport scope (moduleName) -- <> "(utop)")
+                                else
+                                  id
+                          )
 
                 Nothing ->
                   -- Try aliases

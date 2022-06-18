@@ -97,7 +97,7 @@ textStripped t =
     & T.unlines
 
 expectEqualTextTrimmed :: T.Text -> T.Text -> Test ()
-expectEqualTextTrimmed actual expected =
+expectEqualTextTrimmed expected actual =
   let
     realExpected = textStripped expected
     realActual = textStripped actual

@@ -1,0 +1,63 @@
+module Evergreen.Migrate.V2 exposing (..)
+
+import Evergreen.V1.External
+import Evergreen.V1.Types
+import Evergreen.V2.External
+import Evergreen.V2.Types
+
+
+backendModel : Old.BackendModel -> ModelMigration New.BackendModel New.BackendMsg
+backendModel old =
+    { unchangedCore = old.unchangedCore
+    , unchangedUser = old.unchangedUser |> migrate_Types_UserType
+    , externalUnion = old.externalUnion |> migrate_External_ExternalUnion
+    , added = Unimplemented -- new field of type: Basics.Int
+    , removed = Warning -- String.String field removed. either remove this line (data dropped) or migrate into another field.
+    }
+
+
+frontendModel : Old.FrontendModel -> ModelMigration New.FrontendModel New.FrontendMsg
+frontendModel old =
+    ModelUnchanged
+
+
+migrate_External_ExternalUnion old =
+    case old of
+        Evergreen.V1.External.External1 ->
+            Evergreen.V2.External.External1
+
+        Evergreen.V1.External.External2 ->
+            Evergreen.V2.External.External2
+
+
+migrate_Types_BackendMsg old =
+    case old of
+        Evergreen.V1.Types.NoOpBackendMsg ->
+            Evergreen.V2.Types.NoOpBackendMsg
+
+
+migrate_Types_FrontendMsg old =
+    case old of
+        Evergreen.V1.Types.Noop ->
+            Evergreen.V2.Types.Noop
+
+
+migrate_Types_ToBackend old =
+    case old of
+        Evergreen.V1.Types.Nooptobackend ->
+            Evergreen.V2.Types.Nooptobackend
+
+
+migrate_Types_ToFrontend old =
+    case old of
+        Evergreen.V1.Types.Nooptofrontend ->
+            Evergreen.V2.Types.Nooptofrontend
+
+
+migrate_Types_UserType old =
+    case old of
+        Evergreen.V1.Types.UserFirst ->
+            Evergreen.V2.Types.UserFirst
+
+        Evergreen.V1.Types.UserSecond ->
+            Evergreen.V2.Types.UserSecond

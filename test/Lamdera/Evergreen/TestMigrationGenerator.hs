@@ -23,37 +23,43 @@ all = do
 
 suite :: Test ()
 suite = tests
-  [ scope "primitive migration" $ do
-
-      let filenames = ["src/Evergreen/V1/Types.elm", "src/Evergreen/V2/Types.elm"]
-      io $ Lamdera.Compile.makeDev "/Users/mario/dev/projects/lamdera-compiler/test/scenario-migration-generate" filenames
-
-      result <- io $ betweenVersions 1 2 [("BackendModel", "oldhash", "newhash")]
-
-    --     nextVersion = (WithMigrations 2)
-    --     migrationsFilenames = ["V2.elm"]
-    --   migrations <- io $ getMigrationsSequence migrationsFilenames nextVersion 2
-    --   result <- io $ withProdMode $ lamderaGenerated nextVersion migrationsFilenames
-
-
-
-      expectEqualTextTrimmed result
-        [text|
-          module Evergreen.Migrate.V2 exposing (..)
-
-          import Browser
-          import Http
-          import Lamdera
-          import Url
-
-
-          frontendModel : Old.FrontendModel -> ModelMigration New.FrontendModel New.FrontendMsg
-          frontendModel old = ModelUnchanged
-
-
-          backendModel : Old.BackendModel -> ModelMigration New.BackendModel New.BackendMsg
-          backendModel old =
-              ...
-
-        |]
+  [ scope "primitive migration: 1 -> 2" $ testMigrationGeneration "scenario-migration-generate" 1 2
   ]
+
+
+testMigrationGeneration scenario oldVersion newVersion = do
+
+  let filenames = ["src/Evergreen/V" <> show oldVersion <> "/Types.elm", "src/Evergreen/V" <> show newVersion <> "/Types.elm"]
+  io $ Lamdera.Compile.makeDev "/Users/mario/dev/projects/lamdera-compiler/test/scenario-migration-generate" filenames
+
+  mock <- io $ readUtf8Text $ "test/scenario-migration-generate/src/Evergreen/MigrateExpected/V" <> show newVersion <> ".elm"
+  result <- io $ betweenVersions oldVersion newVersion [("BackendModel", "oldhash", "newhash")]
+
+  expectEqualTextTrimmed (mock & withDefault "failed to load file") result
+
+
+
+--     nextVersion = (WithMigrations 2)
+--     migrationsFilenames = ["V2.elm"]
+--   migrations <- io $ getMigrationsSequence migrationsFilenames nextVersion 2
+--   result <- io $ withProdMode $ lamderaGenerated nextVersion migrationsFilenames
+
+  -- expectEqualTextTrimmed result
+  --   [text|
+  --     module Evergreen.Migrate.V2 exposing (..)
+
+  --     import Browser
+  --     import Http
+  --     import Lamdera
+  --     import Url
+
+
+  --     frontendModel : Old.FrontendModel -> ModelMigration New.FrontendModel New.FrontendMsg
+  --     frontendModel old = ModelUnchanged
+
+
+  --     backendModel : Old.BackendModel -> ModelMigration New.BackendModel New.BackendMsg
+  --     backendModel old =
+  --         ...
+
+  --   |]

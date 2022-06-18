@@ -24,9 +24,9 @@ import qualified Data.Name as N
 import Lamdera
 import qualified Lamdera.Compile
 import qualified Ext.Query.Interfaces
+import qualified Ext.ElmFormat
 
 import qualified Lamdera.Evergreen.MigrationGenX
--- import qualified Ext.ElmFormat
 
 
 generateFor typename oldVersion newVersion = do
@@ -41,7 +41,7 @@ generateFor typename oldVersion newVersion = do
     res <- withCurrentDirectory project $ do
         interfaces <- Ext.Query.Interfaces.all paths
 
-        Lamdera.Evergreen.MigrationGenX.dothewholething 2 interfaces (interfaces Map.! (N.fromChars $ "Evergreen.V" <> show newVersion <> ".Types"))
+        Lamdera.Evergreen.MigrationGenX.dothewholething newVersion interfaces (interfaces Map.! (N.fromChars $ "Evergreen.V" <> show newVersion <> ".Types"))
 
         -- let
         --   -- !_ = debugHaskell "keys" (Map.keys interfaces)
@@ -60,8 +60,7 @@ generateFor typename oldVersion newVersion = do
     pure res
 
 
-
--- typeDiffMigration :: Interfaces -> N.Name -> N.Name -> Interface.Interface -> Text
+-- @TODO remove unused
 sourceType interfaces targetName moduleName  = do
   let
     interface = interfaces Map.! moduleName
@@ -83,9 +82,6 @@ sourceType interfaces targetName moduleName  = do
           error $ show $ "Found no type named " <> nameToText targetName <> " in " <> nameToText moduleName
 
 
-
--- Legacy non-smart baseline
-
 betweenVersions :: Int -> Int -> [(String, String, String)] -> IO Text
 betweenVersions oldVersion newVersion typeCompares = do
   let old = show_ oldVersion
@@ -95,21 +91,6 @@ betweenVersions oldVersion newVersion typeCompares = do
       typeCompareMigration (typename, oldhash, newhash) = do
         implementation <- generateFor typename oldVersion newVersion
         let
-            --   if oldhash == newhash then
-            --     unchangedForType typename
-            --   else
-            --     "Unimplemented"
-                -- @TODO when working on more intelligent auto-generations...
-                -- if typename == "BackendModel" || typename == "FrontendModel" then
-                --   [text|
-                --     ModelMigrated
-                --         ( Unimplemented
-                --         , Cmd.none
-                --         )
-                --   |]
-                -- else
-                --   "Unimplemented"
-
             msgType = msgForType typename
 
             typenameCamel = lowerFirstLetter typename
@@ -119,11 +100,6 @@ betweenVersions oldVersion newVersion typeCompares = do
             migrationType = migrationWrapperForType typename
 
         pure implementation
-        -- pure [text|
-        --   $typenameCamel : Old.$typenameT -> $migrationType New.$typenameT New.$msgType
-        --   $typenameCamel old =
-        --       $implementation
-        -- |]
 
       migrationWrapperForType t =
         case t of
@@ -152,20 +128,8 @@ betweenVersions oldVersion newVersion typeCompares = do
           "BackendMsg" -> "MsgUnchanged"
           "ToFrontend" -> "MsgUnchanged"
 
-  let header = [text|
-
-    module Evergreen.Migrate.V$new exposing (..)
-
-    import Evergreen.V$old.Types as Old
-    import Evergreen.V$new.Types as New
-    import Lamdera.Migrations exposing (..)
-
-
-  |]
-
   res <- typeCompares & mapM typeCompareMigration
-
   res
-    -- & (<>) [header]
     & T.intercalate "\n\n\n"
-    & pure
+    & Ext.ElmFormat.formatOrPassthrough
+    -- & pure
