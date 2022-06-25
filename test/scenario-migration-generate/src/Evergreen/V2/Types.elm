@@ -6,6 +6,7 @@ import Evergreen.V2.External
 type alias BackendModel =
     { unchangedCore : Float
     , unchangedUser : UserType
+    , unchangedAllTypes : Evergreen.V2.External.AllTypes
     , externalUnion : Evergreen.V2.External.ExternalUnion
     , added : Int
     }

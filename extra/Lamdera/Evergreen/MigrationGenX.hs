@@ -32,6 +32,7 @@ import Lamdera.Types
 import qualified Ext.Query.Interfaces as Interfaces
 import qualified Lamdera.Progress as Progress
 import qualified Ext.ElmFormat
+import qualified Lamdera.Wire3.Helpers
 import StandaloneInstances
 
 
@@ -78,9 +79,13 @@ dothewholething oldVersion newVersion interfaces iface_Types = do
         efts
           & Map.toList
           & fmap (\(file, ef@(ElmFileText imports migrations)) -> importsToText imports )
+          & (++) additionalImports
           & List.concat
           & List.sort
           & T.intercalate "\n"
+
+    additionalImports :: [[Text]]
+    additionalImports = [["import Lamdera.Migrations exposing (..)"]]
 
   pure $ ("module Evergreen.Migrate.V" <> show_ newVersion <> " exposing (..)\n\n")
     <> allImports
@@ -440,16 +445,11 @@ unionToFt oldVersion newVersion scope identifier@(author, pkg, newModule, tipe) 
           -- debugHaskellWhen (typeName == "RoomId") ("dunion: " <> hindentFormatValue scope) (t, imps, ft)
           debugNote ("\n✴️  inserting def for " <> t) (t, imps, ft)
 
-        migrationNameUnderscored = newModule
-          & N.toText
-          & T.replace ("Evergreen.V" <> show_ newVersion <> ".") ""
-          & T.replace "." "_"
-
         migration =
           if length tvarMap > 0 then
-            "(migrate_" <> migrationNameUnderscored <> "_" <> nameToText typeName <> " " <> usageParams <> ")" -- <> "<!2>"
+            "(" <> migrationNameUnderscored newModule newVersion typeName <> " " <> usageParams <> ")" -- <> "<!2>"
           else
-            "migrate_" <> migrationNameUnderscored <> "_" <> nameToText typeName -- <> "<!3>"
+            migrationNameUnderscored newModule newVersion typeName -- <> "<!3>"
 
       in
       -- debug $
@@ -458,7 +458,7 @@ unionToFt oldVersion newVersion scope identifier@(author, pkg, newModule, tipe) 
       , (Map.singleton (moduleKey identifier) $
           ElmFileText
             { imports = imports
-            , types = [ "migrate_" <> migrationNameUnderscored <> "_" <> nameToText typeName <> " old =\n" <>
+            , types = [ migrationNameUnderscored newModule newVersion typeName <> " old =\n" <>
                         "  case old of\n" <>
                         ctypes
                       ]
@@ -471,6 +471,15 @@ unionToFt oldVersion newVersion scope identifier@(author, pkg, newModule, tipe) 
   mainLogic
 
 
+migrationNameUnderscored newModule newVersion newTypeName =
+  newModule
+    & N.toText
+    & T.replace ("Evergreen.V" <> show_ newVersion <> ".") ""
+    & T.replace "." "_"
+    & (\v -> "migrate_" <> v <> "_" <> nameToText newTypeName)
+
+
+
 data OldDef = Alias Can.Alias | Union Can.Union deriving (Show)
 
 
@@ -478,6 +487,8 @@ data OldDef = Alias Can.Alias | Union Can.Union deriving (Show)
 aliasToFt :: Int -> Int -> ModuleName.Canonical -> TypeIdentifier -> N.Name -> Interfaces -> RecursionSet -> Interface.Alias -> SnapRes
 aliasToFt oldVersion newVersion scope identifier@(author, pkg, module_, tipe) typeName interfaces recursionSet aliasInterface =
   let
+
+    newModule = module_
 
     oldModuleInterface = interfaces Map.! "Evergreen.V1.Types" -- @TODO
 
@@ -528,6 +539,16 @@ aliasToFt oldVersion newVersion scope identifier@(author, pkg, module_, tipe) ty
                   else
                     subt
 
+                oldModuleName =
+                  newModule
+                    & N.toText
+                    & T.replace ("Evergreen.V" <> show_ newVersion <> ".") ("Evergreen.V" <> show_ oldVersion <> ".")
+                    & N.fromText
+
+                newModuleName =
+                  newModule
+                    & N.toText
+
               in
               ( if length tvars > 0 then
                   "(" <> typeScope <> nameToText typeName <> tvars_ <> ")" -- <> "<!2>"
@@ -538,7 +559,7 @@ aliasToFt oldVersion newVersion scope identifier@(author, pkg, module_, tipe) ty
                   ElmFileText
                     { imports = imps
                     , types = [
-                        "\n" <> (lowerFirstLetter_ $ nameToText typeName) <> " : Old." <> nameToText typeName <> " -> ModelMigration New." <> nameToText typeName <> " New." <> msgForType (nameToText typeName) <> "\n" <>
+                        "\n" <> (lowerFirstLetter_ $ nameToText typeName) <> " : " <> nameToText oldModuleName <> "." <> nameToText typeName <> " -> ModelMigration " <> newModuleName <> "." <> nameToText typeName <> " " <> newModuleName <> "." <> msgForType (nameToText typeName) <> "\n" <>
                         (lowerFirstLetter_ $ nameToText typeName) <> " old = " <> migration
                       ]
                     })
@@ -653,7 +674,7 @@ canonicalToFt oldVersion newVersion scope interfaces recursionSet tipe tipeOldM 
               ("(Maybe " <> subt <> ")", imps, subft)
               -- DMaybe (canonicalToFt oldVersion newVersion scope interfaces recursionSet p tvarMap)
             _ ->
-              error "Fatal: impossible multi-param Maybe! Please report this."
+              error "Fatal: impossible multi-param Maybe! Please report this gen issue."
 
         ("elm", "core", "List", "List") ->
           case params of
@@ -664,7 +685,7 @@ canonicalToFt oldVersion newVersion scope interfaces recursionSet tipe tipeOldM 
               ("(List " <> subt <> ")", imps, subft)
               -- DList (canonicalToFt oldVersion newVersion scope interfaces recursionSet p tvarMap)
             _ ->
-              error "Fatal: impossible multi-param List! Please report this."
+              error "Fatal: impossible multi-param List! Please report this gen issue."
 
         ("elm", "core", "Array", "Array") ->
           case params of
@@ -675,7 +696,7 @@ canonicalToFt oldVersion newVersion scope interfaces recursionSet tipe tipeOldM 
               ("(Array.Array " <> subt <> ")", imps & Set.insert moduleName, subft)
               -- DArray (canonicalToFt oldVersion newVersion scope interfaces recursionSet p tvarMap)
             _ ->
-              error "Fatal: impossible multi-param Array! Please report this."
+              error "Fatal: impossible multi-param Array! Please report this gen issue."
 
         ("elm", "core", "Set", "Set") ->
           case params of
@@ -686,7 +707,7 @@ canonicalToFt oldVersion newVersion scope interfaces recursionSet tipe tipeOldM 
               ("(Set.Set " <> subt <> ")", imps & Set.insert moduleName, subft)
               -- DSet (canonicalToFt oldVersion newVersion scope interfaces recursionSet p tvarMap)
             _ ->
-              error "Fatal: impossible multi-param Set! Please report this."
+              error "Fatal: impossible multi-param Set! Please report this gen issue."
 
         ("elm", "core", "Result", "Result") ->
           -- @TODO next: extract result type
@@ -704,7 +725,7 @@ canonicalToFt oldVersion newVersion scope interfaces recursionSet tipe tipeOldM 
                         ("(Result " <> subt <> " " <> subt2 <> ")", mergeImports imps imps2, mergeFts subft subft2)
                         -- DResult (canonicalToFt oldVersion newVersion scope interfaces recursionSet result tvarMap) (canonicalToFt oldVersion newVersion scope interfaces recursionSet err tvarMap)
                       _ ->
-                        error "Fatal: impossible !2 param Result type! Please report this."
+                        error "Fatal: impossible !2 param Result type! Please report this gen issue."
 
                   )
 
@@ -724,7 +745,7 @@ canonicalToFt oldVersion newVersion scope interfaces recursionSet tipe tipeOldM 
               ("(Dict.Dict " <> subt <> " " <> subt2 <> ")", mergeImports imps imps2 & Set.insert moduleName, mergeFts subft subft2)
               -- DDict (canonicalToFt oldVersion newVersion scope interfaces recursionSet result tvarMap) (canonicalToFt oldVersion newVersion scope interfaces recursionSet err tvarMap)
             _ ->
-              error "Fatal: impossible !2 param Dict type! Please report this."
+              error "Fatal: impossible !2 param Dict type! Please report this gen issue."
 
 
         -- Values backed by JS Kernel types we cannot encode/decode
@@ -847,6 +868,8 @@ canonicalToFt oldVersion newVersion scope interfaces recursionSet tipe tipeOldM 
           case moduleName of
             (ModuleName.Canonical (Pkg.Name author pkg) module_) -> module_
 
+        newModule = module_
+
         identifier = asIdentifier_ (moduleName, name)
 
       in
@@ -897,13 +920,14 @@ canonicalToFt oldVersion newVersion scope interfaces recursionSet tipe tipeOldM 
               -- else
                 usageParamImports & Set.insert moduleName
 
-            typeDef =
+            migrationName = migrationNameUnderscored newModule newVersion name
 
+            typeDef =
               if isUserType_ cType then
                 if length tvarMap_ > 0 then
-                    ["migrate" <> N.toText name <> "4 old = " <> subt]
+                    [migrationName <> " old = " <> subt]
                 else
-                    ["migrate" <> N.toText name <> "5 old = " <> subt]
+                    [migrationName <> " old = " <> subt]
               else
                 -- ["-- no migration for primitive: " <> N.toText name ]
                 []
@@ -917,6 +941,14 @@ canonicalToFt oldVersion newVersion scope interfaces recursionSet tipe tipeOldM 
                     & mergeFts subft
                     & mergeFts (mergeAllFts (fmap selectFts usageParamFts))
 
+
+            migration =
+              if length tvarMap_ > 0 then
+                "(" <> migrationName <> " " <> usageParamNames <> ")" -- <> "<!2>"
+              else
+                migrationName -- <> "<!3>"
+
+
             -- !_ = formatHaskellValue "Can.TAlias.Holey:" (name, cType, tvarMap_, moduleName, scope) :: IO ()
           in
           -- debug_note ("🔵inserting def for " <> T.unpack (moduleNameKey moduleName) <> "." <> N.toString name <> "\n" <> (T.unpack $ head typeDef)) $
@@ -927,11 +959,13 @@ canonicalToFt oldVersion newVersion scope interfaces recursionSet tipe tipeOldM 
                 ("SAMETYPES", scopeImports, thing)
               else
                 (
-                  debugIden <> "🔵" <>
-                  if length tvarMap_ > 0 then
-                    "(" <> typeScope <> N.toText name <> " " <> usageParamNames <> ")"
-                  else
-                    typeScope <> N.toText name
+                  -- debugIden <> "🔵" <>
+                  migration
+                  -- "migrateeee" <>
+                  -- if length tvarMap_ > 0 then
+                  --   "(" <> typeScope <> N.toText name <> " " <> usageParamNames <> ")"
+                  -- else
+                  --   typeScope <> N.toText name
                 , scopeImports
                 , thing
                 )
@@ -965,7 +999,7 @@ canonicalToFt oldVersion newVersion scope interfaces recursionSet tipe tipeOldM 
           )
 
 
-    Can.TRecord fieldMap isPartial ->
+    Can.TRecord newFields isPartial ->
       case isPartial of
         Just whatIsThis ->
           ("ERROR TRecord, please report this!", Set.empty, Map.empty)
@@ -976,16 +1010,13 @@ canonicalToFt oldVersion newVersion scope interfaces recursionSet tipe tipeOldM 
             fieldMapOld =
               case tipeOldM of
                 Just tipeOld ->
-                  case tipeOld of
-                    Can.TRecord fieldMapOld isPartialOld ->
-                      fieldMapOld
-                    -- _ -> error $ "field map old not record: " <> show tipe
-                    _ -> Map.empty
-                -- _ -> error $ "field map old is empty for TRecord: " <> show tipe
+                  case Lamdera.Wire3.Helpers.resolveFieldMap tipeOld tvarMap of
+                    Just fields -> fields
+                    Nothing -> Map.empty
                 _ -> Map.empty
 
             fields =
-              fieldMap
+              newFields
                 & Map.toList
                 -- Restore user's field code-ordering to keep types looking familiar
                 & List.sortOn (\(name, (Can.FieldType index tipe)) -> index)
@@ -1015,13 +1046,15 @@ canonicalToFt oldVersion newVersion scope interfaces recursionSet tipe tipeOldM 
               fieldMapOld
                 & Map.toList
                 & filterMap (\(name, (Can.FieldType index tipe)) ->
-                  case Map.lookup name fieldMap of
+                  case Map.lookup name newFields of
                     Just (Can.FieldType index_ tipeOld) ->
                       Nothing
                     Nothing ->
-                      let (st,imps,ft) = canonicalToFt oldVersion newVersion scope interfaces recursionSet tipe nothingTODO tvarMap
-                      in
-                      Just ( N.toText name, ("Warning -- " <> qualifiedTypeName tipe <> " field removed. either remove this line (data dropped) or migrate into another field.", imps, ft) )
+                      -- This seemed like a nice idea to add the migrations anyway, but what does it mean to add a migration for an old type
+                      -- that has no equivalent new type in the current context...?
+                      -- let (st,imps,ft) = canonicalToFt oldVersion newVersion scope interfaces recursionSet tipe nothingTODO tvarMap
+                      -- in
+                      Just ( N.toText name, ("Warning -- this `" <> qualifiedTypeName tipe <> "` field disappeared in V" <> show_ newVersion <> ". This line is just a reminder and can be removed once you've handled it.", Set.empty, Map.empty) )
                 )
 
             fieldsFormatted =
@@ -1069,7 +1102,7 @@ canonicalToFt oldVersion newVersion scope interfaces recursionSet tipe tipeOldM 
       (N.toText name, Set.empty, Map.empty)
 
     Can.TLambda _ _ ->
-      error "Fatal: impossible function type! Please report this."
+      error "Fatal: impossible function type! Please report this gen issue."
       -- ("XXXXXX TLambda", Set.empty, Map.empty)
       -- DError $ "must not contain functions"
 
@@ -1123,8 +1156,16 @@ asIdentifier tipe =
   case tipe of
     Can.TType moduleName name params ->
       asIdentifier_ (moduleName, name)
+    Can.TAlias moduleName name _ _ ->
+      asIdentifier_ (moduleName, name)
 
-    _ -> error $ "asIdentifierUnimplemented: " <> show tipe
+    Can.TLambda a b        -> ("elm", "core", "Basics", "<function>")
+    Can.TVar a             -> ("elm", "core", "Basics", "a")
+    Can.TRecord a b        -> ("elm", "core", "Basics", "{}")
+    Can.TUnit              -> ("elm", "core", "Basics", "()")
+    Can.TTuple a b c       -> ("elm", "core", "Basics", "Tuple")
+
+    -- _ -> error $ "asIdentifierUnimplemented: " <> show tipe
 
 
 asIdentifier_ :: (ModuleName.Canonical, N.Name) -> TypeIdentifier

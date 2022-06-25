@@ -155,7 +155,7 @@ resolvedRecordFieldMapM fieldMap extensibleName tvarMap =
   case extensibleName of
     Just extensibleName ->
       case List.find (\(n,_) -> n == extensibleName) tvarMap of
-        Just (extensibleName, extensibleType) ->
+        Just (_, extensibleType) ->
           case extensibleType of
             TRecord fieldMapExtended maybeNameExtended ->
               Just $ fieldMap <> fieldMapExtended
@@ -204,6 +204,37 @@ resolvedRecordFieldMapM fieldMap extensibleName tvarMap =
     -- Not an extensible record
     Nothing -> Nothing
 
+
+resolveFieldMap tipe tvarMap =
+  case tipe of
+    TRecord fieldMapExtended maybeNameExtended ->
+      Just $ fieldMapExtended
+
+    TAlias moduleName typeName tvars (Holey tipe) -> do
+      let newResolvedTvars = tvars & fmap (\(n, t) -> (n, resolveTvars tvarMap t))
+      case resolveTvars newResolvedTvars tipe of
+        TRecord fieldMapExtensible _ -> Just fieldMapExtensible
+        _ -> Nothing
+
+    TAlias moduleName typeName tvars (Filled tipe) -> do
+      let newResolvedTvars = tvars & fmap (\(n, t) -> (n, resolveTvars tvarMap t))
+      case resolveTvars newResolvedTvars tipe of
+        TRecord fieldMapExtensible _ -> Just fieldMapExtensible
+        _ -> Nothing
+
+    {-|
+      This should be impossible, but can happen with code like this:
+
+      type alias Record a =
+          { a | field : a }
+
+      type alias Blah =
+          Record Int
+
+      And it seems Elm's type checker doesn't pick it up.
+
+    -}
+    _ -> Nothing
 
 -- instance Show (Can.Decls) where
 --   show decls_ = show $ declsToList decls_

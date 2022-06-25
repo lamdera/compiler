@@ -1,4 +1,4 @@
-module Evergreen.MigrateExpected.V2 exposing (..)
+module Evergreen.Migrate.V2 exposing (..)
 
 import Evergreen.V1.External
 import Evergreen.V1.Types
@@ -11,33 +11,15 @@ backendModel : Evergreen.V1.Types.BackendModel -> ModelMigration Evergreen.V2.Ty
 backendModel old =
     { unchangedCore = old.unchangedCore
     , unchangedUser = old.unchangedUser |> migrate_Types_UserType
-    , unchangedAllTypes = old.unchangedAllTypes |> migrate_External_AllTypes
     , externalUnion = old.externalUnion |> migrate_External_ExternalUnion
     , added = Unimplemented -- new field of type: Basics.Int
-    , removed = Warning -- this `String.String` field disappeared in V2. This line is just a reminder and can be removed once you've handled it.
-    , removedRecord = Warning -- this `Evergreen.V1.External.AllTypes` field disappeared in V2. This line is just a reminder and can be removed once you've handled it.
+    , removed = Unimplemented -- String.String field removed. either remove this line (data dropped) or migrate into another field.
     }
 
 
 frontendModel : Evergreen.V1.Types.FrontendModel -> ModelMigration Evergreen.V2.Types.FrontendModel Evergreen.V2.Types.FrontendMsg
 frontendModel old =
     ModelUnchanged
-
-
-migrate_External_AllTypes old =
-    { int = old.int
-    , float = old.float
-    , bool = old.bool
-    , char = old.char
-    , string = old.string
-    , listInt = old.listInt
-    , setFloat = old.setFloat
-    , arrayString = old.arrayString
-    , dict = old.dict
-    , time = old.time
-    , order = old.order
-    , unit = old.unit
-    }
 
 
 migrate_External_ExternalUnion old =
@@ -93,4 +75,4 @@ migrate_Types_UserType old =
                This is just a reminder in case migrating some subset of the old data to this new value was important.
                See https://lamdera.com/tips/modified-custom-type for more info.
             -}
-            Notice
+            Unimplemented
