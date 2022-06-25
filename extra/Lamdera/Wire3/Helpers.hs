@@ -776,8 +776,10 @@ resolveTvars tvarMap t =
                 _ -> error $ "bad nesting Holey" ++ show tipe
 
             rt ->
-              -- resolveTvars tvarMap rt
-              error $ "resolveTvars: impossible extensible record with non-record type: " ++ show maybeExtensible ++ "\n\n" ++ show rt
+              -- @TODO used to have this, but it caused a failure on `TVar a` for which an mcve was elusive...
+              -- theory is that a chained tvar case must somehow be possible, perhaps in a compound type.
+              -- error $ "resolveTvars: impossible extensible record with non-record type: " ++ show maybeExtensible ++ "\n\n" ++ show rt
+              resolveTvars tvarMap rt
 
 
     TUnit -> t
