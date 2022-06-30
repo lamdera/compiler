@@ -222,14 +222,20 @@ Executable lamdera
         Lamdera.AppConfig
         Lamdera.Checks
         Lamdera.Constrain
-        Lamdera.Evergreen.MigrationHarness
         Lamdera.Evergreen.MigrationGenerator
+        Lamdera.Evergreen.MigrationGeneratorUnion
+        Lamdera.Evergreen.MigrationGeneratorAlias
+        Lamdera.Evergreen.MigrationGeneratorType
+        Lamdera.Evergreen.MigrationGeneratorHelpers
+        Lamdera.Evergreen.MigrationGenX
+        Lamdera.Evergreen.MigrationHarness
         Lamdera.Evergreen.Snapshot
         Lamdera.Extensions
         Lamdera.Graph
         Lamdera.Hints
         Lamdera.Injection
         Lamdera.Live
+        Lamdera.PostCompile
         Lamdera.Project
         Lamdera.RelativeLoad
         Lamdera.Suggestions
@@ -283,8 +289,9 @@ Executable lamdera
         EasyTest
         Test
         LamderaSharedBuildHelpers
-        Test.Helpers
         Test.Check
+        Test.Ext.ElmPages.Check
+        Test.Helpers
         Test.Lamdera
         Test.Snapshot
         Test.TypeHashes

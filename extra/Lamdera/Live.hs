@@ -50,10 +50,9 @@ lamderaLiveSrc =
 
 
 -- @TODO means we have to restart live for any changes... how to improve that?
-lamderaLiveHead :: B.Builder
-lamderaLiveHead =
+lamderaLiveHead :: FilePath -> B.Builder
+lamderaLiveHead root =
   Lamdera.unsafe $ do
-    root <- getProjectRoot
     headHtmlM <- readUtf8Text $ root </> "head.html"
     case headHtmlM of
       Just headHtml ->

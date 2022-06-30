@@ -45,6 +45,8 @@ shouldHaveCodecsGenerated name =
     -- Avoid cyclic imports; generated codecs rely on lamdera/codecs:Lamdera.Wire. This is our codec bootstrap module.
     Name "lamdera" "codecs" -> False
 
+    Name "mdgriffith" "style-elements" -> False
+
     -- Everything else should have codecs generated
     _ -> True
 

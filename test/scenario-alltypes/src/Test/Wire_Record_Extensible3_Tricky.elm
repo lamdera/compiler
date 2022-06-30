@@ -273,3 +273,39 @@ expected_w3_encode_TimePickerConfig =
 
 expected_w3_decode_TimePickerConfig =
     Lamdera.Wire3.succeedDecode (\timePickerType0 -> { timePickerType = timePickerType0 }) |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeInt
+
+
+
+-- Recursive unconstrained -> constrained case in https://github.com/mdgriffith/style-elements/tree/5.0.2
+
+
+type Property class variation
+    = Variation variation (List (Property class Never))
+
+
+expected_w3_encode_Property :
+    (class -> Lamdera.Wire3.Encoder)
+    -> (variation -> Lamdera.Wire3.Encoder)
+    -> Property class variation
+    -> Lamdera.Wire3.Encoder
+expected_w3_encode_Property w3_x_c_class w3_x_c_variation w3v =
+    case w3v of
+        Variation v0 v1 ->
+            Lamdera.Wire3.encodeSequenceWithoutLength
+                [ Lamdera.Wire3.encodeUnsignedInt8 0
+                , w3_x_c_variation v0
+                , Lamdera.Wire3.encodeList (w3_encode_Property w3_x_c_class Lamdera.Wire3.encodeNever) v1
+                ]
+
+
+expected_w3_decode_Property w3_x_c_class w3_x_c_variation =
+    Lamdera.Wire3.decodeUnsignedInt8
+        |> Lamdera.Wire3.andThenDecode
+            (\w3v ->
+                case w3v of
+                    0 ->
+                        Lamdera.Wire3.succeedDecode Variation |> Lamdera.Wire3.andMapDecode w3_x_c_variation |> Lamdera.Wire3.andMapDecode (Lamdera.Wire3.decodeList (w3_decode_Property w3_x_c_class Lamdera.Wire3.decodeNever))
+
+                    _ ->
+                        Lamdera.Wire3.failDecode
+            )

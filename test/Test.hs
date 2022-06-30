@@ -89,14 +89,14 @@ For more information on how to use the GHCi debugger, see the GHC User's Guide.
 -- Current target for ghci :rr command. See ~/.ghci config file, which should contain
 -- something like `:def rr const $ return $ unlines [":r","Test.target"]`
 
-target = Test.all
+-- target = Test.all
 
 -- target =
 --   Test.Check.checkWithParams "/Users/mario/lamdera/test/v1" "always-v0"
 
 -- target = buildTestHarnessToProductionJs
 -- target = checkProjectCompiles
--- target = liveReloadLive
+target = liveReloadLive
 -- target = do
   -- Dir.withCurrentDirectory "/Users/mario/dev/projects/lamdera-dashboard" $ Lamdera.CLI.Check.run () ()
 -- target = Test.Wire.all
@@ -129,7 +129,7 @@ checkProjectCompiles = do
   -- Lamdera.CLI.Check.checkUserProjectCompiles "/Users/mario/dev/projects/lamdera-dashboard"
 
   --  Lamdera.CLI.Check.checkUserProjectCompiles runs in async so we don't get the trace
-  let root = "/Users/mario/work/codespecs"
+  let root = "/Users/mario/dev/test/style-elements"
       scaffold = "src/Frontend.elm"
   -- let root = "/Users/mario/dev/test/realia/staging"
   --     scaffold = "src/LFR.elm"
@@ -186,16 +186,16 @@ buildTestHarnessToProductionJs = do
 {- Dynamic testing of lamdera live with managed thread kill + reload -}
 liveReloadLive = do
 
-
-
   setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
   setEnv "LDEBUG" "1"
 
   let p = "/Users/mario/lamdera/test/v1"
+
   -- let p = "/Users/mario/dev/test/lamdera-init"
   -- let p = "/Users/mario/dev/test/nu-ashworld-lamdera"
   -- let p = "/Users/mario/dev/projects/otstats"
   -- let p = "/Users/mario/work/codespecs"
+  -- let p = "/Users/mario/lamdera/overrides/packages/elm/bytes/1.0.8/benchmarks"
 
   -- rmdir "/Users/mario/.elm"
   -- rmdir $ p <> "/elm-stuff"
@@ -209,7 +209,7 @@ liveReloadLive = do
 
   Dir.setCurrentDirectory p
   Dir.setCurrentDirectory p
-  withCurrentDirectory p $ trackedForkIO "Test.liveReloadLive" $ withCurrentDirectory p $ Develop.run () (Develop.Flags Nothing)
+  withCurrentDirectory p $ trackedForkIO "Test.liveReloadLive" $ withCurrentDirectory p $ Develop.runWithRoot p (Develop.Flags Nothing)
 
   -- Doing this actually makes no sense in the :rr context, as the thread is long-running so it's the same as
   -- disabling the ENV vars mid-run! But leaving it here as a reminder, because it _does_ pollute the ENV

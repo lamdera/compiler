@@ -3,6 +3,7 @@
 module Develop
   ( Flags(..)
   , run
+  , runWithRoot
   )
   where
 
@@ -59,7 +60,13 @@ data Flags =
 
 
 run :: () -> Flags -> IO ()
-run () (Flags maybePort) =
+run () flags = do
+  root <- getProjectRoot
+  runWithRoot root flags
+
+
+runWithRoot :: FilePath -> Flags -> IO ()
+runWithRoot root (Flags maybePort) =
   do  let port = maybe 8000 id maybePort
       liftIO $ Lamdera.stdoutSetup
       putStrLn $ "Go to http://localhost:" ++ show port ++ " to see your project dashboard."
@@ -103,10 +110,10 @@ run () (Flags maybePort) =
 
       Live.withEnd liveState $
        httpServe (config port) $
-        Live.serveLamderaPublicFiles (serveElm sentryCache) serveFilePretty -- Add /public/* as if it were /* to mirror production
-        <|> (serveFiles sentryCache)
+        Live.serveLamderaPublicFiles root (serveElm sentryCache) serveFilePretty -- Add /public/* as if it were /* to mirror production
+        <|> (serveFiles root sentryCache)
         <|> serveDirectoryWith directoryConfig "."
-        <|> Live.serveWebsocket liveState
+        <|> Live.serveWebsocket root liveState
         <|> route [ ("_r/:endpoint", Live.serveRpc liveState port) ]
         <|> Live.serveExperimental root
         <|> serveAssets -- Compiler packaged static files
@@ -151,11 +158,11 @@ error404 =
 -- SERVE FILES
 
 
-serveFiles :: Sentry.Cache -> Snap ()
-serveFiles sentryCache =
+serveFiles :: FilePath -> Sentry.Cache -> Snap ()
+serveFiles root sentryCache =
   do  path <- getSafePath
       guard =<< liftIO (Dir.doesFileExist path)
-      serveElm_ path <|> serveFilePretty path
+      serveElm_ root path <|> serveFilePretty path
 
 
 
@@ -228,12 +235,12 @@ compileToBuilder path =
                     Exit.toJson $ Exit.reactorToReport exit
 
 
-serveElm_ :: FilePath -> Snap ()
-serveElm_ path =
+serveElm_ :: FilePath -> FilePath -> Snap ()
+serveElm_ root path =
   do  guard (takeExtension path == ".elm")
       modifyResponse (setContentType "text/html")
       liftIO $ atomicPutStrLn $ "⛑  manually compiling: " <> path
-      root <- liftIO $ getProjectRoot
+
       result <- liftIO $ compile (root </> path)
       case result of
         Right builder ->
@@ -269,7 +276,7 @@ compile path =
 
                 javascript <- Task.mapError Exit.ReactorBadGenerate $ Generate.dev root details artifacts
                 let (NE.List name _) = Build.getRootNames artifacts
-                return $ Html.sandwich name javascript
+                return $ Html.sandwich root name javascript
 
 
 

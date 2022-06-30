@@ -13,9 +13,9 @@ backendModel old =
     , unchangedUser = old.unchangedUser |> migrate_Types_UserType
     , unchangedAllTypes = old.unchangedAllTypes |> migrate_External_AllTypes
     , externalUnion = old.externalUnion |> migrate_External_ExternalUnion
-    , added = Unimplemented -- new field of type: Basics.Int
-    , removed = Warning -- this `String.String` field disappeared in V2. This line is just a reminder and can be removed once you've handled it.
-    , removedRecord = Warning -- this `Evergreen.V1.External.AllTypes` field disappeared in V2. This line is just a reminder and can be removed once you've handled it.
+    , added = Unimplemented -- new in V2 (Basics.Int)
+    , removed = Warning -- removed in V2 (String.String). This line is just a reminder and can be removed once you've handled it.
+    , removedRecord = Warning -- removed in V2 (Evergreen.V1.External.AllTypes). This line is just a reminder and can be removed once you've handled it.
     }
 
 
