@@ -200,16 +200,9 @@ liveReloadLive = do
   -- rmdir "/Users/mario/.elm"
   -- rmdir $ p <> "/elm-stuff"
 
-  bash $ "cp /Users/mario/dev/projects/lamdera/runtime/src/LamderaRPC.elm " <> p <> "/src/LamderaRPC.elm"
-
-
-  Dir.setCurrentDirectory p
-  Dir.setCurrentDirectory p
-
-
-  Dir.setCurrentDirectory p
-  Dir.setCurrentDirectory p
-  withCurrentDirectory p $ trackedForkIO "Test.liveReloadLive" $ withCurrentDirectory p $ Develop.runWithRoot p (Develop.Flags Nothing)
+  -- Dir.setCurrentDirectory p
+  -- withCurrentDirectory p $
+  trackedForkIO "Test.liveReloadLive" $ withCurrentDirectory p $ Develop.runWithRoot p (Develop.Flags Nothing)
 
   -- Doing this actually makes no sense in the :rr context, as the thread is long-running so it's the same as
   -- disabling the ENV vars mid-run! But leaving it here as a reminder, because it _does_ pollute the ENV

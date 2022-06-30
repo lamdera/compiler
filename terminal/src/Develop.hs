@@ -69,7 +69,9 @@ runWithRoot :: FilePath -> Flags -> IO ()
 runWithRoot root (Flags maybePort) =
   do  let port = maybe 8000 id maybePort
       liftIO $ Lamdera.stdoutSetup
-      putStrLn $ "Go to http://localhost:" ++ show port ++ " to see your project dashboard."
+      atomicPutStrLn $ "Go to http://localhost:" ++ show port ++ " to see your project dashboard."
+
+      Lamdera.setProjectRoot root
 
       onlyWhen (port == 8001) $
         error "Port 8001 is reserved for the Lamdera proxy, please pick another port."
