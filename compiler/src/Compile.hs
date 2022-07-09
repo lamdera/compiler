@@ -15,6 +15,7 @@ import qualified AST.Source as Src
 import qualified AST.Canonical as Can
 import qualified AST.Optimized as Opt
 import qualified Canonicalize.Module as Canonicalize
+import qualified Elm.Float
 import qualified Elm.Interface as I
 import qualified Elm.ModuleName as ModuleName
 import qualified Elm.Package as Pkg
@@ -119,8 +120,42 @@ compile pkg ifaces modul = do
                 )
                 (firstParam : rest) ->
                 let
+                    {-| Element.Color -> Element.Attr decorative msg -}
                     backgroundColorAnnotation =
-                        0
+                        Can.Forall
+                            (Map.fromList [ ("decorative", ()), ("msg", ()) ])
+                            (Can.TLambda
+                                (Can.TType
+                                    (ModuleName.Canonical package "Element")
+                                    "Color"
+                                    []
+                                )
+                                (Can.TType
+                                    (ModuleName.Canonical package "Element")
+                                    "Attr"
+                                    [ Can.TVar "decorative", Can.TVar "msg" ]
+                                )
+                            )
+
+                    backgroundColor =
+                        Reporting.Annotation.At
+                            location
+                            (Can.VarForeign
+                                (ModuleName.Canonical package "Element.Background")
+                                "color"
+                                backgroundColorAnnotation
+                            )
+
+                    rgb255 =
+                        Reporting.Annotation.At
+                            location
+                            (Can.VarForeign
+                                (ModuleName.Canonical package "Element")
+                                "rgb255"
+                                backgroundColorAnnotation
+                            )
+
+
 
                     newAttributes =
                         Reporting.Annotation.At
@@ -129,15 +164,23 @@ compile pkg ifaces modul = do
                                 [ Reporting.Annotation.At
                                     location
                                     (Can.Call
-                                        (Reporting.Annotation.At
+                                        backgroundColor
+                                        [ Reporting.Annotation.At
                                             location
-                                            (Can.VarForeign
-                                                (ModuleName.Canonical package "Element.Background")
-                                                "color"
-                                                annotation
+                                            (Can.Call
+                                                rgb255
+                                                [ Reporting.Annotation.At
+                                                    location
+                                                    (Can.Int 50)
+                                                , Reporting.Annotation.At
+                                                    location
+                                                    (Can.Int 200)
+                                                , Reporting.Annotation.At
+                                                    location
+                                                    (Can.Int 100)
+                                                ]
                                             )
-                                        )
-                                        []
+                                        ]
                                     )
                                 ]
                             )
