@@ -18,6 +18,7 @@ import qualified Data.Text.Encoding as T
 import qualified Data.Text.Lazy.Encoding as TL
 import qualified Data.Text.Lazy.Builder as TLB
 
+import System.Command (command)
 import System.Exit (exitFailure)
 import System.FilePath as FP ((</>), joinPath, splitDirectories, takeDirectory)
 import System.IO.Unsafe (unsafePerformIO)
@@ -382,7 +383,6 @@ cq_ bin args input = do
 -- Re-exports
 
 (&) = (Data.Function.&)
-
 
 
 -- Strings

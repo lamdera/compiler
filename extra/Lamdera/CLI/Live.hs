@@ -57,6 +57,8 @@ import Control.Monad (guard, void)
 
 import qualified Lamdera.CLI.Check
 import qualified Lamdera.RelativeLoad
+import qualified Ext.Common
+
 
 
 type LiveState = (TVar [Client], TVar (Maybe ClientId), BroadcastChan In Text, TVar Text)
@@ -299,6 +301,7 @@ serveExperimental root = do
       [ ("_x/read", serveExperimentalRead root)
       , ("_x/write", serveExperimentalWrite root)
       , ("_x/list", serveExperimentalList root)
+      , ("_x/editor", serveExperimentalEditorOpen root)
       ]
   handlers
     & List.find (\(prefix, handler) ->
@@ -359,6 +362,24 @@ serveExperimentalList root path = do
 
     else do
       error404 "folder not found"
+
+
+serveExperimentalEditorOpen :: FilePath -> Text -> Snap ()
+serveExperimentalEditorOpen root path = do
+  debug $ "_x/editor received: " ++ show path
+  case path & T.splitOn ":" of
+    file:line:xs -> do
+      let fullpath = (root </> T.unpack file)
+      debug $ "_x/editor: " ++ show fullpath
+      exists_ <- liftIO $ Dir.doesFileExist fullpath
+      if exists_
+        then do
+          -- @TODO generalise with editor discovery
+          liftIO $ Ext.Common.bash $ "open -na \"IntelliJ IDEA CE.app\" --args --line " <> T.unpack line <> " " <> fullpath
+          jsonResponse "{ status: 'tried opening editor' }"
+        else do
+          error404 "file not found"
+
 
 
 serveRpc (mClients, mLeader, mChan, beState) port = do

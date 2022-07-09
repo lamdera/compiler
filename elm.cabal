@@ -410,4 +410,5 @@ Executable lamdera
         clock,
         fold-debounce,
         formatting,
-        fsnotify
+        fsnotify,
+        command
