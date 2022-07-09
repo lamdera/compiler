@@ -101,18 +101,24 @@ compile pkg ifaces modul = do
             Can.Float float ->
                 Can.Float float
             Can.List exprs ->
-                Can.List (map updateExpr exprs)
+                Can.List (fmap updateExpr exprs)
             Can.Negate expr ->
                 Can.Negate (updateExpr expr)
             Can.Binop name canonical name2 annotation expr expr2 ->
                 Can.Binop name canonical name2 annotation (updateExpr expr) (updateExpr expr2)
             Can.Lambda patterns expr ->
                 Can.Lambda patterns (updateExpr expr)
+            Can.Call
+                (Reporting.Annotation.At location (Can.VarForeign canonical name annotation))
+                (firstParam : rest) ->
+                Can.Call
+                    (Reporting.Annotation.At location (Can.VarForeign canonical name annotation))
+                    (fmap updateExpr (firstParam : rest))
             Can.Call expr exprs ->
-                Can.Call (updateExpr expr) (map updateExpr exprs)
+                Can.Call (updateExpr expr) (fmap updateExpr exprs)
             Can.If exprs expr ->
                 Can.If
-                    (map (\(first, second) -> (updateExpr first, updateExpr second)) exprs)
+                    (fmap (\(first, second) -> (updateExpr first, updateExpr second)) exprs)
                     (updateExpr expr)
             Can.Let def expr ->
                 Can.Let def (updateExpr expr)
@@ -121,7 +127,14 @@ compile pkg ifaces modul = do
             Can.LetDestruct pattern expr expr2 ->
                 Can.LetDestruct pattern (updateExpr expr) (updateExpr expr2)
             Can.Case expr caseBranches ->
-                Can.Case (updateExpr expr) caseBranches
+                Can.Case
+                    (updateExpr expr)
+                    (fmap
+                        (\(Can.CaseBranch pattern caseExpr) ->
+                            Can.CaseBranch pattern (updateExpr caseExpr)
+                        )
+                        caseBranches
+                    )
             Can.Accessor name ->
                 Can.Accessor name
             Can.Access expr name ->
@@ -133,7 +146,7 @@ compile pkg ifaces modul = do
             Can.Unit ->
                 Can.Unit
             Can.Tuple expr expr2 maybeExpr ->
-                Can.Tuple (updateExpr expr) (updateExpr expr2) maybeExpr
+                Can.Tuple (updateExpr expr) (updateExpr expr2) (fmap updateExpr maybeExpr)
             Can.Shader shaderSource shaderTypes ->
                 Can.Shader shaderSource shaderTypes
         )
