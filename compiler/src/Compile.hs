@@ -73,6 +73,19 @@ compile pkg ifaces modul = do
   canonical1 <- Lamdera.Wire3.Core.addWireGenerations canonical0 pkg ifaces modul_
   canonical2 <- Lamdera.Wire2.Core.addWireGenerations canonical1 pkg ifaces modul_
 
+  let
+    adjustElmUiFunctions :: Can.Decls -> Can.Decls
+    adjustElmUiFunctions decls =
+      -- error "todo!"
+      decls
+
+    canonical3 :: Can.Module
+    canonical3 =
+      (Can._decls canonical2)
+        & adjustElmUiFunctions
+        & (\newDecls -> canonical2 { Can._decls = newDecls })
+
+
   -- () <- unsafePerformIO $ do
   --   case (pkg, Src.getName modul) of
   --     ((Pkg.Name "author" "project"), "Page") -> do
@@ -88,12 +101,17 @@ compile pkg ifaces modul = do
   --   pure (pure ())
 
   -- ()          <- debugPassText "starting typecheck" moduleName (pure ())
-  annotations <- typeCheck modul_ canonical2
+  annotations <- typeCheck modul_ canonical3
   -- ()          <- debugPassText "starting nitpick" moduleName (pure ())
-  ()          <- nitpick canonical2
+  ()          <- nitpick canonical3
+
+
+
+
   -- ()          <- debugPassText "starting optimize" moduleName (pure ())
-  objects     <- optimize modul_ annotations canonical2
-  return (Artifacts canonical2 annotations objects)
+  objects     <- optimize modul_ annotations canonical3
+
+  return (Artifacts canonical3 annotations objects)
 
 
 {- The original compile function for reference -}
