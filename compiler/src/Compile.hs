@@ -20,6 +20,7 @@ import qualified Elm.ModuleName as ModuleName
 import qualified Elm.Package as Pkg
 import qualified Nitpick.PatternMatches as PatternMatches
 import qualified Optimize.Module as Optimize
+import qualified Reporting.Annotation
 import qualified Reporting.Error as E
 import qualified Reporting.Result as R
 import qualified Reporting.Render.Type.Localizer as Localizer
@@ -74,15 +75,100 @@ compile pkg ifaces modul = do
   canonical2 <- Lamdera.Wire2.Core.addWireGenerations canonical1 pkg ifaces modul_
 
   let
-    adjustElmUiFunctions :: Can.Decls -> Can.Decls
-    adjustElmUiFunctions decls =
+    updateExpr :: Can.Expr -> Can.Expr
+    updateExpr (Reporting.Annotation.At location expr) =
+        (case expr of
+            Can.VarLocal name ->
+                Can.VarLocal name
+            Can.VarTopLevel canonical name ->
+                Can.VarTopLevel canonical name
+            Can.VarKernel name name2 ->
+                Can.VarKernel name name2
+            Can.VarForeign canonical name annotation ->
+                Can.VarForeign canonical name annotation
+            Can.VarCtor ctorOpts canonical name zeroBased annotation ->
+                Can.VarCtor ctorOpts canonical name zeroBased annotation
+            Can.VarDebug canonical name annotation ->
+                Can.VarDebug canonical name annotation
+            Can.VarOperator name canonical name2 annotation ->
+                Can.VarOperator name canonical name2 annotation
+            Can.Chr string ->
+                Can.Chr string
+            Can.Str string ->
+                Can.Str string
+            Can.Int int ->
+                Can.Int int
+            Can.Float float ->
+                Can.Float float
+            Can.List exprs ->
+                Can.List (map updateExpr exprs)
+            Can.Negate expr ->
+                Can.Negate (updateExpr expr)
+            Can.Binop name canonical name2 annotation expr expr2 ->
+                Can.Binop name canonical name2 annotation (updateExpr expr) (updateExpr expr2)
+            Can.Lambda patterns expr ->
+                Can.Lambda patterns (updateExpr expr)
+            Can.Call expr exprs ->
+                Can.Call (updateExpr expr) (map updateExpr exprs)
+            Can.If exprs expr ->
+                Can.If
+                    (map (\(first, second) -> (updateExpr first, updateExpr second)) exprs)
+                    (updateExpr expr)
+            Can.Let def expr ->
+                Can.Let def (updateExpr expr)
+            Can.LetRec defs expr ->
+                Can.LetRec defs (updateExpr expr)
+            Can.LetDestruct pattern expr expr2 ->
+                Can.LetDestruct pattern (updateExpr expr) (updateExpr expr2)
+            Can.Case expr caseBranches ->
+                Can.Case (updateExpr expr) caseBranches
+            Can.Accessor name ->
+                Can.Accessor name
+            Can.Access expr name ->
+                Can.Access (updateExpr expr) name
+            Can.Update name expr fieldUpdates ->
+                Can.Update name (updateExpr expr) fieldUpdates
+            Can.Record fields ->
+                Can.Record fields
+            Can.Unit ->
+                Can.Unit
+            Can.Tuple expr expr2 maybeExpr ->
+                Can.Tuple (updateExpr expr) (updateExpr expr2) maybeExpr
+            Can.Shader shaderSource shaderTypes ->
+                Can.Shader shaderSource shaderTypes
+        )
+        & Reporting.Annotation.At location
+
+    updateDefs :: Can.Def -> Can.Def
+    updateDefs def =
+        case def of
+            Can.Def name patterns expr ->
+                Can.Def name patterns (updateExpr expr)
+
+            Can.TypedDef name freeVars patterns expr type_ ->
+                Can.TypedDef name freeVars patterns (updateExpr expr) type_
+
+
+    updateDecls :: Can.Decls -> Can.Decls
+    updateDecls decls =
       -- error "todo!"
-      decls
+        case decls of
+            Can.Declare def nextDecl ->
+                Can.Declare (updateDefs def) (updateDecls nextDecl)
+
+            Can.DeclareRec def remainingDefs nextDecl ->
+                Can.DeclareRec
+                    (updateDefs def)
+                    (map updateDefs remainingDefs)
+                    (updateDecls nextDecl)
+                
+            Can.SaveTheEnvironment ->
+                Can.SaveTheEnvironment
 
     canonical3 :: Can.Module
     canonical3 =
       (Can._decls canonical2)
-        & adjustElmUiFunctions
+        & updateDecls
         & (\newDecls -> canonical2 { Can._decls = newDecls })
 
 
