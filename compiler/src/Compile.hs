@@ -109,10 +109,56 @@ compile pkg ifaces modul = do
             Can.Lambda patterns expr ->
                 Can.Lambda patterns (updateExpr expr)
             Can.Call
-                (Reporting.Annotation.At location (Can.VarForeign canonical name annotation))
+                (Reporting.Annotation.At
+                    location
+                    (Can.VarForeign
+                        (ModuleName.Canonical package "Element")
+                        "el"
+                        annotation
+                    )
+                )
                 (firstParam : rest) ->
+                let
+                    backgroundColorAnnotation =
+                        0
+
+                    newAttributes =
+                        Reporting.Annotation.At
+                            location
+                            (Can.List
+                                [ Reporting.Annotation.At
+                                    location
+                                    (Can.Call
+                                        (Reporting.Annotation.At
+                                            location
+                                            (Can.VarForeign
+                                                (ModuleName.Canonical package "Element.Background")
+                                                "color"
+                                                annotation
+                                            )
+                                        )
+                                        []
+                                    )
+                                ]
+                            )
+
+--                     finalAttributes =
+--                         Reporting.Annotation.At
+--                             location
+--                             (Can.BinOps
+--
+--                                 newAttributes
+--                             )
+
+                in
                 Can.Call
-                    (Reporting.Annotation.At location (Can.VarForeign canonical name annotation))
+                    (Reporting.Annotation.At
+                        location
+                        (Can.VarForeign
+                            (ModuleName.Canonical package "Element")
+                            (dt "Note" "el")
+                            annotation)
+                        )
                     (fmap updateExpr (firstParam : rest))
             Can.Call expr exprs ->
                 Can.Call (updateExpr expr) (fmap updateExpr exprs)
