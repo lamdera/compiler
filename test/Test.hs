@@ -89,14 +89,14 @@ For more information on how to use the GHCi debugger, see the GHC User's Guide.
 -- Current target for ghci :rr command. See ~/.ghci config file, which should contain
 -- something like `:def rr const $ return $ unlines [":r","Test.target"]`
 
-target = Test.all
+-- target = Test.all
 
 -- target =
 --   Test.Check.checkWithParams "/Users/mario/lamdera/test/v1" "always-v0"
 
 -- target = buildTestHarnessToProductionJs
 -- target = checkProjectCompiles
--- target = liveReloadLive
+target = liveReloadLive
 -- target = do
   -- Dir.withCurrentDirectory "/Users/mario/dev/projects/lamdera-dashboard" $ Lamdera.CLI.Check.run () ()
 -- target = Test.Wire.all
