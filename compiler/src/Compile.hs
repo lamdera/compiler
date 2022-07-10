@@ -137,6 +137,63 @@ compile pkg ifaces modul = do
                                 )
                             )
 
+                    packageName :: Pkg.Name
+                    packageName = Pkg.Name "elm" "core"
+
+                    {-| List a -> List a -> List a -}
+                    listAppendAnnotation =
+                        Can.Forall
+                            (Map.fromList [ ("a", ()) ])
+                            (Can.TLambda
+                                (Can.TType
+                                    ModuleName.list
+                                    "List"
+                                    [ Can.TVar "a" ]
+                                )
+                                (Can.TLambda
+                                    (Can.TType
+                                        ModuleName.list
+                                        "List"
+                                        [ Can.TVar "a" ]
+                                    )
+                                    (Can.TType
+                                        ModuleName.list
+                                        "List"
+                                        [ Can.TVar "a" ]
+                                    )
+                                )
+                            )
+
+                    rgb255Annotation =
+                        Can.Forall
+                            (Map.fromList [])
+                            (Can.TLambda
+                                (Can.TType
+                                    (ModuleName.basics)
+                                    "Int"
+                                    []
+                                )
+                                (Can.TLambda
+                                    (Can.TType
+                                        (ModuleName.basics)
+                                        "Int"
+                                        []
+                                    )
+                                    (Can.TLambda
+                                        (Can.TType
+                                            (ModuleName.basics)
+                                            "Int"
+                                            []
+                                        )
+                                        (Can.TType
+                                            (ModuleName.Canonical (dt "Note" package) "Element")
+                                            "Color"
+                                            []
+                                        )
+                                    )
+                                )
+                            )
+
                     backgroundColor =
                         Reporting.Annotation.At
                             location
@@ -152,11 +209,11 @@ compile pkg ifaces modul = do
                             (Can.VarForeign
                                 (ModuleName.Canonical package "Element")
                                 "rgb255"
-                                backgroundColorAnnotation
+                                rgb255Annotation
                             )
 
 
-
+                    {-| [ Element.Background.color (Element.rgb255 50 200 100) ] -}
                     newAttributes =
                         Reporting.Annotation.At
                             location
@@ -185,13 +242,24 @@ compile pkg ifaces modul = do
                                 ]
                             )
 
---                     finalAttributes =
---                         Reporting.Annotation.At
---                             location
---                             (Can.BinOps
---
---                                 newAttributes
---                             )
+                    listAppend =
+                        Reporting.Annotation.At
+                            location
+                            (Can.VarForeign
+                                (ModuleName.Canonical package "List")
+                                "append"
+                                listAppendAnnotation
+                            )
+
+                    finalAttributes =
+                        Reporting.Annotation.At
+                            location
+                            (Can.Call
+                                listAppend
+                                [ firstParam
+                                , newAttributes
+                                ]
+                            )
 
                 in
                 Can.Call
@@ -199,10 +267,10 @@ compile pkg ifaces modul = do
                         location
                         (Can.VarForeign
                             (ModuleName.Canonical package "Element")
-                            (dt "Note" "el")
+                            ("el")
                             annotation)
                         )
-                    (fmap updateExpr (firstParam : rest))
+                    (finalAttributes : fmap updateExpr rest)
             Can.Call expr exprs ->
                 Can.Call (updateExpr expr) (fmap updateExpr exprs)
             Can.If exprs expr ->
