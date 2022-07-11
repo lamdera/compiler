@@ -10,11 +10,13 @@ import qualified Data.Name as Name
 
 import qualified AST.Source as Src
 import qualified AST.Canonical as Can
+import AST.Canonical
 import qualified AST.Optimized as Opt
 import qualified Canonicalize.Module as Canonicalize
 import qualified Elm.Float
 import qualified Elm.Interface as I
-import qualified Elm.ModuleName as ModuleName
+import qualified Elm.ModuleName as Module
+import Elm.Package
 import qualified Elm.Package as Pkg
 import qualified Nitpick.PatternMatches as PatternMatches
 import qualified Optimize.Module as Optimize
@@ -39,6 +41,37 @@ import Lamdera
 import qualified CanSer.CanSer as ToSource
 import qualified Data.Text as T
 import qualified Data.Utf8
+
+newAttributes location =
+    let
+        a = Reporting.Annotation.At location
+    in
+    (a (List
+          [ (a (Call
+                  (a (VarForeign
+                        (Module.Canonical (Name "mdgriffith" "elm-ui") "Element.Background")
+                        "color"
+                        (Forall
+                           (Map.fromList [("decorative", ()), ("msg", ())])
+                           (TLambda
+                              (TType (Module.Canonical (Name "mdgriffith" "elm-ui") "Element") "Color" [])
+                              (TType (Module.Canonical (Name "mdgriffith" "elm-ui") "Element") "Attr" [TVar "decorative", TVar "msg"])))))
+                  [ (a (Call
+                          (a (VarForeign
+                                (Module.Canonical (Name "mdgriffith" "elm-ui") "Element")
+                                "rgb255"
+                                (Forall
+                                   (Map.fromList [])
+                                   (TLambda
+                                      (TType (Module.Canonical (Name "elm" "core") "Basics") "Int" [])
+                                      (TLambda
+                                         (TType (Module.Canonical (Name "elm" "core") "Basics") "Int" [])
+                                         (TLambda
+                                            (TType (Module.Canonical (Name "elm" "core") "Basics") "Int" [])
+                                            (TType (Module.Canonical (Name "mdgriffith" "elm-ui") "Element") "Color" [])))))))
+                          [(a (Int 50)), (a (Int 200)), (a (Int 100))]))
+                  ]))
+          ]))
 
 updateExpr :: Can.Expr -> Can.Expr
 updateExpr (Reporting.Annotation.At location expr) =
@@ -92,144 +125,17 @@ updateExpr (Reporting.Annotation.At location expr) =
             (Reporting.Annotation.At
                 location
                 (Can.VarForeign
-                    (ModuleName.Canonical package "Element")
+                    (Module.Canonical (Name "mdgriffith" "elm-ui") "Element")
                     "el"
                     annotation
                 )
             )
             (firstParam : rest) ->
             let
-                {-| Element.Color -> Element.Attr decorative msg -}
-                backgroundColorAnnotation =
-                    Can.Forall
-                        (Map.fromList [ ("decorative", ()), ("msg", ()) ])
-                        (Can.TLambda
-                            (Can.TType
-                                (ModuleName.Canonical package "Element")
-                                "Color"
-                                []
-                            )
-                            (Can.TType
-                                (ModuleName.Canonical package "Element")
-                                "Attr"
-                                [ Can.TVar "decorative", Can.TVar "msg" ]
-                            )
-                        )
-
-                {-| List a -> List a -> List a -}
-                listAppendAnnotation =
-                    Can.Forall
-                        (Map.fromList [ ("a", ()) ])
-                        (Can.TLambda
-                            (Can.TType
-                                ModuleName.list
-                                "List"
-                                [ Can.TVar "a" ]
-                            )
-                            (Can.TLambda
-                                (Can.TType
-                                    ModuleName.list
-                                    "List"
-                                    [ Can.TVar "a" ]
-                                )
-                                (Can.TType
-                                    ModuleName.list
-                                    "List"
-                                    [ Can.TVar "a" ]
-                                )
-                            )
-                        )
-
-                rgb255Annotation =
-                    Can.Forall
-                        (Map.fromList [])
-                        (Can.TLambda
-                            (Can.TType
-                                ModuleName.basics
-                                "Int"
-                                []
-                            )
-                            (Can.TLambda
-                                (Can.TType
-                                    ModuleName.basics
-                                    "Int"
-                                    []
-                                )
-                                (Can.TLambda
-                                    (Can.TType
-                                        ModuleName.basics
-                                        "Int"
-                                        []
-                                    )
-                                    (Can.TType
-                                        (ModuleName.Canonical package "Element")
-                                        "Color"
-                                        []
-                                    )
-                                )
-                            )
-                        )
-
-                backgroundColor =
-                    Reporting.Annotation.At
-                        location
-                        (Can.VarForeign
-                            (ModuleName.Canonical package "Element.Background")
-                            "color"
-                            backgroundColorAnnotation
-                        )
-
-                rgb255 =
-                    Reporting.Annotation.At
-                        location
-                        (Can.VarForeign
-                            (ModuleName.Canonical package "Element")
-                            "rgb255"
-                            rgb255Annotation
-                        )
-
-
-                {-| [ Element.Background.color (Element.rgb255 50 200 100) ] -}
-                newAttributes =
-                    Reporting.Annotation.At
-                        location
-                        (Can.List
-                            [ Reporting.Annotation.At
-                                location
-                                (Can.Call
-                                    backgroundColor
-                                    [ Reporting.Annotation.At
-                                        location
-                                        (Can.Call
-                                            rgb255
-                                            [ Reporting.Annotation.At
-                                                location
-                                                (Can.Int 50)
-                                            , Reporting.Annotation.At
-                                                location
-                                                (Can.Int 200)
-                                            , Reporting.Annotation.At
-                                                location
-                                                (Can.Int 100)
-                                            ]
-                                        )
-                                    ]
-                                )
-                            ]
-                        )
-
-                listAppend =
-                    Reporting.Annotation.At
-                        location
-                        (Can.VarForeign
-                            ModuleName.list
-                            "append"
-                            listAppendAnnotation
-                        )
-
                 {-| List.append firstParam newAttributes  -}
+                finalAttributes :: Can.Expr
                 finalAttributes =
-                    newAttributes
+                    firstParam --newAttributes location
 --                        Reporting.Annotation.At
 --                            location
 --                            (Can.Call
@@ -241,16 +147,14 @@ updateExpr (Reporting.Annotation.At location expr) =
 --                                --newAttributes
 --                                ]
 --                            )
-
+                elmUi =
+                    Name "mdgriffith" "elm-ui"
             in
             Can.Call
                 (Reporting.Annotation.At
                     location
-                    (Can.VarForeign
-                        (ModuleName.Canonical package "Element")
-                        ("el")
-                        annotation)
-                    )
+                    (Can.VarForeign (Module.Canonical elmUi "Element") "el" annotation)
+                )
                 (finalAttributes : fmap updateExpr rest)
                 & debugHaskell "Note"
 
