@@ -2,7 +2,7 @@
 {-# LANGUAGE BangPatterns #-}
 {-# OPTIONS_GHC -Wall -fno-warn-unused-do-bind #-}
 module Lamdera.UiSourceMap
-    (updateDecls)
+    (updateDecls, src)
     where
 
 import qualified Data.Map as Map
@@ -26,6 +26,7 @@ import qualified Reporting.Result as R
 import qualified Reporting.Render.Type.Localizer as Localizer
 import qualified Type.Constrain.Module as Type
 import qualified Type.Solve as Type
+import NeatInterpolation
 
 -- import System.IO.Unsafe (unsafePerformIO)
 
@@ -42,7 +43,7 @@ import qualified CanSer.CanSer as ToSource
 import qualified Data.Text as T
 import qualified Data.Utf8
 
-newAttributes location originalAttributes =
+newAttributes fileName location originalAttributes =
     let
         a = Reporting.Annotation.At location
     in
@@ -58,52 +59,158 @@ newAttributes location originalAttributes =
                          (TType (Module.Canonical (Name "elm" "core") "List") "List" [TVar "a"])
                          (TType (Module.Canonical (Name "elm" "core") "List") "List" [TVar "a"]))))))
           [ originalAttributes
-          , (a (List
-                  [ (a (Call
-                          (a (VarForeign
-                                (Module.Canonical (Name "mdgriffith" "elm-ui") "Element.Background")
-                                "color"
-                                (Forall
-                                   (Map.fromList [("decorative", ()), ("msg", ())])
-                                   (TLambda
-                                      (TAlias
-                                         (Module.Canonical (Name "mdgriffith" "elm-ui") "Element")
-                                         "Color"
-                                         []
-                                         (Filled (TType (Module.Canonical (Name "mdgriffith" "elm-ui") "Internal.Model") "Color" [])))
-                                      (TAlias
-                                         (Module.Canonical (Name "mdgriffith" "elm-ui") "Element")
-                                         "Attr"
-                                         [("decorative", TVar "decorative"), ("msg", TVar "msg")]
-                                         (Filled
-                                            (TType
-                                               (Module.Canonical (Name "mdgriffith" "elm-ui") "Internal.Model")
-                                               "Attribute"
-                                               [TVar "decorative", TVar "msg"])))))))
-                          [ (a (Call
-                                  (a (VarForeign
-                                        (Module.Canonical (Name "mdgriffith" "elm-ui") "Element")
-                                        "rgb255"
-                                        (Forall
-                                           (Map.fromList [])
-                                           (TLambda
-                                              (TType (Module.Canonical (Name "elm" "core") "Basics") "Int" [])
-                                              (TLambda
-                                                 (TType (Module.Canonical (Name "elm" "core") "Basics") "Int" [])
-                                                 (TLambda
-                                                    (TType (Module.Canonical (Name "elm" "core") "Basics") "Int" [])
-                                                    (TAlias
-                                                       (Module.Canonical (Name "mdgriffith" "elm-ui") "Element")
-                                                       "Color"
-                                                       []
-                                                       (Filled (TType (Module.Canonical (Name "mdgriffith" "elm-ui") "Internal.Model") "Color" [])))))))))
-                                  [(a (Int 50)), (a (Int 100)), (a (Int 200))]))
-                          ]))
-                  ]))
+          , newAttributesHelper fileName location
           ]))
 
-updateExpr :: Can.Expr -> Can.Expr
-updateExpr (Reporting.Annotation.At location expr) =
+{-| If you change this, maybe sure to change it in uiSourceMap.js as well -}
+jsPropertyName = "triggerUrl123"
+
+newAttributesHelper :: Module.Canonical -> Reporting.Annotation.Region -> Can.Expr
+newAttributesHelper fileName location =
+    let
+        (Reporting.Annotation.Region (Reporting.Annotation.Position row _) _) =
+            location
+
+        lineNumber =
+            Data.Utf8.toChars (Module._module fileName)
+                ++ ".elm:"
+                ++ show row
+                & Data.Utf8.fromChars
+
+        a =
+            Reporting.Annotation.At location
+    in
+    (a (List
+      [ (a (Binop
+              "|>"
+              (Module.Canonical (Name "elm" "core") "Basics")
+              "apR"
+              (Forall (Map.fromList [("a", ()), ("b", ())]) (TLambda (TVar "a") (TLambda (TLambda (TVar "a") (TVar "b")) (TVar "b"))))
+              (a (Call
+                    (a (VarForeign
+                          (Module.Canonical (Name "elm" "html") "Html.Events")
+                          "on"
+                          (Forall
+                             (Map.fromList [("msg", ())])
+                             (TLambda
+                                (TType (Module.Canonical (Name "elm" "core") "String") "String" [])
+                                (TLambda
+                                   (TType (Module.Canonical (Name "elm" "json") "Json.Decode") "Decoder" [TVar "msg"])
+                                   (TAlias
+                                      (Module.Canonical (Name "elm" "html") "Html")
+                                      "Attribute"
+                                      [("msg", TVar "msg")]
+                                      (Filled (TType (Module.Canonical (Name "elm" "virtual-dom") "VirtualDom") "Attribute" [TVar "msg"]))))))))
+                    [ (a (Str "dblclick"))
+                    , (a (Binop
+                            "|>"
+                            (Module.Canonical (Name "elm" "core") "Basics")
+                            "apR"
+                            (Forall (Map.fromList [("a", ()), ("b", ())]) (TLambda (TVar "a") (TLambda (TLambda (TVar "a") (TVar "b")) (TVar "b"))))
+                            (a (Call
+                                  (a (VarForeign
+                                        (Module.Canonical (Name "elm" "json") "Json.Decode")
+                                        "field"
+                                        (Forall
+                                           (Map.fromList [("a", ())])
+                                           (TLambda
+                                              (TType (Module.Canonical (Name "elm" "core") "String") "String" [])
+                                              (TLambda
+                                                 (TType (Module.Canonical (Name "elm" "json") "Json.Decode") "Decoder" [TVar "a"])
+                                                 (TType (Module.Canonical (Name "elm" "json") "Json.Decode") "Decoder" [TVar "a"]))))))
+                                  [ (a (Str jsPropertyName))
+                                  , (a (VarForeign
+                                          (Module.Canonical (Name "elm" "json") "Json.Decode")
+                                          "int"
+                                          (Forall
+                                             (Map.fromList [])
+                                             (TType
+                                                (Module.Canonical (Name "elm" "json") "Json.Decode")
+                                                "Decoder"
+                                                [TType (Module.Canonical (Name "elm" "core") "Basics") "Int" []]))))
+                                  ]))
+                            (a (Call
+                                  (a (VarForeign
+                                        (Module.Canonical (Name "elm" "json") "Json.Decode")
+                                        "andThen"
+                                        (Forall
+                                           (Map.fromList [("a", ()), ("b", ())])
+                                           (TLambda
+                                              (TLambda (TVar "a") (TType (Module.Canonical (Name "elm" "json") "Json.Decode") "Decoder" [TVar "b"]))
+                                              (TLambda
+                                                 (TType (Module.Canonical (Name "elm" "json") "Json.Decode") "Decoder" [TVar "a"])
+                                                 (TType (Module.Canonical (Name "elm" "json") "Json.Decode") "Decoder" [TVar "b"]))))))
+                                  [ (a (Lambda
+                                          [(a (PAnything))]
+                                          (a (Call
+                                                (a (VarForeign
+                                                      (Module.Canonical (Name "elm" "json") "Json.Decode")
+                                                      "fail"
+                                                      (Forall
+                                                         (Map.fromList [("a", ())])
+                                                         (TLambda
+                                                            (TType (Module.Canonical (Name "elm" "core") "String") "String" [])
+                                                            (TType (Module.Canonical (Name "elm" "json") "Json.Decode") "Decoder" [TVar "a"])))))
+                                                [(a (Str ""))]))))
+                                  ]))))
+                    ]))
+              (a (VarForeign
+                    (Module.Canonical (Name "mdgriffith" "elm-ui") "Element")
+                    "htmlAttribute"
+                    (Forall
+                       (Map.fromList [("msg", ())])
+                       (TLambda
+                          (TAlias
+                             (Module.Canonical (Name "elm" "html") "Html")
+                             "Attribute"
+                             [("msg", TVar "msg")]
+                             (Filled (TType (Module.Canonical (Name "elm" "virtual-dom") "VirtualDom") "Attribute" [TVar "msg"])))
+                          (TAlias
+                             (Module.Canonical (Name "mdgriffith" "elm-ui") "Element")
+                             "Attribute"
+                             [("msg", TVar "msg")]
+                             (Filled (TType (Module.Canonical (Name "mdgriffith" "elm-ui") "Internal.Model") "Attribute" [TUnit, TVar "msg"])))))))))
+      , (a (Binop
+              "|>"
+              (Module.Canonical (Name "elm" "core") "Basics")
+              "apR"
+              (Forall (Map.fromList [("a", ()), ("b", ())]) (TLambda (TVar "a") (TLambda (TLambda (TVar "a") (TVar "b")) (TVar "b"))))
+              (a (Call
+                    (a (VarForeign
+                          (Module.Canonical (Name "elm" "html") "Html.Attributes")
+                          "attribute"
+                          (Forall
+                             (Map.fromList [("msg", ())])
+                             (TLambda
+                                (TType (Module.Canonical (Name "elm" "core") "String") "String" [])
+                                (TLambda
+                                   (TType (Module.Canonical (Name "elm" "core") "String") "String" [])
+                                   (TAlias
+                                      (Module.Canonical (Name "elm" "html") "Html")
+                                      "Attribute"
+                                      [("msg", TVar "msg")]
+                                      (Filled (TType (Module.Canonical (Name "elm" "virtual-dom") "VirtualDom") "Attribute" [TVar "msg"]))))))))
+                    [(a (Str "line-number-attribute")), (a (Str lineNumber))]))
+              (a (VarForeign
+                    (Module.Canonical (Name "mdgriffith" "elm-ui") "Element")
+                    "htmlAttribute"
+                    (Forall
+                       (Map.fromList [("msg", ())])
+                       (TLambda
+                          (TAlias
+                             (Module.Canonical (Name "elm" "html") "Html")
+                             "Attribute"
+                             [("msg", TVar "msg")]
+                             (Filled (TType (Module.Canonical (Name "elm" "virtual-dom") "VirtualDom") "Attribute" [TVar "msg"])))
+                          (TAlias
+                             (Module.Canonical (Name "mdgriffith" "elm-ui") "Element")
+                             "Attribute"
+                             [("msg", TVar "msg")]
+                             (Filled (TType (Module.Canonical (Name "mdgriffith" "elm-ui") "Internal.Model") "Attribute" [TUnit, TVar "msg"])))))))))
+      ]))
+
+updateExpr :: Module.Canonical -> Can.Expr -> Can.Expr
+updateExpr fileName (Reporting.Annotation.At location expr) =
     (case expr of
         Can.VarLocal name ->
             Can.VarLocal name
@@ -139,16 +246,16 @@ updateExpr (Reporting.Annotation.At location expr) =
             Can.Float float
 
         Can.List exprs ->
-            Can.List (fmap updateExpr exprs)
+            Can.List (fmap (updateExpr fileName) exprs)
 
         Can.Negate expr ->
-            Can.Negate (updateExpr expr)
+            Can.Negate ((updateExpr fileName) expr)
 
         Can.Binop name canonical name2 annotation expr expr2 ->
-            Can.Binop name canonical name2 annotation (updateExpr expr) (updateExpr expr2)
+            Can.Binop name canonical name2 annotation ((updateExpr fileName) expr) ((updateExpr fileName) expr2)
 
         Can.Lambda patterns expr ->
-            Can.Lambda patterns (updateExpr expr)
+            Can.Lambda patterns ((updateExpr fileName) expr)
 
         Can.Call
             (Reporting.Annotation.At
@@ -169,7 +276,49 @@ updateExpr (Reporting.Annotation.At location expr) =
                         annotation
                     )
                 )
-                (newAttributes location firstParam : fmap updateExpr rest)
+                (newAttributes fileName location firstParam : fmap (updateExpr fileName) rest)
+
+        Can.Call
+            (Reporting.Annotation.At
+                location
+                (Can.VarForeign
+                    (Module.Canonical (Name "mdgriffith" "elm-ui") "Element")
+                    "paragraph"
+                    annotation
+                )
+            )
+            (firstParam : rest) ->
+            Can.Call
+                (Reporting.Annotation.At
+                    location
+                    (Can.VarForeign
+                        (Module.Canonical (Name "mdgriffith" "elm-ui") "Element")
+                        "paragraph"
+                        annotation
+                    )
+                )
+                (newAttributes fileName location firstParam : fmap (updateExpr fileName) rest)
+
+        Can.Call
+            (Reporting.Annotation.At
+                location
+                (Can.VarForeign
+                    (Module.Canonical (Name "mdgriffith" "elm-ui") "Element")
+                    "wrappedRow"
+                    annotation
+                )
+            )
+            (firstParam : rest) ->
+            Can.Call
+                (Reporting.Annotation.At
+                    location
+                    (Can.VarForeign
+                        (Module.Canonical (Name "mdgriffith" "elm-ui") "Element")
+                        "wrappedRow"
+                        annotation
+                    )
+                )
+                (newAttributes fileName location firstParam : fmap (updateExpr fileName) rest)
 
         Can.Call
             (Reporting.Annotation.At
@@ -190,7 +339,7 @@ updateExpr (Reporting.Annotation.At location expr) =
                         annotation
                     )
                 )
-                (newAttributes location firstParam : fmap updateExpr rest)
+                (newAttributes fileName location firstParam : fmap (updateExpr fileName) rest)
 
         Can.Call
             (Reporting.Annotation.At
@@ -211,31 +360,31 @@ updateExpr (Reporting.Annotation.At location expr) =
                         annotation
                     )
                 )
-                (newAttributes location firstParam : fmap updateExpr rest)
+                (newAttributes fileName location firstParam : fmap (updateExpr fileName) rest)
 
         Can.Call expr exprs ->
-            Can.Call (updateExpr expr) (fmap updateExpr exprs)
+            Can.Call ((updateExpr fileName) expr) (fmap (updateExpr fileName) exprs)
 
         Can.If exprs expr ->
             Can.If
-                (fmap (\(first, second) -> (updateExpr first, updateExpr second)) exprs)
-                (updateExpr expr)
+                (fmap (\(first, second) -> ((updateExpr fileName) first, (updateExpr fileName) second)) exprs)
+                ((updateExpr fileName) expr)
 
         Can.Let def expr ->
-            Can.Let def (updateExpr expr)
+            Can.Let def ((updateExpr fileName) expr)
 
         Can.LetRec defs expr ->
-            Can.LetRec defs (updateExpr expr)
+            Can.LetRec defs ((updateExpr fileName) expr)
 
         Can.LetDestruct pattern expr expr2 ->
-            Can.LetDestruct pattern (updateExpr expr) (updateExpr expr2)
+            Can.LetDestruct pattern ((updateExpr fileName) expr) ((updateExpr fileName) expr2)
 
         Can.Case expr caseBranches ->
             Can.Case
-                (updateExpr expr)
+                ((updateExpr fileName) expr)
                 (fmap
                     (\(Can.CaseBranch pattern caseExpr) ->
-                        Can.CaseBranch pattern (updateExpr caseExpr)
+                        Can.CaseBranch pattern ((updateExpr fileName) caseExpr)
                     )
                     caseBranches
                 )
@@ -244,10 +393,10 @@ updateExpr (Reporting.Annotation.At location expr) =
             Can.Accessor name
 
         Can.Access expr name ->
-            Can.Access (updateExpr expr) name
+            Can.Access ((updateExpr fileName) expr) name
 
         Can.Update name expr fieldUpdates ->
-            Can.Update name (updateExpr expr) fieldUpdates
+            Can.Update name ((updateExpr fileName) expr) fieldUpdates
 
         Can.Record fields ->
             Can.Record fields
@@ -256,35 +405,41 @@ updateExpr (Reporting.Annotation.At location expr) =
             Can.Unit
 
         Can.Tuple expr expr2 maybeExpr ->
-            Can.Tuple (updateExpr expr) (updateExpr expr2) (fmap updateExpr maybeExpr)
+            Can.Tuple ((updateExpr fileName) expr) ((updateExpr fileName) expr2) (fmap (updateExpr fileName) maybeExpr)
 
         Can.Shader shaderSource shaderTypes ->
             Can.Shader shaderSource shaderTypes
     )
     & Reporting.Annotation.At location
 
-updateDefs :: Can.Def -> Can.Def
-updateDefs def =
+updateDefs :: Module.Canonical -> Can.Def -> Can.Def
+updateDefs fileName def =
     case def of
         Can.Def name patterns expr ->
-            Can.Def name patterns (updateExpr expr)
+            Can.Def name patterns ((updateExpr fileName) expr)
 
         Can.TypedDef name freeVars patterns expr type_ ->
-            Can.TypedDef name freeVars patterns (updateExpr expr) type_
+            Can.TypedDef name freeVars patterns ((updateExpr fileName) expr) type_
 
 
-updateDecls :: Can.Decls -> Can.Decls
-updateDecls decls =
+updateDecls :: Module.Canonical -> Can.Decls -> Can.Decls
+updateDecls fileName decls =
   -- error "todo!"
     case decls of
         Can.Declare def nextDecl ->
-            Can.Declare (updateDefs def) (updateDecls nextDecl)
+            Can.Declare (updateDefs fileName def) (updateDecls fileName nextDecl)
 
         Can.DeclareRec def remainingDefs nextDecl ->
             Can.DeclareRec
-                (updateDefs def)
-                (map updateDefs remainingDefs)
-                (updateDecls nextDecl)
+                (updateDefs fileName def)
+                (map (updateDefs fileName) remainingDefs)
+                (updateDecls fileName nextDecl)
 
         Can.SaveTheEnvironment ->
             Can.SaveTheEnvironment
+
+src =
+  [text|
+  asdf
+  asdf
+  asdf |]
