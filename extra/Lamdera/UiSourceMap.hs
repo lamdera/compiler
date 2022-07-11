@@ -42,34 +42,63 @@ import qualified CanSer.CanSer as ToSource
 import qualified Data.Text as T
 import qualified Data.Utf8
 
-newAttributes location =
+newAttributes location originalAttributes =
     let
         a = Reporting.Annotation.At location
     in
-    (a (List
-          [ (a (Call
-                  (a (VarForeign
-                        (Module.Canonical (Name "mdgriffith" "elm-ui") "Element.Background")
-                        "color"
-                        (Forall
-                           (Map.fromList [("decorative", ()), ("msg", ())])
-                           (TLambda
-                              (TType (Module.Canonical (Name "mdgriffith" "elm-ui") "Element") "Color" [])
-                              (TType (Module.Canonical (Name "mdgriffith" "elm-ui") "Element") "Attr" [TVar "decorative", TVar "msg"])))))
+    (a (Call
+          (a (VarForeign
+                (Module.Canonical (Name "elm" "core") "List")
+                "append"
+                (Forall
+                   (Map.fromList [("a", ())])
+                   (TLambda
+                      (TType (Module.Canonical (Name "elm" "core") "List") "List" [TVar "a"])
+                      (TLambda
+                         (TType (Module.Canonical (Name "elm" "core") "List") "List" [TVar "a"])
+                         (TType (Module.Canonical (Name "elm" "core") "List") "List" [TVar "a"]))))))
+          [ originalAttributes
+          , (a (List
                   [ (a (Call
                           (a (VarForeign
-                                (Module.Canonical (Name "mdgriffith" "elm-ui") "Element")
-                                "rgb255"
+                                (Module.Canonical (Name "mdgriffith" "elm-ui") "Element.Background")
+                                "color"
                                 (Forall
-                                   (Map.fromList [])
+                                   (Map.fromList [("decorative", ()), ("msg", ())])
                                    (TLambda
-                                      (TType (Module.Canonical (Name "elm" "core") "Basics") "Int" [])
-                                      (TLambda
-                                         (TType (Module.Canonical (Name "elm" "core") "Basics") "Int" [])
-                                         (TLambda
-                                            (TType (Module.Canonical (Name "elm" "core") "Basics") "Int" [])
-                                            (TType (Module.Canonical (Name "mdgriffith" "elm-ui") "Element") "Color" [])))))))
-                          [(a (Int 50)), (a (Int 200)), (a (Int 100))]))
+                                      (TAlias
+                                         (Module.Canonical (Name "mdgriffith" "elm-ui") "Element")
+                                         "Color"
+                                         []
+                                         (Filled (TType (Module.Canonical (Name "mdgriffith" "elm-ui") "Internal.Model") "Color" [])))
+                                      (TAlias
+                                         (Module.Canonical (Name "mdgriffith" "elm-ui") "Element")
+                                         "Attr"
+                                         [("decorative", TVar "decorative"), ("msg", TVar "msg")]
+                                         (Filled
+                                            (TType
+                                               (Module.Canonical (Name "mdgriffith" "elm-ui") "Internal.Model")
+                                               "Attribute"
+                                               [TVar "decorative", TVar "msg"])))))))
+                          [ (a (Call
+                                  (a (VarForeign
+                                        (Module.Canonical (Name "mdgriffith" "elm-ui") "Element")
+                                        "rgb255"
+                                        (Forall
+                                           (Map.fromList [])
+                                           (TLambda
+                                              (TType (Module.Canonical (Name "elm" "core") "Basics") "Int" [])
+                                              (TLambda
+                                                 (TType (Module.Canonical (Name "elm" "core") "Basics") "Int" [])
+                                                 (TLambda
+                                                    (TType (Module.Canonical (Name "elm" "core") "Basics") "Int" [])
+                                                    (TAlias
+                                                       (Module.Canonical (Name "mdgriffith" "elm-ui") "Element")
+                                                       "Color"
+                                                       []
+                                                       (Filled (TType (Module.Canonical (Name "mdgriffith" "elm-ui") "Internal.Model") "Color" [])))))))))
+                                  [(a (Int 50)), (a (Int 100)), (a (Int 200))]))
+                          ]))
                   ]))
           ]))
 
@@ -131,32 +160,58 @@ updateExpr (Reporting.Annotation.At location expr) =
                 )
             )
             (firstParam : rest) ->
-            let
-                {-| List.append firstParam newAttributes  -}
-                finalAttributes :: Can.Expr
-                finalAttributes =
-                    firstParam --newAttributes location
---                        Reporting.Annotation.At
---                            location
---                            (Can.Call
---                                listAppend
---                                [ newAttributes
---                                , Reporting.Annotation.At
---                                  location
---                                  (Can.List [])
---                                --newAttributes
---                                ]
---                            )
-                elmUi =
-                    Name "mdgriffith" "elm-ui"
-            in
             Can.Call
                 (Reporting.Annotation.At
                     location
-                    (Can.VarForeign (Module.Canonical elmUi "Element") "el" annotation)
+                    (Can.VarForeign
+                        (Module.Canonical (Name "mdgriffith" "elm-ui") "Element")
+                        "el"
+                        annotation
+                    )
                 )
-                (finalAttributes : fmap updateExpr rest)
-                & debugHaskell "Note"
+                (newAttributes location firstParam : fmap updateExpr rest)
+
+        Can.Call
+            (Reporting.Annotation.At
+                location
+                (Can.VarForeign
+                    (Module.Canonical (Name "mdgriffith" "elm-ui") "Element")
+                    "column"
+                    annotation
+                )
+            )
+            (firstParam : rest) ->
+            Can.Call
+                (Reporting.Annotation.At
+                    location
+                    (Can.VarForeign
+                        (Module.Canonical (Name "mdgriffith" "elm-ui") "Element")
+                        "column"
+                        annotation
+                    )
+                )
+                (newAttributes location firstParam : fmap updateExpr rest)
+
+        Can.Call
+            (Reporting.Annotation.At
+                location
+                (Can.VarForeign
+                    (Module.Canonical (Name "mdgriffith" "elm-ui") "Element")
+                    "row"
+                    annotation
+                )
+            )
+            (firstParam : rest) ->
+            Can.Call
+                (Reporting.Annotation.At
+                    location
+                    (Can.VarForeign
+                        (Module.Canonical (Name "mdgriffith" "elm-ui") "Element")
+                        "row"
+                        annotation
+                    )
+                )
+                (newAttributes location firstParam : fmap updateExpr rest)
 
         Can.Call expr exprs ->
             Can.Call (updateExpr expr) (fmap updateExpr exprs)
