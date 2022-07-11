@@ -1,3 +1,6 @@
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE BangPatterns #-}
+{-# OPTIONS_GHC -Wall -fno-warn-unused-do-bind #-}
 module Lamdera.UiSourceMap
     (updateDecls)
     where

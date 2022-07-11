@@ -77,7 +77,7 @@ compile pkg ifaces modul = do
   canonical2 <- Lamdera.Wire2.Core.addWireGenerations canonical1 pkg ifaces modul_
 
 
-
+  let
     canonical3 :: Can.Module
     canonical3 =
       (Can._decls canonical2)
