@@ -15,13 +15,11 @@ import qualified AST.Source as Src
 import qualified AST.Canonical as Can
 import qualified AST.Optimized as Opt
 import qualified Canonicalize.Module as Canonicalize
-import qualified Elm.Float
 import qualified Elm.Interface as I
 import qualified Elm.ModuleName as ModuleName
 import qualified Elm.Package as Pkg
 import qualified Nitpick.PatternMatches as PatternMatches
 import qualified Optimize.Module as Optimize
-import qualified Reporting.Annotation
 import qualified Reporting.Error as E
 import qualified Reporting.Result as R
 import qualified Reporting.Render.Type.Localizer as Localizer
@@ -106,7 +104,6 @@ compile pkg ifaces modul = do
 
   -- ()          <- debugPassText "starting optimize" moduleName (pure ())
   objects     <- optimize modul_ annotations canonical3
-
   return (Artifacts canonical3 annotations objects)
 
 

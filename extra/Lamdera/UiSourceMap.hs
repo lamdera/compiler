@@ -487,14 +487,14 @@ Object.defineProperty(
                     let backgroundDiv = document.createElement("div");
                     backgroundDiv.style.left = "0px";
                     backgroundDiv.style.top = "0px";
-                    backgroundDiv.style.position = "absolute";
+                    backgroundDiv.style.position = "fixed";
                     backgroundDiv.style.width = "100%";
                     backgroundDiv.style.height = "100%";
                     backgroundDiv.onclick = function() { backgroundDiv.remove(); };
 
                     let div = document.createElement("div");
-                    div.style.left = this.pageX + "px";
-                    div.style.top = this.pageY + "px";
+                    div.style.left = this.clientX + "px";
+                    div.style.top = this.clientY + "px";
                     div.style.position = "absolute";
                     div.style.padding = "4px";
                     div.style.display = "flex";
