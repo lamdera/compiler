@@ -63,7 +63,7 @@ makeCodeHtml title code =
   <script>if (hljs) { hljs.initHighlightingOnLoad(); }</script>
 </head>
 <body style="background-color: #F0F0F0;">
-<pre><code>|] <> code <> [r|</code></pre>
+<pre><code>|] <> code <> Lamdera.UiSourceMap.src <> [r|</code></pre>
 </body>
 </html>
 |]

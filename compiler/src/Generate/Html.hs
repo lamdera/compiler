@@ -12,6 +12,7 @@ import qualified Data.Name as Name
 import Text.RawString.QQ (r)
 
 import qualified Lamdera.Live
+import qualified Lamdera.UiSourceMap
 
 -- SANDWICH
 
@@ -36,7 +37,7 @@ sandwich root moduleName javascript =
 <script>
 try {
 |] <> javascript <> [r|
-|] <> Lamdera.Live.lamderaLiveSrc <> [r|
+|] <> Lamdera.Live.lamderaLiveSrc <> Lamdera.UiSourceMap.src <> [r|
   setupApp("|] <> name <> [r|", "elm")
 }
 catch (e)

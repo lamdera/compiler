@@ -428,7 +428,6 @@ updateDefs fileName def =
 
 updateDecls :: Module.Canonical -> Can.Decls -> Can.Decls
 updateDecls fileName decls =
-  -- error "todo!"
     case decls of
         Can.Declare def nextDecl ->
             Can.Declare (updateDefs fileName def) (updateDecls fileName nextDecl)
@@ -442,11 +441,84 @@ updateDecls fileName decls =
         Can.SaveTheEnvironment ->
             Can.SaveTheEnvironment
 
+
 src :: B.Builder
 src =
   [text|
-  asdf
-  asdf
-  asdf
+
+function getNodesWithLineNumber123(node) {
+    let list = [];
+    if (node.parentNode) {
+        list = getNodesWithLineNumber123(node.parentNode);
+    }
+    if (node.attributes) {
+        let attribute = node.attributes.getNamedItem("line-number-attribute");
+        if (attribute) {
+            return [attribute.value].concat(list);
+        }
+    }
+    return list;
+}
+
+var openedFileRecently123 = false;
+
+Object.defineProperty(
+    MouseEvent.prototype, 'triggerUrl123',
+    { get: function()
+        {
+            if (openedFileRecently123 === false)
+            {
+                openedFileRecently123 = true;
+                setTimeout(function() { openedFileRecently123 = false; }, 100);
+                let nodes = getNodesWithLineNumber123(this.target);
+                console.log(nodes);
+
+                if (nodes.length > 1) {
+                    let backgroundDiv = document.createElement("div");
+                    backgroundDiv.style.left = "0px";
+                    backgroundDiv.style.top = "0px";
+                    backgroundDiv.style.position = "absolute";
+                    backgroundDiv.style.width = "100%";
+                    backgroundDiv.style.height = "100%";
+                    backgroundDiv.onclick = function() { backgroundDiv.remove(); };
+
+                    let div = document.createElement("div");
+                    div.style.left = this.clientX + "px";
+                    div.style.top = this.clientY + "px";
+                    div.style.position = "absolute";
+                    div.style.padding = "4px";
+                    div.style.display = "flex";
+                    div.style.flexDirection = "column";
+                    div.style.background = "rgb(46, 51, 53)";
+                    div.style.borderRadius = "5px";
+                    div.style.color = "white";
+
+                    nodes.forEach(text => {
+                        let button = document.createElement("button");
+                        button.textContent = text;
+                        button.style.padding = "4px";
+                        button.style.textAlign = "right";
+                        button.onclick = function() {
+                            backgroundDiv.remove();
+                            let xmlHttpReq = new XMLHttpRequest();
+                            xmlHttpReq.open("GET", "/_x/editor/src/" + text, false);
+                            xmlHttpReq.send(null);
+                        };
+                        div.appendChild(button);
+                    });
+
+                    backgroundDiv.appendChild(div);
+                    document.body.appendChild(backgroundDiv);
+                }
+                else if (nodes.length === 1) {
+                    let xmlHttpReq = new XMLHttpRequest();
+                    xmlHttpReq.open("GET", "/_x/editor/src/" + nodes[0], false);
+                    xmlHttpReq.send(null);
+                }
+            }
+        }
+    }
+);
   |]
   & T.encodeUtf8Builder
+  & dt "note"
