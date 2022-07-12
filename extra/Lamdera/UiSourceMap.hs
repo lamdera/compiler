@@ -47,7 +47,7 @@ import qualified CanSer.CanSer as ToSource
 import qualified Data.Text as T
 import qualified Data.Utf8
 
-newAttributes fileName location originalAttributes =
+newAttributes fileName functionName location originalAttributes =
     let
         a = Reporting.Annotation.At location
     in
@@ -63,20 +63,22 @@ newAttributes fileName location originalAttributes =
                          (TType (Module.Canonical (Name "elm" "core") "List") "List" [TVar "a"])
                          (TType (Module.Canonical (Name "elm" "core") "List") "List" [TVar "a"]))))))
           [ originalAttributes
-          , newAttributesHelper fileName location
+          , newAttributesHelper fileName functionName location
           ]))
 
 {-| If you change this, maybe sure to change it in uiSourceMap.js as well -}
 jsPropertyName = "triggerUrl123"
 
-newAttributesHelper :: Module.Canonical -> Reporting.Annotation.Region -> Can.Expr
-newAttributesHelper fileName location =
+newAttributesHelper :: Module.Canonical -> Name.Name -> Reporting.Annotation.Region -> Can.Expr
+newAttributesHelper fileName functionName location =
     let
         (Reporting.Annotation.Region (Reporting.Annotation.Position row _) _) =
             location
 
         lineNumber =
-            Data.Utf8.toChars (Module._module fileName)
+            Name.toChars functionName
+                ++ ","
+                ++ Data.Utf8.toChars (Module._module fileName)
                 ++ ".elm:"
                 ++ show row
                 & Data.Utf8.fromChars
@@ -213,8 +215,8 @@ newAttributesHelper fileName location =
                              (Filled (TType (Module.Canonical (Name "mdgriffith" "elm-ui") "Internal.Model") "Attribute" [TUnit, TVar "msg"])))))))))
       ]))
 
-updateExpr :: Module.Canonical -> Can.Expr -> Can.Expr
-updateExpr fileName (Reporting.Annotation.At location expr) =
+updateExpr :: Module.Canonical -> Name.Name -> Can.Expr -> Can.Expr
+updateExpr fileName functionName (Reporting.Annotation.At location expr) =
     (case expr of
         Can.VarLocal name ->
             Can.VarLocal name
@@ -250,16 +252,16 @@ updateExpr fileName (Reporting.Annotation.At location expr) =
             Can.Float float
 
         Can.List exprs ->
-            Can.List (fmap (updateExpr fileName) exprs)
+            Can.List (fmap (updateExpr fileName functionName) exprs)
 
         Can.Negate expr ->
-            Can.Negate ((updateExpr fileName) expr)
+            Can.Negate ((updateExpr fileName functionName) expr)
 
         Can.Binop name canonical name2 annotation expr expr2 ->
-            Can.Binop name canonical name2 annotation ((updateExpr fileName) expr) ((updateExpr fileName) expr2)
+            Can.Binop name canonical name2 annotation ((updateExpr fileName functionName) expr) ((updateExpr fileName functionName) expr2)
 
         Can.Lambda patterns expr ->
-            Can.Lambda patterns ((updateExpr fileName) expr)
+            Can.Lambda patterns ((updateExpr fileName functionName) expr)
 
         Can.Call
             (Reporting.Annotation.At
@@ -280,7 +282,7 @@ updateExpr fileName (Reporting.Annotation.At location expr) =
                         annotation
                     )
                 )
-                (newAttributes fileName location firstParam : fmap (updateExpr fileName) rest)
+                (newAttributes fileName functionName location firstParam : fmap (updateExpr fileName functionName) rest)
 
         Can.Call
             (Reporting.Annotation.At
@@ -301,7 +303,7 @@ updateExpr fileName (Reporting.Annotation.At location expr) =
                         annotation
                     )
                 )
-                (newAttributes fileName location firstParam : fmap (updateExpr fileName) rest)
+                (newAttributes fileName functionName location firstParam : fmap (updateExpr fileName functionName) rest)
 
         Can.Call
             (Reporting.Annotation.At
@@ -322,7 +324,7 @@ updateExpr fileName (Reporting.Annotation.At location expr) =
                         annotation
                     )
                 )
-                (newAttributes fileName location firstParam : fmap (updateExpr fileName) rest)
+                (newAttributes fileName functionName location firstParam : fmap (updateExpr fileName functionName) rest)
 
         Can.Call
             (Reporting.Annotation.At
@@ -343,7 +345,7 @@ updateExpr fileName (Reporting.Annotation.At location expr) =
                         annotation
                     )
                 )
-                (newAttributes fileName location firstParam : fmap (updateExpr fileName) rest)
+                (newAttributes fileName functionName location firstParam : fmap (updateExpr fileName functionName) rest)
 
         Can.Call
             (Reporting.Annotation.At
@@ -364,31 +366,31 @@ updateExpr fileName (Reporting.Annotation.At location expr) =
                         annotation
                     )
                 )
-                (newAttributes fileName location firstParam : fmap (updateExpr fileName) rest)
+                (newAttributes fileName functionName location firstParam : fmap (updateExpr fileName functionName) rest)
 
         Can.Call expr exprs ->
-            Can.Call ((updateExpr fileName) expr) (fmap (updateExpr fileName) exprs)
+            Can.Call ((updateExpr fileName functionName) expr) (fmap (updateExpr fileName functionName) exprs)
 
         Can.If exprs expr ->
             Can.If
-                (fmap (\(first, second) -> ((updateExpr fileName) first, (updateExpr fileName) second)) exprs)
-                ((updateExpr fileName) expr)
+                (fmap (\(first, second) -> ((updateExpr fileName functionName) first, (updateExpr fileName functionName) second)) exprs)
+                ((updateExpr fileName functionName) expr)
 
         Can.Let def expr ->
-            Can.Let def ((updateExpr fileName) expr)
+            Can.Let def ((updateExpr fileName functionName) expr)
 
         Can.LetRec defs expr ->
-            Can.LetRec defs ((updateExpr fileName) expr)
+            Can.LetRec defs ((updateExpr fileName functionName) expr)
 
         Can.LetDestruct pattern expr expr2 ->
-            Can.LetDestruct pattern ((updateExpr fileName) expr) ((updateExpr fileName) expr2)
+            Can.LetDestruct pattern ((updateExpr fileName functionName) expr) ((updateExpr fileName functionName) expr2)
 
         Can.Case expr caseBranches ->
             Can.Case
-                ((updateExpr fileName) expr)
+                ((updateExpr fileName functionName) expr)
                 (fmap
                     (\(Can.CaseBranch pattern caseExpr) ->
-                        Can.CaseBranch pattern ((updateExpr fileName) caseExpr)
+                        Can.CaseBranch pattern ((updateExpr fileName functionName) caseExpr)
                     )
                     caseBranches
                 )
@@ -397,10 +399,10 @@ updateExpr fileName (Reporting.Annotation.At location expr) =
             Can.Accessor name
 
         Can.Access expr name ->
-            Can.Access ((updateExpr fileName) expr) name
+            Can.Access ((updateExpr fileName functionName) expr) name
 
         Can.Update name expr fieldUpdates ->
-            Can.Update name ((updateExpr fileName) expr) fieldUpdates
+            Can.Update name ((updateExpr fileName functionName) expr) fieldUpdates
 
         Can.Record fields ->
             Can.Record fields
@@ -409,7 +411,7 @@ updateExpr fileName (Reporting.Annotation.At location expr) =
             Can.Unit
 
         Can.Tuple expr expr2 maybeExpr ->
-            Can.Tuple ((updateExpr fileName) expr) ((updateExpr fileName) expr2) (fmap (updateExpr fileName) maybeExpr)
+            Can.Tuple ((updateExpr fileName functionName) expr) ((updateExpr fileName functionName) expr2) (fmap (updateExpr fileName functionName) maybeExpr)
 
         Can.Shader shaderSource shaderTypes ->
             Can.Shader shaderSource shaderTypes
@@ -420,10 +422,18 @@ updateDefs :: Module.Canonical -> Can.Def -> Can.Def
 updateDefs fileName def =
     case def of
         Can.Def name patterns expr ->
-            Can.Def name patterns ((updateExpr fileName) expr)
+            Can.Def
+                name
+                patterns
+                ((updateExpr fileName (Reporting.Annotation.toValue name)) expr)
 
         Can.TypedDef name freeVars patterns expr type_ ->
-            Can.TypedDef name freeVars patterns ((updateExpr fileName) expr) type_
+            Can.TypedDef
+                name
+                freeVars
+                patterns
+                ((updateExpr fileName (Reporting.Annotation.toValue name)) expr)
+                type_
 
 
 updateDecls :: Module.Canonical -> Can.Decls -> Can.Decls
@@ -454,7 +464,8 @@ function getNodesWithLineNumber123(node) {
     if (node.attributes) {
         let attribute = node.attributes.getNamedItem("line-number-attribute");
         if (attribute) {
-            return [attribute.value].concat(list);
+            let components = attribute.value.split(",");
+            return [{ functionName : components[0], path: components[1] }].concat(list);
         }
     }
     return list;
@@ -471,7 +482,6 @@ Object.defineProperty(
                 openedFileRecently123 = true;
                 setTimeout(function() { openedFileRecently123 = false; }, 100);
                 let nodes = getNodesWithLineNumber123(this.target);
-                console.log(nodes);
 
                 if (nodes.length > 1) {
                     let backgroundDiv = document.createElement("div");
@@ -483,8 +493,8 @@ Object.defineProperty(
                     backgroundDiv.onclick = function() { backgroundDiv.remove(); };
 
                     let div = document.createElement("div");
-                    div.style.left = this.clientX + "px";
-                    div.style.top = this.clientY + "px";
+                    div.style.left = this.pageX + "px";
+                    div.style.top = this.pageY + "px";
                     div.style.position = "absolute";
                     div.style.padding = "4px";
                     div.style.display = "flex";
@@ -493,15 +503,17 @@ Object.defineProperty(
                     div.style.borderRadius = "5px";
                     div.style.color = "white";
 
-                    nodes.forEach(text => {
+                    nodes.forEach(node => {
+                        let splitPath = node.path.split(":");
+                        let moduleName = splitPath[0].substring(0,splitPath[0].length-3);
                         let button = document.createElement("button");
-                        button.textContent = text;
+                        button.textContent = moduleName + node.functionName + ":" + splitPath[1];
                         button.style.padding = "4px";
                         button.style.textAlign = "right";
                         button.onclick = function() {
                             backgroundDiv.remove();
                             let xmlHttpReq = new XMLHttpRequest();
-                            xmlHttpReq.open("GET", "/_x/editor/src/" + text, false);
+                            xmlHttpReq.open("GET", "/_x/editor/src/" + node.path, false);
                             xmlHttpReq.send(null);
                         };
                         div.appendChild(button);
@@ -521,4 +533,3 @@ Object.defineProperty(
 );
   |]
   & T.encodeUtf8Builder
-  & dt "note"
