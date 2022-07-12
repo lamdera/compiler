@@ -368,18 +368,68 @@ serveExperimentalEditorOpen :: FilePath -> Text -> Snap ()
 serveExperimentalEditorOpen root path = do
   debug $ "_x/editor received: " ++ show path
   case path & T.splitOn ":" of
-    file:line:xs -> do
+    file:row:column:xs -> do
       let fullpath = (root </> T.unpack file)
       debug $ "_x/editor: " ++ show fullpath
       exists_ <- liftIO $ Dir.doesFileExist fullpath
       if exists_
         then do
-          -- @TODO generalise with editor discovery
-          liftIO $ Ext.Common.bash $ "open -na \"IntelliJ IDEA CE.app\" --args --line " <> T.unpack line <> " " <> fullpath
-          jsonResponse "{ status: 'tried opening editor' }"
+          tryOpenInDetectedEditor root fullpath row column
+
         else do
           error404 "file not found"
+    _ ->
+      error404 "unexpected identifier, expecting format: <filename>:<row>:<column>"
 
+
+tryOpenInDetectedEditor :: FilePath -> FilePath -> Text -> Text -> Snap ()
+tryOpenInDetectedEditor root file row column = do
+  res <- liftIO $ mapM id (editors root)
+  case justs res of
+    [] ->
+      -- @TODO give more helpful error that guides user how to configure things?
+      error404 "No supported editors found"
+
+    (editor, openEditor):xs -> do
+      liftIO $ openEditor file row column
+      jsonResponse $ "{ status: 'tried opening editor " <> editor <> "' }"
+
+
+type EditorOpenIO = (FilePath -> Text -> Text -> IO String)
+
+
+editors :: FilePath -> [IO (Maybe (B.Builder, EditorOpenIO))]
+editors projectRoot =
+  [ detectEditor "custom-*nix" (projectRoot </> "openEditor.sh")
+      (\file row column -> Ext.Common.cq_ (projectRoot </> "openEditor.sh") [file, T.unpack row, T.unpack column] "")
+
+  , detectEditor "custom-windows" (projectRoot </> "openEditor.bat")
+      (\file row column -> Ext.Common.cq_ (projectRoot </> "openEditor.bat") [file, T.unpack row, T.unpack column] "")
+
+  , detectEditor "vscode-insiders" "/usr/local/bin/code-insiders"
+      (\file row column -> Ext.Common.cq_ "/usr/local/bin/code-insiders" [ "-g", file <> ":" <> T.unpack row <> ":" <> T.unpack column] "")
+
+  , detectEditor "vscode" "/usr/local/bin/code"
+      (\file row column -> Ext.Common.cq_ "/usr/local/bin/code" [ "-g", file <> ":" <> T.unpack row <> ":" <> T.unpack column] "")
+
+  , detectEditor "intellij-ce" "/Applications/IntelliJ IDEA CE.app"
+      (\file row column -> Ext.Common.cq_  "open" ["-na", "IntelliJ IDEA CE.app", "--args", "--line", T.unpack row, file] "")
+
+  , detectEditor "intellij" "/Applications/IntelliJ IDEA.app"
+      (\file row column -> Ext.Common.cq_  "open" ["-na", "IntelliJ IDEA.app", "--args", "--line", T.unpack row, file] "")
+
+
+  ]
+
+
+detectEditor :: B.Builder -> FilePath -> EditorOpenIO -> IO (Maybe (B.Builder, EditorOpenIO))
+detectEditor editorName editorBinaryPath openIO = do
+  exists <- Dir.doesFileExist editorBinaryPath
+  if exists
+    then
+      pure $ Just (editorName, openIO)
+    else
+      pure Nothing
 
 
 serveRpc (mClients, mLeader, mChan, beState) port = do

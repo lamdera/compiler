@@ -190,6 +190,7 @@ liveReloadLive = do
 
   setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
   setEnv "LDEBUG" "1"
+  setEnv "EXPERIMENTAL" "1"
 
   let p = "/Users/mario/lamdera/test/v1"
 

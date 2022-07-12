@@ -68,18 +68,24 @@ newAttributes fileName functionName location originalAttributes =
 
 jsPropertyName = "triggerUrl123"
 
+
+moduleToFilePath :: Module.Canonical -> String
+moduleToFilePath ((Module.Canonical pkg moduleName)) =
+    moduleName & Name.toText & T.replace "." "/" & (\v -> v <> ".elm") & T.unpack
+
+
 newAttributesHelper :: Module.Canonical -> Name.Name -> Reporting.Annotation.Region -> Can.Expr
-newAttributesHelper fileName functionName location =
+newAttributesHelper module_ functionName location =
     let
-        (Reporting.Annotation.Region (Reporting.Annotation.Position row _) _) =
+        (Reporting.Annotation.Region (Reporting.Annotation.Position row column) _) =
             location
 
         lineNumber =
             Name.toChars functionName
-                ++ ","
-                ++ Data.Utf8.toChars (Module._module fileName)
-                ++ ".elm:"
-                ++ show row
+                ++ "," ++ (moduleToFilePath module_)
+                ++ ":" ++ show row
+                ++ ":" ++ show column
+
                 & Data.Utf8.fromChars
 
         a =
