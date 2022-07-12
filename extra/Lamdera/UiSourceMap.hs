@@ -66,7 +66,6 @@ newAttributes fileName functionName location originalAttributes =
           , newAttributesHelper fileName functionName location
           ]))
 
-{-| If you change this, maybe sure to change it in uiSourceMap.js as well -}
 jsPropertyName = "triggerUrl123"
 
 newAttributesHelper :: Module.Canonical -> Name.Name -> Reporting.Annotation.Region -> Can.Expr
