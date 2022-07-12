@@ -76,16 +76,6 @@ compile pkg ifaces modul = do
   canonical1 <- Lamdera.Wire3.Core.addWireGenerations canonical0 pkg ifaces modul_
   canonical2 <- Lamdera.Wire2.Core.addWireGenerations canonical1 pkg ifaces modul_
 
-
-  let
-    canonical3 :: Can.Module
-    canonical3 =
-        Lamdera.UiSourceMap.updateDecls
-            (Can._name canonical2)
-            (Can._decls canonical2)
-            & (\newDecls -> canonical2 { Can._decls = newDecls })
-
-
   -- () <- unsafePerformIO $ do
   --   case (pkg, Src.getName modul) of
   --     ((Pkg.Name "author" "project"), "Page") -> do
@@ -101,11 +91,17 @@ compile pkg ifaces modul = do
   --   pure (pure ())
 
   -- ()          <- debugPassText "starting typecheck" moduleName (pure ())
-  annotations <- typeCheck modul_ canonical3
+  annotations <- typeCheck modul_ canonical2
   -- ()          <- debugPassText "starting nitpick" moduleName (pure ())
-  ()          <- nitpick canonical3
+  ()          <- nitpick canonical2
 
-
+  let
+      canonical3 :: Can.Module
+      canonical3 =
+          Lamdera.UiSourceMap.updateDecls
+              (Can._name canonical2)
+              (Can._decls canonical2)
+              & (\newDecls -> canonical2 { Can._decls = newDecls })
 
 
   -- ()          <- debugPassText "starting optimize" moduleName (pure ())
