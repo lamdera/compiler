@@ -400,31 +400,35 @@ type EditorOpenIO = (FilePath -> Text -> Text -> IO String)
 
 editors :: FilePath -> [IO (Maybe (B.Builder, EditorOpenIO))]
 editors projectRoot =
-  [ detectEditor "custom-*nix" (projectRoot </> "openEditor.sh")
+  [ detectEditor "custom-*nix"
+      (Dir.doesFileExist (projectRoot </> "openEditor.sh"))
       (\file row column -> Ext.Common.cq_ (projectRoot </> "openEditor.sh") [file, T.unpack row, T.unpack column] "")
 
-  , detectEditor "custom-windows" (projectRoot </> "openEditor.bat")
+  , detectEditor "custom-windows"
+      (Dir.doesFileExist (projectRoot </> "openEditor.bat"))
       (\file row column -> Ext.Common.cq_ (projectRoot </> "openEditor.bat") [file, T.unpack row, T.unpack column] "")
 
-  , detectEditor "vscode-insiders" "/usr/local/bin/code-insiders"
+  , detectEditor "vscode-insiders"
+      (Dir.doesFileExist "/usr/local/bin/code-insiders")
       (\file row column -> Ext.Common.cq_ "/usr/local/bin/code-insiders" [ "-g", file <> ":" <> T.unpack row <> ":" <> T.unpack column] "")
 
-  , detectEditor "vscode" "/usr/local/bin/code"
+  , detectEditor "vscode"
+      (Dir.doesFileExist "/usr/local/bin/code")
       (\file row column -> Ext.Common.cq_ "/usr/local/bin/code" [ "-g", file <> ":" <> T.unpack row <> ":" <> T.unpack column] "")
 
-  , detectEditor "intellij-ce" "/Applications/IntelliJ IDEA CE.app"
+  , detectEditor "intellij-ce"
+      (Dir.doesDirectoryExist "/Applications/IntelliJ IDEA CE.app")
       (\file row column -> Ext.Common.cq_  "open" ["-na", "IntelliJ IDEA CE.app", "--args", "--line", T.unpack row, file] "")
 
-  , detectEditor "intellij" "/Applications/IntelliJ IDEA.app"
+  , detectEditor "intellij"
+      (Dir.doesDirectoryExist "/Applications/IntelliJ IDEA.app")
       (\file row column -> Ext.Common.cq_  "open" ["-na", "IntelliJ IDEA.app", "--args", "--line", T.unpack row, file] "")
-
-
   ]
 
 
-detectEditor :: B.Builder -> FilePath -> EditorOpenIO -> IO (Maybe (B.Builder, EditorOpenIO))
-detectEditor editorName editorBinaryPath openIO = do
-  exists <- Dir.doesFileExist editorBinaryPath
+detectEditor :: B.Builder -> IO Bool -> EditorOpenIO -> IO (Maybe (B.Builder, EditorOpenIO))
+detectEditor editorName editorExistsCheck openIO = do
+  exists <- editorExistsCheck
   if exists
     then
       pure $ Just (editorName, openIO)
