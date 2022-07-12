@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE QuasiQuotes #-}
 {-# OPTIONS_GHC -Wall -fno-warn-unused-do-bind #-}
 module Lamdera.UiSourceMap
     (updateDecls, src)
@@ -7,6 +8,7 @@ module Lamdera.UiSourceMap
 
 import qualified Data.Map as Map
 import qualified Data.Name as Name
+import qualified Data.Text.Encoding as T
 
 import qualified AST.Source as Src
 import qualified AST.Canonical as Can
@@ -27,6 +29,8 @@ import qualified Reporting.Render.Type.Localizer as Localizer
 import qualified Type.Constrain.Module as Type
 import qualified Type.Solve as Type
 import NeatInterpolation
+import qualified Data.ByteString.Builder as B
+
 
 -- import System.IO.Unsafe (unsafePerformIO)
 
@@ -438,8 +442,11 @@ updateDecls fileName decls =
         Can.SaveTheEnvironment ->
             Can.SaveTheEnvironment
 
+src :: B.Builder
 src =
   [text|
   asdf
   asdf
-  asdf |]
+  asdf
+  |]
+  & T.encodeUtf8Builder
