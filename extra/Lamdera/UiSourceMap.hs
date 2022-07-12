@@ -518,7 +518,7 @@ Object.defineProperty(
                         button.onclick = function() {
                             backgroundDiv.remove();
                             let xmlHttpReq = new XMLHttpRequest();
-                            xmlHttpReq.open("GET", "/_x/editor/src/" + node.path, false);
+                            xmlHttpReq.open("GET", "/_x/editor/src/" + node.path, true);
                             xmlHttpReq.send(null);
                         };
                         div.appendChild(button);
@@ -529,7 +529,7 @@ Object.defineProperty(
                 }
                 else if (nodes.length === 1) {
                     let xmlHttpReq = new XMLHttpRequest();
-                    xmlHttpReq.open("GET", "/_x/editor/src/" + nodes[0], false);
+                    xmlHttpReq.open("GET", "/_x/editor/src/" + nodes[0], true);
                     xmlHttpReq.send(null);
                 }
             }
