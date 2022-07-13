@@ -62,7 +62,7 @@ newAttributes fileName functionName location originalAttributes =
                       (TLambda
                          (TType (Module.Canonical (Name "elm" "core") "List") "List" [TVar "a"])
                          (TType (Module.Canonical (Name "elm" "core") "List") "List" [TVar "a"]))))))
-          [ originalAttributes
+          [ updateExpr fileName functionName originalAttributes
           , newAttributesHelper fileName functionName location
           ]))
 
@@ -180,106 +180,72 @@ updateExpr fileName functionName (Reporting.Annotation.At location expr) =
             (Reporting.Annotation.At
                 location
                 (Can.VarForeign
-                    (Module.Canonical (Name "mdgriffith" "elm-ui") "Element")
-                    "el"
+                    (Module.Canonical (Name "mdgriffith" "elm-ui") moduleName)
+                    functionName_
                     annotation
                 )
             )
             (firstParam : rest) ->
-            Can.Call
-                (Reporting.Annotation.At
-                    location
-                    (Can.VarForeign
-                        (Module.Canonical (Name "mdgriffith" "elm-ui") "Element")
-                        "el"
-                        annotation
+            let
+                expr =
+                    (Reporting.Annotation.At
+                        location
+                        (Can.VarForeign
+                            (Module.Canonical (Name "mdgriffith" "elm-ui") moduleName)
+                            functionName_
+                            annotation
+                        )
                     )
-                )
-                (newAttributes fileName functionName location (firstParam) : fmap (updateExpr fileName functionName) rest)
 
-        Can.Call
-            (Reporting.Annotation.At
-                location
-                (Can.VarForeign
-                    (Module.Canonical (Name "mdgriffith" "elm-ui") "Element")
-                    "paragraph"
-                    annotation
-                )
-            )
-            (firstParam : rest) ->
-            Can.Call
-                (Reporting.Annotation.At
-                    location
-                    (Can.VarForeign
-                        (Module.Canonical (Name "mdgriffith" "elm-ui") "Element")
-                        "paragraph"
-                        annotation
+                isElement =
+                    (functionName_ == "el"
+                        || functionName_ == "row"
+                        || functionName_ == "column"
+                        || functionName_ == "wrappedRow"
+                        || functionName_ == "paragraph"
+                        || functionName_ == "textColumn"
+                        || functionName_ == "table"
+                        || functionName_ == "indexedTable"
+                        || functionName_ == "link"
+                        || functionName_ == "newTabLink"
+                        || functionName_ == "download"
+                        || functionName_ == "downloadAs"
+                        || functionName_ == "image"
                     )
-                )
-                (newAttributes fileName functionName location firstParam : fmap (updateExpr fileName functionName) rest)
+                        && moduleName == "Element"
 
-        Can.Call
-            (Reporting.Annotation.At
-                location
-                (Can.VarForeign
-                    (Module.Canonical (Name "mdgriffith" "elm-ui") "Element")
-                    "wrappedRow"
-                    annotation
-                )
-            )
-            (firstParam : rest) ->
-            Can.Call
-                (Reporting.Annotation.At
-                    location
-                    (Can.VarForeign
-                        (Module.Canonical (Name "mdgriffith" "elm-ui") "Element")
-                        "wrappedRow"
-                        annotation
+                isKeyed =
+                    (functionName_ == "el"
+                        || functionName_ == "row"
+                        || functionName_ == "column"
                     )
-                )
-                (newAttributes fileName functionName location firstParam : fmap (updateExpr fileName functionName) rest)
+                        && moduleName == "Element.Keyed"
 
-        Can.Call
-            (Reporting.Annotation.At
-                location
-                (Can.VarForeign
-                    (Module.Canonical (Name "mdgriffith" "elm-ui") "Element")
-                    "column"
-                    annotation
-                )
-            )
-            (firstParam : rest) ->
-            Can.Call
-                (Reporting.Annotation.At
-                    location
-                    (Can.VarForeign
-                        (Module.Canonical (Name "mdgriffith" "elm-ui") "Element")
-                        "column"
-                        annotation
+                isInput =
+                    (functionName_ == "button"
+                        || functionName_ == "checkbox"
+                        || functionName_ == "text"
+                        || functionName_ == "multiline"
+                        || functionName_ == "username"
+                        || functionName_ == "newPassword"
+                        || functionName_ == "currentPassword"
+                        || functionName_ == "email"
+                        || functionName_ == "search"
+                        || functionName_ == "spellChecked"
+                        || functionName_ == "slider"
+                        || functionName_ == "radio"
+                        || functionName_ == "radioRow"
                     )
-                )
-                (newAttributes fileName functionName location firstParam : fmap (updateExpr fileName functionName) rest)
-
-        Can.Call
-            (Reporting.Annotation.At
-                location
-                (Can.VarForeign
-                    (Module.Canonical (Name "mdgriffith" "elm-ui") "Element")
-                    "row"
-                    annotation
-                )
-            )
-            (firstParam : rest) ->
-            Can.Call
-                (Reporting.Annotation.At
-                    location
-                    (Can.VarForeign
-                        (Module.Canonical (Name "mdgriffith" "elm-ui") "Element")
-                        "row"
-                        annotation
-                    )
-                )
-                (newAttributes fileName functionName location firstParam : fmap (updateExpr fileName functionName) rest)
+                        && moduleName == "Element.Input"
+            in
+            if isElement || isKeyed || isInput then
+                Can.Call
+                    expr
+                    (newAttributes fileName functionName location firstParam : fmap (updateExpr fileName functionName) rest)
+            else
+                Can.Call
+                    ((updateExpr fileName functionName) expr)
+                    (fmap (updateExpr fileName functionName) (firstParam : rest))
 
         Can.Call expr exprs ->
             Can.Call ((updateExpr fileName functionName) expr) (fmap (updateExpr fileName functionName) exprs)
