@@ -92,133 +92,41 @@ newAttributesHelper module_ functionName location =
             Reporting.Annotation.At location
     in
     (a (List
-      [ (a (Binop
-              "|>"
-              (Module.Canonical (Name "elm" "core") "Basics")
-              "apR"
-              (Forall (Map.fromList [("a", ()), ("b", ())]) (TLambda (TVar "a") (TLambda (TLambda (TVar "a") (TVar "b")) (TVar "b"))))
-              (a (Call
-                    (a (VarForeign
-                          (Module.Canonical (Name "elm" "html") "Html.Events")
-                          "on"
-                          (Forall
-                             (Map.fromList [("msg", ())])
-                             (TLambda
-                                (TType (Module.Canonical (Name "elm" "core") "String") "String" [])
-                                (TLambda
-                                   (TType (Module.Canonical (Name "elm" "json") "Json.Decode") "Decoder" [TVar "msg"])
-                                   (TAlias
-                                      (Module.Canonical (Name "elm" "html") "Html")
-                                      "Attribute"
-                                      [("msg", TVar "msg")]
-                                      (Filled (TType (Module.Canonical (Name "elm" "virtual-dom") "VirtualDom") "Attribute" [TVar "msg"]))))))))
-                    [ (a (Str "dblclick"))
-                    , (a (Binop
-                            "|>"
-                            (Module.Canonical (Name "elm" "core") "Basics")
-                            "apR"
-                            (Forall (Map.fromList [("a", ()), ("b", ())]) (TLambda (TVar "a") (TLambda (TLambda (TVar "a") (TVar "b")) (TVar "b"))))
-                            (a (Call
-                                  (a (VarForeign
-                                        (Module.Canonical (Name "elm" "json") "Json.Decode")
-                                        "field"
-                                        (Forall
-                                           (Map.fromList [("a", ())])
-                                           (TLambda
-                                              (TType (Module.Canonical (Name "elm" "core") "String") "String" [])
-                                              (TLambda
-                                                 (TType (Module.Canonical (Name "elm" "json") "Json.Decode") "Decoder" [TVar "a"])
-                                                 (TType (Module.Canonical (Name "elm" "json") "Json.Decode") "Decoder" [TVar "a"]))))))
-                                  [ (a (Str jsPropertyName))
-                                  , (a (VarForeign
-                                          (Module.Canonical (Name "elm" "json") "Json.Decode")
-                                          "int"
-                                          (Forall
-                                             (Map.fromList [])
-                                             (TType
-                                                (Module.Canonical (Name "elm" "json") "Json.Decode")
-                                                "Decoder"
-                                                [TType (Module.Canonical (Name "elm" "core") "Basics") "Int" []]))))
-                                  ]))
-                            (a (Call
-                                  (a (VarForeign
-                                        (Module.Canonical (Name "elm" "json") "Json.Decode")
-                                        "andThen"
-                                        (Forall
-                                           (Map.fromList [("a", ()), ("b", ())])
-                                           (TLambda
-                                              (TLambda (TVar "a") (TType (Module.Canonical (Name "elm" "json") "Json.Decode") "Decoder" [TVar "b"]))
-                                              (TLambda
-                                                 (TType (Module.Canonical (Name "elm" "json") "Json.Decode") "Decoder" [TVar "a"])
-                                                 (TType (Module.Canonical (Name "elm" "json") "Json.Decode") "Decoder" [TVar "b"]))))))
-                                  [ (a (Lambda
-                                          [(a (PAnything))]
-                                          (a (Call
-                                                (a (VarForeign
-                                                      (Module.Canonical (Name "elm" "json") "Json.Decode")
-                                                      "fail"
-                                                      (Forall
-                                                         (Map.fromList [("a", ())])
-                                                         (TLambda
-                                                            (TType (Module.Canonical (Name "elm" "core") "String") "String" [])
-                                                            (TType (Module.Canonical (Name "elm" "json") "Json.Decode") "Decoder" [TVar "a"])))))
-                                                [(a (Str ""))]))))
-                                  ]))))
-                    ]))
-              (a (VarForeign
-                    (Module.Canonical (Name "mdgriffith" "elm-ui") "Element")
-                    "htmlAttribute"
-                    (Forall
-                       (Map.fromList [("msg", ())])
-                       (TLambda
-                          (TAlias
-                             (Module.Canonical (Name "elm" "html") "Html")
-                             "Attribute"
-                             [("msg", TVar "msg")]
-                             (Filled (TType (Module.Canonical (Name "elm" "virtual-dom") "VirtualDom") "Attribute" [TVar "msg"])))
-                          (TAlias
-                             (Module.Canonical (Name "mdgriffith" "elm-ui") "Element")
-                             "Attribute"
-                             [("msg", TVar "msg")]
-                             (Filled (TType (Module.Canonical (Name "mdgriffith" "elm-ui") "Internal.Model") "Attribute" [TUnit, TVar "msg"])))))))))
-      , (a (Binop
-              "|>"
-              (Module.Canonical (Name "elm" "core") "Basics")
-              "apR"
-              (Forall (Map.fromList [("a", ()), ("b", ())]) (TLambda (TVar "a") (TLambda (TLambda (TVar "a") (TVar "b")) (TVar "b"))))
-              (a (Call
-                    (a (VarForeign
-                          (Module.Canonical (Name "elm" "html") "Html.Attributes")
-                          "attribute"
-                          (Forall
-                             (Map.fromList [("msg", ())])
-                             (TLambda
-                                (TType (Module.Canonical (Name "elm" "core") "String") "String" [])
-                                (TLambda
-                                   (TType (Module.Canonical (Name "elm" "core") "String") "String" [])
-                                   (TAlias
-                                      (Module.Canonical (Name "elm" "html") "Html")
-                                      "Attribute"
-                                      [("msg", TVar "msg")]
-                                      (Filled (TType (Module.Canonical (Name "elm" "virtual-dom") "VirtualDom") "Attribute" [TVar "msg"]))))))))
-                    [(a (Str "line-number-attribute")), (a (Str lineNumber))]))
-              (a (VarForeign
-                    (Module.Canonical (Name "mdgriffith" "elm-ui") "Element")
-                    "htmlAttribute"
-                    (Forall
-                       (Map.fromList [("msg", ())])
-                       (TLambda
-                          (TAlias
-                             (Module.Canonical (Name "elm" "html") "Html")
-                             "Attribute"
-                             [("msg", TVar "msg")]
-                             (Filled (TType (Module.Canonical (Name "elm" "virtual-dom") "VirtualDom") "Attribute" [TVar "msg"])))
-                          (TAlias
-                             (Module.Canonical (Name "mdgriffith" "elm-ui") "Element")
-                             "Attribute"
-                             [("msg", TVar "msg")]
-                             (Filled (TType (Module.Canonical (Name "mdgriffith" "elm-ui") "Internal.Model") "Attribute" [TUnit, TVar "msg"])))))))))
-      ]))
+          [ (a (Call
+                  (a (VarForeign
+                        (Module.Canonical (Name "mdgriffith" "elm-ui") "Element")
+                        "htmlAttribute"
+                        (Forall
+                           (Map.fromList [("msg", ())])
+                           (TLambda
+                              (TAlias
+                                 (Module.Canonical (Name "elm" "html") "Html")
+                                 "Attribute"
+                                 [("msg", TVar "msg")]
+                                 (Filled (TType (Module.Canonical (Name "elm" "virtual-dom") "VirtualDom") "Attribute" [TVar "msg"])))
+                              (TAlias
+                                 (Module.Canonical (Name "mdgriffith" "elm-ui") "Element")
+                                 "Attribute"
+                                 [("msg", TVar "msg")]
+                                 (Filled (TType (Module.Canonical (Name "mdgriffith" "elm-ui") "Internal.Model") "Attribute" [TUnit, TVar "msg"])))))))
+                  [ (a (Call
+                          (a (VarForeign
+                                (Module.Canonical (Name "elm" "html") "Html.Attributes")
+                                "attribute"
+                                (Forall
+                                   (Map.fromList [("msg", ())])
+                                   (TLambda
+                                      (TType (Module.Canonical (Name "elm" "core") "String") "String" [])
+                                      (TLambda
+                                         (TType (Module.Canonical (Name "elm" "core") "String") "String" [])
+                                         (TAlias
+                                            (Module.Canonical (Name "elm" "html") "Html")
+                                            "Attribute"
+                                            [("msg", TVar "msg")]
+                                            (Filled (TType (Module.Canonical (Name "elm" "virtual-dom") "VirtualDom") "Attribute" [TVar "msg"]))))))))
+                          [(a (Str "line-number-attribute")), (a (Str lineNumber))]))
+                  ]))
+          ]))
 
 updateExpr :: Module.Canonical -> Name.Name -> Can.Expr -> Can.Expr
 updateExpr fileName functionName (Reporting.Annotation.At location expr) =
@@ -287,7 +195,7 @@ updateExpr fileName functionName (Reporting.Annotation.At location expr) =
                         annotation
                     )
                 )
-                (newAttributes fileName functionName location firstParam : fmap (updateExpr fileName functionName) rest)
+                (newAttributes fileName functionName location (firstParam) : fmap (updateExpr fileName functionName) rest)
 
         Can.Call
             (Reporting.Annotation.At
@@ -456,11 +364,14 @@ updateDecls fileName decls =
         Can.SaveTheEnvironment ->
             Can.SaveTheEnvironment
 
-
+{-|123 is used as a suffix to reduce the chances of a name collision-}
 src :: B.Builder
 src =
   [text|
 
+var mouseX123 = 0;
+var mouseY123 = 0;
+var backgroundDiv123 = null;
 function getNodesWithLineNumber123(node) {
     let list = [];
     if (node.parentNode) {
@@ -476,65 +387,68 @@ function getNodesWithLineNumber123(node) {
     return list;
 }
 
-var openedFileRecently123 = false;
+window.addEventListener(
+    "mousemove",
+    function (event) {
+        mouseX123 = event.clientX;
+        mouseY123 = event.clientY;
+    });
 
-Object.defineProperty(
-    MouseEvent.prototype, 'triggerUrl123',
-    { get: function()
+window.addEventListener(
+    "keydown",
+    function(event) {
+        console.log(event);
+        if (event.ctrlKey && event.altKey && event.keyCode == 67)
         {
-            if (openedFileRecently123 === false)
-            {
-                openedFileRecently123 = true;
-                setTimeout(function() { openedFileRecently123 = false; }, 100);
-                let nodes = getNodesWithLineNumber123(this.target);
+            let target = document.elementFromPoint(mouseX123, mouseY123);
 
-                if (nodes.length > 1) {
-                    let backgroundDiv = document.createElement("div");
-                    backgroundDiv.style.left = "0px";
-                    backgroundDiv.style.top = "0px";
-                    backgroundDiv.style.position = "fixed";
-                    backgroundDiv.style.width = "100%";
-                    backgroundDiv.style.height = "100%";
-                    backgroundDiv.onclick = function() { backgroundDiv.remove(); };
+            let nodes = getNodesWithLineNumber123(target);
 
-                    let div = document.createElement("div");
-                    div.style.left = this.clientX + "px";
-                    div.style.top = this.clientY + "px";
-                    div.style.position = "absolute";
-                    div.style.padding = "4px";
-                    div.style.display = "flex";
-                    div.style.flexDirection = "column";
-                    div.style.background = "rgb(46, 51, 53)";
-                    div.style.borderRadius = "5px";
-                    div.style.color = "white";
-
-                    nodes.forEach(node => {
-                        let splitPath = node.path.split(":");
-                        let moduleName = splitPath[0].substring(0,splitPath[0].length-3);
-                        let button = document.createElement("button");
-                        button.textContent = moduleName + node.functionName + ":" + splitPath[1];
-                        button.style.padding = "4px";
-                        button.style.textAlign = "right";
-                        button.onclick = function() {
-                            backgroundDiv.remove();
-                            let xmlHttpReq = new XMLHttpRequest();
-                            xmlHttpReq.open("GET", "/_x/editor/src/" + node.path, true);
-                            xmlHttpReq.send(null);
-                        };
-                        div.appendChild(button);
-                    });
-
-                    backgroundDiv.appendChild(div);
-                    document.body.appendChild(backgroundDiv);
+            if (nodes.length > 0) {
+                if (backgroundDiv123) {
+                    backgroundDiv123.remove();
                 }
-                else if (nodes.length === 1) {
-                    let xmlHttpReq = new XMLHttpRequest();
-                    xmlHttpReq.open("GET", "/_x/editor/src/" + nodes[0], true);
-                    xmlHttpReq.send(null);
-                }
+
+                backgroundDiv123 = document.createElement("div");
+                backgroundDiv123.style.left = "0px";
+                backgroundDiv123.style.top = "0px";
+                backgroundDiv123.style.position = "fixed";
+                backgroundDiv123.style.width = "100%";
+                backgroundDiv123.style.height = "100%";
+                backgroundDiv123.onclick = function() { backgroundDiv123.remove(); };
+
+                let div = document.createElement("div");
+                div.style.left = mouseX123 + "px";
+                div.style.top = mouseY123 + "px";
+                div.style.position = "absolute";
+                div.style.padding = "4px";
+                div.style.display = "flex";
+                div.style.flexDirection = "column";
+                div.style.background = "rgb(46, 51, 53)";
+                div.style.borderRadius = "5px";
+                div.style.color = "white";
+
+                nodes.forEach(node => {
+                    let splitPath = node.path.split(":");
+                    let moduleName = splitPath[0].substring(0,splitPath[0].length-3);
+                    let button = document.createElement("button");
+                    button.textContent = moduleName + node.functionName + ":" + splitPath[1];
+                    button.style.padding = "4px";
+                    button.style.textAlign = "right";
+                    button.onclick = function() {
+                        backgroundDiv123.remove();
+                        let xmlHttpReq = new XMLHttpRequest();
+                        xmlHttpReq.open("GET", "/_x/editor/src/" + node.path, true);
+                        xmlHttpReq.send(null);
+                    };
+                    div.appendChild(button);
+                });
+
+                backgroundDiv123.appendChild(div);
+                document.body.appendChild(backgroundDiv123);
             }
         }
-    }
-);
+    });
+
   |]
   & T.encodeUtf8Builder
