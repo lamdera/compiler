@@ -40,6 +40,7 @@ jobs:
 
       # Now setup Haskell, given we're comitted to actually doing a lib build
       - uses: haskell/actions/setup@v1
+        if: steps.cache.outputs.cache-hit != 'true'
         with:
           enable-stack: true
           stack-version: 'latest'
