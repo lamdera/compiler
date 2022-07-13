@@ -252,17 +252,31 @@ updateExpr fileName functionName (Reporting.Annotation.At location expr) =
 
         Can.If exprs expr ->
             Can.If
-                (fmap (\(first, second) -> ((updateExpr fileName functionName) first, (updateExpr fileName functionName) second)) exprs)
+                (fmap
+                    (\(first, second) ->
+                        ((updateExpr fileName functionName) first
+                        , (updateExpr fileName functionName) second
+                        )
+                    )
+                    exprs
+                )
                 ((updateExpr fileName functionName) expr)
 
         Can.Let def expr ->
-            Can.Let def ((updateExpr fileName functionName) expr)
+            Can.Let
+                (updateDefs fileName def)
+                ((updateExpr fileName functionName) expr)
 
         Can.LetRec defs expr ->
-            Can.LetRec defs ((updateExpr fileName functionName) expr)
+            Can.LetRec
+                (fmap (updateDefs fileName) defs)
+                ((updateExpr fileName functionName) expr)
 
         Can.LetDestruct pattern expr expr2 ->
-            Can.LetDestruct pattern ((updateExpr fileName functionName) expr) ((updateExpr fileName functionName) expr2)
+            Can.LetDestruct
+                pattern
+                ((updateExpr fileName functionName) expr)
+                ((updateExpr fileName functionName) expr2)
 
         Can.Case expr caseBranches ->
             Can.Case
@@ -281,16 +295,27 @@ updateExpr fileName functionName (Reporting.Annotation.At location expr) =
             Can.Access ((updateExpr fileName functionName) expr) name
 
         Can.Update name expr fieldUpdates ->
-            Can.Update name ((updateExpr fileName functionName) expr) fieldUpdates
+            Can.Update
+                name
+                ((updateExpr fileName functionName) expr)
+                (fmap
+                    (\(Can.FieldUpdate region expr) ->
+                        Can.FieldUpdate region (updateExpr fileName functionName expr)
+                    )
+                    fieldUpdates
+                )
 
         Can.Record fields ->
-            Can.Record fields
+            Can.Record (fmap (\field -> updateExpr fileName functionName field) fields)
 
         Can.Unit ->
             Can.Unit
 
         Can.Tuple expr expr2 maybeExpr ->
-            Can.Tuple ((updateExpr fileName functionName) expr) ((updateExpr fileName functionName) expr2) (fmap (updateExpr fileName functionName) maybeExpr)
+            Can.Tuple
+                ((updateExpr fileName functionName) expr)
+                ((updateExpr fileName functionName) expr2)
+                (fmap (updateExpr fileName functionName) maybeExpr)
 
         Can.Shader shaderSource shaderTypes ->
             Can.Shader shaderSource shaderTypes
@@ -363,7 +388,6 @@ window.addEventListener(
 window.addEventListener(
     "keydown",
     function(event) {
-        console.log(event);
         if (event.ctrlKey && event.altKey && event.keyCode == 67)
         {
             let target = document.elementFromPoint(mouseX123, mouseY123);
