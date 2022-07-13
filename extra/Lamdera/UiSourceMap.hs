@@ -384,8 +384,6 @@ window.addEventListener(
                 backgroundDiv123.onclick = function() { backgroundDiv123.remove(); };
 
                 let div = document.createElement("div");
-                div.style.left = mouseX123 + "px";
-                div.style.top = mouseY123 + "px";
                 div.style.position = "absolute";
                 div.style.padding = "4px";
                 div.style.display = "flex";
@@ -412,6 +410,9 @@ window.addEventListener(
 
                 backgroundDiv123.appendChild(div);
                 document.body.appendChild(backgroundDiv123);
+
+                div.style.left = Math.min(mouseX123, window.innerWidth - div.offsetWidth) + "px";
+                div.style.top = Math.min(mouseY123, window.innerHeight - div.offsetHeight) + "px";
             }
         }
     });
