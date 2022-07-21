@@ -548,11 +548,11 @@ _10MB :: Word64
 _10MB =
   10000000 -- 10MB limit
 
+logger :: BS.ByteString -> IO ()
 logger =
   (\bs ->
     atomicPutStrLn $ T.unpack $ T.decodeUtf8 bs
   )
-
 
 jsonResponse :: B.Builder -> Snap ()
 jsonResponse s =

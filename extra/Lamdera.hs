@@ -226,7 +226,6 @@ setProjectRoot root = do
 
 getProjectRoot :: IO FilePath
 getProjectRoot = do
-
   root <- readMVar projectRootMvar
   case root of
     ProjectRootInvalid -> do

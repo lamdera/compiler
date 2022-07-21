@@ -94,6 +94,26 @@ modifyModul pkg ifaces modul =
                       & listUpsert
                           isModeValue
                           (a (Value (a ("mode")) [] (a (Var CapVar (Data.Name.fromChars $ show envMode))) Nothing))
+                , Src._exports =
+                    case Src._exports newModul of
+                      A.At _ Src.Open -> Src._exports newModul
+                      A.At loc (Src.Explicit exposures) ->
+                        exposures
+                          & listUpsert
+                              (\v ->
+                                case v of
+                                  (Src.Lower (A.At _ "mode")) -> True
+                                  _ -> False
+                              )
+                              (Src.Lower (a "mode"))
+                          & listUpsert
+                              (\v ->
+                                case v of
+                                  (Src.Upper (A.At _ "Mode") _) -> True
+                                  _ -> False
+                              )
+                              (Src.Upper (a "Mode") (Src.Public r))
+                          & (\newExposures ->  A.At loc (Src.Explicit newExposures) )
                 }
 
           else pure newModul
@@ -140,6 +160,9 @@ aliasStubs aliases =
 
 a v =
   A.at (A.Position 0 0) (A.Position 0 10) v
+
+r =
+  A.Region (A.Position 0 0) (A.Position 0 10)
 
 showValue (A.At region (Src.Value name pattern expr mtype)) = do
   -- data Value = Value (A.Located Name) [Pattern] Expr (Maybe Type)
