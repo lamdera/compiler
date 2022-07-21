@@ -36,8 +36,7 @@ import StandaloneInstances
 
 
 
-
--- newConstructorWarnings :: [Text]
+newConstructorWarnings :: N.Name -> Text -> Can.Union -> Can.Union -> [Text]
 newConstructorWarnings typeName moduleScope newUnion oldUnion =
   Can._u_alts newUnion
     & filterMap (\(Can.Ctor newConstructor index int newParams) -> do
@@ -46,7 +45,7 @@ newConstructorWarnings typeName moduleScope newUnion oldUnion =
           -- This constructor is missing a match in the old type, warn the user this new constructor exists
           Just $
             "    notices ->\n" <>
-            "        {- `" <> N.toText newConstructor <> "` doesn't exist in " <> moduleScope <> N.toText typeName <> ".\n" <>
+            "        {- `" <> N.toText newConstructor <> "` doesn't exist in the old " <> moduleScope <> N.toText typeName <> ".\n" <>
             "        This is just a reminder in case migrating some subset of the old data to this new value was important.\n" <>
             "        See https://lamdera.com/tips/modified-custom-type for more info. -}\n" <>
             "        Notice"

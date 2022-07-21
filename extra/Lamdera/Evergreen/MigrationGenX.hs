@@ -161,7 +161,7 @@ migrateUnion author pkg oldUnion newUnion params tvarMap oldVersion newVersion t
       oldConstructorFts
         & fmap (\(t,imps,ft) -> t)
         -- & T.intercalate " -> todo \n"
-        & flip (++) (newConstructorWarnings typeName moduleScope newUnion oldUnion)
+        & flip (++) (newConstructorWarnings typeName moduleScopeOld newUnion oldUnion)
         & T.concat
 
     imports :: ElmImports
@@ -172,6 +172,9 @@ migrateUnion author pkg oldUnion newUnion params tvarMap oldVersion newVersion t
 
     moduleScope :: Text
     moduleScope = nameToText newModule <> "."
+
+    moduleScopeOld :: Text
+    moduleScopeOld = nameToText oldModuleName <> "."
 
     -- debug (t, imps, ft) =
     --   -- debugHaskellWhen (typeName == "RoomId") ("dunion: " <> hindentFormatValue scope) (t, imps, ft)
@@ -258,8 +261,8 @@ genOldConstructorFt oldModuleName moduleScope typeName interfaces tvarMap recurs
 unimplementedText oldConstructor moduleScope typeName oldModuleName =
   T.concat [
     " ->\n",
-    "           {- `", N.toText oldConstructor, "` doesn't exist in ", moduleScope, N.toText typeName, " so I couldn't figure out how to migrate it!\n",
-    "           You'll need to decide what happens to ", N.toText oldModuleName, ".", N.toText oldConstructor, " values in a migration.\n",
+    "           {- `", N.toText oldConstructor, "` doesn't exist in ", moduleScope, N.toText typeName, " so I couldn't figure out how to migrate it.\n",
+    "           You'll need to decide what happens to this ", N.toText oldModuleName, ".", N.toText oldConstructor, " value in a migration.\n",
     "           See https://lamdera.com/tips/modified-custom-type for more info. -}\n",
     "           Unimplemented\n"
   ]
