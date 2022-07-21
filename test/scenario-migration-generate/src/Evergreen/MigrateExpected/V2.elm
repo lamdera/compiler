@@ -1,4 +1,4 @@
-module Evergreen.MigrateExpected.V2 exposing (..)
+module Evergreen.Migrate.V2 exposing (..)
 
 import Evergreen.V1.External
 import Evergreen.V1.Types
@@ -24,6 +24,7 @@ frontendModel old =
     ModelUnchanged
 
 
+migrate_External_AllTypes : Evergreen.V1.External.AllTypes -> Evergreen.V2.External.AllTypes
 migrate_External_AllTypes old =
     { int = old.int
     , float = old.float
@@ -40,6 +41,7 @@ migrate_External_AllTypes old =
     }
 
 
+migrate_External_ExternalUnion : Evergreen.V1.External.ExternalUnion -> Evergreen.V2.External.ExternalUnion
 migrate_External_ExternalUnion old =
     case old of
         Evergreen.V1.External.External1 ->
@@ -49,30 +51,35 @@ migrate_External_ExternalUnion old =
             Evergreen.V2.External.External2
 
 
+migrate_Types_BackendMsg : Evergreen.V1.Types.BackendMsg -> Evergreen.V2.Types.BackendMsg
 migrate_Types_BackendMsg old =
     case old of
         Evergreen.V1.Types.NoOpBackendMsg ->
             Evergreen.V2.Types.NoOpBackendMsg
 
 
+migrate_Types_FrontendMsg : Evergreen.V1.Types.FrontendMsg -> Evergreen.V2.Types.FrontendMsg
 migrate_Types_FrontendMsg old =
     case old of
         Evergreen.V1.Types.Noop ->
             Evergreen.V2.Types.Noop
 
 
+migrate_Types_ToBackend : Evergreen.V1.Types.ToBackend -> Evergreen.V2.Types.ToBackend
 migrate_Types_ToBackend old =
     case old of
         Evergreen.V1.Types.Nooptobackend ->
             Evergreen.V2.Types.Nooptobackend
 
 
+migrate_Types_ToFrontend : Evergreen.V1.Types.ToFrontend -> Evergreen.V2.Types.ToFrontend
 migrate_Types_ToFrontend old =
     case old of
         Evergreen.V1.Types.Nooptofrontend ->
             Evergreen.V2.Types.Nooptofrontend
 
 
+migrate_Types_UserType : Evergreen.V1.Types.UserType -> Evergreen.V2.Types.UserType
 migrate_Types_UserType old =
     case old of
         Evergreen.V1.Types.UserFirst ->

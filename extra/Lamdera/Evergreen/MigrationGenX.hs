@@ -177,12 +177,18 @@ migrateUnion author pkg oldUnion newUnion params tvarMap oldVersion newVersion t
     --   -- debugHaskellWhen (typeName == "RoomId") ("dunion: " <> hindentFormatValue scope) (t, imps, ft)
     --   debugNote ("\n✴️  inserting def for " <> t) (t, imps, ft)
 
+    migrationName :: Text
+    migrationName = migrationNameUnderscored newModule newVersion typeName
+
     migration :: Text
     migration =
       if length tvarMap > 0 then
-        "(" <> migrationNameUnderscored newModule newVersion typeName <> " " <> usageParams <> ")" -- <> "<!2>"
+        "(" <> migrationName <> " " <> usageParams <> ")" -- <> "<!2>"
       else
-        migrationNameUnderscored newModule newVersion typeName -- <> "<!3>"
+        migrationName -- <> "<!3>"
+
+    migrationTypeSignature :: Text
+    migrationTypeSignature = T.concat [ oldModuleName & N.toText, ".", typeName & N.toText, " -> ", newModule & N.toText, ".", typeName & N.toText]
 
   in
   -- debug $
@@ -191,9 +197,12 @@ migrateUnion author pkg oldUnion newUnion params tvarMap oldVersion newVersion t
   , (Map.singleton (moduleKey identifier) $
       ElmFileText
         { imports = imports
-        , types = [ migrationNameUnderscored newModule newVersion typeName <> " old =\n" <>
-                    "  case old of\n" <>
-                    ctypes
+        , types = [ T.concat
+                    [ migrationName, " : ", migrationTypeSignature, "\n"
+                    , migrationName <> " old =\n"
+                    , "  case old of\n"
+                    , ctypes
+                    ]
                   ]
         })
       & mergeFts oldFts
@@ -420,6 +429,10 @@ handleAliasToFt oldVersion newVersion scope interfaces recursionSet tipe@(Can.TA
 
     identifier = asIdentifier_ (moduleName, name)
 
+    oldModuleName :: N.Name
+    oldModuleName = asOldModuleName newModule newVersion oldVersion
+
+    typeName = name
   in
   case aliasType of
     Can.Holey cType ->
@@ -472,14 +485,22 @@ handleAliasToFt oldVersion newVersion scope interfaces recursionSet tipe@(Can.TA
           -- else
             usageParamImports & Set.insert moduleName
 
+        migrationName :: Text
         migrationName = migrationNameUnderscored newModule newVersion name
+
+        migrationTypeSignature :: Text
+        migrationTypeSignature = T.concat [ oldModuleName & N.toText, ".", typeName & N.toText, " -> ", newModule & N.toText, ".", typeName & N.toText]
 
         typeDef =
           if isUserType_ cType then
             -- if length tvarMap_ > 0 then
             --     [migrationName <> " old = " <> subt]
             -- else
-                [T.concat [migrationName, " old = ", subt]]
+                [ T.concat
+                  [ migrationName, " : ", migrationTypeSignature, "\n"
+                  , migrationName, " old = ", subt
+                  ]
+                ]
           else
             -- ["-- no migration for primitive: " <> N.toText name ]
             []
