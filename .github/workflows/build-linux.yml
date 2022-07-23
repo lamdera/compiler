@@ -32,23 +32,9 @@ jobs:
 
       - uses: actions/checkout@v2
 
-      - name: Setup stack
-        run: |
-          curl -sSL https://get.haskellstack.org/ | sh
-          stack setup
-        shell: alpine.sh --root {0}
-
-
       # Launch remote SSHD endpoint for debugging
-      - name: Setup upterm session
-        uses: lhotari/action-upterm@v1
-
-
-
-      - uses: haskell/actions/setup@v1
-        with:
-          enable-stack: true
-          stack-version: 'latest'
+      # - name: Setup upterm session
+      #   uses: lhotari/action-upterm@v1
 
       # First, check if the specific cache exists, so we don't waste ~3m of build
       # time restoring the 1.5GB cache for no reason. See https://github.com/actions/cache/pull/420
@@ -58,8 +44,8 @@ jobs:
         with:
           only-check-key: true
           path: |
-            ~/.stack
-            .stack-work
+            /home/runner/rootfs/alpine-v3.15-x86_64/home/runner/.ghcup
+            /home/runner/rootfs/alpine-v3.15-x86_64/home/runner/.cabal
           key: ${{ runner.os }}-${{ hashFiles('stack.yaml.lock') }}-${{ hashFiles('elm.cabal') }}
 
       # If it doesn't exist, setup our cache action, while also trying to restore
@@ -69,8 +55,8 @@ jobs:
         if: steps.cache.outputs.cache-hit != 'true'
         with:
           path: |
-            ~/.stack
-            .stack-work
+            /home/runner/rootfs/alpine-v3.15-x86_64/home/runner/.ghcup
+            /home/runner/rootfs/alpine-v3.15-x86_64/home/runner/.cabal
           key: ${{ runner.os }}-${{ hashFiles('stack.yaml.lock') }}-${{ hashFiles('elm.cabal') }}
           restore-keys: |
             ${{ runner.os }}-
@@ -79,7 +65,32 @@ jobs:
       # most part valuable to cache.
       - name: Install Dependencies
         if: steps.cache.outputs.cache-hit != 'true'
-        run: stack build --ghc-options='-optl-static -optl-pthread' --only-dependencies
+        run: |
+          build=`pwd`
+          cd /usr/lib/gcc/x86_64-alpine-linux-musl/10.3.1/
+          cp crtbeginT.o crtbeginT.o.orig
+          cp crtbeginS.o crtbeginT.o
+          cp crtend.o crtend.o.orig
+          cp crtendS.o crtend.o
+          cd $build
+
+          curl https://downloads.haskell.org/~ghcup/0.1.17.3/x86_64-linux-ghcup-0.1.17.3 > /usr/local/bin/ghcup && chmod +x /usr/local/bin/ghcup
+
+          ghcup install cabal recommended
+          PATH=$PATH:/home/runner/.ghcup/bin
+
+          ghcup install ghc 9.0.2
+          ghcup set ghc 9.0.2
+
+          cabal v2-update
+          cabal v2-build --ghc-option=-optl=-static --ghc-option=-split-sections -O2 --only-dependencies
+
+          cabal v2-build --ghc-option=-optl=-static --ghc-option=-split-sections -O2
+          cp dist-newstyle/build/x86_64-linux/ghc-*/elm-*/x/lamdera/*opt/build/lamdera/lamdera ./
+          strip -s ./lamdera
+
+        shell: alpine.sh --root {0}
+
 
   # The install step is split to a separate job, so that if the we were building
   # from scratch and just spent 30 minutes building all the libraries, but then
@@ -92,30 +103,64 @@ jobs:
     runs-on: ubuntu-latest
     needs: build-packages
     steps:
-      - uses: actions/checkout@v2
-      - uses: haskell/actions/setup@v1
+      - uses: jirutka/setup-alpine@v1
         with:
-          enable-stack: true
-          stack-version: 'latest'
+          branch: v3.15
+          packages: >
+            alpine-sdk
+            autoconf
+            gcc
+            gmp
+            gmp-dev
+            libffi
+            libffi-dev
+            llvm10
+            make
+            musl-dev
+            ncurses-dev
+            ncurses-static
+            tree
+            wget
+            zlib-dev
+            zlib-static
+
+      - uses: actions/checkout@v2
+
       - uses: actions/cache@v2
         with:
           path: |
-            ~/.stack
-            .stack-work
+            /home/runner/rootfs/alpine-v3.15-x86_64/home/runner/.ghcup
+            /home/runner/rootfs/alpine-v3.15-x86_64/home/runner/.cabal
           key: ${{ runner.os }}-${{ hashFiles('stack.yaml.lock') }}-${{ hashFiles('elm.cabal') }}
           restore-keys: |
             ${{ runner.os }}-
 
-      # The retry is here because of the windows build issues, but doesn't
-      # hurt to leave it, worst case it never retries
-      - uses: nick-invision/retry@v2
-        with:
-          timeout_minutes: 5
-          max_attempts: 3
-          command: stack install --ghc-options='-optl-static -optl-pthread' --force-dirty
+      - name: Compile static binary
+        run: |
+          build=`pwd`
+          cd /usr/lib/gcc/x86_64-alpine-linux-musl/10.3.1/
+          cp crtbeginT.o crtbeginT.o.orig
+          cp crtbeginS.o crtbeginT.o
+          cp crtend.o crtend.o.orig
+          cp crtendS.o crtend.o
+          cd $build
 
-      - name: Archive lamdera.exe artifact
+          curl https://downloads.haskell.org/~ghcup/0.1.17.3/x86_64-linux-ghcup-0.1.17.3 > /usr/local/bin/ghcup && chmod +x /usr/local/bin/ghcup
+
+          ghcup install cabal recommended
+          PATH=$PATH:/home/runner/.ghcup/bin
+
+          ghcup install ghc 9.0.2
+          ghcup set ghc 9.0.2
+
+          cabal v2-build --ghc-option=-optl=-static --ghc-option=-split-sections -O2
+          cp dist-newstyle/build/x86_64-linux/ghc-*/elm-*/x/lamdera/*opt/build/lamdera/lamdera ./
+          strip -s ./lamdera
+
+        shell: alpine.sh --root {0}
+
+      - name: Archive lamdera artifact
         uses: actions/upload-artifact@v2
         with:
           name: lamdera-next
-          path: ~/.local/bin/lamdera
+          path: lamdera
