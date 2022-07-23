@@ -32,6 +32,13 @@ jobs:
 
       - uses: actions/checkout@v2
 
+      - name: Setup stack
+        run: |
+          curl -sSL https://get.haskellstack.org/ | sh
+          stack setup
+        shell: alpine.sh --root {0}
+
+
       # Launch remote SSHD endpoint for debugging
       - name: Setup upterm session
         uses: lhotari/action-upterm@v1
