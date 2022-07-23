@@ -69,6 +69,7 @@ jobs:
     - run: docker tag lamdera/compiler-linux localhost:5000/lamdera/compiler-linux && docker push localhost:5000/lamdera/compiler-linux || true
       # if: steps.cache.outputs.cache-hit != 'true'
 
+    # Launch remote SSHD endpoint for debugging
     - name: Setup upterm session
       uses: lhotari/action-upterm@v1
 

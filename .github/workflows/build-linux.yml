@@ -1,7 +1,7 @@
 on:
   push:
     branches:
-      - lamdera-next-disabled
+      - linux-musl
 
 name: Build Lamdera Compiler for Linux
 jobs:
@@ -9,7 +9,35 @@ jobs:
     name: Build Libraries
     runs-on: ubuntu-latest
     steps:
+      - uses: jirutka/setup-alpine@v1
+        with:
+          branch: v3.15
+          packages: >
+            alpine-sdk
+            autoconf
+            gcc
+            gmp
+            gmp-dev
+            libffi
+            libffi-dev
+            llvm10
+            make
+            musl-dev
+            ncurses-dev
+            ncurses-static
+            tree
+            wget
+            zlib-dev
+            zlib-static
+
       - uses: actions/checkout@v2
+
+      # Launch remote SSHD endpoint for debugging
+      - name: Setup upterm session
+        uses: lhotari/action-upterm@v1
+
+
+
       - uses: haskell/actions/setup@v1
         with:
           enable-stack: true
