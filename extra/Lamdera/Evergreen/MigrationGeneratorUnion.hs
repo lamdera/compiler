@@ -44,12 +44,18 @@ newConstructorWarnings typeName moduleScope newUnion oldUnion =
         Nothing ->
           -- This constructor is missing a match in the old type, warn the user this new constructor exists
           Just $
-            "    notices ->\n" <>
             "        {- `" <> N.toText newConstructor <> "` doesn't exist in the old " <> moduleScope <> N.toText typeName <> ".\n" <>
             "        This is just a reminder in case migrating some subset of the old data to this new value was important.\n" <>
-            "        See https://lamdera.com/tips/modified-custom-type for more info. -}\n" <>
-            "        Notice"
+            "        See https://lamdera.com/tips/modified-custom-type for more info. -}\n"
         Just _ ->
           -- This constructor has a match in the old type, so skip it
           Nothing
     )
+    & (\notices ->
+          if length notices > 0 then
+            ["    notices ->\n" <>
+            "        " <> T.concat notices <> "\n" <>
+            "        Notice"]
+          else
+            []
+      )

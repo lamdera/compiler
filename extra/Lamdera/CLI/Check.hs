@@ -31,6 +31,7 @@ import qualified Make
 import qualified Elm.Outline
 
 import Lamdera
+import qualified Lamdera.Version
 
 import qualified Lamdera.Evergreen.MigrationHarness
 import Lamdera.Evergreen.MigrationHarness (VersionInfo(..), createLamderaGenerated, vinfoVersion, getLastLocalTypeChangeVersion)
@@ -490,6 +491,7 @@ checkForLatestBinaryVersion inDebug = do
           Lamdera.Version.raw
 
       debug $ "comparing remote:" <> show latestVersionText <> " local:" <> show Lamdera.Version.raw
+
       debug $ "comparing remote:" <> show latestVersion <> " local:" <> show localVersion
 
       onlyWhen (latestVersionText /= "skip" && latestVersion > localVersion) $ do

@@ -30,7 +30,10 @@ import qualified Terminal.Chomp as Chomp
 import qualified Terminal.Error as Error
 
 
+<<<<<<< HEAD
 import qualified Lamdera
+=======
+>>>>>>> 5a61e15f (Add build time versioning)
 import qualified Lamdera.Version
 import qualified Sanity
 
