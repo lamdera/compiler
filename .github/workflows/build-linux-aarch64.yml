@@ -1,9 +1,9 @@
 on:
   push:
     branches:
-      - linux-musl
+      - linux-musl-aarch64-disabled
 
-name: Build Lamdera Compiler for Linux
+name: Build Linux aarch64
 jobs:
   build-packages:
     name: Build Libraries
@@ -11,6 +11,7 @@ jobs:
     steps:
       - uses: jirutka/setup-alpine@v1
         with:
+          arch: aarch64
           branch: v3.15
           packages: >
             alpine-sdk
@@ -27,14 +28,15 @@ jobs:
             ncurses-static
             tree
             wget
+            zlib
             zlib-dev
             zlib-static
 
       - uses: actions/checkout@v2
 
       # Launch remote SSHD endpoint for debugging
-      # - name: Setup upterm session
-      #   uses: lhotari/action-upterm@v1
+      - name: Setup upterm session
+        uses: lhotari/action-upterm@v1
 
       # First, check if the specific cache exists, so we don't waste ~3m of build
       # time restoring the 1.5GB cache for no reason. See https://github.com/actions/cache/pull/420
@@ -44,9 +46,9 @@ jobs:
         with:
           only-check-key: true
           path: |
-            /home/runner/rootfs/alpine-v3.15-x86_64/home/runner/.ghcup
-            /home/runner/rootfs/alpine-v3.15-x86_64/home/runner/.cabal
-          key: ${{ runner.os }}-${{ hashFiles('stack.yaml.lock') }}-${{ hashFiles('elm.cabal') }}
+            /home/runner/rootfs/alpine-v3.15-aarch64/home/runner/.ghcup
+            /home/runner/rootfs/alpine-v3.15-aarch64/home/runner/.cabal
+          key: ${{ runner.os }}-aarch64-${{ hashFiles('stack.yaml.lock') }}-${{ hashFiles('elm.cabal') }}
 
       # If it doesn't exist, setup our cache action, while also trying to restore
       # a prior broader matching cache if it exists (saves a lot of time if just
@@ -55,11 +57,11 @@ jobs:
         if: steps.cache.outputs.cache-hit != 'true'
         with:
           path: |
-            /home/runner/rootfs/alpine-v3.15-x86_64/home/runner/.ghcup
-            /home/runner/rootfs/alpine-v3.15-x86_64/home/runner/.cabal
-          key: ${{ runner.os }}-${{ hashFiles('stack.yaml.lock') }}-${{ hashFiles('elm.cabal') }}
+            /home/runner/rootfs/alpine-v3.15-aarch64/home/runner/.ghcup
+            /home/runner/rootfs/alpine-v3.15-aarch64/home/runner/.cabal
+          key: ${{ runner.os }}-aarch64-${{ hashFiles('stack.yaml.lock') }}-${{ hashFiles('elm.cabal') }}
           restore-keys: |
-            ${{ runner.os }}-
+            ${{ runner.os }}-aarch64-
 
       # Install just our dependencies, this can take ~30m from scratch and is the
       # most part valuable to cache.
@@ -67,14 +69,17 @@ jobs:
         if: steps.cache.outputs.cache-hit != 'true'
         run: |
           build=`pwd`
-          cd /usr/lib/gcc/x86_64-alpine-linux-musl/10.3.1/
+          cd /usr/lib/gcc/aarch64-alpine-linux-musl/10.3.1/
           cp crtbeginT.o crtbeginT.o.orig
           cp crtbeginS.o crtbeginT.o
           cp crtend.o crtend.o.orig
           cp crtendS.o crtend.o
           cd $build
 
-          curl https://downloads.haskell.org/~ghcup/0.1.17.8/x86_64-linux-ghcup-0.1.17.8 > /usr/local/bin/ghcup && chmod +x /usr/local/bin/ghcup
+          # https://ughe.github.io/2018/07/19/qemu-aarch64
+          curl https://ughe.github.io/data/2018/ld-linux-aarch64.so.1 > /lib/ld-linux-aarch64.so.1
+
+          curl https://downloads.haskell.org/~ghcup/0.1.17.8/aarch64-linux-ghcup-0.1.17.8 > /usr/local/bin/ghcup && chmod +x /usr/local/bin/ghcup
 
           ghcup install cabal recommended
           PATH=$PATH:/home/runner/.ghcup/bin
@@ -86,7 +91,7 @@ jobs:
           cabal v2-build --ghc-option=-optl=-static --ghc-option=-split-sections -O2 --only-dependencies
 
           cabal v2-build --ghc-option=-optl=-static --ghc-option=-split-sections -O2
-          cp dist-newstyle/build/x86_64-linux/ghc-*/elm-*/x/lamdera/*opt/build/lamdera/lamdera ./
+          cp dist-newstyle/build/aarch64-linux/ghc-*/elm-*/x/lamdera/*opt/build/lamdera/lamdera ./
           strip -s ./lamdera
 
         shell: alpine.sh --root {0}
@@ -121,6 +126,7 @@ jobs:
             ncurses-static
             tree
             wget
+            zlib
             zlib-dev
             zlib-static
 
@@ -129,23 +135,23 @@ jobs:
       - uses: actions/cache@v2
         with:
           path: |
-            /home/runner/rootfs/alpine-v3.15-x86_64/home/runner/.ghcup
-            /home/runner/rootfs/alpine-v3.15-x86_64/home/runner/.cabal
-          key: ${{ runner.os }}-${{ hashFiles('stack.yaml.lock') }}-${{ hashFiles('elm.cabal') }}
+            /home/runner/rootfs/alpine-v3.15-aarch64/home/runner/.ghcup
+            /home/runner/rootfs/alpine-v3.15-aarch64/home/runner/.cabal
+          key: ${{ runner.os }}-aarch64-${{ hashFiles('stack.yaml.lock') }}-${{ hashFiles('elm.cabal') }}
           restore-keys: |
-            ${{ runner.os }}-
+            ${{ runner.os }}-aarch64-
 
       - name: Compile static binary
         run: |
           build=`pwd`
-          cd /usr/lib/gcc/x86_64-alpine-linux-musl/10.3.1/
+          cd /usr/lib/gcc/aarch64-alpine-linux-musl/10.3.1/
           cp crtbeginT.o crtbeginT.o.orig
           cp crtbeginS.o crtbeginT.o
           cp crtend.o crtend.o.orig
           cp crtendS.o crtend.o
           cd $build
 
-          curl https://downloads.haskell.org/~ghcup/0.1.17.8/x86_64-linux-ghcup-0.1.17.8 > /usr/local/bin/ghcup && chmod +x /usr/local/bin/ghcup
+          curl https://downloads.haskell.org/~ghcup/0.1.17.8/aarch64-linux-ghcup-0.1.17.8 > /usr/local/bin/ghcup && chmod +x /usr/local/bin/ghcup
 
           ghcup install cabal recommended
           PATH=$PATH:/home/runner/.ghcup/bin
@@ -154,7 +160,7 @@ jobs:
           ghcup set ghc 9.0.2
 
           cabal v2-build --ghc-option=-optl=-static --ghc-option=-split-sections -O2
-          cp dist-newstyle/build/x86_64-linux/ghc-*/elm-*/x/lamdera/*opt/build/lamdera/lamdera ./
+          cp dist-newstyle/build/aarch64-linux/ghc-*/elm-*/x/lamdera/*opt/build/lamdera/lamdera ./
           strip -s ./lamdera
 
         shell: alpine.sh --root {0}
