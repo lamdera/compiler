@@ -1,3 +1,7 @@
+# Alpine aarch64 doesn't seem to be compatible with aarch64 ghcup (library issues)
+# Closest we got is with LD_LIBRARY_PATH=/lib but then ran into the libtinfo6 issue again,
+# so probably can't use ghcup. Maybe need to try stack again?
+
 on:
   push:
     branches:
@@ -81,7 +85,7 @@ jobs:
 
           curl https://downloads.haskell.org/~ghcup/0.1.17.8/aarch64-linux-ghcup-0.1.17.8 > /usr/local/bin/ghcup && chmod +x /usr/local/bin/ghcup
 
-          ghcup install cabal recommended
+          LD_LIBRARY_PATH=/lib ghcup install cabal recommended
           PATH=$PATH:/home/runner/.ghcup/bin
 
           ghcup install ghc 9.0.2

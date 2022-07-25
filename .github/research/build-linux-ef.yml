@@ -1,3 +1,7 @@
+# This was a docker based attempt at alpine MUSL builds to avoid the libtinfo5/6 clash issues with gcc.
+# Had lots of issues with the indirection in the build scripts ported from elm-format, as well as getting
+# github actions caching to play nice/fast with Docker. Ultimately gave up on this approach, but here for ref.
+
 on:
   push:
     branches:

@@ -1,7 +1,8 @@
 on:
   push:
     branches:
-      - linux-musl
+      - release
+      - release-linux
 
 name: Build Lamdera Compiler for Linux
 jobs:

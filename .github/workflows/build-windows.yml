@@ -1,7 +1,8 @@
 on:
   push:
     branches:
-      - windows
+      - release
+      - release-windows
 
 name: Build Lamdera Compiler for Windows
 jobs:
@@ -9,12 +10,6 @@ jobs:
     name: Build Windows Libraries
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: haskell/actions/setup@v1
-        with:
-          enable-stack: true
-          stack-version: 'latest'
-
       # First, check if the specific cache exists, so we don't waste ~3m of build
       # time restoring the 1.5GB cache for no reason. See https://github.com/actions/cache/pull/420
       # as this functionality may become part of actions/cache in future.
@@ -41,6 +36,15 @@ jobs:
           key: ${{ runner.os }}-${{ hashFiles('stack.yaml.lock') }}
           restore-keys: |
             ${{ runner.os }}-
+
+      - uses: actions/checkout@v2
+        if: steps.cache.outputs.cache-hit != 'true'
+
+      - uses: haskell/actions/setup@v1
+        if: steps.cache.outputs.cache-hit != 'true'
+        with:
+          enable-stack: true
+          stack-version: 'latest'
 
       # Install just our dependencies, this can take ~30m from scratch and is the
       # most part valuable to cache.
