@@ -9,29 +9,6 @@ jobs:
     name: Build Libraries
     runs-on: ubuntu-latest
     steps:
-      - uses: jirutka/setup-alpine@v1
-        with:
-          branch: v3.15
-          packages: >
-            alpine-sdk
-            autoconf
-            gcc
-            gmp
-            gmp-dev
-            libffi
-            libffi-dev
-            llvm10
-            make
-            musl-dev
-            ncurses-dev
-            ncurses-static
-            tree
-            wget
-            zlib-dev
-            zlib-static
-
-      - uses: actions/checkout@v2
-
       # Launch remote SSHD endpoint for debugging
       # - name: Setup upterm session
       #   uses: lhotari/action-upterm@v1
@@ -60,6 +37,31 @@ jobs:
           key: ${{ runner.os }}-${{ hashFiles('stack.yaml.lock') }}-${{ hashFiles('elm.cabal') }}
           restore-keys: |
             ${{ runner.os }}-
+
+      - uses: jirutka/setup-alpine@v1
+        if: steps.cache.outputs.cache-hit != 'true'
+        with:
+          branch: v3.15
+          packages: >
+            alpine-sdk
+            autoconf
+            gcc
+            gmp
+            gmp-dev
+            libffi
+            libffi-dev
+            llvm10
+            make
+            musl-dev
+            ncurses-dev
+            ncurses-static
+            tree
+            wget
+            zlib-dev
+            zlib-static
+
+      - uses: actions/checkout@v2
+        if: steps.cache.outputs.cache-hit != 'true'
 
       # Install just our dependencies, this can take ~30m from scratch and is the
       # most part valuable to cache.
