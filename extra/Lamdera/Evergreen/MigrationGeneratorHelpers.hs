@@ -134,11 +134,12 @@ addImport moduleName imp ft =
     ) (moduleNameKey moduleName)
 
 
-migrationNameUnderscored :: N.Name -> Int -> N.Name -> Text
-migrationNameUnderscored newModule newVersion newTypeName =
+migrationNameUnderscored :: N.Name -> Int -> Int -> N.Name -> Text
+migrationNameUnderscored newModule oldVersion newVersion newTypeName =
   newModule
     & N.toText
     & T.replace ("Evergreen.V" <> show_ newVersion <> ".") ""
+    & T.replace ("Evergreen.V" <> show_ oldVersion <> ".") ""
     & T.replace "." "_"
     & (\v -> "migrate_" <> v <> "_" <> nameToText newTypeName)
 

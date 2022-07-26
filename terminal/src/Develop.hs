@@ -163,8 +163,8 @@ error404 =
 serveFiles :: FilePath -> Sentry.Cache -> Snap ()
 serveFiles root sentryCache =
   do  path <- getSafePath
-      guard =<< liftIO (Dir.doesFileExist path)
-      serveElm_ root path <|> serveFilePretty path
+      guard =<< liftIO (Dir.doesFileExist (root </> path))
+      serveElm_ root path <|> serveFilePretty (root </> path)
 
 
 

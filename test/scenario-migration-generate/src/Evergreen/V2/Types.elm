@@ -1,5 +1,6 @@
 module Evergreen.V2.Types exposing (..)
 
+import Dict exposing (Dict)
 import Evergreen.V2.External
 
 
@@ -16,6 +17,15 @@ type UserType
     = UserFirst
     | UserSecond
     | UserAdded
+    | UserAddedParam Int
+    | UserWithParam Int
+    | UserWithParams Float String (Dict Int String)
+    | UserWithParamCustom CustomType
+
+
+type CustomType
+    = CustomOne
+    | CustomTwo
 
 
 type alias FrontendModel =

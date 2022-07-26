@@ -1,5 +1,6 @@
 module Evergreen.Migrate.V2 exposing (..)
 
+import Dict
 import Evergreen.V1.External
 import Evergreen.V1.Types
 import Evergreen.V2.External
@@ -10,9 +11,9 @@ import Lamdera.Migrations exposing (..)
 backendModel : Evergreen.V1.Types.BackendModel -> ModelMigration Evergreen.V2.Types.BackendModel Evergreen.V2.Types.BackendMsg
 backendModel old =
     { unchangedCore = old.unchangedCore
-    , unchangedUser = old.unchangedUser |> migrate_Types_UserType
-    , unchangedAllTypes = old.unchangedAllTypes |> migrate_External_AllTypes
-    , externalUnion = old.externalUnion |> migrate_External_ExternalUnion
+    , unchangedUser = migrate_Types_UserType old.unchangedUser
+    , unchangedAllTypes = migrate_External_AllTypes old.unchangedAllTypes
+    , externalUnion = migrate_External_ExternalUnion old.externalUnion
     , added = Unimplemented -- new in V2 (Basics.Int)
     , removed = Warning -- removed in V2 (String.String). This line is just a reminder and can be removed once you've handled it.
     , removedRecord = Warning -- removed in V2 (Evergreen.V1.External.AllTypes). This line is just a reminder and can be removed once you've handled it.
@@ -58,6 +59,16 @@ migrate_Types_BackendMsg old =
             Evergreen.V2.Types.NoOpBackendMsg
 
 
+migrate_Types_CustomType : Evergreen.V1.Types.CustomType -> Evergreen.V1.Types.CustomType
+migrate_Types_CustomType old =
+    case old of
+        Evergreen.V1.Types.CustomOne ->
+            Evergreen.V1.Types.CustomOne
+
+        Evergreen.V1.Types.CustomTwo ->
+            Evergreen.V1.Types.CustomTwo
+
+
 migrate_Types_FrontendMsg : Evergreen.V1.Types.FrontendMsg -> Evergreen.V2.Types.FrontendMsg
 migrate_Types_FrontendMsg old =
     case old of
@@ -95,8 +106,21 @@ migrate_Types_UserType old =
             -}
             Unimplemented
 
+        Evergreen.V1.Types.UserWithParam p0 ->
+            Evergreen.V2.Types.UserWithParam p0
+
+        Evergreen.V1.Types.UserWithParams p0 p1 p2 ->
+            Evergreen.V2.Types.UserWithParams p0 p1 p2
+
+        Evergreen.V1.Types.UserWithParamCustom p0 ->
+            Evergreen.V2.Types.UserWithParamCustom (migrate_Types_CustomType p0)
+
         notices ->
             {- `UserAdded` doesn't exist in the old Evergreen.V1.Types.UserType.
+               This is just a reminder in case migrating some subset of the old data to this new value was important.
+               See https://lamdera.com/tips/modified-custom-type for more info.
+            -}
+            {- `UserAddedParam Int` doesn't exist in the old Evergreen.V1.Types.UserType.
                This is just a reminder in case migrating some subset of the old data to this new value was important.
                See https://lamdera.com/tips/modified-custom-type for more info.
             -}

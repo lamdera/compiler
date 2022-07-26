@@ -125,11 +125,13 @@ target = liveReloadLive
 
 checkProjectCompiles = do
   setEnv "LDEBUG" "1"
+  let
   -- Lamdera.CLI.Check.checkUserProjectCompiles "/Users/mario/dev/test/lamdera-init"
   -- Lamdera.CLI.Check.checkUserProjectCompiles "/Users/mario/dev/projects/lamdera-dashboard"
 
   --  Lamdera.CLI.Check.checkUserProjectCompiles runs in async so we don't get the trace
-  let root = "/Users/mario/dev/test/style-elements"
+      -- root = "/Users/mario/dev/test/style-elements"
+      root = "/Users/mario/dev/test/lamdera-init"
       scaffold = "src/Frontend.elm"
   -- let root = "/Users/mario/dev/test/realia/staging"
   --     scaffold = "src/LFR.elm"

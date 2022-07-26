@@ -1,5 +1,6 @@
 module Evergreen.V1.Types exposing (..)
 
+import Dict exposing (Dict)
 import Evergreen.V1.External
 
 
@@ -17,6 +18,14 @@ type UserType
     = UserFirst
     | UserSecond
     | UserRemoved
+    | UserWithParam Int
+    | UserWithParams Float String (Dict Int String)
+    | UserWithParamCustom CustomType
+
+
+type CustomType
+    = CustomOne
+    | CustomTwo
 
 
 type alias AllTypes =

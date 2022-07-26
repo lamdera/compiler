@@ -181,7 +181,7 @@ migrateUnion author pkg oldUnion newUnion params tvarMap oldVersion newVersion t
     --   debugNote ("\n✴️  inserting def for " <> t) (t, imps, ft)
 
     migrationName :: Text
-    migrationName = migrationNameUnderscored newModule newVersion typeName
+    migrationName = migrationNameUnderscored newModule oldVersion newVersion typeName
 
     migration :: Text
     migration =
@@ -283,7 +283,7 @@ migrateMatchedConstructor oldConstructor newConstructor oldModuleName moduleScop
               else if isAnonymousRecord paramOld then
                 subt
               else if isUserType_ paramOld then
-                T.concat [" (migrate", asTypeName paramOld,  " p", show_ i, ")"]
+                T.concat [" (", migrationNameUnderscored oldModuleName oldVersion newVersion (N.fromText $ asTypeName paramOld),  " p", show_ i, ")"]
               else
                 T.concat ["p", show_ i]
 
@@ -297,20 +297,41 @@ migrateMatchedConstructor oldConstructor newConstructor oldModuleName moduleScop
 
     migration :: Text
     migration =
-      if oldParams == newParams then
-        T.concat [
-          moduleScope, N.toText newConstructor, " ",
-          (paramsZipped
-            & T.intercalate " "
-          )
-        ]
+      if areEquivalentEvergreenTypes oldParams newParams then
+        T.concat [ moduleScope, N.toText newConstructor, " ", (paramsZipped & T.intercalate " ") ]
       else
-        "Unimplemented"
+        "-- params have changed\nUnimplemented"
   in
   if List.length oldParams > 0 then
     T.concat ["    ", N.toText oldModuleName, ".", N.toText oldConstructor, " ", (imap (\i _ -> "p" <> show_ i) oldParams & T.intercalate " "), " -> ", migration, "\n"]
   else
     T.concat ["    ", N.toText oldModuleName, ".", N.toText oldConstructor, " -> ", moduleScope, N.toText newConstructor, "\n"]
+
+
+
+-- Like == but considers union types equal despite module defs
+areEquivalentEvergreenTypes t1s t2s =
+  let
+      result =
+        length t1s == length t2s
+          && and (zipWith isEquivalentEvergreenType t1s t2s)
+  in
+  debugHaskellPass "areEquivalentEvergreenTypes" (result, t1s, t2s) result
+
+isEquivalentEvergreenType t1 t2 =
+  case (t1, t2) of
+    ((Can.TType (ModuleName.Canonical (Pkg.Name "author" "project") module1) name1 params1),
+     (Can.TType (ModuleName.Canonical (Pkg.Name "author" "project") module2) name2 params2)) ->
+      name1 == name2 && isEquivalentEvergreenModule module1 module2
+    _ -> t1 == t2
+
+isEquivalentEvergreenModule m1 m2 =
+  let m1_ = m1 & N.toText & T.splitOn "."
+      m2_ = m2 & N.toText & T.splitOn "."
+  in
+  case (m1_, m2_) of
+    ("Evergreen":_:xs1, "Evergreen":_:xs2) -> xs1 == xs2
+    _ -> m1 == m2
 
 
 -- A top level Alias definition i.e. `type alias ...`
@@ -489,7 +510,7 @@ handleAliasToFt oldVersion newVersion scope interfaces recursionSet tipe@(Can.TA
             usageParamImports & Set.insert moduleName
 
         migrationName :: Text
-        migrationName = migrationNameUnderscored newModule newVersion name
+        migrationName = migrationNameUnderscored newModule oldVersion newVersion name
 
         migrationTypeSignature :: Text
         migrationTypeSignature = T.concat [ oldModuleName & N.toText, ".", typeName & N.toText, " -> ", newModule & N.toText, ".", typeName & N.toText]
@@ -610,7 +631,7 @@ handleRecordToFt oldVersion newVersion scope interfaces recursionSet tipe@(Can.T
                       -- at the least we can thread the tipeOld type in here now!
                       let (st,imps,ft) = canonicalToFt oldVersion newVersion scope interfaces recursionSet tipe (Just (tipeOld)) tvarMap
                       in
-                      (N.toText name, (T.concat["old.", N.toText name, " |> ", st], imps, ft))
+                      (N.toText name, (T.concat[st, " old.", N.toText name], imps, ft))
                       -- (N.toText name, canonicalToFt oldVersion newVersion scope interfaces recursionSet tipe nothingTODO tvarMap)
 
                   Nothing ->
