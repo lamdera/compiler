@@ -152,24 +152,20 @@ Used by `lamdera live`, this file needs to be packaged with parcel into `/extra/
 
 To package whenever changes are made to this file:
 
-```
-cd extra
-npm i
-parcel build live.js --no-source-maps
-```
-
-Then re-run the main build with `stack install`.
+- Run the esbuild instructions are at the top of ./extra/dist/live.js.
+- Modify the `extra/Lamdera/Live.hs` file in some way (`x = 1` works well) to ensure it will get recompiled
+- Then re-run the main build with `stack install`.
 
 This inlining happens like this:
 
 ```
 lamderaLive :: BS.ByteString
 lamderaLive =
-  $(bsToExp =<< runIO (BS.readFile ("extra" </> "dist" </> "live.js")))
+  $(bsToExp =<< runIO (Lamdera.RelativeLoad.find "extra/dist/live.js"))
 ```
 
 The `$(...)` syntax is invoking Template Haskell.
 
 ⚠️ Because unchanged files aren't recompiled, you might need to add an `x = 1` to the bottom of the `.hs` file to force a change, and thus the expression to be re-evaluated. If you find you've updated a static file, but the complied binary still has the old one, this is likely the reason why.
 
-In development, using `LDEBUG=1` will cause `extra/dist/live.js` to be dynamically included on first binary boot (so a kill+reboot+refresh will get the latest local live.js, but you still have to remember to `parcel build` it first).
+In development, using `LDEBUG=1` will cause `~/dev/projects/lamdera-compiler/extra/dist/live.js` to be dynamically included + built on first binary boot (so a kill+reboot+refresh will get the latest local live.js, esbuild it and inject it).

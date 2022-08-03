@@ -1,9 +1,9 @@
 // This file needs to be minified into dist. Do it like so:
-// cd ui/browser
-// parcel build live.js --no-source-maps
+// cd extra
+// esbuild live.js --bundle --minify --target=chrome58,firefox57,safari11,edge16 > dist/live.js
 
-const Sockette = require('sockette')
-const Cookie = require('js-cookie')
+import * as Sockette from 'sockette';
+import * as Cookie  from 'js-cookie';
 
 var clientId = ""
 const sessionId = getSessionId()
@@ -159,7 +159,13 @@ window.setupApp = function(name, elid) {
   msgHandler = function(e) {
 
     // console.log(`got message`,e)
-    const d = JSON.parse(e.data)
+    let d = null;
+    try {
+      d = JSON.parse(e.data)
+    } catch(err) {
+      console.log(err, e.data);
+      return;
+    }
 
     switch(d.t) {
       case "r":
@@ -242,6 +248,8 @@ window.setupApp = function(name, elid) {
 
           app.ports.rpcOut.subscribe(returnHandler)
 
+          if (d.i) { d.i = JSON.parse(d.i); }
+          if (d.j) { d.j = JSON.parse(d.j); }
           app.ports.rpcIn.send(d)
 
           // Is there a nicer way to do this?

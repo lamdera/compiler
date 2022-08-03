@@ -350,12 +350,14 @@ Executable lamdera
         -- @TODO need to remove and use Utf8 module instead somehow? Or compat it.
         text,
         -- Extra
+        aeson,
         neat-interpolation,
         natural-sort,
         listsafe,
         safe,
         filemanip,
         unix-compat,
+
         -- Live
         websockets,
         websockets-snap,

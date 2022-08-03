@@ -15,6 +15,7 @@ import qualified Data.Text.Lazy as TL
 import qualified Data.Text.IO as T
 import qualified Data.Text.Encoding as T
 import qualified Data.Text.Lazy.Encoding as TL
+import qualified Data.Text.Lazy.Builder as TLB
 import qualified Data.Map as Map
 import qualified Data.List as List
 import GHC.Word (Word64)
@@ -26,7 +27,7 @@ import Control.Concurrent.STM (atomically, newTVarIO, readTVar, writeTVar, TVar)
 import Control.Exception (finally, throw)
 import Language.Haskell.TH (runIO)
 import Data.FileEmbed (bsToExp)
-
+import qualified Data.Aeson.Encoding as A
 
 import Snap.Core
 
@@ -35,6 +36,7 @@ import qualified Develop.Generate.Help as Generate
 import qualified Develop.StaticFiles as StaticFiles
 import qualified Json.Decode as D
 import qualified Json.Encode as E
+import qualified Json.String
 import qualified Data.Utf8 as Utf8
 
 import Lamdera
@@ -54,6 +56,7 @@ import Snap.Util.FileServe
 import Control.Monad (guard, void)
 
 import qualified Lamdera.CLI.Check
+import qualified Lamdera.RelativeLoad
 
 
 type LiveState = (TVar [Client], TVar (Maybe ClientId), BroadcastChan In Text, TVar Text)
@@ -180,7 +183,7 @@ replaceRpcMarkers shouldReplace localdev =
 lamderaLocalDev :: Text
 lamderaLocalDev =
   -- @TODO fix this back later... conflicts with the change directory command in ghci live reload
-  T.decodeUtf8 $(bsToExp =<< runIO (BS.readFile ("extra/LocalDev/LocalDev.elm")))
+  T.decodeUtf8 $(bsToExp =<< runIO (Lamdera.RelativeLoad.find "extra/LocalDev/LocalDev.elm"))
 
   -- $(bsToExp =<< runIO (BS.readFile ("/Users/mario/dev/projects/lamdera-compiler/extra/LocalDev/LocalDev.elm")))
 
@@ -233,7 +236,7 @@ serveWebsocket (mClients, mLeader, mChan, beState) =
                   -- Tell everyone about the new leader (also causes actual leader to go active as leader)
                   broadcastLeader mClients mLeader
 
-                SocketServer.broadcastImpl mClients $ "{\"t\":\"c\",\"s\":\"" <> sessionId <> "\",\"c\":\""<> clientId <> "\"}"
+                SocketServer.broadcastImpl mClients $ "{\"t\":\"c\",\"s\":\"" <> sessionId <> "\",\"c\":\"" <> clientId <> "\"}"
 
                 leader <- atomically $ readTVar mLeader
                 case leader of
@@ -274,10 +277,8 @@ serveWebsocket (mClients, mLeader, mChan, beState) =
 
 
                     else if T.isPrefixOf "{\"t\":\"qr\"," text
-
                       then do
-
-                        debugT $ "🍕  rpc response:" <> text
+                        -- debugT $ "RPC:↖️ " <> text
                         -- Query response, send it to the chan for pickup by awaiting HTTP endpoint
                         liftIO $ writeBChan mChan text
                         pure ()
@@ -367,7 +368,7 @@ serveRpc (mClients, mLeader, mChan, beState) port = do
   mSid <- getCookie "sid"
   contentType <- getHeader "Content-Type" <$> getRequest
 
-  debug $ "RPC received: " ++ show (contentType, mEndpoint, mSid, rbody)
+  debug $ "RPC:↘️ " ++ show (contentType, mEndpoint, mSid, rbody)
 
   randBytes <- liftIO $ getEntropy 20
   let newSid = BSL.toStrict $ B.toLazyByteString $ B.byteStringHex randBytes
@@ -400,38 +401,52 @@ serveRpc (mClients, mLeader, mChan, beState) port = do
 
         Nothing ->
           -- Should be impossible given we already checked above
-          error "no endpoint present"
+          error "impossible: no endpoint present"
 
-    -- Splice some extra info onto the RPC JSON request
+    -- Unfortunately the JSON string encoding logic is hidden inside Data.Aeson.Encoding.Internal
+    -- so off we go with all the silly format hops
+    escapeJsonString :: Text -> Text
+    escapeJsonString t = A.text t & A.encodingToLazyByteString & BSL.toStrict & T.decodeUtf8
+
+    escapedBody =
+      rbody & TL.decodeUtf8 & TL.toStrict & escapeText
+
+    escapeText :: Text -> E.Value
+    escapeText t =
+      t & escapeJsonString & T.unpack & Utf8.fromChars
+        -- E.string quotes the string, but because we had to route through Aeson for escaping, it's already quoted
+        -- so instead we have to construct the raw E.Value
+        & (E.String . Json.String.toBuilder)
+
+    fallbackStringBody = rpcResponse ("st", escapedBody)
+
+    rpcResponse value =
+      E.object
+          [ ("t", E.string "q")
+          , ("s", E.text sid)
+          , ("e", E.text $ T.decodeUtf8 endpoint)
+          , ("r", E.text reqId)
+          , value
+          ]
+        & encodeToText
+
+    encodeToText encoder = encoder & E.encode & B.toLazyByteString & BSL.toStrict & T.decodeUtf8
+
     payload =
       case contentType of
         Just "application/octet-stream" ->
           let
             body = T.pack $ show $ BSL.unpack rbody
           in
-          -- t s e r i j
-          "{\"t\":\"q\",\"s\":\""<> sid <>
-          "\",\"e\":\"" <> T.decodeUtf8 endpoint <>
-          "\",\"r\":\""<> reqId <>
-          "\",\"i\":" <> body <>
-          ",\"j\":null}"
+          rpcResponse ("i", E.text body)
 
         Just "application/json" ->
-          let
-            body = TL.toStrict $ TL.decodeUtf8 rbody
-          in
-          "{\"t\":\"q\",\"s\":\""<> sid <>
-          "\",\"e\":\"" <> T.decodeUtf8 endpoint <>
-          "\",\"r\":\""<> reqId <>
-          "\",\"i\":[],\"j\":" <> body <> "}"
+          rpcResponse ("j", escapedBody)
 
         Just "application/x-www-form-urlencoded" ->
           let
-            escapeJsonString = T.replace "\"" "\\\""
-
-            body = T.pack $ show $ BSL.unpack rbody
-
-            body2 =
+            -- @TODO it would be nice to rework this to use E.* in future
+            body =
               Snap.Core.parseUrlEncoded (BSL.toStrict rbody)
                 & Map.toList
                 & fmap (\(key, vals) ->
@@ -439,34 +454,23 @@ serveRpc (mClients, mLeader, mChan, beState) port = do
                     values =
                       case vals of
                         [] -> "null"
-                        val:[] -> "\"" <> (T.decodeUtf8 val & escapeJsonString) <> "\""
+                        val:[] -> T.concat ["\"", (T.decodeUtf8 val & escapeJsonString), "\""]
                         _ ->
                           vals
-                            & fmap (\v -> "\"" <> (T.decodeUtf8 v & escapeJsonString) <> "\"")
+                            & fmap (\v -> T.concat ["\"", (T.decodeUtf8 v & escapeJsonString), "\""])
                             & T.intercalate ","
-                            & (\v -> "[" <> v <> "]")
+                            & (\v -> T.concat ["[", v, "]"])
                   in
-                  "\"" <> T.decodeUtf8 key <> "\":" <> values
+                  T.concat ["\"", T.decodeUtf8 key, "\":", values]
                 )
-                & (\v ->
-                  "{" <> (v & T.intercalate ",") <> "}"
-                    -- & T.encodeUtf8
-                    -- & Snap.Core.urlEncode
-                    -- & T.decodeUtf8
-                )
-                -- & (\v ->
-                --   "\"" <> v <> "\""
-                -- )
-
+                & (\v -> T.concat ["{", (v & T.intercalate ","), "}"])
           in
-          -- t s e r i j
-          "{\"t\":\"q\",\"s\":\""<> sid <>
-          "\",\"e\":\"" <> T.decodeUtf8 endpoint <>
-          "\",\"r\":\""<> reqId <>
-          "\",\"i\":[],\"j\":" <> body2 <> "}"
+          rpcResponse ("j", escapeText body)
 
-        Nothing -> do
-          error "invalid Content-Type"
+        Just other ->
+          fallbackStringBody
+        Nothing ->
+          fallbackStringBody
 
     loopRead :: IO (Either (D.Error x) B.Builder, Text)
     loopRead = do
@@ -480,14 +484,19 @@ serveRpc (mClients, mLeader, mChan, beState) port = do
           if textContains reqId chanText
             then do
               let
-                decoder :: D.Decoder err E.Value
+                decoder :: D.Decoder err B.Builder
                 decoder =
                   D.oneOf
-                    [ D.field "i" D.value
-                    , D.field "v" D.value
+                    [ D.field "i" (D.value & fmap E.encode)  -- Bytes
+                    , D.field "v" (D.value & fmap E.encode)  -- Json.Value
+                    , D.field "vs" (D.string & fmap Json.String.toBuilder) -- String
                     ]
 
-              pure (D.fromByteString decoder (T.encodeUtf8 chanText) & fmap E.encode, chanText)
+                result =
+                  D.fromByteString decoder (T.encodeUtf8 chanText)
+
+              -- debugT $ "loopRead decoding: " <> chanText
+              pure (result, chanText)
 
             else
               loopRead
@@ -504,10 +513,13 @@ serveRpc (mClients, mLeader, mChan, beState) port = do
         Just (result, chanText) ->
           case result of
             Right value ->
-              if textContains "\"error\":" chanText then
-                error400 (B.byteString $ T.encodeUtf8 chanText)
-              else
-                writeBuilder value
+              if textContains "\"error\":" chanText
+                then do
+                  debugT $ "RPC:↙️  error:" <> chanText
+                  error400 (B.byteString $ T.encodeUtf8 chanText)
+                else do
+                  debugT $ "RPC:↙️  response:" <> (TL.toStrict $ TL.decodeUtf8 $ B.toLazyByteString value)
+                  writeBuilder value
 
             Left jsonProblem -> do
               debugT $ "😢 rpc response decoding failed for " <> chanText

@@ -11,6 +11,7 @@ import System.Exit (exitFailure)
 import System.FilePath as FP ((</>), joinPath, splitDirectories, takeDirectory)
 import System.IO.Unsafe (unsafePerformIO)
 import System.IO (hFlush, hPutStr, hPutStrLn, stderr, stdout, hClose, openTempFile)
+import System.Info
 import qualified System.Directory as Dir
 import qualified System.Environment as Env
 import qualified System.Mem as Mem
@@ -27,6 +28,44 @@ import Control.DeepSeq (force, deepseq, NFData)
 
 -- Re-exports
 import qualified Data.Function
+
+
+-- Environment
+
+data OSType = Windows | MacOS | Linux | UnknownOS String deriving (Eq, Show)
+
+ostype :: OSType
+ostype = do
+  -- case dt "OSTYPE:" System.Info.os of
+  case System.Info.os of
+    "darwin" -> MacOS
+    "linux" -> Linux
+    "mingw32" -> Windows
+    _ -> UnknownOS System.Info.os
+
+
+isDebug :: IO Bool
+isDebug = do
+  debugM <- Env.lookupEnv "LDEBUG"
+  case debugM of
+    Just _ -> pure True
+    Nothing -> pure False
+
+
+{-# NOINLINE isDebug_ #-}
+isDebug_ :: Bool
+isDebug_ = unsafePerformIO $ isDebug
+
+
+isProdEnv =
+  case ostype of
+    MacOS -> False
+    Linux -> True
+    Windows -> False
+    UnknownOS name ->
+      -- We have an unexpected system...
+      error $ "ERROR: please report: skipping url open on unknown OSTYPE: " <> show name
+
 
 
 -- Copy of combined internals of Project.getRoot as it seems to notoriously cause cyclic wherever imported
@@ -127,6 +166,10 @@ printouts are atomic and un-garbled.
 atomicPutStrLn :: String -> IO ()
 atomicPutStrLn str =
   withMVar printLock (\_ -> hPutStr stdout (str <> "\n") >> hFlush stdout)
+
+atomicPutStrLnDebug :: String -> IO ()
+atomicPutStrLnDebug s = do
+  onlyWhen (not isProdEnv || isDebug_) $ atomicPutStrLn s
 
 
 {- Wrap an IO in basic runtime information
@@ -269,7 +312,40 @@ ghciThreads :: MVar [ThreadId]
 ghciThreads = unsafePerformIO $ newMVar []
 
 
+-- System
+
+bash :: String -> IO String
+bash command =
+  c_ "bash" ["-c", command] ""
+
+bashq :: String -> IO String
+bashq command =
+  cq_ "bash" ["-c", command] ""
+
+
+c_ :: String -> [String] -> String -> IO String
+c_ bin args input = do
+  atomicPutStrLnDebug $ "🤖  " <> bin <> " " <> show args <> " " <> input
+  (exit, stdout, stderr) <- System.Process.readProcessWithExitCode bin args input
+  res <-
+    if Prelude.length stderr > 0
+      then pure stderr
+      else pure stdout
+  atomicPutStrLnDebug $ "└── " <> res
+  pure res
+
+cq_ :: String -> [String] -> String -> IO String
+cq_ bin args input = do
+  atomicPutStrLnDebug $ "🤖  " <> bin <> " " <> show args <> " " <> input
+  (exit, stdout, stderr) <- System.Process.readProcessWithExitCode bin args input
+  res <-
+    if Prelude.length stderr > 0
+      then pure stderr
+      else pure stdout
+  pure res
+
 
 -- Re-exports
 
 (&) = (Data.Function.&)
+

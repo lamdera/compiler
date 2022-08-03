@@ -34,14 +34,14 @@ module Lamdera
   , first
   , second
   -- , ppElm
-  , isDebug
-  , isDebug_
+  , Ext.Common.isDebug
+  , Ext.Common.isDebug_
   , isExperimental
   , isExperimental_
   -- , isTypeSnapshot
   , isTest
-  , ostype
-  , OSType(..)
+  , Ext.Common.ostype
+  , Ext.Common.OSType(..)
   , env
   , unsafe
   , onlyWhen
@@ -171,7 +171,7 @@ import qualified Data.Name as N
 import qualified Data.Utf8 as Utf8
 
 import qualified Ext.Common
-import Ext.Common (getProjectRoot, getProjectRootFor, getProjectRootMaybe)
+import Ext.Common (getProjectRoot, getProjectRootFor, getProjectRootMaybe, OSType(..), ostype)
 
 -- import CanSer.CanSer (ppElm)
 
@@ -353,19 +353,6 @@ debugHaskellWhen cond label value =
         pure value
 
 
-isDebug :: IO Bool
-isDebug = do
-  debugM <- Env.lookupEnv "LDEBUG"
-  case debugM of
-    Just _ -> pure True
-    Nothing -> pure False
-
-
-{-# NOINLINE isDebug_ #-}
-isDebug_ :: Bool
-isDebug_ = unsafePerformIO $ isDebug
-
-
 isExperimental :: IO Bool
 isExperimental = do
   experimentalM <- Env.lookupEnv "EXPERIMENTAL"
@@ -385,19 +372,6 @@ isTest = do
   case debugM of
     Just _ -> pure True
     Nothing -> pure False
-
-
-ostype :: OSType
-ostype = do
-  -- case dt "OSTYPE:" System.Info.os of
-  case System.Info.os of
-    "darwin" -> MacOS
-    "linux" -> Linux
-    "mingw32" -> Windows
-    _ -> UnknownOS System.Info.os
-
-
-data OSType = Windows | MacOS | Linux | UnknownOS String deriving (Eq, Show)
 
 
 env =

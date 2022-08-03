@@ -18,6 +18,8 @@ module Json.Encode
   , dict
   , list
   , (==>)
+  -- Lamdera
+  , text
   )
   where
 
@@ -37,6 +39,7 @@ import qualified Json.String as Json
 
 
 import Lamdera
+import qualified Data.Text as T
 
 -- VALUES
 
@@ -311,3 +314,14 @@ commaNewline =
 newline :: B.Builder
 newline =
   B.char7 '\n'
+
+
+-- Lamdera
+
+text :: Text -> Value
+text =
+  string . Utf8.fromChars . T.unpack
+  -- String (B.char7 '"' <> Json.toBuilder str <> B.char7 '"')
+
+
+  --   t x = x & T.unpack & Utf8.fromChars & E.string

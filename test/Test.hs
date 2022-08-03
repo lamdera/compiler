@@ -24,7 +24,7 @@ import qualified Ext.Query.Canonical
 
 import Develop
 
-import Ext.Common (trackedForkIO)
+import Ext.Common (trackedForkIO, bash)
 import qualified System.Directory as Dir
 import System.FilePath ((</>))
 
@@ -168,18 +168,28 @@ buildTestHarnessToProductionJs = do
 {- Dynamic testing of lamdera live with managed thread kill + reload -}
 liveReloadLive = do
 
+
+
   setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
   setEnv "LDEBUG" "1"
 
-  -- let p = "/Users/mario/lamdera/test/v1"
+  let p = "/Users/mario/lamdera/test/v1"
   -- let p = "/Users/mario/dev/test/lamdera-init"
   -- let p = "/Users/mario/dev/test/nu-ashworld-lamdera"
   -- let p = "/Users/mario/dev/projects/otstats"
-  let p = "/Users/mario/work/codespecs"
+  -- let p = "/Users/mario/work/codespecs"
 
   -- rmdir "/Users/mario/.elm"
   -- rmdir $ p <> "/elm-stuff"
 
+  bash $ "cp /Users/mario/dev/projects/lamdera/runtime/src/LamderaRPC.elm " <> p <> "/src/LamderaRPC.elm"
+
+
+  Dir.setCurrentDirectory p
+  Dir.setCurrentDirectory p
+
+
+  Dir.setCurrentDirectory p
   Dir.setCurrentDirectory p
   withCurrentDirectory p $ trackedForkIO "Test.liveReloadLive" $ withCurrentDirectory p $ Develop.run () (Develop.Flags Nothing)
 
