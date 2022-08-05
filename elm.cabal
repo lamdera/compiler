@@ -231,6 +231,7 @@ Executable lamdera
         Lamdera.Injection
         Lamdera.Live
         Lamdera.Project
+        Lamdera.RelativeLoad
         Lamdera.Suggestions
         Lamdera.TypeHash
         Lamdera.Types
@@ -239,6 +240,7 @@ Executable lamdera
         Lamdera.Wire2.Decoder
         Lamdera.Wire2.Encoder
         Lamdera.Wire2.Graph
+        Lamdera.PostCompile
         Lamdera.Wire2.Helpers
         Lamdera.Wire2.Interfaces
         Lamdera.Wire3.Core
@@ -306,6 +308,7 @@ Executable lamdera
 
         -- ext-elm-pages
         Ext.ElmPages
+        Test.Ext.ElmPages.Check
 
     Build-depends:
         ansi-terminal,

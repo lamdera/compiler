@@ -741,14 +741,19 @@ openUrlInBrowser url = do
       System.Process.callCommand $ "open " <> T.unpack url
 
     Linux -> do
-      System.Process.callCommand $ "xdg-open " <> T.unpack url
+      xdgPath <- Ext.Common.bash "command -v xdg-open"
+      if (xdgPath /= "")
+        then do
+          System.Process.callCommand $ "xdg-open " <> T.unpack url
+        else do
+          atomicPutStrLn $ "Oops! I couldn't find a way to open the URL for you. Please open it manually in a browser."
 
     Windows -> do
       System.Process.callCommand $ "start " <> T.unpack url
 
     UnknownOS name -> do
       -- We have an unexpected system...
-      atomicPutStrLn $ "ERROR: please report: skipping url open on unknown OSTYPE: " <> show name
+      atomicPutStrLn $ "Oops, I couldn't find a way to open the URL for you. Please report: for unknown OSTYPE: " <> show name
       pure ()
 
 
