@@ -17,10 +17,12 @@ type alias AllTypes =
     , bool : Bool
     , char : Char
     , string : String
+    , maybeBool : Maybe Bool
     , listInt : List Int
     , setFloat : Set Float
     , arrayString : Array String
     , dict : Dict String (List Int)
+    , result : Result Int String
     , time : Time.Posix
     , order : Order
     , unit : ()

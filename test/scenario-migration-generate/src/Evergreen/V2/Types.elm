@@ -1,13 +1,23 @@
 module Evergreen.V2.Types exposing (..)
 
+import Array exposing (Array)
 import Dict exposing (Dict)
 import Evergreen.V2.External
+import Set exposing (Set)
 
 
 type alias BackendModel =
     { unchangedCore : Float
     , unchangedUser : UserType
     , unchangedAllTypes : Evergreen.V2.External.AllTypes
+    , unchangedResult : Result Int String
+    , unchangedDict : Dict Int String
+    , changedMaybe : Maybe UserType
+    , changedList : List UserType
+    , changedSet : Set String
+    , changedArray : Array UserType
+    , changedDict : Dict Int UserType
+    , changedResult : Result UserType UserType
     , externalUnion : Evergreen.V2.External.ExternalUnion
     , added : Int
     }
@@ -21,11 +31,18 @@ type UserType
     | UserWithParam Int
     | UserWithParams Float String (Dict Int String)
     | UserWithParamCustom CustomType
+    | UserResultP1 (Result CustomType String)
+    | UserResultP2 (Result Int CustomType)
+    | UserResultPBoth (Result CustomType Evergreen.V2.External.ExternalUnion)
 
 
 type CustomType
     = CustomOne
     | CustomTwo
+
+
+type alias UserRecordChanged =
+    { maybe : Maybe String }
 
 
 type alias FrontendModel =

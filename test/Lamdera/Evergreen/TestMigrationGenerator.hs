@@ -29,10 +29,14 @@ suite = tests
 
 testMigrationGeneration scenario oldVersion newVersion = do
 
-  let filenames = ["src/Evergreen/V" <> show oldVersion <> "/Types.elm", "src/Evergreen/V" <> show newVersion <> "/Types.elm"]
-  io $ Lamdera.Compile.makeDev "/Users/mario/dev/projects/lamdera-compiler/test/scenario-migration-generate" filenames
-
-  mock <- io $ readUtf8Text $ "test/scenario-migration-generate/src/Evergreen/MigrateExpected/V" <> show newVersion <> ".elm"
-  result <- io $ betweenVersions oldVersion newVersion [("BackendModel", "oldhash", "newhash")]
+  mock <- io $ readUtf8Text $ "test/scenario-migration-generate/src/Evergreen/Migrate/V" <> show newVersion <> ".elm"
+  result <- io $ betweenVersions oldVersion newVersion
 
   expectEqualTextTrimmed (mock & withDefault "failed to load file") result
+
+  let filenames =
+        [ "src/Evergreen/V" <> show oldVersion <> "/Types.elm"
+        , "src/Evergreen/V" <> show newVersion <> "/Types.elm"
+        , "src/Evergreen/Migrate/V" <> show newVersion <> ".elm"
+        ]
+  io $ Lamdera.Compile.makeDev "/Users/mario/dev/projects/lamdera-compiler/test/scenario-migration-generate" filenames

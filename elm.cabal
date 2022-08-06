@@ -227,7 +227,6 @@ Executable lamdera
         Lamdera.Evergreen.MigrationGeneratorAlias
         Lamdera.Evergreen.MigrationGeneratorType
         Lamdera.Evergreen.MigrationGeneratorHelpers
-        Lamdera.Evergreen.MigrationGenX
         Lamdera.Evergreen.MigrationHarness
         Lamdera.Evergreen.Snapshot
         Lamdera.Extensions

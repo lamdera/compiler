@@ -35,20 +35,41 @@ import qualified Lamdera.Wire3.Helpers
 import StandaloneInstances
 
 
-allMigrations :: ElmFilesText -> Text
+type RecursionSet = Set.Set (ModuleName.Canonical, N.Name)
+type TypeIdentifier = (Pkg.Author, Pkg.Project, N.Name, N.Name)
+type Migration = (Text, ElmImports, MigrationDefinitions)
+
+-- @TODO can we drop this given migrations generate everything inline into a single file?
+data MigrationDefinition =
+  MigrationDefinition
+    { imports :: ElmImports
+    , types :: [Text]
+    }
+  deriving (Show, Eq)
+
+type MigrationDefinitions = Map Text MigrationDefinition
+
+-- Map <import name> <package>
+-- @TODO in future we can use this to pin package versions and adjust import routing to those snapshots
+type ElmImports = Set.Set ModuleName.Canonical
+
+
+allMigrations :: MigrationDefinitions -> Text
 allMigrations efts =
     efts
       & Map.toList
-      & fmap (\(file, ef@(ElmFileText imports migrations)) -> migrations )
+      & fmap (\(file, ef@(MigrationDefinition imports migrations)) -> migrations )
       & List.concat
       & List.sort
+      -- @TODO check if this is actually needed once we sort out incorrect gen?
+      & List.nub
       & T.intercalate "\n\n"
 
-allImports :: ElmFilesText -> Text
-allImports efts =
+allDefinitionImportsText :: MigrationDefinitions -> Text
+allDefinitionImportsText efts =
     efts
       & Map.toList
-      & fmap (\(file, ef@(ElmFileText imports migrations)) -> importsToText imports )
+      & fmap (\(file, ef@(MigrationDefinition imports migrations)) -> importsToText imports )
       & (++) additionalImports
       & List.concat
       & List.sort
@@ -66,46 +87,34 @@ importsToText imports =
         )
         & List.sort
 
-
-type RecursionSet = Set.Set (ModuleName.Canonical, N.Name)
-type TypeIdentifier = (Pkg.Author, Pkg.Project, N.Name, N.Name)
-type SnapRes = (Text, ElmImports, ElmFilesText)
-
-data ElmFileText =
-  ElmFileText
-    { imports :: ElmImports
-    , types :: [Text]
-    }
-  deriving (Show, Eq)
-
-type ElmFilesText = Map Text ElmFileText
-
--- Map <import name> <package>
--- @TODO in future we can use this to pin package versions and adjust import routing to those snapshots
-type ElmImports = Set.Set ModuleName.Canonical
-
-selectNames :: (a,b,c) -> a
-selectNames (a,b,c) = a
+selectMigrationText :: (a,b,c) -> a
+selectMigrationText (a,b,c) = a
 selectImports :: (a,b,c) -> b
 selectImports (a,b,c) = b
-selectFts :: (a,b,c) -> c
-selectFts (a,b,c) = c
+selectMigrationDefinitions :: (a,b,c) -> c
+selectMigrationDefinitions (a,b,c) = c
 
 lamderaTypes :: [N.Name]
 lamderaTypes = [ "FrontendModel" , "BackendModel" , "FrontendMsg" , "ToBackend" , "BackendMsg" , "ToFrontend" ]
 
-mergeElmFileText :: Text -> ElmFileText -> ElmFileText -> ElmFileText
-mergeElmFileText k ft1 ft2 =
-  ElmFileText
+mergeMigrationDefinition :: Text -> MigrationDefinition -> MigrationDefinition -> MigrationDefinition
+mergeMigrationDefinition k ft1 ft2 =
+  MigrationDefinition
     { imports = Set.union (imports ft1) (imports ft2)
     , types = (types ft1 <> types ft2) & List.nub
     }
 
-mergeFts :: ElmFilesText -> ElmFilesText -> ElmFilesText
-mergeFts ft1 ft2 = unionWithKey mergeElmFileText ft1 ft2
+allMigrationDefinitions :: [Migration] -> MigrationDefinitions
+allMigrationDefinitions migrations = migrations & fmap selectMigrationDefinitions & mergeAllMigrationDefinitions
 
-mergeAllFts :: [ElmFilesText] -> ElmFilesText
-mergeAllFts ftss = ftss & foldl (\acc fts -> mergeFts acc fts) Map.empty
+allImports :: [Migration] -> ElmImports
+allImports migrations = migrations & fmap selectImports & mergeAllImports
+
+mergeMigrationDefinitions :: MigrationDefinitions -> MigrationDefinitions -> MigrationDefinitions
+mergeMigrationDefinitions ft1 ft2 = unionWithKey mergeMigrationDefinition ft1 ft2
+
+mergeAllMigrationDefinitions :: [MigrationDefinitions] -> MigrationDefinitions
+mergeAllMigrationDefinitions ftss = ftss & foldl (\acc fts -> mergeMigrationDefinitions acc fts) Map.empty
 
 mergeImports :: ElmImports -> ElmImports -> ElmImports
 mergeImports i1 i2 = Set.union i1 i2
@@ -113,11 +122,11 @@ mergeImports i1 i2 = Set.union i1 i2
 mergeAllImports :: [ElmImports] -> ElmImports
 mergeAllImports imps = imps & foldl (\acc elmImport -> mergeImports acc elmImport) Set.empty
 
-addImports :: ModuleName.Canonical -> ElmImports -> ElmFilesText -> ElmFilesText
+addImports :: ModuleName.Canonical -> ElmImports -> MigrationDefinitions -> MigrationDefinitions
 addImports scope@(ModuleName.Canonical (Pkg.Name author pkg) module_) imports ft =
   imports & foldl (\ft imp -> addImport scope imp ft) ft
 
-addImport :: ModuleName.Canonical -> ModuleName.Canonical -> ElmFilesText -> ElmFilesText
+addImport :: ModuleName.Canonical -> ModuleName.Canonical -> MigrationDefinitions -> MigrationDefinitions
 addImport moduleName imp ft =
   ft
     & Map.alter (\mft ->
@@ -127,7 +136,7 @@ addImport moduleName imp ft =
 
         Nothing ->
           Just $
-            ElmFileText
+            MigrationDefinition
               { imports = Set.singleton imp
               , types = []
               }
@@ -147,7 +156,7 @@ migrationNameUnderscored newModule oldVersion newVersion newTypeName =
 data TypeDef = Alias Can.Alias | Union Can.Union deriving (Show)
 
 
-basicUnimplemented :: Maybe Can.Type -> Can.Type -> SnapRes
+basicUnimplemented :: Maybe Can.Type -> Can.Type -> Migration
 basicUnimplemented tipeOldM tipe =
   case tipeOldM of
     Just tipeOld ->
@@ -227,6 +236,8 @@ asTypeName tipe =
 qualifiedTypeName :: Can.Type -> Text
 qualifiedTypeName tipe =
   case asIdentifier tipe of
+    ("elm", "core", "Basics", typeName) -> N.toText typeName
+    ("elm", "core", "String", typeName) -> N.toText typeName
     (author, pkg, module_, typeName) -> N.toText module_ <> "." <> N.toText typeName
 
 
@@ -235,11 +246,14 @@ isUserType :: TypeIdentifier -> Bool
 isUserType (author, pkg, module_, tipe) =
   author == "author" && pkg == "project"
 
-
-isUserType_ :: Can.Type -> Bool
-isUserType_ cType =
+-- Whether this top level wrapping type is defined by the user,
+-- i.e. an alias or custom type, meaning we likely need to migrate it
+isUserDefinedType_ :: Can.Type -> Bool
+isUserDefinedType_ cType =
   case cType of
-    Can.TType moduleName name params -> isUserModule moduleName
+    Can.TType moduleName name params ->
+      isUserModule moduleName
+
     Can.TLambda _ _ -> True
     Can.TVar _ -> True
     Can.TRecord _ _ -> True
@@ -247,8 +261,8 @@ isUserType_ cType =
     Can.TTuple _ _ _ -> False
     Can.TAlias _ _ _ aType ->
       case aType of
-        Can.Holey t -> isUserType_ t
-        Can.Filled t -> isUserType_ t
+        Can.Holey t -> isUserDefinedType_ t
+        Can.Filled t -> isUserDefinedType_ t
 
 isAnonymousRecord :: Can.Type -> Bool
 isAnonymousRecord cType =
