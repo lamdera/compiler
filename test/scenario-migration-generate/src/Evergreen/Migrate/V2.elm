@@ -27,9 +27,9 @@ backendModel old =
     , changedDict = old.changedDict |> Dict.map (\k v -> v |> migrate_Types_UserType)
     , changedResult = old.changedResult |> Result.mapError migrate_Types_UserType |> Result.map migrate_Types_UserType
     , externalUnion = old.externalUnion |> migrate_External_ExternalUnion
-    , added = Unimplemented -- Type `Int` added in V2
-    , removed = Unimplemented -- Type `String` removed in V2. This line is just a reminder and can be removed once you've handled it.
-    , removedRecord = Unimplemented -- Type `Evergreen.V1.External.AllTypes` removed in V2. This line is just a reminder and can be removed once you've handled it.
+    , added = Unimplemented -- Type `Int` added in V2. I need you to set a default value.
+    , removed = Unimplemented -- Type `String` removed in V2. Make sure to do something with the `old.removed` value if you wish to keep the data, then remove this notice.
+    , removedRecord = Unimplemented -- Type `Evergreen.V1.External.AllTypes` removed in V2. Make sure to do something with the `old.removedRecord` value if you wish to keep the data, then remove this notice.
     }
 
 

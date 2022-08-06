@@ -725,7 +725,7 @@ handleRecordToFt oldVersion newVersion scope interfaces recursionSet tipe@(Can.T
                     -- This field did not exist in the old version. We need an init! @TODO
                     let (st,imps,ft) = canonicalToFt oldVersion newVersion scope interfaces recursionSet tipe nothingTODO tvarMap
                     in
-                    ( N.toText name, (T.concat["Unimplemented -- Type `", qualifiedTypeName tipe, "` added in V", show_ newVersion], imps, ft) )
+                    ( N.toText name, (T.concat["Unimplemented -- Type `", qualifiedTypeName tipe, "` added in V", show_ newVersion, ". I need you to set a default value."], imps, ft) )
             )
             & (\v -> v ++ missingFields)
 
@@ -743,7 +743,7 @@ handleRecordToFt oldVersion newVersion scope interfaces recursionSet tipe@(Can.T
                   -- let (st,imps,ft) = canonicalToFt oldVersion newVersion scope interfaces recursionSet tipe nothingTODO tvarMap
                   -- in
                   Just ( N.toText name,
-                    (T.concat["Unimplemented -- Type `", qualifiedTypeName tipe, "` removed in V", show_ newVersion, ". This line is just a reminder and can be removed once you've handled it."]
+                    (T.concat["Unimplemented -- Type `", qualifiedTypeName tipe, "` removed in V", show_ newVersion, ". Make sure to do something with the `old.", N.toText name, "` value if you wish to keep the data, then remove this notice."]
                     , Set.empty
                     , Map.empty)
                     )
