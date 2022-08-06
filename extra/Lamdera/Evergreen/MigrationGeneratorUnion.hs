@@ -62,7 +62,7 @@ newConstructorWarnings typeName moduleScope newUnion oldUnion =
           if length notices > 0 then
             ["    notices ->\n" <>
             "        " <> T.concat notices <> "\n" <>
-            "        Notice"]
+            "        Unimplemented"]
           else
             []
       )

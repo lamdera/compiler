@@ -16,22 +16,20 @@ import Set
 backendModel : Evergreen.V1.Types.BackendModel -> ModelMigration Evergreen.V2.Types.BackendModel Evergreen.V2.Types.BackendMsg
 backendModel old =
     { unchangedCore = old.unchangedCore
-    , unchangedUser = migrate_Types_UserType old.unchangedUser
-    , unchangedAllTypes = migrate_External_AllTypes old.unchangedAllTypes
+    , unchangedUser = old.unchangedUser |> migrate_Types_UserType
+    , unchangedAllTypes = old.unchangedAllTypes |> migrate_External_AllTypes
     , unchangedResult = old.unchangedResult
     , unchangedDict = old.unchangedDict
-    , changedMaybe = Maybe.map migrate_Types_UserType old.changedMaybe
-    , changedList = List.map migrate_Types_UserType old.changedList
-    , changedSet =
-        -- Type changed from `Set Int` to `Set String`
-        Set.map Unimplemented old.changedSet
-    , changedArray = Array.map migrate_Types_UserType old.changedArray
-    , changedDict = Dict.fromList <| List.map (Tuple.mapFirst migrate_Types_UserType) <| Dict.toList old.changedDict
-    , changedResult = Result.mapError migrate_Types_UserType <| Result.map migrate_Types_UserType <| old.changedResult
-    , externalUnion = migrate_External_ExternalUnion old.externalUnion
+    , changedMaybe = old.changedMaybe |> Maybe.map migrate_Types_UserType
+    , changedList = old.changedList |> List.map migrate_Types_UserType
+    , changedSet = old.changedSet |> Set.map Unimplemented -- Type changed from `Set Int` to `Set String`
+    , changedArray = old.changedArray |> Array.map migrate_Types_UserType
+    , changedDict = old.changedDict |> Dict.map (\k v -> v |> migrate_Types_UserType)
+    , changedResult = old.changedResult |> Result.mapError migrate_Types_UserType |> Result.map migrate_Types_UserType
+    , externalUnion = old.externalUnion |> migrate_External_ExternalUnion
     , added = Unimplemented -- Type `Int` added in V2
-    , removed = Warning -- Type `String` removed in V2. This line is just a reminder and can be removed once you've handled it.
-    , removedRecord = Warning -- Type `Evergreen.V1.External.AllTypes` removed in V2. This line is just a reminder and can be removed once you've handled it.
+    , removed = Unimplemented -- Type `String` removed in V2. This line is just a reminder and can be removed once you've handled it.
+    , removedRecord = Unimplemented -- Type `Evergreen.V1.External.AllTypes` removed in V2. This line is just a reminder and can be removed once you've handled it.
     }
 
 
@@ -130,16 +128,16 @@ migrate_Types_UserType old =
             Evergreen.V2.Types.UserWithParams p0 p1 p2
 
         Evergreen.V1.Types.UserWithParamCustom p0 ->
-            Evergreen.V2.Types.UserWithParamCustom (migrate_Types_CustomType p0)
+            Evergreen.V2.Types.UserWithParamCustom (p0 |> migrate_Types_CustomType)
 
         Evergreen.V1.Types.UserResultP1 p0 ->
-            Evergreen.V2.Types.UserResultP1 (Result.map migrate_Types_CustomType <| p0)
+            Evergreen.V2.Types.UserResultP1 (p0 |> Result.mapError migrate_Types_CustomType)
 
         Evergreen.V1.Types.UserResultP2 p0 ->
-            Evergreen.V2.Types.UserResultP2 (Result.mapError migrate_Types_CustomType <| p0)
+            Evergreen.V2.Types.UserResultP2 (p0 |> Result.map migrate_Types_CustomType)
 
         Evergreen.V1.Types.UserResultPBoth p0 ->
-            Evergreen.V2.Types.UserResultPBoth (Result.mapError migrate_Types_CustomType <| Result.map migrate_External_ExternalUnion <| p0)
+            Evergreen.V2.Types.UserResultPBoth (p0 |> Result.mapError migrate_Types_CustomType |> Result.map migrate_External_ExternalUnion)
 
         notices ->
             {- `UserAdded` doesn't exist in the old Evergreen.V1.Types.UserType.
@@ -150,4 +148,4 @@ migrate_Types_UserType old =
                This is just a reminder in case migrating some subset of the old data to this new value was important.
                See https://lamdera.com/tips/modified-custom-type for more info.
             -}
-            Notice
+            Unimplemented

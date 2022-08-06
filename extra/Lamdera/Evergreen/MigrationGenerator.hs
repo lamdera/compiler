@@ -187,7 +187,7 @@ migrateUnion author pkg oldUnion newUnion params tvarMap oldVersion newVersion t
     migrationName = migrationNameUnderscored newModule oldVersion newVersion typeName
 
     migration :: Text
-    migration = "(" <> migrationName <> " " <> paramMigrationTextsCombined <> ")" -- <> "<!2>"
+    migration = migrationName <> " " <> paramMigrationTextsCombined -- <> "<!2>"
 
     migrationTypeSignature :: Text
     migrationTypeSignature = T.concat [ oldModuleName & N.toText, ".", typeName & N.toText, " -> ", newModule & N.toText, ".", typeName & N.toText]
@@ -195,7 +195,7 @@ migrateUnion author pkg oldUnion newUnion params tvarMap oldVersion newVersion t
     constructorCaseMigrations :: Text
     constructorCaseMigrations =
       oldConstructorsMigrations
-        & fmap (\(t,imps,ft) -> t)
+        & fmap selectMigrationText
         & flip (++) (newConstructorWarnings typeName moduleScopeOld newUnion oldUnion)
         & T.concat
 
@@ -267,10 +267,10 @@ genOldConstructorFt oldModuleName moduleScope typeName interfaces tvarMap recurs
                               migration
                             else if isUserDefinedType_ paramOld then
                               -- T.concat [" (", migrationNameUnderscored oldModuleName oldVersion newVersion (N.fromText $ asTypeName paramOld),  " p", show_ i, ")"]
-                              T.concat [" (", migration,  " p", show_ i, ")"]
+                              T.concat ["(p", show_ i, " |> ", migration, ")"]
                             else
                               -- T.concat ["p", show_ i]
-                              T.concat [" (", migration,  " p", show_ i, ")"]
+                              T.concat ["(p", show_ i, " |> ", migration, ")"]
 
                       in
                       (appliedMigration, imps, subft)
@@ -718,7 +718,7 @@ handleRecordToFt oldVersion newVersion scope interfaces recursionSet tipe@(Can.T
                       -- at the least we can thread the tipeOld type in here now!
                       let (st,imps,ft) = canonicalToFt oldVersion newVersion scope interfaces recursionSet tipe (Just (tipeOld)) tvarMap
                       in
-                      (N.toText name, (T.concat[st, " old.", N.toText name], imps, ft))
+                      (N.toText name, (T.concat["old.", N.toText name, " |> ", st], imps, ft))
                       -- (N.toText name, canonicalToFt oldVersion newVersion scope interfaces recursionSet tipe nothingTODO tvarMap)
 
                   Nothing ->
@@ -743,7 +743,7 @@ handleRecordToFt oldVersion newVersion scope interfaces recursionSet tipe@(Can.T
                   -- let (st,imps,ft) = canonicalToFt oldVersion newVersion scope interfaces recursionSet tipe nothingTODO tvarMap
                   -- in
                   Just ( N.toText name,
-                    (T.concat["Warning -- Type `", qualifiedTypeName tipe, "` removed in V", show_ newVersion, ". This line is just a reminder and can be removed once you've handled it."]
+                    (T.concat["Unimplemented -- Type `", qualifiedTypeName tipe, "` removed in V", show_ newVersion, ". This line is just a reminder and can be removed once you've handled it."]
                     , Set.empty
                     , Map.empty)
                     )
@@ -768,7 +768,7 @@ handleRecordToFt oldVersion newVersion scope interfaces recursionSet tipe@(Can.T
 
         result :: Migration
         result =
-          (" { " <> fieldsFormatted <> "\n    }"
+          ("\n    { " <> fieldsFormatted <> "\n    }"
           , imports
           , mergedFt
           )
@@ -818,7 +818,7 @@ handleTypeToFt oldVersion newVersion scope interfaces recursionSet tipe@(Can.TTy
                         (False) ->
                           if migration1 == ""
                             then
-                              T.concat [ "-- Type changed from `", typeName, " ", qualifiedTypeName p1o, "` to `", typeName, " ", qualifiedTypeName p1, "`\n", typeName, ".map Unimplemented" ]
+                              T.concat [ typeName, ".map Unimplemented", " -- Type changed from `", typeName, " ", qualifiedTypeName p1o, "` to `", typeName, " ", qualifiedTypeName p1, "`\n" ]
                             else
                               T.concat [ typeName, ".map ", migration1 ]
                     in
@@ -863,9 +863,9 @@ handleTypeToFt oldVersion newVersion scope interfaces recursionSet tipe@(Can.TTy
 
                       migration = case (p1o == p1, p2o == p2) of
                         (True, True) -> "" -- No migration necessary
-                        (False, True) -> T.concat [ "Result.map ", subt1, " <| " ]
-                        (True, False) -> T.concat [ "Result.mapError ", subt2, " <| " ]
-                        (False, False) -> T.concat [ "Result.mapError ", subt1, " <| Result.map ", subt2, " <| " ]
+                        (False, True) -> T.concat [ "Result.mapError ", subt1]
+                        (True, False) -> T.concat [ "Result.map ", subt2 ]
+                        (False, False) -> T.concat [ "Result.mapError ", subt1, " |> Result.map ", subt2 ]
                     in
                     (migration, mergeImports imps1 imps2 & Set.insert moduleName, mergeMigrationDefinitions subft1 subft2)
                     -- DResult (canonicalToFt oldVersion newVersion scope interfaces recursionSet result tvarMap) (canonicalToFt oldVersion newVersion scope interfaces recursionSet err tvarMap)
@@ -892,9 +892,9 @@ handleTypeToFt oldVersion newVersion scope interfaces recursionSet tipe@(Can.TTy
 
                       migration = case (p1o == p1, p2o == p2) of
                         (True, True) -> "" -- No migration necessary
-                        (False, True) -> T.concat [ "Dict.map ", subt1, " <| " ]
-                        (True, False) -> T.concat [ "Dict.fromList <| List.map (Tuple.mapFirst ", subt2, ") <| Dict.toList " ]
-                        (False, False) -> T.concat [ "Dict.fromList <| List.map (Tuple.mapBoth ", subt1, " ", subt2, ") <| Dict.toList " ]
+                        (False, True) -> T.concat [ "Dict.toList |> List.map (Tuple.mapFirst ", subt1, ") |> Dict.fromList" ]
+                        (True, False) -> T.concat [ "Dict.map (\\k v -> v |> ", subt2, ")" ]
+                        (False, False) -> T.concat [ "Dict.toList |> List.map (Tuple.mapBoth ", subt1, " ", subt2, ") |> Dict.fromList" ]
                     in
                     (migration, mergeImports imps1 imps2 & Set.insert moduleName, mergeMigrationDefinitions subft1 subft2)
                     -- DResult (canonicalToFt oldVersion newVersion scope interfaces recursionSet result tvarMap) (canonicalToFt oldVersion newVersion scope interfaces recursionSet err tvarMap)
