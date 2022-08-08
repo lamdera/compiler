@@ -124,7 +124,6 @@ window.setupApp = function(name, elid) {
       document.getElementById(elid).innerText = 'This is a headless program, meaning there is nothing to show here.\n\nI started the program anyway though, and you can access it as `app` in the developer console.'
     }
     // window.app = app
-
     app.ports.send_ToFrontend.subscribe(function (payload) {
       if (payload.b !== null) {
         payload.b = bytesToBase64(payload.b)

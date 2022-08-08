@@ -248,6 +248,7 @@ serveWebsocket (mClients, mLeader, mChan, beState) =
                     pure Nothing
 
               onReceive clientId text = do
+                -- debugT $ "[socketRecieve ] " <> text
                 if T.isPrefixOf "{\"t\":\"env\"," text
                   then do
                     root <- liftIO $ getProjectRoot
@@ -507,7 +508,8 @@ serveRpc (mClients, mLeader, mChan, beState) port = do
     Just leaderId -> do
       liftIO $ sendToLeader mClients mLeader (\leader -> pure payload)
 
-      result <- liftIO $ timeout 2 $ loopRead
+      let seconds = 10
+      result <- liftIO $ timeout seconds $ loopRead
 
       case result of
         Just (result, chanText) ->
@@ -528,7 +530,7 @@ serveRpc (mClients, mLeader, mChan, beState) port = do
 
         Nothing -> do
           debugT $ "⏰ RPC timed out for:" <> payload
-          writeBuilder "error:timeout"
+          writeBuilder $ B.byteString $ T.encodeUtf8 $ "error:timeout:" <> show_ seconds <> "s"
 
 
     Nothing -> do

@@ -31,7 +31,6 @@ import Html.Lazy
 import Lamdera exposing (ClientId, Key, SessionId, Url)
 import Lamdera.Debug as LD
 import Lamdera.Json as Json
-import Lamdera.Wire2 as Wire2
 import Lamdera.Wire3 as Wire exposing (Bytes)
 import Process
 import Task exposing (Task)
