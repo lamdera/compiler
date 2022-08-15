@@ -24,7 +24,7 @@ jobs:
           path: |
             /home/runner/rootfs/alpine-v3.15-x86_64/home/runner/.ghcup
             /home/runner/rootfs/alpine-v3.15-x86_64/home/runner/.cabal
-          key: ${{ runner.os }}-${{ hashFiles('stack.yaml.lock') }}-${{ hashFiles('elm.cabal') }}
+          key: ${{ runner.os }}-v1-${{ hashFiles('stack.yaml.lock') }}-${{ hashFiles('elm.cabal') }}
 
       # If it doesn't exist, setup our cache action, while also trying to restore
       # a prior broader matching cache if it exists (saves a lot of time if just
@@ -35,9 +35,9 @@ jobs:
           path: |
             /home/runner/rootfs/alpine-v3.15-x86_64/home/runner/.ghcup
             /home/runner/rootfs/alpine-v3.15-x86_64/home/runner/.cabal
-          key: ${{ runner.os }}-${{ hashFiles('stack.yaml.lock') }}-${{ hashFiles('elm.cabal') }}
+          key: ${{ runner.os }}-v1-${{ hashFiles('stack.yaml.lock') }}-${{ hashFiles('elm.cabal') }}
           restore-keys: |
-            ${{ runner.os }}-
+            ${{ runner.os }}-v1-
 
       - uses: jirutka/setup-alpine@v1
         if: steps.cache.outputs.cache-hit != 'true'
@@ -134,9 +134,9 @@ jobs:
           path: |
             /home/runner/rootfs/alpine-v3.15-x86_64/home/runner/.ghcup
             /home/runner/rootfs/alpine-v3.15-x86_64/home/runner/.cabal
-          key: ${{ runner.os }}-${{ hashFiles('stack.yaml.lock') }}-${{ hashFiles('elm.cabal') }}
+          key: ${{ runner.os }}-v1-${{ hashFiles('stack.yaml.lock') }}-${{ hashFiles('elm.cabal') }}
           restore-keys: |
-            ${{ runner.os }}-
+            ${{ runner.os }}-v1-
 
       - name: Compile static binary
         run: |
