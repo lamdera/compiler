@@ -196,7 +196,7 @@ migrateUnion author pkg oldUnion newUnion params tvarMap oldVersion newVersion t
     constructorCaseMigrations =
       oldConstructorsMigrations
         & fmap selectMigrationText
-        & flip (++) (newConstructorWarnings typeName moduleScopeOld newUnion oldUnion)
+        & flip (++) (newConstructorWarnings typeName moduleScopeOld newUnion oldUnion newVersion)
         & T.concat
 
   in
@@ -311,9 +311,9 @@ genOldConstructorFt oldModuleName moduleScope typeName interfaces tvarMap recurs
         ( -- No old constructor with same name, so this is a new/renamed constructor
           if List.length oldParams > 0
             then
-              T.concat ["    ", N.toText oldModuleName, ".", N.toText oldConstructor, " ", (imap (\i _ -> "p" <> show_ i) oldParams & T.intercalate " "), (oldConstructorRemovedMessage oldConstructor moduleScope typeName oldModuleName)]
+              T.concat ["    ", N.toText oldModuleName, ".", N.toText oldConstructor, " ", (imap (\i _ -> "p" <> show_ i) oldParams & T.intercalate " "), (oldConstructorRemovedMessage oldConstructor moduleScope typeName oldModuleName newVersion)]
             else
-              T.concat ["    ", N.toText oldModuleName, ".", N.toText oldConstructor, (oldConstructorRemovedMessage oldConstructor moduleScope typeName oldModuleName)]
+              T.concat ["    ", N.toText oldModuleName, ".", N.toText oldConstructor, (oldConstructorRemovedMessage oldConstructor moduleScope typeName oldModuleName newVersion)]
         , Set.empty
         , Map.empty
         )
@@ -383,11 +383,11 @@ genOldConstructorFt oldModuleName moduleScope typeName interfaces tvarMap recurs
   -- )
 
 -- oldConstructorRemovedMessage :: _ -> Text
-oldConstructorRemovedMessage oldConstructor moduleScope typeName oldModuleName =
+oldConstructorRemovedMessage oldConstructor moduleScope typeName oldModuleName newVersion =
   T.concat [
     " ->\n",
-    "           {- `", N.toText oldConstructor, "` doesn't exist in ", moduleScope, N.toText typeName, " so I couldn't figure out how to migrate it.\n",
-    "           You'll need to decide what happens to this ", N.toText oldModuleName, ".", N.toText oldConstructor, " value in a migration.\n",
+    "           {- `", N.toText oldConstructor, "` removed or renamed in V", show_ newVersion, " so I couldn't figure out how to migrate it.\n",
+    "           I need you to decide what happens to this ", N.toText oldModuleName, ".", N.toText oldConstructor, " value in a migration.\n",
     "           See https://lamdera.com/tips/modified-custom-type for more info. -}\n",
     "           Unimplemented\n"
   ]
@@ -743,7 +743,7 @@ handleRecordToFt oldVersion newVersion scope interfaces recursionSet tipe@(Can.T
                   -- let (st,imps,ft) = canonicalToFt oldVersion newVersion scope interfaces recursionSet tipe nothingTODO tvarMap
                   -- in
                   Just ( N.toText name,
-                    (T.concat["Unimplemented -- Type `", qualifiedTypeName tipe, "` removed in V", show_ newVersion, ". Make sure to do something with the `old.", N.toText name, "` value if you wish to keep the data, then remove this notice."]
+                    (T.concat["Unimplemented -- Type `", qualifiedTypeName tipe, "` removed in V", show_ newVersion, ". I need you to do something with the `old.", N.toText name, "` value if you wish to keep the data, then remove this line."]
                     , Set.empty
                     , Map.empty)
                     )

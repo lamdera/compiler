@@ -28,8 +28,8 @@ backendModel old =
     , changedResult = old.changedResult |> Result.mapError migrate_Types_UserType |> Result.map migrate_Types_UserType
     , externalUnion = old.externalUnion |> migrate_External_ExternalUnion
     , added = Unimplemented -- Type `Int` added in V2. I need you to set a default value.
-    , removed = Unimplemented -- Type `String` removed in V2. Make sure to do something with the `old.removed` value if you wish to keep the data, then remove this notice.
-    , removedRecord = Unimplemented -- Type `Evergreen.V1.External.AllTypes` removed in V2. Make sure to do something with the `old.removedRecord` value if you wish to keep the data, then remove this notice.
+    , removed = Unimplemented -- Type `String` removed in V2. I need you to do something with the `old.removed` value if you wish to keep the data, then remove this line.
+    , removedRecord = Unimplemented -- Type `Evergreen.V1.External.AllTypes` removed in V2. I need you to do something with the `old.removedRecord` value if you wish to keep the data, then remove this line.
     }
 
 
@@ -115,8 +115,8 @@ migrate_Types_UserType old =
             Evergreen.V2.Types.UserSecond
 
         Evergreen.V1.Types.UserRemoved ->
-            {- `UserRemoved` doesn't exist in Evergreen.V2.Types.UserType so I couldn't figure out how to migrate it.
-               You'll need to decide what happens to this Evergreen.V1.Types.UserRemoved value in a migration.
+            {- `UserRemoved` removed or renamed in V2 so I couldn't figure out how to migrate it.
+               I need you to decide what happens to this Evergreen.V1.Types.UserRemoved value in a migration.
                See https://lamdera.com/tips/modified-custom-type for more info.
             -}
             Unimplemented
@@ -140,11 +140,11 @@ migrate_Types_UserType old =
             Evergreen.V2.Types.UserResultPBoth (p0 |> Result.mapError migrate_Types_CustomType |> Result.map migrate_External_ExternalUnion)
 
         notices ->
-            {- `UserAdded` doesn't exist in the old Evergreen.V1.Types.UserType.
+            {- `UserAdded` added in V2.
                This is just a reminder in case migrating some subset of the old data to this new value was important.
                See https://lamdera.com/tips/modified-custom-type for more info.
             -}
-            {- `UserAddedParam Int` doesn't exist in the old Evergreen.V1.Types.UserType.
+            {- `UserAddedParam Int` added in V2.
                This is just a reminder in case migrating some subset of the old data to this new value was important.
                See https://lamdera.com/tips/modified-custom-type for more info.
             -}
