@@ -64,6 +64,9 @@ run () (Flags maybePort) =
       liftIO $ Lamdera.stdoutSetup
       putStrLn $ "Go to http://localhost:" ++ show port ++ " to see your project dashboard."
 
+      onlyWhen (port == 8001) $
+        error "Port 8001 is reserved for the Lamdera proxy, please pick another port."
+
       root <- getProjectRoot
 
       liveState <- liftIO $ Live.init
