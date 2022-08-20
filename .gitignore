@@ -1,5 +1,5 @@
 elm-stuff
-dist
+/dist
 cabal-dev
 .cabal-sandbox/
 cabal.sandbox.config
@@ -10,7 +10,6 @@ travis.log
 
 
 # @LAMDERA
-extra/dist
 extra/node_modules
 extra/.cache
 .stack-work

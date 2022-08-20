@@ -6,6 +6,17 @@ module Ext.Common where
 import Control.Concurrent
 import Control.Concurrent.MVar
 import Control.Monad (unless)
+import Control.Arrow ((>>>))
+
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Lazy as BSL
+import qualified Data.ByteString.Builder as B
+import qualified Data.Text as T
+import qualified Data.Text.Lazy as TL
+import qualified Data.Text.IO as T
+import qualified Data.Text.Encoding as T
+import qualified Data.Text.Lazy.Encoding as TL
+import qualified Data.Text.Lazy.Builder as TLB
 
 import System.Exit (exitFailure)
 import System.FilePath as FP ((</>), joinPath, splitDirectories, takeDirectory)
@@ -349,3 +360,104 @@ cq_ bin args input = do
 
 (&) = (Data.Function.&)
 
+
+
+-- Strings
+
+type Text = T.Text
+type TextLazy = TL.Text
+type TextBuilder = TLB.Builder
+type Bs = BS.ByteString
+type BsLazy = BSL.ByteString
+type Builder = B.Builder
+
+
+-- Helpers for Haskell ecosystem string types chaos
+
+stringToText :: String -> Text
+stringToText = T.pack
+stringToTextLazy :: String -> TextLazy
+stringToTextLazy = TL.pack
+stringToBs :: String -> Bs
+stringToBs = T.pack >>> textToBs
+stringToBsLazy :: String -> BsLazy
+stringToBsLazy = T.pack >>> textToBsLazy
+stringToBuilder :: String -> Builder
+stringToBuilder = T.pack >>> textToBuilder
+stringToTextBuilder :: String -> TextBuilder
+stringToTextBuilder = TLB.fromString
+
+textToString :: Text -> String
+textToString = T.unpack
+textToTextLazy :: Text -> TextLazy
+textToTextLazy = TL.fromStrict
+textToBs :: Text -> Bs
+textToBs = T.encodeUtf8
+textToBsLazy :: Text -> BsLazy
+textToBsLazy = TL.fromStrict >>> TL.encodeUtf8
+textToBuilder :: Text -> Builder
+textToBuilder = textToBs >>> bsToBuilder
+textToTextBuilder :: Text -> TextBuilder
+textToTextBuilder = TLB.fromText
+
+textLazyToString :: TextLazy -> String
+textLazyToString = TL.unpack
+textLazyToText :: TextLazy -> Text
+textLazyToText = TL.toStrict
+textLazyToBs :: TextLazy -> Bs
+textLazyToBs = TL.toStrict >>> textToBs
+textLazyToBsLazy :: TextLazy -> BsLazy
+textLazyToBsLazy = TL.encodeUtf8
+textLazyToBuilder :: TextLazy -> Builder
+textLazyToBuilder = TL.encodeUtf8 >>> B.lazyByteString
+textLazyToTextBuilder :: TextLazy -> TextBuilder
+textLazyToTextBuilder = TLB.fromLazyText
+
+textBuilderToString :: TextBuilder -> String
+textBuilderToString = error "todo:textBuilderToString" -- @TODO
+textBuilderToText :: TextBuilder -> Text
+textBuilderToText = error "todo:textBuilderToText" -- @TODO
+textBuilderToTextLazy :: TextBuilder -> TextLazy
+textBuilderToTextLazy = TLB.toLazyText
+textBuilderToBs :: TextBuilder -> Bs
+textBuilderToBs = error "todo:textBuilderToBs" -- @TODO
+textBuilderToBsLazy :: TextBuilder -> BsLazy
+textBuilderToBsLazy = error "todo:textBuilderToBsLazy" -- @TODO
+textBuilderToBuilder :: TextBuilder -> Builder
+textBuilderToBuilder = error "todo:textBuilderToBuilder" -- @TODO
+
+bsToString :: Bs -> String
+bsToString = T.decodeUtf8 >>> T.unpack
+bsToText :: Bs -> Text
+bsToText = T.decodeUtf8
+bsToTextLazy :: Bs -> TextLazy
+bsToTextLazy = BSL.fromStrict >>> TL.decodeUtf8
+bsToBsLazy :: Bs -> BsLazy
+bsToBsLazy = BSL.fromStrict
+bsToBuilder :: Bs -> Builder
+bsToBuilder = B.byteString
+
+bsLazyToString :: BsLazy -> String
+bsLazyToString = TL.decodeUtf8 >>> TL.unpack
+bsLazyToText :: BsLazy -> Text
+bsLazyToText = TL.decodeUtf8 >>> TL.toStrict
+bsLazyToTextLazy :: BsLazy -> TextLazy
+bsLazyToTextLazy = TL.decodeUtf8
+bsLazyToBs :: BsLazy -> Bs
+bsLazyToBs = BSL.toStrict
+bsLazyToBuilder :: BsLazy -> Builder
+bsLazyToBuilder = B.lazyByteString
+
+builderToString :: Builder -> String
+builderToString = B.toLazyByteString >>> bsLazyToString
+builderToText :: Builder -> Text
+builderToText = builderToTextLazy >>> TL.toStrict
+builderToTextLazy :: Builder -> TextLazy
+builderToTextLazy = B.toLazyByteString >>> TL.decodeUtf8
+builderToBs :: Builder -> Bs
+builderToBs = B.toLazyByteString >>> bsLazyToBs
+builderToBsLazy :: Builder -> BsLazy
+builderToBsLazy = B.toLazyByteString
+
+-- @TODO import qualified Data.Utf8 as Utf8
+-- Utf8.Utf8
