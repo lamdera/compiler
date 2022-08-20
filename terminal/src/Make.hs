@@ -88,8 +88,7 @@ runHelp root paths style (Flags debug optimize maybeOutput _ maybeDocs) =
 
         p:ps ->
           do  artifacts <- buildPaths style root details (NE.List p ps)
-              Lamdera.PostCompile.check artifacts Exit.MakeCannotBuild
-              case maybeOutput of
+              res <- case maybeOutput of
                 Nothing ->
                   case getMains artifacts of
                     [] ->
@@ -120,6 +119,8 @@ runHelp root paths style (Flags debug optimize maybeOutput _ maybeDocs) =
                       builder <- toBuilder root details desiredMode artifacts
                       generate style target (Html.sandwich name builder) (NE.List name [])
 
+              Lamdera.PostCompile.check artifacts Exit.MakeCannotBuild
+              pure res
 
 
 -- GET INFORMATION

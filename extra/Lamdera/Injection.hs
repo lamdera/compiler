@@ -112,20 +112,20 @@ modifiedHttp_toTask isProd =
         });
       });
 
-      window.cors_api_host = 'localhost:8001'
+      window.cors_api_host = 'localhost:8001';
 
       var alterIfProxyRequired = function(url) {
         if (shouldProxy) {
-          var cors_api_url = 'http://' + window.cors_api_host + '/'
-          var origin = window.location.protocol + '//' + window.location.host
+          var cors_api_url = 'http://' + window.cors_api_host + '/';
+          var origin = window.location.protocol + '//' + window.location.host;
           var targetOrigin = /^https?:\/\/([^\/]+)/i.exec(url)
           if (targetOrigin && targetOrigin[0].toLowerCase() !== origin &&
               targetOrigin[1] !== window.cors_api_host) {
               url = cors_api_url + url;
           }
-          return url
+          return url;
         } else {
-          return url
+          return url;
         }
       }
     |]
@@ -216,13 +216,13 @@ injections isBackend isLocalDev =
         {
           if(dead){ return }
           if (upgradeMode) {
-            // console.log('sendToApp.inactive',msg)
+            // console.log('sendToApp.inactive',msg);
             // No more messages should run in upgrade mode
             // @TODO redirect messages somewhere
             _Platform_enqueueEffects(managers, $$elm$$core$$Platform$$Cmd$$none, $$elm$$core$$Platform$$Sub$$none);
             return;
           }
-          //console.log('sendToApp.active',msg)
+          //console.log('sendToApp.active',msg);
 
           $shouldProxy
 
@@ -236,26 +236,26 @@ injections isBackend isLocalDev =
             return;
           }
 
-          const updateDuration = mtime() - start
-          start = mtime()
+          const updateDuration = mtime() - start;
+          start = mtime();
 
           if (isBackend && loggingEnabled) {
             pos = pos + 1;
             const s = $$author$$project$$LBR$$serialize(msg);
-            serializeDuration = mtime() - start
-            start = mtime()
-            insertEvent(pos, global.config.version, s.a, updateDuration, serializeDuration, A2($$elm$$core$$Maybe$$withDefault, null, s.b))
-            logDuration = mtime() - start
+            serializeDuration = mtime() - start;
+            start = mtime();
+            insertEvent(pos, global.config.version, s.a, updateDuration, serializeDuration, A2($$elm$$core$$Maybe$$withDefault, null, s.b));
+            logDuration = mtime() - start;
           }
 
-          // console.log(`model size: ${global.sizeof(pair.a)}`)
-          // console.log(pair.a)
+          // console.log(`model size: ${global.sizeof(pair.a)}`);
+          // console.log(pair.a);
 
           stepper(model = pair.a, viewMetadata);
           //console.log('cmds', pair.b);
           _Platform_enqueueEffects(managers, pair.b, subscriptions(model));
 
-          const stepEnqueueDuration = mtime() - start
+          const stepEnqueueDuration = mtime() - start;
 
           if (isBackend) {
             //console.log({serialize: serializeDuration, log: logDuration, update: updateDuration, stepEnqueue: stepEnqueueDuration})
@@ -269,11 +269,11 @@ injections isBackend isLocalDev =
         $exportFns
 
         const die = function() {
-          console.log('App dying')
-          managers = null
-          model = null
-          stepper = null
-          ports = null
+          //console.log('App dying');
+          managers = null;
+          model = null;
+          stepper = null;
+          ports = null;
         }
 
         return ports ? { ports: ports, gm: function() { return model }, eum: function() { upgradeMode = true }, die: die, fns: fns } : {};

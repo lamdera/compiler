@@ -50,48 +50,54 @@ data DiffableType
   deriving (Show)
 
 
-checkPageDataType :: Interfaces -> Bool -> Either Reporting.Exit.BuildProblem ()
-checkPageDataType interfaces inDebug = do
-
+checkPageDataType :: Interfaces -> Either Reporting.Exit.BuildProblem ()
+checkPageDataType interfaces =
   case Map.lookup "Main" interfaces of
-    Just targetInterface -> do
-      let
-        targetModule =
-          (ModuleName.Canonical (Pkg.Name "author" "project") "Main")
+    Just targetInterface ->
+      if typeExists "PageData" targetInterface
+        then do
+          let
+            targetModule =
+              (ModuleName.Canonical (Pkg.Name "author" "project") "Main")
 
-        typediffs :: [(Text, DiffableType)]
-        typediffs =
-          case diffableTypeByName interfaces (toName "PageData") targetModule targetInterface of
-            DCustom name variants ->
-              variants & fmap (\(n, fs) -> fs & fmap (\f -> (n,f))) & List.concat
-            _ ->
-              error "checkPageDataType: unexpected typeDiff for PageData. Please report this issue."
+            typediffs :: [(Text, DiffableType)]
+            typediffs =
+              let typediff = diffableTypeByName interfaces (toName "PageData") targetModule targetInterface
+              in
+              case typediff of
+                DCustom name variants ->
+                  variants & fmap (\(n, fs) -> fs & fmap (\f -> (n,f))) & List.concat
+                _ ->
+                  error $ "checkPageDataType: unexpected typeDiff for PageData. Please report this issue: " ++ show typediff
 
-        errors :: [(Text, [Text], DiffableType)]
-        errors =
-          typediffs
-            & fmap (\(t,tds) -> (t, diffableTypeErrors tds, tds))
-            & filter (\(t,errs,tds) -> List.length errs > 0)
+            errors :: [(Text, [Text], DiffableType)]
+            errors =
+              typediffs
+                & fmap (\(t,tds) -> (t, diffableTypeErrors tds, tds))
+                & filter (\(t,errs,tds) -> List.length errs > 0)
 
-        formattedErrors :: [D.Doc]
-        formattedErrors =
-          errors
-            & fmap (\(tipe, errors_, tds) ->
-                D.stack $
-                  (errors_ & List.nub & fmap (\e -> D.fromChars . T.unpack $ "- " <> e) )
-              )
+            formattedErrors :: [D.Doc]
+            formattedErrors =
+              errors
+                & fmap (\(tipe, errors_, tds) ->
+                    D.stack $
+                      (errors_ & List.nub & fmap (\e -> D.fromChars . T.unpack $ "- " <> e) )
+                  )
 
-      debug_note "Checking elm-pages PageData type..." (Right ())
+          debug_note "Found Main.PageData, checking for wire constraints..." (Right ())
 
-      if List.length errors > 0
-        then
-          wireError formattedErrors
+          if List.length errors > 0
+            then
+              wireError formattedErrors
+            else do
+              Right ()
 
         else do
+          debug_note "Skipping elm-pages check, no Main.PageData found in interfaces" (Right ())
           Right ()
 
     Nothing -> do
-      debug_note "Skipping elm-pages check, no Main found in interfaces..." (Right ())
+      debug_note "Skipping elm-pages check, no Main found in interfaces" (Right ())
       Right ()
 
 
@@ -133,6 +139,15 @@ diffableTypeByName interfaces targetName modul interface = do
         Nothing ->
           DError $ "Found no type named " <> nameToText targetName <> " in " <> nameToText moduleName
 
+
+typeExists :: N.Name -> Interface.Interface -> Bool
+typeExists targetName interface = do
+  case Map.lookup targetName $ Interface._aliases interface of
+    Just alias -> True
+    Nothing ->
+      case Map.lookup targetName $ Interface._unions interface of
+        Just union -> True
+        Nothing -> False
 
 
 -- A top level Custom Type definition i.e. `type Herp = Derp ...`

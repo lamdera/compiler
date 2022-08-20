@@ -27,10 +27,9 @@ check artifacts errorWrapper =
 
 checkElmPagesTypes :: Build.Artifacts -> IO (Either Exit.BuildProblem ())
 checkElmPagesTypes artifacts = do
-  inDebug <- isDebug
   -- Unfortunately Build.Artifacts only contains project deps, we need the full tree...
   interfaces <- Ext.Query.Interfaces.artifactsToFullInterfaces artifacts
 
-  case Ext.ElmPages.checkPageDataType interfaces inDebug of
+  case Ext.ElmPages.checkPageDataType interfaces of
     Right _  -> pure $ Right ()
     Left err -> pure $ Left err
