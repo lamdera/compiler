@@ -26,19 +26,9 @@ jobs:
             /home/runner/rootfs/alpine-v3.15-x86_64/home/runner/.cabal
           key: ${{ runner.os }}-v1-${{ hashFiles('stack.yaml.lock') }}-${{ hashFiles('elm.cabal') }}
 
-      # If it doesn't exist, setup our cache action, while also trying to restore
+      # If it doesn't exist, setup Alpine first, then restore our cache action, while also trying to restore
       # a prior broader matching cache if it exists (saves a lot of time if just
       # modifying a few packages).
-      - uses: actions/cache@v2
-        if: steps.cache.outputs.cache-hit != 'true'
-        with:
-          path: |
-            /home/runner/rootfs/alpine-v3.15-x86_64/home/runner/.ghcup
-            /home/runner/rootfs/alpine-v3.15-x86_64/home/runner/.cabal
-          key: ${{ runner.os }}-v1-${{ hashFiles('stack.yaml.lock') }}-${{ hashFiles('elm.cabal') }}
-          restore-keys: |
-            ${{ runner.os }}-v1-
-
       - uses: jirutka/setup-alpine@v1
         if: steps.cache.outputs.cache-hit != 'true'
         with:
@@ -60,8 +50,17 @@ jobs:
             wget
             zlib-dev
             zlib-static
+      - uses: actions/cache@v3
+        if: steps.cache.outputs.cache-hit != 'true'
+        with:
+          path: |
+            /home/runner/rootfs/alpine-v3.15-x86_64/home/runner/.ghcup
+            /home/runner/rootfs/alpine-v3.15-x86_64/home/runner/.cabal
+          key: ${{ runner.os }}-v1-${{ hashFiles('stack.yaml.lock') }}-${{ hashFiles('elm.cabal') }}
+          restore-keys: |
+            ${{ runner.os }}-v1-
 
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         if: steps.cache.outputs.cache-hit != 'true'
 
       # Install just our dependencies, this can take ~30m from scratch and is the
@@ -127,9 +126,9 @@ jobs:
             zlib-dev
             zlib-static
 
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
 
-      - uses: actions/cache@v2
+      - uses: actions/cache@v3
         with:
           path: |
             /home/runner/rootfs/alpine-v3.15-x86_64/home/runner/.ghcup
@@ -164,7 +163,7 @@ jobs:
         shell: alpine.sh --root {0}
 
       - name: Archive lamdera artifact
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: lamdera-next
           path: lamdera
