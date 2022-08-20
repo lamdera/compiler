@@ -21,7 +21,7 @@ import qualified Reporting.Task as Task
 import qualified Build
 import qualified File
 import qualified Stuff
-
+import qualified Json.Encode as Encode
 
 import Ext.Common
 
@@ -130,12 +130,12 @@ runTaskUnsafe task = do
       return a
 
     Left exit ->
-      do  Exit.toStderr (Exit.reactorToReport exit)
-          error
+      do  -- Exit.toStderr (Exit.reactorToReport exit)
+          error $
             "\n-------------------------------------------------\
-            \\nError in Evergreen snapshots, please report this.\
+            \\nError in allProjectInterfaces, please report this.\
             \\n-------------------------------------------------\
-            \\n"
+            \\n" ++ (exit & Exit.reactorToReport & Exit.toJson & Encode.encode & builderToString)
 
 
 extractInterfaces :: [Build.Module] -> IO (Map.Map ModuleName.Raw I.Interface)

@@ -12,7 +12,6 @@ import qualified Data.List as List
 import qualified Data.Text as T
 import qualified Data.Name as N
 import qualified Data.Set as Set
-import Data.Map ((!))
 
 import AST.Canonical
 import qualified AST.Source as Valid
@@ -23,7 +22,8 @@ import qualified Reporting.Annotation as A
 import qualified Reporting.Result as Result
 import qualified Reporting.Doc as D
 import qualified Reporting.Task as Task
-import qualified Reporting.Exit as Exit
+import qualified Reporting.Exit
+import qualified Build
 
 import Lamdera
 import Lamdera.Types
@@ -35,7 +35,7 @@ import StandaloneInstances
 
 {- Attempt to load all interfaces for project in current directory and generate
 type snapshots  -}
-calculateAndWrite :: IO (Either Exit.BuildProblem ([Text], [(Text, [Text], DiffableType)]))
+calculateAndWrite :: IO (Either Reporting.Exit.BuildProblem ([Text], [(Text, [Text], DiffableType)]))
 calculateAndWrite = do
   res <- calculateLamderaHashes
   case res of
@@ -46,9 +46,26 @@ calculateAndWrite = do
     Left err ->
       pure res
 
-buildCheckHashes = do
-  Task.eio Exit.ReactorBadBuild $ calculateLamderaHashes
 
+buildCheckHashes :: Build.Artifacts -> Task.Task Reporting.Exit.Reactor ([Text], [(Text, [Text], DiffableType)])
+buildCheckHashes artifacts = do
+  Task.eio Reporting.Exit.ReactorBadBuild $ do
+    calculateLamderaHashes
+    -- @TODO this guard isn't needed with the safe Map.lookup access now added downstream,
+    -- however left this here as a reminder that we might want more intelligent treatment of
+    -- hash checking in future when we have the memorycached daemon mode.
+    -- let
+    --   didBuildTypes =
+    --     Build._modules artifacts
+    --       & fmap (\m ->
+    --           case m of
+    --             Build.Fresh moduleNameRaw _ _ -> moduleNameRaw == "Types"
+    --             Build.Cached moduleNameRaw _ _ -> moduleNameRaw == "Types"
+    --         )
+    --       & any ((==) True)
+    -- if didBuildTypes
+    --   then calculateLamderaHashes
+    --   else pure $ Right ([], [])
 
 
 {- Tracks types that have already been seen to ensure we can break cycles -}
@@ -70,26 +87,29 @@ lamderaCoreTypes =
 calculateHashPair :: FilePath -> N.Name -> N.Name -> IO (Text, Text)
 calculateHashPair path modulename typename = do
   interfaces <- Interfaces.all [ path ]
-  let
-    interfaceModule = (interfaces ! modulename)
-    dt = diffableTypeByName interfaces typename modulename interfaceModule
+  case Map.lookup modulename interfaces of
+    Just interfaceModule -> do
+      let dt = diffableTypeByName interfaces typename modulename interfaceModule
+      pure $ (diffableTypeToHash dt, diffableTypeToText dt)
+    Nothing ->
+      error $ "calculateHashPair: did not find " ++ show modulename ++ " in interfaces."
 
-  pure $ (diffableTypeToHash dt, diffableTypeToText dt)
 
-
-calculateLamderaHashes :: IO (Either Exit.BuildProblem ([Text], [(Text, [Text], DiffableType)]))
+calculateLamderaHashes :: IO (Either Reporting.Exit.BuildProblem ([Text], [(Text, [Text], DiffableType)]))
 calculateLamderaHashes = do
   interfaces <- Interfaces.all [ "src/Types.elm" ]
   inDebug <- Lamdera.isDebug
-  calculateLamderaHashes_ interfaces inDebug
+  case Map.lookup "Types" interfaces of
+    Just iface_Types ->
+      calculateLamderaHashes_ interfaces iface_Types inDebug
+
+    Nothing ->
+      pure $ Right $ ([],[])
 
 
-calculateLamderaHashes_ :: Interfaces -> Bool -> IO (Either Exit.BuildProblem ([Text], [(Text, [Text], DiffableType)]))
-calculateLamderaHashes_ interfaces inDebug = do
-
+calculateLamderaHashes_ :: Interfaces -> Interface.Interface -> Bool -> IO (Either Reporting.Exit.BuildProblem ([Text], [(Text, [Text], DiffableType)]))
+calculateLamderaHashes_ interfaces iface_Types inDebug = do
   let
-    iface_Types = (interfaces ! "Types")
-
     typediffs :: [(Text, DiffableType)]
     typediffs =
       lamderaCoreTypes
@@ -138,7 +158,7 @@ calculateLamderaHashes_ interfaces inDebug = do
             []
       in
       pure $ Left $
-        Exit.BuildLamderaProblem "WIRE ISSUES"
+        Reporting.Exit.BuildLamderaProblem "WIRE ISSUES"
           "I ran into the following problems when checking Lamdera core types:"
           (formattedErrors ++
           [ D.reflow "See <https://dashboard.lamdera.app/docs/wire> for more info."

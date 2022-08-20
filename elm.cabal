@@ -1,4 +1,3 @@
-
 Name: elm
 Version: 0.19.1
 
@@ -256,6 +255,7 @@ Executable lamdera
         Lamdera.Http
         Lamdera.Progress
         SocketServer
+        Network.Status
 
         -- Future --
         Lamdera.ReverseProxy

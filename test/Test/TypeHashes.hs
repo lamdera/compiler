@@ -3,7 +3,6 @@
 module Test.TypeHashes where
 
 import qualified System.Directory as Dir
-import Data.Map ((!))
 import System.FilePath ((</>))
 
 import EasyTest

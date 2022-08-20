@@ -14,7 +14,6 @@ import Lamdera.Wire3.Helpers
 import StandaloneInstances
 
 import Lamdera
-import Data.Map ((!))
 import qualified Data.Map as Map
 import qualified Lamdera.Compile
 

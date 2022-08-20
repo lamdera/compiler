@@ -7,7 +7,6 @@ import qualified Data.List as List
 import qualified Data.Map as Map
 import qualified Data.Text as T
 import qualified Data.Set as Set
-import Data.Map ((!))
 
 import qualified Data.Name as N
 import qualified AST.Canonical as Can
@@ -15,7 +14,7 @@ import qualified Elm.ModuleName as ModuleName
 import qualified Elm.Package as Pkg
 import qualified Elm.Interface as Interface
 import qualified Reporting.Doc as D
-import qualified Reporting.Exit as Exit
+import qualified Reporting.Exit
 
 import StandaloneInstances
 
@@ -51,49 +50,54 @@ data DiffableType
   deriving (Show)
 
 
-checkPageDataType :: Interfaces -> Bool -> Either Exit.BuildProblem ()
+checkPageDataType :: Interfaces -> Bool -> Either Reporting.Exit.BuildProblem ()
 checkPageDataType interfaces inDebug = do
-  let
-    targetModule =
-      (ModuleName.Canonical (Pkg.Name "author" "project") "Main")
 
-    targetInterface = interfaces ! "Main"
+  case Map.lookup "Main" interfaces of
+    Just targetInterface -> do
+      let
+        targetModule =
+          (ModuleName.Canonical (Pkg.Name "author" "project") "Main")
 
-    typediffs :: [(Text, DiffableType)]
-    typediffs =
-      case diffableTypeByName interfaces (toName "PageData") targetModule targetInterface of
-        DCustom name variants ->
-          variants & fmap (\(n, fs) -> fs & fmap (\f -> (n,f))) & List.concat
-        _ ->
-          error "checkPageDataType: unexpected typeDiff for PageData. Please report this issue."
+        typediffs :: [(Text, DiffableType)]
+        typediffs =
+          case diffableTypeByName interfaces (toName "PageData") targetModule targetInterface of
+            DCustom name variants ->
+              variants & fmap (\(n, fs) -> fs & fmap (\f -> (n,f))) & List.concat
+            _ ->
+              error "checkPageDataType: unexpected typeDiff for PageData. Please report this issue."
 
-    errors :: [(Text, [Text], DiffableType)]
-    errors =
-      typediffs
-        & fmap (\(t,tds) -> (t, diffableTypeErrors tds, tds))
-        & filter (\(t,errs,tds) -> List.length errs > 0)
+        errors :: [(Text, [Text], DiffableType)]
+        errors =
+          typediffs
+            & fmap (\(t,tds) -> (t, diffableTypeErrors tds, tds))
+            & filter (\(t,errs,tds) -> List.length errs > 0)
 
-    formattedErrors :: [D.Doc]
-    formattedErrors =
-      errors
-        & fmap (\(tipe, errors_, tds) ->
-            D.stack $
-              (errors_ & List.nub & fmap (\e -> D.fromChars . T.unpack $ "- " <> e) )
-          )
+        formattedErrors :: [D.Doc]
+        formattedErrors =
+          errors
+            & fmap (\(tipe, errors_, tds) ->
+                D.stack $
+                  (errors_ & List.nub & fmap (\e -> D.fromChars . T.unpack $ "- " <> e) )
+              )
 
-  debug_note "Checking elm-pages PageData type..." (Right ())
+      debug_note "Checking elm-pages PageData type..." (Right ())
 
-  if List.length errors > 0
-    then
-      wireError formattedErrors
+      if List.length errors > 0
+        then
+          wireError formattedErrors
 
-    else do
+        else do
+          Right ()
+
+    Nothing -> do
+      debug_note "Skipping elm-pages check, no Main found in interfaces..." (Right ())
       Right ()
 
 
 wireError formattedErrors =
   Left $
-        Exit.BuildLamderaProblem "WIRE ISSUES"
+        Reporting.Exit.BuildLamderaProblem "WIRE ISSUES"
           "I found one or more Route Modules with Data types that contain functions."
           (formattedErrors ++
           [ D.reflow "See <https://dashboard.lamdera.app/docs/wire> for more info."

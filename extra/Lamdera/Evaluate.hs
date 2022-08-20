@@ -16,7 +16,6 @@ import StandaloneInstances
 -- import qualified Lamdera.Interfaces
 import qualified Ext.Query.Canonical
 import qualified Ext.Query.Interfaces
-import Data.Map ((!))
 import qualified Data.Map as Map
 
 

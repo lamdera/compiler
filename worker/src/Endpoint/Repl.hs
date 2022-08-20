@@ -12,7 +12,6 @@ import qualified Data.Aeson.Types as Aeson
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Builder as B
 import qualified Data.ByteString.Lazy as LBS
-import Data.Map ((!))
 import qualified Data.Map as Map
 import qualified Data.Map.Utils as Map
 import qualified Data.Name as N

@@ -265,7 +265,7 @@ compile path =
                 artifacts <- Task.eio Exit.ReactorBadBuild $ Build.fromPaths Reporting.silent root details (NE.List path [])
 
                 Lamdera.PostCompile.check artifacts Exit.ReactorBadBuild
-                Lamdera.TypeHash.buildCheckHashes
+                Lamdera.TypeHash.buildCheckHashes artifacts
 
                 javascript <- Task.mapError Exit.ReactorBadGenerate $ Generate.dev root details artifacts
                 let (NE.List name _) = Build.getRootNames artifacts
