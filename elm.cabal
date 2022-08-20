@@ -248,6 +248,7 @@ Executable lamdera
         Lamdera.Wire3.Graph
         Lamdera.Wire3.Helpers
         Lamdera.Wire3.Interfaces
+        Lamdera.Version
 
         -- Lamdera Utility --
         Lamdera.Compile
@@ -360,6 +361,7 @@ Executable lamdera
         safe,
         filemanip,
         unix-compat,
+        githash,
 
         -- Live
         websockets,

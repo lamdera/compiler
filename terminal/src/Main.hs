@@ -27,6 +27,7 @@ import qualified Repl
 
 import qualified Lamdera
 import qualified Lamdera.CLI
+import qualified Lamdera.Version
 
 -- MAIN
 
@@ -59,7 +60,7 @@ intro =
     [ P.fillSep
         ["Hi,","thank","you","for","trying","out"
         ,P.green "Lamdera"
-        ,P.green (P.text Lamdera.lamderaVersionString)
+        ,P.green (P.text Lamdera.Version.short)
         ,"on"
         ,P.green "Elm"
         ,P.green (P.text (V.toChars V.compiler)) <> "."

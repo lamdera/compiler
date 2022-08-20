@@ -33,17 +33,18 @@ import qualified Elm.Outline
 import Lamdera
 import Lamdera.Evergreen (VersionInfo(..), createLamderaGenerated, vinfoVersion, getLastLocalTypeChangeVersion)
 import qualified Lamdera.AppConfig
-import qualified Lamdera.Http
-import qualified Lamdera.Progress as Progress
-import qualified Lamdera.Project
-import qualified Lamdera.Update
-import qualified Lamdera.Compile
 import qualified Lamdera.Checks
+import qualified Lamdera.Compile
 import qualified Lamdera.Evergreen
 import qualified Lamdera.Evergreen.Snapshot
+import qualified Lamdera.Http
+import qualified Lamdera.Legacy
+import qualified Lamdera.Progress as Progress
+import qualified Lamdera.Project
 import qualified Lamdera.TypeHash
 import qualified Lamdera.Types
-import qualified Lamdera.Legacy
+import qualified Lamdera.Update
+import qualified Lamdera.Version
 import qualified Network.Status
 
 
@@ -482,23 +483,25 @@ checkForLatestBinaryVersion inDebug = do
             & withDefault ( 0, 0, 0 )
 
         localVersion =
-          Lamdera.lamderaVersion
+          Lamdera.Version.raw
 
-      debug $ "comparing remote:" <> show latestVersionText <> " local:" <> show Lamdera.lamderaVersion
+      debug $ "comparing remote:" <> show latestVersionText <> " local:" <> show Lamdera.Version.raw
       debug $ "comparing remote:" <> show latestVersion <> " local:" <> show localVersion
 
       onlyWhen (latestVersionText /= "skip" && latestVersion > localVersion) $ do
           progressPointer "Checking version..."
           progressDoc $ D.stack
             [ D.red $ D.reflow $ "NOTE: There is a new lamdera version, please upgrade before you deploy."
-            , D.reflow $ "Current: " <> Lamdera.lamderaVersionString
+            , D.reflow $ "Current: " <> Lamdera.Version.short
             , D.reflow $ "New:     " <> T.unpack latestVersionText
             , D.reflow $ "You can download it here: <https://dashboard.lamdera.app/docs/download>"
             ]
 
       onlyWhen (latestVersion < localVersion) $ do
           progressDoc $ D.stack
-            [ D.magenta $ D.reflow $ "\nWarning: this is a pre-release compiler v" <> versionToString localVersion <> " (latest is v" <> versionToString latestVersion <> ")"
+            [ D.magenta $ D.reflow $
+                "\nWarning: this is a pre-release compiler v" <> Lamdera.Version.rawToString localVersion <>
+                " (latest is v" <> Lamdera.Version.rawToString latestVersion <> ")"
             ]
 
     Left err ->

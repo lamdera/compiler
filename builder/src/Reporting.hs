@@ -47,6 +47,7 @@ import qualified Reporting.Exit.Help as Help
 
 
 import Lamdera
+import qualified Lamdera.Version
 
 -- STYLE
 
@@ -455,13 +456,14 @@ putException e = do
   hPutStrLn stderr ""
   Help.toStderr $ D.stack $
     [ D.dullyellow "-- ERROR -----------------------------------------------------------------------"
+    , D.reflow $ Lamdera.Version.full
     , D.reflow $
         "I ran into something that bypassed the normal error reporting process!\
         \ I extracted whatever information I could from the internal error:"
     , D.vcat $ map (\line -> D.red ">" <> "   " <> D.fromChars line) (lines (show e))
     , D.reflow $
-        "These errors are usually pretty confusing, so start by asking around on one of\
-        \ forums listed at https://elm-lang.org/community to see if anyone can get you\
+        "These errors are usually pretty confusing, so start by asking around on Discord\
+        \ https://dashboard.lamdera.app/docs/discuss to see if anyone can get you\
         \ unstuck quickly."
     , D.dullyellow "-- REQUEST ---------------------------------------------------------------------"
     , D.reflow $

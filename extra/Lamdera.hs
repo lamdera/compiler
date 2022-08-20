@@ -2,10 +2,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 
 module Lamdera
-  ( lamderaVersion
-  , lamderaVersionString
-  , versionToString
-  , inProduction
+  ( inProduction
   , getLamderaPkgPath
   , stdoutSetup
   , unsafePerformIO
@@ -175,15 +172,6 @@ import Ext.Common (getProjectRoot, getProjectRootFor, getProjectRootMaybe, OSTyp
 
 -- import CanSer.CanSer (ppElm)
 
-lamderaVersion :: (Int, Int, Int)
-lamderaVersion = (1,0,2)
-
-lamderaVersionString :: String
-lamderaVersionString = versionToString lamderaVersion
-
-versionToString :: (Int, Int, Int) -> String
-versionToString (m,mi,p) =
-  show m <> "." <> show mi <> "." <> show p
 
 stdoutSetup :: IO ()
 stdoutSetup = do

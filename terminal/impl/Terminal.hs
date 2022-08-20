@@ -31,6 +31,7 @@ import qualified Terminal.Error as Error
 
 
 import qualified Lamdera
+import qualified Lamdera.Version
 import qualified Sanity
 
 -- COMMAND
@@ -45,8 +46,8 @@ _command details example args_ flags_ callback =
           do  hPutStrLn stdout (V.toChars V.compiler)
               Exit.exitSuccess
 
-        ["--version-lamdera"] ->
-          do  hPutStrLn stdout (V.toChars V.compiler ++ "-" ++ Lamdera.lamderaVersionString)
+        ["--version-full"] ->
+          do  hPutStrLn stdout (Lamdera.Version.full)
               Exit.exitSuccess
 
         chunks ->
@@ -81,8 +82,8 @@ app intro outro commands =
           do  hPutStrLn stdout (V.toChars V.compiler)
               Exit.exitSuccess
 
-        ["--version-lamdera"] ->
-          do  hPutStrLn stdout (V.toChars V.compiler ++ "-" ++ Lamdera.lamderaVersionString)
+        ["--version-full"] ->
+          do  hPutStrLn stdout (Lamdera.Version.full)
               Exit.exitSuccess
 
         command : chunks ->

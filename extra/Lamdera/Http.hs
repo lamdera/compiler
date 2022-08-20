@@ -15,6 +15,7 @@ import qualified Data.ByteString.Char8 as BS
 import qualified Network.HTTP.Client as HTTP
 
 import Lamdera
+import qualified Lamdera.Version
 import Lamdera.Progress
 import StandaloneInstances
 
@@ -27,7 +28,7 @@ data WithErrorField a
 
 jsonHeaders :: [Http.Header]
 jsonHeaders =
-  [ ( Http.hUserAgent, "lamdera-" <> BS.pack lamderaVersionString )
+  [ ( Http.hUserAgent, "lamdera-" <> BS.pack Lamdera.Version.short )
   , ( Http.hContentType, "application/json" )
   , ( Http.hAccept, "application/json" )
   , ( Http.hAcceptEncoding, "gzip")
