@@ -81,11 +81,12 @@ jobs:
       # Use a retry action because inexplicably sometimes stack install stalls
       # indefinitely after the `compiling Main` step, but then succeeds immediately
       # with a second stack install. 🤷🏻‍♂️
-      - uses: nick-invision/retry@v3
+      - uses: nick-fields/retry@v2
         with:
           timeout_minutes: 5
           max_attempts: 3
-          command: stack install
+          command: |
+            stack install
 
       - name: Archive lamdera.exe artifact
         uses: actions/upload-artifact@v3
