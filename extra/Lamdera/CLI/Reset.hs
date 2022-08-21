@@ -14,6 +14,7 @@ import LamderaSharedBuildHelpers
 
 import Lamdera
 import Lamdera.Progress
+import qualified Lamdera.Version
 
 
 run :: () -> () -> IO ()
@@ -59,7 +60,9 @@ run () () = do
       if List.isInfixOf [ostype] [MacOS, Linux]
         then do
           progress $ "Removing artifacts in " <> elmHome
-          c $ "find " <> elmHome <> "/0.19.1/packages | grep artifacts.dat | xargs rm"
+          let packageDir = elmHome </> Lamdera.Version.elm </> "packages"
+          onlyWhen_ (doesDirectoryExist packageDir) $
+            c $ "find " <> packageDir <> " | grep artifacts.dat | xargs rm"
 
         else do
           progress $ "Removing " <> elmHome

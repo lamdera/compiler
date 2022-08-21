@@ -4,6 +4,8 @@ module Lamdera.Version where
 
 import GitHash
 
+import qualified Elm.Version as V
+
 
 raw :: (Int, Int, Int)
 raw = (1,0,2)
@@ -30,3 +32,8 @@ full =
     , " (", giCommitDate gi, ")"
     , " (branch:", giBranch gi, ")"
     ]
+
+
+elm :: String
+elm =
+  V.toChars V.compiler
