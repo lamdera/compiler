@@ -88,6 +88,8 @@ For more information on how to use the GHCi debugger, see the GHC User's Guide.
 
 target = Test.all
 
+-- target =
+--   Test.Check.checkWithParams "/Users/mario/lamdera/test/v1" "always-v0"
 
 -- target = buildTestHarnessToProductionJs
 -- target = checkProjectCompiles
@@ -104,6 +106,19 @@ target = Test.all
 -- target = Test.Check.mockBuildSh "/Users/mario/lamdera-deploys/test-local-v1" "test-local"
 -- target = Test.Check.mockBuildSh "/Users/mario/dev/test/lamdera-init" "test-local"
 
+-- target = do
+--   let p = "/Users/mario/dev/projects/elm-pages/examples/end-to-end"
+--   Dir.setCurrentDirectory p
+--   Dir.setCurrentDirectory p
+--   withCurrentDirectory p $
+--     Make.run ["app/Route/Index.elm"]
+--           $ Make.Flags
+--               { _debug = False
+--               , _optimize = False
+--               , _output = Nothing
+--               , _report = Nothing
+--               , _docs = Nothing
+--               }
 
 checkProjectCompiles = do
   setEnv "LDEBUG" "1"

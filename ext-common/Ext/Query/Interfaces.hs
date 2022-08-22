@@ -39,12 +39,12 @@ all paths = do
 
 
 -- Takes Build.Artifacts and extracts project interfaces, loads all package dep interfaces, and merges them
-artifactsToFullInterfaces :: Build.Artifacts -> IO (Map.Map ModuleName.Raw I.Interface)
-artifactsToFullInterfaces artifacts = do
+artifactsToFullInterfaces :: Details.Details -> Build.Artifacts -> IO (Map.Map ModuleName.Raw I.Interface)
+artifactsToFullInterfaces details artifacts = do
 
   ifaces <- extractInterfaces $ Build._modules artifacts
 
-  artifactsDeps <- allDepArtifacts
+  artifactsDeps <- allDepArtifacts_ details
   pure $ Map.union ifaces (_ifaces artifactsDeps)
 
 
@@ -76,17 +76,25 @@ allDepArtifacts =
         Left _ ->
           error $ "Ran into some problem loading elm.json\nTry running `lamdera make` in: " ++ root
 
-        Right details ->
-          do  omvar <- Details.loadObjects root details
-              imvar <- Details.loadInterfaces root details
-              mdeps <- readMVar imvar
-              mobjs <- readMVar omvar
-              case liftM2 (,) mdeps mobjs of
-                Nothing ->
-                  error $ "Ran into some weird problem loading elm.json\nTry running `lamdera make` in: " ++ root
+        Right details -> allDepArtifacts_ details
 
-                Just (deps, objs) ->
-                  return $ Artifacts (toInterfaces deps) objs
+{- allDepsArtifacts without Details.load, which reads/writes to disk, conflicting with
+   it's use in Lamdera.Postcompile where we're already in a compile read/write phase.
+ -}
+allDepArtifacts_ :: Details.Details -> IO Artifacts
+allDepArtifacts_ details = do
+  debug "Loading allDeps"
+  root <- getProjectRoot
+  omvar <- Details.loadObjects root details
+  imvar <- Details.loadInterfaces root details
+  mdeps <- readMVar imvar
+  mobjs <- readMVar omvar
+  case liftM2 (,) mdeps mobjs of
+    Nothing ->
+      error $ "Ran into some weird problem loading elm.json\nTry running `lamdera make` in: " ++ root
+
+    Just (deps, objs) ->
+      return $ Artifacts (toInterfaces deps) objs
 
 
 toInterfaces :: Map.Map ModuleName.Canonical I.DependencyInterface -> Map.Map ModuleName.Raw I.Interface

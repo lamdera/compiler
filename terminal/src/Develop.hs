@@ -264,7 +264,7 @@ compile path =
             do  details <- Task.eio Exit.ReactorBadDetails $ Details.load Reporting.silent scope root
                 artifacts <- Task.eio Exit.ReactorBadBuild $ Build.fromPaths Reporting.silent root details (NE.List path [])
 
-                Lamdera.PostCompile.check artifacts Exit.ReactorBadBuild
+                Lamdera.PostCompile.check details artifacts Exit.ReactorBadBuild
                 Lamdera.TypeHash.buildCheckHashes artifacts
 
                 javascript <- Task.mapError Exit.ReactorBadGenerate $ Generate.dev root details artifacts

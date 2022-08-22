@@ -8,27 +8,31 @@ import System.FilePath ((</>))
 
 import qualified Reporting.Exit as Exit
 import qualified Reporting.Task as Task
+import qualified Elm.Details as Details
 
 import qualified Ext.ElmPages
 import qualified Ext.Query.Interfaces
 import Lamdera
 
 
-check :: Build.Artifacts -> (Exit.BuildProblem -> b) -> Task.Task b ()
-check artifacts errorWrapper =
+check :: Details.Details -> Build.Artifacts -> (Exit.BuildProblem -> b) -> Task.Task b ()
+check details artifacts errorWrapper =
   Task.eio errorWrapper $ do
     root <- getProjectRoot
     hasElmPagesPageData <- fileContains (root </> ".elm-pages/Main.elm") "type PageData"
     if hasElmPagesPageData
-      then checkElmPagesTypes artifacts
+      then checkElmPagesTypes details artifacts
       else pure $ Right ()
 
 
 
-checkElmPagesTypes :: Build.Artifacts -> IO (Either Exit.BuildProblem ())
-checkElmPagesTypes artifacts = do
+checkElmPagesTypes :: Details.Details -> Build.Artifacts -> IO (Either Exit.BuildProblem ())
+checkElmPagesTypes details artifacts = do
+
+  sleep 2
+
   -- Unfortunately Build.Artifacts only contains project deps, we need the full tree...
-  interfaces <- Ext.Query.Interfaces.artifactsToFullInterfaces artifacts
+  interfaces <- Ext.Query.Interfaces.artifactsToFullInterfaces details artifacts
 
   case Ext.ElmPages.checkPageDataType interfaces of
     Right _  -> pure $ Right ()

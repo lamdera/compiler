@@ -119,7 +119,7 @@ runHelp root paths style (Flags debug optimize maybeOutput _ maybeDocs) =
                       builder <- toBuilder root details desiredMode artifacts
                       generate style target (Html.sandwich name builder) (NE.List name [])
 
-              Lamdera.PostCompile.check artifacts Exit.MakeCannotBuild
+              Lamdera.PostCompile.check details artifacts Exit.MakeCannotBuild
               pure res
 
 
