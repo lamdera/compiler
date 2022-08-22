@@ -19,7 +19,7 @@ suite = tests $
       io $ setEnv "LDEBUG" "1"
 
       actual <- catchOutput $
-        Lamdera.Compile.makeDev "./test/scenario-elm-pages-incompatible-wire/.elm-pages" "Main.elm"
+        Lamdera.Compile.makeDev "./test/scenario-elm-pages-incompatible-wire" ".elm-pages/Main.elm"
 
       io $ atomicPutStrLn $ T.unpack actual
 

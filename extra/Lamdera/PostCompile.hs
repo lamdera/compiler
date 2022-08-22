@@ -28,9 +28,6 @@ check details artifacts errorWrapper =
 
 checkElmPagesTypes :: Details.Details -> Build.Artifacts -> IO (Either Exit.BuildProblem ())
 checkElmPagesTypes details artifacts = do
-
-  sleep 2
-
   -- Unfortunately Build.Artifacts only contains project deps, we need the full tree...
   interfaces <- Ext.Query.Interfaces.artifactsToFullInterfaces details artifacts
 

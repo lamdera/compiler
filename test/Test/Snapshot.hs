@@ -104,7 +104,9 @@ suite = tests $
                       }
               , lastReceived : Time.Posix
               , subCounter : Int
-              , rpcRes : Result Http.Error Int
+              , rpcRes : Result Http.Error String
+              , rpcResJson : Result Http.Error String
+              , rpcResRaw : Result Http.Error String
               , backendTtype : Maybe Evergreen.V1.Fusion.TType
               , backendVal : Evergreen.V1.Fusion.VType
               , theta : Float
@@ -131,6 +133,21 @@ suite = tests $
               , benchDictRec : Dict.Dict String Record
               , allTypes : Evergreen.V1.WireTypes.AllTypes
               }
+
+
+          type ToBackend
+              = ClientJoin
+              | CounterIncremented
+              | CounterDecremented
+              | TestBackendHttp
+              | GrowBenchList Int
+              | GrowBenchDictRec Int
+              | ClearBenchList
+              | ClearBenchDictRec
+              | PatchedQuery Evergreen.V1.Fusion.FType
+              | FusionedQuery (List Evergreen.V1.Fusion.FType)
+              | MsgThatCausesACrash
+              | MsgThatCausesACrash2
 
 
           type FrontendMsg
@@ -160,25 +177,15 @@ suite = tests $
               | ExternalAlias Evergreen.V1.WireTypes.ExternalAliasTuple
               | TestRPC
               | TestBackendHttp_
-              | RPCRes (Result Http.Error Int)
+              | RPCResWire (Result Http.Error Int)
+              | RPCResJson (Result Http.Error String)
+              | RPCResRaw (Result Http.Error String)
               | EditLocal Evergreen.V1.Fusion.FType
               | FusionQuery (List Evergreen.V1.Fusion.FType)
               | ClickedSelectFile
               | FileSelected File.File
               | AnimationFrameDelta Float
-
-
-          type ToBackend
-              = ClientJoin
-              | CounterIncremented
-              | CounterDecremented
-              | TestBackendHttp
-              | GrowBenchList Int
-              | GrowBenchDictRec Int
-              | ClearBenchList
-              | ClearBenchDictRec
-              | PatchedQuery Evergreen.V1.Fusion.FType
-              | FusionedQuery (List Evergreen.V1.Fusion.FType)
+              | SendToBackend ToBackend
 
 
           type BackendMsg

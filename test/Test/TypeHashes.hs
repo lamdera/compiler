@@ -23,7 +23,7 @@ suite = tests
         project = "/Users/mario/lamdera/test/v1"
         expected =
           [text|
-            ["7f1c52d2bffce369e8b63a8cbb09ca699d27bf34","c6705c231ea1753f3bfc4e54191ddde603bac315","186ccb6692674723afc0bb8758845dc504d39982","aa8ea8fb987f5faa1826d1bf359529ea2fb17e51","a6b615774ea87d310518531985a84cb7b8c9bb75","a83d62ff8afc0e6ca4b0cd6a544d023ef6718807"]
+            ["a57ac2f8269a6929598785f3a9789cdb7c528e8e","c6705c231ea1753f3bfc4e54191ddde603bac315","3fbceb448ef53c7bbb655e6d49d94c927cc3caa0","6bf58721649b39b399ac7ec2f6b162baceae03d6","a6b615774ea87d310518531985a84cb7b8c9bb75","a83d62ff8afc0e6ca4b0cd6a544d023ef6718807"]
           |]
 
       liftIO $ withDebug $ Dir.withCurrentDirectory project $ do
