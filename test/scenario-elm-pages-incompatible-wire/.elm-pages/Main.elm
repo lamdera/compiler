@@ -1,37 +1,47 @@
 port module Main exposing (..)
 
 import Api
-import ApiRoute
-import Browser.Navigation
 import Bytes exposing (Bytes)
 import Bytes.Decode
 import Bytes.Encode
-import DataSource exposing (DataSource)
-import Head
-import Html exposing (Html)
+import Dict
+import Effect exposing (Effect)
+import ErrorPage exposing (ErrorPage)
 import HtmlPrinter
+import Lamdera.Wire3
+import Pages.FormState
+import Pages.Internal.String
+import Pages.Internal.Platform.ToJsPayload
+import Pages.Internal.ResponseSketch exposing (ResponseSketch)
+import Pages.Msg
+import Server.Response
+import ApiRoute
+import Browser.Navigation
+import Route exposing (Route)
 import Http
 import Json.Decode
 import Json.Encode
-import Lamdera.Wire3
 import Pages.Flags
-import Pages.Internal.NotFoundReason
+import Pages.Fetcher
 import Pages.Internal.Platform
-import Pages.Internal.Platform.ToJsPayload
-import Pages.Internal.ResponseSketch exposing (ResponseSketch)
-import Pages.Internal.RoutePattern
-import Pages.Internal.String
-import Pages.PageUrl exposing (PageUrl)
-import Path exposing (Path)
-import QueryParams
-import Route exposing (Route)
-import Route.Index
-import Server.Response
 import Shared
 import Site
+import Head
+import Html exposing (Html)
+import Pages.Internal.NotFoundReason
+import Pages.Transition
+import Pages.PageUrl exposing (PageUrl)
+import Path exposing (Path)
+import Pages.Internal.RoutePattern
+import Pages.ProgramConfig
+import Url
+import DataSource exposing (DataSource)
+import QueryParams
 import Task exposing (Task)
 import Url exposing (Url)
 import View
+
+import Route.Index
 
 
 type alias Model =
@@ -52,7 +62,11 @@ type alias Model =
 
 type PageModel
     = ModelIndex Route.Index.Model
+
+    | ModelErrorPage____ ErrorPage.Model
     | NotFound
+
+
 
 
 type Msg
@@ -66,48 +80,97 @@ type Msg
         , fragment : Maybe String
         , metadata : Maybe Route
         }
+    | MsgErrorPage____ ErrorPage.Msg
     | MsgIndex Route.Index.Msg
+
 
 
 type PageData
     = Data404NotFoundPage____
+    | DataErrorPage____ ErrorPage
     | DataIndex Route.Index.Data
 
 
+
+type ActionData
+    = 
+    ActionDataIndex Route.Index.ActionData
+
+
+
 view :
-    { path : Path
+    Pages.FormState.PageFormState
+    -> List Pages.Transition.FetcherState
+    -> Maybe Pages.Transition.Transition
+    -> { path : Path
     , route : Maybe Route
     }
     -> Maybe PageUrl
     -> Shared.Data
     -> PageData
+    -> Maybe ActionData
     ->
-        { view : Model -> { title : String, body : Html Msg }
+        { view : Model -> { title : String, body : Html (Pages.Msg.Msg Msg) }
         , head : List Head.Tag
         }
-view page maybePageUrl globalData pageData =
+view pageFormState fetchers transition page maybePageUrl globalData pageData actionData =
     case ( page.route, pageData ) of
-        ( Just Route.Index, DataIndex data ) ->
+        ( _, DataErrorPage____ data ) ->
             { view =
                 \model ->
                     case model.page of
-                        ModelIndex subModel ->
-                            Route.Index.route.view
-                                maybePageUrl
-                                model.global
-                                subModel
-                                { data = data
-                                , sharedData = globalData
-                                , routeParams = {}
-                                , path = page.path
-                                }
-                                |> View.map MsgIndex
-                                |> Shared.template.view globalData page model.global MsgGlobal
+                        ModelErrorPage____ subModel ->
+                            ErrorPage.view data subModel
+                                --maybePageUrl
+                                --model.global
+                                ----subModel
+                                --{ data = data
+                                --, sharedData = globalData
+                                --, routeParams = {}
+                                --, path = page.path
+                                --}
+                                |> View.map (MsgErrorPage____ >> Pages.Msg.UserMsg)
+                                |> Shared.template.view globalData page model.global (MsgGlobal >> Pages.Msg.UserMsg)
 
                         _ ->
                             { title = "Model mismatch", body = Html.text <| "Model mismatch" }
             , head = []
             }
+
+
+
+        ( Just Route.Index, DataIndex data ) ->
+                  let
+                      actionDataOrNothing =
+                          case actionData of
+                              Just (ActionDataIndex justActionData) -> Just justActionData
+                              _ -> Nothing
+                  in
+                  { view =
+                      \model ->
+                          case model.page of
+                              ModelIndex subModel ->
+                                  Route.Index.route.view
+                                      maybePageUrl
+                                      model.global
+                                      subModel
+                                      { data = data
+                                      , sharedData = globalData
+                                      , routeParams = {}
+                                      , action = actionDataOrNothing
+                                      , path = page.path
+                                      , submit = Pages.Fetcher.submit Route.Index.w3_decode_ActionData
+                                      , transition = transition
+                                      , fetchers = fetchers
+                                      , pageFormState = pageFormState
+                                      }
+                                      |> View.map (Pages.Msg.map MsgIndex)
+                                      |> Shared.template.view globalData page model.global (MsgGlobal >> Pages.Msg.UserMsg)
+
+                              _ ->
+                                  { title = "Model mismatch", body = Html.text <| "Model mismatch" }
+                  , head = []
+                  }
 
         _ ->
             { head = []
@@ -115,11 +178,13 @@ view page maybePageUrl globalData pageData =
                 \_ ->
                     { title = "Page not found"
                     , body =
-                        Html.div []
+                            Html.div [] 
                             [ Html.text "This page could not be found."
                             ]
                     }
+
             }
+
 
 
 init :
@@ -127,6 +192,7 @@ init :
     -> Pages.Flags.Flags
     -> Shared.Data
     -> PageData
+    -> Maybe ActionData
     -> Maybe Browser.Navigation.Key
     ->
         Maybe
@@ -138,53 +204,99 @@ init :
             , metadata : Maybe Route
             , pageUrl : Maybe PageUrl
             }
-    -> ( Model, Cmd Msg )
-init currentGlobalModel userFlags sharedData pageData navigationKey maybePagePath =
+    -> ( Model, Effect Msg )
+init currentGlobalModel userFlags sharedData pageData actionData navigationKey maybePagePath =
     let
         ( sharedModel, globalCmd ) =
-            currentGlobalModel |> Maybe.map (\m -> ( m, Cmd.none )) |> Maybe.withDefault (Shared.template.init navigationKey userFlags maybePagePath)
+            currentGlobalModel |> Maybe.map (\m -> ( m, Effect.none )) |> Maybe.withDefault (Shared.template.init userFlags maybePagePath)
 
         ( templateModel, templateCmd ) =
-            case ( Maybe.map2 Tuple.pair (maybePagePath |> Maybe.andThen .metadata) (maybePagePath |> Maybe.map .path), pageData ) of
+            case ( ( Maybe.map2 Tuple.pair (maybePagePath |> Maybe.andThen .metadata) (maybePagePath |> Maybe.map .path) ), pageData ) of
                 ( Just ( Route.Index, justPath ), DataIndex thisPageData ) ->
+                    let
+                        actionDataOrNothing =
+                            case actionData of
+                                Just (ActionDataIndex justActionData) -> Just justActionData
+                                _ -> Nothing
+                    in
                     Route.Index.route.init
                         (Maybe.andThen .pageUrl maybePagePath)
                         sharedModel
                         { data = thisPageData
                         , sharedData = sharedData
+                        , action = actionDataOrNothing
                         , routeParams = {}
                         , path = justPath.path
+                        , submit = Pages.Fetcher.submit Route.Index.w3_decode_ActionData
+                        , transition = Nothing -- TODO is this safe, will this always be Nothing?
+                        , fetchers = []
+                        , pageFormState = Dict.empty
                         }
-                        |> Tuple.mapBoth ModelIndex (Cmd.map MsgIndex)
+                        |> Tuple.mapBoth ModelIndex (Effect.map MsgIndex)
 
                 _ ->
-                    ( NotFound, Cmd.none )
+                    (case pageData of
+                        DataErrorPage____ errorPage ->
+                            errorPage
+
+                        _ ->
+                            ErrorPage.notFound
+                    )
+                        |> ErrorPage.init
+                        |> Tuple.mapBoth ModelErrorPage____ (Effect.map MsgErrorPage____)
     in
     ( { global = sharedModel
       , page = templateModel
       , current = maybePagePath
       }
-    , Cmd.batch
+    , Effect.batch
         [ templateCmd
-        , globalCmd |> Cmd.map MsgGlobal
+        , globalCmd |> Effect.map MsgGlobal
         ]
     )
 
 
-update : Shared.Data -> PageData -> Maybe Browser.Navigation.Key -> Msg -> Model -> ( Model, Cmd Msg )
-update sharedData pageData navigationKey msg model =
+
+update : Pages.FormState.PageFormState  -> List Pages.Transition.FetcherState -> Maybe Pages.Transition.Transition -> Shared.Data -> PageData -> Maybe Browser.Navigation.Key -> Msg -> Model -> ( Model, Effect Msg )
+update pageFormState fetchers transition sharedData pageData navigationKey msg model =
     case msg of
+        MsgErrorPage____ msg_ ->
+            let
+                ( updatedPageModel, pageCmd ) =
+                    case ( model.page, pageData ) of
+                        ( ModelErrorPage____ pageModel, DataErrorPage____ thisPageData ) ->
+                            ErrorPage.update
+                                -- TODO pass in url or no?
+                                --{ data = thisPageData
+                                --, sharedData = sharedData
+                                --, routeParams = {}
+                                --, path = justPage.path
+                                --}
+                                thisPageData
+                                msg_
+                                pageModel
+                                --model.global -- TODO pass in Shared.Model
+                                |> Tuple.mapBoth ModelErrorPage____ (Effect.map MsgErrorPage____)
+
+                        _ ->
+                            ( model.page, Effect.none )
+            in
+            ( { model | page = updatedPageModel }
+            , pageCmd
+            )
+
+
         MsgGlobal msg_ ->
             let
                 ( sharedModel, globalCmd ) =
                     Shared.template.update msg_ model.global
             in
             ( { model | global = sharedModel }
-            , globalCmd |> Cmd.map MsgGlobal
+            , globalCmd |> Effect.map MsgGlobal
             )
 
         OnPageChange record ->
-            (init (Just model.global) Pages.Flags.PreRenderFlags sharedData pageData navigationKey <|
+            (init (Just model.global) Pages.Flags.PreRenderFlags sharedData pageData Nothing navigationKey <|
                 Just
                     { path =
                         { path = record.path
@@ -223,10 +335,12 @@ update sharedData pageData navigationKey msg model =
                                 ( { updatedModel
                                     | global = updatedGlobalModel
                                   }
-                                , Cmd.batch [ cmd, Cmd.map MsgGlobal globalCmd ]
+                                , Effect.batch [ cmd, Effect.map MsgGlobal globalCmd ]
                                 )
                    )
 
+
+        
         MsgIndex msg_ ->
             let
                 ( updatedPageModel, pageCmd, ( newGlobalModel, newGlobalCmd ) ) =
@@ -236,51 +350,61 @@ update sharedData pageData navigationKey msg model =
                                 pageUrl
                                 { data = thisPageData
                                 , sharedData = sharedData
+                                , action = Nothing
                                 , routeParams = {}
                                 , path = justPage.path
+                                , submit = Pages.Fetcher.submit Route.Index.w3_decode_ActionData
+                                , transition = transition
+                                , fetchers = fetchers
+                                , pageFormState = pageFormState
                                 }
-                                navigationKey
                                 msg_
                                 pageModel
                                 model.global
-                                |> mapBoth ModelIndex (Cmd.map MsgIndex)
+                                |> mapBoth ModelIndex (Effect.map MsgIndex)
                                 |> (\( a, b, c ) ->
                                         case c of
                                             Just sharedMsg ->
                                                 ( a, b, Shared.template.update sharedMsg model.global )
 
                                             Nothing ->
-                                                ( a, b, ( model.global, Cmd.none ) )
+                                                ( a, b, ( model.global, Effect.none ) )
                                    )
 
                         _ ->
-                            ( model.page, Cmd.none, ( model.global, Cmd.none ) )
+                            ( model.page, Effect.none, ( model.global, Effect.none ) )
             in
             ( { model | page = updatedPageModel, global = newGlobalModel }
-            , Cmd.batch [ pageCmd, newGlobalCmd |> Cmd.map MsgGlobal ]
+            , Effect.batch [ pageCmd, newGlobalCmd |> Effect.map MsgGlobal ]
             )
+
 
 
 templateSubscriptions : Maybe Route -> Path -> Model -> Sub Msg
 templateSubscriptions route path model =
     case ( model.page, route ) of
+        
         ( ModelIndex templateModel, Just Route.Index ) ->
             Route.Index.route.subscriptions
-                Nothing
-                -- TODO wire through value
+                Nothing -- TODO wire through value
                 {}
                 path
                 templateModel
                 model.global
                 |> Sub.map MsgIndex
 
+
+
         _ ->
             Sub.none
 
 
-main : Pages.Internal.Platform.Program Model Msg PageData Shared.Data
+main : Pages.Internal.Platform.Program Model Msg PageData ActionData Shared.Data ErrorPage
 main =
-    Pages.Internal.Platform.application
+    Pages.Internal.Platform.application config
+
+config : Pages.ProgramConfig.ProgramConfig Msg Model (Maybe Route) PageData ActionData Shared.Data (Effect Msg) mappedMsg ErrorPage
+config =
         { init = init Nothing
         , urlToRoute = Route.urlToRoute
         , routeToPath = \route -> route |> Maybe.map Route.routeToPath |> Maybe.withDefault []
@@ -301,18 +425,35 @@ main =
         , fromJsPort = fromJsPort identity
         , gotBatchSub = Sub.none
         , data = dataForRoute
+        , action = action
+        , onActionData = onActionData
         , sharedData = Shared.template.data
         , apiRoutes = \_ -> []
         , pathPatterns = routePatterns3
-        , basePath = []
-        , fetchPageData = fetchPageData
+        , basePath = [  ]
         , sendPageData = sendPageData
         , byteEncodePageData = byteEncodePageData
         , byteDecodePageData = byteDecodePageData
         , hotReloadData = hotReloadData identity
         , encodeResponse = encodeResponse
         , decodeResponse = decodeResponse
+        , encodeAction = encodeActionData
+        , cmdToEffect = Effect.fromCmd
+        , perform = Effect.perform
+        , errorStatusCode = ErrorPage.statusCode
+        , notFoundPage = ErrorPage.notFound
+        , internalError = ErrorPage.internalError
+        , errorPageToData = DataErrorPage____
+        , notFoundRoute = Nothing
         }
+
+onActionData actionData =
+    case actionData of
+        ActionDataIndex thisActionData ->
+            Route.Index.route.onAction |> Maybe.map (\onAction -> onAction thisActionData) |> Maybe.map MsgIndex
+
+
+
 
 
 globalHeadTags : DataSource (List Head.Tag)
@@ -326,14 +467,14 @@ globalHeadTags =
         |> DataSource.map List.concat
 
 
-encodeResponse : ResponseSketch PageData Shared.Data -> Bytes.Encode.Encoder
+encodeResponse : ResponseSketch PageData ActionData Shared.Data -> Bytes.Encode.Encoder
 encodeResponse =
-    Pages.Internal.ResponseSketch.w3_encode_ResponseSketch w3_encode_PageData Shared.w3_encode_Data
+    Pages.Internal.ResponseSketch.w3_encode_ResponseSketch w3_encode_PageData w3_encode_ActionData Shared.w3_encode_Data
 
 
-decodeResponse : Bytes.Decode.Decoder (ResponseSketch PageData Shared.Data)
+decodeResponse : Bytes.Decode.Decoder (ResponseSketch PageData ActionData Shared.Data)
 decodeResponse =
-    Pages.Internal.ResponseSketch.w3_decode_ResponseSketch w3_decode_PageData Shared.w3_decode_Data
+    Pages.Internal.ResponseSketch.w3_decode_ResponseSketch w3_decode_PageData w3_decode_ActionData Shared.w3_decode_Data
 
 
 port hotReloadData : (Bytes -> msg) -> Sub msg
@@ -342,6 +483,10 @@ port hotReloadData : (Bytes -> msg) -> Sub msg
 byteEncodePageData : PageData -> Bytes.Encode.Encoder
 byteEncodePageData pageData =
     case pageData of
+        DataErrorPage____ thisPageData ->
+            ErrorPage.w3_encode_ErrorPage thisPageData
+
+
         Data404NotFoundPage____ ->
             Bytes.Encode.unsignedInt8 0
 
@@ -349,78 +494,50 @@ byteEncodePageData pageData =
             Route.Index.w3_encode_Data thisPageData
 
 
+encodeActionData : ActionData -> Bytes.Encode.Encoder
+encodeActionData actionData =
+    case actionData of
+        ActionDataIndex thisActionData ->
+            Route.Index.w3_encode_ActionData thisActionData
+
+
+
 port sendPageData : Pages.Internal.Platform.ToJsPayload.NewThingForPort -> Cmd msg
-
-
-fetchPageData : Url -> Maybe { contentType : String, body : String } -> Task Http.Error ( Url, ResponseSketch PageData Shared.Data )
-fetchPageData url details =
-    Http.task
-        { method = details |> Maybe.map (\_ -> "POST") |> Maybe.withDefault "GET"
-        , headers = []
-        , url =
-            url.path
-                |> Pages.Internal.String.chopForwardSlashes
-                |> String.split "/"
-                |> List.filter ((/=) "")
-                |> (\l -> l ++ [ "content.dat" ])
-                |> String.join "/"
-                |> String.append "/"
-        , body = details |> Maybe.map (\justDetails -> Http.stringBody justDetails.contentType justDetails.body) |> Maybe.withDefault Http.emptyBody
-        , resolver =
-            Http.bytesResolver
-                (\response ->
-                    case response of
-                        Http.BadUrl_ url_ ->
-                            Err (Http.BadUrl url_)
-
-                        Http.Timeout_ ->
-                            Err Http.Timeout
-
-                        Http.NetworkError_ ->
-                            Err Http.NetworkError
-
-                        Http.BadStatus_ metadata _ ->
-                            Err (Http.BadStatus metadata.statusCode)
-
-                        Http.GoodStatus_ _ body ->
-                            body
-                                |> decodeBytes decodeResponse
-                                |> Result.mapError Http.BadBody
-                                |> Result.map (\okResponse -> ( url, okResponse ))
-                )
-        , timeout = Nothing
-        }
-        |> Task.andThen
-            (\( _, response ) ->
-                case response of
-                    Pages.Internal.ResponseSketch.Redirect location ->
-                        -- TODO what if it redirects to external URL? Need to handle that somehow, or is it an error?
-                        fetchPageData { url | path = location } Nothing
-
-                    _ ->
-                        Task.succeed ( url, response )
-            )
 
 
 byteDecodePageData : Maybe Route -> Bytes.Decode.Decoder PageData
 byteDecodePageData route =
     case route of
-        Nothing ->
-            Bytes.Decode.fail
-
-        Just Route.Index ->
+        Nothing -> Bytes.Decode.fail
+        (Just Route.Index) ->
             Route.Index.w3_decode_Data |> Bytes.Decode.map DataIndex
 
 
-dataForRoute : Maybe Route -> DataSource (Server.Response.Response PageData)
+
+
+
+dataForRoute : Maybe Route -> DataSource (Server.Response.Response PageData ErrorPage)
 dataForRoute route =
     case route of
         Nothing ->
-            DataSource.succeed (Server.Response.render Data404NotFoundPage____ |> Server.Response.withStatusCode 404)
+            DataSource.succeed (Server.Response.render Data404NotFoundPage____ |> Server.Response.withStatusCode 404 |> Server.Response.mapError never )
 
         Just Route.Index ->
-            Route.Index.route.data {}
-                |> DataSource.map (Server.Response.map DataIndex)
+            Route.Index.route.data {} 
+                 |> DataSource.map (Server.Response.map DataIndex)
+              
+
+action : Maybe Route -> DataSource (Server.Response.Response ActionData ErrorPage)
+action route =
+    case route of
+        Nothing ->
+            DataSource.succeed ( Server.Response.plainText "TODO" )
+
+        Just Route.Index ->
+            Route.Index.route.action {} 
+                 |> DataSource.map (Server.Response.map ActionDataIndex)
+              
+
 
 
 handleRoute : Maybe Route -> DataSource (Maybe Pages.Internal.NotFoundReason.NotFoundReason)
@@ -429,8 +546,8 @@ handleRoute maybeRoute =
         Nothing ->
             DataSource.succeed Nothing
 
-        Just Route.Index ->
-            Route.Index.route.handleRoute { moduleName = [ "Index" ], routePattern = { segments = [], ending = Nothing } } (\param -> []) {}
+        Just (Route.Index) ->
+            Route.Index.route.handleRoute { moduleName = [ "Index" ], routePattern = { segments = [  ], ending = Nothing } } (\param -> [  ]) {}
 
 
 stringToString : String -> String
@@ -470,6 +587,8 @@ maybeToString maybeString =
             "Nothing"
 
 
+
+
 routePatterns : ApiRoute.ApiRoute ApiRoute.Response
 routePatterns =
     ApiRoute.succeed
@@ -481,12 +600,12 @@ routePatterns =
                     ]
             )
             [ { kind = Route.Index.route.kind, pathPattern = "/" }
+          
             ]
-            |> (\json -> DataSource.succeed (Json.Encode.encode 0 json))
+            |> (\json -> DataSource.succeed ( Json.Encode.encode 0 json ))
         )
         |> ApiRoute.literal "route-patterns.json"
         |> ApiRoute.single
-
 
 apiPatterns : ApiRoute.ApiRoute ApiRoute.Response
 apiPatterns =
@@ -494,10 +613,11 @@ apiPatterns =
         apiPatternsString =
             Api.routes getStaticRoutes (\_ -> "")
                 |> List.map ApiRoute.toJson
+
     in
     ApiRoute.succeed
         (Json.Encode.list identity apiPatternsString
-            |> (\json -> DataSource.succeed (Json.Encode.encode 0 json))
+            |> (\json -> DataSource.succeed ( Json.Encode.encode 0 json ))
         )
         |> ApiRoute.literal "api-patterns.json"
         |> ApiRoute.single
@@ -511,9 +631,8 @@ routePatterns2 =
 
 routePatterns3 : List Pages.Internal.RoutePattern.RoutePattern
 routePatterns3 =
-    [ { segments = [], ending = Nothing }
+    [ { segments = [  ], ending = Nothing }
     ]
-
 
 getStaticRoutes : DataSource (List Route)
 getStaticRoutes =
@@ -554,9 +673,7 @@ pathsToGenerateHandler =
 
 port toJsPort : Json.Encode.Value -> Cmd msg
 
-
 port fromJsPort : (Json.Decode.Value -> msg) -> Sub msg
-
 
 port gotBatchSub : (Json.Decode.Value -> msg) -> Sub msg
 
@@ -565,7 +682,6 @@ mapBoth : (a -> b) -> (c -> d) -> ( a, c, e ) -> ( b, d, e )
 mapBoth fnA fnB ( a, b, c ) =
     ( fnA a, fnB b, c )
 
-
 encodeBytes : (b -> Bytes.Encode.Encoder) -> b -> Bytes
 encodeBytes bytesEncoder items =
     Bytes.Encode.encode (bytesEncoder items)
@@ -573,5 +689,6 @@ encodeBytes bytesEncoder items =
 
 decodeBytes : Bytes.Decode.Decoder a -> Bytes -> Result String a
 decodeBytes bytesDecoder items =
-    Lamdera.Wire3.bytesDecodeStrict bytesDecoder items
+    Bytes.Decode.decode bytesDecoder items
+    -- Lamdera.Wire3.bytesDecodeStrict bytesDecoder items
         |> Result.fromMaybe "Decoding error"

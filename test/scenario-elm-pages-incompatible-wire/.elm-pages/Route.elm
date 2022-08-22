@@ -1,8 +1,8 @@
-module Route exposing (baseUrlAsPath, Route(..), link, matchers, routeToPath, toLink, urlToRoute, toPath)
+module Route exposing (baseUrlAsPath, Route(..), link, matchers, routeToPath, toLink, urlToRoute, toPath, redirectTo, toString)
 
 {-|
 
-@docs Route, link, matchers, routeToPath, toLink, urlToRoute, toPath
+@docs Route, link, matchers, routeToPath, toLink, urlToRoute, toPath, redirectTo, toString, baseUrlAsPath
 
 -}
 
@@ -33,6 +33,7 @@ baseUrl =
     "/"
 
 
+{-| -}
 baseUrlAsPath : List String
 baseUrlAsPath =
     baseUrl
@@ -92,8 +93,8 @@ toLink toAnchorTag route =
 
 
 {-| -}
-link : Route -> List (Attribute msg) -> List (Html msg) -> Html msg
-link route attributes children =
+link : List (Attribute msg) -> List (Html msg) -> Route -> Html msg
+link attributes children route =
     toLink
         (\anchorAttrs ->
             Html.a
@@ -101,3 +102,11 @@ link route attributes children =
                 children
         )
         route
+
+
+{-| -}
+redirectTo : Route -> Server.Response.Response data error
+redirectTo route =
+    route
+        |> toString
+        |> Server.Response.temporaryRedirect

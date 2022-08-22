@@ -6,9 +6,11 @@ import qualified Data.Text as T
 
 import EasyTest
 import Test.Helpers
+import qualified System.Directory as Dir
 
-import Lamdera
+import Lamdera hiding (atomicPutStrLn)
 import Lamdera.Compile
+import Ext.Common
 
 all = EasyTest.run suite
 
@@ -16,12 +18,17 @@ all = EasyTest.run suite
 suite :: Test ()
 suite = tests $
   [ scope "isWireCompatible" $ do
-      io $ setEnv "LDEBUG" "1"
+      io $ do
+        let p = "./test/scenario-elm-pages-incompatible-wire"
+        Dir.setCurrentDirectory p
+        setEnv "LDEBUG" "1"
+        bash $ "npm i"
+        bash $ "npm run build"
 
       actual <- catchOutput $
-        Lamdera.Compile.makeDev "./test/scenario-elm-pages-incompatible-wire" ".elm-pages/Main.elm"
+        Lamdera.Compile.makeDev "./" ".elm-pages/Main.elm"
 
-      io $ atomicPutStrLn $ T.unpack actual
+      io $ Dir.setCurrentDirectory "../.."
 
       expectTextContains actual
         "Route.Index.Data.unserialisableValue must not contain functions"

@@ -4,7 +4,7 @@
         "app",
         "src",
         ".elm-pages",
-        "../../../elm-pages/src"
+        "elm-pages/src"
     ],
     "elm-version": "0.19.1",
     "dependencies": {
