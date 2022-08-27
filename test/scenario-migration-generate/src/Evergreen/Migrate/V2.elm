@@ -20,6 +20,14 @@ backendModel old =
     , unchangedAllTypes = old.unchangedAllTypes |> migrate_External_AllTypes
     , unchangedResult = old.unchangedResult
     , unchangedDict = old.unchangedDict
+    , unchangedAnonymousRecord =
+        old.unchangedAnonymousRecord
+            |> (\rec ->
+                    { name = rec.name
+                    , age = rec.age
+                    , userType = rec.userType |> migrate_Types_UserType
+                    }
+               )
     , changedMaybe = old.changedMaybe |> Maybe.map migrate_Types_UserType
     , changedList = old.changedList |> List.map migrate_Types_UserType
     , changedSet = old.changedSet |> Set.map Unimplemented -- Type changed from `Set Int` to `Set String`
@@ -138,6 +146,12 @@ migrate_Types_UserType old =
 
         Evergreen.V1.Types.UserResultPBoth p0 ->
             Evergreen.V2.Types.UserResultPBoth (p0 |> Result.mapError migrate_Types_CustomType |> Result.map migrate_External_ExternalUnion)
+
+        Evergreen.V1.Types.UserAnonymous p0 ->
+            Evergreen.V2.Types.UserAnonymous
+                { record = p0.record
+                , userType = p0.userType |> migrate_Types_UserType
+                }
 
         notices ->
             {- `UserAdded` added in V2.

@@ -12,6 +12,7 @@ type alias BackendModel =
     , unchangedAllTypes : Evergreen.V1.External.AllTypes
     , unchangedResult : Result Int String
     , unchangedDict : Dict Int String
+    , unchangedAnonymousRecord : { name : String, age : Int, userType : UserType }
     , changedMaybe : Maybe UserType
     , changedList : List UserType
     , changedSet : Set Int
@@ -34,6 +35,7 @@ type UserType
     | UserResultP1 (Result CustomType String)
     | UserResultP2 (Result Int CustomType)
     | UserResultPBoth (Result CustomType Evergreen.V1.External.ExternalUnion)
+    | UserAnonymous { record : String, userType : UserType }
 
 
 type CustomType

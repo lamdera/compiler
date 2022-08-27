@@ -224,8 +224,6 @@ Executable lamdera
         Lamdera.Constrain
         Lamdera.Evergreen.MigrationGenerator
         Lamdera.Evergreen.MigrationGeneratorUnion
-        Lamdera.Evergreen.MigrationGeneratorAlias
-        Lamdera.Evergreen.MigrationGeneratorType
         Lamdera.Evergreen.MigrationGeneratorHelpers
         Lamdera.Evergreen.MigrationHarness
         Lamdera.Evergreen.Snapshot

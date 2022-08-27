@@ -38,9 +38,6 @@ import qualified Ext.Query.Interfaces
 import qualified Lamdera.Wire3.Helpers
 import StandaloneInstances
 
-
-import Lamdera.Evergreen.MigrationGeneratorUnion
-import Lamdera.Evergreen.MigrationGeneratorAlias
 import Lamdera.Evergreen.MigrationGeneratorHelpers
 
 
@@ -70,7 +67,7 @@ generateFor oldVersion newVersion interfaces iface_Types = do
     efts :: MigrationDefinitions
     efts =
       lamderaTypes
-        & fmap (\t -> (t, ftByName oldVersion newVersion interfaces moduleName t iface_Types))
+        & fmap (\t -> (t, migrationDefinitionByName oldVersion newVersion interfaces moduleName t iface_Types))
         & foldl (\acc (t, ft) -> mergeMigrationDefinitions acc ft) Map.empty
         -- a little weird but ensures current version of types, our entry point, is added to final migration imports...
         & addImport moduleName moduleName
@@ -83,8 +80,8 @@ generateFor oldVersion newVersion interfaces iface_Types = do
     <> allMigrations efts
 
 
-ftByName :: Int -> Int -> Interfaces -> ModuleName.Canonical -> N.Name -> Interface.Interface -> MigrationDefinitions
-ftByName oldVersion newVersion interfaces newModule typeName interface = do
+migrationDefinitionByName :: Int -> Int -> Interfaces -> ModuleName.Canonical -> N.Name -> Interface.Interface -> MigrationDefinitions
+migrationDefinitionByName oldVersion newVersion interfaces newModule typeName interface = do
   let
     recursionIdentifier :: (ModuleName.Canonical, N.Name)
     recursionIdentifier = (newModule, typeName)
@@ -96,7 +93,7 @@ ftByName oldVersion newVersion interfaces newModule typeName interface = do
   case findDef (canModuleName newModule) typeName interfaces of
     Just (Alias alias) -> do
       let
-        diffableAlias = aliasToFt oldVersion newVersion newModule identifier typeName interfaces recursionSet alias
+        diffableAlias = aliasToFt oldVersion newVersion newModule identifier typeName interfaces recursionSet alias "old"
         (subt, imps, subft) = diffableAlias
       subft & addImports newModule imps
 
@@ -199,6 +196,35 @@ migrateUnion author pkg oldUnion newUnion params tvarMap oldVersion newVersion t
         & flip (++) (newConstructorWarnings typeName moduleScopeOld newUnion oldUnion newVersion)
         & T.concat
 
+    newConstructorWarnings :: N.Name -> Text -> Can.Union -> Can.Union -> Int -> [Text]
+    newConstructorWarnings typeName moduleScope newUnion oldUnion newVersion =
+      Can._u_alts newUnion
+        & filterMap (\(Can.Ctor newConstructor index int newParams) -> do
+          case Can._u_alts oldUnion & List.find (\(Can.Ctor oldConstructor _ _ _) -> newConstructor == oldConstructor ) of
+            Nothing ->
+              let params =
+                    if length newParams > 0
+                      then " " <> (T.intercalate " " (fmap asTypeName newParams))
+                      else ""
+              in
+              -- This constructor is missing a match in the old type, warn the user this new constructor exists
+              Just $ T.concat [
+                "        {- `", N.toText newConstructor, params, "` added in V", show_ newVersion, ".\n",
+                "        This is just a reminder in case migrating some subset of the old data to this new value was important.\n",
+                "        See https://lamdera.com/tips/modified-custom-type for more info. -}\n"
+                ]
+            Just _ ->
+              -- This constructor has a match in the old type, so skip it
+              Nothing
+        )
+        & (\notices ->
+              if length notices > 0 then
+                ["    notices ->\n" <>
+                "        " <> T.concat notices <> "\n" <>
+                "        Unimplemented"]
+              else
+                []
+          )
   in
   -- debug $
   ( migration
@@ -232,19 +258,8 @@ genOldConstructorMigrationDefinitions oldModuleName moduleScope typeName interfa
 
 genOldConstructorFt oldModuleName moduleScope typeName interfaces tvarMap recursionSet localScope newVersion oldVersion newUnion oldUnion oldConstructor oldParams =
   let
-    cparams :: [Migration]
-    cparams =
-      -- @TODO we need to include new params here as well?
-      -- yes – but we get them from the paramMigrations instead.
-      -- so @TODO remove this block entirely once rewritten
-      oldParams &
-        fmap (\param ->
-          canonicalToFt oldVersion newVersion localScope interfaces recursionSet param nothingTODO tvarMap
-          )
-
     newCtorM :: Maybe Can.Ctor
     newCtorM = Can._u_alts newUnion & List.find (\(Can.Ctor newConstructor _ _ _) -> newConstructor == oldConstructor )
-
 
     migration_ :: Migration
     migration_ =
@@ -258,7 +273,7 @@ genOldConstructorFt oldModuleName moduleScope typeName interfaces tvarMap recurs
                   case (paramOldM, paramNewM) of
                     (Just paramOld, Just paramNew) ->
                       let ft@(migration, imps, subft) =
-                            canonicalToFt oldVersion newVersion localScope interfaces recursionSet paramNew (Just paramOld) tvarMap
+                            canonicalToFt oldVersion newVersion localScope interfaces recursionSet paramNew (Just paramOld) tvarMap ("p" <> show_ i)
 
                           appliedMigration =
                             if paramOld == paramNew then
@@ -294,7 +309,12 @@ genOldConstructorFt oldModuleName moduleScope typeName interfaces tvarMap recurs
                           & fmap selectMigrationText
                           & (\paramMigrations -> T.concat [ moduleScope, N.toText newConstructor, " ", (paramMigrations & T.intercalate " ") ])
                   in
-                  T.concat ["    ", N.toText oldModuleName, ".", N.toText oldConstructor, " ", (imap (\i _ -> "p" <> show_ i) oldParams & T.intercalate " "), " -> ", migration, "\n"]
+                  T.concat
+                      [ "    ", N.toText oldModuleName, ".", N.toText oldConstructor, " ", (imap (\i _ -> "p" <> show_ i) oldParams & T.intercalate " ")
+                      , " -> \n"
+                      , migration & T.lines & fmap (\v -> T.concat ["    ", v ]) & T.unlines
+                      , "\n"
+                      ]
                 else
                   T.concat ["    ", N.toText oldModuleName, ".", N.toText oldConstructor, " -> ", moduleScope, N.toText newConstructor, "\n"]
               , paramMigrations
@@ -308,91 +328,28 @@ genOldConstructorFt oldModuleName moduleScope typeName interfaces tvarMap recurs
         fullMigration
 
       Nothing ->
+        let
+          oldConstructorRemovedMessage :: Text
+          oldConstructorRemovedMessage =
+            T.concat [
+              " ->\n",
+              "           {- `", N.toText oldConstructor, "` removed or renamed in V", show_ newVersion, " so I couldn't figure out how to migrate it.\n",
+              "           I need you to decide what happens to this ", N.toText oldModuleName, ".", N.toText oldConstructor, " value in a migration.\n",
+              "           See https://lamdera.com/tips/modified-custom-type for more info. -}\n",
+              "           Unimplemented\n"
+            ]
+        in
         ( -- No old constructor with same name, so this is a new/renamed constructor
           if List.length oldParams > 0
             then
-              T.concat ["    ", N.toText oldModuleName, ".", N.toText oldConstructor, " ", (imap (\i _ -> "p" <> show_ i) oldParams & T.intercalate " "), (oldConstructorRemovedMessage oldConstructor moduleScope typeName oldModuleName newVersion)]
+              T.concat ["    ", N.toText oldModuleName, ".", N.toText oldConstructor, " ", (imap (\i _ -> "p" <> show_ i) oldParams & T.intercalate " "), oldConstructorRemovedMessage]
             else
-              T.concat ["    ", N.toText oldModuleName, ".", N.toText oldConstructor, (oldConstructorRemovedMessage oldConstructor moduleScope typeName oldModuleName newVersion)]
+              T.concat ["    ", N.toText oldModuleName, ".", N.toText oldConstructor, oldConstructorRemovedMessage]
         , Set.empty
         , Map.empty
         )
-
-
-    -- migration :: Text
-    -- migration =
-    --   case newCtorM of
-    --   Just (Can.Ctor newConstructor _ _ newParams) ->
-    --       let
-    --         paramsZipped :: [Text]
-    --         paramsZipped =
-    --           zipFull oldParams newParams
-    --             & imap (\i (paramOldM, paramNewM) ->
-    --               case (paramOldM, paramNewM) of
-    --                 (Just paramOld, Just paramNew) ->
-    --                   let ft@(migration, imps, subft) =
-    --                         canonicalToFt oldVersion newVersion localScope interfaces recursionSet paramOld (Just paramNew) tvarMap
-    --                   in
-    --                   -- migration
-    --                   -- <> "MARKER🟠"
-
-    --                   if paramOld == paramNew then
-    --                     T.concat ["p", show_ i]
-    --                   else if isAnonymousRecord paramOld then
-    --                     migration
-    --                   else if isUserDefinedType_ paramOld then
-    --                     -- T.concat [" (", migrationNameUnderscored oldModuleName oldVersion newVersion (N.fromText $ asTypeName paramOld),  " p", show_ i, ")"]
-    --                     T.concat [" (", migration,  " p", show_ i, ")"]
-    --                   else
-    --                     -- T.concat ["p", show_ i]
-    --                     T.concat [" (", migration,  " p", show_ i, ")"]
-
-    --                 (Just paramOld, Nothing) -> "\n-- warning: old variant didn't get mapped to anything, check this is what you want\n"
-
-    --                 (Nothing, Just paramNew) -> "(Debug.todo \"this new variant needs to be initialised!\")"
-
-    --                 _ -> error "impossible, zip produced a value without any contents"
-
-    --             )
-
-    --         migration :: Text
-    --         migration =
-    --           -- if areEquivalentEvergreenTypes oldParams newParams then
-    --             T.concat [ moduleScope, N.toText newConstructor, " ", (paramsZipped & T.intercalate " ") ]
-    --           -- else
-    --             -- "-- params have changed\nUnimplemented"
-    --       in
-    --       if List.length oldParams > 0 then
-    --         T.concat ["    ", N.toText oldModuleName, ".", N.toText oldConstructor, " ", (imap (\i _ -> "p" <> show_ i) oldParams & T.intercalate " "), " -> ", migration, "\n"]
-    --       else
-    --         T.concat ["    ", N.toText oldModuleName, ".", N.toText oldConstructor, " -> ", moduleScope, N.toText newConstructor, "\n"]
-
-    --   Nothing -> do
-    --     -- No old constructor with same name, so this is a new/renamed constructor
-    --     if List.length oldParams > 0
-    --       then
-    --         T.concat ["    ", N.toText oldModuleName, ".", N.toText oldConstructor, " ", (imap (\i _ -> "p" <> show_ i) oldParams & T.intercalate " "), (oldConstructorRemovedMessage oldConstructor moduleScope typeName oldModuleName)]
-    --       else
-    --         T.concat ["    ", N.toText oldModuleName, ".", N.toText oldConstructor, (oldConstructorRemovedMessage oldConstructor moduleScope typeName oldModuleName)]
-
   in
   migration_
-  -- ( migration
-  -- , foldl (\acc (st, imps, ft) -> mergeImports acc imps) Set.empty cparams
-  -- , foldl (\acc (st, imps, ft) -> mergeMigrationDefinitions acc ft) Map.empty cparams
-  -- )
-
--- oldConstructorRemovedMessage :: _ -> Text
-oldConstructorRemovedMessage oldConstructor moduleScope typeName oldModuleName newVersion =
-  T.concat [
-    " ->\n",
-    "           {- `", N.toText oldConstructor, "` removed or renamed in V", show_ newVersion, " so I couldn't figure out how to migrate it.\n",
-    "           I need you to decide what happens to this ", N.toText oldModuleName, ".", N.toText oldConstructor, " value in a migration.\n",
-    "           See https://lamdera.com/tips/modified-custom-type for more info. -}\n",
-    "           Unimplemented\n"
-  ]
-
-
 
 
 -- Like == but considers union types equal despite module defs
@@ -405,12 +362,14 @@ areEquivalentEvergreenTypes t1s t2s =
   -- debugHaskellPass "areEquivalentEvergreenTypes" (result, t1s, t2s) $
   result
 
+
 isEquivalentEvergreenType t1 t2 =
   case (t1, t2) of
     ((Can.TType (ModuleName.Canonical (Pkg.Name "author" "project") module1) name1 params1),
      (Can.TType (ModuleName.Canonical (Pkg.Name "author" "project") module2) name2 params2)) ->
       name1 == name2 && isEquivalentEvergreenModule module1 module2
     _ -> t1 == t2
+
 
 isEquivalentEvergreenModule m1 m2 =
   let m1_ = m1 & N.toText & T.splitOn "."
@@ -422,8 +381,8 @@ isEquivalentEvergreenModule m1 m2 =
 
 
 -- A top level Alias definition i.e. `type alias ...`
-aliasToFt :: Int -> Int -> ModuleName.Canonical -> TypeIdentifier -> N.Name -> Interfaces -> RecursionSet -> Can.Alias -> Migration
-aliasToFt oldVersion newVersion scope identifier@(author, pkg, newModule, _) typeName interfaces recursionSet (Can.Alias tvars tipe) =
+aliasToFt :: Int -> Int -> ModuleName.Canonical -> TypeIdentifier -> N.Name -> Interfaces -> RecursionSet -> Can.Alias -> Text -> Migration
+aliasToFt oldVersion newVersion scope identifier@(author, pkg, newModule, _) typeName interfaces recursionSet (Can.Alias tvars tipe) oldValueRef =
   let
     oldModuleName :: N.Name
     oldModuleName = asOldModuleName newModule newVersion oldVersion
@@ -435,7 +394,7 @@ aliasToFt oldVersion newVersion scope identifier@(author, pkg, newModule, _) typ
   case tipeOld of
     (Just (Alias (Can.Alias tvarsOld tipeOld))) ->
       let
-        (subt, imps, subft) = canonicalToFt oldVersion newVersion scope interfaces recursionSet tipe (Just tipeOld) []
+        (subt, imps, subft) = canonicalToFt oldVersion newVersion scope interfaces recursionSet tipe (Just tipeOld) [] oldValueRef
 
         tvars_ = tvars & fmap N.toText & T.intercalate " "
 
@@ -478,8 +437,8 @@ typedAliasMigration oldModuleName newModuleName typeName migration =
   T.concat ["\n", (lowerFirstLetter_ $ nameToText typeName), " : ", nameToText oldModuleName, ".", nameToText typeName, " -> ModelMigration ", newModuleName, ".", nameToText typeName, " ", newModuleName, ".", msgForType (nameToText typeName), "\n",
   (lowerFirstLetter_ $ nameToText typeName), " old = ", migration]
 
-canonicalToFt :: Int -> Int -> ModuleName.Canonical -> Interfaces -> RecursionSet -> Can.Type -> Maybe Can.Type -> [(N.Name, Can.Type)] -> Migration
-canonicalToFt oldVersion newVersion scope interfaces recursionSet tipe tipeOldM tvarMap =
+canonicalToFt :: Int -> Int -> ModuleName.Canonical -> Interfaces -> RecursionSet -> Can.Type -> Maybe Can.Type -> [(N.Name, Can.Type)] -> Text -> Migration
+canonicalToFt oldVersion newVersion scope interfaces recursionSet tipe tipeOldM tvarMap oldValueRef =
   let
     -- scopeModule =
     --   case scope of
@@ -495,21 +454,23 @@ canonicalToFt oldVersion newVersion scope interfaces recursionSet tipe tipeOldM 
   in
   -- debug $
   case tipe of
-    Can.TType moduleName name params -> handleTypeToFt oldVersion newVersion scope interfaces recursionSet tipe tipeOldM tvarMap
+    Can.TType moduleName name params ->
+      handleTypeToFt oldVersion newVersion scope interfaces recursionSet tipe tipeOldM tvarMap oldValueRef
 
-    Can.TAlias moduleName name tvarMap_ aliasType -> handleAliasToFt oldVersion newVersion scope interfaces recursionSet tipe tipeOldM tvarMap
+    Can.TAlias moduleName name tvarMap_ aliasType -> handleAliasToFt oldVersion newVersion scope interfaces recursionSet tipe tipeOldM tvarMap oldValueRef
 
-    Can.TRecord newFields isPartial -> handleRecordToFt oldVersion newVersion scope interfaces recursionSet tipe tipeOldM tvarMap
+    Can.TRecord newFields isPartial ->
+      handleRecordToFt oldVersion newVersion scope interfaces recursionSet tipe tipeOldM tvarMap oldValueRef
 
     Can.TTuple t1 t2 mt3 ->
       let
-        (subt, imps, subft) = (canonicalToFt oldVersion newVersion scope interfaces recursionSet t1 nothingTODO tvarMap)
-        (subt2, imps2, subft2) = (canonicalToFt oldVersion newVersion scope interfaces recursionSet t2 nothingTODO tvarMap)
+        (subt, imps, subft) = (canonicalToFt oldVersion newVersion scope interfaces recursionSet t1 tipeOldM tvarMap oldValueRef)
+        (subt2, imps2, subft2) = (canonicalToFt oldVersion newVersion scope interfaces recursionSet t2 tipeOldM tvarMap oldValueRef)
       in
       case mt3 of
         Just t3 ->
           let
-            (subt3, imps3, subft3) = (canonicalToFt oldVersion newVersion scope interfaces recursionSet t3 nothingTODO tvarMap)
+            (subt3, imps3, subft3) = (canonicalToFt oldVersion newVersion scope interfaces recursionSet t3 tipeOldM tvarMap oldValueRef)
           in
           (T.concat ["(", subt, ", ", subt2, ", ", subt3, ")"], mergeAllImports [imps,imps2,imps3], mergeAllMigrationDefinitions [subft,subft2,subft3])
 
@@ -529,8 +490,8 @@ canonicalToFt oldVersion newVersion scope interfaces recursionSet tipe tipeOldM 
       -- DError $ "must not contain functions"
 
 
-handleAliasToFt :: Int -> Int -> ModuleName.Canonical -> Interfaces -> RecursionSet -> Can.Type -> Maybe Can.Type -> [(N.Name, Can.Type)] -> Migration
-handleAliasToFt oldVersion newVersion scope interfaces recursionSet tipe@(Can.TAlias moduleName name tvarMap_ aliasType) tipeOldM tvarMap =
+handleAliasToFt :: Int -> Int -> ModuleName.Canonical -> Interfaces -> RecursionSet -> Can.Type -> Maybe Can.Type -> [(N.Name, Can.Type)] -> Text -> Migration
+handleAliasToFt oldVersion newVersion scope interfaces recursionSet tipe@(Can.TAlias moduleName name tvarMap_ aliasType) tipeOldM tvarMap oldValueRef =
   let
     module_ =
       case moduleName of
@@ -552,7 +513,7 @@ handleAliasToFt oldVersion newVersion scope interfaces recursionSet tipe@(Can.TA
         usageParamFts =
           tvarMap_
             & fmap (\(n, paramType) ->
-              canonicalToFt oldVersion newVersion scope interfaces recursionSet paramType nothingTODO tvarMap_
+              canonicalToFt oldVersion newVersion scope interfaces recursionSet paramType nothingTODO tvarMap_ oldValueRef
             )
 
         usageParamNames :: Text
@@ -576,9 +537,9 @@ handleAliasToFt oldVersion newVersion scope interfaces recursionSet tipe@(Can.TA
         (subt, imps, subft) :: Migration =
           case tipeOldM of
             Just tipeOld ->
-              canonicalToFt oldVersion newVersion moduleName interfaces recursionSet cType (Just tipeOld) tvarMap_
+              canonicalToFt oldVersion newVersion moduleName interfaces recursionSet cType (Just tipeOld) tvarMap_ oldValueRef
             Nothing ->
-              canonicalToFt oldVersion newVersion moduleName interfaces recursionSet cType nothingTODO tvarMap_
+              canonicalToFt oldVersion newVersion moduleName interfaces recursionSet cType Nothing tvarMap_ oldValueRef
 
         typeScope =
           if moduleName == scope then
@@ -661,7 +622,7 @@ handleAliasToFt oldVersion newVersion scope interfaces recursionSet tipe@(Can.TA
       -- If an alias is filled, then it can't have any open holes within it either?
       -- So we can take this opportunity to reset tvars to reduce likeliness of naming conflicts?
       let
-        (subt, imps, subft) = canonicalToFt oldVersion newVersion moduleName interfaces recursionSet cType nothingTODO []
+        (subt, imps, subft) = canonicalToFt oldVersion newVersion moduleName interfaces recursionSet cType tipeOldM [] oldValueRef
 
         debugIden = "" -- <> "<af>"
       in
@@ -683,8 +644,8 @@ handleAliasToFt oldVersion newVersion scope interfaces recursionSet tipe@(Can.TA
       )
 
 
-handleRecordToFt :: Int -> Int -> ModuleName.Canonical -> Interfaces -> RecursionSet -> Can.Type -> Maybe Can.Type -> [(N.Name, Can.Type)] -> Migration
-handleRecordToFt oldVersion newVersion scope interfaces recursionSet tipe@(Can.TRecord newFields isPartial) tipeOldM tvarMap =
+handleRecordToFt :: Int -> Int -> ModuleName.Canonical -> Interfaces -> RecursionSet -> Can.Type -> Maybe Can.Type -> [(N.Name, Can.Type)] -> Text -> Migration
+handleRecordToFt oldVersion newVersion scope interfaces recursionSet tipe@(Can.TRecord newFields isPartial) tipeOldM tvarMap oldValueRef =
   case isPartial of
     Just whatIsThis ->
       ("ERROR TRecord, please report this!", Set.empty, Map.empty)
@@ -706,26 +667,32 @@ handleRecordToFt oldVersion newVersion scope interfaces recursionSet tipe@(Can.T
           newFields
             & Map.toList
             -- Restore user's field code-ordering to keep types looking familiar
-            & List.sortOn (\(name, (Can.FieldType index tipe)) -> index)
-            & fmap (\(name, (Can.FieldType index tipe)) ->
+            & List.sortOn (\(name, (Can.FieldType index ftipe)) -> index)
+            & fmap (\(name, (Can.FieldType index ftipe)) ->
                 case Map.lookup name fieldMapOld of
-                  Just (Can.FieldType index_ tipeOld) ->
-                    if tipeOld == tipe then
-                      (N.toText name, (T.concat["old.", N.toText name], Set.empty, Map.empty))
+                  Just (Can.FieldType index_ ftipeOld) ->
+                    if ftipeOld == ftipe then
+                      (N.toText name, (T.concat[ oldValueRef, ".", N.toText name], Set.empty, Map.empty))
                     else
-                      -- @TODO NEXT
-                      -- this shoudl generate a migrate<NewTypeName> function – but maybe that comes from the canonicalToFt?
-                      -- at the least we can thread the tipeOld type in here now!
-                      let (st,imps,ft) = canonicalToFt oldVersion newVersion scope interfaces recursionSet tipe (Just (tipeOld)) tvarMap
-                      in
-                      (N.toText name, (T.concat["old.", N.toText name, " |> ", st], imps, ft))
-                      -- (N.toText name, canonicalToFt oldVersion newVersion scope interfaces recursionSet tipe nothingTODO tvarMap)
+                      if isAnonymousRecord ftipe
+                        then
+                          -- In order to deal with anonymous records inline, we have to change
+                          -- the name of the value to avoid shadowing the `old.` ref.
+                          -- @TODO this probably won't work for multiple inline anonymous vars.. how to?
+                          let (st,imps,ft) = handleRecordToFt oldVersion newVersion scope interfaces recursionSet ftipe (Just ftipeOld) tvarMap "rec"
+                          in
+                          (N.toText name, (T.concat[ oldValueRef, ".", N.toText name, " |> (\\rec -> ", st, ")"], imps, ft))
+                        else
+                          let (st,imps,ft) = canonicalToFt oldVersion newVersion scope interfaces recursionSet ftipe (Just (ftipeOld)) tvarMap oldValueRef
+                          in
+                          -- (N.toText name, (T.concat[ oldValueRef, N.toText name, " xmarkerx \n-- ", show_ ftipe, "\n|> ", st ], imps, ft))
+                          (N.toText name, (T.concat[ oldValueRef, ".", N.toText name, " |> ", st ], imps, ft))
 
                   Nothing ->
-                    -- This field did not exist in the old version. We need an init! @TODO
-                    let (st,imps,ft) = canonicalToFt oldVersion newVersion scope interfaces recursionSet tipe nothingTODO tvarMap
+                    -- This field did not exist in the old version. We need an init!
+                    let (st,imps,ft) = canonicalToFt oldVersion newVersion scope interfaces recursionSet ftipe Nothing tvarMap oldValueRef
                     in
-                    ( N.toText name, (T.concat["Unimplemented -- Type `", qualifiedTypeName tipe, "` added in V", show_ newVersion, ". I need you to set a default value."], imps, ft) )
+                    ( N.toText name, (T.concat["Unimplemented -- Type `", qualifiedTypeName ftipe, "` added in V", show_ newVersion, ". I need you to set a default value."], imps, ft) )
             )
             & (\v -> v ++ missingFields)
 
@@ -738,10 +705,6 @@ handleRecordToFt oldVersion newVersion scope interfaces recursionSet tipe@(Can.T
                 Just (Can.FieldType index_ tipeOld) ->
                   Nothing
                 Nothing ->
-                  -- This seemed like a nice idea to add the migrations anyway, but what does it mean to add a migration for an old type
-                  -- that has no equivalent new type in the current context...?
-                  -- let (st,imps,ft) = canonicalToFt oldVersion newVersion scope interfaces recursionSet tipe nothingTODO tvarMap
-                  -- in
                   Just ( N.toText name,
                     (T.concat["Unimplemented -- Type `", qualifiedTypeName tipe, "` removed in V", show_ newVersion, ". I need you to do something with the `old.", N.toText name, "` value if you wish to keep the data, then remove this line."]
                     , Set.empty
@@ -776,8 +739,8 @@ handleRecordToFt oldVersion newVersion scope interfaces recursionSet tipe@(Can.T
       result
 
 
-handleTypeToFt :: Int -> Int -> ModuleName.Canonical -> Interfaces -> RecursionSet -> Can.Type -> Maybe Can.Type -> [(N.Name, Can.Type)] -> Migration
-handleTypeToFt oldVersion newVersion scope interfaces recursionSet tipe@(Can.TType moduleName name params) tipeOldM tvarMap =
+handleTypeToFt :: Int -> Int -> ModuleName.Canonical -> Interfaces -> RecursionSet -> Can.Type -> Maybe Can.Type -> [(N.Name, Can.Type)] -> Text -> Migration
+handleTypeToFt oldVersion newVersion scope interfaces recursionSet tipe@(Can.TType moduleName name params) tipeOldM tvarMap oldValueRef =
   -- error "tbc"
   let
     recursionIdentifier :: (ModuleName.Canonical, N.Name)
@@ -802,6 +765,7 @@ handleTypeToFt oldVersion newVersion scope interfaces recursionSet tipe@(Can.TTy
     moduleNameRaw :: N.Name
     moduleNameRaw = canModuleName moduleName
 
+    migrateSingleParamCollection :: Migration
     migrateSingleParamCollection =
       case tipeOldM of
         Just tipeOld ->
@@ -809,31 +773,31 @@ handleTypeToFt oldVersion newVersion scope interfaces recursionSet tipe@(Can.TTy
             Can.TType _ _ paramsOld -> -- @WARNING MUST BE SAME TYPE?
               zipFull paramsOld params & (\p ->
                 case p of
-                  (Just p1o,Just p1):_ ->
+                  (Just p0o,Just p0):_ ->
                     let
-                      (migration1, imps1, subft1) = (canonicalToFt oldVersion newVersion scope interfaces recursionSet p1 (Just p1o) tvarMap)
+                      (migration1, imps1, subft1) = (canonicalToFt oldVersion newVersion scope interfaces recursionSet p0 (Just p0o) tvarMap "p0")
 
-                      migration = case (p1o == p1) of
+                      migration = case (p0o == p0) of
                         (True) -> "" -- No migration necessary
                         (False) ->
                           if migration1 == ""
                             then
-                              T.concat [ typeName, ".map Unimplemented", " -- Type changed from `", typeName, " ", qualifiedTypeName p1o, "` to `", typeName, " ", qualifiedTypeName p1, "`\n" ]
+                              T.concat [ typeName, ".map Unimplemented", " -- Type changed from `", typeName, " ", qualifiedTypeName p0o, "` to `", typeName, " ", qualifiedTypeName p0, "`\n" ]
                             else
                               T.concat [ typeName, ".map ", migration1 ]
                     in
                     (migration, imps1 & Set.insert moduleName, subft1)
                   _ ->
-                    error $ T.unpack $ T.concat ["Fatal: impossible multi-param ", typeName, "! Please report this gen issue."]
+                    error $ T.unpack $ T.concat ["migrateSingleParamCollection: impossible multi-param ", typeName, "! Please report this gen issue."]
               )
-            _ -> error $ T.unpack $ T.concat ["non-matching TType in ", typeName, " gen"]
+            _ -> error $ T.unpack $ T.concat ["migrateSingleParamCollection: non-matching TType in ", typeName, " gen"]
 
         Nothing ->
           (T.concat ["Unimplemented -- This ", typeName, " type has changed to something else"], Set.empty, Map.empty)
 
   in
   if (Set.member recursionIdentifier recursionSet) then
-    handleSeenRecursiveType  oldVersion newVersion scope interfaces recursionSet tipe tipeOldM tvarMap
+    handleSeenRecursiveType oldVersion newVersion scope identifier interfaces recursionSet tipe tipeOldM tvarMap oldValueRef
   else
   case identifier of
     ("elm", "core", "String", "String") -> ("", Set.empty, Map.empty)
@@ -856,18 +820,18 @@ handleTypeToFt oldVersion newVersion scope interfaces recursionSet tipe@(Can.TTy
             Can.TType _ _ paramsOld -> -- @WARNING MUST BE SAME TYPE?
               zipFull paramsOld params & (\p ->
                 case p of
-                  (Just p1o,Just p1):(Just p2o,Just p2):_ ->
+                  (Just p0o,Just p0):(Just p1o,Just p1):_ ->
                     let
-                      (subt1, imps1, subft1) = (canonicalToFt oldVersion newVersion scope interfaces recursionSet p1 (Just p1o) tvarMap)
-                      (subt2, imps2, subft2) = (canonicalToFt oldVersion newVersion scope interfaces recursionSet p2 (Just p2o) tvarMap)
+                      (subt0, imps0, subft0) = (canonicalToFt oldVersion newVersion scope interfaces recursionSet p0 (Just p0o) tvarMap "p0")
+                      (subt1, imps1, subft1) = (canonicalToFt oldVersion newVersion scope interfaces recursionSet p1 (Just p1o) tvarMap "p1")
 
-                      migration = case (p1o == p1, p2o == p2) of
+                      migration = case (p0o == p0, p1o == p1) of
                         (True, True) -> "" -- No migration necessary
-                        (False, True) -> T.concat [ "Result.mapError ", subt1]
-                        (True, False) -> T.concat [ "Result.map ", subt2 ]
-                        (False, False) -> T.concat [ "Result.mapError ", subt1, " |> Result.map ", subt2 ]
+                        (False, True) -> T.concat [ "Result.mapError ", subt0]
+                        (True, False) -> T.concat [ "Result.map ", subt1 ]
+                        (False, False) -> T.concat [ "Result.mapError ", subt0, " |> Result.map ", subt1 ]
                     in
-                    (migration, mergeImports imps1 imps2 & Set.insert moduleName, mergeMigrationDefinitions subft1 subft2)
+                    (migration, mergeImports imps0 imps1 & Set.insert moduleName, mergeMigrationDefinitions subft0 subft1)
                     -- DResult (canonicalToFt oldVersion newVersion scope interfaces recursionSet result tvarMap) (canonicalToFt oldVersion newVersion scope interfaces recursionSet err tvarMap)
                   _ ->
                     error "Fatal: impossible !2 param Result type! Please report this gen issue."
@@ -885,18 +849,18 @@ handleTypeToFt oldVersion newVersion scope interfaces recursionSet tipe@(Can.TTy
             Can.TType _ _ paramsOld -> -- @WARNING MUST BE SAME TYPE?
               zipFull paramsOld params & (\p ->
                 case p of
-                  (Just p1o,Just p1):(Just p2o,Just p2):_ ->
+                  (Just p0o,Just p0):(Just p1o,Just p1):_ ->
                     let
-                      (subt1, imps1, subft1) = (canonicalToFt oldVersion newVersion scope interfaces recursionSet p1 (Just p1o) tvarMap)
-                      (subt2, imps2, subft2) = (canonicalToFt oldVersion newVersion scope interfaces recursionSet p2 (Just p2o) tvarMap)
+                      (subt0, imps0, subft0) = (canonicalToFt oldVersion newVersion scope interfaces recursionSet p0 (Just p0o) tvarMap "p0")
+                      (subt1, imps1, subft1) = (canonicalToFt oldVersion newVersion scope interfaces recursionSet p1 (Just p1o) tvarMap "p1")
 
-                      migration = case (p1o == p1, p2o == p2) of
+                      migration = case (p0o == p0, p1o == p1) of
                         (True, True) -> "" -- No migration necessary
-                        (False, True) -> T.concat [ "Dict.toList |> List.map (Tuple.mapFirst ", subt1, ") |> Dict.fromList" ]
-                        (True, False) -> T.concat [ "Dict.map (\\k v -> v |> ", subt2, ")" ]
-                        (False, False) -> T.concat [ "Dict.toList |> List.map (Tuple.mapBoth ", subt1, " ", subt2, ") |> Dict.fromList" ]
+                        (False, True) -> T.concat [ "Dict.toList |> List.map (Tuple.mapFirst ", subt0, ") |> Dict.fromList" ]
+                        (True, False) -> T.concat [ "Dict.map (\\k v -> v |> ", subt1, ")" ]
+                        (False, False) -> T.concat [ "Dict.toList |> List.map (Tuple.mapBoth ", subt0, " ", subt1, ") |> Dict.fromList" ]
                     in
-                    (migration, mergeImports imps1 imps2 & Set.insert moduleName, mergeMigrationDefinitions subft1 subft2)
+                    (migration, mergeImports imps0 imps1 & Set.insert moduleName, mergeMigrationDefinitions subft0 subft1)
                     -- DResult (canonicalToFt oldVersion newVersion scope interfaces recursionSet result tvarMap) (canonicalToFt oldVersion newVersion scope interfaces recursionSet err tvarMap)
                   _ ->
                     error "Fatal: impossible !2 param Result type! Please report this gen issue."
@@ -983,7 +947,7 @@ handleTypeToFt oldVersion newVersion scope interfaces recursionSet tipe@(Can.TTy
                       )
 
           handleAlias alias =
-            aliasToFt oldVersion newVersion scope identifier name interfaces newRecursionSet alias
+            aliasToFt oldVersion newVersion scope identifier name interfaces newRecursionSet alias oldValueRef
               & (\(n, imports, subft) ->
                 ( n -- <> "<!4>"
                 , if moduleName /= scope then
@@ -1006,15 +970,15 @@ handleTypeToFt oldVersion newVersion scope interfaces recursionSet tipe@(Can.TTy
 
 
 
-handleSeenRecursiveType :: Int -> Int -> ModuleName.Canonical -> Interfaces -> RecursionSet -> Can.Type -> Maybe Can.Type -> [(N.Name, Can.Type)] -> Migration
-handleSeenRecursiveType oldVersion newVersion scope interfaces recursionSet tipe@(Can.TType moduleName name params) tipeOldM tvarMap =
+handleSeenRecursiveType :: Int -> Int -> ModuleName.Canonical -> TypeIdentifier -> Interfaces -> RecursionSet -> Can.Type -> Maybe Can.Type -> [(N.Name, Can.Type)] -> Text -> Migration
+handleSeenRecursiveType oldVersion newVersion scope identifier@(author, pkg, newModule, _) interfaces recursionSet tipe@(Can.TType moduleName name params) tipeOldM tvarMap oldValueRef =
   -- error "tbc"
   let
       usageMigration :: [Migration]
       usageMigration =
         -- tvarResolvedParams
         params
-          & fmap (\param -> canonicalToFt oldVersion newVersion scope interfaces recursionSet param nothingTODO tvarMap)
+          & fmap (\param -> canonicalToFt oldVersion newVersion scope interfaces recursionSet param tipeOldM tvarMap oldValueRef)
 
       usageParams :: Text
       usageParams =
@@ -1045,11 +1009,15 @@ handleSeenRecursiveType oldVersion newVersion scope interfaces recursionSet tipe
       typeName :: Text
       typeName =
         N.toText name
+
+      migrationName :: Text
+      migrationName = migrationNameUnderscored newModule oldVersion newVersion name
+
     in
     ( if length params > 0 then
-        "(" <> typeScope <> typeName <> " " <> usageParams <> ")" -- <> "<!R>"
+        "(" <> migrationName <> " " <> usageParams <> ")" -- <> "<!R>"
       else
-        typeScope <> typeName -- <> "<!R>"
+        migrationName -- <> "<!R2>"
     , Set.insert moduleName usageImports
     , usageFts
     )
