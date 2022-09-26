@@ -142,8 +142,21 @@ migrateUnion author pkg oldUnion newUnion params tvarMap oldVersion newVersion t
 
     paramMigrations :: [Migration]
     paramMigrations =
+      -- @TODO do we need to use oldParams here? Maybe not as this is the def migrator, and the actual
+      -- value migratons will get caught in the actual constructor migrations?
       tvarResolvedParams params tvarMap
-        & fmap (\param -> canonicalToFt oldVersion newVersion scope interfaces recursionSet param nothingTODO tvarMap)
+        & imap (\i param ->
+          canonicalToFt oldVersion newVersion scope interfaces recursionSet param Nothing tvarMap ("p" <> show_ i)
+        )
+      -- If we do need to migrate params here, it would probably be something like:
+      -- let
+      --   oldParams = error "todo used oldParams"
+      --   newParams = error "todo used newParams"
+      -- in
+      -- zipFull oldParams newParams
+      --   & imap (\i (paramOldM, paramNewM) ->
+      --     migrateParam i paramOldM paramNewM interfaces tvarMap recursionSet localScope newVersion oldVersion
+      --   )
 
     paramMigrationTextsCombined :: Text
     paramMigrationTextsCombined =
@@ -256,6 +269,38 @@ genOldConstructorMigrationDefinitions oldModuleName moduleScope typeName interfa
     )
 
 
+migrateParam i paramOldM paramNewM interfaces tvarMap recursionSet localScope newVersion oldVersion =
+  case (paramOldM, paramNewM) of
+    (Just paramOld, Just paramNew) ->
+      let ft@(migration, imps, subft) =
+            canonicalToFt oldVersion newVersion localScope interfaces recursionSet paramNew (Just paramOld) tvarMap ("p" <> show_ i)
+
+          appliedMigration =
+            if paramOld == paramNew then
+              T.concat ["p", show_ i]
+            else if isAnonymousRecord paramOld then
+              migration
+            else if isUserDefinedType_ paramOld then
+              -- T.concat [" (", migrationNameUnderscored oldModuleName oldVersion newVersion (N.fromText $ asTypeName paramOld),  " p", show_ i, ")"]
+              T.concat ["(p", show_ i, " |> ", migration, ")"]
+            else
+              -- T.concat ["p", show_ i]
+              T.concat ["(p", show_ i, " |> ", migration, ")"]
+
+      in
+      (appliedMigration, imps, subft)
+      -- migration
+      -- <> "MARKER🟠"
+
+    (Just paramOld, Nothing) ->
+      ("\n-- warning: old variant didn't get mapped to anything, check this is what you want\n", Set.empty, Map.empty)
+
+    (Nothing, Just paramNew) ->
+      ("(Debug.todo \"this new variant needs to be initialised!\")", Set.empty, Map.empty)
+
+    _ -> error "impossible, zip produced a value without any contents"
+
+
 genOldConstructorFt oldModuleName moduleScope typeName interfaces tvarMap recursionSet localScope newVersion oldVersion newUnion oldUnion oldConstructor oldParams =
   let
     newCtorM :: Maybe Can.Ctor
@@ -270,36 +315,7 @@ genOldConstructorFt oldModuleName moduleScope typeName interfaces tvarMap recurs
             paramMigrations =
               zipFull oldParams newParams
                 & imap (\i (paramOldM, paramNewM) ->
-                  case (paramOldM, paramNewM) of
-                    (Just paramOld, Just paramNew) ->
-                      let ft@(migration, imps, subft) =
-                            canonicalToFt oldVersion newVersion localScope interfaces recursionSet paramNew (Just paramOld) tvarMap ("p" <> show_ i)
-
-                          appliedMigration =
-                            if paramOld == paramNew then
-                              T.concat ["p", show_ i]
-                            else if isAnonymousRecord paramOld then
-                              migration
-                            else if isUserDefinedType_ paramOld then
-                              -- T.concat [" (", migrationNameUnderscored oldModuleName oldVersion newVersion (N.fromText $ asTypeName paramOld),  " p", show_ i, ")"]
-                              T.concat ["(p", show_ i, " |> ", migration, ")"]
-                            else
-                              -- T.concat ["p", show_ i]
-                              T.concat ["(p", show_ i, " |> ", migration, ")"]
-
-                      in
-                      (appliedMigration, imps, subft)
-                      -- migration
-                      -- <> "MARKER🟠"
-
-                    (Just paramOld, Nothing) ->
-                      ("\n-- warning: old variant didn't get mapped to anything, check this is what you want\n", Set.empty, Map.empty)
-
-                    (Nothing, Just paramNew) ->
-                      ("(Debug.todo \"this new variant needs to be initialised!\")", Set.empty, Map.empty)
-
-                    _ -> error "impossible, zip produced a value without any contents"
-
+                  migrateParam i paramOldM paramNewM interfaces tvarMap recursionSet localScope newVersion oldVersion
                 )
 
             fullMigration =
@@ -513,7 +529,10 @@ handleAliasToFt oldVersion newVersion scope interfaces recursionSet tipe@(Can.TA
         usageParamFts =
           tvarMap_
             & fmap (\(n, paramType) ->
-              canonicalToFt oldVersion newVersion scope interfaces recursionSet paramType nothingTODO tvarMap_ oldValueRef
+              -- @TODO are we sure we don't need oldParam setup here? Need to come up with a test example if we do.
+              let oldParamType = Nothing
+              in
+              canonicalToFt oldVersion newVersion scope interfaces recursionSet paramType oldParamType tvarMap_ oldValueRef
             )
 
         usageParamNames :: Text
