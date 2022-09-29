@@ -722,10 +722,27 @@ handleRecordToFt oldVersion newVersion scope interfaces recursionSet tipe@(Can.T
                         then
                           -- In order to deal with anonymous records inline, we have to change
                           -- the name of the value to avoid shadowing the `old.` ref.
-                          -- @TODO this probably won't work for multiple inline anonymous vars.. how to?
-                          let (st,imps,ft) = handleRecordToFt oldVersion newVersion scope interfaces recursionSet ftipe (Just ftipeOld) tvarMap "rec"
+                          let
+                            readMaybeInt :: Text -> Maybe Int
+                            readMaybeInt = readMaybeText
+
+                            -- For every additional anonymous nesting, bump the reference number
+                            recname :: Text
+                            recname =
+                              case oldValueRef of
+                                "old" -> "rec"
+                                _ ->
+                                  oldValueRef
+                                    & T.replace "rec" ""
+                                    & readMaybeInt
+                                    & withDefault (0 :: Int)
+                                    & (+) 1
+                                    & show_
+                                    & (<>) "rec"
+
+                            (st,imps,ft) = handleRecordToFt oldVersion newVersion scope interfaces recursionSet ftipe (Just ftipeOld) tvarMap recname
                           in
-                          (N.toText name, (T.concat[ oldValueRef, ".", N.toText name, " |> (\\rec -> ", st, ")"], imps, ft))
+                          (N.toText name, (T.concat[ oldValueRef, ".", N.toText name, " |> (\\", recname, " -> ", st, ")"], imps, ft))
                         else
                           let (st,imps,ft) = canonicalToFt oldVersion newVersion scope interfaces recursionSet ftipe (Just (ftipeOld)) tvarMap oldValueRef
                           in

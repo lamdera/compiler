@@ -13,6 +13,11 @@ type alias BackendModel =
     , unchangedResult : Result Int String
     , unchangedDict : Dict Int String
     , unchangedAnonymousRecord : { name : String, age : Int, userType : UserType }
+    , unchangedAnonymousRecordNested :
+        { name : String
+        , subrecord :
+            { age : Int, userType : UserType }
+        }
     , changedMaybe : Maybe UserType
     , changedList : List UserType
     , changedSet : Set Int
@@ -36,6 +41,7 @@ type UserType
     | UserResultP2 (Result Int CustomType)
     | UserResultPBoth (Result CustomType Evergreen.V1.External.ExternalUnion)
     | UserAnonymous { record : String, userType : UserType }
+    | UserAnonymousNested { record : String, subrecord : { userType : UserType } }
 
 
 type CustomType

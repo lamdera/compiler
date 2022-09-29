@@ -47,6 +47,19 @@ backendModel old =
                     , userType = rec.userType |> migrate_Types_UserType
                     }
                )
+    , unchangedAnonymousRecordNested =
+        old.unchangedAnonymousRecordNested
+            |> (\rec ->
+                    { name = rec.name
+                    , subrecord =
+                        rec.subrecord
+                            |> (\rec1 ->
+                                    { age = rec1.age
+                                    , userType = rec1.userType |> migrate_Types_UserType
+                                    }
+                               )
+                    }
+               )
     , changedMaybe = old.changedMaybe |> Maybe.map migrate_Types_UserType
     , changedList = old.changedList |> List.map migrate_Types_UserType
     , changedSet = old.changedSet |> Set.map Unimplemented -- Type changed from `Set Int` to `Set String`
@@ -170,6 +183,17 @@ migrate_Types_UserType old =
             Evergreen.V2.Types.UserAnonymous
                 { record = p0.record
                 , userType = p0.userType |> migrate_Types_UserType
+                }
+
+        Evergreen.V1.Types.UserAnonymousNested p0 ->
+            Evergreen.V2.Types.UserAnonymousNested
+                { record = p0.record
+                , subrecord =
+                    p0.subrecord
+                        |> (\rec1 ->
+                                { userType = rec1.userType |> migrate_Types_UserType
+                                }
+                           )
                 }
 
         notices ->

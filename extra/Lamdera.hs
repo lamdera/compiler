@@ -111,6 +111,8 @@ module Lamdera
   , launchAppZero
   , head_
   , last_
+  , Text.Read.readMaybe
+  , readMaybeText
   )
   where
 
@@ -939,3 +941,7 @@ head_ list default_ =
 last_ :: [a] -> a -> a
 last_ list default_ =
   Safe.lastMay list & withDefault default_
+
+readMaybeText :: Read a => Text -> Maybe a
+readMaybeText t =
+  t & T.unpack & readMaybe
