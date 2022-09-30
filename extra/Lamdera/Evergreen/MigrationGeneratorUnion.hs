@@ -50,7 +50,7 @@ newConstructorWarnings typeName moduleScope newUnion oldUnion newVersion =
           in
           -- This constructor is missing a match in the old type, warn the user this new constructor exists
           Just $ T.concat [
-            "        {- `", N.toText newConstructor, params, "` added in V", show_ newVersion, ".\n",
+            "        {- `", N.toText newConstructor, params, "` was added in V", show_ newVersion, ".\n",
             "        This is just a reminder in case migrating some subset of the old data to this new value was important.\n",
             "        See https://lamdera.com/tips/modified-custom-type for more info. -}\n"
             ]

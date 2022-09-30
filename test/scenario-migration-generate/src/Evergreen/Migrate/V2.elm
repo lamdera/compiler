@@ -67,9 +67,9 @@ backendModel old =
     , changedDict = old.changedDict |> Dict.map (\k v -> v |> migrate_Types_UserType)
     , changedResult = old.changedResult |> Result.mapError migrate_Types_UserType |> Result.map migrate_Types_UserType
     , externalUnion = old.externalUnion |> migrate_External_ExternalUnion
-    , added = Unimplemented -- Type `Int` added in V2. I need you to set a default value.
-    , removed = Unimplemented -- Type `String` removed in V2. I need you to do something with the `old.removed` value if you wish to keep the data, then remove this line.
-    , removedRecord = Unimplemented -- Type `Evergreen.V1.External.AllTypes` removed in V2. I need you to do something with the `old.removedRecord` value if you wish to keep the data, then remove this line.
+    , added = Unimplemented -- Type `Int` was added in V2. I need you to set a default value.
+    , removed = Unimplemented -- Type `String` was removed in V2. I need you to do something with the `old.removed` value if you wish to keep the data, then remove this line.
+    , removedRecord = Unimplemented -- Type `Evergreen.V1.External.AllTypes` was removed in V2. I need you to do something with the `old.removedRecord` value if you wish to keep the data, then remove this line.
     }
 
 
@@ -155,7 +155,7 @@ migrate_Types_UserType old =
             Evergreen.V2.Types.UserSecond
 
         Evergreen.V1.Types.UserRemoved ->
-            {- `UserRemoved` removed or renamed in V2 so I couldn't figure out how to migrate it.
+            {- `UserRemoved` was removed or renamed in V2 so I couldn't figure out how to migrate it.
                I need you to decide what happens to this Evergreen.V1.Types.UserRemoved value in a migration.
                See https://lamdera.com/tips/modified-custom-type for more info.
             -}
@@ -197,11 +197,11 @@ migrate_Types_UserType old =
                 }
 
         notices ->
-            {- @NOTICE `UserAdded` added in V2.
+            {- @NOTICE `UserAdded` was added in V2.
                This is just a reminder in case migrating some subset of the old data to this new value was important.
                See https://lamdera.com/tips/modified-custom-type for more info.
             -}
-            {- @NOTICE `UserAddedParam Int` added in V2.
+            {- @NOTICE `UserAddedParam Int` was added in V2.
                This is just a reminder in case migrating some subset of the old data to this new value was important.
                See https://lamdera.com/tips/modified-custom-type for more info.
             -}

@@ -247,7 +247,7 @@ migrateUnion author pkg oldUnion newUnion params tvarMap oldVersion newVersion t
               in
               -- This constructor is missing a match in the old type, warn the user this new constructor exists
               Just $ T.concat [
-                "        {- @NOTICE `", N.toText newConstructor, params, "` added in V", show_ newVersion, ".\n",
+                "        {- @NOTICE `", N.toText newConstructor, params, "` was added in V", show_ newVersion, ".\n",
                 "        This is just a reminder in case migrating some subset of the old data to this new value was important.\n",
                 "        See https://lamdera.com/tips/modified-custom-type for more info. -}\n"
                 ]
@@ -374,7 +374,7 @@ genOldConstructorFt oldModuleName moduleScope typeName interfaces tvarMap recurs
           oldConstructorRemovedMessage =
             T.concat [
               " ->\n",
-              "           {- `", N.toText oldConstructor, "` removed or renamed in V", show_ newVersion, " so I couldn't figure out how to migrate it.\n",
+              "           {- `", N.toText oldConstructor, "` was removed or renamed in V", show_ newVersion, " so I couldn't figure out how to migrate it.\n",
               "           I need you to decide what happens to this ", N.toText oldModuleName, ".", N.toText oldConstructor, " value in a migration.\n",
               "           See https://lamdera.com/tips/modified-custom-type for more info. -}\n",
               "           Unimplemented\n"
@@ -753,7 +753,7 @@ handleRecordToFt oldVersion newVersion scope interfaces recursionSet tipe@(Can.T
                     -- This field did not exist in the old version. We need an init!
                     let (st,imps,ft) = canonicalToFt oldVersion newVersion scope interfaces recursionSet ftipe Nothing tvarMap oldValueRef
                     in
-                    ( N.toText name, (T.concat["Unimplemented -- Type `", qualifiedTypeName ftipe, "` added in V", show_ newVersion, ". I need you to set a default value."], imps, ft) )
+                    ( N.toText name, (T.concat["Unimplemented -- Type `", qualifiedTypeName ftipe, "` was added in V", show_ newVersion, ". I need you to set a default value."], imps, ft) )
             )
             & (\v -> v ++ missingFields)
 
@@ -767,7 +767,7 @@ handleRecordToFt oldVersion newVersion scope interfaces recursionSet tipe@(Can.T
                   Nothing
                 Nothing ->
                   Just ( N.toText name,
-                    (T.concat["Unimplemented -- Type `", qualifiedTypeName tipe, "` removed in V", show_ newVersion, ". I need you to do something with the `old.", N.toText name, "` value if you wish to keep the data, then remove this line."]
+                    (T.concat["Unimplemented -- Type `", qualifiedTypeName tipe, "` was removed in V", show_ newVersion, ". I need you to do something with the `old.", N.toText name, "` value if you wish to keep the data, then remove this line."]
                     , Set.empty
                     , Map.empty)
                     )
