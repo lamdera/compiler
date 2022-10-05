@@ -159,6 +159,22 @@ injections isBackend isLocalDev =
         then "true"
         else "false"
 
+    runUpdate =
+      if isLocalDev
+        then
+          [text|
+            var pair = A2(update, msg, model);
+          |]
+        else
+          [text|
+            try {
+              var pair = A2(update, msg, model);
+            } catch(err) {
+              if (isBackend) { bugsnag.notify(err); }
+              return;
+            }
+          |]
+
     exportFns =
       if isBackend
         then
@@ -181,7 +197,7 @@ injections isBackend isLocalDev =
   in
   [text|
 
-    var isBackend = $isBackend_ && typeof isLamdera !== 'undefined'
+    var isBackend = $isBackend_ && typeof isLamdera !== 'undefined';
 
     function _Platform_initialize(flagDecoder, args, init, update, subscriptions, stepperBuilder)
       {
@@ -229,12 +245,7 @@ injections isBackend isLocalDev =
           var serializeDuration, logDuration = null;
           var start = mtime();
 
-          try {
-            var pair = A2(update, msg, model);
-          } catch(err) {
-            if (isBackend) { bugsnag.notify(err); }
-            return;
-          }
+          $runUpdate
 
           const updateDuration = mtime() - start;
           start = mtime();
