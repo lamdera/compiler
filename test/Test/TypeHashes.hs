@@ -125,8 +125,8 @@ suite = tests
         sha_first = textSha1 "C[[R[SS]][S][Res[S,L[R[SS]]]][Res[S,R[SL[C[[][]]]SS]]][D[S,I]][D[S,R[C[[I]]SC[[I]]SC[[S]]L[C[[][]]]SS]]][D[S,R[C[[I]]SSS]]][][][Res[S,R[SL[C[[][]]]SS]]]]"
         sha_second = textSha1 "C[[R[SS]][S][Res[S,L[R[SS]]]][Res[S,R[SL[C[[][]]]SS]]][D[S,I]][D[S,R[C[[I]]SC[[I]]SC[[S]]L[C[[][]]]SS]]][D[S,R[C[[I]]SSS]]][][][][Res[S,R[SL[C[[][]]]SS]]]]"
 
-      liftIO $ putStrLn $ show sha_first
-      liftIO $ putStrLn $ show sha_second
+      liftIO $ atomicPutStrLn $ show sha_first
+      liftIO $ atomicPutStrLn $ show sha_second
 
       expect $ sha_first /= sha_second
   ]

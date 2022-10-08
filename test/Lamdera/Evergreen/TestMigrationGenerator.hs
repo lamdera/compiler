@@ -39,4 +39,9 @@ testMigrationGeneration scenario oldVersion newVersion = do
         , "src/Evergreen/V" <> show newVersion <> "/Types.elm"
         , "src/Evergreen/Migrate/V" <> show newVersion <> ".elm"
         ]
-  io $ Lamdera.Compile.makeDev "/Users/mario/dev/projects/lamdera-compiler/test/scenario-migration-generate" filenames
+
+  actual <- catchOutput $
+    Lamdera.Compile.makeDev "/Users/mario/dev/projects/lamdera-compiler/test/scenario-migration-generate" filenames
+
+  expectTextContains actual
+    "This `Unimplemented` value is a:\n\n    UnimplementedMigration"

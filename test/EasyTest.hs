@@ -98,11 +98,9 @@ textStripped t =
     & T.unlines
 
 
-bash = error "todo Ext.Common.bash"
-
-ensureBinary :: String -> Test ()
-ensureBinary t = do
-  exists <- liftIO $ bash "command -v icdiff"
+ensureBinaryIcdiff :: String -> Test ()
+ensureBinaryIcdiff t = do
+  exists <- liftIO $ Ext.Common.bash "command -v icdiff"
   if exists /= ""
     then ok
     else
@@ -119,8 +117,7 @@ expectEqualTextTrimmed expected actual =
     then
       ok
     else do
-      -- @TODO enable when merged and we've got Ext.Common.bash
-      -- _ <- ensureBinary "icdiff"
+      _ <- ensureBinaryIcdiff "icdiff"
       diff <- liftIO $ do
         icdiff realExpected realActual
 

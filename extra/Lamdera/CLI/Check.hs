@@ -39,7 +39,6 @@ import Lamdera.Evergreen.MigrationHarness (VersionInfo(..), createLamderaGenerat
 import qualified Lamdera.AppConfig
 import qualified Lamdera.Checks
 import qualified Lamdera.Compile
-import qualified Lamdera.Evergreen
 import qualified Lamdera.Evergreen.Snapshot
 import qualified Lamdera.Http
 import qualified Lamdera.Legacy
