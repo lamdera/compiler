@@ -25,7 +25,7 @@ import qualified Publish
 import qualified Repl
 
 
-import qualified Lamdera
+import qualified Lamdera.Version
 import qualified Lamdera.CLI
 import qualified Lamdera.Version
 

@@ -30,7 +30,6 @@ import qualified Terminal.Chomp as Chomp
 import qualified Terminal.Error as Error
 
 
-import qualified Lamdera
 import qualified Lamdera.Version
 import qualified Sanity
 

@@ -4,13 +4,16 @@ module Test where
 
 import EasyTest
 import Lamdera
-import qualified Test.LamderaGenerated
 import qualified Test.Snapshot
 import qualified Test.Lamdera
 import qualified Test.Check
 import qualified Test.Wire
 import qualified Test.Ext.ElmPages.Check
 import qualified Test.TypeHashes
+
+import qualified Lamdera.Evergreen.TestMigrationHarness
+import qualified Lamdera.Evergreen.TestMigrationGenerator
+
 import Test.Helpers
 
 import qualified Make
@@ -122,11 +125,13 @@ target = Test.all
 
 checkProjectCompiles = do
   setEnv "LDEBUG" "1"
+  let
   -- Lamdera.CLI.Check.checkUserProjectCompiles "/Users/mario/dev/test/lamdera-init"
   -- Lamdera.CLI.Check.checkUserProjectCompiles "/Users/mario/dev/projects/lamdera-dashboard"
 
   --  Lamdera.CLI.Check.checkUserProjectCompiles runs in async so we don't get the trace
-  let root = "/Users/mario/dev/projects/lamdera-website"
+      -- root = "/Users/mario/dev/test/style-elements"
+      root = "/Users/mario/dev/test/lamdera-init"
       scaffold = "src/Frontend.elm"
   -- let root = "/Users/mario/dev/test/realia/staging"
   --     scaffold = "src/LFR.elm"
@@ -134,7 +139,7 @@ checkProjectCompiles = do
   --     scaffold = "elm-stuff/elm-pages/.elm-pages/Main.elm"
       tmp = lamderaCache root <> "/tmp.js"
 
-  Lamdera.Compile.makeDev root scaffold
+  Lamdera.Compile.makeDev root [scaffold]
 
   -- Dir.withCurrentDirectory root $
   --   Make.run_cleanup (pure ()) [scaffold] $
@@ -183,30 +188,23 @@ buildTestHarnessToProductionJs = do
 {- Dynamic testing of lamdera live with managed thread kill + reload -}
 liveReloadLive = do
 
-
-
   setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
   setEnv "LDEBUG" "1"
 
   let p = "/Users/mario/lamdera/test/v1"
+
   -- let p = "/Users/mario/dev/test/lamdera-init"
   -- let p = "/Users/mario/dev/test/nu-ashworld-lamdera"
   -- let p = "/Users/mario/dev/projects/otstats"
   -- let p = "/Users/mario/work/codespecs"
+  -- let p = "/Users/mario/lamdera/overrides/packages/elm/bytes/1.0.8/benchmarks"
 
   -- rmdir "/Users/mario/.elm"
   -- rmdir $ p <> "/elm-stuff"
 
-  bash $ "cp /Users/mario/dev/projects/lamdera/runtime/src/LamderaRPC.elm " <> p <> "/src/LamderaRPC.elm"
-
-
-  Dir.setCurrentDirectory p
-  Dir.setCurrentDirectory p
-
-
-  Dir.setCurrentDirectory p
-  Dir.setCurrentDirectory p
-  withCurrentDirectory p $ trackedForkIO "Test.liveReloadLive" $ withCurrentDirectory p $ Develop.run () (Develop.Flags Nothing)
+  -- Dir.setCurrentDirectory p
+  -- withCurrentDirectory p $
+  trackedForkIO "Test.liveReloadLive" $ withCurrentDirectory p $ Develop.runWithRoot p (Develop.Flags Nothing)
 
   -- Doing this actually makes no sense in the :rr context, as the thread is long-running so it's the same as
   -- disabling the ENV vars mid-run! But leaving it here as a reminder, because it _does_ pollute the ENV
@@ -267,6 +265,7 @@ allTests =
     , scope "Test.Snapshot -> " $ Test.Snapshot.suite
     , scope "Test.Wire -> " $ Test.Wire.suite
     , scope "Test.Ext.ElmPages.Check -> " $ Test.Ext.ElmPages.Check.suite
-    , scope "Test.LamderaGenerated.suite -> " $ Test.LamderaGenerated.suite
     , scope "Test.TypeHashes -> " $ Test.TypeHashes.suite
+    , scope "Lamdera.Evergreen.TestMigrationHarness -> " $ Lamdera.Evergreen.TestMigrationHarness.suite
+    , scope "Lamdera.Evergreen.TestMigrationGenerator -> " $ Lamdera.Evergreen.TestMigrationGenerator.suite
     ]

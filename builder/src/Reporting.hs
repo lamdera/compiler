@@ -324,7 +324,7 @@ trackBuild style callback =
 
           _ <- forkIO $
             do  takeMVar mvar
-                putStrFlush "Compiling ..."
+                atomicPutStrLn "Compiling ..."
                 buildLoop chan 0
                 putMVar mvar ()
 
@@ -343,7 +343,7 @@ buildLoop chan done =
       case msg of
         Left BDone ->
           do  let !done1 = done + 1
-              putStrFlush $ "\rCompiling (" ++ show done1 ++ ")"
+              atomicPutStrLn $ "\rCompiling (" ++ show done1 ++ ")"
               buildLoop chan done1
 
         Right result ->
@@ -351,7 +351,7 @@ buildLoop chan done =
             !message = toFinalMessage done result
             !width = 12 + length (show done)
           in
-          putStrLn $
+          atomicPutStrLn $
             if length message < width
             then '\r' : replicate width ' ' ++ '\r' : message
             else '\r' : message
@@ -437,6 +437,8 @@ vbottom = if isWindows then '+' else '┘'
 putStrFlush :: String -> IO ()
 putStrFlush str =
   hPutStr stdout str >> hFlush stdout
+    -- This seemed ideal, but it actually ruins line-overwriting progress i.e. the compile indicator
+    -- so we need to be selective with what we actually override...
     -- & Lamdera.alternativeImplementation (atomicPutStrLn str)
 
 

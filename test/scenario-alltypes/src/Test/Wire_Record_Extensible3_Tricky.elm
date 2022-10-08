@@ -273,3 +273,77 @@ expected_w3_encode_TimePickerConfig =
 
 expected_w3_decode_TimePickerConfig =
     Lamdera.Wire3.succeedDecode (\timePickerType0 -> { timePickerType = timePickerType0 }) |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeInt
+
+
+
+{-
+
+   Recursive unconstrained -> constrained case in https://github.com/mdgriffith/style-elements/tree/5.0.2
+
+   Somewhat unclear how to resolve this.
+
+   Here's the error the below code results in:
+
+    -- TYPE MISMATCH ------------------- src/Test/Wire_Record_Extensible3_Tricky.elm
+
+    The 2nd argument to `encodeList` is not what I expect:
+
+        ^^^^^^^^^^
+    This `v1` value is a:
+
+        List (Property class Never)
+
+    But `encodeList` needs the 2nd argument to be:
+
+        List (Property class variation)
+
+    Hint: I always figure out the argument types from left to right. If an argument
+    is acceptable, I assume it is “correct” and move on. So the problem may actually
+    be in one of the previous arguments!
+
+    Hint: Your type annotation uses type variable `variation` which means ANY type
+    of value can flow through, but your code is saying it specifically wants a
+    `Never` value. Maybe change your type annotation to be more specific? Maybe
+    change the code to be more general?
+
+    Read <https://elm-lang.org/0.19.1/type-annotations> for more advice!
+    --------------------------------------------------------------------------------
+
+    So Elm's type inference is upset that we're narrowing the recursive `variation` call to a Never?
+
+    Is there any way to sort this out generically without special casing a new `w3_encode_Property_[variationType]`
+    implementation to handle the specific case?
+
+-}
+{-
+   type Property class variation
+       = Variation variation (List (Property class Never))
+
+
+   expected_w3_encode_Property :
+       (class -> Lamdera.Wire3.Encoder)
+       -> (variation -> Lamdera.Wire3.Encoder)
+       -> Property class variation
+       -> Lamdera.Wire3.Encoder
+   expected_w3_encode_Property w3_x_c_class w3_x_c_variation w3v =
+       case w3v of
+           Variation v0 v1 ->
+               Lamdera.Wire3.encodeSequenceWithoutLength
+                   [ Lamdera.Wire3.encodeUnsignedInt8 0
+                   , w3_x_c_variation v0
+                   , Lamdera.Wire3.encodeList (w3_encode_Property w3_x_c_class Lamdera.Wire3.encodeNever) v1
+                   ]
+
+
+   expected_w3_decode_Property w3_x_c_class w3_x_c_variation =
+       Lamdera.Wire3.decodeUnsignedInt8
+           |> Lamdera.Wire3.andThenDecode
+               (\w3v ->
+                   case w3v of
+                       0 ->
+                           Lamdera.Wire3.succeedDecode Variation |> Lamdera.Wire3.andMapDecode w3_x_c_variation |> Lamdera.Wire3.andMapDecode (Lamdera.Wire3.decodeList (w3_decode_Property w3_x_c_class Lamdera.Wire3.decodeNever))
+
+                       _ ->
+                           Lamdera.Wire3.failDecode
+               )
+-}

@@ -22,11 +22,14 @@ suite = tests $
         let p = "./test/scenario-elm-pages-incompatible-wire"
         Dir.setCurrentDirectory p
         setEnv "LDEBUG" "1"
+
+        bash $ "git submodule init"
+        bash $ "git submodule update"
         bash $ "npm i"
         bash $ "npm run build"
 
       actual <- catchOutput $
-        Lamdera.Compile.makeDev "./" ".elm-pages/Main.elm"
+        Lamdera.Compile.makeDev ".elm-pages" ["Main.elm"]
 
       io $ Dir.setCurrentDirectory "../.."
 

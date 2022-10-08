@@ -164,15 +164,15 @@ addWireGenerations_ canonical pkg ifaces modul =
 
     -- !x = unsafePerformIO $ do
     --       case (pkg, Src.getName modul) of
-    --         ((Name "elm" "regex"), "Regex") -> do
+    --         ((Name "mdgriffith" "style-elements"), _) -> do
     --         -- ((Name "author" "project"), "Subdir.Subsubdir.SubsubdirType") -> do
-    --
+
     --           newDefs
     --             & fmap ToSource.convert
     --             & mapM (atomicPutStrLn . T.unpack)
     --           -- formatHaskellValue "declsAfter" $ declsToSummary $ extendedDecls
     --           pure ()
-    --
+
     --         _ ->
     --           pure ()
 

@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
 
-module Test.LamderaGenerated where
+module Lamdera.Evergreen.TestMigrationHarness where
 
 import EasyTest
 import Control.Applicative
@@ -13,7 +13,7 @@ import System.Environment (setEnv, unsetEnv)
 import Test.Helpers
 
 import Lamdera
-import Lamdera.Evergreen
+import Lamdera.Evergreen.MigrationHarness
 
 
 all = do

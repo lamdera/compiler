@@ -95,9 +95,9 @@ withEnd (mClients, mLeader, mChan, beState) io = do
 -- Additional handler to serve files in /public from root / so that
 -- image/asset references from Elm work locally same as in production
 -- serveLamderaPublicFiles :: Snap ()
-serveLamderaPublicFiles serveElm serveFilePretty =
+serveLamderaPublicFiles root serveElm serveFilePretty =
   do  file <- getSafePath
-      let pubFile = "public" </> file
+      let pubFile = root </> "public" </> file
       guard =<< liftIO (Dir.doesFileExist pubFile)
       -- debug $ "serving lamdera public files: " <> file
       serveElm pubFile <|> serveFilePretty pubFile
@@ -193,7 +193,7 @@ refreshClients (mClients, mLeader, mChan, beState) =
   SocketServer.broadcastImpl mClients "{\"t\":\"r\"}" -- r is refresh, see live.js
 
 
-serveWebsocket (mClients, mLeader, mChan, beState) =
+serveWebsocket root (mClients, mLeader, mChan, beState) =
   do  file <- getSafePath
       guard (file == "_w")
       mKey <- getHeader "sec-websocket-key" <$> getRequest
@@ -251,7 +251,6 @@ serveWebsocket (mClients, mLeader, mChan, beState) =
                 -- debugT $ "[socketRecieve ] " <> text
                 if T.isPrefixOf "{\"t\":\"env\"," text
                   then do
-                    root <- liftIO $ getProjectRoot
                     -- This is a bit dodge, but avoids needing to pull in all of Aeson
                     setEnvMode root $ (T.splitOn "\"" text) !! 7
 
@@ -549,11 +548,11 @@ _10MB :: Word64
 _10MB =
   10000000 -- 10MB limit
 
+logger :: BS.ByteString -> IO ()
 logger =
   (\bs ->
     atomicPutStrLn $ T.unpack $ T.decodeUtf8 bs
   )
-
 
 jsonResponse :: B.Builder -> Snap ()
 jsonResponse s =

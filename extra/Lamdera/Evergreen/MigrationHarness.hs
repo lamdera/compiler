@@ -2,7 +2,7 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE BangPatterns #-}
 
-module Lamdera.Evergreen where
+module Lamdera.Evergreen.MigrationHarness where
 
 import Prelude hiding (init)
 import qualified System.Directory as Dir

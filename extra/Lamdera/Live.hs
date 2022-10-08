@@ -5,6 +5,7 @@
 module Lamdera.Live where
 
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Builder as B
 import qualified Data.Text.Encoding as T
 import qualified System.Directory as Dir
 import System.FilePath as FP
@@ -46,6 +47,19 @@ lamderaLiveSrc =
       else do
         Lamdera.debug $ "🗿  Using compiled lamderaLive"
         pure (T.encodeUtf8Builder (T.decodeUtf8 lamderaLive))
+
+
+-- @TODO means we have to restart live for any changes... how to improve that?
+lamderaLiveHead :: FilePath -> B.Builder
+lamderaLiveHead root =
+  Lamdera.unsafe $ do
+    headHtmlM <- readUtf8Text $ root </> "head.html"
+    case headHtmlM of
+      Just headHtml ->
+        pure (T.encodeUtf8Builder headHtml)
+
+      Nothing ->
+        pure ""
 
 
 lamderaLive :: BS.ByteString

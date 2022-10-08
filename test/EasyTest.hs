@@ -29,6 +29,7 @@ import Data.TreeDiff
 import System.IO (openTempFile, hClose)
 import System.Process (readProcessWithExitCode)
 import Lamdera
+import qualified Ext.Common
 
 data Status = Failed | Passed !Int | Skipped | Pending
 
@@ -96,8 +97,18 @@ textStripped t =
     & fmap T.stripEnd
     & T.unlines
 
+
+ensureBinaryIcdiff :: String -> Test ()
+ensureBinaryIcdiff t = do
+  exists <- liftIO $ Ext.Common.bash "command -v icdiff"
+  if exists /= ""
+    then ok
+    else
+      crash $ "I could not find a binary tool used in a test: " ++ t
+
+
 expectEqualTextTrimmed :: T.Text -> T.Text -> Test ()
-expectEqualTextTrimmed actual expected =
+expectEqualTextTrimmed expected actual =
   let
     realExpected = textStripped expected
     realActual = textStripped actual
@@ -106,6 +117,7 @@ expectEqualTextTrimmed actual expected =
     then
       ok
     else do
+      _ <- ensureBinaryIcdiff "icdiff"
       diff <- liftIO $ do
         icdiff realExpected realActual
 
@@ -367,7 +379,7 @@ runWrap env t = do
   e <- try $ runReaderT t env
   case e of
     Left e -> do
-      note_ env (messages env ++ "💥💥💥 EXCEPTION!!!: " ++ show (e :: SomeException))
+      note_ env ("\n💥💥💥 EXCEPTION!!!: 💥💥💥💥💥💥💥💥💥💥💥💥💥💥💥\n\n" ++ messages env ++ ":\n" ++ show (e :: SomeException) ++ "\n💥💥💥💥💥💥💥💥💥💥💥💥💥💥💥")
       runReaderT (putResult Failed) env
       pure Nothing
     Right a -> pure a

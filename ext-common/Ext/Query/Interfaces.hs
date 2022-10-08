@@ -28,7 +28,7 @@ import Ext.Common
 
 all :: [FilePath] -> IO (Map.Map ModuleName.Raw I.Interface)
 all paths = do
-  debug "Loading Interfaces.all"
+  debug $ "Loading Interfaces.all on paths: " ++ show paths
   artifactsDeps <- allDepArtifacts
   ifacesProject <-
     case paths of

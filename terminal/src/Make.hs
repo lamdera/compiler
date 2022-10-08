@@ -96,7 +96,7 @@ runHelp root paths style (Flags debug optimize maybeOutput _ maybeDocs) =
 
                     [name] ->
                       do  builder <- toBuilder root details desiredMode artifacts
-                          generate style "index.html" (Html.sandwich name builder) (NE.List name [])
+                          generate style "index.html" (Html.sandwich root name builder) (NE.List name [])
 
                     name:names ->
                       do  builder <- toBuilder root details desiredMode artifacts
@@ -117,7 +117,7 @@ runHelp root paths style (Flags debug optimize maybeOutput _ maybeDocs) =
                 Just (Html target) ->
                   do  name <- hasOneMain artifacts
                       builder <- toBuilder root details desiredMode artifacts
-                      generate style target (Html.sandwich name builder) (NE.List name [])
+                      generate style target (Html.sandwich root name builder) (NE.List name [])
 
               Lamdera.PostCompile.check details artifacts Exit.MakeCannotBuild
               pure res

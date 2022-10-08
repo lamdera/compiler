@@ -105,7 +105,7 @@ compile = do
   touch $ project </> "src/Types.elm"
   touch $ project </> "src/WireTypes.elm"
 
-  Lamdera.Compile.makeDev project ("src" </> "Frontend.elm")
+  Lamdera.Compile.makeDev project ["src" </> "Frontend.elm"]
 
   unsetEnv "TOKEN"
   unsetEnv "LAMDERA_APP_NAME"
@@ -124,7 +124,7 @@ snapshotWithParams version projectPath appName = do
   setEnv "ELM_HOME" "/Users/mario/elm-home-elmx-test"
 
   Dir.withCurrentDirectory projectPath $ do
-    Lamdera.Compile.makeDev projectPath ("src" </> "Types.elm")
+    Lamdera.Compile.makeDev projectPath ["src" </> "Types.elm"]
     Lamdera.Evergreen.Snapshot.run version
 
   unsetEnv "LAMDERA_APP_NAME"
@@ -159,7 +159,7 @@ testWire = do
 
   let rootPaths = [ "src" </> "Frontend.elm" ]
 
-  Lamdera.Compile.makeDev project ("src" </> "Frontend.elm")
+  Lamdera.Compile.makeDev project ["src" </> "Frontend.elm"]
 
 
 config = do

@@ -16,8 +16,8 @@ import qualified Lamdera.Live
 -- SANDWICH
 
 
-sandwich :: Name.Name -> B.Builder -> B.Builder
-sandwich moduleName javascript =
+sandwich :: FilePath -> Name.Name -> B.Builder -> B.Builder
+sandwich root moduleName javascript =
   let name = Name.toBuilder moduleName in
   [r|<!DOCTYPE HTML>
 <html>
@@ -26,6 +26,7 @@ sandwich moduleName javascript =
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, minimum-scale=1.0">
   <title>|] <> name <> [r|</title>
   <style>body { padding: 0; margin: 0; }</style>
+|] <> Lamdera.Live.lamderaLiveHead root <> [r|
 </head>
 
 <body>
