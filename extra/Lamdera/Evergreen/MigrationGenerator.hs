@@ -43,25 +43,28 @@ import StandaloneInstances
 import Lamdera.Evergreen.MigrationGeneratorHelpers
 
 
-betweenVersions :: Int -> Int -> IO Text
-betweenVersions oldVersion newVersion = do
+betweenVersions :: Int -> Int -> String -> IO Text
+betweenVersions oldVersion newVersion root = do
     let
-        -- @TODO generalise params
-        project = "/Users/mario/dev/projects/lamdera-compiler/test/scenario-migration-generate"
         paths = ["src/Evergreen/V" <> show oldVersion <> "/Types.elm", "src/Evergreen/V" <> show newVersion <> "/Types.elm"]
+        moduleNameString = "Evergreen.V" <> show newVersion <> ".Types"
 
-    Lamdera.Compile.makeDev project paths
+    Lamdera.Compile.makeDev root paths
 
-    res <- withCurrentDirectory project $ do
+    res <- withCurrentDirectory root $ do
         interfaces <- Ext.Query.Interfaces.all paths
-        generateFor oldVersion newVersion interfaces (interfaces Map.! (N.fromChars $ "Evergreen.V" <> show newVersion <> ".Types"))
+        case Map.lookup (N.fromChars moduleNameString) interfaces of
+          Just interface ->
+            generateFor oldVersion newVersion interfaces (interfaces Map.! (N.fromChars $ "Evergreen.V" <> show newVersion <> ".Types"))
+
+          Nothing ->
+            error $ "Fatal: could not find the module `" <> moduleNameString <> "`, please report this issue in Discord with your project code."
 
     Ext.ElmFormat.formatOrPassthrough res
 
 
 generateFor :: Int -> Int -> Interfaces -> Interface.Interface -> IO Text
 generateFor oldVersion newVersion interfaces iface_Types = do
-  -- pure ""
   let
     moduleName :: ModuleName.Canonical
     moduleName = (ModuleName.Canonical (Pkg.Name "author" "project") (N.fromChars $ "Evergreen.V" <> show newVersion <> ".Types"))
@@ -148,7 +151,7 @@ unionToFt oldVersion newVersion scope identifier@(author, pkg, newModule, tipe) 
     migrateUnion author pkg oldUnion newUnion params tvarMap oldVersion newVersion typeName newModule identifier oldModuleName interfaces recursionSet scope
 
 
--- migrateUnion :: Can.Union -> Can.Union -> Migration
+migrateUnion :: Pkg.Author -> Pkg.Project -> Can.Union -> Can.Union -> [Can.Type] -> [(N.Name, Can.Type)] -> Int -> Int -> N.Name -> N.Name -> TypeIdentifier -> N.Name -> Interfaces -> RecursionSet -> ModuleName.Canonical -> Migration
 migrateUnion author pkg oldUnion newUnion params tvarMap oldVersion newVersion typeName newModule identifier oldModuleName interfaces recursionSet scope =
   let
     oldModuleNameCanonical :: ModuleName.Canonical
@@ -283,9 +286,8 @@ migrateUnion author pkg oldUnion newUnion params tvarMap oldVersion newVersion t
   )
 
 
--- genOldConstructorMigrationDefinitions :: [Migration]
+genOldConstructorMigrationDefinitions :: N.Name -> Text -> N.Name -> Interfaces -> [(N.Name, Can.Type)] -> RecursionSet -> ModuleName.Canonical -> Int -> Int -> Can.Union -> Can.Union -> [Migration]
 genOldConstructorMigrationDefinitions oldModuleName moduleScope typeName interfaces tvarMap recursionSet localScope newVersion oldVersion newUnion oldUnion =
-  -- error "tbc"
   Can._u_alts oldUnion
     & fmap (\(Can.Ctor oldConstructor index int oldParams) ->
       -- For each OLD constructor type param
@@ -293,7 +295,7 @@ genOldConstructorMigrationDefinitions oldModuleName moduleScope typeName interfa
 
     )
 
-
+migrateParam :: Int -> Maybe Can.Type -> Maybe Can.Type -> Interfaces -> [(N.Name, Can.Type)] -> RecursionSet -> ModuleName.Canonical -> Int -> Int -> Migration
 migrateParam i paramOldM paramNewM interfaces tvarMap recursionSet localScope newVersion oldVersion =
   case (paramOldM, paramNewM) of
     (Just paramOld, Just paramNew) ->
@@ -306,16 +308,12 @@ migrateParam i paramOldM paramNewM interfaces tvarMap recursionSet localScope ne
             else if isAnonymousRecord paramOld then
               migration
             else if isUserDefinedType_ paramOld then
-              -- T.concat [" (", migrationNameUnderscored oldModuleName oldVersion newVersion (N.fromText $ asTypeName paramOld),  " p", show_ i, ")"]
               T.concat ["(p", show_ i, " |> ", migration, ")"]
             else
-              -- T.concat ["p", show_ i]
               T.concat ["(p", show_ i, " |> ", migration, ")"]
 
       in
       (appliedMigration, imps, subft)
-      -- migration
-      -- <> "MARKER🟠"
 
     (Just paramOld, Nothing) ->
       ("\n-- warning: old variant didn't get mapped to anything, check this is what you want\n", Set.empty, Map.empty)

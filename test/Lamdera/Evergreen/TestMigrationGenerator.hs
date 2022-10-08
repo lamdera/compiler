@@ -14,7 +14,7 @@ import Test.Helpers
 
 import Lamdera
 import qualified Lamdera.Compile
-import Lamdera.Evergreen.MigrationGenerator
+import qualified Lamdera.Evergreen.MigrationGenerator
 
 
 all = do
@@ -29,8 +29,10 @@ suite = tests
 
 testMigrationGeneration scenario oldVersion newVersion = do
 
+  let root = "/Users/mario/dev/projects/lamdera-compiler/test/scenario-migration-generate"
+
   mock <- io $ readUtf8Text $ "test/scenario-migration-generate/src/Evergreen/Migrate/V" <> show newVersion <> ".elm"
-  result <- io $ betweenVersions oldVersion newVersion
+  result <- io $ Lamdera.Evergreen.MigrationGenerator.betweenVersions oldVersion newVersion root
 
   expectEqualTextTrimmed (mock & withDefault "failed to load file") result
 

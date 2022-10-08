@@ -33,13 +33,10 @@ import qualified Elm.Outline
 import Lamdera
 import qualified Lamdera.Version
 
-import qualified Lamdera.Evergreen.MigrationHarness
-import Lamdera.Evergreen.MigrationHarness (VersionInfo(..), createLamderaGenerated, vinfoVersion, getLastLocalTypeChangeVersion)
 
 import qualified Lamdera.AppConfig
 import qualified Lamdera.Checks
 import qualified Lamdera.Compile
-import qualified Lamdera.Evergreen.Snapshot
 import qualified Lamdera.Http
 import qualified Lamdera.Legacy
 import qualified Lamdera.Progress as Progress
@@ -49,6 +46,12 @@ import qualified Lamdera.Types
 import qualified Lamdera.Update
 import qualified Lamdera.Version
 import qualified Network.Status
+
+
+import qualified Lamdera.Evergreen.Snapshot
+import qualified Lamdera.Evergreen.MigrationGenerator
+import qualified Lamdera.Evergreen.MigrationHarness
+import Lamdera.Evergreen.MigrationHarness (VersionInfo(..), createLamderaGenerated, vinfoVersion, getLastLocalTypeChangeVersion)
 
 
 progressPointer t = do
@@ -269,8 +272,7 @@ onlineCheck root appName inDebug localTypes externalTypeWarnings isHoistRebuild 
 
               lastLocalTypeChangeVersion <- Lamdera.Evergreen.MigrationHarness.getLastLocalTypeChangeVersion root
 
-              -- let defaultMigrations = defaultMigrationFile lastLocalTypeChangeVersion nextVersion typeCompares
-              let defaultMigrations = generateMigrationFile lastLocalTypeChangeVersion nextVersion typeCompares
+              defaultMigrations <- Lamdera.Evergreen.MigrationGenerator.betweenVersions lastLocalTypeChangeVersion nextVersion root
 
               writeUtf8 nextMigrationPath defaultMigrations
 
@@ -490,7 +492,6 @@ checkForLatestBinaryVersion inDebug = do
           Lamdera.Version.raw
 
       debug $ "comparing remote:" <> show latestVersionText <> " local:" <> show Lamdera.Version.raw
-
       debug $ "comparing remote:" <> show latestVersion <> " local:" <> show localVersion
 
       onlyWhen (latestVersionText /= "skip" && latestVersion > localVersion) $ do
@@ -710,19 +711,6 @@ committedCheck root versionInfo = do
 
       else
         progress "Okay, I did not add it."
-
-
-generateMigrationFile :: Int -> Int -> [(String, String, String)] -> Text
---  :: Int -> IO Text
-generateMigrationFile oldVersion newVersion typeCompares = do
-  --oldVersion = do
-  -- @NEXT
-
-  -- Get the typediffs for old/new types, per type
-
-  -- Recurse on the differences together somehow, writing out migration functions for each type encountered
-
-  ""
 
 
 lamderaCheckBothFileContents :: Int -> Text
