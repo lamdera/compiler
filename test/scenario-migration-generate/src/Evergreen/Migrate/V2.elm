@@ -68,6 +68,8 @@ backendModel old =
     , changedResult = old.changedResult |> Result.mapError migrate_Types_UserType |> Result.map migrate_Types_UserType
     , externalUnion = old.externalUnion |> migrate_External_ExternalUnion
     , added = Unimplemented -- Type `Int` was added in V2. I need you to set a default value.
+    , typeToAlias = old.typeToAlias |> migrate_Types_TypeToAlias
+    , aliasToType = old.aliasToType |> Unimplemented -- `AliasToType` was a type alias, but now it's a custom type. I need you to write this migration.
     , removed = Unimplemented -- Type `String` was removed in V2. I need you to do something with the `old.removed` value if you wish to keep the data, then remove this line.
     , removedRecord = Unimplemented -- Type `Evergreen.V1.External.AllTypes` was removed in V2. I need you to do something with the `old.removedRecord` value if you wish to keep the data, then remove this line.
     }
@@ -143,6 +145,12 @@ migrate_Types_ToFrontend old =
     case old of
         Evergreen.V1.Types.Nooptofrontend ->
             Evergreen.V2.Types.Nooptofrontend
+
+
+migrate_Types_TypeToAlias : Evergreen.V1.Types.TypeToAlias -> Evergreen.V2.Types.TypeToAlias
+migrate_Types_TypeToAlias old =
+    -- `TypeToAlias` was a concrete type, but now it's a type alias. I need you to write this migration.
+    Unimplemented
 
 
 migrate_Types_UserType : Evergreen.V1.Types.UserType -> Evergreen.V2.Types.UserType

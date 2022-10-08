@@ -26,6 +26,10 @@ type alias BackendModel =
     , changedResult : Result UserType UserType
     , externalUnion : Evergreen.V2.External.ExternalUnion
     , added : Int
+
+    -- Drastic changes
+    , typeToAlias : TypeToAlias
+    , aliasToType : AliasToType
     }
 
 
@@ -52,8 +56,12 @@ type CustomType
     | CustomTwo
 
 
-type alias UserRecordChanged =
-    { maybe : Maybe String }
+type alias TypeToAlias =
+    { maybe : Maybe Int }
+
+
+type AliasToType
+    = TypeToAlias_
 
 
 type alias FrontendModel =

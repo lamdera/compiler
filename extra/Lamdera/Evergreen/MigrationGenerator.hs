@@ -142,8 +142,8 @@ unionToFt oldVersion newVersion scope identifier@(author, pkg, newModule, tipe) 
     tipeOld = findDef oldModuleName typeName interfaces
   in
   case tipeOld of
-  Nothing        -> ("Unimplemented -- Cannot find any old type with same name as new type", Set.empty, Map.empty)
-  Just (Alias a) -> ("Unimplemented -- Old type was an Custom type, new type is an Alias", Set.empty, Map.empty)
+  Nothing        -> ("Unimplemented -- I couldn't find an old type named `" <> N.toText typeName <> "`. I need you to write this migration.", Set.empty, Map.empty)
+  Just (Alias a) -> ("Unimplemented -- `" <> N.toText typeName <> "` was a type alias, but now it's a custom type. I need you to write this migration.", Set.empty, Map.empty)
   Just (Union oldUnion) ->
     migrateUnion author pkg oldUnion newUnion params tvarMap oldVersion newVersion typeName newModule identifier oldModuleName interfaces recursionSet scope
 
@@ -423,56 +423,64 @@ isEquivalentEvergreenModule m1 m2 =
 
 -- A top level Alias definition i.e. `type alias ...`
 aliasToFt :: Int -> Int -> ModuleName.Canonical -> TypeIdentifier -> N.Name -> Interfaces -> RecursionSet -> Can.Alias -> Text -> Migration
-aliasToFt oldVersion newVersion scope identifier@(author, pkg, newModule, _) typeName interfaces recursionSet (Can.Alias tvars tipe) oldValueRef =
+aliasToFt oldVersion newVersion scope identifier@(author, pkg, newModule, _) typeName interfaces recursionSet alias@(Can.Alias tvars tipe) oldValueRef =
   let
     oldModuleName :: N.Name
     oldModuleName = asOldModuleName newModule newVersion oldVersion
 
-    tipeOld :: Maybe TypeDef
-    tipeOld = findDef oldModuleName typeName interfaces
+    tipeOldM :: Maybe TypeDef
+    tipeOldM = findDef oldModuleName typeName interfaces
 
   in
-  case tipeOld of
-    (Just (Alias (Can.Alias tvarsOld tipeOld))) ->
-      let
-        (subt, imps, subft) = canonicalToFt oldVersion newVersion scope interfaces recursionSet tipe (Just tipeOld) [] oldValueRef
+  case tipeOldM of
+    Nothing               -> ("Unimplemented -- I couldn't find an old type named `" <> N.toText typeName <> "`. I need you to write this migration.", Set.empty, Map.empty)
+    Just (Union oldUnion) -> ("Unimplemented -- `" <> N.toText typeName <> "` was a custom type, but now it's a type alias. I need you to write this migration.", Set.empty, Map.empty)
+    Just (Alias aliasOld@(Can.Alias tvarsOld tipeOld)) ->
+      migrateAlias oldVersion newVersion scope identifier typeName interfaces recursionSet alias aliasOld oldModuleName oldValueRef
 
-        tvars_ = tvars & fmap N.toText & T.intercalate " "
 
-        typeScope =
-          if moduleName == scope then
-            ""
-          -- else if isUserType identifier then
-          --   nameToText newModule <> "."
-          else
-            T.concat [nameToText newModule, "."]
+-- A top level Alias definition i.e. `type alias ...`
+migrateAlias :: Int -> Int -> ModuleName.Canonical -> TypeIdentifier -> N.Name -> Interfaces -> RecursionSet -> Can.Alias -> Can.Alias -> N.Name -> Text -> Migration
+migrateAlias oldVersion newVersion scope identifier@(author, pkg, newModule, _) typeName interfaces recursionSet (Can.Alias tvars tipe) (Can.Alias tvarsOld tipeOld) oldModuleName oldValueRef =
+  let
+    (subt, imps, subft) = canonicalToFt oldVersion newVersion scope interfaces recursionSet tipe (Just tipeOld) [] oldValueRef
 
-        moduleName = (ModuleName.Canonical (Pkg.Name author pkg) newModule)
+    tvars_ = tvars & fmap N.toText & T.intercalate " "
 
-        migration =
-          if tipe == tipeOld then
-            "ModelUnchanged"
-          else
-            subt
+    typeScope =
+      if moduleName == scope then
+        ""
+      -- else if isUserType identifier then
+      --   nameToText newModule <> "."
+      else
+        T.concat [nameToText newModule, "."]
 
-        newModuleName =
-          newModule
-            & N.toText
+    moduleName = (ModuleName.Canonical (Pkg.Name author pkg) newModule)
 
-      in
-      ( if length tvars > 0 then
-          T.concat ["(", typeScope, nameToText typeName, tvars_, ")"] -- <> "<!2>"
-        else
-          T.concat [typeScope, nameToText typeName] -- <> "<!3>"
-      , imps
-      , (Map.singleton (moduleKey identifier) $
-          MigrationDefinition
-            { imports = imps
-            , types = [ typedAliasMigration oldModuleName newModuleName typeName migration ]
-            })
-          & mergeMigrationDefinitions subft
-      )
-    _ -> error "old alias became ???"
+    migration =
+      if tipe == tipeOld then
+        "ModelUnchanged"
+      else
+        subt
+
+    newModuleName =
+      newModule
+        & N.toText
+
+  in
+  ( if length tvars > 0 then
+      T.concat ["(", typeScope, nameToText typeName, tvars_, ")"] -- <> "<!2>"
+    else
+      T.concat [typeScope, nameToText typeName] -- <> "<!3>"
+  , imps
+  , (Map.singleton (moduleKey identifier) $
+      MigrationDefinition
+        { imports = imps
+        , types = [ typedAliasMigration oldModuleName newModuleName typeName migration ]
+        })
+      & mergeMigrationDefinitions subft
+  )
+
 
 typedAliasMigration oldModuleName newModuleName typeName migration =
   T.concat ["\n", (lowerFirstLetter_ $ nameToText typeName), " : ", nameToText oldModuleName, ".", nameToText typeName, " -> ModelMigration ", newModuleName, ".", nameToText typeName, " ", newModuleName, ".", msgForType (nameToText typeName), "\n",
@@ -580,10 +588,15 @@ handleAliasToFt oldVersion newVersion scope interfaces recursionSet tipe@(Can.TA
 
         (subt, imps, subft) :: Migration =
           case tipeOldM of
-            Just tipeOld ->
+            Just (tipeOld@(Can.TAlias moduleName name tvarMap_ aliasType)) ->
               canonicalToFt oldVersion newVersion moduleName interfaces recursionSet cType (Just tipeOld) tvarMap_ oldValueRef
+
+            Just tipeOld ->
+              ("-- `" <> N.toText typeName <> "` was a concrete type, but now it's a type alias. I need you to write this migration.\n        Unimplemented", Set.empty, Map.empty)
+
             Nothing ->
-              canonicalToFt oldVersion newVersion moduleName interfaces recursionSet cType Nothing tvarMap_ oldValueRef
+              ("-- I couldn't find an old type named `" <> N.toText typeName <> "`. I need you to write this migration.\n        Unimplemented", Set.empty, Map.empty)
+
 
         typeScope =
           if moduleName == scope then
