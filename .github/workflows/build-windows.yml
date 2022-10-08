@@ -9,7 +9,7 @@ jobs:
     name: Build Windows Libraries
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
 
       # First, check if the specific cache exists, so we don't waste ~3m of build
       # time restoring the 1.5GB cache for no reason. See https://github.com/actions/cache/pull/420
@@ -27,7 +27,7 @@ jobs:
       # If it doesn't exist, setup our cache action, while also trying to restore
       # a prior broader matching cache if it exists (saves a lot of time if just
       # modifying a few packages).
-      - uses: actions/cache@v2
+      - uses: actions/cache@v3
         if: steps.cache.outputs.cache-hit != 'true'
         with:
           path: |
@@ -62,12 +62,12 @@ jobs:
     runs-on: windows-latest
     needs: build-packages
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - uses: haskell/actions/setup@v1
         with:
           enable-stack: true
           stack-version: 'latest'
-      - uses: actions/cache@v2
+      - uses: actions/cache@v3
         with:
           path: |
             ~\AppData\Local\Programs\stack
@@ -80,14 +80,14 @@ jobs:
       # Use a retry action because inexplicably sometimes stack install stalls
       # indefinitely after the `compiling Main` step, but then succeeds immediately
       # with a second stack install. 🤷🏻‍♂️
-      - uses: nick-invision/retry@v2
+      - uses: nick-fields/retry@v2
         with:
           timeout_minutes: 5
           max_attempts: 3
           command: stack install
 
       - name: Archive lamdera.exe artifact
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: lamdera-next.exe
           path: ~\AppData\Roaming\local\bin\lamdera.exe
