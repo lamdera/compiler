@@ -181,17 +181,54 @@ migrate_Types_UserType old =
 
         Evergreen.V1.Types.UserAnonymous p0 ->
             Evergreen.V2.Types.UserAnonymous
-                { record = p0.record
+                { name = p0.name
                 , userType = p0.userType |> migrate_Types_UserType
                 }
 
         Evergreen.V1.Types.UserAnonymousNested p0 ->
             Evergreen.V2.Types.UserAnonymousNested
-                { record = p0.record
+                { name = p0.name
                 , subrecord =
                     p0.subrecord
                         |> (\rec1 ->
                                 { userType = rec1.userType |> migrate_Types_UserType
+                                }
+                           )
+                }
+
+        Evergreen.V1.Types.UserAnonymousNestedAdded p0 ->
+            Evergreen.V2.Types.UserAnonymousNestedAdded
+                { name = p0.name
+                , subrecord =
+                    p0.subrecord
+                        |> (\rec1 ->
+                                { userType = rec1.userType |> migrate_Types_UserType
+                                , added = Unimplemented -- Type `Int` was added in V2. I need you to set a default value.
+                                }
+                           )
+                }
+
+        Evergreen.V1.Types.UserAnonymousNestedRemoved p0 ->
+            Evergreen.V2.Types.UserAnonymousNestedRemoved
+                { name = p0.name
+                , subrecord =
+                    p0.subrecord
+                        |> (\rec1 ->
+                                { userType = rec1.userType |> migrate_Types_UserType
+                                , removed = Unimplemented -- Type `String` was removed in V2. I need you to do something with the `old.removed` value if you wish to keep the data, then remove this line.
+                                }
+                           )
+                }
+
+        Evergreen.V1.Types.UserAnonymousNestedAddedRemoved p0 ->
+            Evergreen.V2.Types.UserAnonymousNestedAddedRemoved
+                { name = p0.name
+                , subrecord =
+                    p0.subrecord
+                        |> (\rec1 ->
+                                { userType = rec1.userType |> migrate_Types_UserType
+                                , added = Unimplemented -- Type `Int` was added in V2. I need you to set a default value.
+                                , removed = Unimplemented -- Type `String` was removed in V2. I need you to do something with the `old.removed` value if you wish to keep the data, then remove this line.
                                 }
                            )
                 }

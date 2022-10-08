@@ -40,8 +40,11 @@ type UserType
     | UserResultP1 (Result CustomType String)
     | UserResultP2 (Result Int CustomType)
     | UserResultPBoth (Result CustomType Evergreen.V1.External.ExternalUnion)
-    | UserAnonymous { record : String, userType : UserType }
-    | UserAnonymousNested { record : String, subrecord : { userType : UserType } }
+    | UserAnonymous { name : String, userType : UserType }
+    | UserAnonymousNested { name : String, subrecord : { userType : UserType } }
+    | UserAnonymousNestedAdded { name : String, subrecord : { userType : UserType } }
+    | UserAnonymousNestedRemoved { name : String, subrecord : { userType : UserType, removed : String } }
+    | UserAnonymousNestedAddedRemoved { name : String, subrecord : { userType : UserType, removed : String } }
 
 
 type CustomType
