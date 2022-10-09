@@ -79,7 +79,6 @@ isProdEnv =
       error $ "ERROR: please report: skipping url open on unknown OSTYPE: " <> show name
 
 
-
 -- Copy of combined internals of Project.getRoot as it seems to notoriously cause cyclic wherever imported
 -- Further modified for more explicit current directory setting compared to flakey Dir.setCurrentDirectory
 
@@ -101,6 +100,7 @@ setProjectRoot :: FilePath -> IO ()
 setProjectRoot root = do
   debug $ "➡️🏠  set project root: " <> root
   modifyMVar_ projectRootMvar (\v -> pure $ ProjectRootSet root)
+
 
 getProjectRoot :: IO FilePath
 getProjectRoot = do
