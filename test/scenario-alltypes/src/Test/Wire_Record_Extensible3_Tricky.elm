@@ -314,6 +314,13 @@ expected_w3_decode_TimePickerConfig =
     Is there any way to sort this out generically without special casing a new `w3_encode_Property_[variationType]`
     implementation to handle the specific case?
 
+    After asking on Slack, Jeremy came up with a trampolining solution: https://ellie-app.com/jPLtxqfsM3ba1
+
+    But a few folks comfirmed this is a polymorphic recursion bug:
+
+    - https://github.com/elm/compiler/issues/2180
+    - https://github.com/elm/compiler/issues/238#issuecomment-23913277
+
 -}
 {-
    type Property class variation
