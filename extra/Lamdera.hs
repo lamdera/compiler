@@ -75,8 +75,8 @@ module Lamdera
   , lamderaEnvModePath
   , lamderaExternalWarningsPath
   , lamderaBackendDevSnapshotPath
-  , setProjectRoot
-  , getProjectRoot
+  , Ext.Common.setProjectRoot
+  , Ext.Common.getProjectRoot
   , Ext.Common.getProjectRootFor
   , Ext.Common.getProjectRootMaybe
   , Ext.Common.justs
@@ -204,27 +204,6 @@ printLock = unsafePerformIO $ newMVar ()
 atomicPutStrLn :: String -> IO ()
 atomicPutStrLn str =
   withMVar printLock (\_ -> hPutStr stdout (str <> "\n") >> hFlush stdout)
-
-
-
-data ProjectRoot = ProjectRootInvalid | ProjectRootSet FilePath | ProjectRootContextual FilePath
-
--- https://stackoverflow.com/questions/16811376/simulate-global-variable trick
-{-# NOINLINE projectRootMvar #-}
-projectRootMvar :: MVar ProjectRoot
-projectRootMvar = unsafePerformIO $ do
-  rootM <- Ext.Common.getProjectRootMaybe
-  newMVar $
-    case rootM of
-      Just root ->
-        ProjectRootContextual root
-      Nothing ->
-        ProjectRootInvalid
-
-setProjectRoot :: FilePath -> IO ()
-setProjectRoot root = do
-  debug $ "➡️🏠  set project root: " <> root
-  modifyMVar_ projectRootMvar (\v -> pure $ ProjectRootSet root)
 
 
 -- debug :: String -> Task.Task a

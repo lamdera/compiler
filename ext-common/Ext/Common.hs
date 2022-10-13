@@ -80,17 +80,40 @@ isProdEnv =
 
 
 -- Copy of combined internals of Project.getRoot as it seems to notoriously cause cyclic wherever imported
+-- Further modified for more explicit current directory setting compared to flakey Dir.setCurrentDirectory
+
+data ProjectRoot = ProjectRootInvalid | ProjectRootSet FilePath | ProjectRootContextual FilePath
+
+-- https://stackoverflow.com/questions/16811376/simulate-global-variable trick
+{-# NOINLINE projectRootMvar #-}
+projectRootMvar :: MVar ProjectRoot
+projectRootMvar = unsafePerformIO $ do
+  rootM <- Ext.Common.getProjectRootMaybe
+  newMVar $
+    case rootM of
+      Just root ->
+        ProjectRootContextual root
+      Nothing ->
+        ProjectRootInvalid
+
+setProjectRoot :: FilePath -> IO ()
+setProjectRoot root = do
+  debug $ "➡️🏠  set project root: " <> root
+  modifyMVar_ projectRootMvar (\v -> pure $ ProjectRootSet root)
+
 getProjectRoot :: IO FilePath
 getProjectRoot = do
-  subDir <- Dir.getCurrentDirectory
-  res <- getProjectRootMaybe
-  case res of
-    Just filepath -> pure filepath
-    Nothing -> do
-      binName <- Env.getProgName
-      putStrLn $ "Cannot find an elm.json! Make sure you're in a project folder, or run `" <> binName <> " init` to start a new one. (I started searching from " <> subDir <> ")"
-      debug $ "current directory was: " <> subDir
-      exitFailure
+  root <- readMVar projectRootMvar
+  case root of
+    ProjectRootInvalid -> do
+      debug $ "🏠  got project root: " <> "invalid project root"
+      pure "blah"
+    ProjectRootSet root -> do
+      debug $ "🏠  got project root: " <> root
+      pure root
+    ProjectRootContextual root -> do
+      debug $ "🏠  got project root: " <> root
+      pure root
 
 
 getProjectRootMaybe :: IO (Maybe FilePath)
