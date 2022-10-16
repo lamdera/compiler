@@ -302,6 +302,10 @@ serveExperimental root = do
       , ("_x/write", serveExperimentalWrite root)
       , ("_x/list", serveExperimentalList root)
       , ("_x/editor", serveExperimentalEditorOpen root)
+      , ("_x\\read", serveExperimentalRead root)
+      , ("_x\\write", serveExperimentalWrite root)
+      , ("_x\\list", serveExperimentalList root)
+      , ("_x\\editor", serveExperimentalEditorOpen root)
       ]
   handlers
     & List.find (\(prefix, handler) ->
@@ -309,8 +313,9 @@ serveExperimental root = do
     )
     & fmap (\(prefix, handler) -> do
       let path =
-            fullpath & T.replace (prefix <>  "/") "" -- Strip when sub-dirs
-                     & T.replace prefix ""           -- Strip when root dir
+            fullpath & T.replace (prefix <>  "/") ""  -- Strip when sub-dirs
+                     & T.replace (prefix <>  "\\") "" -- Strip when sub-dirs windows
+                     & T.replace prefix ""            -- Strip when root dir
       failIfNotExperimentalMode (handler path)
     )
     & withDefault pass
