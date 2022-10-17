@@ -96,11 +96,10 @@ compile pkg ifaces modul = do
   let
       canonical3 :: Can.Module
       canonical3 =
-          Lamdera.UiSourceMap.updateDecls
-              (Can._name canonical2)
-              (Can._decls canonical2)
-              & (\newDecls -> canonical2 { Can._decls = newDecls })
-
+        if Lamdera.isLive
+          then Lamdera.UiSourceMap.updateDecls (Can._name canonical2) (Can._decls canonical2)
+                 & (\newDecls -> canonical2 { Can._decls = newDecls })
+          else canonical2
 
   -- ()          <- debugPassText "starting optimize" moduleName (pure ())
   objects     <- optimize modul_ annotations canonical3

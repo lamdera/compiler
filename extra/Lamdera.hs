@@ -37,6 +37,8 @@ module Lamdera
   , isExperimental_
   -- , isTypeSnapshot
   , isTest
+  , isLive
+  , setLive
   , Ext.Common.ostype
   , Ext.Common.OSType(..)
   , env
@@ -365,6 +367,18 @@ isTest = do
   case debugM of
     Just _ -> pure True
     Nothing -> pure False
+
+
+{-# NOINLINE isLive_ #-}
+isLive_ :: MVar Bool
+isLive_ = unsafePerformIO $ newMVar False
+
+setLive :: Bool -> IO ()
+setLive b = modifyMVar_ isLive_ (\_ -> pure b)
+
+{-# NOINLINE isLive #-}
+isLive :: Bool
+isLive = unsafePerformIO $ readMVar isLive_
 
 
 env =
