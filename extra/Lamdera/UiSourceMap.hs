@@ -48,6 +48,34 @@ import qualified CanSer.CanSer as ToSource
 import qualified Data.Text as T
 import qualified Data.Utf8
 
+
+updateDecls :: Module.Canonical -> Can.Decls -> Can.Decls
+updateDecls fileName decls =
+    case fileName of
+        Module.Canonical (Name "author" "project") "LocalDev" ->
+            decls
+
+        Module.Canonical (Name "author" "project") _ ->
+            case decls of
+                Can.Declare def nextDecl ->
+                    Can.Declare (updateDefs fileName def) (updateDecls fileName nextDecl)
+
+                Can.DeclareRec def remainingDefs nextDecl ->
+                    Can.DeclareRec
+                        (updateDefs fileName def)
+                        (map (updateDefs fileName) remainingDefs)
+                        (updateDecls fileName nextDecl)
+
+                Can.SaveTheEnvironment ->
+                    Can.SaveTheEnvironment
+
+        _ ->
+            decls
+
+
+
+
+
 newAttributes isElmUi fileName functionName location originalAttributes =
     let
         a = Reporting.Annotation.At location
@@ -493,29 +521,6 @@ updateDefs fileName def =
                 type_
 
 
-updateDecls :: Module.Canonical -> Can.Decls -> Can.Decls
-updateDecls fileName decls =
-    case fileName of
-        Module.Canonical (Name "author" "project") "LocalDev" ->
-            decls
-
-        Module.Canonical (Name "author" "project") _ ->
-            case decls of
-                Can.Declare def nextDecl ->
-                    Can.Declare (updateDefs fileName def) (updateDecls fileName nextDecl)
-
-                Can.DeclareRec def remainingDefs nextDecl ->
-                    Can.DeclareRec
-                        (updateDefs fileName def)
-                        (map (updateDefs fileName) remainingDefs)
-                        (updateDecls fileName nextDecl)
-
-                Can.SaveTheEnvironment ->
-                    Can.SaveTheEnvironment
-
-        _ ->
-            decls
-
 {-|123 is used as a suffix to reduce the chances of a name collision-}
 src :: B.Builder
 src =
@@ -549,7 +554,7 @@ window.addEventListener(
 window.addEventListener(
     "keydown",
     function(event) {
-        if (event.ctrlKey && event.altKey && event.keyCode == 67)
+        if (event.ctrlKey && event.altKey && event.keyCode == 88)
         {
             let target = document.elementFromPoint(mouseX123, mouseY123);
 
