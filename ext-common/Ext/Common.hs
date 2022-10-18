@@ -107,13 +107,13 @@ getProjectRoot tag = do
   root <- readMVar projectRootMvar
   case root of
     ProjectRootInvalid -> do
-      debug $ "🏠  read project root [" <> tag <> "]: " <> "invalid project root"
+      debug $ "🏠 read project root [" <> tag <> "]: " <> "invalid project root"
       pure "blah"
     ProjectRootSet root -> do
-      debug $ "🏠  read project root [" <> tag <> "]: " <> root
+      debug $ "🏠 read project root [" <> tag <> "]: " <> root
       pure root
     ProjectRootContextual root -> do
-      debug $ "🏠  read project root [" <> tag <> "]: " <> root
+      debug $ "🏠 read project root [" <> tag <> "]: " <> root
       pure root
 
 

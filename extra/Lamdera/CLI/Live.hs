@@ -396,6 +396,9 @@ tryOpenInDetectedEditor root file row column = do
       error404 "No supported editors found"
 
     (editor, openEditor):xs -> do
+      debug "📝  found the following editors, opening first:"
+      justs res & fmap fst & show & debug
+
       liftIO $ openEditor file row column
       jsonResponse $ "{ status: 'tried opening editor " <> editor <> "' }"
 
@@ -413,22 +416,40 @@ editors projectRoot =
       (Dir.doesFileExist (projectRoot </> "openEditor.bat"))
       (\file row column -> Ext.Common.cq_ (projectRoot </> "openEditor.bat") [file, T.unpack row, T.unpack column] "")
 
-  , detectEditor "vscode-insiders"
-      (Dir.doesFileExist "/usr/local/bin/code-insiders")
-      (\file row column -> Ext.Common.cq_ "/usr/local/bin/code-insiders" [ "-g", file <> ":" <> T.unpack row <> ":" <> T.unpack column] "")
+  , detectExecutable "code-insiders"
+      (\executablePath file row column -> do
+        Ext.Common.c_ executablePath [ "-g", file <> ":" <> T.unpack row <> ":" <> T.unpack column] ""
+      )
 
-  , detectEditor "vscode"
-      (Dir.doesFileExist "/usr/local/bin/code")
-      (\file row column -> Ext.Common.cq_ "/usr/local/bin/code" [ "-g", file <> ":" <> T.unpack row <> ":" <> T.unpack column] "")
+  , detectExecutable "code"
+      (\executablePath file row column -> do
+        Ext.Common.c_ executablePath [ "-g", file <> ":" <> T.unpack row <> ":" <> T.unpack column] ""
+      )
 
   , detectEditor "intellij-ce"
       (Dir.doesDirectoryExist "/Applications/IntelliJ IDEA CE.app")
-      (\file row column -> Ext.Common.cq_  "open" ["-na", "IntelliJ IDEA CE.app", "--args", "--line", T.unpack row, file] "")
+      (\file row column -> do
+        let column_ :: Int = column & readMaybeText & withDefault 1
+        -- IntelliJ seems to number it's columns from 1 index
+        Ext.Common.cq_  "open" ["-na", "IntelliJ IDEA CE.app", "--args", "--line", T.unpack row, "--column", show (column_ - 1), file] ""
+      )
 
   , detectEditor "intellij"
       (Dir.doesDirectoryExist "/Applications/IntelliJ IDEA.app")
-      (\file row column -> Ext.Common.cq_  "open" ["-na", "IntelliJ IDEA.app", "--args", "--line", T.unpack row, file] "")
+      (\file row column -> do
+        let column_ :: Int = column & readMaybeText & withDefault 1
+        -- IntelliJ seems to number it's columns from 1 index
+        Ext.Common.cq_  "open" ["-na", "IntelliJ IDEA.app", "--args", "--line", T.unpack row, "--column", show (column_ - 1), file] ""
+      )
   ]
+
+
+detectExecutable :: B.Builder -> (FilePath -> EditorOpenIO) -> IO (Maybe (B.Builder, EditorOpenIO))
+detectExecutable executableName fn = do
+  x <- Dir.findExecutable $ Ext.Common.builderToString executableName
+  pure $ case x of
+    Just path -> Just (executableName, fn path)
+    _ -> Nothing
 
 
 detectEditor :: B.Builder -> IO Bool -> EditorOpenIO -> IO (Maybe (B.Builder, EditorOpenIO))

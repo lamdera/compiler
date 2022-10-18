@@ -146,7 +146,7 @@ calculateLamderaHashes_ interfaces iface_Types inDebug = do
               (errors_ & List.nub & fmap (\e -> D.fromChars . T.unpack $ "- " <> e) )
           )
 
-  debug "Generating type hashes..."
+  debug "🕸  Generating type hashes..."
 
   if List.length errors > 0
     then
