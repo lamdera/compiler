@@ -269,6 +269,13 @@ Executable lamdera
         Lamdera.Evaluate.Canonical
         Lamdera.Evaluate.Optimized
 
+        -- elm-pages support --
+        Lamdera.PostCompile
+        Test.Ext.ElmPages.Check
+
+        -- UI Source Map Experiment --
+        Lamdera.UiSourceMap
+
         -- Lamdera Legacy --
         Lamdera.Legacy
         -- Wire.Source
@@ -281,6 +288,7 @@ Executable lamdera
         -- Fusion.Encode
         -- Fusion.Binary
         -- Lamdera.Diff
+
 
         -- Testing:
         EasyTest
@@ -298,6 +306,7 @@ Executable lamdera
 
 
         -- Debug helpers --
+        LamderaSharedBuildHelpers
         StandaloneInstances
         CanSer.CanSer
         Sanity
@@ -410,4 +419,5 @@ Executable lamdera
         clock,
         fold-debounce,
         formatting,
-        fsnotify
+        fsnotify,
+        command

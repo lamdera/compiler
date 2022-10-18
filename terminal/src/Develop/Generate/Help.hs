@@ -16,6 +16,7 @@ import Text.RawString.QQ (r)
 import qualified Json.Encode as Encode
 
 import qualified Lamdera.Live
+import qualified Lamdera.UiSourceMap
 
 -- PAGES
 
@@ -33,7 +34,7 @@ makePageHtml moduleName maybeFlags =
 <body>
 <script>
 Elm.|] <> Name.toBuilder moduleName <> [r|.init({ flags: |] <> maybe "undefined" Encode.encode maybeFlags <> [r| });
-|] <> Lamdera.Live.lamderaLiveSrc <> [r|
+|] <> Lamdera.Live.lamderaLiveSrc <> Lamdera.UiSourceMap.src <> [r|
 </script>
 </body>
 </html>
@@ -62,7 +63,7 @@ makeCodeHtml title code =
   <script>if (hljs) { hljs.initHighlightingOnLoad(); }</script>
 </head>
 <body style="background-color: #F0F0F0;">
-<pre><code>|] <> code <> [r|</code></pre>
+<pre><code>|] <> code <> Lamdera.UiSourceMap.src <> [r|</code></pre>
 </body>
 </html>
 |]

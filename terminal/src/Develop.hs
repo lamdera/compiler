@@ -67,7 +67,9 @@ run () flags = do
 
 runWithRoot :: FilePath -> Flags -> IO ()
 runWithRoot root (Flags maybePort) =
-  do  let port = maybe 8000 id maybePort
+  do
+      Lamdera.setLive True
+      let port = maybe 8000 id maybePort
       liftIO $ Lamdera.stdoutSetup
       atomicPutStrLn $ "Go to http://localhost:" ++ show port ++ " to see your project dashboard."
 
@@ -125,10 +127,10 @@ runWithRoot root (Flags maybePort) =
 
 config :: Int -> Config Snap a
 config port =
-  setVerbose False $ setPort port $
+  setVerbose True $ setPort port $
     -- setAccessLog ConfigNoLog $ setErrorLog ConfigNoLog $ defaultConfig
     -- Unsure why errors aren't logged in original impl, exceptions get eaten otherwise...
-    setAccessLog ConfigNoLog $ setErrorLog (ConfigIoLog Live.logger) $ defaultConfig
+    setAccessLog (ConfigIoLog Live.logger) $ setErrorLog (ConfigIoLog Live.logger) $ defaultConfig
 
 
 -- INDEX

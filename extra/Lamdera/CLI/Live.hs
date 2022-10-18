@@ -57,6 +57,8 @@ import Control.Monad (guard, void)
 
 import qualified Lamdera.CLI.Check
 import qualified Lamdera.RelativeLoad
+import qualified Ext.Common
+
 
 
 type LiveState = (TVar [Client], TVar (Maybe ClientId), BroadcastChan In Text, TVar Text)
@@ -299,6 +301,11 @@ serveExperimental root = do
       [ ("_x/read", serveExperimentalRead root)
       , ("_x/write", serveExperimentalWrite root)
       , ("_x/list", serveExperimentalList root)
+      , ("_x/editor", serveExperimentalEditorOpen root)
+      , ("_x\\read", serveExperimentalRead root)
+      , ("_x\\write", serveExperimentalWrite root)
+      , ("_x\\list", serveExperimentalList root)
+      , ("_x\\editor", serveExperimentalEditorOpen root)
       ]
   handlers
     & List.find (\(prefix, handler) ->
@@ -306,8 +313,9 @@ serveExperimental root = do
     )
     & fmap (\(prefix, handler) -> do
       let path =
-            fullpath & T.replace (prefix <>  "/") "" -- Strip when sub-dirs
-                     & T.replace prefix ""           -- Strip when root dir
+            fullpath & T.replace (prefix <>  "/") ""  -- Strip when sub-dirs
+                     & T.replace (prefix <>  "\\") "" -- Strip when sub-dirs windows
+                     & T.replace prefix ""            -- Strip when root dir
       failIfNotExperimentalMode (handler path)
     )
     & withDefault pass
@@ -359,6 +367,78 @@ serveExperimentalList root path = do
 
     else do
       error404 "folder not found"
+
+
+serveExperimentalEditorOpen :: FilePath -> Text -> Snap ()
+serveExperimentalEditorOpen root path = do
+  debug $ "_x/editor received: " ++ show path
+  case path & T.splitOn ":" of
+    file:row:column:xs -> do
+      let fullpath = (root </> T.unpack file)
+      debug $ "_x/editor: " ++ show fullpath
+      exists_ <- liftIO $ Dir.doesFileExist fullpath
+      if exists_
+        then do
+          tryOpenInDetectedEditor root fullpath row column
+
+        else do
+          error404 "file not found"
+    _ ->
+      error404 "unexpected identifier, expecting format: <filename>:<row>:<column>"
+
+
+tryOpenInDetectedEditor :: FilePath -> FilePath -> Text -> Text -> Snap ()
+tryOpenInDetectedEditor root file row column = do
+  res <- liftIO $ mapM id (editors root)
+  case justs res of
+    [] ->
+      -- @TODO give more helpful error that guides user how to configure things?
+      error404 "No supported editors found"
+
+    (editor, openEditor):xs -> do
+      liftIO $ openEditor file row column
+      jsonResponse $ "{ status: 'tried opening editor " <> editor <> "' }"
+
+
+type EditorOpenIO = (FilePath -> Text -> Text -> IO String)
+
+
+editors :: FilePath -> [IO (Maybe (B.Builder, EditorOpenIO))]
+editors projectRoot =
+  [ detectEditor "custom-*nix"
+      (Dir.doesFileExist (projectRoot </> "openEditor.sh"))
+      (\file row column -> Ext.Common.cq_ (projectRoot </> "openEditor.sh") [file, T.unpack row, T.unpack column] "")
+
+  , detectEditor "custom-windows"
+      (Dir.doesFileExist (projectRoot </> "openEditor.bat"))
+      (\file row column -> Ext.Common.cq_ (projectRoot </> "openEditor.bat") [file, T.unpack row, T.unpack column] "")
+
+  , detectEditor "vscode-insiders"
+      (Dir.doesFileExist "/usr/local/bin/code-insiders")
+      (\file row column -> Ext.Common.cq_ "/usr/local/bin/code-insiders" [ "-g", file <> ":" <> T.unpack row <> ":" <> T.unpack column] "")
+
+  , detectEditor "vscode"
+      (Dir.doesFileExist "/usr/local/bin/code")
+      (\file row column -> Ext.Common.cq_ "/usr/local/bin/code" [ "-g", file <> ":" <> T.unpack row <> ":" <> T.unpack column] "")
+
+  , detectEditor "intellij-ce"
+      (Dir.doesDirectoryExist "/Applications/IntelliJ IDEA CE.app")
+      (\file row column -> Ext.Common.cq_  "open" ["-na", "IntelliJ IDEA CE.app", "--args", "--line", T.unpack row, file] "")
+
+  , detectEditor "intellij"
+      (Dir.doesDirectoryExist "/Applications/IntelliJ IDEA.app")
+      (\file row column -> Ext.Common.cq_  "open" ["-na", "IntelliJ IDEA.app", "--args", "--line", T.unpack row, file] "")
+  ]
+
+
+detectEditor :: B.Builder -> IO Bool -> EditorOpenIO -> IO (Maybe (B.Builder, EditorOpenIO))
+detectEditor editorName editorExistsCheck openIO = do
+  exists <- editorExistsCheck
+  if exists
+    then
+      pure $ Just (editorName, openIO)
+    else
+      pure Nothing
 
 
 serveRpc (mClients, mLeader, mChan, beState) port = do

@@ -98,7 +98,7 @@ calculateHashPair path modulename typename = do
 
 calculateLamderaHashes :: IO (Either Reporting.Exit.BuildProblem ([Text], [(Text, [Text], DiffableType)]))
 calculateLamderaHashes = do
-  debug $ "calculating lamdera hashes"
+  debug $ "🤝  calculating lamdera hashes"
   interfaces <- Interfaces.all [ "src/Types.elm" ]
   inDebug <- Lamdera.isDebug
   case Map.lookup "Types" interfaces of

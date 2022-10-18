@@ -1,8 +1,7 @@
 on:
   push:
     branches:
-      - release
-      - release-windows
+      - windows
 
 name: Build Lamdera Compiler for Windows
 jobs:
@@ -10,6 +9,8 @@ jobs:
     name: Build Windows Libraries
     runs-on: windows-latest
     steps:
+      - uses: actions/checkout@v3
+
       # First, check if the specific cache exists, so we don't waste ~3m of build
       # time restoring the 1.5GB cache for no reason. See https://github.com/actions/cache/pull/420
       # as this functionality may become part of actions/cache in future.
@@ -37,9 +38,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-
 
-      - uses: actions/checkout@v3
-        if: steps.cache.outputs.cache-hit != 'true'
-
+      # Now setup Haskell, given we're comitted to actually doing a lib build
       - uses: haskell/actions/setup@v1
         if: steps.cache.outputs.cache-hit != 'true'
         with:
@@ -85,8 +84,7 @@ jobs:
         with:
           timeout_minutes: 5
           max_attempts: 3
-          command: |
-            stack install
+          command: stack install
 
       - name: Archive lamdera.exe artifact
         uses: actions/upload-artifact@v3
