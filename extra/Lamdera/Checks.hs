@@ -111,7 +111,7 @@ progressPointer t =
 
 
 writeDefaultImplementations = do
-  root <- getProjectRoot
+  root <- getProjectRoot "writeDefaultImplementations"
   defaultImplementations
     & mapM (\(filename, implementation) -> do
         exists <- doesFileExist (root </> filename)

@@ -40,7 +40,7 @@ run (Args file expressionName) () = do
   debug_ "Starting annotation..."
 
   elmHome <- PerUserCache.getElmHome
-  root <- getProjectRoot
+  root <- getProjectRoot "Lamdera.CLI.Annotate.run"
   printAnnotations root file expressionName
 
 

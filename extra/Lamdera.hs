@@ -231,7 +231,7 @@ debug_ :: String -> IO ()
 debug_ str = do
   debugM <- Env.lookupEnv "LDEBUG"
   case debugM of
-    Just _ -> atomicPutStrLn $ "DEBUG: " ++ str ++ "\n"
+    Just _ -> atomicPutStrLn $ "DEBUG: " ++ str -- ++ "\n"
     Nothing -> pure ()
 
 
@@ -530,7 +530,7 @@ writeUtf8Handle handle content = do
 -- Copied from File.IO due to cyclic imports and adjusted for Text
 writeUtf8Root :: FilePath -> Text -> IO ()
 writeUtf8Root filePath content = do
-  root <- getProjectRoot
+  root <- getProjectRoot ("writeUtf8Root:" <> filePath)
   writeUtf8 (root </> filePath) content
 
 
@@ -651,7 +651,7 @@ lamderaCache root =
 
 lamderaCache_ :: IO FilePath
 lamderaCache_ =
-  lamderaCache <$> getProjectRoot
+  lamderaCache <$> getProjectRoot ("lamderaCache_")
 
 
 lamderaHashesPath :: FilePath -> FilePath
@@ -671,7 +671,7 @@ lamderaExternalWarningsPath root =
 
 lamderaBackendDevSnapshotPath :: IO FilePath
 lamderaBackendDevSnapshotPath = do
-  root <- getProjectRoot
+  root <- getProjectRoot ("lamderaBackendDevSnapshotPath")
   pure $ lamderaCache root </> ".lamdera-bem-dev"
 
 
@@ -724,7 +724,7 @@ data Env = Production | Development
 getEnvMode :: IO Env
 getEnvMode = do
   inProduction <- Lamdera.inProduction
-  root <- getProjectRoot
+  root <- getProjectRoot "getEnvMode"
   if inProduction
     then do
       debug "[mode] inProduction"

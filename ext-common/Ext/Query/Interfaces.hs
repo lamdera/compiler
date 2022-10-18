@@ -70,7 +70,7 @@ allDepArtifacts =
   BW.withScope $ \scope ->
   do  debug "Loading allDeps"
       style <- Reporting.terminal
-      root <- getProjectRoot
+      root <- getProjectRoot "allDepArtifacts"
       result <- Details.load style scope root
       case result of
         Left _ ->
@@ -84,7 +84,7 @@ allDepArtifacts =
 allDepArtifacts_ :: Details.Details -> IO Artifacts
 allDepArtifacts_ details = do
   debug "Loading allDeps"
-  root <- getProjectRoot
+  root <- getProjectRoot "allDepArtifacts_"
   omvar <- Details.loadObjects root details
   imvar <- Details.loadInterfaces root details
   mdeps <- readMVar imvar
@@ -120,7 +120,7 @@ toUnique oneOrMore =
 allProjectInterfaces :: NE.List FilePath -> IO (Map.Map ModuleName.Raw I.Interface)
 allProjectInterfaces paths =
   BW.withScope $ \scope -> do
-    root <- getProjectRoot
+    root <- getProjectRoot "allProjectInterfaces"
     let paths_ = paths & fmap (\p -> root <> "/" <> p)
     runTaskUnsafe $
       do  details    <- Task.eio Exit.ReactorBadDetails $ Details.load Reporting.silent scope root
@@ -173,7 +173,7 @@ cachedHelp name ciMvar = do
           return (Just (name, iface))
 
     Build.Unneeded ->
-      do  root <- getProjectRoot
+      do  root <- getProjectRoot "cachedHelp"
           maybeIface <- File.readBinary (Stuff.elmi root name)
           case maybeIface of
             Nothing ->

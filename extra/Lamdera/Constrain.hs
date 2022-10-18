@@ -70,7 +70,7 @@ determineTypesLocation tipe = do
 
     Nothing -> do
 
-      root <- getProjectRoot
+      root <- getProjectRoot "determineTypesLocation"
       bridgeM <- readUtf8Text $ root </> "src" </> "Bridge.elm"
       let
         res =

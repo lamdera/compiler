@@ -333,7 +333,7 @@ elmPkgJs mode =
   case mode of
     Mode.Dev _ -> do
       unsafePerformIO $ do
-        root <- getProjectRoot
+        root <- getProjectRoot "elmPkgJs"
         elmPkgJsSources <- safeListDirectory $ root </> "elm-pkg-js"
 
         wrappedPkgImports <-

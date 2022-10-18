@@ -98,22 +98,22 @@ projectRootMvar = unsafePerformIO $ do
 
 setProjectRoot :: FilePath -> IO ()
 setProjectRoot root = do
-  debug $ "➡️🏠  set project root: " <> root
+  debug $ "➡️ 🏠  set project root: " <> root
   modifyMVar_ projectRootMvar (\v -> pure $ ProjectRootSet root)
 
 
-getProjectRoot :: IO FilePath
-getProjectRoot = do
+getProjectRoot :: String -> IO FilePath
+getProjectRoot tag = do
   root <- readMVar projectRootMvar
   case root of
     ProjectRootInvalid -> do
-      debug $ "🏠  got project root: " <> "invalid project root"
+      debug $ "🏠  read project root [" <> tag <> "]: " <> "invalid project root"
       pure "blah"
     ProjectRootSet root -> do
-      debug $ "🏠  got project root: " <> root
+      debug $ "🏠  read project root [" <> tag <> "]: " <> root
       pure root
     ProjectRootContextual root -> do
-      debug $ "🏠  got project root: " <> root
+      debug $ "🏠  read project root [" <> tag <> "]: " <> root
       pure root
 
 
@@ -162,7 +162,7 @@ debug :: String -> IO ()
 debug str = do
   debugM <- Env.lookupEnv "LDEBUG"
   case debugM of
-    Just _ -> atomicPutStrLn $ "DEBUG: " ++ str ++ "\n"
+    Just _ -> atomicPutStrLn $ "DEBUG: " ++ str -- ++ "\n"
     Nothing -> pure ()
 
 

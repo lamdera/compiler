@@ -63,7 +63,7 @@ snapshotCurrentTypes version interfaces iface_Types = do
         & eftToText version
 
   inDebug <- Lamdera.isDebug
-  root <- getProjectRoot
+  root <- getProjectRoot "Lamdera.Evergreen.Snapshots.run"
 
   efts
     & Map.toList

@@ -21,7 +21,7 @@ import Lamdera
 
 fullGraph :: [FilePath] -> IO (Either Exit.Make Opt.GlobalGraph)
 fullGraph paths = do
-  root <- getProjectRoot
+  root <- getProjectRoot "fullGraph"
   withCurrentDirectory root $ do
     let
       debug_ = True
@@ -62,7 +62,7 @@ fullGraph paths = do
 getFullGraph :: Details.Details -> [Build.Module] -> Task.Task Exit.Generate Opt.GlobalGraph
 getFullGraph details modules =
   do
-      root <- Task.io Lamdera.getProjectRoot
+      root <- Task.io $ Lamdera.getProjectRoot "getFullGraph"
       objects <- finalizeObjects =<< loadObjects root details modules
       Task.io $ pure $ objectsToGlobalGraph objects
 

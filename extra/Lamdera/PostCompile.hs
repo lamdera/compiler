@@ -18,7 +18,7 @@ import Lamdera
 check :: Details.Details -> Build.Artifacts -> (Exit.BuildProblem -> b) -> Task.Task b ()
 check details artifacts errorWrapper =
   Task.eio errorWrapper $ do
-    root <- getProjectRoot
+    root <- getProjectRoot "Lamdera.PostCompile.check"
     hasElmPagesPageData <- fileContains (root </> ".elm-pages/Main.elm") "type PageData"
     if hasElmPagesPageData
       then checkElmPagesTypes details artifacts

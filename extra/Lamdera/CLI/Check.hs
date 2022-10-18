@@ -83,7 +83,7 @@ run () () = do
   debug $ "hoist rebuild:" ++ show isHoistRebuild
   debug $ "force version:" ++ show forceVersion
 
-  root <- getProjectRoot
+  root <- getProjectRoot "Lamdera.CLI.Check.run"
   checkGitInitialised root
 
   Lamdera.Legacy.temporaryCheckOldTypesNeedingMigration inProduction root
@@ -522,7 +522,7 @@ buildProductionJsFiles root inProduction versionInfo = do
 
     progressPointer "Compiling production code..."
 
-    root <- getProjectRoot
+    root <- getProjectRoot "buildProductionJsFiles"
 
     debug $ "Compiling JS for production v" <> show (vinfoVersion versionInfo)
 
@@ -596,7 +596,7 @@ checkUserProjectCompiles root = do
 
 migrationCheck :: FilePath -> VersionInfo -> IO ()
 migrationCheck root nextVersion = do
-  root <- getProjectRoot
+  root <- getProjectRoot "migrationCheck"
   let
     version = vinfoVersion nextVersion
     migrationPath = (root </> "src/Evergreen/Migrate/V") <> show version <> ".elm"

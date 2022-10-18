@@ -61,7 +61,7 @@ data Flags =
 
 run :: () -> Flags -> IO ()
 run () flags = do
-  root <- getProjectRoot
+  root <- getProjectRoot "Develop.run"
   runWithRoot root flags
 
 
@@ -78,7 +78,7 @@ runWithRoot root (Flags maybePort) =
       onlyWhen (port == 8001) $
         error "Port 8001 is reserved for the Lamdera proxy, please pick another port."
 
-      root <- getProjectRoot
+      root <- getProjectRoot "Develop.runWithRoot"
 
       liveState <- liftIO $ Live.init
 

@@ -41,7 +41,7 @@ calculateAndWrite = do
   res <- calculateLamderaHashes
   case res of
     Right (hashes, warnings) -> do
-      root <- getProjectRoot
+      root <- getProjectRoot "calculateAndWrite"
       writeUtf8 (lamderaHashesPath root) $ show_ hashes
       pure res
     Left err ->
