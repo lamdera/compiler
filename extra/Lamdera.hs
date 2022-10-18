@@ -10,7 +10,7 @@ module Lamdera
   , alternativeImplementation
   , alternativeImplementationWhen
   , alternativeImplementationPassthrough
-  , atomicPutStrLn
+  , Ext.Common.atomicPutStrLn
   , debug_
   , debug_note
   , debug
@@ -175,7 +175,7 @@ import qualified Data.Name as N
 import qualified Data.Utf8 as Utf8
 
 import qualified Ext.Common
-import Ext.Common (getProjectRoot, getProjectRootFor, getProjectRootMaybe, OSType(..), ostype)
+import Ext.Common (getProjectRoot, getProjectRootFor, getProjectRootMaybe, OSType(..), ostype, atomicPutStrLn)
 
 -- import CanSer.CanSer (ppElm)
 
@@ -195,17 +195,6 @@ inProduction = do
 
 getLamderaPkgPath :: IO (Maybe String)
 getLamderaPkgPath = Env.lookupEnv "LOVR"
-
-
--- https://stackoverflow.com/questions/16811376/simulate-global-variable trick
-{-# NOINLINE printLock #-}
-printLock :: MVar ()
-printLock = unsafePerformIO $ newMVar ()
-
-
-atomicPutStrLn :: String -> IO ()
-atomicPutStrLn str =
-  withMVar printLock (\_ -> hPutStr stdout (str <> "\n") >> hFlush stdout)
 
 
 -- debug :: String -> Task.Task a
@@ -374,7 +363,9 @@ isLive_ :: MVar Bool
 isLive_ = unsafePerformIO $ newMVar False
 
 setLive :: Bool -> IO ()
-setLive b = modifyMVar_ isLive_ (\_ -> pure b)
+setLive b = do
+  debug $ "⚡️ set live: " <> show b
+  modifyMVar_ isLive_ (\_ -> pure b)
 
 {-# NOINLINE isLive #-}
 isLive :: Bool
