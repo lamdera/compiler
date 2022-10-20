@@ -23,10 +23,11 @@ run () () = do
 
   elmHome <- PerUserCache.getElmHome
   root <- getProjectRootMaybe
-
+  legacyLamderaHome <- Dir.getAppUserDataDirectory "lamdera"
   let
     elmStuff = (root & withDefault "./") </> "elm-stuff"
     lamderaLegacy = (root & withDefault "./") </> "lamdera-stuff"
+    lamderaCliLogin = elmHome </> ".lamdera-cli"
 
   progress "Here is the plan:\n"
 
@@ -34,17 +35,12 @@ run () () = do
     then
       report $ D.fillSep ["-", D.yellow "Remove artifacts in", D.fromChars elmHome]
     else
-      report $ D.fillSep ["-", D.red "Remove", D.fromChars elmHome]
+      planNukeDir elmHome ""
 
-  onlyWhen_ (doesDirectoryExist elmStuff) $ do
-    report $ D.fillSep ["-", D.red "Remove", D.fromChars elmStuff]
-
-  onlyWhen_ (doesDirectoryExist lamderaLegacy) $
-    report $ D.fillSep ["-", D.red "Remove", D.fromChars lamderaLegacy, "(legacy)"]
-
-  legacyLamderaHome <- Dir.getAppUserDataDirectory "lamdera"
-  onlyWhen_ (doesDirectoryExist legacyLamderaHome) $
-    report $ D.fillSep ["-", D.red "Remove", D.fromChars legacyLamderaHome, "(legacy)"]
+  planNukeFile lamderaCliLogin ""
+  planNukeDir elmStuff ""
+  planNukeDir lamderaLegacy "(Legacy)"
+  planNukeDir legacyLamderaHome "(Legacy)"
 
   progress ""
 
@@ -65,23 +61,33 @@ run () () = do
             c $ "find " <> packageDir <> " | grep artifacts.dat | xargs rm"
 
         else do
-          progress $ "Removing " <> elmHome
-          rmdir elmHome
+          nukeDir elmHome
 
-      onlyWhen_ (doesDirectoryExist elmStuff) $ do
-        progress $ "Removing " <> elmStuff
-        rmdir elmStuff
-
-      onlyWhen_ (doesDirectoryExist lamderaLegacy) $ do
-        progress $ "Removing " <> lamderaLegacy
-        rmdir lamderaLegacy
-
-      onlyWhen_ (doesDirectoryExist legacyLamderaHome) $ do
-        progress $ "Removing " <> legacyLamderaHome
-        rmdir legacyLamderaHome
-
+      nukeFile lamderaCliLogin
+      nukeDir elmStuff
+      nukeDir lamderaLegacy
+      nukeDir legacyLamderaHome
 
     else
-      progress "\nOkay, I did not reset."
+      progress "\nOkay, I did not reset anything."
 
   pure ()
+
+
+planNukeDir dir suffix =
+  onlyWhen_ (doesDirectoryExist dir) $ do
+    report $ D.fillSep ["-", D.red "Remove", D.fromChars dir, suffix]
+
+planNukeFile file suffix =
+  onlyWhen_ (doesFileExist file) $ do
+    report $ D.fillSep ["-", D.red "Remove", D.fromChars file, suffix]
+
+nukeDir dir =
+  onlyWhen_ (doesDirectoryExist dir) $ do
+    progress $ "Removing " <> dir
+    rmdir dir
+
+nukeFile file =
+  onlyWhen_ (doesFileExist file) $ do
+    progress $ "Removing " <> file
+    remove file
