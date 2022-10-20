@@ -562,7 +562,8 @@ fetchProductionInfo appName useLocal =
     endpoint =
       if (textContains "-local" appName && ostype == MacOS) || useLocal
         then
-          "https://" <> T.unpack appName <> ".lamdera.test/_i"
+          -- "https://" <> T.unpack appName <> ".lamdera.test/_i"
+          "http://" <> T.unpack appName <> ".lamdera.test/_i"
 
         else
           "https://" <> T.unpack appName <> ".lamdera.app/_i"
