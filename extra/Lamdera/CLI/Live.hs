@@ -4,8 +4,7 @@
 
 module Lamdera.CLI.Live where
 
-{- `lamdera live` functionalty
--}
+{- `lamdera live` functionalty -}
 
 import qualified Data.ByteString.Builder as B
 import qualified Data.ByteString as BS
@@ -17,6 +16,7 @@ import qualified Data.Text.Encoding as T
 import qualified Data.Text.Lazy.Encoding as TL
 import qualified Data.Text.Lazy.Builder as TLB
 import qualified Data.Map as Map
+import qualified Data.HashMap.Strict as HashMap
 import qualified Data.List as List
 import GHC.Word (Word64)
 
@@ -52,7 +52,9 @@ import Data.Word (Word8)
 import System.Process
 
 import System.Entropy
-import Snap.Util.FileServe
+import Snap.Util.FileServe (
+    getSafePath, serveDirectoryWith, defaultDirectoryConfig, defaultMimeTypes, mimeTypes, MimeMap, DirectoryConfig
+  )
 import Control.Monad (guard, void)
 
 import qualified Lamdera.CLI.Check
@@ -96,20 +98,29 @@ withEnd (mClients, mLeader, mChan, beState) io = do
 
 -- Additional handler to serve files in /public from root / so that
 -- image/asset references from Elm work locally same as in production
--- serveLamderaPublicFiles :: Snap ()
-serveLamderaPublicFiles root serveElm serveFilePretty =
+serveLamderaPublicFiles :: FilePath -> (FilePath -> Snap ()) -> Snap ()
+serveLamderaPublicFiles root serveElm =
   do  file <- getSafePath
       let pubFile = root </> "public" </> file
       guard =<< liftIO (Dir.doesFileExist pubFile)
       -- debug $ "serving lamdera public files: " <> file
-      serveElm pubFile <|> serveFilePretty pubFile
+      serveElm pubFile <|> serveDirectoryWith directoryConfig (root </> "public")
+
+
+directoryConfig :: MonadSnap m => DirectoryConfig m
+directoryConfig =
+  defaultDirectoryConfig {
+    mimeTypes =
+      defaultMimeTypes
+        & HashMap.insert ".md" "text/plain"
+  }
 
 
 -- So that Elm's Navigation routing can work on any URL, serve any unmatched
 -- non-extensioned paths to the "index" (in this case the src/LocalDev.elm
 -- harness as we're local in the reactor). Extensioned paths will continue to
 -- the next handler, namely `error404` (see `run` fn at top of file)
--- serveUnmatchedUrlsToIndex :: Snap ()
+serveUnmatchedUrlsToIndex :: FilePath -> (FilePath -> Snap()) -> Snap ()
 serveUnmatchedUrlsToIndex root serveElm =
   do  file <- getSafePath
       guard (takeExtension file == "")

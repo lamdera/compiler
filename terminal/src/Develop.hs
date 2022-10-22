@@ -114,7 +114,8 @@ runWithRoot root (Flags maybePort) =
 
       Live.withEnd liveState $
        httpServe (config port) $
-        Live.serveLamderaPublicFiles root (serveElm sentryCache) serveFilePretty -- Add /public/* as if it were /* to mirror production
+        -- Add /public/* as if it were /* to mirror production, but still render .elm files as an Elm app first
+        Live.serveLamderaPublicFiles root (serveElm sentryCache)
         <|> (serveFiles root sentryCache)
         <|> serveDirectoryWith directoryConfig "."
         <|> Live.serveWebsocket root liveState
