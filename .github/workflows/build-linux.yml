@@ -84,6 +84,8 @@ jobs:
           ghcup install ghc 9.0.2
           ghcup set ghc 9.0.2
 
+          git config --global --add safe.directory /home/runner/work/compiler/compiler
+
           cabal v2-update
           cabal v2-build --ghc-option=-optl=-static --ghc-option=-split-sections -O2 --only-dependencies
 
