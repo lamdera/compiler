@@ -97,7 +97,7 @@ helpfulInformation =
 
     Expect to see:
 
-      - `Unimplemented` values as placeholders wherever I was unable to figure out a clear migration path for you
+      - `Unimplementеd` values as placeholders wherever I was unable to figure out a clear migration path for you
       - `@NOTICE` comments for things you should know about, i.e. new custom type constructors that won't get any
         value mappings from the old type by default
 
@@ -625,7 +625,7 @@ handleAliasToFt oldVersion newVersion scope interfaces recursionSet tipe@(Can.TA
             -- else
                 [ T.concat
                   [ migrationName, " : ", migrationTypeSignature, "\n"
-                  , migrationName, " old = ", subt
+                  , migrationName, " ", oldValueRef, " = ", subt
                   ]
                 ]
           else
@@ -842,10 +842,10 @@ handleTypeToFt oldVersion newVersion scope interfaces recursionSet tipe@(Can.TTy
       case tipeOldM of
         Just tipeOld ->
           case tipeOld of
-            Can.TType _ _ paramsOld -> -- @WARNING MUST BE SAME TYPE?
+            Can.TType _ _ paramsOld -> -- @WARNING MUST BE SAME COLLECTION TYPE...?
               zipFull paramsOld params & (\p ->
                 case p of
-                  (Just p0o,Just p0):_ ->
+                  (Just p0o,Just p0):[] ->
                     let
                       (migration1, imps1, subft1) = (canonicalToFt oldVersion newVersion scope interfaces recursionSet p0 (Just p0o) tvarMap "p0")
 
@@ -862,7 +862,7 @@ handleTypeToFt oldVersion newVersion scope interfaces recursionSet tipe@(Can.TTy
                   _ ->
                     error $ T.unpack $ T.concat ["migrateSingleParamCollection: impossible multi-param ", typeName, "! Please report this gen issue."]
               )
-            _ -> error $ T.unpack $ T.concat ["migrateSingleParamCollection: non-matching TType in ", typeName, " gen"]
+            _ -> error $ T.unpack $ T.concat ["migrateSingleParamCollection: non-matching TType in ", typeName, " gen:\nold:", show_ tipeOld, "\nnew:", show_ tipe]
 
         Nothing ->
           (T.concat ["Unimplemented -- This ", typeName, " type has changed to something else"], Set.empty, Map.empty)

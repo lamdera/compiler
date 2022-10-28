@@ -9,7 +9,7 @@ It includes:
 
 Expect to see:
 
-  - `Unimplemented` values as placeholders wherever I was unable to figure out a clear migration path for you
+  - `Unimplementеd` values as placeholders wherever I was unable to figure out a clear migration path for you
   - `@NOTICE` comments for things you should know about, i.e. new custom type constructors that won't get any
     value mappings from the old type by default
 
@@ -70,6 +70,7 @@ backendModel old =
     , added = Unimplemented -- Type `Int` was added in V2. I need you to set a default value.
     , typeToAlias = old.typeToAlias |> migrate_Types_TypeToAlias
     , aliasToType = old.aliasToType |> Unimplemented -- `AliasToType` was a type alias, but now it's a custom type. I need you to write this migration.
+    , apps = old.apps |> Dict.map (\k v -> v |> migrate_Types_App)
     , removed = Unimplemented -- Type `String` was removed in V2. I need you to do something with the `old.removed` value if you wish to keep the data, then remove this line.
     , removedRecord = Unimplemented -- Type `Evergreen.V1.External.AllTypes` was removed in V2. I need you to do something with the `old.removedRecord` value if you wish to keep the data, then remove this line.
     }
@@ -109,11 +110,23 @@ migrate_External_ExternalUnion old =
             Evergreen.V2.External.External2
 
 
+migrate_Types_App : Evergreen.V1.Types.App -> Evergreen.V2.Types.App
+migrate_Types_App p1 =
+    { configUses = p1.configUses |> migrate_Types_ConfigUses
+    }
+
+
 migrate_Types_BackendMsg : Evergreen.V1.Types.BackendMsg -> Evergreen.V2.Types.BackendMsg
 migrate_Types_BackendMsg old =
     case old of
         Evergreen.V1.Types.NoOpBackendMsg ->
             Evergreen.V2.Types.NoOpBackendMsg
+
+
+migrate_Types_ConfigUses : Evergreen.V1.Types.ConfigUses -> Evergreen.V2.Types.ConfigUses
+migrate_Types_ConfigUses p1 =
+    { fe = p1.fe
+    }
 
 
 migrate_Types_CustomType : Evergreen.V1.Types.CustomType -> Evergreen.V2.Types.CustomType

@@ -23,6 +23,7 @@ import qualified Lamdera.Compile
 import qualified Lamdera.Evaluate
 import qualified Lamdera.CLI.Check
 
+import qualified Ext.Common
 import qualified Ext.Query.Canonical
 
 import Develop
@@ -89,16 +90,21 @@ For more information on how to use the GHCi debugger, see the GHC User's Guide.
 -- Current target for ghci :rr command. See ~/.ghci config file, which should contain
 -- something like `:def rr const $ return $ unlines [":r","Test.target"]`
 
--- target = Test.all
+target = Test.all
 
 -- target =
 --   Test.Check.checkWithParams "/Users/mario/lamdera/test/v1" "always-v0"
 
 -- target = buildTestHarnessToProductionJs
 -- target = checkProjectCompiles
-target = liveReloadLive
+-- target = liveReloadLive
 -- target = do
-  -- Dir.withCurrentDirectory "/Users/mario/dev/projects/lamdera-dashboard" $ Lamdera.CLI.Check.run () ()
+
+--   let p = "/Users/mario/dev/projects/lamdera-dashboard"
+
+--   Ext.Common.setProjectRoot p
+--   Dir.withCurrentDirectory p $ Lamdera.CLI.Check.run () ()
+
 -- target = Test.Wire.all
 -- target = checkUserConfig
 -- target = Test.Wire.buildAllPackages
@@ -192,7 +198,9 @@ liveReloadLive = do
   setEnv "LDEBUG" "1"
   setEnv "EXPERIMENTAL" "1"
 
-  let p = "/Users/mario/lamdera/test/v1"
+  -- let p = "/Users/mario/lamdera/test/v1"
+  let p = "/Users/mario/dev/projects/bento-life"
+  -- let p = "/Users/mario/dev/projects/lamdera-dashboard"
 
   -- let p = "/Users/mario/dev/test/lamdera-init"
   -- let p = "/Users/mario/dev/test/nu-ashworld-lamdera"

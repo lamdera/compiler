@@ -31,6 +31,9 @@ type alias BackendModel =
     -- Drastic changes
     , typeToAlias : TypeToAlias
     , aliasToType : AliasToType
+
+    -- WIP
+    , apps : Dict String App
     }
 
 
@@ -83,3 +86,19 @@ type ToBackend
 
 type ToFrontend
     = Nooptofrontend
+
+
+type alias App =
+    { configUses : ConfigUses }
+
+
+type alias ConfigUses =
+    { fe : Maybe (List Int)
+
+    -- , be : Maybe (List ConfigUse)
+    }
+
+
+
+-- type alias ConfigUse =
+--     ( String, String, List String )
