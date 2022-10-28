@@ -99,6 +99,5 @@ type alias ConfigUses =
     }
 
 
-
--- type alias ConfigUse =
---     ( String, String, List String )
+type alias ConfigUse =
+    ( String, String, List String )

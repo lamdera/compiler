@@ -125,7 +125,13 @@ migrate_Types_BackendMsg old =
 
 migrate_Types_ConfigUses : Evergreen.V1.Types.ConfigUses -> Evergreen.V2.Types.ConfigUses
 migrate_Types_ConfigUses p1 =
-    { fe = p1.fe
+    { fe = Unimplemented -- Type `Maybe (List (Int))` was added in V2. I need you to set a default value.
+    , a = Unimplemented -- Type `Array (Evergreen.V1.Types.ConfigUse)` was removed in V2. I need you to do something with the `p1.a` value if you wish to keep the data, then remove this line.
+    , d = Unimplemented -- Type `Dict (String) (List (Evergreen.V1.Types.ConfigUse))` was removed in V2. I need you to do something with the `p1.d` value if you wish to keep the data, then remove this line.
+    , l = Unimplemented -- Type `List (Evergreen.V1.Types.ConfigUse)` was removed in V2. I need you to do something with the `p1.l` value if you wish to keep the data, then remove this line.
+    , m = Unimplemented -- Type `Maybe (List (Evergreen.V1.Types.ConfigUse))` was removed in V2. I need you to do something with the `p1.m` value if you wish to keep the data, then remove this line.
+    , r = Unimplemented -- Type `Result (String) (List (Evergreen.V1.Types.ConfigUse))` was removed in V2. I need you to do something with the `p1.r` value if you wish to keep the data, then remove this line.
+    , s = Unimplemented -- Type `Set (Evergreen.V1.Types.ConfigUse)` was removed in V2. I need you to do something with the `p1.s` value if you wish to keep the data, then remove this line.
     }
 
 
@@ -236,7 +242,7 @@ migrate_Types_UserType old =
                     p0.subrecord
                         |> (\rec1 ->
                                 { userType = rec1.userType |> migrate_Types_UserType
-                                , removed = Unimplemented -- Type `String` was removed in V2. I need you to do something with the `old.removed` value if you wish to keep the data, then remove this line.
+                                , removed = Unimplemented -- Type `String` was removed in V2. I need you to do something with the `rec1.removed` value if you wish to keep the data, then remove this line.
                                 }
                            )
                 }
@@ -249,7 +255,7 @@ migrate_Types_UserType old =
                         |> (\rec1 ->
                                 { userType = rec1.userType |> migrate_Types_UserType
                                 , added = Unimplemented -- Type `Int` was added in V2. I need you to set a default value.
-                                , removed = Unimplemented -- Type `String` was removed in V2. I need you to do something with the `old.removed` value if you wish to keep the data, then remove this line.
+                                , removed = Unimplemented -- Type `String` was removed in V2. I need you to do something with the `rec1.removed` value if you wish to keep the data, then remove this line.
                                 }
                            )
                 }

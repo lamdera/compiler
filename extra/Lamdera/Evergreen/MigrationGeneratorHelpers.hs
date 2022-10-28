@@ -202,6 +202,28 @@ getModuleNameUnkeyed moduleName =
     (ModuleName.Canonical (Pkg.Name author pkg) module_) ->
         nameToText module_
 
+typeNameToStringQualified :: ModuleName.Canonical -> N.Name -> [Can.Type] -> Text
+typeNameToStringQualified moduleName tipeName params = do
+  let coreType = [nameToText tipeName] ++ parenthesize (fmap qualifiedTypeName params) & T.intercalate " "
+  case moduleName of
+    (ModuleName.Canonical (Pkg.Name author pkg) module_) ->
+      case (author, pkg, module_) of
+        ("elm", "core", "Basics") -> coreType
+        ("elm", "core", "String") -> coreType
+        ("elm", "core", "Maybe") -> coreType
+        ("elm", "core", "List") -> coreType
+        ("elm", "core", "Set") -> coreType
+        ("elm", "core", "Array") -> coreType
+        ("elm", "core", "Dict") -> coreType
+        ("elm", "core", "Result") -> coreType
+        _ ->
+          T.concat $ [nameToText module_, ".", nameToText tipeName] ++ (fmap qualifiedTypeName params)
+
+
+parenthesize :: [Text] -> [Text]
+parenthesize texts =
+  texts & fmap (\v -> T.concat ["(", v, ")"])
+
 
 asIdentifier :: Can.Type -> TypeIdentifier
 asIdentifier tipe =
@@ -235,11 +257,17 @@ asTypeName tipe =
 
 qualifiedTypeName :: Can.Type -> Text
 qualifiedTypeName tipe =
-  case asIdentifier tipe of
-    ("elm", "core", "Basics", typeName) -> N.toText typeName
-    ("elm", "core", "String", typeName) -> N.toText typeName
-    (author, pkg, module_, typeName) -> N.toText module_ <> "." <> N.toText typeName
-
+  case tipe of
+    Can.TType moduleName name params ->         typeNameToStringQualified moduleName name params
+    Can.TAlias moduleName name namedParams _ -> typeNameToStringQualified moduleName name (fmap snd namedParams)
+    Can.TLambda a b        -> "<function>"
+    Can.TVar a             -> "a"
+    Can.TRecord a b        -> "{}"
+    Can.TUnit              -> "()"
+    Can.TTuple a b mc      ->
+      case mc of
+        Just c -> T.concat ["(", qualifiedTypeName a, ", ", qualifiedTypeName b, ", ", qualifiedTypeName c, ")"]
+        Nothing -> T.concat ["(", qualifiedTypeName a, ", ", qualifiedTypeName b, ")"]
 
 
 isUserType :: TypeIdentifier -> Bool

@@ -778,7 +778,7 @@ handleRecordToFt oldVersion newVersion scope interfaces recursionSet tipe@(Can.T
                   Nothing
                 Nothing ->
                   Just ( N.toText name,
-                    (T.concat["Unimplemented -- Type `", qualifiedTypeName tipe, "` was removed in V", show_ newVersion, ". I need you to do something with the `old.", N.toText name, "` value if you wish to keep the data, then remove this line."]
+                    (T.concat["Unimplemented -- Type `", qualifiedTypeName tipe, "` was removed in V", show_ newVersion, ". I need you to do something with the `", oldValueRef, ".", N.toText name, "` value if you wish to keep the data, then remove this line."]
                     , Set.empty
                     , Map.empty)
                     )

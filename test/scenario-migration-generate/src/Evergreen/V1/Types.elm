@@ -93,12 +93,14 @@ type alias App =
 
 
 type alias ConfigUses =
-    { fe : Maybe (List Int)
-
-    -- , be : Maybe (List ConfigUse)
+    { m : Maybe (List ConfigUse)
+    , l : List ConfigUse
+    , s : Set ConfigUse
+    , a : Array ConfigUse
+    , d : Dict String (List ConfigUse)
+    , r : Result String (List ConfigUse)
     }
 
 
-
--- type alias ConfigUse =
---     ( String, String, List String )
+type alias ConfigUse =
+    ( String, String, List String )
