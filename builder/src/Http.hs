@@ -304,8 +304,9 @@ lamderaGetArchive manager url onError err onSuccess =
               & (\x ->
                   case x of
                     author:package:version:_ ->
-                      -- All overrides hardcoded to 1.0.0 for now, improve in future
                       ("lamdera/" <> T.unpack package, T.unpack version)
+
+
                     _ ->
                       error $ "unexpected URL parts: " <> show x
               )
@@ -322,11 +323,19 @@ lamderaGetArchive manager url onError err onSuccess =
                       error $ "unexpected URL parts: " <> show x
               )
 
-        packageZip = (pkgsPath & withDefault "<no-packages-path-override-set>") <> "/packages/" <> package <> "/pack.zip"
-        packageRoot = (pkgsPath & withDefault "<no-packages-path-override-set>") <> "/packages/" <> package <> "/" <> version
+        packageZip = concat [pkgsPath & withDefault "<no-packages-path-override-set>", "/packages/", package, "/pack-", version, ".zip"]
+        packageZipBare = concat [pkgsPath & withDefault "<no-packages-path-override-set>", "/packages/", package, "/pack.zip"]
+        packageRoot = concat [pkgsPath & withDefault "<no-packages-path-override-set>", "/packages/", package, "/", version]
 
       -- overrideExists <- doesDirectoryExist packageRoot
-      overrideExists <- doesFileExist packageZip
+      overrideExists <- do
+        exists <- doesFileExist packageZip
+        if exists
+          then pure True
+          else do
+            -- Backwards compatible support for when pack.zip was used without a version number
+            bareExists <- doesFileExist packageZip
+            pure bareExists
 
       -- debug_ $ "🔥: " <> show (package, packageZip, packageRoot, overrideExists, url)
 
