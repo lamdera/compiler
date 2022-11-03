@@ -1,10 +1,23 @@
-resolver: lts-17.4
+resolver: lts-18.28
 packages:
 - '.'
+
+allow-newer: true
+
+# @TODO future, package constraint issues to be resolved before we can move to 9.0.2
+# resolver: lts-19.31 # ghc-9.0.2
+# extra-deps:
+# - timeout-0.1.1@sha256:56c1d3321d7139d1f7ebf04d46c95d3a3f1c8c9e0f15666ae3ccd6bae6204b6e,1427
+# - command-0.1.1@sha256:5232b98c195bc3b8a6f35c55ccd2fa424abe355ca54cfcd836bbe7e494834773,1110
+# - snap-server-1.1.2.0@sha256:325378e4f7a50b1a94cf6175e11b9ac6db5edcdd87226f2d5997999334b85c46,15200
+# - websockets-snap-0.10.3.1@sha256:89582b7db916e67b6c8192f489e4eafe7488d9f813e349836a2e74fa4388623d,991
+# - io-streams-haproxy-1.0.1.0@sha256:e756f17c5b07b62103d75c1535cb454ac8d098a4b726c8a3bafb334071646a1c,3084
+
+# resolver: lts-18.28 # ghc-8.10.7
 extra-deps:
-- language-glsl-0.3.0
-- timeout-0.1.1@sha256:56c1d3321d7139d1f7ebf04d46c95d3a3f1c8c9e0f15666ae3ccd6bae6204b6e,1427
 - command-0.1.1@sha256:5232b98c195bc3b8a6f35c55ccd2fa424abe355ca54cfcd836bbe7e494834773,1110
+- language-glsl-0.3.0@sha256:85c1e7bf2cf5d6e604b7a2899c27e2935033425944db200798e57849e64d4c81,1636
+- timeout-0.1.1@sha256:56c1d3321d7139d1f7ebf04d46c95d3a3f1c8c9e0f15666ae3ccd6bae6204b6e,1427
 
 # Required to build on windows
 - regex-posix-clib-2.7

@@ -5,12 +5,19 @@
 
 packages:
 - completed:
+    hackage: command-0.1.1@sha256:5232b98c195bc3b8a6f35c55ccd2fa424abe355ca54cfcd836bbe7e494834773,1110
+    pantry-tree:
+      size: 167
+      sha256: 1ecfeb4b1367de6b489dbda20be05df78beb07f71d7c0b1f471fab1cd9c8044a
+  original:
+    hackage: command-0.1.1@sha256:5232b98c195bc3b8a6f35c55ccd2fa424abe355ca54cfcd836bbe7e494834773,1110
+- completed:
     hackage: language-glsl-0.3.0@sha256:85c1e7bf2cf5d6e604b7a2899c27e2935033425944db200798e57849e64d4c81,1636
     pantry-tree:
       size: 582
       sha256: 64800d879b2d864171f72a7a717883540a0607d2d5ffb3be3378299fa80fdce5
   original:
-    hackage: language-glsl-0.3.0
+    hackage: language-glsl-0.3.0@sha256:85c1e7bf2cf5d6e604b7a2899c27e2935033425944db200798e57849e64d4c81,1636
 - completed:
     hackage: timeout-0.1.1@sha256:56c1d3321d7139d1f7ebf04d46c95d3a3f1c8c9e0f15666ae3ccd6bae6204b6e,1427
     pantry-tree:
@@ -18,13 +25,6 @@ packages:
       sha256: e571503d7e609c3fe496de7e858613360bfa6c06e20ac57d9659bd32d0645889
   original:
     hackage: timeout-0.1.1@sha256:56c1d3321d7139d1f7ebf04d46c95d3a3f1c8c9e0f15666ae3ccd6bae6204b6e,1427
-- completed:
-    hackage: command-0.1.1@sha256:5232b98c195bc3b8a6f35c55ccd2fa424abe355ca54cfcd836bbe7e494834773,1110
-    pantry-tree:
-      size: 167
-      sha256: 1ecfeb4b1367de6b489dbda20be05df78beb07f71d7c0b1f471fab1cd9c8044a
-  original:
-    hackage: command-0.1.1@sha256:5232b98c195bc3b8a6f35c55ccd2fa424abe355ca54cfcd836bbe7e494834773,1110
 - completed:
     hackage: regex-posix-clib-2.7@sha256:998fca06da3d719818f0691ef0b8b9b7375afeea228cb08bd9e2db53f96b0cd7,1232
     pantry-tree:
@@ -34,7 +34,7 @@ packages:
     hackage: regex-posix-clib-2.7
 snapshots:
 - completed:
-    size: 563103
-    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/17/4.yaml
-    sha256: f11e2153044f5f71ea7b1c9398f4721f517c9bd37642ed769647b896564021f3
-  original: lts-17.4
+    size: 590100
+    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/18/28.yaml
+    sha256: 428ec8d5ce932190d3cbe266b9eb3c175cd81e984babf876b64019e2cbe4ea68
+  original: lts-18.28
