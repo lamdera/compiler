@@ -81,7 +81,7 @@ checkPageDataType interfaces =
               errors
                 & fmap (\(tipe, errors_, tds) ->
                     D.stack $
-                      (errors_ & List.nub & fmap (\e -> D.fromChars . T.unpack $ "- " <> e) )
+                      (errors_ & List.nub & fmap (\e -> D.fromChars . T.unpack $ T.concat ["- ", e]) )
                   )
 
           debug_note "Found Main.PageData, checking for wire constraints..." (Right ())
@@ -137,7 +137,7 @@ diffableTypeByName interfaces targetName modul interface = do
           unionToDiffableType targetName currentModule (nameToText targetName) interfaces recursionSet [] union []
 
         Nothing ->
-          DError $ "Found no type named " <> nameToText targetName <> " in " <> nameToText moduleName
+          DError $ T.concat ["Found no type named ", nameToText targetName, " in ", nameToText moduleName]
 
 
 typeExists :: N.Name -> Interface.Interface -> Bool
@@ -235,14 +235,14 @@ canonicalToDiffableType targetName currentModule interfaces recursionSet canonic
         kernelError =
           case identifier of
             (author, pkg, module_, tipe) ->
-              DError $ "must not contain kernel type `" <> tipe <> "` from " <> author <> "/" <> pkg <> ":" <> module_
+              DError $ T.concat ["must not contain kernel type `", tipe, "` from ", author, "/", pkg, ":", module_]
 
       in
 
       if (Set.member recursionIdentifier recursionSet) then
         DRecursion $ case (moduleName, name) of
           ((ModuleName.Canonical (Pkg.Name pkg1 pkg2) module_), typename) ->
-            utf8ToText pkg1 <> "/" <> utf8ToText pkg2 <> ":" <> nameToText module_ <> "." <> nameToText typename
+            T.concat [utf8ToText pkg1, "/", utf8ToText pkg2, ":", nameToText module_, ".", nameToText typename]
 
       else
       case identifier of
@@ -360,10 +360,10 @@ canonicalToDiffableType targetName currentModule interfaces recursionSet canonic
                       aliasToDiffableType targetName currentModule interfaces newRecursionSet tvarMap alias tvarResolvedParams
 
                     Nothing ->
-                      DError $ "❗️Failed to find either alias or custom type for type that seemingly must exist: " <> tipe <> "` from " <> author <> "/" <> pkg <> ":" <> module_ <> ". Please report this issue with your code!"
+                      DError $ T.concat ["❗️Failed to find either alias or custom type for type that seemingly must exist: ", tipe, "` from ", author, "/", pkg, ":", module_, ". Please report this issue with your code!"]
 
             Nothing ->
-              DError $ "The `" <> tipe <> "` type from " <> author <> "/" <> pkg <> ":" <> module_ <> " is referenced, but I can't find it! You can try `lamdera install " <> author <> "/" <> pkg <> "`, otherwise this might be a type which has been intentionally hidden by the author, so it cannot be used!"
+              DError $ T.concat ["The `", tipe, "` type from ", author, "/", pkg, ":", module_, " is referenced, but I can't find it! You can try `lamdera install ", author, "/", pkg, "`, otherwise this might be a type which has been intentionally hidden by the author, so it cannot be used!"]
 
 
     Can.TAlias moduleName name tvarMap_ aliasType ->
@@ -429,10 +429,12 @@ canonicalToDiffableType targetName currentModule interfaces recursionSet canonic
           let
             !_ = formatHaskellValue "Can.Tvar not found:" name :: IO ()
           in
-          DError $ "Error: tvar lookup failed, please report this issue: cannot find "
-            <> N.toText name
-            <> " in tvarMap "
-            <>  (T.pack $ show tvarMap)
+          DError $ T.concat
+            [ "Error: tvar lookup failed, please report this issue: cannot find "
+            , N.toText name
+            , " in tvarMap "
+            ,  (T.pack $ show tvarMap)
+            ]
 
     Can.TLambda _ _ ->
       DError $ "must not contain functions"
@@ -447,7 +449,7 @@ diffableTypeErrors dtype =
             let errors = diffableTypeErrors tipe
             case errors of
               [] -> []
-              xs -> errors & fmap (\err -> nameToText (ModuleName._module moduleName) <> "." <> name <> "." <> n <> " " <> err )
+              xs -> errors & fmap (\err -> T.concat [nameToText (ModuleName._module moduleName), ".", name, ".", n, " ", err ])
           )
         & List.concat
 
@@ -459,7 +461,7 @@ diffableTypeErrors dtype =
                   let errors = diffableTypeErrors param
                   case errors of
                     [] -> []
-                    xs -> errors & fmap (\err -> n <> " " <> err)
+                    xs -> errors & fmap (\err -> T.concat [n, " ", err])
                 )
               & List.concat
           )
