@@ -380,6 +380,15 @@ cq_ bin args input = do
   pure res
 
 
+requireBinary :: String -> IO FilePath
+requireBinary name = do
+  x <- Dir.findExecutable name
+  pure $ case x of
+    Just path -> path
+    _ ->
+      error $ concat ["please install the following required binary: ", name]
+
+
 -- Re-exports
 
 (&) = (Data.Function.&)

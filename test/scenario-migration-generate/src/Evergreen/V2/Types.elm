@@ -69,11 +69,13 @@ type AliasToType
 
 type alias FrontendModel =
     { basic : Int
+    , added : Int
     }
 
 
 type FrontendMsg
     = Noop
+    | AllTypes Evergreen.V2.External.AllTypes
 
 
 type BackendMsg

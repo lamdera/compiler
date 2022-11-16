@@ -37,13 +37,22 @@ import StandaloneInstances
 
 type RecursionSet = Set.Set (ModuleName.Canonical, N.Name)
 type TypeIdentifier = (Pkg.Author, Pkg.Project, N.Name, N.Name)
-type Migration = (Text, ElmImports, MigrationDefinitions)
+data Migration = MigrationNested
+  { migrationDef :: Text
+  , migrationImports :: ElmImports
+  , migrationNestedDefs :: MigrationDefinitions
+  , migrationName :: Text
+  }
+
+xMigrationNested (a,b,c,d) = MigrationNested a b c d
+
 
 -- @TODO can we drop this given migrations generate everything inline into a single file?
 data MigrationDefinition =
   MigrationDefinition
     { imports :: ElmImports
-    , types :: [Text]
+    -- , migrations :: [Text] <----- this is the problem!
+    , migrations :: Map Text Text
     }
   deriving (Show, Eq)
 
@@ -58,7 +67,7 @@ allMigrations :: MigrationDefinitions -> Text
 allMigrations efts =
     efts
       & Map.toList
-      & fmap (\(file, ef@(MigrationDefinition imports migrations)) -> migrations )
+      & fmap (\(file, ef@(MigrationDefinition imports migrations)) -> Map.toList migrations & fmap snd )
       & List.concat
       & List.sort
       -- @TODO check if this is actually needed once we sort out incorrect gen?
@@ -73,6 +82,7 @@ allDefinitionImportsText efts =
       & (++) additionalImports
       & List.concat
       & List.sort
+      & List.nub
       & T.intercalate "\n"
 
 additionalImports :: [[Text]]
@@ -87,28 +97,32 @@ importsToText imports =
         )
         & List.sort
 
-selectMigrationText :: (a,b,c) -> a
-selectMigrationText (a,b,c) = a
-selectImports :: (a,b,c) -> b
-selectImports (a,b,c) = b
-selectMigrationDefinitions :: (a,b,c) -> c
-selectMigrationDefinitions (a,b,c) = c
-
-lamderaTypes :: [N.Name]
-lamderaTypes = [ "FrontendModel" , "BackendModel" , "FrontendMsg" , "ToBackend" , "BackendMsg" , "ToFrontend" ]
+lamderaCoreTypes :: [N.Name]
+lamderaCoreTypes = [ "FrontendModel" , "BackendModel" , "FrontendMsg" , "ToBackend" , "BackendMsg" , "ToFrontend" ]
 
 mergeMigrationDefinition :: Text -> MigrationDefinition -> MigrationDefinition -> MigrationDefinition
 mergeMigrationDefinition k ft1 ft2 =
   MigrationDefinition
     { imports = Set.union (imports ft1) (imports ft2)
-    , types = (types ft1 <> types ft2) & List.nub
+    , migrations = (migrations ft1 <> migrations ft2)
     }
 
 allMigrationDefinitions :: [Migration] -> MigrationDefinitions
-allMigrationDefinitions migrations = migrations & fmap selectMigrationDefinitions & mergeAllMigrationDefinitions
+allMigrationDefinitions migrations =
+  migrations & foldl (\acc migration ->
+      acc
+        & Map.insert
+            (migrationName migration)
+            (MigrationDefinition
+              { imports = migrationImports migration
+              , migrations = Map.singleton (migrationName migration) (migrationDef migration)
+              })
+        & Map.union (migrationNestedDefs migration)
+  ) Map.empty
+
 
 allImports :: [Migration] -> ElmImports
-allImports migrations = migrations & fmap selectImports & mergeAllImports
+allImports migrations = migrations & fmap migrationImports & mergeAllImports
 
 mergeMigrationDefinitions :: MigrationDefinitions -> MigrationDefinitions -> MigrationDefinitions
 mergeMigrationDefinitions ft1 ft2 = unionWithKey mergeMigrationDefinition ft1 ft2
@@ -138,7 +152,7 @@ addImport moduleName imp ft =
           Just $
             MigrationDefinition
               { imports = Set.singleton imp
-              , types = []
+              , migrations = Map.empty
               }
     ) (moduleNameKey moduleName)
 
@@ -156,16 +170,16 @@ migrationNameUnderscored newModule oldVersion newVersion newTypeName =
 data TypeDef = Alias Can.Alias | Union Can.Union deriving (Show)
 
 
-basicUnimplemented :: Maybe Can.Type -> Can.Type -> Migration
-basicUnimplemented tipeOldM tipe =
-  case tipeOldM of
-    Just tipeOld ->
-      if tipeOld /= tipe then
-        ("Unimplemented -- expecting: " <> (qualifiedTypeName tipeOld) <> " -> " <> qualifiedTypeName tipe, Set.empty, Map.empty)
-      else
-        ("UHHHH1", Set.empty, Map.empty)
-    Nothing ->
-      ("UHHHH2", Set.empty, Map.empty)
+-- basicUnimplemented :: Maybe Can.Type -> Can.Type -> Migration
+-- basicUnimplemented tipeOldM tipe =
+--   case tipeOldM of
+--     Just tipeOld ->
+--       if tipeOld /= tipe then
+--         ("Unimplemented -- expecting: " <> (qualifiedTypeName tipeOld) <> " -> " <> qualifiedTypeName tipe, Set.empty, Map.empty)
+--       else
+--         ("UHHHH1", Set.empty, Map.empty)
+--     Nothing ->
+--       ("UHHHH2", Set.empty, Map.empty)
 
 
 canModuleName :: ModuleName.Canonical -> N.Name
@@ -278,6 +292,11 @@ isUserType (author, pkg, module_, tipe) =
 -- i.e. an alias or custom type, meaning we likely need to migrate it
 isUserDefinedType_ :: Can.Type -> Bool
 isUserDefinedType_ cType =
+  -- (\v ->
+  --   if v
+  --     then v
+  --     else debugHaskellPass "isUserDefinedType_" cType v
+  -- ) $
   case cType of
     Can.TType moduleName name params ->
       isUserModule moduleName

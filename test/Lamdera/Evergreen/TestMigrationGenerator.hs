@@ -11,6 +11,7 @@ import qualified Data.Text as T
 import System.Environment (setEnv, unsetEnv)
 
 import Test.Helpers
+import qualified Ext.Common
 
 import Lamdera
 import qualified Lamdera.Compile
@@ -28,6 +29,8 @@ suite = tests
 
 
 testMigrationGeneration scenario oldVersion newVersion = do
+
+  io $ atomicPutStrLn <$> Ext.Common.requireBinary "elm-format"
 
   let root = "/Users/mario/dev/projects/lamdera-compiler/test/scenario-migration-generate"
 

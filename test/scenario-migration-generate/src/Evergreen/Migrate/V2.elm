@@ -70,7 +70,8 @@ backendModel old =
     , added = Unimplemented -- Type `Int` was added in V2. I need you to set a default value.
     , typeToAlias = old.typeToAlias |> migrate_Types_TypeToAlias
     , aliasToType = old.aliasToType |> Unimplemented -- `AliasToType` was a type alias, but now it's a custom type. I need you to write this migration.
-    , apps = old.apps |> Dict.map (\k v -> v |> migrate_Types_App)
+    , apps = Unimplemented -- Type `Dict (String) (Evergreen.V2.Types.App)` was added in V2. I need you to set a default value.
+    , depthTests = Unimplemented -- Type `Dict (String) (Evergreen.V1.Types.Depth)` was removed in V2. I need you to do something with the `old.depthTests` value if you wish to keep the data, then remove this line.
     , removed = Unimplemented -- Type `String` was removed in V2. I need you to do something with the `old.removed` value if you wish to keep the data, then remove this line.
     , removedRecord = Unimplemented -- Type `Evergreen.V1.External.AllTypes` was removed in V2. I need you to do something with the `old.removedRecord` value if you wish to keep the data, then remove this line.
     }
@@ -78,7 +79,9 @@ backendModel old =
 
 frontendModel : Evergreen.V1.Types.FrontendModel -> ModelMigration Evergreen.V2.Types.FrontendModel Evergreen.V2.Types.FrontendMsg
 frontendModel old =
-    ModelUnchanged
+    { basic = old.basic
+    , added = Unimplemented -- Type `Int` was added in V2. I need you to set a default value.
+    }
 
 
 migrate_External_AllTypes : Evergreen.V1.External.AllTypes -> Evergreen.V2.External.AllTypes
@@ -110,29 +113,11 @@ migrate_External_ExternalUnion old =
             Evergreen.V2.External.External2
 
 
-migrate_Types_App : Evergreen.V1.Types.App -> Evergreen.V2.Types.App
-migrate_Types_App p1 =
-    { configUses = p1.configUses |> migrate_Types_ConfigUses
-    }
-
-
 migrate_Types_BackendMsg : Evergreen.V1.Types.BackendMsg -> Evergreen.V2.Types.BackendMsg
 migrate_Types_BackendMsg old =
     case old of
         Evergreen.V1.Types.NoOpBackendMsg ->
             Evergreen.V2.Types.NoOpBackendMsg
-
-
-migrate_Types_ConfigUses : Evergreen.V1.Types.ConfigUses -> Evergreen.V2.Types.ConfigUses
-migrate_Types_ConfigUses p1 =
-    { fe = Unimplemented -- Type `Maybe (List (Int))` was added in V2. I need you to set a default value.
-    , a = Unimplemented -- Type `Array (Evergreen.V1.Types.ConfigUse)` was removed in V2. I need you to do something with the `p1.a` value if you wish to keep the data, then remove this line.
-    , d = Unimplemented -- Type `Dict (String) (List (Evergreen.V1.Types.ConfigUse))` was removed in V2. I need you to do something with the `p1.d` value if you wish to keep the data, then remove this line.
-    , l = Unimplemented -- Type `List (Evergreen.V1.Types.ConfigUse)` was removed in V2. I need you to do something with the `p1.l` value if you wish to keep the data, then remove this line.
-    , m = Unimplemented -- Type `Maybe (List (Evergreen.V1.Types.ConfigUse))` was removed in V2. I need you to do something with the `p1.m` value if you wish to keep the data, then remove this line.
-    , r = Unimplemented -- Type `Result (String) (List (Evergreen.V1.Types.ConfigUse))` was removed in V2. I need you to do something with the `p1.r` value if you wish to keep the data, then remove this line.
-    , s = Unimplemented -- Type `Set (Evergreen.V1.Types.ConfigUse)` was removed in V2. I need you to do something with the `p1.s` value if you wish to keep the data, then remove this line.
-    }
 
 
 migrate_Types_CustomType : Evergreen.V1.Types.CustomType -> Evergreen.V2.Types.CustomType
@@ -150,6 +135,9 @@ migrate_Types_FrontendMsg old =
     case old of
         Evergreen.V1.Types.Noop ->
             Evergreen.V2.Types.Noop
+
+        Evergreen.V1.Types.AllTypes p0 ->
+            Evergreen.V2.Types.AllTypes (p0 |> migrate_External_AllTypes)
 
 
 migrate_Types_ToBackend : Evergreen.V1.Types.ToBackend -> Evergreen.V2.Types.ToBackend

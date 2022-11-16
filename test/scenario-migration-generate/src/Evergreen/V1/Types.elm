@@ -33,7 +33,7 @@ type alias BackendModel =
     , aliasToType : AliasToType
 
     -- WIP
-    , apps : Dict String App
+    , depthTests : Dict String Depth
     }
 
 
@@ -74,6 +74,7 @@ type alias FrontendModel =
 
 type FrontendMsg
     = Noop
+    | AllTypes Evergreen.V1.External.AllTypes
 
 
 type BackendMsg
@@ -88,11 +89,11 @@ type ToFrontend
     = Nooptofrontend
 
 
-type alias App =
-    { configUses : ConfigUses }
+type alias Depth =
+    { typeUses : TypeUses }
 
 
-type alias ConfigUses =
+type alias TypeUses =
     { m : Maybe (List ConfigUse)
     , l : List ConfigUse
     , s : Set ConfigUse
