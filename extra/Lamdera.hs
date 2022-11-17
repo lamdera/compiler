@@ -269,7 +269,7 @@ debugPass label value pass =
     case debugM of
       Just _ -> do
         atomicPutStrLn $
-          "\n🔶--------------------------------------------------------------------------------"
+          "\n🔶->"
             <> T.unpack label
             <> "\n"
             <> show value
@@ -285,7 +285,7 @@ debugPassText label value pass =
     case debugM of
       Just _ -> do
         atomicPutStrLn $
-          "\n🔶--------------------------------------------------------------------------------"
+          "\n🔶->"
             <> T.unpack label
             <> "\n\n"
             <> T.unpack value
@@ -308,13 +308,13 @@ debugHaskell label value =
         pure value
 
 
-debugHaskellPass :: Show a => Text -> a -> b -> b
+debugHaskellPass :: (Show a, Show b) => Text -> a -> b -> b
 debugHaskellPass label value pass =
   unsafePerformIO $ do
     debugM <- Env.lookupEnv "LDEBUG"
     case debugM of
       Just _ -> do
-        hindentPrintValue label value
+        hindentPrintValue label (value, pass)
         pure pass
 
       Nothing ->

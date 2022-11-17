@@ -33,6 +33,7 @@ lamderaLiveSrc =
         if exists
           then do
             Lamdera.debug $ "🗿 Using " ++ overridePathBuilt ++ " for lamderaLive"
+            Ext.Common.requireBinary "esbuild"
             Ext.Common.bash $ "cd " <> overrideRoot <> " && esbuild " <> overridePath <> " --bundle --minify --target=chrome58,firefox57,safari11,edge16 > " <> overridePathBuilt
             overrideM <- readUtf8Text overridePathBuilt
             case overrideM of

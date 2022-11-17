@@ -37,7 +37,6 @@ import StandaloneInstances
 type snapshots  -}
 calculateAndWrite :: IO (Either Reporting.Exit.BuildProblem ([Text], [(Text, [Text], DiffableType)]))
 calculateAndWrite = do
-  debug "calculate and write hashes"
   res <- calculateLamderaHashes
   case res of
     Right (hashes, warnings) -> do
@@ -98,7 +97,7 @@ calculateHashPair path modulename typename = do
 
 calculateLamderaHashes :: IO (Either Reporting.Exit.BuildProblem ([Text], [(Text, [Text], DiffableType)]))
 calculateLamderaHashes = do
-  debug $ "🤝  calculating lamdera hashes"
+  debug $ "#️⃣  typehash: full with interface load"
   interfaces <- Interfaces.all [ "src/Types.elm" ]
   inDebug <- Lamdera.isDebug
   case Map.lookup "Types" interfaces of
@@ -146,7 +145,7 @@ calculateLamderaHashes_ interfaces iface_Types inDebug = do
               (errors_ & List.nub & fmap (\e -> D.fromChars . T.unpack $ "- " <> e) )
           )
 
-  debug "🕸  Generating type hashes..."
+  debug "#️⃣  typehash: generating from interfaces"
 
   if List.length errors > 0
     then

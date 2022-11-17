@@ -614,6 +614,7 @@ migrationCheck root nextVersion = do
   let cache = lamderaCache root
   let lamderaCheckBothPath = cache </> "LamderaCheckBoth.elm"
   mkdir cache
+
   gen <- Lamdera.Evergreen.MigrationHarness.createLamderaGenerated root nextVersion
   writeUtf8 lamderaCheckBothPath gen
 
