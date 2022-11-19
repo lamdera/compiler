@@ -55,6 +55,13 @@ ostype = do
     "mingw32" -> Windows
     _ -> UnknownOS System.Info.os
 
+os :: String
+os = System.Info.os
+
+arch :: String
+arch = do
+  System.Info.arch
+
 
 isDebug :: IO Bool
 isDebug = do

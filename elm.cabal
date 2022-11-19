@@ -243,7 +243,6 @@ Executable lamdera
         Lamdera.Wire2.Decoder
         Lamdera.Wire2.Encoder
         Lamdera.Wire2.Graph
-        Lamdera.PostCompile
         Lamdera.Wire2.Helpers
         Lamdera.Wire2.Interfaces
         Lamdera.Wire3.Core
@@ -269,9 +268,6 @@ Executable lamdera
         Lamdera.Evaluate.Canonical
         Lamdera.Evaluate.Optimized
 
-        -- elm-pages support --
-        Lamdera.PostCompile
-        Test.Ext.ElmPages.Check
 
         -- UI Source Map Experiment --
         Lamdera.UiSourceMap
@@ -293,9 +289,7 @@ Executable lamdera
         -- Testing:
         EasyTest
         Test
-        LamderaSharedBuildHelpers
         Test.Check
-        Test.Ext.ElmPages.Check
         Test.Helpers
         Test.Lamdera
         Test.Snapshot
