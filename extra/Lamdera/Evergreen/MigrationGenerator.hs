@@ -61,6 +61,18 @@ betweenVersions oldVersion newVersion root = do
             error $ "Fatal: could not find the module `" <> moduleNameString <> "`, please report this issue in Discord with your project code."
 
     Ext.ElmFormat.formatOrPassthrough res
+    -- res2 <- Ext.ElmFormat.format res
+    -- case res2 of
+    --   Right x -> pure x
+    --   Left err -> error (T.unpack err)
+
+
+  -- pure $ ("module Evergreen.Migrate.V" <> show_ newVersion <> " exposing (..)\n\n")
+  --   <> helpfulInformation
+  --   <> "\n"
+  --   <> allDefinitionImportsText efts
+  --   <> "\n\n"
+  --   <> allMigrations efts
 
 
 generateFor :: Int -> Int -> Interfaces -> Interface.Interface -> IO Text
@@ -69,21 +81,41 @@ generateFor oldVersion newVersion interfaces iface_Types = do
     moduleName :: ModuleName.Canonical
     moduleName = (ModuleName.Canonical (Pkg.Name "author" "project") (N.fromChars $ "Evergreen.V" <> show newVersion <> ".Types"))
 
-    efts :: MigrationDefinitions
-    efts =
+    migrations :: [(N.Name, Migration)]
+    migrations =
       lamderaCoreTypes
-        & fmap (\t -> (t, migrationDefinitionByName oldVersion newVersion interfaces moduleName t iface_Types))
-        & foldl (\acc (t, ft) -> mergeMigrationDefinitions acc ft) Map.empty
-        -- a little weird but ensures current version of types, our entry point, is added to final migration imports...
-        & addImport moduleName moduleName
-    -- debugEfts = efts & eftToText version
+        & fmap (\t -> (t, coreTypeMigration oldVersion newVersion interfaces moduleName t iface_Types))
+        -- & debugHaskell "all migration definitions"
+        -- & foldl (\acc (t, ft) -> mergeMigrationDefinitions acc ft) Map.empty
+        & debugHaskell "efts"
 
-  pure $ ("module Evergreen.Migrate.V" <> show_ newVersion <> " exposing (..)\n\n")
-    <> helpfulInformation
-    <> "\n"
-    <> allDefinitionImportsText efts
-    <> "\n\n"
-    <> allMigrations efts
+    imports = migrations
+      & fmap snd
+      & allImports
+      -- a little weird but ensures current version of types, our entry point, is added to final migration imports...
+      & Set.insert moduleName
+      & importsToText
+      & (++) additionalImports
+      & List.sort
+      & List.nub
+      & T.intercalate "\n"
+
+
+    additionalImports :: [Text]
+    additionalImports = ["import Lamdera.Migrations exposing (..)"]
+
+    coreMigrations = migrations & fmap (migrationDef . snd)
+
+    subMigrations = migrations & fmap (migrationNestedDefs . snd) & mergeAllMigrationDefinitions & allMigrations
+
+    output =
+      [ (T.concat [ "module Evergreen.Migrate.V", show_ newVersion, " exposing (..)" ])
+      , helpfulInformation
+      , imports
+      ] ++ coreMigrations ++ [subMigrations]
+
+
+  output & T.intercalate "\n\n" & pure
 
 
 helpfulInformation =
@@ -113,8 +145,8 @@ helpfulInformation =
   |]
 
 
-migrationDefinitionByName :: Int -> Int -> Interfaces -> ModuleName.Canonical -> N.Name -> Interface.Interface -> MigrationDefinitions
-migrationDefinitionByName oldVersion newVersion interfaces newModule typeName interface = do
+coreTypeMigration :: Int -> Int -> Interfaces -> ModuleName.Canonical -> N.Name -> Interface.Interface -> Migration
+coreTypeMigration oldVersion newVersion interfaces newModule typeName interface = do
   let
     recursionIdentifier :: (ModuleName.Canonical, N.Name)
     recursionIdentifier = (newModule, typeName)
@@ -123,20 +155,52 @@ migrationDefinitionByName oldVersion newVersion interfaces newModule typeName in
     identifier :: TypeIdentifier
     identifier = asIdentifier_ recursionIdentifier
 
+    t = nameToText typeName
+
+    -- typeScope =
+    --   if moduleName == scope then
+    --     ""
+    --   -- else if isUserType identifier then
+    --   --   nameToText newModule <> "."
+    --   else
+    --     T.concat [nameToText newModule, "."]
+
+    -- moduleName = (ModuleName.Canonical (Pkg.Name author pkg) newModule)
+
+    -- @TODO restore unchanged function
+    -- migration =
+    --   if tipe == tipeOld then
+    --     "ModelUnchanged"
+    --   else
+    --     subt
+
+    newModuleName =
+      newModule & canModuleName & N.toText
+
+    oldModuleName :: Text
+    oldModuleName = asOldModuleName (canModuleName newModule) newVersion oldVersion & nameToText
+
+    migrationWrapper migration =
+      (T.concat
+        ["\n", (lowerFirstLetter_ t), " : ", oldModuleName, ".", t, " -> ", migrationWrapperForType typeName , " ", newModuleName, ".", t, " ", newModuleName, ".", msgForType typeName, "\n"
+        , (lowerFirstLetter_ $ nameToText typeName), " old = ", migrationWrapperForType typeName, " (", migration, " old, Cmd.none)"
+        ])
+
   case findDef (canModuleName newModule) typeName interfaces of
     Just (Alias alias) -> do
       let
         diffableAlias = aliasToFt oldVersion newVersion newModule identifier typeName interfaces recursionSet alias "old"
         (MigrationNested subt imps subft migrationName) = diffableAlias
-      subft & addImports newModule imps
+      (MigrationNested (migrationWrapper subt) imps (subft & addImports newModule imps) migrationName)
 
     Just (Union union) -> do
       let
         diffableUnion = unionToFt oldVersion newVersion newModule identifier typeName interfaces recursionSet [] union []
         (MigrationNested subt imps subft migrationName) = diffableUnion
-      subft & addImports newModule imps
+      (MigrationNested (migrationWrapper subt) imps (subft & addImports newModule imps) migrationName)
 
-    Nothing -> Map.empty
+    Nothing ->
+      error $ concat [ "Tried to generate a migration for core type ", N.toChars typeName, ", but I couldn't find it defined in Types.elm" ]
 
 
 -- A top level Custom Type definition i.e. `type Herp = Derp ...`
@@ -225,10 +289,6 @@ migrateUnion author pkg oldUnion newUnion params tvarMap oldVersion newVersion t
     moduleScopeOld :: Text
     moduleScopeOld = nameToText oldModuleName <> "."
 
-    -- debug (t, imps, ft) =
-    --   -- debugHaskellWhen (typeName == "RoomId") ("dunion: " <> hindentFormatValue scope) (t, imps, ft)
-    --   debugNote ("\n✴️  inserting def for " <> t) (t, imps, ft)
-
     migrationName :: Text
     migrationName = migrationNameUnderscored newModule oldVersion newVersion typeName
 
@@ -276,7 +336,8 @@ migrateUnion author pkg oldUnion newUnion params tvarMap oldVersion newVersion t
           )
   in
   -- debug $
-  xMigrationNested ( migration
+  xMigrationNested
+  ( migration
   , usageImports
   , (Map.singleton (moduleKey identifier) $
       MigrationDefinition
@@ -475,29 +536,34 @@ migrateAlias oldVersion newVersion scope identifier@(author, pkg, newModule, _) 
       newModule
         & N.toText
 
+    -- migrationName :: Text
+    -- migrationName = migrationNameUnderscored newModule oldVersion newVersion typeName
+
+    -- migration :: Text
+    -- migration = migrationName <> " " <> paramMigrationTextsCombined -- <> "<!2>"
+
+    migrationName_ :: Text
+    migrationName_ = migrationNameUnderscored newModule oldVersion newVersion typeName
+
+
   in
-  xMigrationNested ( if length tvars > 0 then
-      T.concat ["(", typeScope, nameToText typeName, tvars_, ")"] -- <> "<!2>"
-    else
-      T.concat [typeScope, nameToText typeName] -- <> "<!3>"
+  xMigrationNested
+  ( migrationName_
   , imps
   , (Map.singleton (moduleKey identifier) $
       MigrationDefinition
         { imports = imps
         , migrations = Map.singleton
             (lowerFirstLetter_ $ nameToText typeName)
-            (typedAliasMigration oldModuleName newModuleName typeName migration)
+            (T.concat
+              ["\n", migrationName_, " : ", nameToText oldModuleName, ".", nameToText typeName, " -> ", newModuleName, ".", nameToText typeName, "\n"
+              , migrationName_, " old = ", migration
+              ])
         })
       & mergeMigrationDefinitions subft
-  , ""
+  , migrationName_
   )
 
-
-typedAliasMigration oldModuleName newModuleName typeName migration =
-  T.concat
-    ["\n", (lowerFirstLetter_ $ nameToText typeName), " : ", nameToText oldModuleName, ".", nameToText typeName, " -> ModelMigration ", newModuleName, ".", nameToText typeName, " ", newModuleName, ".", msgForType (nameToText typeName), "\n"
-    , (lowerFirstLetter_ $ nameToText typeName), " old = ", migration
-    ]
 
 canonicalToFt :: Int -> Int -> ModuleName.Canonical -> Interfaces -> RecursionSet -> Can.Type -> Maybe Can.Type -> [(N.Name, Can.Type)] -> Text -> Migration
 canonicalToFt oldVersion newVersion scope interfaces recursionSet tipe tipeOldM tvarMap oldValueRef =

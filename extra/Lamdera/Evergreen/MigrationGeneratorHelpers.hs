@@ -43,6 +43,7 @@ data Migration = MigrationNested
   , migrationNestedDefs :: MigrationDefinitions
   , migrationName :: Text
   }
+  deriving (Show)
 
 xMigrationNested (a,b,c,d) = MigrationNested a b c d
 
@@ -74,19 +75,6 @@ allMigrations efts =
       & List.nub
       & T.intercalate "\n\n"
 
-allDefinitionImportsText :: MigrationDefinitions -> Text
-allDefinitionImportsText efts =
-    efts
-      & Map.toList
-      & fmap (\(file, ef@(MigrationDefinition imports migrations)) -> importsToText imports )
-      & (++) additionalImports
-      & List.concat
-      & List.sort
-      & List.nub
-      & T.intercalate "\n"
-
-additionalImports :: [[Text]]
-additionalImports = [["import Lamdera.Migrations exposing (..)"]]
 
 importsToText :: Set.Set ModuleName.Canonical -> [Text]
 importsToText imports =
@@ -324,9 +312,9 @@ isUserModule moduleName =
         (ModuleName.Canonical (Pkg.Name author pkg) module_) ->
             author == "author" && pkg == "project"
 
-migrationWrapperForType :: Text -> Text
+migrationWrapperForType :: N.Name -> Text
 migrationWrapperForType t =
-  case t of
+  case N.toChars t of
     "BackendModel"  -> "ModelMigration"
     "FrontendModel" -> "ModelMigration"
     "FrontendMsg"   -> "MsgMigration"
@@ -334,9 +322,9 @@ migrationWrapperForType t =
     "BackendMsg"    -> "MsgMigration"
     "ToFrontend"    -> "MsgMigration"
 
-msgForType :: Text -> Text
+msgForType :: N.Name -> Text
 msgForType t =
-  case t of
+  case N.toChars t of
     "BackendModel"  -> "BackendMsg"
     "FrontendModel" -> "FrontendMsg"
     "FrontendMsg"   -> "FrontendMsg"

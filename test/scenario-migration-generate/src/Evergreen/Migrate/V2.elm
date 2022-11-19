@@ -32,8 +32,38 @@ import Result
 import Set
 
 
+frontendModel : Evergreen.V1.Types.FrontendModel -> ModelMigration Evergreen.V2.Types.FrontendModel Evergreen.V2.Types.FrontendMsg
+frontendModel old =
+    ModelMigration ( migrate_Types_FrontendModel old, Cmd.none )
+
+
 backendModel : Evergreen.V1.Types.BackendModel -> ModelMigration Evergreen.V2.Types.BackendModel Evergreen.V2.Types.BackendMsg
 backendModel old =
+    ModelMigration ( migrate_Types_BackendModel old, Cmd.none )
+
+
+frontendMsg : Evergreen.V1.Types.FrontendMsg -> MsgMigration Evergreen.V2.Types.FrontendMsg Evergreen.V2.Types.FrontendMsg
+frontendMsg old =
+    MsgUnchanged
+
+
+toBackend : Evergreen.V1.Types.ToBackend -> MsgMigration Evergreen.V2.Types.ToBackend Evergreen.V2.Types.BackendMsg
+toBackend old =
+    MsgUnchanged
+
+
+backendMsg : Evergreen.V1.Types.BackendMsg -> MsgMigration Evergreen.V2.Types.BackendMsg Evergreen.V2.Types.BackendMsg
+backendMsg old =
+    MsgUnchanged
+
+
+toFrontend : Evergreen.V1.Types.ToFrontend -> MsgMigration Evergreen.V2.Types.ToFrontend Evergreen.V2.Types.FrontendMsg
+toFrontend old =
+    MsgUnchanged
+
+
+migrate_Types_BackendModel : Evergreen.V1.Types.BackendModel -> Evergreen.V2.Types.BackendModel
+migrate_Types_BackendModel old =
     { unchangedCore = old.unchangedCore
     , unchangedUser = old.unchangedUser |> migrate_Types_UserType
     , unchangedAllTypes = old.unchangedAllTypes |> migrate_External_AllTypes
@@ -77,8 +107,8 @@ backendModel old =
     }
 
 
-frontendModel : Evergreen.V1.Types.FrontendModel -> ModelMigration Evergreen.V2.Types.FrontendModel Evergreen.V2.Types.FrontendMsg
-frontendModel old =
+migrate_Types_FrontendModel : Evergreen.V1.Types.FrontendModel -> Evergreen.V2.Types.FrontendModel
+migrate_Types_FrontendModel old =
     { basic = old.basic
     , added = Unimplemented -- Type `Int` was added in V2. I need you to set a default value.
     }
