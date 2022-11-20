@@ -308,6 +308,8 @@ isEquivalentElmType name t1 t2 = do
             (Can.Filled t1, Can.Filled t2) ->
               -- debugHaskellPass "TAlias:Filled" (moduleName, moduleName2, name, name2, tvarMap_, tvarMap_2) $
               isEquivalentElmType name t1 t2
+            _ ->
+              False
         (Can.TRecord newFields isPartial, Can.TRecord newFields2 isPartial2) ->
           -- debugHaskell "TRecord" $
           t1 == t2
