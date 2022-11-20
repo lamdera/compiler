@@ -72,7 +72,7 @@ generateFor coreTypeDiffs oldVersion newVersion interfaces iface_Types = do
         )
         -- & debugHaskell "all migration definitions"
         -- & foldl (\acc (t, ft) -> mergeMigrationDefinitions acc ft) Map.empty
-        & debugHaskell "efts"
+        -- & debugHaskell "efts"
 
     imports = migrations
       & fmap snd
@@ -148,31 +148,37 @@ coreTypeMigration typeDidChange oldVersion newVersion interfaces newModule typeN
     oldModuleName :: Text
     oldModuleName = asOldModuleName (canModuleName newModule) newVersion oldVersion & nameToText
 
-    migrationWrapper migrationFn = do
-      let migration =
-            if typeDidChange
-              then T.concat [migrationWrapperForType typeName, " (", migrationFn, " old, Cmd.none)"]
-              else unchangedForType typeName
+    migrationWrapper migration = do
+      -- let migration =
+      --       if typeDidChange
+      --         then T.concat [migrationWrapperForType typeName, " (", migrationFn, " old, Cmd.none)"]
+      --         else migrationFn
       (T.concat
         ["\n", (lowerFirstLetter_ t), " : ", oldModuleName, ".", t, " -> ", migrationTypeForType typeName , " ", newModuleName, ".", t, " ", newModuleName, ".", msgForType typeName, "\n"
         , (lowerFirstLetter_ $ nameToText typeName), " old = ", migration
         ])
 
-  case findDef (canModuleName newModule) typeName interfaces of
-    Just (Alias alias) -> do
-      let
-        diffableAlias = aliasToFt oldVersion newVersion newModule identifier typeName interfaces recursionSet alias "old"
-        (MigrationNested subt imps subft migrationName) = diffableAlias
-      (MigrationNested (migrationWrapper subt) imps (subft & addImports newModule imps) migrationName)
+  if typeDidChange
+    then
+      case findDef (canModuleName newModule) typeName interfaces of
+        Just (Alias alias) -> do
+          let
+            diffableAlias = aliasToFt oldVersion newVersion newModule identifier typeName interfaces recursionSet alias "old"
+            (MigrationNested migrationImpl imps subft migrationName) = diffableAlias
+            migration = T.concat [migrationWrapperForType typeName, " (", migrationImpl, " old, Cmd.none)"]
+          (MigrationNested (migrationWrapper migration) imps (subft & addImports newModule imps) migrationName)
 
-    Just (Union union) -> do
-      let
-        diffableUnion = unionToFt oldVersion newVersion newModule identifier typeName interfaces recursionSet [] union []
-        (MigrationNested subt imps subft migrationName) = diffableUnion
-      (MigrationNested (migrationWrapper subt) imps (subft & addImports newModule imps) migrationName)
+        Just (Union union) -> do
+          let
+            diffableUnion = unionToFt oldVersion newVersion newModule identifier typeName interfaces recursionSet [] union []
+            (MigrationNested migrationImpl imps subft migrationName) = diffableUnion
+            migration = T.concat [migrationWrapperForType typeName, " (", migrationImpl, " old, Cmd.none)"]
+          (MigrationNested (migrationWrapper migration) imps (subft & addImports newModule imps) migrationName)
 
-    Nothing ->
-      error $ concat [ "Tried to generate a migration for core type ", N.toChars typeName, ", but I couldn't find it defined in Types.elm" ]
+        Nothing ->
+          error $ concat [ "Tried to generate a migration for core type ", N.toChars typeName, ", but I couldn't find it defined in Types.elm" ]
+    else
+      (MigrationNested (migrationWrapper (unchangedForType typeName)) Set.empty Map.empty "")
 
 
 -- A top level Custom Type definition i.e. `type Herp = Derp ...`

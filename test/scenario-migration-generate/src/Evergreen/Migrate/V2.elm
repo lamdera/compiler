@@ -143,13 +143,6 @@ migrate_External_ExternalUnion old =
             Evergreen.V2.External.External2
 
 
-migrate_Types_BackendMsg : Evergreen.V1.Types.BackendMsg -> Evergreen.V2.Types.BackendMsg
-migrate_Types_BackendMsg old =
-    case old of
-        Evergreen.V1.Types.NoOpBackendMsg ->
-            Evergreen.V2.Types.NoOpBackendMsg
-
-
 migrate_Types_CustomType : Evergreen.V1.Types.CustomType -> Evergreen.V2.Types.CustomType
 migrate_Types_CustomType old =
     case old of
@@ -158,30 +151,6 @@ migrate_Types_CustomType old =
 
         Evergreen.V1.Types.CustomTwo ->
             Evergreen.V2.Types.CustomTwo
-
-
-migrate_Types_FrontendMsg : Evergreen.V1.Types.FrontendMsg -> Evergreen.V2.Types.FrontendMsg
-migrate_Types_FrontendMsg old =
-    case old of
-        Evergreen.V1.Types.Noop ->
-            Evergreen.V2.Types.Noop
-
-        Evergreen.V1.Types.AllTypes p0 ->
-            Evergreen.V2.Types.AllTypes (p0 |> migrate_External_AllTypes)
-
-
-migrate_Types_ToBackend : Evergreen.V1.Types.ToBackend -> Evergreen.V2.Types.ToBackend
-migrate_Types_ToBackend old =
-    case old of
-        Evergreen.V1.Types.Nooptobackend ->
-            Evergreen.V2.Types.Nooptobackend
-
-
-migrate_Types_ToFrontend : Evergreen.V1.Types.ToFrontend -> Evergreen.V2.Types.ToFrontend
-migrate_Types_ToFrontend old =
-    case old of
-        Evergreen.V1.Types.Nooptofrontend ->
-            Evergreen.V2.Types.Nooptofrontend
 
 
 migrate_Types_TypeToAlias : Evergreen.V1.Types.TypeToAlias -> Evergreen.V2.Types.TypeToAlias
