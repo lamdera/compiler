@@ -5,7 +5,7 @@ module Evergreen.Migrate.V2 exposing (..)
 It includes:
 
   - A migration for each of the 6 Lamdera core types that has changed
-  - A migration named `migrate_ModuleName_TypeName` for each changed/custom sub-type within a changed core type
+  - A function named `migrate_ModuleName_TypeName` for each changed/custom type
 
 Expect to see:
 
@@ -34,12 +34,12 @@ import Set
 
 frontendModel : Evergreen.V1.Types.FrontendModel -> ModelMigration Evergreen.V2.Types.FrontendModel Evergreen.V2.Types.FrontendMsg
 frontendModel old =
-    ModelMigration ( migrate_Types_FrontendModel old, Cmd.none )
+    ModelMigrated ( migrate_Types_FrontendModel old, Cmd.none )
 
 
 backendModel : Evergreen.V1.Types.BackendModel -> ModelMigration Evergreen.V2.Types.BackendModel Evergreen.V2.Types.BackendMsg
 backendModel old =
-    ModelMigration ( migrate_Types_BackendModel old, Cmd.none )
+    ModelMigrated ( migrate_Types_BackendModel old, Cmd.none )
 
 
 frontendMsg : Evergreen.V1.Types.FrontendMsg -> MsgMigration Evergreen.V2.Types.FrontendMsg Evergreen.V2.Types.FrontendMsg

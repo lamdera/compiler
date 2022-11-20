@@ -29,6 +29,8 @@ import Lamdera
 import Lamdera.Types
 import Lamdera.Progress
 import Lamdera.Wire3.Helpers
+import qualified Lamdera.Types
+
 import qualified Ext.Query.Interfaces as Interfaces
 import StandaloneInstances
 
@@ -73,17 +75,6 @@ type RecursionSet =
   Set.Set (ModuleName.Raw, N.Name, [Type])
 
 
-lamderaCoreTypes :: [ModuleName.Raw]
-lamderaCoreTypes =
-  [ "FrontendModel"
-  , "BackendModel"
-  , "FrontendMsg"
-  , "ToBackend"
-  , "BackendMsg"
-  , "ToFrontend"
-  ]
-
-
 calculateHashPair :: FilePath -> N.Name -> N.Name -> IO (Text, Text)
 calculateHashPair path modulename typename = do
   interfaces <- Interfaces.all [ path ]
@@ -113,7 +104,7 @@ calculateLamderaHashes_ interfaces iface_Types inDebug = do
   let
     typediffs :: [(Text, DiffableType)]
     typediffs =
-      lamderaCoreTypes
+      Lamdera.Types.core
         & fmap (\t -> (nameToText t, diffableTypeByName interfaces t "Types" iface_Types))
 
 

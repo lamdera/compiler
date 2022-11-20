@@ -15,6 +15,7 @@ import qualified Ext.Common
 
 import Lamdera
 import qualified Lamdera.Compile
+import qualified Lamdera.Types
 import qualified Lamdera.Evergreen.MigrationGenerator
 
 
@@ -33,9 +34,15 @@ testMigrationGeneration scenario oldVersion newVersion = do
   io $ atomicPutStrLn <$> Ext.Common.requireBinary "elm-format"
 
   let root = "/Users/mario/dev/projects/lamdera-compiler/test/scenario-migration-generate"
+      typeCompares = zipWith3
+        (\label local prod -> (label, T.unpack local, T.unpack prod))
+        (Lamdera.Types.core)
+        ["o","o","o","o","o","o"]
+        ["x","x","o","o","o","o"]
+
 
   mock <- io $ readUtf8Text $ "test/scenario-migration-generate/src/Evergreen/Migrate/V" <> show newVersion <> ".elm"
-  result <- io $ Lamdera.Evergreen.MigrationGenerator.betweenVersions oldVersion newVersion root
+  result <- io $ Lamdera.Evergreen.MigrationGenerator.betweenVersions typeCompares oldVersion newVersion root
 
   expectEqualTextTrimmed (mock & withDefault "failed to load file") result
 

@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Lamdera.Types where
 
 import qualified Data.Map as Map
@@ -34,3 +36,14 @@ data DiffableType
   | DError Text
   | DExternalWarning (Text, Text, Text, Text) DiffableType
   deriving (Show)
+
+
+core :: [ModuleName.Raw]
+core =
+  [ "FrontendModel"
+  , "BackendModel"
+  , "FrontendMsg"
+  , "ToBackend"
+  , "BackendMsg"
+  , "ToFrontend"
+  ]

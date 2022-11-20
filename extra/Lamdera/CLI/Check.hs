@@ -212,7 +212,7 @@ onlineCheck root appName inDebug localTypes externalTypeWarnings isHoistRebuild 
           let
             typeCompares = zipWith3
               (\label local prod -> (label, T.unpack local, T.unpack prod))
-              [ "FrontendModel", "BackendModel", "FrontendMsg", "ToBackend", "BackendMsg", "ToFrontend" ]
+              Lamdera.Types.core
               localTypes
               productionTypes
 
@@ -221,7 +221,7 @@ onlineCheck root appName inDebug localTypes externalTypeWarnings isHoistRebuild 
 
             formattedChangedTypes =
               changedTypes
-                & fmap (\(label, local, prod) -> D.indent 4 (D.dullyellow (D.fromChars label)))
+                & fmap (\(label, local, prod) -> D.indent 4 (D.dullyellow (D.fromChars $ show label)))
                 & D.vcat
 
           if migrationExists
@@ -272,7 +272,7 @@ onlineCheck root appName inDebug localTypes externalTypeWarnings isHoistRebuild 
 
               lastLocalTypeChangeVersion <- Lamdera.Evergreen.MigrationHarness.getLastLocalTypeChangeVersion root
 
-              defaultMigrations <- Lamdera.Evergreen.MigrationGenerator.betweenVersions lastLocalTypeChangeVersion nextVersion root
+              defaultMigrations <- Lamdera.Evergreen.MigrationGenerator.betweenVersions typeCompares lastLocalTypeChangeVersion nextVersion root
 
               writeUtf8 nextMigrationPath defaultMigrations
 

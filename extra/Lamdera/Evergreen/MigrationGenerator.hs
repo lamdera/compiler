@@ -5,46 +5,37 @@
 
 module Lamdera.Evergreen.MigrationGenerator where
 
-import qualified AST.Canonical as Can
-import qualified AST.Source as Valid
-import qualified Elm.ModuleName as ModuleName
-import qualified Elm.Package as Pkg
-import qualified Elm.Interface as Interface
-import qualified Reporting.Annotation as A
-import qualified Reporting.Result as Result
-import qualified Reporting.Error as Error
-
-import qualified Reporting.Doc as D
-
-import qualified System.Environment as Env
-import Data.Maybe (fromMaybe)
-import System.FilePath ((</>))
-import Data.Map (Map, (!))
+import Data.Map (Map)
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 import qualified Data.List as List
 import qualified Data.Text as T
 import qualified Data.Name as N
-import Data.Map.Strict (unionWithKey)
 import NeatInterpolation
 
-import qualified Data.Utf8 as Utf8
+import qualified AST.Canonical as Can
+import qualified Elm.ModuleName as ModuleName
+import qualified Elm.Package as Pkg
+import qualified Elm.Interface as Interface
 
 import Lamdera
 import Lamdera.Types
 import qualified Lamdera.Compile
-import qualified Ext.Query.Interfaces as Interfaces
-import qualified Lamdera.Progress as Progress
 import qualified Ext.ElmFormat
 import qualified Ext.Query.Interfaces
 import qualified Lamdera.Wire3.Helpers
-import StandaloneInstances
+-- import StandaloneInstances
 
 import Lamdera.Evergreen.MigrationGeneratorHelpers
 
 
-betweenVersions :: Int -> Int -> String -> IO Text
-betweenVersions oldVersion newVersion root = do
+
+type CoreTypeDiffs = [(N.Name, String, String)]
+
+
+
+betweenVersions :: CoreTypeDiffs -> Int -> Int -> String -> IO Text
+betweenVersions coreTypeDiffs oldVersion newVersion root = do
     let
         paths = ["src/Evergreen/V" <> show oldVersion <> "/Types.elm", "src/Evergreen/V" <> show newVersion <> "/Types.elm"]
         moduleNameString = "Evergreen.V" <> show newVersion <> ".Types"
@@ -55,7 +46,7 @@ betweenVersions oldVersion newVersion root = do
         interfaces <- Ext.Query.Interfaces.all paths
         case Map.lookup (N.fromChars moduleNameString) interfaces of
           Just interface ->
-            generateFor oldVersion newVersion interfaces (interfaces Map.! (N.fromChars $ "Evergreen.V" <> show newVersion <> ".Types"))
+            generateFor coreTypeDiffs oldVersion newVersion interfaces (interfaces Map.! (N.fromChars $ "Evergreen.V" <> show newVersion <> ".Types"))
 
           Nothing ->
             error $ "Fatal: could not find the module `" <> moduleNameString <> "`, please report this issue in Discord with your project code."
@@ -67,24 +58,18 @@ betweenVersions oldVersion newVersion root = do
     --   Left err -> error (T.unpack err)
 
 
-  -- pure $ ("module Evergreen.Migrate.V" <> show_ newVersion <> " exposing (..)\n\n")
-  --   <> helpfulInformation
-  --   <> "\n"
-  --   <> allDefinitionImportsText efts
-  --   <> "\n\n"
-  --   <> allMigrations efts
-
-
-generateFor :: Int -> Int -> Interfaces -> Interface.Interface -> IO Text
-generateFor oldVersion newVersion interfaces iface_Types = do
+generateFor :: CoreTypeDiffs -> Int -> Int -> Interfaces -> Interface.Interface -> IO Text
+generateFor coreTypeDiffs oldVersion newVersion interfaces iface_Types = do
   let
     moduleName :: ModuleName.Canonical
     moduleName = (ModuleName.Canonical (Pkg.Name "author" "project") (N.fromChars $ "Evergreen.V" <> show newVersion <> ".Types"))
 
     migrations :: [(N.Name, Migration)]
     migrations =
-      lamderaCoreTypes
-        & fmap (\t -> (t, coreTypeMigration oldVersion newVersion interfaces moduleName t iface_Types))
+      coreTypeDiffs
+        & fmap (\(t, oldHash, newHash) ->
+            (t, coreTypeMigration (oldHash /= newHash) oldVersion newVersion interfaces moduleName t iface_Types)
+        )
         -- & debugHaskell "all migration definitions"
         -- & foldl (\acc (t, ft) -> mergeMigrationDefinitions acc ft) Map.empty
         & debugHaskell "efts"
@@ -130,7 +115,7 @@ helpfulInformation =
     It includes:
 
       - A migration for each of the 6 Lamdera core types that has changed
-      - A migration named `migrate_ModuleName_TypeName` for each changed/custom sub-type within a changed core type
+      - A function named `migrate_ModuleName_TypeName` for each changed/custom type
 
     Expect to see:
 
@@ -145,8 +130,8 @@ helpfulInformation =
   |]
 
 
-coreTypeMigration :: Int -> Int -> Interfaces -> ModuleName.Canonical -> N.Name -> Interface.Interface -> Migration
-coreTypeMigration oldVersion newVersion interfaces newModule typeName interface = do
+coreTypeMigration :: Bool -> Int -> Int -> Interfaces -> ModuleName.Canonical -> N.Name -> Interface.Interface -> Migration
+coreTypeMigration typeDidChange oldVersion newVersion interfaces newModule typeName interface = do
   let
     recursionIdentifier :: (ModuleName.Canonical, N.Name)
     recursionIdentifier = (newModule, typeName)
@@ -157,33 +142,20 @@ coreTypeMigration oldVersion newVersion interfaces newModule typeName interface 
 
     t = nameToText typeName
 
-    -- typeScope =
-    --   if moduleName == scope then
-    --     ""
-    --   -- else if isUserType identifier then
-    --   --   nameToText newModule <> "."
-    --   else
-    --     T.concat [nameToText newModule, "."]
-
-    -- moduleName = (ModuleName.Canonical (Pkg.Name author pkg) newModule)
-
-    -- @TODO restore unchanged function
-    -- migration =
-    --   if tipe == tipeOld then
-    --     "ModelUnchanged"
-    --   else
-    --     subt
-
     newModuleName =
       newModule & canModuleName & N.toText
 
     oldModuleName :: Text
     oldModuleName = asOldModuleName (canModuleName newModule) newVersion oldVersion & nameToText
 
-    migrationWrapper migration =
+    migrationWrapper migrationFn = do
+      let migration =
+            if typeDidChange
+              then T.concat [migrationWrapperForType typeName, " (", migrationFn, " old, Cmd.none)"]
+              else unchangedForType typeName
       (T.concat
-        ["\n", (lowerFirstLetter_ t), " : ", oldModuleName, ".", t, " -> ", migrationWrapperForType typeName , " ", newModuleName, ".", t, " ", newModuleName, ".", msgForType typeName, "\n"
-        , (lowerFirstLetter_ $ nameToText typeName), " old = ", migrationWrapperForType typeName, " (", migration, " old, Cmd.none)"
+        ["\n", (lowerFirstLetter_ t), " : ", oldModuleName, ".", t, " -> ", migrationTypeForType typeName , " ", newModuleName, ".", t, " ", newModuleName, ".", msgForType typeName, "\n"
+        , (lowerFirstLetter_ $ nameToText typeName), " old = ", migration
         ])
 
   case findDef (canModuleName newModule) typeName interfaces of
