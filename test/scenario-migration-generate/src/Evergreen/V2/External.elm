@@ -27,3 +27,7 @@ type alias AllTypes =
     , order : Order
     , unit : ()
     }
+
+
+type TypeThatGetsMoved
+    = TypeThatGetsMoved

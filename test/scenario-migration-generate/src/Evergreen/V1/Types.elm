@@ -29,6 +29,7 @@ type alias BackendModel =
     , removedRecord : Evergreen.V1.External.AllTypes
 
     -- Drastic changes
+    , typeThatGetsMoved : TypeThatGetsMoved
     , typeToAlias : TypeToAlias
     , aliasToType : AliasToType
 
@@ -105,3 +106,7 @@ type alias TypeUses =
 
 type alias ConfigUse =
     ( String, String, List String )
+
+
+type TypeThatGetsMoved
+    = TypeThatGetsMoved

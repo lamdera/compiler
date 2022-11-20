@@ -28,6 +28,7 @@ type alias BackendModel =
     , added : Int
 
     -- Drastic changes
+    , typeThatGetsMoved : Evergreen.V2.External.TypeThatGetsMoved
     , typeToAlias : TypeToAlias
     , aliasToType : AliasToType
 
