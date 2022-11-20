@@ -29,11 +29,6 @@ import qualified Lamdera.Wire3.Helpers
 import Lamdera.Evergreen.MigrationGeneratorHelpers
 
 
-
-type CoreTypeDiffs = [(N.Name, String, String)]
-
-
-
 betweenVersions :: CoreTypeDiffs -> Int -> Int -> String -> IO Text
 betweenVersions coreTypeDiffs oldVersion newVersion root = do
     let
@@ -135,24 +130,24 @@ coreTypeMigration typeDidChange oldVersion newVersion interfaces newModule typeN
   let
     recursionIdentifier :: (ModuleName.Canonical, N.Name)
     recursionIdentifier = (newModule, typeName)
+
     recursionSet :: RecursionSet
     recursionSet = Set.singleton recursionIdentifier
+
     identifier :: TypeIdentifier
     identifier = asIdentifier_ recursionIdentifier
 
+    t :: Text
     t = nameToText typeName
 
-    newModuleName =
-      newModule & canModuleName & N.toText
+    newModuleName :: Text
+    newModuleName = newModule & canModuleName & N.toText
 
     oldModuleName :: Text
     oldModuleName = asOldModuleName (canModuleName newModule) newVersion oldVersion & nameToText
 
+    migrationWrapper :: Text -> Text
     migrationWrapper migration = do
-      -- let migration =
-      --       if typeDidChange
-      --         then T.concat [migrationWrapperForType typeName, " (", migrationFn, " old, Cmd.none)"]
-      --         else migrationFn
       (T.concat
         ["\n", (lowerFirstLetter_ t), " : ", oldModuleName, ".", t, " -> ", migrationTypeForType typeName , " ", newModuleName, ".", t, " ", newModuleName, ".", msgForType typeName, "\n"
         , (lowerFirstLetter_ $ nameToText typeName), " old = ", migration
@@ -223,7 +218,7 @@ migrateUnion author pkg oldUnion newUnion params tvarMap oldVersion newVersion t
       -- value migratons will get caught in the actual constructor migrations?
       tvarResolvedParams params tvarMap
         & imap (\i param ->
-          canonicalToFt oldVersion newVersion scope interfaces recursionSet param Nothing tvarMap ("p" <> show_ i)
+          canToMigration oldVersion newVersion scope interfaces recursionSet param Nothing tvarMap ("p" <> show_ i)
         )
       -- If we do need to migrate params here, it would probably be something like:
       -- let
@@ -347,7 +342,7 @@ migrateParam i paramOldM paramNewM interfaces tvarMap recursionSet localScope ne
   case (paramOldM, paramNewM) of
     (Just paramOld, Just paramNew) ->
       let ft@(MigrationNested migration imps subft migrationName) =
-            canonicalToFt oldVersion newVersion localScope interfaces recursionSet paramNew (Just paramOld) tvarMap ("p" <> show_ i)
+            canToMigration oldVersion newVersion localScope interfaces recursionSet paramNew (Just paramOld) tvarMap ("p" <> show_ i)
 
           appliedMigration =
             if paramOld == paramNew then
@@ -440,34 +435,6 @@ genOldConstructorFt oldModuleName moduleScope typeName interfaces tvarMap recurs
   migration_
 
 
--- Like == but considers union types equal despite module defs
-areEquivalentEvergreenTypes t1s t2s =
-  let
-      result =
-        length t1s == length t2s
-          && and (zipWith isEquivalentEvergreenType t1s t2s)
-  in
-  -- debugHaskellPass "areEquivalentEvergreenTypes" (result, t1s, t2s) $
-  result
-
-
-isEquivalentEvergreenType t1 t2 =
-  case (t1, t2) of
-    ((Can.TType (ModuleName.Canonical (Pkg.Name "author" "project") module1) name1 params1),
-     (Can.TType (ModuleName.Canonical (Pkg.Name "author" "project") module2) name2 params2)) ->
-      name1 == name2 && isEquivalentEvergreenModule module1 module2
-    _ -> t1 == t2
-
-
-isEquivalentEvergreenModule m1 m2 =
-  let m1_ = m1 & N.toText & T.splitOn "."
-      m2_ = m2 & N.toText & T.splitOn "."
-  in
-  case (m1_, m2_) of
-    ("Evergreen":_:xs1, "Evergreen":_:xs2) -> xs1 == xs2
-    _ -> m1 == m2
-
-
 -- A top level Alias definition i.e. `type alias ...`
 aliasToFt :: Int -> Int -> ModuleName.Canonical -> TypeIdentifier -> N.Name -> Interfaces -> RecursionSet -> Can.Alias -> Text -> Migration
 aliasToFt oldVersion newVersion scope identifier@(author, pkg, newModule, _) typeName interfaces recursionSet alias@(Can.Alias tvars tipe) oldValueRef =
@@ -490,7 +457,7 @@ aliasToFt oldVersion newVersion scope identifier@(author, pkg, newModule, _) typ
 migrateAlias :: Int -> Int -> ModuleName.Canonical -> TypeIdentifier -> N.Name -> Interfaces -> RecursionSet -> Can.Alias -> Can.Alias -> N.Name -> Text -> Migration
 migrateAlias oldVersion newVersion scope identifier@(author, pkg, newModule, _) typeName interfaces recursionSet (Can.Alias tvars tipe) (Can.Alias tvarsOld tipeOld) oldModuleName oldValueRef =
   let
-    (MigrationNested subt imps subft migrationName) = canonicalToFt oldVersion newVersion scope interfaces recursionSet tipe (Just tipeOld) [] oldValueRef
+    (MigrationNested subt imps subft migrationName) = canToMigration oldVersion newVersion scope interfaces recursionSet tipe (Just tipeOld) [] oldValueRef
 
     tvars_ = tvars & fmap N.toText & T.intercalate " "
 
@@ -543,46 +510,32 @@ migrateAlias oldVersion newVersion scope identifier@(author, pkg, newModule, _) 
   )
 
 
-canonicalToFt :: Int -> Int -> ModuleName.Canonical -> Interfaces -> RecursionSet -> Can.Type -> Maybe Can.Type -> [(N.Name, Can.Type)] -> Text -> Migration
-canonicalToFt oldVersion newVersion scope interfaces recursionSet tipe tipeOldM tvarMap oldValueRef =
-  let
-    -- scopeModule =
-    --   case scope of
-    --     (ModuleName.Canonical (Pkg.Name author pkg) module_) -> module_
-
-    -- debug (t, imps, ft) =
-    --   -- debugHaskellWhen (textContains "OptionalData" t) ("\n✳️  inserting def for " <> t <> "\n" <> (T.pack . show $ canonical)) (t, imps, ft)
-    --   -- debug_note ("🔵inserting def for " <> T.unpack t <> ":\n" <> ( ft)) $ (t, imps, ft)
-    --   unsafePerformIO $ do
-    --       formatHaskellValue ("\n🔵inserting def for " <> (show_ tipeOldM)) (t, ft) :: IO ()
-    --       -- formatHaskellValue ("\n🟠 which had oldtype: " <> t) (tipeOldM) :: IO ()
-    --       pure (t, imps, ft)
-  in
-  -- debug $
+canToMigration :: Int -> Int -> ModuleName.Canonical -> Interfaces -> RecursionSet -> Can.Type -> Maybe Can.Type -> [(N.Name, Can.Type)] -> Text -> Migration
+canToMigration oldVersion newVersion scope interfaces recursionSet tipe tipeOldM tvarMap oldValueRef =
   case tipe of
     Can.TType moduleName name params ->
-      handleTypeToFt oldVersion newVersion scope interfaces recursionSet tipe tipeOldM tvarMap oldValueRef
+      typeToMigration oldVersion newVersion scope interfaces recursionSet tipe tipeOldM tvarMap oldValueRef
 
-    Can.TAlias moduleName name tvarMap_ aliasType -> handleAliasToFt oldVersion newVersion scope interfaces recursionSet tipe tipeOldM tvarMap oldValueRef
+    Can.TAlias moduleName name tvarMap_ aliasType -> canAliasToMigration oldVersion newVersion scope interfaces recursionSet tipe tipeOldM tvarMap oldValueRef
 
     Can.TRecord newFields isPartial ->
-      handleRecordToFt oldVersion newVersion scope interfaces recursionSet tipe tipeOldM tvarMap oldValueRef
+      recordToMigration oldVersion newVersion scope interfaces recursionSet tipe tipeOldM tvarMap oldValueRef
 
     Can.TTuple t1 t2 mt3 ->
       let
-        (MigrationNested subt imps subft migrationName) = (canonicalToFt oldVersion newVersion scope interfaces recursionSet t1 tipeOldM tvarMap oldValueRef)
-        (MigrationNested subt2 imps2 subft2 migrationName2) = (canonicalToFt oldVersion newVersion scope interfaces recursionSet t2 tipeOldM tvarMap oldValueRef)
+        (MigrationNested subt imps subft migrationName) = (canToMigration oldVersion newVersion scope interfaces recursionSet t1 tipeOldM tvarMap oldValueRef)
+        (MigrationNested subt2 imps2 subft2 migrationName2) = (canToMigration oldVersion newVersion scope interfaces recursionSet t2 tipeOldM tvarMap oldValueRef)
       in
       case mt3 of
         Just t3 ->
           let
-            (MigrationNested subt3 imps3 subft3 migrationName3) = (canonicalToFt oldVersion newVersion scope interfaces recursionSet t3 tipeOldM tvarMap oldValueRef)
+            (MigrationNested subt3 imps3 subft3 migrationName3) = (canToMigration oldVersion newVersion scope interfaces recursionSet t3 tipeOldM tvarMap oldValueRef)
           in
           xMigrationNested (T.concat ["(", subt, ", ", subt2, ", ", subt3, ")"], mergeAllImports [imps,imps2,imps3], mergeAllMigrationDefinitions [subft,subft2,subft3], "")
 
         Nothing ->
           xMigrationNested (T.concat ["(", subt, ", ", subt2, ")"], mergeImports imps imps2, mergeMigrationDefinitions subft subft2, "")
-      -- DTuple (canonicalToFt oldVersion newVersion scope interfaces recursionSet t1 tvarMap) (canonicalToFt oldVersion newVersion scope interfaces recursionSet t2 tvarMap)
+      -- DTuple (canToMigration oldVersion newVersion scope interfaces recursionSet t1 tvarMap) (canToMigration oldVersion newVersion scope interfaces recursionSet t2 tvarMap)
 
     Can.TUnit ->
       xMigrationNested ("()", Set.empty, Map.empty, "")
@@ -596,8 +549,8 @@ canonicalToFt oldVersion newVersion scope interfaces recursionSet tipe tipeOldM 
       -- DError $ "must not contain functions"
 
 
-handleAliasToFt :: Int -> Int -> ModuleName.Canonical -> Interfaces -> RecursionSet -> Can.Type -> Maybe Can.Type -> [(N.Name, Can.Type)] -> Text -> Migration
-handleAliasToFt oldVersion newVersion scope interfaces recursionSet tipe@(Can.TAlias moduleName name tvarMap_ aliasType) tipeOldM tvarMap oldValueRef =
+canAliasToMigration :: Int -> Int -> ModuleName.Canonical -> Interfaces -> RecursionSet -> Can.Type -> Maybe Can.Type -> [(N.Name, Can.Type)] -> Text -> Migration
+canAliasToMigration oldVersion newVersion scope interfaces recursionSet tipe@(Can.TAlias moduleName name tvarMap_ aliasType) tipeOldM tvarMap oldValueRef =
   let
     module_ =
       case moduleName of
@@ -622,7 +575,7 @@ handleAliasToFt oldVersion newVersion scope interfaces recursionSet tipe@(Can.TA
               -- @TODO are we sure we don't need oldParam setup here? Need to come up with a test example if we do.
               let oldParamType = Nothing
               in
-              canonicalToFt oldVersion newVersion scope interfaces recursionSet paramType oldParamType tvarMap_ oldValueRef
+              canToMigration oldVersion newVersion scope interfaces recursionSet paramType oldParamType tvarMap_ oldValueRef
             )
 
         usageParamNames :: Text
@@ -646,7 +599,7 @@ handleAliasToFt oldVersion newVersion scope interfaces recursionSet tipe@(Can.TA
         (MigrationNested subt imps subft migrationName_) :: Migration =
           case tipeOldM of
             Just (tipeOld@(Can.TAlias moduleName name tvarMap_ aliasType)) ->
-              canonicalToFt oldVersion newVersion moduleName interfaces recursionSet cType (Just tipeOld) tvarMap_ oldValueRef
+              canToMigration oldVersion newVersion moduleName interfaces recursionSet cType (Just tipeOld) tvarMap_ oldValueRef
 
             Just tipeOld ->
               xMigrationNested ("-- `" <> N.toText typeName <> "` was a concrete type, but now it's a type alias. I need you to write this migration.\n        Unimplemented", Set.empty, Map.empty, "")
@@ -739,7 +692,7 @@ handleAliasToFt oldVersion newVersion scope interfaces recursionSet tipe@(Can.TA
       -- If an alias is filled, then it can't have any open holes within it either?
       -- So we can take this opportunity to reset tvars to reduce likeliness of naming conflicts?
       let
-        (MigrationNested subt imps subft migrationName) = canonicalToFt oldVersion newVersion moduleName interfaces recursionSet cType tipeOldM [] oldValueRef
+        (MigrationNested subt imps subft migrationName) = canToMigration oldVersion newVersion moduleName interfaces recursionSet cType tipeOldM [] oldValueRef
 
         debugIden = "" -- <> "<af>"
       in
@@ -762,8 +715,8 @@ handleAliasToFt oldVersion newVersion scope interfaces recursionSet tipe@(Can.TA
       )
 
 
-handleRecordToFt :: Int -> Int -> ModuleName.Canonical -> Interfaces -> RecursionSet -> Can.Type -> Maybe Can.Type -> [(N.Name, Can.Type)] -> Text -> Migration
-handleRecordToFt oldVersion newVersion scope interfaces recursionSet tipe@(Can.TRecord newFields isPartial) tipeOldM tvarMap oldValueRef =
+recordToMigration :: Int -> Int -> ModuleName.Canonical -> Interfaces -> RecursionSet -> Can.Type -> Maybe Can.Type -> [(N.Name, Can.Type)] -> Text -> Migration
+recordToMigration oldVersion newVersion scope interfaces recursionSet tipe@(Can.TRecord newFields isPartial) tipeOldM tvarMap oldValueRef =
   case isPartial of
     Just whatIsThis ->
       xMigrationNested ("ERROR TRecord, please report this!", Set.empty, Map.empty, "")
@@ -789,9 +742,10 @@ handleRecordToFt oldVersion newVersion scope interfaces recursionSet tipe@(Can.T
             & fmap (\(name, (Can.FieldType index ftipe)) ->
                 case Map.lookup name fieldMapOld of
                   Just (Can.FieldType index_ ftipeOld) ->
-                    if ftipeOld == ftipe then
+                    if isEquivalentElmType name ftipeOld ftipe then
                       (N.toText name, xMigrationNested (T.concat[ oldValueRef, ".", N.toText name], Set.empty, Map.empty, ""))
                     else
+                      -- debugHaskellPassDiffWhen (name == "unchangedAllTypes") "these types are unequal" (ftipeOld, ftipe) $
                       if isAnonymousRecord ftipe
                         then
                           -- In order to deal with anonymous records inline, we have to change
@@ -814,18 +768,18 @@ handleRecordToFt oldVersion newVersion scope interfaces recursionSet tipe@(Can.T
                                     & show_
                                     & (<>) "rec"
 
-                            (MigrationNested st imps ft migrationName) = handleRecordToFt oldVersion newVersion scope interfaces recursionSet ftipe (Just ftipeOld) tvarMap recname
+                            (MigrationNested st imps ft migrationName) = recordToMigration oldVersion newVersion scope interfaces recursionSet ftipe (Just ftipeOld) tvarMap recname
                           in
                           (N.toText name, xMigrationNested (T.concat[ oldValueRef, ".", N.toText name, " |> (\\", recname, " -> ", st, ")"], imps, ft, ""))
                         else
-                          let (MigrationNested st imps ft migrationName) = canonicalToFt oldVersion newVersion scope interfaces recursionSet ftipe (Just (ftipeOld)) tvarMap oldValueRef
+                          let (MigrationNested st imps ft migrationName) = canToMigration oldVersion newVersion scope interfaces recursionSet ftipe (Just (ftipeOld)) tvarMap oldValueRef
                           in
                           -- (N.toText name, (T.concat[ oldValueRef, N.toText name, " xmarkerx \n-- ", show_ ftipe, "\n|> ", st ], imps, ft))
                           (N.toText name, xMigrationNested (T.concat[ oldValueRef, ".", N.toText name, " |> ", st ], imps, ft, ""))
 
                   Nothing ->
                     -- This field did not exist in the old version. We need an init!
-                    let (MigrationNested st imps ft migrationName) = canonicalToFt oldVersion newVersion scope interfaces recursionSet ftipe Nothing tvarMap oldValueRef
+                    let (MigrationNested st imps ft migrationName) = canToMigration oldVersion newVersion scope interfaces recursionSet ftipe Nothing tvarMap oldValueRef
                     in
                     ( N.toText name, xMigrationNested (T.concat["Unimplemented -- Type `", qualifiedTypeName ftipe, "` was added in V", show_ newVersion, ". I need you to set a default value."], imps, ft, "") )
             )
@@ -877,8 +831,8 @@ handleRecordToFt oldVersion newVersion scope interfaces recursionSet tipe@(Can.T
       result
 
 
-handleTypeToFt :: Int -> Int -> ModuleName.Canonical -> Interfaces -> RecursionSet -> Can.Type -> Maybe Can.Type -> [(N.Name, Can.Type)] -> Text -> Migration
-handleTypeToFt oldVersion newVersion scope interfaces recursionSet tipe@(Can.TType moduleName name params) tipeOldM tvarMap oldValueRef =
+typeToMigration :: Int -> Int -> ModuleName.Canonical -> Interfaces -> RecursionSet -> Can.Type -> Maybe Can.Type -> [(N.Name, Can.Type)] -> Text -> Migration
+typeToMigration oldVersion newVersion scope interfaces recursionSet tipe@(Can.TType moduleName name params) tipeOldM tvarMap oldValueRef =
   -- error "tbc"
   let
     recursionIdentifier :: (ModuleName.Canonical, N.Name)
@@ -913,7 +867,7 @@ handleTypeToFt oldVersion newVersion scope interfaces recursionSet tipe@(Can.TTy
                 case p of
                   (Just p0o,Just p0):[] ->
                     let
-                      (MigrationNested migration1 imps1 subft1 migrationName1) = (canonicalToFt oldVersion newVersion scope interfaces recursionSet p0 (Just p0o) tvarMap "p0")
+                      (MigrationNested migration1 imps1 subft1 migrationName1) = (canToMigration oldVersion newVersion scope interfaces recursionSet p0 (Just p0o) tvarMap "p0")
 
                       migration = case (p0o == p0) of
                         (True) -> "" -- No migration necessary
@@ -960,8 +914,8 @@ handleTypeToFt oldVersion newVersion scope interfaces recursionSet tipe@(Can.TTy
                 case p of
                   (Just p0o,Just p0):(Just p1o,Just p1):_ ->
                     let
-                      (MigrationNested subt0 imps0 subft0 migrationName0) = (canonicalToFt oldVersion newVersion scope interfaces recursionSet p0 (Just p0o) tvarMap "p0")
-                      (MigrationNested subt1 imps1 subft1 migrationName1) = (canonicalToFt oldVersion newVersion scope interfaces recursionSet p1 (Just p1o) tvarMap "p1")
+                      (MigrationNested subt0 imps0 subft0 migrationName0) = (canToMigration oldVersion newVersion scope interfaces recursionSet p0 (Just p0o) tvarMap "p0")
+                      (MigrationNested subt1 imps1 subft1 migrationName1) = (canToMigration oldVersion newVersion scope interfaces recursionSet p1 (Just p1o) tvarMap "p1")
 
                       migration = case (p0o == p0, p1o == p1) of
                         (True, True) -> "" -- No migration necessary
@@ -970,7 +924,7 @@ handleTypeToFt oldVersion newVersion scope interfaces recursionSet tipe@(Can.TTy
                         (False, False) -> T.concat [ "Result.mapError ", subt0, " |> Result.map ", subt1 ]
                     in
                     xMigrationNested (migration, mergeImports imps0 imps1 & Set.insert moduleName, mergeMigrationDefinitions subft0 subft1, "")
-                    -- DResult (canonicalToFt oldVersion newVersion scope interfaces recursionSet result tvarMap) (canonicalToFt oldVersion newVersion scope interfaces recursionSet err tvarMap)
+                    -- DResult (canToMigration oldVersion newVersion scope interfaces recursionSet result tvarMap) (canToMigration oldVersion newVersion scope interfaces recursionSet err tvarMap)
                   _ ->
                     error "Fatal: impossible !2 param Result type! Please report this gen issue."
               )
@@ -989,8 +943,8 @@ handleTypeToFt oldVersion newVersion scope interfaces recursionSet tipe@(Can.TTy
                 case p of
                   (Just p0o,Just p0):(Just p1o,Just p1):_ ->
                     let
-                      (MigrationNested subt0 imps0 subft0 migrationName0) = (canonicalToFt oldVersion newVersion scope interfaces recursionSet p0 (Just p0o) tvarMap "p0")
-                      (MigrationNested subt1 imps1 subft1 migrationName1) = (canonicalToFt oldVersion newVersion scope interfaces recursionSet p1 (Just p1o) tvarMap "p1")
+                      (MigrationNested subt0 imps0 subft0 migrationName0) = (canToMigration oldVersion newVersion scope interfaces recursionSet p0 (Just p0o) tvarMap "p0")
+                      (MigrationNested subt1 imps1 subft1 migrationName1) = (canToMigration oldVersion newVersion scope interfaces recursionSet p1 (Just p1o) tvarMap "p1")
 
                       migration = case (p0o == p0, p1o == p1) of
                         (True, True) -> "" -- No migration necessary
@@ -999,7 +953,7 @@ handleTypeToFt oldVersion newVersion scope interfaces recursionSet tipe@(Can.TTy
                         (False, False) -> T.concat [ "Dict.toList |> List.map (Tuple.mapBoth ", subt0, " ", subt1, ") |> Dict.fromList" ]
                     in
                     xMigrationNested (migration, mergeImports imps0 imps1 & Set.insert moduleName, mergeMigrationDefinitions subft0 subft1, "")
-                    -- DResult (canonicalToFt oldVersion newVersion scope interfaces recursionSet result tvarMap) (canonicalToFt oldVersion newVersion scope interfaces recursionSet err tvarMap)
+                    -- DResult (canToMigration oldVersion newVersion scope interfaces recursionSet result tvarMap) (canToMigration oldVersion newVersion scope interfaces recursionSet err tvarMap)
                   _ ->
                     error "Fatal: impossible !2 param Result type! Please report this gen issue."
               )
@@ -1125,7 +1079,7 @@ handleSeenRecursiveType oldVersion newVersion scope identifier@(author, pkg, new
       usageMigration =
         -- tvarResolvedParams
         params
-          & fmap (\param -> canonicalToFt oldVersion newVersion scope interfaces recursionSet param tipeOldM tvarMap oldValueRef)
+          & fmap (\param -> canToMigration oldVersion newVersion scope interfaces recursionSet param tipeOldM tvarMap oldValueRef)
 
       usageParams :: Text
       usageParams =

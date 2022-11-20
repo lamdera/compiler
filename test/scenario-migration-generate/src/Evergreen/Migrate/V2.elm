@@ -66,7 +66,7 @@ migrate_Types_BackendModel : Evergreen.V1.Types.BackendModel -> Evergreen.V2.Typ
 migrate_Types_BackendModel old =
     { unchangedCore = old.unchangedCore
     , unchangedUser = old.unchangedUser |> migrate_Types_UserType
-    , unchangedAllTypes = old.unchangedAllTypes |> migrate_External_AllTypes
+    , unchangedAllTypes = old.unchangedAllTypes
     , unchangedResult = old.unchangedResult
     , unchangedDict = old.unchangedDict
     , unchangedAnonymousRecord =
@@ -111,25 +111,6 @@ migrate_Types_FrontendModel : Evergreen.V1.Types.FrontendModel -> Evergreen.V2.T
 migrate_Types_FrontendModel old =
     { basic = old.basic
     , added = Unimplemented -- Type `Int` was added in V2. I need you to set a default value.
-    }
-
-
-migrate_External_AllTypes : Evergreen.V1.External.AllTypes -> Evergreen.V2.External.AllTypes
-migrate_External_AllTypes old =
-    { int = old.int
-    , float = old.float
-    , bool = old.bool
-    , char = old.char
-    , string = old.string
-    , maybeBool = old.maybeBool
-    , listInt = old.listInt
-    , setFloat = old.setFloat
-    , arrayString = old.arrayString
-    , dict = old.dict
-    , result = old.result
-    , time = old.time
-    , order = old.order
-    , unit = old.unit
     }
 
 

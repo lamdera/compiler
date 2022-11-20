@@ -3,6 +3,8 @@
 module Lamdera.Types where
 
 import qualified Data.Map as Map
+
+import qualified Data.Name as N
 import qualified Elm.Interface as Interface
 import qualified Elm.ModuleName as ModuleName
 
@@ -47,3 +49,6 @@ core =
   , "BackendMsg"
   , "ToFrontend"
   ]
+
+
+type CoreTypeDiffs = [(N.Name, String, String)]

@@ -22,6 +22,8 @@ module Lamdera
   , debugPassText
   , debugHaskell
   , debugHaskellPass
+  , debugHaskellPassWhen
+  , debugHaskellPassDiffWhen
   , debugHaskellWhen
   -- , PP.sShow
   , T.Text
@@ -319,6 +321,41 @@ debugHaskellPass label value pass =
 
       Nothing ->
         pure pass
+
+
+debugHaskellPassWhen :: (Show a, Show b) => Bool -> Text -> a -> b -> b
+debugHaskellPassWhen condition label value pass =
+  if not condition
+    then pass
+    else
+      unsafePerformIO $ do
+        debugM <- Env.lookupEnv "LDEBUG"
+        case debugM of
+          Just _ -> do
+            hindentPrintValue label (value, pass)
+            pure pass
+
+          Nothing ->
+            pure pass
+
+
+debugHaskellPassDiffWhen :: (Show a, Show b, Show c) => Bool -> Text -> (a, b) -> c -> c
+debugHaskellPassDiffWhen condition label (v1, v2) pass =
+  if not condition
+    then pass
+    else
+      unsafePerformIO $ do
+        debugM <- Env.lookupEnv "LDEBUG"
+        case debugM of
+          Just _ -> do
+            hindentPrintValue label ((v1,v2), pass)
+            v1_ <- hindent v1
+            v2_ <- hindent v2
+            icdiff v1_ v2_
+            pure pass
+
+          Nothing ->
+            pure pass
 
 
 debugHaskellWhen :: Show a => Bool -> Text -> a -> a

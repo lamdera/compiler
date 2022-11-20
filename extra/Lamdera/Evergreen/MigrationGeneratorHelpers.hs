@@ -289,6 +289,76 @@ isAnonymousRecord cType =
     _ -> False
 
 
+
+-- Like == but ignores differences in alias module locations when they are pointing to equivalent types
+isEquivalentElmType :: N.Name -> Can.Type -> Can.Type -> Bool
+isEquivalentElmType name t1 t2 = do
+  -- if name /= "unchangedAllTypes"
+  --   then
+  --   else
+      case (t1,t2) of
+        (Can.TType moduleName name params, Can.TType moduleName2 name2 params2) ->
+          -- debugHaskell "TType" $
+          t1 == t2
+        (Can.TAlias moduleName name tvarMap_ aliasType, Can.TAlias moduleName2 name2 tvarMap_2 aliasType2) ->
+          case (aliasType, aliasType2) of
+            (Can.Holey t1, Can.Holey t2) ->
+              -- debugHaskellPass "TAlias:Holey" (moduleName, moduleName2, name, name2, tvarMap_, tvarMap_2) $
+              isEquivalentElmType name t1 t2
+            (Can.Filled t1, Can.Filled t2) ->
+              -- debugHaskellPass "TAlias:Filled" (moduleName, moduleName2, name, name2, tvarMap_, tvarMap_2) $
+              isEquivalentElmType name t1 t2
+        (Can.TRecord newFields isPartial, Can.TRecord newFields2 isPartial2) ->
+          -- debugHaskell "TRecord" $
+          t1 == t2
+        (Can.TTuple t1 t2 mt3, Can.TTuple t12 t22 mt32) ->
+          -- debugHaskell "TTuple" $
+          t1 == t2
+        (Can.TUnit, Can.TUnit) ->
+          -- debugHaskell "TUnit" $
+          t1 == t2
+        (Can.TVar name, Can.TVar name2) ->
+          -- debugHaskell "TVar" $
+          t1 == t2
+        (Can.TLambda _ _, Can.TLambda _ _) ->
+          -- Skip lambda equality not relevant
+          False
+        _ ->
+          -- debugHaskell "unequal types" $
+          False
+
+
+-- Like == but considers union types equal despite module defs
+areEquivalentEvergreenTypes :: [Can.Type] -> [Can.Type] -> Bool
+areEquivalentEvergreenTypes t1s t2s =
+  let
+      result =
+        length t1s == length t2s
+          && and (zipWith isEquivalentEvergreenType t1s t2s)
+  in
+  -- debugHaskellPass "areEquivalentEvergreenTypes" (result, t1s, t2s) $
+  result
+
+isEquivalentEvergreenType :: Can.Type -> Can.Type -> Bool
+isEquivalentEvergreenType t1 t2 =
+  case (t1, t2) of
+    ((Can.TType (ModuleName.Canonical (Pkg.Name "author" "project") module1) name1 params1),
+     (Can.TType (ModuleName.Canonical (Pkg.Name "author" "project") module2) name2 params2)) ->
+      name1 == name2 && isEquivalentEvergreenModule module1 module2
+    _ -> t1 == t2
+
+
+isEquivalentEvergreenModule :: ModuleName.Raw -> ModuleName.Raw -> Bool
+isEquivalentEvergreenModule m1 m2 =
+  let m1_ = m1 & N.toText & T.splitOn "."
+      m2_ = m2 & N.toText & T.splitOn "."
+  in
+  case (m1_, m2_) of
+    ("Evergreen":_:xs1, "Evergreen":_:xs2) -> xs1 == xs2
+    _ -> m1 == m2
+
+
+
 isUserModule :: ModuleName.Canonical -> Bool
 isUserModule moduleName =
     case moduleName of
