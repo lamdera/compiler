@@ -338,7 +338,7 @@ Executable lamdera
         ghc-prim >= 0.5.2,
         haskeline,
         HTTP >= 4000.2.5 && < 4000.4,
-        http-client >= 0.6 && < 0.7,
+        http-client >= 0.6 && < 0.8,
         http-client-tls >= 0.3 && < 0.4,
         http-types >= 0.12 && < 1.0,
         language-glsl >= 0.3,
