@@ -18,6 +18,7 @@ type alias BackendModel =
         , subrecord :
             { age : Int, userType : UserType }
         }
+    , unchangedStringAlias : StringAlias
     , changedMaybe : Maybe UserType
     , changedList : List UserType
     , changedSet : Set Int
@@ -71,6 +72,10 @@ type alias AliasToType =
 type alias FrontendModel =
     { basic : Int
     }
+
+
+type alias StringAlias =
+    String
 
 
 type FrontendMsg

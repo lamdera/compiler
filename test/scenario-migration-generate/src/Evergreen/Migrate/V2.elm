@@ -90,6 +90,7 @@ migrate_Types_BackendModel old =
                                )
                     }
                )
+    , unchangedStringAlias = old.unchangedStringAlias
     , changedMaybe = old.changedMaybe |> Maybe.map migrate_Types_UserType
     , changedList = old.changedList |> List.map migrate_Types_UserType
     , changedSet = old.changedSet |> Set.map Unimplemented -- Type changed from `Set Int` to `Set String`
