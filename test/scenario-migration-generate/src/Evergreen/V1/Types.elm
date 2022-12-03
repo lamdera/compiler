@@ -1,6 +1,7 @@
 module Evergreen.V1.Types exposing (..)
 
 import Array exposing (Array)
+import Audio
 import Dict exposing (Dict)
 import Evergreen.V1.External
 import Set exposing (Set)
@@ -78,7 +79,11 @@ type alias StringAlias =
     String
 
 
-type FrontendMsg
+type alias FrontendMsg =
+    Audio.Msg FrontendMsg_
+
+
+type FrontendMsg_
     = Noop
     | AllTypes Evergreen.V1.External.AllTypes
 

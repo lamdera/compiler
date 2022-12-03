@@ -17,6 +17,7 @@ import qualified AST.Canonical as Can
 import qualified Elm.ModuleName as ModuleName
 import qualified Elm.Package as Pkg
 import qualified Elm.Interface as Interface
+import qualified Data.Utf8 as Utf8
 
 import Lamdera
 import Lamdera.Types
@@ -86,7 +87,7 @@ generateFor coreTypeDiffs oldVersion newVersion interfaces iface_Types = do
 
     coreMigrations = migrations & fmap (migrationDef . snd)
 
-    subMigrations = migrations & fmap (migrationNestedDefs . snd) & mergeAllMigrationDefinitions & allMigrations
+    subMigrations = migrations & fmap (migrationTopLevelDefs . snd) & mergeAllMigrationDefinitions & allMigrations
 
     output =
       [ (T.concat [ "module Evergreen.Migrate.V", show_ newVersion, " exposing (..)" ])
@@ -98,6 +99,7 @@ generateFor coreTypeDiffs oldVersion newVersion interfaces iface_Types = do
   output & T.intercalate "\n\n" & pure
 
 
+helpfulInformation :: Text
 helpfulInformation =
   -- @TODO currently silly hack, but the 'Unimplemented' keyword is naively used to check if there are
   -- any pending migrations... but that means we can't use that word in comments, so we use the utf8 substitute
@@ -160,14 +162,14 @@ coreTypeMigration typeDidChange oldVersion newVersion interfaces newModule typeN
           let
             diffableAlias = aliasToFt oldVersion newVersion newModule identifier typeName interfaces recursionSet alias "old"
             (MigrationNested migrationImpl imps subft migrationName) = diffableAlias
-            migration = T.concat [migrationWrapperForType typeName, " (", migrationImpl, " old, Cmd.none)"]
+            migration = T.concat [migrationWrapperForType typeName, " ( ", migrationImpl, " old, Cmd.none )"]
           (MigrationNested (migrationWrapper migration) imps (subft & addImports newModule imps) migrationName)
 
         Just (Union union) -> do
           let
-            diffableUnion = unionToFt oldVersion newVersion newModule identifier typeName interfaces recursionSet [] union []
+            diffableUnion = migrateUnion oldVersion newVersion newModule identifier typeName interfaces recursionSet [] union []
             (MigrationNested migrationImpl imps subft migrationName) = diffableUnion
-            migration = T.concat [migrationWrapperForType typeName, " (", migrationImpl, " old, Cmd.none)"]
+            migration = T.concat [migrationWrapperForType typeName, " ( ", migrationImpl, " old, Cmd.none )"]
           (MigrationNested (migrationWrapper migration) imps (subft & addImports newModule imps) migrationName)
 
         Nothing ->
@@ -177,8 +179,8 @@ coreTypeMigration typeDidChange oldVersion newVersion interfaces newModule typeN
 
 
 -- A top level Custom Type definition i.e. `type Herp = Derp ...`
-unionToFt :: Int -> Int -> ModuleName.Canonical -> TypeIdentifier -> N.Name -> Interfaces -> RecursionSet -> [(N.Name, Can.Type)] -> Can.Union -> [Can.Type] -> Migration
-unionToFt oldVersion newVersion scope identifier@(author, pkg, newModule, tipe) typeName interfaces recursionSet tvarMap newUnion params =
+migrateUnion :: Int -> Int -> ModuleName.Canonical -> TypeIdentifier -> N.Name -> Interfaces -> RecursionSet -> [(N.Name, Can.Type)] -> Can.Union -> [Can.Type] -> Migration
+migrateUnion oldVersion newVersion scope identifier@(author, pkg, newModule, tipe) typeName interfaces recursionSet tvarMap newUnion params =
   let
     oldModuleName :: N.Name
     oldModuleName = asOldModuleName newModule newVersion oldVersion
@@ -192,11 +194,11 @@ unionToFt oldVersion newVersion scope identifier@(author, pkg, newModule, tipe) 
   Just (Alias a) ->
     xMigrationNested ("Unimplemented -- `" <> N.toText typeName <> "` was a type alias, but now it's a custom type. I need you to write this migration.", Set.empty, Map.empty, "")
   Just (Union oldUnion) ->
-    migrateUnion author pkg oldUnion newUnion params tvarMap oldVersion newVersion typeName newModule identifier oldModuleName interfaces recursionSet scope
+    migrateUnion_ author pkg oldUnion newUnion params tvarMap oldVersion newVersion typeName newModule identifier oldModuleName interfaces recursionSet scope
 
 
-migrateUnion :: Pkg.Author -> Pkg.Project -> Can.Union -> Can.Union -> [Can.Type] -> [(N.Name, Can.Type)] -> Int -> Int -> N.Name -> N.Name -> TypeIdentifier -> N.Name -> Interfaces -> RecursionSet -> ModuleName.Canonical -> Migration
-migrateUnion author pkg oldUnion newUnion params tvarMap oldVersion newVersion typeName newModule identifier oldModuleName interfaces recursionSet scope =
+migrateUnion_ :: Pkg.Author -> Pkg.Project -> Can.Union -> Can.Union -> [Can.Type] -> [(N.Name, Can.Type)] -> Int -> Int -> N.Name -> N.Name -> TypeIdentifier -> N.Name -> Interfaces -> RecursionSet -> ModuleName.Canonical -> Migration
+migrateUnion_ author pkg oldUnion newUnion params tvarMap oldVersion newVersion typeName newModule identifier oldModuleName interfaces recursionSet scope =
   let
     oldModuleNameCanonical :: ModuleName.Canonical
     oldModuleNameCanonical =
@@ -402,7 +404,7 @@ genOldConstructorFt oldModuleName moduleScope typeName interfaces tvarMap recurs
                   & fmap migrationImports
                   & mergeAllImports
               , paramMigrations
-                  & fmap migrationNestedDefs
+                  & fmap migrationTopLevelDefs
                   & mergeAllMigrationDefinitions
               , ""
               )
@@ -652,7 +654,7 @@ canAliasToMigration oldVersion newVersion scope interfaces recursionSet tipe@(Ca
               }
           )
             & mergeMigrationDefinitions subft
-            & mergeMigrationDefinitions (mergeAllMigrationDefinitions (fmap migrationNestedDefs usageParamFts))
+            & mergeMigrationDefinitions (mergeAllMigrationDefinitions (fmap migrationTopLevelDefs usageParamFts))
 
 
         migration =
@@ -833,7 +835,6 @@ recordToMigration oldVersion newVersion scope interfaces recursionSet tipe@(Can.
 
 typeToMigration :: Int -> Int -> ModuleName.Canonical -> Interfaces -> RecursionSet -> Can.Type -> Maybe Can.Type -> [(N.Name, Can.Type)] -> Text -> Migration
 typeToMigration oldVersion newVersion scope interfaces recursionSet tipe@(Can.TType moduleName name params) tipeOldM tvarMap oldValueRef =
-  -- error "tbc"
   let
     recursionIdentifier :: (ModuleName.Canonical, N.Name)
     recursionIdentifier = (moduleName, name)
@@ -851,8 +852,12 @@ typeToMigration oldVersion newVersion scope interfaces recursionSet tipe@(Can.TT
     kernelError =
       case identifier of
         (author, pkg, module_, typeName) ->
-          xMigrationNested ("XXXXXX Kernel error", Set.empty, Map.empty, "")
-          -- DError $ "must not contain kernel type `" <> tipe <> "` from " <> author <> "/" <> pkg <> ":" <> nameToText module_
+          xMigrationNested
+            ( T.concat ["Kernel error: must not contain kernel type `", show_ tipe, "` from ", show_ author, "/", show_ pkg, ":", nameToText module_ ]
+            , Set.empty
+            , Map.empty
+            , ""
+            )
 
     moduleNameRaw :: N.Name
     moduleNameRaw = canModuleName moduleName
@@ -1008,8 +1013,8 @@ typeToMigration oldVersion newVersion scope interfaces recursionSet tipe@(Can.TT
 
       let handleUnion union =
             -- if isUserDefinedType_ tipe
-                -- then
-                  unionToFt oldVersion newVersion scope identifier name interfaces newRecursionSet tvarMap union params
+            --     then
+                  migrateUnion oldVersion newVersion scope identifier name interfaces newRecursionSet tvarMap union params
                     & (\(MigrationNested n imports subft migrationName) ->
                       xMigrationNested ( n
                       , if moduleName /= scope then
@@ -1028,7 +1033,7 @@ typeToMigration oldVersion newVersion scope interfaces recursionSet tipe@(Can.TT
                 -- else
                 --   -- Our top level type is not a user defined type, this can happen when libraries like
                 --   -- MartinSStewart/elm-audio are used, resulting in `type alias FrontendMsg = Audio.Msg FrontendMsg_`
-                --   ( "old55NotAUserDefinedType" -- <> "<!5>"
+                --   xMigrationNested ( "old55NotAUserDefinedType" -- <> "<!5>"
                 --       , if moduleName /= scope then
                 --           Set.empty & Set.insert moduleName
                 --         else
@@ -1039,6 +1044,7 @@ typeToMigration oldVersion newVersion scope interfaces recursionSet tipe@(Can.TT
                 --               addImport scope (moduleName) -- <> "(utop)")
                 --             else
                 --               id
+                --       , "old55NotAUserDefinedType"
                 --       )
 
           handleAlias alias =
@@ -1055,6 +1061,7 @@ typeToMigration oldVersion newVersion scope interfaces recursionSet tipe@(Can.TT
                         addImport scope (moduleName) -- <> "(utop)")
                       else
                         id
+                    --
                 , migrationName
                 )
               )
@@ -1097,7 +1104,7 @@ handleSeenRecursiveType oldVersion newVersion scope identifier@(author, pkg, new
       usageFts :: MigrationDefinitions
       usageFts =
         usageMigration
-          & fmap migrationNestedDefs
+          & fmap migrationTopLevelDefs
           & mergeAllMigrationDefinitions
 
       typeScope :: Text

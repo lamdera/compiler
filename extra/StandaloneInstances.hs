@@ -398,6 +398,12 @@ instance Show B.Builder where
   show = T.unpack . T.decodeUtf8 . BSL.toStrict . B.toLazyByteString
 
 
+instance Show Elm.Package.Project where
+  show = Utf8.toChars
+
+instance Show Elm.Package.Author where
+  show = Utf8.toChars
+
 
 -- IsString
 

@@ -38,7 +38,7 @@ testMigrationGeneration scenario oldVersion newVersion = do
         (\label local prod -> (label, T.unpack local, T.unpack prod))
         (Lamdera.Types.core)
         ["o","o","o","o","o","o"]
-        ["x","x","o","o","o","o"]
+        ["x","x","x","o","o","o"]
 
 
   mock <- io $ readUtf8Text $ "test/scenario-migration-generate/src/Evergreen/Migrate/V" <> show newVersion <> ".elm"

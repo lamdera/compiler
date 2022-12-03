@@ -22,10 +22,12 @@ import StandaloneInstances
 
 type RecursionSet = Set.Set (ModuleName.Canonical, N.Name)
 type TypeIdentifier = (Pkg.Author, Pkg.Project, N.Name, N.Name)
+
+-- A specialised local migration def, along with any dependant top-level migrations and their related imports
 data Migration = MigrationNested
   { migrationDef :: Text
   , migrationImports :: ElmImports
-  , migrationNestedDefs :: MigrationDefinitions
+  , migrationTopLevelDefs :: MigrationDefinitions
   , migrationName :: Text
   }
   deriving (Show)
@@ -33,11 +35,10 @@ data Migration = MigrationNested
 xMigrationNested (a,b,c,d) = MigrationNested a b c d
 
 
--- @TODO can we drop this given migrations generate everything inline into a single file?
+-- Set of top-level migration functions and their required imports
 data MigrationDefinition =
   MigrationDefinition
     { imports :: ElmImports
-    -- , migrations :: [Text] <----- this is the problem!
     , migrations :: Map Text Text
     }
   deriving (Show, Eq)
@@ -88,7 +89,7 @@ allMigrationDefinitions migrations =
               { imports = migrationImports migration
               , migrations = Map.singleton (migrationName migration) (migrationDef migration)
               })
-        & Map.union (migrationNestedDefs migration)
+        & Map.union (migrationTopLevelDefs migration)
   ) Map.empty
 
 

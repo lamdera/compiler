@@ -66,7 +66,7 @@ expectFileContains needle file =
         ok
 
 
-{-| For quick and general local development testing via `stack ghci` as TestLamdera.check -}
+{-| For quick and general local development testing via `stack ghci` as Test.Check.check -}
 check = do
   -- touch "/Users/mario/lamdera/test/v1/src/WireTypes.elm"
   -- touch "/Users/mario/lamdera/test/v1/src/Env.elm"
