@@ -5,7 +5,6 @@ module Test.Lamdera where
 import qualified System.Directory as Dir
 import System.FilePath ((</>))
 import Data.Text as T
-import System.Environment (setEnv, unsetEnv, lookupEnv)
 
 import Lamdera
 import EasyTest

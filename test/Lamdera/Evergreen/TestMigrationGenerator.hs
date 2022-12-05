@@ -8,7 +8,6 @@ import Control.Applicative
 import Control.Monad
 import NeatInterpolation
 import qualified Data.Text as T
-import System.Environment (setEnv, unsetEnv)
 
 import Test.Helpers
 import qualified Ext.Common

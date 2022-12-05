@@ -15,7 +15,7 @@ import qualified Elm.Package as Pkg
 
 import Control.Concurrent.MVar
 import Control.Exception (SomeException, AsyncException(UserInterrupt), catch, fromException, throw)
-import System.Environment (setEnv, unsetEnv, lookupEnv)
+import System.Environment (lookupEnv)
 import System.FilePath ((</>))
 
 import EasyTest

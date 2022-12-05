@@ -31,6 +31,7 @@ format text = do
           pure $ Right $ T.pack stdout
 
     Nothing -> do
+      Lamdera.debug $ "🔥💅 warning: no elm-format found locally, skipping"
       pure $ Left $ "No elm-format found locally, skipping."
 
 
@@ -39,4 +40,6 @@ formatOrPassthrough text = do
   formatted_ <- format text
   case formatted_ of
     Right formatted -> pure formatted
-    Left err -> pure text
+    Left err -> do
+      Lamdera.debug $ "🔥💅 warning: no elm-format found locally, skipping"
+      pure text

@@ -20,6 +20,7 @@ See <https://dashboard.lamdera.com/docs/evergreen> for more info.
 -}
 
 import Array
+import Audio
 import Dict
 import Evergreen.V1.External
 import Evergreen.V1.Types
@@ -44,7 +45,7 @@ backendModel old =
 
 frontendMsg : Evergreen.V1.Types.FrontendMsg -> MsgMigration Evergreen.V2.Types.FrontendMsg Evergreen.V2.Types.FrontendMsg
 frontendMsg old =
-    MsgUnchanged
+    MsgMigrated ( migrate_Types_FrontendMsg old, Cmd.none )
 
 
 toBackend : Evergreen.V1.Types.ToBackend -> MsgMigration Evergreen.V2.Types.ToBackend Evergreen.V2.Types.BackendMsg
@@ -116,6 +117,56 @@ migrate_Types_FrontendModel old =
     }
 
 
+migrate_Types_FrontendMsg : Evergreen.V1.Types.FrontendMsg -> Evergreen.V2.Types.FrontendMsg
+migrate_Types_FrontendMsg old =
+    migrate_Audio_Msg migrate_Types_FrontendMsg_
+
+
+migrate_Audio_FromJSMsg : Audio.FromJSMsg -> Audio.FromJSMsg
+migrate_Audio_FromJSMsg old =
+    case old of
+        Audio.AudioLoadSuccess p0 ->
+            Audio.AudioLoadSuccess p0
+
+        Audio.AudioLoadFailed p0 ->
+            Audio.AudioLoadFailed p0
+
+        Audio.InitAudioContext p0 ->
+            Audio.InitAudioContext p0
+
+        Audio.JsonParseError p0 ->
+            Audio.JsonParseError p0
+
+
+migrate_Audio_Msg : (userMsgOld -> userMsgNew) -> Audio.Msg userMsgOld -> Audio.Msg userMsgNew
+migrate_Audio_Msg userMsgMigrate old =
+    case old of
+        Audio.FromJSMsg p0 ->
+            Audio.FromJSMsg p0
+
+        Audio.UserMsg p0 ->
+            Audio.UserMsg (userMsgMigrate p0)
+
+
+migrate_External_AllTypes : Evergreen.V1.External.AllTypes -> Evergreen.V2.External.AllTypes
+migrate_External_AllTypes p0 =
+    { int = p0.int
+    , float = p0.float
+    , bool = p0.bool
+    , char = p0.char
+    , string = p0.string
+    , maybeBool = p0.maybeBool
+    , listInt = p0.listInt
+    , setFloat = p0.setFloat
+    , arrayString = p0.arrayString
+    , dict = p0.dict
+    , result = p0.result
+    , time = p0.time
+    , order = p0.order
+    , unit = p0.unit
+    }
+
+
 migrate_External_ExternalUnion : Evergreen.V1.External.ExternalUnion -> Evergreen.V2.External.ExternalUnion
 migrate_External_ExternalUnion old =
     case old of
@@ -134,6 +185,16 @@ migrate_Types_CustomType old =
 
         Evergreen.V1.Types.CustomTwo ->
             Evergreen.V2.Types.CustomTwo
+
+
+migrate_Types_FrontendMsg_ : Evergreen.V1.Types.FrontendMsg_ -> Evergreen.V2.Types.FrontendMsg_
+migrate_Types_FrontendMsg_ old =
+    case old of
+        Evergreen.V1.Types.Noop ->
+            Evergreen.V2.Types.Noop
+
+        Evergreen.V1.Types.AllTypes p0 ->
+            Evergreen.V2.Types.AllTypes (p0 |> migrate_External_AllTypes)
 
 
 migrate_Types_TypeToAlias : Evergreen.V1.Types.TypeToAlias -> Evergreen.V2.Types.TypeToAlias

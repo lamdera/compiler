@@ -2,7 +2,7 @@
 
 module Test.Helpers where
 
-import System.Environment (setEnv, unsetEnv, lookupEnv)
+import System.Environment (lookupEnv)
 import System.FilePath ((</>))
 import Data.Text as T
 import qualified Data.Text.Encoding as T

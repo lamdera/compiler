@@ -82,14 +82,7 @@ mergeMigrationDefinition k ft1 ft2 =
 allMigrationDefinitions :: [Migration] -> MigrationDefinitions
 allMigrationDefinitions migrations =
   migrations & foldl (\acc migration ->
-      acc
-        & Map.insert
-            (migrationName migration)
-            (MigrationDefinition
-              { imports = migrationImports migration
-              , migrations = Map.singleton (migrationName migration) (migrationDef migration)
-              })
-        & Map.union (migrationTopLevelDefs migration)
+    acc & Map.union (migrationTopLevelDefs migration)
   ) Map.empty
 
 
@@ -289,6 +282,11 @@ isAnonymousRecord cType =
     Can.TRecord _ _ -> True
     _ -> False
 
+isTvar :: Can.Type -> Bool
+isTvar cType =
+  case cType of
+    Can.TVar _ -> True
+    _ -> False
 
 
 -- Like == but ignores differences in alias module locations when they are pointing to equivalent types

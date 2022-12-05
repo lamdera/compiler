@@ -90,10 +90,11 @@ module Lamdera
   , show_
   , sleep
   , getVersion
-  , Env.setEnv
-  , Env.unsetEnv
   , getEnvMode
   , setEnvMode
+  , setEnv
+  , unsetEnv
+  , lookupEnv
   , openUrlInBrowser
   , textSha1
   , (!!!)
@@ -190,13 +191,13 @@ stdoutSetup = do
 
 inProduction :: IO Bool
 inProduction = do
-  appNameEnvM <- liftIO $ Env.lookupEnv "LAMDERA_APP_NAME"
-  forceNotProd <- liftIO $ Env.lookupEnv "NOTPROD"
+  appNameEnvM <- liftIO $ lookupEnv "LAMDERA_APP_NAME"
+  forceNotProd <- liftIO $ lookupEnv "NOTPROD"
   pure $ (appNameEnvM /= Nothing && forceNotProd == Nothing) -- @TODO better isProd check...
 
 
 getLamderaPkgPath :: IO (Maybe String)
-getLamderaPkgPath = Env.lookupEnv "LOVR"
+getLamderaPkgPath = lookupEnv "LOVR"
 
 
 -- debug :: String -> Task.Task a
@@ -376,7 +377,7 @@ debugHaskellWhen cond label value =
 
 isExperimental :: IO Bool
 isExperimental = do
-  experimentalM <- Env.lookupEnv "EXPERIMENTAL"
+  experimentalM <- lookupEnv "EXPERIMENTAL"
   case experimentalM of
     Just _ -> pure True
     Nothing -> pure False
@@ -389,7 +390,7 @@ isExperimental_ = unsafePerformIO $ isExperimental
 
 isTest :: IO Bool
 isTest = do
-  debugM <- Env.lookupEnv "LTEST"
+  debugM <- lookupEnv "LTEST"
   case debugM of
     Just _ -> pure True
     Nothing -> pure False
@@ -772,6 +773,24 @@ getEnvMode = do
 setEnvMode :: FilePath -> Text -> IO ()
 setEnvMode root mode = do
   writeUtf8 (lamderaEnvModePath root) $ mode
+
+
+setEnv :: String -> String -> IO ()
+setEnv name value = do
+  debug $ Prelude.concat ["🌏✍️  ENV ", name, ":", value]
+  Env.setEnv name value
+
+
+unsetEnv :: String -> IO ()
+unsetEnv name = do
+  debug $ Prelude.concat ["🌏❌  ENV ", name]
+  Env.unsetEnv name
+
+
+lookupEnv :: String -> IO (Maybe String)
+lookupEnv name = do
+  debug $ Prelude.concat ["🌏👀  ENV ", name]
+  Env.lookupEnv name
 
 
 openUrlInBrowser :: Text -> IO ()

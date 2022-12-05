@@ -63,8 +63,8 @@ lamderaGenerated nextVersion migrationFilepaths = do
            , "import Types as T" <> nextVersion_
            ]
       )
-        & List.filter ((/=) "")
-        & List.sort
+        & filter ((/=) "")
+        & sort
         & T.intercalate "\n"
 
   supportingCode <- genSupportingCode
