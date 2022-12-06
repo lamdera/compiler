@@ -462,3 +462,11 @@ tvarResolvedParams params tvarMap =
             Nothing -> p
         _ -> p
     )
+
+
+suffixIfNonempty :: Text -> Text -> Text
+suffixIfNonempty t s =
+  if T.length s == 0 then
+    s
+  else
+    s <> t

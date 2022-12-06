@@ -29,6 +29,12 @@ type alias AllTypes =
     }
 
 
+type alias Paramed a =
+    { subtype : a
+    , string : String
+    }
+
+
 type UnionThatGetsMoved
     = UnionThatGetsMoved
 

@@ -102,7 +102,7 @@ migrate_Types_BackendModel old =
     , added = Unimplemented -- Type `Int` was added in V2. I need you to set a default value.
     , unionThatGetsMoved = old.unionThatGetsMoved |> Unimplemented -- I couldn't find an old type named `UnionThatGetsMoved`. I need you to write this migration.
     , aliasThatGetsMoved = old.aliasThatGetsMoved
-    , typeToAlias = old.typeToAlias |> migrate_Types_TypeToAlias
+    , typeToAlias = old.typeToAlias |> Unimplemented -- `TypeToAlias` was a concrete type, but now it's a type alias. I need you to write this migration.
     , aliasToType = old.aliasToType |> Unimplemented -- `AliasToType` was a type alias, but now it's a custom type. I need you to write this migration.
     , apps = Unimplemented -- Type `Dict (String) (Evergreen.V2.Types.App)` was added in V2. I need you to set a default value.
     , depthTests = Unimplemented -- Field of type `Dict (String) (Evergreen.V1.Types.Depth)` was removed in V2. I need you to do something with the `old.depthTests` value if you wish to keep the data, then remove this line.
@@ -139,14 +139,14 @@ migrate_Audio_FromJSMsg old =
             Audio.JsonParseError p0
 
 
-migrate_Audio_Msg : (userMsgOld -> userMsgNew) -> Audio.Msg userMsgOld -> Audio.Msg userMsgNew
-migrate_Audio_Msg userMsgMigrate old =
+migrate_Audio_Msg : (userMsg_old -> userMsg_new) -> Audio.Msg userMsg_old -> Audio.Msg userMsg_new
+migrate_Audio_Msg migrate_userMsg old =
     case old of
         Audio.FromJSMsg p0 ->
             Audio.FromJSMsg p0
 
         Audio.UserMsg p0 ->
-            Audio.UserMsg (userMsgMigrate p0)
+            Audio.UserMsg (migrate_userMsg p0)
 
 
 migrate_External_AllTypes : Evergreen.V1.External.AllTypes -> Evergreen.V2.External.AllTypes
@@ -178,6 +178,13 @@ migrate_External_ExternalUnion old =
             Evergreen.V2.External.External2
 
 
+migrate_External_Paramed : (a_old -> a_new) -> Evergreen.V1.External.Paramed a_old -> Evergreen.V2.External.Paramed a_new
+migrate_External_Paramed migrate_a p0 =
+    { subtype = p0.subtype |> migrate_a
+    , string = p0.string
+    }
+
+
 migrate_Types_CustomType : Evergreen.V1.Types.CustomType -> Evergreen.V2.Types.CustomType
 migrate_Types_CustomType old =
     case old of
@@ -196,12 +203,6 @@ migrate_Types_FrontendMsg_ old =
 
         Evergreen.V1.Types.AllTypes p0 ->
             Evergreen.V2.Types.AllTypes (p0 |> migrate_External_AllTypes)
-
-
-migrate_Types_TypeToAlias : Evergreen.V1.Types.TypeToAlias -> Evergreen.V2.Types.TypeToAlias
-migrate_Types_TypeToAlias old =
-    -- `TypeToAlias` was a concrete type, but now it's a type alias. I need you to write this migration.
-    Unimplemented
 
 
 migrate_Types_UserType : Evergreen.V1.Types.UserType -> Evergreen.V2.Types.UserType
@@ -291,6 +292,9 @@ migrate_Types_UserType old =
                                 }
                            )
                 }
+
+        Evergreen.V1.Types.UserTvarAlias p0 ->
+            Evergreen.V2.Types.UserTvarAlias (p0 |> migrate_External_Paramed migrate_Types_CustomType)
 
         notices ->
             {- @NOTICE `UserAdded` was added in V2.

@@ -56,6 +56,7 @@ type UserType
     | UserAnonymousNestedAdded { name : String, subrecord : { userType : UserType, added : Int } }
     | UserAnonymousNestedRemoved { name : String, subrecord : { userType : UserType } }
     | UserAnonymousNestedAddedRemoved { name : String, subrecord : { userType : UserType, added : Int } }
+    | UserTvarAlias (Evergreen.V2.External.Paramed CustomType)
 
 
 type CustomType

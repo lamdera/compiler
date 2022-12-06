@@ -27,3 +27,9 @@ type alias AllTypes =
     , order : Order
     , unit : ()
     }
+
+
+type alias Paramed a =
+    { subtype : a
+    , string : String
+    }
