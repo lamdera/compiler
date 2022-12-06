@@ -100,13 +100,14 @@ migrate_Types_BackendModel old =
     , changedResult = old.changedResult |> Result.mapError migrate_Types_UserType |> Result.map migrate_Types_UserType
     , externalUnion = old.externalUnion |> migrate_External_ExternalUnion
     , added = Unimplemented -- Type `Int` was added in V2. I need you to set a default value.
-    , typeThatGetsMoved = old.typeThatGetsMoved |> Unimplemented -- I couldn't find an old type named `TypeThatGetsMoved`. I need you to write this migration.
+    , unionThatGetsMoved = old.unionThatGetsMoved |> Unimplemented -- I couldn't find an old type named `UnionThatGetsMoved`. I need you to write this migration.
+    , aliasThatGetsMoved = old.aliasThatGetsMoved
     , typeToAlias = old.typeToAlias |> migrate_Types_TypeToAlias
     , aliasToType = old.aliasToType |> Unimplemented -- `AliasToType` was a type alias, but now it's a custom type. I need you to write this migration.
     , apps = Unimplemented -- Type `Dict (String) (Evergreen.V2.Types.App)` was added in V2. I need you to set a default value.
-    , depthTests = Unimplemented -- Type `Dict (String) (Evergreen.V1.Types.Depth)` was removed in V2. I need you to do something with the `old.depthTests` value if you wish to keep the data, then remove this line.
-    , removed = Unimplemented -- Type `String` was removed in V2. I need you to do something with the `old.removed` value if you wish to keep the data, then remove this line.
-    , removedRecord = Unimplemented -- Type `Evergreen.V1.External.AllTypes` was removed in V2. I need you to do something with the `old.removedRecord` value if you wish to keep the data, then remove this line.
+    , depthTests = Unimplemented -- Field of type `Dict (String) (Evergreen.V1.Types.Depth)` was removed in V2. I need you to do something with the `old.depthTests` value if you wish to keep the data, then remove this line.
+    , removed = Unimplemented -- Field of type `String` was removed in V2. I need you to do something with the `old.removed` value if you wish to keep the data, then remove this line.
+    , removedRecord = Unimplemented -- Field of type `Evergreen.V1.External.AllTypes` was removed in V2. I need you to do something with the `old.removedRecord` value if you wish to keep the data, then remove this line.
     }
 
 
@@ -273,7 +274,7 @@ migrate_Types_UserType old =
                     p0.subrecord
                         |> (\rec1 ->
                                 { userType = rec1.userType |> migrate_Types_UserType
-                                , removed = Unimplemented -- Type `String` was removed in V2. I need you to do something with the `rec1.removed` value if you wish to keep the data, then remove this line.
+                                , removed = Unimplemented -- Field of type `String` was removed in V2. I need you to do something with the `rec1.removed` value if you wish to keep the data, then remove this line.
                                 }
                            )
                 }
@@ -286,7 +287,7 @@ migrate_Types_UserType old =
                         |> (\rec1 ->
                                 { userType = rec1.userType |> migrate_Types_UserType
                                 , added = Unimplemented -- Type `Int` was added in V2. I need you to set a default value.
-                                , removed = Unimplemented -- Type `String` was removed in V2. I need you to do something with the `rec1.removed` value if you wish to keep the data, then remove this line.
+                                , removed = Unimplemented -- Field of type `String` was removed in V2. I need you to do something with the `rec1.removed` value if you wish to keep the data, then remove this line.
                                 }
                            )
                 }

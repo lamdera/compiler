@@ -518,8 +518,10 @@ aliasToFt oldVersion newVersion scope identifier@(author, pkg, newModule, _) typ
 
   in
   case tipeOldM of
-    Nothing               -> xMigrationNested ("Unimplemented -- I couldn't find an old type named `" <> N.toText typeName <> "`. I need you to write this migration.", Set.empty, Map.empty, "")
-    Just (Union oldUnion) -> xMigrationNested ("Unimplemented -- `" <> N.toText typeName <> "` was a custom type, but now it's a type alias. I need you to write this migration.", Set.empty, Map.empty, "")
+    Nothing               ->
+      xMigrationNested ("Unimplemented -- I couldn't find an old type named `" <> N.toText typeName <> "`. I need you to write this migration.", Set.empty, Map.empty, "")
+    Just (Union oldUnion) ->
+      xMigrationNested ("Unimplemented -- `" <> N.toText typeName <> "` was a custom type, but now it's a type alias. I need you to write this migration.", Set.empty, Map.empty, "")
     Just (Alias aliasOld@(Can.Alias tvarsOld tipeOld)) ->
       migrateAlias oldVersion newVersion scope identifier typeName interfaces recursionSet alias aliasOld oldModuleName oldValueRef
 
@@ -760,8 +762,8 @@ canAliasToMigration oldVersion newVersion scope interfaces recursionSet tipe@(Ca
             , thing
             , ""
             )
-        _ ->
-          xMigrationNested (T.concat ["-- TODO old type gone for type: ", show_ tipe], scopeImports, thing, "")
+        Nothing ->
+          xMigrationNested (T.concat ["Unimplemented -- I couldn't find an old type named `", N.toText typeName, "`. I need you to write this migration." ], Set.empty, Map.empty, "")
 
 
     Can.Filled cType ->
@@ -867,7 +869,7 @@ recordToMigration oldVersion newVersion scope interfaces recursionSet tipe@(Can.
                   Nothing
                 Nothing ->
                   Just ( N.toText name,
-                    xMigrationNested (T.concat["Unimplemented -- Type `", qualifiedTypeName tipe, "` was removed in V", show_ newVersion, ". I need you to do something with the `", oldValueRef, ".", N.toText name, "` value if you wish to keep the data, then remove this line."]
+                    xMigrationNested (T.concat["Unimplemented -- Field of type `", qualifiedTypeName tipe, "` was removed in V", show_ newVersion, ". I need you to do something with the `", oldValueRef, ".", N.toText name, "` value if you wish to keep the data, then remove this line."]
                     , Set.empty
                     , Map.empty
                     , ""

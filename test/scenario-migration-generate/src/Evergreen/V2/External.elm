@@ -29,5 +29,9 @@ type alias AllTypes =
     }
 
 
-type TypeThatGetsMoved
-    = TypeThatGetsMoved
+type UnionThatGetsMoved
+    = UnionThatGetsMoved
+
+
+type alias AliasThatGetsMoved =
+    { someThing : String }

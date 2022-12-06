@@ -30,7 +30,8 @@ type alias BackendModel =
     , added : Int
 
     -- Drastic changes
-    , typeThatGetsMoved : Evergreen.V2.External.TypeThatGetsMoved
+    , unionThatGetsMoved : Evergreen.V2.External.UnionThatGetsMoved
+    , aliasThatGetsMoved : Evergreen.V2.External.AliasThatGetsMoved
     , typeToAlias : TypeToAlias
     , aliasToType : AliasToType
 
