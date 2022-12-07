@@ -28,6 +28,7 @@ import qualified Lamdera.Wire3.Helpers
 -- import StandaloneInstances
 
 import Lamdera.Evergreen.MigrationGeneratorHelpers
+import Lamdera.Evergreen.MigrationSpecialCases
 
 
 betweenVersions :: CoreTypeDiffs -> Int -> Int -> String -> IO Text
@@ -268,6 +269,7 @@ migrateUnion_ author pkg oldUnion newUnion params tvarMap oldVersion newVersion 
     paramMigrationTextsCombined =
       paramMigrations
         & fmap migrationDef
+        & parenthesize
         & T.intercalate " "
 
     usageImports :: Set.Set ModuleName.Canonical
@@ -372,6 +374,7 @@ migrateUnion_ author pkg oldUnion newUnion params tvarMap oldVersion newVersion 
   ( migration
   , usageImports
   , (Map.singleton (moduleKey identifier) $
+      specialCaseMigration identifier $
       MigrationDefinition
         { imports = imports
         , migrations = Map.singleton migrationName $ T.concat
@@ -422,10 +425,10 @@ migrateParam i paramOldM paramNewM interfaces tvarMap recursionSet localScope ne
       xMigrationNested (appliedMigration, imps, subft, "")
 
     (Just paramOld, Nothing) ->
-      xMigrationNested ("\n-- warning: old variant didn't get mapped to anything, check this is what you want\n", Set.empty, Map.empty, "")
+      xMigrationNested ("Unimplemented -- Warning: old variant didn't get mapped to anything, check this is what you want\n", Set.empty, Map.empty, "")
 
     (Nothing, Just paramNew) ->
-      xMigrationNested ("(Debug.todo \"this new variant needs to be initialised!\")", Set.empty, Map.empty, "")
+      xMigrationNested ("Unimplemented -- This new variant needs to be initialised\n", Set.empty, Map.empty, "")
 
     _ -> error "impossible, zip produced a value without any contents"
 
@@ -551,6 +554,7 @@ migrateAlias oldVersion newVersion scope identifier@(author, pkg, newModule, _) 
   ( migrationName_
   , imps
   , (Map.singleton (moduleKey identifier) $
+      specialCaseMigration identifier $
       MigrationDefinition
         { imports = imps
         , migrations = Map.singleton
@@ -754,17 +758,11 @@ canAliasToMigration oldVersion newVersion scope interfaces recursionSet tipe@(Ca
 
           in
 
-          if tipeOld == tipe then
-            xMigrationNested ("SAMETYPES", scopeImports, thing, "")
-          else
-            xMigrationNested (
-              -- debugIden <> "🔵" <>
-              migration
-              -- "migrateeee" <>
-              -- if length tvarMap_ > 0 then
-              --   "(" <> typeScope <> N.toText name <> " " <> usageParamNames <> ")"
-              -- else
-              --   typeScope <> N.toText name
+          -- if isEquivalentElmType typeName tipeOld tipe then
+          --   xMigrationNested ("(SAMETYPES for " <> N.toText typeName <> ")", scopeImports, thing, "")
+          -- else
+            xMigrationNested
+            ( migration
             , scopeImports
             , thing
             , ""
@@ -1060,6 +1058,9 @@ typeToMigration oldVersion newVersion scope interfaces recursionSet tipe@(Can.TT
             _ -> error "non-matching TType in Dict gen"
         Nothing ->
           xMigrationNested ("Unimplemented -- This Dict type has changed to something else", Set.empty, Map.empty, "")
+
+    -- Other core types we can skip migrating
+    ("elm", "browser", "Browser.Navigation", "Key")      -> xMigrationNested ("", Set.empty, Map.empty, "")
 
 
     -- Values backed by JS Kernel types we cannot encode/decode

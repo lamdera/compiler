@@ -66,8 +66,8 @@ importsToText :: Set.Set ModuleName.Canonical -> [Text]
 importsToText imports =
   imports
         & Set.toList
-        & filterMap (\(ModuleName.Canonical (Pkg.Name author project) module_) ->
-          Just $ "import " <> nameToText module_
+        & fmap (\(ModuleName.Canonical (Pkg.Name author project) module_) ->
+          "import " <> nameToText module_
         )
         & List.sort
 
@@ -87,7 +87,11 @@ allMigrationDefinitions migrations =
 
 
 allImports :: [Migration] -> ElmImports
-allImports migrations = migrations & fmap migrationImports & mergeAllImports
+allImports migrations = migrations
+  & fmap (\migration ->
+    migrationImports migration <> (migrationTopLevelDefs migration & Map.toList & fmap (imports . snd) & mergeAllImports)
+  )
+  & mergeAllImports
 
 mergeMigrationDefinitions :: MigrationDefinitions -> MigrationDefinitions -> MigrationDefinitions
 mergeMigrationDefinitions ft1 ft2 = unionWithKey mergeMigrationDefinition ft1 ft2
@@ -298,7 +302,7 @@ isEquivalentElmType name t1 t2 = do
       case (t1,t2) of
         (Can.TType moduleName name params, Can.TType moduleName2 name2 params2) ->
           -- debugHaskell "TType" $
-          t1 == t2
+          t1 == t2 && params == params2
         (Can.TAlias moduleName name tvarMap_ aliasType, Can.TAlias moduleName2 name2 tvarMap_2 aliasType2) ->
           case (aliasType, aliasType2) of
             (Can.Holey t1, Can.Holey t2) ->

@@ -104,6 +104,7 @@ migrate_Types_BackendModel old =
     , aliasThatGetsMoved = old.aliasThatGetsMoved
     , typeToAlias = old.typeToAlias |> Unimplemented -- `TypeToAlias` was a concrete type, but now it's a type alias. I need you to write this migration.
     , aliasToType = old.aliasToType |> Unimplemented -- `AliasToType` was a type alias, but now it's a custom type. I need you to write this migration.
+    , time = old.time
     , apps = Unimplemented -- Type `Dict (String) (Evergreen.V2.Types.App)` was added in V2. I need you to set a default value.
     , depthTests = Unimplemented -- Field of type `Dict (String) (Evergreen.V1.Types.Depth)` was removed in V2. I need you to do something with the `old.depthTests` value if you wish to keep the data, then remove this line.
     , removed = Unimplemented -- Field of type `String` was removed in V2. I need you to do something with the `old.removed` value if you wish to keep the data, then remove this line.

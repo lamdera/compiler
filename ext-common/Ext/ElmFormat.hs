@@ -32,7 +32,7 @@ format text = do
 
     Nothing -> do
       Lamdera.debug $ "🔥💅 warning: no elm-format found locally, skipping"
-      pure $ Left $ "No elm-format found locally, skipping."
+      pure $ Left $ "no elm-format found locally, skipping."
 
 
 formatOrPassthrough :: Text -> IO Text
@@ -41,5 +41,5 @@ formatOrPassthrough text = do
   case formatted_ of
     Right formatted -> pure formatted
     Left err -> do
-      Lamdera.debug $ "🔥💅 warning: no elm-format found locally, skipping"
+      Lamdera.debug $ "🔥💅 warning: " <> show err
       pure text

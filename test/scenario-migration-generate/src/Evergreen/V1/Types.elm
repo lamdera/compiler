@@ -5,6 +5,7 @@ import Audio
 import Dict exposing (Dict)
 import Evergreen.V1.External
 import Set exposing (Set)
+import Time
 
 
 type alias BackendModel =
@@ -35,6 +36,9 @@ type alias BackendModel =
     , aliasThatGetsMoved : AliasThatGetsMoved
     , typeToAlias : TypeToAlias
     , aliasToType : AliasToType
+
+    -- Package types
+    , time : Time.Posix
 
     -- WIP
     , depthTests : Dict String Depth
