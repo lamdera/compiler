@@ -369,25 +369,34 @@ migrateUnion_ author pkg oldUnion newUnion params tvarMap oldVersion newVersion 
                 []
           )
   in
-  -- debug $
-  xMigrationNested
-  ( migration
-  , usageImports
-  , (Map.singleton (moduleKey identifier) $
-      specialCaseMigration identifier $
-      MigrationDefinition
-        { imports = imports
-        , migrations = Map.singleton migrationName $ T.concat
-            [ migrationName, " : ", migrationTypeSignature, "\n"
-            , [ migrationName, paramMigrationVars, " old =\n" ] & T.intercalate " "
-            , "  case old of\n"
-            , constructorCaseMigrations
-            ]
-        })
-      & mergeMigrationDefinitions oldConstructorsMigrationDefinitions
-      & mergeMigrationDefinitions paramMigrationDefinitions
-  , ""
-  )
+  case specialCaseMigration identifier of
+    Just migrationDef ->
+      MigrationNested
+        migration
+        Set.empty
+        (
+          (Map.singleton (moduleKey identifier) migrationDef)
+            & mergeMigrationDefinitions paramMigrationDefinitions
+        )
+        ""
+    Nothing ->
+      xMigrationNested
+      ( migration
+      , usageImports
+      , (Map.singleton (moduleKey identifier) $
+          MigrationDefinition
+            { imports = imports
+            , migrations = Map.singleton migrationName $ T.concat
+                [ migrationName, " : ", migrationTypeSignature, "\n"
+                , [ migrationName, paramMigrationVars, " old =\n" ] & T.intercalate " "
+                , "  case old of\n"
+                , constructorCaseMigrations
+                ]
+            })
+          & mergeMigrationDefinitions oldConstructorsMigrationDefinitions
+          & mergeMigrationDefinitions paramMigrationDefinitions
+      , ""
+      )
 
 
 genOldConstructorMigrationDefinitions :: N.Name -> Text -> N.Name -> Interfaces -> [(N.Name, Can.Type)] -> RecursionSet -> ModuleName.Canonical -> Int -> Int -> Can.Union -> Can.Union -> [Migration]
@@ -550,23 +559,31 @@ migrateAlias oldVersion newVersion scope identifier@(author, pkg, newModule, _) 
     migrationName_ :: Text
     migrationName_ = migrationNameUnderscored newModule oldVersion newVersion typeName
   in
-  xMigrationNested
-  ( migrationName_
-  , imps
-  , (Map.singleton (moduleKey identifier) $
-      specialCaseMigration identifier $
-      MigrationDefinition
-        { imports = imps
-        , migrations = Map.singleton
-            (lowerFirstLetter_ $ nameToText typeName)
-            (T.concat
-              ["\n", migrationName_, " : ", nameToText oldModuleName, ".", nameToText typeName, " -> ", newModuleName, ".", nameToText typeName, "\n"
-              , migrationName_, " old = ", migration
-              ])
-        })
-      & mergeMigrationDefinitions subft
-  , migrationName_
-  )
+
+  case specialCaseMigration identifier of
+    Just migrationDef ->
+      MigrationNested
+        migrationName_
+        Set.empty
+        (Map.singleton (moduleKey identifier) migrationDef)
+        migrationName_
+    Nothing ->
+      xMigrationNested
+      ( migrationName_
+      , imps
+      , (Map.singleton (moduleKey identifier) $
+          MigrationDefinition
+            { imports = imps
+            , migrations = Map.singleton
+                (lowerFirstLetter_ $ nameToText typeName)
+                (T.concat
+                  ["\n", migrationName_, " : ", nameToText oldModuleName, ".", nameToText typeName, " -> ", newModuleName, ".", nameToText typeName, "\n"
+                  , migrationName_, " old = ", migration
+                  ])
+            })
+          & mergeMigrationDefinitions subft
+      , migrationName_
+      )
 
 
 canToMigration :: Int -> Int -> ModuleName.Canonical -> Interfaces -> RecursionSet -> Can.Type -> Maybe Can.Type -> [(N.Name, Can.Type)] -> Text -> Migration
@@ -672,7 +689,6 @@ canAliasToMigration oldVersion newVersion scope interfaces recursionSet tipe@(Ca
 
             (MigrationNested subt imps subft migrationName_) :: Migration =
               let
-                !_ = debugHaskell "canAliasToMigration" (typeName, res)
                 paramPairs =
                   zipWith (\(n1,t1) (n2,t2) -> (n1, t1, t2)) tvarMapOld tvarMap_
 

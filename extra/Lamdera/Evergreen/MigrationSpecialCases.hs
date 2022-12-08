@@ -9,6 +9,7 @@ module Lamdera.Evergreen.MigrationSpecialCases where
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Data.Text (Text)
+import qualified Data.Text as T
 
 import NeatInterpolation
 
@@ -19,7 +20,7 @@ import qualified Data.Name as N
 import Lamdera.Evergreen.MigrationGeneratorHelpers
 
 
-specialCaseMigration identifier regularMigrationGen =
+specialCaseMigration identifier =
     case identifier of
       ("pzp1997", "assoc-list", "AssocList", "Dict") ->
         migration identifier
@@ -39,14 +40,24 @@ specialCaseMigration identifier regularMigrationGen =
                 List.Nonempty.map migrate_a old
           |]
 
-      _ ->
-        regularMigrationGen
+      ("MartinSStewart", "elm-audio", "Audio", "Msg") ->
+        migration identifier
+          [text|
+            migrate_Audio_Msg : (userMsg_old -> userMsg_new) -> Audio.Msg userMsg_old -> Audio.Msg userMsg_new
+            migrate_Audio_Msg migrate_userMsg old =
+                old
+                  |> Audio.migrateMsg (\userMsg_old -> (migrate_userMsg userMsg_old, Cmd.none))
+                  |> Tuple.first
+          |]
 
-migration :: TypeIdentifier -> Text -> MigrationDefinition
+      _ ->
+        Nothing
+
+migration :: TypeIdentifier -> Text -> Maybe MigrationDefinition
 migration (author, pkg, module_, typeName) def =
-  MigrationDefinition
+  Just $ MigrationDefinition
     { imports = Set.singleton $ ModuleName.Canonical (Pkg.Name author pkg) module_
-    , migrations = Map.singleton ("migrate_" <> N.toText module_ <> "_" <> N.toText typeName) def
+    , migrations = Map.singleton (T.concat ["migrate_", N.toText module_, "_", N.toText typeName]) def
     }
 
 

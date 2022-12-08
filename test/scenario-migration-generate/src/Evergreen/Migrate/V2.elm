@@ -124,30 +124,11 @@ migrate_Types_FrontendMsg old =
     migrate_Audio_Msg migrate_Types_FrontendMsg_
 
 
-migrate_Audio_FromJSMsg : Audio.FromJSMsg -> Audio.FromJSMsg
-migrate_Audio_FromJSMsg old =
-    case old of
-        Audio.AudioLoadSuccess p0 ->
-            Audio.AudioLoadSuccess p0
-
-        Audio.AudioLoadFailed p0 ->
-            Audio.AudioLoadFailed p0
-
-        Audio.InitAudioContext p0 ->
-            Audio.InitAudioContext p0
-
-        Audio.JsonParseError p0 ->
-            Audio.JsonParseError p0
-
-
 migrate_Audio_Msg : (userMsg_old -> userMsg_new) -> Audio.Msg userMsg_old -> Audio.Msg userMsg_new
 migrate_Audio_Msg migrate_userMsg old =
-    case old of
-        Audio.FromJSMsg p0 ->
-            Audio.FromJSMsg p0
-
-        Audio.UserMsg p0 ->
-            Audio.UserMsg (migrate_userMsg p0)
+    old
+        |> Audio.migrateMsg (\userMsg_old -> ( migrate_userMsg userMsg_old, Cmd.none ))
+        |> Tuple.first
 
 
 migrate_External_AllTypes : Evergreen.V1.External.AllTypes -> Evergreen.V2.External.AllTypes
