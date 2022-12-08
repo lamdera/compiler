@@ -7,7 +7,6 @@ import qualified System.Directory as Dir
 import qualified Data.Text as T
 import Lamdera
 
-adminToken = "ntil6p9l4i1zylcreuisd0ncrf17xxko"
 
 clearPriorBuilds = do
   c "rm -rf ~/lamdera-builds/build-test-local || true"
@@ -62,10 +61,6 @@ injectFrontendAppConfig projectPath appName version = do
 
 npmInstall projectPath = do
   c $ "cd " <> projectPath <> " && npm i --production"
-
-killPm2Instances appName = do
-  c $ "pm2 delete " <> appName <> " || true"
-  c $ "pm2 delete " <> appName <> "-zero || true"
 
 addRPCDefaultIfMissing projectRoot = do
   rpcExists <- Dir.doesFileExist $ projectRoot <> "/src/RPC.elm"

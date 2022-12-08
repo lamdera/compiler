@@ -95,6 +95,7 @@ module Lamdera
   , setEnv
   , unsetEnv
   , lookupEnv
+  , requireEnv
   , openUrlInBrowser
   , textSha1
   , (!!!)
@@ -791,6 +792,17 @@ lookupEnv :: String -> IO (Maybe String)
 lookupEnv name = do
   debug $ Prelude.concat ["🌏👀  ENV ", name]
   Env.lookupEnv name
+
+
+requireEnv :: String -> IO String
+requireEnv name = do
+  val <- lookupEnv name
+  case val of
+    Nothing ->
+      error $ Prelude.concat ["🌏👀  ENV var ", name, " is required but was not found"]
+    Just "" ->
+      error $ Prelude.concat ["🌏👀  ENV var ", name, " is required but was empty"]
+    Just v -> pure v
 
 
 openUrlInBrowser :: Text -> IO ()
