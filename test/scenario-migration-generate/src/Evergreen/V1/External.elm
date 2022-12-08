@@ -33,3 +33,16 @@ type alias Paramed a =
     { subtype : a
     , string : String
     }
+
+
+type alias Paramed2 a b =
+    { subtype : a
+    , subtype2 : b
+    , string : String
+    }
+
+
+type alias ParamedSub x =
+    { subtypeParamed : Paramed x
+    , string : String
+    }

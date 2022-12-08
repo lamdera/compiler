@@ -192,9 +192,9 @@ migrateUnion oldVersion newVersion scope identifier@(author, pkg, newModule, tip
   in
   case tipeOld of
   Nothing        ->
-    xMigrationNested ("Unimplemented -- I couldn't find an old type named `" <> N.toText typeName <> "`. I need you to write this migration.", Set.empty, Map.empty, "")
+    xMigrationNested ("Unimplemented -- I couldn't find an old type named `" <> N.toText typeName <> "`. I need you to write this migration.\n", Set.empty, Map.empty, "")
   Just (Alias a) ->
-    xMigrationNested ("Unimplemented -- `" <> N.toText typeName <> "` was a type alias, but now it's a custom type. I need you to write this migration.", Set.empty, Map.empty, "")
+    xMigrationNested ("Unimplemented -- `" <> N.toText typeName <> "` was a type alias, but now it's a custom type. I need you to write this migration.\n", Set.empty, Map.empty, "")
   Just (Union oldUnion) ->
     migrateUnion_ author pkg oldUnion newUnion params tvarMap oldVersion newVersion typeName newModule identifier oldModuleName interfaces recursionSet scope
 
@@ -525,9 +525,9 @@ aliasToFt oldVersion newVersion scope identifier@(author, pkg, newModule, _) typ
   in
   case tipeOldM of
     Nothing               ->
-      xMigrationNested ("Unimplemented -- I couldn't find an old type named `" <> N.toText typeName <> "`. I need you to write this migration.", Set.empty, Map.empty, "")
+      xMigrationNested ("Unimplemented -- I couldn't find an old type named `" <> N.toText typeName <> "`. I need you to write this migration.\n", Set.empty, Map.empty, "")
     Just (Union oldUnion) ->
-      xMigrationNested ("Unimplemented -- `" <> N.toText typeName <> "` was a custom type, but now it's a type alias. I need you to write this migration.", Set.empty, Map.empty, "")
+      xMigrationNested ("Unimplemented -- `" <> N.toText typeName <> "` was a custom type, but now it's a type alias. I need you to write this migration.\n", Set.empty, Map.empty, "")
     Just (Alias aliasOld@(Can.Alias tvarsOld tipeOld)) ->
       migrateAlias oldVersion newVersion scope identifier typeName interfaces recursionSet alias aliasOld oldModuleName oldValueRef
 
@@ -785,10 +785,10 @@ canAliasToMigration oldVersion newVersion scope interfaces recursionSet tipe@(Ca
             )
 
         Just _ ->
-          xMigrationNested ("Unimplemented -- `" <> N.toText typeName <> "` was a concrete type, but now it's a type alias. I need you to write this migration.", Set.empty, Map.empty, "")
+          xMigrationNested ("Unimplemented -- `" <> N.toText typeName <> "` was a concrete type, but now it's a type alias. I need you to write this migration.\n", Set.empty, Map.empty, "")
 
         Nothing ->
-          xMigrationNested (T.concat ["Unimplemented -- I couldn't find an old type named `", N.toText typeName, "`. I need you to write this migration." ], Set.empty, Map.empty, "")
+          xMigrationNested (T.concat ["Unimplemented -- I couldn't find an old type named `", N.toText typeName, "`. I need you to write this migration.\n" ], Set.empty, Map.empty, "")
 
 
     Can.Filled cType ->

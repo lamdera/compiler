@@ -167,6 +167,21 @@ migrate_External_Paramed migrate_a p0 =
     }
 
 
+migrate_External_Paramed2 : (a_old -> a_new) -> (b_old -> b_new) -> Evergreen.V1.External.Paramed2 a_old b_old -> Evergreen.V2.External.Paramed2 a_new b_new
+migrate_External_Paramed2 migrate_a migrate_b p0 =
+    { subtype = p0.subtype |> migrate_a
+    , subtype2 = p0.subtype2 |> migrate_b
+    , string = p0.string
+    }
+
+
+migrate_External_ParamedSub : (x_old -> x_new) -> Evergreen.V1.External.ParamedSub x_old -> Evergreen.V2.External.ParamedSub x_new
+migrate_External_ParamedSub migrate_x p0 =
+    { subtypeParamed = p0.subtypeParamed |> migrate_External_Paramed migrate_x
+    , string = p0.string
+    }
+
+
 migrate_Types_CustomType : Evergreen.V1.Types.CustomType -> Evergreen.V2.Types.CustomType
 migrate_Types_CustomType old =
     case old of
@@ -277,6 +292,22 @@ migrate_Types_UserType old =
 
         Evergreen.V1.Types.UserTvarAlias p0 ->
             Evergreen.V2.Types.UserTvarAlias (p0 |> migrate_External_Paramed migrate_Types_CustomType)
+
+        Evergreen.V1.Types.UserTvarAlias2 p0 ->
+            Evergreen.V2.Types.UserTvarAlias2
+                (p0
+                    |> (migrate_External_Paramed2 migrate_Types_CustomType Unimplemented
+                        -- I couldn't find an old type named `AllTypes`. I need you to write this migration.
+                       )
+                )
+
+        Evergreen.V1.Types.UserTvarAliasSub p0 ->
+            Evergreen.V2.Types.UserTvarAliasSub
+                (p0
+                    |> (migrate_External_ParamedSub Unimplemented
+                        -- I couldn't find an old type named `AllTypes`. I need you to write this migration.
+                       )
+                )
 
         notices ->
             {- @NOTICE `UserAdded` was added in V2.
