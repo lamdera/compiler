@@ -106,7 +106,8 @@ mockBuildSh projectPath appName = do
   copyRuntimeFiles projectPath
   injectElmPkgJsIncludesDefaultIfMissing projectPath
   injectFrontendAppConfig projectPath appName "1"
-  killPm2Instances appName
+  killAppZero appName
+
   npmInstall projectPath
   addRPCDefaultIfMissing projectPath
   installElmHttpForRPC projectPath
@@ -124,7 +125,7 @@ rebuildLamderaCheckProd projectPath appName = do
   Dir.withCurrentDirectory projectPath $
     Lamdera.CLI.Check.run () ()
 
-  c $ "pm2 delete " <> appName <> "-zero || true"
+  killAppZero appName
 
 
 installElmHttpForRPC projectPath = do

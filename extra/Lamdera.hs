@@ -115,6 +115,7 @@ module Lamdera
   , icdiff
   , withStdinYesAll
   , launchAppZero
+  , killAppZero
   , head_
   , last_
   , Text.Read.readMaybe
@@ -971,6 +972,13 @@ launchAppZero :: Text -> IO ()
 launchAppZero appId = do
   callCommand $ "~/lamdera/scripts/launchAppZero.sh " <> unpack appId
   atomicPutStrLn $ "✨ Called launchAppZero.sh"
+
+killAppZero :: String -> IO ()
+killAppZero appId = do
+  adminToken <- requireEnv "TOKEN"
+  Ext.Common.bash $ "curl -s -d \"{\"token\":\"" <> adminToken <> "\",\"appId\":\"" <> appId <> "\"}\" -H \"Content-Type: application/json\" -X POST -o /dev/null localhost:8080/v1/admin/appZeroRemove || true >> $LOG 2>&1"
+  pure ()
+
 
 head_ :: [a] -> a -> a
 head_ list default_ =
