@@ -192,9 +192,9 @@ migrateUnion oldVersion newVersion scope identifier@(author, pkg, newModule, tip
   in
   case tipeOld of
   Nothing        ->
-    xMigrationNested ("Unimplemented -- I couldn't find an old type named `" <> N.toText typeName <> "`. I need you to write this migration.\n", Set.empty, Map.empty, "")
+    unimplemented "migrateUnion" ("I couldn't find an old type named `" <> N.toText typeName <> "`. I need you to write this migration.")
   Just (Alias a) ->
-    xMigrationNested ("Unimplemented -- `" <> N.toText typeName <> "` was a type alias, but now it's a custom type. I need you to write this migration.\n", Set.empty, Map.empty, "")
+    unimplemented "" ("`" <> N.toText typeName <> "` was a type alias, but now it's a custom type. I need you to write this migration.")
   Just (Union oldUnion) ->
     migrateUnion_ author pkg oldUnion newUnion params tvarMap oldVersion newVersion typeName newModule identifier oldModuleName interfaces recursionSet scope
 
@@ -434,10 +434,10 @@ migrateParam i paramOldM paramNewM interfaces tvarMap recursionSet localScope ne
       xMigrationNested (appliedMigration, imps, subft, "")
 
     (Just paramOld, Nothing) ->
-      xMigrationNested ("Unimplemented -- Warning: old variant didn't get mapped to anything, check this is what you want\n", Set.empty, Map.empty, "")
+      unimplemented "" ("Warning: old variant didn't get mapped to anything, check this is what you want")
 
     (Nothing, Just paramNew) ->
-      xMigrationNested ("Unimplemented -- This new variant needs to be initialised\n", Set.empty, Map.empty, "")
+      unimplemented "" ("This new variant needs to be initialised")
 
     _ -> error "impossible, zip produced a value without any contents"
 
@@ -521,13 +521,12 @@ aliasToFt oldVersion newVersion scope identifier@(author, pkg, newModule, _) typ
 
     tipeOldM :: Maybe TypeDef
     tipeOldM = findDef oldModuleName typeName interfaces
-
   in
   case tipeOldM of
     Nothing               ->
-      xMigrationNested ("Unimplemented -- I couldn't find an old type named `" <> N.toText typeName <> "`. I need you to write this migration.\n", Set.empty, Map.empty, "")
+      unimplemented "aliasToFt:Nothing" ("I couldn't find an old type named `" <> N.toText typeName <> "`. I need you to write this migration.")
     Just (Union oldUnion) ->
-      xMigrationNested ("Unimplemented -- `" <> N.toText typeName <> "` was a custom type, but now it's a type alias. I need you to write this migration.\n", Set.empty, Map.empty, "")
+      unimplemented "" ("`" <> N.toText typeName <> "` was a custom type, but now it's a type alias. I need you to write this migration.")
     Just (Alias aliasOld@(Can.Alias tvarsOld tipeOld)) ->
       migrateAlias oldVersion newVersion scope identifier typeName interfaces recursionSet alias aliasOld oldModuleName oldValueRef
 
@@ -655,12 +654,9 @@ canAliasToMigration oldVersion newVersion scope interfaces recursionSet tipe@(Ca
           let
             usageParamFts :: [Migration]
             usageParamFts =
-              tvarMap_
-                & fmap (\(n, paramType) ->
-                  -- @TODO are we sure we don't need oldParam setup here? Need to come up with a test example if we do.
-                  let oldParamType = Nothing
-                  in
-                  canToMigration oldVersion newVersion scope interfaces recursionSet paramType oldParamType tvarMap_ oldValueRef
+              zip tvarMapOld tvarMap_
+                & fmap (\((nOld, paramTypeOld), (nNew, paramTypeNew)) ->
+                  canToMigration oldVersion newVersion scope interfaces recursionSet paramTypeNew (Just paramTypeOld) tvarMap_ oldValueRef
                 )
 
             usageParamNames :: Text
@@ -728,15 +724,18 @@ canAliasToMigration oldVersion newVersion scope interfaces recursionSet tipe@(Ca
                 & fmap (\(oldT, newT) -> T.concat [ "migrate_", oldT ] )
                 & T.intercalate " "
 
+            oldType = T.concat [oldModuleName & N.toText, ".", typeName & N.toText]
+            newType = T.concat [newModule & N.toText, ".", typeName & N.toText]
+
             migrationTypeSignature :: Text
             migrationTypeSignature = T.concat
               [ paramMigrationFnsTypeSig & T.intercalate " -> " & suffixIfNonempty " -> "
               , " "
-              , oldModuleName & N.toText, ".", typeName & N.toText
+              , oldType
               , " "
               , oldTvars & fmap (\tvar -> T.concat [tvar, "_old"]) & T.intercalate " "
               , " -> "
-              , newModule & N.toText, ".", typeName & N.toText
+              , newType
               , " "
               , newTvars & fmap (\tvar -> T.concat [tvar, "_new"]) & T.intercalate " "
               ]
@@ -785,10 +784,10 @@ canAliasToMigration oldVersion newVersion scope interfaces recursionSet tipe@(Ca
             )
 
         Just _ ->
-          xMigrationNested ("Unimplemented -- `" <> N.toText typeName <> "` was a concrete type, but now it's a type alias. I need you to write this migration.\n", Set.empty, Map.empty, "")
+          unimplemented "" ("`" <> N.toText typeName <> "` was a concrete type, but now it's a type alias. I need you to write this migration.")
 
         Nothing ->
-          xMigrationNested (T.concat ["Unimplemented -- I couldn't find an old type named `", N.toText typeName, "`. I need you to write this migration.\n" ], Set.empty, Map.empty, "")
+          unimplemented "canAliasToMigration" (T.concat ["I couldn't find an old type named `", N.toText oldModuleName, ".", N.toText typeName, "`. I need you to write this migration.\n" ])
 
 
     Can.Filled cType ->
@@ -999,7 +998,7 @@ typeToMigration oldVersion newVersion scope interfaces recursionSet tipe@(Can.TT
             _ -> error $ T.unpack $ T.concat ["migrateSingleParamCollection: non-matching TType in ", typeName, " gen:\nold:", show_ tipeOld, "\nnew:", show_ tipe]
 
         Nothing ->
-          xMigrationNested (T.concat ["Unimplemented -- This ", typeName, " type has changed to something else"], Set.empty, Map.empty, "")
+          unimplemented "" (T.concat ["This ", typeName, " type has changed to something else"])
 
   in
   if (Set.member recursionIdentifier recursionSet) then
@@ -1045,7 +1044,7 @@ typeToMigration oldVersion newVersion scope interfaces recursionSet tipe@(Can.TT
             _ -> error "non-matching TType in Result gen"
 
         Nothing ->
-          xMigrationNested ("Unimplemented -- This Result type has changed to something else", Set.empty, Map.empty, "")
+          unimplemented "" ("This Result type has changed to something el")
 
 
     ("elm", "core", "Dict", "Dict") ->
@@ -1073,7 +1072,7 @@ typeToMigration oldVersion newVersion scope interfaces recursionSet tipe@(Can.TT
               )
             _ -> error "non-matching TType in Dict gen"
         Nothing ->
-          xMigrationNested ("Unimplemented -- This Dict type has changed to something else", Set.empty, Map.empty, "")
+          unimplemented "" ("This Dict type has changed to something el")
 
     -- Other core types we can skip migrating
     ("elm", "browser", "Browser.Navigation", "Key")      -> xMigrationNested ("", Set.empty, Map.empty, "")

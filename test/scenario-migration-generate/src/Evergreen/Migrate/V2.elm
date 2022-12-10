@@ -294,20 +294,10 @@ migrate_Types_UserType old =
             Evergreen.V2.Types.UserTvarAlias (p0 |> migrate_External_Paramed migrate_Types_CustomType)
 
         Evergreen.V1.Types.UserTvarAlias2 p0 ->
-            Evergreen.V2.Types.UserTvarAlias2
-                (p0
-                    |> (migrate_External_Paramed2 migrate_Types_CustomType Unimplemented
-                        -- I couldn't find an old type named `AllTypes`. I need you to write this migration.
-                       )
-                )
+            Evergreen.V2.Types.UserTvarAlias2 (p0 |> migrate_External_Paramed2 migrate_Types_CustomType migrate_External_AllTypes)
 
         Evergreen.V1.Types.UserTvarAliasSub p0 ->
-            Evergreen.V2.Types.UserTvarAliasSub
-                (p0
-                    |> (migrate_External_ParamedSub Unimplemented
-                        -- I couldn't find an old type named `AllTypes`. I need you to write this migration.
-                       )
-                )
+            Evergreen.V2.Types.UserTvarAliasSub (p0 |> migrate_External_ParamedSub migrate_External_AllTypes)
 
         notices ->
             {- @NOTICE `UserAdded` was added in V2.

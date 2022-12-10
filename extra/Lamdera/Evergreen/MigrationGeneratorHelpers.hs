@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Lamdera.Evergreen.MigrationGeneratorHelpers where
 
@@ -139,16 +140,12 @@ migrationNameUnderscored newModule oldVersion newVersion newTypeName =
 data TypeDef = Alias Can.Alias | Union Can.Union deriving (Show)
 
 
--- basicUnimplemented :: Maybe Can.Type -> Can.Type -> Migration
--- basicUnimplemented tipeOldM tipe =
---   case tipeOldM of
---     Just tipeOld ->
---       if tipeOld /= tipe then
---         ("Unimplemented -- expecting: " <> (qualifiedTypeName tipeOld) <> " -> " <> qualifiedTypeName tipe, Set.empty, Map.empty)
---       else
---         ("UHHHH1", Set.empty, Map.empty)
---     Nothing ->
---       ("UHHHH2", Set.empty, Map.empty)
+unimplemented :: Text -> Text -> Migration
+unimplemented debugIdentifier message =
+  let debugIdentifier_ :: Text = ""
+        -- & (\v -> debugIdentifier & suffixIfNonempty " ")
+  in
+  xMigrationNested (T.concat ["Unimplemented -- ", debugIdentifier_, message, "\n"], Set.empty, Map.empty, "")
 
 
 canModuleName :: ModuleName.Canonical -> N.Name
