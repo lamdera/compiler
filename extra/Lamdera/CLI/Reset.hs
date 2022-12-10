@@ -23,7 +23,6 @@ run () () = do
 
   elmHome <- PerUserCache.getElmHome
   root <- getProjectRootMaybe
-  legacyLamderaHome <- Dir.getAppUserDataDirectory "lamdera"
   let
     elmStuff = (root & withDefault "./") </> "elm-stuff"
     lamderaLegacy = (root & withDefault "./") </> "lamdera-stuff"
@@ -40,7 +39,6 @@ run () () = do
   planNukeFile lamderaCliLogin ""
   planNukeDir elmStuff ""
   planNukeDir lamderaLegacy "(Legacy)"
-  planNukeDir legacyLamderaHome "(Legacy)"
 
   progress ""
 
@@ -66,7 +64,6 @@ run () () = do
       nukeFile lamderaCliLogin
       nukeDir elmStuff
       nukeDir lamderaLegacy
-      nukeDir legacyLamderaHome
 
     else
       progress "\nOkay, I did not reset anything."
