@@ -31,6 +31,6 @@ run () () = do
       pure ()
 
     _ ->
-      atomicPutStrLn $ "Error: deploys must be from a main or master branch. You are on branch " <> unpack branch <> "."
+      atomicPutStrLn $ "⚠️  Error: deploys must be from a main or master branch. You are on branch " <> unpack branch <> "."
 
   pure ()

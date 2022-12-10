@@ -671,14 +671,14 @@ mLamdera_Wire =
 
 foldlPairs fn list =
   case list of
-    [] -> error "Error: foldlPairs called with no items! Please report this with your code."
+    [] -> error "⚠️  Error: foldlPairs called with no items! Please report this with your code."
     x:[] -> x
     x:xs ->
       foldl (\acc item -> fn acc item ) x xs
 
 foldrPairs fn list =
   case list of
-    [] -> error "Error: foldrPairs called with no items! Please report this with your code."
+    [] -> error "⚠️  Error: foldrPairs called with no items! Please report this with your code."
     x:[] -> x
     x:xs ->
       fn x (foldrPairs fn xs)

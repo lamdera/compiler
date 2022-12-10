@@ -99,7 +99,7 @@ checkApiLoop inProduction appName token =
             pure False
 
           "invalid" -> do
-            Progress.report $ D.fillSep ["───>", D.red "Error:", D.reflow "invalid token. Please try again."]
+            Progress.report $ D.fillSep ["───>", D.red "⚠️  Error:", D.reflow "invalid token. Please try again."]
             pure True
 
           "success" -> do

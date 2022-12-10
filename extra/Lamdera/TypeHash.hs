@@ -472,7 +472,7 @@ canonicalToDiffableType targetName interfaces recursionSet canonical tvarMap =
           let
             !_ = formatHaskellValue "Tvar not found:" name :: IO ()
           in
-          DError $ "Error: tvar lookup failed, please report this issue: cannot find "
+          DError $ "⚠️  Error: tvar lookup failed, please report this issue: cannot find "
             <> N.toText name
             <> " in tvarMap "
             <>  (T.pack $ show tvarMap)
