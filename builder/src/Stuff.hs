@@ -32,6 +32,8 @@ import qualified Elm.Package as Pkg
 import qualified Elm.Version as V
 
 
+import Lamdera ((&))
+import qualified Lamdera
 
 -- PATHS
 
@@ -178,3 +180,4 @@ getElmHome =
       case maybeCustomHome of
         Just customHome -> return customHome
         Nothing -> Dir.getAppUserDataDirectory "elm"
+          & Lamdera.alternativeImplementation (Dir.getAppUserDataDirectory "lamdera")
