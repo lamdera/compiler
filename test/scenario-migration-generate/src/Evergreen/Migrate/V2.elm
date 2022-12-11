@@ -23,8 +23,10 @@ import Array
 import Audio
 import Dict
 import Evergreen.V1.External
+import Evergreen.V1.IncludedByParam
 import Evergreen.V1.Types
 import Evergreen.V2.External
+import Evergreen.V2.IncludedByParam
 import Evergreen.V2.Types
 import Lamdera.Migrations exposing (..)
 import List
@@ -182,6 +184,12 @@ migrate_External_ParamedSub migrate_x p0 =
     }
 
 
+migrate_IncludedByParam_Record : Evergreen.V1.IncludedByParam.Record -> Evergreen.V2.IncludedByParam.Record
+migrate_IncludedByParam_Record p0 =
+    { test = p0.test
+    }
+
+
 migrate_Types_CustomType : Evergreen.V1.Types.CustomType -> Evergreen.V2.Types.CustomType
 migrate_Types_CustomType old =
     case old of
@@ -297,7 +305,7 @@ migrate_Types_UserType old =
             Evergreen.V2.Types.UserTvarAlias2 (p0 |> migrate_External_Paramed2 migrate_Types_CustomType migrate_External_AllTypes)
 
         Evergreen.V1.Types.UserTvarAliasSub p0 ->
-            Evergreen.V2.Types.UserTvarAliasSub (p0 |> migrate_External_ParamedSub migrate_External_AllTypes)
+            Evergreen.V2.Types.UserTvarAliasSub (p0 |> migrate_External_ParamedSub migrate_IncludedByParam_Record)
 
         notices ->
             {- @NOTICE `UserAdded` was added in V2.

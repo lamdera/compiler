@@ -451,6 +451,11 @@ asOldModuleName newModule newVersion oldVersion =
     & N.fromText
 
 
+asOldModule :: N.Name -> Int -> Int -> ModuleName.Canonical
+asOldModule newModule newVersion oldVersion =
+  ModuleName.Canonical (Pkg.Name "author" "project") (asOldModuleName newModule newVersion oldVersion)
+
+
 
 tvarResolvedParams :: [Can.Type] -> [(N.Name, Can.Type)] -> [Can.Type]
 tvarResolvedParams params tvarMap =

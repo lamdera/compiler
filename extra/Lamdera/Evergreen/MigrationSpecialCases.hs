@@ -30,9 +30,9 @@ specialCaseMigration identifier =
             migrate_AssocList_Dict : (a_old -> a_new) -> (b_old -> b_new) -> AssocList.Dict a_old b_old -> AssocList.Dict a_new b_new
             migrate_AssocList_Dict migrate_a migrate_b old =
                 old
-                    |> Dict.toList
+                    |> AssocList.toList
                     |> List.map (Tuple.mapBoth migrate_a migrate_b)
-                    |> Dict.fromList
+                    |> AssocList.fromList
           |]
 
       ("mgold", "elm-nonempty-list", "List.Nonempty", "Nonempty") ->

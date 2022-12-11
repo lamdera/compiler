@@ -59,10 +59,10 @@ generateFor :: CoreTypeDiffs -> Int -> Int -> Interfaces -> Interface.Interface 
 generateFor coreTypeDiffs oldVersion newVersion interfaces iface_Types = do
   let
     moduleName :: ModuleName.Canonical
-    moduleName = (ModuleName.Canonical (Pkg.Name "author" "project") (N.fromChars $ "Evergreen.V" <> show newVersion <> ".Types"))
+    moduleName = ModuleName.Canonical (Pkg.Name "author" "project") (N.fromChars $ "Evergreen.V" <> show newVersion <> ".Types")
 
-    migrations :: [(N.Name, Migration)]
-    migrations =
+    coreMigrations :: [(N.Name, Migration)]
+    coreMigrations =
       coreTypeDiffs
         & fmap (\(t, oldHash, newHash) ->
             (t, coreTypeMigration (oldHash /= newHash) oldVersion newVersion interfaces moduleName t iface_Types)
@@ -71,7 +71,7 @@ generateFor coreTypeDiffs oldVersion newVersion interfaces iface_Types = do
         -- & foldl (\acc (t, ft) -> mergeMigrationDefinitions acc ft) Map.empty
         -- & debugHaskell "efts"
 
-    imports = migrations
+    imports = coreMigrations
       & fmap snd
       & allImports
       -- a little weird but ensures current version of types, our entry point, is added to final migration imports...
@@ -86,15 +86,15 @@ generateFor coreTypeDiffs oldVersion newVersion interfaces iface_Types = do
     additionalImports :: [Text]
     additionalImports = ["import Lamdera.Migrations exposing (..)"]
 
-    coreMigrations = migrations & fmap (migrationDef . snd)
+    coreMigrationDefs = coreMigrations & fmap (migrationDef . snd)
 
-    subMigrations = migrations & fmap (migrationTopLevelDefs . snd) & mergeAllMigrationDefinitions & allMigrations
+    subMigrations = coreMigrations & fmap (migrationTopLevelDefs . snd) & mergeAllMigrationDefinitions & allMigrations
 
     output =
-      [ (T.concat [ "module Evergreen.Migrate.V", show_ newVersion, " exposing (..)" ])
+      [ T.concat [ "module Evergreen.Migrate.V", show_ newVersion, " exposing (..)" ]
       , helpfulInformation
       , imports
-      ] ++ coreMigrations ++ [subMigrations]
+      ] ++ coreMigrationDefs ++ [subMigrations]
 
 
   output & T.intercalate "\n\n" & pure
@@ -152,10 +152,10 @@ coreTypeMigration typeDidChange oldVersion newVersion interfaces newModule typeN
 
     migrationWrapper :: Text -> Text
     migrationWrapper migration = do
-      (T.concat
-        ["\n", (lowerFirstLetter_ t), " : ", oldModuleName, ".", t, " -> ", migrationTypeForType typeName , " ", newModuleName, ".", t, " ", newModuleName, ".", msgForType typeName, "\n"
-        , (lowerFirstLetter_ $ nameToText typeName), " old = ", migration
-        ])
+      T.concat
+        ["\n", lowerFirstLetter_ t, " : ", oldModuleName, ".", t, " -> ", migrationTypeForType typeName , " ", newModuleName, ".", t, " ", newModuleName, ".", msgForType typeName, "\n"
+        , lowerFirstLetter_ $ nameToText typeName, " old = ", migration
+        ]
 
   if typeDidChange
     then
@@ -208,7 +208,11 @@ migrateUnion_ author pkg oldUnion newUnion params tvarMap oldVersion newVersion 
   let
     oldModuleNameCanonical :: ModuleName.Canonical
     oldModuleNameCanonical =
-      (ModuleName.Canonical (Pkg.Name "author" "project") oldModuleName)
+      ModuleName.Canonical (Pkg.Name "author" "project") oldModuleName
+
+    newModuleNameCanonical :: ModuleName.Canonical
+    newModuleNameCanonical =
+      ModuleName.Canonical (Pkg.Name "author" "project") newModule
 
     tvarMapNew :: [(N.Name, Can.Type)]
     tvarMapNew =
@@ -273,14 +277,18 @@ migrateUnion_ author pkg oldUnion newUnion params tvarMap oldVersion newVersion 
         & T.intercalate " "
 
     usageImports :: Set.Set ModuleName.Canonical
-    usageImports = paramMigrations & allImports & Set.insert oldModuleNameCanonical
+    usageImports =
+      paramMigrations
+        & allImports
+        & Set.insert oldModuleNameCanonical
+        & Set.insert newModuleNameCanonical
 
     paramMigrationDefinitions :: MigrationDefinitions
     paramMigrationDefinitions = paramMigrations & allMigrationDefinitions
 
     localScope :: ModuleName.Canonical
     localScope =
-      (ModuleName.Canonical (Pkg.Name author pkg) newModule)
+      ModuleName.Canonical (Pkg.Name author pkg) newModule
 
     oldConstructorsMigrations :: [Migration]
     oldConstructorsMigrations = genOldConstructorMigrationDefinitions oldModuleName moduleScope typeName interfaces tvarMap recursionSet localScope newVersion oldVersion newUnion oldUnion
@@ -373,7 +381,7 @@ migrateUnion_ author pkg oldUnion newUnion params tvarMap oldVersion newVersion 
     Just migrationDef ->
       MigrationNested
         migration
-        Set.empty
+        usageImports
         (
           (Map.singleton (moduleKey identifier) migrationDef)
             & mergeMigrationDefinitions paramMigrationDefinitions
@@ -563,7 +571,7 @@ migrateAlias oldVersion newVersion scope identifier@(author, pkg, newModule, _) 
     Just migrationDef ->
       MigrationNested
         migrationName_
-        Set.empty
+        imps
         (Map.singleton (moduleKey identifier) migrationDef)
         migrationName_
     Nothing ->
@@ -642,15 +650,20 @@ canAliasToMigration oldVersion newVersion scope interfaces recursionSet tipe@(Ca
 
     identifier = asIdentifier_ (moduleName, name)
 
+    moduleNew = moduleName
+
     oldModuleName :: N.Name
     oldModuleName = asOldModuleName newModule newVersion oldVersion
+
+    oldModule :: ModuleName.Canonical
+    oldModule = asOldModule newModule newVersion oldVersion
 
     typeName = name
   in
   case aliasType of
     Can.Holey cType ->
       case tipeOldM of
-        Just (tipeOld@(Can.TAlias moduleName name tvarMapOld aliasType)) ->
+        Just (tipeOld@(Can.TAlias moduleOld name tvarMapOld aliasType)) ->
           let
             usageParamFts :: [Migration]
             usageParamFts =
@@ -758,6 +771,8 @@ canAliasToMigration oldVersion newVersion scope interfaces recursionSet tipe@(Ca
               (Map.singleton (moduleNameKey moduleName) $
                 MigrationDefinition
                   { imports = imps
+                      & Set.insert moduleNew
+                      & Set.insert moduleOld
                   , migrations = typeDef
                   }
               )

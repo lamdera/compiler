@@ -4,6 +4,7 @@ import Array exposing (Array)
 import Audio
 import Dict exposing (Dict)
 import Evergreen.V1.External
+import Evergreen.V1.IncludedByParam
 import Set exposing (Set)
 import Time
 
@@ -62,7 +63,7 @@ type UserType
     | UserAnonymousNestedAddedRemoved { name : String, subrecord : { userType : UserType, removed : String } }
     | UserTvarAlias (Evergreen.V1.External.Paramed CustomType)
     | UserTvarAlias2 (Evergreen.V1.External.Paramed2 CustomType Evergreen.V1.External.AllTypes)
-    | UserTvarAliasSub (Evergreen.V1.External.ParamedSub Evergreen.V1.External.AllTypes)
+    | UserTvarAliasSub (Evergreen.V1.External.ParamedSub Evergreen.V1.IncludedByParam.Record)
 
 
 type CustomType
