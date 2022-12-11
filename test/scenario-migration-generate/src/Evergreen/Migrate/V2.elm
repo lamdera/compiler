@@ -20,13 +20,16 @@ See <https://dashboard.lamdera.com/docs/evergreen> for more info.
 -}
 
 import Array
+import AssocList
 import Audio
 import Dict
 import Evergreen.V1.External
 import Evergreen.V1.IncludedByParam
+import Evergreen.V1.IncludedBySpecialCasedParam
 import Evergreen.V1.Types
 import Evergreen.V2.External
 import Evergreen.V2.IncludedByParam
+import Evergreen.V2.IncludedBySpecialCasedParam
 import Evergreen.V2.Types
 import Lamdera.Migrations exposing (..)
 import List
@@ -107,6 +110,7 @@ migrate_Types_BackendModel old =
     , typeToAlias = old.typeToAlias |> Unimplemented -- `TypeToAlias` was a concrete type, but now it's a type alias. I need you to write this migration.
     , aliasToType = old.aliasToType |> Unimplemented -- `AliasToType` was a type alias, but now it's a custom type. I need you to write this migration.
     , time = old.time
+    , userCache = old.userCache |> migrate_AssocList_Dict identity migrate_IncludedBySpecialCasedParam_Custom
     , apps = Unimplemented -- Type `Dict (String) (Evergreen.V2.Types.App)` was added in V2. I need you to set a default value.
     , depthTests = Unimplemented -- Field of type `Dict (String) (Evergreen.V1.Types.Depth)` was removed in V2. I need you to do something with the `old.depthTests` value if you wish to keep the data, then remove this line.
     , removed = Unimplemented -- Field of type `String` was removed in V2. I need you to do something with the `old.removed` value if you wish to keep the data, then remove this line.
@@ -124,6 +128,14 @@ migrate_Types_FrontendModel old =
 migrate_Types_FrontendMsg : Evergreen.V1.Types.FrontendMsg -> Evergreen.V2.Types.FrontendMsg
 migrate_Types_FrontendMsg old =
     migrate_Audio_Msg migrate_Types_FrontendMsg_
+
+
+migrate_AssocList_Dict : (a_old -> a_new) -> (b_old -> b_new) -> AssocList.Dict a_old b_old -> AssocList.Dict a_new b_new
+migrate_AssocList_Dict migrate_a migrate_b old =
+    old
+        |> AssocList.toList
+        |> List.map (Tuple.mapBoth migrate_a migrate_b)
+        |> AssocList.fromList
 
 
 migrate_Audio_Msg : (userMsg_old -> userMsg_new) -> Audio.Msg userMsg_old -> Audio.Msg userMsg_new
@@ -188,6 +200,13 @@ migrate_IncludedByParam_Record : Evergreen.V1.IncludedByParam.Record -> Evergree
 migrate_IncludedByParam_Record p0 =
     { test = p0.test
     }
+
+
+migrate_IncludedBySpecialCasedParam_Custom : Evergreen.V1.IncludedBySpecialCasedParam.Custom -> Evergreen.V2.IncludedBySpecialCasedParam.Custom
+migrate_IncludedBySpecialCasedParam_Custom old =
+    case old of
+        Evergreen.V1.IncludedBySpecialCasedParam.Custom ->
+            Evergreen.V2.IncludedBySpecialCasedParam.Custom
 
 
 migrate_Types_CustomType : Evergreen.V1.Types.CustomType -> Evergreen.V2.Types.CustomType

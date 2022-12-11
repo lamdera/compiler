@@ -67,10 +67,8 @@ generateFor coreTypeDiffs oldVersion newVersion interfaces iface_Types = do
         & fmap (\(t, oldHash, newHash) ->
             (t, coreTypeMigration (oldHash /= newHash) oldVersion newVersion interfaces moduleName t iface_Types)
         )
-        -- & debugHaskell "all migration definitions"
-        -- & foldl (\acc (t, ft) -> mergeMigrationDefinitions acc ft) Map.empty
-        -- & debugHaskell "efts"
 
+    imports :: Text
     imports = coreMigrations
       & fmap snd
       & allImports
@@ -81,7 +79,6 @@ generateFor coreTypeDiffs oldVersion newVersion interfaces iface_Types = do
       & List.sort
       & List.nub
       & T.intercalate "\n"
-
 
     additionalImports :: [Text]
     additionalImports = ["import Lamdera.Migrations exposing (..)"]
@@ -94,8 +91,7 @@ generateFor coreTypeDiffs oldVersion newVersion interfaces iface_Types = do
       [ T.concat [ "module Evergreen.Migrate.V", show_ newVersion, " exposing (..)" ]
       , helpfulInformation
       , imports
-      ] ++ coreMigrationDefs ++ [subMigrations]
-
+      ] ++ coreMigrationDefs ++ [ subMigrations ]
 
   output & T.intercalate "\n\n" & pure
 
@@ -231,21 +227,6 @@ migrateUnion_ author pkg oldUnion newUnion params tvarMap oldVersion newVersion 
         & zip (Can._u_vars oldUnion)
         & fmap (N.toText . fst)
 
-
-    -- oldTvars :: [Text]
-    -- oldTvars =
-    --   Can._u_vars oldUnion
-    --     -- & debugHaskell "_u"
-    --     & fmap (Can.TVar)
-    --     & fmap (Lamdera.Wire3.Helpers.resolveTvars tvarMap)
-    --   -- resolveTvars tvarMap
-    --   -- params
-    --   --   & zip ()
-    --     -- & fmap (N.toText . fst)
-    --     & fmap qualifiedTypeName
-    --     -- & T.intercalate " "
-
-
     paramMigrations :: [Migration]
     paramMigrations =
 
@@ -253,21 +234,17 @@ migrateUnion_ author pkg oldUnion newUnion params tvarMap oldVersion newVersion 
       -- value migratons will get caught in the actual constructor migrations?
       zip (tvarResolvedParams params tvarMap) (tvarResolvedParams params tvarMapNew)
         & imap (\i (paramOld, paramNew) ->
-          canToMigration oldVersion newVersion scope interfaces recursionSet paramNew (Just paramOld) tvarMap ("p" <> show_ i)
+          let
+            ft@(MigrationNested migration imps subft migrationName) =
+              canToMigration oldVersion newVersion scope interfaces recursionSet paramNew (Just paramOld) tvarMap ("p" <> show_ i)
+          in
+          if migration == "" then
+            -- Because paramaterised migrations are passed into functions that expect `v1 -> v2` functions, we
+            -- need to pass in a function even if there is no migration necessary, i.e. `String -> String`.
+            ft { migrationDef = "identity" }
+          else
+            ft
         )
-        -- & debugHaskell "paramMigrations"
-        -- & (\v -> if length v /= 0 then catcher v else v )
-
-
-      -- If we do need to migrate params here, it would probably be something like:
-      -- let
-      --   oldParams = error "todo used oldParams"
-      --   newParams = error "todo used newParams"
-      -- in
-      -- zipFull oldParams newParams
-      --   & imap (\i (paramOldM, paramNewM) ->
-      --     migrateParam i paramOldM paramNewM interfaces tvarMap recursionSet localScope newVersion oldVersion
-      --   )
 
     paramMigrationTextsCombined :: Text
     paramMigrationTextsCombined =

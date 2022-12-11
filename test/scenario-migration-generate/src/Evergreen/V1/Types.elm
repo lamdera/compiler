@@ -1,10 +1,12 @@
 module Evergreen.V1.Types exposing (..)
 
 import Array exposing (Array)
+import AssocList
 import Audio
 import Dict exposing (Dict)
 import Evergreen.V1.External
 import Evergreen.V1.IncludedByParam
+import Evergreen.V1.IncludedBySpecialCasedParam
 import Set exposing (Set)
 import Time
 
@@ -40,6 +42,9 @@ type alias BackendModel =
 
     -- Package types
     , time : Time.Posix
+
+    -- Special cased types
+    , userCache : AssocList.Dict String Evergreen.V1.IncludedBySpecialCasedParam.Custom
 
     -- WIP
     , depthTests : Dict String Depth
