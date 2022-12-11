@@ -127,7 +127,7 @@ migrate_Types_FrontendModel old =
 
 migrate_Types_FrontendMsg : Evergreen.V1.Types.FrontendMsg -> Evergreen.V2.Types.FrontendMsg
 migrate_Types_FrontendMsg old =
-    migrate_Audio_Msg migrate_Types_FrontendMsg_
+    old |> migrate_Audio_Msg migrate_Types_FrontendMsg_
 
 
 migrate_AssocList_Dict : (a_old -> a_new) -> (b_old -> b_new) -> AssocList.Dict a_old b_old -> AssocList.Dict a_new b_new

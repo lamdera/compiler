@@ -31,6 +31,20 @@ import Lamdera.Evergreen.MigrationGeneratorHelpers
 import Lamdera.Evergreen.MigrationSpecialCases
 
 
+-- When non-empty, will pretty-print the producer name & definition for the target top-level migration fn name
+debugMigrationFn :: Text
+debugMigrationFn = ""
+-- debugMigrationFn = "migrate_AssocList_Dict"
+
+-- When non-empty, will pretty-print the producer name & value for an inline migration containing the search text
+debugMigrationIncludes :: Text
+debugMigrationIncludes = ""
+-- debugMigrationIncludes = "migrate_Audio_Msg"
+
+debugMigrationIncludes_ tag migration =
+  migration & debugHaskellWhen (debugMigrationIncludes /= "" && debugMigrationIncludes `T.isInfixOf` migrationDef migration) ("debugMigrationIncludes:" <> tag)
+
+
 betweenVersions :: CoreTypeDiffs -> Int -> Int -> String -> IO Text
 betweenVersions coreTypeDiffs oldVersion newVersion root = do
     let
@@ -354,13 +368,17 @@ migrateUnion_ author pkg oldUnion newUnion params tvarMap oldVersion newVersion 
                 []
           )
   in
+  debugMigrationIncludes_ "migrateUnion_" $
   case specialCaseMigration identifier of
     Just migrationDef ->
       MigrationNested
         migration
         usageImports
         (
-          (Map.singleton (moduleKey identifier) migrationDef)
+          (migrationDef
+            & debugHaskellWhen (debugMigrationFn == migrationName) "debugMigrationFn:migrateUnion_:specialCased"
+            & Map.singleton (moduleKey identifier)
+          )
             & mergeMigrationDefinitions paramMigrationDefinitions
         )
         ""
@@ -368,8 +386,7 @@ migrateUnion_ author pkg oldUnion newUnion params tvarMap oldVersion newVersion 
       xMigrationNested
       ( migration
       , usageImports
-      , (Map.singleton (moduleKey identifier) $
-          MigrationDefinition
+      , (MigrationDefinition
             { imports = imports
             , migrations = Map.singleton migrationName $ T.concat
                 [ migrationName, " : ", migrationTypeSignature, "\n"
@@ -377,7 +394,10 @@ migrateUnion_ author pkg oldUnion newUnion params tvarMap oldVersion newVersion 
                 , "  case old of\n"
                 , constructorCaseMigrations
                 ]
-            })
+            }
+            & debugHaskellWhen (debugMigrationFn == migrationName) "debugMigrationFn:migrateUnion_"
+            & Map.singleton (moduleKey identifier)
+          )
           & mergeMigrationDefinitions oldConstructorsMigrationDefinitions
           & mergeMigrationDefinitions paramMigrationDefinitions
       , ""
@@ -395,6 +415,7 @@ genOldConstructorMigrationDefinitions oldModuleName moduleScope typeName interfa
 
 migrateParam :: Int -> Maybe Can.Type -> Maybe Can.Type -> Interfaces -> [(N.Name, Can.Type)] -> RecursionSet -> ModuleName.Canonical -> Int -> Int -> Migration
 migrateParam i paramOldM paramNewM interfaces tvarMap recursionSet localScope newVersion oldVersion =
+  -- debugHaskell "migrateParam" $
   case (paramOldM, paramNewM) of
     (Just paramOld, Just paramNew) ->
       let ft@(MigrationNested migration imps subft migrationName) =
@@ -542,29 +563,44 @@ migrateAlias oldVersion newVersion scope identifier@(author, pkg, newModule, _) 
 
     migrationName_ :: Text
     migrationName_ = migrationNameUnderscored newModule oldVersion newVersion typeName
-  in
 
+    applyOldValueIfNotRecord =
+      if isRecord tipe then
+        ""
+      else
+        T.concat [oldValueRef, " |> "]
+
+
+    -- !x = debugHaskell "applyOldValueIfNotRecord" (isRecord tipe, tipe)
+
+  in
+  debugMigrationIncludes_ "migrateAlias" $
   case specialCaseMigration identifier of
     Just migrationDef ->
       MigrationNested
         migrationName_
         imps
-        (Map.singleton (moduleKey identifier) migrationDef)
+        (migrationDef
+          & debugHaskellWhen (debugMigrationFn == migrationName_) "debugMigrationFn:migrateAlias:specialCased"
+          & Map.singleton (moduleKey identifier)
+        )
         migrationName_
     Nothing ->
       xMigrationNested
       ( migrationName_
       , imps
-      , (Map.singleton (moduleKey identifier) $
-          MigrationDefinition
+      , (MigrationDefinition
             { imports = imps
-            , migrations = Map.singleton
-                (lowerFirstLetter_ $ nameToText typeName)
-                (T.concat
+            , migrations =
+                Map.singleton (lowerFirstLetter_ $ nameToText typeName) $
+                T.concat
                   ["\n", migrationName_, " : ", nameToText oldModuleName, ".", nameToText typeName, " -> ", newModuleName, ".", nameToText typeName, "\n"
-                  , migrationName_, " old = ", migration
-                  ])
-            })
+                  , migrationName_, " ", oldValueRef, " = ", applyOldValueIfNotRecord, migration
+                  ]
+            }
+            & debugHaskellWhen (debugMigrationFn == migrationName_) "debugMigrationFn:migrateAlias"
+            & Map.singleton (moduleKey identifier)
+          )
           & mergeMigrationDefinitions subft
       , migrationName_
       )
@@ -572,7 +608,7 @@ migrateAlias oldVersion newVersion scope identifier@(author, pkg, newModule, _) 
 
 canToMigration :: Int -> Int -> ModuleName.Canonical -> Interfaces -> RecursionSet -> Can.Type -> Maybe Can.Type -> [(N.Name, Can.Type)] -> Text -> Migration
 canToMigration oldVersion newVersion scope interfaces recursionSet tipe tipeOldM tvarMap oldValueRef =
-
+  debugMigrationIncludes_ "canToMigration" $
   -- let !x = debugHaskell "canToMigration" (tipeOldM, tipe)
   -- in
   case tipe of
@@ -637,6 +673,7 @@ canAliasToMigration oldVersion newVersion scope interfaces recursionSet tipe@(Ca
 
     typeName = name
   in
+  debugMigrationIncludes_ "canAliasToMigration" $
   case aliasType of
     Can.Holey cType ->
       case tipeOldM of
@@ -807,6 +844,7 @@ canAliasToMigration oldVersion newVersion scope interfaces recursionSet tipe@(Ca
 
 recordToMigration :: Int -> Int -> ModuleName.Canonical -> Interfaces -> RecursionSet -> Can.Type -> Maybe Can.Type -> [(N.Name, Can.Type)] -> Text -> Migration
 recordToMigration oldVersion newVersion scope interfaces recursionSet tipe@(Can.TRecord newFields isPartial) tipeOldM tvarMap oldValueRef =
+  debugMigrationIncludes_ "recordToMigration" $
   case isPartial of
     Just whatIsThis ->
       xMigrationNested ("ERROR TRecord, please report this!", Set.empty, Map.empty, "")
@@ -996,6 +1034,7 @@ typeToMigration oldVersion newVersion scope interfaces recursionSet tipe@(Can.TT
   if (Set.member recursionIdentifier recursionSet) then
     handleSeenRecursiveType oldVersion newVersion scope identifier interfaces recursionSet tipe tipeOldM tvarMap oldValueRef
   else
+  debugMigrationIncludes_ "typeToMigration" $
   case identifier of
     ("elm", "core", "String", "String") -> xMigrationNested ("", Set.empty, Map.empty, "")
     ("elm", "core", "Basics", "Int") ->    xMigrationNested ("", Set.empty, Map.empty, "")

@@ -283,6 +283,12 @@ isAnonymousRecord cType =
     Can.TRecord _ _ -> True
     _ -> False
 
+isRecord :: Can.Type -> Bool
+isRecord cType =
+  case cType of
+    Can.TRecord _ _ -> True
+    _ -> False
+
 isTvar :: Can.Type -> Bool
 isTvar cType =
   case cType of
