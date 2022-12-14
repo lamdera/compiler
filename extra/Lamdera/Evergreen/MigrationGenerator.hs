@@ -653,17 +653,15 @@ canToMigration oldVersion newVersion scope interfaces recursionSet tipe tipeOldM
 
 
 canAliasToMigration :: Int -> Int -> ModuleName.Canonical -> Interfaces -> RecursionSet -> Can.Type -> Maybe Can.Type -> [(N.Name, Can.Type)] -> Text -> Migration
-canAliasToMigration oldVersion newVersion scope interfaces recursionSet tipe@(Can.TAlias moduleName name tvarMap_ aliasType) tipeOldM tvarMap oldValueRef =
+canAliasToMigration oldVersion newVersion scope interfaces recursionSet tipe@(Can.TAlias moduleNameNew name tvarMap_ aliasType) tipeOldM tvarMap oldValueRef =
   let
     module_ =
-      case moduleName of
+      case moduleNameNew of
         (ModuleName.Canonical (Pkg.Name author pkg) module_) -> module_
 
     newModule = module_
 
-    identifier = asIdentifier_ (moduleName, name)
-
-    moduleNew = moduleName
+    identifier = asIdentifier_ (moduleNameNew, name)
 
     oldModuleName :: N.Name
     oldModuleName = asOldModuleName newModule newVersion oldVersion
@@ -677,7 +675,7 @@ canAliasToMigration oldVersion newVersion scope interfaces recursionSet tipe@(Ca
   case aliasType of
     Can.Holey cType ->
       case tipeOldM of
-        Just (tipeOld@(Can.TAlias moduleOld name tvarMapOld aliasType)) ->
+        Just (tipeOld@(Can.TAlias moduleNameOld name tvarMapOld aliasType)) ->
           let
             usageParamFts :: [Migration]
             usageParamFts =
@@ -705,22 +703,19 @@ canAliasToMigration oldVersion newVersion scope interfaces recursionSet tipe@(Ca
                 -- & T.intercalate " "
 
             oldTvars :: [Text]
-            oldTvars =
-              tvarMapOld
-                & fmap (N.toText . fst)
-
+            oldTvars = tvarMapOld & fmap (N.toText . fst)
 
             (MigrationNested subt imps subft migrationName_) :: Migration =
               let
                 paramPairs =
                   zipWith (\(n1,t1) (n2,t2) -> (n1, t1, t2)) tvarMapOld tvarMap_
 
-                res = canToMigration oldVersion newVersion moduleName interfaces recursionSet cType (Just tipeOld) tvarMapOld oldValueRef
+                res = canToMigration oldVersion newVersion moduleNameNew interfaces recursionSet cType (Just tipeOld) tvarMapOld oldValueRef
               in
               res
 
             typeScope =
-              if moduleName == scope then
+              if moduleNameNew == scope then
                 ""
               -- else if isUserType identifier then
               --   nameToText module_ <> "."
@@ -733,7 +728,7 @@ canAliasToMigration oldVersion newVersion scope interfaces recursionSet tipe@(Ca
               -- if moduleName == scope then
               --   usageParamImports
               -- else
-                usageParamImports & Set.insert moduleName
+                usageParamImports & Set.insert moduleNameNew
 
             migrationName :: Text
             migrationName = migrationNameUnderscored newModule oldVersion newVersion name
@@ -782,11 +777,11 @@ canAliasToMigration oldVersion newVersion scope interfaces recursionSet tipe@(Ca
                 Map.empty
 
             thing =
-              (Map.singleton (moduleNameKey moduleName) $
+              (Map.singleton (moduleNameKey moduleNameNew) $
                 MigrationDefinition
                   { imports = imps
-                      & Set.insert moduleNew
-                      & Set.insert moduleOld
+                      & Set.insert moduleNameNew
+                      & Set.insert moduleNameOld
                   , migrations = typeDef
                   }
               )
@@ -805,12 +800,7 @@ canAliasToMigration oldVersion newVersion scope interfaces recursionSet tipe@(Ca
           -- if isEquivalentElmType typeName tipeOld tipe then
           --   xMigrationNested ("(SAMETYPES for " <> N.toText typeName <> ")", scopeImports, thing, "")
           -- else
-            xMigrationNested
-            ( migration
-            , scopeImports
-            , thing
-            , ""
-            )
+            xMigrationNested ( migration , scopeImports , thing , "" )
 
         Just _ ->
           unimplemented "" ("`" <> N.toText typeName <> "` was a concrete type, but now it's a type alias. I need you to write this migration.")
@@ -824,7 +814,7 @@ canAliasToMigration oldVersion newVersion scope interfaces recursionSet tipe@(Ca
       -- If an alias is filled, then it can't have any open holes within it either?
       -- So we can take this opportunity to reset tvars to reduce likeliness of naming conflicts?
       let
-        (MigrationNested subt imps subft migrationName) = canToMigration oldVersion newVersion moduleName interfaces recursionSet cType tipeOldM [] oldValueRef
+        (MigrationNested subt imps subft migrationName) = canToMigration oldVersion newVersion moduleNameNew interfaces recursionSet cType tipeOldM [] oldValueRef
 
         debugIden = "" -- <> "<af>"
       in
@@ -991,7 +981,7 @@ typeToMigration oldVersion newVersion scope interfaces recursionSet tipe@(Can.TT
       case identifier of
         (author, pkg, module_, typeName) ->
           xMigrationNested
-            ( T.concat ["Kernel error: must not contain kernel type `", show_ tipe, "` from ", show_ author, "/", show_ pkg, ":", nameToText module_ ]
+            ( T.concat ["-- Kernel error: must not contain kernel type `", show_ tipe, "` from ", show_ author, "/", show_ pkg, ":", nameToText module_, "\n" ]
             , Set.empty
             , Map.empty
             , ""
@@ -1004,7 +994,7 @@ typeToMigration oldVersion newVersion scope interfaces recursionSet tipe@(Can.TT
     migrateSingleParamCollection =
       case tipeOldM of
         Just tipeOld ->
-          case tipeOld of
+          case Lamdera.Wire3.Helpers.unwrapAliasesDeep tipeOld of
             Can.TType _ _ paramsOld -> -- @WARNING MUST BE SAME COLLECTION TYPE...?
               zipFull paramsOld params & (\p ->
                 case p of
@@ -1025,10 +1015,20 @@ typeToMigration oldVersion newVersion scope interfaces recursionSet tipe@(Can.TT
                   _ ->
                     error $ T.unpack $ T.concat ["migrateSingleParamCollection: impossible multi-param ", typeName, "! Please report this gen issue."]
               )
-            _ -> error $ T.unpack $ T.concat ["migrateSingleParamCollection: non-matching TType in ", typeName, " gen:\nold:", show_ tipeOld, "\nnew:", show_ tipe]
+        --     _ -> error $ T.unpack $ T.concat ["migrateSingleParamCollection: non-matching TType in ", typeName, " gen:\nold:", show_ tipeOld, "\nnew:", show_ tipe]
+
+        -- Nothing ->
+        --   unimplemented "" (T.concat ["This ", typeName, " type has changed to something else"])
+
+
+            _ -> unimplemented ("typeToMigration:" <> typeName)
+                   ("The old type has changed to a " <> typeName <> ". I need you to write this migration.")
+            -- _ -> error ("non-matching TType in " <> typeName <> " gen")
 
         Nothing ->
-          unimplemented "" (T.concat ["This ", typeName, " type has changed to something else"])
+          unimplemented ("typeToMigration:" <> typeName <> ":Nothing") ("I couldn't find an old type. I need you to write this migration.")
+          -- unimplemented "" ("This Result type has changed to something el")
+
 
   in
   if (Set.member recursionIdentifier recursionSet) then
@@ -1052,7 +1052,7 @@ typeToMigration oldVersion newVersion scope interfaces recursionSet tipe@(Can.TT
     ("elm", "core", "Result", "Result") ->
       case tipeOldM of
         Just tipeOld ->
-          case tipeOld of
+          case Lamdera.Wire3.Helpers.unwrapAliasesDeep tipeOld of
             Can.TType _ _ paramsOld -> -- @WARNING MUST BE SAME TYPE?
               zipFull paramsOld params & (\p ->
                 case p of
@@ -1072,16 +1072,18 @@ typeToMigration oldVersion newVersion scope interfaces recursionSet tipe@(Can.TT
                   _ ->
                     error "Fatal: impossible !2 param Result type! Please report this gen issue."
               )
-            _ -> error "non-matching TType in Result gen"
+            _ -> unimplemented "typeToMigration:Dict" ("The old type has changed to a Result. I need you to write this migration.")
+            -- _ -> error "non-matching TType in Result gen"
 
         Nothing ->
-          unimplemented "" ("This Result type has changed to something el")
+          unimplemented "typeToMigration:Result:Nothing" ("I couldn't find an old type. I need you to write this migration.")
+          -- unimplemented "" ("This Result type has changed to something el")
 
 
     ("elm", "core", "Dict", "Dict") ->
       case tipeOldM of
         Just tipeOld ->
-          case tipeOld of
+          case Lamdera.Wire3.Helpers.unwrapAliasesDeep tipeOld of
             Can.TType _ _ paramsOld -> -- @WARNING MUST BE SAME TYPE?
               zipFull paramsOld params & (\p ->
                 case p of
@@ -1101,9 +1103,11 @@ typeToMigration oldVersion newVersion scope interfaces recursionSet tipe@(Can.TT
                   _ ->
                     error "Fatal: impossible !2 param Result type! Please report this gen issue."
               )
-            _ -> error "non-matching TType in Dict gen"
+            _ -> unimplemented "typeToMigration:Dict" ("The old type has changed to a Dict. I need you to write this migration.")
+            -- _ -> error $ "non-matching TType in Dict gen: " <> show tipeOld
+
         Nothing ->
-          unimplemented "" ("This Dict type has changed to something el")
+          unimplemented "typeToMigration:Dict:Nothing" ("I couldn't find an old type. I need you to write this migration.")
 
     -- Other core types we can skip migrating
     ("elm", "browser", "Browser.Navigation", "Key")      -> xMigrationNested ("", Set.empty, Map.empty, "")
@@ -1256,12 +1260,10 @@ handleSeenRecursiveType oldVersion newVersion scope identifier@(author, pkg, new
           nameToText (canModuleName moduleName) <> "."
 
       typeName :: Text
-      typeName =
-        N.toText name
+      typeName = N.toText name
 
       migrationName :: Text
       migrationName = migrationNameUnderscored newModule oldVersion newVersion name
-
     in
     xMigrationNested ( if length params > 0 then
         "(" <> migrationName <> " " <> usageParams <> ")" -- <> "<!R>"
