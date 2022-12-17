@@ -53,6 +53,16 @@ specialCaseMigration identifier =
                     |> Tuple.first
           |]
 
+      ("MartinSStewart", "elm-audio", "Audio", "Model") ->
+        migrationDefinition identifier
+          [text|
+            migrate_Audio_Model : (userMsg_old -> userMsg_new) -> (userModel_old -> userModel_new) -> Audio.Model userMsg_old userModel_old -> Audio.Model userMsg_new userModel_new
+            migrate_Audio_Model migrate_userMsg migrate_userModel old =
+                old
+                    |> Audio.migrateModel migrate_userMsg (\userModel_old -> (migrate_userModel userModel_old, Cmd.none))
+                    |> Tuple.first
+          |]
+
       _ ->
         Nothing
 
