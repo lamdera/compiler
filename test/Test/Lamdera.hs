@@ -23,6 +23,7 @@ import Test.Check
 -- import qualified Lamdera.CLI.Live
 -- import qualified Lamdera.ReverseProxy
 -- import Test.Wire
+import qualified Ext.Common
 
 
 all = run Test.Lamdera.suite
@@ -42,7 +43,7 @@ suite = tests
 
         test _ = do
 
-          actual <- catchOutput $ withStdinYesAll $ Dir.withCurrentDirectory tmpFolder $ Init.run () ()
+          actual <- catchOutput $ withStdinYesAll $ Ext.Common.withProjectRoot tmpFolder $ Init.run () ()
 
           io $ formatHaskellValue "actual" actual
 
@@ -120,7 +121,7 @@ snapshotWithParams version projectPath appName = do
   setEnv "LDEBUG" "1"
   setEnv "ELM_HOME" "/Users/mario/elm-home-elmx-test"
 
-  Dir.withCurrentDirectory projectPath $ do
+  Ext.Common.withProjectRoot projectPath $ do
     Lamdera.Compile.makeDev projectPath ["src" </> "Types.elm"]
     Lamdera.Evergreen.Snapshot.run version
 
@@ -163,7 +164,7 @@ config = do
   -- setEnv "LDEBUG" "1"
   let project = "/Users/mario/lamdera/test/v1"
   -- let project = "/Users/mario/dev/projects/lamdera-test"
-  Dir.withCurrentDirectory project $ do
+  Ext.Common.withProjectRoot project $ do
     prodToken <- requireEnv "TOKEN"
     Lamdera.AppConfig.checkUserConfig "test-local" (Just $ T.pack prodToken)
 
@@ -180,7 +181,7 @@ login = do
   let project = "/Users/mario/lamdera/test/v1"
   setEnv "LDEBUG" "1"
   -- setEnv "LAMDERA_APP_NAME" "test-local"
-  Dir.withCurrentDirectory project $
+  Ext.Common.withProjectRoot project $
     Lamdera.CLI.Login.run () ()
   unsetEnv "LDEBUG"
   unsetEnv "LAMDERA_APP_NAME"
@@ -207,7 +208,7 @@ checkUserConfig = do
   setEnv "LDEBUG" "1"
   adminToken <- requireEnv "TOKEN"
 
-  Dir.withCurrentDirectory projectPath $
+  Ext.Common.withProjectRoot projectPath $
     do
         Lamdera.Compile.makeHarnessDevJs projectPath
         Lamdera.AppConfig.checkUserConfig appName (Just (T.pack adminToken))

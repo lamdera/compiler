@@ -67,7 +67,6 @@ module Lamdera
   , remove
   , rmdir
   , mkdir
-  , withCurrentDirectory
   , safeListDirectory
   , copyFile
   , replaceInFile
@@ -608,10 +607,6 @@ rmdir filepath = do
 mkdir :: FilePath -> IO ()
 mkdir dir =
   Dir.createDirectoryIfMissing True dir
-
-
-withCurrentDirectory =
-  Dir.withCurrentDirectory
 
 
 safeListDirectory :: FilePath -> IO [FilePath]

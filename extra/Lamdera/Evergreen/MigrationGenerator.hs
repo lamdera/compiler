@@ -19,6 +19,7 @@ import qualified Elm.Package as Pkg
 import qualified Elm.Interface as Interface
 import qualified Data.Utf8 as Utf8
 
+import qualified Ext.Common
 import Lamdera
 import Lamdera.Types
 import qualified Lamdera.Compile
@@ -53,7 +54,7 @@ betweenVersions coreTypeDiffs oldVersion newVersion root = do
 
     Lamdera.Compile.makeDev root paths
 
-    res <- withCurrentDirectory root $ do
+    res <- Ext.Common.withProjectRoot root $ do
         interfaces <- Ext.Query.Interfaces.all paths
         case Map.lookup (N.fromChars moduleNameString) interfaces of
           Just interface ->

@@ -33,9 +33,6 @@ suite :: Test ()
 suite = tests $
   [ scope "production check -> AppConfig usages & injection" $ do
 
-
-
-      -- let project = "/Users/mario/dev/projects/lamdera-compiler/test/scenario-empty-elm-init"
       let project = "/Users/mario/dev/projects/lamdera-compiler/test/scenario-always-v0"
           expectContains needle file = (project </> file) & expectFileContains needle
 
@@ -136,16 +133,15 @@ mockBuildSh projectPath appName = do
 rebuildLamderaCheckProd projectPath appName = do
   launchAppZero $ T.pack appName
 
-  Ext.Common.setProjectRoot projectPath
   -- FORCEVERSION=1 LDEBUG=1 TOKEN=$TOKEN LOVR=${LOVR} ELM_HOME=$ELM_HOME_ LAMDERA_APP_NAME=${APP} $LAMDERA_COMPILER check # >> $LOG 2>&1
-  Dir.withCurrentDirectory projectPath $
+  Ext.Common.withProjectRoot projectPath $
     Lamdera.CLI.Check.run_
 
   killAppZero appName
 
 
 installElmHttpForRPC projectPath = do
-  withCurrentDirectory projectPath $ do
+  Ext.Common.withProjectRoot projectPath $ do
     Test.Wire.installHelper Pkg.http
 
 
@@ -170,10 +166,7 @@ checkWithParams projectPath appName = do
     cp "/Users/mario/lamdera/runtime/src/RPC_Empty.elm" (projectPath ++ "/src/RPC.elm")
   cp "/Users/mario/lamdera/runtime/src/LamderaHelpers.elm" (projectPath ++ "/src/LamderaHelpers.elm")
 
-  Ext.Common.setProjectRoot projectPath
-  Dir.withCurrentDirectory projectPath $
-    do
-        Lamdera.CLI.Check.run_
+  Ext.Common.withProjectRoot projectPath $ Lamdera.CLI.Check.run_
 
   unsetEnv "LAMDERA_APP_NAME"
   unsetEnv "LOVR"
@@ -199,8 +192,7 @@ checkWithParamsNoDebug version projectPath appName = do
   cp "/Users/mario/lamdera/runtime/src/RPC.elm" (projectPath ++ "/src/RPC.elm")
   cp "/Users/mario/lamdera/runtime/src/LamderaHelpers.elm" (projectPath ++ "/src/LamderaHelpers.elm")
 
-  Ext.Common.setProjectRoot projectPath
-  Dir.withCurrentDirectory projectPath $ Lamdera.CLI.Check.run_
+  Ext.Common.withProjectRoot projectPath $ Lamdera.CLI.Check.run_
 
   rm (projectPath ++ "/src/LBR.elm")
   rm (projectPath ++ "/src/LFR.elm")
@@ -214,16 +206,12 @@ checkWithParamsNoDebug version projectPath appName = do
   unsetEnv "NOTPROD"
 
 
-
 cleanupCheckGen project = do
   rm (project ++ "/src/LBR.elm")
   rm (project ++ "/src/LFR.elm")
-  rm (project ++ "/src/RPC.elm")
+  -- rm (project ++ "/src/RPC.elm")
   rm (project ++ "/src/LamderaGenerated.elm")
   rm (project ++ "/src/LamderaHelpers.elm")
   rm (project ++ "/src/LamderaRPC.elm")
-  rm (project ++ "/src/RPC.elm")
-  rm (project ++ "/src/LBR.elm")
-  rm (project ++ "/src/LFR.elm")
   rm (project ++ "/backend-app.js")
   rm (project ++ "/frontend-app.js")

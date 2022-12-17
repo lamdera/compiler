@@ -51,6 +51,7 @@ import qualified Make
 -- http
 import qualified Json.Decode as D
 import qualified Lamdera.Http
+import qualified Ext.Common
 
 all = EasyTest.run suite
 
@@ -192,7 +193,7 @@ tryStandaloneInstall pkg  = do
     root = buildAllPackagesRoot ++ "/" ++ (fmap (\c -> if c == '/' then '_' else c ) pkgIdent)
 
   mkdir root
-  withCurrentDirectory root $ do
+  Ext.Common.withProjectRoot root $ do
 
     -- Known bad packages that cannot be compiled for non-code reasons
     markKnownBad pkg "Skinney/" -- Author renamed github name

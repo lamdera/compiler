@@ -17,12 +17,13 @@ import qualified Reporting.Task as Task
 import qualified Stuff
 
 import Lamdera
+import qualified Ext.Common
 
 
 fullGraph :: [FilePath] -> IO (Either Exit.Make Opt.GlobalGraph)
 fullGraph paths = do
   root <- getProjectRoot "fullGraph"
-  withCurrentDirectory root $ do
+  Ext.Common.withProjectRoot root $ do
     let
       debug_ = True
       optimize = False

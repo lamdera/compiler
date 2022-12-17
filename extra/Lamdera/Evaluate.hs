@@ -38,7 +38,7 @@ exec root path name = do
 
   -- root <- getProjectRootFor path
 
-  withCurrentDirectory root $ track "load+exec suite" $ do
+  Ext.Common.withProjectRoot root $ track "load+exec suite" $ do
 
     (canonical, objectsLocal, graph) <-
       track "load" $ do

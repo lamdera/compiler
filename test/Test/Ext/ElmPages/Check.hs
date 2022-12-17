@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE BangPatterns #-}
 
 module Test.Ext.ElmPages.Check where
 
@@ -19,19 +20,18 @@ suite :: Test ()
 suite = tests $
   [ scope "isWireCompatible" $ do
       io $ do
-        let p = "./test/scenario-elm-pages-incompatible-wire"
-        Dir.setCurrentDirectory p
-        setEnv "LDEBUG" "1"
+        let p = "/Users/mario/dev/projects/lamdera-compiler/test/scenario-elm-pages-incompatible-wire"
 
-        bash $ "git submodule init"
-        bash $ "git submodule update"
-        bash $ "npm i"
-        bash $ "npm run build"
+        Dir.withCurrentDirectory p $ do
+          bash $ "git submodule init"
+          bash $ "git submodule update"
+          bash $ "npm ci"
+          bash $ "npm run build"
 
       actual <- catchOutput $
         Lamdera.Compile.makeDev ".elm-pages" ["Main.elm"]
 
-      io $ Dir.setCurrentDirectory "../.."
+      let !x = debugHaskell "actual output" actual
 
       expectTextContains actual
         "Route.Index.Data.unserialisableValue must not contain functions"

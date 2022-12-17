@@ -130,6 +130,14 @@ getProjectRootMaybe = do
   findHelp "elm.json" (FP.splitDirectories subDir)
 
 
+withProjectRoot :: FilePath -> IO a -> IO a
+withProjectRoot root io = do
+  originalRoot <- getProjectRoot "withProjectRoot"
+  setProjectRoot root
+  !res <- Dir.withCurrentDirectory root io
+  setProjectRoot originalRoot
+  pure res
+
 
 findHelp :: FilePath -> [String] -> IO (Maybe FilePath)
 findHelp name dirs =

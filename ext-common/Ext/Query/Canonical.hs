@@ -68,7 +68,7 @@ loadFileSource :: FilePath -> IO (BS.ByteString, Src.Module)
 loadFileSource path = do
   project <- getProjectRootFor path
 
-  Dir.withCurrentDirectory project $ do
+  Ext.Common.withProjectRoot project $ do
     source <- File.readUtf8 path
     case Parse.fromByteString Parse.Application source of
       Right modul -> do
@@ -154,7 +154,7 @@ render (Code.Source sourceLines) region@(Region (Position startLine _) (Position
 
 showDefOptimized :: FilePath -> FilePath -> Data.Name.Name -> IO ()
 showDefOptimized project file name = do
-  Dir.withCurrentDirectory project $ do
+  Ext.Common.withProjectRoot project $ do
 
     -- canonical <- loadSingleCanonical file
 
@@ -179,7 +179,7 @@ showDefOptimized project file name = do
 
 showDefCanonical :: FilePath -> FilePath -> Data.Name.Name -> IO ()
 showDefCanonical project file name = do
-  Dir.withCurrentDirectory project $ do
+  Ext.Common.withProjectRoot project $ do
     canonical <- loadSingleCanonical file
     -- objects <- loadSingleObjects file
 
@@ -244,7 +244,7 @@ defName def =
 
 showDefAnnotation :: FilePath -> FilePath -> Data.Name.Name -> IO ()
 showDefAnnotation project file name = do
-  Dir.withCurrentDirectory project $ do
+  Ext.Common.withProjectRoot project $ do
     (Compile.Artifacts canonical annotations objects) <- loadSingleArtifacts file
 
     -- , _types :: Map.Map Name.Name Can.Annotation

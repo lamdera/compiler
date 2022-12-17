@@ -213,7 +213,7 @@ liveReloadLive = do
 
   -- Dir.setCurrentDirectory p
   -- withCurrentDirectory p $
-  trackedForkIO "Test.liveReloadLive" $ withCurrentDirectory p $ Develop.runWithRoot p (Develop.Flags Nothing)
+  trackedForkIO "Test.liveReloadLive" $ Develop.runWithRoot p (Develop.Flags Nothing)
 
   -- Doing this actually makes no sense in the :rr context, as the thread is long-running so it's the same as
   -- disabling the ENV vars mid-run! But leaving it here as a reminder, because it _does_ pollute the ENV
@@ -254,23 +254,10 @@ rerunOnly seed label =
   EasyTest.rerunOnly seed label allTests
 
 
-single = do
-
-  -- rmdir "/Users/mario/.elm"
-  -- rmdir "/Users/mario/elm-home-elmx-test" -- @TODO test without clean cache as well
-  -- @TODO later when we've restored
-  -- rmdir "/Users/mario/.lamdera"
-
-  rmdir "/Users/mario/lamdera/test/v1/elm-stuff"
-
-  EasyTest.rerunOnly 2433968847666733451 "evergreen -> type snapshots -> .alltypes e2e to disk for lamdera/test/v1/"
-    allTests
-
-
 allTests =
   tests
     [ tests []
-    -- , scope "Test.Lamdera -> " $ Test.Lamdera.suite
+    , scope "Test.Lamdera -> " $ Test.Lamdera.suite
     -- , scope "Test.Snapshot -> " $ Test.Snapshot.suite
     -- , scope "Test.Wire -> " $ Test.Wire.suite
     -- , scope "Test.Ext.ElmPages.Check -> " $ Test.Ext.ElmPages.Check.suite

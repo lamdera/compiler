@@ -10,6 +10,7 @@ import Control.Concurrent.Async
 import qualified Data.Text as T
 
 import Lamdera
+import qualified Ext.Common
 
 
 -- Runs `lamdera make --optimize` of given path with no output
@@ -29,7 +30,7 @@ makeOptimizedWithCleanup cleanup root path = do
   writeUtf8 scaffold $ "module Main_ exposing (..)\n\nimport " <> (T.pack $ FP.takeFileName $ FP.dropExtensions path) <> "\nimport Html\n\nmain = Html.text \"\""
 
   r <- async $
-    Dir.withCurrentDirectory root $
+    Ext.Common.withProjectRoot root $
       Make.run_cleanup cleanup [scaffold] $
         Make.Flags
           { _debug = False
@@ -56,7 +57,7 @@ make_ root = do
   debug $ "🏗   lamdera make " <> root <> "/"
 
   r <- async $
-    Dir.withCurrentDirectory root $
+    Ext.Common.withProjectRoot root $
       Make.run [] $
         Make.Flags
           { _debug = False
@@ -82,7 +83,7 @@ makeDev root paths = do
   absRoot <- Dir.makeAbsolute root
 
   r <- async $
-    Dir.withCurrentDirectory absRoot $ do
+    Ext.Common.withProjectRoot absRoot $ do
       mapM touch paths
       Make.run paths $
         Make.Flags
@@ -117,7 +118,7 @@ makeHarnessDevJs root = do
   writeUtf8 scaffold "module Main_ exposing (..)\n\nimport Frontend\nimport Backend\nimport Types\nimport Html\n\nmain = Html.text \"\""
 
   r <- async $
-    Dir.withCurrentDirectory root $
+    Ext.Common.withProjectRoot root $
       Make.run [scaffold] $
         Make.Flags
           { _debug = True

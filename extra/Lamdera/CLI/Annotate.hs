@@ -19,6 +19,7 @@ import qualified Compile
 import Lamdera
 import Lamdera.Progress
 import qualified Ext.Query.Canonical
+import qualified Ext.Common
 
 {-
 
@@ -46,7 +47,7 @@ run (Args file expressionName) () = do
 
 printAnnotations :: FilePath -> FilePath -> Name.Name -> IO ()
 printAnnotations root file expressionName = do
-  withCurrentDirectory root $ do
+  Ext.Common.withProjectRoot root $ do
     debug_ "Getting artifacts..."
 
     (Compile.Artifacts canonical annotations objects) <- Ext.Query.Canonical.loadSingleArtifacts file
