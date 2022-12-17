@@ -47,28 +47,25 @@ import qualified Lamdera.Update
 import qualified Lamdera.Version
 import qualified Network.Status
 
-
-import qualified Lamdera.Evergreen.Snapshot
+import Lamdera.Evergreen.MigrationHarness (VersionInfo(..), createLamderaGenerated, vinfoVersion, getLastLocalTypeChangeVersion)
+import qualified Lamdera.Evergreen.MigrationDestructive
 import qualified Lamdera.Evergreen.MigrationGenerator
 import qualified Lamdera.Evergreen.MigrationHarness
-import Lamdera.Evergreen.MigrationHarness (VersionInfo(..), createLamderaGenerated, vinfoVersion, getLastLocalTypeChangeVersion)
+import qualified Lamdera.Evergreen.Snapshot
 
 
-progressPointer t = do
-  Progress.report $ D.fillSep [ D.fromChars "\n───>", D.blue $ t ]
-
-progressPointer_ t = do
-  Progress.report $ D.fillSep [ D.fromChars "───>", D.blue $ t ]
-
-progress t = do
-  Progress.report $ D.stack [D.reflow t]
-
-progressDoc d =
-  Progress.report $ D.stack [d]
+data Flags =
+  Flags
+    { _destructiveMigration :: Bool
+    }
 
 
-run :: () -> () -> IO ()
-run () () = do
+run_ :: IO ()
+run_ = run () (Lamdera.CLI.Check.Flags { _destructiveMigration = False })
+
+
+run :: () -> Lamdera.CLI.Check.Flags -> IO ()
+run () flags@(Lamdera.CLI.Check.Flags destructiveMigration) = do
   debug_ "Starting check..."
 
   -- appNameEnvM <- Env.lookupEnv "LAMDERA_APP_NAME"
@@ -102,7 +99,7 @@ run () () = do
 
   if ips == []
     then offlineCheck root
-    else onlineCheck root appName inDebug localTypes externalTypeWarnings isHoistRebuild forceVersion forceNotProd inProduction
+    else onlineCheck root appName inDebug localTypes externalTypeWarnings isHoistRebuild forceVersion forceNotProd inProduction destructiveMigration
 
 
 offlineCheck root = do
@@ -156,7 +153,7 @@ offlineCheck root = do
   pure ()
 
 
-onlineCheck root appName inDebug localTypes externalTypeWarnings isHoistRebuild forceVersion forceNotProd inProduction  = do
+onlineCheck root appName inDebug localTypes externalTypeWarnings isHoistRebuild forceVersion forceNotProd inProduction destructiveMigration = do
 
   (prodVersion, productionTypes, nextVersion) <- getProdInfo appName inProduction forceNotProd forceVersion isHoistRebuild localTypes
 
@@ -272,7 +269,12 @@ onlineCheck root appName inDebug localTypes externalTypeWarnings isHoistRebuild 
 
               lastLocalTypeChangeVersion <- Lamdera.Evergreen.MigrationHarness.getLastLocalTypeChangeVersion root
 
-              defaultMigrations <- Lamdera.Evergreen.MigrationGenerator.betweenVersions typeCompares lastLocalTypeChangeVersion nextVersion root
+              defaultMigrations <- do
+                if destructiveMigration
+                  then
+                    Lamdera.Evergreen.MigrationDestructive.generate lastLocalTypeChangeVersion nextVersion typeCompares
+                  else
+                    Lamdera.Evergreen.MigrationGenerator.betweenVersions typeCompares lastLocalTypeChangeVersion nextVersion root
 
               writeUtf8 nextMigrationPath defaultMigrations
 
@@ -932,3 +934,16 @@ getInputHelp :: IO String
 getInputHelp =
   do  hFlush stdout
       getLine
+
+
+progressPointer t = do
+  Progress.report $ D.fillSep [ D.fromChars "\n───>", D.blue $ t ]
+
+progressPointer_ t = do
+  Progress.report $ D.fillSep [ D.fromChars "───>", D.blue $ t ]
+
+progress t = do
+  Progress.report $ D.stack [D.reflow t]
+
+progressDoc d =
+  Progress.report $ D.stack [d]

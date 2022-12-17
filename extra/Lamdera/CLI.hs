@@ -82,8 +82,13 @@ check =
       reflow
         "It will query the production environment and supply\
         \ information about the next version and required migrations."
+
+
+    checkFlags =
+      flags Lamdera.CLI.Check.Flags
+        |-- onOff "destructive-migration" "Generate a migration that drops all production data, instead of the usual automatic migration generation."
   in
-  Terminal.Command "check" (Common summary) details example noArgs noFlags Lamdera.CLI.Check.run
+  Terminal.Command "check" (Common summary) details example noArgs checkFlags Lamdera.CLI.Check.run
 
 
 deploy :: Terminal.Command

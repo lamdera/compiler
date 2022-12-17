@@ -4,6 +4,7 @@
 
 module Test.Check where
 
+import System.FilePath ((</>))
 import qualified Data.Text as T
 import qualified Data.Map as Map
 import qualified Data.Set as Set
@@ -23,6 +24,7 @@ import qualified System.Directory as Dir
 import qualified Test.Wire
 
 import LamderaSharedBuildHelpers
+import qualified Ext.Common
 
 all = EasyTest.run suite
 
@@ -30,19 +32,32 @@ all = EasyTest.run suite
 suite :: Test ()
 suite = tests $
   [ scope "production check -> AppConfig usages & injection" $ do
-      _ <- io $ checkWithParams "test" "always-v0"
 
-      "test/elm-stuff/lamdera/.lamdera-fe-config" & expectFileContains "configFEOnly"
-      "test/elm-stuff/lamdera/.lamdera-be-config" & expectFileContains "configBEOnly"
 
-      "test/elm-stuff/lamdera/.lamdera-fe-config" & expectFileContains "configBoth"
-      "test/elm-stuff/lamdera/.lamdera-be-config" & expectFileContains "configBoth"
 
-      "test/frontend-app.js" & expectFileContains "fe-only-from-dashboard"
-      "test/backend-app.js" & expectFileContains "be-only-from-dashboard"
+      -- let project = "/Users/mario/dev/projects/lamdera-compiler/test/scenario-empty-elm-init"
+      let project = "/Users/mario/dev/projects/lamdera-compiler/test/scenario-always-v0"
+          expectContains needle file = (project </> file) & expectFileContains needle
 
-      "test/frontend-app.js" & expectFileContains "both-from-dashboard"
-      "test/backend-app.js" & expectFileContains "both-from-dashboard"
+      io $ Ext.Common.bash $ "cd " <> project <> " && git init"
+      io $ Ext.Common.bash $ "cd " <> project <> " && git remote add lamdera git@apps.lamdera.com:always-v0.git"
+
+      _ <- io $ checkWithParams project "always-v0"
+
+      "elm-stuff/lamdera/.lamdera-fe-config" & expectContains "frontendOnly"
+      "elm-stuff/lamdera/.lamdera-be-config" & expectContains "backendOnly"
+
+      "elm-stuff/lamdera/.lamdera-fe-config" & expectContains "both"
+      "elm-stuff/lamdera/.lamdera-be-config" & expectContains "both"
+
+      "frontend-app.js" & expectContains "fe-only-from-dashboard"
+      "backend-app.js" & expectContains "be-only-from-dashboard"
+
+      "frontend-app.js" & expectContains "both-from-dashboard"
+      "backend-app.js" & expectContains "both-from-dashboard"
+
+      io $ rmdir (project </> ".git")
+      io $ cleanupCheckGen project
   ]
 
 
@@ -51,14 +66,14 @@ expectFileContains needle file =
   scope ("-> '" ++ file ++ "' contains '" ++ T.unpack needle ++ "'") $ do
     exists_ <- io $ Dir.doesFileExist file
     onlyWhen (not exists_) $
-      crash $ "expectFileContains: file not found: " ++ file
+      crash $ "❌  expectFileContains: file not found: " ++ file
 
     textM <- io $ readUtf8Text file
     case textM of
       Just text ->
         if (not $ textContains needle text)
           then
-            crash $ "expectFileContains: file '" ++ file ++ "' does not contain '" ++ T.unpack needle ++ "'"
+            crash $ "❌  expectFileContains: file '" ++ file ++ "' does not contain '" ++ T.unpack needle ++ "'\n📖 file contents were:\n" ++ T.unpack text
           else
             ok
 
@@ -121,9 +136,10 @@ mockBuildSh projectPath appName = do
 rebuildLamderaCheckProd projectPath appName = do
   launchAppZero $ T.pack appName
 
+  Ext.Common.setProjectRoot projectPath
   -- FORCEVERSION=1 LDEBUG=1 TOKEN=$TOKEN LOVR=${LOVR} ELM_HOME=$ELM_HOME_ LAMDERA_APP_NAME=${APP} $LAMDERA_COMPILER check # >> $LOG 2>&1
   Dir.withCurrentDirectory projectPath $
-    Lamdera.CLI.Check.run () ()
+    Lamdera.CLI.Check.run_
 
   killAppZero appName
 
@@ -154,21 +170,16 @@ checkWithParams projectPath appName = do
     cp "/Users/mario/lamdera/runtime/src/RPC_Empty.elm" (projectPath ++ "/src/RPC.elm")
   cp "/Users/mario/lamdera/runtime/src/LamderaHelpers.elm" (projectPath ++ "/src/LamderaHelpers.elm")
 
+  Ext.Common.setProjectRoot projectPath
   Dir.withCurrentDirectory projectPath $
     do
-        Lamdera.CLI.Check.run () ()
-
-  -- rm (projectPath ++ "/src/LBR.elm")
-  -- rm (projectPath ++ "/src/LFR.elm")
-  -- rm (projectPath ++ "/src/RPC.elm")
-  -- rm (projectPath ++ "/src/LamderaHelpers.elm")
+        Lamdera.CLI.Check.run_
 
   unsetEnv "LAMDERA_APP_NAME"
   unsetEnv "LOVR"
   unsetEnv "LDEBUG"
   unsetEnv "ELM_HOME"
   unsetEnv "NOTPROD"
-  unsetEnv "TOKEN"
   unsetEnv "VERSION"
 
 
@@ -188,7 +199,8 @@ checkWithParamsNoDebug version projectPath appName = do
   cp "/Users/mario/lamdera/runtime/src/RPC.elm" (projectPath ++ "/src/RPC.elm")
   cp "/Users/mario/lamdera/runtime/src/LamderaHelpers.elm" (projectPath ++ "/src/LamderaHelpers.elm")
 
-  Dir.withCurrentDirectory projectPath $ Lamdera.CLI.Check.run () ()
+  Ext.Common.setProjectRoot projectPath
+  Dir.withCurrentDirectory projectPath $ Lamdera.CLI.Check.run_
 
   rm (projectPath ++ "/src/LBR.elm")
   rm (projectPath ++ "/src/LFR.elm")
@@ -200,3 +212,18 @@ checkWithParamsNoDebug version projectPath appName = do
   unsetEnv "LOVR"
   unsetEnv "ELM_HOME"
   unsetEnv "NOTPROD"
+
+
+
+cleanupCheckGen project = do
+  rm (project ++ "/src/LBR.elm")
+  rm (project ++ "/src/LFR.elm")
+  rm (project ++ "/src/RPC.elm")
+  rm (project ++ "/src/LamderaGenerated.elm")
+  rm (project ++ "/src/LamderaHelpers.elm")
+  rm (project ++ "/src/LamderaRPC.elm")
+  rm (project ++ "/src/RPC.elm")
+  rm (project ++ "/src/LBR.elm")
+  rm (project ++ "/src/LFR.elm")
+  rm (project ++ "/backend-app.js")
+  rm (project ++ "/frontend-app.js")

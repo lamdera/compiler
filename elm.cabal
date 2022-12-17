@@ -222,9 +222,10 @@ Executable lamdera
         Lamdera.AppConfig
         Lamdera.Checks
         Lamdera.Constrain
+        Lamdera.Evergreen.MigrationDestructive
         Lamdera.Evergreen.MigrationGenerator
-        Lamdera.Evergreen.MigrationGeneratorUnion
         Lamdera.Evergreen.MigrationGeneratorHelpers
+        Lamdera.Evergreen.MigrationGeneratorUnion
         Lamdera.Evergreen.MigrationHarness
         Lamdera.Evergreen.MigrationSpecialCases
         Lamdera.Evergreen.Snapshot
@@ -240,6 +241,7 @@ Executable lamdera
         Lamdera.TypeHash
         Lamdera.Types
         Lamdera.Update
+        Lamdera.Version
         Lamdera.Wire2.Core
         Lamdera.Wire2.Decoder
         Lamdera.Wire2.Encoder
@@ -252,7 +254,6 @@ Executable lamdera
         Lamdera.Wire3.Graph
         Lamdera.Wire3.Helpers
         Lamdera.Wire3.Interfaces
-        Lamdera.Version
 
         -- Lamdera Utility --
         Lamdera.Compile

@@ -591,7 +591,7 @@ remove filepath =
       if exists_
         then Dir.removeFile filepath
         else do
-          debug_ $ "[FAILED:DOES NOT EXIST] remove: " ++ show filepath
+          debug_ $ "🗑❌  does not exist: " ++ show filepath
           return ()
 
 

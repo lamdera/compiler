@@ -14,7 +14,7 @@ run :: () -> () -> IO ()
 run () () = do
   debug_ "Starting check..."
 
-  Lamdera.CLI.Check.run () ()
+  Lamdera.CLI.Check.run_
 
   -- This invocation doesn't appear to work on older git versions, left for posterity
   -- (exit, stdout, stderr) <- System.Process.readProcessWithExitCode "git" ["branch","--show-current"] ""
