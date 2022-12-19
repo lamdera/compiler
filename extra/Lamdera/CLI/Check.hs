@@ -221,6 +221,8 @@ onlineCheck root appName inDebug localTypes externalTypeWarnings isHoistRebuild 
                 & fmap (\(label, local, prod) -> D.indent 4 (D.dullyellow (D.fromChars $ show label)))
                 & D.vcat
 
+          lastLocalTypeChangeVersion <- Lamdera.Evergreen.MigrationHarness.getLastLocalTypeChangeVersion root
+
           if migrationExists
             then do
               debug $ "Migration file already exists"
@@ -229,6 +231,11 @@ onlineCheck root appName inDebug localTypes externalTypeWarnings isHoistRebuild 
               -- a migration, and then later changed another thing. Basically grep for `toBackend old = Unchanged` for each label?
               -- so we don't acidentally run a migration saying nothing changed when it's not type safe?
               -- is that even possible or will compiler catch incorrect "unchanged" declarations?
+
+              onlyWhen destructiveMigration $ do
+                destructive <- Lamdera.Evergreen.MigrationDestructive.generate lastLocalTypeChangeVersion nextVersion typeCompares
+                writeUtf8 nextMigrationPath destructive
+                pure ()
 
               debug $ "Reading migration source..."
               migrationSource <- T.decodeUtf8 <$> IO.readUtf8 nextMigrationPath
@@ -266,8 +273,6 @@ onlineCheck root appName inDebug localTypes externalTypeWarnings isHoistRebuild 
               debug $ "Migration does not exist"
 
               _ <- mkdir $ root </> "src/Evergreen/Migrate"
-
-              lastLocalTypeChangeVersion <- Lamdera.Evergreen.MigrationHarness.getLastLocalTypeChangeVersion root
 
               defaultMigrations <- do
                 if destructiveMigration
