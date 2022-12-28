@@ -35,15 +35,32 @@ import Lamdera.Evergreen.MigrationSpecialCases
 -- When non-empty, will pretty-print the producer name & definition for the target top-level migration fn name
 debugMigrationFn :: Text
 debugMigrationFn = ""
--- debugMigrationFn = "migrate_AssocList_Dict"
 
 -- When non-empty, will pretty-print the producer name & value for an inline migration containing the search text
 debugMigrationIncludes :: Text
 debugMigrationIncludes = ""
--- debugMigrationIncludes = "migrate_Audio_Msg"
 
 debugMigrationIncludes_ tag migration =
-  migration & debugHaskellWhen (debugMigrationIncludes /= "" && debugMigrationIncludes `T.isInfixOf` migrationDef migration) ("debugMigrationIncludes:" <> tag)
+  migration
+    & debugHaskellWhen ( debugMigrationIncludes /= ""
+      && (
+      -- debugMigrationIncludes `T.isInfixOf` migrationDef migration
+      -- ||
+      (migration
+        & migrationTopLevelDefs
+        & Map.toList
+        & fmap snd
+        & filter (\migrationDefinition ->
+            migrationDefinition
+              & migrations
+              & (\v -> debugMigrationIncludes `T.isInfixOf` v)
+          )
+        & length
+        & (\c -> c > 0)
+      )
+    )
+    )
+    ("debugMigrationIncludes:" <> tag)
 
 
 betweenVersions :: CoreTypeDiffs -> Int -> Int -> String -> IO Text
@@ -100,7 +117,7 @@ generateFor coreTypeDiffs oldVersion newVersion interfaces iface_Types = do
 
     coreMigrationDefs = coreMigrations & fmap (migrationDef . snd)
 
-    subMigrations = coreMigrations & fmap (migrationTopLevelDefs . snd) & mergeAllMigrationDefinitions & allMigrations
+    subMigrations = coreMigrations & fmap (migrationTopLevelDefs . snd) & mergeAllSubDefs & allMigrations
 
     output =
       [ T.concat [ "module Evergreen.Migrate.V", show_ newVersion, " exposing (..)" ]
@@ -174,21 +191,21 @@ coreTypeMigration typeDidChange oldVersion newVersion interfaces newModule typeN
         Just (Alias alias) -> do
           let
             diffableAlias = aliasToFt oldVersion newVersion newModule identifier typeName interfaces recursionSet alias "old"
-            (MigrationNested migrationImpl imps subft migrationName) = diffableAlias
+            (MigrationNested migrationImpl imps subDefs) = diffableAlias
             migration = T.concat ["\n    ", migrationWrapperForType typeName, " ( ", migrationImpl, " old, Cmd.none )"]
-          (MigrationNested (migrationWrapper migration) imps (subft & addImports newModule imps) migrationName)
+          (MigrationNested (migrationWrapper migration) imps subDefs)
 
         Just (Union union) -> do
           let
             diffableUnion = migrateUnion oldVersion newVersion newModule identifier typeName interfaces recursionSet [] union []
-            (MigrationNested migrationImpl imps subft migrationName) = diffableUnion
+            (MigrationNested migrationImpl imps subDefs) = diffableUnion
             migration = T.concat ["\n    ", migrationWrapperForType typeName, " ( ", migrationImpl, " old, Cmd.none )"]
-          (MigrationNested (migrationWrapper migration) imps (subft & addImports newModule imps) migrationName)
+          (MigrationNested (migrationWrapper migration) imps subDefs)
 
         Nothing ->
           error $ concat [ "Tried to generate a migration for core type ", N.toChars typeName, ", but I couldn't find it defined in Types.elm" ]
     else
-      (MigrationNested (migrationWrapper (unchangedForType typeName)) Set.empty Map.empty "")
+      (MigrationNested (migrationWrapper (unchangedForType typeName)) Set.empty Map.empty)
 
 
 -- A top level Custom Type definition i.e. `type Herp = Derp ...`
@@ -215,15 +232,13 @@ migrateUnion oldVersion newVersion scope identifier@(author, pkg, newModule, tip
 
 
 migrateUnion_ :: Pkg.Author -> Pkg.Project -> Can.Union -> Can.Union -> [Can.Type] -> [(N.Name, Can.Type)] -> Int -> Int -> N.Name -> N.Name -> TypeIdentifier -> N.Name -> Interfaces -> RecursionSet -> ModuleName.Canonical -> Migration
-migrateUnion_ author pkg oldUnion newUnion params tvarMap oldVersion newVersion typeName newModule identifier oldModuleName interfaces recursionSet scope =
+migrateUnion_ author pkg oldUnion newUnion params tvarMapOld oldVersion newVersion typeName newModule identifier oldModuleName interfaces recursionSet scope =
   let
     oldModuleNameCanonical :: ModuleName.Canonical
-    oldModuleNameCanonical =
-      ModuleName.Canonical (Pkg.Name "author" "project") oldModuleName
+    oldModuleNameCanonical = ModuleName.Canonical (Pkg.Name author pkg) oldModuleName
 
     newModuleNameCanonical :: ModuleName.Canonical
-    newModuleNameCanonical =
-      ModuleName.Canonical (Pkg.Name "author" "project") newModule
+    newModuleNameCanonical = ModuleName.Canonical (Pkg.Name author pkg) newModule
 
     tvarMapNew :: [(N.Name, Can.Type)]
     tvarMapNew =
@@ -242,16 +257,15 @@ migrateUnion_ author pkg oldUnion newUnion params tvarMap oldVersion newVersion 
         & zip (Can._u_vars oldUnion)
         & fmap (N.toText . fst)
 
-    paramMigrations :: [Migration]
-    paramMigrations =
-
+    tvarMigrations :: [Migration]
+    tvarMigrations =
       -- @TODO do we need to use oldParams here? Maybe not as this is the def migrator, and the actual
       -- value migratons will get caught in the actual constructor migrations?
-      zip (tvarResolvedParams params tvarMap) (tvarResolvedParams params tvarMapNew)
+      zip (tvarResolveParams params tvarMapOld) (tvarResolveParams params tvarMapNew)
         & imap (\i (paramOld, paramNew) ->
           let
-            ft@(MigrationNested migration imps subft migrationName) =
-              canToMigration oldVersion newVersion scope interfaces recursionSet paramNew (Just paramOld) tvarMap ("p" <> show_ i)
+            ft@(MigrationNested migration imps subDefs) =
+              canToMigration oldVersion newVersion scope interfaces recursionSet paramNew (Just paramOld) tvarMapOld ("p" <> show_ i)
           in
           if migration == "" then
             -- Because paramaterised migrations are passed into functions that expect `v1 -> v2` functions, we
@@ -261,36 +275,35 @@ migrateUnion_ author pkg oldUnion newUnion params tvarMap oldVersion newVersion 
             ft
         )
 
-    paramMigrationTextsCombined :: Text
-    paramMigrationTextsCombined =
-      paramMigrations
+    tvarMigrationTextsCombined :: Text
+    tvarMigrationTextsCombined =
+      tvarMigrations
         & fmap migrationDef
         & parenthesize
         & T.intercalate " "
 
-    usageImports :: Set.Set ModuleName.Canonical
-    usageImports =
-      paramMigrations
-        & allImports
-        & Set.insert oldModuleNameCanonical
-        & Set.insert newModuleNameCanonical
-
-    paramMigrationDefinitions :: MigrationDefinitions
-    paramMigrationDefinitions = paramMigrations & allMigrationDefinitions
+    tvarMigrationDefinitions :: MigrationDefinitions
+    tvarMigrationDefinitions = tvarMigrations & allSubDefs
 
     localScope :: ModuleName.Canonical
     localScope =
       ModuleName.Canonical (Pkg.Name author pkg) newModule
 
     oldConstructorsMigrations :: [Migration]
-    oldConstructorsMigrations = genOldConstructorMigrationDefinitions oldModuleName moduleScope typeName interfaces tvarMap recursionSet localScope newVersion oldVersion newUnion oldUnion
+    oldConstructorsMigrations =
+      Can._u_alts oldUnion
+        & fmap (\(Can.Ctor oldConstructor index int oldParams) ->
+          -- For each OLD constructor type param
+          genOldConstructorMigration oldModuleName moduleScope typeName interfaces tvarMapOld tvarMapNew recursionSet localScope newVersion oldVersion newUnion oldUnion oldConstructor oldParams
+        )
 
+
+    -- @TODO is this needed anymore?
     imports :: ElmImports
-    imports = oldConstructorsMigrations & foldl (\acc (MigrationNested st imps ft migrationName) -> mergeImports acc imps) Set.empty
+    imports = oldConstructorsMigrations & allImports
 
     oldConstructorsMigrationDefinitions :: MigrationDefinitions
-    oldConstructorsMigrationDefinitions =
-      oldConstructorsMigrations & foldl (\acc (MigrationNested st imps ft migrationName) -> mergeMigrationDefinitions acc ft) Map.empty
+    oldConstructorsMigrationDefinitions = oldConstructorsMigrations & allSubDefs
 
     moduleScope :: Text
     moduleScope = nameToText newModule <> "."
@@ -302,8 +315,7 @@ migrateUnion_ author pkg oldUnion newUnion params tvarMap oldVersion newVersion 
     migrationName = migrationNameUnderscored newModule oldVersion newVersion typeName
 
     migration :: Text
-    migration = migrationName <> " " <> paramMigrationTextsCombined -- <> "<!2>"
-
+    migration = migrationName <> " " <> tvarMigrationTextsCombined -- <> "<!2>"
 
     paramMigrationPairs = zip oldTvars newTvars
 
@@ -341,8 +353,10 @@ migrateUnion_ author pkg oldUnion newUnion params tvarMap oldVersion newVersion 
     newConstructorWarnings :: N.Name -> Text -> Can.Union -> Can.Union -> Int -> [Text]
     newConstructorWarnings typeName moduleScope newUnion oldUnion newVersion =
       Can._u_alts newUnion
-        & filterMap (\(Can.Ctor newConstructor index int newParams) -> do
-          case Can._u_alts oldUnion & List.find (\(Can.Ctor oldConstructor _ _ _) -> newConstructor == oldConstructor ) of
+        & filterMap (\(Can.Ctor newConstructorName index int newParams) -> do
+          case Can._u_alts oldUnion & List.find (\(Can.Ctor oldConstructorName _ _ _) ->
+                 newConstructorName == oldConstructorName
+            ) of
             Nothing ->
               let params =
                     if length newParams > 0
@@ -351,7 +365,7 @@ migrateUnion_ author pkg oldUnion newUnion params tvarMap oldVersion newVersion 
               in
               -- This constructor is missing a match in the old type, warn the user this new constructor exists
               Just $ T.concat [
-                "        {- @NOTICE `", N.toText newConstructor, params, "` was added in V", show_ newVersion, ".\n",
+                "        {- @NOTICE `", N.toText newConstructorName, params, "` was added in V", show_ newVersion, ".\n",
                 "        This is just a reminder in case migrating some subset of the old data to this new value was important.\n",
                 "        See https://lamdera.com/tips/modified-custom-type for more info.\n",
                 "        -}\n"
@@ -362,9 +376,10 @@ migrateUnion_ author pkg oldUnion newUnion params tvarMap oldVersion newVersion 
         )
         & (\notices ->
               if length notices > 0 then
-                ["    notices ->\n" <>
-                "        " <> T.concat notices <> "\n" <>
-                "        Unimplemented"]
+                [ "    notices ->\n" <>
+                  "        " <> T.concat notices <> "\n" <>
+                  "        Unimplemented"
+                ]
               else
                 []
           )
@@ -374,22 +389,22 @@ migrateUnion_ author pkg oldUnion newUnion params tvarMap oldVersion newVersion 
     Just migrationDef ->
       MigrationNested
         migration
-        usageImports
-        (
-          (migrationDef
-            & debugHaskellWhen (debugMigrationFn == migrationName) "debugMigrationFn:migrateUnion_:specialCased"
-            & Map.singleton (moduleKey identifier)
-          )
-            & mergeMigrationDefinitions paramMigrationDefinitions
+        (Set.fromList [oldModuleNameCanonical, newModuleNameCanonical] <> imports)
+        (Map.singleton (newModuleNameCanonical, typeName) migrationDef
+            & debugHaskellWhen (debugMigrationFn == migration) "debugMigrationFn:migrateUnion_:specialCased"
+            & Map.union tvarMigrationDefinitions
+            & Map.union oldConstructorsMigrationDefinitions
         )
-        ""
+
     Nothing ->
       xMigrationNested
       ( migration
-      , usageImports
+      , Set.empty
       , (MigrationDefinition
-            { imports = imports
-            , migrations = Map.singleton migrationName $ T.concat
+            { imports = Set.fromList [oldModuleNameCanonical, newModuleNameCanonical] <> imports
+            , migrations =
+              -- Map.singleton migrationName $
+              T.concat
                 [ migrationName, " : ", migrationTypeSignature, "\n"
                 , [ migrationName, paramMigrationVars, " old =\n" ] & T.intercalate " "
                 , "  case old of\n"
@@ -397,73 +412,29 @@ migrateUnion_ author pkg oldUnion newUnion params tvarMap oldVersion newVersion 
                 ]
             }
             & debugHaskellWhen (debugMigrationFn == migrationName) "debugMigrationFn:migrateUnion_"
-            & Map.singleton (moduleKey identifier)
+            & Map.singleton (newModuleNameCanonical, typeName)
           )
-          & mergeMigrationDefinitions oldConstructorsMigrationDefinitions
-          & mergeMigrationDefinitions paramMigrationDefinitions
-      , ""
+          & Map.union tvarMigrationDefinitions
+          & Map.union oldConstructorsMigrationDefinitions
       )
 
 
-genOldConstructorMigrationDefinitions :: N.Name -> Text -> N.Name -> Interfaces -> [(N.Name, Can.Type)] -> RecursionSet -> ModuleName.Canonical -> Int -> Int -> Can.Union -> Can.Union -> [Migration]
-genOldConstructorMigrationDefinitions oldModuleName moduleScope typeName interfaces tvarMap recursionSet localScope newVersion oldVersion newUnion oldUnion =
-  Can._u_alts oldUnion
-    & fmap (\(Can.Ctor oldConstructor index int oldParams) ->
-      -- For each OLD constructor type param
-      genOldConstructorFt oldModuleName moduleScope typeName interfaces tvarMap recursionSet localScope newVersion oldVersion newUnion oldUnion oldConstructor oldParams
-
-    )
-
-migrateParam :: Int -> Maybe Can.Type -> Maybe Can.Type -> Interfaces -> [(N.Name, Can.Type)] -> RecursionSet -> ModuleName.Canonical -> Int -> Int -> Migration
-migrateParam i paramOldM paramNewM interfaces tvarMap recursionSet localScope newVersion oldVersion =
-  -- debugHaskell "migrateParam" $
-  case (paramOldM, paramNewM) of
-    (Just paramOld, Just paramNew) ->
-      let ft@(MigrationNested migration imps subft migrationName) =
-            canToMigration oldVersion newVersion localScope interfaces recursionSet paramNew (Just paramOld) tvarMap ("p" <> show_ i)
-
-          appliedMigration =
-            if isTvar paramOld then
-              case paramOld of
-                Can.TVar name ->
-                  T.concat ["( migrate_", N.toText name, " p", show_ i, ")"]
-                _ -> "impossible"
-            else if paramOld == paramNew then
-              T.concat ["p", show_ i]
-            else if isAnonymousRecord paramOld then
-              migration
-            else if isUserDefinedType_ paramOld then
-              T.concat ["(p", show_ i, " |> ", migration, ")"]
-            else
-              T.concat ["(p", show_ i, " |> ", migration, ")"]
-
-      in
-      xMigrationNested (appliedMigration, imps, subft, "")
-
-    (Just paramOld, Nothing) ->
-      unimplemented "" ("Warning: old variant didn't get mapped to anything, check this is what you want")
-
-    (Nothing, Just paramNew) ->
-      unimplemented "" ("This new variant needs to be initialised")
-
-    _ -> error "impossible, zip produced a value without any contents"
-
-
-genOldConstructorFt oldModuleName moduleScope typeName interfaces tvarMap recursionSet localScope newVersion oldVersion newUnion oldUnion oldConstructor oldParams =
+genOldConstructorMigration :: N.Name -> Text -> N.Name -> Interfaces -> [(N.Name, Can.Type)] -> [(N.Name, Can.Type)] -> RecursionSet -> ModuleName.Canonical -> Int -> Int -> Can.Union -> Can.Union -> N.Name -> [Can.Type] -> Migration
+genOldConstructorMigration oldModuleName moduleScope typeName interfaces tvarMapOld tvarMapNew recursionSet localScope newVersion oldVersion newUnion oldUnion oldConstructorName oldParams =
   let
     newCtorM :: Maybe Can.Ctor
-    newCtorM = Can._u_alts newUnion & List.find (\(Can.Ctor newConstructor _ _ _) -> newConstructor == oldConstructor )
+    newCtorM = Can._u_alts newUnion & List.find (\(Can.Ctor newConstructorName _ _ _) -> newConstructorName == oldConstructorName )
 
     migration_ :: Migration
     migration_ =
       case newCtorM of
-      Just (Can.Ctor newConstructor _ _ newParams) ->
+      Just (Can.Ctor newConstructorName _ _ newParams) ->
         let
             paramMigrations :: [Migration]
             paramMigrations =
               zipFull oldParams newParams
                 & imap (\i (paramOldM, paramNewM) ->
-                  migrateParam i paramOldM paramNewM interfaces tvarMap recursionSet localScope newVersion oldVersion
+                  migrateParam i paramOldM paramNewM interfaces tvarMapOld tvarMapNew recursionSet localScope newVersion oldVersion
                 )
 
             fullMigration =
@@ -471,23 +442,22 @@ genOldConstructorFt oldModuleName moduleScope typeName interfaces tvarMap recurs
                   let migration =
                         paramMigrations
                           & fmap migrationDef
-                          & (\paramMigrations -> T.concat [ moduleScope, N.toText newConstructor, " ", (paramMigrations & T.intercalate " ") ])
+                          & (\paramMigrations -> T.concat [ moduleScope, N.toText newConstructorName, " ", (paramMigrations & T.intercalate " ") ])
                   in
                   T.concat
-                      [ "    ", N.toText oldModuleName, ".", N.toText oldConstructor, " ", (imap (\i _ -> "p" <> show_ i) oldParams & T.intercalate " ")
+                      [ "    ", N.toText oldModuleName, ".", N.toText oldConstructorName, " ", (imap (\i _ -> "p" <> show_ i) oldParams & T.intercalate " ")
                       , " -> \n"
                       , migration & T.lines & fmap (\v -> T.concat ["        ", v ]) & T.unlines
                       , "\n"
                       ]
                 else
-                  T.concat ["    ", N.toText oldModuleName, ".", N.toText oldConstructor, " -> ", moduleScope, N.toText newConstructor, "\n"]
+                  T.concat ["    ", N.toText oldModuleName, ".", N.toText oldConstructorName, " -> ", moduleScope, N.toText newConstructorName, "\n"]
               , paramMigrations
                   & fmap migrationImports
                   & mergeAllImports
               , paramMigrations
                   & fmap migrationTopLevelDefs
-                  & mergeAllMigrationDefinitions
-              , ""
+                  & mergeAllSubDefs
               )
         in
         fullMigration
@@ -498,8 +468,8 @@ genOldConstructorFt oldModuleName moduleScope typeName interfaces tvarMap recurs
           oldConstructorRemovedMessage =
             T.concat [
               " ->\n",
-              "           {- `", N.toText oldConstructor, "` was removed or renamed in V", show_ newVersion, " so I couldn't figure out how to migrate it.\n",
-              "           I need you to decide what happens to this ", N.toText oldModuleName, ".", N.toText oldConstructor, " value in a migration.\n",
+              "           {- `", N.toText oldConstructorName, "` was removed or renamed in V", show_ newVersion, " so I couldn't figure out how to migrate it.\n",
+              "           I need you to decide what happens to this ", N.toText oldModuleName, ".", N.toText oldConstructorName, " value in a migration.\n",
               "           See https://lamdera.com/tips/modified-custom-type for more info.\n",
               "           -}\n",
               "           Unimplemented\n"
@@ -508,15 +478,53 @@ genOldConstructorFt oldModuleName moduleScope typeName interfaces tvarMap recurs
         xMigrationNested ( -- No old constructor with same name, so this is a new/renamed constructor
           if List.length oldParams > 0
             then
-              T.concat ["    ", N.toText oldModuleName, ".", N.toText oldConstructor, " ", (imap (\i _ -> "p" <> show_ i) oldParams & T.intercalate " "), oldConstructorRemovedMessage]
+              T.concat ["    ", N.toText oldModuleName, ".", N.toText oldConstructorName, " ", (imap (\i _ -> "p" <> show_ i) oldParams & T.intercalate " "), oldConstructorRemovedMessage]
             else
-              T.concat ["    ", N.toText oldModuleName, ".", N.toText oldConstructor, oldConstructorRemovedMessage]
+              T.concat ["    ", N.toText oldModuleName, ".", N.toText oldConstructorName, oldConstructorRemovedMessage]
         , Set.empty
         , Map.empty
-        , ""
         )
   in
   migration_
+
+
+migrateParam :: Int -> Maybe Can.Type -> Maybe Can.Type -> Interfaces -> [(N.Name, Can.Type)] -> [(N.Name, Can.Type)] -> RecursionSet -> ModuleName.Canonical -> Int -> Int -> Migration
+migrateParam i paramOldM paramNewM interfaces tvarMapOld tvarMapNew recursionSet localScope newVersion oldVersion =
+  -- debugHaskell "migrateParam" $
+  case (paramOldM, paramNewM) of
+    (Just paramOld, Just paramNew) ->
+      let ft@(MigrationNested migration imps subDefs) =
+            canToMigration oldVersion newVersion localScope interfaces recursionSet paramNew (Just paramOld) tvarMapOld ("p" <> show_ i)
+
+          appliedMigration =
+            if isTvar paramOld then
+              case paramOld of
+                Can.TVar name ->
+                  xMigrationNested (T.concat ["( migrate_", N.toText name, " p", show_ i, ")"], imps, subDefs)
+                _ ->
+                  error "impossible:appliedMigration tvar /= tvar"
+            else if isEquivalentElmType "External.Paramed" (tvarResolveParam tvarMapOld paramOld) (tvarResolveParam tvarMapNew paramNew) then
+              -- debugHaskellPass "thethingis" (
+              --     (tvarResolveParam tvarMapOld paramOld)
+              --   , (tvarResolveParam tvarMapNew paramNew)
+              --   ) $
+              xMigrationNested (T.concat ["p", show_ i], Set.empty, Map.empty)
+            else if isAnonymousRecord paramOld then
+              ft
+            else if isUserDefinedType_ paramOld then
+              xMigrationNested (T.concat ["(p", show_ i, " |> ", migration, ")"], imps, subDefs)
+            else
+              xMigrationNested (T.concat ["(p", show_ i, " |> ", migration, ")"], imps, subDefs)
+      in
+      appliedMigration
+
+    (Just paramOld, Nothing) ->
+      unimplemented "migrateParam:noNew" ("Warning: old variant didn't get mapped to anything, check this is what you want")
+
+    (Nothing, Just paramNew) ->
+      unimplemented "migrateParam:noOld" ("This new variant needs to be initialised")
+
+    _ -> error "impossible, zip produced a value without any contents"
 
 
 -- A top level Alias definition i.e. `type alias ...`
@@ -540,9 +548,15 @@ aliasToFt oldVersion newVersion scope identifier@(author, pkg, newModule, _) typ
 
 -- A top level Alias definition i.e. `type alias ...`
 migrateAlias :: Int -> Int -> ModuleName.Canonical -> TypeIdentifier -> N.Name -> Interfaces -> RecursionSet -> Can.Alias -> Can.Alias -> N.Name -> Text -> Migration
-migrateAlias oldVersion newVersion scope identifier@(author, pkg, newModule, _) typeName interfaces recursionSet (Can.Alias tvarsNew tipe) (Can.Alias tvarsOld tipeOld) oldModuleName oldValueRef =
+migrateAlias oldVersion newVersion scope identifier@(author, pkg, newModule, typeNameNew) typeName interfaces recursionSet (Can.Alias tvarsNew tipe) (Can.Alias tvarsOld tipeOld) oldModuleName oldValueRef =
   let
-    (MigrationNested subt imps subft migrationName) = canToMigration oldVersion newVersion scope interfaces recursionSet tipe (Just tipeOld) [] oldValueRef
+    (MigrationNested subt imps subDefs) = canToMigration oldVersion newVersion scope interfaces recursionSet tipe (Just tipeOld) [] oldValueRef
+
+    oldModuleNameCanonical :: ModuleName.Canonical
+    oldModuleNameCanonical = ModuleName.Canonical (Pkg.Name author pkg) oldModuleName
+
+    newModuleNameCanonical :: ModuleName.Canonical
+    newModuleNameCanonical = ModuleName.Canonical (Pkg.Name author pkg) newModule
 
     typeScope =
       if moduleName == scope then
@@ -571,7 +585,6 @@ migrateAlias oldVersion newVersion scope identifier@(author, pkg, newModule, _) 
       else
         T.concat [oldValueRef, " |> "]
 
-
     -- !x = debugHaskell "applyOldValueIfNotRecord" (isRecord tipe, tipe)
 
   in
@@ -580,30 +593,29 @@ migrateAlias oldVersion newVersion scope identifier@(author, pkg, newModule, _) 
     Just migrationDef ->
       MigrationNested
         migrationName_
-        imps
+        (Set.fromList [oldModuleNameCanonical, newModuleNameCanonical] <> imps)
         (migrationDef
           & debugHaskellWhen (debugMigrationFn == migrationName_) "debugMigrationFn:migrateAlias:specialCased"
-          & Map.singleton (moduleKey identifier)
+          & Map.singleton (newModuleNameCanonical, typeNameNew)
+          & Map.union subDefs
         )
-        migrationName_
     Nothing ->
       xMigrationNested
       ( migrationName_
-      , imps
+      , Set.fromList [oldModuleNameCanonical, newModuleNameCanonical]
       , (MigrationDefinition
             { imports = imps
             , migrations =
-                Map.singleton (lowerFirstLetter_ $ nameToText typeName) $
+                -- Map.singleton (lowerFirstLetter_ $ nameToText typeName) $
                 T.concat
                   ["\n", migrationName_, " : ", nameToText oldModuleName, ".", nameToText typeName, " -> ", newModuleName, ".", nameToText typeName, "\n"
                   , migrationName_, " ", oldValueRef, " = ", applyOldValueIfNotRecord, migration
                   ]
             }
             & debugHaskellWhen (debugMigrationFn == migrationName_) "debugMigrationFn:migrateAlias"
-            & Map.singleton (moduleKey identifier)
+            & Map.singleton (newModuleNameCanonical, typeNameNew)
           )
-          & mergeMigrationDefinitions subft
-      , migrationName_
+          & Map.union subDefs
       )
 
 
@@ -624,33 +636,30 @@ canToMigration oldVersion newVersion scope interfaces recursionSet tipe tipeOldM
 
     Can.TTuple t1 t2 mt3 ->
       let
-        (MigrationNested subt imps subft migrationName) =
+        (MigrationNested subt imps subDefs) =
           canToMigration oldVersion newVersion scope interfaces recursionSet t1 tipeOldM tvarMap oldValueRef
-        (MigrationNested subt2 imps2 subft2 migrationName2) =
+        (MigrationNested subt2 imps2 subDefs2) =
           canToMigration oldVersion newVersion scope interfaces recursionSet t2 tipeOldM tvarMap oldValueRef
       in
       case mt3 of
         Just t3 ->
           let
-            (MigrationNested subt3 imps3 subft3 migrationName3) =
+            (MigrationNested subt3 imps3 subDefs3) =
               canToMigration oldVersion newVersion scope interfaces recursionSet t3 tipeOldM tvarMap oldValueRef
           in
-          xMigrationNested (T.concat ["(", subt, ", ", subt2, ", ", subt3, ")"], mergeAllImports [imps,imps2,imps3], mergeAllMigrationDefinitions [subft,subft2,subft3], "")
+          xMigrationNested (T.concat ["(", subt, ", ", subt2, ", ", subt3, ")"], mergeAllImports [imps,imps2,imps3], mergeAllSubDefs [subDefs,subDefs2,subDefs3])
 
         Nothing ->
-          xMigrationNested (T.concat ["(", subt, ", ", subt2, ")"], mergeImports imps imps2, mergeMigrationDefinitions subft subft2, "")
-      -- DTuple (canToMigration oldVersion newVersion scope interfaces recursionSet t1 tvarMap) (canToMigration oldVersion newVersion scope interfaces recursionSet t2 tvarMap)
+          xMigrationNested (T.concat ["(", subt, ", ", subt2, ")"], imps <> imps2, Map.union subDefs subDefs2)
 
     Can.TUnit ->
-      xMigrationNested ("()", Set.empty, Map.empty, "")
+      xMigrationNested ("()", Set.empty, Map.empty)
 
     Can.TVar name ->
-      xMigrationNested ("migrate_" <> N.toText name, Set.empty, Map.empty, "")
+      xMigrationNested ("migrate_" <> N.toText name, Set.empty, Map.empty)
 
     Can.TLambda _ _ ->
       error "Fatal: impossible function type! Please report this gen issue."
-      -- ("XXXXXX TLambda", Set.empty, Map.empty)
-      -- DError $ "must not contain functions"
 
 
 canAliasToMigration :: Int -> Int -> ModuleName.Canonical -> Interfaces -> RecursionSet -> Can.Type -> Maybe Can.Type -> [(N.Name, Can.Type)] -> Text -> Migration
@@ -676,8 +685,8 @@ canAliasToMigration oldVersion newVersion scope interfaces recursionSet tipeNew@
       case tipeOldM of
         Just (tipeOld@(Can.TAlias moduleNameOld typeNameOld tvarMapOld aliasType)) ->
           let
-            usageParamFts :: [Migration]
-            usageParamFts =
+            usageParamSubDefs :: [Migration]
+            usageParamSubDefs =
               zip tvarMapOld tvarMapNew
                 & fmap (\((nOld, paramTypeOld), (nNew, paramTypeNew)) ->
                   canToMigration oldVersion newVersion scope interfaces recursionSet paramTypeNew (Just paramTypeOld) tvarMapNew oldValueRef
@@ -685,15 +694,9 @@ canAliasToMigration oldVersion newVersion scope interfaces recursionSet tipeNew@
 
             usageParamNames :: Text
             usageParamNames =
-              usageParamFts
+              usageParamSubDefs
                 & fmap migrationDef
                 & T.intercalate " "
-
-            usageParamImports :: ElmImports
-            usageParamImports =
-              usageParamFts
-                & fmap migrationImports
-                & mergeAllImports
 
             newTvars :: [Text]
             newTvars = tvarMapNew & fmap (N.toText . fst)
@@ -701,7 +704,7 @@ canAliasToMigration oldVersion newVersion scope interfaces recursionSet tipeNew@
             oldTvars :: [Text]
             oldTvars = tvarMapOld & fmap (N.toText . fst)
 
-            (MigrationNested subt imps subft migrationName_) :: Migration =
+            (MigrationNested subt imps subDefs) :: Migration =
               let
                 paramPairs = zipWith (\(n1,t1) (n2,t2) -> (n1, t1, t2)) tvarMapOld tvarMapNew
                 res = canToMigration oldVersion newVersion moduleNameNew interfaces recursionSet cType (Just tipeOld) tvarMapOld oldValueRef
@@ -717,12 +720,6 @@ canAliasToMigration oldVersion newVersion scope interfaces recursionSet tipeNew@
                 T.concat [nameToText module_, "."]
 
             debugIden = "" -- <> "<ah>"
-
-            scopeImports =
-              -- if moduleName == scope then
-              --   usageParamImports
-              -- else
-                usageParamImports & Set.insert moduleNameNew
 
             migrationName :: Text
             migrationName = migrationNameUnderscored newModule oldVersion newVersion typeNameNew
@@ -756,67 +753,54 @@ canAliasToMigration oldVersion newVersion scope interfaces recursionSet tipeNew@
               , newTvars & fmap (\tvar -> T.concat [tvar, "_new"]) & T.intercalate " "
               ]
 
+            applyOldValueIfNotRecord =
+              if isRecord cType then
+                ""
+              else
+                T.concat [oldValueRef, " |> "]
+
             typeDef =
               if isUserDefinedType_ cType then
-                -- if length tvarMap_ > 0 then
-                --     [migrationName <> " old = " <> subt]
-                -- else
-                Map.singleton migrationName $ T.concat
+                T.concat
                   [ migrationName, " : ", migrationTypeSignature, "\n"
-                  , migrationName, " ", paramMigrationVars, " ", oldValueRef, " = ", subt
+                  , migrationName, " ", paramMigrationVars, " ", oldValueRef, " = ", applyOldValueIfNotRecord, subt
                   ]
 
               else
-                -- ["-- no migration for primitive: " <> N.toText name ]
-                Map.empty
-
-            thing =
-              (Map.singleton (moduleNameKey moduleNameNew) $
-                MigrationDefinition
-                  { imports = imps
-                      & Set.insert moduleNameNew
-                      & Set.insert moduleNameOld
-                  , migrations = typeDef
-                  }
-              )
-                & mergeMigrationDefinitions subft
-                & mergeMigrationDefinitions (mergeAllMigrationDefinitions (fmap migrationTopLevelDefs usageParamFts))
-
+                -- T.concat [ "-- no migration for primitive: " <> N.toText name ]
+                "-- oopsie\n"
 
             migration =
               if length tvarMapNew > 0 then
                 T.concat ["(", migrationName, " ", usageParamNames, ")"] -- <> "<!2>"
               else
                 migrationName -- <> "<!3>"
-
           in
-
-          -- if isEquivalentElmType typeName tipeOld tipe then
-          --   xMigrationNested ("(SAMETYPES for " <> N.toText typeName <> ")", scopeImports, thing, "")
-          -- else
-            xMigrationNested ( migration , scopeImports , thing , "" )
+            xMigrationNested ( migration , Set.empty,
+              (Map.singleton (moduleNameNew, typeNameNew) $
+                MigrationDefinition
+                  { imports = Set.fromList [moduleNameNew, moduleNameOld]
+                  , migrations = typeDef
+                  }
+              )
+                & Map.union subDefs
+                & Map.union (mergeAllSubDefs (fmap migrationTopLevelDefs usageParamSubDefs))
+             )
 
         Just tipeOld ->
           -- The old type is not an alias, but the new type is. Is this the right treatment?
           unimplemented ""
             ("`" <> N.toText typeNameNew <> "` was a concrete type, but now it's a type alias. I need you to write this migration." )
-          -- unimplemented ""
-          --   ("`" <> N.toText typeNameNew <> "` was a concrete type (" <> show_ tipeOld
-          --    <> "), but now it's a type alias. I need you to write this migration to "
-          --    <> show_ tipeNew
-          --   )
 
         Nothing ->
           unimplemented "canAliasToMigration" (T.concat ["I couldn't find an old type named `", N.toText oldModuleName, ".", N.toText typeNameNew, "`. I need you to write this migration.\n" ])
-
 
     Can.Filled cType ->
       -- @TODO hypothesis...
       -- If an alias is filled, then it can't have any open holes within it either?
       -- So we can take this opportunity to reset tvars to reduce likeliness of naming conflicts?
       let
-        (MigrationNested subt imps subft migrationName) = canToMigration oldVersion newVersion moduleNameNew interfaces recursionSet cType tipeOldM [] oldValueRef
-
+        (MigrationNested subt imps subDefs) = canToMigration oldVersion newVersion moduleNameNew interfaces recursionSet cType tipeOldM [] oldValueRef
         debugIden = "" -- <> "<af>"
       in
       xMigrationNested (
@@ -828,8 +812,7 @@ canAliasToMigration oldVersion newVersion scope interfaces recursionSet tipeNew@
         else
           T.concat [nameToText module_, ".", N.toText typeNameNew]
       , imps
-      , subft
-      , ""
+      , subDefs
       )
 
 
@@ -838,7 +821,7 @@ recordToMigration oldVersion newVersion scope interfaces recursionSet tipe@(Can.
   debugMigrationIncludes_ "recordToMigration" $
   case isPartial of
     Just whatIsThis ->
-      xMigrationNested ("ERROR TRecord, please report this!", Set.empty, Map.empty, "")
+      xMigrationNested ("ERROR TRecord, please report this!", Set.empty, Map.empty)
       -- DError "must not contain partial records"
 
     Nothing ->
@@ -852,8 +835,8 @@ recordToMigration oldVersion newVersion scope interfaces recursionSet tipe@(Can.
                 Nothing -> Map.empty
             _ -> Map.empty
 
-        fields :: [(Text, Migration)]
-        fields =
+        fieldMigrations :: [(Text, Migration)]
+        fieldMigrations =
           newFields
             & Map.toList
             -- Restore user's field code-ordering to keep types looking familiar
@@ -862,7 +845,13 @@ recordToMigration oldVersion newVersion scope interfaces recursionSet tipe@(Can.
                 case Map.lookup name fieldMapOld of
                   Just (Can.FieldType index_ ftipeOld) ->
                     if isEquivalentElmType name ftipeOld ftipe then
-                      (N.toText name, xMigrationNested (T.concat[ oldValueRef, ".", N.toText name], Set.empty, Map.empty, ""))
+                      (N.toText name
+                      , xMigrationNested
+                        ( T.concat[ oldValueRef, ".", N.toText name]
+                        , Set.empty
+                        , Map.empty
+                        )
+                      )
                     else
                       -- debugHaskellPassDiffWhen (name == "unchangedAllTypes") "these types are unequal" (ftipeOld, ftipe) $
                       if isAnonymousRecord ftipe
@@ -887,32 +876,26 @@ recordToMigration oldVersion newVersion scope interfaces recursionSet tipe@(Can.
                                     & show_
                                     & (<>) "rec"
 
-                            (MigrationNested st imps ft migrationName) = recordToMigration oldVersion newVersion scope interfaces recursionSet ftipe (Just ftipeOld) tvarMap recname
+                            (MigrationNested st imps subDefs) = recordToMigration oldVersion newVersion scope interfaces recursionSet ftipe (Just ftipeOld) tvarMap recname
                           in
                           ( N.toText name
                           , xMigrationNested
-                            ( T.concat [oldValueRef, ".", N.toText name, " |> (\\", recname, " -> ", st, ")"]
-                            , imps, ft, ""
-                            )
+                            ( T.concat [oldValueRef, ".", N.toText name, " |> (\\", recname, " -> ", st, ")"], imps, subDefs)
                           )
                         else
                           let
-                            (MigrationNested st imps ft migrationName) =
+                            (MigrationNested st imps subDefs) =
                               canToMigration oldVersion newVersion scope interfaces recursionSet ftipe (Just (ftipeOld)) tvarMap oldValueRef
-                            -- case ftipe of
                           in
                           ( N.toText name
-                          , xMigrationNested
-                            ( T.concat [oldValueRef, ".", N.toText name, " |> ", st ]
-                            , imps, ft, ""
-                            )
+                          , xMigrationNested ( T.concat [oldValueRef, ".", N.toText name, " |> ", st ], imps, subDefs)
                           )
 
                   Nothing ->
                     -- This field did not exist in the old version. We need an init!
-                    let (MigrationNested st imps ft migrationName) = canToMigration oldVersion newVersion scope interfaces recursionSet ftipe Nothing tvarMap oldValueRef
+                    let (MigrationNested st imps ft) = canToMigration oldVersion newVersion scope interfaces recursionSet ftipe Nothing tvarMap oldValueRef
                     in
-                    ( N.toText name, xMigrationNested (T.concat["Unimplemented -- Type `", qualifiedTypeName ftipe, "` was added in V", show_ newVersion, ". I need you to set a default value."], imps, ft, "") )
+                    ( N.toText name, xMigrationNested (T.concat["Unimplemented -- Type `", qualifiedTypeName ftipe, "` was added in V", show_ newVersion, ". I need you to set a default value."], imps, ft) )
             )
             & (\v -> v ++ missingFields)
 
@@ -925,41 +908,34 @@ recordToMigration oldVersion newVersion scope interfaces recursionSet tipe@(Can.
                 Just (Can.FieldType index_ tipeOld) ->
                   Nothing
                 Nothing ->
-                  Just ( N.toText name,
-                    xMigrationNested (T.concat["Unimplemented -- Field of type `", qualifiedTypeName tipe, "` was removed in V", show_ newVersion, ". I need you to do something with the `", oldValueRef, ".", N.toText name, "` value if you wish to keep the data, then remove this line."]
-                    , Set.empty
-                    , Map.empty
-                    , ""
-                    )
+                  Just ( N.toText name
+                       , unimplemented ("recordToMigration:" <> qualifiedTypeName tipe)
+                          ( T.concat["Field of type `", qualifiedTypeName tipe, "` was removed in V", show_ newVersion
+                          , ". I need you to do something with the `", oldValueRef, ".", N.toText name, "` value if you wish to keep the data, then remove this line."]
+                          )
                   )
             )
 
         fieldsFormatted :: Text
         fieldsFormatted =
-          fields
-            & fmap (\(fieldname, (MigrationNested st imps ft migrationName)) -> fieldname <> " = " <> st)
+          fieldMigrations
+            & fmap (\(fieldname, (MigrationNested st imps ft)) -> fieldname <> " = " <> st)
             & T.intercalate "\n    , "
 
         imports :: ElmImports
         imports =
-          fields
-            & foldl (\acc (name, (MigrationNested st imps ft migrationName)) -> mergeImports acc imps) Set.empty
+          fieldMigrations
+            & foldl (\acc (name, (MigrationNested st imps ft)) -> acc <> imps) Set.empty
 
-        mergedFt :: MigrationDefinitions
-        mergedFt =
-          fields
-            & foldl (\acc (name, (MigrationNested st imps ft migrationName)) -> mergeMigrationDefinitions acc ft) Map.empty
-            & addImports scope imports
+        mergedSubDefs :: MigrationDefinitions
+        mergedSubDefs = fieldMigrations & fmap snd & allSubDefs
 
-        result :: Migration
-        result =
-          xMigrationNested ("\n    { " <> fieldsFormatted <> "\n    }"
-          , imports
-          , mergedFt
-          , ""
-          )
       in
-      result
+      xMigrationNested
+        ( "\n    { " <> fieldsFormatted <> "\n    }"
+        , imports
+        , mergedSubDefs
+        )
 
 
 typeToMigration :: Int -> Int -> ModuleName.Canonical -> Interfaces -> RecursionSet -> Can.Type -> Maybe Can.Type -> [(N.Name, Can.Type)] -> Text -> Migration
@@ -983,136 +959,109 @@ typeToMigration oldVersion newVersion scope interfaces recursionSet tipe@(Can.TT
         (author, pkg, module_, typeName) ->
           xMigrationNested
             ( T.concat ["-- Kernel error: must not contain kernel type `", show_ tipe, "` from ", show_ author, "/", show_ pkg, ":", nameToText module_, "\n" ]
-            , Set.empty
-            , Map.empty
-            , ""
-            )
+            , Set.empty, Map.empty)
 
     moduleNameRaw :: N.Name
     moduleNameRaw = canModuleName moduleName
 
-    migrateSingleParamCollection :: Migration
-    migrateSingleParamCollection =
+    withOldParams handler =
       case tipeOldM of
         Just tipeOld ->
           case tipeOld of
-            Can.TType _ _ paramsOld -> -- @WARNING MUST BE SAME COLLECTION TYPE...?
+            Can.TType oldModuleName oldName paramsOld -> -- @TODO MUST BE SAME COLLECTION TYPE...?
+              if oldName == name
+                then handler paramsOld
+                else unimplemented ("typeToMigration:" <> typeName)
+                  ("The old type has changed to a " <> typeName <> ". I need you to write this migration.")
+            _ ->
+              unimplemented ("typeToMigration:" <> typeName)
+                ("The old type has changed to a " <> typeName <> ". I need you to write this migration.")
+        Nothing ->
+          unimplemented (T.concat ["typeToMigration:", typeName, ":Nothing"])
+            ("I couldn't find an old type. I need you to write this migration.")
+
+    migrate1ParamCollection :: Migration
+    migrate1ParamCollection =
+      withOldParams (\paramsOld ->
+        zipFull paramsOld params & (\p ->
+          case p of
+            (Just p0o,Just p0):[] ->
+              let
+                (MigrationNested migration_p1 imps1 subDefs1) =
+                  (canToMigration oldVersion newVersion scope interfaces recursionSet p0 (Just p0o) tvarMap "p0")
+
+                migration = case (isEquivalentElmType name p0o p0) of
+                  True -> "" -- No migration necessary
+                  False ->
+                    if migration_p1 == ""
+                      then T.concat [ typeName, ".map Unimplemented", " -- Type changed from `", typeName, " ", qualifiedTypeName p0o, "` to `", typeName, " ", qualifiedTypeName p0, "`\n" ]
+                      else T.concat [ typeName, ".map ", migration_p1 ]
+              in
+              xMigrationNested (migration, Set.singleton moduleName, subDefs1)
+            _ ->
+              error $ T.unpack $ T.concat ["migrate1ParamCollection: impossible multi-param ", typeName, "! Please report this gen issue."]
+        )
+      )
+
+    migrate2ParamCollection :: (Text -> Text) -> (Text -> Text) -> (Text -> Text -> Text) -> Migration
+    migrate2ParamCollection handle1 handle2 handleBoth =
+      case tipeOldM of
+        Just tipeOld ->
+          case tipeOld of
+            Can.TType oldModuleName oldName paramsOld -> -- @TODO MUST BE SAME TYPE?
               zipFull paramsOld params & (\p ->
                 case p of
-                  (Just p0o,Just p0):[] ->
+                  (Just p0o,Just p0):(Just p1o,Just p1):_ ->
                     let
-                      (MigrationNested migration1 imps1 subft1 migrationName1) = (canToMigration oldVersion newVersion scope interfaces recursionSet p0 (Just p0o) tvarMap "p0")
-
-                      migration = case (p0o == p0) of
-                        (True) -> "" -- No migration necessary
-                        (False) ->
-                          if migration1 == ""
-                            then
-                              T.concat [ typeName, ".map Unimplemented", " -- Type changed from `", typeName, " ", qualifiedTypeName p0o, "` to `", typeName, " ", qualifiedTypeName p0, "`\n" ]
-                            else
-                              T.concat [ typeName, ".map ", migration1 ]
+                      (MigrationNested migrate_p0 imps0 subDefs0) =
+                        (canToMigration oldVersion newVersion scope interfaces recursionSet p0 (Just p0o) tvarMap "p0")
+                      (MigrationNested migrate_p1 imps1 subDefs1) =
+                        (canToMigration oldVersion newVersion scope interfaces recursionSet p1 (Just p1o) tvarMap "p1")
+                      (migration, migrationDefs) = case (isEquivalentElmType name p0o p0, isEquivalentElmType name p1o p1) of
+                        (True, True)   -> ("", Map.empty) -- No migration necessary
+                        (False, True)  -> (handle1 migrate_p0, subDefs0)
+                        (True, False)  -> (handle2 migrate_p1, subDefs1)
+                        (False, False) -> (handleBoth migrate_p0 migrate_p1, Map.union subDefs0 subDefs1)
                     in
-                    xMigrationNested (migration, imps1 & Set.insert moduleName, subft1, "")
+                    xMigrationNested (migration, Set.singleton moduleName, migrationDefs)
                   _ ->
-                    error $ T.unpack $ T.concat ["migrateSingleParamCollection: impossible multi-param ", typeName, "! Please report this gen issue."]
+                    error $ concat ["Fatal: impossible !2 param ", T.unpack typeName, " type! Please report this gen issue."]
               )
-        --     _ -> error $ T.unpack $ T.concat ["migrateSingleParamCollection: non-matching TType in ", typeName, " gen:\nold:", show_ tipeOld, "\nnew:", show_ tipe]
-
-        -- Nothing ->
-        --   unimplemented "" (T.concat ["This ", typeName, " type has changed to something else"])
-
-
-            _ -> unimplemented ("typeToMigration:" <> typeName)
-                   ("The old type has changed to a " <> typeName <> ". I need you to write this migration.")
-            -- _ -> error ("non-matching TType in " <> typeName <> " gen")
-
+            _ -> unimplemented (T.concat ["typeToMigration:", typeName])
+                  (T.concat ["The old type has changed to a ", typeName, ". I need you to write this migration."])
         Nothing ->
-          unimplemented ("typeToMigration:" <> typeName <> ":Nothing") ("I couldn't find an old type. I need you to write this migration.")
-          -- unimplemented "" ("This Result type has changed to something el")
-
-
+          unimplemented (T.concat ["typeToMigration:", typeName, ":Nothing"])
+            ("I couldn't find an old type. I need you to write this migration.")
   in
   if (Set.member recursionIdentifier recursionSet) then
     handleSeenRecursiveType oldVersion newVersion scope identifier interfaces recursionSet tipe tipeOldM tvarMap oldValueRef
   else
   debugMigrationIncludes_ "typeToMigration" $
   case identifier of
-    ("elm", "core", "String", "String") -> xMigrationNested ("", Set.empty, Map.empty, "")
-    ("elm", "core", "Basics", "Int") ->    xMigrationNested ("", Set.empty, Map.empty, "")
-    ("elm", "core", "Basics", "Float") ->  xMigrationNested ("", Set.empty, Map.empty, "")
-    ("elm", "core", "Basics", "Bool") ->   xMigrationNested ("", Set.empty, Map.empty, "")
-    ("elm", "core", "Basics", "Order") ->  xMigrationNested ("", Set.empty, Map.empty, "")
-    ("elm", "core", "Basics", "Never") ->  xMigrationNested ("", Set.empty, Map.empty, "")
-    ("elm", "core", "Char", "Char") ->     xMigrationNested ("", Set.empty, Map.empty, "")
+    ("elm", "core", "String", "String") -> noMigration
+    ("elm", "core", "Basics", "Int")    -> noMigration
+    ("elm", "core", "Basics", "Float")  -> noMigration
+    ("elm", "core", "Basics", "Bool")   -> noMigration
+    ("elm", "core", "Basics", "Order")  -> noMigration
+    ("elm", "core", "Basics", "Never")  -> noMigration
+    ("elm", "core", "Char", "Char")     -> noMigration
+    ("elm", "core", "Maybe", "Maybe")   -> migrate1ParamCollection
+    ("elm", "core", "List", "List")     -> migrate1ParamCollection
+    ("elm", "core", "Array", "Array")   -> migrate1ParamCollection
+    ("elm", "core", "Set", "Set")       -> migrate1ParamCollection
 
-    ("elm", "core", "Maybe", "Maybe") -> migrateSingleParamCollection
-    ("elm", "core", "List", "List") ->   migrateSingleParamCollection
-    ("elm", "core", "Array", "Array") -> migrateSingleParamCollection
-    ("elm", "core", "Set", "Set") ->     migrateSingleParamCollection
+    ("elm", "core", "Result", "Result") -> migrate2ParamCollection
+      (\m_p0      -> T.concat [ "Result.mapError ", m_p0] )
+      (\m_p1      -> T.concat [ "Result.map ", m_p1 ])
+      (\m_p0 m_p1 -> T.concat [ "Result.mapError ", m_p0, " |> Result.map ", m_p1 ])
 
-    ("elm", "core", "Result", "Result") ->
-      case tipeOldM of
-        Just tipeOld ->
-          case tipeOld of
-            Can.TType _ _ paramsOld -> -- @WARNING MUST BE SAME TYPE?
-              zipFull paramsOld params & (\p ->
-                case p of
-                  (Just p0o,Just p0):(Just p1o,Just p1):_ ->
-                    let
-                      (MigrationNested subt0 imps0 subft0 migrationName0) = (canToMigration oldVersion newVersion scope interfaces recursionSet p0 (Just p0o) tvarMap "p0")
-                      (MigrationNested subt1 imps1 subft1 migrationName1) = (canToMigration oldVersion newVersion scope interfaces recursionSet p1 (Just p1o) tvarMap "p1")
-
-                      migration = case (p0o == p0, p1o == p1) of
-                        (True, True) -> "" -- No migration necessary
-                        (False, True) -> T.concat [ "Result.mapError ", subt0]
-                        (True, False) -> T.concat [ "Result.map ", subt1 ]
-                        (False, False) -> T.concat [ "Result.mapError ", subt0, " |> Result.map ", subt1 ]
-                    in
-                    xMigrationNested (migration, mergeImports imps0 imps1 & Set.insert moduleName, mergeMigrationDefinitions subft0 subft1, "")
-                    -- DResult (canToMigration oldVersion newVersion scope interfaces recursionSet result tvarMap) (canToMigration oldVersion newVersion scope interfaces recursionSet err tvarMap)
-                  _ ->
-                    error "Fatal: impossible !2 param Result type! Please report this gen issue."
-              )
-            _ -> unimplemented "typeToMigration:Dict" ("The old type has changed to a Result. I need you to write this migration.")
-            -- _ -> error "non-matching TType in Result gen"
-
-        Nothing ->
-          unimplemented "typeToMigration:Result:Nothing" ("I couldn't find an old type. I need you to write this migration.")
-          -- unimplemented "" ("This Result type has changed to something el")
-
-
-    ("elm", "core", "Dict", "Dict") ->
-      case tipeOldM of
-        Just tipeOld ->
-          case tipeOld of
-            Can.TType _ _ paramsOld -> -- @WARNING MUST BE SAME TYPE?
-              zipFull paramsOld params & (\p ->
-                case p of
-                  (Just p0o,Just p0):(Just p1o,Just p1):_ ->
-                    let
-                      (MigrationNested subt0 imps0 subft0 migrationName0) = (canToMigration oldVersion newVersion scope interfaces recursionSet p0 (Just p0o) tvarMap "p0")
-                      (MigrationNested subt1 imps1 subft1 migrationName1) = (canToMigration oldVersion newVersion scope interfaces recursionSet p1 (Just p1o) tvarMap "p1")
-
-                      migration = case (p0o == p0, p1o == p1) of
-                        (True, True) -> "" -- No migration necessary
-                        (False, True) -> T.concat [ "Dict.toList |> List.map (Tuple.mapFirst ", subt0, ") |> Dict.fromList" ]
-                        (True, False) -> T.concat [ "Dict.map (\\k v -> v |> ", subt1, ")" ]
-                        (False, False) -> T.concat [ "Dict.toList |> List.map (Tuple.mapBoth ", subt0, " ", subt1, ") |> Dict.fromList" ]
-                    in
-                    xMigrationNested (migration, mergeImports imps0 imps1 & Set.insert moduleName, mergeMigrationDefinitions subft0 subft1, "")
-                    -- DResult (canToMigration oldVersion newVersion scope interfaces recursionSet result tvarMap) (canToMigration oldVersion newVersion scope interfaces recursionSet err tvarMap)
-                  _ ->
-                    error "Fatal: impossible !2 param Result type! Please report this gen issue."
-              )
-            _ -> unimplemented "typeToMigration:Dict" ("The old type has changed to a Dict. I need you to write this migration.")
-            -- _ -> error $ "non-matching TType in Dict gen: " <> show tipeOld
-
-        Nothing ->
-          unimplemented "typeToMigration:Dict:Nothing" ("I couldn't find an old type. I need you to write this migration.")
+    ("elm", "core", "Dict", "Dict")     -> migrate2ParamCollection
+      (\m_p0      -> T.concat [ "Dict.toList |> List.map (Tuple.mapFirst ", m_p0, ") |> Dict.fromList" ])
+      (\m_p1      -> T.concat [ "Dict.map (\\k v -> v |> ", m_p1, ")" ])
+      (\m_p0 m_p1 -> T.concat [ "Dict.toList |> List.map (Tuple.mapBoth ", m_p0, " ", m_p1, ") |> Dict.fromList" ])
 
     -- Other core types we can skip migrating
-    ("elm", "browser", "Browser.Navigation", "Key")      -> xMigrationNested ("", Set.empty, Map.empty, "")
-
+    ("elm", "browser", "Browser.Navigation", "Key")   -> noMigration
 
     -- Values backed by JS Kernel types we cannot encode/decode
     ("elm", "virtual-dom", "VirtualDom", "Node")      -> kernelError
@@ -1139,7 +1088,7 @@ typeToMigration oldVersion newVersion scope interfaces recursionSet tipe@(Can.TT
 
     -- Not Kernel, but have functions... should we have them here?
     -- @TODO remove once we add test for functions in custom types
-    ("elm", "url", "Url.Parser", "Parser") -> kernelError
+    ("elm", "url", "Url.Parser", "Parser")               -> kernelError
     ("elm", "url", "Url.Parser.Internal", "QueryParser") -> kernelError
 
     -- Kernel concessions for Frontend Model and Msg
@@ -1159,57 +1108,18 @@ typeToMigration oldVersion newVersion scope interfaces recursionSet tipe@(Can.TT
       -- Anything else must not be a core type, recurse to find it
 
       let handleUnion union =
-            -- if isUserDefinedType_ tipe
-            --     then
-                  migrateUnion oldVersion newVersion scope identifier name interfaces newRecursionSet tvarMap union params
-                    & (\(MigrationNested n imports subft migrationName) ->
-                      xMigrationNested ( n
-                      , if moduleName /= scope then
-                          imports & Set.insert moduleName
-                        else
-                          imports
-                      , subft
-                          & addImports scope imports
-                          & if moduleName /= scope then
-                              addImport scope (moduleName) -- <> "(utop)")
-                            else
-                              id
-                      , migrationName
-                      )
-                    )
-                -- else
-                --   -- Our top level type is not a user defined type, this can happen when libraries like
-                --   -- MartinSStewart/elm-audio are used, resulting in `type alias FrontendMsg = Audio.Msg FrontendMsg_`
-                --   xMigrationNested ( "old55NotAUserDefinedType" -- <> "<!5>"
-                --       , if moduleName /= scope then
-                --           Set.empty & Set.insert moduleName
-                --         else
-                --           Set.empty
-                --       , Map.empty
-                --           & addImports scope Set.empty
-                --           & if moduleName /= scope then
-                --               addImport scope (moduleName) -- <> "(utop)")
-                --             else
-                --               id
-                --       , "old55NotAUserDefinedType"
-                --       )
+            migrateUnion oldVersion newVersion scope identifier name interfaces newRecursionSet tvarMap union params
 
           handleAlias alias =
+            -- @TODO try drop the overly paranoid import merging / insertions
             aliasToFt oldVersion newVersion scope identifier name interfaces newRecursionSet alias oldValueRef
-              & (\(MigrationNested n imports subft migrationName) ->
+              & (\(MigrationNested n imports subDefs) ->
                 xMigrationNested ( n -- <> "<!4>"
                 , if moduleName /= scope then
                     imports & Set.insert moduleName
                   else
                     imports
-                , subft
-                    & addImports scope imports
-                    & if moduleName /= scope then
-                        addImport scope (moduleName) -- <> "(utop)")
-                      else
-                        id
-                    --
-                , migrationName
+                , subDefs
                 )
               )
       in
@@ -1217,11 +1127,7 @@ typeToMigration oldVersion newVersion scope interfaces recursionSet tipe@(Can.TT
         Just (Alias alias) -> handleAlias alias
         Just (Union union) -> handleUnion union
         Nothing ->
-          MigrationNested
-            ("XXXXXX subi fail: " <> nameToText moduleNameRaw <> " in " <> (T.pack . show $ (Map.keys interfaces)))
-            Set.empty
-            Map.empty
-            ""
+          unimplemented "typeToMigration" ("I couldn't find an old type named `" <> N.toText typeName <> "`. I need you to write this migration.")
 
 
 handleSeenRecursiveType :: Int -> Int -> ModuleName.Canonical -> TypeIdentifier -> Interfaces -> RecursionSet -> Can.Type -> Maybe Can.Type -> [(N.Name, Can.Type)] -> Text -> Migration
@@ -1230,7 +1136,7 @@ handleSeenRecursiveType oldVersion newVersion scope identifier@(author, pkg, new
   let
       usageMigration :: [Migration]
       usageMigration =
-        -- tvarResolvedParams
+        -- tvarResolveParams
         params
           & fmap (\param -> canToMigration oldVersion newVersion scope interfaces recursionSet param tipeOldM tvarMap oldValueRef)
 
@@ -1247,11 +1153,11 @@ handleSeenRecursiveType oldVersion newVersion scope identifier@(author, pkg, new
           & mergeAllImports
           -- & Set.insert oldModuleNameCanonical
 
-      usageFts :: MigrationDefinitions
-      usageFts =
+      subDefs :: MigrationDefinitions
+      subDefs =
         usageMigration
           & fmap migrationTopLevelDefs
-          & mergeAllMigrationDefinitions
+          & mergeAllSubDefs
 
       typeScope :: Text
       typeScope =
@@ -1270,7 +1176,6 @@ handleSeenRecursiveType oldVersion newVersion scope identifier@(author, pkg, new
         "(" <> migrationName <> " " <> usageParams <> ")" -- <> "<!R>"
       else
         migrationName -- <> "<!R2>"
-    , Set.insert moduleName usageImports
-    , usageFts
-    , migrationName
+    , Set.empty
+    , subDefs
     )

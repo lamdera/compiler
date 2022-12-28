@@ -14,7 +14,7 @@ import Time
 type alias BackendModel =
     { unchangedCore : Float
     , unchangedUser : UserType
-    , unchangedAllTypes : Evergreen.V2.External.AllTypes
+    , unchangedAllCoreTypes : Evergreen.V2.External.AllCoreTypes
     , unchangedResult : Result Int String
     , unchangedDict : Dict Int String
     , unchangedAnonymousRecord : { name : String, age : Int, userType : UserType }
@@ -24,12 +24,12 @@ type alias BackendModel =
             { age : Int, userType : UserType }
         }
     , unchangedStringAlias : StringAlias
-    , changedMaybe : Maybe UserType
-    , changedList : List UserType
-    , changedSet : Set String
-    , changedArray : Array UserType
-    , changedDict : Dict Int UserType
-    , changedResult : Result UserType UserType
+    , withCustomMaybe : Maybe UserType
+    , withCustomList : List UserType
+    , withCustomSet : Set String
+    , withCustomArray : Array UserType
+    , withCustomDict : Dict Int UserType
+    , withCustomResult : Result UserType UserType
     , externalUnion : Evergreen.V2.External.ExternalUnion
     , added : Int
 
@@ -67,8 +67,10 @@ type UserType
     | UserAnonymousNestedRemoved { name : String, subrecord : { userType : UserType } }
     | UserAnonymousNestedAddedRemoved { name : String, subrecord : { userType : UserType, added : Int } }
     | UserTvarAlias (Evergreen.V2.External.Paramed CustomType)
-    | UserTvarAlias2 (Evergreen.V2.External.Paramed2 CustomType Evergreen.V2.External.AllTypes)
-    | UserTvarAliasSub (Evergreen.V2.External.ParamedSub Evergreen.V2.IncludedByParam.Record)
+    | UserTvarAlias2 (Evergreen.V2.External.Paramed2 CustomType Evergreen.V2.External.AllCoreTypes)
+    | UserTvarAliasSub (Evergreen.V2.External.ParamedSub Evergreen.V2.IncludedByParam.Custom)
+    | UserExtTime Time.Posix
+    | UserExtResultTime (Result String Time.Posix)
 
 
 type CustomType
@@ -100,7 +102,7 @@ type alias FrontendMsg =
 
 type FrontendMsg_
     = Noop
-    | AllTypes Evergreen.V2.External.AllTypes
+    | AllCoreTypes Evergreen.V2.External.AllCoreTypes
 
 
 type BackendMsg

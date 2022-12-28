@@ -11,7 +11,7 @@ type ExternalUnion
     | External2
 
 
-type alias AllTypes =
+type alias AllCoreTypes =
     { int : Int
     , float : Float
     , bool : Bool

@@ -69,7 +69,9 @@ specialCaseMigration identifier =
 
 migrationDefinition :: TypeIdentifier -> Text -> Maybe MigrationDefinition
 migrationDefinition (author, pkg, module_, typeName) def =
+  let marker = (T.concat ["migrate_", module_ & N.toText & T.replace "." "_", "_", N.toText typeName])
+  in
   Just $ MigrationDefinition
     { imports = Set.singleton $ ModuleName.Canonical (Pkg.Name author pkg) module_
-    , migrations = Map.singleton (T.concat ["migrate_", module_ & N.toText & T.replace "." "_", "_", N.toText typeName]) def
+    , migrations = def
     }

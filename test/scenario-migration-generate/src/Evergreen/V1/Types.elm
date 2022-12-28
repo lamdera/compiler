@@ -14,7 +14,7 @@ import Time
 type alias BackendModel =
     { unchangedCore : Float
     , unchangedUser : UserType
-    , unchangedAllTypes : Evergreen.V1.External.AllTypes
+    , unchangedAllCoreTypes : Evergreen.V1.External.AllCoreTypes
     , unchangedResult : Result Int String
     , unchangedDict : Dict Int String
     , unchangedAnonymousRecord : { name : String, age : Int, userType : UserType }
@@ -24,15 +24,15 @@ type alias BackendModel =
             { age : Int, userType : UserType }
         }
     , unchangedStringAlias : StringAlias
-    , changedMaybe : Maybe UserType
-    , changedList : List UserType
-    , changedSet : Set Int
-    , changedArray : Array UserType
-    , changedDict : Dict Int UserType
-    , changedResult : Result UserType UserType
+    , withCustomMaybe : Maybe UserType
+    , withCustomList : List UserType
+    , withCustomSet : Set Int
+    , withCustomArray : Array UserType
+    , withCustomDict : Dict Int UserType
+    , withCustomResult : Result UserType UserType
     , externalUnion : Evergreen.V1.External.ExternalUnion
     , removed : String
-    , removedRecord : Evergreen.V1.External.AllTypes
+    , removedRecord : Evergreen.V1.External.AllCoreTypes
 
     -- Drastic changes
     , unionThatGetsMoved : UnionThatGetsMoved
@@ -67,8 +67,10 @@ type UserType
     | UserAnonymousNestedRemoved { name : String, subrecord : { userType : UserType, removed : String } }
     | UserAnonymousNestedAddedRemoved { name : String, subrecord : { userType : UserType, removed : String } }
     | UserTvarAlias (Evergreen.V1.External.Paramed CustomType)
-    | UserTvarAlias2 (Evergreen.V1.External.Paramed2 CustomType Evergreen.V1.External.AllTypes)
-    | UserTvarAliasSub (Evergreen.V1.External.ParamedSub Evergreen.V1.IncludedByParam.Record)
+    | UserTvarAlias2 (Evergreen.V1.External.Paramed2 CustomType Evergreen.V1.External.AllCoreTypes)
+    | UserTvarAliasSub (Evergreen.V1.External.ParamedSub Evergreen.V1.IncludedByParam.Custom)
+    | UserExtTime Time.Posix
+    | UserExtResultTime (Result String Time.Posix)
 
 
 type CustomType
@@ -99,7 +101,7 @@ type alias FrontendMsg =
 
 type FrontendMsg_
     = Noop
-    | AllTypes Evergreen.V1.External.AllTypes
+    | AllCoreTypes Evergreen.V1.External.AllCoreTypes
 
 
 type BackendMsg

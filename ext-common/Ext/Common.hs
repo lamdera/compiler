@@ -89,7 +89,7 @@ isProdEnv =
 -- Copy of combined internals of Project.getRoot as it seems to notoriously cause cyclic wherever imported
 -- Further modified for more explicit current directory setting compared to flakey Dir.setCurrentDirectory
 
-data ProjectRoot = ProjectRootInvalid | ProjectRootSet FilePath | ProjectRootContextual FilePath
+data ProjectRoot = ProjectRootUnset | ProjectRootSet FilePath | ProjectRootContextual FilePath
 
 -- https://stackoverflow.com/questions/16811376/simulate-global-variable trick
 {-# NOINLINE projectRootMvar #-}
@@ -101,7 +101,7 @@ projectRootMvar = unsafePerformIO $ do
       Just root ->
         ProjectRootContextual root
       Nothing ->
-        ProjectRootInvalid
+        ProjectRootUnset
 
 setProjectRoot :: FilePath -> IO ()
 setProjectRoot root = do
@@ -113,9 +113,9 @@ getProjectRoot :: String -> IO FilePath
 getProjectRoot tag = do
   root <- readMVar projectRootMvar
   case root of
-    ProjectRootInvalid -> do
+    ProjectRootUnset -> do
       -- debug $ "🏠 read project root [" <> tag <> "]: " <> "invalid project root"
-      pure "<invalidprojectroot>"
+      pure "<unset-project-root>"
     ProjectRootSet root -> do
       -- debug $ "🏠 read project root [" <> tag <> "]: " <> root
       pure root

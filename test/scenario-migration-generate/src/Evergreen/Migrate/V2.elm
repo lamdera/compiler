@@ -72,7 +72,7 @@ migrate_Types_BackendModel : Evergreen.V1.Types.BackendModel -> Evergreen.V2.Typ
 migrate_Types_BackendModel old =
     { unchangedCore = old.unchangedCore
     , unchangedUser = old.unchangedUser |> migrate_Types_UserType
-    , unchangedAllTypes = old.unchangedAllTypes
+    , unchangedAllCoreTypes = old.unchangedAllCoreTypes
     , unchangedResult = old.unchangedResult
     , unchangedDict = old.unchangedDict
     , unchangedAnonymousRecord =
@@ -97,12 +97,12 @@ migrate_Types_BackendModel old =
                     }
                )
     , unchangedStringAlias = old.unchangedStringAlias
-    , changedMaybe = old.changedMaybe |> Maybe.map migrate_Types_UserType
-    , changedList = old.changedList |> List.map migrate_Types_UserType
-    , changedSet = old.changedSet |> Set.map Unimplemented -- Type changed from `Set Int` to `Set String`
-    , changedArray = old.changedArray |> Array.map migrate_Types_UserType
-    , changedDict = old.changedDict |> Dict.map (\k v -> v |> migrate_Types_UserType)
-    , changedResult = old.changedResult |> Result.mapError migrate_Types_UserType |> Result.map migrate_Types_UserType
+    , withCustomMaybe = old.withCustomMaybe |> Maybe.map migrate_Types_UserType
+    , withCustomList = old.withCustomList |> List.map migrate_Types_UserType
+    , withCustomSet = old.withCustomSet |> Set.map Unimplemented -- Type changed from `Set Int` to `Set String`
+    , withCustomArray = old.withCustomArray |> Array.map migrate_Types_UserType
+    , withCustomDict = old.withCustomDict |> Dict.map (\k v -> v |> migrate_Types_UserType)
+    , withCustomResult = old.withCustomResult |> Result.mapError migrate_Types_UserType |> Result.map migrate_Types_UserType
     , externalUnion = old.externalUnion |> migrate_External_ExternalUnion
     , added = Unimplemented -- Type `Int` was added in V2. I need you to set a default value.
     , unionThatGetsMoved = old.unionThatGetsMoved |> Unimplemented -- I couldn't find an old type named `UnionThatGetsMoved`. I need you to write this migration.
@@ -114,7 +114,7 @@ migrate_Types_BackendModel old =
     , apps = Unimplemented -- Type `Dict (String) (Evergreen.V2.Types.App)` was added in V2. I need you to set a default value.
     , depthTests = Unimplemented -- Field of type `Dict (String) (Evergreen.V1.Types.Depth)` was removed in V2. I need you to do something with the `old.depthTests` value if you wish to keep the data, then remove this line.
     , removed = Unimplemented -- Field of type `String` was removed in V2. I need you to do something with the `old.removed` value if you wish to keep the data, then remove this line.
-    , removedRecord = Unimplemented -- Field of type `Evergreen.V1.External.AllTypes` was removed in V2. I need you to do something with the `old.removedRecord` value if you wish to keep the data, then remove this line.
+    , removedRecord = Unimplemented -- Field of type `Evergreen.V1.External.AllCoreTypes` was removed in V2. I need you to do something with the `old.removedRecord` value if you wish to keep the data, then remove this line.
     }
 
 
@@ -145,8 +145,8 @@ migrate_Audio_Msg migrate_userMsg old =
         |> Tuple.first
 
 
-migrate_External_AllTypes : Evergreen.V1.External.AllTypes -> Evergreen.V2.External.AllTypes
-migrate_External_AllTypes p0 =
+migrate_External_AllCoreTypes : Evergreen.V1.External.AllCoreTypes -> Evergreen.V2.External.AllCoreTypes
+migrate_External_AllCoreTypes p0 =
     { int = p0.int
     , float = p0.float
     , bool = p0.bool
@@ -196,10 +196,11 @@ migrate_External_ParamedSub migrate_x p0 =
     }
 
 
-migrate_IncludedByParam_Record : Evergreen.V1.IncludedByParam.Record -> Evergreen.V2.IncludedByParam.Record
-migrate_IncludedByParam_Record p0 =
-    { test = p0.test
-    }
+migrate_IncludedByParam_Custom : Evergreen.V1.IncludedByParam.Custom -> Evergreen.V2.IncludedByParam.Custom
+migrate_IncludedByParam_Custom old =
+    case old of
+        Evergreen.V1.IncludedByParam.Custom ->
+            Evergreen.V2.IncludedByParam.Custom
 
 
 migrate_IncludedBySpecialCasedParam_Custom : Evergreen.V1.IncludedBySpecialCasedParam.Custom -> Evergreen.V2.IncludedBySpecialCasedParam.Custom
@@ -225,8 +226,8 @@ migrate_Types_FrontendMsg_ old =
         Evergreen.V1.Types.Noop ->
             Evergreen.V2.Types.Noop
 
-        Evergreen.V1.Types.AllTypes p0 ->
-            Evergreen.V2.Types.AllTypes (p0 |> migrate_External_AllTypes)
+        Evergreen.V1.Types.AllCoreTypes p0 ->
+            Evergreen.V2.Types.AllCoreTypes p0
 
 
 migrate_Types_UserType : Evergreen.V1.Types.UserType -> Evergreen.V2.Types.UserType
@@ -321,10 +322,16 @@ migrate_Types_UserType old =
             Evergreen.V2.Types.UserTvarAlias (p0 |> migrate_External_Paramed migrate_Types_CustomType)
 
         Evergreen.V1.Types.UserTvarAlias2 p0 ->
-            Evergreen.V2.Types.UserTvarAlias2 (p0 |> migrate_External_Paramed2 migrate_Types_CustomType migrate_External_AllTypes)
+            Evergreen.V2.Types.UserTvarAlias2 (p0 |> migrate_External_Paramed2 migrate_Types_CustomType migrate_External_AllCoreTypes)
 
         Evergreen.V1.Types.UserTvarAliasSub p0 ->
-            Evergreen.V2.Types.UserTvarAliasSub (p0 |> migrate_External_ParamedSub migrate_IncludedByParam_Record)
+            Evergreen.V2.Types.UserTvarAliasSub (p0 |> migrate_External_ParamedSub migrate_IncludedByParam_Custom)
+
+        Evergreen.V1.Types.UserExtTime p0 ->
+            Evergreen.V2.Types.UserExtTime p0
+
+        Evergreen.V1.Types.UserExtResultTime p0 ->
+            Evergreen.V2.Types.UserExtResultTime p0
 
         notices ->
             {- @NOTICE `UserAdded` was added in V2.

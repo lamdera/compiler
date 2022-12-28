@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE BangPatterns #-}
 
 module Lamdera.Evergreen.MigrationGeneratorHelpers where
 
@@ -21,30 +22,30 @@ import Lamdera.Types
 import StandaloneInstances
 
 
+type TypeRef = (ModuleName.Canonical, N.Name)
 type RecursionSet = Set.Set (ModuleName.Canonical, N.Name)
 type TypeIdentifier = (Pkg.Author, Pkg.Project, N.Name, N.Name)
 
 -- A specialised local migration def, along with any dependant top-level migrations and their related imports
 data Migration = MigrationNested
   { migrationDef :: Text
-  , migrationImports :: ElmImports
+  , migrationImports :: Set.Set ModuleName.Canonical
   , migrationTopLevelDefs :: MigrationDefinitions
-  , migrationName :: Text
   }
   deriving (Show)
 
-xMigrationNested (a,b,c,d) = MigrationNested a b c d
+xMigrationNested (a,b,c) = MigrationNested a b c
 
+type MigrationDefinitions = Map TypeRef MigrationDefinition
 
 -- Set of top-level migration functions and their required imports
 data MigrationDefinition =
   MigrationDefinition
-    { imports :: ElmImports
-    , migrations :: Map Text Text
+    { imports :: Set.Set ModuleName.Canonical
+    , migrations :: Text
     }
   deriving (Show, Eq)
 
-type MigrationDefinitions = Map Text MigrationDefinition
 
 -- Map <import name> <package>
 -- @TODO in future we can use this to pin package versions and adjust import routing to those snapshots
@@ -53,39 +54,26 @@ type ElmImports = Set.Set ModuleName.Canonical
 
 allMigrations :: MigrationDefinitions -> Text
 allMigrations efts =
-    efts
-      & Map.toList
-      & fmap (\(file, ef@(MigrationDefinition imports migrations)) -> Map.toList migrations & fmap snd )
-      & List.concat
-      & List.sort
-      -- @TODO check if this is actually needed once we sort out incorrect gen?
-      & List.nub
-      & T.intercalate "\n\n"
-
+  efts
+    & Map.toList
+    & fmap (\(file, ef@(MigrationDefinition imports migrations)) -> migrations )
+    & List.sort
+    & T.intercalate "\n\n"
 
 importsToText :: Set.Set ModuleName.Canonical -> [Text]
 importsToText imports =
   imports
-        & Set.toList
-        & fmap (\(ModuleName.Canonical (Pkg.Name author project) module_) ->
-          "import " <> nameToText module_
-        )
-        & List.sort
+    & Set.toList
+    & fmap (\(ModuleName.Canonical (Pkg.Name author project) module_) ->
+      "import " <> nameToText module_
+    )
+    & List.sort
 
-
-mergeMigrationDefinition :: Text -> MigrationDefinition -> MigrationDefinition -> MigrationDefinition
-mergeMigrationDefinition k ft1 ft2 =
-  MigrationDefinition
-    { imports = Set.union (imports ft1) (imports ft2)
-    , migrations = (migrations ft1 <> migrations ft2)
-    }
-
-allMigrationDefinitions :: [Migration] -> MigrationDefinitions
-allMigrationDefinitions migrations =
+allSubDefs :: [Migration] -> MigrationDefinitions
+allSubDefs migrations =
   migrations & foldl (\acc migration ->
     acc & Map.union (migrationTopLevelDefs migration)
   ) Map.empty
-
 
 allImports :: [Migration] -> ElmImports
 allImports migrations = migrations
@@ -94,38 +82,11 @@ allImports migrations = migrations
   )
   & mergeAllImports
 
-mergeMigrationDefinitions :: MigrationDefinitions -> MigrationDefinitions -> MigrationDefinitions
-mergeMigrationDefinitions ft1 ft2 = unionWithKey mergeMigrationDefinition ft1 ft2
-
-mergeAllMigrationDefinitions :: [MigrationDefinitions] -> MigrationDefinitions
-mergeAllMigrationDefinitions ftss = ftss & foldl (\acc fts -> mergeMigrationDefinitions acc fts) Map.empty
-
-mergeImports :: ElmImports -> ElmImports -> ElmImports
-mergeImports i1 i2 = Set.union i1 i2
+mergeAllSubDefs :: [MigrationDefinitions] -> MigrationDefinitions
+mergeAllSubDefs ftss = ftss & foldl (\acc fts -> Map.union acc fts) Map.empty
 
 mergeAllImports :: [ElmImports] -> ElmImports
-mergeAllImports imps = imps & foldl (\acc elmImport -> mergeImports acc elmImport) Set.empty
-
-addImports :: ModuleName.Canonical -> ElmImports -> MigrationDefinitions -> MigrationDefinitions
-addImports scope@(ModuleName.Canonical (Pkg.Name author pkg) module_) imports ft =
-  imports & foldl (\ft imp -> addImport scope imp ft) ft
-
-addImport :: ModuleName.Canonical -> ModuleName.Canonical -> MigrationDefinitions -> MigrationDefinitions
-addImport moduleName imp ft =
-  ft
-    & Map.alter (\mft ->
-      case mft of
-        Just ft ->
-          Just $ ft { imports = imports ft & Set.insert imp }
-
-        Nothing ->
-          Just $
-            MigrationDefinition
-              { imports = Set.singleton imp
-              , migrations = Map.empty
-              }
-    ) (moduleNameKey moduleName)
-
+mergeAllImports imps = imps & foldl (\acc elmImport -> acc <> elmImport) Set.empty
 
 migrationNameUnderscored :: N.Name -> Int -> Int -> N.Name -> Text
 migrationNameUnderscored newModule oldVersion newVersion newTypeName =
@@ -145,12 +106,11 @@ unimplemented debugIdentifier message =
   let debugIdentifier_ :: Text = ""
         -- & (\v -> debugIdentifier & suffixIfNonempty " ")
   in
-  xMigrationNested (T.concat ["Unimplemented -- ", debugIdentifier_, message, "\n"], Set.empty, Map.empty, "")
+  xMigrationNested (T.concat ["Unimplemented -- ", debugIdentifier_, message, "\n"], Set.empty, Map.empty)
 
 
 canModuleName :: ModuleName.Canonical -> N.Name
 canModuleName (ModuleName.Canonical (Pkg.Name author pkg) module_) = module_
-
 
 moduleKey :: TypeIdentifier -> Text
 moduleKey identifier@(author, pkg, module_, tipe) =
@@ -216,8 +176,6 @@ asIdentifier tipe =
     Can.TUnit              -> ("elm", "core", "Basics", "()")
     Can.TTuple a b c       -> ("elm", "core", "Basics", "Tuple")
 
-    -- _ -> error $ "asIdentifierUnimplemented: " <> show tipe
-
 
 asIdentifier_ :: (ModuleName.Canonical, N.Name) -> TypeIdentifier
 asIdentifier_ pair =
@@ -277,6 +235,31 @@ isUserDefinedType_ cType =
         Can.Holey t -> isUserDefinedType_ t
         Can.Filled t -> isUserDefinedType_ t
 
+
+containsUserTypes :: [(N.Name, Can.Type)] -> Can.Type -> Bool
+containsUserTypes tvarMap tipe =
+  case tipe of
+    Can.TType moduleName name params -> isUserModule moduleName || (tvarResolveParams params tvarMap & any (containsUserTypes tvarMap))
+    Can.TAlias moduleName name namedParams aType ->
+      case aType of
+        Can.Holey t -> containsUserTypes tvarMap t || (namedParams & fmap snd & (\params -> tvarResolveParams params tvarMap) & any (containsUserTypes tvarMap))
+        Can.Filled t -> containsUserTypes tvarMap t || (namedParams & fmap snd & (\params -> tvarResolveParams params tvarMap) & any (containsUserTypes tvarMap))
+
+    Can.TLambda a b        -> False -- not true but unsupported type
+    Can.TVar a             ->
+      case List.find (\(t,ti) -> t == a) tvarMap of
+        Just (_,ti) -> containsUserTypes tvarMap ti
+        Nothing -> False
+
+    Can.TRecord fields isPartial ->
+      fields & Can.fieldsToList & fmap snd & any (containsUserTypes tvarMap)
+
+    Can.TUnit              -> False
+    Can.TTuple a b mc      -> containsUserTypes tvarMap a || containsUserTypes tvarMap b || case mc of
+        Just c -> containsUserTypes tvarMap c
+        Nothing -> False
+
+
 isAnonymousRecord :: Can.Type -> Bool
 isAnonymousRecord cType =
   case cType of
@@ -297,28 +280,37 @@ isTvar cType =
 
 
 -- Like == but ignores differences in alias module locations when they are pointing to equivalent types
+-- Will NOT find custom types to be equivalent
 isEquivalentElmType :: N.Name -> Can.Type -> Can.Type -> Bool
-isEquivalentElmType name t1 t2 = do
+isEquivalentElmType debug t1 t2 = do
   -- if name /= "unchangedAllTypes"
   --   then
   --   else
       case (t1,t2) of
         (Can.TType moduleName name params, Can.TType moduleName2 name2 params2) ->
+
           -- debugHaskell "TType" $
-          t1 == t2 && params == params2
+            moduleName == moduleName2 && name == name2 && areEquivalentElmTypes name params params2
         (Can.TAlias moduleName name tvarMap_ aliasType, Can.TAlias moduleName2 name2 tvarMap_2 aliasType2) ->
           case (aliasType, aliasType2) of
             (Can.Holey t1, Can.Holey t2) ->
               -- debugHaskellPass "TAlias:Holey" (moduleName, moduleName2, name, name2, tvarMap_, tvarMap_2) $
-              isEquivalentElmType name t1 t2
+              isEquivalentElmType name t1 t2 && areEquivalentTvarMaps name tvarMap_ tvarMap_2
             (Can.Filled t1, Can.Filled t2) ->
               -- debugHaskellPass "TAlias:Filled" (moduleName, moduleName2, name, name2, tvarMap_, tvarMap_2) $
-              isEquivalentElmType name t1 t2
+              isEquivalentElmType name t1 t2 && areEquivalentTvarMaps name tvarMap_ tvarMap_2
             _ ->
               False
-        (Can.TRecord newFields isPartial, Can.TRecord newFields2 isPartial2) ->
+        (Can.TRecord fields isPartial, Can.TRecord fields2 isPartial2) ->
           -- debugHaskell "TRecord" $
-          t1 == t2
+          -- t1 == t2
+          let
+            fieldsTypes1 :: [Can.Type] = fields & Can.fieldsToList & fmap snd
+            fieldTypes2 :: [Can.Type] = fields2 & Can.fieldsToList & fmap snd
+          in
+          (length fieldsTypes1 == length fieldTypes2)
+            && areEquivalentElmTypes debug fieldsTypes1 fieldTypes2
+
         (Can.TTuple t1 t2 mt3, Can.TTuple t12 t22 mt32) ->
           -- debugHaskell "TTuple" $
           t1 == t2
@@ -335,6 +327,27 @@ isEquivalentElmType name t1 t2 = do
           -- debugHaskell "unequal types" $
           False
 
+areEquivalentElmTypes :: N.Name -> [Can.Type] -> [Can.Type] -> Bool
+areEquivalentElmTypes debug types1 types2 =
+  (length types1 == length types2)
+    &&
+  (zipWith (isEquivalentElmType debug) types1 types2 & all id)
+
+areEquivalentTvarMaps :: N.Name -> [(N.Name, Can.Type)] -> [(N.Name, Can.Type)] -> Bool
+areEquivalentTvarMaps debug tvars1 tvars2 =
+  (length tvars1 == length tvars2)
+    &&
+  (zipWith (\(n1, t1) (n2, t2) -> n1 == n2 && isEquivalentElmType debug t1 t2) tvars1 tvars2 & all id)
+
+
+-- Like == but considers identically defined union types equal despite module defs
+isEquivalentEvergreenType :: Can.Type -> Can.Type -> Bool
+isEquivalentEvergreenType t1 t2 =
+  case (t1, t2) of
+    ((Can.TType (ModuleName.Canonical (Pkg.Name "author" "project") module1) name1 params1),
+     (Can.TType (ModuleName.Canonical (Pkg.Name "author" "project") module2) name2 params2)) ->
+      name1 == name2 && isEquivalentEvergreenModule module1 module2
+    _ -> t1 == t2
 
 -- Like == but considers union types equal despite module defs
 areEquivalentEvergreenTypes :: [Can.Type] -> [Can.Type] -> Bool
@@ -346,15 +359,6 @@ areEquivalentEvergreenTypes t1s t2s =
   in
   -- debugHaskellPass "areEquivalentEvergreenTypes" (result, t1s, t2s) $
   result
-
-isEquivalentEvergreenType :: Can.Type -> Can.Type -> Bool
-isEquivalentEvergreenType t1 t2 =
-  case (t1, t2) of
-    ((Can.TType (ModuleName.Canonical (Pkg.Name "author" "project") module1) name1 params1),
-     (Can.TType (ModuleName.Canonical (Pkg.Name "author" "project") module2) name2 params2)) ->
-      name1 == name2 && isEquivalentEvergreenModule module1 module2
-    _ -> t1 == t2
-
 
 isEquivalentEvergreenModule :: ModuleName.Raw -> ModuleName.Raw -> Bool
 isEquivalentEvergreenModule m1 m2 =
@@ -462,23 +466,24 @@ asOldModule newModule newVersion oldVersion =
   ModuleName.Canonical (Pkg.Name "author" "project") (asOldModuleName newModule newVersion oldVersion)
 
 
+tvarResolveParams :: [Can.Type] -> [(N.Name, Can.Type)] -> [Can.Type]
+tvarResolveParams params tvarMap =
+  params & fmap (tvarResolveParam tvarMap)
 
-tvarResolvedParams :: [Can.Type] -> [(N.Name, Can.Type)] -> [Can.Type]
-tvarResolvedParams params tvarMap =
-  params
-    & fmap (\p ->
-      case p of
-        Can.TVar a ->
-          case List.find (\(t,ti) -> t == a) tvarMap of
-            Just (_,ti) -> ti
-            Nothing -> p
-        _ -> p
-    )
+tvarResolveParam :: [(N.Name, Can.Type)] -> Can.Type -> Can.Type
+tvarResolveParam tvarMap param =
+  case param of
+    Can.TVar a ->
+      case List.find (\(t,ti) -> t == a) tvarMap of
+        Just (_,ti) -> ti
+        Nothing -> param
+    _ -> param
 
 
 suffixIfNonempty :: Text -> Text -> Text
 suffixIfNonempty t s =
-  if T.length s == 0 then
-    s
-  else
-    s <> t
+  if T.length s == 0 then s else s <> t
+
+
+noMigration :: Migration
+noMigration = xMigrationNested ("", Set.empty, Map.empty)
