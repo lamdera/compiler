@@ -72,16 +72,16 @@ check :: Terminal.Command
 check =
   let
     summary =
-      "Compile Lamdera project and type-check Evergreen migrations \
-      \against the deployed production app."
+      "Compile and type-check against the deployed production app. \
+      \Generates type snapshots and migrations if necessary."
 
     details =
       "The `check` command helps prepare Lamdera Elm projects for deployment:"
 
     example =
       reflow
-        "It will query the production environment and supply\
-        \ information about the next version and required migrations."
+        "It will compile the project and type-check migrations against the deployed production app. \
+        \ It will generate type snapshots and migrations if necessary."
 
     checkFlags =
       flags Lamdera.CLI.Check.Flags
