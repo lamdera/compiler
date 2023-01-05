@@ -234,6 +234,7 @@ Executable lamdera
         Lamdera.Hints
         Lamdera.Injection
         Lamdera.Live
+        Lamdera.Make
         Lamdera.PostCompile
         Lamdera.Project
         Lamdera.RelativeLoad
@@ -314,6 +315,7 @@ Executable lamdera
         Ext.ElmFormat
         Ext.Query.Canonical
         Ext.Query.Interfaces
+        Ext.Query.Optimized
 
         -- ext-sentry
         Ext.Sentry

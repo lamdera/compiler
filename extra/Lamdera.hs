@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE BangPatterns #-}
 
 module Lamdera
   ( inProduction
@@ -125,6 +126,7 @@ module Lamdera
 -- A prelude-like thing that contains the commonly used things in elm.
 -- Names differ, but semantics are similar.
 
+import Control.DeepSeq (force, deepseq, NFData)
 import qualified Debug.Trace as DT
 import qualified Wire.PrettyPrint as PP
 import qualified Data.Text as T
@@ -305,7 +307,7 @@ debugHaskell label value =
     debugM <- Env.lookupEnv "LDEBUG"
     case debugM of
       Just _ -> do
-        hindentPrintValue label value
+        !x <- hindentPrintValue label value
         pure value
 
       Nothing ->
@@ -318,7 +320,7 @@ debugHaskellPass label value pass =
     debugM <- Env.lookupEnv "LDEBUG"
     case debugM of
       Just _ -> do
-        hindentPrintValue label (value, pass)
+        !x <- hindentPrintValue label (value, pass)
         pure pass
 
       Nothing ->
@@ -334,7 +336,7 @@ debugHaskellPassWhen condition label value pass =
         debugM <- Env.lookupEnv "LDEBUG"
         case debugM of
           Just _ -> do
-            hindentPrintValue label (value, pass)
+            !x <- hindentPrintValue label (value, pass)
             pure pass
 
           Nothing ->

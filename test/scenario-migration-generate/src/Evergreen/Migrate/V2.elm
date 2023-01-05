@@ -105,7 +105,7 @@ migrate_Types_BackendModel old =
     , withCustomResult = old.withCustomResult |> Result.mapError migrate_Types_UserType |> Result.map migrate_Types_UserType
     , externalUnion = old.externalUnion |> migrate_External_ExternalUnion
     , added = Unimplemented -- Type `Int` was added in V2. I need you to set a default value.
-    , unionThatGetsMoved = old.unionThatGetsMoved |> Unimplemented -- I couldn't find an old type named `UnionThatGetsMoved`. I need you to write this migration.
+    , unionThatGetsMoved = old.unionThatGetsMoved |> migrate_External_UnionThatGetsMoved
     , aliasThatGetsMoved = old.aliasThatGetsMoved
     , typeToAlias = old.typeToAlias |> Unimplemented -- `TypeToAlias` was a concrete type, but now it's a type alias. I need you to write this migration.
     , aliasToType = old.aliasToType |> Unimplemented -- `AliasToType` was a type alias, but now it's a custom type. I need you to write this migration.
@@ -122,6 +122,8 @@ migrate_Types_FrontendModel : Evergreen.V1.Types.FrontendModel -> Evergreen.V2.T
 migrate_Types_FrontendModel old =
     { basic = old.basic
     , added = Unimplemented -- Type `Int` was added in V2. I need you to set a default value.
+    , url = old.url
+    , key = old.key
     }
 
 
@@ -194,6 +196,13 @@ migrate_External_ParamedSub migrate_x p0 =
     { subtypeParamed = p0.subtypeParamed |> migrate_External_Paramed migrate_x
     , string = p0.string
     }
+
+
+migrate_External_UnionThatGetsMoved : Evergreen.V1.Types.UnionThatGetsMoved -> Evergreen.V2.External.UnionThatGetsMoved
+migrate_External_UnionThatGetsMoved old =
+    case old of
+        Evergreen.V1.Types.UnionThatGetsMoved ->
+            Evergreen.V2.External.UnionThatGetsMoved
 
 
 migrate_IncludedByParam_Custom : Evergreen.V1.IncludedByParam.Custom -> Evergreen.V2.IncludedByParam.Custom

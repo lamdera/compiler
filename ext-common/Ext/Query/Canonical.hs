@@ -152,29 +152,24 @@ render (Code.Source sourceLines) region@(Region (Position startLine _) (Position
 
 
 
-showDefOptimized :: FilePath -> FilePath -> Data.Name.Name -> IO ()
+showDefOptimized :: FilePath -> FilePath -> Data.Name.Name -> IO (Map.Map Opt.Global Opt.Node)
 showDefOptimized project file name = do
   Ext.Common.withProjectRoot project $ do
-
     -- canonical <- loadSingleCanonical file
-
     objects <- loadSingleObjects file
 
-        -- objects
-        --   & _l_nodes
-        --   &
+    let
+      def = objects
+        & Opt._l_nodes
+        -- & Map.lookup name
+        & Map.filterWithKey (\k _ ->
+            case k of
+              Opt.Global (Module.Canonical (Pkg.Name _ _) _) name_ ->
+                name_ == name
+          )
 
-    objects
-      & Opt._l_nodes
-      -- & Map.lookup name
-      & Map.filterWithKey (\k _ ->
-          case k of
-            Opt.Global (Module.Canonical (Pkg.Name _ _) _) name_ ->
-              name_ == name
-        )
-      & show
-      & putStrLn
-      -- & formatHaskellValue ("found")
+    def & show & putStrLn
+    pure def
 
 
 showDefCanonical :: FilePath -> FilePath -> Data.Name.Name -> IO ()

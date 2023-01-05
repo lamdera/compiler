@@ -21,10 +21,16 @@ import Lamdera
 import Lamdera.Types
 import StandaloneInstances
 
-
-type TypeRef = (ModuleName.Canonical, N.Name)
+type TypeName = N.Name
+type TypeRef = (ModuleName.Canonical, TypeName)
 type RecursionSet = Set.Set (ModuleName.Canonical, N.Name)
 type TypeIdentifier = (Pkg.Author, Pkg.Project, N.Name, N.Name)
+type TvarMap = [(N.Name, Can.Type)] -- @TODO make it an actual map
+
+data TypeDef
+  = Alias ModuleName.Canonical TypeName Can.Alias
+  | Union ModuleName.Canonical TypeName Can.Union
+  deriving (Show)
 
 -- A specialised local migration def, along with any dependant top-level migrations and their related imports
 data Migration = MigrationNested
@@ -50,6 +56,39 @@ data MigrationDefinition =
 -- Map <import name> <package>
 -- @TODO in future we can use this to pin package versions and adjust import routing to those snapshots
 type ElmImports = Set.Set ModuleName.Canonical
+
+
+
+-- When non-empty, will pretty-print the producer name & definition for the target top-level migration fn name
+debugMigrationFn :: Text
+debugMigrationFn = ""
+
+-- When non-empty, will pretty-print the producer name & value for an inline migration containing the search text
+debugMigrationIncludes :: Text
+debugMigrationIncludes = ""
+
+debugMigrationIncludes_ tag migration =
+  migration
+    & debugHaskellWhen ( debugMigrationIncludes /= ""
+      && (
+      -- debugMigrationIncludes `T.isInfixOf` migrationDef migration
+      -- ||
+      (migration
+        & migrationTopLevelDefs
+        & Map.toList
+        & fmap snd
+        & filter (\migrationDefinition ->
+            migrationDefinition
+              & migrations
+              & (\v -> debugMigrationIncludes `T.isInfixOf` v)
+          )
+        & length
+        & (\c -> c > 0)
+      )
+    )
+    )
+    ("debugMigrationIncludes:" <> tag)
+
 
 
 allMigrations :: MigrationDefinitions -> Text
@@ -97,10 +136,6 @@ migrationNameUnderscored newModule oldVersion newVersion newTypeName =
     & T.replace "." "_"
     & (\v -> "migrate_" <> v <> "_" <> nameToText newTypeName)
 
-
-data TypeDef = Alias Can.Alias | Union Can.Union deriving (Show)
-
-
 unimplemented :: Text -> Text -> Migration
 unimplemented debugIdentifier message =
   let debugIdentifier_ :: Text = ""
@@ -109,8 +144,8 @@ unimplemented debugIdentifier message =
   xMigrationNested (T.concat ["Unimplemented -- ", debugIdentifier_, message, "\n"], Set.empty, Map.empty)
 
 
-canModuleName :: ModuleName.Canonical -> N.Name
-canModuleName (ModuleName.Canonical (Pkg.Name author pkg) module_) = module_
+dropCan :: ModuleName.Canonical -> N.Name
+dropCan (ModuleName.Canonical (Pkg.Name author pkg) module_) = module_
 
 moduleKey :: TypeIdentifier -> Text
 moduleKey identifier@(author, pkg, module_, tipe) =
@@ -177,6 +212,18 @@ asIdentifier tipe =
     Can.TTuple a b c       -> ("elm", "core", "Basics", "Tuple")
 
 
+typeModuleNameCan :: Can.Type -> ModuleName.Canonical
+typeModuleNameCan tipe =
+  case tipe of
+    Can.TType moduleName name params -> moduleName
+    Can.TAlias moduleName name _ _ ->   moduleName
+    Can.TLambda a b        -> error $ "used typeModuleName on :" <> show ("elm", "core", "Basics", "<function>")
+    Can.TVar a             -> error $ "used typeModuleName on :" <> show ("elm", "core", "Basics", "a")
+    Can.TRecord a b        -> error $ "used typeModuleName on :" <> show ("elm", "core", "Basics", "{}")
+    Can.TUnit              -> error $ "used typeModuleName on :" <> show ("elm", "core", "Basics", "()")
+    Can.TTuple a b c       -> error $ "used typeModuleName on :" <> show ("elm", "core", "Basics", "Tuple")
+
+
 asIdentifier_ :: (ModuleName.Canonical, N.Name) -> TypeIdentifier
 asIdentifier_ pair =
   case pair of
@@ -236,28 +283,53 @@ isUserDefinedType_ cType =
         Can.Filled t -> isUserDefinedType_ t
 
 
+laterError = error "fail"
+
+
 containsUserTypes :: [(N.Name, Can.Type)] -> Can.Type -> Bool
 containsUserTypes tvarMap tipe =
+  let
+    !_ = onlyWhen (
+          case tipe of
+            Can.TType moduleName name params ->
+              name == "Set"
+            _ -> False
+         ) $
+           formatHaskellValue "containsUserTypes" (tipe, tvarMap) :: IO ()
+  in
   case tipe of
-    Can.TType moduleName name params -> isUserModule moduleName || (tvarResolveParams params tvarMap & any (containsUserTypes tvarMap))
+    Can.TType moduleName name params ->
+      -- debugHaskellPassWhen (length params /= 0) "containsUserTypes:params" (tipe, tvarMap) $
+      isUserModule moduleName
+      || (params /= [] && (tvarResolveParams params tvarMap & any (containsUserTypes tvarMap)))
+
     Can.TAlias moduleName name namedParams aType ->
       case aType of
-        Can.Holey t -> containsUserTypes tvarMap t || (namedParams & fmap snd & (\params -> tvarResolveParams params tvarMap) & any (containsUserTypes tvarMap))
-        Can.Filled t -> containsUserTypes tvarMap t || (namedParams & fmap snd & (\params -> tvarResolveParams params tvarMap) & any (containsUserTypes tvarMap))
-
-    Can.TLambda a b        -> False -- not true but unsupported type
-    Can.TVar a             ->
-      case List.find (\(t,ti) -> t == a) tvarMap of
-        Just (_,ti) -> containsUserTypes tvarMap ti
-        Nothing -> False
+        Can.Holey t ->
+          containsUserTypes tvarMap t
+          || (namedParams & fmap snd & (\params -> tvarResolveParams params tvarMap) & any (containsUserTypes tvarMap))
+        Can.Filled t ->
+          containsUserTypes tvarMap t
+          || (namedParams & fmap snd & (\params -> tvarResolveParams params tvarMap) & any (containsUserTypes tvarMap))
 
     Can.TRecord fields isPartial ->
       fields & Can.fieldsToList & fmap snd & any (containsUserTypes tvarMap)
 
-    Can.TUnit              -> False
-    Can.TTuple a b mc      -> containsUserTypes tvarMap a || containsUserTypes tvarMap b || case mc of
+    Can.TTuple a b mc      ->
+      containsUserTypes tvarMap a || containsUserTypes tvarMap b || case mc of
         Just c -> containsUserTypes tvarMap c
         Nothing -> False
+
+    Can.TVar a             ->
+      case List.find (\(t,ti) -> t == a) tvarMap of
+        Just (_, Can.TVar a_) ->
+          -- tvarMap mapping for `a` is a TVar, i.e. ("userMsg", TVar "userMsg").
+          -- if we don't terminate this now, we'll have an infinite loop
+          False
+        Just (_,ti) -> containsUserTypes tvarMap ti
+        Nothing -> False
+    Can.TUnit              -> False
+    Can.TLambda a b        -> False -- not true but unsupported type
 
 
 isAnonymousRecord :: Can.Type -> Bool
@@ -421,32 +493,44 @@ unchangedForType t =
 nothingTODO = Nothing
 
 
-findDef :: N.Name -> N.Name -> Interfaces -> Maybe TypeDef
-findDef moduleName typeName interfaces =
-  case Map.lookup moduleName interfaces of
+findTypeDef :: Can.Type -> Interfaces -> Maybe TypeDef
+findTypeDef tipe interfaces =
+  case tipe of
+    Can.TType moduleNameCan typeName params -> findDef moduleNameCan typeName interfaces
+    Can.TAlias moduleNameCan typeName _ _ -> findDef moduleNameCan typeName interfaces
+    _ -> error $ "findTypeDef used on non-concrete type: " <> show tipe
+
+
+findDef :: ModuleName.Canonical -> N.Name -> Interfaces -> Maybe TypeDef
+findDef moduleNameCan typeName interfaces =
+  case Map.lookup (dropCan moduleNameCan) interfaces of
     Just moduleInterface ->
-      findDef_ typeName moduleInterface
+      findDef_ moduleNameCan typeName moduleInterface
 
     Nothing ->
       Nothing
       -- error $ "could not find old module at all: " <> show (module_, tipe)
       -- error $ "could not find '" <> N.toChars oldModuleName <> "' old module at all: " <> show (Map.keys interfaces)
 
-findDef_ :: N.Name -> Interface.Interface -> Maybe TypeDef
-findDef_ typeName moduleInterface =
+findDef_ :: ModuleName.Canonical -> N.Name -> Interface.Interface -> Maybe TypeDef
+findDef_ moduleNameCan typeName moduleInterface =
+  -- let
+  --   moduleName :: ModuleName.Canonical
+  --   moduleName = ModuleName.Canonical (Interface._home moduleInterface) typeName
+  -- in
   case Map.lookup typeName $ Interface._aliases moduleInterface of
     Just aliasInterface ->
         case aliasInterface of
-          Interface.PublicAlias a -> Just $ Alias a
-          Interface.PrivateAlias a -> Just $ Alias a
+          Interface.PublicAlias a -> Just $ Alias moduleNameCan typeName a
+          Interface.PrivateAlias a -> Just $ Alias moduleNameCan typeName a
 
     Nothing ->
       case Map.lookup typeName $ Interface._unions moduleInterface of
         Just unionInterface -> do
           case unionInterface of
-            Interface.OpenUnion u -> Just $ Union u
-            Interface.ClosedUnion u -> Just $ Union u
-            Interface.PrivateUnion u -> Just $ Union u
+            Interface.OpenUnion u -> Just $ Union moduleNameCan typeName u
+            Interface.ClosedUnion u -> Just $ Union moduleNameCan typeName u
+            Interface.PrivateUnion u -> Just $ Union moduleNameCan typeName u
 
         Nothing ->
           -- error $ "could not find old type at all: " <> show (module_, tipe)
@@ -464,6 +548,19 @@ asOldModuleName newModule newVersion oldVersion =
 asOldModule :: N.Name -> Int -> Int -> ModuleName.Canonical
 asOldModule newModule newVersion oldVersion =
   ModuleName.Canonical (Pkg.Name "author" "project") (asOldModuleName newModule newVersion oldVersion)
+
+
+loadTvars :: [N.Name] -> [(N.Name, Can.Type)] -> [Can.Type]
+loadTvars tvars tvarMap =
+  tvars & fmap (loadTvar tvarMap)
+
+loadTvar :: [(N.Name, Can.Type)] -> N.Name -> Can.Type
+loadTvar tvarMap name =
+  case List.find (\(t,ti) -> t == name) tvarMap of
+    Just (_,ti) -> ti
+    Nothing -> error $ "could not resolve tvar, is this a problem?"
+      -- This would be the alternative:
+      -- Can.Tvar name
 
 
 tvarResolveParams :: [Can.Type] -> [(N.Name, Can.Type)] -> [Can.Type]

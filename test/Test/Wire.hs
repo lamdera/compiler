@@ -92,6 +92,7 @@ wire = do
           , "src/Test/Wire_Record_Extensible3_Tricky.elm"
           , "src/Test/Wire_Phantom.elm"
           , "src/Test/Wire_Tvar_Deep.elm"
+          , "src/Test/Wire_Tvar_Deep2.elm"
           , "src/Test/Wire_Tvar_Recursive_Reference.elm"
           , "src/Test/Wire_Unsupported.elm"
           , "src/Test/Wire_Unconstructable.elm"

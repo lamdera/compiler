@@ -7,9 +7,6 @@ module Lamdera.Wire3.Core where
 
 All the code that does the Wire encoder/decoder code gen and injection
 
--- @EXTENSIBLERECORDS search for this tag for issues related to skipping
-support for extensible records ATM.
-
 -}
 
 import System.IO.Unsafe (unsafePerformIO)

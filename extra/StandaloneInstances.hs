@@ -228,14 +228,13 @@ deriving instance Show Reporting.Exit.Outline
 deriving instance Show Reporting.Exit.OutlineProblem
 deriving instance Show Reporting.Exit.BuildProjectProblem
 deriving instance Show Reporting.Exit.BuildProblem
-
 deriving instance Show Reporting.Exit.Install
 deriving instance Show Reporting.Exit.RegistryProblem
 deriving instance Show Reporting.Exit.Solver
 deriving instance Show Reporting.Exit.Details
-
-
 deriving instance Show Reporting.Exit.Help.Report
+deriving instance Show Reporting.Exit.Make
+deriving instance Show Reporting.Exit.Generate
 
 deriving instance Show Reporting.Error.Module
 deriving instance Show Reporting.Error.Error

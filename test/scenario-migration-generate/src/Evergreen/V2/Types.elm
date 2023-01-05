@@ -7,8 +7,10 @@ import Dict exposing (Dict)
 import Evergreen.V2.External
 import Evergreen.V2.IncludedByParam
 import Evergreen.V2.IncludedBySpecialCasedParam
+import Lamdera
 import Set exposing (Set)
 import Time
+import Url
 
 
 type alias BackendModel =
@@ -89,6 +91,8 @@ type AliasToType
 type alias FrontendModel =
     { basic : Int
     , added : Int
+    , url : Url.Url
+    , key : Lamdera.Key
     }
 
 

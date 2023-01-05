@@ -710,7 +710,7 @@ unwrapAliasesDeep t =
         & fmap (\(FieldType index tipe) ->
             FieldType index (unwrapAliasesDeep tipe)
           )
-        -- @EXTENSIBLERECORDS For now we don't support extensible records, so drop the maybeExtensible
+        -- Responsibility of caller to flatten extended records, so unwrapping can drop
         & (\newFieldMap -> TRecord newFieldMap Nothing )
 
     TUnit -> t
