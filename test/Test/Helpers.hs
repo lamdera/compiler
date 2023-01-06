@@ -7,7 +7,7 @@ import System.FilePath ((</>))
 import Data.Text as T
 import qualified Data.Text.Encoding as T
 
-import EasyTest
+import qualified EasyTest
 
 import Lamdera
 import Test.Main (captureProcessResult)
@@ -39,6 +39,20 @@ withDebugPkg io = do
   pure res
 
 
+withTestEnv :: EasyTest.Test a -> EasyTest.Test a
+withTestEnv test = do
+  EasyTest.io $ do
+    setEnv "LDEBUG" "1"
+    setEnv "LTEST" "1"
+    setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
+  res <- test
+  EasyTest.io $ do
+    unsetEnv "LDEBUG"
+    unsetEnv "LTEST"
+    unsetEnv "LOVR"
+  pure res
+
+
 withProdMode :: IO a -> IO a
 withProdMode io = do
   setEnv "LDEBUG" "1"
@@ -57,17 +71,17 @@ rm :: String -> IO ()
 rm path = Lamdera.remove path
 
 
-catchOutput :: IO () -> Test Text
+catchOutput :: IO () -> EasyTest.Test Text
 catchOutput action = do
   -- https://hackage.haskell.org/package/main-tester-0.2.0.1/docs/Test-Main.html
-  pr <- io $ captureProcessResult action
+  pr <- EasyTest.io $ captureProcessResult action
   -- @TODO improve this to actually pull out values
   pure $ T.decodeUtf8 $ "stdout:\n" <> Test.Main.prStdout pr <> "\nstderr:\n" <> Test.Main.prStderr pr
 
 
-catchOutputStdErr :: IO () -> Test Text
+catchOutputStdErr :: IO () -> EasyTest.Test Text
 catchOutputStdErr action = do
   -- https://hackage.haskell.org/package/main-tester-0.2.0.1/docs/Test-Main.html
-  pr <- io $ captureProcessResult action
+  pr <- EasyTest.io $ captureProcessResult action
   -- @TODO improve this to actually pull out values
   pure $ T.decodeUtf8 $ Test.Main.prStderr pr

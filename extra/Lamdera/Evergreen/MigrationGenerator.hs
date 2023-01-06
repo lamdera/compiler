@@ -63,9 +63,10 @@ generateFor coreTypeDiffs oldVersion newVersion interfaces iface_Types = do
         & fmap (\(t, oldHash, newHash) ->
             (t, coreTypeMigration (oldHash /= newHash) oldVersion newVersion interfaces moduleName t iface_Types)
         )
-  migrationsToFile oldVersion newVersion coreMigrations moduleName
+  pure $ migrationsToFile oldVersion newVersion coreMigrations moduleName
 
 
+migrationsToFile :: Int -> Int -> [(N.Name, Migration)] -> ModuleName.Canonical -> Text
 migrationsToFile oldVersion newVersion migrations moduleName =
   let
     imports :: Text
@@ -93,7 +94,7 @@ migrationsToFile oldVersion newVersion migrations moduleName =
       , imports
       ] ++ coreMigrationDefs ++ [ subMigrations ]
   in
-  output & T.intercalate "\n\n" & pure
+  output & T.intercalate "\n\n"
 
 
 helpfulInformation :: Text
@@ -414,7 +415,10 @@ genOldConstructorMigration :: N.Name -> Text -> N.Name -> Interfaces -> TvarMap 
 genOldConstructorMigration oldModuleName moduleScope typeName interfaces tvarMapOld tvarMapNew recursionSet localScope newVersion oldVersion newUnion oldUnion oldConstructorName oldParams =
   let
     newCtorM :: Maybe Can.Ctor
-    newCtorM = Can._u_alts newUnion & List.find (\(Can.Ctor newConstructorName _ _ _) -> newConstructorName == oldConstructorName )
+    newCtorM = Can._u_alts newUnion & List.find (\(Can.Ctor newConstructorName _ _ _) ->
+      newConstructorName == oldConstructorName
+      || (newConstructorName == (oldConstructorName & N.toText & (\v -> v <> "_") & N.fromText))
+      )
 
     migration_ :: Migration
     migration_ =

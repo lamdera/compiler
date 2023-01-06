@@ -27,7 +27,7 @@ import qualified Reporting.Exit.Help as Help
 
 import Lamdera
 import Lamdera.Http
-import Lamdera.Progress
+import Lamdera.Progress (throw, progress)
 import qualified Lamdera.Graph
 import qualified Lamdera.CLI.Login
 import qualified Lamdera.Project

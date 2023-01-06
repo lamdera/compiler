@@ -58,7 +58,7 @@ suite = tests
             ""          -- }
           ]
           & (\fields ->
-                mconcat fields & (\all -> "R[" <> all <> "]")
+                mconcat fields & (\all_ -> "R[" <> all_ <> "]")
             )
 
       liftIO $ Lamdera.Compile.makeDev_ file

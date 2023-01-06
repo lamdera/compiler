@@ -22,6 +22,7 @@ import System.Random (Random)
 import qualified Control.Concurrent.Async as A
 import qualified Data.Map as Map
 import qualified System.Random as Random
+import qualified Text.PrettyPrint.ANSI.Leijen as P
 
 import Data.Function ((&))
 import qualified Data.Text as T
@@ -379,7 +380,12 @@ runWrap env t = do
   e <- try $ runReaderT t env
   case e of
     Left e -> do
-      note_ env ("\n💥💥💥 EXCEPTION!!!: 💥💥💥💥💥💥💥💥💥💥💥💥💥💥💥\n\n" ++ messages env ++ ":\n" ++ show (e :: SomeException) ++ "\n💥💥💥💥💥💥💥💥💥💥💥💥💥💥💥")
+      note_ env (
+        "\n💥💥💥 EXCEPTION!!!: 💥💥💥💥💥💥💥💥💥💥💥💥💥💥💥\n\n"
+        -- Why doesn't this colouring work?
+        ++ P.displayS (P.renderPretty 1 80 ( (P.yellow $ P.text (messages env)))) ""
+        ++ ":\n" ++ show (e :: SomeException)
+        ++ "\n💥💥💥💥💥💥💥💥💥💥💥💥💥💥💥")
       runReaderT (putResult Failed) env
       pure Nothing
     Right a -> pure a
