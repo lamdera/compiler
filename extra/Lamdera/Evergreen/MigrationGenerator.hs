@@ -375,7 +375,7 @@ migrateUnion_ author pkg oldUnion newUnion tvarMapOld tvarMapNew oldVersion newV
                 []
           )
   in
-  debugHaskellPass "migrateUnion_inputs" (identifier, tvarsOld, tvarsNew, tvarMapOld, tvarMapNew, oldUnion, newUnion) $
+  -- debugHaskellPass "migrateUnion_inputs" (identifier, tvarsOld, tvarsNew, tvarMapOld, tvarMapNew, oldUnion, newUnion) $
   debugMigrationIncludes_ "migrateUnion_" $
   case specialCaseMigration identifier of
     Just migrationDef ->
@@ -837,21 +837,20 @@ canAliasToMigration oldVersion newVersion scope interfaces recursionSet typeNew@
 
 recordToMigration :: Int -> Int -> ModuleName.Canonical -> Interfaces -> RecursionSet -> Can.Type -> Maybe Can.Type -> TvarMap -> Text -> Migration
 recordToMigration oldVersion newVersion scope interfaces recursionSet tipe@(Can.TRecord newFields isPartial) typeOldM tvarMap oldValueRef =
+  debugHaskellPass "recordToMigration" (typeOldM, tipe) $
   debugMigrationIncludes_ "recordToMigration" $
   case isPartial of
     Just whatIsThis ->
+      -- @TODO check support for partial records
       xMigrationNested ("ERROR TRecord, please report this!", Set.empty, Map.empty)
       -- DError "must not contain partial records"
-
     Nothing ->
       let
         fieldMapOld :: Map N.Name Can.FieldType
         fieldMapOld =
           case typeOldM of
             Just typeOld ->
-              case Lamdera.Wire3.Helpers.resolveFieldMap typeOld tvarMap of
-                Just fields -> fields
-                Nothing -> Map.empty
+              Lamdera.Wire3.Helpers.extractFieldMap typeOld
             _ -> Map.empty
 
         fieldMigrations :: [(Text, Migration)]
@@ -859,62 +858,45 @@ recordToMigration oldVersion newVersion scope interfaces recursionSet tipe@(Can.
           newFields
             & Map.toList
             -- Restore user's field code-ordering to keep types looking familiar
-            & List.sortOn (\(name, (Can.FieldType index ftipe)) -> index)
-            & fmap (\(name, (Can.FieldType index ftipe)) ->
-                case Map.lookup name fieldMapOld of
-                  Just (Can.FieldType index_ ftypeOld) ->
-                    if isEquivalentElmType name ftypeOld ftipe then
-                      (N.toText name
-                      , xMigrationNested
-                        ( T.concat[ oldValueRef, ".", N.toText name]
-                        , Set.empty
-                        , Map.empty
-                        )
-                      )
-                    else
-                      -- debugHaskellPassDiffWhen (name == "unchangedAllTypes") "these types are unequal" (ftypeOld, ftipe) $
-                      if isAnonymousRecord ftipe
+            & List.sortOn (\(fieldName, (Can.FieldType index fieldTypeNew)) -> index)
+            & fmap (\(fieldName, (Can.FieldType index fieldTypeNew)) ->
+                case Map.lookup fieldName fieldMapOld of
+                  Just (Can.FieldType index_ fieldTypeOld) ->
+                      -- debugHaskellPassDiffWhen (name == "unchangedAllTypes") "these types are unequal" (fieldTypeOld, fieldTypeNew) $
+
+                    let oldFieldRef = T.concat [oldValueRef, ".", N.toText fieldName]
+                    in
+                    if requiresMigration tvarMap fieldTypeOld then
+                      let
+                        (MigrationNested migration imps subDefs) =
+                          canToMigration oldVersion newVersion scope interfaces recursionSet fieldTypeNew (Just (fieldTypeOld)) tvarMap oldFieldRef
+                            -- & debugHaskellPass "fieldparammigration" (fieldTypeOld, fieldTypeNew)
+                      in
+                      if isAnonymousRecord fieldTypeNew
                         then
-                          -- In order to deal with anonymous records inline, we have to change
-                          -- the name of the value to avoid shadowing the `old.` ref.
                           let
-                            readMaybeInt :: Text -> Maybe Int
-                            readMaybeInt = readMaybeText
-
-                            -- For every additional anonymous nesting, bump the reference number
-                            recname :: Text
-                            recname =
-                              case oldValueRef of
-                                "old" -> "rec"
-                                _ ->
-                                  oldValueRef
-                                    & T.replace "rec" ""
-                                    & readMaybeInt
-                                    & withDefault (0 :: Int)
-                                    & (+) 1
-                                    & show_
-                                    & (<>) "rec"
-
-                            (MigrationNested st imps subDefs) = recordToMigration oldVersion newVersion scope interfaces recursionSet ftipe (Just ftypeOld) tvarMap recname
+                            -- In order to deal with anonymous records inline, we have to change
+                            -- the name of the value to avoid shadowing the `old.` ref.
+                            recname = nextUniqueRef oldValueRef
                           in
-                          ( N.toText name
+                          ( N.toText fieldName
                           , xMigrationNested
-                            ( T.concat [oldValueRef, ".", N.toText name, " |> (\\", recname, " -> ", st, ")"], imps, subDefs)
+                            ( T.concat [ oldFieldRef, " |> (\\", recname, " -> ", migration, ")"], imps, subDefs)
                           )
                         else
-                          let
-                            (MigrationNested st imps subDefs) =
-                              canToMigration oldVersion newVersion scope interfaces recursionSet ftipe (Just (ftypeOld)) tvarMap oldValueRef
-                          in
-                          ( N.toText name
-                          , xMigrationNested ( T.concat [oldValueRef, ".", N.toText name, " |> ", st ], imps, subDefs)
+                          ( N.toText fieldName
+                          , xMigrationNested ( T.concat [ oldFieldRef, " |> ", migration ], imps, subDefs)
                           )
+                    else
+                      ( N.toText fieldName
+                      , xMigrationNested ( T.concat [ oldFieldRef ], Set.empty, Map.empty)
+                      )
 
                   Nothing ->
                     -- This field did not exist in the old version. We need an init!
-                    let (MigrationNested st imps ft) = canToMigration oldVersion newVersion scope interfaces recursionSet ftipe Nothing tvarMap oldValueRef
+                    let (MigrationNested migration imps subDefs) = canToMigration oldVersion newVersion scope interfaces recursionSet fieldTypeNew Nothing tvarMap oldValueRef
                     in
-                    ( N.toText name, xMigrationNested (T.concat["Unimplemented -- Type `", qualifiedTypeName ftipe, "` was added in V", show_ newVersion, ". I need you to set a default value."], imps, ft) )
+                    ( N.toText fieldName, xMigrationNested (T.concat["Unimplemented -- Type `", qualifiedTypeName fieldTypeNew, "` was added in V", show_ newVersion, ". I need you to set a default value."], imps, subDefs) )
             )
             & (\v -> v ++ missingFields)
 
@@ -1079,71 +1061,23 @@ typeToMigration oldVersion newVersion scope interfaces recursionSet typeNew@(Can
       (\m_p1      -> T.concat [ "Dict.map (\\k v -> v |> ", m_p1, ")" ])
       (\m_p0 m_p1 -> T.concat [ "Dict.toList |> List.map (Tuple.mapBoth ", m_p0, " ", m_p1, ") |> Dict.fromList" ])
 
-    -- Other core types we can skip migrating
-    -- ("elm", "browser", "Browser.Navigation", "Key")   -> noMigration
-
-    -- -- Values backed by JS Kernel types we cannot encode/decode
-    -- ("elm", "virtual-dom", "VirtualDom", "Node")      -> kernelError
-    -- ("elm", "virtual-dom", "VirtualDom", "Attribute") -> kernelError
-    -- ("elm", "virtual-dom", "VirtualDom", "Handler")   -> kernelError
-    -- ("elm", "core", "Process", "Id")                  -> kernelError
-    -- ("elm", "core", "Platform", "ProcessId")          -> kernelError
-    -- ("elm", "core", "Platform", "Program")            -> kernelError
-    -- ("elm", "core", "Platform", "Router")             -> kernelError
-    -- ("elm", "core", "Platform", "Task")               -> kernelError
-    -- ("elm", "core", "Task", "Task")                   -> kernelError
-    -- ("elm", "core", "Platform.Cmd", "Cmd")            -> kernelError
-    -- ("elm", "core", "Platform.Sub", "Sub")            -> kernelError
-    -- ("elm", "json", "Json.Decode", "Decoder")         -> kernelError
-    -- ("elm", "json", "Json.Decode", "Value")           -> kernelError
-    -- ("elm", "json", "Json.Encode", "Value")           -> kernelError
-    -- ("elm", "http", "Http", "Body")                   -> kernelError
-    -- ("elm", "http", "Http", "Part")                   -> kernelError
-    -- ("elm", "http", "Http", "Expect")                 -> kernelError
-    -- ("elm", "http", "Http", "Resolver")               -> kernelError
-    -- ("elm", "parser", "Parser", "Parser")             -> kernelError
-    -- ("elm", "parser", "Parser.Advanced", "Parser")    -> kernelError
-    -- ("elm", "regex", "Regex", "Regex")                -> kernelError
-
-    -- -- Not Kernel, but have functions... should we have them here?
-    -- -- @TODO remove once we add test for functions in custom types
-    -- ("elm", "url", "Url.Parser", "Parser")               -> kernelError
-    -- ("elm", "url", "Url.Parser.Internal", "QueryParser") -> kernelError
-
-    -- Kernel concessions for Frontend Model and Msg
-    -- ("elm", "file", "File", "File") -> ("File.File", Set.singleton moduleName, Map.empty)
-
-    -- @TODO improve; These aliases will show up as VirtualDom errors which might confuse users
-    -- ("elm", "svg", "Svg", "Svg") -> kernelError
-    -- ("elm", "svg", "Svg", "Attribute") -> kernelError
-
-    -- ((ModuleName.Canonical (Pkg.Name "elm" _) (N.Name n)), _) ->
-    --   DError $ "❗️unhandled elm type: " <> (T.pack $ show moduleName) <> ":" <> (T.pack $ show name)
-    --
-    -- ((ModuleName.Canonical (Pkg.Name "elm-explorations" _) (N.Name n)), _) ->
-    --   DError $ "❗️unhandled elm-explorations type: " <> (T.pack $ show moduleName) <> ":" <> (T.pack $ show name)
-
     (author, pkg, module_, typeName) ->
       -- Anything else must not be a core type, recurse to find it
-
-
       -- @TODO lift the Maybe handling up so we only ever have a typeOld here
       case typeOldM of
         Just typeOld ->
           case (findTypeDef typeOld interfaces, findTypeDef typeNew interfaces) of
             (Just typeDefOld, Just typeDefNew) ->
-              -- @TODO migrateTypeDef needs to be passed tvars!
-
+              -- @TODO migrateTypeDef needs to be passed tvars! -- @TODOTODO is this todo really todo?
               let
                 tvarMapOld_ = redoTvarMap typeOld typeDefOld
                 tvarMapNew_ = redoTvarMap typeNew typeDefNew
               in
-              debugHaskellPass "typeToMigration_BOOM" (typeOld, typeNew, typeDefOld, typeDefNew, tvarMapOld_, tvarMapNew_) $
+              -- debugHaskellPass "typeToMigration_BOOM" (typeOld, typeNew, typeDefOld, typeDefNew, tvarMapOld_, tvarMapNew_) $
                 migrateTypeDef typeDefOld typeDefNew oldVersion newVersion interfaces tvarMapOld_ tvarMapNew_
 
             (_, Nothing) ->
               unimplemented "typeToMigration" ("Impossible: I came across a `" <> show_ typeNew <> "` reference but couldn't actually load the definition. Please report this.")
-
             (Nothing, _) ->
               unimplemented "typeToMigration" ("Impossible: I came across a `" <> show_ typeOld <> "` reference but couldn't actually load the definition. Please report this.")
 
@@ -1195,7 +1129,8 @@ redoTvarMap tipe typeDef =
   tvarMap
 
 
-
+-- Prevents us from recursing infinitely on a recursive type, but still includes
+-- any unique tvars that might have been used in this specific invocation
 handleSeenRecursiveType :: Int -> Int -> ModuleName.Canonical -> TypeIdentifier -> Interfaces -> RecursionSet -> Can.Type -> Maybe Can.Type -> TvarMap -> Text -> Migration
 handleSeenRecursiveType oldVersion newVersion scope identifier@(author, pkg, newModule, _) interfaces recursionSet tipe@(Can.TType moduleName name params) typeOldM tvarMap oldValueRef =
   -- error "tbc"
@@ -1224,16 +1159,6 @@ handleSeenRecursiveType oldVersion newVersion scope identifier@(author, pkg, new
         usageMigration
           & fmap migrationTopLevelDefs
           & mergeAllSubDefs
-
-      typeScope :: Text
-      typeScope =
-        if moduleName == scope then
-          ""
-        else
-          nameToText (dropCan moduleName) <> "."
-
-      typeName :: Text
-      typeName = N.toText name
 
       migrationName :: Text
       migrationName = migrationNameUnderscored newModule oldVersion newVersion name

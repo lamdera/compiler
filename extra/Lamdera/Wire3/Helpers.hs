@@ -238,6 +238,17 @@ resolveFieldMap tipe tvarMap =
     -}
     _ -> Nothing
 
+
+extractFieldMap tipe =
+  case tipe of
+    TRecord fieldMapExtended maybeNameExtended ->
+      fieldMapExtended
+    TAlias moduleName typeName tvars (Holey tipe) -> do
+      extractFieldMap tipe
+    TAlias moduleName typeName tvars (Filled tipe) -> do
+      extractFieldMap tipe
+    _ -> Map.empty
+
 -- instance Show (Can.Decls) where
 --   show decls_ = show $ declsToList decls_
 

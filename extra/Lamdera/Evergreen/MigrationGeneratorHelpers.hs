@@ -286,7 +286,12 @@ isUserDefinedType_ cType =
 laterError = error "fail"
 
 
-containsUserTypes :: [(N.Name, Can.Type)] -> Can.Type -> Bool
+requiresMigration :: TvarMap -> Can.Type -> Bool
+requiresMigration tvarMap tipe =
+  containsUserTypes tvarMap tipe
+
+
+containsUserTypes :: TvarMap -> Can.Type -> Bool
 containsUserTypes tvarMap tipe =
   let
     !_ = onlyWhen (
@@ -584,3 +589,22 @@ suffixIfNonempty t s =
 
 noMigration :: Migration
 noMigration = xMigrationNested ("", Set.empty, Map.empty)
+
+
+-- For every additional anonymous nesting, bump the reference number
+nextUniqueRef :: Text -> Text
+nextUniqueRef oldRef =
+  let
+    readMaybeInt :: Text -> Maybe Int
+    readMaybeInt = readMaybeText
+  in
+  case oldRef of
+    "old" -> "rec"
+    _ ->
+      oldRef
+        & T.replace "rec" ""
+        & readMaybeInt
+        & withDefault (0 :: Int)
+        & (+) 1
+        & show_
+        & (<>) "rec"
