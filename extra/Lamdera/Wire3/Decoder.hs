@@ -354,7 +354,7 @@ decoderForType ifaces cname tipe =
                 TRecord fieldMap extensibleName ->
                   case resolvedRecordFieldMapM fieldMap extensibleName tvars_ of
                     Just resolved ->
-                     let extendedRecord = TRecord resolved Nothing & resolveTvars tvars_
+                     let extendedRecord = TRecord resolved Nothing & resolveTvar tvars_
                      in decoderForType ifaces cname extendedRecord
                     Nothing -> normalDecoder
                 otherTypes -> normalDecoder
@@ -363,7 +363,7 @@ decoderForType ifaces cname tipe =
                 TRecord fieldMap extensibleName ->
                     case resolvedRecordFieldMapM fieldMap extensibleName tvars_ of
                     Just resolved ->
-                      let extendedRecord = TRecord resolved Nothing & resolveTvars tvars_
+                      let extendedRecord = TRecord resolved Nothing & resolveTvar tvars_
                       in decoderForType ifaces cname extendedRecord
                     Nothing -> normalDecoder
                 otherTypes -> normalDecoder

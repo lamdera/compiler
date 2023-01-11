@@ -163,25 +163,25 @@ resolvedRecordFieldMapM fieldMap extensibleName tvarMap =
               Just $ fieldMap <> fieldMapExtended
 
             TAlias moduleName typeName tvars (Holey tipe) -> do
-              let newResolvedTvars = tvars & fmap (\(n, t) -> (n, resolveTvars tvarMap t))
-              case resolveTvars newResolvedTvars tipe of
+              let newResolvedTvars = tvars & fmap (\(n, t) -> (n, resolveTvar tvarMap t))
+              case resolveTvar newResolvedTvars tipe of
                 TRecord fieldMapExtensible _ ->
                   fieldMap
                     & Map.union fieldMapExtensible
                     & fmap (\(FieldType index tipe) ->
-                        FieldType index (resolveTvars newResolvedTvars tipe)
+                        FieldType index (resolveTvar newResolvedTvars tipe)
                       )
                     & Just
                 _ -> Nothing
 
             TAlias moduleName typeName tvars (Filled tipe) -> do
-              let newResolvedTvars = tvars & fmap (\(n, t) -> (n, resolveTvars tvarMap t))
-              case resolveTvars newResolvedTvars tipe of
+              let newResolvedTvars = tvars & fmap (\(n, t) -> (n, resolveTvar tvarMap t))
+              case resolveTvar newResolvedTvars tipe of
                 TRecord fieldMapExtensible _ ->
                   fieldMap
                     & Map.union fieldMapExtensible
                     & fmap (\(FieldType index tipe) ->
-                        FieldType index (resolveTvars newResolvedTvars tipe)
+                        FieldType index (resolveTvar newResolvedTvars tipe)
                       )
                     & Just
                 _ -> Nothing
@@ -213,14 +213,14 @@ resolveFieldMap tipe tvarMap =
       Just $ fieldMapExtended
 
     TAlias moduleName typeName tvars (Holey tipe) -> do
-      let newResolvedTvars = tvars & fmap (\(n, t) -> (n, resolveTvars tvarMap t))
-      case resolveTvars newResolvedTvars tipe of
+      let newResolvedTvars = tvars & fmap (\(n, t) -> (n, resolveTvar tvarMap t))
+      case resolveTvar newResolvedTvars tipe of
         TRecord fieldMapExtensible _ -> Just fieldMapExtensible
         _ -> Nothing
 
     TAlias moduleName typeName tvars (Filled tipe) -> do
-      let newResolvedTvars = tvars & fmap (\(n, t) -> (n, resolveTvars tvarMap t))
-      case resolveTvars newResolvedTvars tipe of
+      let newResolvedTvars = tvars & fmap (\(n, t) -> (n, resolveTvar tvarMap t))
+      case resolveTvar newResolvedTvars tipe of
         TRecord fieldMapExtensible _ -> Just fieldMapExtensible
         _ -> Nothing
 
@@ -733,10 +733,10 @@ unwrapAliasesDeep t =
     TAlias moduleName typeName tvars (Filled tipe) -> unwrapAliasesDeep tipe
 
 
-resolveTvars :: [(Data.Name.Name, Type)] -> Type -> Type
-resolveTvars tvarMap t =
+resolveTvar :: [(Data.Name.Name, Type)] -> Type -> Type
+resolveTvar tvarMap t =
   case t of
-    TLambda t1 t2 -> TLambda (resolveTvars tvarMap t1) (resolveTvars tvarMap t2)
+    TLambda t1 t2 -> TLambda (resolveTvar tvarMap t1) (resolveTvar tvarMap t2)
 
     TVar a ->
       case List.find (\(t,ti) -> t == a) tvarMap of
@@ -770,7 +770,7 @@ resolveTvars tvarMap t =
 
     TType modul typename tvars ->
       tvars
-        & fmap (resolveTvars tvarMap)
+        & fmap (resolveTvar tvarMap)
         & TType modul typename
 
     TRecord fieldMap maybeExtensible ->
@@ -778,42 +778,42 @@ resolveTvars tvarMap t =
         Nothing ->
           fieldMap
             & fmap (\(FieldType index tipe) ->
-                FieldType index (resolveTvars tvarMap tipe)
+                FieldType index (resolveTvar tvarMap tipe)
               )
             & (\newFieldMap -> TRecord newFieldMap Nothing )
         Just extensibleName -> do
-          let resolvedExtension = resolveTvars tvarMap (TVar extensibleName)
+          let resolvedExtension = resolveTvar tvarMap (TVar extensibleName)
           case resolvedExtension of
             TRecord fieldMapExtensible _ ->
               fieldMap
                 & Map.union fieldMapExtensible
                 & fmap (\(FieldType index tipe) ->
-                    FieldType index (resolveTvars tvarMap tipe)
+                    FieldType index (resolveTvar tvarMap tipe)
                   )
                 -- Now the extensible record has been reified, we can drop the extensible part
                 & (\newFieldMap -> TRecord newFieldMap Nothing )
 
             TAlias moduleName typeName tvars (Holey tipe) -> do
-              let newResolvedTvars = tvars & fmap (\(n, t) -> (n, resolveTvars tvarMap t))
-              case resolveTvars newResolvedTvars tipe of
+              let newResolvedTvars = tvars & fmap (\(n, t) -> (n, resolveTvar tvarMap t))
+              case resolveTvar newResolvedTvars tipe of
                 TRecord fieldMapExtensible _ ->
                   fieldMap
                     & Map.union fieldMapExtensible
                     & fmap (\(FieldType index tipe) ->
-                        FieldType index (resolveTvars newResolvedTvars tipe)
+                        FieldType index (resolveTvar newResolvedTvars tipe)
                       )
                     -- Now the extensible record has been reified, we can drop the extensible part
                     & (\newFieldMap -> TRecord newFieldMap Nothing )
                 _ -> error $ "bad nesting Holey" ++ show tipe
 
             TAlias moduleName typeName tvars (Filled tipe) -> do
-              let newResolvedTvars = tvars & fmap (\(n, t) -> (n, resolveTvars tvarMap t))
-              case resolveTvars newResolvedTvars tipe of
+              let newResolvedTvars = tvars & fmap (\(n, t) -> (n, resolveTvar tvarMap t))
+              case resolveTvar newResolvedTvars tipe of
                 TRecord fieldMapExtensible _ ->
                   fieldMap
                     & Map.union fieldMapExtensible
                     & fmap (\(FieldType index tipe) ->
-                        FieldType index (resolveTvars newResolvedTvars tipe)
+                        FieldType index (resolveTvar newResolvedTvars tipe)
                       )
                     -- Now the extensible record has been reified, we can drop the extensible part
                     & (\newFieldMap -> TRecord newFieldMap Nothing )
@@ -823,21 +823,21 @@ resolveTvars tvarMap t =
               -- @TODO used to have this, but it caused a failure on `TVar a` for which an mcve was elusive...
               -- theory is that a chained tvar case must somehow be possible, perhaps in a compound type.
               -- error $ "resolveTvars: impossible extensible record with non-record type: " ++ show maybeExtensible ++ "\n\n" ++ show rt
-              resolveTvars tvarMap rt
+              resolveTvar tvarMap rt
 
 
     TUnit -> t
 
-    TTuple a b Nothing  -> TTuple (resolveTvars tvarMap a) (resolveTvars tvarMap b) Nothing
-    TTuple a b (Just c) -> TTuple (resolveTvars tvarMap a) (resolveTvars tvarMap b) (Just $ resolveTvars tvarMap c)
+    TTuple a b Nothing  -> TTuple (resolveTvar tvarMap a) (resolveTvar tvarMap b) Nothing
+    TTuple a b (Just c) -> TTuple (resolveTvar tvarMap a) (resolveTvar tvarMap b) (Just $ resolveTvar tvarMap c)
 
     TAlias moduleName typeName tvars (Holey tipe) ->
-      let newResolvedTvars = tvars & fmap (\(n, t) -> (n, resolveTvars tvarMap t))
-      in TAlias moduleName typeName newResolvedTvars (Filled $ resolveTvars newResolvedTvars tipe)
+      let newResolvedTvars = tvars & fmap (\(n, t) -> (n, resolveTvar tvarMap t))
+      in TAlias moduleName typeName newResolvedTvars (Filled $ resolveTvar newResolvedTvars tipe)
 
     TAlias moduleName typeName tvars (Filled tipe) ->
-      let newResolvedTvars = tvars & fmap (\(n, t) -> (n, resolveTvars tvarMap t))
-      in TAlias moduleName typeName newResolvedTvars (Filled $ resolveTvars newResolvedTvars tipe)
+      let newResolvedTvars = tvars & fmap (\(n, t) -> (n, resolveTvar tvarMap t))
+      in TAlias moduleName typeName newResolvedTvars (Filled $ resolveTvar newResolvedTvars tipe)
 
 
 resolveTvarRenames tvars tvarNames =

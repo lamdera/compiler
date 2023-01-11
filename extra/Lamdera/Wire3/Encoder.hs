@@ -341,7 +341,7 @@ inlineIfRecordOrCall depth ifaces cname tipe tvars aType =
         TRecord fieldMap extensibleName ->
           case resolvedRecordFieldMapM fieldMap extensibleName tvars of
             Just extendedFields ->
-              let extendedRecord = TRecord (extendedFields) Nothing & resolveTvars tvars
+              let extendedRecord = TRecord (extendedFields) Nothing & resolveTvar tvars
               in deepEncoderForType depth ifaces cname extendedRecord
             Nothing -> normalEncoder
 
@@ -414,7 +414,7 @@ encodeTypeValue depth ifaces cname tipe value =
                 TRecord fieldMap extensibleName ->
                   case resolvedRecordFieldMapM fieldMap extensibleName tvars of
                     Just resolved ->
-                        let extendedRecord = TRecord resolved extensibleName & resolveTvars tvars
+                        let extendedRecord = TRecord resolved extensibleName & resolveTvar tvars
                         in
                         call (encoderForType depth ifaces cname extendedRecord) [ value ]
                     Nothing -> normalEncoder

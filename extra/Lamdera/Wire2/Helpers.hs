@@ -603,10 +603,10 @@ unwrapAliasesDeep t =
     TAlias moduleName typeName tvars (Filled tipe) -> unwrapAliasesDeep tipe
 
 
-resolveTvars :: [(Data.Name.Name, Type)] -> Type -> Type
-resolveTvars tvarMap t =
+resolveTvar :: [(Data.Name.Name, Type)] -> Type -> Type
+resolveTvar tvarMap t =
   case t of
-    TLambda t1 t2 -> TLambda (resolveTvars tvarMap t1) (resolveTvars tvarMap t2)
+    TLambda t1 t2 -> TLambda (resolveTvar tvarMap t1) (resolveTvar tvarMap t2)
 
     TVar a ->
       case List.find (\(t,ti) -> t == a) tvarMap of
@@ -640,7 +640,7 @@ resolveTvars tvarMap t =
 
     TType modul typename tvars ->
       tvars
-        & fmap (resolveTvars tvarMap)
+        & fmap (resolveTvar tvarMap)
         & TType modul typename
 
     TRecord fieldMap maybeExtensible ->
@@ -648,17 +648,17 @@ resolveTvars tvarMap t =
         Nothing ->
           fieldMap
             & fmap (\(FieldType index tipe) ->
-                FieldType index (resolveTvars tvarMap tipe)
+                FieldType index (resolveTvar tvarMap tipe)
               )
             -- @EXTENSIBLERECORDS For now we don't support extensible records, so drop the maybeExtensible
             & (\newFieldMap -> TRecord newFieldMap Nothing )
         Just extensibleName ->
-          case resolveTvars tvarMap (TVar extensibleName) of
+          case resolveTvar tvarMap (TVar extensibleName) of
             TRecord fieldMapExtensible _ ->
               fieldMap
                 & Map.union fieldMapExtensible
                 & fmap (\(FieldType index tipe) ->
-                    FieldType index (resolveTvars tvarMap tipe)
+                    FieldType index (resolveTvar tvarMap tipe)
                   )
                 -- @EXTENSIBLERECORDS For now we don't support extensible records, so drop the maybeExtensible
                 & (\newFieldMap -> TRecord newFieldMap Nothing )
@@ -668,16 +668,16 @@ resolveTvars tvarMap t =
 
     TUnit -> t
 
-    TTuple a b Nothing  -> TTuple (resolveTvars tvarMap a) (resolveTvars tvarMap b) Nothing
-    TTuple a b (Just c) -> TTuple (resolveTvars tvarMap a) (resolveTvars tvarMap b) (Just $ resolveTvars tvarMap c)
+    TTuple a b Nothing  -> TTuple (resolveTvar tvarMap a) (resolveTvar tvarMap b) Nothing
+    TTuple a b (Just c) -> TTuple (resolveTvar tvarMap a) (resolveTvar tvarMap b) (Just $ resolveTvar tvarMap c)
 
     TAlias moduleName typeName tvars (Holey tipe) ->
-      let newResolvedTvars = tvars & fmap (\(n, t) -> (n, resolveTvars tvarMap t))
-      in TAlias moduleName typeName newResolvedTvars (Filled $ resolveTvars newResolvedTvars tipe)
+      let newResolvedTvars = tvars & fmap (\(n, t) -> (n, resolveTvar tvarMap t))
+      in TAlias moduleName typeName newResolvedTvars (Filled $ resolveTvar newResolvedTvars tipe)
 
     TAlias moduleName typeName tvars (Filled tipe) ->
-      let newResolvedTvars = tvars & fmap (\(n, t) -> (n, resolveTvars tvarMap t))
-      in TAlias moduleName typeName newResolvedTvars (Filled $ resolveTvars newResolvedTvars tipe)
+      let newResolvedTvars = tvars & fmap (\(n, t) -> (n, resolveTvar tvarMap t))
+      in TAlias moduleName typeName newResolvedTvars (Filled $ resolveTvar newResolvedTvars tipe)
 
 
 resolveTvarRenames tvars tvarNames =

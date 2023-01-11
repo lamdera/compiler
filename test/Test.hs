@@ -92,19 +92,26 @@ For more information on how to use the GHCi debugger, see the GHC User's Guide.
 
 target = Test.all
 
+
+-- target = do
+--   -- let p = "/Users/mario/dev/projects/lamdera-dashboard"
+--   let p = "/Users/mario/dev/projects/bento-life"
+--   -- let p = "/Users/mario/dev/test/sheep-game"
+
+--   Lamdera.remove (p </> "src/Evergreen/Migrate/V45.elm")
+--   Lamdera.rmdir (p </> "src/Evergreen/V45")
+--   Ext.Common.setProjectRoot p
+--   -- Dir.withCurrentDirectory p $ Lamdera.CLI.Check.run () (Lamdera.CLI.Check.Flags { Lamdera.CLI.Check._destructiveMigration = True })
+--   Dir.withCurrentDirectory p $ Lamdera.CLI.Check.run_
+
+
 -- target =
---   Test.Check.checkWithParams "/Users/mario/lamdera/test/v1" "always-v0"
+  -- Test.Check.checkWithParams "/Users/mario/lamdera/test/v1" "always-v0"
+  -- Test.Check.checkWithParams "/Users/mario/lamdera/test/sheep-game" "sheep-game"
 
 -- target = buildTestHarnessToProductionJs
 -- target = checkProjectCompiles
 -- target = liveReloadLive
--- target = do
-
---   let p = "/Users/mario/dev/projects/lamdera-dashboard"
-
---   Ext.Common.setProjectRoot p
---   Dir.withCurrentDirectory p $ Lamdera.CLI.Check.run () ()
-
 -- target = Test.Wire.all
 -- target = checkUserConfig
 -- target = Test.Wire.buildAllPackages
@@ -257,7 +264,7 @@ rerunOnly seed label =
 allTests =
   tests
     [ tests []
-    , scope "Test.Lamdera -> " $ Test.Lamdera.suite
+    -- , scope "Test.Lamdera -> " $ Test.Lamdera.suite
     -- , scope "Test.Snapshot -> " $ Test.Snapshot.suite
     -- , scope "Test.Wire -> " $ Test.Wire.suite
     -- , scope "Test.Ext.ElmPages.Check -> " $ Test.Ext.ElmPages.Check.suite

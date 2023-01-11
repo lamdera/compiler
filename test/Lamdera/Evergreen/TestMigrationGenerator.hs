@@ -47,7 +47,8 @@ all = do
 
 suite :: Test ()
 suite = tests
-  [ scope "testExamples" testExamples
+  [
+    scope "testExamples" testExamples
   -- , scope "e2e migration: 1 -> 2" $ testMigrationGeneration "scenario-migration-generate" 1 2
   -- , scope "containsUserTypes" testContainsUserTypes
   ]
@@ -109,7 +110,8 @@ testExamples = withTestEnv $ do
         [
           -- "src/Test/Migrate_Record.elm"
         -- , "src/Test/Migrate_External_Wrap.elm"
-         "src/Migrate_External_Paramed"
+          -- "src/Migrate_External_Paramed"
+         "src/Migrate_All"
         -- , ""
         ]
 
@@ -127,6 +129,7 @@ testExamples = withTestEnv $ do
       filenameOld = folder </> "Old.elm"
       filenameNew = folder </> "New.elm"
       filenameExpected = folder </> "Expected.elm"
+      filenameActual = folder </> "Actual.elm"
       typeName = "Target"
       moduleNameOld = N.fromChars $ FP.takeBaseName folder <> ".Old"
       moduleNameNew = N.fromChars $ FP.takeBaseName folder <> ".New"
@@ -158,6 +161,7 @@ testExamples = withTestEnv $ do
                   expected <- io $ Ext.ElmFormat.formatOrPassthrough (expectation & T.replace "\\n" "\n" & T.strip)
                   -- actual <- io $ Ext.ElmFormat.formatOrPassthrough (migrationDef & T.replace "\\n" "\n" & T.strip)
                   actual <- io $ Ext.ElmFormat.formatOrPassthrough (final)
+                  _ <- io $ writeUtf8 (project </> filenameActual) actual
                   expectEqualTextTrimmed expected actual
                   pure migrationNested
                 Nothing ->

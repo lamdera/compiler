@@ -19,6 +19,7 @@ import qualified Elm.Interface as Interface
 
 import Lamdera
 import Lamdera.Types
+import Lamdera.Wire3.Helpers (resolveTvar)
 import StandaloneInstances
 
 type TypeName = N.Name
@@ -117,15 +118,13 @@ allSubDefs migrations =
 allImports :: [Migration] -> ElmImports
 allImports migrations = migrations
   & fmap (\migration ->
-    migrationImports migration <> (migrationTopLevelDefs migration & Map.toList & fmap (imports . snd) & mergeAllImports)
+    migrationImports migration <>
+      (migrationTopLevelDefs migration & Map.toList & fmap (imports . snd) & Set.unions)
   )
-  & mergeAllImports
+  & Set.unions
 
 mergeAllSubDefs :: [MigrationDefinitions] -> MigrationDefinitions
 mergeAllSubDefs ftss = ftss & foldl (\acc fts -> Map.union acc fts) Map.empty
-
-mergeAllImports :: [ElmImports] -> ElmImports
-mergeAllImports imps = imps & foldl (\acc elmImport -> acc <> elmImport) Set.empty
 
 migrationNameUnderscored :: N.Name -> Int -> Int -> N.Name -> Text
 migrationNameUnderscored newModule oldVersion newVersion newTypeName =
@@ -141,7 +140,7 @@ unimplemented debugIdentifier message =
   let debugIdentifier_ :: Text = ""
         -- & (\v -> debugIdentifier & suffixIfNonempty " ")
   in
-  xMigrationNested (T.concat ["Unimplemented -- ", debugIdentifier_, message, "\n"], Set.empty, Map.empty)
+  xMigrationNested (T.concat ["(Unimplemented {- ", debugIdentifier_, message, " -})"], Set.empty, Map.empty)
 
 
 dropCan :: ModuleName.Canonical -> N.Name
@@ -259,6 +258,10 @@ isUserType :: TypeIdentifier -> Bool
 isUserType (author, pkg, module_, tipe) =
   author == "author" && pkg == "project"
 
+
+isPackageType :: Can.Type -> Bool
+isPackageType = not . isUserDefinedType_
+
 -- Whether this top level wrapping type is defined by the user,
 -- i.e. an alias or custom type, meaning we likely need to migrate it
 isUserDefinedType_ :: Can.Type -> Bool
@@ -286,23 +289,10 @@ isUserDefinedType_ cType =
 laterError = error "fail"
 
 
-requiresMigration :: TvarMap -> Can.Type -> Bool
-requiresMigration tvarMap tipe =
-  containsUserTypes tvarMap tipe
-
-
+-- @ISSUE this fails to detect custom types, which was the whole point
 containsUserTypes :: TvarMap -> Can.Type -> Bool
 containsUserTypes tvarMap tipe =
-  let
-    !_ = onlyWhen (
-          case tipe of
-            Can.TType moduleName name params ->
-              name == "Set"
-            _ -> False
-         ) $
-           formatHaskellValue "containsUserTypes" (tipe, tvarMap) :: IO ()
-  in
-  case tipe of
+  case resolveTvar tvarMap tipe of
     Can.TType moduleName name params ->
       -- debugHaskellPassWhen (length params /= 0) "containsUserTypes:params" (tipe, tvarMap) $
       isUserModule moduleName
@@ -320,19 +310,15 @@ containsUserTypes tvarMap tipe =
     Can.TRecord fields isPartial ->
       fields & Can.fieldsToList & fmap snd & any (containsUserTypes tvarMap)
 
-    Can.TTuple a b mc      ->
+    Can.TTuple a b mc ->
       containsUserTypes tvarMap a || containsUserTypes tvarMap b || case mc of
         Just c -> containsUserTypes tvarMap c
         Nothing -> False
 
-    Can.TVar a             ->
-      case List.find (\(t,ti) -> t == a) tvarMap of
-        Just (_, Can.TVar a_) ->
-          -- tvarMap mapping for `a` is a TVar, i.e. ("userMsg", TVar "userMsg").
-          -- if we don't terminate this now, we'll have an infinite loop
-          False
-        Just (_,ti) -> containsUserTypes tvarMap ti
-        Nothing -> False
+    Can.TVar a ->
+      -- We've already tried to resolve tvars, so this is an unfilled type, this should be impossible
+      -- error $ concat ["containsUserTypes: unresolved `", show tipe, "`, please report this issue."]
+      True
     Can.TUnit              -> False
     Can.TLambda a b        -> False -- not true but unsupported type
 
@@ -356,26 +342,94 @@ isTvar cType =
     _ -> False
 
 
+
+
 -- Like == but ignores differences in alias module locations when they are pointing to equivalent types
 -- Will NOT find custom types to be equivalent
-isEquivalentElmType :: N.Name -> Can.Type -> Can.Type -> Bool
-isEquivalentElmType debug t1 t2 = do
+-- Will NOT resolve tvars
+
+
+isEquivalentElmType__ :: N.Name -> Can.Type -> Can.Type -> Bool
+isEquivalentElmType__ debug t1 t2 = do
+  case (t1,t2) of
+    (Can.TType moduleName name params, Can.TType moduleName2 name2 params2) ->
+        moduleName == moduleName2 && name == name2
+    (Can.TAlias moduleName name tvarMap_ aliasType, Can.TAlias moduleName2 name2 tvarMap_2 aliasType2) ->
+      case (aliasType, aliasType2) of
+        (Can.Holey t1, Can.Holey t2) ->
+          isEquivalentElmType__ name t1 t2
+        (Can.Filled t1, Can.Filled t2) ->
+          isEquivalentElmType__ name t1 t2
+        _ ->
+          False
+    (Can.TRecord fields isPartial, Can.TRecord fields2 isPartial2) ->
+      let
+        fieldTypes1 :: [Can.Type] = fields & Can.fieldsToList & fmap snd
+        fieldTypes2 :: [Can.Type] = fields2 & Can.fieldsToList & fmap snd
+      in
+      (length fieldTypes1 == length fieldTypes2)
+        && (zipWith (isEquivalentElmType__ debug) fieldTypes1 fieldTypes2 & all id)
+
+    (Can.TTuple t1 t2 mt3, Can.TTuple t12 t22 mt32) ->
+      t1 == t2
+    (Can.TUnit, Can.TUnit) ->
+      t1 == t2
+    (Can.TVar name, Can.TVar name2) ->
+      t1 == t2
+    (Can.TLambda _ _, Can.TLambda _ _) ->
+      -- Skip lambda equality not relevant
+      False
+    _ ->
+      False
+
+
+
+
+
+-- 1. ✅ need to rename the below isEquivalentElmType to be something like isEquivalentAppliedType
+-- 2. rename all usages and check if the logic is right or should use imaginary above function
+-- 2. implement the above, which ignores applied types (tvars)
+
+
+
+
+-- Like == but ignores differences in alias module locations when they are pointing to equivalent types
+-- Will NOT find identically defined custom types to be equivalent
+-- Will NOT resolve tvars
+-- WILL consider applied parameter types
+isEquivalentAppliedType :: N.Name -> Can.Type -> Can.Type -> Bool
+isEquivalentAppliedType debug t1 t2 = do
+  -- debugHaskellPass "isEquivalentElmType" (t1,t2) $
   -- if name /= "unchangedAllTypes"
   --   then
   --   else
+    -- debugHaskellPassWhen True
+    --   -- (case t1 of
+    --   --   Can.TType moduleName name params ->
+    --   --     name == debug
+    --   --   _ -> False
+    --   -- )
+    -- -- debug == "migrate_External_Paramed")
+    --   "thingy" (
+    --     (case t1 of
+    --     Can.TType moduleName name params ->
+    --       name
+    --     _ -> ""
+    --   )
+    --   ) $
       case (t1,t2) of
         (Can.TType moduleName name params, Can.TType moduleName2 name2 params2) ->
 
           -- debugHaskell "TType" $
-            moduleName == moduleName2 && name == name2 && areEquivalentElmTypes name params params2
+            moduleName == moduleName2 && name == name2 && areEquivalentAppliedElmTypes name params params2
         (Can.TAlias moduleName name tvarMap_ aliasType, Can.TAlias moduleName2 name2 tvarMap_2 aliasType2) ->
           case (aliasType, aliasType2) of
             (Can.Holey t1, Can.Holey t2) ->
               -- debugHaskellPass "TAlias:Holey" (moduleName, moduleName2, name, name2, tvarMap_, tvarMap_2) $
-              isEquivalentElmType name t1 t2 && areEquivalentTvarMaps name tvarMap_ tvarMap_2
+              isEquivalentAppliedType name t1 t2 && areEquivalentAppliedTvarMaps name tvarMap_ tvarMap_2
             (Can.Filled t1, Can.Filled t2) ->
               -- debugHaskellPass "TAlias:Filled" (moduleName, moduleName2, name, name2, tvarMap_, tvarMap_2) $
-              isEquivalentElmType name t1 t2 && areEquivalentTvarMaps name tvarMap_ tvarMap_2
+              isEquivalentAppliedType name t1 t2 && areEquivalentAppliedTvarMaps name tvarMap_ tvarMap_2
             _ ->
               False
         (Can.TRecord fields isPartial, Can.TRecord fields2 isPartial2) ->
@@ -386,7 +440,7 @@ isEquivalentElmType debug t1 t2 = do
             fieldTypes2 :: [Can.Type] = fields2 & Can.fieldsToList & fmap snd
           in
           (length fieldsTypes1 == length fieldTypes2)
-            && areEquivalentElmTypes debug fieldsTypes1 fieldTypes2
+            && areEquivalentAppliedElmTypes debug fieldsTypes1 fieldTypes2
 
         (Can.TTuple t1 t2 mt3, Can.TTuple t12 t22 mt32) ->
           -- debugHaskell "TTuple" $
@@ -404,48 +458,17 @@ isEquivalentElmType debug t1 t2 = do
           -- debugHaskell "unequal types" $
           False
 
-areEquivalentElmTypes :: N.Name -> [Can.Type] -> [Can.Type] -> Bool
-areEquivalentElmTypes debug types1 types2 =
+areEquivalentAppliedElmTypes :: N.Name -> [Can.Type] -> [Can.Type] -> Bool
+areEquivalentAppliedElmTypes debug types1 types2 =
   (length types1 == length types2)
     &&
-  (zipWith (isEquivalentElmType debug) types1 types2 & all id)
+  (zipWith (isEquivalentAppliedType debug) types1 types2 & all id)
 
-areEquivalentTvarMaps :: N.Name -> [(N.Name, Can.Type)] -> [(N.Name, Can.Type)] -> Bool
-areEquivalentTvarMaps debug tvars1 tvars2 =
+areEquivalentAppliedTvarMaps :: N.Name -> [(N.Name, Can.Type)] -> [(N.Name, Can.Type)] -> Bool
+areEquivalentAppliedTvarMaps debug tvars1 tvars2 =
   (length tvars1 == length tvars2)
     &&
-  (zipWith (\(n1, t1) (n2, t2) -> n1 == n2 && isEquivalentElmType debug t1 t2) tvars1 tvars2 & all id)
-
-
--- Like == but considers identically defined union types equal despite module defs
-isEquivalentEvergreenType :: Can.Type -> Can.Type -> Bool
-isEquivalentEvergreenType t1 t2 =
-  case (t1, t2) of
-    ((Can.TType (ModuleName.Canonical (Pkg.Name "author" "project") module1) name1 params1),
-     (Can.TType (ModuleName.Canonical (Pkg.Name "author" "project") module2) name2 params2)) ->
-      name1 == name2 && isEquivalentEvergreenModule module1 module2
-    _ -> t1 == t2
-
--- Like == but considers union types equal despite module defs
-areEquivalentEvergreenTypes :: [Can.Type] -> [Can.Type] -> Bool
-areEquivalentEvergreenTypes t1s t2s =
-  let
-      result =
-        length t1s == length t2s
-          && and (zipWith isEquivalentEvergreenType t1s t2s)
-  in
-  -- debugHaskellPass "areEquivalentEvergreenTypes" (result, t1s, t2s) $
-  result
-
-isEquivalentEvergreenModule :: ModuleName.Raw -> ModuleName.Raw -> Bool
-isEquivalentEvergreenModule m1 m2 =
-  let m1_ = m1 & N.toText & T.splitOn "."
-      m2_ = m2 & N.toText & T.splitOn "."
-  in
-  case (m1_, m2_) of
-    ("Evergreen":_:xs1, "Evergreen":_:xs2) -> xs1 == xs2
-    _ -> m1 == m2
-
+  (zipWith (\(n1, t1) (n2, t2) -> n1 == n2 && isEquivalentAppliedType debug t1 t2) tvars1 tvars2 & all id)
 
 
 isUserModule :: ModuleName.Canonical -> Bool

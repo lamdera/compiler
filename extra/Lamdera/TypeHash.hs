@@ -213,7 +213,7 @@ unionToDiffableType targetName typeName interfaces recursionSet tvarMap unionInt
           , -- For each constructor type param
             params_
               -- Swap any `TVar (Name {_name = "a"})` for the actual injected params
-              & fmap (resolveTvars newTvarMap)
+              & fmap (resolveTvar newTvarMap)
               & fmap (\resolvedParam -> canonicalToDiffableType targetName interfaces recursionSet resolvedParam newTvarMap )
           )
         )
@@ -260,7 +260,7 @@ canonicalToDiffableType targetName interfaces recursionSet canonical tvarMap =
         newRecursionSet = Set.insert recursionIdentifier recursionSet
 
         tvarResolvedParams =
-          params & fmap (resolveTvars tvarMap)
+          params & fmap (resolveTvar tvarMap)
 
         identifier :: (Text, Text, Text, Text)
         identifier =
