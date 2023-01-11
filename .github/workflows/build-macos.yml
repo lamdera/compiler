@@ -87,4 +87,4 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: lamdera-next
-          path: ~/.local/bin/lamdera-next
+          path: ~/.local/bin/lamdera
