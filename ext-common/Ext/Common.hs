@@ -398,10 +398,12 @@ cq_ bin args input = do
 requireBinary :: String -> IO FilePath
 requireBinary name = do
   x <- Dir.findExecutable name
-  pure $ case x of
-    Just path -> path
-    _ ->
-      error $ concat ["please install the following required binary: ", name]
+  case x of
+    Just path -> pure path
+    _ -> do
+      let msg = concat ["💥💥💥 please install the following required binary: ", name]
+      atomicPutStrLn msg
+      error msg
 
 
 -- Re-exports
