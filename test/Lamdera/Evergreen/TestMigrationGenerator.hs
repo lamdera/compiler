@@ -24,9 +24,9 @@ import qualified Data.Name as N
 import qualified Reporting.Exit
 
 import Test.Helpers
-import qualified Ext.Common
+import Ext.Common
 
-import Lamdera
+import Lamdera hiding ((&))
 import qualified Lamdera.Compile
 import qualified Lamdera.Types
 import qualified Lamdera.Evergreen.MigrationGenerator as MigrationGenerator
@@ -79,10 +79,10 @@ testMigrationGeneration scenario oldVersion newVersion = do
         , "src/Evergreen/Migrate/V" <> show newVersion <> ".elm"
         ]
 
-  actual <- catchOutput $
+  compilationStdout <- catchOutput $
     Lamdera.Compile.makeDev "/Users/mario/dev/projects/lamdera-compiler/test/scenario-migration-generate" filenames
 
-  expectTextContains actual
+  compilationStdout `expectTextContains`
     "This `Unimplemented` value is a:\n\n    UnimplementedMigration"
 
 
@@ -110,8 +110,8 @@ testExamples = withTestEnv $ do
         [
           -- "src/Test/Migrate_Record.elm"
         -- , "src/Test/Migrate_External_Wrap.elm"
-          -- "src/Migrate_External_Paramed"
-         "src/Migrate_All"
+          "src/Migrate_External_Paramed"
+        , "src/Migrate_All"
         -- , ""
         ]
 
@@ -131,8 +131,11 @@ testExamples = withTestEnv $ do
       filenameExpected = folder </> "Expected.elm"
       filenameActual = folder </> "Actual.elm"
       typeName = "Target"
-      moduleNameOld = N.fromChars $ FP.takeBaseName folder <> ".Old"
-      moduleNameNew = N.fromChars $ FP.takeBaseName folder <> ".New"
+      scenarioName = FP.takeBaseName folder
+      moduleNameOld = N.fromChars $ scenarioName <> ".Old"
+      moduleNameNew = N.fromChars $ scenarioName <> ".New"
+      moduleNameActual = scenarioName <> ".Actual"
+      moduleNameExpected = scenarioName <> ".Expected"
       moduleOld = ModuleName.Canonical (Pkg.Name "author" "project") moduleNameOld
       moduleNew = ModuleName.Canonical (Pkg.Name "author" "project") moduleNameNew
 
@@ -157,12 +160,12 @@ testExamples = withTestEnv $ do
 
               case migrationDefM of
                 Just migrationDef -> do
-                  let final = MigrationGenerator.migrationsToFile oldVersion newVersion [(typeName, (migrationNested { Helpers.migrationDef = "target = " <> migration  }))] moduleNew
+                  let final = MigrationGenerator.migrationsToFile (stringToText moduleNameActual) oldVersion newVersion [(typeName, (migrationNested { Helpers.migrationDef = "target = " <> migration  }))] moduleNew
                   expected <- io $ Ext.ElmFormat.formatOrPassthrough (expectation & T.replace "\\n" "\n" & T.strip)
                   -- actual <- io $ Ext.ElmFormat.formatOrPassthrough (migrationDef & T.replace "\\n" "\n" & T.strip)
                   actual <- io $ Ext.ElmFormat.formatOrPassthrough (final)
                   _ <- io $ writeUtf8 (project </> filenameActual) actual
-                  expectEqualTextTrimmed expected actual
+                  expectEqualTextTrimmed (expected & T.replace "Expected exposing (..)" "Actual exposing (..)") actual
                   pure migrationNested
                 Nothing ->
                   pure migrationNested
