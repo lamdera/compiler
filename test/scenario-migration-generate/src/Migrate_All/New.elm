@@ -47,6 +47,7 @@ type alias BackendModel =
 
     -- Package types
     , time : Time.Posix
+    , url : Url.Url
 
     -- Special cased types
     , userCache : AssocList.Dict String Evergreen.V2.IncludedBySpecialCasedParam.Custom

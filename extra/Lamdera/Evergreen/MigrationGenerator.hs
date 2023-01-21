@@ -702,9 +702,9 @@ canAliasToMigration oldVersion newVersion scope interfaces recursionSet typeNew@
     identifier = asIdentifier_ (moduleNameNew, typeNameNew)
 
   in
-  debugMigrationIncludes_ "canAliasToMigration" $
   case aliasTypeNew of
     Can.Holey cType ->
+      debugMigrationIncludes_ "canAliasToMigration:Holey" $
       case typeOldM of
         Just (typeOld@(Can.TAlias moduleNameOld typeNameOld tvarMapOld aliasType)) ->
           let
@@ -812,6 +812,7 @@ canAliasToMigration oldVersion newVersion scope interfaces recursionSet typeNew@
       let
         (MigrationNested subt imps subDefs) = canToMigration oldVersion newVersion moduleNameNew interfaces recursionSet cType typeOldM tvarMapOld tvarMapNew oldValueRef
       in
+      debugMigrationIncludes_ "canAliasToMigration:Filled" $
       xMigrationNested (
         if module_ == (dropCan scope) then
           N.toText typeNameNew

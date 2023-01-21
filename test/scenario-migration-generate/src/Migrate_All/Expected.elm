@@ -159,6 +159,7 @@ migrate_Migrate_All_New_BackendModel old =
     , typeToAlias = old.typeToAlias |> (Unimplemented {- `TypeToAlias` was a concrete type, but now it's a type alias. I need you to write this migration. -})
     , aliasToType = old.aliasToType |> (Unimplemented {- Type changed from `Migrate_All.Old.AliasToType` to `Migrate_All.New.AliasToType`. I need you to write this migration. -})
     , time = old.time
+    , url = old.url
     , userCache = old.userCache |> migrate_AssocList_Dict identity migrate_IncludedBySpecialCasedParam_Custom
     , apps = (Unimplemented {- Type `Dict (String) (Migrate_All.New.App)` was added in V2. I need you to set a default value. -})
     , depthTests = (Unimplemented {- Field of type `Dict (String) (Migrate_All.Old.Depth)` was removed in V2. I need you to do something with the `old.depthTests` value if you wish to keep the data, then remove this line. -})

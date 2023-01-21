@@ -280,10 +280,10 @@ isUserDefinedType_ cType =
     Can.TRecord _ _ -> True
     Can.TUnit -> False
     Can.TTuple _ _ _ -> False
-    Can.TAlias _ _ _ aType ->
+    Can.TAlias moduleName _ _ aType ->
       case aType of
-        Can.Holey t -> isUserDefinedType_ t
-        Can.Filled t -> isUserDefinedType_ t
+        Can.Holey t -> isUserModule moduleName && isUserDefinedType_ t
+        Can.Filled t -> isUserModule moduleName && isUserDefinedType_ t
 
 
 laterError = error "fail"
