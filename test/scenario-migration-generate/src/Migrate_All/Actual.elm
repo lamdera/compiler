@@ -60,8 +60,8 @@ migrate_External_AliasThatGetsMoved old =
 
 
 migrate_External_AllCoreTypes : Evergreen.V1.External.AllCoreTypes -> Evergreen.V2.External.AllCoreTypes
-migrate_External_AllCoreTypes p0 =
-    p0
+migrate_External_AllCoreTypes old =
+    old
 
 
 migrate_External_ExternalUnion : Evergreen.V1.External.ExternalUnion -> Evergreen.V2.External.ExternalUnion
@@ -75,24 +75,24 @@ migrate_External_ExternalUnion old =
 
 
 migrate_External_Paramed : (a_old -> a_new) -> Evergreen.V1.External.Paramed a_old -> Evergreen.V2.External.Paramed a_new
-migrate_External_Paramed migrate_a p0 =
-    { subtype = p0.subtype |> migrate_a
-    , string = p0.string
+migrate_External_Paramed migrate_a old =
+    { subtype = old.subtype |> migrate_a
+    , string = old.string
     }
 
 
 migrate_External_Paramed2 : (a_old -> a_new) -> (b_old -> b_new) -> Evergreen.V1.External.Paramed2 a_old b_old -> Evergreen.V2.External.Paramed2 a_new b_new
-migrate_External_Paramed2 migrate_a migrate_b p0 =
-    { subtype = p0.subtype |> migrate_a
-    , subtype2 = p0.subtype2 |> migrate_b
-    , string = p0.string
+migrate_External_Paramed2 migrate_a migrate_b old =
+    { subtype = old.subtype |> migrate_a
+    , subtype2 = old.subtype2 |> migrate_b
+    , string = old.string
     }
 
 
 migrate_External_ParamedSub : (x_old -> x_new) -> Evergreen.V1.External.ParamedSub x_old -> Evergreen.V2.External.ParamedSub x_new
-migrate_External_ParamedSub migrate_x p0 =
-    { subtypeParamed = p0.subtypeParamed |> migrate_External_Paramed migrate_x
-    , string = p0.string
+migrate_External_ParamedSub migrate_x old =
+    { subtypeParamed = old.subtypeParamed |> migrate_External_Paramed migrate_x
+    , string = old.string
     }
 
 

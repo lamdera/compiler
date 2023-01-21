@@ -31,9 +31,9 @@ target =
 
 
 migrate_External_Paramed : (a_old -> a_new) -> Evergreen.V1.External.Paramed a_old -> Evergreen.V2.External.Paramed a_new
-migrate_External_Paramed migrate_a p0 =
-    { subtype = p0.subtype |> migrate_a
-    , string = p0.string
+migrate_External_Paramed migrate_a old =
+    { subtype = old.subtype |> migrate_a
+    , string = old.string
     }
 
 

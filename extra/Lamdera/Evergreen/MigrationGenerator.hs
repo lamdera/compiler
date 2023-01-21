@@ -729,7 +729,7 @@ canAliasToMigration oldVersion newVersion scope interfaces recursionSet typeNew@
 
             (MigrationNested migrationAliasedType imps subDefs) :: Migration =
               let
-                res = canToMigration oldVersion newVersion moduleNameNew interfaces recursionSet cType (Just typeOld) tvarMapOld tvarMapNew oldValueRef
+                res = canToMigration oldVersion newVersion moduleNameNew interfaces recursionSet cType (Just typeOld) tvarMapOld tvarMapNew "old"
               in
               res
 
@@ -778,7 +778,7 @@ canAliasToMigration oldVersion newVersion scope interfaces recursionSet typeNew@
             typeDef =
               T.concat
                 [ migrationName, " : ", migrationTypeSignature, "\n"
-                , migrationName, " ", paramMigrationVars, " ", oldValueRef, " = ", applyOldValueIfNotRecord, migrationAliasedType
+                , migrationName, " ", paramMigrationVars, " old = ", applyOldValueIfNotRecord, migrationAliasedType
                 ]
           in
             xMigrationNested (
