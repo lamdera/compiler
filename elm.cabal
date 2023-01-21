@@ -418,4 +418,8 @@ Executable lamdera
         fold-debounce,
         formatting,
         fsnotify,
-        command
+        command,
+
+        -- elm-format local vendor package
+        elm-format-lib,
+        elm-format

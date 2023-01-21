@@ -8,6 +8,10 @@ extra-deps:
 - io-streams-haproxy-1.0.1.0@sha256:2241a754697935e0a11e814affcaa4861b42fe88131f807b586ef48051e28a08,3070
 # Required to build on windows
 - regex-posix-clib-2.7
+- 'vendor/elm-format/elm-format-markdown'
+- 'vendor/elm-format/elm-format-lib'
+- 'vendor/elm-format/avh4-lib'
+- 'vendor/elm-format'
 flags:
   regex-posix:
      _regex-posix-clib: true

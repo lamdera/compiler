@@ -1,3 +1,6 @@
 [submodule "test/scenario-elm-pages-incompatible-wire/elm-pages"]
 	path = test/scenario-elm-pages-incompatible-wire/elm-pages
 	url = git@github.com:dillonkearns/elm-pages.git
+[submodule "vendor/elm-format"]
+	path = vendor/elm-format
+	url = git@github.com:lamdera/elm-format.git

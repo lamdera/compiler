@@ -73,7 +73,7 @@ runTests isTest debugName pkg modul decls generatedName generated canonicalValue
 
             else do
               -- debugHaskellPass ("🏁 Actual value input for " <> (T.pack $ Data.Name.toChars generatedName)) (canonicalValue) (pure ())
-              formatted <- Ext.ElmFormat.format $ ToSource.convert generated
+              let formatted = Ext.ElmFormat.format $ ToSource.convert generated
               case formatted of
                 Right t ->
                   debugPassText ("💚 actual implementation pretty-printed " <> show_ (Src.getName modul)) (t) (pure ())

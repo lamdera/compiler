@@ -49,3 +49,4 @@ generate oldVersion newVersion typeCompares = do
     & (<>) [header]
     & T.intercalate "\n\n\n"
     & Ext.ElmFormat.formatOrPassthrough
+    & pure

@@ -77,7 +77,7 @@ snapshotCurrentTypes version interfaces iface_Types = do
 
       in
       onlyWhen (not $ textContains "/" file) $ do
-        output <- Ext.ElmFormat.formatOrPassthrough $ efToText version (file, ef)
+        let output = Ext.ElmFormat.formatOrPassthrough $ efToText version (file, ef)
         writeUtf8 filename output
     )
 

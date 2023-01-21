@@ -89,7 +89,7 @@ lamderaGenerated nextVersion migrationFilepaths = do
 
       |]
 
-  Ext.ElmFormat.formatOrPassthrough final
+  pure $ Ext.ElmFormat.formatOrPassthrough final
 
 
 

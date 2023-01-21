@@ -49,7 +49,7 @@ betweenVersions coreTypeDiffs oldVersion newVersion root = do
           Nothing ->
             error $ "Fatal: could not find the module `" <> moduleNameString <> "`, please report this issue in Discord with your project code."
 
-    Ext.ElmFormat.formatOrPassthrough res
+    pure $ Ext.ElmFormat.formatOrPassthrough res
 
 generateFor :: CoreTypeDiffs -> Int -> Int -> Interfaces -> Interface.Interface -> IO Text
 generateFor coreTypeDiffs oldVersion newVersion interfaces iface_Types = do

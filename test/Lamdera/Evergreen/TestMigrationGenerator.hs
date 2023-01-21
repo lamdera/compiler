@@ -161,9 +161,9 @@ testExamples = withTestEnv $ do
               case migrationDefM of
                 Just migrationDef -> do
                   let final = MigrationGenerator.migrationsToFile (stringToText moduleNameActual) oldVersion newVersion [(typeName, (migrationNested { Helpers.migrationDef = "target = " <> migration  }))] moduleNew
-                  expected <- io $ Ext.ElmFormat.formatOrPassthrough (expectation & T.replace "\\n" "\n" & T.strip)
-                  -- actual <- io $ Ext.ElmFormat.formatOrPassthrough (migrationDef & T.replace "\\n" "\n" & T.strip)
-                  actual <- io $ Ext.ElmFormat.formatOrPassthrough (final)
+                      expected = Ext.ElmFormat.formatOrPassthrough (expectation & T.replace "\\n" "\n" & T.strip)
+                      -- actual = Ext.ElmFormat.formatOrPassthrough (migrationDef & T.replace "\\n" "\n" & T.strip)
+                      actual = Ext.ElmFormat.formatOrPassthrough (final)
                   _ <- io $ writeUtf8 (project </> filenameActual) actual
                   expectEqualTextTrimmed (expected & T.replace "Expected exposing (..)" "Actual exposing (..)") actual
                   pure migrationNested
