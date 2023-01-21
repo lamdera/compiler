@@ -7,9 +7,11 @@ name: Build Lamdera Compiler for Windows
 jobs:
   build-packages:
     name: Build Windows Libraries
-    runs-on: windows-latest
+    runs-on: [self-hosted, Windows]
     steps:
       - uses: actions/checkout@v3
+        with:
+          submodules: true
 
       # First, check if the specific cache exists, so we don't waste ~3m of build
       # time restoring the 1.5GB cache for no reason. See https://github.com/actions/cache/pull/420
@@ -39,10 +41,11 @@ jobs:
             ${{ runner.os }}-
 
       # Now setup Haskell, given we're comitted to actually doing a lib build
-      - uses: haskell/actions/setup@v1
+      - uses: haskell/actions/setup@v2
         if: steps.cache.outputs.cache-hit != 'true'
         with:
           enable-stack: true
+          stack-no-global: true
           stack-version: 'latest'
 
       # Install just our dependencies, this can take ~30m from scratch and is the
@@ -59,13 +62,16 @@ jobs:
   # whole lib step will be skipped almost immediately so its worth it.
   install:
     name: Build Windows Executable
-    runs-on: windows-latest
+    runs-on: [self-hosted, Windows]
     needs: build-packages
     steps:
       - uses: actions/checkout@v3
-      - uses: haskell/actions/setup@v1
+        with:
+          submodules: true
+      - uses: haskell/actions/setup@v2
         with:
           enable-stack: true
+          stack-no-global: true
           stack-version: 'latest'
       - uses: actions/cache@v3
         with:
