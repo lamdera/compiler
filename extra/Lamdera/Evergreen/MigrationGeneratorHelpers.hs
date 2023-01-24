@@ -33,10 +33,10 @@ data TypeDef
   | Union ModuleName.Canonical TypeName Can.Union
   deriving (Show)
 
--- A specialised local migration def, along with any dependant top-level migrations and their related imports
+-- An applied migration function, along with any dependant top-level migration definitions
 data Migration = MigrationNested
-  { migrationDef :: Text
-  , migrationImports :: Set.Set ModuleName.Canonical
+  { migrationFn :: Text
+  , migrationFnImports :: Set.Set ModuleName.Canonical
   , migrationTopLevelDefs :: MigrationDefinitions
   }
   deriving (Show)
@@ -45,11 +45,11 @@ xMigrationNested (a,b,c) = MigrationNested a b c
 
 type MigrationDefinitions = Map TypeRef MigrationDefinition
 
--- Set of top-level migration functions and their required imports
+-- A top-level migration definition and its required imports
 data MigrationDefinition =
   MigrationDefinition
-    { imports :: Set.Set ModuleName.Canonical
-    , migrations :: Text
+    { migrationDefinitionImports :: Set.Set ModuleName.Canonical
+    , migrationDef :: Text
     }
   deriving (Show, Eq)
 
@@ -72,7 +72,7 @@ debugMigrationIncludes_ tag migration =
   migration
     & debugHaskellWhen ( debugMigrationIncludes /= ""
       && (
-      -- debugMigrationIncludes `T.isInfixOf` migrationDef migration
+      -- debugMigrationIncludes `T.isInfixOf` migrationFn migration
       -- ||
       (migration
         & migrationTopLevelDefs
@@ -80,7 +80,7 @@ debugMigrationIncludes_ tag migration =
         & fmap snd
         & filter (\migrationDefinition ->
             migrationDefinition
-              & migrations
+              & migrationDef
               & (\v -> debugMigrationIncludes `T.isInfixOf` v)
           )
         & length
@@ -118,8 +118,8 @@ allSubDefs migrations =
 allImports :: [Migration] -> ElmImports
 allImports migrations = migrations
   & fmap (\migration ->
-    migrationImports migration <>
-      (migrationTopLevelDefs migration & Map.toList & fmap (imports . snd) & Set.unions)
+    migrationFnImports migration <>
+      (migrationTopLevelDefs migration & Map.toList & fmap (migrationDefinitionImports . snd) & Set.unions)
   )
   & Set.unions
 

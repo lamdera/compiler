@@ -29,7 +29,7 @@ import Language.Haskell.TH (runIO)
 import Data.FileEmbed (bsToExp)
 import qualified Data.Aeson.Encoding as A
 
-import Snap.Core
+import Snap.Core hiding (path)
 
 
 import qualified Develop.Generate.Help as Generate
@@ -134,7 +134,6 @@ prepareLocalDev root = do
     harnessPath = cache </> "LocalDev.elm"
     overridePath = "/Users/mario/dev/projects/lamdera-compiler/extra/LocalDev/LocalDev.elm"
 
-  isDebug <- isDebug
   overrideM <- readUtf8Text overridePath
 
   -- This needs to be moved to an on-demand action, as it has to query production and
@@ -142,7 +141,7 @@ prepareLocalDev root = do
   -- nextVersionInfo <- Lamdera.CLI.Check.getNextVersionInfo root
   -- Lamdera.CLI.Check.writeLamderaGenerated root True nextVersionInfo
 
-  if isDebug
+  if isDebug_
     then do
       rpcExists <- doesFileExist $ root </> "src" </> "RPC.elm"
 
@@ -457,8 +456,8 @@ editors projectRoot =
 
 detectExecutable :: B.Builder -> (FilePath -> EditorOpenIO) -> IO (Maybe (B.Builder, EditorOpenIO))
 detectExecutable executableName fn = do
-  x <- Dir.findExecutable $ Ext.Common.builderToString executableName
-  pure $ case x of
+  pathM <- Dir.findExecutable $ Ext.Common.builderToString executableName
+  pure $ case pathM of
     Just path -> Just (executableName, fn path)
     _ -> Nothing
 
@@ -617,12 +616,12 @@ serveRpc (mClients, mLeader, mChan, beState) port = do
   leader <- liftIO $ atomically $ readTVar mLeader
   case leader of
     Just leaderId -> do
-      liftIO $ sendToLeader mClients mLeader (\leader -> pure payload)
+      liftIO $ sendToLeader mClients mLeader (\leader_ -> pure payload)
 
       let seconds = 10
-      result <- liftIO $ timeout seconds $ loopRead
+      resultPair <- liftIO $ timeout seconds $ loopRead
 
-      case result of
+      case resultPair of
         Just (result, chanText) ->
           case result of
             Right value ->

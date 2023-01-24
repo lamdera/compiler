@@ -156,11 +156,11 @@ testExamples = withTestEnv $ do
               let
                 migrationNested = MigrationGenerator.migrateTypeDef typeDefOld typeDefNew oldVersion newVersion interfaces [] []
                 (Helpers.MigrationNested migration migrationImports migrationDefs) = migrationNested
-                migrationDefM = migrationDefs & Map.lookup (moduleNew, typeName) & fmap Helpers.migrations
+                migrationDefM = migrationDefs & Map.lookup (moduleNew, typeName) & fmap Helpers.migrationDef
 
               case migrationDefM of
                 Just migrationDef -> do
-                  let final = MigrationGenerator.migrationsToFile (stringToText moduleNameActual) oldVersion newVersion [(typeName, (migrationNested { Helpers.migrationDef = "target = " <> migration  }))] moduleNew
+                  let final = MigrationGenerator.migrationsToFile (stringToText moduleNameActual) oldVersion newVersion [(typeName, (migrationNested { Helpers.migrationFn = "target = " <> migration  }))] moduleNew
                       expected = Ext.ElmFormat.formatOrPassthrough (expectation & T.replace "\\n" "\n" & T.strip)
                       -- actual = Ext.ElmFormat.formatOrPassthrough (migrationDef & T.replace "\\n" "\n" & T.strip)
                       actual = Ext.ElmFormat.formatOrPassthrough (final)
