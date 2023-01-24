@@ -105,12 +105,12 @@ run () flags@(Lamdera.CLI.Check.Flags destructiveMigration) = do
 offlineCheck root = do
   progressDoc $ D.stack
     [ D.red $ D.reflow $ "--- OFFLINE MODE ---"
-    , D.red $ D.reflow $ "It appears you are offline, continuing with limited checks."
-    , D.red $ D.reflow $ "Note: being offline and continuing can cause serious confusion when returning offline, in particular:"
-    , D.red $ D.reflow $ "- I have no idea what's in production, so I can only guess no types have changed."
-    , D.red $ D.reflow $ "- This means I won't make any new snapshots"
-    , D.red $ D.reflow $ "- I will assume the latest current migration on disk is the real latest migration"
-    , D.red $ D.reflow $ "- I will type check that migration under Evergreen"
+    , D.reflow $ "It appears you are offline, continuing with limited checks."
+    , D.red $ D.reflow $ "Note: being offline and continuing can cause serious confusion when returning online, in particular:"
+    , D.reflow $ "- I have no idea what's in production, so I can only guess no types have changed."
+    , D.reflow $ "- This means I won't make any new snapshots"
+    , D.reflow $ "- I will assume the latest current migration on disk is the real latest migration"
+    , D.reflow $ "- I will type check that migration under Evergreen"
     ]
 
   shouldContinue <- Reporting.ask $

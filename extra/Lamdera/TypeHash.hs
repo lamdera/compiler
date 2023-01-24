@@ -140,21 +140,12 @@ calculateLamderaHashes_ interfaces iface_Types inDebug = do
 
   if List.length errors > 0
     then
-      let
-        -- !x = onlyWhen inDebug $ formatHaskellValue "diffHasErrors:" typediffs :: IO ()
-
-        notifyWarnings =
-          if List.length warnings > 0 then
-            [ D.reflow $ "Warning: also, a number of types outside Types.elm are referenced, see `lamdera check` for more info." ]
-          else
-            []
-      in
       pure $ Left $
         Reporting.Exit.BuildLamderaProblem "WIRE ISSUES"
           "I ran into the following problems when checking Lamdera core types:"
           (formattedErrors ++
           [ D.reflow "See <https://dashboard.lamdera.app/docs/wire> for more info."
-          ] ++ notifyWarnings)
+          ])
 
     else do
       -- -- These external warnings no longer need to be written to disk, but
@@ -421,8 +412,11 @@ canonicalToDiffableType targetName interfaces recursionSet canonical tvarMap =
                       DError $ "❗️Failed to find either alias or custom type for type that seemingly must exist: " <> tipe <> "` from " <> author <> "/" <> pkg <> ":" <> module_ <> ". Please report this issue with your code!"
 
             Nothing ->
-              DError $ "The `" <> tipe <> "` type from " <> author <> "/" <> pkg <> ":" <> module_ <> " is referenced, but I can't find it! You can try `lamdera install " <> author <> "/" <> pkg <> "`, otherwise this might be a type which has been intentionally hidden by the author, so it cannot be used!"
-
+              DError $ T.concat [
+                "The `", tipe, "` type from ", author, "/", pkg, ":", module_, " is referenced, but I can't find it! ",
+                "You can try `lamdera install ", author, "/", pkg, "`, otherwise this might be a type which has been ",
+                "intentionally hidden by the author, so it cannot be used!"
+              ]
 
     TAlias moduleName name tvarMap_ aliasType ->
       case aliasType of
