@@ -37,6 +37,11 @@ migrate_External_Paramed migrate_a old =
     }
 
 
+migrate_Migrate_External_Paramed_New_AnalyticsModel : Migrate_External_Paramed.Old.AnalyticsModel -> Migrate_External_Paramed.New.AnalyticsModel
+migrate_Migrate_External_Paramed_New_AnalyticsModel old =
+    old
+
+
 migrate_Migrate_External_Paramed_New_CustomType : Migrate_External_Paramed.Old.CustomType -> Migrate_External_Paramed.New.CustomType
 migrate_Migrate_External_Paramed_New_CustomType old =
     case old of
@@ -52,3 +57,6 @@ migrate_Migrate_External_Paramed_New_Target old =
     case old of
         Migrate_External_Paramed.Old.UserTvarAlias p0 ->
             Migrate_External_Paramed.New.UserTvarAlias (p0 |> migrate_External_Paramed migrate_Migrate_External_Paramed_New_CustomType)
+
+        Migrate_External_Paramed.Old.UserMixPackage p0 ->
+            Migrate_External_Paramed.New.UserMixPackage (p0 |> migrate_Migrate_External_Paramed_New_AnalyticsModel)

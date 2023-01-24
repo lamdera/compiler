@@ -176,23 +176,6 @@ getModuleNameUnkeyed moduleName =
     (ModuleName.Canonical (Pkg.Name author pkg) module_) ->
         nameToText module_
 
-typeNameToStringQualified :: ModuleName.Canonical -> N.Name -> [Can.Type] -> Text
-typeNameToStringQualified moduleName tipeName params = do
-  let coreType = [nameToText tipeName] ++ parenthesize (fmap qualifiedTypeName params) & T.intercalate " "
-  case moduleName of
-    (ModuleName.Canonical (Pkg.Name author pkg) module_) ->
-      case (author, pkg, module_) of
-        ("elm", "core", "Basics") -> coreType
-        ("elm", "core", "String") -> coreType
-        ("elm", "core", "Maybe") -> coreType
-        ("elm", "core", "List") -> coreType
-        ("elm", "core", "Set") -> coreType
-        ("elm", "core", "Array") -> coreType
-        ("elm", "core", "Dict") -> coreType
-        ("elm", "core", "Result") -> coreType
-        _ ->
-          T.concat $ [nameToText module_, ".", nameToText tipeName] ++ (fmap qualifiedTypeName params)
-
 
 parenthesize :: [Text] -> [Text]
 parenthesize texts =
@@ -241,13 +224,15 @@ asTypeName tipe =
     _ -> error $ "unimplemented asTypeName: " <> show tipe
 
 
+
+-- Just the qualified name of the overall top level type, i.e. Dict
 qualifiedTypeName :: Can.Type -> Text
 qualifiedTypeName tipe =
   case tipe of
     Can.TType moduleName name params ->         typeNameToStringQualified moduleName name params
     Can.TAlias moduleName name namedParams _ -> typeNameToStringQualified moduleName name (fmap snd namedParams)
     Can.TLambda a b        -> "<function>"
-    Can.TVar a             -> "a"
+    Can.TVar a             -> N.toText a
     Can.TRecord a b        -> "{}"
     Can.TUnit              -> "()"
     Can.TTuple a b mc      ->
@@ -255,17 +240,56 @@ qualifiedTypeName tipe =
         Just c -> T.concat ["(", qualifiedTypeName a, ", ", qualifiedTypeName b, ", ", qualifiedTypeName c, ")"]
         Nothing -> T.concat ["(", qualifiedTypeName a, ", ", qualifiedTypeName b, ")"]
 
-qualifiedTypeNameVerbose :: Can.Type -> Text
-qualifiedTypeNameVerbose tipe =
+typeNameToStringQualified :: ModuleName.Canonical -> N.Name -> [Can.Type] -> Text
+typeNameToStringQualified moduleName tipeName params = do
+  let coreType = nameToText tipeName
+  case moduleName of
+    (ModuleName.Canonical (Pkg.Name author pkg) module_) ->
+      case (author, pkg, module_) of
+        ("elm", "core", "Basics") -> coreType
+        ("elm", "core", "String") -> coreType
+        ("elm", "core", "Maybe") -> coreType
+        ("elm", "core", "List") -> coreType
+        ("elm", "core", "Set") -> coreType
+        ("elm", "core", "Array") -> coreType
+        ("elm", "core", "Dict") -> coreType
+        ("elm", "core", "Result") -> coreType
+        _ ->
+          T.concat $ [moduleNameKey moduleName, ".", nameToText tipeName]
+
+
+-- The qualified specific type as applied, i.e. Dict Int String
+qualifiedType :: Can.Type -> Text
+qualifiedType tipe =
   case tipe of
-    Can.TType moduleName name params ->         T.concat [ moduleNameKey moduleName, ":", typeNameToStringQualified moduleName name params ]
-    Can.TAlias moduleName name namedParams _ -> T.concat [ moduleNameKey moduleName, ":", typeNameToStringQualified moduleName name (fmap snd namedParams) ]
+    Can.TType moduleName name params ->         T.concat [ typeNameToStringQualifiedParams moduleName name params ]
+    Can.TAlias moduleName name namedParams _ -> T.concat [ typeNameToStringQualifiedParams moduleName name (fmap snd namedParams) ]
     Can.TLambda a b         -> "<function>"
-    Can.TVar a              -> "a"
+    Can.TVar a              -> N.toText a
     Can.TRecord a b         -> "{}"
     Can.TUnit               -> "()"
     Can.TTuple a b (Just c) -> T.concat ["(", qualifiedTypeName a, ", ", qualifiedTypeName b, ", ", qualifiedTypeName c, ")"]
     Can.TTuple a b _        -> T.concat ["(", qualifiedTypeName a, ", ", qualifiedTypeName b, ")"]
+
+
+
+typeNameToStringQualifiedParams :: ModuleName.Canonical -> N.Name -> [Can.Type] -> Text
+typeNameToStringQualifiedParams moduleName tipeName params = do
+  let coreType = [nameToText tipeName] ++ parenthesize (fmap qualifiedTypeName params) & T.intercalate " "
+  case moduleName of
+    (ModuleName.Canonical (Pkg.Name author pkg) module_) ->
+      case (author, pkg, module_) of
+        ("elm", "core", "Basics") -> coreType
+        ("elm", "core", "String") -> coreType
+        ("elm", "core", "Maybe") -> coreType
+        ("elm", "core", "List") -> coreType
+        ("elm", "core", "Set") -> coreType
+        ("elm", "core", "Array") -> coreType
+        ("elm", "core", "Dict") -> coreType
+        ("elm", "core", "Result") -> coreType
+        _ ->
+          T.concat $ [moduleNameKey moduleName, ".", nameToText tipeName] ++ (fmap qualifiedTypeName params)
+
 
 
 isUserType :: TypeIdentifier -> Bool
@@ -418,64 +442,50 @@ isEquivalentElmType__ debug t1 t2 = do
 -- WILL consider applied parameter types
 isEquivalentAppliedType :: N.Name -> Can.Type -> Can.Type -> Bool
 isEquivalentAppliedType debug t1 t2 = do
-  -- debugHaskellPass "isEquivalentElmType" (t1,t2) $
-  -- if name /= "unchangedAllTypes"
-  --   then
-  --   else
-    -- debugHaskellPassWhen True
-    --   -- (case t1 of
-    --   --   Can.TType moduleName name params ->
-    --   --     name == debug
-    --   --   _ -> False
-    --   -- )
-    -- -- debug == "migrate_External_Paramed")
-    --   "thingy" (
-    --     (case t1 of
-    --     Can.TType moduleName name params ->
-    --       name
-    --     _ -> ""
-    --   )
-    --   ) $
-      case (t1,t2) of
-        (Can.TType moduleName name params, Can.TType moduleName2 name2 params2) ->
+  case (t1,t2) of
+    (Can.TType moduleName name params, Can.TType moduleName2 name2 params2) ->
 
-          -- debugHaskell "TType" $
-            moduleName == moduleName2 && name == name2 && areEquivalentAppliedElmTypes name params params2
-        (Can.TAlias moduleName name tvarMap_ aliasType, Can.TAlias moduleName2 name2 tvarMap_2 aliasType2) ->
-          case (aliasType, aliasType2) of
-            (Can.Holey t1, Can.Holey t2) ->
-              -- debugHaskellPass "TAlias:Holey" (moduleName, moduleName2, name, name2, tvarMap_, tvarMap_2) $
-              isEquivalentAppliedType name t1 t2 && areEquivalentAppliedTvarMaps name tvarMap_ tvarMap_2
-            (Can.Filled t1, Can.Filled t2) ->
-              -- debugHaskellPass "TAlias:Filled" (moduleName, moduleName2, name, name2, tvarMap_, tvarMap_2) $
-              isEquivalentAppliedType name t1 t2 && areEquivalentAppliedTvarMaps name tvarMap_ tvarMap_2
-            _ ->
-              False
-        (Can.TRecord fields isPartial, Can.TRecord fields2 isPartial2) ->
-          -- debugHaskell "TRecord" $
-          -- t1 == t2
-          let
-            fieldsTypes1 :: [Can.Type] = fields & Can.fieldsToList & fmap snd
-            fieldTypes2 :: [Can.Type] = fields2 & Can.fieldsToList & fmap snd
-          in
-          (length fieldsTypes1 == length fieldTypes2)
-            && areEquivalentAppliedElmTypes debug fieldsTypes1 fieldTypes2
-
-        (Can.TTuple t1 t2 mt3, Can.TTuple t12 t22 mt32) ->
-          -- debugHaskell "TTuple" $
-          t1 == t2
-        (Can.TUnit, Can.TUnit) ->
-          -- debugHaskell "TUnit" $
-          t1 == t2
-        (Can.TVar name, Can.TVar name2) ->
-          -- debugHaskell "TVar" $
-          t1 == t2
-        (Can.TLambda _ _, Can.TLambda _ _) ->
-          -- Skip lambda equality not relevant
-          False
+      -- debugHaskell "TType" $
+        moduleName == moduleName2 && name == name2 && areEquivalentAppliedElmTypes name params params2
+    (Can.TAlias moduleName name tvarMap_ aliasType, Can.TAlias moduleName2 name2 tvarMap_2 aliasType2) ->
+      case (aliasType, aliasType2) of
+        (Can.Holey t1, Can.Holey t2) ->
+          -- debugHaskellPass "TAlias:Holey" (moduleName, moduleName2, name, name2, tvarMap_, tvarMap_2) $
+          isEquivalentAppliedType name t1 t2 && areEquivalentAppliedTvarMaps name tvarMap_ tvarMap_2
+        (Can.Filled t1, Can.Filled t2) ->
+          -- debugHaskellPass "TAlias:Filled" (moduleName, moduleName2, name, name2, tvarMap_, tvarMap_2) $
+          isEquivalentAppliedType name t1 t2 && areEquivalentAppliedTvarMaps name tvarMap_ tvarMap_2
         _ ->
-          -- debugHaskell "unequal types" $
           False
+    (Can.TRecord fields isPartial, Can.TRecord fields2 isPartial2) ->
+      -- debugHaskell "TRecord" $
+      -- t1 == t2
+      let
+        fieldsTypes1 :: [Can.Type] = fields & Can.fieldsToList & fmap snd
+        fieldTypes2 :: [Can.Type] = fields2 & Can.fieldsToList & fmap snd
+      in
+      (length fieldsTypes1 == length fieldTypes2)
+        && areEquivalentAppliedElmTypes debug fieldsTypes1 fieldTypes2
+
+    (Can.TTuple a1 a2 ma3, Can.TTuple b1 b2 mb3) ->
+      isEquivalentAppliedType debug a1 b1 &&
+      isEquivalentAppliedType debug a2 b2 &&
+      case (ma3, mb3) of
+        (Just a3, Just b3) -> isEquivalentAppliedType debug a3 b3
+        (Nothing, Nothing)  -> True
+        _ -> False
+    (Can.TUnit, Can.TUnit) ->
+      -- debugHaskell "TUnit" $
+      t1 == t2
+    (Can.TVar name, Can.TVar name2) ->
+      -- debugHaskell "TVar" $
+      t1 == t2
+    (Can.TLambda _ _, Can.TLambda _ _) ->
+      -- Skip lambda equality not relevant
+      False
+    _ ->
+      -- debugHaskell "unequal types" $
+      False
 
 areEquivalentAppliedElmTypes :: N.Name -> [Can.Type] -> [Can.Type] -> Bool
 areEquivalentAppliedElmTypes debug types1 types2 =

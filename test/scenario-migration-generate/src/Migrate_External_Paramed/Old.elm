@@ -1,11 +1,29 @@
 module Migrate_External_Paramed.Old exposing (..)
 
+import Chart.Item as CI
 import Evergreen.V1.External
 import Evergreen.V1.Types
 
 
 type Target
     = UserTvarAlias (Evergreen.V1.External.Paramed CustomType)
+    | UserMixPackage AnalyticsModel
+
+
+type alias AnalyticsModel =
+    { hoveringBars : List (CI.One Datum CI.Bar)
+    , hoveringDots : List (CI.One Datum CI.Dot)
+    }
+
+
+type alias Datum =
+    ( Int, Maybe AnalyticsVisits )
+
+
+type alias AnalyticsVisits =
+    { start : Int
+    , count : Int
+    }
 
 
 
