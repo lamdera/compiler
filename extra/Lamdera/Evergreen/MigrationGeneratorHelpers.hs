@@ -48,7 +48,7 @@ type MigrationDefinitions = Map TypeRef MigrationDefinition
 -- A top-level migration definition and its required imports
 data MigrationDefinition =
   MigrationDefinition
-    { migrationDefinitionImports :: Set.Set ModuleName.Canonical
+    { migrationDefImports :: Set.Set ModuleName.Canonical
     , migrationDef :: Text
     }
   deriving (Show, Eq)
@@ -119,7 +119,7 @@ allImports :: [Migration] -> ElmImports
 allImports migrations = migrations
   & fmap (\migration ->
     migrationFnImports migration <>
-      (migrationTopLevelDefs migration & Map.toList & fmap (migrationDefinitionImports . snd) & Set.unions)
+      (migrationTopLevelDefs migration & Map.toList & fmap (migrationDefImports . snd) & Set.unions)
   )
   & Set.unions
 
@@ -388,16 +388,16 @@ isTvar cType =
 
 
 isEquivalentElmType__ :: N.Name -> Can.Type -> Can.Type -> Bool
-isEquivalentElmType__ debug t1 t2 = do
+isEquivalentElmType__ debugLabel t1 t2 = do
   case (t1,t2) of
     (Can.TType moduleName name params, Can.TType moduleName2 name2 params2) ->
         moduleName == moduleName2 && name == name2
     (Can.TAlias moduleName name tvarMap_ aliasType, Can.TAlias moduleName2 name2 tvarMap_2 aliasType2) ->
       case (aliasType, aliasType2) of
-        (Can.Holey t1, Can.Holey t2) ->
-          isEquivalentElmType__ name t1 t2
-        (Can.Filled t1, Can.Filled t2) ->
-          isEquivalentElmType__ name t1 t2
+        (Can.Holey c1, Can.Holey c2) ->
+          isEquivalentElmType__ name c1 c2
+        (Can.Filled c1, Can.Filled c2) ->
+          isEquivalentElmType__ name c1 c2
         _ ->
           False
     (Can.TRecord fields isPartial, Can.TRecord fields2 isPartial2) ->
@@ -406,13 +406,13 @@ isEquivalentElmType__ debug t1 t2 = do
         fieldTypes2 :: [Can.Type] = fields2 & Can.fieldsToList & fmap snd
       in
       (length fieldTypes1 == length fieldTypes2)
-        && (zipWith (isEquivalentElmType__ debug) fieldTypes1 fieldTypes2 & all id)
+        && (zipWith (isEquivalentElmType__ debugLabel) fieldTypes1 fieldTypes2 & all id)
 
     (Can.TTuple a1 a2 ma3, Can.TTuple b1 b2 mb3) ->
-      isEquivalentElmType__ debug a1 b1 &&
-      isEquivalentElmType__ debug a2 b2 &&
+      isEquivalentElmType__ debugLabel a1 b1 &&
+      isEquivalentElmType__ debugLabel a2 b2 &&
       case (ma3, mb3) of
-        (Just a3, Just b3) -> isEquivalentElmType__ debug a3 b3
+        (Just a3, Just b3) -> isEquivalentElmType__ debugLabel a3 b3
         (Nothing, Nothing)  -> True
         _ -> False
     (Can.TUnit, Can.TUnit) ->
@@ -441,7 +441,7 @@ isEquivalentElmType__ debug t1 t2 = do
 -- Will NOT resolve tvars
 -- WILL consider applied parameter types
 isEquivalentAppliedType :: N.Name -> Can.Type -> Can.Type -> Bool
-isEquivalentAppliedType debug t1 t2 = do
+isEquivalentAppliedType debugLabel t1 t2 = do
   case (t1,t2) of
     (Can.TType moduleName name params, Can.TType moduleName2 name2 params2) ->
 
@@ -449,12 +449,12 @@ isEquivalentAppliedType debug t1 t2 = do
         moduleName == moduleName2 && name == name2 && areEquivalentAppliedElmTypes name params params2
     (Can.TAlias moduleName name tvarMap_ aliasType, Can.TAlias moduleName2 name2 tvarMap_2 aliasType2) ->
       case (aliasType, aliasType2) of
-        (Can.Holey t1, Can.Holey t2) ->
+        (Can.Holey c1, Can.Holey c2) ->
           -- debugHaskellPass "TAlias:Holey" (moduleName, moduleName2, name, name2, tvarMap_, tvarMap_2) $
-          isEquivalentAppliedType name t1 t2 && areEquivalentAppliedTvarMaps name tvarMap_ tvarMap_2
-        (Can.Filled t1, Can.Filled t2) ->
+          isEquivalentAppliedType name c1 c2 && areEquivalentAppliedTvarMaps name tvarMap_ tvarMap_2
+        (Can.Filled c1, Can.Filled c2) ->
           -- debugHaskellPass "TAlias:Filled" (moduleName, moduleName2, name, name2, tvarMap_, tvarMap_2) $
-          isEquivalentAppliedType name t1 t2 && areEquivalentAppliedTvarMaps name tvarMap_ tvarMap_2
+          isEquivalentAppliedType name c1 c2 && areEquivalentAppliedTvarMaps name tvarMap_ tvarMap_2
         _ ->
           False
     (Can.TRecord fields isPartial, Can.TRecord fields2 isPartial2) ->
@@ -465,13 +465,13 @@ isEquivalentAppliedType debug t1 t2 = do
         fieldTypes2 :: [Can.Type] = fields2 & Can.fieldsToList & fmap snd
       in
       (length fieldsTypes1 == length fieldTypes2)
-        && areEquivalentAppliedElmTypes debug fieldsTypes1 fieldTypes2
+        && areEquivalentAppliedElmTypes debugLabel fieldsTypes1 fieldTypes2
 
     (Can.TTuple a1 a2 ma3, Can.TTuple b1 b2 mb3) ->
-      isEquivalentAppliedType debug a1 b1 &&
-      isEquivalentAppliedType debug a2 b2 &&
+      isEquivalentAppliedType debugLabel a1 b1 &&
+      isEquivalentAppliedType debugLabel a2 b2 &&
       case (ma3, mb3) of
-        (Just a3, Just b3) -> isEquivalentAppliedType debug a3 b3
+        (Just a3, Just b3) -> isEquivalentAppliedType debugLabel a3 b3
         (Nothing, Nothing)  -> True
         _ -> False
     (Can.TUnit, Can.TUnit) ->
@@ -488,16 +488,16 @@ isEquivalentAppliedType debug t1 t2 = do
       False
 
 areEquivalentAppliedElmTypes :: N.Name -> [Can.Type] -> [Can.Type] -> Bool
-areEquivalentAppliedElmTypes debug types1 types2 =
+areEquivalentAppliedElmTypes debugLabel types1 types2 =
   (length types1 == length types2)
     &&
-  (zipWith (isEquivalentAppliedType debug) types1 types2 & all id)
+  (zipWith (isEquivalentAppliedType debugLabel) types1 types2 & all id)
 
 areEquivalentAppliedTvarMaps :: N.Name -> [(N.Name, Can.Type)] -> [(N.Name, Can.Type)] -> Bool
-areEquivalentAppliedTvarMaps debug tvars1 tvars2 =
+areEquivalentAppliedTvarMaps debugLabel tvars1 tvars2 =
   (length tvars1 == length tvars2)
     &&
-  (zipWith (\(n1, t1) (n2, t2) -> n1 == n2 && isEquivalentAppliedType debug t1 t2) tvars1 tvars2 & all id)
+  (zipWith (\(n1, t1) (n2, t2) -> n1 == n2 && isEquivalentAppliedType debugLabel t1 t2) tvars1 tvars2 & all id)
 
 
 isUserModule :: ModuleName.Canonical -> Bool

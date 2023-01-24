@@ -31,8 +31,6 @@ module Lamdera
   , (<>)
   , mconcat
   , (&)
-  , first
-  , second
   -- , ppElm
   , Ext.Common.isDebug
   , Ext.Common.isDebug_

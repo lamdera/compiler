@@ -50,7 +50,7 @@ suite = tests $
   , scope "addImports" $ do
       let
         moduleName = (ModuleName.Canonical (Pkg.Name "author" "pkg") "Types")
-        imports = Set.singleton derpImp
+        imps = Set.singleton derpImp
 
         fts :: ElmFilesText
         fts =
@@ -66,7 +66,7 @@ suite = tests $
             ]
           )
       expectEqual
-        (addImports moduleName imports fts)
+        (addImports moduleName imps fts)
         expected
 
 

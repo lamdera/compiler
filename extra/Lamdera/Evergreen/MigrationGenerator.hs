@@ -658,7 +658,6 @@ canToMigration_ oldVersion newVersion scope interfaces recursionSet typeNew type
 
     Can.TTuple t1 t2 mt3 ->
       let
-        -- @TODO drop just
         (MigrationNested subt imps subDefs) =
           canToMigration oldVersion newVersion scope interfaces recursionSet t1 (Just typeOld) tvarMapOld tvarMapNew oldValueRef
         (MigrationNested subt2 imps2 subDefs2) =

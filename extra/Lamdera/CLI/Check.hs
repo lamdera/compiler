@@ -74,16 +74,16 @@ run () flags@(Lamdera.CLI.Check.Flags destructiveMigration) = do
   inDebug <- Lamdera.isDebug
   isHoistRebuild <- isHoistRebuild_
   forceVersion <- forceVersion_
-  inProduction <- Lamdera.inProduction
+  inProduction_ <- Lamdera.inProduction
 
-  debug $ "production:" ++ show inProduction
+  debug $ "production:" ++ show inProduction_
   debug $ "hoist rebuild:" ++ show isHoistRebuild
   debug $ "force version:" ++ show forceVersion
 
   root <- getProjectRoot "Lamdera.CLI.Check.run"
   checkGitInitialised root
 
-  Lamdera.Legacy.temporaryCheckOldTypesNeedingMigration inProduction root
+  Lamdera.Legacy.temporaryCheckOldTypesNeedingMigration inProduction_ root
 
   progressPointer_ "Checking project compiles..."
   checkUserProjectCompiles root
@@ -99,7 +99,7 @@ run () flags@(Lamdera.CLI.Check.Flags destructiveMigration) = do
 
   if ips == []
     then offlineCheck root
-    else onlineCheck root appName inDebug localTypes externalTypeWarnings isHoistRebuild forceVersion forceNotProd inProduction destructiveMigration
+    else onlineCheck root appName inDebug localTypes externalTypeWarnings isHoistRebuild forceVersion forceNotProd inProduction_ destructiveMigration
 
 
 offlineCheck root = do
@@ -153,9 +153,9 @@ offlineCheck root = do
   pure ()
 
 
-onlineCheck root appName inDebug localTypes externalTypeWarnings isHoistRebuild forceVersion forceNotProd inProduction destructiveMigration = do
+onlineCheck root appName inDebug localTypes externalTypeWarnings isHoistRebuild forceVersion forceNotProd inProduction_ destructiveMigration = do
 
-  (prodVersion, productionTypes, nextVersion) <- getProdInfo appName inProduction forceNotProd forceVersion isHoistRebuild localTypes
+  (prodVersion, productionTypes, nextVersion) <- getProdInfo appName inProduction_ forceNotProd forceVersion isHoistRebuild localTypes
 
   let
     localTypesChangedFromProduction = productionTypes /= localTypes
@@ -178,21 +178,21 @@ onlineCheck root appName inDebug localTypes externalTypeWarnings isHoistRebuild 
       -- Always snapshot types for the first version, we need a starting point
       _ <- Lamdera.Evergreen.Snapshot.run nextVersion
 
-      writeLamderaGenerated root inProduction nextVersionInfo
-      buildProductionJsFiles root inProduction nextVersionInfo
+      writeLamderaGenerated root inProduction_ nextVersionInfo
+      buildProductionJsFiles root inProduction_ nextVersionInfo
 
-      onlyWhen (not inProduction) $ showExternalTypeWarnings externalTypeWarnings
+      onlyWhen (not inProduction_) $ showExternalTypeWarnings externalTypeWarnings
 
       progressDoc $ D.green (D.reflow $ "It appears you're all set to deploy the first version of '" <> T.unpack appName <> "'!")
 
       -- This is the first version, we don't need any migration checking.
-      onlyWhen (not inProduction) $ committedCheck root nextVersionInfo
+      onlyWhen (not inProduction_) $ committedCheck root nextVersionInfo
 
       -- @TEMPORARY
       putStrLn ""
 
     else do
-      writeLamderaGenerated root inProduction nextVersionInfo
+      writeLamderaGenerated root inProduction_ nextVersionInfo
 
       let
         nextMigrationPathBare = ("src/Evergreen/Migrate/V") <> (show nextVersion) <> ".elm"
@@ -253,7 +253,7 @@ onlineCheck root appName inDebug localTypes externalTypeWarnings isHoistRebuild 
 
                 else do
                   migrationCheck root nextVersionInfo
-                  onlyWhen (not inProduction) $ showExternalTypeWarnings externalTypeWarnings
+                  onlyWhen (not inProduction_) $ showExternalTypeWarnings externalTypeWarnings
 
                   progressDoc $
                     D.stack
@@ -265,9 +265,9 @@ onlineCheck root appName inDebug localTypes externalTypeWarnings isHoistRebuild 
                       ]
                       )
 
-                  onlyWhen (not inProduction) $ committedCheck root nextVersionInfo
+                  onlyWhen (not inProduction_) $ committedCheck root nextVersionInfo
 
-                  buildProductionJsFiles root inProduction nextVersionInfo
+                  buildProductionJsFiles root inProduction_ nextVersionInfo
 
             else do
               debug $ "Migration does not exist"
@@ -283,9 +283,9 @@ onlineCheck root appName inDebug localTypes externalTypeWarnings isHoistRebuild 
 
               writeUtf8 nextMigrationPath defaultMigrations
 
-              onlyWhen (not inProduction) $ showExternalTypeWarnings externalTypeWarnings
+              onlyWhen (not inProduction_) $ showExternalTypeWarnings externalTypeWarnings
 
-              if inProduction
+              if inProduction_
                 then
                   Progress.throw $
                     Help.report "UNIMPLEMENTED MIGRATION" (Just nextMigrationPathBare)
@@ -323,18 +323,18 @@ onlineCheck root appName inDebug localTypes externalTypeWarnings isHoistRebuild 
                 ]
 
           migrationCheck root nextVersionInfo
-          onlyWhen (not inProduction) $ showExternalTypeWarnings externalTypeWarnings
+          onlyWhen (not inProduction_) $ showExternalTypeWarnings externalTypeWarnings
 
           progressDoc $ D.green $ D.reflow $ "\nIt appears you're all set to deploy v" <> (show nextVersion) <> " of '" <> T.unpack appName <> "'."
           progressDoc $ D.reflow $ "There are no Evergreen type changes for this version."
 
-          buildProductionJsFiles root inProduction nextVersionInfo
+          buildProductionJsFiles root inProduction_ nextVersionInfo
 
   progressPointer "Checking config..."
   prodTokenM <- Env.lookupEnv "TOKEN"
   Lamdera.AppConfig.checkUserConfig appName (fmap T.pack prodTokenM)
 
-  onlyWhen (not inProduction) $ checkForLatestBinaryVersion inDebug
+  onlyWhen (not inProduction_) $ checkForLatestBinaryVersion inDebug
 
   pure ()
 
@@ -397,7 +397,7 @@ getLocalInfo = do
 
 
 getProdInfo :: Text -> Bool -> Maybe String -> Int -> Bool -> [Text] -> IO (Int, [Text], Int)
-getProdInfo appName inProduction forceNotProd forceVersion isHoistRebuild localTypes = do
+getProdInfo appName inProduction_ forceNotProd forceVersion isHoistRebuild localTypes = do
   (prodVersion, productionTypes) <-
     if isHoistRebuild
       then do
@@ -418,7 +418,7 @@ getProdInfo appName inProduction forceNotProd forceVersion isHoistRebuild localT
             pure (pv, pt)
 
           Left err ->
-            if (inProduction)
+            if (inProduction_)
               then do
                 debug_ $ show err
                 genericExit "FATAL: application info could not be obtained. Please report this to support."
@@ -481,8 +481,8 @@ checkForLatestBinaryVersion inDebug = do
                       lv
                         & T.splitOn "."
                         & fmap toIntCertain
-                        & (\parts ->
-                                case parts of
+                        & (\parts_ ->
+                                case parts_ of
                                     v1 : v2 : v3 : [] ->
                                         Just ( v1, v2, v3 )
 
@@ -523,14 +523,11 @@ checkForLatestBinaryVersion inDebug = do
 
 
 buildProductionJsFiles :: FilePath -> Bool -> VersionInfo -> IO ()
-buildProductionJsFiles root inProduction versionInfo = do
-  onlyWhen inProduction $ do
+buildProductionJsFiles root inProduction_ versionInfo = do
+  onlyWhen inProduction_ $ do
     let version = vinfoVersion versionInfo
 
     progressPointer "Compiling production code..."
-
-    root <- getProjectRoot "buildProductionJsFiles"
-
     debug $ "Compiling JS for production v" <> show (vinfoVersion versionInfo)
 
     onlyWhen (version /= 1 && versionInfo == WithMigrations version) $ do
@@ -604,7 +601,6 @@ checkUserProjectCompiles root = do
 
 migrationCheck :: FilePath -> VersionInfo -> IO ()
 migrationCheck root nextVersion = do
-  root <- getProjectRoot "migrationCheck"
   let
     version = vinfoVersion nextVersion
     migrationPath = (root </> "src/Evergreen/Migrate/V") <> show version <> ".elm"
@@ -857,8 +853,8 @@ firstTwoChars str =
 
 
 writeLamderaGenerated :: FilePath -> Bool -> VersionInfo -> IO ()
-writeLamderaGenerated root inProduction nextVersion =
-  onlyWhen inProduction $ do
+writeLamderaGenerated root inProduction_ nextVersion =
+  onlyWhen inProduction_ $ do
     gen <- Lamdera.Evergreen.MigrationHarness.createLamderaGenerated root nextVersion
     writeIfDifferent (root </> "src/LamderaGenerated.elm") gen
 
