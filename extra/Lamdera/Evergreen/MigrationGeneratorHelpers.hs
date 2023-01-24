@@ -204,11 +204,12 @@ asIdentifier tipe =
   case tipe of
     Can.TType moduleName name params -> asIdentifier_ (moduleName, name)
     Can.TAlias moduleName name _ _ ->   asIdentifier_ (moduleName, name)
-    Can.TLambda a b        -> ("elm", "core", "Basics", "<function>")
-    Can.TVar a             -> ("elm", "core", "Basics", "a")
-    Can.TRecord a b        -> ("elm", "core", "Basics", "{}")
-    Can.TUnit              -> ("elm", "core", "Basics", "()")
-    Can.TTuple a b c       -> ("elm", "core", "Basics", "Tuple")
+    Can.TLambda a b         -> ("elm", "core", "Basics", "<function>")
+    Can.TVar a              -> ("elm", "core", "Basics", "a")
+    Can.TRecord a b         -> ("elm", "core", "Basics", "{}")
+    Can.TUnit               -> ("elm", "core", "Basics", "()")
+    Can.TTuple a b (Just c) -> ("elm", "core", "Basics", "Triple")
+    Can.TTuple a b _        -> ("elm", "core", "Basics", "Tuple")
 
 
 typeModuleNameCan :: Can.Type -> ModuleName.Canonical
@@ -216,11 +217,12 @@ typeModuleNameCan tipe =
   case tipe of
     Can.TType moduleName name params -> moduleName
     Can.TAlias moduleName name _ _ ->   moduleName
-    Can.TLambda a b        -> error $ "used typeModuleName on :" <> show ("elm", "core", "Basics", "<function>")
-    Can.TVar a             -> error $ "used typeModuleName on :" <> show ("elm", "core", "Basics", "a")
-    Can.TRecord a b        -> error $ "used typeModuleName on :" <> show ("elm", "core", "Basics", "{}")
-    Can.TUnit              -> error $ "used typeModuleName on :" <> show ("elm", "core", "Basics", "()")
-    Can.TTuple a b c       -> error $ "used typeModuleName on :" <> show ("elm", "core", "Basics", "Tuple")
+    Can.TLambda a b         -> error $ "used typeModuleName on :" <> show ("elm", "core", "Basics", "<function>")
+    Can.TVar a              -> error $ "used typeModuleName on :" <> show ("elm", "core", "Basics", "a")
+    Can.TRecord a b         -> error $ "used typeModuleName on :" <> show ("elm", "core", "Basics", "{}")
+    Can.TUnit               -> error $ "used typeModuleName on :" <> show ("elm", "core", "Basics", "()")
+    Can.TTuple a b (Just c) -> error $ "used typeModuleName on :" <> show ("elm", "core", "Basics", "Triple")
+    Can.TTuple a b _        -> error $ "used typeModuleName on :" <> show ("elm", "core", "Basics", "Tuple")
 
 
 asIdentifier_ :: (ModuleName.Canonical, N.Name) -> TypeIdentifier
@@ -252,6 +254,18 @@ qualifiedTypeName tipe =
       case mc of
         Just c -> T.concat ["(", qualifiedTypeName a, ", ", qualifiedTypeName b, ", ", qualifiedTypeName c, ")"]
         Nothing -> T.concat ["(", qualifiedTypeName a, ", ", qualifiedTypeName b, ")"]
+
+qualifiedTypeNameVerbose :: Can.Type -> Text
+qualifiedTypeNameVerbose tipe =
+  case tipe of
+    Can.TType moduleName name params ->         T.concat [ moduleNameKey moduleName, ":", typeNameToStringQualified moduleName name params ]
+    Can.TAlias moduleName name namedParams _ -> T.concat [ moduleNameKey moduleName, ":", typeNameToStringQualified moduleName name (fmap snd namedParams) ]
+    Can.TLambda a b         -> "<function>"
+    Can.TVar a              -> "a"
+    Can.TRecord a b         -> "{}"
+    Can.TUnit               -> "()"
+    Can.TTuple a b (Just c) -> T.concat ["(", qualifiedTypeName a, ", ", qualifiedTypeName b, ", ", qualifiedTypeName c, ")"]
+    Can.TTuple a b _        -> T.concat ["(", qualifiedTypeName a, ", ", qualifiedTypeName b, ")"]
 
 
 isUserType :: TypeIdentifier -> Bool
@@ -370,8 +384,13 @@ isEquivalentElmType__ debug t1 t2 = do
       (length fieldTypes1 == length fieldTypes2)
         && (zipWith (isEquivalentElmType__ debug) fieldTypes1 fieldTypes2 & all id)
 
-    (Can.TTuple t1 t2 mt3, Can.TTuple t12 t22 mt32) ->
-      t1 == t2
+    (Can.TTuple a1 a2 ma3, Can.TTuple b1 b2 mb3) ->
+      isEquivalentElmType__ debug a1 b1 &&
+      isEquivalentElmType__ debug a2 b2 &&
+      case (ma3, mb3) of
+        (Just a3, Just b3) -> isEquivalentElmType__ debug a3 b3
+        (Nothing, Nothing)  -> True
+        _ -> False
     (Can.TUnit, Can.TUnit) ->
       t1 == t2
     (Can.TVar name, Can.TVar name2) ->

@@ -456,8 +456,16 @@ canonicalToDiffableType targetName interfaces recursionSet canonical tvarMap =
         )
         & DRecord
 
-    TTuple firstType secondType maybeType_whatisthisfor ->
-      DTuple (canonicalToDiffableType targetName interfaces recursionSet firstType tvarMap) (canonicalToDiffableType targetName interfaces recursionSet secondType tvarMap)
+    TTuple t1 t2 (Just t3) ->
+      DTriple
+        (canonicalToDiffableType targetName interfaces recursionSet t1 tvarMap)
+        (canonicalToDiffableType targetName interfaces recursionSet t2 tvarMap)
+        (canonicalToDiffableType targetName interfaces recursionSet t3 tvarMap)
+
+    TTuple t1 t2 _ ->
+      DTuple
+        (canonicalToDiffableType targetName interfaces recursionSet t1 tvarMap)
+        (canonicalToDiffableType targetName interfaces recursionSet t2 tvarMap)
 
     TUnit ->
       DUnit

@@ -413,8 +413,16 @@ canonicalToDiffableType targetName currentModule interfaces recursionSet canonic
             )
             & DRecord currentModule "unknown"
 
-    Can.TTuple firstType secondType maybeType_whatisthisfor ->
-      DTuple (canonicalToDiffableType targetName currentModule interfaces recursionSet firstType tvarMap) (canonicalToDiffableType targetName currentModule interfaces recursionSet secondType tvarMap)
+    Can.TTuple t1 t2 (Just t3) ->
+      DTriple
+        (canonicalToDiffableType targetName currentModule interfaces recursionSet t1 tvarMap)
+        (canonicalToDiffableType targetName currentModule interfaces recursionSet t2 tvarMap)
+        (canonicalToDiffableType targetName currentModule interfaces recursionSet t3 tvarMap)
+
+    Can.TTuple t1 t2 _ ->
+      DTuple
+        (canonicalToDiffableType targetName currentModule interfaces recursionSet t1 tvarMap)
+        (canonicalToDiffableType targetName currentModule interfaces recursionSet t2 tvarMap)
 
     Can.TUnit ->
       DUnit
