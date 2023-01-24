@@ -634,8 +634,7 @@ canToMigration oldVersion newVersion scope interfaces recursionSet typeNew typeO
              (isPackageType typeOld)
           && (isPackageType typeNew)
           && (isEquivalentAppliedType "canToMigration" typeOld typeNew)
-          then
-            xMigrationNested ("", Set.empty, Map.empty)
+          then noMigration
         else
           mn
 

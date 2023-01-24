@@ -35,6 +35,14 @@ specialCaseMigration identifier =
                     |> AssocList.fromList
           |]
 
+      ("erlandsona", "assoc-set", "AssocSet", "Set") ->
+        migrationDefinition identifier
+          [text|
+            migrate_AssocSet_Set : (a_old -> a_new) -> AssocSet.Set a_old -> AssocSet.Set a_new
+            migrate_AssocSet_Set migrate_a old =
+                old |> AssocSet.map migrate_a
+          |]
+
       ("mgold", "elm-nonempty-list", "List.Nonempty", "Nonempty") ->
         migrationDefinition identifier
           [text|
