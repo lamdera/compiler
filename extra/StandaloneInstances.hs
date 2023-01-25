@@ -71,6 +71,9 @@ import qualified Deps.Solver
 import qualified Json.Encode
 import qualified File
 
+-- elm-format
+import qualified ElmFormat.Messages
+
 
 -- Show
 
@@ -463,6 +466,13 @@ instance NFData (AST.Utils.Shader.Source) where
 -- @TODO probably not good to skip?
 instance NFData (Optimize.DecisionTree.Path) where rnf x = ()
 instance NFData (Optimize.DecisionTree.Test) where rnf x = ()
+
+
+
+-- elm-format
+
+deriving instance Show ElmFormat.Messages.InfoMessage
+
 
 
 

@@ -14,6 +14,7 @@ import System.IO.Unsafe (unsafePerformIO)
 import qualified System.Process
 import qualified System.Directory as Dir
 import qualified Lamdera
+import StandaloneInstances
 
 import qualified ElmFormat.Cli
 -- import qualified ElmFormat.Render.Text as Render
@@ -23,14 +24,16 @@ import ElmFormat.Messages
 
 formatWithEmbedded :: Text -> Either ElmFormat.Messages.InfoMessage Text
 formatWithEmbedded inputText = do
-  ElmFormat.Cli.format ElmVersion.Elm_0_19 ("does this matter?", inputText)
+  ElmFormat.Cli.format ElmVersion.Elm_0_19 ("stdin:nofilepath", inputText)
 
 
 format :: Text -> (Either Text Text)
 format text = do
   case formatWithEmbedded text of
-    Left err -> error "todo elmformat:error -> text"
-    Right text -> Right text
+    Left err ->
+      Left $ Lamdera.show_ err
+    Right formatted ->
+      Right formatted
 
 
 formatOrPassthrough :: Text -> Text
