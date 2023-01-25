@@ -95,8 +95,6 @@ newAttributes isElmUi fileName functionName location originalAttributes =
           , newAttributesHelper isElmUi fileName functionName location
           ]))
 
-jsPropertyName = "triggerUrl123"
-
 
 moduleToFilePath :: Module.Canonical -> String
 moduleToFilePath ((Module.Canonical pkg moduleName)) =

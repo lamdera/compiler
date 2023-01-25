@@ -317,7 +317,10 @@ isUserDefinedType_ cType =
     Can.TVar _ -> True
     Can.TRecord _ _ -> True
     Can.TUnit -> False
-    Can.TTuple _ _ _ -> False
+    Can.TTuple a b mc ->
+      isUserDefinedType_ a || isUserDefinedType_ b || case mc of
+        Just c -> isUserDefinedType_ c
+        Nothing -> False
     Can.TAlias moduleName _ _ aType ->
       case aType of
         Can.Holey t -> isUserModule moduleName && isUserDefinedType_ t
@@ -380,24 +383,38 @@ isTvar cType =
     _ -> False
 
 
+-- Only detects obvious core type changes
+coreTypesMatch :: Can.Type -> Can.Type -> Bool
+coreTypesMatch t1 t2 = do
+  case (t1,t2) of
+    (Can.TType moduleName name params, Can.TType moduleName2 name2 params2) -> True
+    (Can.TAlias moduleName name tvarMap_ aliasType, Can.TAlias moduleName2 name2 tvarMap_2 aliasType2) ->
+      case (aliasType, aliasType2) of
+        (Can.Holey c1, Can.Holey c2) -> True
+        (Can.Filled c1, Can.Filled c2) -> True
+        _ -> False
+    (Can.TRecord fields isPartial, Can.TRecord fields2 isPartial2) -> True
+    (Can.TTuple a1 a2 a3m, Can.TTuple b1 b2 b3m) -> True
+    (Can.TUnit, Can.TUnit) -> True
+    (Can.TVar name, Can.TVar name2) -> True
+    (Can.TLambda _ _, Can.TLambda _ _) -> True
+    _ -> False
 
 
 -- Like == but ignores differences in alias module locations when they are pointing to equivalent types
 -- Will NOT find custom types to be equivalent
 -- Will NOT resolve tvars
-
-
-isEquivalentElmType__ :: N.Name -> Can.Type -> Can.Type -> Bool
-isEquivalentElmType__ debugLabel t1 t2 = do
+isEquivalentElmType :: N.Name -> Can.Type -> Can.Type -> Bool
+isEquivalentElmType debugLabel t1 t2 = do
   case (t1,t2) of
     (Can.TType moduleName name params, Can.TType moduleName2 name2 params2) ->
         moduleName == moduleName2 && name == name2
     (Can.TAlias moduleName name tvarMap_ aliasType, Can.TAlias moduleName2 name2 tvarMap_2 aliasType2) ->
       case (aliasType, aliasType2) of
         (Can.Holey c1, Can.Holey c2) ->
-          isEquivalentElmType__ name c1 c2
+          isEquivalentElmType name c1 c2
         (Can.Filled c1, Can.Filled c2) ->
-          isEquivalentElmType__ name c1 c2
+          isEquivalentElmType name c1 c2
         _ ->
           False
     (Can.TRecord fields isPartial, Can.TRecord fields2 isPartial2) ->
@@ -406,13 +423,13 @@ isEquivalentElmType__ debugLabel t1 t2 = do
         fieldTypes2 :: [Can.Type] = fields2 & Can.fieldsToList & fmap snd
       in
       (length fieldTypes1 == length fieldTypes2)
-        && (zipWith (isEquivalentElmType__ debugLabel) fieldTypes1 fieldTypes2 & all id)
+        && (zipWith (isEquivalentElmType debugLabel) fieldTypes1 fieldTypes2 & all id)
 
-    (Can.TTuple a1 a2 ma3, Can.TTuple b1 b2 mb3) ->
-      isEquivalentElmType__ debugLabel a1 b1 &&
-      isEquivalentElmType__ debugLabel a2 b2 &&
-      case (ma3, mb3) of
-        (Just a3, Just b3) -> isEquivalentElmType__ debugLabel a3 b3
+    (Can.TTuple a1 a2 a3m, Can.TTuple b1 b2 b3m) ->
+      isEquivalentElmType debugLabel a1 b1 &&
+      isEquivalentElmType debugLabel a2 b2 &&
+      case (a3m, b3m) of
+        (Just a3, Just b3) -> isEquivalentElmType debugLabel a3 b3
         (Nothing, Nothing)  -> True
         _ -> False
     (Can.TUnit, Can.TUnit) ->
@@ -424,17 +441,6 @@ isEquivalentElmType__ debugLabel t1 t2 = do
       False
     _ ->
       False
-
-
-
-
-
--- 1. ✅ need to rename the below isEquivalentElmType to be something like isEquivalentAppliedType
--- 2. rename all usages and check if the logic is right or should use imaginary above function
--- 2. implement the above, which ignores applied types (tvars)
-
-
-
 
 -- Like == but ignores differences in alias module locations when they are pointing to equivalent types
 -- Will NOT find identically defined custom types to be equivalent
@@ -467,10 +473,10 @@ isEquivalentAppliedType debugLabel t1 t2 = do
       (length fieldsTypes1 == length fieldTypes2)
         && areEquivalentAppliedElmTypes debugLabel fieldsTypes1 fieldTypes2
 
-    (Can.TTuple a1 a2 ma3, Can.TTuple b1 b2 mb3) ->
+    (Can.TTuple a1 a2 a3m, Can.TTuple b1 b2 b3m) ->
       isEquivalentAppliedType debugLabel a1 b1 &&
       isEquivalentAppliedType debugLabel a2 b2 &&
-      case (ma3, mb3) of
+      case (a3m, b3m) of
         (Just a3, Just b3) -> isEquivalentAppliedType debugLabel a3 b3
         (Nothing, Nothing)  -> True
         _ -> False

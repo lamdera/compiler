@@ -156,7 +156,7 @@ migrate_Migrate_All_New_BackendModel old =
     , added = (Unimplemented {- Type `Int` was added in V2. I need you to set a default value. -})
     , unionThatGetsMoved = old.unionThatGetsMoved |> migrate_External_UnionThatGetsMoved
     , aliasThatGetsMoved = old.aliasThatGetsMoved |> migrate_External_AliasThatGetsMoved
-    , typeToAlias = old.typeToAlias |> (Unimplemented {- `TypeToAlias` was a concrete type, but now it's a type alias. I need you to write this migration. -})
+    , typeToAlias = old.typeToAlias |> (Unimplemented {- Type changed from `Migrate_All.Old.TypeToAlias` to `Migrate_All.New.TypeToAlias`. I need you to write this migration. -})
     , aliasToType = old.aliasToType |> (Unimplemented {- Type changed from `Migrate_All.Old.AliasToType` to `Migrate_All.New.AliasToType`. I need you to write this migration. -})
     , time = old.time
     , url = old.url
@@ -266,6 +266,12 @@ migrate_Migrate_All_New_UserType old =
                                 }
                            )
                 }
+
+        Migrate_All.Old.UserTuple p0 ->
+            Migrate_All.New.UserTuple (p0 |> Tuple.mapSecond migrate_Migrate_All_New_UserType)
+
+        Migrate_All.Old.UserTriple p0 ->
+            Migrate_All.New.UserTriple (p0 |> (\( t1, t2, t3 ) -> ( t1, t2, t3 |> migrate_Migrate_All_New_UserType )))
 
         Migrate_All.Old.UserTvarAlias p0 ->
             Migrate_All.New.UserTvarAlias (p0 |> migrate_External_Paramed migrate_Migrate_All_New_CustomType)

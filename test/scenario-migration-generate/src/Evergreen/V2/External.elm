@@ -26,6 +26,8 @@ type alias AllCoreTypes =
     , time : Time.Posix
     , order : Order
     , unit : ()
+    , tuple : ( Int, String )
+    , triple : ( Int, String, Float )
     }
 
 

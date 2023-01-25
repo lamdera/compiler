@@ -486,9 +486,9 @@ getLastLocalTypeChangeVersion root = do
 
 genSupportingCode = do
 
-  inProduction <- Lamdera.inProduction
+  inProduction_ <- Lamdera.inProduction
 
-  if inProduction
+  if inProduction_
     then
       -- In production, use shared injected code that the LBR/LFR runtime harnesses
       -- also reference to share types and type check everything together

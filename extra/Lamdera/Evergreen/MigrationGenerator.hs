@@ -620,13 +620,11 @@ canToMigration oldVersion newVersion scope interfaces recursionSet typeNew typeO
         (T.concat ["There's no old type to migrate, I need you to initialize this `", qualifiedType typeNew, "` value."])
 
     Just typeOld -> do
-      let
-        mn@(MigrationNested migration imports subDefs) =
-          canToMigration_ oldVersion newVersion scope interfaces recursionSet typeNew typeOld tvarMapOld tvarMapNew oldValueRef
       if
-           (isPackageType typeOld)
+        (   (isPackageType typeOld)
         && (isPackageType typeNew)
-        && (not $ isEquivalentElmType__ "x" typeOld typeNew)
+        && (not $ isEquivalentElmType "x" typeOld typeNew))
+        || (not $ coreTypesMatch typeOld typeNew)
         then
           unimplemented (T.concat ["canToMigration:noOldType"])
             (T.concat [ "Type changed from `", qualifiedType typeOld, "` to `", qualifiedType typeNew, "`. I need you to write this migration." ])
@@ -636,19 +634,16 @@ canToMigration oldVersion newVersion scope interfaces recursionSet typeNew typeO
           && (isEquivalentAppliedType "canToMigration" typeOld typeNew)
           then noMigration
         else
-          mn
+          canToMigration_ oldVersion newVersion scope interfaces recursionSet typeNew typeOld tvarMapOld tvarMapNew oldValueRef
 
 
+-- @NOTE should only be called by canToMigration, as the coreTypesMatch guard allows
+-- us to ignore obvious type mismatches in the subsequent migration mapping code below
 canToMigration_ :: Int -> Int -> ModuleName.Canonical -> Interfaces -> RecursionSet -> Can.Type -> Can.Type -> TvarMap -> TvarMap -> Text -> Migration
 canToMigration_ oldVersion newVersion scope interfaces recursionSet typeNew typeOld tvarMapOld tvarMapNew oldValueRef =
   case typeNew of
     Can.TType moduleName typeName params ->
-      case typeOld of
-        Can.TType moduleNameOld nameOld paramsOld ->
-          typeToMigration oldVersion newVersion scope interfaces recursionSet typeNew typeOld tvarMapOld tvarMapNew oldValueRef
-        _ ->
-          unimplemented ("canToMigration_:TType:" <> N.toText typeName)
-            (T.concat [ "Type changed from `", qualifiedType typeOld, "` to `", qualifiedType typeNew, "`. I need you to write this migration.\n" ])
+      typeToMigration oldVersion newVersion scope interfaces recursionSet typeNew typeOld tvarMapOld tvarMapNew oldValueRef
 
     Can.TAlias moduleName name tvarMap_ aliasType ->
       canAliasToMigration oldVersion newVersion scope interfaces recursionSet typeNew typeOld tvarMapOld tvarMapNew oldValueRef
@@ -656,24 +651,59 @@ canToMigration_ oldVersion newVersion scope interfaces recursionSet typeNew type
     Can.TRecord newFields isPartial ->
       recordToMigration oldVersion newVersion scope interfaces recursionSet typeNew typeOld tvarMapOld tvarMapNew oldValueRef
 
-    Can.TTuple t1 t2 mt3 ->
-      let
-        (MigrationNested subt imps subDefs) =
-          canToMigration oldVersion newVersion scope interfaces recursionSet t1 (Just typeOld) tvarMapOld tvarMapNew oldValueRef
-        (MigrationNested subt2 imps2 subDefs2) =
-          canToMigration oldVersion newVersion scope interfaces recursionSet t2 (Just typeOld) tvarMapOld tvarMapNew oldValueRef
-      in
-      case mt3 of
-        Just t3 ->
+    Can.TTuple a1 b1 c1m ->
+      case typeOld of
+        Can.TTuple a2 b2 c2m ->
+          -- @TODO this whole treatment is wrong, need to expand oldType!
           let
-            (MigrationNested subt3 imps3 subDefs3) =
-              canToMigration oldVersion newVersion scope interfaces recursionSet t3 (Just typeOld) tvarMapOld tvarMapNew oldValueRef
-          in
-          -- @TODO this is the wrong migration, need a mapAll for all 3 tuple values
-          xMigrationNested (T.concat ["(", subt, ", ", subt2, ", ", subt3, ")"], Set.unions [imps,imps2,imps3], mergeAllSubDefs [subDefs,subDefs2,subDefs3])
+            m1@(MigrationNested mfn1 imps1 subDefs1) =
+              canToMigration oldVersion newVersion scope interfaces recursionSet a1 (Just a2) tvarMapOld tvarMapNew oldValueRef
+            m2@(MigrationNested mfn2 imps2 subDefs2) =
+              canToMigration oldVersion newVersion scope interfaces recursionSet b1 (Just b2) tvarMapOld tvarMapNew oldValueRef
 
-        Nothing ->
-          xMigrationNested (T.concat ["Tuple.mapBoth (", subt, ", ", subt2, ")"], imps <> imps2, subDefs <> subDefs2)
+            migrateTuple :: (Text -> Text) -> (Text -> Text) -> (Text -> Text -> Text) -> Migration
+            migrateTuple handle1 handle2 handleBoth =
+              let
+                (migration, migrationDefs) =
+                  case (T.strip mfn1 == "", T.strip mfn2 == "") of
+                    (True, True)   -> ("", Map.empty) -- No migration necessary
+                    (False, True)  -> (handle1 mfn1, subDefs1)
+                    (True, False)  -> (handle2 mfn2, subDefs2)
+                    (False, False) -> (handleBoth mfn1 mfn2, subDefs1 <> subDefs2)
+              in
+              xMigrationNested (migration, imps1 <> imps2, migrationDefs)
+          in
+          case c1m of
+            Nothing ->
+              migrateTuple
+                (\m_p1      -> T.concat [ "Tuple.mapFirst ", m_p1] )
+                (\m_p2      -> T.concat [ "Tuple.mapSecond ", m_p2 ])
+                (\m_p1 m_p2 -> T.concat [ "Tuple.mapBoth ", m_p1, " ", m_p2 ])
+
+            Just c1 ->
+              let
+                (MigrationNested mfn3 imps3 subDefs3) =
+                  canToMigration oldVersion newVersion scope interfaces recursionSet c1 c2m tvarMapOld tvarMapNew oldValueRef
+
+                applyMigration migration oldValRef =
+                  if migration == "" then
+                    oldValRef
+                  else
+                    T.concat [oldValRef, " |> ", migration]
+              in
+              -- No triple map functions in elm/core so we have to roll our own
+              xMigrationNested
+                (
+                  [ applyMigration mfn1 "t1"
+                  , applyMigration mfn2 "t2"
+                  , applyMigration mfn3 "t3"
+                  ] & T.intercalate ", "
+                  & (\applied ->
+                    T.concat ["(\\( t1, t2, t3 ) -> ( ", applied, " ))"]
+                  )
+                , Set.unions [imps1,imps2,imps3]
+                , mergeAllSubDefs [subDefs1,subDefs2,subDefs3]
+                )
 
     Can.TUnit ->
       xMigrationNested ("()", Set.empty, Map.empty)
