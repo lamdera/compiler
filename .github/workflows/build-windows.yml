@@ -7,7 +7,7 @@ name: Build Lamdera Compiler for Windows
 jobs:
   build-packages:
     name: Build Windows Libraries
-    runs-on: [self-hosted, Windows]
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v3
         with:
@@ -62,7 +62,7 @@ jobs:
   # whole lib step will be skipped almost immediately so its worth it.
   install:
     name: Build Windows Executable
-    runs-on: [self-hosted, Windows]
+    runs-on: windows-latest
     needs: build-packages
     steps:
       - uses: actions/checkout@v3
