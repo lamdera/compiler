@@ -22,7 +22,6 @@ import qualified Type.Instantiate as Instantiate
 import Type.Type as Type hiding (Descriptor(..))
 
 
-import qualified Lamdera
 import qualified Lamdera.Constrain
 
 -- CONSTRAIN

@@ -45,7 +45,7 @@ import qualified Elm.ModuleName as ModuleName
 import qualified Elm.Outline
 import qualified Elm.Package
 import qualified Elm.String
-import qualified Elm.Version
+-- import qualified Elm.Version
 import qualified Http
 import qualified Json.Decode
 import qualified Json.String
@@ -57,7 +57,7 @@ import qualified Reporting.Error
 import qualified Reporting.Error.Syntax
 import qualified Reporting.Error.Import
 import qualified Reporting.Error.Canonicalize
-import qualified Reporting.Error.Type
+-- import qualified Reporting.Error.Type
 import qualified Reporting.Error.Main
 import qualified Reporting.Error.Docs
 import qualified Reporting.Render.Type.Localizer
@@ -214,12 +214,12 @@ deriving instance Show Reporting.Annotation.Position
 
 -- deriving instance (Show a) => Show (Reporting.Annotation.Located a)
 instance (Show a) => Show (Reporting.Annotation.Located a) where
-  show (Reporting.Annotation.At region a) = "(a (" ++ show a ++ "))"
+  show (Reporting.Annotation.At _region a) = "(a (" ++ show a ++ "))"
 
 instance (Eq a) => Eq (Reporting.Annotation.Located a) where
   -- Comparison that ignores the actual regions – this is helpful to us in our generation checking
   -- as locations are not important for now
-  (==) (Reporting.Annotation.At r1 a) (Reporting.Annotation.At r2 b) = a == b
+  (==) (Reporting.Annotation.At _r1 a) (Reporting.Annotation.At _r2 b) = a == b
 
 -- instance (Eq a) => Eq (Reporting.Annotation.Located a) where
 --   (==) a b = show (Reporting.Annotation.At region a) = "(a (" ++ show a ++ "))"
@@ -429,7 +429,7 @@ instance IsString Elm.String.String where
 -- NFData
 
 instance NFData (Utf8.Utf8 a) where
-  rnf x = ()
+  rnf _ = ()
 
 
 deriving instance Generic AST.Optimized.Expr
@@ -457,15 +457,15 @@ instance NFData ModuleName.Canonical
 instance NFData Elm.Package.Name
 
 instance NFData (Reporting.Annotation.Located a) where
-  rnf x = ()
+  rnf _ = ()
 instance NFData (Reporting.Annotation.Region) where
-  rnf x = ()
+  rnf _ = ()
 instance NFData (AST.Utils.Shader.Source) where
-  rnf x = ()
+  rnf _ = ()
 
 -- @TODO probably not good to skip?
-instance NFData (Optimize.DecisionTree.Path) where rnf x = ()
-instance NFData (Optimize.DecisionTree.Test) where rnf x = ()
+instance NFData (Optimize.DecisionTree.Path) where rnf _ = ()
+instance NFData (Optimize.DecisionTree.Test) where rnf _ = ()
 
 
 

@@ -9,44 +9,20 @@ module Lamdera.UiSourceMap
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 import qualified Data.Name as Name
+import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
-
-import qualified AST.Source as Src
-import qualified AST.Canonical as Can
-import AST.Canonical
-import qualified AST.Optimized as Opt
-import qualified Canonicalize.Module as Canonicalize
-import qualified Elm.Float
-import qualified Elm.Interface as I
-import qualified Elm.ModuleName as Module
-import Elm.Package
-import qualified Elm.Package as Pkg
-import qualified Nitpick.PatternMatches as PatternMatches
-import qualified Optimize.Module as Optimize
-import qualified Reporting.Annotation
-import qualified Reporting.Error as E
-import qualified Reporting.Result as R
-import qualified Reporting.Render.Type.Localizer as Localizer
-import qualified Type.Constrain.Module as Type
-import qualified Type.Solve as Type
 import NeatInterpolation
+
+import qualified Data.Utf8
+import AST.Canonical
+import Elm.Package
+import qualified AST.Canonical as Can
+import qualified Elm.ModuleName as Module
+import qualified Reporting.Annotation
 import qualified Data.ByteString.Builder as B
 
-
--- import System.IO.Unsafe (unsafePerformIO)
-
-
--- @DEPRECATED for alpha12 release migration only
-import qualified Lamdera.Wire2.Core
-import qualified Lamdera.Wire2.Interfaces
-
-import qualified Lamdera.Wire3.Core
-import qualified Lamdera.Wire3.Interfaces
-import qualified Lamdera.Wire3.Helpers as Lamdera.Wire
 import Lamdera
-import qualified CanSer.CanSer as ToSource
-import qualified Data.Text as T
-import qualified Data.Utf8
+import StandaloneInstances
 
 
 updateDecls :: Module.Canonical -> Can.Decls -> Can.Decls

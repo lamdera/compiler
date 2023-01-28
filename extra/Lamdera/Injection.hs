@@ -366,9 +366,9 @@ elmPkgJs mode =
       ""
 
 onlyIf :: Bool -> Text -> Text
-onlyIf cond text =
+onlyIf cond t =
   if cond
-    then text
+    then t
     else ""
 
 
