@@ -407,7 +407,7 @@ waiProxyToSettings getDest wps' manager req0 sendResponse = do
     case edest of
         Left app -> maybe id timeBound (lpsTimeBound lps) $ app req0 sendResponse
         Right (ProxyDest host port, req, secure) -> tryWebSockets wps host port req sendResponse $ do
-            scb <- semiCachedBody (WAI.requestBody req)
+            scb <- semiCachedBody (WAI.getRequestBodyChunk req)
             let body =
                   case WAI.requestBodyLength req of
                       WAI.KnownLength i -> HC.RequestBodyStream (fromIntegral i) scb
