@@ -132,6 +132,15 @@ migrate_Migrate_All_New_BackendModel old =
                     , userType = rec.userType |> migrate_Migrate_All_New_UserType
                     }
                )
+    , unchangedListAnonymousRecord =
+        old.unchangedListAnonymousRecord
+            |> List.map
+                (\rec ->
+                    { name = rec.name
+                    , age = rec.age
+                    , userType = rec.userType |> migrate_Migrate_All_New_UserType
+                    }
+                )
     , unchangedAnonymousRecordNested =
         old.unchangedAnonymousRecordNested
             |> (\rec ->
@@ -266,6 +275,17 @@ migrate_Migrate_All_New_UserType old =
                                 }
                            )
                 }
+
+        Migrate_All.Old.UserListAnonymous p0 ->
+            Migrate_All.New.UserListAnonymous
+                (p0
+                    |> List.map
+                        (\rec1 ->
+                            { name = rec1.name
+                            , userType = rec1.userType |> migrate_Migrate_All_New_UserType
+                            }
+                        )
+                )
 
         Migrate_All.Old.UserTuple p0 ->
             Migrate_All.New.UserTuple (p0 |> Tuple.mapSecond migrate_Migrate_All_New_UserType)

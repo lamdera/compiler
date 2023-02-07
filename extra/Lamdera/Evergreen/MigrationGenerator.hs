@@ -983,12 +983,24 @@ typeToMigration oldVersion newVersion scope interfaces recursionSet typeNew@(Can
                 (MigrationNested migrate_p0 imps1 subDefs1) =
                   (canToMigration oldVersion newVersion scope interfaces recursionSet p0 (Just p0o) tvarMapOld tvarMapNew "p0")
 
-                migration =
-                  if T.strip migrate_p0 == ""
+                applied =
+                  if migrate_p0 == ""
                     then ""
-                    else T.concat [ typeName, ".map ", migrate_p0 ]
+                    else if isAnonymousRecord p0 then
+                      let
+                        -- In order to deal with anonymous records inline, we have to change
+                        -- the name of the value to avoid shadowing the `old.` ref.
+                        anonymousValueRef = nextUniqueRef oldValueRef
+                        (MigrationNested migration _imps _subDefs) =
+                          canToMigration oldVersion newVersion scope interfaces recursionSet p0 (Just (p0o)) tvarMapOld tvarMapNew anonymousValueRef
+                      in
+                      T.concat [ "(\\", anonymousValueRef, " -> ", migration, ")"]
+                    else
+                      T.concat [ migrate_p0 ]
               in
-              xMigrationNested (migration, Set.singleton moduleName <> imps1, subDefs1)
+              if applied == ""
+                then xMigrationNested ("", Set.empty, Map.empty)
+                else xMigrationNested (T.concat [typeName, ".map ", applied], Set.singleton moduleName <> imps1, subDefs1)
             _ ->
               error $ T.unpack $ T.concat ["migrate1ParamCollection: impossible multi-param ", typeName, "! Please report this gen issue."]
         )

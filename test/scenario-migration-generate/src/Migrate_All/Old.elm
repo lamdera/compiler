@@ -24,6 +24,7 @@ type alias BackendModel =
     , unchangedResult : Result Int String
     , unchangedDict : Dict Int String
     , unchangedAnonymousRecord : { name : String, age : Int, userType : UserType }
+    , unchangedListAnonymousRecord : List { name : String, age : Int, userType : UserType }
     , unchangedAnonymousRecordNested :
         { name : String
         , subrecord :
@@ -73,6 +74,7 @@ type UserType
     | UserAnonymousNestedAdded { name : String, subrecord : { userType : UserType } }
     | UserAnonymousNestedRemoved { name : String, subrecord : { userType : UserType, removed : String } }
     | UserAnonymousNestedAddedRemoved { name : String, subrecord : { userType : UserType, removed : String } }
+    | UserListAnonymous (List { name : String, userType : UserType })
     | UserTuple ( Int, UserType )
     | UserTriple ( Int, Float, UserType )
     | UserTvarAlias (Evergreen.V1.External.Paramed CustomType)
