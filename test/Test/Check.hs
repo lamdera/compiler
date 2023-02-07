@@ -5,26 +5,25 @@
 module Test.Check where
 
 import System.FilePath ((</>))
+import qualified System.Directory as Dir
 import qualified Data.Text as T
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 
+import EasyTest
+import NeatInterpolation
+
 import qualified Elm.ModuleName as ModuleName
 import qualified Elm.Package as Pkg
 
-import EasyTest
 import Test.Helpers
-
 import Lamdera
 import Lamdera.Evergreen.Snapshot
-import NeatInterpolation
 import qualified Lamdera.CLI.Check
-import qualified System.Directory as Dir
-
-import qualified Test.Wire
-
+import qualified Lamdera.Offline
 import LamderaSharedBuildHelpers
 import qualified Ext.Common
+
 
 all = EasyTest.run suite
 
@@ -67,10 +66,10 @@ expectFileContains needle file =
 
     textM <- io $ readUtf8Text file
     case textM of
-      Just text ->
-        if (not $ textContains needle text)
+      Just t ->
+        if (not $ textContains needle t)
           then
-            crash $ "❌  expectFileContains: file '" ++ file ++ "' does not contain '" ++ T.unpack needle ++ "'\n📖 file contents were:\n" ++ T.unpack text
+            crash $ "❌  expectFileContains: file '" ++ file ++ "' does not contain '" ++ T.unpack needle ++ "'\n📖 file contents were:\n" ++ T.unpack t
           else
             ok
 
@@ -142,7 +141,7 @@ rebuildLamderaCheckProd projectPath appName = do
 
 installElmHttpForRPC projectPath = do
   Ext.Common.withProjectRoot projectPath $ do
-    Test.Wire.installHelper Pkg.http
+    Lamdera.Offline.installHelper Pkg.http
 
 
 

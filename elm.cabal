@@ -235,6 +235,7 @@ Executable lamdera
         Lamdera.Injection
         Lamdera.Live
         Lamdera.Make
+        Lamdera.Offline
         Lamdera.PostCompile
         Lamdera.Project
         Lamdera.RelativeLoad
