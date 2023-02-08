@@ -141,6 +141,16 @@ migrate_Migrate_All_New_BackendModel old =
                     , userType = rec.userType |> migrate_Migrate_All_New_UserType
                     }
                 )
+    , unchangedDictAnonymousRecord =
+        old.unchangedDictAnonymousRecord
+            |> Dict.map
+                (\k ->
+                    \rec ->
+                        { name = rec.name
+                        , age = rec.age
+                        , userType = rec.userType |> migrate_Migrate_All_New_UserType
+                        }
+                )
     , unchangedAnonymousRecordNested =
         old.unchangedAnonymousRecordNested
             |> (\rec ->
@@ -159,7 +169,7 @@ migrate_Migrate_All_New_BackendModel old =
     , withCustomList = old.withCustomList |> List.map migrate_Migrate_All_New_UserType
     , withCustomSet = old.withCustomSet |> Set.map (Unimplemented {- Type changed from `Int` to `String`. I need you to write this migration. -})
     , withCustomArray = old.withCustomArray |> Array.map migrate_Migrate_All_New_UserType
-    , withCustomDict = old.withCustomDict |> Dict.map (\k v -> v |> migrate_Migrate_All_New_UserType)
+    , withCustomDict = old.withCustomDict |> Dict.map (\k -> migrate_Migrate_All_New_UserType)
     , withCustomResult = old.withCustomResult |> Result.mapError migrate_Migrate_All_New_UserType |> Result.map migrate_Migrate_All_New_UserType
     , externalUnion = old.externalUnion |> migrate_External_ExternalUnion
     , added = (Unimplemented {- Type `Int` was added in V2. I need you to set a default value. -})

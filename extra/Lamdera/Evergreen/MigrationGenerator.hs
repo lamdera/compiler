@@ -974,36 +974,38 @@ typeToMigration oldVersion newVersion scope interfaces recursionSet typeNew@(Can
     moduleNameRaw :: N.Name
     moduleNameRaw = dropCan moduleName
 
+    applyMigration p0 p0o migrate_p0 =
+      if migrate_p0 == ""
+        then ""
+        else if isAnonymousRecord p0 then
+          let
+            -- In order to deal with anonymous records inline, we have to change
+            -- the name of the value to avoid shadowing the `old.` ref.
+            anonymousValueRef = nextUniqueRef oldValueRef
+            (MigrationNested migration _imps _subDefs) =
+              canToMigration oldVersion newVersion scope interfaces recursionSet p0 (Just (p0o)) tvarMapOld tvarMapNew anonymousValueRef
+          in
+          T.concat [ "(\\", anonymousValueRef, " -> ", migration, ")"]
+        else
+          T.concat [ migrate_p0 ]
+
     migrate1ParamCollection :: Migration
     migrate1ParamCollection =
-        zipFull paramsOld params & (\p ->
-          case p of
-            (Just p0o,Just p0):[] ->
-              let
-                (MigrationNested migrate_p0 imps1 subDefs1) =
-                  (canToMigration oldVersion newVersion scope interfaces recursionSet p0 (Just p0o) tvarMapOld tvarMapNew "p0")
+      zipFull paramsOld params & (\p ->
+        case p of
+          (Just p0o,Just p0):[] ->
+            let
+              (MigrationNested migrate_p0 imps1 subDefs1) =
+                (canToMigration oldVersion newVersion scope interfaces recursionSet p0 (Just p0o) tvarMapOld tvarMapNew "p0")
 
-                applied =
-                  if migrate_p0 == ""
-                    then ""
-                    else if isAnonymousRecord p0 then
-                      let
-                        -- In order to deal with anonymous records inline, we have to change
-                        -- the name of the value to avoid shadowing the `old.` ref.
-                        anonymousValueRef = nextUniqueRef oldValueRef
-                        (MigrationNested migration _imps _subDefs) =
-                          canToMigration oldVersion newVersion scope interfaces recursionSet p0 (Just (p0o)) tvarMapOld tvarMapNew anonymousValueRef
-                      in
-                      T.concat [ "(\\", anonymousValueRef, " -> ", migration, ")"]
-                    else
-                      T.concat [ migrate_p0 ]
-              in
-              if applied == ""
-                then xMigrationNested ("", Set.empty, Map.empty)
-                else xMigrationNested (T.concat [typeName, ".map ", applied], Set.singleton moduleName <> imps1, subDefs1)
-            _ ->
-              error $ T.unpack $ T.concat ["migrate1ParamCollection: impossible multi-param ", typeName, "! Please report this gen issue."]
-        )
+              applied = applyMigration p0 p0o migrate_p0
+            in
+            if applied == ""
+              then xMigrationNested ("", Set.empty, Map.empty)
+              else xMigrationNested (T.concat [typeName, ".map ", applied], Set.singleton moduleName <> imps1, subDefs1)
+          _ ->
+            error $ T.unpack $ T.concat ["migrate1ParamCollection: impossible multi-param ", typeName, "! Please report this gen issue."]
+      )
 
     migrate2ParamCollection :: (Text -> Text) -> (Text -> Text) -> (Text -> Text -> Text) -> Migration
     migrate2ParamCollection handle1 handle2 handleBoth =
@@ -1015,12 +1017,15 @@ typeToMigration oldVersion newVersion scope interfaces recursionSet typeNew@(Can
                 (canToMigration oldVersion newVersion scope interfaces recursionSet p0 (Just p0o) tvarMapOld tvarMapNew "p0")
               (MigrationNested migrate_p1 imps1 subDefs1) =
                 (canToMigration oldVersion newVersion scope interfaces recursionSet p1 (Just p1o) tvarMapOld tvarMapNew "p1")
+
+              applied0 = applyMigration p0 p0o migrate_p0
+              applied1 = applyMigration p1 p1o migrate_p1
               (migration, migrationDefs) =
-                case (T.strip migrate_p0 == "", T.strip migrate_p1 == "") of
+                case (applied0 == "", applied1 == "") of
                   (True, True)   -> ("", Map.empty) -- No migration necessary
-                  (False, True)  -> (handle1 migrate_p0, subDefs0)
-                  (True, False)  -> (handle2 migrate_p1, subDefs1)
-                  (False, False) -> (handleBoth migrate_p0 migrate_p1, subDefs0 <> subDefs1)
+                  (False, True)  -> (handle1 applied0, subDefs0)
+                  (True, False)  -> (handle2 applied1, subDefs1)
+                  (False, False) -> (handleBoth applied0 applied1, subDefs0 <> subDefs1)
             in
             xMigrationNested (migration, Set.singleton moduleName <> imps0 <> imps1, migrationDefs)
           _ ->
@@ -1052,7 +1057,7 @@ typeToMigration oldVersion newVersion scope interfaces recursionSet typeNew@(Can
 
     ("elm", "core", "Dict", "Dict")     -> migrate2ParamCollection
       (\m_p0      -> T.concat [ "Dict.toList |> List.map (Tuple.mapFirst ", m_p0, ") |> Dict.fromList" ])
-      (\m_p1      -> T.concat [ "Dict.map (\\k v -> v |> ", m_p1, ")" ])
+      (\m_p1      -> T.concat [ "Dict.map (\\k -> ", m_p1, ")" ])
       (\m_p0 m_p1 -> T.concat [ "Dict.toList |> List.map (Tuple.mapBoth ", m_p0, " ", m_p1, ") |> Dict.fromList" ])
 
     (author, pkg, module_, typeName_) ->

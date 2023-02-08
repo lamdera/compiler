@@ -25,6 +25,7 @@ type alias BackendModel =
     , unchangedDict : Dict Int String
     , unchangedAnonymousRecord : { name : String, age : Int, userType : UserType }
     , unchangedListAnonymousRecord : List { name : String, age : Int, userType : UserType }
+    , unchangedDictAnonymousRecord : Dict String { name : String, age : Int, userType : UserType }
     , unchangedAnonymousRecordNested :
         { name : String
         , subrecord :
