@@ -24,6 +24,7 @@ import Evergreen.V2.External
 import Lamdera.Migrations exposing (..)
 import Migrate_External_Paramed.New
 import Migrate_External_Paramed.Old
+import Quantity
 
 
 target =
@@ -40,6 +41,11 @@ migrate_External_Paramed migrate_a old =
 migrate_Migrate_External_Paramed_New_AnalyticsModel : Migrate_External_Paramed.Old.AnalyticsModel -> Migrate_External_Paramed.New.AnalyticsModel
 migrate_Migrate_External_Paramed_New_AnalyticsModel old =
     old
+
+
+migrate_Migrate_External_Paramed_New_Coord : (units_old -> units_new) -> Migrate_External_Paramed.Old.Coord units_old -> Migrate_External_Paramed.New.Coord units_new
+migrate_Migrate_External_Paramed_New_Coord migrate_units old =
+    old |> Tuple.mapBoth (migrate_Quantity_Quantity identity migrate_units) (migrate_Quantity_Quantity identity migrate_units)
 
 
 migrate_Migrate_External_Paramed_New_CustomType : Migrate_External_Paramed.Old.CustomType -> Migrate_External_Paramed.New.CustomType
@@ -60,3 +66,13 @@ migrate_Migrate_External_Paramed_New_Target old =
 
         Migrate_External_Paramed.Old.UserMixPackage p0 ->
             Migrate_External_Paramed.New.UserMixPackage (p0 |> migrate_Migrate_External_Paramed_New_AnalyticsModel)
+
+        Migrate_External_Paramed.Old.UserMixPackage2 p0 ->
+            Migrate_External_Paramed.New.UserMixPackage2 (p0 |> migrate_Migrate_External_Paramed_New_Coord migrate_Migrate_External_Paramed_New_CustomType)
+
+
+migrate_Quantity_Quantity : (number_old -> number_new) -> (units_old -> units_new) -> Quantity.Quantity number_old units_old -> Quantity.Quantity number_new units_new
+migrate_Quantity_Quantity migrate_number migrate_units old =
+    case old of
+        Quantity.Quantity p0 ->
+            Quantity.Quantity (migrate_number p0)

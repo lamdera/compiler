@@ -484,8 +484,8 @@ isEquivalentAppliedType debugLabel t1 t2 = do
       -- debugHaskell "TUnit" $
       t1 == t2
     (Can.TVar name, Can.TVar name2) ->
-      -- debugHaskell "TVar" $
-      t1 == t2
+      False -- if we still have unresolved tvars, then types cannot be equivalent in this context
+
     (Can.TLambda _ _, Can.TLambda _ _) ->
       -- Skip lambda equality not relevant
       False

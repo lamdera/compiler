@@ -3,11 +3,13 @@ module Migrate_External_Paramed.New exposing (..)
 import Chart.Item as CI
 import Evergreen.V2.External
 import Evergreen.V2.Types
+import Quantity
 
 
 type Target
     = UserTvarAlias (Evergreen.V2.External.Paramed CustomType)
     | UserMixPackage AnalyticsModel
+    | UserMixPackage2 (Coord CustomType)
 
 
 type alias AnalyticsModel =
@@ -34,3 +36,7 @@ type alias AnalyticsVisits =
 type CustomType
     = CustomOne
     | CustomTwo
+
+
+type alias Coord units =
+    ( Quantity.Quantity Int units, Quantity.Quantity Int units )

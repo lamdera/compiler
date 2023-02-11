@@ -26,7 +26,6 @@ import qualified Lamdera.Compile
 import qualified Ext.ElmFormat
 import qualified Ext.Query.Interfaces
 import qualified Lamdera.Wire3.Helpers
-import Lamdera.Wire3.Helpers (resolveTvar)
 -- import StandaloneInstances
 
 import Lamdera.Evergreen.MigrationGeneratorHelpers
@@ -631,7 +630,10 @@ canToMigration oldVersion newVersion scope interfaces recursionSet typeNew typeO
         else if
              (isPackageType typeOld)
           && (isPackageType typeNew)
-          && (isEquivalentAppliedType "canToMigration" typeOld typeNew)
+          && (isEquivalentAppliedType "canToMigration"
+                (Lamdera.Wire3.Helpers.resolveTvar tvarMapOld typeOld)
+                (Lamdera.Wire3.Helpers.resolveTvar tvarMapNew typeNew)
+             )
           then noMigration
         else
           canToMigration_ oldVersion newVersion scope interfaces recursionSet typeNew typeOld tvarMapOld tvarMapNew oldValueRef
@@ -676,9 +678,9 @@ canToMigration_ oldVersion newVersion scope interfaces recursionSet typeNew type
           case c1m of
             Nothing ->
               migrateTuple
-                (\m_p1      -> T.concat [ "Tuple.mapFirst ", m_p1] )
-                (\m_p2      -> T.concat [ "Tuple.mapSecond ", m_p2 ])
-                (\m_p1 m_p2 -> T.concat [ "Tuple.mapBoth ", m_p1, " ", m_p2 ])
+                (\m_p1      -> T.concat [ "Tuple.mapFirst (", m_p1, ")" ] )
+                (\m_p2      -> T.concat [ "Tuple.mapSecond (", m_p2, ")" ])
+                (\m_p1 m_p2 -> T.concat [ "Tuple.mapBoth (", m_p1, ") (", m_p2, ")" ])
 
             Just c1 ->
               let
@@ -802,16 +804,19 @@ canAliasToMigration oldVersion newVersion scope interfaces recursionSet
               , tvarsNew & fmap (\tvar -> T.concat [tvar, "_new"]) & T.intercalate " "
               ]
 
-            applyOldValueIfNotRecord =
+            applyOldValueIfNotRecord m =
               if isRecord cType then
-                ""
+                m
               else
-                "old |> "
+                if T.strip m == "" then
+                  "old"
+                else
+                  T.concat [ "old |> ", m ]
 
             typeDef =
               T.concat
                 [ migrationName, " : ", migrationTypeSignature, "\n"
-                , migrationName, " ", paramMigrationVars, " old = ", applyOldValueIfNotRecord, migrationAliasedType
+                , migrationName, " ", paramMigrationVars, " old = ", applyOldValueIfNotRecord migrationAliasedType
                 ]
           in
             xMigrationNested (
@@ -831,6 +836,7 @@ canAliasToMigration oldVersion newVersion scope interfaces recursionSet
                   , migrationDef = typeDef
                   }
               )
+                & debugHaskellWhen (debugMigrationFn == migrationName) "debugMigrationFn:canAliasToMigration:Holey"
                 & Map.union subDefs
                 & Map.union (mergeAllSubDefs (fmap migrationTopLevelDefs usageParamMigrations))
              )

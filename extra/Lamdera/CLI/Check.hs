@@ -300,7 +300,7 @@ onlineCheck root appName inDebug localTypes externalTypeWarnings isHoistRebuild 
                     Help.report "UNIMPLEMENTED MIGRATION" (Just nextMigrationPathBare)
                       ("The following types have changed since last deploy (v" <> show prodVersion <> ") and require migrations:")
                       [ formattedChangedTypes
-                      , D.reflow $ "I've generated a placeholder migration file to help you get started:"
+                      , D.reflow $ "I've tried to generate a migration for you here:"
                       , D.reflow $ nextMigrationPath
                       , D.reflow "See <https://dashboard.lamdera.app/docs/evergreen> for more info."
                       ]
