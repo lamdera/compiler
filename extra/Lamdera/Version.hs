@@ -29,7 +29,7 @@ full =
           | otherwise  = ""
   in
   concat
-    [ "lamdera-", short, "-", Ext.Common.os, "-", Ext.Common.arch, "-", giHash gi, dirty
+    [ "lamdera-", short, "-", elm, "-", Ext.Common.os, "-", Ext.Common.arch, "-", giHash gi, dirty
     , " (", giCommitDate gi, ")"
     , " (branch:", giBranch gi, ")"
     ]
