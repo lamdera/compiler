@@ -154,6 +154,17 @@ tryStandaloneInstall pkg  = do
 
 
     markKnownBad pkg "8n8/elm-string-normalize" -- compilation error
+    markKnownBad pkg "Massolari/time-distance" -- 404
+    markKnownBad pkg "NeoVier/elm-mask" -- renamed to henriquecbuss/elm-mask
+    markKnownBad pkg "NeoVier/elm-review-no-function-outside-of-modules" -- renamed to henriquecbuss/elm-review-no-function-outside-of-modules
+    markKnownBad pkg "STTR13/ziplist" -- renamed to staeter/ziplist
+
+
+    markKnownBad pkg "NoRedInk/style-elements" -- package constraints that are too wide
+    markKnownBad pkg "Orasund/elm-cellautomata" -- package constraints that are too wide
+    markKnownBad pkg "Orasund/leaf-lang" -- package constraints that are too wide
+    markKnownBad pkg "alexandrepiveteau/elm-ordt" -- package constraints that are too wide
+
 
 
     -- @TODO issues that might be resolveable
