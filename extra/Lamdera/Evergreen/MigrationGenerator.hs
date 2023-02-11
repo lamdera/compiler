@@ -1077,9 +1077,9 @@ typeToMigration oldVersion newVersion scope interfaces recursionSet typeNew@(Can
           migrateTypeDef typeDefOld typeDefNew oldVersion newVersion interfaces tvarMapOld_ tvarMapNew_
 
         (_, Nothing) ->
-          unimplemented "typeToMigration" ("I came across a `" <> qualifiedTypeName typeNew <> "` type but couldn't load the definition. This should have been caught earlier by Wire, so please report this if you see it.")
+          unimplemented "typeToMigration" ("I came across a new `" <> qualifiedTypeName typeNew <> "` type but couldn't load the definition. This should have been caught earlier by Wire, so please report this if you see it.")
         (Nothing, _) ->
-          unimplemented "typeToMigration" ("I came across a `" <> qualifiedTypeName typeOld <> "` type but couldn't load the definition. This should have been caught earlier by Wire, so please report this if you see it.")
+          unimplemented "typeToMigration" ("I came across an old `" <> qualifiedTypeName typeOld <> "` type but couldn't load the definition. This should have been caught earlier by Wire, so please report this if you see it.")
 
 
 redoTvarMap tvarMap tipe typeDef =
