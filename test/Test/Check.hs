@@ -85,10 +85,11 @@ check = do
   -- checkWithParams "/Users/mario/dev/test/ascii-art" "ascii-art-local"
   -- checkWithParams "/Users/mario/dev/test/lamdera-minilatex-app" "minilatex"
   -- checkWithParams "/Users/mario/dev/lamdera-user-projects/beat-the-big-two" "beat-the-big-two"
-  checkWithParams "/Users/mario/dev/projects/lamdera-dashboard" "dashboard"
+  -- checkWithParams "/Users/mario/dev/projects/lamdera-dashboard" "dashboard"
   -- checkWithParams "/Users/mario/dev/projects/lamdera-test" "testapp"
   -- checkWithParams "/Users/mario/lamdera/tmp/elm-audio-test0" "elm-audio-test0"
   -- checkWithParams "/Users/mario/lamdera-builds/build-test-local/staging" "test-local"
+  checkWithParams "/Users/mario/dev/projects/bento-life" "life"
 
 
 mockBuildSh projectPath appName = do

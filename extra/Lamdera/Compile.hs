@@ -75,7 +75,7 @@ make_ root = do
 
 
 
--- Runs `lamdera make` of given files with no output
+-- Runs `lamdera make` of given files with no JS file output
 makeDev :: FilePath -> [FilePath] -> IO ()
 makeDev root paths = do
   debug $ "🏗   lamdera make " <> root <> "/" <> show paths

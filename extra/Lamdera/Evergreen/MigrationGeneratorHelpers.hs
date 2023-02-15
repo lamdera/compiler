@@ -81,7 +81,7 @@ debugMigrationIncludes_ tag migration =
         & filter (\migrationDefinition ->
             migrationDefinition
               & migrationDef
-              & (\v -> debugMigrationIncludes `T.isInfixOf` v)
+              & (\v -> debugMigrationIncludes `T.isPrefixOf` v)
           )
         & length
         & (\c -> c > 0)

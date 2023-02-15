@@ -68,7 +68,7 @@ data Artifacts =
 allDepArtifacts :: IO Artifacts
 allDepArtifacts =
   BW.withScope $ \scope ->
-  do  debug "Loading allDeps"
+  do  debug "Loading allDepArtifacts"
       style <- Reporting.terminal
       root <- getProjectRoot "allDepArtifacts"
       result <- Details.load style scope root
@@ -83,7 +83,7 @@ allDepArtifacts =
  -}
 allDepArtifacts_ :: Details.Details -> IO Artifacts
 allDepArtifacts_ details = do
-  debug "Loading allDeps"
+  debug "Loading allDepArtifacts_"
   root <- getProjectRoot "allDepArtifacts_"
   omvar <- Details.loadObjects root details
   imvar <- Details.loadInterfaces root details

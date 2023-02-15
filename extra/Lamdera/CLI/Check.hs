@@ -302,7 +302,6 @@ onlineCheck root appName inDebug localTypes externalTypeWarnings isHoistRebuild 
                       [ formattedChangedTypes
                       , D.reflow $ "I've tried to generate a migration for you here:"
                       , D.reflow $ nextMigrationPath
-                      , D.reflow $ "Please check it out "
                       , D.reflow "See <https://dashboard.lamdera.app/docs/evergreen> for more info."
                       ]
 

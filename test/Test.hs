@@ -1,6 +1,14 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Test where
+
+import Control.Monad.Except (catchError)
+import Control.Exception (catch, SomeException)
+import Prelude hiding (catch)
+
+import qualified System.Directory as Dir
+import System.FilePath ((</>))
 
 import EasyTest
 import Lamdera
@@ -23,14 +31,12 @@ import qualified Lamdera.Compile
 import qualified Lamdera.Evaluate
 import qualified Lamdera.CLI.Check
 
+import Ext.Common (trackedForkIO, bash)
 import qualified Ext.Common
 import qualified Ext.Query.Canonical
 
 import Develop
 
-import Ext.Common (trackedForkIO, bash)
-import qualified System.Directory as Dir
-import System.FilePath ((</>))
 
 {-
 
@@ -90,19 +96,19 @@ For more information on how to use the GHCi debugger, see the GHC User's Guide.
 -- Current target for ghci :rr command. See ~/.ghci config file, which should contain
 -- something like `:def rr const $ return $ unlines [":r","Test.target"]`
 
-target = Test.all
+-- target = Test.all
 
 
--- target = do
---   -- let p = "/Users/mario/dev/projects/lamdera-dashboard"
---   let p = "/Users/mario/dev/projects/bento-life"
---   -- let p = "/Users/mario/dev/test/sheep-game"
+target = do
+  let p = "/Users/mario/dev/projects/lamdera-dashboard"
+  -- Lamdera.remove (p </> "src/Evergreen/Migrate/V125.elm")
+  -- Lamdera.rmdir (p </> "src/Evergreen/V125")
 
---   Lamdera.remove (p </> "src/Evergreen/Migrate/V45.elm")
---   Lamdera.rmdir (p </> "src/Evergreen/V45")
---   Ext.Common.setProjectRoot p
---   -- Dir.withCurrentDirectory p $ Lamdera.CLI.Check.run () (Lamdera.CLI.Check.Flags { Lamdera.CLI.Check._destructiveMigration = True })
---   Dir.withCurrentDirectory p $ Lamdera.CLI.Check.run_
+  Ext.Common.setProjectRoot p
+  -- Dir.withCurrentDirectory p $ Lamdera.CLI.Check.run () (Lamdera.CLI.Check.Flags { Lamdera.CLI.Check._destructiveMigration = True })
+  Dir.withCurrentDirectory p $ Lamdera.CLI.Check.run_ `catch` (\(_ :: SomeException) -> pure ())
+
+  -- Lamdera.Compile.makeDev p ["src/Evergreen/Migrate/V62.elm"]
 
 
 -- target =

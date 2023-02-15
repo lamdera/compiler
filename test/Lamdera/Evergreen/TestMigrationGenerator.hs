@@ -13,6 +13,7 @@ import qualified Data.Text as T
 import System.FilePath ((</>))
 import qualified Data.Map as Map
 import qualified System.FilePath as FP
+import qualified Data.Set as Set
 
 import AST.Canonical
 import qualified AST.Optimized as Opt
@@ -154,7 +155,7 @@ testExamples = withTestEnv $ do
         case (typeOldM, typeNewM, expectationM) of
           (Just typeDefOld, Just typeDefNew, Just expectation) -> do
               let
-                migrationNested = MigrationGenerator.migrateTypeDef typeDefOld typeDefNew oldVersion newVersion interfaces [] []
+                migrationNested = MigrationGenerator.migrateTypeDef typeDefOld typeDefNew oldVersion newVersion interfaces [] [] Set.empty
                 (Helpers.MigrationNested migration migrationImports migrationDefs) = migrationNested
                 migrationDefM = migrationDefs & Map.lookup (moduleNew, typeName) & fmap Helpers.migrationDef
 
