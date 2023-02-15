@@ -180,6 +180,10 @@ coreTypeMigration typeDidChange oldVersion newVersion interfaces newModule typeN
 
         (_, Nothing) ->
           error $ concat [ "Tried to generate a migration for core type ", N.toChars typeName, ", but I couldn't find it defined in src/Evergree/V", show newVersion, "/Types.elm" ]
+
+        _ ->
+          unimplemented (T.concat ["coreTypeMigration"])
+            (T.concat [ "Core type changed in an unexpected way. I need you to write this migration." ])
     else
       (MigrationNested (migrationWrapper (unchangedForType typeName)) Set.empty Map.empty)
 
