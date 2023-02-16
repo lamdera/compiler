@@ -72,20 +72,20 @@ debugMigrationIncludes_ tag migration =
   migration
     & debugHaskellWhen ( debugMigrationIncludes /= ""
       && (
-      -- debugMigrationIncludes `T.isInfixOf` migrationFn migration
+      debugMigrationIncludes `T.isPrefixOf` migrationFn migration
       -- ||
-      (migration
-        & migrationTopLevelDefs
-        & Map.toList
-        & fmap snd
-        & filter (\migrationDefinition ->
-            migrationDefinition
-              & migrationDef
-              & (\v -> debugMigrationIncludes `T.isPrefixOf` v)
-          )
-        & length
-        & (\c -> c > 0)
-      )
+      -- (migration
+      --   & migrationTopLevelDefs
+      --   & Map.toList
+      --   & fmap snd
+      --   & filter (\migrationDefinition ->
+      --       migrationDefinition
+      --         & migrationDef
+      --         & (\v -> debugMigrationIncludes `T.isPrefixOf` v)
+      --     )
+      --   & length
+      --   & (\c -> c > 0)
+      -- )
     )
     )
     ("debugMigrationIncludes:" <> tag)
@@ -295,6 +295,11 @@ typeNameToStringQualifiedParams moduleName tipeName params = do
 isUserType :: TypeIdentifier -> Bool
 isUserType (author, pkg, module_, tipe) =
   author == "author" && pkg == "project"
+
+
+isCoreType :: TypeIdentifier -> Bool
+isCoreType (author, pkg, module_, tipe) =
+  author == "elm" && pkg == "core"
 
 
 isPackageType :: Can.Type -> Bool

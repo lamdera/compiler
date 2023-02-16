@@ -265,13 +265,18 @@ migrateUnion_ author pkg oldUnion newUnion tvarMapOld tvarMapNew oldVersion newV
       tvarPairs
         & imap (\i (paramOld, paramNew) ->
           let
+            isAnonymous = isAnonymousRecord paramNew
+            anonymousValueRef = "rec"
+            valueRef = if isAnonymous then anonymousValueRef else ("p" <> show_ i)
             ft@(MigrationNested fn imps subDefs) =
-              canToMigration oldVersion newVersion scope interfaces recursionSet paramNew (Just paramOld) tvarMapOld tvarMapNew ("p" <> show_ i)
+              canToMigration oldVersion newVersion scope interfaces recursionSet paramNew (Just paramOld) tvarMapOld tvarMapNew valueRef
           in
           if fn == "" then
             -- Because paramaterised migrations are passed into functions that expect `v1 -> v2` functions, we
             -- need to pass in a function even if there is no migration necessary, i.e. `String -> String`.
             ft { migrationFn = "identity" }
+          else if isAnonymous then
+            ft { migrationFn = T.concat [ "(\\", anonymousValueRef, " -> ", fn, ")" ] }
           else
             ft
         )
@@ -429,15 +434,50 @@ genOldConstructorMigration oldModuleName moduleScope typeName interfaces tvarMap
             paramMigrations =
               zipFull oldParams newParams
                 & imap (\i (paramOldM, paramNewM) ->
-                  migrateParam i paramOldM paramNewM interfaces tvarMapOld tvarMapNew recursionSet localScope newVersion oldVersion
+                  case (paramOldM, paramNewM) of
+                    (Just paramOld, Just paramNew) ->
+                      let ft@(MigrationNested migration imps subDefs) =
+                            canToMigration oldVersion newVersion localScope interfaces recursionSet paramNew (Just paramOld) tvarMapOld tvarMapNew ("p" <> show_ i)
+
+                          appliedMigration =
+                            if isTvar paramOld then
+                              case paramOld of
+                                Can.TVar name ->
+                                  xMigrationNested (T.concat ["( migrate_", N.toText name, " p", show_ i, ")"], imps, subDefs)
+                                _ ->
+                                  error "impossible:appliedMigration tvar /= tvar"
+                            else if migration == "" then
+                              xMigrationNested (T.concat ["p", show_ i], Set.empty, Map.empty)
+                            else if isAnonymousRecord paramOld then
+                              ft
+                            else if isUserDefinedType_ paramOld then
+                              xMigrationNested (T.concat ["(p", show_ i, " |> ", migration, ")"], imps, subDefs)
+                            else
+                              xMigrationNested (T.concat ["(p", show_ i, " |> ", migration, ")"], imps, subDefs)
+                      in
+                      appliedMigration
+
+                    (Just paramOld, Nothing) ->
+                      unimplemented "migrateParam:noNew" ("Warning: old variant didn't get mapped to anything, check this is what you want")
+
+                    (Nothing, Just paramNew) ->
+                      unimplemented "migrateParam:noOld" ("This new variant needs to be initialised")
+
+                    _ -> error "migrateParam:impossible, zip produced a value without any contents"
                 )
 
             fullMigration =
               xMigrationNested ( if List.length oldParams > 0 then
-                  let migration =
-                        paramMigrations
-                          & fmap migrationFn
-                          & (\migrationFns -> T.concat [ moduleScope, N.toText newConstructorName, " ", (migrationFns & T.intercalate " ") ])
+                  let
+                    migration =
+                      paramMigrations
+                        & fmap migrationFn
+                        & (\migrationFns ->
+                            if T.length (migrationFns & T.intercalate " ") > 50 then
+                              T.concat [ moduleScope, N.toText newConstructorName, " ", (migrationFns & T.intercalate "\n        ") ]
+                            else
+                              T.concat [ moduleScope, N.toText newConstructorName, " ", (migrationFns & T.intercalate " ") ]
+                          )
                   in
                   T.concat
                       [ "    ", N.toText oldModuleName, ".", N.toText oldConstructorName, " ", (imap (\i _ -> "p" <> show_ i) oldParams & T.intercalate " ")
@@ -481,40 +521,6 @@ genOldConstructorMigration oldModuleName moduleScope typeName interfaces tvarMap
         )
   in
   migration_
-
-
-migrateParam :: Int -> Maybe Can.Type -> Maybe Can.Type -> Interfaces -> TvarMap -> TvarMap -> RecursionSet -> ModuleName.Canonical -> Int -> Int -> Migration
-migrateParam i paramOldM paramNewM interfaces tvarMapOld tvarMapNew recursionSet localScope newVersion oldVersion =
-  case (paramOldM, paramNewM) of
-    (Just paramOld, Just paramNew) ->
-      let ft@(MigrationNested migration imps subDefs) =
-            canToMigration oldVersion newVersion localScope interfaces recursionSet paramNew (Just paramOld) tvarMapOld tvarMapNew ("p" <> show_ i)
-
-          appliedMigration =
-            if isTvar paramOld then
-              case paramOld of
-                Can.TVar name ->
-                  xMigrationNested (T.concat ["( migrate_", N.toText name, " p", show_ i, ")"], imps, subDefs)
-                _ ->
-                  error "impossible:appliedMigration tvar /= tvar"
-            else if migration == "" then
-              xMigrationNested (T.concat ["p", show_ i], Set.empty, Map.empty)
-            else if isAnonymousRecord paramOld then
-              ft
-            else if isUserDefinedType_ paramOld then
-              xMigrationNested (T.concat ["(p", show_ i, " |> ", migration, ")"], imps, subDefs)
-            else
-              xMigrationNested (T.concat ["(p", show_ i, " |> ", migration, ")"], imps, subDefs)
-      in
-      appliedMigration
-
-    (Just paramOld, Nothing) ->
-      unimplemented "migrateParam:noNew" ("Warning: old variant didn't get mapped to anything, check this is what you want")
-
-    (Nothing, Just paramNew) ->
-      unimplemented "migrateParam:noOld" ("This new variant needs to be initialised")
-
-    _ -> error "impossible, zip produced a value without any contents"
 
 
 -- A top level Alias definition i.e. `type alias ...`
@@ -617,7 +623,7 @@ migrateAliasDefinition oldVersion newVersion moduleOld scope identifier@(author,
 canToMigration :: Int -> Int -> ModuleName.Canonical -> Interfaces -> RecursionSet -> Can.Type -> Maybe Can.Type -> TvarMap -> TvarMap -> Text -> Migration
 canToMigration oldVersion newVersion scope interfaces recursionSet typeNew typeOldM tvarMapOld tvarMapNew oldValueRef =
   (\migration@(MigrationNested fn imps0 subDefs0) ->
-    debugHaskellPassWhen (debugMigrationFn == fn && fn /= "") "debugMigrationFn:canToMigration" (typeNew, typeOldM) migration
+    debugHaskellPassWhen (debugMigrationFn `T.isInfixOf` fn && fn /= "" && debugMigrationFn /= "") "debugMigrationFn:canToMigration" (typeOldM, typeNew) migration
   ) $
   case typeOldM of
     Nothing ->
@@ -626,9 +632,9 @@ canToMigration oldVersion newVersion scope interfaces recursionSet typeNew typeO
 
     Just typeOld -> do
       if
-        (   (isPackageType typeOld)
-        && (isPackageType typeNew)
-        && (not $ isEquivalentElmType "x" typeOld typeNew))
+        (     (isPackageType typeOld)
+           && (isPackageType typeNew)
+           && (not $ isEquivalentElmType "x" typeOld typeNew))
         || (not $ coreTypesMatch typeOld typeNew)
         then
           unimplemented (T.concat ["canToMigration:noOldType"])
@@ -737,7 +743,7 @@ canAliasToMigration oldVersion newVersion scope interfaces recursionSet
     identifier = asIdentifier_ (moduleNameNew, typeNameNew)
   in
   (\migration@(MigrationNested migrationName imps0 subDefs0) ->
-    debugHaskellPassWhen (debugMigrationFn == migrationName && migrationName /= "") "debugMigrationFn:canToMigration" (typeNew, typeOld) migration
+    debugHaskellPassWhen (debugMigrationFn == migrationName && migrationName /= "") "debugMigrationFn:canAliasToMigration" (typeNew, typeOld) migration
   ) $
   case aliasTypeNew of
     Can.Holey cType ->
@@ -1044,7 +1050,10 @@ typeToMigration oldVersion newVersion scope interfaces recursionSet_ typeNew@(Ca
             error $ concat ["Fatal: impossible !2 param ", T.unpack typeName, " type! Please report this gen issue."]
       )
   in
-  if (Set.member recursionIdentifier recursionSet_) then
+  (\migration@(MigrationNested fn imps0 subDefs0) ->
+    debugHaskellPassWhen (debugMigrationFn `T.isInfixOf` fn && fn /= "" && debugMigrationFn /= "") "debugMigrationFn:typeToMigration" (typeOld, typeNew) migration
+  ) $
+  if (Set.member recursionIdentifier recursionSet_ && not (isCoreType identifierNew)) then
     handleSeenRecursiveType oldVersion newVersion scope identifierNew interfaces newRecursionSet typeNew (Just typeOld) tvarMapOld tvarMapNew oldValueRef
   else
   debugMigrationIncludes_ "typeToMigration" $

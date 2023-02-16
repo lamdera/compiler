@@ -40,7 +40,16 @@ migrate_External_Paramed migrate_a old =
 
 migrate_Migrate_External_Paramed_New_AnalyticsModel : Migrate_External_Paramed.Old.AnalyticsModel -> Migrate_External_Paramed.New.AnalyticsModel
 migrate_Migrate_External_Paramed_New_AnalyticsModel old =
-    old
+    { hoveringBars = old.hoveringBars
+    , hoveringDots = old.hoveringDots
+    , previousCursorPositions =
+        old.previousCursorPositions
+            |> migrate_Migrate_External_Paramed_New_IdDict identity
+                (\rec ->
+                    { position = rec.position |> migrate_Migrate_External_Paramed_New_Point2d
+                    }
+                )
+    }
 
 
 migrate_Migrate_External_Paramed_New_Coord : (units_old -> units_new) -> Migrate_External_Paramed.Old.Coord units_old -> Migrate_External_Paramed.New.Coord units_new
@@ -56,6 +65,42 @@ migrate_Migrate_External_Paramed_New_CustomType old =
 
         Migrate_External_Paramed.Old.CustomTwo ->
             Migrate_External_Paramed.New.CustomTwo
+
+
+migrate_Migrate_External_Paramed_New_IdDict : (k_old -> k_new) -> (v_old -> v_new) -> Migrate_External_Paramed.Old.IdDict k_old v_old -> Migrate_External_Paramed.New.IdDict k_new v_new
+migrate_Migrate_External_Paramed_New_IdDict migrate_k migrate_v old =
+    case old of
+        Migrate_External_Paramed.Old.RBNode_elm_builtin p0 p1 p2 p3 p4 ->
+            Migrate_External_Paramed.New.RBNode_elm_builtin (p0 |> migrate_Migrate_External_Paramed_New_NColor)
+                p1
+                (migrate_v p2)
+                (p3 |> migrate_Migrate_External_Paramed_New_IdDict (Unimplemented {- Type changed from `Migrate_External_Paramed.Old.IdDictkv` to `k`. I need you to write this migration. -}) (Unimplemented {- Type changed from `Migrate_External_Paramed.Old.IdDictkv` to `v`. I need you to write this migration. -}))
+                (p4 |> migrate_Migrate_External_Paramed_New_IdDict (Unimplemented {- Type changed from `Migrate_External_Paramed.Old.IdDictkv` to `k`. I need you to write this migration. -}) (Unimplemented {- Type changed from `Migrate_External_Paramed.Old.IdDictkv` to `v`. I need you to write this migration. -}))
+
+        Migrate_External_Paramed.Old.RBEmpty_elm_builtin ->
+            Migrate_External_Paramed.New.RBEmpty_elm_builtin
+
+
+migrate_Migrate_External_Paramed_New_NColor : Migrate_External_Paramed.Old.NColor -> Migrate_External_Paramed.New.NColor
+migrate_Migrate_External_Paramed_New_NColor old =
+    case old of
+        Migrate_External_Paramed.Old.Red ->
+            Migrate_External_Paramed.New.Red
+
+        Migrate_External_Paramed.Old.Black ->
+            Migrate_External_Paramed.New.Black
+
+
+migrate_Migrate_External_Paramed_New_Point2d : (units_old -> units_new) -> (coordinates_old -> coordinates_new) -> Migrate_External_Paramed.Old.Point2d units_old coordinates_old -> Migrate_External_Paramed.New.Point2d units_new coordinates_new
+migrate_Migrate_External_Paramed_New_Point2d migrate_units migrate_coordinates old =
+    old |> migrate_Migrate_External_Paramed_New_Point2d_ migrate_units migrate_coordinates
+
+
+migrate_Migrate_External_Paramed_New_Point2d_ : (units_old -> units_new) -> (coordinates_old -> coordinates_new) -> Migrate_External_Paramed.Old.Point2d_ units_old coordinates_old -> Migrate_External_Paramed.New.Point2d_ units_new coordinates_new
+migrate_Migrate_External_Paramed_New_Point2d_ migrate_units migrate_coordinates old =
+    case old of
+        Migrate_External_Paramed.Old.Point2d_ p0 ->
+            Migrate_External_Paramed.New.Point2d_ p0
 
 
 migrate_Migrate_External_Paramed_New_Target : Migrate_External_Paramed.Old.Target -> Migrate_External_Paramed.New.Target
