@@ -96,19 +96,24 @@ For more information on how to use the GHCi debugger, see the GHC User's Guide.
 -- Current target for ghci :rr command. See ~/.ghci config file, which should contain
 -- something like `:def rr const $ return $ unlines [":r","Test.target"]`
 
--- target = Test.all
+target = Test.all
+-- target = checkProject
 
 
-target = do
-  let p = "/Users/mario/dev/projects/lamdera-dashboard"
-  -- Lamdera.remove (p </> "src/Evergreen/Migrate/V125.elm")
-  -- Lamdera.rmdir (p </> "src/Evergreen/V125")
+checkProject = do
+  -- let (p, v) = ("/Users/mario/dev/projects/bento-life", "45")
+  let (p, v) = ("/Users/mario/dev/projects/lamdera-dashboard", "126")
+
+  Lamdera.remove (p </> "src/Evergreen/Migrate/V" ++ v ++ ".elm")
+  Lamdera.rmdir (p </> "src/Evergreen/V" ++ v)
 
   Ext.Common.setProjectRoot p
   -- Dir.withCurrentDirectory p $ Lamdera.CLI.Check.run () (Lamdera.CLI.Check.Flags { Lamdera.CLI.Check._destructiveMigration = True })
   Dir.withCurrentDirectory p $ Lamdera.CLI.Check.run_ `catch` (\(_ :: SomeException) -> pure ())
 
-  -- Lamdera.Compile.makeDev p ["src/Evergreen/Migrate/V62.elm"]
+  Lamdera.Compile.makeDev p ["src/Evergreen/Migrate/V" ++ v ++ ".elm"]
+
+
 
 
 -- target =

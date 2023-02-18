@@ -325,7 +325,6 @@ migrateUnionDefinition_ author pkg oldUnion newUnion tvarMapOld tvarMapNew oldVe
         migration
         (Set.fromList [oldModuleNameCanonical, newModuleNameCanonical])
         (Map.singleton (newModuleNameCanonical, typeName) fn
-            -- & debugHaskellWhen (debugMigrationFn == migration) "debugMigrationFn:migrateUnionDefinition_:specialCased"
             & Map.union (allSubDefs tvarMigrations)
         )
         & debugMigrationIncludes_ "migrateUnionDefinition_:specialCased" (oldUnion, newUnion)
@@ -345,7 +344,6 @@ migrateUnionDefinition_ author pkg oldUnion newUnion tvarMapOld tvarMapNew oldVe
                 , constructorCaseMigrations
                 ]
             }
-            -- & debugHaskellWhen (debugMigrationFn == migrationName) "debugMigrationFn:migrateUnionDefinition_"
             & Map.singleton (newModuleNameCanonical, typeName)
           )
           & Map.union (allSubDefs tvarMigrations)
@@ -536,7 +534,6 @@ migrateAliasDefinition oldVersion newVersion moduleOld scope identifier@(author,
 -- the individual branches need to be responsible for this
 canToMigration :: Int -> Int -> ModuleName.Canonical -> Interfaces -> RecursionSet -> Can.Type -> Maybe Can.Type -> TvarMap -> TvarMap -> Text -> Migration
 canToMigration oldVersion newVersion scope interfaces recursionSet typeNew typeOldM tvarMapOld tvarMapNew oldValueRef =
-  debugMigrationIncludes_ "canToMigration" (typeOldM, typeNew) $
   case typeOldM of
     Nothing ->
       unimplemented (T.concat ["canToMigration:noOldType"])
@@ -567,7 +564,6 @@ canToMigration oldVersion newVersion scope interfaces recursionSet typeNew typeO
 -- us to ignore obvious type mismatches in the subsequent migration mapping code below
 canToMigration_ :: Int -> Int -> ModuleName.Canonical -> Interfaces -> RecursionSet -> Can.Type -> Can.Type -> TvarMap -> TvarMap -> Text -> Migration
 canToMigration_ oldVersion newVersion scope interfaces recursionSet typeNew typeOld tvarMapOld tvarMapNew oldValueRef =
-  debugMigrationIncludes_ "canToMigration_" (typeOld, typeNew) $
   case typeNew of
     Can.TType moduleName typeName params ->
       typeToMigration oldVersion newVersion scope interfaces recursionSet typeNew typeOld tvarMapOld tvarMapNew oldValueRef
@@ -579,6 +575,7 @@ canToMigration_ oldVersion newVersion scope interfaces recursionSet typeNew type
       recordToMigration oldVersion newVersion scope interfaces recursionSet typeNew typeOld tvarMapOld tvarMapNew oldValueRef
 
     Can.TTuple a1 b1 c1m ->
+      debugMigrationIncludes_ "canToMigration_:TTuple" (typeOld, typeNew) $
       case typeOld of
         Can.TTuple a2 b2 c2m ->
           let
@@ -635,6 +632,7 @@ canToMigration_ oldVersion newVersion scope interfaces recursionSet typeNew type
       xMigrationNested ("()", Set.empty, Map.empty)
 
     Can.TVar name ->
+      debugMigrationIncludes_ "canToMigration_:TVar" (typeOld, typeNew) $
       xMigrationNested ("migrate_" <> N.toText name, Set.empty, Map.empty)
 
     Can.TLambda _ _ ->
@@ -652,9 +650,6 @@ canAliasToMigration oldVersion newVersion scope interfaces recursionSet (typeNew
 
     identifier = asIdentifier_ (moduleNameNew, typeNameNew)
   in
-  (\migration@(MigrationNested migrationName imps0 subDefs0) ->
-    debugHaskellPassWhen (debugMigrationFn == migrationName && migrationName /= "") "debugMigrationFn:canAliasToMigration" (typeNew, typeOld) migration
-  ) $
   case aliasTypeNew of
     Can.Holey cType ->
       debugMigrationIncludes_ "canAliasToMigration:Holey" (typeOld, typeNew) $
@@ -668,12 +663,8 @@ canAliasToMigration oldVersion newVersion scope interfaces recursionSet (typeNew
                   canToMigration oldVersion newVersion scope interfaces recursionSet paramTypeNew (Just paramTypeOld) tvarMapOldReplaced tvarMapNew oldValueRef
                 )
 
-            usageParamMigrationDefs :: Text
-            usageParamMigrationDefs =
-              usageParamMigrations
-                & fmap migrationFn
-                & T.intercalate " "
-                & T.strip
+            usageParamMigrationFns :: [Text]
+            usageParamMigrationFns = usageParamMigrations & fmap migrationFn
 
             tvarsNew :: [Text]
             tvarsNew = tvarMapNew & fmap (N.toText . fst)
@@ -681,14 +672,14 @@ canAliasToMigration oldVersion newVersion scope interfaces recursionSet (typeNew
             tvarsOld :: [Text]
             tvarsOld = tvarMapOldReplaced & fmap (N.toText . fst)
 
-            (MigrationNested migrationAliasedType imps subDefs) :: Migration =
+            (MigrationNested migrationAliasedType imps subDefs) =
               let
-                cTypeOld = case aliasTypeOld of
-                            Can.Holey cTypeOld_ -> cTypeOld_
-                            Can.Filled cTypeOld_ ->cTypeOld_
-                res = canToMigration oldVersion newVersion moduleNameNew interfaces recursionSet cType (Just cTypeOld) tvarMapOldReplaced tvarMapNew "old"
+                cTypeOld =
+                  case aliasTypeOld of
+                    Can.Holey cTypeOld_ -> cTypeOld_
+                    Can.Filled cTypeOld_ ->cTypeOld_
               in
-              res
+              canToMigration oldVersion newVersion moduleNameNew interfaces recursionSet cType (Just cTypeOld) tvarMapOldReplaced tvarMapNew "old"
 
             typeScope = if moduleNameNew == scope then "" else T.concat [nameToText module_, "."]
 
@@ -728,15 +719,18 @@ canAliasToMigration oldVersion newVersion scope interfaces recursionSet (typeNew
                 [ migrationName, " : ", migrationTypeSignature, "\n"
                 , migrationName, " ", paramMigrationVars, " old = ", applyOldValueIfNotRecord migrationAliasedType
                 ]
+
+            emptiesToIdentity v =
+              v & List.map (\v_ -> if v_ == "" then "identity" else v_)
           in
             xMigrationNested (
               if length tvarMapNew > 0 then
-                if usageParamMigrationDefs == "" && isPackageType cType then
+                if (usageParamMigrationFns & all (== "")) && isPackageType cType then
                   -- None of the applied params for this type need migrations, and the type is a package type
                   -- so we can skip the migration entirely
                   ""
                 else
-                  T.concat ["(", migrationName, " ", usageParamMigrationDefs, ")"]
+                  T.concat ["(", migrationName, " ", usageParamMigrationFns & emptiesToIdentity & parenthesize & T.intercalate " ", ")"]
               else
                 migrationName
               , Set.empty,
@@ -746,7 +740,6 @@ canAliasToMigration oldVersion newVersion scope interfaces recursionSet (typeNew
                   , migrationDef = typeDef
                   }
               )
-                & debugHaskellWhen (debugMigrationFn == migrationName) "debugMigrationFn:canAliasToMigration:Holey"
                 & Map.union subDefs
                 & Map.union (mergeAllSubDefs (fmap migrationTopLevelDefs usageParamMigrations))
              )
@@ -963,9 +956,9 @@ typeToMigration oldVersion newVersion scope interfaces recursionSet_ typeNew@(Ca
     ("elm", "core", "Set", "Set")       -> migrate1ParamCollection
 
     ("elm", "core", "Result", "Result") -> migrate2ParamCollection
-      (\m_p0      -> T.concat [ "Result.mapError ", m_p0] )
-      (\m_p1      -> T.concat [ "Result.map ", m_p1 ])
-      (\m_p0 m_p1 -> T.concat [ "Result.mapError ", m_p0, " |> Result.map ", m_p1 ])
+      (\m_p0      -> T.concat [ "Result.mapError (", m_p0, ")" ])
+      (\m_p1      -> T.concat [ "Result.map (", m_p1, ")" ])
+      (\m_p0 m_p1 -> T.concat [ "Result.mapError (", m_p0, ") |> Result.map (", m_p1, ")" ])
 
     ("elm", "core", "Dict", "Dict")     -> migrate2ParamCollection
       (\m_p0      -> T.concat [ "Dict.toList |> List.map (Tuple.mapFirst ", m_p0, ") |> Dict.fromList" ])
@@ -986,9 +979,9 @@ typeToMigration oldVersion newVersion scope interfaces recursionSet_ typeNew@(Ca
             migrateTypeDef typeDefOld typeDefNew oldVersion newVersion interfaces tvarMapOld_ tvarMapNew_ newRecursionSet
 
           (_, Nothing) ->
-            unimplemented "typeToMigration" ("I came across a new `" <> qualifiedTypeName typeNew <> "` type but couldn't load the definition. This should have been caught earlier by Wire, so please report this if you see it.")
+            unimplemented "typeToMigration" ("I came across a new `" <> qualifiedTypeName typeNew <> "` type but couldn't load the definition. This is probably a hidden package type. I need you to write this migration.")
           (Nothing, _) ->
-            unimplemented "typeToMigration" ("I came across an old `" <> qualifiedTypeName typeOld <> "` type but couldn't load the definition. This should have been caught earlier by Wire, so please report this if you see it.")
+            unimplemented "typeToMigration" ("I came across an old `" <> qualifiedTypeName typeOld <> "` type but couldn't load the definition. This is probably a hidden package type. I need you to write this migration.")
 
 
 migrateTypeDef typeOld typeNew oldVersion newVersion interfaces tvarMapOld tvarMapNew recursionSet =

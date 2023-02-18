@@ -46,7 +46,7 @@ migrate_Migrate_External_Paramed_New_AnalyticsModel old =
         old.previousCursorPositions
             |> migrate_Migrate_External_Paramed_New_IdDict identity
                 (\rec ->
-                    { position = rec.position |> migrate_Migrate_External_Paramed_New_Point2d
+                    { position = rec.position |> migrate_Migrate_External_Paramed_New_Point2d identity identity
                     }
                 )
     }

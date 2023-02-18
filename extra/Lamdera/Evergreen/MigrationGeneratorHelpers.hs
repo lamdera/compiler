@@ -59,14 +59,9 @@ data MigrationDefinition =
 type ElmImports = Set.Set ModuleName.Canonical
 
 
-
--- When non-empty, will pretty-print the producer name & definition for the target top-level migration fn name
-debugMigrationFn :: Text
-debugMigrationFn = ""
-
 -- When non-empty, will pretty-print the producer name & value for an inline migration containing the search text
 debugMigrationIncludes :: Text
-debugMigrationIncludes = "(Unimplemented {- Type changed from `Migrate_External_Paramed.Old.IdDictkv"
+debugMigrationIncludes = ""
 
 debugMigrationIncludes_ tag debugVars migration =
   migration
@@ -182,7 +177,12 @@ getModuleNameUnkeyed moduleName =
 
 parenthesize :: [Text] -> [Text]
 parenthesize texts =
-  texts & fmap (\v -> T.concat ["(", v, ")"])
+  texts & fmap (\v ->
+    if v /= "" then
+      T.concat ["(", v, ")"]
+    else
+      v
+  )
 
 
 asIdentifier :: Can.Type -> TypeIdentifier
