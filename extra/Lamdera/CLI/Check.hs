@@ -283,8 +283,6 @@ onlineCheck root appName inDebug localTypes externalTypeWarnings isHoistRebuild 
 
               writeUtf8 nextMigrationPath defaultMigrations
 
-              onlyWhen (not inProduction_) $ showExternalTypeWarnings externalTypeWarnings
-
               if inProduction_
                 then
                   Progress.throw $
@@ -301,7 +299,7 @@ onlineCheck root appName inDebug localTypes externalTypeWarnings isHoistRebuild 
                       ("The following types have changed since last deploy (v" <> show prodVersion <> ") and require migrations:")
                       [ formattedChangedTypes
                       , D.reflow $ "I've tried to generate a migration for you here:"
-                      , D.reflow $ nextMigrationPath
+                      , D.dullyellow $ D.reflow $ nextMigrationPath
                       , D.reflow "See <https://dashboard.lamdera.app/docs/evergreen> for more info."
                       ]
 
