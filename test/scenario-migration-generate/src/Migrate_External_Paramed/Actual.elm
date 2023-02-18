@@ -74,8 +74,8 @@ migrate_Migrate_External_Paramed_New_IdDict migrate_k migrate_v old =
             Migrate_External_Paramed.New.RBNode_elm_builtin (p0 |> migrate_Migrate_External_Paramed_New_NColor)
                 p1
                 (migrate_v p2)
-                (p3 |> migrate_Migrate_External_Paramed_New_IdDict (Unimplemented {- Type changed from `Migrate_External_Paramed.Old.IdDictkv` to `k`. I need you to write this migration. -}) (Unimplemented {- Type changed from `Migrate_External_Paramed.Old.IdDictkv` to `v`. I need you to write this migration. -}))
-                (p4 |> migrate_Migrate_External_Paramed_New_IdDict (Unimplemented {- Type changed from `Migrate_External_Paramed.Old.IdDictkv` to `k`. I need you to write this migration. -}) (Unimplemented {- Type changed from `Migrate_External_Paramed.Old.IdDictkv` to `v`. I need you to write this migration. -}))
+                (p3 |> migrate_Migrate_External_Paramed_New_IdDict migrate_k migrate_v)
+                (p4 |> migrate_Migrate_External_Paramed_New_IdDict migrate_k migrate_v)
 
         Migrate_External_Paramed.Old.RBEmpty_elm_builtin ->
             Migrate_External_Paramed.New.RBEmpty_elm_builtin

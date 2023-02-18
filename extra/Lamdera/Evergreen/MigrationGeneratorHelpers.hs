@@ -66,29 +66,32 @@ debugMigrationFn = ""
 
 -- When non-empty, will pretty-print the producer name & value for an inline migration containing the search text
 debugMigrationIncludes :: Text
-debugMigrationIncludes = ""
+debugMigrationIncludes = "(Unimplemented {- Type changed from `Migrate_External_Paramed.Old.IdDictkv"
 
-debugMigrationIncludes_ tag migration =
+debugMigrationIncludes_ tag debugVars migration =
   migration
-    & debugHaskellWhen ( debugMigrationIncludes /= ""
-      && (
-      debugMigrationIncludes `T.isPrefixOf` migrationFn migration
-      -- ||
-      -- (migration
-      --   & migrationTopLevelDefs
-      --   & Map.toList
-      --   & fmap snd
-      --   & filter (\migrationDefinition ->
-      --       migrationDefinition
-      --         & migrationDef
-      --         & (\v -> debugMigrationIncludes `T.isPrefixOf` v)
-      --     )
-      --   & length
-      --   & (\c -> c > 0)
-      -- )
-    )
+    & debugHaskellPassWhen (
+        debugMigrationIncludes /= ""
+        && (
+          debugMigrationIncludes `T.isInfixOf` (migrationFn migration)
+          -- || ("(" <> debugMigrationIncludes) `T.isPrefixOf` (migrationFn migration)
+          -- ||
+          -- (migration
+          --   & migrationTopLevelDefs
+          --   & Map.toList
+          --   & fmap snd
+          --   & filter (\migrationDefinition ->
+          --       migrationDefinition
+          --         & migrationDef
+          --         & (\v -> debugMigrationIncludes `T.isPrefixOf` v)
+          --     )
+          --   & length
+          --   & (\c -> c > 0)
+          -- )
+        )
     )
     ("debugMigrationIncludes:" <> tag)
+    debugVars
 
 
 
@@ -479,6 +482,7 @@ isEquivalentAppliedType debugLabel t1 t2 = do
         && areEquivalentAppliedElmTypes debugLabel fieldsTypes1 fieldTypes2
 
     (Can.TTuple a1 a2 a3m, Can.TTuple b1 b2 b3m) ->
+      -- debugHaskellPassWhen (debugLabel == "canToMigration") "tuple comparison" (t1, t2) $
       isEquivalentAppliedType debugLabel a1 b1 &&
       isEquivalentAppliedType debugLabel a2 b2 &&
       case (a3m, b3m) of

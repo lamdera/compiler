@@ -49,9 +49,9 @@ all = do
 suite :: Test ()
 suite = tests
   [
-    scope "testExamples" testExamples
+    scope "migration-scenarios" testExamples
   -- , scope "e2e migration: 1 -> 2" $ testMigrationGeneration "scenario-migration-generate" 1 2
-  -- , scope "containsUserTypes" testContainsUserTypes
+  , scope "containsUserTypes" testContainsUserTypes
   ]
 
 
@@ -101,7 +101,6 @@ testContainsUserTypes = do
 
 
 
-
 testExamples :: Test ()
 testExamples = withTestEnv $ do
   failuresM <- io $ newMVar []
@@ -113,7 +112,6 @@ testExamples = withTestEnv $ do
         -- , "src/Test/Migrate_External_Wrap.elm"
           "src/Migrate_External_Paramed"
         , "src/Migrate_All"
-        -- , ""
         ]
 
     catchTestException :: FilePath -> SomeException -> IO a
@@ -123,6 +121,7 @@ testExamples = withTestEnv $ do
       throw e
 
   testFiles & mapM (\folder -> do
+    scope folder $ do
     io $ putStrLn $ "testing: " <> show folder
     let
       oldVersion = 1
@@ -181,8 +180,7 @@ testExamples = withTestEnv $ do
     then
       crash failures
     else
-      scope "senarios-alltypes no exceptions" $ ok
-
+      scope "migration-senarios-no-exceptions" $ ok
 
 
 -- Old setup for reference with expectation inside an Elm string expression
