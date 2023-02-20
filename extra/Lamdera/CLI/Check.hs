@@ -183,7 +183,7 @@ onlineCheck root appName inDebug localTypes externalTypeWarnings isHoistRebuild 
 
       onlyWhen (not inProduction_) $ showExternalTypeWarnings externalTypeWarnings
 
-      progressDoc $ D.green (D.reflow $ "It appears you're all set to deploy the first version of '" <> T.unpack appName <> "'!")
+      progressDoc $ D.dullgreen (D.reflow $ "It appears you're all set to deploy the first version of '" <> T.unpack appName <> "'!")
 
       -- This is the first version, we don't need any migration checking.
       onlyWhen (not inProduction_) $ committedCheck root nextVersionInfo
@@ -247,7 +247,7 @@ onlineCheck root appName inDebug localTypes externalTypeWarnings isHoistRebuild 
                       ("The following types have changed since last deploy (v" <> show prodVersion <> ") and require migrations:")
                       [ formattedChangedTypes
                       , D.reflow $ "There are still migration placeholders that need implementing here:"
-                      , D.reflow $ nextMigrationPath
+                      , D.dullgreen $ D.reflow $ nextMigrationPath
                       , D.fillSep ["See",D.cyan ("<https://dashboard.lamdera.app/docs/evergreen>"),"for more info."]
                       ]
 
@@ -258,7 +258,7 @@ onlineCheck root appName inDebug localTypes externalTypeWarnings isHoistRebuild 
                   progressDoc $
                     D.stack
                       (
-                      [ D.green $ D.reflow $ "\nIt appears you're all set to deploy v" <> (show nextVersion) <> " of '" <> T.unpack appName <> "'."
+                      [ D.dullgreen $ D.reflow $ "\nIt appears you're all set to deploy v" <> (show nextVersion) <> " of '" <> T.unpack appName <> "'."
                       , D.reflow "Evergreen migrations will be applied to the following types:"
                       , formattedChangedTypes
                       , D.reflow "See <https://dashboard.lamdera.app/docs/evergreen> for more info."
@@ -323,7 +323,7 @@ onlineCheck root appName inDebug localTypes externalTypeWarnings isHoistRebuild 
           migrationCheck root nextVersionInfo
           onlyWhen (not inProduction_) $ showExternalTypeWarnings externalTypeWarnings
 
-          progressDoc $ D.green $ D.reflow $ "\nIt appears you're all set to deploy v" <> (show nextVersion) <> " of '" <> T.unpack appName <> "'."
+          progressDoc $ D.dullgreen $ D.reflow $ "\nIt appears you're all set to deploy v" <> (show nextVersion) <> " of '" <> T.unpack appName <> "'."
           progressDoc $ D.reflow $ "There are no Evergreen type changes for this version."
 
           buildProductionJsFiles root inProduction_ nextVersionInfo

@@ -307,7 +307,7 @@ attemptChanges root env oldOutline toChars changes =
             ,"but","in","the",D.dullyellow "\"indirect\"","dependencies."
             ]
          , D.fillSep
-            ["Should","I","move","it","into",D.green "\"direct\""
+            ["Should","I","move","it","into",D.dullgreen "\"direct\""
             ,"dependencies","for","more","general","use?","[Y/n]: "
             ]
          ]
@@ -320,7 +320,7 @@ attemptChanges root env oldOutline toChars changes =
             ,"but","in","the",D.dullyellow "\"test-dependencies\"","field."
             ]
          , D.fillSep
-            ["Should","I","move","it","into",D.green "\"dependencies\""
+            ["Should","I","move","it","into",D.dullgreen "\"dependencies\""
             ,"for","more","general","use?","[Y/n]: "
             ]
          ]

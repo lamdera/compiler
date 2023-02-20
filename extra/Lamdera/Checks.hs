@@ -79,7 +79,7 @@ runChecks_ root = do
           -- Not a huge deal though, the user error explains that elm/url is missing so overall
           -- users should be able to unblock albeit it being a bit ugly a process.
 
-          report $ D.green "Okay, I've generated them for you!\n"
+          report $ D.dullgreen "Okay, I've generated them for you!\n"
         else
           throw
             $ Help.report "SKIPPING AUTO-GENERATION" (Nothing)
@@ -107,7 +107,7 @@ runChecks_ root = do
 
 
 progressPointer t =
-    report $ D.fillSep [ D.fromChars "───>", D.green $ t <> "\n" ]
+    report $ D.fillSep [ D.fromChars "───>", D.dullgreen $ t <> "\n" ]
 
 
 writeDefaultImplementations = do

@@ -53,7 +53,7 @@ run () () = do
         case apiSession of
           Right "success" -> do
             writeUtf8 (elmHome </> ".lamdera-cli") token
-            Progress.report $ D.fillSep ["───>", D.green "Logged in!"]
+            Progress.report $ D.fillSep ["───>", D.dullgreen "Logged in!"]
 
           Left err -> do
             if Lamdera.Http.isOfflineError err
@@ -105,7 +105,7 @@ checkApiLoop inProduction appName token =
           "success" -> do
             elmHome <- PerUserCache.getElmHome
             writeUtf8 (elmHome </> ".lamdera-cli") token
-            Progress.report $ D.fillSep ["───>", D.green "Logged in!"]
+            Progress.report $ D.fillSep ["───>", D.dullgreen "Logged in!"]
             pure True
 
           _ -> do
