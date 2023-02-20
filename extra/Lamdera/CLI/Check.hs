@@ -183,6 +183,8 @@ onlineCheck root appName inDebug localTypes externalTypeWarnings isHoistRebuild 
 
       onlyWhen (not inProduction_) $ showExternalTypeWarnings externalTypeWarnings
 
+      checkConfig appName
+
       progressDoc $ D.dullgreen (D.reflow $ "It appears you're all set to deploy the first version of '" <> T.unpack appName <> "'!")
 
       -- This is the first version, we don't need any migration checking.
@@ -255,6 +257,8 @@ onlineCheck root appName inDebug localTypes externalTypeWarnings isHoistRebuild 
                   migrationCheck root nextVersionInfo
                   onlyWhen (not inProduction_) $ showExternalTypeWarnings externalTypeWarnings
 
+                  checkConfig appName
+
                   progressDoc $
                     D.stack
                       (
@@ -323,18 +327,23 @@ onlineCheck root appName inDebug localTypes externalTypeWarnings isHoistRebuild 
           migrationCheck root nextVersionInfo
           onlyWhen (not inProduction_) $ showExternalTypeWarnings externalTypeWarnings
 
+          checkConfig appName
+
           progressDoc $ D.dullgreen $ D.reflow $ "\nIt appears you're all set to deploy v" <> (show nextVersion) <> " of '" <> T.unpack appName <> "'."
           progressDoc $ D.reflow $ "There are no Evergreen type changes for this version."
 
           buildProductionJsFiles root inProduction_ nextVersionInfo
 
-  progressPointer "Checking config..."
-  prodTokenM <- Env.lookupEnv "TOKEN"
-  Lamdera.AppConfig.checkUserConfig appName (fmap T.pack prodTokenM)
 
   onlyWhen (not inProduction_) $ checkForLatestBinaryVersion inDebug
 
   pure ()
+
+
+checkConfig appName = do
+  progressPointer "Checking config..."
+  prodTokenM <- Env.lookupEnv "TOKEN"
+  Lamdera.AppConfig.checkUserConfig appName (fmap T.pack prodTokenM)
 
 
 isHoistRebuild_ :: IO Bool

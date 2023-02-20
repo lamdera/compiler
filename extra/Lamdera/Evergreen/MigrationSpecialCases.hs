@@ -51,6 +51,22 @@ specialCaseMigration identifier =
                 old |> List.Nonempty.map migrate_a
           |]
 
+      ("ianmackenzie", "elm-units", "Quantity", "Quantity") ->
+        migrationDefinition identifier
+          [text|
+            migrate_Quantity_Quantity : Quantity.Quantity number units -> Quantity.Quantity number units2
+            migrate_Quantity_Quantity old =
+                Quantity.unwrap old |> Quantity.unsafe
+          |]
+
+      ("ianmackenzie", "elm-triangular-mesh", "TriangularMesh", "TriangularMesh") ->
+        migrationDefinition identifier
+          [text|
+            migrate_TriangularMesh_TriangularMesh : (vertex_old -> vertex_new) -> TriangularMesh.TriangularMesh vertex_old -> TriangularMesh.TriangularMesh vertex_new
+            migrate_TriangularMesh_TriangularMesh migrate_vertex old =
+                old |> TriangularMesh.mapVertices migrate_vertex
+          |]
+
       ("MartinSStewart", "elm-audio", "Audio", "Msg") ->
         migrationDefinition identifier
           [text|
@@ -69,6 +85,26 @@ specialCaseMigration identifier =
                 old
                     |> Audio.migrateModel migrate_userMsg (\userModel_old -> (migrate_userModel userModel_old, Cmd.none))
                     |> Tuple.first
+          |]
+
+      ("edkelly303", "elm-any-type-collections", "Any.Dict", "Dict") ->
+          migrationDefinition identifier
+          [text|
+            migrate_Any_Dict_Dict :
+                (k_old -> k_new)
+                -> (v_old -> v_new)
+                -> (comparable_old -> comparable_new)
+                ->
+                    { interface_old : Any.Dict.Interface k_old v_old v2_old output_old comparable_old
+                    , interface_new : Any.Dict.Interface k_new v_new v2_new output_new comparable_new
+                    }
+                -> Any.Dict.Dict k_old v_old comparable_old
+                -> Any.Dict.Dict k_new v_new comparable_new
+            migrate_Any_Dict_Dict migrate_k migrate_v migrate_comparable { interface_old, interface_new } old =
+                old
+                    |> interface_old.toList
+                    |> List.map (Tuple.mapBoth migrate_k migrate_v)
+                    |> interface_new.fromList
           |]
 
       _ ->

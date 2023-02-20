@@ -6,7 +6,7 @@ import Text.Read (readMaybe)
 import qualified Text.PrettyPrint.ANSI.Leijen as P
 import qualified Data.List as List
 
-import Terminal
+import Terminal hiding (args)
 import Terminal.Helpers
 import qualified Develop -- has Develop.run for live
 import qualified Lamdera.CLI.Login

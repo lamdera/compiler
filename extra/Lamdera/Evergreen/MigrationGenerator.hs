@@ -41,7 +41,7 @@ betweenVersions coreTypeDiffs oldVersion newVersion root = do
     Lamdera.Compile.makeDev root (NE.toList paths)
 
     res <- Ext.Common.withProjectRoot root $ do
-      interfaces <- Ext.Query.Interfaces.allProjectInterfaces paths
+      interfaces <- Ext.Query.Interfaces.all (NE.toList paths)
       case Map.lookup (N.fromChars moduleNameString) interfaces of
         Just interface -> do
           debug $ "starting generatefor"
