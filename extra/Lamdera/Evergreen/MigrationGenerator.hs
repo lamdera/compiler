@@ -912,8 +912,8 @@ typeToMigration oldVersion newVersion scope interfaces recursionSet_ typeNew@(Ca
               else xMigrationNested (T.concat [typeName, ".map ", applied], Set.singleton newModuleName <> imps1, subDefs1)
 
           _ ->
-            debugHaskellPass "migrate1ParamCollection" (typeOld, typeNew) $
-              error $ T.unpack $ T.concat ["migrate1ParamCollection: impossible multi-param ", typeName, "! Please report this gen issue."]
+            unimplemented (T.concat ["migrate1ParamCollection"])
+              (T.concat [ "Type changed from `", qualifiedType typeOld, "` to `", qualifiedType typeNew, "`. I need you to write this migration." ])
       )
 
     migrate2ParamCollection :: (Text -> Text) -> (Text -> Text) -> (Text -> Text -> Text) -> Migration
@@ -938,7 +938,9 @@ typeToMigration oldVersion newVersion scope interfaces recursionSet_ typeNew@(Ca
             in
             xMigrationNested (migration, Set.singleton newModuleName <> imps0 <> imps1, migrationDefs)
           _ ->
-            error $ concat ["Fatal: impossible !2 param ", T.unpack typeName, " type! Please report this gen issue."]
+            unimplemented (T.concat ["migrate2ParamCollection"])
+              (T.concat [ "Type changed from `", qualifiedType typeOld, "` to `", qualifiedType typeNew, "`. I need you to write this migration." ])
+
       )
   in
   debugMigrationIncludes_ "typeToMigration" (typeOld, typeNew) $
