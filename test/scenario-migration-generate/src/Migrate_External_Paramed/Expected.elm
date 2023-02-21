@@ -54,7 +54,7 @@ migrate_Migrate_External_Paramed_New_AnalyticsModel old =
 
 migrate_Migrate_External_Paramed_New_Coord : (units_old -> units_new) -> Migrate_External_Paramed.Old.Coord units_old -> Migrate_External_Paramed.New.Coord units_new
 migrate_Migrate_External_Paramed_New_Coord migrate_units old =
-    old |> Tuple.mapBoth (migrate_Quantity_Quantity identity migrate_units) (migrate_Quantity_Quantity identity migrate_units)
+    old |> Tuple.mapBoth migrate_Quantity_Quantity migrate_Quantity_Quantity
 
 
 migrate_Migrate_External_Paramed_New_CustomType : Migrate_External_Paramed.Old.CustomType -> Migrate_External_Paramed.New.CustomType
@@ -116,8 +116,6 @@ migrate_Migrate_External_Paramed_New_Target old =
             Migrate_External_Paramed.New.UserMixPackage2 (p0 |> migrate_Migrate_External_Paramed_New_Coord migrate_Migrate_External_Paramed_New_CustomType)
 
 
-migrate_Quantity_Quantity : (number_old -> number_new) -> (units_old -> units_new) -> Quantity.Quantity number_old units_old -> Quantity.Quantity number_new units_new
-migrate_Quantity_Quantity migrate_number migrate_units old =
-    case old of
-        Quantity.Quantity p0 ->
-            Quantity.Quantity (migrate_number p0)
+migrate_Quantity_Quantity : Quantity.Quantity number units -> Quantity.Quantity number units2
+migrate_Quantity_Quantity old =
+    Quantity.unwrap old |> Quantity.unsafe

@@ -170,7 +170,7 @@ migrate_Migrate_All_New_BackendModel old =
     , withCustomSet = old.withCustomSet |> Set.map (Unimplemented {- Type changed from `Int` to `String`. I need you to write this migration. -})
     , withCustomArray = old.withCustomArray |> Array.map migrate_Migrate_All_New_UserType
     , withCustomDict = old.withCustomDict |> Dict.map (\k -> migrate_Migrate_All_New_UserType)
-    , withCustomResult = old.withCustomResult |> Result.mapError migrate_Migrate_All_New_UserType |> Result.map migrate_Migrate_All_New_UserType
+    , withCustomResult = old.withCustomResult |> Result.mapError migrate_Migrate_All_New_UserType >> Result.map migrate_Migrate_All_New_UserType
     , externalUnion = old.externalUnion |> migrate_External_ExternalUnion
     , added = (Unimplemented {- Type `Int` was added in V2. I need you to set a default value. -})
     , unionThatGetsMoved = old.unionThatGetsMoved |> migrate_External_UnionThatGetsMoved
@@ -230,7 +230,7 @@ migrate_Migrate_All_New_UserType old =
             Migrate_All.New.UserResultP2 (p0 |> Result.map migrate_Migrate_All_New_CustomType)
 
         Migrate_All.Old.UserResultPBoth p0 ->
-            Migrate_All.New.UserResultPBoth (p0 |> Result.mapError migrate_Migrate_All_New_CustomType |> Result.map migrate_External_ExternalUnion)
+            Migrate_All.New.UserResultPBoth (p0 |> Result.mapError migrate_Migrate_All_New_CustomType >> Result.map migrate_External_ExternalUnion)
 
         Migrate_All.Old.UserAnonymous p0 ->
             Migrate_All.New.UserAnonymous

@@ -319,13 +319,14 @@ migrateUnionDefinition_ author pkg oldUnion newUnion tvarMapOld tvarMapNew oldVe
           )
   in
 
-  case specialCaseMigration identifier of
-    Just fn ->
+  case specialCaseMigration identifier migration tvarMigrations of
+    Just (fn, def, tvarMigrations_) ->
       MigrationNested
-        migration
+        fn
         (Set.fromList [oldModuleNameCanonical, newModuleNameCanonical])
-        (Map.singleton (newModuleNameCanonical, typeName) fn
-            & Map.union (allSubDefs tvarMigrations)
+        (def
+          & Map.singleton (newModuleNameCanonical, typeName)
+          & Map.union (allSubDefs tvarMigrations_)
         )
         & debugMigrationIncludes_ "migrateUnionDefinition_:specialCased" (oldUnion, newUnion)
 
@@ -479,11 +480,7 @@ migrateAliasDefinition oldVersion newVersion moduleOld scope identifier@(author,
     tvarMigrations = migrateTvars oldVersion newVersion scope interfaces recursionSet tvarMapOld tvarMapNew tvarPairs
 
     tvarMigrationTextsCombined :: Text
-    tvarMigrationTextsCombined =
-      tvarMigrations
-        & fmap migrationFn
-        & parenthesize
-        & T.intercalate " "
+    tvarMigrationTextsCombined = tvarMigrations & fmap migrationFn & parenthesize & T.intercalate " "
 
     moduleName = (ModuleName.Canonical (Pkg.Name author pkg) newModule)
 
@@ -498,14 +495,14 @@ migrateAliasDefinition oldVersion newVersion moduleOld scope identifier@(author,
 
     applyOldValueIfNotRecord = if isRecord typeNew then "" else T.concat [oldValueRef, " |> "]
   in
-  case specialCaseMigration identifier of
-    Just fn ->
+  case specialCaseMigration identifier migration_ tvarMigrations of
+    Just (fn, def, tvarMigrations_) ->
       MigrationNested
-        migration_
-        (Set.fromList [moduleOld, newModuleNameCanonical] <> imps)
-        (fn
+        fn
+        (Set.fromList [moduleOld, newModuleNameCanonical])
+        (def
           & Map.singleton (newModuleNameCanonical, typeNameNew)
-          & Map.union subDefs
+          & Map.union (allSubDefs tvarMigrations_)
         )
         & debugMigrationIncludes_ "migrateAliasDefinition:specialCased" (aliasOld, aliasNew)
 
@@ -909,7 +906,7 @@ typeToMigration oldVersion newVersion scope interfaces recursionSet_ typeNew@(Ca
             in
             if applied == ""
               then xMigrationNested ("", Set.empty, Map.empty)
-              else xMigrationNested (T.concat [typeName, ".map ", applied], Set.singleton newModuleName <> imps1, subDefs1)
+              else xMigrationNested (T.concat [typeName, ".map (", applied, ")"], Set.singleton newModuleName <> imps1, subDefs1)
 
           _ ->
             unimplemented (T.concat ["migrate1ParamCollection"])
@@ -960,7 +957,7 @@ typeToMigration oldVersion newVersion scope interfaces recursionSet_ typeNew@(Ca
     ("elm", "core", "Result", "Result") -> migrate2ParamCollection
       (\m_p0      -> T.concat [ "Result.mapError (", m_p0, ")" ])
       (\m_p1      -> T.concat [ "Result.map (", m_p1, ")" ])
-      (\m_p0 m_p1 -> T.concat [ "Result.mapError (", m_p0, ") |> Result.map (", m_p1, ")" ])
+      (\m_p0 m_p1 -> T.concat [ "Result.mapError (", m_p0, ") >> Result.map (", m_p1, ")" ])
 
     ("elm", "core", "Dict", "Dict")     -> migrate2ParamCollection
       (\m_p0      -> T.concat [ "Dict.toList |> List.map (Tuple.mapFirst ", m_p0, ") |> Dict.fromList" ])
@@ -1081,8 +1078,8 @@ handleSeenRecursiveType oldVersion newVersion scope identifier@(author, pkg, new
       tvarPairs = zip tvarsOld tvarsNew
       tvarMigrations = migrateTvars oldVersion newVersion scope interfaces recursionSet tvarMapOld tvarMapNew tvarPairs
 
-      usageParams :: Text
-      usageParams = tvarMigrations & fmap migrationFn & T.intercalate " "
+      tvarMigrationTextsCombined :: Text
+      tvarMigrationTextsCombined = tvarMigrations & fmap migrationFn & parenthesize & T.intercalate " "
 
       subDefs :: MigrationDefinitions
       subDefs = tvarMigrations & fmap migrationTopLevelDefs & mergeAllSubDefs
@@ -1092,7 +1089,7 @@ handleSeenRecursiveType oldVersion newVersion scope identifier@(author, pkg, new
     in
     xMigrationNested (
       if length tvarsNew > 0
-        then "(" <> migrationName <> " " <> usageParams <> ")"
+        then "(" <> migrationName <> " " <> tvarMigrationTextsCombined <> ")"
         else migrationName
     , Set.empty
     , subDefs

@@ -109,7 +109,7 @@ checkProject = do
 
   Ext.Common.setProjectRoot p
   -- Dir.withCurrentDirectory p $ Lamdera.CLI.Check.run () (Lamdera.CLI.Check.Flags { Lamdera.CLI.Check._destructiveMigration = True })
-  Dir.withCurrentDirectory p $ Lamdera.CLI.Check.run_ `catch` (\(_ :: SomeException) -> pure ())
+  Dir.withCurrentDirectory p $ Lamdera.CLI.Check.run_ `catch` (\(err :: SomeException) -> pure ())
 
   Lamdera.Compile.makeDev p ["src/Evergreen/Migrate/V" ++ v ++ ".elm"]
 

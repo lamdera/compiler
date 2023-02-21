@@ -291,7 +291,9 @@ typeNameToStringQualifiedParams moduleName tipeName params = do
         ("elm", "core", "Dict") -> coreType
         ("elm", "core", "Result") -> coreType
         _ ->
-          T.concat $ [moduleNameKey moduleName, ".", nameToText tipeName] ++ (fmap qualifiedTypeName params)
+          [moduleNameKey moduleName, ".", nameToText tipeName, " ", (params & fmap qualifiedTypeName & parenthesize & T.intercalate " ")]
+            & T.concat
+            & T.strip
 
 
 

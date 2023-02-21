@@ -21,11 +21,22 @@ import Lamdera.Evergreen.MigrationGeneratorHelpers
 import Lamdera
 
 
-specialCaseMigration :: TypeIdentifier -> Maybe MigrationDefinition
-specialCaseMigration identifier =
+specialCaseMigration :: TypeIdentifier -> Text -> [Migration] -> Maybe (Text, MigrationDefinition, [Migration])
+specialCaseMigration identifier genFn tvarMigrations =
     case identifier of
-      ("pzp1997", "assoc-list", "AssocList", "Dict") ->
+      ("elm-explorations", "webgl", "WebGL", "Mesh") ->
         migrationDefinition identifier
+        "migrate_WebGL_Mesh"
+        -- @TODO this will break things – but how else should we migrate it?
+        [text|
+          migrate_WebGL_Mesh : WebGL.Mesh attributes_old -> WebGL.Mesh attributes_new
+          migrate_WebGL_Mesh old =
+            WebGL.triangles []
+        |]
+        noTvarMigrations
+
+      ("pzp1997", "assoc-list", "AssocList", "Dict") ->
+        migrationDefinition identifier genFn
           [text|
             migrate_AssocList_Dict : (a_old -> a_new) -> (b_old -> b_new) -> AssocList.Dict a_old b_old -> AssocList.Dict a_new b_new
             migrate_AssocList_Dict migrate_a migrate_b old =
@@ -34,41 +45,48 @@ specialCaseMigration identifier =
                     |> List.map (Tuple.mapBoth migrate_a migrate_b)
                     |> AssocList.fromList
           |]
+          tvarMigrations
 
       ("erlandsona", "assoc-set", "AssocSet", "Set") ->
-        migrationDefinition identifier
+        migrationDefinition identifier genFn
           [text|
             migrate_AssocSet_Set : (a_old -> a_new) -> AssocSet.Set a_old -> AssocSet.Set a_new
             migrate_AssocSet_Set migrate_a old =
                 old |> AssocSet.map migrate_a
           |]
+          tvarMigrations
 
       ("mgold", "elm-nonempty-list", "List.Nonempty", "Nonempty") ->
-        migrationDefinition identifier
+        migrationDefinition identifier genFn
           [text|
             migrate_List_Nonempty_Nonempty : (a_old -> a_new) -> List.Nonempty.Nonempty a_old -> List.Nonempty.Nonempty a_new
             migrate_List_Nonempty_Nonempty migrate_a old =
                 old |> List.Nonempty.map migrate_a
           |]
+          tvarMigrations
 
       ("ianmackenzie", "elm-units", "Quantity", "Quantity") ->
         migrationDefinition identifier
+          -- This is a phantom type, so we don't need to migrate any values
+          "migrate_Quantity_Quantity"
           [text|
             migrate_Quantity_Quantity : Quantity.Quantity number units -> Quantity.Quantity number units2
             migrate_Quantity_Quantity old =
                 Quantity.unwrap old |> Quantity.unsafe
           |]
+          noTvarMigrations
 
       ("ianmackenzie", "elm-triangular-mesh", "TriangularMesh", "TriangularMesh") ->
-        migrationDefinition identifier
+        migrationDefinition identifier genFn
           [text|
             migrate_TriangularMesh_TriangularMesh : (vertex_old -> vertex_new) -> TriangularMesh.TriangularMesh vertex_old -> TriangularMesh.TriangularMesh vertex_new
             migrate_TriangularMesh_TriangularMesh migrate_vertex old =
                 old |> TriangularMesh.mapVertices migrate_vertex
           |]
+          tvarMigrations
 
       ("MartinSStewart", "elm-audio", "Audio", "Msg") ->
-        migrationDefinition identifier
+        migrationDefinition identifier genFn
           [text|
             migrate_Audio_Msg : (userMsg_old -> userMsg_new) -> Audio.Msg userMsg_old -> Audio.Msg userMsg_new
             migrate_Audio_Msg migrate_userMsg old =
@@ -76,9 +94,10 @@ specialCaseMigration identifier =
                     |> Audio.migrateMsg (\userMsg_old -> (migrate_userMsg userMsg_old, Cmd.none))
                     |> Tuple.first
           |]
+          tvarMigrations
 
       ("MartinSStewart", "elm-audio", "Audio", "Model") ->
-        migrationDefinition identifier
+        migrationDefinition identifier genFn
           [text|
             migrate_Audio_Model : (userMsg_old -> userMsg_new) -> (userModel_old -> userModel_new) -> Audio.Model userMsg_old userModel_old -> Audio.Model userMsg_new userModel_new
             migrate_Audio_Model migrate_userMsg migrate_userModel old =
@@ -86,9 +105,23 @@ specialCaseMigration identifier =
                     |> Audio.migrateModel migrate_userMsg (\userModel_old -> (migrate_userModel userModel_old, Cmd.none))
                     |> Tuple.first
           |]
+          tvarMigrations
 
       ("edkelly303", "elm-any-type-collections", "Any.Dict", "Dict") ->
           migrationDefinition identifier
+          [text|
+            { interface_old =
+                Any.Dict.makeInterface
+                    { fromComparable = (Unimplemented {- I need you to write this implementation. -})
+                    , toComparable = (Unimplemented {- I need you to write this implementation. -})
+                    }
+            , interface_new =
+                Any.Dict.makeInterface
+                    { fromComparable = (Unimplemented {- I need you to write this implementation. -})
+                    , toComparable = (Unimplemented {- I need you to write this implementation. -})
+                    }
+            }
+          |]
           [text|
             migrate_Any_Dict_Dict :
                 (k_old -> k_new)
@@ -106,16 +139,23 @@ specialCaseMigration identifier =
                     |> List.map (Tuple.mapBoth migrate_k migrate_v)
                     |> interface_new.fromList
           |]
+          tvarMigrations
 
       _ ->
         Nothing
 
 
-migrationDefinition :: TypeIdentifier -> Text -> Maybe MigrationDefinition
-migrationDefinition (author, pkg, module_, typeName) def =
-  let marker = (T.concat ["migrate_", module_ & N.toText & T.replace "." "_", "_", N.toText typeName])
-  in
-  Just $ MigrationDefinition
-    { migrationDefImports = Set.singleton $ ModuleName.Canonical (Pkg.Name author pkg) module_
-    , migrationDef = def
-    }
+migrationDefinition :: TypeIdentifier -> Text -> Text -> [Migration] -> Maybe (Text, MigrationDefinition, [Migration])
+migrationDefinition (author, pkg, module_, typeName) fn def tvarMigrations =
+  Just
+    ( fn
+    , MigrationDefinition
+        { migrationDefImports = Set.singleton $ ModuleName.Canonical (Pkg.Name author pkg) module_
+        , migrationDef = def
+        }
+    , tvarMigrations
+    )
+
+
+noTvarMigrations :: [Migration]
+noTvarMigrations = []
