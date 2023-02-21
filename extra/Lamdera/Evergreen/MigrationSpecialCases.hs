@@ -109,19 +109,22 @@ specialCaseMigration identifier genFn tvarMigrations =
 
       ("edkelly303", "elm-any-type-collections", "Any.Dict", "Dict") ->
           migrationDefinition identifier
-          [text|
-            { interface_old =
-                Any.Dict.makeInterface
-                    { fromComparable = (Unimplemented {- I need you to write this implementation. -})
-                    , toComparable = (Unimplemented {- I need you to write this implementation. -})
-                    }
-            , interface_new =
-                Any.Dict.makeInterface
-                    { fromComparable = (Unimplemented {- I need you to write this implementation. -})
-                    , toComparable = (Unimplemented {- I need you to write this implementation. -})
-                    }
-            }
-          |]
+          (T.concat [ genFn, " ",
+            [text|
+              { interface_old =
+                  Any.Dict.makeInterface
+                      { fromComparable = Unimplemented {- I need you to write this implementation. -}
+                      , toComparable = Unimplemented {- I need you to write this implementation. -}
+                      }
+              , interface_new =
+                  Any.Dict.makeInterface
+                      { fromComparable = Unimplemented {- I need you to write this implementation. -}
+                      , toComparable = Unimplemented {- I need you to write this implementation. -}
+                      }
+              }
+            |]
+          ]
+          )
           [text|
             migrate_Any_Dict_Dict :
                 (k_old -> k_new)
