@@ -410,9 +410,9 @@ aliasToFt version scope identifier@(author, pkg, module_, tipe) typeName interfa
                 { imports = imps
                 , types =
                     if length tvars > 0 then
-                      ["type alias " <> nameToText typeName <> " " <> tvars_ <> " =" <> subt]
+                      ["type alias " <> nameToText typeName <> " " <> tvars_ <> " = " <> subt]
                     else
-                      ["type alias " <> nameToText typeName <> " =" <> subt]
+                      ["type alias " <> nameToText typeName <> " = " <> subt]
                 })
               & mergeFts subft
           )
