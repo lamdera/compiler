@@ -458,7 +458,8 @@ isEquivalentElmType debugLabel t1 t2 = do
 -- WILL consider applied parameter types
 isEquivalentAppliedType :: N.Name -> Can.Type -> Can.Type -> Bool
 isEquivalentAppliedType debugLabel t1 t2 = do
-  case (t1,t2) of
+  -- debugHaskellPassWhen (N.toText debugLabel == "canToMigration:2") ("isEquivalentAppliedType:" <> N.toText debugLabel) (t1, t2) $
+   case (t1,t2) of
     (Can.TType moduleName name params, Can.TType moduleName2 name2 params2) ->
 
       -- debugHaskell "TType" $
@@ -512,6 +513,7 @@ areEquivalentAppliedElmTypes debugLabel types1 types2 =
 
 areEquivalentAppliedTvarMaps :: N.Name -> [(N.Name, Can.Type)] -> [(N.Name, Can.Type)] -> Bool
 areEquivalentAppliedTvarMaps debugLabel tvars1 tvars2 =
+  -- debugHaskellPassWhen (N.toText debugLabel == "canToMigration:2:tvars") ("areEquivalentAppliedTvarMaps:" <> N.toText debugLabel) (tvars1, tvars2) $
   (length tvars1 == length tvars2)
     &&
   (zipWith (\(n1, t1) (n2, t2) -> n1 == n2 && isEquivalentAppliedType debugLabel t1 t2) tvars1 tvars2 & all id)

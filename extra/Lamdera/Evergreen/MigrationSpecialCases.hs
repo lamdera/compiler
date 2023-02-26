@@ -56,6 +56,24 @@ specialCaseMigration identifier genFn tvarMigrations =
           |]
           tvarMigrations
 
+      ("folkertdev", "elm-deque", "Deque", "Deque") ->
+        migrationDefinition identifier genFn
+          [text|
+            migrate_Deque_Deque : (a_old -> a_new) -> Deque.Deque a_old -> Deque.Deque a_new
+            migrate_Deque_Deque migrate_a old =
+                old |> Deque.map migrate_a
+          |]
+          tvarMigrations
+
+      ("zwilias", "elm-rosetree", "Tree", "Tree") ->
+        migrationDefinition identifier genFn
+          [text|
+            migrate_Tree_Tree : (a_old -> a_new) -> Tree.Tree a_old -> Tree.Tree a_new
+            migrate_Tree_Tree migrate_a old =
+                old |> Tree.map migrate_a
+          |]
+          tvarMigrations
+
       ("mgold", "elm-nonempty-list", "List.Nonempty", "Nonempty") ->
         migrationDefinition identifier genFn
           [text|

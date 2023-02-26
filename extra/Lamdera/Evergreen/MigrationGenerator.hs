@@ -233,7 +233,9 @@ migrateUnionDefinition_ author pkg oldUnion newUnion tvarMapOld tvarMapNew oldVe
       Can._u_alts oldUnion
         & fmap (\(Can.Ctor oldConstructor index int oldParams) ->
           -- For each OLD constructor type param
-          genOldConstructorMigration oldModuleName moduleScope typeName interfaces tvarMapOld tvarMapNew recursionSet localScope newVersion oldVersion newUnion oldUnion oldConstructor oldParams
+          -- Note we reset the tvars here, because constructor migrations are always going to be definition migrations, so we want to honor any top level tvars
+          genOldConstructorMigration oldModuleName moduleScope typeName interfaces [] [] recursionSet localScope newVersion oldVersion newUnion oldUnion oldConstructor oldParams
+            & debugMigrationIncludes_ "genOldConstructorMigration" (oldUnion, newUnion, tvarMapOld, tvarMapNew)
         )
 
     constructorsMigrationDefinitions :: MigrationDefinitions
@@ -377,13 +379,7 @@ genOldConstructorMigration oldModuleName moduleScope typeName interfaces tvarMap
                             canToMigration oldVersion newVersion localScope interfaces recursionSet paramNew (Just paramOld) tvarMapOld tvarMapNew ("p" <> show_ i)
 
                           appliedMigration =
-                            if isTvar paramOld then
-                              case paramOld of
-                                Can.TVar name ->
-                                  xMigrationNested (T.concat ["( migrate_", N.toText name, " p", show_ i, ")"], imps, subDefs)
-                                _ ->
-                                  error "impossible:appliedMigration tvar /= tvar"
-                            else if fn == "" then
+                            if fn == "" then
                               xMigrationNested (T.concat ["p", show_ i], Set.empty, Map.empty)
                             else if isAnonymousRecord paramOld then
                               ft
@@ -431,6 +427,7 @@ genOldConstructorMigration oldModuleName moduleScope typeName interfaces tvarMap
                   & fmap migrationTopLevelDefs
                   & mergeAllSubDefs
               )
+              & debugMigrationIncludes_ "genOldConstructorMigration:paramMigration" (oldParams, newParams)
         in
         fullMigration
 
@@ -540,7 +537,7 @@ canToMigration oldVersion newVersion scope interfaces recursionSet typeNew typeO
       if
         (     (isPackageType typeOld)
            && (isPackageType typeNew)
-           && (not $ isEquivalentElmType "x" typeOld typeNew))
+           && (not $ isEquivalentElmType "canToMigration:1" typeOld typeNew))
         || (not $ coreTypesMatch typeOld typeNew)
         then
           unimplemented (T.concat ["canToMigration:noOldType"])
@@ -548,7 +545,7 @@ canToMigration oldVersion newVersion scope interfaces recursionSet typeNew typeO
         else if
              (isPackageType typeOld)
           && (isPackageType typeNew)
-          && (isEquivalentAppliedType "canToMigration"
+          && (isEquivalentAppliedType "canToMigration:2"
                 (Lamdera.Wire3.Helpers.resolveTvar tvarMapOld typeOld)
                 (Lamdera.Wire3.Helpers.resolveTvar tvarMapNew typeNew)
              )
@@ -569,7 +566,7 @@ canToMigration_ oldVersion newVersion scope interfaces recursionSet typeNew type
       canAliasToMigration oldVersion newVersion scope interfaces recursionSet typeNew typeOld tvarMapOld tvarMapNew oldValueRef
 
     Can.TRecord newFields isPartial ->
-      recordToMigration oldVersion newVersion scope interfaces recursionSet typeNew typeOld tvarMapOld tvarMapNew oldValueRef
+      recordMigration oldVersion newVersion scope interfaces recursionSet typeNew typeOld tvarMapOld tvarMapNew oldValueRef
 
     Can.TTuple a1 b1 c1m ->
       debugMigrationIncludes_ "canToMigration_:TTuple" (typeOld, typeNew) $
@@ -766,9 +763,9 @@ canAliasToMigration oldVersion newVersion scope interfaces recursionSet (typeNew
       )
 
 
-recordToMigration :: Int -> Int -> ModuleName.Canonical -> Interfaces -> RecursionSet -> Can.Type -> Can.Type -> TvarMap -> TvarMap -> Text -> Migration
-recordToMigration oldVersion newVersion scope interfaces recursionSet typeNew@(Can.TRecord newFields isPartial) typeOld tvarMapOld tvarMap oldValueRef =
-  debugMigrationIncludes_ "recordToMigration" (typeOld, typeNew) $
+recordMigration :: Int -> Int -> ModuleName.Canonical -> Interfaces -> RecursionSet -> Can.Type -> Can.Type -> TvarMap -> TvarMap -> Text -> Migration
+recordMigration oldVersion newVersion scope interfaces recursionSet typeNew@(Can.TRecord newFields isPartial) typeOld tvarMapOld tvarMap oldValueRef =
+  debugMigrationIncludes_ "recordMigration" (typeOld, typeNew) $
   case isPartial of
     Just whatIsThis ->
       -- @TODO check support for partial records
@@ -836,7 +833,7 @@ recordToMigration oldVersion newVersion scope interfaces recursionSet typeNew@(C
                   -- This field name no longer exists in the new fieldMap
                   Just
                     ( N.toText name
-                    , unimplemented ("recordToMigration:" <> qualifiedTypeName fieldTypeOld)
+                    , unimplemented ("recordMigration:" <> qualifiedTypeName fieldTypeOld)
                       ( T.concat["Field of type `", qualifiedType fieldTypeOld, "` was removed in V", show_ newVersion
                       , ". I need you to do something with the `", oldValueRef, ".", N.toText name, "` value if you wish to keep the data, then remove this line."]
                       )

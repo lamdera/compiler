@@ -11,6 +11,7 @@ type Target
     = UserTvarAlias (Evergreen.V2.External.Paramed CustomType)
     | UserMixPackage AnalyticsModel
     | UserMixPackage2 (Coord CustomType)
+    | UserMixPackage3 (Debounce Int)
 
 
 type alias AnalyticsModel =
@@ -67,3 +68,10 @@ type CustomType
 
 type alias Coord units =
     ( Quantity.Quantity Int units, Quantity.Quantity Int units )
+
+
+type Debounce a
+    = Debounce
+        { input : List a
+        , locked : Bool
+        }

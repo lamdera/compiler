@@ -67,13 +67,23 @@ migrate_Migrate_External_Paramed_New_CustomType old =
             Migrate_External_Paramed.New.CustomTwo
 
 
+migrate_Migrate_External_Paramed_New_Debounce : (a_old -> a_new) -> Migrate_External_Paramed.Old.Debounce a_old -> Migrate_External_Paramed.New.Debounce a_new
+migrate_Migrate_External_Paramed_New_Debounce migrate_a old =
+    case old of
+        Migrate_External_Paramed.Old.Debounce p0 ->
+            Migrate_External_Paramed.New.Debounce
+                { input = p0.input |> List.map migrate_a
+                , locked = p0.locked
+                }
+
+
 migrate_Migrate_External_Paramed_New_IdDict : (k_old -> k_new) -> (v_old -> v_new) -> Migrate_External_Paramed.Old.IdDict k_old v_old -> Migrate_External_Paramed.New.IdDict k_new v_new
 migrate_Migrate_External_Paramed_New_IdDict migrate_k migrate_v old =
     case old of
         Migrate_External_Paramed.Old.RBNode_elm_builtin p0 p1 p2 p3 p4 ->
             Migrate_External_Paramed.New.RBNode_elm_builtin (p0 |> migrate_Migrate_External_Paramed_New_NColor)
                 p1
-                (migrate_v p2)
+                (p2 |> migrate_v)
                 (p3 |> migrate_Migrate_External_Paramed_New_IdDict migrate_k migrate_v)
                 (p4 |> migrate_Migrate_External_Paramed_New_IdDict migrate_k migrate_v)
 
@@ -114,6 +124,9 @@ migrate_Migrate_External_Paramed_New_Target old =
 
         Migrate_External_Paramed.Old.UserMixPackage2 p0 ->
             Migrate_External_Paramed.New.UserMixPackage2 (p0 |> migrate_Migrate_External_Paramed_New_Coord migrate_Migrate_External_Paramed_New_CustomType)
+
+        Migrate_External_Paramed.Old.UserMixPackage3 p0 ->
+            Migrate_External_Paramed.New.UserMixPackage3 (p0 |> migrate_Migrate_External_Paramed_New_Debounce identity)
 
 
 migrate_Quantity_Quantity : Quantity.Quantity number units -> Quantity.Quantity number units2
