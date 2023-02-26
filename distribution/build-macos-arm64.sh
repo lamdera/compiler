@@ -3,16 +3,21 @@ set -ex                                                   # Be verbose and exit 
 
 arch="arm64"
 buildTag="lamdera-1.1.0-macos-$arch"
-bin=distribution/dist/$buildTag
+dist=distribution/dist
+mkdir -p $dist
+bin=$dist/$buildTag
 
 ghcVersion=9.0.2
 cabalVersion=3.6.2.0
+stackVersion=2.9.1
 
 scriptDir=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
-isolate=$scriptDir/ghcup/macos-$arch
+isolate=~/.ghcup/macos-$arch
+mkdir -p $isolate
 
 ghc=$isolate/bin/ghc-$ghcVersion
 cabal="$isolate/cabal --with-compiler=$ghc"
+stack="$isolate/stack"
 
 
 if ! uname -a | grep "Darwin" && uname -a | grep "arm64"; then
@@ -26,27 +31,23 @@ fi
 
                                                           # Ensure correct arch toolchain is installed, or install it
                                                           # Hopefully in future ghcup has better multi-arch support
-if ! ls -alh "$ghc"; then
-  ghcup install ghc "$ghcVersion" --isolate "$isolate" --force
-fi
-if ! $cabal --version | grep $cabalVersion; then
-  ghcup install cabal "$cabalVersion" --isolate "$isolate" --force
+if ! $stack --version | grep $stackVersion; then
+  ghcup install stack "$stackVersion" --isolate "$isolate" --force
 fi
 
-opt --version                                             # The arm64 build currently requires llvm until we get to GHC 9.4+
+# /opt/homebrew/opt/llvm/bin/opt --version                  #The arm64 build currently requires llvm until we get to GHC 9.4+
 
 
 cd "$scriptDir/.."                                        # Move into the project root
+
+git submodule init && git submodule foreach --recursive git pull && git submodule update
 
 ffiLibs="$(xcrun --show-sdk-path)/usr/include/ffi"        # Workaround for GHC9.0.2 bug until we can use GHC9.2.3+
 export C_INCLUDE_PATH=$ffiLibs                            # https://gitlab.haskell.org/ghc/ghc/-/issues/20592#note_436353
 
 export PATH="/opt/homebrew/opt/llvm@12/bin:$PATH"         # The arm64
 
-$cabal update
-$cabal build -j4                                          # Build with concurrency 4
+$stack install --local-bin-path $dist
 
-mkdir -p distribution/dist                                # Ensure the dist directory is present
-
-cp "$($cabal list-bin .)" $bin                            # Copy built binary to dist
+cp $dist/lamdera $bin                                     # Copy built binary to dist
 strip $bin                                                # Strip symbols to reduce binary size (90M -> 56M)

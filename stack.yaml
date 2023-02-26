@@ -1,4 +1,5 @@
 resolver: lts-19.31 # ghc-9.0.2
+system-ghc: true
 allow-newer: true
 extra-deps:
 - timeout-0.1.1@sha256:56c1d3321d7139d1f7ebf04d46c95d3a3f1c8c9e0f15666ae3ccd6bae6204b6e,1427

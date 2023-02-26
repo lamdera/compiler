@@ -1,0 +1,19 @@
+on:
+  push:
+    branches:
+      - lamdera-next
+
+name: Build Lamdera Compiler for MacOS arm64
+jobs:
+  build:
+    name: Build MacOS arm64
+    runs-on: lamdera-community-m1
+    steps:
+      - uses: actions/checkout@v3
+      - run: echo "${HOME}/.local/bin" >> $GITHUB_PATH
+      - name: Run distribution script
+        run: |
+          test -x "$(which ghcup)" && curl https://downloads.haskell.org/~ghcup/aarch64-apple-darwin-ghcup -o ~/.local/bin/ghcup && chmod a+x ~/.local/bin/ghcup
+          brew install llvm@12
+          cd distribution
+          ./build-macos-arm64.sh
