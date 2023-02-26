@@ -480,7 +480,7 @@ diffableTypeErrors dtype =
     DFloat              -> []
     DBool               -> []
     DOrder              -> []
-    DNever              -> ["must not contain Never values"]
+    DNever              -> [] -- Never is undecodable, but it's also unencodable, so we can support it on the basis that no Never values will ever exist!
     DChar               -> []
     DMaybe tipe         -> diffableTypeErrors tipe
     DList tipe          -> diffableTypeErrors tipe
