@@ -9,9 +9,10 @@ import EasyTest
 import Test.Helpers
 import qualified System.Directory as Dir
 
+import Ext.Common
 import Lamdera hiding (atomicPutStrLn)
 import Lamdera.Compile
-import Ext.Common
+import qualified Lamdera.RelativeLoad
 
 all = EasyTest.run suite
 
@@ -19,20 +20,16 @@ all = EasyTest.run suite
 suite :: Test ()
 suite = tests $
   [ scope "isWireCompatible" $ do
-      io $ do
-        let p = "/Users/mario/dev/projects/lamdera-compiler/test/scenario-elm-pages-incompatible-wire"
+      p <- io $ Lamdera.RelativeLoad.findDir "test/scenario-elm-pages-incompatible-wire"
+      actual <- io $ do
+
+        atomicPutStrLn $ "project dir is" <> p
 
         Dir.withCurrentDirectory p $ do
           bash $ "git submodule init"
           bash $ "git submodule update"
-          bash $ "npm ci"
+          bash $ "npm i"
           bash $ "npm run build"
 
-      actual <- catchOutput $
-        Lamdera.Compile.makeDev ".elm-pages" ["Main.elm"]
-
-      let !x = debugHaskell "actual output" actual
-
-      expectTextContains actual
-        "Route.Index.Data.unserialisableValue must not contain functions"
+      expectTextContains (stringToText actual) "Route.Index.Data.unserialisableValue must not contain functions"
   ]

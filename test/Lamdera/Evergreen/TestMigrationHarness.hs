@@ -12,7 +12,8 @@ import qualified Data.Text as T
 import Test.Helpers
 
 import Lamdera
-import Lamdera.Evergreen.MigrationHarness
+import Lamdera.Evergreen.MigrationHarness (VersionInfo(..))
+import qualified Lamdera.Evergreen.MigrationHarness
 
 
 all = do
@@ -23,28 +24,28 @@ all = do
 suite :: Test ()
 suite = tests
   [ scope "new 3 after migrate 2" $ do
-      migrations <- io $ getMigrationsSequence ["V2.elm", "V3.elm"] (WithoutMigrations 4) 3
+      migrations <- io $ Lamdera.Evergreen.MigrationHarness.getMigrationsSequence ["V2.elm", "V3.elm"] (WithoutMigrations 4) 3
       expectEqualTextTrimmed (show migrations & T.pack) "[(2,[WithMigrations 2,WithMigrations 3,WithoutMigrations 4]),(3,[WithMigrations 3,WithoutMigrations 4]),(4,[WithoutMigrations 4])]"
 
   , scope "deploy 3 after migrate 2" $ do
-      migrations <- io $ getMigrationsSequence ["V2.elm"] (WithoutMigrations 3) 3
+      migrations <- io $ Lamdera.Evergreen.MigrationHarness.getMigrationsSequence ["V2.elm"] (WithoutMigrations 3) 3
       show migrations
         & expectEqual "[(1,[WithMigrations 1,WithMigrations 2,WithoutMigrations 3]),(2,[WithMigrations 2,WithoutMigrations 3]),(3,[WithoutMigrations 3])]"
 
   , scope "deploy 3 after no migrations" $ do
-      migrations <- io $ getMigrationsSequence ["V3.elm"] (WithMigrations 3) 3
+      migrations <- io $ Lamdera.Evergreen.MigrationHarness.getMigrationsSequence ["V3.elm"] (WithMigrations 3) 3
       show migrations
         & expectEqual "[(1,[WithMigrations 1,WithMigrations 3]),(2,[WithMigrations 1,WithMigrations 3]),(3,[WithMigrations 3])]"
 
   , scope "historicMigrations: no deploys" $ do
       let nextVersion = (WithoutMigrations 1)
-      migrations <- io $ getMigrationsSequence [] nextVersion 3
-      expectEqualTextTrimmed (historicMigrations migrations nextVersion "BackendModel") ""
+      migrations <- io $ Lamdera.Evergreen.MigrationHarness.getMigrationsSequence [] nextVersion 3
+      expectEqualTextTrimmed (Lamdera.Evergreen.MigrationHarness.historicMigrations migrations nextVersion "BackendModel") ""
 
   , scope "historicMigrations: 1 deploy" $ do
       let nextVersion = (WithoutMigrations 2)
-      migrations <- io $ getMigrationsSequence [] nextVersion 3
-      expectEqualTextTrimmed (historicMigrations migrations nextVersion "BackendModel") [text|
+      migrations <- io $ Lamdera.Evergreen.MigrationHarness.getMigrationsSequence [] nextVersion 3
+      expectEqualTextTrimmed (Lamdera.Evergreen.MigrationHarness.historicMigrations migrations nextVersion "BackendModel") [text|
         1 ->
             decodeType 5 2 bytes T2.w3_decode_BackendModel
                 |> fallback (\_ -> decodeType 5 2 bytes T2.w2_decode_BackendModel)
@@ -54,8 +55,8 @@ suite = tests
 
   , scope "historicMigrations: 3rd deploy after migrations" $ do
       let nextVersion = (WithoutMigrations 3)
-      migrations <- io $ getMigrationsSequence ["V2.elm"] nextVersion 3
-      expectEqualTextTrimmed (historicMigrations migrations nextVersion "BackendModel") [text|
+      migrations <- io $ Lamdera.Evergreen.MigrationHarness.getMigrationsSequence ["V2.elm"] nextVersion 3
+      expectEqualTextTrimmed (Lamdera.Evergreen.MigrationHarness.historicMigrations migrations nextVersion "BackendModel") [text|
         1 ->
             decodeType 5 1 bytes T1.w3_decode_BackendModel
                 |> fallback (\_ -> decodeType 5 1 bytes T1.w2_decode_BackendModel)
@@ -74,7 +75,7 @@ suite = tests
   , scope "unchanged 62 after migrate 57" $ do
 
       let nextVersion = (WithoutMigrations 62)
-      migrations <- io $ getMigrationsSequence
+      migrations <- io $ Lamdera.Evergreen.MigrationHarness.getMigrationsSequence
         ["V17.elm","V28.elm","V13.elm","V40.elm","V42.elm","V56.elm","V57.elm","V43.elm","V52.elm","V45.elm","V22.elm","V3.elm","V2.elm","V34.elm","V20.elm","V18.elm","V6.elm","V26.elm"]
         nextVersion
         3
@@ -83,10 +84,10 @@ suite = tests
         expectEqualTextTrimmed (show migrations & T.pack) "[(60,[WithMigrations 57,WithoutMigrations 62]),(61,[WithMigrations 57,WithoutMigrations 62]),(62,[WithoutMigrations 62])]"
 
       scope "type imports" $
-        expectEqualTextTrimmed (typeImports migrations nextVersion & T.intercalate "\n") "import Evergreen.V57.Types as T57"
+        expectEqualTextTrimmed (Lamdera.Evergreen.MigrationHarness.typeImports migrations nextVersion & T.intercalate "\n") "import Evergreen.V57.Types as T57"
 
       scope "historic migrations" $
-        expectEqualTextTrimmed (historicMigrations migrations nextVersion "BackendModel")
+        expectEqualTextTrimmed (Lamdera.Evergreen.MigrationHarness.historicMigrations migrations nextVersion "BackendModel")
         [text|
           60 ->
               decodeType 5 62 bytes T62.w3_decode_BackendModel
@@ -107,16 +108,16 @@ suite = tests
       let
         nextVersion = (WithMigrations 62)
         migrationsFilenames = ["V17.elm","V28.elm","V13.elm","V40.elm","V42.elm","V56.elm","V57.elm","V43.elm","V52.elm","V45.elm","V22.elm","V3.elm","V2.elm","V34.elm","V20.elm","V18.elm","V6.elm","V26.elm", "V62.elm"]
-      migrations <- io $ getMigrationsSequence migrationsFilenames nextVersion 3
+      migrations <- io $ Lamdera.Evergreen.MigrationHarness.getMigrationsSequence migrationsFilenames nextVersion 3
 
       scope "migrations" $
         expectEqualTextTrimmed (show migrations & T.pack) "[(60,[WithMigrations 57,WithMigrations 62]),(61,[WithMigrations 57,WithMigrations 62]),(62,[WithMigrations 62])]"
 
       scope "type imports" $
-        expectEqualTextTrimmed (typeImports migrations nextVersion & T.intercalate "\n") "import Evergreen.V57.Types as T57"
+        expectEqualTextTrimmed (Lamdera.Evergreen.MigrationHarness.typeImports migrations nextVersion & T.intercalate "\n") "import Evergreen.V57.Types as T57"
 
       scope "historic migrations" $
-        expectEqualTextTrimmed (historicMigrations migrations nextVersion "BackendModel")
+        expectEqualTextTrimmed (Lamdera.Evergreen.MigrationHarness.historicMigrations migrations nextVersion "BackendModel")
         [text|
           60 ->
               decodeType 5 57 bytes T57.w3_decode_BackendModel
@@ -138,8 +139,8 @@ suite = tests
       let
         nextVersion = (WithoutMigrations 1)
         migrationsFilenames = []
-      migrations <- io $ getMigrationsSequence migrationsFilenames nextVersion 1
-      result <- io $ withProdMode $ lamderaGenerated nextVersion migrationsFilenames
+      migrations <- io $ Lamdera.Evergreen.MigrationHarness.getMigrationsSequence migrationsFilenames nextVersion 1
+      result <- io $ withProdMode $ Lamdera.Evergreen.MigrationHarness.generateFor nextVersion migrationsFilenames
 
       scope "full" $
         expectEqualTextTrimmed result
@@ -238,8 +239,8 @@ suite = tests
       let
         nextVersion = (WithMigrations 2)
         migrationsFilenames = ["V2.elm"]
-      migrations <- io $ getMigrationsSequence migrationsFilenames nextVersion 2
-      result <- io $ withProdMode $ lamderaGenerated nextVersion migrationsFilenames
+      migrations <- io $ Lamdera.Evergreen.MigrationHarness.getMigrationsSequence migrationsFilenames nextVersion 2
+      result <- io $ withProdMode $ Lamdera.Evergreen.MigrationHarness.generateFor nextVersion migrationsFilenames
 
       scope "full" $
         expectEqualTextTrimmed result

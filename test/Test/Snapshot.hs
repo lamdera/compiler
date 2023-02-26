@@ -22,8 +22,8 @@ all = EasyTest.run suite
 
 
 generationFileCheck originalFile generatedFile expectedOutput = do
-  -- original <- liftIO $ readUtf8Text originalFile
-  generatedM <- liftIO $ readUtf8Text generatedFile
+  -- original <- io $ readUtf8Text originalFile
+  generatedM <- io $ readUtf8Text generatedFile
 
   case generatedM of
     Just generated -> do
@@ -72,7 +72,7 @@ suite = tests $
 
   , scope "alltypes e2e to disk for lamdera/test/v1/" $ do
 
-      liftIO $ Test.Lamdera.snapshotWithParams 1 "/Users/mario/lamdera/test/v1" "test-local"
+      io $ Test.Lamdera.snapshotWithParams 1 "/Users/mario/lamdera/test/v1" "test-local"
 
       scope "-> Types.elm" $
         generationFileCheck

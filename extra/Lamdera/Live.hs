@@ -19,9 +19,8 @@ import qualified Lamdera.RelativeLoad
 import qualified Ext.Common
 
 lamderaLiveSrc =
-  Lamdera.unsafe $ do
-    debug <- Lamdera.isDebug
-    if debug
+  Lamdera.unsafe $
+    if Ext.Common.isDebug_
       then do
         Lamdera.debug $ "🗿  Using debug mode lamderaLive"
         userHome <- Dir.getHomeDirectory

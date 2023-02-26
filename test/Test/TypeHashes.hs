@@ -7,37 +7,50 @@ import System.FilePath ((</>))
 
 import EasyTest
 import Test.Helpers
+import NeatInterpolation
 
 import Lamdera
 import Lamdera.Compile
-import NeatInterpolation
+import qualified Lamdera.Types
+import qualified Lamdera.RelativeLoad
 import qualified Ext.Query.Interfaces as Interfaces
 import qualified Lamdera.TypeHash
+import qualified Ext.Common
 
 all = EasyTest.run suite
 
 suite :: Test ()
 suite = tests
   [ scope "e2e test" $ do
+
+      project <- io $ Lamdera.RelativeLoad.findDir "test/scenario-alltypes"
       let
-        project = "/Users/mario/lamdera/test/v1"
+        -- project = "/Users/mario/lamdera/test/v1"
         expected =
           [text|
-            ["a57ac2f8269a6929598785f3a9789cdb7c528e8e","c6705c231ea1753f3bfc4e54191ddde603bac315","3fbceb448ef53c7bbb655e6d49d94c927cc3caa0","6bf58721649b39b399ac7ec2f6b162baceae03d6","a6b615774ea87d310518531985a84cb7b8c9bb75","a83d62ff8afc0e6ca4b0cd6a544d023ef6718807"]
+            ["64db237c2087232331047b907cade9a262601159","728c05b17597cebaad4eee0d43febe29298b0f0c","fa92f6879a3929d7992e184cf89bd93fea3e094b","b1675b2dec2ee3f023cd958159060fd7d5c5c21c","b1675b2dec2ee3f023cd958159060fd7d5c5c21c","b1675b2dec2ee3f023cd958159060fd7d5c5c21c"]
           |]
 
-      liftIO $ withDebug $ Dir.withCurrentDirectory project $ do
+      io $ withDebug $ Ext.Common.withProjectRoot project $ do
         Lamdera.TypeHash.calculateAndWrite
 
-      actual <- liftIO $ readUtf8Text $ lamderaHashesPath project
 
-      expectEqualTextTrimmed (actual & withDefault "<failed to read file>") expected
+      Lamdera.Types.core & mapM
+        (\coreType ->
+          io $ do
+            (thash, ttext) <- withDebug $ Ext.Common.withProjectRoot project $ Lamdera.TypeHash.calculateHashPair "src/Types.elm" "Types" coreType
+            atomicPutStrLn $ show ttext
+        )
+
+      actual <- io $ readUtf8Text $ lamderaHashesPath project
+
+      expectEqualTextTrimmed expected (actual & withDefault "<failed to read file>")
 
 
   , scope "all types" $ do
+      project <- io $ Lamdera.RelativeLoad.findDir "test/scenario-alltypes"
       let
-        file = "/Users/mario/dev/projects/lamdera-compiler/test/scenario-alltypes/src/Test/Wire_Alias_2_Record.elm"
-        project = "/Users/mario/dev/projects/lamdera-compiler/test/scenario-alltypes"
+        file = project </> "src/Test/Wire_Alias_2_Record.elm"
         moduleName = "Test.Wire_Alias_2_Record"
         typeName = "AllTypes"
 
@@ -61,9 +74,9 @@ suite = tests
                 mconcat fields & (\all_ -> "R[" <> all_ <> "]")
             )
 
-      liftIO $ Lamdera.Compile.makeDev_ file
+      io $ Lamdera.Compile.makeDev_ file
 
-      (thash, ttext) <- liftIO $ withDebug $ Dir.withCurrentDirectory project $ do
+      (thash, ttext) <- io $ withDebug $ Ext.Common.withProjectRoot project $ do
         Lamdera.TypeHash.calculateHashPair "src/Test/Wire_Alias_2_Record.elm" moduleName typeName
 
       expectEqualTextTrimmed thash "0b5ace6c03f080a53d547cda99731442119db2de"
@@ -76,9 +89,9 @@ suite = tests
         moduleName = "Test.Wire_Record_Extensible1_Basic"
         typeName = "ColorOverlap"
 
-      liftIO $ Lamdera.Compile.makeDev_ file
+      io $ Lamdera.Compile.makeDev_ file
 
-      (thash, ttext) <- liftIO $ withDebug $ Dir.withCurrentDirectory project $ do
+      (thash, ttext) <- io $ withDebug $ Ext.Common.withProjectRoot project $ do
         Lamdera.TypeHash.calculateHashPair "src/Test/Wire_Record_Extensible1_Basic.elm" moduleName typeName
 
       expectEqualTextTrimmed thash "4bef3232374b3dfe84546f3f132ad4eaaa2cbb2f"
@@ -125,8 +138,8 @@ suite = tests
         sha_first = textSha1 "C[[R[SS]][S][Res[S,L[R[SS]]]][Res[S,R[SL[C[[][]]]SS]]][D[S,I]][D[S,R[C[[I]]SC[[I]]SC[[S]]L[C[[][]]]SS]]][D[S,R[C[[I]]SSS]]][][][Res[S,R[SL[C[[][]]]SS]]]]"
         sha_second = textSha1 "C[[R[SS]][S][Res[S,L[R[SS]]]][Res[S,R[SL[C[[][]]]SS]]][D[S,I]][D[S,R[C[[I]]SC[[I]]SC[[S]]L[C[[][]]]SS]]][D[S,R[C[[I]]SSS]]][][][][Res[S,R[SL[C[[][]]]SS]]]]"
 
-      liftIO $ atomicPutStrLn $ show sha_first
-      liftIO $ atomicPutStrLn $ show sha_second
+      io $ atomicPutStrLn $ show sha_first
+      io $ atomicPutStrLn $ show sha_second
 
       expect $ sha_first /= sha_second
   ]
@@ -134,7 +147,7 @@ suite = tests
 
 
 debugProject project = do
-  withDebug $ Dir.withCurrentDirectory project $ do
+  withDebug $ Ext.Common.withProjectRoot project $ do
     res <- Lamdera.TypeHash.calculateLamderaHashes
     case res of
       Right hashes -> do

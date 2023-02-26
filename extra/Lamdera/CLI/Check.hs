@@ -47,7 +47,7 @@ import qualified Lamdera.Update
 import qualified Lamdera.Version
 import qualified Network.Status
 
-import Lamdera.Evergreen.MigrationHarness (VersionInfo(..), createLamderaGenerated, vinfoVersion, getLastLocalTypeChangeVersion)
+import Lamdera.Evergreen.MigrationHarness (VersionInfo(..), vinfoVersion, getLastLocalTypeChangeVersion)
 import qualified Lamdera.Evergreen.MigrationDestructive
 import qualified Lamdera.Evergreen.MigrationGenerator
 import qualified Lamdera.Evergreen.MigrationHarness
@@ -625,8 +625,8 @@ migrationCheck root nextVersion = do
   let lamderaCheckBothPath = cache </> "LamderaCheckBoth.elm"
   mkdir cache
 
-  gen <- Lamdera.Evergreen.MigrationHarness.createLamderaGenerated root nextVersion
-  writeUtf8 lamderaCheckBothPath gen
+  harness <- Lamdera.Evergreen.MigrationHarness.generate root nextVersion
+  writeUtf8 lamderaCheckBothPath harness
 
   let
     cleanup = do
@@ -862,7 +862,7 @@ firstTwoChars str =
 writeLamderaGenerated :: FilePath -> Bool -> VersionInfo -> IO ()
 writeLamderaGenerated root inProduction_ nextVersion =
   onlyWhen inProduction_ $ do
-    gen <- Lamdera.Evergreen.MigrationHarness.createLamderaGenerated root nextVersion
+    gen <- Lamdera.Evergreen.MigrationHarness.generate root nextVersion
     writeIfDifferent (root </> "src/LamderaGenerated.elm") gen
 
 

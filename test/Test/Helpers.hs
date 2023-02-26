@@ -75,8 +75,7 @@ catchOutput :: IO () -> EasyTest.Test Text
 catchOutput action = do
   -- https://hackage.haskell.org/package/main-tester-0.2.0.1/docs/Test-Main.html
   pr <- EasyTest.io $ captureProcessResult action
-  -- @TODO improve this to actually pull out values
-  pure $ T.decodeUtf8 $ "stdout:\n" <> Test.Main.prStdout pr <> "\nstderr:\n" <> Test.Main.prStderr pr
+  pure $ show_ pr
 
 
 catchOutputStdErr :: IO () -> EasyTest.Test Text

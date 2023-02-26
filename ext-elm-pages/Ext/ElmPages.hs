@@ -166,10 +166,6 @@ unionConstructorsToDiffableTypes :: Can.Union -> N.Name -> ModuleName.Canonical 
 unionConstructorsToDiffableTypes union targetName currentModule typeName interfaces recursionSet tvarMap unionInterface params =
   let
     newTvarMap = tvarMap <> zip (Can._u_vars union) params
-
-    debug dtype =
-      debugHaskell ("\n✴️ inserting for union " <> typeName) (newTvarMap, dtype)
-        & snd
   in
   Can._u_alts union
     -- Sort constructors by name, this allows our diff to be stable to ordering changes
@@ -177,7 +173,7 @@ unionConstructorsToDiffableTypes union targetName currentModule typeName interfa
       -- Ctor N.Name Index.ZeroBased Int [Type]
       (\(Can.Ctor name _ _ _) -> name)
     -- For each constructor
-    & fmap (\(Can.Ctor name index int params_) ->
+    & fmap (\(Can.Ctor name index arity params_) ->
       ( N.toText name
       , -- For each constructor type param
         params_
@@ -192,8 +188,8 @@ unionConstructorsToDiffableTypes union targetName currentModule typeName interfa
 aliasToDiffableType :: N.Name -> ModuleName.Canonical -> Interfaces -> RecursionSet -> [(N.Name, Can.Type)] -> Interface.Alias -> [Can.Type] -> DiffableType
 aliasToDiffableType targetName currentModule interfaces recursionSet tvarMap aliasInterface params =
   let
-    treat a =
-      case a of
+    treat alias =
+      case alias of
         Can.Alias tvars tipe ->
           -- @TODO couldn't force an issue here but it seems wrong to ignore the tvars...
           -- why is aliasToDiffableType never called recursively from canonicalToDiffableType?
@@ -201,8 +197,8 @@ aliasToDiffableType targetName currentModule interfaces recursionSet tvarMap ali
           canonicalToDiffableType targetName currentModule interfaces recursionSet tipe tvarMap
   in
   case aliasInterface of
-    Interface.PublicAlias a -> treat a
-    Interface.PrivateAlias a -> treat a
+    Interface.PublicAlias alias -> treat alias
+    Interface.PrivateAlias alias -> treat alias
 
 
 -- = TLambda Type Type
@@ -217,7 +213,7 @@ canonicalToDiffableType targetName currentModule interfaces recursionSet canonic
   case canonical of
     Can.TType moduleName name params ->
       let
-        currentModule = moduleName
+        currentModule_ = moduleName
 
         recursionIdentifier = (nameRaw moduleName, name, tvarResolvedParams)
 
@@ -257,7 +253,7 @@ canonicalToDiffableType targetName currentModule interfaces recursionSet canonic
         ("elm", "core", "Maybe", "Maybe") ->
           case tvarResolvedParams of
             p:[] ->
-              DMaybe (canonicalToDiffableType targetName currentModule interfaces recursionSet p tvarMap)
+              DMaybe (canonicalToDiffableType targetName currentModule_ interfaces recursionSet p tvarMap)
 
             _ ->
               DError "❗️impossible multi-param Maybe"
@@ -265,28 +261,28 @@ canonicalToDiffableType targetName currentModule interfaces recursionSet canonic
         ("elm", "core", "List", "List") ->
           case tvarResolvedParams of
             p:[] ->
-              DList (canonicalToDiffableType targetName currentModule interfaces recursionSet p tvarMap)
+              DList (canonicalToDiffableType targetName currentModule_ interfaces recursionSet p tvarMap)
             _ ->
               DError "❗️impossible multi-param List"
 
         ("elm", "core", "Array", "Array") ->
           case tvarResolvedParams of
             p:[] ->
-              DArray (canonicalToDiffableType targetName currentModule interfaces recursionSet p tvarMap)
+              DArray (canonicalToDiffableType targetName currentModule_ interfaces recursionSet p tvarMap)
             _ ->
               DError "❗️impossible multi-param Array"
 
         ("elm", "core", "Set", "Set") ->
           case tvarResolvedParams of
             p:[] ->
-              DSet (canonicalToDiffableType targetName currentModule interfaces recursionSet p tvarMap)
+              DSet (canonicalToDiffableType targetName currentModule_ interfaces recursionSet p tvarMap)
             _ ->
               DError "❗️impossible multi-param Set"
 
         ("elm", "core", "Result", "Result") ->
           case tvarResolvedParams of
             result:err:_ ->
-              DResult (canonicalToDiffableType targetName currentModule interfaces recursionSet result tvarMap) (canonicalToDiffableType targetName currentModule interfaces recursionSet err tvarMap)
+              DResult (canonicalToDiffableType targetName currentModule_ interfaces recursionSet result tvarMap) (canonicalToDiffableType targetName currentModule_ interfaces recursionSet err tvarMap)
             _ ->
               DError "❗️impossible !2 param Result type"
 
@@ -294,7 +290,7 @@ canonicalToDiffableType targetName currentModule interfaces recursionSet canonic
         ("elm", "core", "Dict", "Dict") ->
           case tvarResolvedParams of
             result:err:_ ->
-              DDict (canonicalToDiffableType targetName currentModule interfaces recursionSet result tvarMap) (canonicalToDiffableType targetName currentModule interfaces recursionSet err tvarMap)
+              DDict (canonicalToDiffableType targetName currentModule_ interfaces recursionSet result tvarMap) (canonicalToDiffableType targetName currentModule_ interfaces recursionSet err tvarMap)
             _ ->
               DError "❗️impossible !2 param Dict type"
 
@@ -351,13 +347,13 @@ canonicalToDiffableType targetName currentModule interfaces recursionSet canonic
               -- Try unions
               case Map.lookup name $ Interface._unions subInterface of
                 Just union -> do
-                  unionToDiffableType targetName currentModule (N.toText name) interfaces newRecursionSet tvarMap union tvarResolvedParams
+                  unionToDiffableType targetName currentModule_ (N.toText name) interfaces newRecursionSet tvarMap union tvarResolvedParams
 
                 Nothing ->
                   -- Try aliases
                   case Map.lookup name $ Interface._aliases subInterface of
                     Just alias -> do
-                      aliasToDiffableType targetName currentModule interfaces newRecursionSet tvarMap alias tvarResolvedParams
+                      aliasToDiffableType targetName currentModule_ interfaces newRecursionSet tvarMap alias tvarResolvedParams
 
                     Nothing ->
                       DError $ T.concat ["❗️Failed to find either alias or custom type for type that seemingly must exist: ", tipe, "` from ", author, "/", pkg, ":", module_, ". Please report this issue with your code!"]
@@ -370,7 +366,7 @@ canonicalToDiffableType targetName currentModule interfaces recursionSet canonic
       let
         addRecordName n t =
           case t of
-            DRecord currentModule _ fields -> DRecord currentModule (nameToText n) fields
+            DRecord currentModule_ _ fields -> DRecord currentModule_ (nameToText n) fields
             _ -> t
       in
       case aliasType of
@@ -380,8 +376,8 @@ canonicalToDiffableType targetName currentModule interfaces recursionSet canonic
               tvarMap_
                 & fmap (\(n,p) ->
                   case p of
-                    Can.TVar a ->
-                      case List.find (\(t,ti) -> t == a) tvarMap of
+                    Can.TVar tn ->
+                      case List.find (\(t,ti) -> t == tn) tvarMap of
                         Just (_,ti) -> (n,ti)
                         Nothing -> (n,p)
                     _ -> (n,p)
@@ -493,7 +489,7 @@ diffableTypeErrors dtype =
     DUnit               -> []
     DRecursion name     -> []
     DKernelBrowser name -> []
-    DError error        -> [error]
+    DError err          -> [err]
 
     DExternalWarning _ realtipe ->
       -- [ author <> "/" <> pkg <> ":" <> module_ <> "." <> tipe <> " is outside Types.elm and won't get caught by Evergreen!"]

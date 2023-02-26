@@ -51,7 +51,7 @@ makeOptimizedWithCleanup cleanup root path = do
   sleep 10
 
 
--- Runs `lamdera make` with no output
+-- Runs `lamdera make` with no JS output
 make_ :: FilePath -> IO ()
 make_ root = do
   debug $ "🏗   lamdera make " <> root <> "/"
@@ -106,7 +106,7 @@ makeDev_ path =
   makeDev (FP.takeDirectory path) [path]
 
 
--- Runs `lamdera make` of harness file with JS output
+-- Runs `lamdera make` of harness file with JS file output
 makeHarnessDevJs :: FilePath -> IO ()
 makeHarnessDevJs root = do
   let

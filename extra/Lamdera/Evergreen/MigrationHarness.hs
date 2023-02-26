@@ -20,10 +20,10 @@ import Lamdera
 import qualified Ext.ElmFormat
 
 
-createLamderaGenerated :: FilePath -> VersionInfo -> IO Text
-createLamderaGenerated root nextVersion = do
+generate :: FilePath -> VersionInfo -> IO Text
+generate root nextVersion = do
   migrationFilepaths <- findMigrationFilePaths root
-  lamderaGenerated nextVersion migrationFilepaths
+  generateFor nextVersion migrationFilepaths
 
 
 findMigrationFilePaths :: FilePath -> IO [FilePath]
