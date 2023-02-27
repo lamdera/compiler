@@ -7,16 +7,12 @@ dist=distribution/dist
 mkdir -p $dist
 bin=$dist/$buildTag
 
-ghcVersion=9.0.2
-cabalVersion=3.6.2.0
 stackVersion=2.9.1
 
 scriptDir=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 isolate=~/.ghcup/macos-$arch
 mkdir -p $isolate
 
-ghc=$isolate/bin/ghc-$ghcVersion
-cabal="$isolate/cabal --with-compiler=$ghc"
 stack="$isolate/stack"
 
 
@@ -31,7 +27,7 @@ fi
 
                                                           # Ensure correct arch toolchain is installed, or install it
                                                           # Hopefully in future ghcup has better multi-arch support
-if ! $stack --version | grep $stackVersion; then
+if [ ! -f $stack ]; then
   ghcup install stack "$stackVersion" --isolate "$isolate" --force
 fi
 
@@ -39,7 +35,6 @@ fi
 
 
 cd "$scriptDir/.."                                        # Move into the project root
-
 git submodule init && git submodule foreach --recursive git pull && git submodule update
 
 ffiLibs="$(xcrun --show-sdk-path)/usr/include/ffi"        # Workaround for GHC9.0.2 bug until we can use GHC9.2.3+

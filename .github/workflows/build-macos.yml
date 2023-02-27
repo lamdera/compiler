@@ -1,7 +1,7 @@
 on:
   push:
     branches:
-      - github-self-hosted-runner
+      - lamdera-next-disabled
 
 name: Build Lamdera Compiler for MacOS
 jobs:

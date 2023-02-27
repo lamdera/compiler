@@ -3,7 +3,7 @@ on:
     branches:
       - lamdera-next
 
-name: Build MacOS arm64
+name: Build Linux aarch64
 jobs:
   build:
     name: Build MacOS arm64
@@ -13,7 +13,4 @@ jobs:
       - run: echo "${HOME}/.local/bin" >> $GITHUB_PATH
       - name: Run distribution script
         run: |
-          test -x "$(which ghcup)" && curl https://downloads.haskell.org/~ghcup/aarch64-apple-darwin-ghcup -o ~/.local/bin/ghcup && chmod a+x ~/.local/bin/ghcup
-          brew install llvm@12
-          cd distribution
-          ./build-macos-arm64.sh
+          ./build-linux-aarch64.sh

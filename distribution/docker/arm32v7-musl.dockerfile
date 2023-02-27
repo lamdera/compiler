@@ -69,8 +69,9 @@ RUN cabal update
 # Install packages
 WORKDIR /elm
 COPY elm.cabal ./
-RUN cabal build --ghc-option=-optl=-static --ghc-option=-split-sections -O2 --only-dependencies
+COPY vendor/elm-format vendor/elm-format
 
+RUN cabal build --ghc-option=-optl=-static --ghc-option=-split-sections -O2 --only-dependencies
 
 # Import source code
 COPY builder builder

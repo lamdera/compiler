@@ -6,6 +6,7 @@ buildTag="lamdera-1.1.0-linux-x86_64-musl"
 scriptDir=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 
 cd "$scriptDir/.."                                        # Move into the project root
+git submodule init && git submodule update
 
                                                           # Build in Docker
 docker build --progress=plain --platform linux/amd64 \

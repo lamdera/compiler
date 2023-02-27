@@ -40,11 +40,33 @@ RUN cp crtendS.o crtend.o
 
 RUN cabal update
 
-# Install packages
-WORKDIR /elm
-COPY elm.cabal ./
-RUN cabal build --ghc-option=-optl=-static --ghc-option=-split-sections -O2 --only-dependencies
+# # Install packages
+# WORKDIR /lamdera
+# COPY elm.cabal ./
+# RUN cabal build --ghc-option=-optl=-static --ghc-option=-split-sections -O2 --only-dependencies
 
+# # Import source code
+# COPY builder builder
+# COPY compiler compiler
+# COPY reactor reactor
+# COPY terminal terminal
+# COPY LICENSE ./
+# COPY vendor/elm-format vendor/elm-format
+
+# RUN cabal build --ghc-option=-optl=-static --ghc-option=-split-sections -O2
+# RUN cp `cabal list-bin .` ./lamdera
+# RUN strip lamdera
+
+# Install packages
+WORKDIR /lamdera
+COPY elm.cabal ./
+COPY cabal.project ./
+COPY cabal.project.freeze ./
+COPY vendor/elm-format vendor/elm-format
+
+ENV CABALOPTS="-f-export-dynamic -fembed_data_files --enable-executable-static -j4"
+ENV GHCOPTS="-j4 +RTS -A256m -RTS -split-sections -optc-Os -optl=-pthread"
+RUN cabal build $CABALOPTS --ghc-options="$GHCOPTS" --only-dependencies
 
 # Import source code
 COPY builder builder
@@ -53,6 +75,17 @@ COPY reactor reactor
 COPY terminal terminal
 COPY LICENSE ./
 
-RUN cabal build --ghc-option=-optl=-static --ghc-option=-split-sections -O2
+COPY ext-common ext-common
+COPY ext-elm-pages ext-elm-pages
+COPY ext-sentry ext-sentry
+COPY extra extra
+COPY test test
+COPY .git .git
+
+RUN cabal build $CABALOPTS --ghc-options="$GHCOPTS"
+
+# RUN cp dist-newstyle/build/aarch64-linux/ghc-9.0.2/lamdera-1.1.0/x/lamdera/build/lamdera/lamdera ./lamdera
+# Once we're on a newer cabal, we can drop hardcoding the previous command
 RUN cp `cabal list-bin .` ./lamdera
+
 RUN strip lamdera
