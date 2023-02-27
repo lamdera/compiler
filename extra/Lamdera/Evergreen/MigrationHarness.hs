@@ -35,9 +35,12 @@ findMigrationFilePaths root = do
   pure migrationFilePaths
 
 
-lamderaGenerated :: VersionInfo -> [FilePath] -> IO Text
-lamderaGenerated nextVersion migrationFilepaths = do
-  migrationSequence <- liftIO $ getMigrationsSequence migrationFilepaths nextVersion 3 `catchError`
+generateFor :: VersionInfo -> [FilePath] -> IO Text
+generateFor nextVersion migrationFilepaths = do
+
+  let migrationsLimit = 3
+
+  migrationSequence <- liftIO $ getMigrationsSequence migrationFilepaths nextVersion migrationsLimit `catchError`
     (\err -> do
       debug $ show err
       debug "getMigrationsSequence was empty - that should only be true on v1 deploy"
