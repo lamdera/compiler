@@ -1,18 +1,19 @@
 #!/usr/bin/env bash
 set -ex                                                   # Be verbose and exit immediately on error instead of trying to continue
 
+version="1.1.0"
+os="macos"
 arch="x86_64"
-buildTag="lamdera-1.1.0-macos-$arch"
+
+buildTag="lamdera-$version-$os-$arch"
 dist=distribution/dist
 mkdir -p $dist
 bin=$dist/$buildTag
+scriptDir=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 
 stackVersion=2.9.1
-
-scriptDir=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
-isolate=~/.ghcup/macos-$arch
+isolate=~/.ghcup/$os-$arch
 mkdir -p $isolate
-
 stack="$isolate/stack"
 
                                                           # Ensure correct arch toolchain is installed, or install it
@@ -25,11 +26,13 @@ fi
 
 
 cd "$scriptDir/.."                                        # Move into the project root
-git submodule init && git submodule foreach --recursive git pull && git submodule update
+git submodule init && git submodule update
 
 
 $stack install --local-bin-path $dist
 
 cp $dist/lamdera $bin                                     # Copy built binary to dist
 strip $bin                                                # Strip symbols to reduce binary size (90M -> 56M)
+ls -alh $bin
+file $bin
 ls -alh $bin

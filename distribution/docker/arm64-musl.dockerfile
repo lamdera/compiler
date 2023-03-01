@@ -11,6 +11,7 @@ COPY cabal.project.freeze ./
 COPY vendor/elm-format vendor/elm-format
 
 RUN cabal update
+
 ENV CABALOPTS="--allow-newer -f-export-dynamic -fembed_data_files --enable-executable-static -j4"
 ENV GHCOPTS="-j4 +RTS -A256m -RTS -split-sections -optc-Os -optl=-pthread"
 RUN cabal build $CABALOPTS --ghc-options="$GHCOPTS" --only-dependencies
@@ -31,8 +32,6 @@ COPY .git .git
 
 RUN cabal build $CABALOPTS --ghc-options="$GHCOPTS"
 
-# RUN cp dist-newstyle/build/aarch64-linux/ghc-9.0.2/lamdera-1.1.0/x/lamdera/build/lamdera/lamdera ./lamdera
-# Once we're on a newer cabal, we can drop hardcoding the previous command
 RUN cp `cabal list-bin .` ./lamdera
-
+RUN ./lamdera --version-full
 RUN strip lamdera

@@ -1,12 +1,12 @@
 on:
   push:
     branches:
-      - lamdera-next
+      - distribute
 
 name: Build MacOS x86_64
 jobs:
   build:
-    name: Build MacOS arm64
+    name: Build MacOS x86_64
     runs-on: lamdera-community-m1
     steps:
       - uses: actions/checkout@v3

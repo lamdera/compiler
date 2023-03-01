@@ -1,16 +1,17 @@
 on:
   push:
     branches:
-      - lamdera-next
+      - distribute
 
 name: Build Linux x86_64
 jobs:
   build:
-    name: Build MacOS x86_64
-    runs-on: lamdera-community-m1
+    name: Build Linux x86_64
+    runs-on: lamdera-community-linux-x86_64
     steps:
       - uses: actions/checkout@v3
       - run: echo "${HOME}/.local/bin" >> $GITHUB_PATH
       - name: Run distribution script
         run: |
+          cd distribution
           ./build-linux-x86_64-musl.sh

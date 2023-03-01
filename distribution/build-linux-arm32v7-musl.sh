@@ -1,17 +1,23 @@
 #!/usr/bin/env bash
 set -ex                                                   # Be verbose and exit immediately on error instead of trying to continue
 
-buildTag="lamdera-1.1.0-linux-arm32v7-musl"
+version="1.1.0"
+os="linux"
+arch="arm32v7"
 
+buildTag="lamdera-$version-$os-$arch"
+dist=distribution/dist
+mkdir -p $dist
+bin=$dist/$buildTag
 scriptDir=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 
 cd "$scriptDir/.."                                        # Move into the project root
 git submodule init && git submodule update
 
                                                           # Build in Docker
-docker build --progress=plain --platform linux/arm32v7 \
-  -t $buildTag \
-  -f distribution/docker/arm32v7-musl.dockerfile .
+docker build --progress=plain --platform linux/$arch \
+  -t "$buildTag:latest" \
+  -f distribution/docker/$arch-musl.dockerfile .
 
 mkdir -p distribution/dist                                # Ensure the dist directory is present
 
@@ -19,3 +25,5 @@ mkdir -p distribution/dist                                # Ensure the dist dire
 bin=distribution/dist/$buildTag                           # Copy built binary to dist
 docker run --rm --entrypoint cat $buildTag /lamdera/lamdera > $bin
 chmod a+x $bin
+file $bin
+ls -alh $bin

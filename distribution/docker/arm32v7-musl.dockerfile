@@ -1,3 +1,6 @@
+# This doesn't work yet (or may be impossible to get to work via this alpine image)
+# See notes below
+
 FROM arm32v7/alpine:3.15 as build
 
 RUN apk add --no-cache \

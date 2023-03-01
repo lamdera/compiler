@@ -3,7 +3,7 @@ on:
     branches:
       - windows
 
-name: Build Lamdera Compiler for Windows
+name: Build Windows x86_64
 jobs:
   build-packages:
     name: Build Windows Libraries
