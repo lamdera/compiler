@@ -86,7 +86,8 @@ run () flags@(Lamdera.CLI.Check.Flags destructiveMigration) = do
   Lamdera.Legacy.temporaryCheckOldTypesNeedingMigration inProduction_ root
 
   progressPointer_ "Checking project compiles..."
-  checkUserProjectCompiles root
+  -- In production, check optimized up-front for Debug.* usage immediate feedback
+  checkUserProjectCompiles root inProduction_
 
   appName <- Lamdera.Project.appNameOrThrow
 
@@ -183,6 +184,7 @@ onlineCheck root appName inDebug localTypes externalTypeWarnings isHoistRebuild 
 
       onlyWhen (not inProduction_) $ showExternalTypeWarnings externalTypeWarnings
 
+      checkUserProjectCompiles root True
       checkConfig appName
 
       progressDoc $ D.dullgreen (D.reflow $ "It appears you're all set to deploy the first version of '" <> T.unpack appName <> "'!")
@@ -257,6 +259,7 @@ onlineCheck root appName inDebug localTypes externalTypeWarnings isHoistRebuild 
                   migrationCheck root nextVersionInfo
                   onlyWhen (not inProduction_) $ showExternalTypeWarnings externalTypeWarnings
 
+                  checkUserProjectCompiles root True
                   checkConfig appName
 
                   progressDoc $
@@ -276,17 +279,6 @@ onlineCheck root appName inDebug localTypes externalTypeWarnings isHoistRebuild 
             else do
               debug $ "Migration does not exist"
 
-              _ <- mkdir $ root </> "src/Evergreen/Migrate"
-
-              defaultMigrations <- do
-                if destructiveMigration
-                  then
-                    Lamdera.Evergreen.MigrationDestructive.generate lastLocalTypeChangeVersion nextVersion typeCompares
-                  else
-                    Lamdera.Evergreen.MigrationGenerator.betweenVersions typeCompares lastLocalTypeChangeVersion nextVersion root
-
-              writeUtf8 nextMigrationPath defaultMigrations
-
               if inProduction_
                 then
                   Progress.throw $
@@ -297,7 +289,16 @@ onlineCheck root appName inDebug localTypes externalTypeWarnings isHoistRebuild 
                       , D.reflow "See <https://dashboard.lamdera.app/docs/evergreen> for more info."
                       ]
 
-                else
+                else do
+                  _ <- mkdir $ root </> "src/Evergreen/Migrate"
+                  defaultMigrations <- do
+                    if destructiveMigration
+                      then
+                        Lamdera.Evergreen.MigrationDestructive.generate lastLocalTypeChangeVersion nextVersion typeCompares
+                      else
+                        Lamdera.Evergreen.MigrationGenerator.betweenVersions typeCompares lastLocalTypeChangeVersion nextVersion root
+                  writeUtf8 nextMigrationPath defaultMigrations
+
                   Progress.throw $
                     Help.report "UNIMPLEMENTED MIGRATION" (Just nextMigrationPathBare)
                       ("The following types have changed since last deploy (v" <> show prodVersion <> ") and require migrations:")
@@ -327,6 +328,7 @@ onlineCheck root appName inDebug localTypes externalTypeWarnings isHoistRebuild 
           migrationCheck root nextVersionInfo
           onlyWhen (not inProduction_) $ showExternalTypeWarnings externalTypeWarnings
 
+          checkUserProjectCompiles root True
           checkConfig appName
 
           progressDoc $ D.dullgreen $ D.reflow $ "\nIt appears you're all set to deploy v" <> (show nextVersion) <> " of '" <> T.unpack appName <> "'."
@@ -587,8 +589,8 @@ fetchProductionInfo appName useLocal =
   Lamdera.Http.normalJson "lamdera-info" endpoint decoder
 
 
-checkUserProjectCompiles :: FilePath -> IO ()
-checkUserProjectCompiles root = do
+checkUserProjectCompiles :: FilePath -> Bool -> IO ()
+checkUserProjectCompiles root optimized = do
 
   -- Make sure we catch project outline issues first
   eitherOutline <- Elm.Outline.read root True
@@ -602,8 +604,13 @@ checkUserProjectCompiles root = do
 
   _ <- Lamdera.touch $ root </> "src" </> "Types.elm"
 
-  Lamdera.Compile.makeOptimized root ("src" </> "Frontend.elm")
-  Lamdera.Compile.makeOptimized root ("src" </> "Backend.elm")
+  if optimized
+    then do
+      Lamdera.Compile.makeOptimized root ("src" </> "Frontend.elm")
+      Lamdera.Compile.makeOptimized root ("src" </> "Backend.elm")
+    else do
+      Lamdera.Compile.makeDev root ["src" </> "Frontend.elm"]
+      Lamdera.Compile.makeDev root ["src" </> "Backend.elm"]
 
 
 migrationCheck :: FilePath -> VersionInfo -> IO ()
