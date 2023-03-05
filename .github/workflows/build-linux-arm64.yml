@@ -1,7 +1,8 @@
 on:
   push:
     branches:
-      - distribute
+      # For some reason this OOM's on community m1 but not on local m1
+      - distribute-disabled
 
 name: Build Linux arm64
 jobs:
