@@ -34,7 +34,7 @@ lamderaLiveSrc =
             Lamdera.debug $ "🗿 Using " ++ overridePathBuilt ++ " for lamderaLive"
             Ext.Common.requireBinary "npm"
             Ext.Common.requireBinary "esbuild"
-            Ext.Common.bash $ "cd " <> overrideRoot <> " && npm ci && esbuild " <> overridePath <> " --bundle --minify --target=chrome58,firefox57,safari11,edge16 > " <> overridePathBuilt
+            Ext.Common.bash $ "cd " <> overrideRoot <> " && npm i && esbuild " <> overridePath <> " --bundle --minify --target=chrome58,firefox57,safari11,edge16 > " <> overridePathBuilt
             overrideM <- readUtf8Text overridePathBuilt
             case overrideM of
               Just override -> do

@@ -303,19 +303,43 @@ serveWebsocket root (mClients, mLeader, mChan, beState) =
         Nothing ->
           error404 "missing sec-websocket-key header"
 
+serveInteractiveUISourceMap :: FilePath -> Snap()
+serveInteractiveUISourceMap root = do
+  fullpath <- T.pack <$> getSafePath
+  let
+    handlers =
+      -- *nix dir paths
+      [ ("_x/editor", serveEditorOpen root)
+      -- Windows dir paths
+      , ("_x\\editor", serveEditorOpen root)
+      ]
+  handlers
+    & List.find (\(prefix, handler) ->
+      prefix `T.isPrefixOf` fullpath
+    )
+    & fmap (\(prefix, handler) -> do
+      let path =
+            fullpath & T.replace (prefix <>  "/") ""  -- Strip when sub-dirs
+                     & T.replace (prefix <>  "\\") "" -- Strip when sub-dirs windows
+                     & T.replace prefix ""            -- Strip when root dir
+      handler path
+    )
+    & withDefault pass
+
+
 serveExperimental :: FilePath -> Snap ()
 serveExperimental root = do
   fullpath <- T.pack <$> getSafePath
   let
     handlers =
+      -- *nix dir paths
       [ ("_x/read", serveExperimentalRead root)
       , ("_x/write", serveExperimentalWrite root)
       , ("_x/list", serveExperimentalList root)
-      , ("_x/editor", serveExperimentalEditorOpen root)
+      -- Windows dir paths
       , ("_x\\read", serveExperimentalRead root)
       , ("_x\\write", serveExperimentalWrite root)
       , ("_x\\list", serveExperimentalList root)
-      , ("_x\\editor", serveExperimentalEditorOpen root)
       ]
   handlers
     & List.find (\(prefix, handler) ->
@@ -379,8 +403,8 @@ serveExperimentalList root path = do
       error404 "folder not found"
 
 
-serveExperimentalEditorOpen :: FilePath -> Text -> Snap ()
-serveExperimentalEditorOpen root path = do
+serveEditorOpen :: FilePath -> Text -> Snap ()
+serveEditorOpen root path = do
   debug $ "_x/editor received: " ++ show path
   case path & T.splitOn ":" of
     file:row:column:xs -> do

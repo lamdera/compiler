@@ -78,8 +78,6 @@ runWithRoot root (Flags maybePort) =
       onlyWhen (port == 8001) $
         error "Port 8001 is reserved for the Lamdera proxy, please pick another port."
 
-      root <- getProjectRoot "Develop.runWithRoot"
-
       liveState <- liftIO $ Live.init
 
       sentryCache <- liftIO $ Sentry.init
@@ -120,6 +118,7 @@ runWithRoot root (Flags maybePort) =
         <|> serveDirectoryWith directoryConfig "."
         <|> Live.serveWebsocket root liveState
         <|> route [ ("_r/:endpoint", Live.serveRpc liveState port) ]
+        <|> Live.serveInteractiveUISourceMap root
         <|> Live.serveExperimental root
         <|> serveAssets -- Compiler packaged static files
         <|> Live.serveUnmatchedUrlsToIndex root (serveElm sentryCache) -- Everything else without extensions goes to Lamdera LocalDev harness
