@@ -1,4 +1,4 @@
-resolver: lts-19.31 # ghc-9.0.2
+resolver: lts-19.33 # ghc-9.0.2
 system-ghc: true
 allow-newer: true
 extra-deps:
