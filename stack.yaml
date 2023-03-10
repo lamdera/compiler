@@ -9,20 +9,29 @@ extra-deps:
 - io-streams-haproxy-1.0.1.0@sha256:2241a754697935e0a11e814affcaa4861b42fe88131f807b586ef48051e28a08,3070
 # Required to build on windows
 - regex-posix-clib-2.7
+# elm-format vendoring
 - 'vendor/elm-format/elm-format-markdown'
 - 'vendor/elm-format/elm-format-lib'
 - 'vendor/elm-format/avh4-lib'
 - 'vendor/elm-format'
+# windows pinning for build issues
+- ansi-terminal-0.11
 flags:
   regex-posix:
      _regex-posix-clib: true
 packages:
 - '.'
+
+# https://gitlab.haskell.org/ghc/ghc/-/issues/20010#note_359766
+extra-libraries: stdc++ supc++ gcc_s
 extra-include-dirs: # Try remove this in 9.3.2 as it should be fixed: https://gitlab.haskell.org/ghc/ghc/-/issues/20592#note_436353
 # This should be a system agnostic path to macos FFI libs, if not working for you try find a valid with these commands:
 # dir=`xcrun --show-sdk-path`/usr/include/ffi && ls -alh $dir && echo $dir
 # dir=`pkg-config --cflags libffi | sed -E "s/^-I//"` && ls -alh $dir && echo $dir
 - /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/ffi
+# And for windows build issues related to .ddl inclusion
+# https://discourse.haskell.org/t/announce-ghcup-0-1-15-rc2-windows-pre-release/2616/14
+- C:\ghcup\msys64\mingw64\include
 
 
 

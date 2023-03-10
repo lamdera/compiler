@@ -41,6 +41,9 @@ Executable lamdera
         -- add -eventlog for (elm make src/Main.elm +RTS -l; threadscope elm.eventlog)
         -- https://www.oreilly.com/library/view/parallel-and-concurrent/9781449335939/
 
+    -- https://gitlab.haskell.org/ghc/ghc/-/issues/20010#note_359766
+    extra-libraries: stdc++ supc++ gcc_s
+
     Hs-Source-Dirs:
         compiler/src
         builder/src

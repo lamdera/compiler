@@ -52,7 +52,7 @@ jobs:
       # most part valuable to cache.
       - name: Install Dependencies
         if: steps.cache.outputs.cache-hit != 'true'
-        run: stack build --only-dependencies
+        run: stack build --only-dependencies --ghc-options '-optl-static'
 
   # The install step is split to a separate job, so that if the we were building
   # from scratch and just spent 30 minutes building all the libraries, but then
@@ -89,8 +89,9 @@ jobs:
       - uses: nick-fields/retry@v2
         with:
           timeout_minutes: 5
-          max_attempts: 3
-          command: stack install
+          max_attempts: 4
+          # https://gitlab.haskell.org/ghc/ghc/-/issues/20010#note_359766
+          command: stack install --ghc-options '-optl"-Wl,-Bstatic,-lstdc++,-lgcc_s,-Bdynamic"'
 
       - name: Archive lamdera.exe artifact
         uses: actions/upload-artifact@v3
