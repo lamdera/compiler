@@ -90,8 +90,9 @@ jobs:
         with:
           timeout_minutes: 5
           max_attempts: 4
+          # https://gitlab.haskell.org/ghc/ghc/-/issues/20878
           # https://gitlab.haskell.org/ghc/ghc/-/issues/20010#note_359766
-          command: stack install --ghc-options '-optl"-Wl,-Bstatic,-lstdc++,-lgcc_s,-Bdynamic"'
+          command: stack install --ghc-options '-optl"-Wl,-Bstatic,-lstdc++,-lgcc_s,-lwinpthread,-Bdynamic"'
 
       - name: Archive lamdera.exe artifact
         uses: actions/upload-artifact@v3
