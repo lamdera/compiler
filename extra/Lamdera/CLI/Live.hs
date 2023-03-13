@@ -59,6 +59,7 @@ import Control.Monad (guard, void)
 
 import qualified Lamdera.CLI.Check
 import qualified Lamdera.RelativeLoad
+import qualified Lamdera.Version
 import qualified Ext.Common
 
 
@@ -147,19 +148,36 @@ prepareLocalDev root = do
 
       case overrideM of
         Just override -> do
-          writeIfDifferent harnessPath (override & replaceRpcMarkers rpcExists)
+          writeIfDifferent harnessPath
+            (override
+              & replaceVersionMarker
+              & replaceRpcMarker rpcExists
+            )
 
         Nothing ->
-          writeIfDifferent harnessPath (lamderaLocalDev & replaceRpcMarkers rpcExists)
+          writeIfDifferent harnessPath
+            (lamderaLocalDev
+              & replaceVersionMarker
+              & replaceRpcMarker rpcExists
+            )
 
     else do
-      writeIfDifferent harnessPath lamderaLocalDev
+      writeIfDifferent harnessPath
+        (lamderaLocalDev & replaceVersionMarker)
 
   pure harnessPath
 
 
-replaceRpcMarkers :: Bool -> Text -> Text
-replaceRpcMarkers shouldReplace localdev =
+replaceVersionMarker :: Text -> Text
+replaceVersionMarker localdev = do
+  let (m,mi,p) = Lamdera.Version.raw
+  localdev & T.replace
+    "currentVersion =\n    ( 0, 0, 0 )"
+    (T.concat ["currentVersion =\n    ( ", show_ m , ", ", show_ mi , ", ", show_ p , " )"])
+
+
+replaceRpcMarker :: Bool -> Text -> Text
+replaceRpcMarker shouldReplace localdev =
   if not shouldReplace
     then localdev
     else
@@ -194,11 +212,7 @@ replaceRpcMarkers shouldReplace localdev =
 
 lamderaLocalDev :: Text
 lamderaLocalDev =
-  -- @TODO fix this back later... conflicts with the change directory command in ghci live reload
   T.decodeUtf8 $(bsToExp =<< runIO (Lamdera.RelativeLoad.find "extra/LocalDev/LocalDev.elm"))
-
-  -- $(bsToExp =<< runIO (BS.readFile ("/Users/mario/dev/projects/lamdera-compiler/extra/LocalDev/LocalDev.elm")))
-
 
 
 refreshClients (mClients, mLeader, mChan, beState) =

@@ -41,8 +41,10 @@ import Types exposing (BackendModel, BackendMsg, FrontendModel, FrontendMsg, ToB
 -- MKRRI
 
 
+{-| Injected when parsed by Lamdera/CLI/Live.hs
+-}
 currentVersion =
-    ( 1, 0, 1 )
+    ( 0, 0, 0 )
 
 
 port send_ToBackend : Bytes -> Cmd msg
