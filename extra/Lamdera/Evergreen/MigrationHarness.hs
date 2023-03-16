@@ -472,8 +472,8 @@ tipeStringToInt tipe =
 
 getLastLocalTypeChangeVersion :: FilePath -> IO Int
 getLastLocalTypeChangeVersion root = do
+  migrationFilepaths <- findMigrationFilePaths root
 
-  migrationFilepaths <- Dir.listDirectory $ root </> "src/Evergreen/Migrate"
   if migrationFilepaths == []
     then
       pure 1
