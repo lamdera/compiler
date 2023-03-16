@@ -14,12 +14,11 @@ jobs:
           submodules: true
 
       # First, check if the specific cache exists, so we don't waste ~3m of build
-      # time restoring the 1.5GB cache for no reason. See https://github.com/actions/cache/pull/420
-      # as this functionality may become part of actions/cache in future.
-      - uses: bowd/cache@v3
+      # time restoring the 1.5GB cache for no reason.
+      - uses: actions/cache@v3
         id: cache
         with:
-          only-check-key: true
+          lookup-only: true
           path: |
             ~\AppData\Local\Programs\stack
             .stack-work
