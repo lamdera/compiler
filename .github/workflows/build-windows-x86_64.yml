@@ -94,8 +94,14 @@ jobs:
           # https://gitlab.haskell.org/ghc/ghc/-/issues/20010#note_359766
           command: stack install --ghc-options '-optl"-Wl,-Bstatic,-lstdc++,-lgcc_s,-lwinpthread,-Bdynamic"'
 
-      - name: Archive lamdera.exe artifact
+      - name: Create distribution zip
+        uses: vimtor/action-zip@v1
+        with:
+          files: ~\AppData\Roaming\local\bin\lamdera.exe windows\lamdera.exe distribution\dlls\*
+          dest: lamdera.zip
+
+      - name: Archive lamdera.zip artifact
         uses: actions/upload-artifact@v3
         with:
-          name: lamdera-next.exe
-          path: ~\AppData\Roaming\local\bin\lamdera.exe
+          name: lamdera-next.zip
+          path: lamdera.zip
