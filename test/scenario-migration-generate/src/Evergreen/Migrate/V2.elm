@@ -15,7 +15,7 @@ Expect to see:
 
 You can edit this file however you wish! It won't be generated again.
 
-See <https://dashboard.lamdera.com/docs/evergreen> for more info.
+See <https://dashboard.lamdera.app/docs/evergreen> for more info.
 
 -}
 
