@@ -28,6 +28,7 @@ import NeatInterpolation
 
 import Lamdera
 import Lamdera.Progress
+import qualified Ext.Common
 
 
 runChecks :: FilePath -> Bool -> Map.Map Pkg.Name V.Version -> IO (Either Exit.Outline outline) -> IO (Either Exit.Outline outline)
@@ -110,6 +111,7 @@ progressPointer t =
     report $ D.fillSep [ D.fromChars "───>", D.dullgreen $ t <> "\n" ]
 
 
+writeDefaultImplementations :: IO ()
 writeDefaultImplementations = do
   root <- getProjectRoot "writeDefaultImplementations"
   defaultImplementations
@@ -120,6 +122,9 @@ writeDefaultImplementations = do
           else writeUtf8 (root </> filename) implementation
       )
   writeLineIfMissing "elm-stuff" (root </> ".gitignore")
+  onlyWhen_ (fmap not $ Dir.doesDirectoryExist (root </> ".git")) $ do
+    Ext.Common.cq_ "git" ["init"] ""
+    pure ()
 
 
 checkMissingFiles :: FilePath -> [FilePath] -> IO [FilePath]
