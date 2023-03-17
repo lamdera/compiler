@@ -51,7 +51,7 @@ jobs:
       # most part valuable to cache.
       - name: Install Dependencies
         if: steps.cache.outputs.cache-hit != 'true'
-        run: stack build --only-dependencies --ghc-options '-optl-static'
+        run: stack build --only-dependencies --ghc-options '-optl"-Wl,-Bstatic,-lstdc++,-lgcc_s,-lwinpthread,-Bdynamic"'
 
   # The install step is split to a separate job, so that if the we were building
   # from scratch and just spent 30 minutes building all the libraries, but then
@@ -93,10 +93,16 @@ jobs:
           # https://gitlab.haskell.org/ghc/ghc/-/issues/20010#note_359766
           command: stack install --ghc-options '-optl"-Wl,-Bstatic,-lstdc++,-lgcc_s,-lwinpthread,-Bdynamic"'
 
+      - run: |
+          mkdir lamdera
+          cp ~/AppData/Roaming/local/bin/lamdera.exe lamdera/lamdera.exe
+          cp distribution/dlls/* lamdera/
+
       - name: Create distribution zip
         uses: vimtor/action-zip@v1
         with:
-          files: ~\AppData\Roaming\local\bin\lamdera.exe windows\lamdera.exe distribution\dlls\*
+          files: lamdera/
+          recursive: false
           dest: lamdera.zip
 
       - name: Archive lamdera.zip artifact
