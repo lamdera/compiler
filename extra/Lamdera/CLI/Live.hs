@@ -142,28 +142,22 @@ prepareLocalDev root = do
   -- nextVersionInfo <- Lamdera.CLI.Check.getNextVersionInfo root
   -- Lamdera.CLI.Check.writeLamderaGenerated root True nextVersionInfo
 
-  if isDebug_
-    then do
-      rpcExists <- doesFileExist $ root </> "src" </> "RPC.elm"
+  rpcExists <- doesFileExist $ root </> "src" </> "RPC.elm"
 
-      case overrideM of
-        Just override -> do
-          writeIfDifferent harnessPath
-            (override
-              & replaceVersionMarker
-              & replaceRpcMarker rpcExists
-            )
-
-        Nothing ->
-          writeIfDifferent harnessPath
-            (lamderaLocalDev
-              & replaceVersionMarker
-              & replaceRpcMarker rpcExists
-            )
-
-    else do
+  case overrideM of
+    Just override -> do
       writeIfDifferent harnessPath
-        (lamderaLocalDev & replaceVersionMarker)
+        (override
+          & replaceVersionMarker
+          & replaceRpcMarker rpcExists
+        )
+
+    Nothing ->
+      writeIfDifferent harnessPath
+        (lamderaLocalDev
+          & replaceVersionMarker
+          & replaceRpcMarker rpcExists
+        )
 
   pure harnessPath
 
