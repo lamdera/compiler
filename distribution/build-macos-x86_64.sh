@@ -11,7 +11,7 @@ mkdir -p $dist
 bin=$dist/$buildTag
 scriptDir=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 
-stackVersion=2.9.1
+stackVersion=2.9.3
 isolate=~/.ghcup/$os-$arch
 mkdir -p $isolate
 stack="$isolate/stack"

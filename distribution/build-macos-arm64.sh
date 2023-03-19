@@ -20,7 +20,7 @@ if ! ghcup --version; then
   exit 1;
 fi
 
-stackVersion=2.9.1
+stackVersion=2.9.3
 isolate=~/.ghcup/macos-$arch
 mkdir -p $isolate
 stack="$isolate/stack"
