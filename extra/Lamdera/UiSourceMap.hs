@@ -531,38 +531,42 @@ window.addEventListener(
         if (event.ctrlKey && event.altKey && event.keyCode == 88)
         {
             let target = document.elementFromPoint(mouseX123, mouseY123);
-
             let nodes = getNodesWithLineNumber123(target);
 
             if (nodes.length > 0) {
-                if (backgroundDiv123) {
-                    backgroundDiv123.remove();
-                }
+                if (backgroundDiv123) { backgroundDiv123.remove(); }
 
                 backgroundDiv123 = document.createElement("div");
-                backgroundDiv123.style.left = "0px";
-                backgroundDiv123.style.top = "0px";
-                backgroundDiv123.style.position = "fixed";
-                backgroundDiv123.style.width = "100%";
-                backgroundDiv123.style.height = "100%";
+                backgroundDiv123.style.setProperty("left", "0px", "important");
+                backgroundDiv123.style.setProperty("top", "0px", "important");
+                backgroundDiv123.style.setProperty("position", "fixed", "important");
+                backgroundDiv123.style.setProperty("width", "100%", "important");
+                backgroundDiv123.style.setProperty("height", "100%", "important");
                 backgroundDiv123.onclick = function() { backgroundDiv123.remove(); };
 
                 let div = document.createElement("div");
-                div.style.position = "absolute";
-                div.style.padding = "4px";
-                div.style.display = "flex";
-                div.style.flexDirection = "column";
-                div.style.background = "rgb(46, 51, 53)";
-                div.style.borderRadius = "5px";
-                div.style.color = "white";
+                div.style.setProperty("position", "absolute", "important");
+                div.style.setProperty("padding", "4px", "important");
+                div.style.setProperty("display", "flex", "important");
+                div.style.setProperty("flex-direction", "column", "important");
+                div.style.setProperty("background", "rgb(46, 51, 53)", "important");
+                div.style.setProperty("border-radius", "5px", "important");
+                div.style.setProperty("border-radius", "5px", "important");
+                div.style.setProperty("font-size", "13px", "important");
+                div.style.setProperty("font-family", 'system-ui, "Helvetica Neue", sans-serif', "important");
 
                 nodes.forEach(node => {
                     let splitPath = node.path.split(":");
                     let moduleName = splitPath[0].substring(0,splitPath[0].length-3);
                     let button = document.createElement("button");
                     button.textContent = moduleName + node.functionName + ":" + splitPath[1];
-                    button.style.padding = "4px";
-                    button.style.textAlign = "right";
+                    button.style.setProperty("padding", "4px", "important");
+                    button.style.setProperty("text-align", "right", "important");
+                    button.style.setProperty("border", "none", "important");
+                    button.style.setProperty("background", "rgb(46, 51, 53)", "important");
+                    button.style.setProperty("color", "rgb(238, 238, 238)", "important");
+                    button.addEventListener("mouseenter", function(){ this.style.setProperty("background", "rgb(65, 65, 65)", "important") });
+                    button.addEventListener("mouseleave", function(){ this.style.setProperty("background", "rgb(46, 51, 53)", "important") });
                     button.onclick = function() {
                         backgroundDiv123.remove();
                         let xmlHttpReq = new XMLHttpRequest();
@@ -575,8 +579,8 @@ window.addEventListener(
                 backgroundDiv123.appendChild(div);
                 document.body.appendChild(backgroundDiv123);
 
-                div.style.left = Math.min(mouseX123, window.innerWidth - div.offsetWidth) + "px";
-                div.style.top = Math.min(mouseY123, window.innerHeight - div.offsetHeight) + "px";
+                div.style.setProperty("left", Math.min(mouseX123, window.innerWidth - div.offsetWidth) + "px", "important");
+                div.style.setProperty("top", Math.min(mouseY123, window.innerHeight - div.offsetHeight) + "px", "important");
             }
         }
     });
