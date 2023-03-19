@@ -51,16 +51,15 @@ lamderaLiveSrc =
 
 
 -- @TODO means we have to restart live for any changes... how to improve that?
-lamderaLiveHead :: FilePath -> B.Builder
-lamderaLiveHead root =
-  Lamdera.unsafe $ do
-    headHtmlM <- readUtf8Text $ root </> "head.html"
-    case headHtmlM of
-      Just headHtml ->
-        pure (T.encodeUtf8Builder headHtml)
+lamderaLiveHead :: FilePath -> IO (Bool, B.Builder)
+lamderaLiveHead root = do
+  headHtmlM <- readUtf8Text $ root </> "head.html"
+  case headHtmlM of
+    Just headHtml ->
+      pure (True, T.encodeUtf8Builder headHtml)
 
-      Nothing ->
-        pure ""
+    Nothing ->
+      pure (False, "")
 
 
 lamderaLive :: BS.ByteString

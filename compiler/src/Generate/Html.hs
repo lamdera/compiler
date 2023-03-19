@@ -11,6 +11,7 @@ import Data.Monoid ((<>))
 import qualified Data.Name as Name
 import Text.RawString.QQ (r)
 
+import qualified Lamdera
 import qualified Lamdera.Live
 import qualified Lamdera.UiSourceMap
 
@@ -19,15 +20,25 @@ import qualified Lamdera.UiSourceMap
 
 sandwich :: FilePath -> Name.Name -> B.Builder -> B.Builder
 sandwich root moduleName javascript =
-  let name = Name.toBuilder moduleName in
+  let
+    name = Name.toBuilder moduleName
+
+    (hasCustom, customHead) = Lamdera.unsafe $ Lamdera.Live.lamderaLiveHead root
+    htmlHead =
+      if hasCustom
+        then
+          customHead
+        else
+          "<title>" <> name <> "</title>"
+  in
   [r|<!DOCTYPE HTML>
 <html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, minimum-scale=1.0">
-  <title>|] <> name <> [r|</title>
+  <meta name="apple-mobile-web-app-capable" content="yes" />
   <style>body { padding: 0; margin: 0; }</style>
-|] <> Lamdera.Live.lamderaLiveHead root <> [r|
+  |] <> htmlHead <> [r|
 </head>
 
 <body>
