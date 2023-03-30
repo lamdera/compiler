@@ -251,6 +251,7 @@ window.setupApp = function(name, elid) {
 
           if (d.i) { d.i = JSON.parse(d.i); }
           if (d.j) { d.j = JSON.parse(d.j); }
+
           app.ports.rpcIn.send(d)
 
           // Is there a nicer way to do this?
@@ -268,6 +269,7 @@ window.setupApp = function(name, elid) {
 
         } catch (error) {
           console.log(error)
+          console.log(d)
         }
 
         break;

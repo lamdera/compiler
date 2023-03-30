@@ -23,14 +23,16 @@ import GHC.Word (Word64)
 import qualified System.Directory as Dir
 import System.FilePath as FP
 import Control.Applicative ((<|>))
+import Control.Arrow ((***))
 import Control.Concurrent.STM (atomically, newTVarIO, readTVar, writeTVar, TVar)
 import Control.Exception (finally, throw)
 import Language.Haskell.TH (runIO)
 import Data.FileEmbed (bsToExp)
 import qualified Data.Aeson.Encoding as A
 
-import Snap.Core hiding (path)
-
+import Snap.Core hiding (path, headers)
+import qualified Data.CaseInsensitive as CI (original)
+import qualified Data.Bifunctor (first)
 
 import qualified Develop.Generate.Help as Generate
 import qualified Develop.StaticFiles as StaticFiles
@@ -509,7 +511,12 @@ serveRpc (mClients, mLeader, mChan, beState) port = do
   mEndpoint <- getParam "endpoint"
   rbody <- readRequestBody _10MB
   mSid <- getCookie "sid"
-  contentType <- getHeader "Content-Type" <$> getRequest
+  headers :: [(BS.ByteString, BS.ByteString)] <- fmap (\(cs, s) -> (CI.original cs, s)) <$> listHeaders <$> getRequest
+
+  -- E.chars perfoms character escaping, as header values can often have " within them
+  let headersJson = headers & fmap (Ext.Common.bsToUtf8 *** (E.chars . Ext.Common.bsToString)) & E.object
+
+  contentType :: Maybe BS.ByteString <- getHeader "Content-Type" <$> getRequest
 
   debug $ "RPC:↘️ " ++ show (contentType, mEndpoint, mSid, rbody)
 
@@ -561,30 +568,31 @@ serveRpc (mClients, mLeader, mChan, beState) port = do
         -- so instead we have to construct the raw E.Value
         & (E.String . Json.String.toBuilder)
 
-    fallbackStringBody = rpcResponse ("st", escapedBody)
+    fallbackStringBody = rpcPayload ("st", escapedBody)
 
-    rpcResponse value =
+    rpcPayload value =
       E.object
           [ ("t", E.string "q")
           , ("s", E.text sid)
           , ("e", E.text $ T.decodeUtf8 endpoint)
           , ("r", E.text reqId)
+          , ("h", E.String $ Ext.Common.textToBuilder $ encodeToText headersJson)
           , value
           ]
         & encodeToText
 
     encodeToText encoder = encoder & E.encode & B.toLazyByteString & BSL.toStrict & T.decodeUtf8
 
-    payload =
+    requestPayload =
       case contentType of
         Just "application/octet-stream" ->
           let
             body = T.pack $ show $ BSL.unpack rbody
           in
-          rpcResponse ("i", E.text body)
+          rpcPayload ("i", E.text body)
 
         Just "application/json" ->
-          rpcResponse ("j", escapedBody)
+          rpcPayload ("j", escapedBody)
 
         Just "application/x-www-form-urlencoded" ->
           let
@@ -608,7 +616,7 @@ serveRpc (mClients, mLeader, mChan, beState) port = do
                 )
                 & (\v -> T.concat ["{", (v & T.intercalate ","), "}"])
           in
-          rpcResponse ("j", escapeText body)
+          rpcPayload ("j", escapeText body)
 
         Just other ->
           fallbackStringBody
@@ -648,7 +656,7 @@ serveRpc (mClients, mLeader, mChan, beState) port = do
   leader <- liftIO $ atomically $ readTVar mLeader
   case leader of
     Just leaderId -> do
-      liftIO $ sendToLeader mClients mLeader (\leader_ -> pure payload)
+      liftIO $ sendToLeader mClients mLeader (\leader_ -> pure requestPayload)
 
       let seconds = 10
       resultPair <- liftIO $ timeout seconds $ loopRead
@@ -662,7 +670,12 @@ serveRpc (mClients, mLeader, mChan, beState) port = do
                   debugT $ "RPC:↙️  error:" <> chanText
                   error400 (B.byteString $ T.encodeUtf8 chanText)
                 else do
-                  debugT $ "RPC:↙️  response:" <> (TL.toStrict $ TL.decodeUtf8 $ B.toLazyByteString value)
+                  let response = TL.toStrict $ TL.decodeUtf8 $ B.toLazyByteString value
+                  debugT $ "RPC:↙️  response:" <> response
+                  -- This should be more type safe...
+                  onlyWhen (textContains "\"i\"" response) (modifyResponse $ setContentType "application/octet-stream")
+                  onlyWhen (textContains "\"v\"" response) (modifyResponse $ setContentType "application/json; charset=utf-8")
+                  onlyWhen (textContains "\"vs\"" response) (modifyResponse $ setContentType "text/plain; charset=utf-8")
                   writeBuilder value
 
             Left jsonProblem -> do
@@ -671,7 +684,7 @@ serveRpc (mClients, mLeader, mChan, beState) port = do
 
 
         Nothing -> do
-          debugT $ "⏰ RPC timed out for:" <> payload
+          debugT $ "⏰ RPC timed out for:" <> requestPayload
           writeBuilder $ B.byteString $ T.encodeUtf8 $ "error:timeout:" <> show_ seconds <> "s"
 
 

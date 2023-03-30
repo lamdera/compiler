@@ -37,6 +37,8 @@ import Formatting.Clock (timeSpecs)
 import System.Clock (Clock(..), getTime)
 import Control.DeepSeq (force, deepseq, NFData)
 
+import Data.Utf8
+
 
 -- Re-exports
 import qualified Data.Function
@@ -485,6 +487,8 @@ bsToBsLazy :: Bs -> BsLazy
 bsToBsLazy = BSL.fromStrict
 bsToBuilder :: Bs -> Builder
 bsToBuilder = B.byteString
+bsToUtf8 :: Bs -> Data.Utf8.Utf8 a
+bsToUtf8 = T.decodeUtf8 >>> T.unpack >>> Data.Utf8.fromChars
 
 bsLazyToString :: BsLazy -> String
 bsLazyToString = TL.decodeUtf8 >>> TL.unpack
@@ -507,6 +511,3 @@ builderToBs :: Builder -> Bs
 builderToBs = B.toLazyByteString >>> bsLazyToBs
 builderToBsLazy :: Builder -> BsLazy
 builderToBsLazy = B.toLazyByteString
-
--- @TODO import qualified Data.Utf8 as Utf8
--- Utf8.Utf8
