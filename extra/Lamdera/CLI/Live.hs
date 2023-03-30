@@ -168,8 +168,8 @@ replaceVersionMarker :: Text -> Text
 replaceVersionMarker localdev = do
   let (m,mi,p) = Lamdera.Version.raw
   localdev & T.replace
-    "currentVersion =\n    ( 0, 0, 0 )"
-    (T.concat ["currentVersion =\n    ( ", show_ m , ", ", show_ mi , ", ", show_ p , " )"])
+    "( 0, 0, 0 )"
+    (T.concat ["( ", show_ m , ", ", show_ mi , ", ", show_ p , " )"])
 
 
 replaceRpcMarker :: Bool -> Text -> Text
