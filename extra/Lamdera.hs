@@ -61,6 +61,7 @@ module Lamdera
   , writeUtf8Handle
   , writeUtf8Root
   , writeIfDifferent
+  , writeBinary
   , Dir.doesFileExist
   , Dir.doesDirectoryExist
   , remove
@@ -142,13 +143,10 @@ import Data.Text
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Lazy.Encoding as TLE
 import qualified Data.Text.IO
-
 import qualified Data.Char as Char
+import qualified Data.List as List
 
 import System.Exit (exitFailure)
-
-
-import qualified Data.List as List
 
 import Prelude hiding (lookup)
 import qualified Data.ByteString as BS
@@ -581,6 +579,13 @@ writeIfDifferent filepath newContent = do
     Nothing ->
       -- File missing, write
       writeUtf8 filepath newContent
+
+
+writeBinary :: FilePath -> BSL.ByteString -> IO ()
+writeBinary filePath content = do
+  createDirIfMissing filePath
+  debug_ $ "✍️  writeBinary: " ++ show filePath
+  BSL.writeFile filePath content
 
 
 remove :: FilePath -> IO ()

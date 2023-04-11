@@ -389,7 +389,17 @@ serveExperimentalWrite root path = do
     fullpath = root </> (T.unpack path)
   debug $ "_x/write: " ++ show fullpath
 
-  liftIO $ writeIfDifferent fullpath (TL.toStrict $ TL.decodeUtf8 rbody)
+  contentType :: Maybe BS.ByteString <- getHeader "Content-Type" <$> getRequest
+
+  debug $ "_x/write: " ++ show contentType
+
+  liftIO $ case contentType of
+    Just "application/octet-stream" -> Lamdera.writeBinary fullpath rbody
+    Just "image/jpeg"               -> Lamdera.writeBinary fullpath rbody
+
+    _ ->
+      writeIfDifferent fullpath (TL.toStrict $ TL.decodeUtf8 rbody)
+
   jsonResponse $ B.byteString $ "{ written: '" <> T.encodeUtf8 (T.pack fullpath) <> "'}"
 
 
