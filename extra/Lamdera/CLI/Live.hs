@@ -469,7 +469,10 @@ editors projectRoot =
       (\file row column -> Ext.Common.cq_ (projectRoot </> "openEditor.sh") [file, T.unpack row, T.unpack column] "")
 
   , detectEditor "custom-windows"
-      (Dir.doesFileExist (projectRoot </> "openEditor.bat"))
+      (do
+        exists <- Dir.doesFileExist (projectRoot </> "openEditor.bat")
+        pure $ exists && ostype == Windows
+      )
       (\file row column -> Ext.Common.cq_ (projectRoot </> "openEditor.bat") [file, T.unpack row, T.unpack column] "")
 
   , detectExecutable "code-insiders"
