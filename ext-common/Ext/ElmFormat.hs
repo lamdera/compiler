@@ -48,32 +48,32 @@ formatOrPassthrough text = do
 
 -- Old versions that rely on local elm-format binary
 
-format_ :: Text -> IO (Either Text Text)
-format_ text = do
-  elmFormatPath_ <- Dir.findExecutable "elm-format"
-  case elmFormatPath_ of
-    Just elmFormatPath -> do
-      -- Lamdera.debug $ "💅 elm-formatting from stdin:\n" <> T.unpack text
-      Lamdera.debug $ "💅 elm-formatting from stdin"
-      (exit, stdout, stderr) <-
-        System.Process.readProcessWithExitCode elmFormatPath ["--stdin"] (T.unpack text)
+-- format_ :: Text -> IO (Either Text Text)
+-- format_ text = do
+--   elmFormatPath_ <- Dir.findExecutable "elm-format"
+--   case elmFormatPath_ of
+--     Just elmFormatPath -> do
+--       -- Lamdera.debug $ "💅 elm-formatting from stdin:\n" <> T.unpack text
+--       Lamdera.debug $ "💅 elm-formatting from stdin"
+--       (exit, stdout, stderr) <-
+--         System.Process.readProcessWithExitCode elmFormatPath ["--stdin"] (T.unpack text)
 
-      if stderr /= ""
-        then
-          pure $ Left $ T.pack stderr
-        else
-          pure $ Right $ T.pack stdout
+--       if stderr /= ""
+--         then
+--           pure $ Left $ T.pack stderr
+--         else
+--           pure $ Right $ T.pack stdout
 
-    Nothing -> do
-      Lamdera.debug $ "🔥💅 warning: no elm-format found locally, skipping"
-      pure $ Left $ "no elm-format found locally, skipping."
+--     Nothing -> do
+--       Lamdera.debug $ "🔥💅 warning: no elm-format found locally, skipping"
+--       pure $ Left $ "no elm-format found locally, skipping."
 
 
-formatOrPassthrough_ :: Text -> IO Text
-formatOrPassthrough_ text = do
-  formatted_ <- format_ text
-  case formatted_ of
-    Right formatted -> pure formatted
-    Left err -> do
-      Lamdera.debug $ "🔥💅 warning: " <> show err
-      pure text
+-- formatOrPassthrough_ :: Text -> IO Text
+-- formatOrPassthrough_ text = do
+--   formatted_ <- format_ text
+--   case formatted_ of
+--     Right formatted -> pure formatted
+--     Left err -> do
+--       Lamdera.debug $ "🔥💅 warning: " <> show err
+--       pure text
