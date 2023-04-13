@@ -1,4 +1,4 @@
-// This file needs to be minified into dist. Do it like so:
+// This file needs to be minified into dist. `lamdera live` does this in LDEBUG mode, but manually:
 // cd extra
 // esbuild live.js --bundle --minify --target=chrome58,firefox57,safari11,edge16 > dist/live.js
 

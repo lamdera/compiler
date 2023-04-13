@@ -98,7 +98,7 @@ run () flags@(Lamdera.CLI.Check.Flags destructiveMigration) = do
 
   ips <- Network.Status.ips
 
-  if ips == []
+  if ips == [] && not inProduction_
     then offlineCheck root
     else onlineCheck root appName inDebug localTypes externalTypeWarnings isHoistRebuild forceVersion forceNotProd inProduction_ destructiveMigration
 
@@ -114,8 +114,7 @@ offlineCheck root = do
     , D.reflow $ "- I will type check that migration under Evergreen"
     ]
 
-  shouldContinue <- Reporting.ask $
-    D.stack [ D.reflow $ "Do you want me to continue despite this? [Y/n]: " ]
+  shouldContinue <- Reporting.ask $ D.stack [ D.reflow $ "Do you want me to continue despite this? [Y/n]: " ]
 
   if shouldContinue
     then do

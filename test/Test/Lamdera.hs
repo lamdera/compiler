@@ -48,7 +48,7 @@ suite = tests
           io $ formatHaskellValue "actual" actual
 
           expectTextContains actual
-            "Hello! Lamdera projects always start with an elm.json file, as well as three\\nsource files: Frontend.elm , Backend.elm and Types.elm\\n\\nIf you're new to Elm, the best starting point is\\n<https://elm-lang.org/0.19.0/init>\\n\\nOtherwise check out <https://dashboard.lamdera.app/docs/building> for Lamdera\\nspecific information!\\n\\nKnowing all that, would you like me to create a starter implementation? [Y/n]: Okay, I created it! Now read those links, or get going with `lamdera live`.\\n"
+            "Hello! Lamdera projects always start with an elm.json file, as well as four\\nsource files: Frontend.elm , Backend.elm, Types.elm and Env.elm\\n\\nIf you're new to Elm, the best starting point is\\n<https://elm-lang.org/0.19.0/init>\\n\\nOtherwise check out <https://dashboard.lamdera.app/docs/building> for Lamdera\\nspecific information!\\n\\nKnowing all that, would you like me to create a starter implementation? [Y/n]: Okay, I created it! Now read those links, or get going with `lamdera live`.\\n"
 
           ignoreM <- io $ readUtf8Text $ tmpFolder </> ".gitignore"
 
