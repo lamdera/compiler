@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Develop
   ( Flags(..)
@@ -11,6 +12,8 @@ module Develop
 import Control.Applicative ((<|>))
 import Control.Monad (guard)
 import Control.Monad.Trans (MonadIO(liftIO))
+-- import qualified Control.Monad.Catch
+import qualified Control.Exception.Lifted
 import qualified Data.ByteString.Builder as B
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BSL
@@ -111,7 +114,7 @@ runWithRoot root (Flags maybePort) =
       Lamdera.ReverseProxy.start
 
       Live.withEnd liveState $
-       httpServe (config port) $
+       httpServe (config port) $ gcatchlog "general" $
         -- Add /public/* as if it were /* to mirror production, but still render .elm files as an Elm app first
         Live.serveLamderaPublicFiles root (serveElm sentryCache)
         <|> (serveFiles root sentryCache)
@@ -123,6 +126,22 @@ runWithRoot root (Flags maybePort) =
         <|> serveAssets -- Compiler packaged static files
         <|> Live.serveUnmatchedUrlsToIndex root (serveElm sentryCache) -- Everything else without extensions goes to Lamdera LocalDev harness
         <|> error404 -- Will get hit for any non-matching extensioned paths i.e. /hello.blah
+
+
+-- Try narrow down source of exceptions with generalised error catch
+gcatchlog :: String -> Snap () -> Snap ()
+gcatchlog tag snap =
+  snap `Control.Exception.Lifted.catch` (\(e :: Control.Exception.Lifted.SomeException) -> do
+    liftIO $ atomicPutStrLn $ "🚨  gcatchlog: " ++ show e
+    pure ()
+  )
+  -- where
+  --   bar = throwIO FooException
+
+  -- snap `Control.Exception.Lifted.catch` (\e ->
+  --   pure ()
+  -- )
+
 
 
 config :: Int -> Config Snap a

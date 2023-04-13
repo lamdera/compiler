@@ -425,6 +425,7 @@ Executable lamdera
         formatting,
         fsnotify,
         command,
+        lifted-base,
 
         -- elm-format local vendor package
         elm-format-lib,
