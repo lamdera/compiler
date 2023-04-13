@@ -118,7 +118,7 @@ runWithRoot root (Flags maybePort) =
         <|> serveDirectoryWith directoryConfig "."
         <|> Live.serveWebsocket root liveState
         <|> route [ ("_r/:endpoint", Live.serveRpc liveState port) ]
-        <|> Live.serveInteractiveUISourceMap root
+        <|> Live.openEditorHandler root
         <|> Live.serveExperimental root
         <|> serveAssets -- Compiler packaged static files
         <|> Live.serveUnmatchedUrlsToIndex root (serveElm sentryCache) -- Everything else without extensions goes to Lamdera LocalDev harness

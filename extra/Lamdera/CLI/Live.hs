@@ -60,7 +60,7 @@ import Snap.Util.FileServe (
 import Control.Monad (guard, void)
 
 import qualified Lamdera.CLI.Check
-import qualified Lamdera.RelativeLoad
+import qualified Lamdera.Relative
 import qualified Lamdera.Version
 import qualified Ext.Common
 
@@ -208,7 +208,7 @@ replaceRpcMarker shouldReplace localdev =
 
 lamderaLocalDev :: Text
 lamderaLocalDev =
-  T.decodeUtf8 $(bsToExp =<< runIO (Lamdera.RelativeLoad.find "extra/LocalDev/LocalDev.elm"))
+  T.decodeUtf8 $(bsToExp =<< runIO (Lamdera.Relative.readByteString "extra/LocalDev/LocalDev.elm"))
 
 
 refreshClients (mClients, mLeader, mChan, beState) =
@@ -308,13 +308,14 @@ serveWebsocket root (mClients, mLeader, mChan, beState) =
                     else
                       SocketServer.broadcastImpl mClients text
 
-          WS.runWebSocketsSnap $ SocketServer.socketHandler mClients mLeader beState onJoined onReceive (T.decodeUtf8 key) sessionId
+          WS.runWebSocketsSnap $
+            SocketServer.socketHandler mClients mLeader beState onJoined onReceive (T.decodeUtf8 key) sessionId
 
         Nothing ->
           error404 "missing sec-websocket-key header"
 
-serveInteractiveUISourceMap :: FilePath -> Snap()
-serveInteractiveUISourceMap root = do
+openEditorHandler :: FilePath -> Snap ()
+openEditorHandler root = do
   fullpath <- T.pack <$> getSafePath
   let
     handlers =
@@ -382,6 +383,7 @@ serveExperimentalRead root path = do
 
 serveExperimentalWrite :: FilePath -> Text -> Snap ()
 serveExperimentalWrite root path = do
+
   rbody <- readRequestBody _10MB
   debug $ "_x/write received: " ++ show path
   let

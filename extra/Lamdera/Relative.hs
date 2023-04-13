@@ -1,4 +1,4 @@
-module Lamdera.RelativeLoad where
+module Lamdera.Relative where
 
 import qualified Data.ByteString as BS
 import qualified System.Directory as Dir
@@ -12,28 +12,48 @@ import Lamdera
 -- These helpers currently expect that the lamdera-compiler codebase is checked out to `~/dev/projects/lamdera-compiler`
 
 
-find :: FilePath -> IO BS.ByteString
-find path = do
-  fullPath <- findFile path
+readByteString :: FilePath -> IO BS.ByteString
+readByteString path = do
+  fullPath <- requireFile path
   BS.readFile fullPath
 
 
-findFile :: String -> IO String
+findFile :: String -> IO (Maybe String)
 findFile path = do
   fileExists <- doesFileExist path
   if fileExists
-    then pure path
+    then pure (Just path)
     else do
       -- We're likely using a GHCI build mode that's changed our currentDirectory, so now Haskell is confused.
       -- Only thing we can really do now is guess from a standard-ish location relative to home
       userHome <- Dir.getHomeDirectory
-      let relativePath = userHome </> "dev/projects/lamdera-compiler" </> path
+      let absPath = userHome </> "dev/projects/lamdera-compiler" </> path
 
-      exists2 <- doesFileExist relativePath
+      exists2 <- doesFileExist absPath
       if exists2
-        then pure relativePath
+        then pure (Just absPath)
         else
-          error $ "could not find a relative path, seeking at:\n" <> path <> "\n" <> relativePath
+          pure Nothing
+
+
+loadFile :: String -> IO (Maybe Text)
+loadFile path = do
+  found <- findFile path
+  case found of
+    Just absPath -> Lamdera.readUtf8Text absPath
+    Nothing -> pure Nothing
+
+
+requireFile :: String -> IO String
+requireFile path = do
+  found <- findFile path
+  -- We're likely using a GHCI build mode that's changed our currentDirectory, so now Haskell is confused.
+  -- Only thing we can really do now is guess from a standard-ish location relative to home
+  userHome <- Dir.getHomeDirectory
+  let absPath = userHome </> "dev/projects/lamdera-compiler" </> path
+  case found of
+    Just absPath -> pure absPath
+    Nothing -> error $ "could not find a relative path, seeking at:\n" <> path <> "\n" <> absPath
 
 
 findDir :: String -> IO String
@@ -45,10 +65,10 @@ findDir path = do
       -- We're likely using a GHCI build mode that's changed our currentDirectory, so now Haskell is confused.
       -- Only thing we can really do now is guess from a standard-ish location relative to home
       userHome <- Dir.getHomeDirectory
-      let relativePath = userHome </> "dev/projects/lamdera-compiler" </> path
+      let absPath = userHome </> "dev/projects/lamdera-compiler" </> path
 
-      exists2 <- doesDirectoryExist relativePath
+      exists2 <- doesDirectoryExist absPath
       if exists2
-        then pure relativePath
+        then pure absPath
         else
-          error $ "could not find a relative path, seeking at:\n" <> path <> "\n" <> relativePath
+          error $ "could not find a relative path, seeking at:\n" <> path <> "\n" <> absPath

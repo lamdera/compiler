@@ -12,7 +12,7 @@ import NeatInterpolation
 import Lamdera
 import Lamdera.Compile
 import qualified Lamdera.Types
-import qualified Lamdera.RelativeLoad
+import qualified Lamdera.Relative
 import qualified Ext.Query.Interfaces as Interfaces
 import qualified Lamdera.TypeHash
 import qualified Ext.Common
@@ -23,7 +23,7 @@ suite :: Test ()
 suite = tests
   [ scope "e2e test" $ do
 
-      project <- io $ Lamdera.RelativeLoad.findDir "test/scenario-alltypes"
+      project <- io $ Lamdera.Relative.findDir "test/scenario-alltypes"
       let
         -- project = "/Users/mario/lamdera/test/v1"
         expected =
@@ -48,7 +48,7 @@ suite = tests
 
 
   , scope "all types" $ do
-      project <- io $ Lamdera.RelativeLoad.findDir "test/scenario-alltypes"
+      project <- io $ Lamdera.Relative.findDir "test/scenario-alltypes"
       let
         file = project </> "src/Test/Wire_Alias_2_Record.elm"
         moduleName = "Test.Wire_Alias_2_Record"

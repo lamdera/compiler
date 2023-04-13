@@ -12,7 +12,7 @@ import qualified System.Directory as Dir
 import Ext.Common
 import Lamdera hiding (atomicPutStrLn)
 import Lamdera.Compile
-import qualified Lamdera.RelativeLoad
+import qualified Lamdera.Relative
 
 all = EasyTest.run suite
 
@@ -20,7 +20,7 @@ all = EasyTest.run suite
 suite :: Test ()
 suite = tests $
   [ scope "isWireCompatible" $ do
-      p <- io $ Lamdera.RelativeLoad.findDir "test/scenario-elm-pages-incompatible-wire"
+      p <- io $ Lamdera.Relative.findDir "test/scenario-elm-pages-incompatible-wire"
       actual <- io $ do
 
         atomicPutStrLn $ "project dir is" <> p

@@ -161,7 +161,7 @@ This inlining happens like this:
 ```
 lamderaLive :: BS.ByteString
 lamderaLive =
-  $(bsToExp =<< runIO (Lamdera.RelativeLoad.find "extra/dist/live.js"))
+  $(bsToExp =<< runIO (Lamdera.Relative.readByteString "extra/dist/live.js"))
 ```
 
 The `$(...)` syntax is invoking Template Haskell.

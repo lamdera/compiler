@@ -15,7 +15,7 @@ import Data.FileEmbed (bsToExp)
 import qualified System.Directory as Dir
 
 import Lamdera
-import qualified Lamdera.RelativeLoad
+import qualified Lamdera.Relative
 import qualified Ext.Common
 
 lamderaLiveSrc =
@@ -64,4 +64,4 @@ lamderaLiveHead root = do
 
 lamderaLive :: BS.ByteString
 lamderaLive =
-  $(bsToExp =<< runIO (Lamdera.RelativeLoad.find "extra/dist/live.js"))
+  $(bsToExp =<< runIO (Lamdera.Relative.readByteString "extra/dist/live.js"))

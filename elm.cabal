@@ -243,7 +243,7 @@ Executable lamdera
         Lamdera.Offline
         Lamdera.PostCompile
         Lamdera.Project
-        Lamdera.RelativeLoad
+        Lamdera.Relative
         Lamdera.Suggestions
         Lamdera.TypeHash
         Lamdera.Types
