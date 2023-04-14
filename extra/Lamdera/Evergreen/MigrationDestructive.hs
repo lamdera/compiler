@@ -25,7 +25,7 @@ generate oldVersion newVersion typeCompares = do
             msgType = msgForType typename
             typenameCamel = lowerFirstLetter $ N.toChars typename
             typenameT = N.toText typename
-            migrationType = migrationWrapperForType typename
+            migrationType = migrationTypeForType typename
 
         [text|
           $typenameCamel : Old.$typenameT -> $migrationType New.$typenameT New.$msgType
