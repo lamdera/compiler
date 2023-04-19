@@ -638,7 +638,7 @@ serveRpc (mClients, mLeader, mChan, beState) port = do
         Nothing ->
           fallbackStringBody
 
-    loopRead :: IO (Either (D.Error x) B.Builder, Text)
+    loopRead :: IO (Either (D.Error x) (Text, B.Builder), Text)
     loopRead = do
       res <- readBChan outChan
 
@@ -650,12 +650,12 @@ serveRpc (mClients, mLeader, mChan, beState) port = do
           if textContains reqId chanText
             then do
               let
-                decoder :: D.Decoder err B.Builder
+                decoder :: D.Decoder err (Text, B.Builder)
                 decoder =
                   D.oneOf
-                    [ D.field "i" (D.value & fmap E.encode)  -- Bytes
-                    , D.field "v" (D.value & fmap E.encode)  -- Json.Value
-                    , D.field "vs" (D.string & fmap Json.String.toBuilder) -- String
+                    [ D.field "i" (D.value & fmap (\v -> ("i", E.encode v))) -- Bytes
+                    , D.field "v" (D.value & fmap (\v -> ("v", E.encode v))) -- Json.Value
+                    , D.field "vs" (D.string & fmap (\v -> ("vs", Json.String.toBuilder v))) -- String
                     ]
 
                 result =
@@ -679,7 +679,7 @@ serveRpc (mClients, mLeader, mChan, beState) port = do
       case resultPair of
         Just (result, chanText) ->
           case result of
-            Right value ->
+            Right (t, value) ->
               if textContains "\"error\":" chanText
                 then do
                   debugT $ "RPC:↙️  error:" <> chanText
@@ -687,10 +687,9 @@ serveRpc (mClients, mLeader, mChan, beState) port = do
                 else do
                   let response = TL.toStrict $ TL.decodeUtf8 $ B.toLazyByteString value
                   debugT $ "RPC:↙️  response:" <> response
-                  -- This should be more type safe...
-                  onlyWhen (textContains "\"i\"" response) (modifyResponse $ setContentType "application/octet-stream")
-                  onlyWhen (textContains "\"v\"" response) (modifyResponse $ setContentType "application/json; charset=utf-8")
-                  onlyWhen (textContains "\"vs\"" response) (modifyResponse $ setContentType "text/plain; charset=utf-8")
+                  onlyWhen (t == "i") (modifyResponse $ setContentType "application/octet-stream")
+                  onlyWhen (t == "v") (modifyResponse $ setContentType "application/json; charset=utf-8")
+                  onlyWhen (t == "vs") (modifyResponse $ setContentType "text/plain; charset=utf-8")
                   writeBuilder value
 
             Left jsonProblem -> do
@@ -732,14 +731,19 @@ jsonResponse s =
       r <- getResponse
       finishWith r
 
-error404 :: B.Builder -> Snap ()
-error404 s =
-  do  modifyResponse $ setResponseStatus 404 "Not Found"
+httpError :: Int -> BS.ByteString -> B.Builder -> Snap ()
+httpError statusCode errorTitle s =
+  do  modifyResponse $ setResponseStatus statusCode errorTitle
       modifyResponse $ setContentType "application/json; charset=utf-8"
-      -- writeBuilder $ Generate.makePageHtml "NotFound" Nothing
       writeBuilder $ "{\"error\":\"" <> s <> "\"}"
       r <- getResponse
       finishWith r
+
+
+error404 :: B.Builder -> Snap ()
+error404 s =
+  -- writeBuilder $ Generate.makePageHtml "NotFound" Nothing
+  httpError 404 "Not Found" s
 
 error500 :: B.Builder -> Snap ()
 error500 s =
