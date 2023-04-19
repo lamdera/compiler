@@ -43,6 +43,7 @@ watch root action =
           shouldRefresh = do
                 not (List.isInfixOf ".git" f)
              && not (List.isInfixOf "elm-stuff" f)
+             && not (List.isInfixOf "node_modules" f)
              && not (List.isInfixOf "data" f)
 
         onlyWhen shouldRefresh $ Debounce.send trigger f
