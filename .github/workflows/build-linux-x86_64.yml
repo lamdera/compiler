@@ -15,6 +15,7 @@ jobs:
           key: ${{ secrets.GH_USER_SCP_KEY }}
           name: id_ed25519
           known_hosts: ${{ secrets.KNOWN_HOSTS }}
+          if_key_exists: replace
       - uses: actions/checkout@v3
       - run: echo "${HOME}/.local/bin" >> $GITHUB_PATH
       - name: Run distribution script
