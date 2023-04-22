@@ -31,7 +31,7 @@ import Data.FileEmbed (bsToExp)
 import qualified Data.Aeson.Encoding as A
 
 import Snap.Core hiding (path, headers)
-import qualified Data.CaseInsensitive as CI (original)
+import qualified Data.CaseInsensitive as CI (original, mk)
 import qualified Data.Bifunctor (first)
 
 import qualified Develop.Generate.Help as Generate
@@ -526,10 +526,10 @@ serveRpc (mClients, mLeader, mChan, beState) port = do
   mEndpoint <- getParam "endpoint"
   rbody <- readRequestBody _10MB
   mSid <- getCookie "sid"
-  headers :: [(BS.ByteString, BS.ByteString)] <- fmap (\(cs, s) -> (CI.original cs, s)) <$> listHeaders <$> getRequest
+  requestHeaders :: [(BS.ByteString, BS.ByteString)] <- fmap (\(cs, s) -> (CI.original cs, s)) <$> listHeaders <$> getRequest
 
   -- E.chars perfoms character escaping, as header values can often have " within them
-  let headersJson = headers & fmap (Ext.Common.bsToUtf8 *** (E.chars . Ext.Common.bsToString)) & E.object
+  let requestHeadersJson = requestHeaders & fmap (Ext.Common.bsToUtf8 *** (E.chars . Ext.Common.bsToString)) & E.object
 
   contentType :: Maybe BS.ByteString <- getHeader "Content-Type" <$> getRequest
 
@@ -591,7 +591,7 @@ serveRpc (mClients, mLeader, mChan, beState) port = do
           , ("s", E.text sid)
           , ("e", E.text $ T.decodeUtf8 endpoint)
           , ("r", E.text reqId)
-          , ("h", E.String $ Ext.Common.textToBuilder $ encodeToText headersJson)
+          , ("h", E.String $ Ext.Common.textToBuilder $ encodeToText requestHeadersJson)
           , value
           ]
         & encodeToText
@@ -638,35 +638,16 @@ serveRpc (mClients, mLeader, mChan, beState) port = do
         Nothing ->
           fallbackStringBody
 
-    loopRead :: IO (Either (D.Error x) (Text, B.Builder), Text)
+    loopRead :: IO Text
     loopRead = do
       res <- readBChan outChan
-
       case res of
-        Nothing ->
-          loopRead
-
-        Just chanText ->
-          if textContains reqId chanText
-            then do
-              let
-                decoder :: D.Decoder err (Text, B.Builder)
-                decoder =
-                  D.oneOf
-                    [ D.field "i" (D.value & fmap (\v -> ("i", E.encode v))) -- Bytes
-                    , D.field "v" (D.value & fmap (\v -> ("v", E.encode v))) -- Json.Value
-                    , D.field "vs" (D.string & fmap (\v -> ("vs", Json.String.toBuilder v))) -- String
-                    ]
-
-                result =
-                  D.fromByteString decoder (T.encodeUtf8 chanText)
-
-              -- debugT $ "loopRead decoding: " <> chanText
-              pure (result, chanText)
-
-            else
-              loopRead
-
+        Just chanText
+          | textContains reqId chanText -> do
+              debugT $ "loopRead decoding: " <> chanText
+              pure chanText
+          | otherwise -> loopRead
+        Nothing -> loopRead
 
   leader <- liftIO $ atomically $ readTVar mLeader
   case leader of
@@ -674,26 +655,46 @@ serveRpc (mClients, mLeader, mChan, beState) port = do
       liftIO $ sendToLeader mClients mLeader (\leader_ -> pure requestPayload)
 
       let seconds = 10
-      resultPair <- liftIO $ timeout seconds $ loopRead
+      chanTextM <- liftIO $ timeout seconds $ loopRead
 
-      case resultPair of
-        Just (result, chanText) ->
-          case result of
-            Right (t, value) ->
-              if textContains "\"error\":" chanText
-                then do
-                  debugT $ "RPC:↙️  error:" <> chanText
-                  error400 (B.byteString $ T.encodeUtf8 chanText)
-                else do
-                  let response = TL.toStrict $ TL.decodeUtf8 $ B.toLazyByteString value
-                  debugT $ "RPC:↙️  response:" <> response
-                  onlyWhen (t == "i") (modifyResponse $ setContentType "application/octet-stream")
-                  onlyWhen (t == "v") (modifyResponse $ setContentType "application/json; charset=utf-8")
-                  onlyWhen (t == "vs") (modifyResponse $ setContentType "text/plain; charset=utf-8")
-                  writeBuilder value
+      case chanTextM of
+        Just chanText -> do
+          let
+            decoder :: D.Decoder D.ParseError (Int, BS.ByteString, [(Text, Text)], (String, B.Builder))
+            decoder =
+              D.map4 (,,,)
+                (D.field "c" D.int & D.withDefault 200)
+                (D.field "ct" (D.text & fmap Ext.Common.textToBs) & D.withDefault "OK")
+                (D.field "h" (D.pairs D.textKeyDecoder D.text) & D.withDefault [])
+                (D.oneOf
+                    [ D.field "i" (D.value & fmap (\v -> ("i", E.encode v))) -- Bytes
+                    , D.field "v" (D.value & fmap (\v -> ("v", E.encode v))) -- Json.Value
+                    , D.field "vs" (D.string & fmap (\v -> ("vs", Json.String.toBuilder v))) -- String
+                    ])
+
+            decodeResult =
+              D.fromByteString decoder (T.encodeUtf8 chanText)
+
+          case decodeResult of
+            Right (statusCode, statusText, headers, (bodyType, bodyEncoded)) -> do
+
+              let response = TL.toStrict $ TL.decodeUtf8 $ B.toLazyByteString bodyEncoded
+              debugT $ "RPC:↙️  response:" <> response
+              debug $ show (statusCode, statusText)
+              onlyWhen (bodyType == "i") (modifyResponse $ setContentType "application/octet-stream")
+              onlyWhen (bodyType == "v") (modifyResponse $ setContentType "application/json; charset=utf-8")
+              onlyWhen (bodyType == "vs") (modifyResponse $ setContentType "text/plain; charset=utf-8")
+
+              debug $ show headers
+              headers & mapM (\(key, value) ->
+                  modifyResponse $ setHeader (Ext.Common.textToBs key & CI.mk) (Ext.Common.textToBs value)
+                )
+
+              modifyResponse $ setResponseStatus statusCode statusText
+              writeBuilder bodyEncoded
 
             Left jsonProblem -> do
-              debugT $ "😢 rpc response decoding failed for " <> chanText
+              debugT $ "😢 rpc response decoding failed: " <> show_ jsonProblem <> "\n" <> chanText
               writeBuilder $ B.byteString $ "rpc response decoding failed for " <> T.encodeUtf8 chanText
 
 

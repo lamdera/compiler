@@ -342,3 +342,6 @@ expectationToReport path source context (A.Region start end) expectation reason 
         ["an",D.green "ARRAY","with",D.green "TWO","entries."
         ,"This","array","has",D.fromInt len, if len == 1 then "element." else "elements."
         ]
+
+    TNull ->
+      toSnippet "EXPECTING NULL" ["a", D.green "null" <> "."]

@@ -31,7 +31,13 @@ module Json.Decode
   , succeed
   , text
   , required
+  , optional
   , custom
+  , withDefault
+  , map2
+  , map3
+  , map4
+  , textKeyDecoder
   )
   where
 
@@ -53,6 +59,9 @@ import qualified Reporting.Annotation as A
 import qualified Json.Encode as E -- @LAMDERA
 import qualified Data.Text as T
 import qualified Control.Monad
+
+
+import Ext.Common ((&))
 
 -- RUNNERS
 
@@ -111,6 +120,7 @@ data DecodeExpectation
   | TInt
   | TObjectWith B.ByteString
   | TArrayPair Int
+  | TNull
 
 
 
@@ -877,15 +887,115 @@ text = fmap (T.pack . Json.toChars) string
 
 
 map2 :: (a -> b -> value) -> Decoder e a -> Decoder e b -> Decoder e value
-map2 fn d1 d2 =
-  Control.Monad.liftM2 fn d1 d2
+map2 fn a b =
+  Control.Monad.liftM2 fn a b
+
+map3 :: (a -> b -> c -> value) -> Decoder e a -> Decoder e b -> Decoder e c -> Decoder e value
+map3 fn a b c =
+  Control.Monad.liftM3 fn a b c
+
+map4 :: (a -> b -> c -> d -> value) -> Decoder e a -> Decoder e b -> Decoder e c -> Decoder e d -> Decoder e value
+map4 fn a b c d =
+  Control.Monad.liftM4 fn a b c d
 
 
 required :: B.ByteString -> Decoder e a -> Decoder e (a -> b) -> Decoder e b
 required key valDecoder decoder =
     custom (field key valDecoder) decoder
 
+-- optional : String -> Decoder a -> a -> Decoder (a -> b) -> Decoder b
+-- optional key valDecoder fallback decoder =
+--     custom (optionalDecoder [ key ] valDecoder fallback) decoder
+
+-- @TODO this isn't quite right yet and will totally gobble up all errors, not just null ones...
+optional :: B.ByteString -> Decoder e a -> a -> Decoder e (a -> b) -> Decoder e b
+optional key valDecoder fallback decoder  =
+    custom (withDefault fallback (field key valDecoder)) decoder
+
 
 custom :: Decoder e a -> Decoder e (a -> b) -> Decoder e b
 custom d1 d2 =
     map2 (\a_ fn_ -> fn_ a_) d1 d2
+
+
+null :: a -> Decoder x a
+null fallback =
+  Decoder $ \(A.At region ast) ok err ->
+    case ast of
+      NULL ->
+        ok fallback
+
+      _ ->
+        err (Expecting region TNull)
+
+
+at :: [B.ByteString] -> Decoder e a -> Decoder e a
+at fields decoder =
+    foldr field decoder fields
+
+
+withDefault :: a -> Decoder e a -> Decoder e a
+withDefault fallback (Decoder d) =
+  Decoder $ \ast ok err ->
+    d ast ok (\_ -> ok fallback)
+
+
+textKeyDecoder :: KeyDecoder ParseError T.Text
+textKeyDecoder =
+  KeyDecoder textParser Start
+
+
+-- This causes failures, why?
+-- textParser_ :: P.Parser ParseError T.Text
+-- textParser_ =
+--   pString Start & fmap (T.pack . Json.toChars . Json.fromSnippet)
+
+
+textParser :: P.Parser x T.Text
+textParser =
+  P.Parser $ \(P.State src pos end indent row col) cok _ cerr _ ->
+    let
+      len = minusPtr end pos
+      newCol = col + fromIntegral len
+    in
+    cok (Json.fromPtr pos end & (T.pack . Json.toChars)) (P.State src end end indent row newCol)
+
+
+-- optionalDecoder :: [B.ByteString] -> Decoder e a -> a -> Decoder e a
+-- optionalDecoder path valDecoder fallback =
+--     let
+--         nullOr decoder =
+--             oneOf [ decoder, Json.Decode.null fallback ]
+
+--         handleResult input =
+--             case decodeValue (at path value) input of
+--                 Right rawValue ->
+--                     -- The field was present, so now let's try to decode that value.
+--                     -- (If it was present but fails to decode, this should and will fail!)
+--                     case decodeValue (nullOr valDecoder) rawValue of
+--                         Right finalResult ->
+--                             succeed finalResult
+
+--                         Left _ ->
+--                             -- Return a decoder that we know will fail and also give a nice structured error
+--                             at path (nullOr valDecoder)
+
+--                 Left _ ->
+--                     -- The field was not present, so use the fallback.
+--                     succeed fallback
+--     in
+--     value >>= handleResult
+
+-- Started implementing this, but unsure if toAST feels right...
+-- the Elm version only has Json.Value, but here we have a few representations
+
+-- decodeValue :: Decoder e a -> E.Value -> Either e a
+-- decodeValue (Decoder decodeA) value =
+--     let
+--         ok a =
+--             Right a
+
+--         err e =
+--             Left e
+--     in
+--     decodeA (A.At () (toAST value)) ok err
