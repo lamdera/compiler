@@ -45,6 +45,7 @@ watch root action =
              && not (List.isInfixOf "elm-stuff" f)
              && not (List.isInfixOf "node_modules" f)
              && not (List.isInfixOf "data" f)
+             && not (List.isInfixOf "elm-pkg-js-includes.min.js" f)
 
         onlyWhen shouldRefresh $ Debounce.send trigger f
       )

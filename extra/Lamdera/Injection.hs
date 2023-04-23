@@ -9,9 +9,10 @@ module Lamdera.Injection where
 import System.IO.Unsafe (unsafePerformIO)
 import qualified File
 import qualified System.Environment as Env
+import qualified System.Directory as Dir
 import qualified Data.ByteString.Builder as B
 import Data.Monoid (mconcat)
-import System.FilePath ((</>))
+import System.FilePath ((</>), takeDirectory)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import qualified Data.Map as Map
@@ -25,7 +26,9 @@ import qualified AST.Optimized as Opt
 import qualified Elm.Kernel
 
 import Lamdera
+import qualified Lamdera.Relative
 import StandaloneInstances
+import qualified Ext.Common
 
 type Mains = Map.Map ModuleName.Canonical Opt.Main
 
@@ -336,34 +339,104 @@ elmPkgJs mode =
         root <- getProjectRoot "elmPkgJs"
         elmPkgJsSources <- safeListDirectory $ root </> "elm-pkg-js"
 
-        wrappedPkgImports <-
-          mapM
-            (\f ->
-              if ".js" `Text.isSuffixOf` (Text.pack f)
-                then do
-                  contents <- File.readUtf8 (root </> "elm-pkg-js" </> f)
-                  pure $
-                    "'" <> Text.encodeUtf8 (Text.pack f) <> "': function(exports){\n" <> contents <> "\nreturn exports;},\n"
-                else
-                  pure ""
-            )
-            elmPkgJsSources
+        includesPathM <- Lamdera.Relative.findFile $ root </> "elm-pkg-js-includes.js"
+        esbuildConfigPathM <- Lamdera.Relative.findFile $ root </> "esbuild.config.js"
+        esbuildPathM <- Dir.findExecutable "esbuild"
 
-        pure $ B.byteString $ mconcat
-          [ "const pkgExports = {\n" <> mconcat wrappedPkgImports <> "\n}\n"
-          , "if (typeof window !== 'undefined') {"
-          , "  window.elmPkgJsInit = function(app) {"
-          , "    for (var pkgId in pkgExports) {"
-          , "      if (pkgExports.hasOwnProperty(pkgId)) {"
-          , "        pkgExports[pkgId]({}).init(app)"
-          , "      }"
-          , "    }"
-          , "  }"
-          , "}"
-          ]
+        case (esbuildConfigPathM, esbuildPathM, includesPathM) of
+          (Just esbuildConfigPath, _, _) ->
+            if Ext.Common.isDebug_
+              then do
+                Lamdera.debug_ "Building esbuild.config.js"
+                hasNode <- Dir.findExecutable "node"
+                minFile <- case hasNode of
+                  Just node -> do
+                    Ext.Common.bash $ "cd " <> takeDirectory esbuildConfigPath <> " && " <> node <> " " <> esbuildConfigPath
+                    Lamdera.Relative.loadFile $ root </> "elm-pkg-js-includes.min.js"
+                  Nothing ->
+                    error "Could not find path to node"
 
+                case minFile of
+                  Just minFileContents -> do
+                    pure $ Ext.Common.textToBuilder minFileContents
+                  Nothing -> do
+                    error "no min file after compile, run `node esbuild.config.js` to check errors"
+              else do
+                Lamdera.debug_ "Using dumb js packager"
+                dumbJsPackager root elmPkgJsSources
+          (_, Just esbuildPath, Just includesPath) ->
+            if Ext.Common.isDebug_
+              then do
+                esbuildIncluder root esbuildPath includesPath
+              else do
+                dumbJsPackager root elmPkgJsSources
+          _ ->
+            dumbJsPackager root elmPkgJsSources
     _ ->
       ""
+
+
+esbuildIncluder :: FilePath -> FilePath -> FilePath -> IO B.Builder
+esbuildIncluder root esbuildPath includesPath = do
+  minFile <- Lamdera.Relative.loadFile $ root </> "elm-pkg-js-includes.min.js"
+  case minFile of
+    Just minFileContents -> do
+      Lamdera.debug_ "Using cached elm-pkg-js-includes.min.js"
+      pure $ Ext.Common.textToBuilder minFileContents
+    Nothing -> do
+      Lamdera.debug_ "Building elm-pkg-js-includes.js"
+      -- packaged <- Ext.Common.cq_ esbuildPath [ includesPath, "--bundle", "--global-name=elmPkgJsIncludes" ] ""
+      packaged <- Ext.Common.cq_ esbuildPath [ includesPath, "--bundle", "--minify", "--global-name=elmPkgJsIncludes" ] ""
+      packaged
+        & Ext.Common.stringToBuilder
+        -- & debugHaskell "minified elmpkgjs"
+        & pure
+
+  -- Build individual files? Any point?
+  -- elmPkgJsSources & mapM
+  --   (\f ->
+  --     if ".js" `Text.isSuffixOf` (Text.pack f) || ".ts" `Text.isSuffixOf` (Text.pack f)
+  --       then do
+  --         contents <- File.readUtf8 (root </> "elm-pkg-js" </> f)
+  --         pure $
+  --           "'" <> Text.encodeUtf8 (Text.pack f) <> "': function(exports){\n" <> contents <> "\nreturn exports;},\n"
+  --       else
+  --         pure ""
+  --   )
+
+
+
+
+-- Tries to be clever by injecting `{}` as the `exports` value. Falls over if the target files have been compiled
+-- by a packager or if they don't use the `export.init` syntax, i.e. `export async function init() {...}`
+dumbJsPackager root elmPkgJsSources = do
+  wrappedPkgImports <-
+    mapM
+      (\f ->
+        if ".js" `Text.isSuffixOf` (Text.pack f)
+          then do
+            contents <- File.readUtf8 (root </> "elm-pkg-js" </> f)
+            pure $
+              "'" <> Text.encodeUtf8 (Text.pack f) <> "': function(exports){\n" <> contents <> "\nreturn exports;},\n"
+          else
+            pure ""
+      )
+      elmPkgJsSources
+
+  pure $ B.byteString $ mconcat
+    [ "const pkgExports = {\n" <> mconcat wrappedPkgImports <> "\n}\n"
+    , "if (typeof window !== 'undefined') {"
+    , "  window.elmPkgJsInit = function(app) {"
+    , "    for (var pkgId in pkgExports) {"
+    , "      if (pkgExports.hasOwnProperty(pkgId)) {"
+    , "        pkgExports[pkgId]({}).init(app)"
+    , "      }"
+    , "    }"
+    , "  }"
+    , "}"
+    ]
+
+
 
 onlyIf :: Bool -> Text -> Text
 onlyIf cond t =
