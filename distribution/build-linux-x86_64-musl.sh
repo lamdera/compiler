@@ -27,4 +27,4 @@ docker run --rm --entrypoint cat $buildTag /lamdera/lamdera > $bin
 chmod a+x $bin
 file $bin
 ls -alh $bin
-echo "put $bin next/lamdera-next-$os-$arch" | sftp -vvv -i ~/.ssh/id_ed25519 -P 22 github@apps.lamdera.com
+echo "put $bin next/lamdera-next-$os-$arch" | sftp -i ~/.ssh/id_ed25519 -P 22 github@apps.lamdera.com
