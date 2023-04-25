@@ -19,6 +19,7 @@ import qualified Elm.Interface as I
 import qualified Elm.ModuleName as ModuleName
 import qualified Elm.Package as Pkg
 import qualified Nitpick.PatternMatches as PatternMatches
+import qualified Nitpick.DebugLog
 import qualified Optimize.Module as Optimize
 import qualified Reporting.Error as E
 import qualified Reporting.Result as R
@@ -92,7 +93,7 @@ compile pkg ifaces modul = do
   annotations <- typeCheck modul_ canonical2
   -- ()          <- debugPassText "starting nitpick" moduleName (pure ())
   ()          <- nitpick canonical2
-
+  ()          <- Nitpick.DebugLog.hasUselessDebugLogs canonical2
   let
       canonical3 :: Can.Module
       canonical3 =
@@ -102,6 +103,7 @@ compile pkg ifaces modul = do
           else canonical2
 
   -- ()          <- debugPassText "starting optimize" moduleName (pure ())
+
   objects     <- optimize modul_ annotations canonical3
   return (Artifacts canonical3 annotations objects)
 
