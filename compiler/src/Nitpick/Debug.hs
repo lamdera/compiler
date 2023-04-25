@@ -50,15 +50,7 @@ hasDebug allowDebugLog expression =
     Opt.VarEnum _ _      -> False
     Opt.VarBox _         -> False
     Opt.VarCycle _ _     -> False
-    Opt.VarDebug name _ _ _ ->
-        Lamdera.alternativeImplementationWhen
-            allowDebugLog
-            (if name == "log" then
-                debugPass "Has log" "" False
-            else
-                debugPass "name" name True
-            )
-            True
+    Opt.VarDebug name _ _ _ -> Lamdera.alternativeImplementationWhen allowDebugLog (name /= "log") True
     Opt.VarKernel _ _    -> False
     Opt.List exprs       -> any (hasDebug allowDebugLog) exprs
     Opt.Function _ expr  -> hasDebug allowDebugLog expr
