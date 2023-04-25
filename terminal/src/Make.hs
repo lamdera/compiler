@@ -65,18 +65,18 @@ data ReportType
 type Task a = Task.Task Exit.Make a
 
 
-run :: [FilePath] -> Flags -> IO ()
-run paths flags@(Flags _ _ _ report _) =
+run :: Bool -> [FilePath] -> Flags -> IO ()
+run allowDebugLogOptimized paths flags@(Flags _ _ _ report _) =
   do  style <- getStyle report
       maybeRoot <- Stuff.findRoot
       Reporting.attemptWithStyle style Exit.makeToReport $
         case maybeRoot of
-          Just root -> runHelp root paths style flags
+          Just root -> runHelp allowDebugLogOptimized root paths style flags
           Nothing   -> return $ Left $ Exit.MakeNoOutline
 
 
-runHelp :: FilePath -> [FilePath] -> Reporting.Style -> Flags -> IO (Either Exit.Make ())
-runHelp root paths style (Flags debug optimize maybeOutput _ maybeDocs) =
+runHelp :: Bool -> FilePath -> [FilePath] -> Reporting.Style -> Flags -> IO (Either Exit.Make ())
+runHelp allowDebugLogOptimized root paths style (Flags debug optimize maybeOutput _ maybeDocs) =
   BW.withScope $ \scope ->
   Stuff.withRootLock root $ Task.run $
   do  desiredMode <- getMode debug optimize
@@ -95,11 +95,11 @@ runHelp root paths style (Flags debug optimize maybeOutput _ maybeDocs) =
                       return ()
 
                     [name] ->
-                      do  builder <- toBuilder root details desiredMode artifacts
+                      do  builder <- toBuilder allowDebugLogOptimized root details desiredMode artifacts
                           generate style "index.html" (Html.sandwich root name builder) (NE.List name [])
 
                     name:names ->
-                      do  builder <- toBuilder root details desiredMode artifacts
+                      do  builder <- toBuilder allowDebugLogOptimized root details desiredMode artifacts
                           generate style "elm.js" builder (NE.List name names)
 
                 Just DevNull ->
@@ -108,7 +108,7 @@ runHelp root paths style (Flags debug optimize maybeOutput _ maybeDocs) =
                 Just (JS target) ->
                   case getNoMains artifacts of
                     [] ->
-                      do  builder <- toBuilder root details desiredMode artifacts
+                      do  builder <- toBuilder allowDebugLogOptimized root details desiredMode artifacts
                           generate style target builder (Build.getRootNames artifacts)
 
                     name:names ->
@@ -116,7 +116,7 @@ runHelp root paths style (Flags debug optimize maybeOutput _ maybeDocs) =
 
                 Just (Html target) ->
                   do  name <- hasOneMain artifacts
-                      builder <- toBuilder root details desiredMode artifacts
+                      builder <- toBuilder allowDebugLogOptimized root details desiredMode artifacts
                       generate style target (Html.sandwich root name builder) (NE.List name [])
 
               Lamdera.PostCompile.check details artifacts Exit.MakeCannotBuild
@@ -259,13 +259,13 @@ generate style target builder names =
 data DesiredMode = Debug | Dev | Prod
 
 
-toBuilder :: FilePath -> Details.Details -> DesiredMode -> Build.Artifacts -> Task B.Builder
-toBuilder root details desiredMode artifacts =
+toBuilder :: Bool -> FilePath -> Details.Details -> DesiredMode -> Build.Artifacts -> Task B.Builder
+toBuilder allowDebugLogOptimized root details desiredMode artifacts =
   Task.mapError Exit.MakeBadGenerate $
     case desiredMode of
       Debug -> Generate.debug root details artifacts
       Dev   -> Generate.dev   root details artifacts
-      Prod  -> Generate.prod  root details artifacts
+      Prod  -> Generate.prod allowDebugLogOptimized root details artifacts
 
 
 
@@ -328,11 +328,11 @@ isDevNull name =
 
 
 -- Clone of run that uses attemptWithStyle_cleanup
-run_cleanup :: IO () -> [FilePath] -> Flags -> IO ()
-run_cleanup cleanup paths flags@(Flags _ _ _ report _) =
+run_cleanup :: Bool -> IO () -> [FilePath] -> Flags -> IO ()
+run_cleanup allowDebugLogOptimized cleanup paths flags@(Flags _ _ _ report _) =
   do  style <- getStyle report
       maybeRoot <- Stuff.findRoot
       Reporting.attemptWithStyle_cleanup cleanup style Exit.makeToReport $
         case maybeRoot of
-          Just root -> runHelp root paths style flags
+          Just root -> runHelp allowDebugLogOptimized root paths style flags
           Nothing   -> return $ Left $ Exit.MakeNoOutline
