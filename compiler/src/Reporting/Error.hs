@@ -63,7 +63,7 @@ data Error
   | BadLamderaWireIncompatible String D.Doc
   | BadLamdera String D.Doc
   -- @LAMDERA
-  | LamderaBadDebugLog A.Region
+  | LamderaBadDebugLog (NE.List A.Region)
 
 
 
@@ -100,21 +100,24 @@ toReports source err =
     BadLamdera title doc ->
       NE.singleton $ Lamdera.Error.report title doc
 
-    LamderaBadDebugLog region ->
-        NE.singleton $
-            Report.Report "USELESS DEBUG.LOG" region [] $
-                Code.toSnippet source region Nothing
-                  (
-                    D.reflow $
-                      "You wrote Debug.log but you forgot to provide it with a second parameter."
-                  ,
-                    D.stack
-                      [
+    LamderaBadDebugLog regions ->
+        fmap
+            (\region ->
+                Report.Report "USELESS DEBUG.LOG" region [] $
+                    Code.toSnippet source region Nothing
+                      (
                         D.reflow $
-                          "Without a second parameter Debug.log won't print anything to the browser console. Here's an example of what it should look like:"
-                        , D.dullyellow $ D.indent 4 $ D.vcat $ [ D.reflow "_ = Debug.log \"debug label\" { someData = 123 }" ]
-                      ]
-                  )
+                          "You wrote Debug.log but you forgot to provide it with a second parameter."
+                      ,
+                        D.stack
+                          [
+                            D.reflow $
+                              "Without a second parameter Debug.log won't print anything to the browser console. Here's an example of what it should look like:"
+                            , D.dullyellow $ D.indent 4 $ D.vcat $ [ D.reflow "_ = Debug.log \"debug label\" { someData = 123 }" ]
+                          ]
+                      )
+            )
+            regions
 
 
 

@@ -22,42 +22,32 @@ import qualified Reporting.Annotation
 import qualified Data.ByteString.Builder as B
 import qualified Reporting.Error as E
 import qualified Reporting.Annotation as A
+import qualified Data.NonEmptyList as NE
 
 import Lamdera
 import StandaloneInstances
 
 hasUselessDebugLogs :: Can.Module -> Either E.Error ()
 hasUselessDebugLogs canonical =
-    updateDecls (Can._name canonical) (Can._decls canonical)
+    case updateDecls (Can._name canonical) (Can._decls canonical) of
+        first : rest -> debugPass "errors" (NE.List first rest) Left $ E.LamderaBadDebugLog $ NE.List first rest
+        [] -> Right ()
 
-updateDecls :: Module.Canonical -> Can.Decls -> Either E.Error ()
+updateDecls :: Module.Canonical -> Can.Decls -> [A.Region]
 updateDecls fileName decls =
-    case fileName of
-        Module.Canonical (Name "author" "project") "LocalDev" ->
-            Right ()
+    case decls of
+        Can.Declare def nextDecl ->
+            updateDefs fileName def ++ updateDecls fileName nextDecl
 
-        Module.Canonical (Name "author" "project") _ ->
-            case decls of
-                Can.Declare def nextDecl ->
-                    case updateDefs fileName def of
-                        Left e -> Left e
-                        Right () -> updateDecls fileName nextDecl
+        Can.DeclareRec def remainingDefs nextDecl ->
+            updateDefs fileName def ++ updateDecls fileName nextDecl ++ concatMap (updateDefs fileName) remainingDefs
 
-                Can.DeclareRec def remainingDefs nextDecl ->
-                    case updateDefs fileName def of
-                        Left e -> Left e
-                        Right () ->
-                            case updateDecls fileName nextDecl of
-                                Left e -> Left e
-                                Right () -> firstError (map (updateDefs fileName) remainingDefs)
+        Can.SaveTheEnvironment ->
+            []
 
-                Can.SaveTheEnvironment ->
-                    Right ()
 
-        _ ->
-            Right ()
 
-updateDefs :: Module.Canonical -> Can.Def -> Either E.Error ()
+updateDefs :: Module.Canonical -> Can.Def -> [A.Region]
 updateDefs fileName def =
     case def of
         Can.Def name patterns expr ->
@@ -67,145 +57,107 @@ updateDefs fileName def =
             updateExpr fileName (Reporting.Annotation.toValue name) expr
 
 
-firstError :: [Either E.Error ()] -> Either E.Error ()
-firstError results =
-    case results of
-        Left e : _ -> Left e
-
-        Right () : rest -> firstError rest
-
-        [] -> Right ()
-
-
-updateExpr :: Module.Canonical -> Name.Name -> Can.Expr -> Either E.Error ()
+updateExpr :: Module.Canonical -> Name.Name -> Can.Expr -> [A.Region]
 updateExpr fileName functionName (Reporting.Annotation.At _ expr) =
     case expr of
         Can.VarLocal name ->
-            Right ()
+            []
 
         Can.VarTopLevel canonical name ->
-            Right ()
+            []
 
         Can.VarKernel name name2 ->
-            Right ()
+            []
 
         Can.VarForeign canonical name annotation ->
-            Right ()
+            []
 
         Can.VarCtor ctorOpts canonical name zeroBased annotation ->
-            Right ()
+            []
 
         Can.VarDebug canonical name annotation ->
-            Right ()
+            []
 
         Can.VarOperator name canonical name2 annotation ->
-            Right ()
+            []
 
         Can.Chr string ->
-            Right ()
+            []
 
         Can.Str string ->
-            Right ()
+            []
 
         Can.Int int ->
-            Right ()
+            []
 
         Can.Float float ->
-            Right ()
+            []
 
         Can.List exprs ->
-            firstError (fmap (updateExpr fileName functionName) exprs)
+            concatMap (updateExpr fileName functionName) exprs
 
         Can.Negate expr ->
             updateExpr fileName functionName expr
 
         Can.Binop name canonical name2 annotation expr expr2 ->
-            case updateExpr fileName functionName expr of
-                Left e -> Left e
-                Right () -> updateExpr fileName functionName expr2
+            updateExpr fileName functionName expr ++ updateExpr fileName functionName expr2
 
         Can.Lambda patterns expr ->
             updateExpr fileName functionName expr
 
         Can.Call expr exprs ->
-            case updateExpr fileName functionName expr of
-                Left e -> Left e
-                Right () -> firstError (fmap (updateExpr fileName functionName) exprs)
+            updateExpr fileName functionName expr ++ concatMap (updateExpr fileName functionName) exprs
 
         Can.If exprs expr ->
-            case (updateExpr fileName functionName) expr of
-                Left e -> Left e
-                Right () ->
-                    firstError
-                        (fmap
-                            (\(first, second) ->
-                                case updateExpr fileName functionName first of
-                                    Left e -> Left e
-                                    Right () -> updateExpr fileName functionName second
-                            )
-                            exprs)
+            updateExpr fileName functionName expr
+                ++ concatMap
+                    (\(first, second) ->
+                        updateExpr fileName functionName first ++ updateExpr fileName functionName second
+                    )
+                    exprs
 
         Can.Let def expr ->
-            case updateExpr fileName functionName expr of
-                Left e -> Left e
-                Right () ->
-                    updateDefs fileName def
+            updateExpr fileName functionName expr ++ updateDefs fileName def
 
         Can.LetRec defs expr ->
-            case updateExpr fileName functionName expr of
-                Left e -> Left e
-                Right () -> firstError (fmap (updateDefs fileName) defs)
+            updateExpr fileName functionName expr ++ concatMap (updateDefs fileName) defs
 
         Can.LetDestruct
             (Reporting.Annotation.At (A.Region start _) Can.PAnything)
             (Reporting.Annotation.At (A.Region _ end) (Can.Call (Reporting.Annotation.At _ (Can.VarDebug _ "log" annotation )) [ firstParam ]))
-            _ ->
-            Left (E.LamderaBadDebugLog (A.Region start end))
+            expr ->
+            [ A.Region start end ] ++ updateExpr fileName functionName expr
 
         Can.LetDestruct pattern expr expr2 ->
-            case updateExpr fileName functionName expr of
-                Left e -> Left e
-                Right () -> updateExpr fileName functionName expr2
+            updateExpr fileName functionName expr ++ updateExpr fileName functionName expr2
 
         Can.Case expr caseBranches ->
-            case updateExpr fileName functionName expr of
-                Left e -> Left e
-                Right () ->
-                    firstError
-                        (fmap
-                            (\(Can.CaseBranch _ caseExpr) -> updateExpr fileName functionName caseExpr)
-                            caseBranches)
-
+            updateExpr fileName functionName expr
+                ++ concatMap
+                    (\(Can.CaseBranch _ caseExpr) -> updateExpr fileName functionName caseExpr)
+                    caseBranches
 
         Can.Accessor name ->
-            Right ()
+            []
 
         Can.Access expr name ->
             updateExpr fileName functionName expr
 
         Can.Update name expr fieldUpdates ->
-            case updateExpr fileName functionName expr of
-                Left e -> Left e
-                Right () ->
-                    firstError (fmap (\(Can.FieldUpdate _ expr) -> updateExpr fileName functionName expr) (Map.elems fieldUpdates))
+            updateExpr fileName functionName expr
+                ++ concatMap (\(Can.FieldUpdate _ expr) -> updateExpr fileName functionName expr) (Map.elems fieldUpdates)
 
         Can.Record fields ->
-            firstError (fmap (\field -> updateExpr fileName functionName field) (Map.elems fields))
+            concatMap (\field -> updateExpr fileName functionName field) (Map.elems fields)
 
         Can.Unit ->
-            Right ()
+            []
 
         Can.Tuple expr expr2 maybeExpr ->
-            case updateExpr fileName functionName expr of
-                Left e -> Left e
-                Right () ->
-                    case updateExpr fileName functionName expr2 of
-                        Left e -> Left e
-                        Right () ->
-                            case fmap (updateExpr fileName functionName) maybeExpr of
-                                Just (Left e) -> Left e
-                                _ -> Right ()
+            updateExpr fileName functionName expr
+                ++ updateExpr fileName functionName expr2
+                ++ concatMap (updateExpr fileName functionName) maybeExpr
 
 
         Can.Shader shaderSource shaderTypes ->
-            Right ()
+            []
