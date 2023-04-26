@@ -157,10 +157,10 @@ updateExpr fileName functionName (Reporting.Annotation.At _ expr) =
                 Right () -> firstError (fmap (updateDefs fileName) defs)
 
         Can.LetDestruct
-            _
-            (Reporting.Annotation.At location (Can.Call (Reporting.Annotation.At _ (Can.VarDebug _ "log" annotation )) [ firstParam ]))
+            (Reporting.Annotation.At (A.Region start _) Can.PAnything)
+            (Reporting.Annotation.At (A.Region _ end) (Can.Call (Reporting.Annotation.At _ (Can.VarDebug _ "log" annotation )) [ firstParam ]))
             _ ->
-            Left (E.BadDebugLog location)
+            Left (E.LamderaBadDebugLog (A.Region start end))
 
         Can.LetDestruct pattern expr expr2 ->
             case updateExpr fileName functionName expr of
