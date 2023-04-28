@@ -31,7 +31,7 @@ makeOptimizedWithCleanup cleanup root path = do
 
   r <- async $
     Ext.Common.withProjectRoot root $
-      Make.run_cleanup False cleanup [scaffold] $
+      Make.run_cleanup cleanup [scaffold] $
         Make.Flags
           { _debug = False
           , _optimize = True
@@ -58,7 +58,7 @@ make_ root = do
 
   r <- async $
     Ext.Common.withProjectRoot root $
-      Make.run False [] $
+      Make.run [] $
         Make.Flags
           { _debug = False
           , _optimize = True
@@ -85,7 +85,7 @@ makeDev root paths = do
   r <- async $
     Ext.Common.withProjectRoot absRoot $ do
       mapM touch paths
-      Make.run False paths $
+      Make.run paths $
         Make.Flags
           { _debug = True
           , _optimize = False
@@ -119,7 +119,7 @@ makeHarnessDevJs root = do
 
   r <- async $
     Ext.Common.withProjectRoot root $
-      Make.run False [scaffold] $
+      Make.run [scaffold] $
         Make.Flags
           { _debug = True
           , _optimize = False

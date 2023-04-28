@@ -71,10 +71,10 @@ dev root details (Build.Artifacts pkg _ roots modules) =
       return $ JS.generate mode graph mains
 
 
-prod :: Bool -> FilePath -> Details.Details -> Build.Artifacts -> Task B.Builder
-prod allowDebugLog root details (Build.Artifacts pkg _ roots modules) =
+prod :: FilePath -> Details.Details -> Build.Artifacts -> Task B.Builder
+prod root details (Build.Artifacts pkg _ roots modules) =
   do  objects <- finalizeObjects =<< loadObjects root details modules
-      checkForDebugUses allowDebugLog objects
+      checkForDebugUses objects
       let graph_ = objectsToGlobalGraph objects
       graph <- Task.io $ Lamdera.AppConfig.injectConfig graph_
       let mode = Mode.Prod (Mode.shortenFieldNames graph)
@@ -94,9 +94,9 @@ repl root details ansi (Build.ReplArtifacts home modules localizer annotations) 
 -- CHECK FOR DEBUG
 
 
-checkForDebugUses :: Bool -> Objects -> Task ()
-checkForDebugUses allowDebugLog (Objects _ locals) =
-  case Map.keys (Map.filter (Nitpick.hasDebugUses allowDebugLog) locals) of
+checkForDebugUses :: Objects -> Task ()
+checkForDebugUses (Objects _ locals) =
+  case Map.keys (Map.filter Nitpick.hasDebugUses locals) of
     []   -> return ()
     m:ms -> Task.throw (Exit.GenerateCannotOptimizeDebugValues m ms)
 

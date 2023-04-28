@@ -542,7 +542,7 @@ buildProductionJsFiles root inProduction_ versionInfo = do
       let migrationPath = root </> "src/Evergreen/Migrate/V" <> show version <> ".elm"
       replaceSnapshotTypeReferences migrationPath version
 
-    Make.run True ["src" </> "LBR.elm"] $
+    Make.run ["src" </> "LBR.elm"] $
       Make.Flags
         { _debug = False
         , _optimize = True
@@ -551,7 +551,7 @@ buildProductionJsFiles root inProduction_ versionInfo = do
         , _docs = Nothing
         }
 
-    Make.run True ["src" </> "LFR.elm"] $
+    Make.run ["src" </> "LFR.elm"] $
       Make.Flags
         { _debug = False
         , _optimize = True
@@ -648,7 +648,7 @@ migrationCheck root nextVersion = do
       pure ()
 
   Dir.withCurrentDirectory root $
-    Make.run_cleanup False cleanup [ lamderaCheckBothPath ] $
+    Make.run_cleanup cleanup [ lamderaCheckBothPath ] $
         Make.Flags
           { _debug = False
           , _optimize = False

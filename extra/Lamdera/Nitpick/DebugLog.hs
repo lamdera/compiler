@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Nitpick.DebugLog
+module Lamdera.Nitpick.DebugLog
   ( hasUselessDebugLogs
   )
   where
