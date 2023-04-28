@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 module Nitpick.Debug
   ( hasDebugUses
   )
@@ -7,7 +8,7 @@ module Nitpick.Debug
 import qualified Data.Map.Utils as Map
 
 import qualified AST.Optimized as Opt
-
+import Lamdera
 
 
 -- HAS DEBUG USES
