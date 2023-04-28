@@ -19,7 +19,6 @@ import qualified Elm.Interface as I
 import qualified Elm.ModuleName as ModuleName
 import qualified Elm.Package as Pkg
 import qualified Nitpick.PatternMatches as PatternMatches
-import qualified Nitpick.DebugLog
 import qualified Optimize.Module as Optimize
 import qualified Reporting.Error as E
 import qualified Reporting.Result as R
@@ -42,6 +41,7 @@ import qualified CanSer.CanSer as ToSource
 import qualified Data.Text as T
 import qualified Data.Utf8
 import qualified Lamdera.UiSourceMap
+import qualified Nitpick.DebugLog
 
 -- import StandaloneInstances
 
