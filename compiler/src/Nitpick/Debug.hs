@@ -47,7 +47,7 @@ hasDebug expression =
     Opt.VarEnum _ _      -> False
     Opt.VarBox _         -> False
     Opt.VarCycle _ _     -> False
-    Opt.VarDebug _ _ _ _ -> True
+    Opt.VarDebug name _ _ _ -> Lamdera.alternativeImplementationWhen {- Replace False with global variable and make sure to set that global to True when lamdera deploy and check are used. -} False (name /= "log") True
     Opt.VarKernel _ _    -> False
     Opt.List exprs       -> any hasDebug exprs
     Opt.Function _ expr  -> hasDebug expr
