@@ -1,0 +1,28 @@
+#!/usr/bin/env node
+
+var child_process = require('child_process');
+
+
+// Some npm users enable --ignore-scripts (a good security measure) so
+// they do not run the post-install hook and install.js does not run.
+// Instead they will run this script.
+//
+// On Mac and Linux, we hard link the lamdera executable into the exact same
+// location as this file. Since npm uses symlinks on these platforms,
+// that means that the first run will invoke this file and subsequent
+// runs will call the lamdera binary directly.
+//
+// On Windows, our binary file must be named lamdera.exe for it to run properly.
+// Instead of symlinks, npm creates two files:
+//
+//   - node_modules/.bin/lamdera (a bash file)
+//   - node_modules/.bin/lamdera.cmd (a batch file)
+//
+// Both files specifically invoke `node` to run the file listed at package.bin,
+// so there is no way around instantiating node for no reason on Windows.
+
+
+var binaryPath = require('../../../extra/npm/binary.js')();
+child_process
+	.spawn(binaryPath, process.argv.slice(2), { stdio: 'inherit' })
+	.on('exit', process.exit);

@@ -1,0 +1,38 @@
+{
+    "name": "@lamdera/compiler",
+    "version": "0.19.1-1.1.1",
+    "description": "npm install wrapper for Lamdera",
+    "license": "BSD-3-Clause",
+    "repository": "lamdera/compiler",
+    "author": "Mario Rogic",
+    "type": "commonjs",
+    "exports": {},
+    "scripts": {
+        "install": "node install.js"
+    },
+    "files": [
+        "install.js",
+        "binary.js",
+        "bin",
+        "bin/lamdera"
+    ],
+    "keywords": [
+        "bin",
+        "binary",
+        "binaries",
+        "lamdera",
+        "install",
+        "installer"
+    ],
+    "bin": {
+        "lamdera": "bin/lamdera"
+    },
+    "optionalDependencies": {
+        "@lamdera/lamdera_darwin_arm64": "0.19.1-1.1.1",
+        "@lamdera/lamdera_darwin_x64": "0.19.1-1.1.1",
+        "@lamdera/lamdera_linux_arm": "0.19.1-1.1.1",
+        "@lamdera/lamdera_linux_arm64": "0.19.1-1.1.1",
+        "@lamdera/lamdera_linux_x64": "0.19.1-1.1.1",
+        "@lamdera/lamdera_win32_x64": "0.19.1-1.1.1"
+    }
+}
