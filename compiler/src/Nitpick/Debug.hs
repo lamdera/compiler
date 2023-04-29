@@ -1,4 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
 module Nitpick.Debug
   ( hasDebugUses
   )
@@ -8,7 +7,9 @@ module Nitpick.Debug
 import qualified Data.Map.Utils as Map
 
 import qualified AST.Optimized as Opt
-import Lamdera
+
+
+import qualified Lamdera.Nitpick.DebugLog
 
 
 -- HAS DEBUG USES
@@ -37,6 +38,7 @@ nodeHasDebug node =
 
 hasDebug :: Opt.Expr -> Bool
 hasDebug expression =
+  Lamdera.Nitpick.DebugLog.hasDebug expression $
   case expression of
     Opt.Bool _           -> False
     Opt.Chr _            -> False
@@ -48,7 +50,7 @@ hasDebug expression =
     Opt.VarEnum _ _      -> False
     Opt.VarBox _         -> False
     Opt.VarCycle _ _     -> False
-    Opt.VarDebug name _ _ _ -> Lamdera.alternativeImplementationWhen {- Replace False with global variable and make sure to set that global to True when lamdera deploy and check are used. -} False (name /= "log") True
+    Opt.VarDebug _ _ _ _ -> True
     Opt.VarKernel _ _    -> False
     Opt.List exprs       -> any hasDebug exprs
     Opt.Function _ expr  -> hasDebug expr

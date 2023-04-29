@@ -1,10 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Lamdera.Nitpick.DebugLog
-  ( hasUselessDebugLogs
-  )
-  where
-
+module Lamdera.Nitpick.DebugLog (hasDebug, hasUselessDebugLogs) where
 
 import qualified Data.Map as Map
 import qualified Data.Set as Set
@@ -17,6 +13,7 @@ import qualified Data.Utf8
 import AST.Canonical
 import Elm.Package
 import qualified AST.Canonical as Can
+import qualified AST.Optimized as Opt
 import qualified Elm.ModuleName as Module
 import qualified Reporting.Annotation
 import qualified Data.ByteString.Builder as B
@@ -26,6 +23,16 @@ import qualified Data.NonEmptyList as NE
 
 import Lamdera
 import StandaloneInstances
+
+
+hasDebug :: Opt.Expr -> Bool -> Bool
+hasDebug expression original = do
+    -- @TODO Replace with global that activates for lamdera deploy and check
+    let ignoreDebugLog = True
+    case expression of
+        Opt.VarDebug name _ _ _ | ignoreDebugLog -> name /= "log"
+        _                                        -> original
+
 
 hasUselessDebugLogs :: Can.Module -> Either E.Error ()
 hasUselessDebugLogs canonical =
