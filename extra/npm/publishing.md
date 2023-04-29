@@ -40,8 +40,13 @@ npm publish --tag beta
 To test that it works, run these commands:
 
 ```bash
+<<<<<<< HEAD
 npm dist-tags ls @lamdera/compiler
 npm install @lamdera/compiler@beta --ignore-scripts
+=======
+npm dist-tags ls lamdera
+npm install lamdera@beta --ignore-scripts
+>>>>>>> e73263a0 (First pass of npm package setup based on @lydell/elm)
 ```
 
 The `latest` tag should not be changed, and there should be an additional `beta` tag.
@@ -65,7 +70,11 @@ Many compiler releases have needed multiple `npm` publications. Maybe something 
 The convention for each Lamdera release is to create a tag the latest one.
 
 ```bash
+<<<<<<< HEAD
 npm dist-tag add @lamdera/0.19.1-3 latest-0.19.1
+=======
+npm dist-tag add lamdera@0.19.1-3 latest-0.19.1
+>>>>>>> e73263a0 (First pass of npm package setup based on @lydell/elm)
 ```
 
 That way people who want a specific version can point to `latest-0.19.1` or `latest-0.18.0` instead of knowing the particular names of all the various publications.

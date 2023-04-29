@@ -22,14 +22,14 @@ Lamdera has no dependency on `npm` to develop locally, so there's no reason to i
 If you're a tooling author, use Lamdera as a dependency and npm as a distribution method, then you can use this package to manage the dependency and installation.
 
 ```
-npm install --save-dev @lamdera/latest
+npm install --save-dev lamdera@latest
 ```
 
 **Multiple versions** ⚠️
 
 If you're a tooling author, use Lamdera as a dependency and npm as a distribution method, then you can
 
-You could also use this package to use different versions of Lamdera in different projects. I.e. `npm install @lamdera/latest` in each project and use the binary at `./node_modules/.bin/lamdera` for compilation. However this is generally not recommended. Lamdera users should always use the latest release, as that's what is used when you do a `lamdera deploy`.
+You could also use this package to use different versions of Lamdera in different projects. I.e. `npm install lamdera@latest` in each project and use the binary at `./node_modules/.bin/lamdera` for compilation. However this is generally not recommended. Lamdera users should always use the latest release, as that's what is used when you do a `lamdera deploy`.
 
 
 **Continuous integration** ⚠️
@@ -49,7 +49,7 @@ That said, it will definitely work to use the `npm` installer on CI if you prefe
 The following command should download the latest Lamdera binary:
 
 ```
-npm install @lamdera/latest
+npm install lamdera@latest
 ```
 
 You should be able to run `npx lamdera --version` within your project and see `0.19.1` (the base Elm version), or `--version-full` to see the full Elm + Lamdera release version. Now you can develop with `npx lamdera live`.

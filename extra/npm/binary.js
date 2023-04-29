@@ -1,5 +1,5 @@
 var fs = require('fs');
-var package = require('../../installers/npm/package.json');
+var package = require('./package.json');
 var path = require('path');
 
 
@@ -13,8 +13,9 @@ var path = require('path');
 module.exports = function()
 {
 	// figure out package of binary
-	var version = package.version.replace(/^(\d+\.\d+\.\d+).*$/, '$1'); // turn '1.2.3-alpha' into '1.2.3'
-	var subPackageName = '@lamdera/compiler_' + process.platform + '_' + process.arch;
+	// turn '0.19.1-1.2.3-alpha' into '0.19.1-1.2.3'
+	var version = package.version.replace(/^(\d+\.\d+\.\d+)-(\d+\.\d+\.\d+).*$/, '$1');
+	var subPackageName = 'lamdera-' + process.platform + '-' + process.arch;
 
 	verifyPlatform(version, subPackageName);
 
@@ -77,7 +78,7 @@ function verifyPlatform(version, subPackageName)
 	var situation = process.platform + '_' + process.arch;
 	console.error(
 		'-- ERROR -----------------------------------------------------------------------\n\n'
-		+ 'The @lamdera/compiler npm package does not support your platform (' + situation + ').\n\n'
+		+ 'The lamdera npm package does not support your platform (' + situation + ').\n\n'
 		+ 'You can try to manually download an appropriate binary (if there is one) from:\n'
 		+ 'https://dashboard.lamdera.app/docs/download\n\n'
 		+ 'Or otherwise asking for help on the Lamdera Discord:\n'
