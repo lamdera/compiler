@@ -524,15 +524,15 @@ hindent v =
 
 hindent_ :: String -> IO Text
 hindent_ s = do
-  pure $ T.pack s
-  -- (exit, stdout, stderr) <-
-  --   System.Process.readProcessWithExitCode "hindent" ["--line-length","150"] s
-  --   `catchError` (\err -> pure (error "no exit code on failure", s, "hindent failed"))
-  -- if Prelude.length stderr > 0
-  --   then
-  --     pure $ T.pack stderr
-  --   else
-  --     pure $ T.pack stdout
+  -- pure $ T.pack s
+  (exit, stdout, stderr) <-
+    System.Process.readProcessWithExitCode "hindent" ["--line-length","150"] s
+    `catchError` (\err -> pure (error "no exit code on failure", s, "hindent failed"))
+  if Prelude.length stderr > 0
+    then
+      pure $ T.pack stderr
+    else
+      pure $ T.pack stdout
 
 
 hindentFormatValue :: Show a => a -> Text

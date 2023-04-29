@@ -30,8 +30,38 @@ all = EasyTest.run suite
 
 suite :: Test ()
 suite = tests $
-  [ scope "production check -> AppConfig usages & injection" $ do
+  [ scope "Lamdera.Nitpick.DebugLog allows usage of Debug.log with --optimize" $ do
+      let project = "/Users/mario/dev/projects/lamdera-compiler/test/project-scenarios/blank-injectable"
+          expectContains needle file = (project </> file) & expectFileContains needle
 
+      io $ Ext.Common.bash $ "cd " <> project <> " && git init"
+      io $ Ext.Common.bash $ "cd " <> project <> " && git remote add lamdera git@apps.lamdera.com:always-v0.git"
+
+      let
+        mods =
+          [ ("{- viewFunctionBodyPlaceholder -}",   "_ = Debug.log \"hello\" \"world\"")
+          , ("{- updateFunctionBodyPlaceholder -}", "_ = Debug.log \"hello\" \"world\"")
+          ]
+        path = (project </> "src" </> "Frontend.elm")
+
+      io (mods & mapM_ (\(before, after) -> replaceInFile before after path ))
+
+      actual <- catchOutput $ checkWithParams project "always-v0"
+
+      io (mods & mapM_ (\(before, after) -> replaceInFile after before path ))
+
+      -- @TODO figure out the (Control.Monad.Trans.Control.MonadBaseControl IO Test) instance
+      -- and replace the above, which won't properly clean up on exceptions
+      -- actual <- withFileModifications (project </> "src" </> "Frontend.elm") mods
+      --    $ catchOutput $ checkWithParams project "always-v0"
+
+      expectTextContains actual
+        "It appears you're all set to deploy the first version of 'always-v0'!"
+
+      pure ()
+
+
+  , scope "production check -> AppConfig usages & injection" $ do
       let project = "/Users/mario/dev/projects/lamdera-compiler/test/scenario-always-v0"
           expectContains needle file = (project </> file) & expectFileContains needle
 
