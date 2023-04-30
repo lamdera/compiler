@@ -9,6 +9,8 @@ import qualified Data.Map.Utils as Map
 import qualified AST.Optimized as Opt
 
 
+import qualified Lamdera.Nitpick.DebugLog
+
 
 -- HAS DEBUG USES
 
@@ -36,6 +38,7 @@ nodeHasDebug node =
 
 hasDebug :: Opt.Expr -> Bool
 hasDebug expression =
+  Lamdera.Nitpick.DebugLog.hasDebug expression $
   case expression of
     Opt.Bool _           -> False
     Opt.Chr _            -> False

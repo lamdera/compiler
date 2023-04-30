@@ -41,6 +41,7 @@ import qualified CanSer.CanSer as ToSource
 import qualified Data.Text as T
 import qualified Data.Utf8
 import qualified Lamdera.UiSourceMap
+import qualified Lamdera.Nitpick.DebugLog
 
 -- import StandaloneInstances
 
@@ -92,16 +93,17 @@ compile pkg ifaces modul = do
   annotations <- typeCheck modul_ canonical2
   -- ()          <- debugPassText "starting nitpick" moduleName (pure ())
   ()          <- nitpick canonical2
-
+  ()          <- Lamdera.Nitpick.DebugLog.hasUselessDebugLogs canonical2
   let
       canonical3 :: Can.Module
       canonical3 =
-        if Lamdera.isLive
+        if (Lamdera.unsafePerformIO Lamdera.isLiveMode)
           then Lamdera.UiSourceMap.updateDecls (Can._name canonical2) (Can._decls canonical2)
                  & (\newDecls -> canonical2 { Can._decls = newDecls })
           else canonical2
 
   -- ()          <- debugPassText "starting optimize" moduleName (pure ())
+
   objects     <- optimize modul_ annotations canonical3
   return (Artifacts canonical3 annotations objects)
 

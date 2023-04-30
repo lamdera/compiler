@@ -23,6 +23,8 @@ import qualified Lamdera.CLI.Check
 import qualified Lamdera.Offline
 import LamderaSharedBuildHelpers
 import qualified Ext.Common
+import qualified Lamdera.Compile
+import qualified Lamdera.Relative
 
 
 all = EasyTest.run suite
@@ -30,8 +32,32 @@ all = EasyTest.run suite
 
 suite :: Test ()
 suite = tests $
-  [ scope "production check -> AppConfig usages & injection" $ do
+  [ scope "Lamdera.Nitpick.DebugLog - lamdera check" $ do
 
+      project <- io $ Lamdera.Relative.findDir "test/project-scenarios/blank-injectable"
+
+      io $ Ext.Common.bash $ "cd " <> project <> " && git init"
+      io $ Ext.Common.bash $ "cd " <> project <> " && git remote add lamdera git@apps.lamdera.com:always-v0.git"
+
+      let path = (project </> "src" </> "Frontend.elm")
+
+      withFileModifications (project </> "src" </> "Frontend.elm")
+        [ ("{- viewFunctionBodyPlaceholder -}",   "_ = Debug.log \"hello\" \"world\"")
+        , ("{- updateFunctionBodyPlaceholder -}", "_ = Debug.log \"hello\" \"world\"")
+        ] $ do
+
+        scope "lamdera check should succeed, ignoring the Debug.log usages" $ do
+          actual <- catchOutput $ checkWithParams project "always-v0"
+          expectTextContains actual
+            "It appears you're all set to deploy the first version of 'always-v0'!"
+
+        scope "lamdera make --optimized should continue to fail" $ do
+          actual <- catchOutput $ Lamdera.Compile.makeOptimizedWithCleanup (pure ()) project "src/Frontend.elm"
+          expectTextContains actual
+            "There are uses of the `Debug` module in the following modules:"
+
+
+  , scope "production check -> AppConfig usages & injection" $ do
       let project = "/Users/mario/dev/projects/lamdera-compiler/test/scenario-always-v0"
           expectContains needle file = (project </> file) & expectFileContains needle
 
@@ -55,6 +81,14 @@ suite = tests $
       io $ rmdir (project </> ".git")
       io $ cleanupCheckGen project
   ]
+
+
+withFileModifications :: FilePath -> [(Text, Text)] -> Test a -> Test a
+withFileModifications path mods action =
+    EasyTest.using
+      (mods & mapM_ (\(before, after) -> replaceInFile before after path))
+      (\_ -> mods & mapM_ (\(before, after) -> replaceInFile after before path))
+      (\_ -> action)
 
 
 expectFileContains :: Text -> FilePath -> Test ()

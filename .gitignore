@@ -6,7 +6,7 @@ cabal.sandbox.config
 .DS_Store
 *~
 travis.log
-
+.idea
 
 
 # @LAMDERA

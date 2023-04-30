@@ -38,8 +38,10 @@ module Lamdera
   , isExperimental_
   -- , isTypeSnapshot
   , isTest
-  , isLive
-  , setLive
+  , isLiveMode
+  , setLiveMode
+  , isCheckMode
+  , setCheckMode
   , Ext.Common.ostype
   , Ext.Common.OSType(..)
   , env
@@ -399,14 +401,28 @@ isTest = do
 isLive_ :: MVar Bool
 isLive_ = unsafePerformIO $ newMVar False
 
-setLive :: Bool -> IO ()
-setLive b = do
-  debug $ "⚡️ set live: " <> show b
+setLiveMode :: Bool -> IO ()
+setLiveMode b = do
+  debug $ "⚡️ set mode live: " <> show b
   modifyMVar_ isLive_ (\_ -> pure b)
 
-{-# NOINLINE isLive #-}
-isLive :: Bool
-isLive = unsafePerformIO $ readMVar isLive_
+{-# NOINLINE isLiveMode #-}
+isLiveMode :: IO Bool
+isLiveMode = readMVar isLive_
+
+
+{-# NOINLINE isCheck_ #-}
+isCheck_ :: MVar Bool
+isCheck_ = unsafePerformIO $ newMVar False
+
+setCheckMode :: Bool -> IO ()
+setCheckMode b = do
+  debug $ "⚡️ set mode check: " <> show b
+  modifyMVar_ isCheck_ (\_ -> pure $! b)
+
+{-# NOINLINE isCheckMode #-}
+isCheckMode :: IO Bool
+isCheckMode = readMVar isCheck_
 
 
 env =
@@ -524,15 +540,15 @@ hindent v =
 
 hindent_ :: String -> IO Text
 hindent_ s = do
-  pure $ T.pack s
-  -- (exit, stdout, stderr) <-
-  --   System.Process.readProcessWithExitCode "hindent" ["--line-length","150"] s
-  --   `catchError` (\err -> pure (error "no exit code on failure", s, "hindent failed"))
-  -- if Prelude.length stderr > 0
-  --   then
-  --     pure $ T.pack stderr
-  --   else
-  --     pure $ T.pack stdout
+  -- pure $ T.pack s
+  (exit, stdout, stderr) <-
+    System.Process.readProcessWithExitCode "hindent" ["--line-length","150"] s
+    `catchError` (\err -> pure (error "no exit code on failure", s, "hindent failed"))
+  if Prelude.length stderr > 0
+    then
+      pure $ T.pack stderr
+    else
+      pure $ T.pack stdout
 
 
 hindentFormatValue :: Show a => a -> Text

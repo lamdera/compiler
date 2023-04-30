@@ -12,6 +12,7 @@ import qualified EasyTest
 import Lamdera
 import Test.Main (captureProcessResult)
 import qualified Test.Main
+import qualified Ext.Common
 
 
 aggressiveCacheClear :: FilePath -> IO ()
@@ -75,7 +76,7 @@ catchOutput :: IO () -> EasyTest.Test Text
 catchOutput action = do
   -- https://hackage.haskell.org/package/main-tester-0.2.0.1/docs/Test-Main.html
   pr <- EasyTest.io $ captureProcessResult action
-  pure $ show_ pr
+  EasyTest.io $ hindent pr
 
 
 catchOutputStdErr :: IO () -> EasyTest.Test Text
