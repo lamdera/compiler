@@ -71,7 +71,7 @@ run () flags = do
 runWithRoot :: FilePath -> Flags -> IO ()
 runWithRoot root (Flags maybePort) =
   do
-      Lamdera.setLive True
+      Lamdera.setLiveMode True
       let port = maybe 8000 id maybePort
       liftIO $ Lamdera.stdoutSetup
       atomicPutStrLn $ "Go to http://localhost:" ++ show port ++ " to see your project dashboard."

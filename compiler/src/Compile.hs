@@ -97,7 +97,7 @@ compile pkg ifaces modul = do
   let
       canonical3 :: Can.Module
       canonical3 =
-        if Lamdera.isLive
+        if (Lamdera.unsafePerformIO Lamdera.isLiveMode)
           then Lamdera.UiSourceMap.updateDecls (Can._name canonical2) (Can._decls canonical2)
                  & (\newDecls -> canonical2 { Can._decls = newDecls })
           else canonical2

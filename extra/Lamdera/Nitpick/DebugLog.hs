@@ -28,7 +28,7 @@ import StandaloneInstances
 hasDebug :: Opt.Expr -> Bool -> Bool
 hasDebug expression original = do
     -- @TODO Replace with global that activates for lamdera deploy and check
-    let ignoreDebugLog = True
+    let ignoreDebugLog = unsafePerformIO $ Lamdera.isCheckMode
     case expression of
         Opt.VarDebug name _ _ _ | ignoreDebugLog -> name /= "log"
         _                                        -> original

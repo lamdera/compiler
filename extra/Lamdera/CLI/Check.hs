@@ -68,6 +68,8 @@ run :: () -> Lamdera.CLI.Check.Flags -> IO ()
 run () flags@(Lamdera.CLI.Check.Flags destructiveMigration) = do
   debug_ "Starting check..."
 
+  Lamdera.setCheckMode True
+
   -- appNameEnvM <- Env.lookupEnv "LAMDERA_APP_NAME"
 
   forceNotProd <- Env.lookupEnv "NOTPROD"
@@ -101,6 +103,8 @@ run () flags@(Lamdera.CLI.Check.Flags destructiveMigration) = do
   if ips == [] && not inProduction_
     then offlineCheck root
     else onlineCheck root appName inDebug localTypes externalTypeWarnings isHoistRebuild forceVersion forceNotProd inProduction_ destructiveMigration
+
+  Lamdera.setCheckMode False
 
 
 offlineCheck root = do
