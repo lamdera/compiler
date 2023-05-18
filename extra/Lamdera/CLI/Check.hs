@@ -719,13 +719,13 @@ committedCheck root versionInfo = do
 
     if addToGitApproved
       then do
-        mapM (\path -> System.callCommand $ "git add " <> path) missingPaths
+        mapM (\path -> callCommand $ "git add " <> path) missingPaths
         commitApproved <- Reporting.ask $
           D.stack [ D.reflow $ "Shall I `git commit` for you? [Y/n]: " ]
 
         if commitApproved
           then do
-            System.callCommand $ "git commit -m \"Preparing for v" <> show version <> "\""
+            callCommand $ "git commit -m \"Preparing for v" <> show version <> "\""
             progress ""
 
           else

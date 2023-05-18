@@ -826,18 +826,18 @@ openUrlInBrowser :: Text -> IO ()
 openUrlInBrowser url = do
   case ostype of
     MacOS -> do
-      System.Process.callCommand $ "open " <> T.unpack url
+      callCommand $ "open " <> T.unpack url
 
     Linux -> do
       xdgPath <- Ext.Common.bash "command -v xdg-open"
       if (xdgPath /= "")
         then do
-          System.Process.callCommand $ "xdg-open " <> T.unpack url
+          callCommand $ "xdg-open " <> T.unpack url
         else do
           atomicPutStrLn $ "Oops! I couldn't find a way to open the URL for you. Please open it manually in a browser."
 
     Windows -> do
-      System.Process.callCommand $ "start " <> T.unpack url
+      callCommand $ "start " <> T.unpack url
 
     UnknownOS name -> do
       -- We have an unexpected system...

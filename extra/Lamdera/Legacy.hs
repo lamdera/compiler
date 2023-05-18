@@ -2,7 +2,6 @@
 
 module Lamdera.Legacy where
 
-import qualified System.Process as System
 import System.FilePath ((</>))
 import qualified System.Directory as Dir
 
@@ -81,7 +80,7 @@ temporaryCheckOldTypesNeedingMigration inProduction root = do
                 putStrLn $ "Renaming '" <> ("module Evergreen.Type.V" <> show version) <> "' to '" <> ("module Evergreen.V" <> show version <> ".Types") <> "'"
                 replaceInFile ("module Evergreen.Type.V" <> (show_ version)) ("module Evergreen.V" <> (show_ version) <> ".Types") dest
 
-                System.callCommand $ "git add " <> dest
+                callCommand $ "git add " <> dest
 
               Nothing ->
                 -- Skip any incorrectly named files...
@@ -119,7 +118,7 @@ temporaryCheckOldTypesNeedingMigration inProduction root = do
           )
 
         putStrLn $ "Staging the changes for git commit..."
-        System.callCommand $ "git add -u " <> oldTypeSnapshotFolder <> " || true"
+        callCommand $ "git add -u " <> oldTypeSnapshotFolder <> " || true"
 
         putStrLn $ "\n\nDone! If you encounter issues with this helper, please drop a note in Discord.\n\n"
 
