@@ -16,11 +16,7 @@ run () () = do
 
   Lamdera.CLI.Check.run_
 
-  -- This invocation doesn't appear to work on older git versions, left for posterity
-  -- (exit, stdout, stderr) <- System.Process.readProcessWithExitCode "git" ["branch","--show-current"] ""
-  (exit, stdout, stderr) <- System.Process.readProcessWithExitCode "git" ["symbolic-ref", "--short", "-q", "HEAD"] ""
-  let branch = stdout & pack & strip
-
+  branch = <- Lamdera.getGitBranch
   case branch of
     "main" -> do
       _ <- readProcess "git" ["push", "lamdera", "main"] ""

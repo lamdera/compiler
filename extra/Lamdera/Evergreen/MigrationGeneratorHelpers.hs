@@ -224,6 +224,7 @@ asTypeName tipe =
     Can.TType moduleName name params -> N.toText name
     Can.TAlias moduleName name _ _ -> N.toText name
     Can.TRecord _ _ -> "anonymousRecord_"
+    Can.TUnit -> "()"
     _ -> error $ "unimplemented asTypeName: " <> show tipe
 
 
