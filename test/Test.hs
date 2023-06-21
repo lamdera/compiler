@@ -30,6 +30,7 @@ import Make (Flags(..))
 import qualified Lamdera.Compile
 import qualified Lamdera.Evaluate
 import qualified Lamdera.CLI.Check
+import qualified Lamdera.CLI.Preview
 
 import Ext.Common (trackedForkIO, bash)
 import qualified Ext.Common
@@ -114,6 +115,9 @@ checkProject = do
   Lamdera.Compile.makeDev p ["src/Evergreen/Migrate/V" ++ v ++ ".elm"]
 
 
+previewProject = do
+  let p = "/Users/mario/dev/projects/lamdera-test"
+  Dir.withCurrentDirectory p $ Lamdera.CLI.Preview.run () ()
 
 
 -- target =

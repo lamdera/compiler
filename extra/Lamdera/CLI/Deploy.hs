@@ -16,7 +16,7 @@ run () () = do
 
   Lamdera.CLI.Check.run_
 
-  branch = <- Lamdera.getGitBranch
+  branch <- Lamdera.getGitBranch
   case branch of
     "main" -> do
       _ <- readProcess "git" ["push", "lamdera", "main"] ""

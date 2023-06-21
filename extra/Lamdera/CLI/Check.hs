@@ -77,6 +77,7 @@ run () flags@(Lamdera.CLI.Check.Flags destructiveMigration) = do
   isHoistRebuild <- isHoistRebuild_
   forceVersion <- forceVersion_
   inProduction_ <- Lamdera.inProduction
+  isPreviewBuild <- Env.lookupEnv "PREVIEW"
 
   debug $ "production:" ++ show inProduction_
   debug $ "hoist rebuild:" ++ show isHoistRebuild
@@ -92,17 +93,21 @@ run () flags@(Lamdera.CLI.Check.Flags destructiveMigration) = do
   checkUserProjectCompiles root inProduction_
 
   appName <- Lamdera.Project.appNameOrThrow
-
-  progressPointer "Checking Evergreen migrations..."
-  debug $ "app name:" ++ show appName
-
   (localTypes, externalTypeWarnings) <- getLocalInfo
 
-  ips <- Network.Status.ips
+  if isPreviewBuild /= Nothing
+    then do
+      buildFirstDeploy root inProduction_ appName externalTypeWarnings
 
-  if ips == [] && not inProduction_
-    then offlineCheck root
-    else onlineCheck root appName inDebug localTypes externalTypeWarnings isHoistRebuild forceVersion forceNotProd inProduction_ destructiveMigration
+    else do
+      progressPointer "Checking Evergreen migrations..."
+      debug $ "app name:" ++ show appName
+
+      ips <- Network.Status.ips
+
+      if ips == [] && not inProduction_
+        then offlineCheck root
+        else onlineCheck root appName inDebug localTypes externalTypeWarnings isHoistRebuild forceVersion forceNotProd inProduction_ destructiveMigration
 
   Lamdera.setCheckMode False
 
@@ -179,24 +184,7 @@ onlineCheck root appName inDebug localTypes externalTypeWarnings isHoistRebuild 
 
   if nextVersion == 1
     then do
-      -- Always snapshot types for the first version, we need a starting point
-      _ <- Lamdera.Evergreen.Snapshot.run nextVersion
-
-      writeLamderaGenerated root inProduction_ nextVersionInfo
-      buildProductionJsFiles root inProduction_ nextVersionInfo
-
-      onlyWhen (not inProduction_) $ showExternalTypeWarnings externalTypeWarnings
-
-      checkUserProjectCompiles root True
-      checkConfig appName
-
-      progressDoc $ D.dullgreen (D.reflow $ "It appears you're all set to deploy the first version of '" <> T.unpack appName <> "'!")
-
-      -- This is the first version, we don't need any migration checking.
-      onlyWhen (not inProduction_) $ committedCheck root nextVersionInfo
-
-      -- @TEMPORARY
-      putStrLn ""
+      buildFirstDeploy root inProduction_ appName externalTypeWarnings
 
     else do
       writeLamderaGenerated root inProduction_ nextVersionInfo
@@ -343,6 +331,29 @@ onlineCheck root appName inDebug localTypes externalTypeWarnings isHoistRebuild 
   onlyWhen (not inProduction_) $ checkForLatestBinaryVersion inDebug
 
   pure ()
+
+
+buildFirstDeploy root inProduction_ appName externalTypeWarnings = do
+  let nextVersionInfo = WithoutMigrations 1
+
+  -- Always snapshot types for the first version, we need a starting point
+  _ <- Lamdera.Evergreen.Snapshot.run 1
+
+  writeLamderaGenerated root inProduction_ nextVersionInfo
+  buildProductionJsFiles root inProduction_ nextVersionInfo
+
+  onlyWhen (not inProduction_) $ showExternalTypeWarnings externalTypeWarnings
+
+  checkUserProjectCompiles root True
+  checkConfig appName
+
+  progressDoc $ D.dullgreen (D.reflow $ "It appears you're all set to deploy the first version of '" <> T.unpack appName <> "'!")
+
+  -- This is the first version, we don't need any migration checking.
+  onlyWhen (not inProduction_) $ committedCheck root nextVersionInfo
+
+  -- @TEMPORARY
+  putStrLn ""
 
 
 checkConfig appName = do
@@ -641,7 +652,9 @@ migrationCheck root nextVersion = do
   let
     cleanup = do
       debug "make_cleanup: Cleaning up build scaffold"
-      -- Remove our temporarily checker file
+      -- When in debug mode, backup the check file for debugging inspection
+      onlyWhen_ Lamdera.isDebug $ copyFile lamderaCheckBothPath (cache </> "LamderaCheckBoth.elm.bk")
+      -- Remove our temporary check harness file
       remove lamderaCheckBothPath
 
       -- Restore backed up unaltered migration file
@@ -665,7 +678,10 @@ migrationCheck root nextVersion = do
   sleep 50 -- 50 milliseconds
 
   debug "Cleaning up build scaffold"
-  -- Remove our temporarily checker file
+
+  -- When in debug mode, backup the check file for debugging inspection
+  onlyWhen_ Lamdera.isDebug $ copyFile lamderaCheckBothPath (cache </> "LamderaCheckBoth.elm.bk")
+  -- Remove our temporary check harness file
   remove $ root </> lamderaCheckBothPath
 
   -- Restore backed up unaltered migration file
