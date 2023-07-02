@@ -106,6 +106,7 @@ suite = tests $
               , subCounter : Int
               , rpcRes : Result Http.Error String
               , rpcResJson : Result Http.Error String
+              , rpcResJsonFailure : Result Http.Error String
               , rpcResRaw : Result Http.Error String
               , backendTtype : Maybe Evergreen.V1.Fusion.TType
               , backendVal : Evergreen.V1.Fusion.VType
@@ -179,6 +180,7 @@ suite = tests $
               | TestBackendHttp_
               | RPCResWire (Result Http.Error Int)
               | RPCResJson (Result Http.Error String)
+              | RPCResJsonFailure (Result Http.Error String)
               | RPCResRaw (Result Http.Error String)
               | EditLocal Evergreen.V1.Fusion.FType
               | FusionQuery (List Evergreen.V1.Fusion.FType)

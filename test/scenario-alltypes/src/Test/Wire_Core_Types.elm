@@ -26,7 +26,7 @@ expected_w3_encode_CoreTypes w3v =
             Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeUnsignedInt8 1, (\t -> Lamdera.Wire3.encodeInt (Time.posixToMillis t)) v0 ]
 
         ValueUrl v0 ->
-            Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeUnsignedInt8 2, Url.w2_encode_Url v0 ]
+            Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeUnsignedInt8 2, Url.w3_encode_Url v0 ]
 
 
 expected_w3_decode_CoreTypes =
@@ -41,7 +41,7 @@ expected_w3_decode_CoreTypes =
                         Lamdera.Wire3.succeedDecode ValueTime |> Lamdera.Wire3.andMapDecode (Lamdera.Wire3.decodeInt |> Lamdera.Wire3.andThenDecode (\t -> Lamdera.Wire3.succeedDecode (Time.millisToPosix t)))
 
                     2 ->
-                        Lamdera.Wire3.succeedDecode ValueUrl |> Lamdera.Wire3.andMapDecode Url.w2_decode_Url
+                        Lamdera.Wire3.succeedDecode ValueUrl |> Lamdera.Wire3.andMapDecode Url.w3_decode_Url
 
                     _ ->
                         Lamdera.Wire3.failDecode
