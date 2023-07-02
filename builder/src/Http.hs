@@ -327,22 +327,23 @@ lamderaGetArchive manager url onError err onSuccess =
         packageZipBare = concat [pkgsPath & withDefault "<no-packages-path-override-set>", "/packages/", package, "/pack.zip"]
         packageRoot = concat [pkgsPath & withDefault "<no-packages-path-override-set>", "/packages/", package, "/", version]
 
-      -- overrideExists <- doesDirectoryExist packageRoot
-      overrideExists <- do
+      zipPath <- do
         exists <- doesFileExist packageZip
         if exists
-          then pure True
+          then pure packageZip
           else do
             -- Backwards compatible support for when pack.zip was used without a version number
-            bareExists <- doesFileExist packageZip
-            pure bareExists
+            bareExists <- doesFileExist packageZipBare
+            if bareExists
+              then pure packageZipBare
+              else pure ""
 
       -- debug_ $ "🔥: " <> show (package, packageZip, packageRoot, overrideExists, url)
 
-      if (isDebug && overrideExists && stringContains package url)
+      if (isDebug && zipPath /= "" && stringContains package url)
         then do
-          debug_ $ "🔁 Using local package override: " <> packageZip
-          zipBs <- bsReadFile packageZip
+          debug_ $ "🔁 Using local package override: " <> zipPath
+          zipBs <- bsReadFile zipPath
           onSuccess (SHA.sha1 $ bsToLazy zipBs, Zip.toArchive $ bsToLazy zipBs)
 
         else do

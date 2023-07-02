@@ -486,7 +486,7 @@ injectConfig graph = do
                         Define (Str t) gDeps ->
                           case Map.lookup (nameToText name_) prodConfigMap of
                             Just (name, value, used, secret) -> do
-                              let !_ = debugNote ("Injecting prod value for Env." <> name) value
+                              -- let !_ = debugNote ("Injecting prod value for Env." <> name) value
                               -- Exists in prod, drop
                               Define (Str (Utf8.fromChars . T.unpack $ value)) gDeps
 

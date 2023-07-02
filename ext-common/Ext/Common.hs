@@ -117,6 +117,8 @@ getProjectRoot tag = do
   case root of
     ProjectRootUnset -> do
       -- debug $ "🏠 read project root [" <> tag <> "]: " <> "invalid project root"
+      -- @TODO this doesn't seem right... we have creations of this path in prod root...
+      -- should we error out instead? Or just return the current directory?
       pure "<unset-project-root>"
     ProjectRootSet root -> do
       -- debug $ "🏠 read project root [" <> tag <> "]: " <> root

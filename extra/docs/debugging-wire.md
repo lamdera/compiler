@@ -7,9 +7,9 @@ decode : Decoder a -> Bytes -> Maybe a
 The `Maybe a` result makes it painfully difficult to debug as no error context is available.
 
 
-## Debugging bytes decoders
+# Debugging bytes decoders
 
-### Custom elm/bytes fork
+## Custom elm/bytes fork
 
 The `LOVR` package override system can be used along with our [custom elm/bytes fork](https://github.com/lamdera/elm-bytes) to get more detailed information about failures.
 
@@ -33,7 +33,7 @@ yes | lamdera reset
 Now running `LOVR=~/lamdera/overrides LDEBUG=1 lamdera ...` will use our custom fork in place of `elm/bytes`.
 
 
-### Modifying wire to use `debugEncoder` / `debugDecoder` helpers
+## Modifying wire to use `debugEncoder` / `debugDecoder` helpers
 
 Now we have a couple of functions that will wrap an encoder/decoder and add some logging.
 

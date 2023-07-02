@@ -38,7 +38,7 @@ debugFind m k =
   case Map.lookup k m of
     Just v -> v
     Nothing ->
-      error (sShow ("Sanity: (!) failed", Map.keys m, "does not contain:", k))
+      error (sShow ("Sanity: (!) failed", take 10 (Map.keys m), "does not contain:", k))
 
 
 {- An alternative version of (!) that will print the keys, missing key & some added context -}
