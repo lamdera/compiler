@@ -16,6 +16,7 @@ port module LocalDev exposing (main)
    be relied on in any way.
 
 -}
+-- import Bytes
 -- import Http
 -- import LamderaGenerated
 -- import LamderaHelpers exposing (..)
@@ -844,7 +845,7 @@ update msg m =
         LoadLatestSnapshotFilenamesResult res ->
             case res of
                 Ok filenames ->
-                    ( { m | devbar = m.devbar |> (\d -> { d | snapshotFilenames = filenames |> List.take 1 }) }
+                    ( { m | devbar = m.devbar |> (\d -> { d | snapshotFilenames = filenames |> List.drop 2 }) }
                     , Cmd.none
                     )
 
@@ -856,58 +857,65 @@ update msg m =
                     ( m, Cmd.none )
 
         LoadSnapshot filename ->
-            ( m, getAppSnapshot "dashboard" filename |> Task.attempt LoadedSnapshot )
+            ( m, getAppSnapshot filename |> Task.attempt LoadedSnapshot )
 
         LoadSnapshotLegacy filename ->
             ( m, getAppSnapshotLegacy "ascii-collab" filename |> Task.attempt LoadedSnapshotLegacy )
 
         LoadedSnapshot res ->
-            Debug.todo "neutered"
+            Debug.todo "neutered LoadedSnapshot"
 
         -- let
         --     evergreenResult =
         --         case res of
         --             Ok ( bytes, version ) ->
+        --                 let
+        --                     x =
+        --                         Debug.log
+        --                             ("running LamderaGenerated.decodeAndUpgradeBackendModel for v"
+        --                                 ++ String.fromInt version
+        --                                 ++ " and bytes size"
+        --                             )
+        --                             ( version, Bytes.width bytes )
+        --                     y =
+        --                         LamderaGenerated.debug bytes
+        --                             |> Debug.log "manual debug result"
+        --                 in
         --                 LamderaGenerated.decodeAndUpgradeBackendModel version bytes
-        --
         --             Err err ->
         --                 DecoderError <| Debug.toString err
-        --
         --     evergreenTest =
         --         case evergreenResult of
         --             AlreadyCurrent ( valueType, cmds ) ->
         --                 "AlreadyCurrent"
-        --
         --             Upgraded ( valueType, cmds ) ->
         --                 "Upgraded"
-        --
         --             UnknownVersion ( int, string, bytes_ ) ->
         --                 "UnknownVersion: " ++ String.fromInt int ++ ", " ++ string
-        --
         --             UnknownType string ->
         --                 "UnknownType: " ++ string
-        --
         --             DecoderError string ->
         --                 "DecoderError: " ++ string
-        --
         --     _ =
         --         Debug.log "evergreenResult" evergreenTest
         -- in
         -- case evergreenResult of
         --     AlreadyCurrent ( valueType, cmds ) ->
-        --         ( { m | bem = valueType }, Cmd.none )
-        --
+        --         let
+        --             _ =
+        --                 Debug.log "NON-MIGRATED RESTORE SUCCESS!" ()
+        --         in
+        --         ( { m | bem = valueType, bemDirty = True }, Cmd.none )
         --     Upgraded ( valueType, cmds ) ->
         --         let
         --             _ =
-        --                 Debug.log "RESTORING SUCCESS DECODE!!!!!" ()
+        --                 Debug.log "MIGRATION SUCCESS!" ()
         --         in
-        --         ( { m | bem = valueType }, Cmd.none )
-        --
+        --         ( { m | bem = valueType, bemDirty = True }, Cmd.none )
         --     _ ->
         --         ( m, Cmd.none )
         LoadedSnapshotLegacy res ->
-            Debug.todo "neutered"
+            Debug.todo "neutered LoadedSnapshotLegacy"
 
         -- let
         --     evergreenResult =
@@ -1483,8 +1491,7 @@ expandedUI topDown devbar =
 
           else
             text ""
-
-        -- , lamderaSnapshots devbar
+        , lamderaSnapshots devbar
         ]
 
 
@@ -1493,14 +1500,14 @@ lamderaSnapshots devbar =
         ([ Html.div [ onClick LoadLatestSnapshotFilename ] [ Html.text "Load latest snapshots" ]
          ]
             ++ List.map (\f -> Html.div [ onClick (LoadSnapshot f) ] [ Html.text f ]) devbar.snapshotFilenames
-            ++ List.map
-                (\f ->
-                    Html.div
-                        [ onClick (LoadSnapshotLegacy f)
-                        ]
-                        [ Html.text <| "LEGACY: " ++ f ]
-                )
-                [ "ascii-collab-v67-1622398980511.json" ]
+         -- ++ List.map
+         --     (\f ->
+         --         Html.div
+         --             [ onClick (LoadSnapshotLegacy f)
+         --             ]
+         --             [ Html.text <| "LEGACY: " ++ f ]
+         --     )
+         --     [ "appname_v9_1687430149455.bin" ]
         )
 
 
@@ -1744,17 +1751,19 @@ getAppSnapshotFilenames appId =
     LD.task
         { method = "GET"
         , headers = []
-        , url = "http://apps.lamdera.com:8080/v1/app/" ++ appId ++ "/snapshots"
 
+        -- , url = "http://apps.lamdera.com:8080/v1/app/" ++ appId ++ "/snapshots"
         -- , url = "http://localhost:8080/v1/app/" ++ appId ++ "/snapshots"
+        , url = "http://localhost:8000/_x/list/snapshots"
         , body = LD.emptyBody
         , resolver = LD.stringResolver <| LD.handleJsonResponse <| Json.decoderList Json.decoderString
         , timeout = Nothing
         }
+        |> Task.map List.sort
 
 
-getAppSnapshot : String -> String -> Task LD.HttpError ( Wire.Bytes, Int )
-getAppSnapshot appId snapshot =
+getAppSnapshot : String -> Task LD.HttpError ( Wire.Bytes, Int )
+getAppSnapshot snapshot =
     Debug.todo "neutered"
 
 
@@ -1762,24 +1771,31 @@ getAppSnapshot appId snapshot =
 -- let
 --     token =
 --         "XXXXX"
---
---     version =
+--     ( appId, version ) =
 --         snapshot
---             |> String.replace (appId ++ "_v") ""
 --             |> String.split "_"
---             |> List.head
---             |> Maybe.andThen String.toInt
---             |> Debug.log "parsed version as:"
---             |> Maybe.withDefault -1
+--             |> (\res ->
+--                     case res of
+--                         appId_ :: version_ :: _ ->
+--                             ( appId_
+--                             , version_
+--                                 |> String.replace "v" ""
+--                                 |> String.toInt
+--                                 |> Debug.log "parsed version as:"
+--                                 |> Maybe.withDefault -1
+--                             )
+--                         _ ->
+--                             Debug.todo ("impossible... bad snapshot name: " ++ snapshot)
+--                )
 -- in
 -- LD.task
 --     { method = "GET"
 --     , headers = []
---     , url = "http://apps.lamdera.com:8080/v1/app/" ++ appId ++ "/snapshot-retrieve/" ++ snapshot ++ "/" ++ token
---
+--     -- , url = "http://apps.lamdera.com:8080/v1/app/" ++ appId ++ "/snapshot-retrieve/" ++ snapshot ++ "/" ++ token
 --     -- , url = "http://localhost:8080/v1/app/" ++ appId ++ "/snapshot-retrieve/" ++ snapshot ++ "/" ++ token
+--     , url = "http://localhost:8000/_x/read/" ++ "snapshots/" ++ snapshot
 --     , body = LD.emptyBody
---     , resolver = LD.bytesResolver LD.handleBytesResponse
+--     , resolver = Http.bytesResolver handleBytesResponse
 --     , timeout = Nothing
 --     }
 --     |> Task.map (\bytes -> ( bytes, version ))
@@ -1787,7 +1803,7 @@ getAppSnapshot appId snapshot =
 
 getAppSnapshotLegacy : String -> String -> Task LD.HttpError ( List Int, Int )
 getAppSnapshotLegacy appId snapshot =
-    Debug.todo "neutered"
+    Debug.todo "neutered getAppSnapshotLegacy"
 
 
 
@@ -1883,3 +1899,21 @@ justs =
                     acc
         )
         []
+
+
+
+-- {-| Helper for handling a Bytes response
+-- -}
+-- handleBytesResponse : Http.Response Bytes -> Result Http.Error Bytes
+-- handleBytesResponse response =
+--     case response of
+--         Http.BadUrl_ url ->
+--             Err (Http.BadUrl url)
+--         Http.Timeout_ ->
+--             Err Http.Timeout
+--         Http.BadStatus_ { statusCode } _ ->
+--             Err (Http.BadStatus statusCode)
+--         Http.NetworkError_ ->
+--             Err Http.NetworkError
+--         Http.GoodStatus_ _ bytes ->
+--             Ok bytes
