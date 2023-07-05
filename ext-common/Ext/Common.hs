@@ -223,7 +223,7 @@ atomicPutStrLn str =
 
 atomicPutStrLnDebug :: String -> IO ()
 atomicPutStrLnDebug s = do
-  onlyWhen (not isProdEnv || isDebug_) $ atomicPutStrLn s
+  onlyWhen (isDebug_) $ atomicPutStrLn s
 
 
 {- Wrap an IO in basic runtime information
