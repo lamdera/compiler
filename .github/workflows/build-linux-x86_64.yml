@@ -2,6 +2,7 @@ on:
   push:
     branches:
       - distribute
+      - linux
 
 name: Build Linux x86_64
 jobs:
