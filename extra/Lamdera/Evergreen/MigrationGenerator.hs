@@ -296,7 +296,7 @@ migrateUnionDefinition_ author pkg oldUnion newUnion tvarMapOld tvarMapNew oldVe
             Nothing ->
               let params =
                     if length newParams > 0
-                      then " " <> (T.intercalate " " (fmap asTypeName newParams))
+                      then " " <> (T.intercalate " " (fmap qualifiedTypeName newParams))
                       else ""
               in
               -- This constructor is missing a match in the old type, warn the user this new constructor exists
@@ -873,7 +873,7 @@ typeToMigration oldVersion newVersion scope interfaces recursionSet_ typeNew@(Ca
     identifierNew = asIdentifier typeNew
 
     typeName :: Text
-    typeName = asTypeName typeNew
+    typeName = qualifiedTypeName typeNew
 
     applyMigration p0 p0o migrate_p0 =
       if migrate_p0 == ""
@@ -903,6 +903,7 @@ typeToMigration oldVersion newVersion scope interfaces recursionSet_ typeNew@(Ca
             in
             if applied == ""
               then xMigrationNested ("", Set.empty, Map.empty)
+              -- @TODO this is dubious applying .map indiscriminately
               else xMigrationNested (T.concat [typeName, ".map (", applied, ")"], Set.singleton newModuleName <> imps1, subDefs1)
 
           _ ->

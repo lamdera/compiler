@@ -45,7 +45,7 @@ newConstructorWarnings typeName moduleScope newUnion oldUnion newVersion =
         Nothing ->
           let params =
                 if length newParams > 0
-                  then " " <> (T.intercalate " " (fmap asTypeName newParams))
+                  then " " <> (T.intercalate " " (fmap qualifiedTypeName newParams))
                   else ""
           in
           -- This constructor is missing a match in the old type, warn the user this new constructor exists

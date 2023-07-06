@@ -217,16 +217,20 @@ asIdentifier_ pair =
     ((ModuleName.Canonical (Pkg.Name author pkg) module_), typeName) ->
           (author, pkg, module_, typeName)
 
+-- @TODO figuring out why we wouldn't always use the qualifiedTypeName – esp given this was only used in 1 place for signatures of custom type constructors it seems
+-- asTypeName :: Can.Type -> Text
+-- asTypeName tipe =
+--   case tipe of
+--     Can.TType moduleName name params -> N.toText name
+--     Can.TAlias moduleName name _ _ -> N.toText name
+--     Can.TRecord _ _ -> "anonymousRecord_"
+--     Can.TUnit -> "()"
+--     Can.TTuple a b mc      ->
+--       case mc of
+--         Just c -> T.concat ["(", qualifiedTypeName a, ", ", qualifiedTypeName b, ", ", qualifiedTypeName c, ")"]
+--         Nothing -> T.concat ["(", qualifiedTypeName a, ", ", qualifiedTypeName b, ")"]
 
-asTypeName :: Can.Type -> Text
-asTypeName tipe =
-  case tipe of
-    Can.TType moduleName name params -> N.toText name
-    Can.TAlias moduleName name _ _ -> N.toText name
-    Can.TRecord _ _ -> "anonymousRecord_"
-    Can.TUnit -> "()"
-    _ -> error $ "unimplemented asTypeName: " <> show tipe
-
+--     _ -> error $ "unimplemented asTypeName: " <> show tipe
 
 
 -- Just the qualified name of the overall top level type, i.e. Dict
@@ -243,6 +247,7 @@ qualifiedTypeName tipe =
       case mc of
         Just c -> T.concat ["(", qualifiedTypeName a, ", ", qualifiedTypeName b, ", ", qualifiedTypeName c, ")"]
         Nothing -> T.concat ["(", qualifiedTypeName a, ", ", qualifiedTypeName b, ")"]
+
 
 typeNameToStringQualified :: ModuleName.Canonical -> N.Name -> [Can.Type] -> Text
 typeNameToStringQualified moduleName tipeName params = do
