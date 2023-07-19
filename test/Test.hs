@@ -30,7 +30,7 @@ import Make (Flags(..))
 import qualified Lamdera.Compile
 import qualified Lamdera.Evaluate
 import qualified Lamdera.CLI.Check
-import qualified Lamdera.CLI.Preview
+import qualified Lamdera.CLI.Deploy
 
 import Ext.Common (trackedForkIO, bash)
 import qualified Ext.Common
@@ -117,7 +117,7 @@ checkProject = do
 
 previewProject = do
   let p = "/Users/mario/dev/projects/lamdera-test"
-  Dir.withCurrentDirectory p $ Lamdera.CLI.Preview.run () ()
+  Dir.withCurrentDirectory p $ Lamdera.CLI.Deploy.run () ()
 
 
 -- target =
@@ -126,6 +126,7 @@ previewProject = do
 
 -- target = buildTestHarnessToProductionJs
 -- target = checkProjectCompiles
+target = previewProject
 -- target = liveReloadLive
 -- target = Test.Wire.all
 -- target = checkUserConfig

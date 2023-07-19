@@ -11,7 +11,6 @@ import Terminal.Helpers
 import qualified Develop -- has Develop.run for live
 import qualified Lamdera.CLI.Login
 import qualified Lamdera.CLI.Check
-import qualified Lamdera.CLI.Preview
 import qualified Lamdera.CLI.Deploy
 import qualified Lamdera.CLI.Reset
 import qualified Lamdera.CLI.Annotate
@@ -91,24 +90,6 @@ check =
   Terminal.Command "check" (Common summary) details example noArgs checkFlags Lamdera.CLI.Check.run
 
 
-preview :: Terminal.Command
-preview =
-  let
-    summary =
-      "Deploy a preview Lamdera app based on the current branch name"
-
-    details =
-      "The `preview` command ignores all Evergreen concerns and always re-deploys as v1"
-
-    example =
-      reflow
-        "It will query the production environment and supply\
-        \ information about the next version and required migrations, \
-        \ and then attempt to deploy."
-  in
-  Terminal.Command "preview" (Common summary) details example noArgs noFlags Lamdera.CLI.Preview.run
-
-
 deploy :: Terminal.Command
 deploy =
   let
@@ -122,7 +103,8 @@ deploy =
       reflow
         "It will query the production environment and supply\
         \ information about the next version and required migrations, \
-        \ and then attempt to deploy."
+        \ and then attempt to deploy. Deploying from non-main/master \
+        \ branches will create/replace a preview app named after the branch."
   in
   Terminal.Command "deploy" (Common summary) details example noArgs noFlags Lamdera.CLI.Deploy.run
 

@@ -218,7 +218,6 @@ Executable lamdera
         Lamdera.CLI.Live
         Lamdera.CLI.Login
         Lamdera.CLI.Check
-        Lamdera.CLI.Preview
         Lamdera.CLI.Deploy
         Lamdera.CLI.Reset
         -- CLI Experimental
@@ -241,6 +240,7 @@ Executable lamdera
         Lamdera.Injection
         Lamdera.Live
         Lamdera.Make
+        Lamdera.Nitpick.DebugLog
         Lamdera.Offline
         Lamdera.PostCompile
         Lamdera.Project
