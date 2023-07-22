@@ -1066,7 +1066,7 @@ envModeChanger showModeChanger =
                     #lamdera-env .lamdera-dev:hover {
                       background-color: #85BC7A20
                     }
-                    #lamdera-env .lamdera-staging:hover {
+                    #lamdera-env .lamdera-preview:hover {
                       background-color: #4196ad20
                     }
                     #lamdera-env .lamdera-prod:hover {
@@ -1085,14 +1085,14 @@ envModeChanger showModeChanger =
                     [ text "Development" ]
 
                 -- , div
-                --     [ onClick (EnvModeSelected "Review")
+                --     [ onClick (EnvModeSelected "Preview")
                 --     , style "cursor" "pointer"
                 --     , style "padding" "6px 6px"
                 --     , style "margin" "4px 2px"
                 --     , style "border-left" "3px solid #4196ad"
-                --     , class "lamdera-staging"
+                --     , class "lamdera-preview"
                 --     ]
-                --     [ text "Review" ]
+                --     [ text "Preview" ]
                 , div
                     [ onClick (EnvModeSelected "Production")
                     , style "cursor" "pointer"
@@ -1221,8 +1221,8 @@ envMeta =
         Env.Production ->
             ( "Prod", red )
 
-        -- Env.Review ->
-        --     ( "Review", blue )
+        -- Env.Preview ->
+        --     ( "Preview", blue )
         Env.Development ->
             ( "Dev", green )
 

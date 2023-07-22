@@ -87,7 +87,14 @@ modifyModul pkg ifaces modul =
                     -- Source for `type Mode = Production | Development`
                     if hasModeDef (Src._unions newModul)
                       then Src._unions newModul
-                      else Src._unions newModul ++ [(a (Union (a ("Mode")) [] [((a ("Production")), []), ((a ("Development")), [])]))]
+                      else Src._unions newModul ++
+                        [ (a (Union (a ("Mode")) []
+                            [ ((a ("Production")), [])
+                            -- , ((a ("Preview")), [])
+                            , ((a ("Development")), [])
+                            ]
+                          ))
+                        ]
                 , Src._values =
                     -- Source for `mode = Development`
                     Src._values newModul
