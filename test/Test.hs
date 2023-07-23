@@ -97,13 +97,14 @@ For more information on how to use the GHCi debugger, see the GHC User's Guide.
 -- Current target for ghci :rr command. See ~/.ghci config file, which should contain
 -- something like `:def rr const $ return $ unlines [":r","Test.target"]`
 
-target = Test.all
+-- target = Test.all
 -- target = checkProject
 
 
 checkProject = do
   -- let (p, v) = ("/Users/mario/dev/projects/bento-life", "45")
-  let (p, v) = ("/Users/mario/dev/projects/lamdera-dashboard", "126")
+  -- let (p, v) = ("/Users/mario/dev/projects/lamdera-dashboard", "126")
+  let (p, v) = ("/Users/mario/dev/test/best-web-vitals", "9")
 
   Lamdera.remove (p </> "src/Evergreen/Migrate/V" ++ v ++ ".elm")
   Lamdera.rmdir (p </> "src/Evergreen/V" ++ v)
@@ -217,19 +218,27 @@ buildTestHarnessToProductionJs = do
 {- Dynamic testing of lamdera live with managed thread kill + reload -}
 liveReloadLive = do
 
-  setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
-  setEnv "LDEBUG" "1"
-  setEnv "EXPERIMENTAL" "1"
+  -- setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
+  -- setEnv "LDEBUG" "1"
+  -- setEnv "EXPERIMENTAL" "1"
 
   -- let p = "/Users/mario/lamdera/test/v1"
-  let p = "/Users/mario/dev/projects/bento-life"
+  -- let p = "/Users/mario/dev/projects/bento-life"
   -- let p = "/Users/mario/dev/projects/lamdera-dashboard"
 
   -- let p = "/Users/mario/dev/test/lamdera-init"
   -- let p = "/Users/mario/dev/test/nu-ashworld-lamdera"
+  let p = "/Users/mario/dev/test/town-collab"
+
   -- let p = "/Users/mario/dev/projects/otstats"
   -- let p = "/Users/mario/work/codespecs"
   -- let p = "/Users/mario/lamdera/overrides/packages/elm/bytes/1.0.8/benchmarks"
+
+  -- Wire debugging feature in LocalDev WIP
+  -- let p = "/Users/mario/dev/test/wire-failure/230623-best-web-vitals/best-web-vitals-v10"
+  -- let p = "/Users/mario/dev/test/wire-failure/230623-best-web-vitals/best-web-vitals-v9"
+  -- let p = "/Users/mario/dev/test/wire-failure/230623-best-web-vitals/newv1snaps"
+  -- let p = "/Users/mario/dev/test/best-web-vitals"
 
   -- rmdir "/Users/mario/.elm"
   -- rmdir $ p <> "/elm-stuff"
