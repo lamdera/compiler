@@ -9,13 +9,6 @@ jobs:
     name: Build Windows Libraries
     runs-on: windows-latest
     steps:
-      - name: Install SSH key
-        uses: shimataro/ssh-key-action@v2
-        with:
-          key: ${{ secrets.GH_USER_SCP_KEY }}
-          name: id_ed25519
-          known_hosts: ${{ secrets.KNOWN_HOSTS }}
-          if_key_exists: replace
       - uses: actions/checkout@v3
         with:
           submodules: true
@@ -117,3 +110,24 @@ jobs:
         with:
           name: lamdera-next.zip
           path: lamdera.zip
+
+  upload:
+    needs: install
+    name: Upload lamdera-next.zip to SFTP
+    runs-on: lamdera-community-linux-x86_64
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v2
+        with:
+          name: lamdera-next.zip
+
+      - name: Install SSH key
+        uses: shimataro/ssh-key-action@v2
+        with:
+          key: ${{ secrets.GH_USER_SCP_KEY }}
+          name: id_ed25519
+          known_hosts: ${{ secrets.KNOWN_HOSTS }}
+          if_key_exists: replace
+
+      - run: |
+          echo "put lamdera-next.zip next/lamdera-next-windows-x86_64.zip" | sftp -i ~/.ssh/id_ed25519 -P 22 github@apps.lamdera.com
