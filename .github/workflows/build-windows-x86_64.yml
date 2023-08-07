@@ -117,7 +117,7 @@ jobs:
     runs-on: lamdera-community-linux-x86_64
     steps:
       - name: Download artifacts
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: lamdera-next.zip
 
