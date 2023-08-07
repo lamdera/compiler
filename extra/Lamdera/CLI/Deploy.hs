@@ -29,7 +29,8 @@ run () () = do
       _ <- readProcess "git" ["push", "lamdera", "master"] ""
       pure ()
 
-    branchName -> do
+    _ -> do
+      let branchName = Lamdera.Project.makeNameClean branch
       appName <- Lamdera.Project.appNameOrThrow
       approveReset <- Reporting.ask $
         D.fillSep
@@ -50,3 +51,4 @@ run () () = do
           pure ()
 
   pure ()
+

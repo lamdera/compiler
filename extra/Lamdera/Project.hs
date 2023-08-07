@@ -6,8 +6,10 @@ module Lamdera.Project where
 -}
 
 import qualified Data.Text as T
+import Data.Char (toLower, isAlphaNum)
 import System.Process (readProcess)
 import System.Exit (exitFailure)
+
 import qualified Reporting.Doc as D
 import qualified Reporting.Exit.Help as Help
 import qualified Reporting.Exit as Exit
@@ -80,6 +82,13 @@ lamderaThrowUnknownApp =
   Lamdera.Progress.throw lamderaUnknownApp
 
 
+makeNameClean :: T.Text -> T.Text
+makeNameClean appName =
+    T.take 20 . T.toLower . T.filter isAllowed $ appName
+  where
+    isAllowed c = isAlphaNum c || c == '-'
+
+
 lamderaUnknownApp =
   Help.report "UNKNOWN APP" (Just "git remote -v")
     ("I cannot figure out which Lamdera app this repository belongs to!")
@@ -112,3 +121,4 @@ findOverridePackages :: IO [(Elm.Package.Name, Word16, Word16, Word16)]
 findOverridePackages =
   -- @STUB todo: make this actually find override packages dynamically
   pure [(Elm.Package.Name (Utf8.fromChars "lamdera") (Utf8.fromChars "websocket"), 1,0,0)]
+
