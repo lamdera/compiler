@@ -2,6 +2,7 @@ on:
   push:
     branches:
       - distribute
+      - macos
 
 name: Build MacOS x86_64
 jobs:

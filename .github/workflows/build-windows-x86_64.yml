@@ -1,6 +1,7 @@
 on:
   push:
     branches:
+      - distribute
       - windows
 
 name: Build Windows x86_64
