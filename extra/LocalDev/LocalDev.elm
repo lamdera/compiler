@@ -1491,7 +1491,8 @@ expandedUI topDown devbar =
 
           else
             text ""
-        , lamderaSnapshots devbar
+
+        -- , lamderaSnapshots devbar
         ]
 
 
