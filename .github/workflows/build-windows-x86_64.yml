@@ -131,4 +131,6 @@ jobs:
           if_key_exists: replace
 
       - run: |
-          echo "put lamdera-next.zip next/lamdera-next-windows-x86_64.zip" | sftp -i ~/.ssh/id_ed25519 -P 22 github@apps.lamdera.com
+          pwd
+          ls -alh
+          echo "lamdera.zip next/lamdera-next-windows-x86_64.zip" | sftp -i ~/.ssh/id_ed25519 -P 22 github@apps.lamdera.com
