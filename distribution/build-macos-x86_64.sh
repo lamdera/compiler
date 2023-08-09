@@ -11,6 +11,11 @@ mkdir -p $dist
 bin=$dist/$buildTag
 scriptDir=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 
+
+
+
+
+
 stackVersion=2.9.3
 isolate=~/.ghcup/$os-$arch
 mkdir -p $isolate
@@ -22,11 +27,15 @@ if [ ! -f "$stack" ]; then
   ghcup install stack "$stackVersion" --isolate "$isolate" --force -p x86_64-apple-darwin
 fi
 
-# /opt/homebrew/opt/llvm/bin/opt --version                  #The arm64 build currently requires llvm until we get to GHC 9.4+
+
 
 
 cd "$scriptDir/.."                                        # Move into the project root
 git submodule init && git submodule update
+
+
+
+
 
 
 $stack install --local-bin-path $dist
