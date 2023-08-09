@@ -42,6 +42,10 @@ run (Args file expressionName) () = do
   printAnnotations root file expressionName
 
 
+printAnnotationsTest :: FilePath -> FilePath -> String -> IO ()
+printAnnotationsTest root file expressionName =
+  printAnnotations root file (Name.fromChars expressionName)
+
 printAnnotations :: FilePath -> FilePath -> Name.Name -> IO ()
 printAnnotations root file expressionName = do
   Ext.Common.withProjectRoot root $ do
