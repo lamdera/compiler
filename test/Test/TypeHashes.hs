@@ -151,11 +151,11 @@ debugProject project = do
     res <- Lamdera.TypeHash.calculateLamderaHashes
     case res of
       Right hashes -> do
-        -- hindentPrintValue "hash" hashes
+        -- hindentPrintLabelled "hash" hashes
         atomicPutStrLn $ show hashes
         pure ()
       Left err -> do
-        -- hindentPrintValue "hash-err" err
+        -- hindentPrintLabelled "hash-err" err
         pure ()
 
     pure ()

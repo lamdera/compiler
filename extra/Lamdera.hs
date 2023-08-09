@@ -55,7 +55,8 @@ module Lamdera
   , formatHaskellValue
   , hindent
   , hindent_
-  , hindentPrintValue
+  , hindentPrintLabelled
+  , hindentPrint
   , hindentFormatValue
   -- , readUtf8
   , readUtf8Text
@@ -306,7 +307,7 @@ debugHaskell label value =
     debugM <- Env.lookupEnv "LDEBUG"
     case debugM of
       Just _ -> do
-        !x <- hindentPrintValue label value
+        !x <- hindentPrintLabelled label value
         pure value
 
       Nothing ->
@@ -319,7 +320,7 @@ debugHaskellPass label value pass =
     debugM <- Env.lookupEnv "LDEBUG"
     case debugM of
       Just _ -> do
-        !x <- hindentPrintValue label (value, pass)
+        !x <- hindentPrintLabelled label (value, pass)
         pure pass
 
       Nothing ->
@@ -335,7 +336,7 @@ debugHaskellPassWhen condition label value pass =
         debugM <- Env.lookupEnv "LDEBUG"
         case debugM of
           Just _ -> do
-            !x <- hindentPrintValue label (value, pass)
+            !x <- hindentPrintLabelled label (value, pass)
             pure pass
 
           Nothing ->
@@ -351,7 +352,7 @@ debugHaskellPassDiffWhen condition label (v1, v2) pass =
         debugM <- Env.lookupEnv "LDEBUG"
         case debugM of
           Just _ -> do
-            hindentPrintValue label ((v1,v2), pass)
+            hindentPrintLabelled label ((v1,v2), pass)
             v1_ <- hindent v1
             v2_ <- hindent v2
             icdiff v1_ v2_
@@ -369,7 +370,7 @@ debugHaskellWhen cond label value =
       Just _ -> do
         if cond
           then do
-            hindentPrintValue label value
+            hindentPrintLabelled label value
             pure value
           else
             pure value
@@ -500,12 +501,12 @@ The bang pattern forces evaluation and you don't have to worry about the type-co
 -}
 formatHaskellValue label v =
   unsafePerformIO $ do
-    hindentPrintValue label v
+    hindentPrintLabelled label v
     pure $ pure ()
 
 
-hindentPrintValue :: Show a => Text -> a -> IO a
-hindentPrintValue label v = do
+hindentPrintLabelled :: Show a => Text -> a -> IO a
+hindentPrintLabelled label v = do
   let
     input = Text.Show.Unicode.ushow v
 
@@ -513,23 +514,59 @@ hindentPrintValue label v = do
   --   then
   --     atomicPutStrLn $ "❌SKIPPED display, value show > 10,000 chars, here's a clip:\n" <> Prelude.take 1000 input
   --   else do
-  (exit, stdout, stderr) <- System.Process.readProcessWithExitCode "hindent" ["--line-length","150"] input
-  if Prelude.length stderr > 0
-    then
-      atomicPutStrLn $
-        "\n🔶 "
-          <> T.unpack label
-          <> "\n->"
-          <> stderr
-          <> "\n📥 for input: \n"
-          <> input
 
-    else
-      atomicPutStrLn $
-        "\n🔶 "
-          <> T.unpack label
-          <> "\n->"
-          <> stdout
+  pathM <- Dir.findExecutable "hindent"
+  case pathM of
+    Just _ -> do
+      (exit, stdout, stderr) <- System.Process.readProcessWithExitCode "hindent" ["--line-length","150"] input
+      if Prelude.length stderr > 0
+        then
+          atomicPutStrLn $
+            "\n🔶 "
+              <> T.unpack label
+              <> "\n->"
+              <> stderr
+              <> "\n📥 for input: \n"
+              <> input
+
+        else
+          atomicPutStrLn $
+            "\n🔶 "
+              <> T.unpack label
+              <> "\n->"
+              <> stdout
+    Nothing -> do
+      debug_ "hindent missing, formatting without"
+      atomicPutStrLn $ show v
+
+  pure v
+
+
+hindentPrint :: Show a => a -> IO a
+hindentPrint v = do
+  let
+    input = Text.Show.Unicode.ushow v
+
+  pathM <- Dir.findExecutable "hindent"
+  case pathM of
+    Just _ -> do
+      (exit, stdout, stderr) <- System.Process.readProcessWithExitCode "hindent" ["--line-length","150"] input
+      if Prelude.length stderr > 0
+        then
+          atomicPutStrLn $
+            "\nerrors: \n"
+              <> stderr
+              <> "\n📥 for input: \n"
+              <> input
+              <> "\nwith output: \n"
+              <> stdout
+
+        else
+          atomicPutStrLn stdout
+
+    Nothing -> do
+      debug_ "hindent missing, formatting without"
+      atomicPutStrLn $ show v
 
   pure v
 

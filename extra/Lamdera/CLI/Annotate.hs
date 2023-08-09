@@ -25,15 +25,12 @@ import qualified Ext.Common
 
 Lookup and print out the type annotation for the given file:expression.
 
-@TODO this only works if we've already compiled successfully (no errors) before!
+Note: currently Ext.Query.Canonical.loadSingleArtifacts will try compile the file,
+so this annotation query will involve a full disk read of all .elm file metadata
+for the entire project on every single query, as Elm tries to figure out if there's
+any changes requiring an incremental compile.
 
-If we instead want to do a check compile first, we'll need to use Lamdera.Compile.make.
-
-Note: if we do this, this annotation query will involve a full disk read of all
-.elm file metadata for the entire project on every single query, as Elm tries to
-figure out if there's any changes requiring an incremental compile.
-
-@FUTURE @TRACK inotify-mode feature (https://trello.com/c/S1LmVKbK) would solve this!
+@FUTURE in the in-memory daemon mode we will have equivalent functions that use the cache
 
 -}
 run :: Args -> () -> IO ()
@@ -54,8 +51,9 @@ printAnnotations root file expressionName = do
 
     case annotations & Map.lookup expressionName of
       Just annotation -> do
-        formatHaskellValue ("debug AST") annotation
-        putStrLn $ T.unpack $ canonicalTypeToString annotation
+        hindentPrint annotation
+        pure ()
+        -- putStrLn $ T.unpack $ canonicalTypeToString annotation
 
       Nothing ->
         putStrLn "Oops! Something went wrong!"

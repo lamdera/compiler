@@ -29,7 +29,7 @@ import qualified File
 -- elmx
 import qualified Ext.Query.Interfaces
 
-import Lamdera (hindentPrintValue, last_)
+import Lamdera (hindentPrintLabelled, last_)
 import Ext.Common
 
 -- @TODO
@@ -72,7 +72,7 @@ loadFileSource path = do
     source <- File.readUtf8 path
     case Parse.fromByteString Parse.Application source of
       Right modul -> do
-        -- hindentPrintValue "module source" modul
+        -- hindentPrintLabelled "module source" modul
         pure $ (source, modul)
 
       Left err ->
@@ -104,13 +104,13 @@ loadFileSourceValue path name = do
 
     code = Code.toSource source
 
-  -- hindentPrintValue "1. module imports" imports
-  -- hindentPrintValue "2. value location" valueLocation
+  -- hindentPrintLabelled "1. module imports" imports
+  -- hindentPrintLabelled "2. value location" valueLocation
 
   putStrLn "3. print found definition:\n"
 
-  hindentPrintValue "4. value" value
-  hindentPrintValue "4. docs" (modul & Src._docs)
+  hindentPrintLabelled "4. value" value
+  hindentPrintLabelled "4. docs" (modul & Src._docs)
 
   render code valueLocation Nothing
     & mapM_ (putStrLn . snd)
