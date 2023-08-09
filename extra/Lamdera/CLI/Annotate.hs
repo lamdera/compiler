@@ -56,8 +56,8 @@ printAnnotations root file expressionName = do
     case annotations & Map.lookup expressionName of
       Just annotation -> do
         hindentPrint annotation
-        pure ()
-        -- putStrLn $ T.unpack $ canonicalTypeToString annotation
+        putStrLn $ "----------------------------------------"
+        putStrLn $ T.unpack $ canonicalTypeToString annotation
 
       Nothing ->
         putStrLn "Oops! Something went wrong!"
