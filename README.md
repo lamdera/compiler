@@ -1,3 +1,5 @@
+For Lamdera docs, see [extra/readme.md](extra/readme.md).
+
 # Elm
 
 A delightful language for reliable webapps.
