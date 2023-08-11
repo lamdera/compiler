@@ -21,14 +21,11 @@ import Lamdera.Progress
 import qualified Ext.Query.Canonical
 import qualified Ext.Common
 
-import qualified Elm.ModuleName as ModuleName
-import qualified Elm.Package as Package
-import qualified Data.Utf8 as Utf8
+import System.FilePath ((</>))
 import qualified AST.Source as Src
+import qualified Reporting.Doc
 import qualified Reporting.Render.Type.Localizer as Localizer
-import System.FilePath
-import AST.Canonical (FieldType(..))
-
+import qualified Reporting.Render.Type
 {-
 
 Lookup and print out the type annotation for the given file:expression.
@@ -69,7 +66,7 @@ printAnnotations root file expressionName = do
       Just annotation -> do
         hindentPrint annotation
         putStrLn $ "----------------------------------------"
-        putStrLn $ T.unpack $ canonicalAnnotationToString modul annotation
+        putStrLn $ canonicalAnnotationToString modul annotation
 
       Nothing ->
         putStrLn "Oops! Something went wrong!"
@@ -107,165 +104,15 @@ exampleExpressionNames chars =
 
 -- Convert a Canonical Annotation into a String
 
-canonicalAnnotationToString :: Src.Module -> Can.Annotation -> Text
+canonicalAnnotationToString :: Src.Module -> Can.Annotation -> String
 canonicalAnnotationToString modul (Can.Forall freeVars tipe) =
   let 
     localizer = 
       Localizer.fromModule modul
     
-    localize moduleName name = 
-      Localizer.toChars localizer moduleName name & T.pack
+    context = 
+      Reporting.Render.Type.None
   in
-  case tipe of 
-    TLambda t1 t2 ->
-      -- within a type annotation, lambdas need to be wrapped in parentheses, 
-      -- but if the whole expression is a lambda, we can skip the parens.
-      tLambdaToString localize t1 t2
-
-    _ -> 
-      -- otherwise, we can proceed as normal
-      typeToString localize tipe
-
-
-typeToString :: (ModuleName.Canonical -> Name.Name -> Text) -> Type -> Text
-typeToString localize tipe = 
-  case tipe of
-    TLambda t1 t2 ->
-      "(" <> tLambdaToString localize t1 t2 <> ")"
-
-    TVar name ->
-      nameToString name
-
-    TType moduleName name paramTypes ->
-      tTypeToString localize moduleName name paramTypes
-
-    TRecord fieldTypes extensibleName ->
-      tRecordToString localize fieldTypes extensibleName
-
-    TUnit ->
-      "()"
-
-    TTuple t1 t2 mt3 ->
-      tTupleToString localize t1 t2 mt3 
-
-    TAlias moduleName name namedParamTypes alias ->
-      tAliasToString localize moduleName name namedParamTypes alias 
-
-
--- typeToString helpers
-
-tLambdaToString :: (ModuleName.Canonical -> Name.Name -> Text) -> Type -> Type -> Text
-tLambdaToString localize t1 t2 =
-  case t2 of 
-    TLambda t2a t2b ->
-      -- if the next thing is also a lambda, we don't need to wrap it in 
-      -- parentheses because (->) is right-associative
-      typeToString localize t1 <> " -> " <> tLambdaToString localize t2a t2b
-
-    _ ->
-      typeToString localize t1 <> " -> " <> typeToString localize t2
-
-
-tTypeToString :: (ModuleName.Canonical -> Name.Name -> Text) -> ModuleName.Canonical -> Name.Name -> [Type] -> Text
-tTypeToString localize moduleName name paramTypes = 
-      let 
-          paramString =
-            paramTypes 
-              & map (parenthesizeParams localize)
-              & T.intercalate " "
-          
-          spacedParamString = 
-            if paramString == "" then 
-              "" 
-            else 
-              " " <> paramString
-      in
-      localize moduleName name <> spacedParamString
-
-
-tRecordToString :: (ModuleName.Canonical -> Name.Name -> Text) -> Map.Map Name.Name FieldType -> Maybe Name.Name -> Text
-tRecordToString localize fieldTypes extensibleName =
-  let
-    fieldsString = 
-      fieldTypes
-        & Map.toList
-        & map fieldNameAndTypeToString
-        & T.intercalate ", "
-    
-    fieldNameAndTypeToString (name, FieldType _ tipe) = 
-      nameToString name <> " : " <> typeToString localize tipe
-  in
-  case extensibleName of 
-    Nothing ->
-      if fieldsString == "" then 
-        "{}" 
-      else 
-        "{ " <> fieldsString <> " }"
-
-    Just name ->
-      "{ " <> nameToString name <> " | " <> fieldsString <> " }"
-
-
-tTupleToString :: (ModuleName.Canonical -> Name.Name -> Text) -> Type -> Type -> Maybe Type -> Text
-tTupleToString localize t1 t2 mt3 =
-  case mt3 of
-    Just t3 ->
-      "( " 
-        <> typeToString localize t1 
-        <> ", " 
-        <> typeToString localize t2 
-        <> ", " 
-        <> typeToString localize t3 
-        <> " )"
-
-    Nothing ->
-      "( " 
-        <> typeToString localize t1 
-        <> ", " 
-        <> typeToString localize t2 
-        <> " )"
-
-
-tAliasToString :: (ModuleName.Canonical -> Name.Name -> Text) -> ModuleName.Canonical -> Name.Name -> [( Name.Name, Type )] -> alias -> Text
-tAliasToString localize moduleName name namedParamTypes alias =
-  -- I don't understand what the alias is for, so it's unused in this function
-  case namedParamTypes of 
-    [] ->
-      localize moduleName name 
-
-    _ ->
-      let 
-        paramString = 
-          namedParamTypes 
-            -- I don't understand why the params need to have names.
-            -- Let's throw the names away for now...
-            & map snd
-            & map (parenthesizeParams localize)
-            & T.intercalate " " 
-      in
-      localize moduleName name  <> " " <> paramString
-
-
-parenthesizeParams :: (ModuleName.Canonical -> Name.Name -> Text) -> Type -> Text
-parenthesizeParams localize paramType = 
-  -- the params of an alias or custom type need to be parenthesized if they 
-  -- themselves are aliases or custom types that have params. For example, 
-  -- `Maybe (Result x a)` needs parentheses, but `Maybe Char` does not.
-  let 
-    paramTypeString = 
-      typeToString localize paramType
-  in
-    case paramType of 
-      TType moduleName name (h:t) ->
-        "(" <> paramTypeString <> ")"
-
-      TAlias moduleName name (h:t) alias ->
-        "(" <> paramTypeString <> ")"
-
-      _ ->
-        paramTypeString
-
-
-nameToString :: Name.Name -> Text
-nameToString name =
-  T.pack $ Utf8.toChars name
+  tipe
+  & Reporting.Render.Type.canToDoc localizer context
+  & Reporting.Doc.toString
