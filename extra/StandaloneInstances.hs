@@ -60,6 +60,7 @@ import qualified Reporting.Error.Canonicalize
 -- import qualified Reporting.Error.Type
 import qualified Reporting.Error.Main
 import qualified Reporting.Error.Docs
+import qualified Reporting.Report
 import qualified Reporting.Render.Type.Localizer
 import qualified Nitpick.PatternMatches
 import qualified Parse.Symbol
@@ -277,6 +278,10 @@ deriving instance Show Reporting.Error.Syntax.Func
 
 deriving instance Show Reporting.Error.Import.Error
 deriving instance Show Reporting.Error.Import.Problem
+
+deriving instance Show Reporting.Report.Report
+
+
 
 -- deriving instance
 

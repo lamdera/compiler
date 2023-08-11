@@ -5,6 +5,8 @@ module Reporting.Error
   , Error(..)
   , toDoc
   , toJson
+  -- @LAMDERA
+  , toReports
   )
   where
 

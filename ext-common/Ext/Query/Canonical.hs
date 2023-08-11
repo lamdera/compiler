@@ -23,6 +23,7 @@ import qualified Parse.Module as Parse
 import Reporting.Annotation
 import qualified Reporting.Render.Code as Code
 import qualified Reporting.Annotation as A
+import qualified Reporting.Error
 import qualified Compile
 import qualified File
 
@@ -31,6 +32,7 @@ import qualified Ext.Query.Interfaces
 
 import Lamdera (hindentPrintLabelled, last_)
 import Ext.Common
+import StandaloneInstances
 
 -- @TODO
 -- Lamdera.Canonical.loadDef "src/Test/Basic.elm" "exampleFunction"
@@ -58,7 +60,8 @@ loadSingleArtifacts path = do
         Right artifacts ->
           pure artifacts
 
-        Left err -> error $ "error!" ++ show err
+        Left err -> error $ "error!" ++
+          show (Reporting.Error.toReports (Code.toSource source) err)
 
     Left err ->
       error "bad syntax"
