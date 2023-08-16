@@ -64,26 +64,32 @@ startReverseProxy_ = do
                     pure $ WPRResponse $ responseLBS status200 ([] & addCors request) ""
 
                   _ -> do
-                    case pathInfo request of
-                      "http:":"":hostname:rest -> do
+                    let
+                      -- When a request comes in with a custom defined port, we need to extract that
+                      -- port from the hostname and pass it to the proxy destination. Otherwise, the
+                      -- proxy destination will use the default port (80 for http, 443 for https).
+                      -- for example: https://example.com:3001 -> ProxyDestSecure "example.com" 3001
+                      handleWithDefaultPort :: Text -> [Text] -> Int -> (Request -> ProxyDest -> WaiProxyResponse) -> IO WaiProxyResponse
+                      handleWithDefaultPort hostname rest defaultPort wrapper = do
                         let
-                          (hostnameClean, port) =
+                          (hostnameClean, targetPort) =
                             case Text.splitOn ":" hostname of
                               hostnameClean:port:[] ->
-                                (hostnameClean, port & Text.unpack & readMaybe & withDefault 80)
+                                (hostnameClean, port & Text.unpack & readMaybe & withDefault defaultPort)
 
                               _ ->
-                                (hostname, 80)
+                                (hostname, defaultPort)
 
-
-                        pure $ WPRModifiedRequest
+                        pure $ wrapper
                           (modReq rest hostnameClean request)
-                          (ProxyDest (T.encodeUtf8 hostnameClean) port)
+                          (ProxyDest (T.encodeUtf8 hostnameClean) targetPort)
 
-                      "https:":"":hostname:rest ->
-                        pure $ WPRModifiedRequestSecure
-                          (modReq rest hostname request)
-                          (ProxyDest (T.encodeUtf8 hostname) 443)
+                    case pathInfo request of
+                      "http:":"":hostname:rest -> do
+                        handleWithDefaultPort hostname rest 80 WPRModifiedRequest
+
+                      "https:":"":hostname:rest -> do
+                        handleWithDefaultPort hostname rest 443 WPRModifiedRequestSecure
 
                       path ->
                         pure $ WPRProxyFail $ "url missing http or https prefix: " <> Text.unpack (Text.intercalate "," path)
@@ -92,9 +98,8 @@ startReverseProxy_ = do
               pure res
 
             Nothing ->
-              -- Impossible for our purposes
-              -- debug_ "HTTP request without host... dropping"
-              pure $ WPRProxyDestSecure (ProxyDest "lamdera.com" 80)
+              -- Impossible for our purposes, but possible with hand crafted curl shennanigans
+              pure $ WPRProxyFail $ "request is missing host header: " <> show request
         )
         (\exception ->
           debug_note ("\n➡️❌  proxy error: " ++ show exception) defaultOnExc exception
