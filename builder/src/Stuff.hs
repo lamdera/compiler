@@ -46,16 +46,19 @@ stuff root =
 details :: FilePath -> FilePath
 details root =
   stuff root </> "d.dat"
+    & Lamdera.alternativeImplementation (stuff root </> "d.x.dat")
 
 
 interfaces :: FilePath -> FilePath
 interfaces root =
   stuff root </> "i.dat"
+    & Lamdera.alternativeImplementation (stuff root </> "i.x.dat")
 
 
 objects :: FilePath -> FilePath
 objects root =
   stuff root </> "o.dat"
+    & Lamdera.alternativeImplementation (stuff root </> "o.x.dat")
 
 
 prepublishDir :: FilePath -> FilePath
@@ -180,4 +183,4 @@ getElmHome =
       case maybeCustomHome of
         Just customHome -> return customHome
         Nothing -> Dir.getAppUserDataDirectory "elm"
-          & Lamdera.alternativeImplementation (Dir.getAppUserDataDirectory "lamdera")
+          -- & Lamdera.alternativeImplementation (Dir.getAppUserDataDirectory "lamdera")

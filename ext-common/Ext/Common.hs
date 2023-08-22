@@ -221,6 +221,10 @@ atomicPutStrLn :: String -> IO ()
 atomicPutStrLn str =
   withMVar printLock (\_ -> hPutStr stdout (str <> "\n") >> hFlush stdout)
 
+atomicPutStrLn_ :: Text -> IO ()
+atomicPutStrLn_ text =
+  atomicPutStrLn $ T.unpack text
+
 atomicPutStrLnDebug :: String -> IO ()
 atomicPutStrLnDebug s = do
   onlyWhen (isDebug_) $ atomicPutStrLn s
@@ -380,23 +384,29 @@ bashq command =
 c_ :: String -> [String] -> String -> IO String
 c_ bin args input = do
   atomicPutStrLnDebug $ "🤖  " <> bin <> " " <> show args <> " " <> input
-  (exit, stdout, stderr) <- System.Process.readProcessWithExitCode bin args input
+  (exit, stdOut, stdErr) <- System.Process.readProcessWithExitCode bin args input
   res <-
-    if Prelude.length stderr > 0
-      then pure stderr
-      else pure stdout
-  atomicPutStrLnDebug $ "└── " <> res
-  pure res
+    if Prelude.length stdErr > 0
+      then pure stdErr
+      else pure stdOut
+  -- This doesn't quite work for debugging because bash will honour the sequence codes of the output
+  -- which gives us confusing results. I.e. Elm compilation clears the buffer during operation
+  -- onlyWhen (Prelude.length stdErr > 0) $ atomicPutStrLnDebug $ "└── stdErr: " <> stdErr
+  -- onlyWhen (Prelude.length stdOut > 0) $ atomicPutStrLnDebug $ "└── stdOut: " <> stdOut
+  -- This doesn't happen with the show instance as it escapes sequences inside the string
+  atomicPutStrLnDebug $ "└── " <> show (exit, stdOut, stdErr)
+  pure $ show (exit, stdOut, stdErr)
+
 
 cq_ :: String -> [String] -> String -> IO String
 cq_ bin args input = do
   atomicPutStrLnDebug $ "🤖  " <> bin <> " " <> show args <> " " <> input
-  (exit, stdout, stderr) <- System.Process.readProcessWithExitCode bin args input
+  (exit, stdOut, stdErr) <- System.Process.readProcessWithExitCode bin args input
   res <-
-    if Prelude.length stderr > 0
-      then pure stderr
-      else pure stdout
-  pure res
+    if Prelude.length stdErr > 0
+      then pure stdErr
+      else pure stdOut
+  pure $ show (exit, stdOut, stdErr)
 
 
 requireBinary :: String -> IO FilePath

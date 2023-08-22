@@ -299,6 +299,7 @@ Executable lamdera
         -- Testing:
         EasyTest
         Test
+        Test.Caching
         Test.Check
         Test.Helpers
         Test.Lamdera

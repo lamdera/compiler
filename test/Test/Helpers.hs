@@ -85,3 +85,8 @@ catchOutputStdErr action = do
   pr <- EasyTest.io $ captureProcessResult action
   -- @TODO improve this to actually pull out values
   pure $ T.decodeUtf8 $ Test.Main.prStderr pr
+
+
+captureProcessOutput action = do
+    pr <- captureProcessResult action
+    hindent pr

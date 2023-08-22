@@ -13,3 +13,7 @@ travis.log
 extra/node_modules
 extra/.cache
 .stack-work
+
+# @TESTS
+elm-home
+

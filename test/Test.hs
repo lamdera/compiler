@@ -14,6 +14,7 @@ import EasyTest
 import Lamdera
 import qualified Test.Snapshot
 import qualified Test.Lamdera
+import qualified Test.Caching
 import qualified Test.Check
 import qualified Test.Wire
 import qualified Test.Ext.ElmPages.Check

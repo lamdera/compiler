@@ -211,14 +211,17 @@ debug str =
 debugT text =
   liftIO $ debug_ (T.unpack text)
 
+alternativeImplementation :: a -> a -> a
 alternativeImplementation fn ignored =
   fn
 
+alternativeImplementationWhen :: Bool -> a -> a -> a
 alternativeImplementationWhen cond fn original =
   if cond
     then fn
     else original
 
+alternativeImplementationPassthrough :: (a -> b) -> a -> b
 alternativeImplementationPassthrough fn original =
   fn original
 
