@@ -42,6 +42,7 @@ import qualified Stuff
 
 import Lamdera
 import qualified Lamdera.CLI.Live as Live
+import qualified Lamdera.Constrain
 import qualified Lamdera.ReverseProxy
 import qualified Lamdera.TypeHash
 import qualified Lamdera.PostCompile
@@ -92,6 +93,12 @@ runWithRoot root (Flags maybePort) =
           Sentry.asyncUpdateJsOutput sentryCache $ do
             debug_ $ "🛫  recompile triggered by: " ++ show events
             harness <- Live.prepareLocalDev root
+            let
+              typesRootChanged = events & filter (\event ->
+                     stringContains "src/Types.elm" event
+                  || stringContains "src/Bridge.elm" event
+                ) & length & (\v -> v > 0)
+            onlyWhen typesRootChanged Lamdera.Constrain.resetTypeLocations
             compileToBuilder harness
           -- Simultaneously tell all clients to refresh. All those HTTP
           -- requests will open but block on the cache mVar, and then release
