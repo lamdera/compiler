@@ -47,7 +47,7 @@ suite = tests $
         ] $ do
 
         scope "lamdera check should succeed, ignoring the Debug.log usages" $ do
-          actual <- catchOutput $ checkWithParams project "always-v0"
+          actual <- catchOutput $ checkWithParamsProduction project "always-v0"
           expectTextContains actual
             "It appears you're all set to deploy the first version of 'always-v0'!"
 
@@ -64,7 +64,7 @@ suite = tests $
       io $ Ext.Common.bash $ "cd " <> project <> " && git init"
       io $ Ext.Common.bash $ "cd " <> project <> " && git remote add lamdera git@apps.lamdera.com:always-v0.git"
 
-      _ <- io $ checkWithParams project "always-v0"
+      _ <- io $ checkWithParamsProduction project "always-v0"
 
       "elm-stuff/lamdera/.lamdera-fe-config" & expectContains "frontendOnly"
       "elm-stuff/lamdera/.lamdera-be-config" & expectContains "backendOnly"
@@ -115,15 +115,15 @@ expectFileContains needle file =
 check = do
   -- touch "/Users/mario/lamdera/test/v1/src/WireTypes.elm"
   -- touch "/Users/mario/lamdera/test/v1/src/Env.elm"
-  -- checkWithParams "/Users/mario/lamdera/test/v1" "always-v0"
-  -- checkWithParams "/Users/mario/dev/test/ascii-art" "ascii-art-local"
-  -- checkWithParams "/Users/mario/dev/test/lamdera-minilatex-app" "minilatex"
-  -- checkWithParams "/Users/mario/dev/lamdera-user-projects/beat-the-big-two" "beat-the-big-two"
-  -- checkWithParams "/Users/mario/dev/projects/lamdera-dashboard" "dashboard"
-  -- checkWithParams "/Users/mario/dev/projects/lamdera-test" "testapp"
-  -- checkWithParams "/Users/mario/lamdera/tmp/elm-audio-test0" "elm-audio-test0"
-  -- checkWithParams "/Users/mario/lamdera-builds/build-test-local/staging" "test-local"
-  checkWithParams "/Users/mario/dev/projects/bento-life" "life"
+  -- checkWithParamsProduction "/Users/mario/lamdera/test/v1" "always-v0"
+  -- checkWithParamsProduction "/Users/mario/dev/test/ascii-art" "ascii-art-local"
+  -- checkWithParamsProduction "/Users/mario/dev/test/lamdera-minilatex-app" "minilatex"
+  -- checkWithParamsProduction "/Users/mario/dev/lamdera-user-projects/beat-the-big-two" "beat-the-big-two"
+  -- checkWithParamsProduction "/Users/mario/dev/projects/lamdera-dashboard" "dashboard"
+  -- checkWithParamsProduction "/Users/mario/dev/projects/lamdera-test" "testapp"
+  -- checkWithParamsProduction "/Users/mario/lamdera/tmp/elm-audio-test0" "elm-audio-test0"
+  -- checkWithParamsProduction "/Users/mario/lamdera-builds/build-test-local/staging" "test-local"
+  checkWithParamsProduction "/Users/mario/dev/projects/bento-life" "life"
 
 
 mockBuildSh projectPath appName = do
@@ -181,16 +181,26 @@ installElmHttpForRPC projectPath = do
 
 
 {-| Run the `lamdera check` pipeline with specific params -}
-checkWithParams projectPath appName = do
-  setEnv "LAMDERA_APP_NAME" appName
+checkWithParams projectPath = do
   setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
   setEnv "LDEBUG" "1"
   setEnv "ELM_HOME" "/Users/mario/elm-home-elmx-test"
+
+  Ext.Common.withProjectRoot projectPath $ Lamdera.CLI.Check.run_
+
+  unsetEnv "LOVR"
+  unsetEnv "LDEBUG"
+  unsetEnv "ELM_HOME"
+
+
+{-| Run the `lamdera check` pipeline as if it were run in production to invoke prod behaviour -}
+checkWithParamsProduction projectPath appName = do
+  setEnv "LAMDERA_APP_NAME" appName
   -- setEnv "NOTPROD" "1"
-  requireEnv "TOKEN"
   -- setEnv "HOIST_REBUILD" "1"
   -- setEnv "VERSION" "1"
 
+  requireEnv "TOKEN"
   cp "/Users/mario/lamdera/runtime/src/LBR.elm" (projectPath ++ "/src/LBR.elm")
   cp "/Users/mario/lamdera/runtime/src/LFR.elm" (projectPath ++ "/src/LFR.elm")
   cp "/Users/mario/lamdera/runtime/src/LamderaRPC.elm" (projectPath ++ "/src/LamderaRPC.elm")
@@ -200,15 +210,10 @@ checkWithParams projectPath appName = do
     cp "/Users/mario/lamdera/runtime/src/RPC_Empty.elm" (projectPath ++ "/src/RPC.elm")
   cp "/Users/mario/lamdera/runtime/src/LamderaHelpers.elm" (projectPath ++ "/src/LamderaHelpers.elm")
 
-  Ext.Common.withProjectRoot projectPath $ Lamdera.CLI.Check.run_
-
+  checkWithParams projectPath
   unsetEnv "LAMDERA_APP_NAME"
-  unsetEnv "LOVR"
-  unsetEnv "LDEBUG"
-  unsetEnv "ELM_HOME"
   unsetEnv "NOTPROD"
   unsetEnv "VERSION"
-
 
 
 {-| Run the `lamdera check` pipeline with specific params -}

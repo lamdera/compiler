@@ -68,6 +68,18 @@ run :: () -> Lamdera.CLI.Check.Flags -> IO ()
 run () flags@(Lamdera.CLI.Check.Flags destructiveMigration) = do
   debug_ "Starting check..."
 
+  branch <- Lamdera.getGitBranch
+  case branch of
+    "main" -> runHelp () flags
+    "master" -> runHelp () flags
+    _ -> do
+      atomicPutStrLn "`lamdera check` is only for main/master branches when preparing for a production deploy."
+      atomicPutStrLn "If you're trying to deploy a preview app, use `lamdera deploy` instead."
+      pure ()
+
+
+runHelp :: () -> Lamdera.CLI.Check.Flags -> IO ()
+runHelp () flags@(Lamdera.CLI.Check.Flags destructiveMigration) = do
   Lamdera.setCheckMode True
 
   -- appNameEnvM <- Env.lookupEnv "LAMDERA_APP_NAME"
