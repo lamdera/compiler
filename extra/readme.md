@@ -33,8 +33,10 @@ The test framework is a very lightweight vendored copy of `EasyTest.hs`, defined
 The easiest way to run is from the project root:
 
 ```
-$ stack ghci
+$ TOKEN="..." LDEBUG=1 LOVR=~/lamdera/overrides stack ghci
 λ: Test.all
+...
+✅  38 tests passed, no failures!
 ```
 
 ### Developing

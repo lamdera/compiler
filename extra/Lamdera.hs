@@ -150,7 +150,7 @@ import qualified Data.Text.IO
 import qualified Data.Char as Char
 import qualified Data.List as List
 
-import System.Exit (exitFailure)
+import qualified System.Exit (ExitCode(..))
 
 import Prelude hiding (lookup)
 import qualified Data.ByteString as BS
@@ -510,67 +510,21 @@ formatHaskellValue label v =
 
 hindentPrintLabelled :: Show a => Text -> a -> IO a
 hindentPrintLabelled label v = do
-  let
-    input = Text.Show.Unicode.ushow v
-
-  -- if Prelude.length input > 10000
-  --   then
-  --     atomicPutStrLn $ "❌SKIPPED display, value show > 10,000 chars, here's a clip:\n" <> Prelude.take 1000 input
-  --   else do
-
-  pathM <- Dir.findExecutable "hindent"
-  case pathM of
-    Just _ -> do
-      (exit, stdout, stderr) <- System.Process.readProcessWithExitCode "hindent" ["--line-length","150"] input
-      if Prelude.length stderr > 0
-        then
-          atomicPutStrLn $
-            "\n🔶 "
-              <> T.unpack label
-              <> "\n->"
-              <> stderr
-              <> "\n📥 for input: \n"
-              <> input
-
-        else
-          atomicPutStrLn $
-            "\n🔶 "
-              <> T.unpack label
-              <> "\n->"
-              <> stdout
-    Nothing -> do
-      debug_ "hindent missing, formatting without"
-      atomicPutStrLn $ show v
-
+  let input = Text.Show.Unicode.ushow v
+  formatted <- hindent_ input
+  atomicPutStrLn $
+    "\n🔶 "
+      <> T.unpack label
+      <> "\n->"
+      <> T.unpack formatted
   pure v
 
 
 hindentPrint :: Show a => a -> IO a
 hindentPrint v = do
-  let
-    input = Text.Show.Unicode.ushow v
-
-  pathM <- Dir.findExecutable "hindent"
-  case pathM of
-    Just _ -> do
-      (exit, stdout, stderr) <- System.Process.readProcessWithExitCode "hindent" ["--line-length","150"] input
-      if Prelude.length stderr > 0
-        then
-          atomicPutStrLn $
-            "\nerrors: \n"
-              <> stderr
-              <> "\n📥 for input: \n"
-              <> input
-              <> "\nwith output: \n"
-              <> stdout
-
-        else
-          atomicPutStrLn stdout
-
-    Nothing -> do
-      debug_ "hindent missing, formatting without"
-      atomicPutStrLn $ show v
-
+  let input = Text.Show.Unicode.ushow v
+  formatted <- hindent_ input
+  Ext.Common.atomicPutStrLn_ formatted
   pure v
 
 
@@ -581,15 +535,33 @@ hindent v =
 
 hindent_ :: String -> IO Text
 hindent_ s = do
-  -- pure $ T.pack s
-  (exit, stdout, stderr) <-
-    System.Process.readProcessWithExitCode "hindent" ["--line-length","150"] s
-    `catchError` (\err -> pure (error "no exit code on failure", s, "hindent failed"))
-  if Prelude.length stderr > 0
-    then
-      pure $ T.pack stderr
-    else
-      pure $ T.pack stdout
+  pathM <- Dir.findExecutable "hindent"
+  case pathM of
+    Just _ -> do
+      (exit, stdout, stderr) <-
+        System.Process.readProcessWithExitCode "hindent" ["--line-length","150"] s
+        `catchError` (\err -> pure (error "no exit code on failure", s, "hindent failed on input"))
+
+      if exit /= System.Exit.ExitSuccess
+        then
+          pure $ T.pack stderr
+        else
+          if Prelude.length stderr > 0
+            then
+              pure $ T.pack $
+                "\nerrors: \n"
+                  <> stderr
+                  <> "\n📥 for input: \n"
+                  <> s
+                  <> "\nwith output: \n"
+                  <> stdout
+
+            else
+              pure $ T.pack stdout
+
+    Nothing -> do
+      debug_ "🔥  hindent missing, returning without formatting"
+      pure $ T.pack s
 
 
 hindentFormatValue :: Show a => a -> Text

@@ -76,7 +76,8 @@ catchOutput :: IO () -> EasyTest.Test Text
 catchOutput action = do
   -- https://hackage.haskell.org/package/main-tester-0.2.0.1/docs/Test-Main.html
   pr <- EasyTest.io $ captureProcessResult action
-  EasyTest.io $ hindent pr
+  -- EasyTest.io $ hindent pr
+  pure $ T.pack $ show pr
 
 
 catchOutputStdErr :: IO () -> EasyTest.Test Text
@@ -89,4 +90,6 @@ catchOutputStdErr action = do
 
 captureProcessOutput action = do
     pr <- captureProcessResult action
-    hindent pr
+    -- hindent pr
+    pure $ T.pack $ show pr
+

@@ -98,7 +98,7 @@ For more information on how to use the GHCi debugger, see the GHC User's Guide.
 -- Current target for ghci :rr command. See ~/.ghci config file, which should contain
 -- something like `:def rr const $ return $ unlines [":r","Test.target"]`
 
--- target = Test.all
+target = Test.all
 -- target = checkProject
 
 
@@ -128,7 +128,7 @@ previewProject = do
 
 -- target = buildTestHarnessToProductionJs
 -- target = checkProjectCompiles
-target = previewProject
+-- target = previewProject
 -- target = liveReloadLive
 -- target = Test.Wire.all
 -- target = checkUserConfig
@@ -139,6 +139,7 @@ target = previewProject
 -- target = Lamdera.ReverseProxy.start
 -- target = Test.Check.mockBuildSh "/Users/mario/lamdera-deploys/test-local-v1" "test-local"
 -- target = Test.Check.mockBuildSh "/Users/mario/dev/test/lamdera-init" "test-local"
+-- target = Test.Caching.all
 
 -- target = do
 --   let p = "/Users/mario/dev/projects/elm-pages/examples/end-to-end"
@@ -220,16 +221,16 @@ buildTestHarnessToProductionJs = do
 liveReloadLive = do
 
   -- setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
-  -- setEnv "LDEBUG" "1"
-  -- setEnv "EXPERIMENTAL" "1"
+  setEnv "LDEBUG" "1"
+  setEnv "EXPERIMENTAL" "1"
 
   -- let p = "/Users/mario/lamdera/test/v1"
   -- let p = "/Users/mario/dev/projects/bento-life"
-  -- let p = "/Users/mario/dev/projects/lamdera-dashboard"
+  let p = "/Users/mario/dev/projects/lamdera-dashboard"
 
   -- let p = "/Users/mario/dev/test/lamdera-init"
   -- let p = "/Users/mario/dev/test/nu-ashworld-lamdera"
-  let p = "/Users/mario/dev/test/town-collab"
+  -- let p = "/Users/mario/dev/test/town-collab"
 
   -- let p = "/Users/mario/dev/projects/otstats"
   -- let p = "/Users/mario/work/codespecs"
