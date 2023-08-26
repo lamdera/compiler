@@ -15,7 +15,7 @@ module.exports = function()
 	// figure out package of binary
 	// turn '0.19.1-1.2.3-alpha' into '0.19.1-1.2.3'
 	var version = package.version.replace(/^(\d+\.\d+\.\d+)-(\d+\.\d+\.\d+).*$/, '$1');
-	var subPackageName = 'lamdera-' + process.platform + '-' + process.arch;
+	var subPackageName = '@lamdera/compiler-' + process.platform + '-' + process.arch;
 
 	verifyPlatform(version, subPackageName);
 
@@ -75,7 +75,7 @@ function verifyPlatform(version, subPackageName)
 {
 	if (subPackageName in package.optionalDependencies) return;
 
-	var situation = process.platform + '_' + process.arch;
+	var situation = process.platform + '-' + process.arch;
 	console.error(
 		'-- ERROR -----------------------------------------------------------------------\n\n'
 		+ 'The lamdera npm package does not support your platform (' + situation + ').\n\n'

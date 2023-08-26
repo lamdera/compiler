@@ -37,7 +37,7 @@ You could also use this package to use different versions of Lamdera in differen
 This works, but there are usually faster and more reliable options:
 
 1. You can download `lamdera` directly from [the downloads page](https://dashboard.lamdera.app/docs/download). This is all the `npm` installer does, but with extra HTTP requests to `npmjs.com` servers, making it slower and adding more failure points.
-2. Many continuous integration pipelines ways to cache files ([example](https://docs.travis-ci.com/user/caching/)) to make builds faster and more reliable.
+2. Many continuous integration pipelines offer ways to cache files ([i.e. github actions cache](https://github.com/marketplace/actions/cache)) to make builds faster and more reliable.
 
 That said, it will definitely work to use the `npm` installer on CI if you prefer that option.
 

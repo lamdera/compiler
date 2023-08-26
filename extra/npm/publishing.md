@@ -19,11 +19,11 @@ Create each of these by running the `lamdera` executable for each platform throu
 
 Put the above files at:
 
-1. `packages/lamdera_darwin_arm64/lamdera`
-2. `packages/lamdera_darwin_x64/lamdera`
-3. `packages/lamdera_linux_x64/lamdera`
-4. `packages/lamdera_linux_arm64/lamdera`
-5. `packages/lamdera_win32_x64/lamdera.exe` (Note the `.exe` file extension!)
+1. `packages/lamdera-darwin-arm64/lamdera`
+2. `packages/lamdera-darwin-x64/lamdera`
+3. `packages/lamdera-linux-x64/lamdera`
+4. `packages/lamdera-linux-arm64/lamdera`
+5. `packages/lamdera-win32-x64/lamdera.exe` (Note the `.exe` file extension!)
 
 (They are ignored by git.)
 
