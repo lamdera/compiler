@@ -37,6 +37,8 @@ module Lamdera
   , isExperimental
   , isExperimental_
   -- , isTypeSnapshot
+  , isLamdera
+  , isLamdera_
   , isTest
   , isLiveMode
   , setLiveMode
@@ -392,6 +394,18 @@ isExperimental = do
 {-# NOINLINE isExperimental_ #-}
 isExperimental_ :: Bool
 isExperimental_ = unsafePerformIO $ isExperimental
+
+
+isLamdera :: IO Bool
+isLamdera = do
+  root <- getProjectRoot "Lamdera.isLamdera"
+  fileContains (root </> "elm.json") "lamdera/core"
+
+
+{-# NOINLINE isLamdera_ #-}
+isLamdera_ :: Bool
+isLamdera_ = unsafePerformIO $ isLamdera
+
 
 
 isTest :: IO Bool

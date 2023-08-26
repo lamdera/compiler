@@ -7,6 +7,7 @@ import qualified Data.List as List
 import qualified Data.Map as Map
 import qualified Data.Text as T
 import qualified Data.Set as Set
+import System.FilePath ((</>))
 
 import qualified Data.Name as N
 import qualified AST.Canonical as Can
@@ -21,6 +22,18 @@ import StandaloneInstances
 import Lamdera
 import Lamdera.Wire3.Helpers
 import Lamdera.Types (Interfaces)
+
+
+isElmPages :: IO Bool
+isElmPages = do
+    root <- getProjectRoot "Ext.ElmPages.isElmPages"
+    fileContains (root </> ".elm-pages/Main.elm") "type PageData"
+
+
+{-# NOINLINE isElmPages_ #-}
+isElmPages_ :: Bool
+isElmPages_ = unsafePerformIO $ isDebug
+
 
 
 data DiffableType

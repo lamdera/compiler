@@ -245,7 +245,8 @@ Executable lamdera
         Lamdera.PostCompile
         Lamdera.Project
         Lamdera.Relative
-        Lamdera.Suggestions
+        Lamdera.Reporting.Evergreen
+        Lamdera.Reporting.Suggestions
         Lamdera.TypeHash
         Lamdera.Types
         Lamdera.Update

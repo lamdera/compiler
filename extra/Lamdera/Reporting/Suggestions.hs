@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Lamdera.Suggestions where
+module Lamdera.Reporting.Suggestions where
 
 {- Helper to remove wire generations from suggestions such as:
 

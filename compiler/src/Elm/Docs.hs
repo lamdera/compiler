@@ -48,7 +48,7 @@ import qualified Reporting.Error.Docs as E
 import qualified Reporting.Result as Result
 
 
-import qualified Lamdera.Suggestions
+import qualified Lamdera.Reporting.Suggestions
 
 -- DOCUMENTATION
 
@@ -420,7 +420,7 @@ checkNames exports_ names =
     loneDoc    = Map.traverseMissing onlyInDocs
     loneExport = Map.traverseMissing onlyInExports
     checkBoth  = Map.zipWithAMatched (\n _ r -> isUnique n r)
-    exports    = Lamdera.Suggestions.hideWireExports exports_
+    exports    = Lamdera.Reporting.Suggestions.hideWireExports exports_
   in
   case Result.run (Map.mergeA loneExport loneDoc checkBoth exports docs) of
     (_, Right _) -> Right ()
@@ -467,7 +467,7 @@ checkDefs exportDict_ overview comments (Can.Module name _ _ decls unions aliase
   let
     types = gatherTypes decls Map.empty
     info = Info comments types unions aliases infixes effects
-    exportDict = Lamdera.Suggestions.hideWireExports exportDict_
+    exportDict = Lamdera.Reporting.Suggestions.hideWireExports exportDict_
   in
   case Result.run (Map.traverseWithKey (checkExport info) exportDict) of
     (_, Left  problems ) -> Left  $ E.DefProblems (OneOrMore.destruct NE.List problems)
