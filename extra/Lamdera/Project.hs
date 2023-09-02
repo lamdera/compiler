@@ -117,8 +117,16 @@ lamderaProgramTest =
   Elm.Package.Name (Utf8.fromChars "lamdera") (Utf8.fromChars "program-test")
 
 
+{-# NOINLINE lamderaWebsocket #-}
+lamderaWebsocket :: Elm.Package.Name
+lamderaWebsocket =
+  Elm.Package.Name (Utf8.fromChars "lamdera") (Utf8.fromChars "websocket")
+
+
 findOverridePackages :: IO [(Elm.Package.Name, Word16, Word16, Word16)]
 findOverridePackages =
-  -- @STUB todo: make this actually find override packages dynamically
-  pure [(Elm.Package.Name (Utf8.fromChars "lamdera") (Utf8.fromChars "websocket"), 1,0,0)]
-
+  -- @STUB todo: make this actually find override packages dynamically and draw in their deps
+  -- this would allow us to have private unpublished local packages in LOVR that are auto added
+  -- in addition to the existing package override behaviour
+  -- pure [(Elm.Package.Name (Utf8.fromChars "lamdera") (Utf8.fromChars "websocket"), 1,0,0)]
+  pure []
