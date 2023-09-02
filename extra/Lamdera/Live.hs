@@ -18,6 +18,8 @@ import Lamdera
 import qualified Lamdera.Relative
 import qualified Ext.Common
 
+
+lamderaLiveSrc :: B.Builder
 lamderaLiveSrc =
   Lamdera.unsafe $
     if Ext.Common.isDebug_

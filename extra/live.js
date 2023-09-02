@@ -1,6 +1,7 @@
-// This file needs to be minified into dist. `lamdera live` does this in LDEBUG mode, but manually:
+// This file needs to be minified into dist for release:
 // cd extra
 // esbuild live.js --bundle --minify --target=chrome58,firefox57,safari11,edge16 > dist/live.js
+// `lamdera live` does this automatically LDEBUG mode
 
 import * as Sockette from 'sockette';
 import * as Cookie  from 'js-cookie';
