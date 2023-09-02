@@ -68,14 +68,23 @@ run :: () -> Lamdera.CLI.Check.Flags -> IO ()
 run () flags@(Lamdera.CLI.Check.Flags destructiveMigration) = do
   debug_ "Starting check..."
 
-  branch <- Lamdera.getGitBranch
-  case branch of
-    "main" -> runHelp () flags
-    "master" -> runHelp () flags
-    _ -> do
-      atomicPutStrLn "`lamdera check` is only for main/master branches when preparing for a production deploy."
-      atomicPutStrLn "If you're trying to deploy a preview app, use `lamdera deploy` instead."
-      pure ()
+  inProduction_ <- Lamdera.inProduction
+
+  if inProduction_
+    then
+      -- In production check will only get run in the right context
+      -- and we also may not have branch information available due to the checkout mechanism
+      -- so assume the invocation is right and allow it to continue
+      runHelp () flags
+    else do
+      branch <- Lamdera.getGitBranch
+      case branch of
+        "main" -> runHelp () flags
+        "master" -> runHelp () flags
+        _ -> do
+          atomicPutStrLn "`lamdera check` is only for main/master branches when preparing for a production deploy."
+          atomicPutStrLn "If you're trying to deploy a preview app, use `lamdera deploy` instead."
+          pure ()
 
 
 runHelp :: () -> Lamdera.CLI.Check.Flags -> IO ()
