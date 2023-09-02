@@ -1,6 +1,6 @@
 {
     "name": "lamdera",
-    "version": "0.19.1-1.1.1-2",
+    "version": "0.19.1-1.2.0-1",
     "description": "npm install wrapper for Lamdera",
     "license": "BSD-3-Clause",
     "repository": "lamdera/compiler",
@@ -28,11 +28,10 @@
         "lamdera": "bin/lamdera"
     },
     "optionalDependencies": {
-        "@lamdera/compiler-darwin-arm64": "0.19.1-1.1.1",
-        "@lamdera/compiler-darwin-x64": "0.19.1-1.1.1",
-        "@lamdera/compiler-linux-arm": "0.19.1-1.1.1",
-        "@lamdera/compiler-linux-arm64": "0.19.1-1.1.1",
-        "@lamdera/compiler-linux-x64": "0.19.1-1.1.1",
-        "@lamdera/compiler-win32-x64": "0.19.1-1.1.1"
+        "@lamdera/compiler-darwin-arm64": "0.19.1-1.2.0",
+        "@lamdera/compiler-darwin-x64": "0.19.1-1.2.0",
+        "@lamdera/compiler-linux-arm64": "0.19.1-1.2.0",
+        "@lamdera/compiler-linux-x64": "0.19.1-1.2.0",
+        "@lamdera/compiler-win32-x64": "0.19.1-1.2.0"
     }
 }

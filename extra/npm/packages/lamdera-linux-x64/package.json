@@ -1,0 +1,13 @@
+{
+  "name": "@lamdera/compiler-linux-x64",
+  "version": "0.19.1-1.2.0",
+  "description": "The Linux 64-bit binary for Lamdera.",
+  "repository": "lamdera/compiler",
+  "license": "BSD-3-Clause",
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "x64"
+  ]
+}

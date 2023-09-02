@@ -1,13 +1,13 @@
 {
-  "name": "@lamdera/compiler-darwin-arm64",
+  "name": "@lamdera/compiler-darwin-x64",
   "version": "0.19.1-1.2.0",
-  "description": "The macOS ARM 64-bit binary for Lamdera.",
+  "description": "The macOS 64-bit binary for Lamdera.",
   "repository": "lamdera/compiler",
   "license": "BSD-3-Clause",
   "os": [
     "darwin"
   ],
   "cpu": [
-    "arm64"
+    "x64"
   ]
 }

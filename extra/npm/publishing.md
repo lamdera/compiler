@@ -34,8 +34,11 @@ TODO: Update for also publishing all the sub packages!
 In `package.json`, bump the version to `"0.19.2-beta"`.
 
 ```bash
-npm publish --tag beta
+npm publish
 ```
+
+Note: if using `@` package prefix, needs `--access public` on creation as npm assumes private by default.
+
 
 To test that it works, run these commands:
 

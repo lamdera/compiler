@@ -9,7 +9,7 @@ import qualified Elm.Version as V
 
 
 raw :: (Int, Int, Int)
-raw = (1,1,1)
+raw = (1,2,0)
 
 
 rawToString :: (Int, Int, Int) -> String

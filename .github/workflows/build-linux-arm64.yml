@@ -1,7 +1,7 @@
 on:
   push:
     branches:
-      - distribute-test
+      - distribute
 
 name: Build Linux arm64
 jobs:
