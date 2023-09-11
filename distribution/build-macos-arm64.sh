@@ -36,7 +36,7 @@ git submodule init && git submodule update
 ffiLibs="$(xcrun --show-sdk-path)/usr/include/ffi"        # Workaround for GHC9.0.2 bug until we can use GHC9.2.3+
 export C_INCLUDE_PATH=$ffiLibs                            # https://gitlab.haskell.org/ghc/ghc/-/issues/20592#note_436353
 
-export PATH="/opt/homebrew/opt/llvm@12/bin:$PATH"         # The arm64 build currently requires llvm until we get to GHC 9.4+
+export PATH="/opt/homebrew/opt/llvm@13/bin:$PATH"         # The arm64 build currently requires llvm until we get to GHC 9.4+
 
 $stack install --local-bin-path $dist
 
