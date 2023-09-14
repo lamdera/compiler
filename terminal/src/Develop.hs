@@ -23,6 +23,7 @@ import qualified Data.NonEmptyList as NE
 import qualified System.Directory as Dir
 import System.FilePath as FP
 import Snap.Core hiding (path)
+import qualified Snap.Core as SnapCore
 import Snap.Http.Server
 import Snap.Util.FileServe
 
@@ -53,6 +54,10 @@ import qualified Ext.Sentry as Sentry
 import Control.Concurrent.STM (atomically, newTVarIO, readTVar, writeTVar, TVar)
 
 import StandaloneInstances
+
+import qualified Artifacts
+import qualified Endpoint.Repl as Repl
+
 
 -- RUN THE DEV SERVER
 
@@ -120,6 +125,8 @@ runWithRoot root (Flags maybePort) =
 
       Lamdera.ReverseProxy.start
 
+      rArtifacts <- Artifacts.loadRepl
+
       Live.withEnd liveState $
        httpServe (config port) $ gcatchlog "general" $
         -- Add /public/* as if it were /* to mirror production, but still render .elm files as an Elm app first
@@ -130,6 +137,7 @@ runWithRoot root (Flags maybePort) =
         <|> route [ ("_r/:endpoint", Live.serveRpc liveState port) ]
         <|> Live.openEditorHandler root
         <|> Live.serveExperimental root
+        <|> (SnapCore.path "repl" $ Repl.endpoint rArtifacts)
         <|> serveAssets -- Compiler packaged static files
         <|> Live.serveUnmatchedUrlsToIndex root (serveElm sentryCache) -- Everything else without extensions goes to Lamdera LocalDev harness
         <|> error404 -- Will get hit for any non-matching extensioned paths i.e. /hello.blah

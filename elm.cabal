@@ -309,6 +309,9 @@ Executable lamdera
         Test.Wire
         Lamdera.Evergreen.TestMigrationHarness
         Lamdera.Evergreen.TestMigrationGenerator
+        Endpoint.Repl
+        Artifacts
+        Cors
 
 
         -- Debug helpers --
@@ -397,6 +400,7 @@ Executable lamdera
         -- Debug
         unicode-show,
         network-info,
+        network-uri,
 
         -- Future
         conduit-extra,

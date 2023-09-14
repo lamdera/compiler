@@ -125,12 +125,14 @@ previewProject = do
 
 --target =
 --  Test.Check.checkWithParams "/Users/mario/dev/projects/lamdera-dashboard"
+-- target =
+--   Test.Check.checkWithParams "/Users/mario/dev/projects/lamdera-dashboard"
   -- Test.Check.checkWithParams "/Users/mario/lamdera/test/sheep-game" "sheep-game"
 
 -- target = buildTestHarnessToProductionJs
 -- target = checkProjectCompiles
 -- target = previewProject
--- target = liveReloadLive
+target = liveReloadLive
 -- target = Test.Wire.all
 -- target = checkUserConfig
 -- target = Test.Wire.buildAllPackages
