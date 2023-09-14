@@ -141,7 +141,6 @@ previewProject = do
   Dir.withCurrentDirectory p $ Lamdera.CLI.Deploy.run () ()
 
 
-
 checkProjectCompiles = do
   setEnv "LDEBUG" "1"
   let
