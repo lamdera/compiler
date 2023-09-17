@@ -41,6 +41,9 @@ npm publish --access public
 cd "$return"
 
 
+# Finally, publish the top level `lamdera` package
+npm publish --access public
+
 exit
 
 # When we have an arm32 bit build working we can publish this
