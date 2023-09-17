@@ -7,6 +7,7 @@ import Control.Concurrent
 import Control.Concurrent.MVar
 import Control.Monad (unless)
 import Control.Arrow ((>>>))
+import qualified GHC.IO.Exception
 
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BSL
@@ -373,40 +374,42 @@ ghciThreads = unsafePerformIO $ newMVar []
 -- System
 
 bash :: String -> IO String
-bash command =
-  c_ "bash" ["-c", command] ""
+bash command = do
+  (exit, stdOut, stdErr) <- c_ "bash" ["-c", command] ""
+  pure $ show $ stdErr <> stdOut
 
 bashq :: String -> IO String
-bashq command =
-  cq_ "bash" ["-c", command] ""
+bashq command = do
+  (exit, stdOut, stdErr) <- cq_ "bash" ["-c", command] ""
+  pure $ show $ stdErr <> stdOut
 
 
-c_ :: String -> [String] -> String -> IO String
+-- Call executable and print output in debug mode
+c_ :: String -> [String] -> String -> IO (GHC.IO.Exception.ExitCode, String, String)
 c_ bin args input = do
   atomicPutStrLnDebug $ "🤖  " <> bin <> " " <> show args <> " " <> input
   (exit, stdOut, stdErr) <- System.Process.readProcessWithExitCode bin args input
-  res <-
-    if Prelude.length stdErr > 0
-      then pure stdErr
-      else pure stdOut
   -- This doesn't quite work for debugging because bash will honour the sequence codes of the output
   -- which gives us confusing results. I.e. Elm compilation clears the buffer during operation
   -- onlyWhen (Prelude.length stdErr > 0) $ atomicPutStrLnDebug $ "└── stdErr: " <> stdErr
   -- onlyWhen (Prelude.length stdOut > 0) $ atomicPutStrLnDebug $ "└── stdOut: " <> stdOut
   -- This doesn't happen with the show instance as it escapes sequences inside the string
   atomicPutStrLnDebug $ "└── " <> show (exit, stdOut, stdErr)
-  pure $ show (exit, stdOut, stdErr)
+  pure $ (exit, stdOut, stdErr)
 
 
-cq_ :: String -> [String] -> String -> IO String
+-- Call quiet, don't print output in debug mode
+cq_ :: String -> [String] -> String -> IO (GHC.IO.Exception.ExitCode, String, String)
 cq_ bin args input = do
   atomicPutStrLnDebug $ "🤖  " <> bin <> " " <> show args <> " " <> input
   (exit, stdOut, stdErr) <- System.Process.readProcessWithExitCode bin args input
-  res <-
-    if Prelude.length stdErr > 0
-      then pure stdErr
-      else pure stdOut
-  pure $ show (exit, stdOut, stdErr)
+  pure $ (exit, stdOut, stdErr)
+
+
+execCombineStdOutErr :: String -> [String] -> String -> IO String
+execCombineStdOutErr bin args input = do
+  (exit, stdOut, stdErr) <- c_ bin args input
+  pure $ stdErr <> stdOut
 
 
 requireBinary :: String -> IO FilePath

@@ -466,23 +466,23 @@ editors :: FilePath -> [IO (Maybe (B.Builder, EditorOpenIO))]
 editors projectRoot =
   [ detectEditor "custom-*nix"
       (Dir.doesFileExist (projectRoot </> "openEditor.sh"))
-      (\file row column -> Ext.Common.cq_ (projectRoot </> "openEditor.sh") [file, T.unpack row, T.unpack column] "")
+      (\file row column -> Ext.Common.execCombineStdOutErr (projectRoot </> "openEditor.sh") [file, T.unpack row, T.unpack column] "")
 
   , detectEditor "custom-windows"
       (do
         exists <- Dir.doesFileExist (projectRoot </> "openEditor.bat")
         pure $ exists && ostype == Windows
       )
-      (\file row column -> Ext.Common.cq_ (projectRoot </> "openEditor.bat") [file, T.unpack row, T.unpack column] "")
+      (\file row column -> Ext.Common.execCombineStdOutErr (projectRoot </> "openEditor.bat") [file, T.unpack row, T.unpack column] "")
 
   , detectExecutable "code-insiders"
       (\executablePath file row column -> do
-        Ext.Common.c_ executablePath [ "-g", file <> ":" <> T.unpack row <> ":" <> T.unpack column] ""
+        Ext.Common.execCombineStdOutErr executablePath [ "-g", file <> ":" <> T.unpack row <> ":" <> T.unpack column] ""
       )
 
   , detectExecutable "code"
       (\executablePath file row column -> do
-        Ext.Common.c_ executablePath [ "-g", file <> ":" <> T.unpack row <> ":" <> T.unpack column] ""
+        Ext.Common.execCombineStdOutErr executablePath [ "-g", file <> ":" <> T.unpack row <> ":" <> T.unpack column] ""
       )
 
   , detectEditor "intellij-ce"
@@ -490,7 +490,7 @@ editors projectRoot =
       (\file row column -> do
         let column_ :: Int = column & readMaybeText & withDefault 1
         -- IntelliJ seems to number it's columns from 1 index
-        Ext.Common.cq_  "open" ["-na", "IntelliJ IDEA CE.app", "--args", "--line", T.unpack row, "--column", show (column_ - 1), file] ""
+        Ext.Common.execCombineStdOutErr "open" ["-na", "IntelliJ IDEA CE.app", "--args", "--line", T.unpack row, "--column", show (column_ - 1), file] ""
       )
 
   , detectEditor "intellij"
@@ -498,7 +498,7 @@ editors projectRoot =
       (\file row column -> do
         let column_ :: Int = column & readMaybeText & withDefault 1
         -- IntelliJ seems to number it's columns from 1 index
-        Ext.Common.cq_  "open" ["-na", "IntelliJ IDEA.app", "--args", "--line", T.unpack row, "--column", show (column_ - 1), file] ""
+        Ext.Common.execCombineStdOutErr "open" ["-na", "IntelliJ IDEA.app", "--args", "--line", T.unpack row, "--column", show (column_ - 1), file] ""
       )
   ]
 

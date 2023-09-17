@@ -386,7 +386,7 @@ esbuildIncluder root esbuildPath includesPath = do
     Nothing -> do
       Lamdera.debug_ "Building elm-pkg-js-includes.js"
       -- packaged <- Ext.Common.cq_ esbuildPath [ includesPath, "--bundle", "--global-name=elmPkgJsIncludes" ] ""
-      packaged <- Ext.Common.cq_ esbuildPath [ includesPath, "--bundle", "--minify", "--global-name=elmPkgJsIncludes" ] ""
+      (exit, packaged, stdErr) <- Ext.Common.cq_ esbuildPath [ includesPath, "--bundle", "--minify", "--global-name=elmPkgJsIncludes" ] ""
       packaged
         & Ext.Common.stringToBuilder
         -- & debugHaskell "minified elmpkgjs"
