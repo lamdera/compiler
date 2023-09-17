@@ -17,3 +17,6 @@ extra/.cache
 # @TESTS
 elm-home
 
+# Jim
+experimental/
+.vscode/
