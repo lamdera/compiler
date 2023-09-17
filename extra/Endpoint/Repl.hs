@@ -48,7 +48,7 @@ import qualified Reporting.Render.Type.Localizer as L
 
 allowedOrigins :: [String]
 allowedOrigins =
-  [ "*"
+  [ "http://localhost:8007"
   ]
 
 
