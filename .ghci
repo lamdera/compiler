@@ -1,0 +1,3 @@
+:set -fbyte-code
+:set -fobject-code
+:def rr const $ return $ unlines [":r","Test.target"]

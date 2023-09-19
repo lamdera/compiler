@@ -46,6 +46,17 @@ packages:
       size: 1461
   original:
     hackage: ansi-terminal-0.11
+- completed:
+    name: language-glsl
+    version: 0.4.0.0
+    git: https://github.com/noteed/language-glsl.git
+    pantry-tree:
+      size: 1066
+      sha256: 155d01f395cc7df3c511df6ff35835b9d54f88a629a58098af7b54a4eeff8e63
+    commit: 99c3aae76363b127679da640a6f00d61d2203830
+  original:
+    git: https://github.com/noteed/language-glsl.git
+    commit: 99c3aae76363b127679da640a6f00d61d2203830
 snapshots:
 - completed:
     sha256: 9313df78f49519315342f4c51ffc5da12659d3735f8ac3c54a1fb98ff874474e

@@ -122,8 +122,8 @@ previewProject = do
   Dir.withCurrentDirectory p $ Lamdera.CLI.Deploy.run () ()
 
 
-target =
-  Test.Check.checkWithParams "/Users/mario/dev/projects/lamdera-dashboard"
+--target =
+--  Test.Check.checkWithParams "/Users/mario/dev/projects/lamdera-dashboard"
   -- Test.Check.checkWithParams "/Users/mario/lamdera/test/sheep-game" "sheep-game"
 
 -- target = buildTestHarnessToProductionJs
@@ -277,6 +277,9 @@ liveReloadLive = do
   --   "src/Bytes/Encode.elm"
   --   "withDebug"
 
+target = do
+   let project = "E:/repos/compiler/test/scenario-webgl-extensions/"
+   Lamdera.Compile.makeDev project [ "src/Triangle.elm" ]
 
 all =
   EasyTest.run allTests
