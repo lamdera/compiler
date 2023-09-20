@@ -15,6 +15,7 @@ import qualified Lamdera.AppConfig
 import qualified Lamdera.Update
 import qualified Lamdera.Compile
 import qualified Lamdera.Evergreen.Snapshot
+import qualified Lamdera.Relative
 import Test.Helpers
 import Test.Check
 
@@ -28,22 +29,12 @@ import qualified Ext.Common
 
 suite :: Test ()
 suite = tests
-  [ scope "make Elm app containing extension directive in shader" $
-        let
-            elmStuffFolder = "/Users/martinstewart/Documents/GitHub/compiler/test/scenario-webgl-extensions/elm-stuff"
+  [ scope "make Elm app containing extension directive in shader" $ do
+        project <- io $ Lamdera.Relative.findDir "test/scenario-webgl-extensions"
 
-            setup = do
-                rmdir elmStuffFolder
+        _ <- io $ rmdir (project </> "elm-stuff")
 
-            cleanup _ = do
-                rmdir elmStuffFolder
+        actual <- catchOutput $ Lamdera.Compile.makeDev project [ "src/Triangle.elm" ]
 
-            test _ = do
-                let project = "/Users/martinstewart/Documents/GitHub/compiler/test/scenario-webgl-extensions/"
-                actual <- catchOutput $ Lamdera.Compile.makeDev project [ "src/Triangle.elm" ]
-
-                expectTextContains actual
-                    "Success! Compiled 1 module."
-        in
-        using setup cleanup test
+        expectTextContains actual "Success! Compiled 1 module."
   ]
