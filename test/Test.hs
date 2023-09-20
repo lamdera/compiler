@@ -19,6 +19,7 @@ import qualified Test.Check
 import qualified Test.Wire
 import qualified Test.Ext.ElmPages.Check
 import qualified Test.TypeHashes
+import qualified Test.WebGL
 
 import qualified Lamdera.Evergreen.TestMigrationHarness
 import qualified Lamdera.Evergreen.TestMigrationGenerator
@@ -277,9 +278,8 @@ liveReloadLive = do
   --   "src/Bytes/Encode.elm"
   --   "withDebug"
 
-target = do
-   let project = "E:/repos/compiler/test/scenario-webgl-extensions/"
-   Lamdera.Compile.makeDev project [ "src/Triangle.elm" ]
+target = tests []
+--target = Test.WebGL.suite
 
 all =
   EasyTest.run allTests
@@ -302,4 +302,5 @@ allTests =
     , scope "Test.Check -> " $ Test.Check.suite
     , scope "Lamdera.Evergreen.TestMigrationHarness -> " $ Lamdera.Evergreen.TestMigrationHarness.suite
     , scope "Lamdera.Evergreen.TestMigrationGenerator -> " $ Lamdera.Evergreen.TestMigrationGenerator.suite
+    , scope "Test.WebGL -> " $ Test.WebGL.suite
     ]
