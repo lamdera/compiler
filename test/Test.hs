@@ -278,8 +278,7 @@ liveReloadLive = do
   --   "src/Bytes/Encode.elm"
   --   "withDebug"
 
-target = tests []
---target = Test.WebGL.suite
+target = EasyTest.run Test.WebGL.suite
 
 all =
   EasyTest.run allTests

@@ -28,9 +28,22 @@ import qualified Ext.Common
 
 suite :: Test ()
 suite = tests
-  []
---   pending $ scope "make Elm app containing extension directive in shader" $ do
---      let project = "E:/repos/compiler/test/scenario-webgl-extensions/"
---      actual <- catchOutput $ Lamdera.Compile.makeDev project [ "src/Triangle.elm" ]
---      expectTextContains actual "1 module compiled successfully"
-  --]
+  [ scope "make Elm app containing extension directive in shader" $
+        let
+            elmStuffFolder = "/Users/martinstewart/Documents/GitHub/compiler/test/scenario-webgl-extensions/elm-stuff"
+
+            setup = do
+                rmdir elmStuffFolder
+
+            cleanup _ = do
+                rmdir elmStuffFolder
+
+            test _ = do
+                let project = "/Users/martinstewart/Documents/GitHub/compiler/test/scenario-webgl-extensions/"
+                actual <- catchOutput $ Lamdera.Compile.makeDev project [ "src/Triangle.elm" ]
+
+                expectTextContains actual
+                    "Success! Compiled 1 module."
+        in
+        using setup cleanup test
+  ]
