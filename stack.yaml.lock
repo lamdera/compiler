@@ -7,55 +7,48 @@ packages:
 - completed:
     hackage: timeout-0.1.1@sha256:56c1d3321d7139d1f7ebf04d46c95d3a3f1c8c9e0f15666ae3ccd6bae6204b6e,1427
     pantry-tree:
-      size: 437
       sha256: e571503d7e609c3fe496de7e858613360bfa6c06e20ac57d9659bd32d0645889
+      size: 437
   original:
     hackage: timeout-0.1.1@sha256:56c1d3321d7139d1f7ebf04d46c95d3a3f1c8c9e0f15666ae3ccd6bae6204b6e,1427
 - completed:
     hackage: command-0.1.1@sha256:5232b98c195bc3b8a6f35c55ccd2fa424abe355ca54cfcd836bbe7e494834773,1110
     pantry-tree:
-      size: 167
       sha256: 1ecfeb4b1367de6b489dbda20be05df78beb07f71d7c0b1f471fab1cd9c8044a
+      size: 167
   original:
     hackage: command-0.1.1@sha256:5232b98c195bc3b8a6f35c55ccd2fa424abe355ca54cfcd836bbe7e494834773,1110
 - completed:
     hackage: snap-server-1.1.2.0@sha256:325378e4f7a50b1a94cf6175e11b9ac6db5edcdd87226f2d5997999334b85c46,15200
     pantry-tree:
-      size: 3313
       sha256: bac856da3319ff93d100dfd5811fbcc39d7d8b7e51d6adc07aea3fc81aacd14e
+      size: 3313
   original:
     hackage: snap-server-1.1.2.0@sha256:325378e4f7a50b1a94cf6175e11b9ac6db5edcdd87226f2d5997999334b85c46,15200
 - completed:
     hackage: websockets-snap-0.10.3.1@sha256:89582b7db916e67b6c8192f489e4eafe7488d9f813e349836a2e74fa4388623d,991
     pantry-tree:
-      size: 330
       sha256: 1630fc5df984c0fd574e68860bf21e1ea3f60ffc26ed1f3859d4e5411bc1e6d8
+      size: 330
   original:
     hackage: websockets-snap-0.10.3.1@sha256:89582b7db916e67b6c8192f489e4eafe7488d9f813e349836a2e74fa4388623d,991
 - completed:
-    hackage: io-streams-haproxy-1.0.1.0@sha256:2241a754697935e0a11e814affcaa4861b42fe88131f807b586ef48051e28a08,3070
-    pantry-tree:
-      size: 589
-      sha256: e0fd63710948210cda2b5d21bd51eedc43f8813470d015158de8bd03237b1cb9
-  original:
-    hackage: io-streams-haproxy-1.0.1.0@sha256:2241a754697935e0a11e814affcaa4861b42fe88131f807b586ef48051e28a08,3070
-- completed:
     hackage: regex-posix-clib-2.7@sha256:998fca06da3d719818f0691ef0b8b9b7375afeea228cb08bd9e2db53f96b0cd7,1232
     pantry-tree:
-      size: 524
       sha256: 5bf20952472d930323766d250f5fbbe3fe6f2cd3d931e5cf7b62a238ab2099ff
+      size: 524
   original:
     hackage: regex-posix-clib-2.7
 - completed:
     hackage: ansi-terminal-0.11@sha256:97470250c92aae14c4c810d7f664c532995ba8910e2ad797b29f22ad0d2d0194,3307
     pantry-tree:
-      size: 1461
       sha256: 4098c4b8bb503fcf0730aedc8247a479d3e22fd1fe4c6b4b2b2b5da30bdfb713
+      size: 1461
   original:
     hackage: ansi-terminal-0.11
 snapshots:
 - completed:
-    size: 619204
-    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/19/33.yaml
-    sha256: 6d1532d40621957a25bad5195bfca7938e8a06d923c91bc52aa0f3c41181f2d4
-  original: lts-19.33
+    sha256: 9313df78f49519315342f4c51ffc5da12659d3735f8ac3c54a1fb98ff874474e
+    size: 640036
+    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/21/12.yaml
+  original: lts-21.12

@@ -36,7 +36,7 @@ watch root action =
                 Added f _ _ -> f
                 Modified f _ _ -> f
                 Removed f _ _ -> f
-                Unknown f _ _ -> f
+                Unknown f _ _ _ -> f
 
           -- @TODO it would be better to not listen to these folders in the `watchTree` when available
           -- https://github.com/haskell-fswatch/hfsnotify/issues/101
