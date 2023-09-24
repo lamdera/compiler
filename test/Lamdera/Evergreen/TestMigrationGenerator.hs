@@ -122,57 +122,57 @@ testExamples = withTestEnv $ do
 
   testFiles & mapM (\folder -> do
     scope folder $ do
-    io $ putStrLn $ "testing: " <> show folder
-    let
-      oldVersion = 1
-      newVersion = 2
-      filenameOld = folder </> "Old.elm"
-      filenameNew = folder </> "New.elm"
-      filenameExpected = folder </> "Expected.elm"
-      filenameActual = folder </> "Actual.elm"
-      typeName = "Target"
-      scenarioName = FP.takeBaseName folder
-      moduleNameOld = N.fromChars $ scenarioName <> ".Old"
-      moduleNameNew = N.fromChars $ scenarioName <> ".New"
-      moduleNameActual = scenarioName <> ".Actual"
-      moduleNameExpected = scenarioName <> ".Expected"
-      moduleOld = ModuleName.Canonical (Pkg.Name "author" "project") moduleNameOld
-      moduleNew = ModuleName.Canonical (Pkg.Name "author" "project") moduleNameNew
+      io $ putStrLn $ "testing: " <> show folder
+      let
+        oldVersion = 1
+        newVersion = 2
+        filenameOld = folder </> "Old.elm"
+        filenameNew = folder </> "New.elm"
+        filenameExpected = folder </> "Expected.elm"
+        filenameActual = folder </> "Actual.elm"
+        typeName = "Target"
+        scenarioName = FP.takeBaseName folder
+        moduleNameOld = N.fromChars $ scenarioName <> ".Old"
+        moduleNameNew = N.fromChars $ scenarioName <> ".New"
+        moduleNameActual = scenarioName <> ".Actual"
+        moduleNameExpected = scenarioName <> ".Expected"
+        moduleOld = ModuleName.Canonical (Pkg.Name "author" "project") moduleNameOld
+        moduleNew = ModuleName.Canonical (Pkg.Name "author" "project") moduleNameNew
 
-    interfacesE <- io $ Lamdera.Make.compileToInterfaces project filenameOld [filenameNew] `catch` catchTestException filenameNew
+      interfacesE <- io $ Lamdera.Make.compileToInterfaces project filenameOld [filenameNew] `catch` catchTestException filenameNew
 
-    case interfacesE of
-      Left err -> io $ Lamdera.Progress.throw $ Reporting.Exit.makeToReport err
-      -- "🏗  error, please compile manually:\n\ncd " <> project <> " && lamdera make " <> filename <> "\n\n"
-      Right interfaces -> do
-        let
-          typeOldM = Helpers.findDef moduleOld typeName interfaces
-          typeNewM = Helpers.findDef moduleNew typeName interfaces
+      case interfacesE of
+        Left err -> io $ Lamdera.Progress.throw $ Reporting.Exit.makeToReport err
+        -- "🏗  error, please compile manually:\n\ncd " <> project <> " && lamdera make " <> filename <> "\n\n"
+        Right interfaces -> do
+          let
+            typeOldM = Helpers.findDef moduleOld typeName interfaces
+            typeNewM = Helpers.findDef moduleNew typeName interfaces
 
-        expectationM <- io $ readUtf8Text (project </> filenameExpected)
+          expectationM <- io $ readUtf8Text (project </> filenameExpected)
 
-        case (typeOldM, typeNewM, expectationM) of
-          (Just typeDefOld, Just typeDefNew, Just expectation) -> do
-              let
-                migrationNested = MigrationGenerator.migrateTypeDef typeDefOld typeDefNew oldVersion newVersion interfaces [] [] Set.empty
-                (Helpers.MigrationNested migration migrationImports migrationDefs) = migrationNested
-                migrationDefM = migrationDefs & Map.lookup (moduleNew, typeName) & fmap Helpers.migrationDef
+          case (typeOldM, typeNewM, expectationM) of
+            (Just typeDefOld, Just typeDefNew, Just expectation) -> do
+                let
+                  migrationNested = MigrationGenerator.migrateTypeDef typeDefOld typeDefNew oldVersion newVersion interfaces [] [] Set.empty
+                  (Helpers.MigrationNested migration migrationImports migrationDefs) = migrationNested
+                  migrationDefM = migrationDefs & Map.lookup (moduleNew, typeName) & fmap Helpers.migrationDef
 
-              case migrationDefM of
-                Just migrationDef -> do
-                  let final = MigrationGenerator.migrationsToFile (stringToText moduleNameActual) oldVersion newVersion [(typeName, (migrationNested { Helpers.migrationFn = "target = " <> migration  }))] moduleNew
-                      expected = Ext.ElmFormat.formatOrPassthrough (expectation & T.replace "\\n" "\n" & T.strip)
-                      -- actual = Ext.ElmFormat.formatOrPassthrough (migrationDef & T.replace "\\n" "\n" & T.strip)
-                      actual = Ext.ElmFormat.formatOrPassthrough (final)
-                  _ <- io $ writeUtf8 (project </> filenameActual) actual
-                  expectEqualTextTrimmed (expected & T.replace "Expected exposing (..)" "Actual exposing (..)") actual
-                  pure migrationNested
-                Nothing ->
-                  pure migrationNested
-          (_, _, Nothing) ->                  error $ "Could not find expectation file: " <> filenameExpected
-          (Nothing, Just typeNew, _) ->       error $ "Could not find type `Target` in test: " <> N.toChars moduleNameNew
-          (Just typeOld, Nothing, _) -> error $ "Could not find type `Target` in test: " <> N.toChars moduleNameOld
-          (Nothing, Nothing, _) ->      error $ "Could not find type `Target` in test: " <> N.toChars moduleNameNew
+                case migrationDefM of
+                  Just migrationDef -> do
+                    let final = MigrationGenerator.migrationsToFile (stringToText moduleNameActual) oldVersion newVersion [(typeName, (migrationNested { Helpers.migrationFn = "target = " <> migration  }))] moduleNew
+                        expected = Ext.ElmFormat.formatOrPassthrough (expectation & T.replace "\\n" "\n" & T.strip)
+                        -- actual = Ext.ElmFormat.formatOrPassthrough (migrationDef & T.replace "\\n" "\n" & T.strip)
+                        actual = Ext.ElmFormat.formatOrPassthrough (final)
+                    _ <- io $ writeUtf8 (project </> filenameActual) actual
+                    expectEqualTextTrimmed (expected & T.replace "Expected exposing (..)" "Actual exposing (..)") actual
+                    pure migrationNested
+                  Nothing ->
+                    pure migrationNested
+            (_, _, Nothing) ->                  error $ "Could not find expectation file: " <> filenameExpected
+            (Nothing, Just typeNew, _) ->       error $ "Could not find type `Target` in test: " <> N.toChars moduleNameNew
+            (Just typeOld, Nothing, _) -> error $ "Could not find type `Target` in test: " <> N.toChars moduleNameOld
+            (Nothing, Nothing, _) ->      error $ "Could not find type `Target` in test: " <> N.toChars moduleNameNew
     )
 
   failures <- io $ readMVar failuresM
