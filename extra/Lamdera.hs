@@ -554,7 +554,7 @@ hindent_ s = do
     Just _ -> do
       (exit, stdout, stderr) <-
         System.Process.readProcessWithExitCode "hindent" ["--line-length","150"] s
-        `catchError` (\err -> pure (error "no exit code on failure", s, "hindent failed on input"))
+        `catchError` (\err -> pure (System.Exit.ExitFailure 123, s, "hindent failed on input"))
 
       if exit /= System.Exit.ExitSuccess
         then

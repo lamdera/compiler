@@ -73,8 +73,10 @@ exec root path name = do
       let !force = show $ Lamdera.Evaluate.Optimized.run def Map.empty (Opt._g_nodes $ Opt.addLocalGraph objectsLocal graph)
       pure force
 
-    formatted <- hindent_ force
-    atomicPutStrLn $ T.unpack $ formatted
+    -- formatted <- hindent_ force
+    -- atomicPutStrLn $ T.unpack $ formatted
+
+    atomicPutStrLn force
 
 
     -- formatHaskellValue "canonical Test.Basic" canonical

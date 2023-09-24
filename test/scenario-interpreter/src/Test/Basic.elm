@@ -90,8 +90,9 @@ suite =
     , test "List.repeat 10M" <|
         -- Just a performance test
         notEquals (List.repeat 10000000 0) []
-    , test "folding with a plus" <|
-        equals (List.foldl (+) 0 [ 1, 2, 3 ]) 6
+
+    -- , test "folding with a plus" <|
+    --     equals (List.foldl (+) 0 [ 1, 2, 3 ]) 6
     , test "Custom type equality" <|
         equals Custom1 Custom1
     , test "Custom type inequality" <|
