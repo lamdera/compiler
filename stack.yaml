@@ -15,6 +15,8 @@ extra-deps:
 - 'vendor/elm-format'
 # windows pinning for build issues
 - ansi-terminal-0.11
+- git: https://github.com/noteed/language-glsl.git
+  commit: 99c3aae76363b127679da640a6f00d61d2203830
 flags:
   regex-posix:
      _regex-posix-clib: true

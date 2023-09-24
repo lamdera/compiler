@@ -19,6 +19,7 @@ import qualified Test.Check
 import qualified Test.Wire
 import qualified Test.Ext.ElmPages.Check
 import qualified Test.TypeHashes
+import qualified Test.WebGL
 
 import qualified Lamdera.Evergreen.TestMigrationHarness
 import qualified Lamdera.Evergreen.TestMigrationGenerator
@@ -122,8 +123,8 @@ previewProject = do
   Dir.withCurrentDirectory p $ Lamdera.CLI.Deploy.run () ()
 
 
-target =
-  Test.Check.checkWithParams "/Users/mario/dev/projects/lamdera-dashboard"
+--target =
+--  Test.Check.checkWithParams "/Users/mario/dev/projects/lamdera-dashboard"
   -- Test.Check.checkWithParams "/Users/mario/lamdera/test/sheep-game" "sheep-game"
 
 -- target = buildTestHarnessToProductionJs
@@ -277,6 +278,7 @@ liveReloadLive = do
   --   "src/Bytes/Encode.elm"
   --   "withDebug"
 
+target = EasyTest.run Test.WebGL.suite
 
 all =
   EasyTest.run allTests
@@ -299,4 +301,5 @@ allTests =
     , scope "Test.Check -> " $ Test.Check.suite
     , scope "Lamdera.Evergreen.TestMigrationHarness -> " $ Lamdera.Evergreen.TestMigrationHarness.suite
     , scope "Lamdera.Evergreen.TestMigrationGenerator -> " $ Lamdera.Evergreen.TestMigrationGenerator.suite
+    , scope "Test.WebGL -> " $ Test.WebGL.suite
     ]
