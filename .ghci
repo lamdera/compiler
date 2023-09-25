@@ -1,3 +1,4 @@
 :set -fbyte-code
 :set -fobject-code
-:def rr const $ return $ unlines [":r","Test.target"]
+:set -fwarn-name-shadowing
+:def rr const $ return $ unlines ["Ext.Common.killTrackedThreads",":r","Test.target"]
