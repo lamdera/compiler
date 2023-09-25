@@ -1,4 +1,6 @@
 {-# OPTIONS_GHC -Wall #-}
+{-# LANGUAGE BangPatterns #-}
+
 module Stuff
   ( details
   , interfaces
@@ -131,6 +133,12 @@ withRootLock root work =
   do  let dir = stuff root
       Dir.createDirectoryIfMissing True dir
       Lock.withFileLock (dir </> "lock") Lock.Exclusive (\_ -> work)
+        & Lamdera.alternativeImplementation (do
+            Lamdera.debug "🔒 withRootLock"
+            !res <- Lock.withFileLock (dir </> "lock") Lock.Exclusive (\_ -> work)
+            Lamdera.debug "🔓 unlocking withRootLock"
+            pure res
+          )
 
 
 withRegistryLock :: PackageCache -> IO a -> IO a

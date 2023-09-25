@@ -359,7 +359,7 @@ killTrackedThreads = do
           debug $ "No tracked GHCI threads to kill."
           pure []
         threads -> do
-          debug $ "Killing tracked GHCI threads: " ++ show threads
+          debug $ "🔪  Killing tracked GHCI threads: " ++ show threads
           mapM killThread threads
           pure []
     )
