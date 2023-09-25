@@ -33,12 +33,12 @@ packages:
   original:
     hackage: websockets-snap-0.10.3.1@sha256:89582b7db916e67b6c8192f489e4eafe7488d9f813e349836a2e74fa4388623d,991
 - completed:
-    hackage: regex-posix-clib-2.7@sha256:998fca06da3d719818f0691ef0b8b9b7375afeea228cb08bd9e2db53f96b0cd7,1232
+    hackage: regex-posix-0.96.0.1@sha256:d479ca2cc6274c15801169f83dae883c9b62b78af3c7b30ed3fbd4b4612156b8,2969
     pantry-tree:
-      sha256: 5bf20952472d930323766d250f5fbbe3fe6f2cd3d931e5cf7b62a238ab2099ff
-      size: 524
+      sha256: 3d916f1884ab4261f0a0ef124d5372f41c399232ae2c303de7a7ea03b7848405
+      size: 748
   original:
-    hackage: regex-posix-clib-2.7
+    hackage: regex-posix-0.96.0.1
 - completed:
     hackage: ansi-terminal-0.11@sha256:97470250c92aae14c4c810d7f664c532995ba8910e2ad797b29f22ad0d2d0194,3307
     pantry-tree:
@@ -47,16 +47,16 @@ packages:
   original:
     hackage: ansi-terminal-0.11
 - completed:
+    commit: 99c3aae76363b127679da640a6f00d61d2203830
+    git: https://github.com/noteed/language-glsl.git
     name: language-glsl
-    version: 0.4.0.0
-    git: https://github.com/noteed/language-glsl.git
     pantry-tree:
-      size: 1066
       sha256: 155d01f395cc7df3c511df6ff35835b9d54f88a629a58098af7b54a4eeff8e63
-    commit: 99c3aae76363b127679da640a6f00d61d2203830
+      size: 1066
+    version: 0.4.0.0
   original:
-    git: https://github.com/noteed/language-glsl.git
     commit: 99c3aae76363b127679da640a6f00d61d2203830
+    git: https://github.com/noteed/language-glsl.git
 snapshots:
 - completed:
     sha256: 9313df78f49519315342f4c51ffc5da12659d3735f8ac3c54a1fb98ff874474e

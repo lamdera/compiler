@@ -7,7 +7,7 @@ extra-deps:
 - snap-server-1.1.2.0@sha256:325378e4f7a50b1a94cf6175e11b9ac6db5edcdd87226f2d5997999334b85c46,15200
 - websockets-snap-0.10.3.1@sha256:89582b7db916e67b6c8192f489e4eafe7488d9f813e349836a2e74fa4388623d,991
 # Required to build on windows
-- regex-posix-clib-2.7
+- regex-posix-0.96.0.1
 # elm-format vendoring
 - 'vendor/elm-format/elm-format-markdown'
 - 'vendor/elm-format/elm-format-lib'
