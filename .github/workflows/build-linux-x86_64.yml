@@ -3,6 +3,7 @@ on:
     branches:
       - distribute
       - linux
+      - linux-x86_64
 
 name: Build Linux x86_64
 jobs:
