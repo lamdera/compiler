@@ -4,13 +4,14 @@ module Ext.Filewatch where
 
 import Ext.Common
 import System.FSNotify
-import Control.Concurrent (threadDelay, forkIO)
+import Control.Concurrent (threadDelay)
 import Control.Monad (forever)
 import qualified Data.List as List
 import qualified Control.FoldDebounce as Debounce
-import qualified System.Directory as Dir
 import qualified System.FilePath as FP
 
+
+watch :: FilePath -> ([FilePath] -> IO ()) -> IO ()
 watch root action =
   trackedForkIO "Ext.Filewatch.watch" $ withManager $ \mgr -> do
     trigger <-
@@ -26,32 +27,37 @@ watch root action =
           }
 
     -- start a watching job (in the background)
-    watchTree
+    _ <- watchTree
       mgr          -- manager
       root         -- directory to watch
       (const True) -- predicate
       (\e -> do
         let
-          f = case e of
-                Added f _ _ -> f
-                Modified f _ _ -> f
-                Removed f _ _ -> f
-                Unknown f _ _ _ -> f
+          filepath = case e of
+            Added f _ _ -> f
+            Modified f _ _ -> f
+            ModifiedAttributes f _ _ -> f
+            Removed f _ _ -> f
+            WatchedDirectoryRemoved f _ _ -> f
+            CloseWrite f _ _ -> f
+            Unknown f _ _ _ -> f
 
           -- @TODO it would be better to not listen to these folders in the `watchTree` when available
           -- https://github.com/haskell-fswatch/hfsnotify/issues/101
           shouldRefresh = do
-                not (List.isInfixOf ".git" f)
-             && not (List.isInfixOf "elm-stuff" f)
-             && not (List.isInfixOf "node_modules" f)
-             && not (List.isInfixOf "data" f)
-             && not (List.isInfixOf "elm-pkg-js-includes.min.js" f)
+                not (List.isInfixOf ".git" filepath)
+             && not (List.isInfixOf "elm-stuff" filepath)
+             && not (List.isInfixOf "node_modules" filepath)
+             && not (List.isInfixOf "data" filepath)
+             && not (List.isInfixOf "elm-pkg-js-includes.min.js" filepath)
 
-        onlyWhen shouldRefresh $ Debounce.send trigger f
+        onlyWhen shouldRefresh $ Debounce.send trigger filepath
       )
 
     -- sleep forever (until interrupted)
     forever $ threadDelay 1000000
 
+
+watchFile :: FilePath -> ([FilePath] -> IO ()) -> IO ()
 watchFile file action =
   watch (FP.takeDirectory file) action
