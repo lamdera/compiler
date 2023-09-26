@@ -1,13 +1,14 @@
 # FROM registry.gitlab.b-data.ch/ghc/ghc4pandoc:8.10.7 as bootstrap
 
 # @TODO having issues on subsequent versions of GHC, retry in future
-FROM registry.gitlab.b-data.ch/ghc/ghc4pandoc:9.0.2 as bootstrap
+# https://gitlab.b-data.ch/ghc/ghc4pandoc
+FROM registry.gitlab.b-data.ch/ghc/ghc4pandoc:9.4.3 as bootstrap
 
 # Install packages
 WORKDIR /lamdera
 COPY elm.cabal ./
 COPY cabal.project ./
-COPY cabal.project.freeze ./
+# COPY cabal.project.freeze ./
 COPY vendor/elm-format vendor/elm-format
 
 RUN cabal update

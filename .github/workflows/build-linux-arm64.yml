@@ -2,6 +2,8 @@ on:
   push:
     branches:
       - distribute
+      - linux
+      - linux-arm64
 
 name: Build Linux arm64
 jobs:

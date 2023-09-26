@@ -12,6 +12,7 @@ module Lamdera
   , alternativeImplementationWhen
   , alternativeImplementationPassthrough
   , Ext.Common.atomicPutStrLn
+  , Ext.File.writeBinaryValueStrict
   , debug_
   , debug_note
   , debug
@@ -183,6 +184,7 @@ import qualified Data.Name as N
 import qualified Data.Utf8 as Utf8
 
 import qualified Ext.Common
+import qualified Ext.File
 import Ext.Common (getProjectRoot, getProjectRootFor, getProjectRootMaybe, OSType(..), ostype, atomicPutStrLn)
 
 -- import CanSer.CanSer (ppElm)
@@ -755,14 +757,16 @@ lamderaBackendDevSnapshotPath = do
 
 
 lowerFirstLetter :: String -> Text
-lowerFirstLetter text =
-  case text of
+lowerFirstLetter string =
+  case string of
     first:rest -> T.pack $ [Char.toLower first] <> rest
+    [] -> T.pack string
 
 lowerFirstLetter_ :: Text -> Text
 lowerFirstLetter_ text =
   case T.unpack text of
     first:rest -> T.pack $ [Char.toLower first] <> rest
+    [] -> text
 
 
 findElmFiles :: FilePath -> IO [FilePath]

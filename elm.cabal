@@ -41,10 +41,10 @@ Executable lamdera
         -- add -eventlog for (elm make src/Main.elm +RTS -l; threadscope elm.eventlog)
         -- https://www.oreilly.com/library/view/parallel-and-concurrent/9781449335939/
 
-    if os(windows)
-        -- https://gitlab.haskell.org/ghc/ghc/-/issues/20878
-        -- https://gitlab.haskell.org/ghc/ghc/-/issues/20010#note_359766
-        extra-libraries: stdc++ supc++ gcc_s gcc_s_seh-1
+    -- if os(windows)
+    --     -- https://gitlab.haskell.org/ghc/ghc/-/issues/20878
+    --     -- https://gitlab.haskell.org/ghc/ghc/-/issues/20010#note_359766
+    --     extra-libraries: stdc++ supc++ gcc_s gcc_s_seh-1
 
     Hs-Source-Dirs:
         compiler/src
@@ -307,6 +307,7 @@ Executable lamdera
         Test.Snapshot
         Test.TypeHashes
         Test.Wire
+        Test.WebGL
         Lamdera.Evergreen.TestMigrationHarness
         Lamdera.Evergreen.TestMigrationGenerator
 
@@ -322,6 +323,7 @@ Executable lamdera
         -- ext-common
         Ext.Common
         Ext.ElmFormat
+        Ext.File
         Ext.Query.Canonical
         Ext.Query.Interfaces
         Ext.Query.Optimized
@@ -336,26 +338,24 @@ Executable lamdera
 
     Build-depends:
         ansi-terminal,
-          -- >= 0.8 && < 0.9,
-        ansi-wl-pprint >= 0.6.8 && < 0.7,
-        base >=4.11 && <5,
-        binary >= 0.8 && < 0.9,
-        bytestring >= 0.11.5.2 && < 0.12,
+        ansi-wl-pprint < 1,
+        base,
+        binary,
+        bytestring,
         containers,
-          -- >= 0.5.8.2 && < 0.6,
-        directory >= 1.2.3.0 && < 2.0,
-        edit-distance >= 0.2 && < 0.3,
+        directory,
+        edit-distance,
         file-embed,
         filelock,
-        filepath >= 1 && < 2.0,
-        ghc-prim >= 0.5.2,
+        filepath,
+        ghc-prim,
         haskeline,
-        HTTP >= 4000.4.1 && < 4000.5,
-        http-client >= 0.6 && < 0.8,
-        http-client-tls >= 0.3 && < 0.4,
-        http-types >= 0.12 && < 1.0,
-        language-glsl >= 0.3,
-        mtl >= 2.2.1 && < 3,
+        HTTP,
+        http-client,
+        http-client-tls,
+        http-types,
+        language-glsl,
+        mtl,
         network,
           -- >= 2.4 && < 2.7,
         parsec,
@@ -366,7 +366,7 @@ Executable lamdera
         snap-core,
         snap-server,
         template-haskell,
-        time >= 1.9.1,
+        time,
         unordered-containers,
         utf8-string,
         vector,
@@ -374,6 +374,10 @@ Executable lamdera
 
 
         -- @LAMDERA
+
+        -- Windows metapackage
+        system-cxx-std-lib,
+
         -- @TODO need to remove and use Utf8 module instead somehow? Or compat it.
         text,
         -- Extra
@@ -385,6 +389,7 @@ Executable lamdera
         filemanip,
         unix-compat,
         githash,
+        temporary,
 
         -- Live
         websockets,
