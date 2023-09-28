@@ -9,6 +9,10 @@ jobs:
   build-packages:
     name: Build Windows Libraries
     runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+
     steps:
       - uses: actions/checkout@v3
         with:
