@@ -49,7 +49,8 @@ watch root action =
                 not (List.isInfixOf ".git" filepath)
              && not (List.isInfixOf "elm-stuff" filepath)
              && not (List.isInfixOf "node_modules" filepath)
-             && not (List.isInfixOf "data" filepath)
+            --  This is really dumb of you because some people use `/data/...` as a folder...
+            --  && not (List.isInfixOf "data" filepath)
              && not (List.isInfixOf "elm-pkg-js-includes.min.js" filepath)
 
         Ext.Common.debug $ "👀 file event " ++ show e ++ " with shouldRefresh:" ++ show shouldRefresh
