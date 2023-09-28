@@ -37,7 +37,7 @@ sandwich root moduleName javascript =
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, minimum-scale=1.0">
   <meta name="apple-mobile-web-app-capable" content="yes" />
-  <style>body { padding: 0; margin: 0; } body.error { padding: 10px } @media (prefers-color-scheme: dark) { body.error { background-color: #000; color: #fff; } } </style>
+  <style>body { padding: 0; margin: 0; } body.boot-unhandled-js-error { padding: 10px } @media (prefers-color-scheme: dark) { body.boot-unhandled-js-error { background-color: #000; color: #fff; } } </style>
   |] <> htmlHead <> [r|
 </head>
 
@@ -53,7 +53,7 @@ try {
 }
 catch (e)
 {
-  document.body.classList.add("error");
+  document.body.classList.add("boot-unhandled-js-error");
   // display initialization errors (e.g. bad flags, infinite recursion)
   var header = document.createElement("h1");
   header.style.fontFamily = "monospace";
