@@ -26,6 +26,7 @@ watch root action =
           , Debounce.alwaysResetTimer = True
           }
 
+    Ext.Common.debug $ "👀 file watch booting for " ++ show root
     -- start a watching job (in the background)
     _ <- watchTree
       mgr          -- manager
@@ -51,6 +52,7 @@ watch root action =
              && not (List.isInfixOf "data" filepath)
              && not (List.isInfixOf "elm-pkg-js-includes.min.js" filepath)
 
+        Ext.Common.debug $ "👀 file event " ++ show e ++ " with shouldRefresh:" ++ show shouldRefresh
         onlyWhen shouldRefresh $ Debounce.send trigger filepath
       )
 
