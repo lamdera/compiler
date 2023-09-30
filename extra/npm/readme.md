@@ -27,8 +27,6 @@ npm install --save-dev lamdera@latest
 
 **Multiple versions** ⚠️
 
-If you're a tooling author, use Lamdera as a dependency and npm as a distribution method, then you can
-
 You could also use this package to use different versions of Lamdera in different projects. I.e. `npm install lamdera@latest` in each project and use the binary at `./node_modules/.bin/lamdera` for compilation. However this is generally not recommended. Lamdera users should always use the latest release, as that's what is used when you do a `lamdera deploy`.
 
 
