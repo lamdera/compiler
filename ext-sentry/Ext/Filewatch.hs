@@ -37,6 +37,7 @@ watch root action =
                 Modified f _ _ -> f
                 Removed f _ _ -> f
                 Unknown f _ _ _ -> f
+                _ -> error $ "unreachable:" ++ show e
 
           -- @TODO it would be better to not listen to these folders in the `watchTree` when available
           -- https://github.com/haskell-fswatch/hfsnotify/issues/101
