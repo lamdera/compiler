@@ -40,6 +40,8 @@ import qualified Reporting.Error.Import as Import
 import qualified Reporting.Exit as Exit
 import qualified Reporting.Exit.Help as Help
 import qualified Reporting.Render.Type.Localizer as L
+import Lamdera as LA
+import qualified Data.Text
 
 
 
@@ -165,7 +167,7 @@ compile (A.Artifacts interfaces objects) state@(Repl.State imports types decls) 
         ExprEntry        src -> Repl.toByteString state (Repl.OutputExpr src)
   in
   case
-    do  modul <- mapLeft Error.BadSyntax $ Parse.fromByteString Parse.Application source
+    do  modul <- mapLeft Error.BadSyntax $ Parse.fromByteString Parse.Application (LA.debugPassText "SOURCE" ( Data.Text.pack $ show source) $ source)
         ifaces <- mapLeft Error.BadImports $ checkImports interfaces (Src._imports modul)
         artifacts <- Compile.compile Pkg.dummyName ifaces modul
         return ( modul, artifacts, objects )
