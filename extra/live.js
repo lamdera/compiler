@@ -110,9 +110,7 @@ window.setupApp = function(name, elid) {
 
     if (name !== "LocalDev") {
       console.warn('Not a Lamdera app, loading as normal Elm.')
-      // @TODO this breaks for sub-names i.e. Test.Encode.main, Elm["Test.Encode"] != Elm.Test.Encode
-      // Figure out if we can call obj props with strings
-      app = Elm[name].init({ node: document.getElementById(elid) })
+      app = name.split('.').reduce((o,i)=> o[i], Elm).init({ node: document.getElementById(elid) })
       if (document.getElementById(elid)) {
         document.getElementById(elid).innerText = 'This is a headless program, meaning there is nothing to show here.\n\nI started the program anyway though, and you can access it as `app` in the developer console.'
       }
