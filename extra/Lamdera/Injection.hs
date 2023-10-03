@@ -331,6 +331,7 @@ injections isBackend isLocalDev =
 {- elm-pkg-js integration
 See: https://github.com/supermario/elm-pkg-js
 -}
+{-# NOINLINE elmPkgJs #-}
 elmPkgJs :: Mode.Mode -> B.Builder
 elmPkgJs mode =
   case mode of
