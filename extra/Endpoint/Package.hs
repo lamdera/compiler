@@ -46,7 +46,7 @@ writeElmJson pkgs = do
                 "indirect" .= (Map.empty :: Map.Map String String)
             ]
           ]
-    writeFile "../../outlines/repl/elm.json" ( BL.unpack $ encode elmJson)
+    writeFile "./outlines/repl/elm.json" ( BL.unpack $ encode elmJson)
 
 
 handlePost :: Snap ()
