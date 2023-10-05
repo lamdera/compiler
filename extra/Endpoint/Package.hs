@@ -1,8 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DeriveGeneric #-}
 
 module Endpoint.Package (handlePost) where
-
-{-# LANGUAGE DeriveGeneric #-}
 
 import GHC.Generics (Generic)
 
@@ -35,7 +34,7 @@ writeElmJson pkgs = do
             "type" .= ("application" :: String),
             "source-directories" .= (["../../repl-src"] :: [String]),
             "elm-version" .= ("0.19.1" :: String),
-            "dep  endencies" .= object [
+            "dependencies" .= object [
                 "direct" .= directDeps,
                 "indirect" .= object [
                     "elm/json" .= ("1.1.3" :: String)
