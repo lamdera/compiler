@@ -57,6 +57,7 @@ import StandaloneInstances
 
 import qualified Artifacts
 import qualified Endpoint.Repl as Repl
+import qualified Endpoint.Package as Package
 
 
 -- RUN THE DEV SERVER
@@ -138,6 +139,7 @@ runWithRoot root (Flags maybePort) =
         <|> Live.openEditorHandler root
         <|> Live.serveExperimental root
         <|> (SnapCore.path "repl" $ Repl.endpoint rArtifacts)
+        <|> (SnapCore.path "packageList" $ Package.handlePost)
         <|> serveAssets -- Compiler packaged static files
         <|> Live.serveUnmatchedUrlsToIndex root (serveElm sentryCache) -- Everything else without extensions goes to Lamdera LocalDev harness
         <|> error404 -- Will get hit for any non-matching extensioned paths i.e. /hello.blah
