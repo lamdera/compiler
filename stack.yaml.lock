@@ -54,6 +54,13 @@ packages:
   original:
     hackage: readable-0.3.1
 - completed:
+    hackage: fsnotify-0.4.1.0@sha256:44540beabea36aeeef930aa4d5f28091d431904bc9923b6ac4d358831c651235,2854
+    pantry-tree:
+      sha256: f8e89e81fe0ca6e285036e04b165119ccfc59e7e668c1bfc28927f39062c5949
+      size: 1280
+  original:
+    hackage: fsnotify-0.4.1.0
+- completed:
     hackage: regex-posix-0.96.0.1@sha256:d479ca2cc6274c15801169f83dae883c9b62b78af3c7b30ed3fbd4b4612156b8,2969
     pantry-tree:
       sha256: 3d916f1884ab4261f0a0ef124d5372f41c399232ae2c303de7a7ea03b7848405

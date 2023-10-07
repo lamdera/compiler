@@ -13,6 +13,7 @@ extra-deps:
 - fold-debounce-0.2.0.11
 - snap-core-1.0.5.1
 - readable-0.3.1
+- fsnotify-0.4.1.0
 #- ansi-wl-pprint-0.6.9@sha256:fb737bc96e2aef34ad595d54ced7a73f648c521ebcb00fe0679aff45ccd49212,2448
 #- optparse-applicative-0.17.1.0@sha256:cb5f5f0dc9749846fc0e3df0041a8efee6368cc1cff07336acd4c3b02a951ed6,5147
 
