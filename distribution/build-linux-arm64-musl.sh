@@ -81,10 +81,13 @@ declare -f build_binary
 #     -it registry.gitlab.b-data.ch/ghc/ghc4pandoc:9.2.7 \
 #     /bin/bash
 
+[ "$GITHUB_ACTIONS" == "true" ] && runMode="-i" || runMode="-it"
+
 docker $DOCKER_HOST run \
     -v /root/compiler:/root/compiler \
-    -it registry.gitlab.b-data.ch/ghc/ghc4pandoc:9.2.7 \
+    $runMode registry.gitlab.b-data.ch/ghc/ghc4pandoc:9.2.7 \
     bash -c "$(declare -f build_binary); build_binary '$bin'"
+
 
 if [ -z "$RSYNC_PATH" ]; then
     echo "RSYNC_PATH is empty, skipping"
