@@ -1,14 +1,6 @@
 #!/usr/bin/env bash
 set -ex                                                   # Be verbose and exit immediately on error instead of trying to continue
 
-if [ "$GITHUB_ACTIONS" == "true" ]; then
-    RSYNC_PATH=""
-    DOCKER_HOST=""
-else
-    RSYNC_PATH="root@lamdera-falkenstein-arm64-1:/root/compiler/"
-    DOCKER_HOST="-H ssh://root@lamdera-falkenstein-arm64-1"
-fi
-
 source "common.sh"
 os="linux"
 arch="arm64"
@@ -19,12 +11,24 @@ mkdir -p $dist
 bin=$dist/$buildTag
 
 scriptDir=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
-cd "$scriptDir/.."                                        # Move into the project root
+compilerRoot="$scriptDir/.."
 
+if [ "$GITHUB_ACTIONS" == "true" ]; then
+    mountRoot="$compilerRoot"
+    rsyncCompilerPath=""
+    dockerHost=""
+else
+    mountRoot="/root/compiler"
+    rsyncCompilerPath="root@lamdera-falkenstein-arm64-1:/root/compiler/"
+    dockerHost="-H ssh://root@lamdera-falkenstein-arm64-1"
+fi
+
+
+cd "$compilerRoot"                                                   # Move into the project root
 git submodule init && git submodule update
 
-if [ -z "$RSYNC_PATH" ]; then
-    echo "RSYNC_PATH is empty, skipping"
+if [ -z "$rsyncCompilerPath" ]; then
+    echo "rsyncCompilerPath is empty, skipping"
 else
     # GOAL: syncronise all relevant files to the remote host
     rsync -avz \
@@ -33,15 +37,16 @@ else
         --exclude="extra/npm" \
         --exclude="node_modules" \
         --exclude="elm-stuff" \
-        ./ $RSYNC_PATH
+        ./ $rsyncCompilerPath
 fi
 
-build_binary() {
+
+build_binary_docker() {
+    set -ex
     local bin="$1"
     local compilerRoot="/root/compiler"
     cd $compilerRoot
 
-    echo "the bin is '$bin'"
     git config --global --add safe.directory /root/compiler
 
     # GOAL: get the cabal caches into the mounted folder so they persist outside the Docker run lifetime and we don't needlessly rebuild hundreds of super expensive deps repeatedly forever
@@ -71,7 +76,7 @@ build_binary() {
     strip "$bin"
 
 }
-declare -f build_binary
+declare -f build_binary_docker
 
 # GOAL: get a suitable build environment with GHC & Cabal build for arm64 in an Alpine container using MUSL instead of GLIBC, so we can build portable static binaries
 
@@ -83,17 +88,17 @@ declare -f build_binary
 
 [ "$GITHUB_ACTIONS" == "true" ] && runMode="-i" || runMode="-it"
 
-docker $DOCKER_HOST run \
-    -v /root/compiler:/root/compiler \
+docker $dockerHost run \
+    -v "$mountRoot:/root/compiler" \
     $runMode registry.gitlab.b-data.ch/ghc/ghc4pandoc:9.2.7 \
-    bash -c "$(declare -f build_binary); build_binary '$bin'"
+    bash -c "$(declare -f build_binary_docker); build_binary_docker '$bin'"
 
 
-if [ -z "$RSYNC_PATH" ]; then
-    echo "RSYNC_PATH is empty, skipping"
+if [ -z "$rsyncCompilerPath" ]; then
+    echo "rsyncCompilerPath is empty, skipping"
 else
     # GOAL: get the remote binary locally
-    scp $RSYNC_PATH/"$bin" "$bin"
+    scp $rsyncCompilerPath/"$bin" "$bin"
 fi
 
 ls -alh "$bin"
