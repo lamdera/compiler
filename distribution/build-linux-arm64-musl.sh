@@ -18,8 +18,8 @@ if [ "$GITHUB_ACTIONS" == "true" ]; then
     rsyncCompilerPath=""
     dockerHost=""
 else
-    mountRoot="/root/compiler"
-    rsyncCompilerPath="root@lamdera-falkenstein-arm64-1:/root/compiler/"
+    mountRoot="/home/github/runner-setups/lamdera-compiler/_work/compiler/compiler"
+    rsyncCompilerPath="root@lamdera-falkenstein-arm64-1:$mountRoot"
     dockerHost="-H ssh://root@lamdera-falkenstein-arm64-1"
 fi
 
@@ -44,6 +44,8 @@ fi
 build_binary_docker() {
     set -ex
     local bin="$1"
+    local userId="$1"
+    local groupId="$1"
     local compilerRoot="/root/compiler"
     cd $compilerRoot
 
@@ -75,6 +77,8 @@ build_binary_docker() {
     cp "$(cabal list-bin .)" "$bin"
     strip "$bin"
 
+    # Work around ownership issues that prevent GH actions from managing the files later
+    chown -R "$userId:$groupId" ./*
 }
 declare -f build_binary_docker
 
@@ -86,12 +90,12 @@ declare -f build_binary_docker
 #     -it registry.gitlab.b-data.ch/ghc/ghc4pandoc:9.2.7 \
 #     /bin/bash
 
-[ "$GITHUB_ACTIONS" == "true" ] && runMode="-i" || runMode="-it"
+[ "$GITHUB_ACTIONS" == "true" ] && runMode="--rm -i" || runMode="-it"
 
 docker $dockerHost run \
     -v "$mountRoot:/root/compiler" \
     $runMode registry.gitlab.b-data.ch/ghc/ghc4pandoc:9.2.7 \
-    bash -c "$(declare -f build_binary_docker); build_binary_docker '$bin'"
+    bash -c "$(declare -f build_binary_docker); build_binary_docker '$bin' '$(id -u)' '$(id -g)'"
 
 
 if [ -z "$rsyncCompilerPath" ]; then
