@@ -14,14 +14,15 @@ compilerRoot="$scriptDir/.."
 
 if [ "$GITHUB_ACTIONS" == "true" ]; then
     mountRoot="$compilerRoot"
+    cacheRoot="/home/github/cabal-caches/linux-arm64"
     rsyncCompilerPath=""
     dockerHost=""
 else
-    mountRoot="/home/github/runner-setups/lamdera-compiler/_work/compiler/compiler"
+    mountRoot="/root/compiler"
+    cacheRoot="/home/github/cabal-caches/linux-arm64"
     rsyncCompilerPath="root@lamdera-falkenstein-arm64-1:$mountRoot"
     dockerHost="-H ssh://root@lamdera-falkenstein-arm64-1"
 fi
-
 
 cd "$compilerRoot"                                                   # Move into the project root
 git submodule init && git submodule update
@@ -31,20 +32,25 @@ if [ -z "$rsyncCompilerPath" ]; then
 else
     # GOAL: syncronise all relevant files to the remote host
     rsync -avz \
+        --exclude=".stack-work" \
         --exclude="ext-package-cache" \
         --exclude="distribution/dist" \
+        --exclude="dist-newstyle" \
         --exclude="extra/npm" \
         --exclude="node_modules" \
         --exclude="elm-stuff" \
         ./ $rsyncCompilerPath
+
+    ssh root@lamdera-falkenstein-arm64-1 "mkdir -p $cacheRoot || true"
 fi
 
 
 build_binary_docker() {
     set -ex
     local bin="$1"
-    local userId="$1"
-    local groupId="$1"
+    local actions="$2"
+    local userId="$3"
+    local groupId="$4"
     local compilerRoot="/root/compiler"
     cd $compilerRoot
 
@@ -52,9 +58,9 @@ build_binary_docker() {
 
     # GOAL: get the cabal caches into the mounted folder so they persist outside the Docker run lifetime and we don't needlessly rebuild hundreds of super expensive deps repeatedly forever
     # This is documented but doesn't seem to work https://cabal.readthedocs.io/en/3.6/installing-packages.html#environment-variables
-    export CABAL_DIR=$compilerRoot/distribution/cabal-caches/linux-arm64
-    mkdir -p distribution/cabal-caches/linux-arm64 || true
-    ln -sf $compilerRoot/distribution/cabal-caches/linux-arm64 ~/.cabal
+    export CABAL_DIR=/root/cache
+    mkdir -p /root/cache || true
+    ln -sf /root/cache ~/.cabal
 
     # GOAL: pin our dependencies so we can build them one by one
     cabal update
@@ -77,7 +83,7 @@ build_binary_docker() {
     strip "$bin"
 
     # Work around ownership issues that prevent GH actions from managing the files later
-    chown -R "$userId:$groupId" ./*
+    [ "$actions" == "true" ] && chown -R "$userId:$groupId" ./*
 }
 declare -f build_binary_docker
 
@@ -94,8 +100,9 @@ mkdir -p $dist
 [ "$GITHUB_ACTIONS" == "true" ] && runMode="--rm -i" || runMode="-it"
 docker $dockerHost run \
     -v "$mountRoot:/root/compiler" \
+    -v "$cacheRoot:/root/cache" \
     $runMode registry.gitlab.b-data.ch/ghc/ghc4pandoc:9.2.7 \
-    bash -c "$(declare -f build_binary_docker); build_binary_docker '$bin' '$(id -u)' '$(id -g)'"
+    bash -c "$(declare -f build_binary_docker); build_binary_docker '$bin' '$GITHUB_ACTIONS' '$(id -u)' '$(id -g)'"
 
 
 if [ -z "$rsyncCompilerPath" ]; then
