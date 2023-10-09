@@ -7,7 +7,6 @@ arch="arm64"
 
 buildTag="lamdera-$version-$os-$arch"
 dist=distribution/dist
-mkdir -p $dist
 bin=$dist/$buildTag
 
 scriptDir=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
@@ -90,8 +89,9 @@ declare -f build_binary_docker
 #     -it registry.gitlab.b-data.ch/ghc/ghc4pandoc:9.2.7 \
 #     /bin/bash
 
-[ "$GITHUB_ACTIONS" == "true" ] && runMode="--rm -i" || runMode="-it"
+mkdir -p $dist
 
+[ "$GITHUB_ACTIONS" == "true" ] && runMode="--rm -i" || runMode="-it"
 docker $dockerHost run \
     -v "$mountRoot:/root/compiler" \
     $runMode registry.gitlab.b-data.ch/ghc/ghc4pandoc:9.2.7 \
