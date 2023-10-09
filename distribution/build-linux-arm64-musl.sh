@@ -54,6 +54,12 @@ build_binary_docker() {
     local compilerRoot="/root/compiler"
     cd $compilerRoot
 
+    cleanup() {
+        # Work around ownership issues that prevent GH actions from managing the files later
+        [ "$actions" == "true" ] && chown -R "$userId:$groupId" ./* || true
+    }
+    trap cleanup EXIT
+
     git config --global --add safe.directory /root/compiler
 
     # GOAL: get the cabal caches into the mounted folder so they persist outside the Docker run lifetime and we don't needlessly rebuild hundreds of super expensive deps repeatedly forever
@@ -83,7 +89,7 @@ build_binary_docker() {
     strip "$bin"
 
     # Work around ownership issues that prevent GH actions from managing the files later
-    [ "$actions" == "true" ] && chown -R "$userId:$groupId" ./*
+    [ "$actions" == "true" ] && chown -R "$userId:$groupId" ./* || true
 }
 declare -f build_binary_docker
 
