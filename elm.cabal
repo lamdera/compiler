@@ -41,12 +41,12 @@ Executable lamdera
         -- add -eventlog for (elm make src/Main.elm +RTS -l; threadscope elm.eventlog)
         -- https://www.oreilly.com/library/view/parallel-and-concurrent/9781449335939/
 
-    if os(windows)
-        -- https://gitlab.haskell.org/ghc/ghc/-/issues/20878
-        -- https://gitlab.haskell.org/ghc/ghc/-/issues/20010#note_359766
-        -- extra-libraries: stdc++ supc++ gcc_s gcc_s_seh-1
-        -- https://gitlab.haskell.org/ghc/ghc/-/issues/22738#note_472157
-        extra-libraries: supc++ gcc_s gcc_s_seh-1
+    -- if os(windows)
+    --     -- https://gitlab.haskell.org/ghc/ghc/-/issues/20878
+    --     -- https://gitlab.haskell.org/ghc/ghc/-/issues/20010#note_359766
+    -- extra-libraries: stdc++ supc++ gcc_s gcc_s_seh-1
+    -- extra-libraries: msys-stdc++-6
+    -- build-depends: system-cxx-std-lib
 
     Hs-Source-Dirs:
         compiler/src
@@ -378,7 +378,7 @@ Executable lamdera
         -- @LAMDERA
 
         -- Windows metapackage
-        system-cxx-std-lib,
+        --system-cxx-std-lib,
 
         -- @TODO need to remove and use Utf8 module instead somehow? Or compat it.
         text,
