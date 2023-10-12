@@ -56,8 +56,10 @@ handlePost = do
         Left err -> writeBS $ "Error: Could not decode JSON: " <> (ByteString.pack err)
         Right packages -> do
             liftIO $ writeElmJson packages
-            writeBS "Successfully received packages and wrote to elm.json"
+            let message = ByteString.pack $ "Packages added: " ++ (show $ length packages)
+            writeBS message
 
+-- (show $ length packages) ++
 --routes :: [(ByteString, Snap ())]
 --routes = [("/packageList", method POST handlePost)]
 
