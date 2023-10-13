@@ -86,5 +86,5 @@ reportOnInstalledPackages = do
         Left err -> writeBS $ "Failed to parse JSON: " <> (LBS.toStrict jsonData)
         Right topLevel -> do
             let directDeps = HM.toList $ direct $ dependencies topLevel
-                outputList = map (\(name, version) -> "{\"name\": \"" ++ name ++ "\", \"version\": \"" ++ version ++ "\"}") directDeps
+            let outputList = map (\(name, version) -> object ["name" .= name, "version" .= version]) directDeps
             writeBS . LBS.toStrict . encode $ outputList
