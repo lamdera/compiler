@@ -82,12 +82,9 @@ instance FromJSON Dependencies
 reportOnInstalledPackages :: Snap ()
 reportOnInstalledPackages = do
     jsonData <- liftIO $ LBS.readFile "./outlines/repl/elm.json"
-
-
-    case eitherDecode jsonData :: Either String Dependencies of
+    case eitherDecode jsonData :: Either String TopLevel of
         Left err -> writeBS $ "Failed to parse JSON: " <> (LBS.toStrict jsonData)
-        Right deps -> do
-            let directDeps = HM.toList $ direct deps
-                -- Convert to your desired output format
+        Right topLevel -> do
+            let directDeps = HM.toList $ direct $ dependencies topLevel
                 outputList = map (\(name, version) -> "{\"name\": \"" ++ name ++ "\", \"version\": \"" ++ version ++ "\"}") directDeps
             writeBS . LBS.toStrict . encode $ outputList
