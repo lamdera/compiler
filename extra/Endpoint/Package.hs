@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE DeriveGeneric #-}
 
-module Endpoint.Package (handlePost) where
+module Endpoint.Package (handlePost, reportOnInstalledPackages) where
 
 import GHC.Generics (Generic)
 
@@ -17,7 +17,11 @@ import GHC.Generics
 import System.IO (writeFile)
 import Control.Monad.IO.Class (liftIO)
 import qualified Data.Map as Map
-
+---
+import Snap.Util.FileServe
+import qualified Data.ByteString.Lazy as LBS
+import qualified Data.HashMap.Strict as HM
+import Data.Text.Encoding (decodeUtf8)
 import Snap.Http.Server.Config (setPort, defaultConfig)
 
 data Package = Package { name :: String, version :: String } deriving (Show, Generic)
@@ -59,7 +63,31 @@ handlePost = do
             let message = ByteString.pack $ "Packages added: " ++ (show $ length packages)
             writeBS message
 
--- (show $ length packages) ++
---routes :: [(ByteString, Snap ())]
---routes = [("/packageList", method POST handlePost)]
 
+
+data Dependencies = Dependencies {
+    direct :: HM.HashMap String String
+  } deriving (Generic, Show)
+
+data TopLevel = TopLevel {
+    dependencies :: Dependencies
+  } deriving (Generic, Show)
+
+instance FromJSON TopLevel
+
+instance FromJSON Dependencies
+
+--- curl -X POST -H "Content-Length: 0" http://localhost:8000/reportOnInstalledPackages
+
+reportOnInstalledPackages :: Snap ()
+reportOnInstalledPackages = do
+    jsonData <- liftIO $ LBS.readFile "./outlines/repl/elm.json"
+
+
+    case eitherDecode jsonData :: Either String Dependencies of
+        Left err -> writeBS $ "Failed to parse JSON: " <> (LBS.toStrict jsonData)
+        Right deps -> do
+            let directDeps = HM.toList $ direct deps
+                -- Convert to your desired output format
+                outputList = map (\(name, version) -> "{\"name\": \"" ++ name ++ "\", \"version\": \"" ++ version ++ "\"}") directDeps
+            writeBS . LBS.toStrict . encode $ outputList

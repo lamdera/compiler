@@ -145,6 +145,7 @@ runWithRoot root (Flags maybePort) =
         <|> Live.serveExperimental root
         <|> (SnapCore.path "repl" $ Repl.endpoint rArtifacts)
         <|> (SnapCore.path "packageList" $ Package.handlePost)
+        <|> (SnapCore.path "reportOnInstalledPackages" $ Package.reportOnInstalledPackages)
         <|> serveAssets -- Compiler packaged static files
         <|> Live.serveUnmatchedUrlsToIndex root (serveElm sentryCache) -- Everything else without extensions goes to Lamdera LocalDev harness
         <|> error404 -- Will get hit for any non-matching extensioned paths i.e. /hello.blah
