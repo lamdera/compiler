@@ -59,6 +59,7 @@ import qualified Artifacts
 import qualified Endpoint.Repl as Repl
 import qualified Endpoint.Package as Package
 
+import Data.IORef
 
 -- RUN THE DEV SERVER
 
@@ -74,6 +75,7 @@ run () flags = do
   root <- getProjectRoot "Develop.run"
   runWithRoot root flags
 
+-- currentArtifacts <- liftIO $ readIORef artifactRef
 
 runWithRoot :: FilePath -> Flags -> IO ()
 runWithRoot root (Flags maybePort) =
@@ -91,6 +93,10 @@ runWithRoot root (Flags maybePort) =
       liveState <- liftIO $ Live.init
 
       sentryCache <- liftIO $ Sentry.init
+
+      initialArtifacts <- Artifacts.loadRepl
+      artifactRef <- newIORef initialArtifacts
+
 
       let
         recompile :: [String] -> IO ()
@@ -126,7 +132,9 @@ runWithRoot root (Flags maybePort) =
 
       Lamdera.ReverseProxy.start
 
-      rArtifacts <- Artifacts.loadRepl
+      -- rArtifacts <- Artifacts.loadRepl
+      initialArtifacts <- Artifacts.loadRepl
+      artifactRef <- newIORef initialArtifacts
 
       Live.withEnd liveState $
        httpServe (config port) $ gcatchlog "general" $
@@ -138,8 +146,8 @@ runWithRoot root (Flags maybePort) =
         <|> route [ ("_r/:endpoint", Live.serveRpc liveState port) ]
         <|> Live.openEditorHandler root
         <|> Live.serveExperimental root
-        <|> (SnapCore.path "repl" $ Repl.endpoint rArtifacts)
-        <|> (SnapCore.path "packageList" $ Package.handlePost)
+        <|> (SnapCore.path "repl" $ Repl.endpoint artifactRef)
+        <|> (SnapCore.path "packageList" $ Package.handlePost artifactRef)
         <|> (SnapCore.path "reportOnInstalledPackages" $ Package.reportOnInstalledPackages)
         <|> serveAssets -- Compiler packaged static files
         <|> Live.serveUnmatchedUrlsToIndex root (serveElm sentryCache) -- Everything else without extensions goes to Lamdera LocalDev harness
