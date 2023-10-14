@@ -43,6 +43,7 @@ import qualified Reporting.Render.Type.Localizer as L
 import Lamdera as LA
 import qualified Data.Text
 
+import Data.IORef
 
 
 -- ALLOWED ORIGINS
@@ -58,13 +59,14 @@ allowedOrigins =
 -- ENDPOINT
 
 
-endpoint :: A.Artifacts -> Snap ()
-endpoint artifacts =
+endpoint :: IORef A.Artifacts -> Snap ()
+endpoint artifactRef =
   Cors.allow POST allowedOrigins $
-  do  body <- readRequestBody (64 * 1024)
+  do  currentArtifacts <- liftIO $ readIORef artifactRef
+      body <- readRequestBody (64 * 1024)
       case decodeBody body of
         Just (state, entry) ->
-          serveOutcome (toOutcome artifacts state entry)
+          serveOutcome (toOutcome currentArtifacts state entry)
 
         Nothing ->
           do  modifyResponse $ setResponseStatus 400 "Bad Request"
