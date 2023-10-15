@@ -59,6 +59,7 @@ allowedOrigins :: [String]
 allowedOrigins =
   [ "https://elm-lang.org"
   , "https://package.elm-lang.org"
+   ,"http://localhost:8007"
   ]
 
 
