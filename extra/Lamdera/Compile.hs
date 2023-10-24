@@ -92,6 +92,7 @@ makeDev root paths = do
           , _output = Just Make.DevNull
           , _report = Nothing
           , _docs = Nothing
+          , _noWire = False
           }
   wait r
   -- The compilation process ends by printing to terminal in a way that overwrites

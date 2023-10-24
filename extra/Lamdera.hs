@@ -40,6 +40,9 @@ module Lamdera
   -- , isTypeSnapshot
   , isLamdera
   , isLamdera_
+  , disableWire
+  , isWireEnabled
+  , isWireEnabled_
   , isTest
   , isLiveMode
   , setLiveMode
@@ -407,6 +410,25 @@ isLamdera = do
 {-# NOINLINE isLamdera_ #-}
 isLamdera_ :: Bool
 isLamdera_ = unsafePerformIO $ isLamdera
+
+
+{-# NOINLINE useWire_ #-}
+useWire_ :: MVar Bool
+useWire_ = unsafePerformIO $ newMVar True
+
+disableWire :: IO ()
+disableWire = do
+  debug $ "⚡️ disableWire"
+  modifyMVar_ useWire_ (\_ -> pure False)
+
+{-# NOINLINE isWireEnabled #-}
+isWireEnabled :: IO Bool
+isWireEnabled = do
+  readMVar useWire_
+
+{-# NOINLINE isWireEnabled_ #-}
+isWireEnabled_ :: Bool
+isWireEnabled_ = unsafePerformIO $ isWireEnabled
 
 
 

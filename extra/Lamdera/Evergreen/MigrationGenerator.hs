@@ -7,6 +7,7 @@ module Lamdera.Evergreen.MigrationGenerator where
 
 import Data.Map (Map)
 import qualified Data.Map as Map
+import qualified Sanity
 import qualified Data.Set as Set
 import qualified Data.List as List
 import qualified Data.Text as T
@@ -45,7 +46,7 @@ betweenVersions coreTypeDiffs oldVersion newVersion root = do
       case Map.lookup (N.fromChars moduleNameString) interfaces of
         Just interface -> do
           debug $ "starting generatefor"
-          generateFor coreTypeDiffs oldVersion newVersion interfaces (interfaces Map.! (N.fromChars $ "Evergreen.V" <> show newVersion <> ".Types"))
+          generateFor coreTypeDiffs oldVersion newVersion interfaces (interfaces Sanity.! (N.fromChars $ "Evergreen.V" <> show newVersion <> ".Types"))
 
         Nothing ->
           error $ "Fatal: could not find the module `" <> moduleNameString <> "`, please report this issue in Discord with your project code."

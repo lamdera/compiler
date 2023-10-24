@@ -58,6 +58,9 @@ data Artifacts =
 
 compile :: Pkg.Name -> Map.Map ModuleName.Raw I.Interface -> Src.Module -> Either E.Error Artifacts
 compile pkg ifaces modul = do
+ -- Allow global opt-out of Lamdera compile modifications
+ Lamdera.alternativeImplementationWhen (not Lamdera.isWireEnabled_) (compile_ pkg ifaces modul) $ do
+
   -- @TEMPORARY debugging
   -- Inject stub definitions for wire functions, so the canonicalize phase can run
   -- Necessary for user-code which references yet-to-be generated functions
