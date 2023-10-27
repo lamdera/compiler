@@ -6,6 +6,7 @@
 :set -Wno-error=unused-imports
 :set -Wno-error=unused-matches
 :set -Wno-error=unused-top-binds
+:set -Wno-error=unused-do-bind
 :set -Wno-error=name-shadowing
 :set -Wno-error=incomplete-uni-patterns
 :def rr const $ return $ unlines ["Ext.Common.killTrackedThreads",":r","Test.target"]

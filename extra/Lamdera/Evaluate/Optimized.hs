@@ -67,6 +67,7 @@ run def args nodes =
   case def of
     Define expr funcDeps ->
       evalExpr expr args nodes
+    _ -> error $ "run: unexpected arg: " <> show def
 
 
 type Locals = Map.Map Data.Name.Name Expr
@@ -102,52 +103,55 @@ evalExpr expr locals globals =
 
     (Call (VarGlobal (Global (Module.Canonical (Name "elm" "core") "Basics") "add")) [arg1, arg2]) ->
       case [evalExpr arg1 locals globals, evalExpr arg2 locals globals] of
-        [Int a, Int b] -> Int $ a + b
-        [Float a, Float b] -> do
-          case (pFloat a, pFloat b) of
-            (Just a_, Just b_) -> Float $ Utf8.fromChars $ show $ a_ + b_
-            _ -> error $ "impossible failure to parse floats: " <> show a <> ", " <> show b
-        [Int a, Float b] -> do
+        [Int a_, Int b] -> Int $ a_ + b
+        [Float a_, Float b] -> do
+          case (pFloat a_, pFloat b) of
+            (Just a__, Just b_) -> Float $ Utf8.fromChars $ show $ a__ + b_
+            _ -> error $ "impossible failure to parse floats: " <> show a_ <> ", " <> show b
+        [Int a_, Float b] -> do
           case pFloat b of
-            Just b_ -> Float $ Utf8.fromChars $ show $ (fromIntegral a) + b_
+            Just b_ -> Float $ Utf8.fromChars $ show $ (fromIntegral a_) + b_
             _ -> error $ "impossible failure to parse float: " <> show b
-        [Float a, Int b] -> do
-          case pFloat a of
-            Just a_ -> Float $ Utf8.fromChars $ show $ a_ + (fromIntegral b)
-            _ -> error $ "impossible failure to parse float: " <> show a
+        [Float a_, Int b] -> do
+          case pFloat a_ of
+            Just a__ -> Float $ Utf8.fromChars $ show $ a__ + (fromIntegral b)
+            _ -> error $ "impossible failure to parse float: " <> show a_
 
         evaled -> error $ "unhandled Basics.add: " <> show evaled
 
     (Call (VarGlobal (Global (Module.Canonical (Name "elm" "core") "Basics") "sub")) [arg1, arg2]) ->
       case [evalExpr arg1 locals globals, evalExpr arg2 locals globals] of
-        [Int a, Int b] -> Int $ a - b
-        [Float a, Float b] -> do
-          case (pFloat a, pFloat b) of
-            (Just a_, Just b_) -> Float $ Utf8.fromChars $ show $ a_ - b_
-            _ -> error $ "impossible failure to parse floats: " <> show a <> ", " <> show b
-        [Int a, Float b] -> do
+        [Int a_, Int b] -> Int $ a_ - b
+        [Float a_, Float b] -> do
+          case (pFloat a_, pFloat b) of
+            (Just a__, Just b_) -> Float $ Utf8.fromChars $ show $ a__ - b_
+            _ -> error $ "impossible failure to parse floats: " <> show a_ <> ", " <> show b
+        [Int a_, Float b] -> do
           case pFloat b of
-            Just b_ -> Float $ Utf8.fromChars $ show $ (fromIntegral a) - b_
+            Just b_ -> Float $ Utf8.fromChars $ show $ (fromIntegral a_) - b_
             _ -> error $ "impossible failure to parse float: " <> show b
-        [Float a, Int b] -> do
-          case pFloat a of
-            Just a_ -> Float $ Utf8.fromChars $ show $ a_ - (fromIntegral b)
-            _ -> error $ "impossible failure to parse float: " <> show a
+        [Float a_, Int b] -> do
+          case pFloat a_ of
+            Just a__ -> Float $ Utf8.fromChars $ show $ a__ - (fromIntegral b)
+            _ -> error $ "impossible failure to parse float: " <> show a_
 
         evaled -> error $ "unhandled Basics.sub: " <> show evaled
 
 
     (Call (VarGlobal (Global (Module.Canonical (Name "elm" "core") "Basics") "eq")) [arg1, arg2]) ->
       case [evalExpr arg1 locals globals, evalExpr arg2 locals globals] of
-        [a, b] -> Bool $ a == b
+        [a_, b] -> Bool $ a_ == b
+        _ -> error $ "unexpected args to Basics.eq: " <> show [arg1, arg2]
 
     (Call (VarGlobal (Global (Module.Canonical (Name "elm" "core") "Basics") "neq")) [arg1, arg2]) ->
       case [evalExpr arg1 locals globals, evalExpr arg2 locals globals] of
-        [a, b] -> Bool $ a /= b
+        [a_, b] -> Bool $ a_ /= b
+        _ -> error $ "unexpected args to Basics.neq: " <> show [arg1, arg2]
 
     (Call (VarGlobal (Global (Module.Canonical (Name "elm" "core") "Basics") "append")) [arg1, arg2]) ->
       case [evalExpr arg1 locals globals, evalExpr arg2 locals globals] of
-        [Str a, Str b] -> Str $ Utf8.fromChars $ Utf8.toChars a <> Utf8.toChars b
+        [Str a_, Str b] -> Str $ Utf8.fromChars $ Utf8.toChars a_ <> Utf8.toChars b
+        _ -> error $ "unexpected args to Basics.append: " <> show [arg1, arg2]
 
     (Call (VarGlobal (Global (Module.Canonical (Name "elm" "core") "Basics") "apL")) [arg1, arg2]) ->
       let
@@ -160,7 +164,8 @@ evalExpr expr locals globals =
 
     (Call (VarGlobal (Global (Module.Canonical (Name "elm" "core") "List") "repeat")) [arg1, arg2]) ->
       case [evalExpr arg1 locals globals, evalExpr arg2 locals globals] of
-        [Int a, b] -> List $ take a $ repeat b
+        [Int a_, b] -> List $ take a_ $ repeat b
+        _ -> error $ "unexpected args to List.repeat: " <> show [arg1, arg2]
 
 
     -- (Call (VarGlobal (Global (Module.Canonical (Name "elm" "core") "List") "foldl")) [arg1, arg2, arg3]) ->
@@ -179,8 +184,8 @@ evalExpr expr locals globals =
       case Map.lookup global globals of
         Just node ->
           case node of
-            Define expr funcDeps ->
-              evalExpr (Call (applyVarLocals locals expr) args_) locals globals
+            Define expr_ funcDeps ->
+              evalExpr (Call (applyVarLocals locals expr_) args_) locals globals
 
             Link global_ ->
               -- Recurse again to find the linked global
@@ -205,24 +210,24 @@ evalExpr expr locals globals =
           error $ "Global not found in globals:\n"<> show global <> "\n\n "-- <> show globals
 
 
-    (Call expr args_) ->
+    (Call expr_ args_) ->
 
       let args = args_ & fmap (applyVarLocals locals)
       in
-      case expr of
-        Function pnames expr_ ->
+      case expr_ of
+        Function pnames expr__ ->
           if length pnames /= length args then
             -- This means we're currying
             let (locals_, pnames_) = zipRem pnames args
             in
-            (Function pnames_ (applyVarLocals (locals_ & Map.fromList) expr_))
+            (Function pnames_ (applyVarLocals (locals_ & Map.fromList) expr__))
             -- error $ "lengths do not match! " <> (T.unpack $ hindentFormatValue (pnames, args))
           else
-            evalExpr expr_ (zip pnames args & Map.fromList) globals
+            evalExpr expr__ (zip pnames args & Map.fromList) globals
 
-        Call expr_ args_ ->
+        Call expr__ args__ ->
           -- We have all the args we need to reduce the full expression
-          evalExpr (Call (expr_ & applyVarLocals locals) args_) locals globals
+          evalExpr (Call (expr__ & applyVarLocals locals) args__) locals globals
 
         If conditionBranches elseBranch ->
           evalExpr (If conditionBranches elseBranch) locals globals
@@ -233,6 +238,7 @@ evalExpr expr locals globals =
         VarKernel "Utils" "le" ->
           case args of
             [a1, a2] -> Bool $ a1 <= a2
+            _ -> error $ "VarKernel Utils.le unexpected args: \n" <> (T.unpack $ hindentFormatValue (expr, args))
 
         VarKernel "List" "cons" ->
           case args of
@@ -266,7 +272,7 @@ evalExpr expr locals globals =
     Str s -> expr
     Bool b -> expr
 
-    List exprs -> exprs & fmap (\expr -> evalExpr expr locals globals) & List
+    List exprs -> exprs & fmap (\expr_ -> evalExpr expr_ locals globals) & List
 
     If conditionBranches elseBranch ->
       conditionBranches
@@ -287,7 +293,7 @@ evalExpr expr locals globals =
     TailCall name args ->
       -- TailCalls are handled specially by caller, so just reduce the args expressions and return
       args
-        & fmap (\(name, expr) -> (name, evalExpr expr locals globals))
+        & fmap (\(name_, expr_) -> (name_, evalExpr expr_ locals globals))
         & TailCall name
 
     VarEnum global index ->
@@ -346,8 +352,8 @@ applyVarLocals locals expr =
 
     List vals -> List (vals & fmap (applyVarLocals locals))
 
-    (Call expr args) ->
-      Call (applyVarLocals locals expr) (fmap (applyVarLocals locals) args)
+    (Call expr_ args) ->
+      Call (applyVarLocals locals expr_) (fmap (applyVarLocals locals) args)
 
     If conditionBranches elseBranch ->
       If
@@ -411,8 +417,8 @@ zipRem l1 l2 =
 
 -- https://package.elm-lang.org/packages/elm/core/latest/Basics#comparison
 instance Ord Expr where
-  compare v1 v2 =
-    case [v1,v2] of
+  compare v1_ v2_ =
+    case [v1_,v2_] of
       -- | Chr ES.String
       [Chr v1, Chr v2] ->
         error "todo: instance Ord Expr for Chr"
@@ -457,6 +463,8 @@ handleCyclePlain node args globals =
             _ -> res
       in
       tailDefResult args
+    _ ->
+      error $ "handleCyclePlain: unexpected node: " <> T.unpack (hindentFormatValue node)
 
 
 {- A naive implementation of tail recursion using stRefs, seems to have no

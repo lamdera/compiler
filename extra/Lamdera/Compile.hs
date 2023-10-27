@@ -40,6 +40,7 @@ makeOptimizedWithCleanup cleanup root path = do
           , _output = Just (Make.JS tmp)
           , _report = Nothing
           , _docs = Nothing
+          , _noWire = False
           }
   wait r
   remove tmp
@@ -65,6 +66,7 @@ make_ root = do
           , _output = Just Make.DevNull
           , _report = Nothing
           , _docs = Nothing
+          , _noWire = False
           }
   wait r
   -- The compilation process ends by printing to terminal in a way that overwrites
@@ -127,6 +129,7 @@ makeHarnessDevJs root = do
           , _output = Just (Make.JS tmp)
           , _report = Nothing
           , _docs = Nothing
+          , _noWire = False
           }
   wait r
   remove tmp

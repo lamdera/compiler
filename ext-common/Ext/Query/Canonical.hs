@@ -84,7 +84,7 @@ loadFileSourceValue path name = do
   (source, modul) <- loadFileSource path
 
   let
-    imports = modul & Src._imports
+    -- imports = modul & Src._imports
 
     value =
       modul
@@ -142,11 +142,11 @@ render (Code.Source sourceLines) region@(Region (Position startLine _) (Position
         & drop (fromIntegral (startLine - 1))
         & take (fromIntegral (1 + endLine - startLine))
 
-    width =
-      length (show (fst (last_ relevantLines (0, ""))))
+    -- width =
+    --   length (show (fst (last_ relevantLines (0, ""))))
 
-    smallerRegion =
-      maybe region id maybeSubRegion
+    -- smallerRegion =
+    --   maybe region id maybeSubRegion
   in
   relevantLines
 
