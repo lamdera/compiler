@@ -61,6 +61,7 @@ certainAppName lamderaRemotes appNameEnvM =
         & (\l ->
             case l of
               f:second:_ -> second
+              _ -> error $ "Lamdera.Project.certainAppName: impossible case: " ++ show l
           )
         & T.splitOn "."
         & List.head

@@ -37,7 +37,17 @@ Executable lamdera
     if flag(dev)
         ghc-options: -O0 -Wall -Werror
     else
+        -- Make everything an error, ignoring the ones that already sit in core
         ghc-options: -O2 -rtsopts -threaded "-with-rtsopts=-N -qg -A128m"
+            -Werror
+            -Wno-error=noncanonical-monad-instances
+            -Wno-error=unused-imports
+            -Wno-error=unused-matches
+            -Wno-error=unused-top-binds
+            -Wno-error=name-shadowing
+            -- We never use this Haskell feature, so skipping Evan's usages of it
+            -Wno-error=incomplete-uni-patterns
+
         -- add -eventlog for (elm make src/Main.elm +RTS -l; threadscope elm.eventlog)
         -- https://www.oreilly.com/library/view/parallel-and-concurrent/9781449335939/
 

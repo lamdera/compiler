@@ -295,17 +295,19 @@ addDef def_ decls_ =
 
 
 addRecDef :: [Def] -> Decls -> Decls
-addRecDef (def_:defs_) decls_ =
-  case decls_ of
-    Declare def decls ->
-      DeclareRec def_ defs_ (Declare def decls)
+addRecDef list decls_ =
+  case list of
+    (def_:defs_) ->
+      case decls_ of
+        Declare def decls ->
+          DeclareRec def_ defs_ (Declare def decls)
 
-    DeclareRec def defs decls ->
-      DeclareRec def_ defs_ (DeclareRec def defs decls)
+        DeclareRec def defs decls ->
+          DeclareRec def_ defs_ (DeclareRec def defs decls)
 
-    SaveTheEnvironment ->
-      DeclareRec def_ defs_ SaveTheEnvironment
-
+        SaveTheEnvironment ->
+          DeclareRec def_ defs_ SaveTheEnvironment
+    _ -> error $ "addRecDef: impossible list: " ++ show list
 
 removeDef :: Def -> Decls -> Decls
 removeDef def_ decls_ =

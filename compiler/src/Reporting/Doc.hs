@@ -348,6 +348,7 @@ sgrToStyle sgrs style@(Style bold underline color) =
           Ansi.SetSwapForegroundBackground _ -> style
           Ansi.SetColor l i c                -> Style bold underline (toColor l i c)
           Ansi.SetRGBColor _ _               -> style
+          _                                  -> error $ "sgrToStyle: unimplemented style: " ++ show sgr
 
 
 isBold :: Ansi.ConsoleIntensity -> Bool

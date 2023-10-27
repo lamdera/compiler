@@ -55,6 +55,11 @@ run () () = do
             writeUtf8 (elmHome </> ".lamdera-cli") token
             Progress.report $ D.fillSep ["───>", D.dullgreen "Logged in!"]
 
+          Right _ -> do
+            Progress.report $ D.fillSep ["───>", D.red "Unexpected response, starting again: ", D.fromChars $ show apiSession ]
+            remove (elmHome </> ".lamdera-cli")
+            checkApiLoop inProduction appName newToken
+
           Left err -> do
             if Lamdera.Http.isOfflineError err
               then do

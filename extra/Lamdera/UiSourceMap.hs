@@ -51,7 +51,12 @@ updateDecls fileName decls =
 
 
 
-
+newAttributes :: Bool
+                -> Module.Canonical
+                -> Name.Name
+                -> Reporting.Annotation.Region
+                -> Expr
+                -> Reporting.Annotation.Located Expr_
 newAttributes isElmUi fileName functionName location originalAttributes =
     let
         a = Reporting.Annotation.At location
@@ -151,6 +156,7 @@ newAttributesHelper isElmUi module_ functionName location =
                       [(a (Str "line-number-attribute")), (a (Str lineNumber))]))
               ]))
 
+htmlNodes :: Set.Set Name.Name
 htmlNodes =
     Set.fromList
         [ "h1"
@@ -252,8 +258,8 @@ htmlNodes =
         ]
 
 updateExpr :: Module.Canonical -> Name.Name -> Can.Expr -> Can.Expr
-updateExpr fileName functionName (Reporting.Annotation.At location expr) =
-    (case expr of
+updateExpr fileName functionName (Reporting.Annotation.At location_ expr_) =
+    (case expr_ of
         Can.VarLocal name ->
             Can.VarLocal name
 
@@ -454,8 +460,8 @@ updateExpr fileName functionName (Reporting.Annotation.At location expr) =
                 name
                 ((updateExpr fileName functionName) expr)
                 (fmap
-                    (\(Can.FieldUpdate region expr) ->
-                        Can.FieldUpdate region (updateExpr fileName functionName expr)
+                    (\(Can.FieldUpdate region expr__) ->
+                        Can.FieldUpdate region (updateExpr fileName functionName expr__)
                     )
                     fieldUpdates
                 )
@@ -475,7 +481,7 @@ updateExpr fileName functionName (Reporting.Annotation.At location expr) =
         Can.Shader shaderSource shaderTypes ->
             Can.Shader shaderSource shaderTypes
     )
-    & Reporting.Annotation.At location
+    & Reporting.Annotation.At location_
 
 updateDefs :: Module.Canonical -> Can.Def -> Can.Def
 updateDefs fileName def =

@@ -320,6 +320,7 @@ intermediateMigration allMigrations tipe from to finalVersion =
         "ToBackend"     -> "thenMigrateMsg"
         "BackendMsg"    -> "thenMigrateMsg"
         "ToFrontend"    -> "thenMigrateMsg"
+        _               -> error $ "intermediateMigration: impossible tipe: " <> show tipe
     kindForType =
       case tipe of
         "BackendModel"  -> "Model"
@@ -328,6 +329,7 @@ intermediateMigration allMigrations tipe from to finalVersion =
         "ToBackend"     -> "Msg"
         "BackendMsg"    -> "Msg"
         "ToFrontend"    -> "Msg"
+        _               -> error $ "intermediateMigration: impossible tipe: " <> show tipe
 
     lastMigrationBefore targetVersion =
       allMigrations

@@ -385,9 +385,6 @@ encoderAlias isTest ifaces pkg modul decls aliasName alias@(Alias tvars tipe) =
 
     generatedBody = deepEncoderForType 0 ifaces cname tipe
 
-    aliasType = case tipe of
-                  TAlias _moduleNameCanonical _aliasName _aliasParams _aliasType -> _aliasType
-
     -- = Def (A.Located Name) [Pattern] Expr
     generated = Def (a (generatedName)) ptvars $
       -- debugEncoder (Data.Name.toElmString aliasName) $

@@ -46,8 +46,8 @@ defGetEdges def =
 
 
 getLvars :: Expr -> [Data.Name.Name]
-getLvars (A.At _ expr) =
-  case expr of
+getLvars (A.At _ expr_) =
+  case expr_ of
     VarLocal name -> []
     VarTopLevel cname name -> [name]
     VarKernel module_ name -> []
@@ -81,3 +81,4 @@ getLvars (A.At _ expr) =
         Just e3 -> [e1, e2, e3] & concatMap getLvars
         Nothing -> [e1, e2] & concatMap getLvars
     Shader source types -> []
+    _ -> error $ "getLvars: impossible expr: " ++ show expr_
