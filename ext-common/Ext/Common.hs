@@ -121,7 +121,8 @@ getProjectRoot tag = do
       -- @TODO this doesn't seem right... we have creations of this path in prod root...
       -- should we error out instead? Or just return the current directory?
       -- pure "<unset-project-root>"
-      error "Fatal: I don't know where the project root is! This should generally be impossible, unless you've accidentally run lamdera in a folder that has no parent folders with an elm.json."
+      subDir <- Dir.getCurrentDirectory
+      error $ "Fatal: I don't know where the project root is! This should generally be impossible, unless you've accidentally run lamdera in a folder that has no parent folders with an elm.json. My current working directory is " <> subDir <> "."
     ProjectRootSet root -> do
       -- debug $ "🏠 read project root [" <> tag <> "]: " <> root
       pure root
