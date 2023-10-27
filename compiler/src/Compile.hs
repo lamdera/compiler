@@ -68,7 +68,7 @@ compile pkg ifaces modul = do
         modul
           & Lamdera.Wire3.Interfaces.modifyModul pkg ifaces
           & Lamdera.Wire2.Interfaces.modifyModul pkg ifaces
-      moduleName = T.pack $ Data.Utf8.toChars $ Src.getName modul
+      -- moduleName = T.pack $ Data.Utf8.toChars $ Src.getName modul
 
   -- ()          <- debugPassText "starting canonical" "" (pure ())
   canonical0  <- canonicalize pkg ifaces modul_
