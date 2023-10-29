@@ -137,4 +137,5 @@ jobs:
       - run: |
           pwd
           ls -alh
+          lamdera/lamdera.exe --version-full
           echo "put lamdera.zip next/lamdera-next-windows-x86_64.zip" | sftp -i ~/.ssh/id_ed25519 -P 22 github@apps.lamdera.com
