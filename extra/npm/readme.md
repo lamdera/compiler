@@ -11,26 +11,30 @@ Beware of [Elm IDE gotchas](https://dashboard.lamdera.app/docs/ides-and-tooling)
 
 ## What is this package for?
 
-**Normal installs** ❌
+### Normal installs ❌
 
 Use the instructions [here](https://dashboard.lamdera.app/docs/download) instead.
 
 Lamdera has no dependency on `npm` to develop locally, so there's no reason to introduce it unless you specifically want to use `npm` for other reasons.
 
-**Tooling author** ✅
+It will also mean you have duplicate copies of the lamdera binary in every single `node_modules`.
 
-If you're a tooling author, use Lamdera as a dependency and npm as a distribution method, then you can use this package to manage the dependency and installation.
+### Tooling author ✅
+
+If you're a tooling author, use Lamdera as a dependency and npm as a distribution method, then you _could_ use this package to manage the dependency and installation.
 
 ```
 npm install --save-dev lamdera@latest
 ```
 
-**Multiple versions** ⚠️
+It still has the duplication per `node_modules` problem.
+
+### Multiple versions ⚠️
 
 You could also use this package to use different versions of Lamdera in different projects. I.e. `npm install lamdera@latest` in each project and use the binary at `./node_modules/.bin/lamdera` for compilation. However this is generally not recommended. Lamdera users should always use the latest release, as that's what is used when you do a `lamdera deploy`.
 
 
-**Continuous integration** ⚠️
+### Continuous integration ⚠️
 
 This works, but there are usually faster and more reliable options:
 
