@@ -98,10 +98,14 @@ jobs:
           # https://gitlab.haskell.org/ghc/ghc/-/issues/20010#note_359766
           command: stack install --ghc-options '-optl"-Wl,-Bstatic,-lstdc++,-lgcc_s,-lwinpthread,-Bdynamic"'
 
-      - run: |
+      - name: Copy binary files, dlls & check
+        run: |
           mkdir lamdera
           cp ~/AppData/Roaming/local/bin/lamdera.exe lamdera/lamdera.exe
           cp distribution/dlls/* lamdera/
+          pwd
+          ls -alh
+          ./lamdera/lamdera.exe --version-full
 
       - name: Create distribution zip
         uses: vimtor/action-zip@v1
@@ -137,5 +141,4 @@ jobs:
       - run: |
           pwd
           ls -alh
-          lamdera/lamdera.exe --version-full
           echo "put lamdera.zip next/lamdera-next-windows-x86_64.zip" | sftp -i ~/.ssh/id_ed25519 -P 22 github@apps.lamdera.com
