@@ -25,6 +25,13 @@ module Endpoint.Package (handlePost, reportOnInstalledPackages) where
   ]
   The json body reports on the packages that are currently installed in the repl.
   This response is mediated by function `reportOnInstalledPackages` below.
+
+  NOTE.  handlePost and reportOnInstalledPackages
+         are referenced in the Snap webserver at Develop.runWithRoot
+         via the code fragments
+
+             SnapCore.path "packageList" $ Package.handlePost artifactRef)
+             SnapCore.path "reportOnInstalledPackages" $ Package.reportOnInstalledPackages)
 -}
 
 
