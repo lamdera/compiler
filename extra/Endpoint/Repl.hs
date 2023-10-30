@@ -38,7 +38,27 @@ module Endpoint.Repl
      decls: Dict.fromList [("first p q","first p q = p |> andThen (\s -> q |> map (\_ -> s))\n"))]
      types: Dict.fromList []
 
+  NOTES.
 
+  1. Repl.endpoint defined here is called by the Snap server Develop.runWithRoot
+     via the code fragment
+
+        SnapCore.path "repl" $ Repl.endpoint artifactRef
+
+  2. The value of of artifactRef is set by
+
+         initialArtifacts <- ReplArtifacts.loadRepl
+
+     in `Develop.runWithRoot`.
+
+   3. If `endpoint artifactRef` successfully decodes the request, it
+      passes the resulting information to
+
+          toOutcome :: A.Artifacts -> Repl.State -> String -> Outcome
+
+      which in turn passes the information to `compile`.  The result
+      of compilation is handed to `serveOutcome` which (at long last)
+      replies to the client's request.
 
 -}
 
