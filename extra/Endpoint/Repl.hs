@@ -5,6 +5,42 @@ module Endpoint.Repl
   )
   where
 
+{-
+  The purpose of  this endpoint is to provide a REPL for Elm that
+  is accessible via Http requests.  The function `endpoint` of
+  this module is referenced in the Snap webserver at Develop.runWithRoot
+  via the code fragment
+
+         SnapCore.path "repl" $ Repl.endpoint artifactRef
+
+
+  Function decodeBodyHelp decodes incoming Json requests to the repl.
+  The Json data has the form
+
+    { "imports": <dictionary of imports>,
+      "types": <dictionary of types>,
+      "decls": <dictionary of declarations>,
+      "entry": <string>
+    }
+
+  where the dictionaries are of the form
+
+    { "name": <string>, "source": <string> }
+
+  and "entry" the string representation of the Elm
+  code to be evaluated.
+
+  Here is a typical incoming json object from a request to
+  evaluate `run (first int (symbol ".")) "42."`:
+
+     entry: "run (first int (symbol \".\")) \"42.\""
+     imports: Dict.fromList [("Parser","import Parser exposing(..)\n")]
+     decls: Dict.fromList [("first p q","first p q = p |> andThen (\s -> q |> map (\_ -> s))\n"))]
+     types: Dict.fromList []
+
+
+
+-}
 
 import Data.Aeson ((.:))
 import qualified Data.Aeson as Aeson
@@ -18,10 +54,8 @@ import qualified Data.Map.Utils as Map
 import qualified Data.Name as N
 import qualified Data.NonEmptyList as NE
 import Snap.Core
-
 import qualified ReplArtifacts as A
 import qualified Cors
-
 import qualified AST.Source as Src
 import qualified AST.Canonical as Can
 import qualified AST.Optimized as Opt
