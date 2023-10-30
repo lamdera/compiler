@@ -23,7 +23,7 @@ import qualified Data.ByteString.Lazy as LBS
 import qualified Data.HashMap.Strict as HM
 import Data.Text.Encoding (decodeUtf8)
 import Snap.Http.Server.Config (setPort, defaultConfig)
-import qualified Artifacts
+import qualified ReplArtifacts
 import Data.IORef
 
 
@@ -56,7 +56,7 @@ writeElmJson pkgs = do
     writeFile "./outlines/repl/elm.json" ( BL.unpack $ encode elmJson)
 
 
-handlePost :: IORef Artifacts.Artifacts -> Snap ()
+handlePost :: IORef ReplArtifacts.Artifacts -> Snap ()
 handlePost artifactRef = do
     body <- readRequestBody 10000
     let maybePackageList = eitherDecode body :: Either String PackageList
@@ -66,7 +66,7 @@ handlePost artifactRef = do
             liftIO $ writeElmJson packages
             let message = ByteString.pack $ "Packages added: " ++ (show $ length packages)
             writeBS message
-            newArtifacts <- liftIO Artifacts.loadRepl
+            newArtifacts <- liftIO ReplArtifacts.loadRepl
             liftIO $ writeIORef artifactRef newArtifacts
 
 

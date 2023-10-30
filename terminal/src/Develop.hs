@@ -55,7 +55,7 @@ import Control.Concurrent.STM (atomically, newTVarIO, readTVar, writeTVar, TVar)
 
 import StandaloneInstances
 
-import qualified Artifacts
+import qualified ReplArtifacts
 import qualified Endpoint.Repl as Repl
 import qualified Endpoint.Package as Package
 
@@ -94,7 +94,7 @@ runWithRoot root (Flags maybePort) =
 
       sentryCache <- liftIO $ Sentry.init
 
-      initialArtifacts <- Artifacts.loadRepl
+      initialArtifacts <- ReplArtifacts.loadRepl
       artifactRef <- newIORef initialArtifacts
 
 
@@ -132,8 +132,8 @@ runWithRoot root (Flags maybePort) =
 
       Lamdera.ReverseProxy.start
 
-      -- rArtifacts <- Artifacts.loadRepl
-      initialArtifacts <- Artifacts.loadRepl
+      -- rArtifacts <- ReplArtifacts.loadRepl
+      initialArtifacts <- ReplArtifacts.loadRepl
       artifactRef <- newIORef initialArtifacts
 
       Live.withEnd liveState $

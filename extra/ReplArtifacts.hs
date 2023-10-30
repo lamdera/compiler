@@ -1,5 +1,5 @@
 {-# OPTIONS_GHC -Wall #-}
-module Artifacts
+module ReplArtifacts
   ( Artifacts(..)
   , loadCompile
   , loadRepl
