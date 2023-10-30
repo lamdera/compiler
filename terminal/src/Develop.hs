@@ -133,7 +133,6 @@ runWithRoot root (Flags maybePort) =
 
       Lamdera.ReverseProxy.start
 
-      -- rArtifacts <- ReplArtifacts.loadRepl
       initialArtifacts <- ReplArtifacts.loadRepl
       artifactRef <- newIORef initialArtifacts
 
