@@ -7,6 +7,12 @@ module ReplArtifacts
   )
   where
 
+{-
+
+  load artifacts for /extra/Endpoint/Repl.  See note (2) in that file.
+
+-}
+
 
 import Control.Concurrent (readMVar)
 import Control.Monad (liftM2)
