@@ -3,9 +3,32 @@
 
 module Endpoint.Package (handlePost, reportOnInstalledPackages) where
 
+{-
+  1.
+
+  This endpoint will respond to POST requests to "https://repl.lamdera.com/packageList"
+  with a JSON body of the form:
+  [
+    { "name": "elm/core", "version": "1.0.5" },
+    { "name": "elm/html", "version": "1.0.0" }
+  ]
+  It will write an elm.json file to the repl directory, and then reload the repl.
+  This response is mediate by function `handlePost` below.
+
+  2.
+
+  In additon, this endpoint will respond to GET requests to "https://repl.lamdera.com/reportOnInstalledPackages"
+  with a JSON body of the form:
+  [
+    { "name": "elm/core", "version": "1.0.5" },
+    { "name": "elm/html", "version": "1.0.0" }
+  ]
+  The json body reports on the packages that are currently installed in the repl.
+  This response is mediated by function `reportOnInstalledPackages` below.
+-}
+
+
 import GHC.Generics (Generic)
-
-
 import Snap.Core
 import Snap.Http.Server
 import Data.Aeson (FromJSON, eitherDecode, encode, ToJSON, toJSON, object, (.=))
