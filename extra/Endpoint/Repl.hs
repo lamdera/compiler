@@ -19,7 +19,7 @@ import qualified Data.Name as N
 import qualified Data.NonEmptyList as NE
 import Snap.Core
 
-import qualified Artifacts as A
+import qualified ReplArtifacts as A
 import qualified Cors
 
 import qualified AST.Source as Src
