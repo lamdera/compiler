@@ -8,7 +8,6 @@ module Develop
   )
   where
 
-
 import Control.Applicative ((<|>))
 import Control.Monad (guard)
 import Control.Monad.Trans (MonadIO(liftIO))
@@ -67,6 +66,7 @@ data Flags =
 run :: () -> Flags -> IO ()
 run () flags = do
   root <- getProjectRoot "Develop.run"
+  Dir.setCurrentDirectory root
   runWithRoot root flags
 
 
@@ -126,6 +126,10 @@ runWithRoot root (Flags maybePort) =
         -- Add /public/* as if it were /* to mirror production, but still render .elm files as an Elm app first
         Live.serveLamderaPublicFiles root (serveElm sentryCache)
         <|> (serveFiles root sentryCache)
+        -- @WARNING, `serveDirectoryWith` implicitly uses Dir.getCurrentDirectory. We can't change '.' to `root` as it freaks out
+        -- with the fully qualified path. And we can't use `System.Filepath.makeRelative` because it refuses to introduce `../`.
+        -- So if the user has accidentally run `lamdera live` in a subfolder of their project root, this next line is relying on the
+        -- `Dir.setCurrentDirectory root` at the top of this file to have worked correctly – which it seems it doesn't always do.
         <|> serveDirectoryWith directoryConfig "."
         <|> Live.serveWebsocket root liveState
         <|> route [ ("_r/:endpoint", Live.serveRpc liveState port) ]

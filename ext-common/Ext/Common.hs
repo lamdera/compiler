@@ -98,7 +98,7 @@ data ProjectRoot = ProjectRootUnset | ProjectRootSet FilePath | ProjectRootConte
 {-# NOINLINE projectRootMvar #-}
 projectRootMvar :: MVar ProjectRoot
 projectRootMvar = unsafePerformIO $ do
-  rootM <- Ext.Common.getProjectRootMaybe
+  rootM <- getProjectRootMaybe
   newMVar $
     case rootM of
       Just root ->
