@@ -14,6 +14,10 @@ jobs:
         shell: bash
 
     steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: true
+
       # First, check if the specific cache exists, so we don't waste ~3m of build
       # time restoring the 1.5GB cache for no reason.
       - uses: actions/cache@v3
@@ -25,11 +29,6 @@ jobs:
             .stack-work
             C:\sr
           key: ${{ runner.os }}-${{ hashFiles('stack.yaml.lock') }}
-
-      - uses: actions/checkout@v3
-        if: steps.cache.outputs.cache-hit != 'true'
-        with:
-          submodules: true
 
       # If it doesn't exist, setup our cache action, while also trying to restore
       # a prior broader matching cache if it exists (saves a lot of time if just
