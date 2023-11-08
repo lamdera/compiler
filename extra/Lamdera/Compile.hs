@@ -22,7 +22,7 @@ makeOptimized root path = do
 -- Runs `lamdera make --optimize` of given files with no output, followed by the cleanup IO
 makeOptimizedWithCleanup :: IO () -> FilePath -> FilePath -> IO ()
 makeOptimizedWithCleanup cleanup root path = do
-  debug $ "🏗   lamdera make --optimize " <> root <> "/" <> path
+  debug $ "🏗   makeOptimizedWithCleanup: lamdera make --optimize " <> root <> "/" <> path
   let
     tmp = lamderaCache root <> "/tmp.js"
     scaffold = lamderaCache root <> "/Main_.elm"
@@ -55,7 +55,7 @@ makeOptimizedWithCleanup cleanup root path = do
 -- Runs `lamdera make` with no JS output
 make_ :: FilePath -> IO ()
 make_ root = do
-  debug $ "🏗   lamdera make " <> root <> "/"
+  debug $ "🏗   make_: lamdera make " <> root <> "/"
 
   r <- async $
     Ext.Common.withProjectRoot root $
@@ -80,7 +80,7 @@ make_ root = do
 -- Runs `lamdera make` of given files with no JS file output
 makeDev :: FilePath -> [FilePath] -> IO ()
 makeDev root paths = do
-  debug $ "🏗   lamdera make " <> root <> "/" <> show paths
+  debug $ "🏗   makeDev: lamdera make " <> root <> "/" <> show paths
 
   absRoot <- Dir.makeAbsolute root
 
@@ -116,7 +116,7 @@ makeHarnessDevJs root = do
     tmp = lamderaCache root <> "/tmp.js"
     scaffold = lamderaCache root <> "/Main_.elm"
 
-  debug $ "🏗   lamdera make " <> scaffold
+  debug $ "🏗   makeHarnessDevJs: lamdera make " <> scaffold
 
   writeUtf8 scaffold "module Main_ exposing (..)\n\nimport Frontend\nimport Backend\nimport Types\nimport Html\n\nmain = Html.text \"\""
 

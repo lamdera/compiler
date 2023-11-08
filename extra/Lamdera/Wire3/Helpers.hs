@@ -409,8 +409,19 @@ namedTodo modul functionName =
 a v =
   A.at (A.Position 0 0) (A.Position 0 10) v
 
+-- Refer to Lamdera.Wire3.endianness
+endianness =
+  a (VarForeign mLamdera_Wire "endianness"
+        (Forall
+           Map.empty
+           (TType
+              (Module.Canonical (Name "elm" "bytes") "Bytes")
+              "Endianness"
+              [])))
+
 
 encodeSequenceWithoutLength list =
+  -- @TODO we could optimise all sequences of length 1 to not use the sequence encoding ?
   (a (Call (a (VarForeign mLamdera_Wire "encodeSequenceWithoutLength"
               (Forall
                  Map.empty
@@ -425,7 +436,29 @@ encodeSequenceWithoutLength list =
 
 
 encodeUnsignedInt8 value =
-  (a (Call (a (VarForeign mLamdera_Wire "encodeUnsignedInt8"
+  (a (Call (a (VarForeign mBytes_Encode "unsignedInt8"
+                (Forall
+                   Map.empty
+                   (TLambda
+                      (TType (Module.Canonical (Name "elm" "core") "Basics") "Int" [])
+                      tLamdera_Wire_Encoder))))
+          [value]))
+
+
+encodeUnsignedInt16 value =
+  (a (Call (a (VarForeign mBytes_Encode "unsignedInt16"
+                (Forall
+                   Map.empty
+                   (TLambda
+                      ((TType (Module.Canonical (Name "elm" "bytes") "Bytes") "Endianness" []))
+                      (TLambda
+                          (TType (Module.Canonical (Name "elm" "core") "Basics") "Int" [])
+                          tLamdera_Wire_Encoder)))))
+          [endianness, value]))
+
+
+encodeInt value =
+  (a (Call (a (VarForeign mLamdera_Wire "encodeInt"
                 (Forall
                    Map.empty
                    (TLambda
@@ -449,6 +482,38 @@ decodeUnsignedInt8 =
                     [TType (Module.Canonical (Name "elm" "core") "Basics") "Int" []]))))))
 
 
+decodeUnsignedInt16 =
+  a (Call (a (VarForeign mBytes_Decode "unsignedInt16"
+        (Forall
+           Map.empty
+           (TLambda
+              (TType (Module.Canonical (Name "elm" "bytes") "Bytes") "Endianness" [])
+              (TAlias
+                  mLamdera_Wire
+                  "Decoder"
+                  [("a", TType (Module.Canonical (Name "elm" "core") "Basics") "Int" [])]
+                  (Filled
+                    (TType
+                        (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
+                        "Decoder"
+                        [TType (Module.Canonical (Name "elm" "core") "Basics") "Int" []])))))))
+    [endianness]
+  )
+
+
+decodeInt =
+  (a (VarForeign mLamdera_Wire "decodeInt"
+        (Forall
+           Map.empty
+           (TAlias
+              mLamdera_Wire
+              "Decoder"
+              [("a", TType (Module.Canonical (Name "elm" "core") "Basics") "Int" [])]
+              (Filled
+                 (TType
+                    (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
+                    "Decoder"
+                    [TType (Module.Canonical (Name "elm" "core") "Basics") "Int" []]))))))
 
 
 decodeTime =
@@ -619,6 +684,8 @@ int value =
 str value =
   a (Str value)
 
+
+list :: [Expr] -> A.Located Expr_
 list values =
   a (List values)
 
@@ -678,8 +745,9 @@ tLamdera_Wire_Encoder_Holey =
      (Holey (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Encode") "Encoder" [])))
 
 
-mLamdera_Wire =
-  (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire3")
+mLamdera_Wire = (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire3")
+mBytes_Encode = (Module.Canonical (Name "elm" "bytes") "Bytes.Encode")
+mBytes_Decode = (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
 
 
 foldlPairs fn list =

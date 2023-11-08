@@ -41,10 +41,10 @@ expected_w3_encode_ExternalCustomBasic : ExternalCustomBasic -> Lamdera.Wire3.En
 expected_w3_encode_ExternalCustomBasic w3v =
     case w3v of
         Custom1 ->
-            Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeUnsignedInt8 0 ]
+            Lamdera.Wire3.encodeUnsignedInt8 0
 
         Custom2 ->
-            Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeUnsignedInt8 1 ]
+            Lamdera.Wire3.encodeUnsignedInt8 1
 
 
 expected_w3_decode_ExternalCustomBasic =
@@ -91,7 +91,7 @@ expected_w3_encode_ExternalCustomThreaded w3_x_c_threadedTvar w3_x_c_threadedTva
             Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeUnsignedInt8 1, w3_x_c_threadedTvar v0 ]
 
         AlphabeticallyLast ->
-            Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeUnsignedInt8 2 ]
+            Lamdera.Wire3.encodeUnsignedInt8 2
 
 
 expected_w3_decode_ExternalCustomThreaded w3_x_c_threadedTvar w3_x_c_threadedTvar2 =
