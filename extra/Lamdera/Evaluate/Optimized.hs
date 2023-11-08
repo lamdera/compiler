@@ -139,12 +139,10 @@ evalExpr expr locals globals =
 
 
     (Call (VarGlobal (Global (Module.Canonical (Name "elm" "core") "Basics") "eq")) [arg1, arg2]) ->
-      case [evalExpr arg1 locals globals, evalExpr arg2 locals globals] of
-        [a_, b] -> Bool $ a_ == b
+      Bool $ evalExpr arg1 locals globals == evalExpr arg2 locals globals
 
     (Call (VarGlobal (Global (Module.Canonical (Name "elm" "core") "Basics") "neq")) [arg1, arg2]) ->
-      case [evalExpr arg1 locals globals, evalExpr arg2 locals globals] of
-        [a_, b] -> Bool $ a_ /= b
+      Bool $ evalExpr arg1 locals globals /= evalExpr arg2 locals globals
 
     (Call (VarGlobal (Global (Module.Canonical (Name "elm" "core") "Basics") "append")) [arg1, arg2]) ->
       case [evalExpr arg1 locals globals, evalExpr arg2 locals globals] of
