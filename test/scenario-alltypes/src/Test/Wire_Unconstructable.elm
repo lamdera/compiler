@@ -1,5 +1,7 @@
 module Test.Wire_Unconstructable exposing (..)
 
+import Bytes.Decode
+import Bytes.Encode
 import Lamdera.Wire3
 
 
@@ -12,13 +14,13 @@ expected_w3_encode_Unconstructable w3v =
     case w3v of
         Unconstructable v0 ->
             Lamdera.Wire3.encodeSequenceWithoutLength
-                [ Lamdera.Wire3.encodeUnsignedInt8 0
+                [ Bytes.Encode.unsignedInt8 0
                 , w3_encode_Unconstructable v0
                 ]
 
 
 expected_w3_decode_Unconstructable =
-    Lamdera.Wire3.decodeUnsignedInt8
+    Bytes.Decode.unsignedInt8
         |> Lamdera.Wire3.andThenDecode
             (\w3v ->
                 case w3v of

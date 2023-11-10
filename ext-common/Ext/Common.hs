@@ -130,6 +130,16 @@ getProjectRoot tag = do
       -- debug $ "🏠 read project root [" <> tag <> "]: " <> root
       pure root
 
+getProjectRoot_ :: String -> IO (Maybe FilePath)
+getProjectRoot_ tag = do
+  root <- readMVar projectRootMvar
+  case root of
+    ProjectRootUnset -> pure Nothing
+    ProjectRootSet root -> do
+      pure $ Just root
+    ProjectRootContextual root -> do
+      pure $ Just root
+
 
 getProjectRootMaybe :: IO (Maybe FilePath)
 getProjectRootMaybe = do
@@ -139,10 +149,12 @@ getProjectRootMaybe = do
 
 withProjectRoot :: FilePath -> IO a -> IO a
 withProjectRoot root io = do
-  originalRoot <- getProjectRoot "withProjectRoot"
+  originalRootM <- getProjectRoot_ "withProjectRoot"
   setProjectRoot root
   !res <- Dir.withCurrentDirectory root io
-  setProjectRoot originalRoot
+  case originalRootM of
+    Just originalRoot -> setProjectRoot originalRoot
+    Nothing -> pure ()
   pure res
 
 

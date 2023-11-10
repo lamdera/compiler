@@ -1,6 +1,8 @@
 module Test.Wire_Union_3_Params exposing (..)
 
 import Array exposing (Array)
+import Bytes.Decode
+import Bytes.Encode
 import Dict exposing (Dict)
 import Lamdera.Wire3
 import Set exposing (Set)
@@ -31,62 +33,62 @@ expected_w3_encode_UnionParams : UnionParams -> Lamdera.Wire3.Encoder
 expected_w3_encode_UnionParams w3v =
     case w3v of
         ValueArrayString v0 ->
-            Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeUnsignedInt8 0, Lamdera.Wire3.encodeArray Lamdera.Wire3.encodeString v0 ]
+            Lamdera.Wire3.encodeSequenceWithoutLength [ Bytes.Encode.unsignedInt8 0, Lamdera.Wire3.encodeArray Lamdera.Wire3.encodeString v0 ]
 
         ValueBool v0 ->
-            Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeUnsignedInt8 1, Lamdera.Wire3.encodeBool v0 ]
+            Lamdera.Wire3.encodeSequenceWithoutLength [ Bytes.Encode.unsignedInt8 1, Lamdera.Wire3.encodeBool v0 ]
 
         ValueChar v0 ->
-            Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeUnsignedInt8 2, Lamdera.Wire3.encodeChar v0 ]
+            Lamdera.Wire3.encodeSequenceWithoutLength [ Bytes.Encode.unsignedInt8 2, Lamdera.Wire3.encodeChar v0 ]
 
         ValueDict v0 ->
-            Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeUnsignedInt8 3, Lamdera.Wire3.encodeDict Lamdera.Wire3.encodeString (Lamdera.Wire3.encodeList Lamdera.Wire3.encodeInt) v0 ]
+            Lamdera.Wire3.encodeSequenceWithoutLength [ Bytes.Encode.unsignedInt8 3, Lamdera.Wire3.encodeDict Lamdera.Wire3.encodeString (Lamdera.Wire3.encodeList Lamdera.Wire3.encodeInt) v0 ]
 
         ValueFloat v0 ->
-            Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeUnsignedInt8 4, Lamdera.Wire3.encodeFloat v0 ]
+            Lamdera.Wire3.encodeSequenceWithoutLength [ Bytes.Encode.unsignedInt8 4, Lamdera.Wire3.encodeFloat v0 ]
 
         ValueInt v0 ->
-            Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeUnsignedInt8 5, Lamdera.Wire3.encodeInt v0 ]
+            Lamdera.Wire3.encodeSequenceWithoutLength [ Bytes.Encode.unsignedInt8 5, Lamdera.Wire3.encodeInt v0 ]
 
         ValueListBool v0 ->
-            Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeUnsignedInt8 6, Lamdera.Wire3.encodeList Lamdera.Wire3.encodeBool v0 ]
+            Lamdera.Wire3.encodeSequenceWithoutLength [ Bytes.Encode.unsignedInt8 6, Lamdera.Wire3.encodeList Lamdera.Wire3.encodeBool v0 ]
 
         ValueMaybe v0 ->
-            Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeUnsignedInt8 7, Lamdera.Wire3.encodeMaybe Lamdera.Wire3.encodeString v0 ]
+            Lamdera.Wire3.encodeSequenceWithoutLength [ Bytes.Encode.unsignedInt8 7, Lamdera.Wire3.encodeMaybe Lamdera.Wire3.encodeString v0 ]
 
         ValueOrder v0 ->
-            Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeUnsignedInt8 8, Lamdera.Wire3.encodeOrder v0 ]
+            Lamdera.Wire3.encodeSequenceWithoutLength [ Bytes.Encode.unsignedInt8 8, Lamdera.Wire3.encodeOrder v0 ]
 
         ValueRecord v0 ->
-            Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeUnsignedInt8 9, (\w3_rec_var0 -> Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeInt w3_rec_var0.field1, Lamdera.Wire3.encodeString w3_rec_var0.field2 ]) v0 ]
+            Lamdera.Wire3.encodeSequenceWithoutLength [ Bytes.Encode.unsignedInt8 9, (\w3_rec_var0 -> Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeInt w3_rec_var0.field1, Lamdera.Wire3.encodeString w3_rec_var0.field2 ]) v0 ]
 
         ValueResult v0 ->
-            Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeUnsignedInt8 10, Lamdera.Wire3.encodeResult Lamdera.Wire3.encodeString Lamdera.Wire3.encodeInt v0 ]
+            Lamdera.Wire3.encodeSequenceWithoutLength [ Bytes.Encode.unsignedInt8 10, Lamdera.Wire3.encodeResult Lamdera.Wire3.encodeString Lamdera.Wire3.encodeInt v0 ]
 
         ValueSetFloat v0 ->
-            Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeUnsignedInt8 11, Lamdera.Wire3.encodeSet Lamdera.Wire3.encodeFloat v0 ]
+            Lamdera.Wire3.encodeSequenceWithoutLength [ Bytes.Encode.unsignedInt8 11, Lamdera.Wire3.encodeSet Lamdera.Wire3.encodeFloat v0 ]
 
         ValueStandalone ->
-            Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeUnsignedInt8 12 ]
+            Bytes.Encode.unsignedInt8 12
 
         ValueString v0 ->
-            Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeUnsignedInt8 13, Lamdera.Wire3.encodeString v0 ]
+            Lamdera.Wire3.encodeSequenceWithoutLength [ Bytes.Encode.unsignedInt8 13, Lamdera.Wire3.encodeString v0 ]
 
         ValueTriple v0 ->
-            Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeUnsignedInt8 14, Lamdera.Wire3.encodeTriple Lamdera.Wire3.encodeInt Lamdera.Wire3.encodeString Lamdera.Wire3.encodeBool v0 ]
+            Lamdera.Wire3.encodeSequenceWithoutLength [ Bytes.Encode.unsignedInt8 14, Lamdera.Wire3.encodeTriple Lamdera.Wire3.encodeInt Lamdera.Wire3.encodeString Lamdera.Wire3.encodeBool v0 ]
 
         ValueTuple v0 ->
-            Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeUnsignedInt8 15, Lamdera.Wire3.encodePair Lamdera.Wire3.encodeInt Lamdera.Wire3.encodeString v0 ]
+            Lamdera.Wire3.encodeSequenceWithoutLength [ Bytes.Encode.unsignedInt8 15, Lamdera.Wire3.encodePair Lamdera.Wire3.encodeInt Lamdera.Wire3.encodeString v0 ]
 
         ValueTwoParams v0 v1 ->
-            Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeUnsignedInt8 16, Lamdera.Wire3.encodeBool v0, Lamdera.Wire3.encodeChar v1 ]
+            Lamdera.Wire3.encodeSequenceWithoutLength [ Bytes.Encode.unsignedInt8 16, Lamdera.Wire3.encodeBool v0, Lamdera.Wire3.encodeChar v1 ]
 
         ValueUnit v0 ->
-            Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeUnsignedInt8 17, Lamdera.Wire3.encodeUnit v0 ]
+            Lamdera.Wire3.encodeSequenceWithoutLength [ Bytes.Encode.unsignedInt8 17, Lamdera.Wire3.encodeUnit v0 ]
 
 
 expected_w3_decode_UnionParams =
-    Lamdera.Wire3.decodeUnsignedInt8
+    Bytes.Decode.unsignedInt8
         |> Lamdera.Wire3.andThenDecode
             (\w3v ->
                 case w3v of

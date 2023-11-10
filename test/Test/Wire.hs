@@ -74,12 +74,13 @@ wire = do
     setEnv "ELM_HOME" "/Users/mario/elm-home-elmx-test"
 
     let testFiles =
-          [
-            "src/Test/Wire_Union_1_Basic.elm"
+          [ ""
+          , "src/Test/Wire_Union_1_Basic.elm"
           , "src/Test/Wire_Union_2_Basic.elm"
           , "src/Test/External.elm"
           , "src/Test/Wire_Union_3_Params.elm"
           , "src/Test/Wire_Union_4_Tricky.elm"
+          , "src/Test/Wire_Union_5_Massive.elm"
           , "src/Test/Wire_Alias_1_Basic.elm"
           , "src/Test/Wire_Alias_2_Record.elm"
           , "src/Test/Wire_Alias_3_SubAlias.elm"
@@ -106,7 +107,7 @@ wire = do
         throw e
 
 
-    testFiles & mapM (\filename -> do
+    testFiles & filter ((/=) "") & mapM (\filename -> do
         putStrLn $ "testing: " <> show filename
         -- Bust Elm's caching with this one weird trick!
         touch $ project </> filename

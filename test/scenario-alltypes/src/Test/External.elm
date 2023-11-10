@@ -1,5 +1,7 @@
 module Test.External exposing (..)
 
+import Bytes.Decode
+import Bytes.Encode
 import Lamdera.Wire3
 
 
@@ -41,14 +43,14 @@ expected_w3_encode_ExternalCustomBasic : ExternalCustomBasic -> Lamdera.Wire3.En
 expected_w3_encode_ExternalCustomBasic w3v =
     case w3v of
         Custom1 ->
-            Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeUnsignedInt8 0 ]
+            Bytes.Encode.unsignedInt8 0
 
         Custom2 ->
-            Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeUnsignedInt8 1 ]
+            Bytes.Encode.unsignedInt8 1
 
 
 expected_w3_decode_ExternalCustomBasic =
-    Lamdera.Wire3.decodeUnsignedInt8
+    Bytes.Decode.unsignedInt8
         |> Lamdera.Wire3.andThenDecode
             (\w3v ->
                 case w3v of
@@ -85,17 +87,17 @@ expected_w3_encode_ExternalCustomThreaded : (threadedTvar -> Lamdera.Wire3.Encod
 expected_w3_encode_ExternalCustomThreaded w3_x_c_threadedTvar w3_x_c_threadedTvar2 w3v =
     case w3v of
         AlphabeticallyFirst v0 ->
-            Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeUnsignedInt8 0, w3_x_c_threadedTvar2 v0 ]
+            Lamdera.Wire3.encodeSequenceWithoutLength [ Bytes.Encode.unsignedInt8 0, w3_x_c_threadedTvar2 v0 ]
 
         AlphabeticallyKMiddleThreaded v0 ->
-            Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeUnsignedInt8 1, w3_x_c_threadedTvar v0 ]
+            Lamdera.Wire3.encodeSequenceWithoutLength [ Bytes.Encode.unsignedInt8 1, w3_x_c_threadedTvar v0 ]
 
         AlphabeticallyLast ->
-            Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeUnsignedInt8 2 ]
+            Bytes.Encode.unsignedInt8 2
 
 
 expected_w3_decode_ExternalCustomThreaded w3_x_c_threadedTvar w3_x_c_threadedTvar2 =
-    Lamdera.Wire3.decodeUnsignedInt8
+    Bytes.Decode.unsignedInt8
         |> Lamdera.Wire3.andThenDecode
             (\w3v ->
                 case w3v of

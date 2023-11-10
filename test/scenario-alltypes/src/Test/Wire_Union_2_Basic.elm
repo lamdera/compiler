@@ -1,5 +1,7 @@
 module Test.Wire_Union_2_Basic exposing (..)
 
+import Bytes.Decode
+import Bytes.Encode
 import Lamdera.Wire3
 
 
@@ -14,20 +16,20 @@ expected_w3_encode_Union2 : Union2 -> Lamdera.Wire3.Encoder
 expected_w3_encode_Union2 w3v =
     case w3v of
         Alphabetically ->
-            Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeUnsignedInt8 0 ]
+            Bytes.Encode.unsignedInt8 0
 
         Middle ->
-            Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeUnsignedInt8 1 ]
+            Bytes.Encode.unsignedInt8 1
 
         Reversed ->
-            Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeUnsignedInt8 2 ]
+            Bytes.Encode.unsignedInt8 2
 
         ShouldBeLast ->
-            Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeUnsignedInt8 3 ]
+            Bytes.Encode.unsignedInt8 3
 
 
 expected_w3_decode_Union2 =
-    Lamdera.Wire3.decodeUnsignedInt8
+    Bytes.Decode.unsignedInt8
         |> Lamdera.Wire3.andThenDecode
             (\w3v ->
                 case w3v of

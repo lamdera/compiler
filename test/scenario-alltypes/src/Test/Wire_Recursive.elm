@@ -1,5 +1,7 @@
 module Test.Wire_Recursive exposing (..)
 
+import Bytes.Decode
+import Bytes.Encode
 import Lamdera.Wire3
 
 
@@ -11,11 +13,11 @@ expected_w3_encode_Recursive : (a -> Lamdera.Wire3.Encoder) -> Recursive a -> La
 expected_w3_encode_Recursive w3_x_c_a w3v =
     case w3v of
         Recurse v0 ->
-            Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeUnsignedInt8 0, w3_encode_Recursive w3_x_c_a v0 ]
+            Lamdera.Wire3.encodeSequenceWithoutLength [ Bytes.Encode.unsignedInt8 0, w3_encode_Recursive w3_x_c_a v0 ]
 
 
 expected_w3_decode_Recursive w3_x_c_a =
-    Lamdera.Wire3.decodeUnsignedInt8
+    Bytes.Decode.unsignedInt8
         |> Lamdera.Wire3.andThenDecode
             (\w3v ->
                 case w3v of
@@ -51,14 +53,14 @@ expected_w3_encode_Lazy : (a -> Lamdera.Wire3.Encoder) -> Lazy a -> Lamdera.Wire
 expected_w3_encode_Lazy w3_x_c_a w3v =
     case w3v of
         Evaluated v0 ->
-            Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeUnsignedInt8 0, w3_x_c_a v0 ]
+            Lamdera.Wire3.encodeSequenceWithoutLength [ Bytes.Encode.unsignedInt8 0, w3_x_c_a v0 ]
 
         Lazy v0 ->
-            Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeUnsignedInt8 1, Lamdera.Wire3.failEncode () ]
+            Lamdera.Wire3.encodeSequenceWithoutLength [ Bytes.Encode.unsignedInt8 1, Lamdera.Wire3.failEncode () ]
 
 
 expected_w3_decode_Lazy w3_x_c_a =
-    Lamdera.Wire3.decodeUnsignedInt8
+    Bytes.Decode.unsignedInt8
         |> Lamdera.Wire3.andThenDecode
             (\w3v ->
                 case w3v of
@@ -77,14 +79,14 @@ expected_w3_encode_LazyListView : (a -> Lamdera.Wire3.Encoder) -> LazyListView a
 expected_w3_encode_LazyListView w3_x_c_a w3v =
     case w3v of
         Cons v0 v1 ->
-            Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeUnsignedInt8 0, w3_x_c_a v0, w3_encode_LazyList w3_x_c_a v1 ]
+            Lamdera.Wire3.encodeSequenceWithoutLength [ Bytes.Encode.unsignedInt8 0, w3_x_c_a v0, w3_encode_LazyList w3_x_c_a v1 ]
 
         Nil ->
-            Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeUnsignedInt8 1 ]
+            Bytes.Encode.unsignedInt8 1
 
 
 expected_w3_decode_LazyListView w3_x_c_a =
-    Lamdera.Wire3.decodeUnsignedInt8
+    Bytes.Decode.unsignedInt8
         |> Lamdera.Wire3.andThenDecode
             (\w3v ->
                 case w3v of
@@ -132,12 +134,12 @@ expected_w3_decode_LazyList w3_x_c_a =
 -- expected_w3_encode_Deque w3_x_c_a w3v =
 --     case w3v of
 --         Deque v0 ->
---             Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeUnsignedInt8 0, expected_w3_encode_Deque w3_x_c_a v0 ]
+--             Lamdera.Wire3.encodeSequenceWithoutLength [ Bytes.Encode.unsignedInt8 0, expected_w3_encode_Deque w3_x_c_a v0 ]
 --
 --
 -- expected_w3_decode_Deque : Lamdera.Wire3.Decoder a -> Lamdera.Wire3.Decoder (Deque a)
 -- expected_w3_decode_Deque w3_x_c_a =
---     Lamdera.Wire3.decodeUnsignedInt8
+--     Bytes.Decode.unsignedInt8
 --         |> Lamdera.Wire3.andThenDecode
 --             (\w3v ->
 --                 case w3v of

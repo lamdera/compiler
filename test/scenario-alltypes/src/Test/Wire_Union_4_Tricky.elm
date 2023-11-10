@@ -1,6 +1,8 @@
 module Test.Wire_Union_4_Tricky exposing (..)
 
 import Array exposing (Array)
+import Bytes.Decode
+import Bytes.Encode
 import Dict exposing (Dict)
 import Lamdera.Wire3
 import Set exposing (Set)
@@ -49,17 +51,17 @@ expected_w3_encode_UnionTricky : UnionTricky -> Lamdera.Wire3.Encoder
 expected_w3_encode_UnionTricky w3v =
     case w3v of
         ValueAliased v0 ->
-            Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeUnsignedInt8 0, w3_encode_AliasInt v0 ]
+            Lamdera.Wire3.encodeSequenceWithoutLength [ Bytes.Encode.unsignedInt8 0, w3_encode_AliasInt v0 ]
 
         ValueCustom v0 ->
-            Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeUnsignedInt8 1, Test.External.w3_encode_ExternalCustomThreaded Lamdera.Wire3.encodeInt Lamdera.Wire3.encodeString v0 ]
+            Lamdera.Wire3.encodeSequenceWithoutLength [ Bytes.Encode.unsignedInt8 1, Test.External.w3_encode_ExternalCustomThreaded Lamdera.Wire3.encodeInt Lamdera.Wire3.encodeString v0 ]
 
         ValueRecursive v0 ->
-            Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeUnsignedInt8 2, w3_encode_UnionTricky v0 ]
+            Lamdera.Wire3.encodeSequenceWithoutLength [ Bytes.Encode.unsignedInt8 2, w3_encode_UnionTricky v0 ]
 
 
 expected_w3_decode_UnionTricky =
-    Lamdera.Wire3.decodeUnsignedInt8
+    Bytes.Decode.unsignedInt8
         |> Lamdera.Wire3.andThenDecode
             (\w3v ->
                 case w3v of

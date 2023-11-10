@@ -348,7 +348,7 @@ elmPkgJs mode =
           (Just esbuildConfigPath, _, _) ->
             if Ext.Common.isDebug_
               then do
-                Lamdera.debug_ "Building esbuild.config.js"
+                Lamdera.debug_ "🏗️  Building esbuild.config.js"
                 hasNode <- Dir.findExecutable "node"
                 minFile <- case hasNode of
                   Just node -> do
@@ -363,15 +363,17 @@ elmPkgJs mode =
                   Nothing -> do
                     error "no min file after compile, run `node esbuild.config.js` to check errors"
               else do
-                Lamdera.debug_ "Using dumb js packager"
+                Lamdera.debug_ "🏗️🟠  Using dumbJsPackager, ignoring esbuild.config.js in non-dev mode"
                 dumbJsPackager root elmPkgJsSources
           (_, Just esbuildPath, Just includesPath) ->
             if Ext.Common.isDebug_
               then do
                 esbuildIncluder root esbuildPath includesPath
               else do
+                Lamdera.debug_ "🏗️🟠  Using dumbJsPackager, ignoring esbuild in non-dev mode"
                 dumbJsPackager root elmPkgJsSources
-          _ ->
+          _ -> do
+            Lamdera.debug_ "🏗️  Using dumbJsPackager"
             dumbJsPackager root elmPkgJsSources
     _ ->
       ""
@@ -382,10 +384,10 @@ esbuildIncluder root esbuildPath includesPath = do
   minFile <- Lamdera.Relative.loadFile $ root </> "elm-pkg-js-includes.min.js"
   case minFile of
     Just minFileContents -> do
-      Lamdera.debug_ "Using cached elm-pkg-js-includes.min.js"
+      Lamdera.debug_ "🏗️  Using cached elm-pkg-js-includes.min.js"
       pure $ Ext.Common.textToBuilder minFileContents
     Nothing -> do
-      Lamdera.debug_ "Building elm-pkg-js-includes.js"
+      Lamdera.debug_ "🏗️  Building elm-pkg-js-includes.js"
       -- packaged <- Ext.Common.cq_ esbuildPath [ includesPath, "--bundle", "--global-name=elmPkgJsIncludes" ] ""
       (exit, packaged, stdErr) <- Ext.Common.cq_ esbuildPath [ includesPath, "--bundle", "--minify", "--global-name=elmPkgJsIncludes" ] ""
       packaged
