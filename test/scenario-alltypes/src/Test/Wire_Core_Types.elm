@@ -1,6 +1,8 @@
 module Test.Wire_Core_Types exposing (..)
 
 import Bytes
+import Bytes.Decode
+import Bytes.Encode
 import Lamdera.Wire3
 import Time
 import Url
@@ -20,17 +22,17 @@ expected_w3_encode_CoreTypes : CoreTypes -> Lamdera.Wire3.Encoder
 expected_w3_encode_CoreTypes w3v =
     case w3v of
         ValueBytes v0 ->
-            Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeUnsignedInt8 0, Lamdera.Wire3.encodeBytes v0 ]
+            Lamdera.Wire3.encodeSequenceWithoutLength [ Bytes.Encode.unsignedInt8 0, Lamdera.Wire3.encodeBytes v0 ]
 
         ValueTime v0 ->
-            Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeUnsignedInt8 1, (\t -> Lamdera.Wire3.encodeInt (Time.posixToMillis t)) v0 ]
+            Lamdera.Wire3.encodeSequenceWithoutLength [ Bytes.Encode.unsignedInt8 1, (\t -> Lamdera.Wire3.encodeInt (Time.posixToMillis t)) v0 ]
 
         ValueUrl v0 ->
-            Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeUnsignedInt8 2, Url.w3_encode_Url v0 ]
+            Lamdera.Wire3.encodeSequenceWithoutLength [ Bytes.Encode.unsignedInt8 2, Url.w3_encode_Url v0 ]
 
 
 expected_w3_decode_CoreTypes =
-    Lamdera.Wire3.decodeUnsignedInt8
+    Bytes.Decode.unsignedInt8
         |> Lamdera.Wire3.andThenDecode
             (\w3v ->
                 case w3v of

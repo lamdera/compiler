@@ -73,17 +73,17 @@ runTests isTest_ debugName pkg modul decls generatedName generated canonicalValu
 
             else do
               -- debugHaskellPass ("🏁 Actual value input for " <> (T.pack $ Data.Name.toChars generatedName)) (canonicalValue) (pure ())
-              let formatted = Ext.ElmFormat.format $ ToSource.convert generated
-              case formatted of
-                Right t ->
-                  debugPassText ("💚 actual implementation pretty-printed " <> show_ (Src.getName modul)) (t) (pure ())
-                Left err ->
-                  debugPassText ("❌❌❌ actual implementation pretty-printed something went wrong with formatting " <> show_ (Src.getName modul)) (err) (pure ())
+              -- let formatted = Ext.ElmFormat.format $ ToSource.convert generated
+              -- case formatted of
+              --   Right t ->
+              --     debugPassText ("💚 actual implementation pretty-printed " <> show_ (Src.getName modul)) (t) (pure ())
+              --   Left err ->
+              --     debugPassText ("❌❌❌ actual implementation pretty-printed something went wrong with formatting " <> show_ (Src.getName modul)) (err) (pure ())
 
               -- debugPassText ("🧡 expected implementation pretty-printed " <> show_ (Src.getName modul)) (Source2.generateCodecs Map.empty wiregen) (pure ())
               -- debugHaskellPass ("🧡 expected implementation AST.Canonical " <> show_ (Src.getName modul)) (testDefinition) (pure ())
 
-              -- diff <- icdiff (hindentFormatValue testDefinition) (hindentFormatValue generated)
+              diff <- icdiff (hindentFormatValue testDefinition) (hindentFormatValue generated)
               diff2 <- icdiff (ToSource.convert (testDefinition `withName` generatedName)) (ToSource.convert generated)
               -- diff2 <- do
               --   l <- Ext.ElmFormat.format $ ToSource.convert testDefinition
@@ -93,7 +93,7 @@ runTests isTest_ debugName pkg modul decls generatedName generated canonicalValu
               --           Left err -> show_ err
               --           Right t  -> t
               --   icdiff (withDefault l) (withDefault r)
-              -- atomicPutStrLn $ "❌❌❌ failed, attempting pretty-print diff1:\n" ++ diff
+              atomicPutStrLn $ "❌❌❌ failed, attempting pretty-print diff1:\n" ++ diff
               atomicPutStrLn $ "❌❌❌ ASTs do not match, attempting pretty-print diff2:\n" ++ diff2
               -- error "exiting!"
               -- atomicPutStrLn $ "❌❌❌ " ++ Data.Name.toChars (Src.getName modul) ++ "." ++ Data.Name.toChars generatedName ++ " gen does not match test definition."

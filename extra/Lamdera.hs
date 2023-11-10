@@ -869,9 +869,9 @@ requireEnv name = do
   val <- lookupEnv name
   case val of
     Nothing ->
-      error $ Prelude.concat ["🌏👀  ENV var ", name, " is required but was not found"]
+      error $ Prelude.concat ["🌏👀  ENV var `", name, "` is required but was not found"]
     Just "" ->
-      error $ Prelude.concat ["🌏👀  ENV var ", name, " is required but was empty"]
+      error $ Prelude.concat ["🌏👀  ENV var `", name, "` is required but was empty"]
     Just v -> pure v
 
 

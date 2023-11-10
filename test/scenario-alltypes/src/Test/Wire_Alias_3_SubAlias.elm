@@ -1,6 +1,8 @@
 module Test.Wire_Alias_3_SubAlias exposing (..)
 
 import Array exposing (Array)
+import Bytes.Decode
+import Bytes.Encode
 import Dict exposing (Dict)
 import Lamdera.Wire3
 import Set exposing (Set)
@@ -84,11 +86,11 @@ expected_w3_encode_SubCustom : (value -> Lamdera.Wire3.Encoder) -> SubCustom val
 expected_w3_encode_SubCustom w3_x_c_value w3v =
     case w3v of
         SubCustomValue v0 ->
-            Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeUnsignedInt8 0, w3_x_c_value v0 ]
+            Lamdera.Wire3.encodeSequenceWithoutLength [ Bytes.Encode.unsignedInt8 0, w3_x_c_value v0 ]
 
 
 expected_w3_decode_SubCustom w3_x_c_value =
-    Lamdera.Wire3.decodeUnsignedInt8
+    Bytes.Decode.unsignedInt8
         |> Lamdera.Wire3.andThenDecode
             (\w3v ->
                 case w3v of

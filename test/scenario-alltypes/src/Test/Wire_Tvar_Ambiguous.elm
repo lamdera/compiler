@@ -16,6 +16,8 @@ The test itself has a minor difference in gen diff for record treatment hence th
 
 -}
 
+import Bytes.Decode
+import Bytes.Encode
 import Lamdera.Wire3
 import Test.Wire_Tvar_Ambiguous2
 
@@ -29,14 +31,14 @@ expected_w3_encode_Definition : (a -> Lamdera.Wire3.Encoder) -> Definition a -> 
 expected_w3_encode_Definition w3_x_c_a w3v =
     case w3v of
         CustomTypeDefinition v0 ->
-            Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeUnsignedInt8 0, Test.Wire_Tvar_Ambiguous2.w3_encode_AccessControlled (Lamdera.Wire3.encodeMaybe w3_x_c_a) v0 ]
+            Lamdera.Wire3.encodeSequenceWithoutLength [ Bytes.Encode.unsignedInt8 0, Test.Wire_Tvar_Ambiguous2.w3_encode_AccessControlled (Lamdera.Wire3.encodeMaybe w3_x_c_a) v0 ]
 
         TypeAliasDefinition v0 ->
-            Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeUnsignedInt8 1, Lamdera.Wire3.encodeMaybe w3_x_c_a v0 ]
+            Lamdera.Wire3.encodeSequenceWithoutLength [ Bytes.Encode.unsignedInt8 1, Lamdera.Wire3.encodeMaybe w3_x_c_a v0 ]
 
 
 expected_w3_decode_Definition w3_x_c_a =
-    Lamdera.Wire3.decodeUnsignedInt8
+    Bytes.Decode.unsignedInt8
         |> Lamdera.Wire3.andThenDecode
             (\w3v ->
                 case w3v of

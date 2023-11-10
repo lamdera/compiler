@@ -441,7 +441,7 @@ encodeUnsignedInt8 value =
                    Map.empty
                    (TLambda
                       (TType (Module.Canonical (Name "elm" "core") "Basics") "Int" [])
-                      tLamdera_Wire_Encoder))))
+                      tElm_Bytes_Encoder))))
           [value]))
 
 
@@ -453,7 +453,7 @@ encodeUnsignedInt16 value =
                       ((TType (Module.Canonical (Name "elm" "bytes") "Bytes") "Endianness" []))
                       (TLambda
                           (TType (Module.Canonical (Name "elm" "core") "Basics") "Int" [])
-                          tLamdera_Wire_Encoder)))))
+                          tElm_Bytes_Encoder)))))
           [endianness, value]))
 
 
@@ -468,19 +468,12 @@ encodeInt value =
 
 
 decodeUnsignedInt8 =
-  (a (VarForeign mLamdera_Wire "decodeUnsignedInt8"
+  (a (VarForeign mBytes_Decode "unsignedInt8"
         (Forall
            Map.empty
-           (TAlias
-              mLamdera_Wire
-              "Decoder"
-              [("a", TType (Module.Canonical (Name "elm" "core") "Basics") "Int" [])]
-              (Filled
-                 (TType
-                    (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
-                    "Decoder"
-                    [TType (Module.Canonical (Name "elm" "core") "Basics") "Int" []]))))))
-
+           (tElm_Bytes_Decoder tInt)
+        )
+  ))
 
 decodeUnsignedInt16 =
   a (Call (a (VarForeign mBytes_Decode "unsignedInt16"
@@ -488,15 +481,9 @@ decodeUnsignedInt16 =
            Map.empty
            (TLambda
               (TType (Module.Canonical (Name "elm" "bytes") "Bytes") "Endianness" [])
-              (TAlias
-                  mLamdera_Wire
-                  "Decoder"
-                  [("a", TType (Module.Canonical (Name "elm" "core") "Basics") "Int" [])]
-                  (Filled
-                    (TType
-                        (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
-                        "Decoder"
-                        [TType (Module.Canonical (Name "elm" "core") "Basics") "Int" []])))))))
+              (tElm_Bytes_Decoder tInt)
+           )
+        )))
     [endianness]
   )
 
@@ -715,18 +702,19 @@ lvar n =
 
 -- Patterns
 
-pint i =
-  a (PInt i)
+pint i = a (PInt i)
+pvar n = a (PVar n)
+pAny_  = a (PAnything)
 
-pvar n =
-  a (PVar n)
+call fn args = (a (Call fn args))
 
-pAny_ =
-  a (PAnything)
+tInt = (TType (Module.Canonical (Name "elm" "core") "Basics") "Int" [])
 
-call fn args =
-  (a (Call fn args))
+tElm_Bytes_Encoder =
+  (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Encode") "Encoder" [])
 
+tElm_Bytes_Decoder v =
+  (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [v])
 
 tLamdera_Wire_Encoder =
   (TAlias

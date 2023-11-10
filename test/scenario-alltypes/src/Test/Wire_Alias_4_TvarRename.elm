@@ -1,5 +1,7 @@
 module Test.Wire_Alias_4_TvarRename exposing (..)
 
+import Bytes.Decode
+import Bytes.Encode
 import Lamdera.Wire3
 import Test.Wire_Alias_4_TvarRename2
 
@@ -43,11 +45,11 @@ expected_w3_encode_Also : (msg -> Lamdera.Wire3.Encoder) -> Also msg -> Lamdera.
 expected_w3_encode_Also w3_x_c_msg w3v =
     case w3v of
         Tag v0 ->
-            Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeUnsignedInt8 0, Test.Wire_Alias_4_TvarRename2.w3_encode_OnGrid (Lamdera.Wire3.encodeMaybe w3_x_c_msg) v0 ]
+            Lamdera.Wire3.encodeSequenceWithoutLength [ Bytes.Encode.unsignedInt8 0, Test.Wire_Alias_4_TvarRename2.w3_encode_OnGrid (Lamdera.Wire3.encodeMaybe w3_x_c_msg) v0 ]
 
 
 expected_w3_decode_Also w3_x_c_msg =
-    Lamdera.Wire3.decodeUnsignedInt8
+    Bytes.Decode.unsignedInt8
         |> Lamdera.Wire3.andThenDecode
             (\w3v ->
                 case w3v of
