@@ -91,6 +91,7 @@ wire = do
           , "src/Test/Wire_Record_Extensible1_Basic.elm"
           , "src/Test/Wire_Record_Extensible2_MultiParam.elm"
           , "src/Test/Wire_Record_Extensible3_Tricky.elm"
+          , "src/Test/Wire_Record_Extensible4_DB.elm"
           , "src/Test/Wire_Phantom.elm"
           , "src/Test/Wire_Tvar_Deep.elm"
           , "src/Test/Wire_Tvar_Deep2.elm"
@@ -125,8 +126,3 @@ wire = do
       crash failures
     else
       scope "senarios-alltypes no exceptions" $ ok
-
-
-
-
-

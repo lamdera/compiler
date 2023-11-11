@@ -315,9 +315,9 @@ encoderUnion isTest_ ifaces pkg modul decls unionName union =
 
     ttype = (TType cname unionName (tvars & fmap TVar))
 
-    namedThingiesFigureThisOut = tvars & fmap (\tvar -> (tvar, ())) & Map.fromList
+    freeVars = tvars & fmap (\tvar -> (tvar, ())) & Map.fromList
 
-    generatedTyped = TypedDef (a (generatedName)) namedThingiesFigureThisOut (ptvarsTyped ++ [(pvar "w3v", ttype)]) generatedBody $
+    generatedTyped = TypedDef (a (generatedName)) freeVars (ptvarsTyped ++ [(pvar "w3v", ttype)]) generatedBody $
       -- @NOTE: unlike Def, with a TypedDef only the final type is annotated here, the rest of the types
       -- seem to be draw from the Pattern collection.
       (TAlias
@@ -390,6 +390,53 @@ decoderUnion isTest_ ifaces pkg modul decls unionName union =
   generated
 
 
+-- Takes a tvar name and a type, and recursively searches for any extensible record constraints
+-- on that tvar name, returning all the constraint field names and types. This can then be used
+-- to construct an anonymous record constraint for the type signature.
+-- See Wire_Record_Extensible4_DB.elm for an example.
+getTvarConstraint :: Data.Name.Name -> Type -> Map.Map Data.Name.Name Type
+getTvarConstraint tvarName tipe =
+  -- @TODO cover all the possible constraint types!
+  -- debugHaskellPass ("🧡 getTvarConstraint ") tipe $
+  case tipe of
+    TType cname aliasName tvars ->
+      tvars & fmap (getTvarConstraint tvarName) & Map.unions
+
+    TRecord fields ext ->
+      case ext of
+        Nothing ->
+          fields & fmap (\(FieldType _ t) -> getTvarConstraint tvarName t) & Map.unions
+
+        Just extName ->
+          if extName == tvarName
+            then fields & fmap (\(FieldType _ t) -> t)
+            else Map.empty
+
+    _ ->
+      -- no constraint
+      Map.empty
+
+
+-- Sometimes a tvar is a constrained record (aka "extensible record"), and we need to
+-- generate a type signature that includes the constraint. This function takes a tvar
+-- name and a type, and if the type is a constrained record, it returns a new type
+-- that includes the constraint. Otherwise it returns the original type.
+-- See Wire_Record_Extensible4_DB.elm for an example.
+constrainTvar :: Data.Name.Name -> Type -> Type
+constrainTvar tvar tipe =
+  -- debugHaskell ("🧡 constrainTvar") $
+  let constraints = getTvarConstraint tvar tipe
+  in
+  if Map.size constraints > 0 then
+    constraints
+      & Map.toList
+      & imap (\i (name, t) -> (name, FieldType (fromIntegral i) t))
+      & Map.fromList
+      & (\fields -> TRecord fields (Just tvar))
+  else
+    TVar tvar
+
+
 encoderAlias :: Bool -> Map.Map Module.Raw I.Interface -> Pkg.Name -> Src.Module -> Decls -> Data.Name.Name -> Alias -> Def
 encoderAlias isTest_ ifaces pkg modul decls aliasName alias@(Alias tvars tipe) =
   let
@@ -400,7 +447,11 @@ encoderAlias isTest_ ifaces pkg modul decls aliasName alias@(Alias tvars tipe) =
     ptvars = tvars & fmap (\tvar -> pvar $ Data.Name.fromChars $ "w3_x_c_" ++ Data.Name.toChars tvar )
 
     ptvarsTyped = tvars & fmap (\tvar ->
-        (pvar $ Data.Name.fromChars $ "w3_x_c_" ++ Data.Name.toChars tvar, TLambda (TVar tvar) tLamdera_Wire_Encoder_Holey)
+        let constrainedTvar = constrainTvar tvar tipe
+        in
+        ( pvar $ Data.Name.fromChars $ "w3_x_c_" ++ Data.Name.toChars tvar
+        , TLambda constrainedTvar tLamdera_Wire_Encoder_Holey
+        )
       )
 
     tvarsNameTyped = tvars & fmap (\tvar ->
@@ -416,10 +467,10 @@ encoderAlias isTest_ ifaces pkg modul decls aliasName alias@(Alias tvars tipe) =
 
     ttype = (TType cname aliasName (tvars & fmap TVar))
 
-    namedThingiesFigureThisOut = tvars & fmap (\tvar -> (tvar, ())) & Map.fromList
+    freeVars = tvars & fmap (\tvar -> (tvar, ())) & Map.fromList
 
     -- | TypedDef (A.Located Name) FreeVars [(Pattern, Type)] Expr Type
-    generatedTyped = TypedDef (a (generatedName)) namedThingiesFigureThisOut (ptvarsTyped) generatedBody $
+    generatedTyped = TypedDef (a (generatedName)) freeVars (ptvarsTyped) generatedBody $
       (TLambda
         (TAlias
             -- (Module.Canonical (Name "author" "project") "Test.Wire_Alias_1_Basic")

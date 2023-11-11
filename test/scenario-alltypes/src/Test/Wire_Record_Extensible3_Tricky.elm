@@ -86,13 +86,13 @@ type alias Config_ otherConfig msg =
 
 {-| Again, extensible record alias encoders never actually get used
 -}
-expected_w3_encode_Config_ : (otherConfig -> Lamdera.Wire3.Encoder) -> (msg -> Lamdera.Wire3.Encoder) -> Config_ otherConfig msg -> Lamdera.Wire3.Encoder
+expected_w3_encode_Config_ : ({ otherConfig | attributes : List msg } -> Lamdera.Wire3.Encoder) -> (msg -> Lamdera.Wire3.Encoder) -> Config_ otherConfig msg -> Lamdera.Wire3.Encoder
 expected_w3_encode_Config_ w3_x_c_otherConfig w3_x_c_msg =
-    Lamdera.Wire3.failEncode
+    w3_x_c_otherConfig
 
 
 expected_w3_decode_Config_ w3_x_c_otherConfig w3_x_c_msg =
-    Lamdera.Wire3.failDecode
+    w3_x_c_otherConfig
 
 
 
@@ -103,13 +103,13 @@ type alias Record a =
     { a | field : a }
 
 
-expected_w3_encode_Record : (a -> Lamdera.Wire3.Encoder) -> Record a -> Lamdera.Wire3.Encoder
+expected_w3_encode_Record : ({ a | field : a } -> Lamdera.Wire3.Encoder) -> Record a -> Lamdera.Wire3.Encoder
 expected_w3_encode_Record w3_x_c_a =
-    Lamdera.Wire3.failEncode
+    w3_x_c_a
 
 
 expected_w3_decode_Record w3_x_c_a =
-    Lamdera.Wire3.failDecode
+    w3_x_c_a
 
 
 type alias DoubleParamed =
@@ -250,22 +250,22 @@ expected_w3_decode_DatePickerType =
             )
 
 
-expected_w3_encode_DatePickerConfig : (otherConfig -> Lamdera.Wire3.Encoder) -> (DatePickerConfig otherConfig -> Lamdera.Wire3.Encoder)
+expected_w3_encode_DatePickerConfig : ({ otherConfig | allowYearNavigation : Bool } -> Lamdera.Wire3.Encoder) -> (DatePickerConfig otherConfig -> Lamdera.Wire3.Encoder)
 expected_w3_encode_DatePickerConfig w3_x_c_otherConfig =
-    Lamdera.Wire3.failEncode
+    w3_x_c_otherConfig
 
 
 expected_w3_decode_DatePickerConfig w3_x_c_otherConfig =
-    Lamdera.Wire3.failDecode
+    w3_x_c_otherConfig
 
 
-expected_w3_encode_AddedConfig : (otherConfig -> Lamdera.Wire3.Encoder) -> (AddedConfig otherConfig -> Lamdera.Wire3.Encoder)
+expected_w3_encode_AddedConfig : ({ otherConfig | attributes : String.String } -> Lamdera.Wire3.Encoder) -> (AddedConfig otherConfig -> Lamdera.Wire3.Encoder)
 expected_w3_encode_AddedConfig w3_x_c_otherConfig =
-    Lamdera.Wire3.failEncode
+    w3_x_c_otherConfig
 
 
 expected_w3_decode_AddedConfig w3_x_c_otherConfig =
-    Lamdera.Wire3.failDecode
+    w3_x_c_otherConfig
 
 
 expected_w3_encode_TimePickerConfig : TimePickerConfig -> Lamdera.Wire3.Encoder

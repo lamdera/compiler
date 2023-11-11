@@ -14,9 +14,9 @@ type alias ColorValue compatible =
 {-| NOTE: this is generated, but it will never be called, because you can't have a `Named a` type
 at runtime, it must always be concrete!
 -}
-expected_w3_encode_ColorValue : (compatible -> Lamdera.Wire3.Encoder) -> ColorValue compatible -> Lamdera.Wire3.Encoder
+expected_w3_encode_ColorValue : ({ compatible | value : String.String } -> Lamdera.Wire3.Encoder) -> ColorValue compatible -> Lamdera.Wire3.Encoder
 expected_w3_encode_ColorValue w3_x_c_compatible =
-    Lamdera.Wire3.failEncode
+    w3_x_c_compatible
 
 
 

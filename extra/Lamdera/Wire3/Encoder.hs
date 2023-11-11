@@ -215,11 +215,7 @@ encoderForType depth ifaces cname tipe =
     TRecord fieldMap maybeExtensible ->
       case maybeExtensible of
         Just extensibleName ->
-          -- If we've arrived at a record that still has an extensible name, that means
-          -- this is a type that was not reified. These only exist at compile time, never runtime
-          -- (as in order for an extensible type to be _used_, it must be _filled_).
-          -- So we'll still generate the def for ease but it will never be called, and will get DCE'd.
-          failEncode
+          (lvar $ Data.Name.fromChars $ "w3_x_c_" ++ Data.Name.toChars extensibleName)
 
         Nothing ->
           let
