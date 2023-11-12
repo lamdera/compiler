@@ -136,6 +136,29 @@ expectEqualTextTrimmed expected actual =
           -- , T.pack $ show $ prettyEditExpr $ ediff (realExpected) (realActual)
           ]
 
+expectEqualFormat :: (Eq a, Show a) => a -> a -> Test ()
+expectEqualFormat expected actual =
+  if expected == actual
+    then
+      ok
+    else do
+      _ <- ensureBinaryIcdiff "icdiff"
+      diff <- liftIO $ do
+        icdiff (hindentFormatValue expected) (hindentFormatValue actual)
+
+      crash $
+        T.unpack $
+        T.unlines
+          [ ""
+          -- , "➡️  the result:"
+          -- , (realActual)
+          -- , "⬅️  did not equal expected value:"
+          -- , (realExpected)
+          , "💥💥💥"
+          , ""
+          , T.pack diff
+          -- , T.pack $ show $ prettyEditExpr $ ediff (realExpected) (realActual)
+          ]
 
 expectNotEqual :: (Eq a, Show a) => a -> a -> Test ()
 expectNotEqual forbidden actual =
