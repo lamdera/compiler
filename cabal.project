@@ -4,3 +4,8 @@ packages:
     ./vendor/elm-format/elm-format-lib
     ./vendor/elm-format/avh4-lib
     ./vendor/elm-format
+
+source-repository-package
+    type: git
+    location: https://github.com/noteed/language-glsl.git
+    tag: 99c3aae76363b127679da640a6f00d61d2203830
