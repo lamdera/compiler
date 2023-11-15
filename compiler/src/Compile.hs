@@ -67,7 +67,7 @@ compile pkg ifaces modul = do
   let modul_ =
         modul
           & Lamdera.Wire3.Interfaces.modifyModul pkg ifaces
-          & Lamdera.Wire2.Interfaces.modifyModul pkg ifaces
+          -- & Lamdera.Wire2.Interfaces.modifyModul pkg ifaces
       -- moduleName = T.pack $ Data.Utf8.toChars $ Src.getName modul
 
   -- ()          <- debugPassText "starting canonical" "" (pure ())
@@ -75,8 +75,8 @@ compile pkg ifaces modul = do
   -- ()          <- debugPassText "starting canonical2" moduleName (pure ())
 
   -- Add Canonical Wire gens, i.e. the `w2_[en|de]code_TYPENAME` functions
-  canonical1 <- Lamdera.Wire3.Core.addWireGenerations canonical0 pkg ifaces modul_
-  canonical2 <- Lamdera.Wire2.Core.addWireGenerations canonical1 pkg ifaces modul_
+  canonical2 <- Lamdera.Wire3.Core.addWireGenerations canonical0 pkg ifaces modul_
+  -- canonical2 <- Lamdera.Wire2.Core.addWireGenerations canonical1 pkg ifaces modul_
 
   -- () <- unsafePerformIO $ do
   --   case (pkg, Src.getName modul) of
