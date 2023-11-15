@@ -23,10 +23,10 @@ module Lamdera
   , debugPass
   , debugPassText
   , debugHaskell
+  , debugHaskellWhen
   , debugHaskellPass
   , debugHaskellPassWhen
   , debugHaskellPassDiffWhen
-  , debugHaskellWhen
   -- , PP.sShow
   , T.Text
   , (<>)

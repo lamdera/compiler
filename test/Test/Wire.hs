@@ -4,61 +4,90 @@
 
 module Test.Wire where
 
-
 import qualified Data.Map as Map
-import qualified Data.Set as Set
-import qualified Data.Text as Text
-import qualified Data.Utf8 as Utf8
-
-import qualified Elm.ModuleName as ModuleName
+import qualified Elm.ModuleName as Module
 import qualified Elm.Package as Pkg
 
 import Control.Concurrent.MVar
 import Control.Exception (SomeException, AsyncException(UserInterrupt), catch, fromException, throw)
-import System.Environment (lookupEnv)
 import System.FilePath ((</>))
 
 import EasyTest
 import Lamdera
-import Lamdera.Evergreen.Snapshot
-import NeatInterpolation
--- import qualified TestLamdera
 import qualified Lamdera.Compile
 
-import StandaloneInstances
-
--- Test all
-import qualified Reporting.Exit as Exit
-import qualified System.Exit as Exit
-import qualified Reporting.Task as Task
-import qualified Deps.Solver as Solver
-import qualified Deps.Registry
-
-import qualified BackgroundWriter as BW
-import qualified Elm.Outline as Outline
-import qualified Elm.Details as Details
-import qualified Install
-import qualified Reporting.Task as Task
-import qualified Reporting.Doc as D
-import qualified Elm.Version as V
-import qualified Elm.Constraint as C
-import qualified Stuff
-import qualified Reporting
-
-import qualified Init
-import qualified Make
-
--- http
-import qualified Json.Decode as D
-import qualified Lamdera.Http
-import qualified Ext.Common
+-- tests
+import qualified Lamdera.Wire3.Core
+import AST.Canonical
 
 all = EasyTest.run suite
 
 suite :: Test ()
 suite = tests $
   [ scope "compile all Elm wire expectations" wire
+  , scope "function tests" functions
   ]
+
+functions :: Test ()
+functions = do
+  let before =
+        TType
+            (Module.Canonical (Pkg.Name "elm" "core") "Maybe")
+            "Maybe"
+            [ TAlias
+                (Module.Canonical (Pkg.Name "author" "project") "Test.Wire_Record_Extensible5_ElmCss")
+                "Length"
+                [("compatible", TVar "compatibleB"), ("units", TVar "unit")]
+                (Holey
+                  (TAlias
+                      (Module.Canonical (Pkg.Name "author" "project") "Test.Wire_Record_Extensible5_ElmCss_External")
+                      "Length"
+                      [("compatible", TVar "compatible"), ("units", TVar "units")]
+                      (Holey
+                        (TRecord
+                            (Map.fromList
+                              [ ( "length"
+                                , FieldType
+                                    1
+                                    (TType (Module.Canonical (Pkg.Name "author" "project") "Test.Wire_Record_Extensible5_ElmCss_External") "Compatible" []))
+                              , ("numericValue", FieldType 2 (TType (Module.Canonical (Pkg.Name "elm" "core") "Basics") "Float" []))
+                              , ("unitLabel", FieldType 4 (TType (Module.Canonical (Pkg.Name "elm" "core") "String") "String" []))
+                              , ("units", FieldType 3 (TVar "units"))
+                              , ("value", FieldType 0 (TType (Module.Canonical (Pkg.Name "elm" "core") "String") "String" []))
+                              ])
+                            (Just "compatible")))))
+            ]
+
+      expected =
+        TType
+            (Module.Canonical (Pkg.Name "elm" "core") "Maybe")
+            "Maybe"
+            [ TAlias
+                (Module.Canonical (Pkg.Name "author" "project") "Test.Wire_Record_Extensible5_ElmCss")
+                "Length"
+                [("compatibleB", TVar "compatibleB"), ("unit", TVar "unit")]
+                (Holey
+                  (TAlias
+                      (Module.Canonical (Pkg.Name "author" "project") "Test.Wire_Record_Extensible5_ElmCss_External")
+                      "Length"
+                      [("compatibleB", TVar "compatibleB"), ("unit", TVar "unit")]
+                      (Holey
+                        (TRecord
+                            (Map.fromList
+                              [ ( "length"
+                                , FieldType
+                                    1
+                                    (TType (Module.Canonical (Pkg.Name "author" "project") "Test.Wire_Record_Extensible5_ElmCss_External") "Compatible" []))
+                              , ("numericValue", FieldType 2 (TType (Module.Canonical (Pkg.Name "elm" "core") "Basics") "Float" []))
+                              , ("unitLabel", FieldType 4 (TType (Module.Canonical (Pkg.Name "elm" "core") "String") "String" []))
+                              , ("units", FieldType 3 (TVar "unit"))
+                              , ("value", FieldType 0 (TType (Module.Canonical (Pkg.Name "elm" "core") "String") "String" []))
+                              ])
+                            (Just "compatibleB")))))
+            ]
+
+  expectEqualFormat expected (Lamdera.Wire3.Core.normaliseTvarNames Map.empty before)
+
 
 wire :: Test ()
 wire = do
@@ -91,6 +120,8 @@ wire = do
           , "src/Test/Wire_Record_Extensible1_Basic.elm"
           , "src/Test/Wire_Record_Extensible2_MultiParam.elm"
           , "src/Test/Wire_Record_Extensible3_Tricky.elm"
+          , "src/Test/Wire_Record_Extensible4_DB.elm"
+          , "src/Test/Wire_Record_Extensible5_ElmCss.elm"
           , "src/Test/Wire_Phantom.elm"
           , "src/Test/Wire_Tvar_Deep.elm"
           , "src/Test/Wire_Tvar_Deep2.elm"
@@ -125,8 +156,3 @@ wire = do
       crash failures
     else
       scope "senarios-alltypes no exceptions" $ ok
-
-
-
-
-

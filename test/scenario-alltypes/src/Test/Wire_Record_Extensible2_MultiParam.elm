@@ -15,13 +15,13 @@ type alias ExtensibleRecordType comparable a =
     { a | id : comparable }
 
 
-expected_w3_encode_ExtensibleRecordType : (comparable -> Lamdera.Wire3.Encoder) -> (a -> Lamdera.Wire3.Encoder) -> ExtensibleRecordType comparable a -> Lamdera.Wire3.Encoder
+expected_w3_encode_ExtensibleRecordType : (comparable -> Lamdera.Wire3.Encoder) -> ({ a | id : comparable } -> Lamdera.Wire3.Encoder) -> ExtensibleRecordType comparable a -> Lamdera.Wire3.Encoder
 expected_w3_encode_ExtensibleRecordType w3_x_c_comparable w3_x_c_a =
-    Lamdera.Wire3.failEncode
+    w3_x_c_a
 
 
 expected_w3_decode_ExtensibleRecordType w3_x_c_comparable w3_x_c_a =
-    Lamdera.Wire3.failDecode
+    w3_x_c_a
 
 
 

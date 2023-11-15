@@ -315,9 +315,9 @@ encoderUnion isTest_ ifaces pkg modul decls unionName union =
 
     ttype = (TType cname unionName (tvars & fmap TVar))
 
-    namedThingiesFigureThisOut = tvars & fmap (\tvar -> (tvar, ())) & Map.fromList
+    freeVars = tvars & fmap (\tvar -> (tvar, ())) & Map.fromList
 
-    generatedTyped = TypedDef (a (generatedName)) namedThingiesFigureThisOut (ptvarsTyped ++ [(pvar "w3v", ttype)]) generatedBody $
+    generatedTyped = TypedDef (a (generatedName)) freeVars (ptvarsTyped ++ [(pvar "w3v", ttype)]) generatedBody $
       -- @NOTE: unlike Def, with a TypedDef only the final type is annotated here, the rest of the types
       -- seem to be draw from the Pattern collection.
       (TAlias
@@ -390,6 +390,169 @@ decoderUnion isTest_ ifaces pkg modul decls unionName union =
   generated
 
 
+-- Takes a tvar name and a type, and recursively searches for any extensible record constraints
+-- on that tvar name, returning all the constraint field names and types. This can then be used
+-- to construct an anonymous record constraint for the type signature.
+-- See Wire_Record_Extensible4_DB.elm for an example.
+getRecordConstraints :: Data.Name.Name -> Type -> Map.Map Data.Name.Name Type
+getRecordConstraints tvarName tipe =
+  -- @TODO cover all the possible constraint types!
+  -- debugHaskellPass ("🔵 getRecordConstraints ") (tvarName, tipe) $
+  case tipe of
+    TType cname aliasName tvars ->
+      tvars & fmap (getRecordConstraints tvarName) & Map.unions
+
+    TRecord fields ext ->
+      case ext of
+        Nothing ->
+          fields & fmap (\(FieldType _ t) -> getRecordConstraints tvarName t) & Map.unions
+
+        Just extName ->
+          if extName == tvarName
+            then fields & fmap (\(FieldType _ t) -> t)
+            else Map.empty
+
+    TTuple a_ b Nothing  -> [a_, b]    & fmap (getRecordConstraints tvarName) & Map.unions
+    TTuple a_ b (Just c) -> [a_, b, c] & fmap (getRecordConstraints tvarName) & Map.unions
+
+    TAlias moduleName typeName tvars aType ->
+      let
+        aliasedTvarName =
+          case List.find (\(t,ti) -> ti == TVar tvarName) tvars of
+            Just (tvarNameNew, tvarType) -> tvarNameNew
+            Nothing -> tvarName
+      in
+
+      case aType of
+        Holey t ->
+          getRecordConstraints aliasedTvarName t
+          -- extractors & fmap (\extractor -> extractor t) & Map.unions
+
+        Filled t ->
+          getRecordConstraints aliasedTvarName t
+          -- extractors & fmap (\extractor -> extractor t) & Map.unions
+
+    _ ->
+      -- no constraint
+      Map.empty
+
+
+renameTvars :: Data.Name.Name -> Data.Name.Name -> Type -> Type
+renameTvars oldName newName t =
+  case t of
+    TVar a ->
+      if a == oldName then TVar newName else t
+    TLambda t1 t2 -> TLambda (renameTvars oldName newName t1) (renameTvars oldName newName t2)
+    TType moduleName typeName params ->
+      TType moduleName typeName (fmap (renameTvars oldName newName) params)
+    TRecord fieldMap maybeName ->
+      fieldMap
+        & fmap (\(FieldType index tipe) ->
+            FieldType index (renameTvars oldName newName tipe)
+          )
+        & (\newFieldMap -> TRecord newFieldMap maybeName )
+    TUnit -> t
+    TTuple a b Nothing  -> TTuple (renameTvars oldName newName a) (renameTvars oldName newName b) Nothing
+    TTuple a b (Just c) -> TTuple (renameTvars oldName newName a) (renameTvars oldName newName b) (Just $ renameTvars oldName newName c)
+
+    TAlias moduleName typeName tvars (Holey tipe) ->
+      TAlias moduleName typeName (fmap (\(n,v) -> (n, renameTvars oldName newName t)) tvars) (Holey $ renameTvars oldName newName tipe)
+    TAlias moduleName typeName tvars (Filled tipe) ->
+      TAlias moduleName typeName (fmap (\(n,v) -> (n, renameTvars oldName newName t)) tvars) (Filled $ renameTvars oldName newName tipe)
+
+
+-- Flatten any TVar renames down through the type tree so that when we extract a constraint,
+-- all the TVars are consistent in the top level type signature we extract them for.
+normaliseTvarNames :: Map.Map Data.Name.Name Data.Name.Name -> Type -> Type
+normaliseTvarNames renames t =
+  -- debugHaskellPass "🔵 normaliseTvarNames" (renames, t) $
+  case t of
+    TVar a ->
+      case Map.lookup a renames of
+        Just newName -> TVar newName
+        Nothing -> t
+    TLambda t1 t2 -> TLambda (normaliseTvarNames renames t1) (normaliseTvarNames renames t2)
+    TType moduleName typeName params ->
+      TType moduleName typeName (fmap (normaliseTvarNames renames) params)
+    TRecord fieldMap maybeName ->
+      let newMaybeName =
+            case maybeName of
+              Just name ->
+                case Map.lookup name renames of
+                  Just newName -> Just newName
+                  Nothing -> maybeName
+              Nothing -> maybeName
+      in
+      fieldMap
+        & fmap (\(FieldType index tipe) ->
+            FieldType index (normaliseTvarNames renames tipe)
+          )
+        & (\newFieldMap -> TRecord newFieldMap newMaybeName )
+    TUnit -> t
+    TTuple a b Nothing  -> TTuple (normaliseTvarNames renames a) (normaliseTvarNames renames b) Nothing
+    TTuple a b (Just c) -> TTuple (normaliseTvarNames renames a) (normaliseTvarNames renames b) (Just $ normaliseTvarNames renames c)
+
+    TAlias moduleName typeName tvars atype ->
+      let
+        adjustTvars =
+          tvars & fmap (\x@(aliasName,v) ->
+            case v of
+              TVar originalName ->
+                let normalisedName =
+                      case Map.lookup originalName renames of
+                        Just newName -> newName
+                        Nothing -> originalName
+                in
+                if aliasName /= normalisedName
+                  -- we have a tvar rename, just write the tvar for now
+                  then (aliasName, TVar normalisedName)
+                  -- everything is aligned, carry on
+                  else x
+              _ -> x
+          )
+
+        newRenames =
+          adjustTvars & foldl (\acc (aliasName, v) ->
+            case v of
+              TVar originalName ->
+                if aliasName /= originalName
+                  then Map.insert aliasName originalName acc
+                  else acc
+              _ -> acc
+          ) Map.empty
+
+        newTvars =
+          adjustTvars & fmap (\x@(n,v) ->
+            case v of
+              TVar originalName -> (originalName, v)
+              _ -> x
+            )
+      in
+      case atype of
+        Holey tipe  -> TAlias moduleName typeName newTvars (Holey $ normaliseTvarNames newRenames tipe)
+        Filled tipe -> TAlias moduleName typeName newTvars (Filled $ normaliseTvarNames newRenames tipe)
+
+
+-- Sometimes a tvar is a constrained record (aka "extensible record"), and we need to
+-- generate a type signature that includes the constraint. This function takes a tvar
+-- name and a type, and if the type is a constrained record, it returns a new type
+-- that includes the constraint. Otherwise it returns the original TVar.
+-- See Wire_Record_Extensible4_DB.elm for an example.
+constrainTvar :: Data.Name.Name -> Type -> Type
+constrainTvar tvarName tipe =
+  -- debugHaskellPassWhen (tvarName == "compatibleA") ("🧡 constrainTvar") (tvarName, tipe) $
+  let constraints = getRecordConstraints tvarName tipe
+  in
+  if Map.size constraints > 0 then
+    constraints
+      & Map.toList
+      & imap (\i (name, t) -> (name, FieldType (fromIntegral i) t))
+      & Map.fromList
+      & (\fields -> TRecord fields (Just tvarName))
+  else
+    TVar tvarName
+
+
 encoderAlias :: Bool -> Map.Map Module.Raw I.Interface -> Pkg.Name -> Src.Module -> Decls -> Data.Name.Name -> Alias -> Def
 encoderAlias isTest_ ifaces pkg modul decls aliasName alias@(Alias tvars tipe) =
   let
@@ -399,8 +562,14 @@ encoderAlias isTest_ ifaces pkg modul decls aliasName alias@(Alias tvars tipe) =
     cname = Module.Canonical pkg (Src.getName modul)
     ptvars = tvars & fmap (\tvar -> pvar $ Data.Name.fromChars $ "w3_x_c_" ++ Data.Name.toChars tvar )
 
+    normalisedTvarsType = normaliseTvarNames Map.empty tipe
+
     ptvarsTyped = tvars & fmap (\tvar ->
-        (pvar $ Data.Name.fromChars $ "w3_x_c_" ++ Data.Name.toChars tvar, TLambda (TVar tvar) tLamdera_Wire_Encoder_Holey)
+        let constrainedTvar = constrainTvar tvar normalisedTvarsType
+        in
+        ( pvar $ Data.Name.fromChars $ "w3_x_c_" ++ Data.Name.toChars tvar
+        , TLambda constrainedTvar tLamdera_Wire_Encoder_Holey
+        )
       )
 
     tvarsNameTyped = tvars & fmap (\tvar ->
@@ -416,10 +585,10 @@ encoderAlias isTest_ ifaces pkg modul decls aliasName alias@(Alias tvars tipe) =
 
     ttype = (TType cname aliasName (tvars & fmap TVar))
 
-    namedThingiesFigureThisOut = tvars & fmap (\tvar -> (tvar, ())) & Map.fromList
+    freeVars = tvars & fmap (\tvar -> (tvar, ())) & Map.fromList
 
     -- | TypedDef (A.Located Name) FreeVars [(Pattern, Type)] Expr Type
-    generatedTyped = TypedDef (a (generatedName)) namedThingiesFigureThisOut (ptvarsTyped) generatedBody $
+    generatedTyped = TypedDef (a (generatedName)) freeVars (ptvarsTyped) generatedBody $
       (TLambda
         (TAlias
             -- (Module.Canonical (Name "author" "project") "Test.Wire_Alias_1_Basic")

@@ -315,7 +315,7 @@ decoderForType ifaces cname tipe =
       -- | TRecord (Map.Map Name FieldType) (Maybe Name)
       case maybeExtensible of
         Just extensibleName ->
-          failDecode $ "extensible record type defs are never encoded/decoded directly" -- <> Data.Name.toChars extensibleName
+          lvar $ Data.Name.fromChars $ "w3_x_c_" ++ Data.Name.toChars extensibleName
 
         Nothing ->
           let fields = fieldMap & fieldsToList & List.sortOn (\(name, field) -> name)

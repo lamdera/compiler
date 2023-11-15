@@ -898,22 +898,6 @@ resolveTvar tvarMap t =
       in TAlias moduleName typeName newResolvedTvars (Filled $ resolveTvar newResolvedTvars tipe)
 
 
-resolveTvarRenames tvars tvarNames =
-  tvarNames
-    & fmap (\tvarName ->
-      case List.find (\(tvarName_,tvarType) -> tvarName_ == tvarName) tvars of
-        Just (_,tvarType) ->
-          case tvarType of
-            -- If we looked up the Tvar and got another Tvar, we've got a tvar
-            -- that's not specific higher up, but has been renamed by the parent
-            -- context, so we rename our ForAll clause and thus all the params
-            -- that reference back to it
-            TVar newName -> newName
-            _ -> tvarName
-        Nothing -> tvarName
-      )
-
-
 extractTvarsInTvars tvars =
   tvars
     & concatMap (\(tvarName,tvarType) ->
