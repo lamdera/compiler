@@ -137,6 +137,7 @@ runWithRoot root (Flags maybePort) =
 
       initialArtifacts <- ReplArtifacts.loadRepl
       artifactRef <- newIORef initialArtifacts
+      cArtifacts <- ReplArtifacts.loadCompile
 
       Live.withEnd liveState $
        httpServe (config port) $ gcatchlog "general" $
@@ -153,6 +154,7 @@ runWithRoot root (Flags maybePort) =
         <|> Live.openEditorHandler root
         <|> Live.serveExperimental root
         <|> (SnapCore.path "repl" $ Repl.endpoint artifactRef)
+        <|> (SnapCore.path "compile" $ Compile.endpoint cArtifacts)
         <|> (SnapCore.path "packageList" $ Package.handlePost artifactRef)
         <|> (SnapCore.path "reportOnInstalledPackages" $ Package.reportOnInstalledPackages)
         <|> serveAssets -- Compiler packaged static files
