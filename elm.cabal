@@ -374,7 +374,7 @@ Executable lamdera
         utf8-string,
         vector,
         zip-archive,
-
+        io-streams,
 
         -- @LAMDERA
         -- @TODO need to remove and use Utf8 module instead somehow? Or compat it.
