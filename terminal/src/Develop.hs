@@ -61,6 +61,8 @@ import qualified Endpoint.Package as Package
 
 import Data.IORef
 
+import qualified Endpoint.Compile as Compile
+
 -- RUN THE DEV SERVER
 
 
