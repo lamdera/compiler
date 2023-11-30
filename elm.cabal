@@ -324,7 +324,9 @@ Executable lamdera
         Lamdera.Evergreen.TestMigrationHarness
         Lamdera.Evergreen.TestMigrationGenerator
         Endpoint.Repl
-        Artifacts
+        Endpoint.Compile
+        Endpoint.Package
+        ReplArtifacts
         Cors
 
 
