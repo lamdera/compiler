@@ -264,12 +264,6 @@ Executable lamdera
         Lamdera.Types
         Lamdera.Update
         Lamdera.Version
-        Lamdera.Wire2.Core
-        Lamdera.Wire2.Decoder
-        Lamdera.Wire2.Encoder
-        Lamdera.Wire2.Graph
-        Lamdera.Wire2.Helpers
-        Lamdera.Wire2.Interfaces
         Lamdera.Wire3.Core
         Lamdera.Wire3.Decoder
         Lamdera.Wire3.Encoder
@@ -298,8 +292,7 @@ Executable lamdera
 
         -- Lamdera Legacy --
         Lamdera.Legacy
-        -- Wire.Source
-        -- Wire.Source2
+        -- Wire.Source3
 
         -- Fusion
         -- Fusion.Types
