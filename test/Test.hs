@@ -229,9 +229,9 @@ liveReloadLive = do
 
   -- let p = "/Users/mario/lamdera/test/v1"
   -- let p = "/Users/mario/dev/projects/bento-life"
---  let p = "/Users/mario/dev/projects/lamdera-dashboard"
---  let p = "/Users/carlson/dev/elm-notebook/elm-notebook-poc"
-  let p = "/Users/carlson/dev/elm-notebook/elm-notebook-v2"
+  --  let p = "/Users/mario/dev/projects/lamdera-dashboard"
+  --  let p = "/Users/carlson/dev/elm-notebook/elm-notebook-poc"
+  let p = "/Users/carlson/dev/elm-work/notebook/elm-notebook-v2"
 
   -- let p = "/Users/mario/dev/test/lamdera-init"
   -- let p = "/Users/mario/dev/test/nu-ashworld-lamdera"
