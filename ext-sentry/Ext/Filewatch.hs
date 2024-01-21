@@ -3,7 +3,7 @@
 module Ext.Filewatch where
 
 import Ext.Common
-import System.FSNotify
+import qualified System.FSNotify as FSNotify
 import Control.Concurrent (threadDelay)
 import Control.Monad (forever)
 import qualified Data.List as List
@@ -12,8 +12,10 @@ import qualified System.FilePath as FP
 
 
 watch :: FilePath -> ([FilePath] -> IO ()) -> IO ()
-watch root action =
-  trackedForkIO "Ext.Filewatch.watch" $ withManager $ \mgr -> do
+watch root action = do
+  let config = FSNotify.defaultConfig { FSNotify.confOnHandlerException = \e -> Ext.Common.debug ("fsnotify: handler threw exception: " <> show e) }
+
+  trackedForkIO "Ext.Filewatch.watch" $ FSNotify.withManagerConf config $ \mgr -> do
     trigger <-
       Debounce.new
         Debounce.Args
@@ -28,20 +30,20 @@ watch root action =
 
     Ext.Common.debug $ "👀 file watch booting for " ++ show root
     -- start a watching job (in the background)
-    _ <- watchTree
+    _ <- FSNotify.watchTree
       mgr          -- manager
       root         -- directory to watch
       (const True) -- predicate
       (\e -> do
         let
           filepath = case e of
-            Added f _ _ -> f
-            Modified f _ _ -> f
-            ModifiedAttributes f _ _ -> f
-            Removed f _ _ -> f
-            WatchedDirectoryRemoved f _ _ -> f
-            CloseWrite f _ _ -> f
-            Unknown f _ _ _ -> f
+            FSNotify.Added f _ _ -> f
+            FSNotify.Modified f _ _ -> f
+            FSNotify.ModifiedAttributes f _ _ -> f
+            FSNotify.Removed f _ _ -> f
+            FSNotify.WatchedDirectoryRemoved f _ _ -> f
+            FSNotify.CloseWrite f _ _ -> f
+            FSNotify.Unknown f _ _ _ -> f
 
           -- @TODO it would be better to not listen to these folders in the `watchTree` when available
           -- https://github.com/haskell-fswatch/hfsnotify/issues/101
