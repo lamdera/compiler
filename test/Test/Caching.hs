@@ -58,7 +58,7 @@ suite = tests $
 
 
             will_fail_on_elm_caches =
-                Html.w2_encode_Html
+                Html.w3_encode_Html
         |]
 
         withDebug $ captureProcessOutput $ Lamdera.Compile.makeDev project ["src/Main.elm"]

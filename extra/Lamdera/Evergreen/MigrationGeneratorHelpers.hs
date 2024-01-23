@@ -540,6 +540,7 @@ migrationWrapperForType t =
     "ToBackend"     -> "MsgMigrated"
     "BackendMsg"    -> "MsgMigrated"
     "ToFrontend"    -> "MsgMigrated"
+    _               -> error $ "migrationWrapperForType: impossible type: " <> show t
 
 migrationTypeForType :: N.Name -> Text
 migrationTypeForType t =
@@ -550,6 +551,7 @@ migrationTypeForType t =
     "ToBackend"     -> "MsgMigration"
     "BackendMsg"    -> "MsgMigration"
     "ToFrontend"    -> "MsgMigration"
+    _               -> error $ "migrationTypeForType: impossible type: " <> show t
 
 msgForType :: N.Name -> Text
 msgForType t =
@@ -560,6 +562,7 @@ msgForType t =
     "ToBackend"     -> "BackendMsg"
     "BackendMsg"    -> "BackendMsg"
     "ToFrontend"    -> "FrontendMsg"
+    _               -> error $ "msgForType: impossible type: " <> show t
 
 unchangedForType :: N.Name -> Text
 unchangedForType t =
@@ -570,9 +573,7 @@ unchangedForType t =
     "ToBackend"     -> "MsgUnchanged"
     "BackendMsg"    -> "MsgUnchanged"
     "ToFrontend"    -> "MsgUnchanged"
-
-
-nothingTODO = Nothing
+    _               -> error $ "unchangedForType: impossible type: " <> show t
 
 
 findTypeDef :: Can.Type -> Interfaces -> Maybe TypeDef

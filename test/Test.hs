@@ -94,13 +94,31 @@ For more information on how to use the GHCi debugger, see the GHC User's Guide.
 
 -}
 
-
-
 -- Current target for ghci :rr command. See ~/.ghci config file, which should contain
 -- something like `:def rr const $ return $ unlines [":r","Test.target"]`
 
 -- target = Test.all
 -- target = checkProject
+--target =
+--  Test.Check.checkWithParams "/Users/mario/dev/projects/lamdera-dashboard"
+  -- Test.Check.checkWithParams "/Users/mario/lamdera/test/sheep-game" "sheep-game"
+
+-- target = buildTestHarnessToProductionJs
+-- target = checkProjectCompiles
+-- target = previewProject
+-- target = liveReloadLive
+target = Test.all
+-- target = checkUserConfig
+-- target = Test.Wire.buildAllPackages
+-- target = Lamdera.CLI.Login.run () ()
+-- target = Dir.withCurrentDirectory "/Users/mario/dev/projects/lamdera-test" $ Lamdera.CLI.Reset.run () ()
+-- target = Lamdera.Diff.run
+-- target = Lamdera.ReverseProxy.start
+-- target = Test.Check.mockBuildSh "/Users/mario/lamdera-deploys/test-local-v1" "test-local"
+-- target = Test.Check.mockBuildSh "/Users/mario/dev/test/lamdera-init" "test-local"
+-- target = Test.Caching.all
+
+-- target = EasyTest.run Test.WebGL.suite
 
 
 checkProject = do
@@ -123,40 +141,6 @@ previewProject = do
   Dir.withCurrentDirectory p $ Lamdera.CLI.Deploy.run () ()
 
 
---target =
---  Test.Check.checkWithParams "/Users/mario/dev/projects/lamdera-dashboard"
--- target =
---   Test.Check.checkWithParams "/Users/mario/dev/projects/lamdera-dashboard"
-  -- Test.Check.checkWithParams "/Users/mario/lamdera/test/sheep-game" "sheep-game"
-
--- target = buildTestHarnessToProductionJs
--- target = checkProjectCompiles
--- target = previewProject
-target = liveReloadLive
--- target = Test.Wire.all
--- target = checkUserConfig
--- target = Test.Wire.buildAllPackages
--- target = Lamdera.CLI.Login.run () ()
--- target = Dir.withCurrentDirectory "/Users/mario/dev/projects/lamdera-test" $ Lamdera.CLI.Reset.run () ()
--- target = Lamdera.Diff.run
--- target = Lamdera.ReverseProxy.start
--- target = Test.Check.mockBuildSh "/Users/mario/lamdera-deploys/test-local-v1" "test-local"
--- target = Test.Check.mockBuildSh "/Users/mario/dev/test/lamdera-init" "test-local"
--- target = Test.Caching.all
-
--- target = do
---   let p = "/Users/mario/dev/projects/elm-pages/examples/end-to-end"
---   Dir.setCurrentDirectory p
---   Dir.setCurrentDirectory p
---   withCurrentDirectory p $
---     Make.run ["app/Route/Index.elm"]
---           $ Make.Flags
---               { _debug = False
---               , _optimize = False
---               , _output = Nothing
---               , _report = Nothing
---               , _docs = Nothing
---               }
 
 checkProjectCompiles = do
   setEnv "LDEBUG" "1"
@@ -166,27 +150,20 @@ checkProjectCompiles = do
 
   --  Lamdera.CLI.Check.checkUserProjectCompiles runs in async so we don't get the trace
       -- root = "/Users/mario/dev/test/style-elements"
-      root = "/Users/mario/dev/test/lamdera-init"
-      scaffold = "src/Frontend.elm"
+      -- root = "/Users/mario/dev/test/lamdera-init"
+      -- root = "/Users/mario/dev/test/cdvienne-lamdera-fail/xbus-gui"
+      -- scaffold = "src/Main.elm"
+      root = "/Users/mario/dev/test/cdvienne-lamdera-fail/xbus-gui/elm-protoc-types"
+      scaffold = "src/Proto/Google/Protobuf.elm"
+
   -- let root = "/Users/mario/dev/test/realia/staging"
   --     scaffold = "src/LFR.elm"
   -- let root = "/Users/mario/dev/projects/elmcraft"
   --     scaffold = "elm-stuff/elm-pages/.elm-pages/Main.elm"
       tmp = lamderaCache root <> "/tmp.js"
 
+  Ext.Common.setProjectRoot root
   Lamdera.Compile.makeDev root [scaffold]
-
-  -- Dir.withCurrentDirectory root $
-  --   Make.run_cleanup (pure ()) [scaffold] $
-  --     Make.Flags
-  --       { _debug = False
-  --       , _optimize = True
-  --       -- We don't use Make.DevNull as it does not actually compile to JS,
-  --       -- thus we never get warnings about Debug.* usage which we want.
-  --       , _output = Just (Make.JS tmp)
-  --       , _report = Nothing
-  --       , _docs = Nothing
-  --       }
 
 
 -- target = do
@@ -227,25 +204,9 @@ liveReloadLive = do
   setEnv "LDEBUG" "1"
   setEnv "EXPERIMENTAL" "1"
 
-  -- let p = "/Users/mario/lamdera/test/v1"
-  -- let p = "/Users/mario/dev/projects/bento-life"
-  --  let p = "/Users/mario/dev/projects/lamdera-dashboard"
-  --  let p = "/Users/carlson/dev/elm-notebook/elm-notebook-poc"
-  let p = "/Users/carlson/dev/elm-work/notebook/elm-notebook-v2"
-
+  let p = "/Users/mario/lamdera/test/v1"
   -- let p = "/Users/mario/dev/test/lamdera-init"
-  -- let p = "/Users/mario/dev/test/nu-ashworld-lamdera"
-  -- let p = "/Users/mario/dev/test/town-collab"
-
-  -- let p = "/Users/mario/dev/projects/otstats"
-  -- let p = "/Users/mario/work/codespecs"
   -- let p = "/Users/mario/lamdera/overrides/packages/elm/bytes/1.0.8/benchmarks"
-
-  -- Wire debugging feature in LocalDev WIP
-  -- let p = "/Users/mario/dev/test/wire-failure/230623-best-web-vitals/best-web-vitals-v10"
-  -- let p = "/Users/mario/dev/test/wire-failure/230623-best-web-vitals/best-web-vitals-v9"
-  -- let p = "/Users/mario/dev/test/wire-failure/230623-best-web-vitals/newv1snaps"
-  -- let p = "/Users/mario/dev/test/best-web-vitals"
 
   -- rmdir "/Users/mario/.elm"
   -- rmdir $ p <> "/elm-stuff"
@@ -282,8 +243,6 @@ liveReloadLive = do
   --   "src/Bytes/Encode.elm"
   --   "withDebug"
 
---target = EasyTest.run Test.WebGL.suite
-
 all =
   EasyTest.run allTests
 
@@ -300,7 +259,8 @@ allTests =
     , scope "Test.Lamdera -> " $ Test.Lamdera.suite
     , scope "Test.Snapshot -> " $ Test.Snapshot.suite
     , scope "Test.Wire -> " $ Test.Wire.suite
-    , scope "Test.Ext.ElmPages.Check -> " $ Test.Ext.ElmPages.Check.suite
+    -- Disable temporarily as the cache busting is crazy aggressive meaning 100mb redownload each run :|
+    -- , scope "Test.Ext.ElmPages.Check -> " $ Test.Ext.ElmPages.Check.suite
     , scope "Test.TypeHashes -> " $ Test.TypeHashes.suite
     , scope "Test.Check -> " $ Test.Check.suite
     , scope "Lamdera.Evergreen.TestMigrationHarness -> " $ Lamdera.Evergreen.TestMigrationHarness.suite

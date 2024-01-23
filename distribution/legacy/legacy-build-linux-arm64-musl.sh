@@ -1,9 +1,15 @@
+# This build script runs entirely within docker, which makes using the caches effectively stupidly tricky,
+# invalidates them often, and makes it really slow and painful to debug any build issues as we're always
+# going from scratch. So this is here for posterity, but we're now using a "run bash in the slim Docker
+# base environment with a mounted volume for files & caches" method instead. Builds down from 20m to 60s.
+
+
 #!/usr/bin/env bash
 set -ex                                                   # Be verbose and exit immediately on error instead of trying to continue
 
 source "common.sh"
 os="linux"
-arch="x86_64"
+arch="arm64"
 
 buildTag="lamdera-$version-$os-$arch"
 dist=distribution/dist
@@ -15,14 +21,14 @@ cd "$scriptDir/.."                                        # Move into the projec
 git submodule init && git submodule update
 
                                                           # Build in Docker
-docker build --progress=plain --platform linux/amd64 \
+docker -H ssh://root@lamdera-falkenstein-arm64-1 build --progress=plain --platform linux/$arch \
   -t "$buildTag:latest" \
-  -f distribution/docker/$arch-musl.dockerfile .
+  -f distribution/legacy/$arch-musl.dockerfile .
 
 mkdir -p distribution/dist                                # Ensure the dist directory is present
 
 
-bin=distribution/dist/$buildTag                           # Copy built binary to dist
+                                                          # Copy built binary to dist
 docker run --rm --entrypoint cat $buildTag /lamdera/lamdera > $bin
 chmod a+x $bin
 file $bin

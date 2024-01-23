@@ -9,6 +9,10 @@ jobs:
   build-packages:
     name: Build Windows Libraries
     runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+
     steps:
       - uses: actions/checkout@v3
         with:
@@ -41,7 +45,7 @@ jobs:
             ${{ runner.os }}-
 
       # Now setup Haskell, given we're comitted to actually doing a lib build
-      - uses: haskell/actions/setup@v2
+      - uses: haskell-actions/setup@v2
         if: steps.cache.outputs.cache-hit != 'true'
         with:
           enable-stack: true
@@ -68,7 +72,7 @@ jobs:
       - uses: actions/checkout@v3
         with:
           submodules: true
-      - uses: haskell/actions/setup@v2
+      - uses: haskell-actions/setup@v2
         with:
           enable-stack: true
           stack-no-global: true
@@ -94,10 +98,12 @@ jobs:
           # https://gitlab.haskell.org/ghc/ghc/-/issues/20010#note_359766
           command: stack install --ghc-options '-optl"-Wl,-Bstatic,-lstdc++,-lgcc_s,-lwinpthread,-Bdynamic"'
 
-      - run: |
+      - name: Copy binary files, dlls & check
+        run: |
           mkdir lamdera
           cp ~/AppData/Roaming/local/bin/lamdera.exe lamdera/lamdera.exe
           cp distribution/dlls/* lamdera/
+          ./lamdera/lamdera.exe --version-full
 
       - name: Create distribution zip
         uses: vimtor/action-zip@v1

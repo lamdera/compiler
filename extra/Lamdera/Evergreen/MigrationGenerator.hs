@@ -7,6 +7,7 @@ module Lamdera.Evergreen.MigrationGenerator where
 
 import Data.Map (Map)
 import qualified Data.Map as Map
+import qualified Sanity
 import qualified Data.Set as Set
 import qualified Data.List as List
 import qualified Data.Text as T
@@ -45,7 +46,7 @@ betweenVersions coreTypeDiffs oldVersion newVersion root = do
       case Map.lookup (N.fromChars moduleNameString) interfaces of
         Just interface -> do
           debug $ "starting generatefor"
-          generateFor coreTypeDiffs oldVersion newVersion interfaces (interfaces Map.! (N.fromChars $ "Evergreen.V" <> show newVersion <> ".Types"))
+          generateFor coreTypeDiffs oldVersion newVersion interfaces (interfaces Sanity.! (N.fromChars $ "Evergreen.V" <> show newVersion <> ".Types"))
 
         Nothing ->
           error $ "Fatal: could not find the module `" <> moduleNameString <> "`, please report this issue in Discord with your project code."
@@ -621,6 +622,9 @@ canToMigration_ oldVersion newVersion scope interfaces recursionSet typeNew type
                 , Set.unions [imps1,imps2,imps3]
                 , mergeAllSubDefs [subDefs1,subDefs2,subDefs3]
                 )
+        _ ->
+          -- the coreTypesMatch guard should make this impossible
+          error $ "canToMigration_: impossible type mismatch! Please report this gen issue." ++ show (typeOld, typeNew)
 
     Can.TUnit ->
       xMigrationNested ("()", Set.empty, Map.empty)
@@ -761,7 +765,8 @@ canAliasToMigration oldVersion newVersion scope interfaces recursionSet (typeNew
       , imps
       , subDefs
       )
-
+canAliasToMigration oldVersion newVersion scope interfaces recursionSet typeNew typeOld tvarMapOld tvarMapNew oldValueRef =
+  error $ "canAliasToMigration: impossible alias type! Please report this gen issue: " <> show (typeNew, typeOld)
 
 recordMigration :: Int -> Int -> ModuleName.Canonical -> Interfaces -> RecursionSet -> Can.Type -> Can.Type -> TvarMap -> TvarMap -> Text -> Migration
 recordMigration oldVersion newVersion scope interfaces recursionSet typeNew@(Can.TRecord newFields isPartial) typeOld tvarMapOld tvarMap oldValueRef =
@@ -857,6 +862,8 @@ recordMigration oldVersion newVersion scope interfaces recursionSet typeNew@(Can
             , fieldMigrations & fmap (migrationFnImports . snd) & Set.unions
             , fieldMigrations & fmap snd & allSubDefs
             )
+recordMigration oldVersion newVersion scope interfaces recursionSet typeNew typeOld tvarMapOld tvarMap oldValueRef =
+  error $ "recordMigration: impossible record type! Please report this gen issue."
 
 
 typeToMigration :: Int -> Int -> ModuleName.Canonical -> Interfaces -> RecursionSet -> Can.Type -> Can.Type -> TvarMap -> TvarMap -> Text -> Migration
@@ -979,7 +986,9 @@ typeToMigration oldVersion newVersion scope interfaces recursionSet_ typeNew@(Ca
             unimplemented "typeToMigration" ("I came across a new `" <> qualifiedTypeName typeNew <> "` type but couldn't load the definition. This is probably a hidden package type. I need you to write this migration.")
           (Nothing, _) ->
             unimplemented "typeToMigration" ("I came across an old `" <> qualifiedTypeName typeOld <> "` type but couldn't load the definition. This is probably a hidden package type. I need you to write this migration.")
-
+          context -> error $ "typeToMigration: impossible! Please report this gen issue: " <> show context
+typeToMigration oldVersion newVersion scope interfaces recursionSet typeNew typeOld tvarMapOld tvarMapNew oldValueRef =
+  error $ "typeToMigration: impossible! Please report this gen issue: " <> show (typeNew, typeOld)
 
 migrateTypeDef typeOld typeNew oldVersion newVersion interfaces tvarMapOld tvarMapNew recursionSet =
   case (typeOld, typeNew) of
@@ -1038,6 +1047,8 @@ redoTvarMap tvarMap tipe typeDef =
           -- uhhhhh?? this can't be right.
           -- debugHaskellPass "redoTvarMap_alias" (tipe, typeDef) $
           tvarMap_
+        _ ->
+          error $ "redoTvarMap: impossible tipe! Please report this gen issue: " <> show tipe
   in
   newTvarMap
 
@@ -1093,3 +1104,5 @@ handleSeenRecursiveType oldVersion newVersion scope identifier@(author, pkg, new
     , subDefs
     )
     & debugMigrationIncludes_ "handleSeenRecursiveType" (typeOld, typeNew)
+handleSeenRecursiveType oldVersion newVersion scope identifier@(author, pkg, newModule, _) interfaces recursionSet typeNew typeOld tvarMapOld tvarMapNew oldValueRef =
+  error $ "handleSeenRecursiveType: impossible recursive type! Please report this gen issue: " <> show (typeNew, typeOld)

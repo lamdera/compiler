@@ -3,6 +3,7 @@ on:
     branches:
       - distribute
       - macos
+      - macos-arm64
 
 name: Build MacOS arm64
 jobs:
@@ -22,6 +23,5 @@ jobs:
       - name: Run distribution script
         run: |
           test -x "$(which ghcup)" && curl https://downloads.haskell.org/~ghcup/aarch64-apple-darwin-ghcup -o ~/.local/bin/ghcup && chmod a+x ~/.local/bin/ghcup
-          brew install llvm@13
           cd distribution
           ./build-macos-arm64.sh

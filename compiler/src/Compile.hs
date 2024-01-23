@@ -28,11 +28,6 @@ import qualified Type.Solve as Type
 
 -- import System.IO.Unsafe (unsafePerformIO)
 
-
--- @DEPRECATED for alpha12 release migration only
-import qualified Lamdera.Wire2.Core
-import qualified Lamdera.Wire2.Interfaces
-
 import qualified Lamdera.Wire3.Core
 import qualified Lamdera.Wire3.Interfaces
 import qualified Lamdera.Wire3.Helpers as Lamdera.Wire
@@ -58,22 +53,23 @@ data Artifacts =
 
 compile :: Pkg.Name -> Map.Map ModuleName.Raw I.Interface -> Src.Module -> Either E.Error Artifacts
 compile pkg ifaces modul = do
+ -- Allow global opt-out of Lamdera compile modifications
+ Lamdera.alternativeImplementationWhen (not Lamdera.isWireEnabled_) (compile_ pkg ifaces modul) $ do
+
   -- @TEMPORARY debugging
   -- Inject stub definitions for wire functions, so the canonicalize phase can run
   -- Necessary for user-code which references yet-to-be generated functions
   let modul_ =
         modul
           & Lamdera.Wire3.Interfaces.modifyModul pkg ifaces
-          & Lamdera.Wire2.Interfaces.modifyModul pkg ifaces
-      moduleName = T.pack $ Data.Utf8.toChars $ Src.getName modul
+      -- moduleName = T.pack $ Data.Utf8.toChars $ Src.getName modul
 
   -- ()          <- debugPassText "starting canonical" "" (pure ())
   canonical0  <- canonicalize pkg ifaces modul_
   -- ()          <- debugPassText "starting canonical2" moduleName (pure ())
 
-  -- Add Canonical Wire gens, i.e. the `w2_[en|de]code_TYPENAME` functions
-  canonical1 <- Lamdera.Wire3.Core.addWireGenerations canonical0 pkg ifaces modul_
-  canonical2 <- Lamdera.Wire2.Core.addWireGenerations canonical1 pkg ifaces modul_
+  -- Add Canonical Wire gens, i.e. the `w3_[en|de]code_TYPENAME` functions
+  canonical2 <- Lamdera.Wire3.Core.addWireGenerations canonical0 pkg ifaces modul_
 
   -- () <- unsafePerformIO $ do
   --   case (pkg, Src.getName modul) of

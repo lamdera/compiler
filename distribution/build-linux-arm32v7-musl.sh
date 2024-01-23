@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -ex                                                   # Be verbose and exit immediately on error instead of trying to continue
 
-version="1.2.0"
+source "common.sh"
 os="linux"
 arch="arm32v7"
 

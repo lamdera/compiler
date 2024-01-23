@@ -15,6 +15,8 @@ import Data.Foldable (traverse_)
 import qualified File
 
 
+import Lamdera ((&))
+import qualified Lamdera
 
 -- BACKGROUND WRITER
 
@@ -36,7 +38,7 @@ writeBinary :: (Binary.Binary a) => Scope -> FilePath -> a -> IO ()
 writeBinary (Scope workList) path value =
   do  mvar <- newEmptyMVar
       _ <- forkIO (File.writeBinary path value >> putMVar mvar ())
+        & Lamdera.alternativeImplementation (forkIO (Lamdera.writeBinaryValueStrict path value >> putMVar mvar ()))
       oldWork <- takeMVar workList
       let !newWork = mvar:oldWork
       putMVar workList newWork
-

@@ -22,6 +22,7 @@ run () () = do
   debug_ "Starting reset..."
 
   elmHome <- PerUserCache.getElmHome
+  legacyElmHome <- Dir.getAppUserDataDirectory "lamdera"
   root <- getProjectRootMaybe
   let
     elmStuff = (root & withDefault "./") </> "elm-stuff"
@@ -38,6 +39,7 @@ run () () = do
 
   planNukeFile lamderaCliLogin ""
   planNukeDir elmStuff ""
+  planNukeDir legacyElmHome "(Legacy)"
   planNukeDir lamderaLegacy "(Legacy)"
 
   progress ""
@@ -56,14 +58,14 @@ run () () = do
           progress $ "Removing artifacts in " <> elmHome
           let packageDir = elmHome </> Lamdera.Version.elm </> "packages"
           onlyWhen_ (doesDirectoryExist packageDir) $ do
-            c $ "find " <> packageDir <> " | grep artifacts.dat | xargs rm"
-            c $ "find " <> packageDir <> " | grep artifacts.x.dat | xargs rm"
-
+            c $ "find " <> packageDir <> " | grep artifacts.dat | xargs rm -r"
+            c $ "find " <> packageDir <> " | grep artifacts.x.dat | xargs rm -r"
         else do
           nukeDir elmHome
 
       nukeFile lamderaCliLogin
       nukeDir elmStuff
+      nukeDir legacyElmHome
       nukeDir lamderaLegacy
 
     else

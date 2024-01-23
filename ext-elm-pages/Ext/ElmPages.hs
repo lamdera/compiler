@@ -32,7 +32,7 @@ isElmPages = do
 
 {-# NOINLINE isElmPages_ #-}
 isElmPages_ :: Bool
-isElmPages_ = unsafePerformIO $ isDebug
+isElmPages_ = unsafePerformIO $ isElmPages
 
 
 

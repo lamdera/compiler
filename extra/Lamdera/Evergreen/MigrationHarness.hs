@@ -128,7 +128,6 @@ decodeAndUpgradeFor migrationSequence nextVersion valueType = do
         [text|
             $nextVersion_ ->
                 decodeType $valueTypeInt version bytes T$nextVersion_.w3_decode_$valueType
-                    |> fallback (\_ -> decodeType $valueTypeInt version bytes T$nextVersion_.w2_decode_$valueType)
                     |> upgradeIsCurrent
                     |> otherwiseError
         |]
@@ -262,7 +261,6 @@ migrationForType migrationSequence migrationsForVersion startVersion finalVersio
         then
           [text|
             decodeType $valueTypeInt $finalVersion_ bytes T$finalVersion_.w3_decode_$tipe
-                |> fallback (\_ -> decodeType $valueTypeInt $finalVersion_ bytes T$finalVersion_.w2_decode_$tipe)
                 |> upgradeSucceeds
                 |> otherwiseError
           |]
@@ -278,7 +276,6 @@ migrationForType migrationSequence migrationsForVersion startVersion finalVersio
         then
           [text|
             decodeType $valueTypeInt $startVersion_ bytes T$startVersion_.w3_decode_$tipe
-                |> fallback (\_ -> decodeType $valueTypeInt $startVersion_ bytes T$startVersion_.w2_decode_$tipe)
                 $intermediateMigrationsFormatted
                 |> upgradeSucceeds
                 |> otherwiseError
@@ -320,6 +317,7 @@ intermediateMigration allMigrations tipe from to finalVersion =
         "ToBackend"     -> "thenMigrateMsg"
         "BackendMsg"    -> "thenMigrateMsg"
         "ToFrontend"    -> "thenMigrateMsg"
+        _               -> error $ "intermediateMigration: impossible tipe: " <> show tipe
     kindForType =
       case tipe of
         "BackendModel"  -> "Model"
@@ -328,6 +326,7 @@ intermediateMigration allMigrations tipe from to finalVersion =
         "ToBackend"     -> "Msg"
         "BackendMsg"    -> "Msg"
         "ToFrontend"    -> "Msg"
+        _               -> error $ "intermediateMigration: impossible tipe: " <> show tipe
 
     lastMigrationBefore targetVersion =
       allMigrations

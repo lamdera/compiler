@@ -295,17 +295,19 @@ addDef def_ decls_ =
 
 
 addRecDef :: [Def] -> Decls -> Decls
-addRecDef (def_:defs_) decls_ =
-  case decls_ of
-    Declare def decls ->
-      DeclareRec def_ defs_ (Declare def decls)
+addRecDef list decls_ =
+  case list of
+    (def_:defs_) ->
+      case decls_ of
+        Declare def decls ->
+          DeclareRec def_ defs_ (Declare def decls)
 
-    DeclareRec def defs decls ->
-      DeclareRec def_ defs_ (DeclareRec def defs decls)
+        DeclareRec def defs decls ->
+          DeclareRec def_ defs_ (DeclareRec def defs decls)
 
-    SaveTheEnvironment ->
-      DeclareRec def_ defs_ SaveTheEnvironment
-
+        SaveTheEnvironment ->
+          DeclareRec def_ defs_ SaveTheEnvironment
+    _ -> error $ "addRecDef: impossible list: " ++ show list
 
 removeDef :: Def -> Decls -> Decls
 removeDef def_ decls_ =
@@ -407,8 +409,19 @@ namedTodo modul functionName =
 a v =
   A.at (A.Position 0 0) (A.Position 0 10) v
 
+-- Refer to Lamdera.Wire3.endianness
+endianness =
+  a (VarForeign mLamdera_Wire "endianness"
+        (Forall
+           Map.empty
+           (TType
+              (Module.Canonical (Name "elm" "bytes") "Bytes")
+              "Endianness"
+              [])))
+
 
 encodeSequenceWithoutLength list =
+  -- @TODO we could optimise all sequences of length 1 to not use the sequence encoding ?
   (a (Call (a (VarForeign mLamdera_Wire "encodeSequenceWithoutLength"
               (Forall
                  Map.empty
@@ -423,7 +436,29 @@ encodeSequenceWithoutLength list =
 
 
 encodeUnsignedInt8 value =
-  (a (Call (a (VarForeign mLamdera_Wire "encodeUnsignedInt8"
+  (a (Call (a (VarForeign mBytes_Encode "unsignedInt8"
+                (Forall
+                   Map.empty
+                   (TLambda
+                      (TType (Module.Canonical (Name "elm" "core") "Basics") "Int" [])
+                      tElm_Bytes_Encoder))))
+          [value]))
+
+
+encodeUnsignedInt16 value =
+  (a (Call (a (VarForeign mBytes_Encode "unsignedInt16"
+                (Forall
+                   Map.empty
+                   (TLambda
+                      ((TType (Module.Canonical (Name "elm" "bytes") "Bytes") "Endianness" []))
+                      (TLambda
+                          (TType (Module.Canonical (Name "elm" "core") "Basics") "Int" [])
+                          tElm_Bytes_Encoder)))))
+          [endianness, value]))
+
+
+encodeInt value =
+  (a (Call (a (VarForeign mLamdera_Wire "encodeInt"
                 (Forall
                    Map.empty
                    (TLambda
@@ -433,7 +468,28 @@ encodeUnsignedInt8 value =
 
 
 decodeUnsignedInt8 =
-  (a (VarForeign mLamdera_Wire "decodeUnsignedInt8"
+  (a (VarForeign mBytes_Decode "unsignedInt8"
+        (Forall
+           Map.empty
+           (tElm_Bytes_Decoder tInt)
+        )
+  ))
+
+decodeUnsignedInt16 =
+  a (Call (a (VarForeign mBytes_Decode "unsignedInt16"
+        (Forall
+           Map.empty
+           (TLambda
+              (TType (Module.Canonical (Name "elm" "bytes") "Bytes") "Endianness" [])
+              (tElm_Bytes_Decoder tInt)
+           )
+        )))
+    [endianness]
+  )
+
+
+decodeInt =
+  (a (VarForeign mLamdera_Wire "decodeInt"
         (Forall
            Map.empty
            (TAlias
@@ -445,8 +501,6 @@ decodeUnsignedInt8 =
                     (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
                     "Decoder"
                     [TType (Module.Canonical (Name "elm" "core") "Basics") "Int" []]))))))
-
-
 
 
 decodeTime =
@@ -617,6 +671,8 @@ int value =
 str value =
   a (Str value)
 
+
+list :: [Expr] -> A.Located Expr_
 list values =
   a (List values)
 
@@ -646,18 +702,19 @@ lvar n =
 
 -- Patterns
 
-pint i =
-  a (PInt i)
+pint i = a (PInt i)
+pvar n = a (PVar n)
+pAny_  = a (PAnything)
 
-pvar n =
-  a (PVar n)
+call fn args = (a (Call fn args))
 
-pAny_ =
-  a (PAnything)
+tInt = (TType (Module.Canonical (Name "elm" "core") "Basics") "Int" [])
 
-call fn args =
-  (a (Call fn args))
+tElm_Bytes_Encoder =
+  (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Encode") "Encoder" [])
 
+tElm_Bytes_Decoder v =
+  (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [v])
 
 tLamdera_Wire_Encoder =
   (TAlias
@@ -676,8 +733,9 @@ tLamdera_Wire_Encoder_Holey =
      (Holey (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Encode") "Encoder" [])))
 
 
-mLamdera_Wire =
-  (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire3")
+mLamdera_Wire = (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire3")
+mBytes_Encode = (Module.Canonical (Name "elm" "bytes") "Bytes.Encode")
+mBytes_Decode = (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
 
 
 foldlPairs fn list =
@@ -838,22 +896,6 @@ resolveTvar tvarMap t =
     TAlias moduleName typeName tvars (Filled tipe) ->
       let newResolvedTvars = tvars & fmap (\(n, t) -> (n, resolveTvar tvarMap t))
       in TAlias moduleName typeName newResolvedTvars (Filled $ resolveTvar newResolvedTvars tipe)
-
-
-resolveTvarRenames tvars tvarNames =
-  tvarNames
-    & fmap (\tvarName ->
-      case List.find (\(tvarName_,tvarType) -> tvarName_ == tvarName) tvars of
-        Just (_,tvarType) ->
-          case tvarType of
-            -- If we looked up the Tvar and got another Tvar, we've got a tvar
-            -- that's not specific higher up, but has been renamed by the parent
-            -- context, so we rename our ForAll clause and thus all the params
-            -- that reference back to it
-            TVar newName -> newName
-            _ -> tvarName
-        Nothing -> tvarName
-      )
 
 
 extractTvarsInTvars tvars =

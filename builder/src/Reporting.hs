@@ -377,6 +377,9 @@ toFinalMessage done result =
         Exit.BuildProjectProblem _ ->
           "Detected a problem."
 
+        Exit.BuildLamderaProblem _ _ _ ->
+          "Detected a Lamdera problem."
+
 
 
 -- GENERATE

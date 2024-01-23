@@ -54,6 +54,7 @@ run def args =
   case def of
     Def name pargs expr ->
       evaluate_ expr args
+    _ -> error "Expecting a def!"
 
 
 evaluate_ expr args =
@@ -61,6 +62,7 @@ evaluate_ expr args =
     Binop "+" _ _ _ left right ->
       case (evaluate_ left args, evaluate_ right args) of
         (Int l, Int r) -> Int (l + r)
+        _ -> error $ "Binop(+) unexpected values: " ++ show expr
 
     Binop "==" _ _ _ left right ->
       case (evaluate_ left args, evaluate_ right args) of

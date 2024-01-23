@@ -42,8 +42,8 @@ import Lamdera.Wire3.Graph
 
 import qualified Ext.ElmFormat
 
-runTests isTest debugName pkg modul decls generatedName generated canonicalValue wiregen =
-  if isTest
+runTests isTest_ debugName pkg modul decls generatedName generated canonicalValue wiregen =
+  if isTest_
     then
       unsafePerformIO $ do
       let
@@ -73,18 +73,18 @@ runTests isTest debugName pkg modul decls generatedName generated canonicalValue
 
             else do
               -- debugHaskellPass ("🏁 Actual value input for " <> (T.pack $ Data.Name.toChars generatedName)) (canonicalValue) (pure ())
-              let formatted = Ext.ElmFormat.format $ ToSource.convert generated
-              case formatted of
-                Right t ->
-                  debugPassText ("💚 actual implementation pretty-printed " <> show_ (Src.getName modul)) (t) (pure ())
-                Left err ->
-                  debugPassText ("❌❌❌ actual implementation pretty-printed something went wrong with formatting " <> show_ (Src.getName modul)) (err) (pure ())
+              -- let formatted = Ext.ElmFormat.format $ ToSource.convert generated
+              -- case formatted of
+              --   Right t ->
+              --     debugPassText ("💚 actual implementation pretty-printed " <> show_ (Src.getName modul)) (t) (pure ())
+              --   Left err ->
+              --     debugPassText ("❌❌❌ actual implementation pretty-printed something went wrong with formatting " <> show_ (Src.getName modul)) (err) (pure ())
 
               -- debugPassText ("🧡 expected implementation pretty-printed " <> show_ (Src.getName modul)) (Source2.generateCodecs Map.empty wiregen) (pure ())
               -- debugHaskellPass ("🧡 expected implementation AST.Canonical " <> show_ (Src.getName modul)) (testDefinition) (pure ())
 
               diff <- icdiff (hindentFormatValue testDefinition) (hindentFormatValue generated)
-              diff2 <- icdiff (ToSource.convert testDefinition) (ToSource.convert generated)
+              diff2 <- icdiff (ToSource.convert (testDefinition `withName` generatedName)) (ToSource.convert generated)
               -- diff2 <- do
               --   l <- Ext.ElmFormat.format $ ToSource.convert testDefinition
               --   r <- Ext.ElmFormat.format $ ToSource.convert generated
@@ -94,7 +94,7 @@ runTests isTest debugName pkg modul decls generatedName generated canonicalValue
               --           Right t  -> t
               --   icdiff (withDefault l) (withDefault r)
               atomicPutStrLn $ "❌❌❌ failed, attempting pretty-print diff1:\n" ++ diff
-              atomicPutStrLn $ "❌❌❌ failed, attempting pretty-print diff2:\n" ++ diff2
+              atomicPutStrLn $ "❌❌❌ ASTs do not match, attempting pretty-print diff2:\n" ++ diff2
               -- error "exiting!"
               -- atomicPutStrLn $ "❌❌❌ " ++ Data.Name.toChars (Src.getName modul) ++ "." ++ Data.Name.toChars generatedName ++ " gen does not match test definition."
               pure ()
@@ -147,7 +147,7 @@ addWireGenerations canonical pkg ifaces modul =
 addWireGenerations_ :: Can.Module -> Pkg.Name -> Map.Map Module.Raw I.Interface -> Src.Module -> Either D.Doc Can.Module
 addWireGenerations_ canonical pkg ifaces modul =
   let
-    !isTest = unsafePerformIO Lamdera.isTest
+    !isTest_ = unsafePerformIO Lamdera.isTest
 
     -- !x = unsafePerformIO $ do
     --       case (pkg, Src.getName modul) of
@@ -179,8 +179,8 @@ addWireGenerations_ canonical pkg ifaces modul =
       (Can._unions canonical)
         & Map.toList
         & concatMap (\(name, union) ->
-            [ (encoderUnion isTest ifaces pkg modul decls_ name union)
-            , (decoderUnion isTest ifaces pkg modul decls_ name union)
+            [ (encoderUnion isTest_ ifaces pkg modul decls_ name union)
+            , (decoderUnion isTest_ ifaces pkg modul decls_ name union)
             ]
         )
 
@@ -188,8 +188,8 @@ addWireGenerations_ canonical pkg ifaces modul =
       (Can._aliases canonical)
         & Map.toList
         & concatMap (\(name, alias) ->
-            [ (encoderAlias isTest ifaces pkg modul decls_ name alias)
-            , (decoderAlias isTest ifaces pkg modul decls_ name alias)
+            [ (encoderAlias isTest_ ifaces pkg modul decls_ name alias)
+            , (decoderAlias isTest_ ifaces pkg modul decls_ name alias)
             ]
         )
 
@@ -211,7 +211,7 @@ addWireGenerations_ canonical pkg ifaces modul =
     issues, so we have a record of the things we've tried. -}
     oldDeclsImpl =
       declsToList decls_
-        & List.unionBy (\a b -> defName a == defName b) (unionDefs ++ aliasDefs)
+        & List.unionBy (\a_ b -> defName a_ == defName b) (unionDefs ++ aliasDefs)
         & Lamdera.Wire3.Graph.stronglyConnCompDefs
         & Lamdera.Wire3.Graph.addGraphDefsToDecls SaveTheEnvironment
 
@@ -223,8 +223,8 @@ addWireGenerations_ canonical pkg ifaces modul =
 
         Export exports ->
           newDefs
-            & foldl (\exports def ->
-                addExport def exports
+            & foldl (\exports_ def ->
+                addExport def exports_
               )
               exports
             & Export
@@ -245,9 +245,9 @@ addExport def exports =
 
 
 encoderUnion :: Bool -> Map.Map Module.Raw I.Interface -> Pkg.Name -> Src.Module -> Decls -> Data.Name.Name -> Union -> Def
-encoderUnion isTest ifaces pkg modul decls unionName union =
+encoderUnion isTest_ ifaces pkg modul decls unionName union =
   let
-    !x = runTests isTest "encoderUnion" pkg modul decls generatedName finalGen union (unionAsModule cname unionName union)
+    !x = runTests isTest_ "encoderUnion" pkg modul decls generatedName finalGen union (unionAsModule cname unionName union)
 
     generatedName = Data.Name.fromChars $ "w3_encode_" ++ Data.Name.toChars unionName
     cname = Module.Canonical pkg (Src.getName modul)
@@ -258,6 +258,15 @@ encoderUnion isTest ifaces pkg modul decls unionName union =
         (pvar $ Data.Name.fromChars $ "w3_x_c_" ++ Data.Name.toChars tvar, TLambda (TVar tvar) tLamdera_Wire_Encoder_Holey)
       )
 
+    numCtors = length $ _u_alts union
+
+    variantIntEncoder n
+      | numCtors <= 255        = encodeUnsignedInt8 (int n)
+      | numCtors <= 65535      = encodeUnsignedInt16 (int n)
+      -- Truly ridiculous but... maybe one day? 🪐
+      -- | numCtors <= 4294967295 = encodeUnsignedInt32 (int n)
+      | otherwise              = error $ "Unhandled custom type variant size (" ++ show n ++ "), please report this issue for the custom type " ++ Data.Name.toChars unionName
+
     generatedBody =
         -- debugEncoder_ (Data.Name.toElmString unionName)
         (caseof (lvar "w3v") $
@@ -266,18 +275,24 @@ encoderUnion isTest ifaces pkg modul decls unionName union =
               & imap (\i (Ctor tagName tagIndex numParams paramTypes) ->
                   let
                     params =
-                      paramTypes & imap (\i paramType ->
+                      paramTypes & imap (\pi_ paramType ->
                         PatternCtorArg
-                          { _index = Index.ZeroBased i
+                          { _index = Index.ZeroBased pi_
                           , _type = paramType
-                          , _arg = pvar (Data.Name.fromChars $ "v" ++ show i)
+                          , _arg = pvar (Data.Name.fromChars $ "v" ++ show pi_)
                           }
                       )
 
                     paramEncoders =
-                      paramTypes & imap (\i paramType ->
-                          encodeTypeValue 0 ifaces cname paramType (lvar (Data.Name.fromChars $ "v" ++ show i))
+                      paramTypes & imap (\pi_ paramType ->
+                          encodeTypeValue 0 ifaces cname paramType (lvar (Data.Name.fromChars $ "v" ++ show pi_))
                       )
+
+                    branchHandler =
+                      if numParams == 0 then
+                        variantIntEncoder i
+                      else
+                        encodeSequenceWithoutLength $ list $ [ variantIntEncoder i ] ++ paramEncoders
                   in
                   CaseBranch
                     (a (PCtor
@@ -288,7 +303,7 @@ encoderUnion isTest ifaces pkg modul decls unionName union =
                       , _p_index = tagIndex
                       , _p_args = params
                       }))
-                    (encodeSequenceWithoutLength $ list $ [ encodeUnsignedInt8 (int i) ] ++ paramEncoders)
+                    branchHandler
               )
             )
 
@@ -300,9 +315,9 @@ encoderUnion isTest ifaces pkg modul decls unionName union =
 
     ttype = (TType cname unionName (tvars & fmap TVar))
 
-    namedThingiesFigureThisOut = tvars & fmap (\tvar -> (tvar, ())) & Map.fromList
+    freeVars = tvars & fmap (\tvar -> (tvar, ())) & Map.fromList
 
-    generatedTyped = TypedDef (a (generatedName)) namedThingiesFigureThisOut (ptvarsTyped ++ [(pvar "w3v", ttype)]) generatedBody $
+    generatedTyped = TypedDef (a (generatedName)) freeVars (ptvarsTyped ++ [(pvar "w3v", ttype)]) generatedBody $
       -- @NOTE: unlike Def, with a TypedDef only the final type is annotated here, the rest of the types
       -- seem to be draw from the Pattern collection.
       (TAlias
@@ -318,9 +333,9 @@ encoderUnion isTest ifaces pkg modul decls unionName union =
 
 
 decoderUnion :: Bool -> Map.Map Module.Raw I.Interface -> Pkg.Name -> Src.Module -> Decls -> Data.Name.Name -> Union -> Def
-decoderUnion isTest ifaces pkg modul decls unionName union =
+decoderUnion isTest_ ifaces pkg modul decls unionName union =
   let
-    !x = runTests isTest "decoderUnion" pkg modul decls generatedName generated union (unionAsModule cname unionName union)
+    !x = runTests isTest_ "decoderUnion" pkg modul decls generatedName generated union (unionAsModule cname unionName union)
 
     generatedName = Data.Name.fromChars $ "w3_decode_" ++ Data.Name.toChars unionName
     cname = Module.Canonical pkg (Src.getName modul)
@@ -336,6 +351,15 @@ decoderUnion isTest ifaces pkg modul decls unionName union =
       in
       (a (VarCtor (_u_opts union) cname tagName index (Forall tvarsTypesig constructorType)))
 
+    numCtors = length $ _u_alts union
+
+    variantIntDecoder
+      | numCtors <= 255        = decodeUnsignedInt8
+      | numCtors <= 65535      = decodeUnsignedInt16
+      -- Truly ridiculous but... maybe one day? 🪐
+      -- | numCtors <= 4294967295 = decodeUnsignedInt32
+      | otherwise = error $ "Unhandled custom type variant size (" ++ show numCtors ++ "), please report this issue for the custom type " ++ Data.Name.toChars unionName
+
     generated =
       Def
       -- TypedDef
@@ -343,7 +367,7 @@ decoderUnion isTest ifaces pkg modul decls unionName union =
         -- Map.empty
         ptvars $
         -- debugDecoder (Data.Name.toElmString unionName)
-        (decodeUnsignedInt8 |> andThenDecode1
+        (variantIntDecoder |> andThenDecode1
               (lambda1 (pvar "w3v") $
                 caseof (lvar "w3v") $
                   _u_alts union
@@ -366,17 +390,186 @@ decoderUnion isTest ifaces pkg modul decls unionName union =
   generated
 
 
+-- Takes a tvar name and a type, and recursively searches for any extensible record constraints
+-- on that tvar name, returning all the constraint field names and types. This can then be used
+-- to construct an anonymous record constraint for the type signature.
+-- See Wire_Record_Extensible4_DB.elm for an example.
+getRecordConstraints :: Data.Name.Name -> Type -> Map.Map Data.Name.Name Type
+getRecordConstraints tvarName tipe =
+  -- @TODO cover all the possible constraint types!
+  -- debugHaskellPass ("🔵 getRecordConstraints ") (tvarName, tipe) $
+  case tipe of
+    TType cname aliasName tvars ->
+      tvars & fmap (getRecordConstraints tvarName) & Map.unions
+
+    TRecord fields ext ->
+      case ext of
+        Nothing ->
+          fields & fmap (\(FieldType _ t) -> getRecordConstraints tvarName t) & Map.unions
+
+        Just extName ->
+          if extName == tvarName
+            then fields & fmap (\(FieldType _ t) -> t)
+            else Map.empty
+
+    TTuple a_ b Nothing  -> [a_, b]    & fmap (getRecordConstraints tvarName) & Map.unions
+    TTuple a_ b (Just c) -> [a_, b, c] & fmap (getRecordConstraints tvarName) & Map.unions
+
+    TAlias moduleName typeName tvars aType ->
+      let
+        aliasedTvarName =
+          case List.find (\(t,ti) -> ti == TVar tvarName) tvars of
+            Just (tvarNameNew, tvarType) -> tvarNameNew
+            Nothing -> tvarName
+      in
+
+      case aType of
+        Holey t ->
+          getRecordConstraints aliasedTvarName t
+          -- extractors & fmap (\extractor -> extractor t) & Map.unions
+
+        Filled t ->
+          getRecordConstraints aliasedTvarName t
+          -- extractors & fmap (\extractor -> extractor t) & Map.unions
+
+    _ ->
+      -- no constraint
+      Map.empty
+
+
+renameTvars :: Data.Name.Name -> Data.Name.Name -> Type -> Type
+renameTvars oldName newName t =
+  case t of
+    TVar a ->
+      if a == oldName then TVar newName else t
+    TLambda t1 t2 -> TLambda (renameTvars oldName newName t1) (renameTvars oldName newName t2)
+    TType moduleName typeName params ->
+      TType moduleName typeName (fmap (renameTvars oldName newName) params)
+    TRecord fieldMap maybeName ->
+      fieldMap
+        & fmap (\(FieldType index tipe) ->
+            FieldType index (renameTvars oldName newName tipe)
+          )
+        & (\newFieldMap -> TRecord newFieldMap maybeName )
+    TUnit -> t
+    TTuple a b Nothing  -> TTuple (renameTvars oldName newName a) (renameTvars oldName newName b) Nothing
+    TTuple a b (Just c) -> TTuple (renameTvars oldName newName a) (renameTvars oldName newName b) (Just $ renameTvars oldName newName c)
+
+    TAlias moduleName typeName tvars (Holey tipe) ->
+      TAlias moduleName typeName (fmap (\(n,v) -> (n, renameTvars oldName newName t)) tvars) (Holey $ renameTvars oldName newName tipe)
+    TAlias moduleName typeName tvars (Filled tipe) ->
+      TAlias moduleName typeName (fmap (\(n,v) -> (n, renameTvars oldName newName t)) tvars) (Filled $ renameTvars oldName newName tipe)
+
+
+-- Flatten any TVar renames down through the type tree so that when we extract a constraint,
+-- all the TVars are consistent in the top level type signature we extract them for.
+normaliseTvarNames :: Map.Map Data.Name.Name Data.Name.Name -> Type -> Type
+normaliseTvarNames renames t =
+  -- debugHaskellPass "🔵 normaliseTvarNames" (renames, t) $
+  case t of
+    TVar a ->
+      case Map.lookup a renames of
+        Just newName -> TVar newName
+        Nothing -> t
+    TLambda t1 t2 -> TLambda (normaliseTvarNames renames t1) (normaliseTvarNames renames t2)
+    TType moduleName typeName params ->
+      TType moduleName typeName (fmap (normaliseTvarNames renames) params)
+    TRecord fieldMap maybeName ->
+      let newMaybeName =
+            case maybeName of
+              Just name ->
+                case Map.lookup name renames of
+                  Just newName -> Just newName
+                  Nothing -> maybeName
+              Nothing -> maybeName
+      in
+      fieldMap
+        & fmap (\(FieldType index tipe) ->
+            FieldType index (normaliseTvarNames renames tipe)
+          )
+        & (\newFieldMap -> TRecord newFieldMap newMaybeName )
+    TUnit -> t
+    TTuple a b Nothing  -> TTuple (normaliseTvarNames renames a) (normaliseTvarNames renames b) Nothing
+    TTuple a b (Just c) -> TTuple (normaliseTvarNames renames a) (normaliseTvarNames renames b) (Just $ normaliseTvarNames renames c)
+
+    TAlias moduleName typeName tvars atype ->
+      let
+        adjustTvars =
+          tvars & fmap (\x@(aliasName,v) ->
+            case v of
+              TVar originalName ->
+                let normalisedName =
+                      case Map.lookup originalName renames of
+                        Just newName -> newName
+                        Nothing -> originalName
+                in
+                if aliasName /= normalisedName
+                  -- we have a tvar rename, just write the tvar for now
+                  then (aliasName, TVar normalisedName)
+                  -- everything is aligned, carry on
+                  else x
+              _ -> x
+          )
+
+        newRenames =
+          adjustTvars & foldl (\acc (aliasName, v) ->
+            case v of
+              TVar originalName ->
+                if aliasName /= originalName
+                  then Map.insert aliasName originalName acc
+                  else acc
+              _ -> acc
+          ) Map.empty
+
+        newTvars =
+          adjustTvars & fmap (\x@(n,v) ->
+            case v of
+              TVar originalName -> (originalName, v)
+              _ -> x
+            )
+      in
+      case atype of
+        Holey tipe  -> TAlias moduleName typeName newTvars (Holey $ normaliseTvarNames newRenames tipe)
+        Filled tipe -> TAlias moduleName typeName newTvars (Filled $ normaliseTvarNames newRenames tipe)
+
+
+-- Sometimes a tvar is a constrained record (aka "extensible record"), and we need to
+-- generate a type signature that includes the constraint. This function takes a tvar
+-- name and a type, and if the type is a constrained record, it returns a new type
+-- that includes the constraint. Otherwise it returns the original TVar.
+-- See Wire_Record_Extensible4_DB.elm for an example.
+constrainTvar :: Data.Name.Name -> Type -> Type
+constrainTvar tvarName tipe =
+  -- debugHaskellPassWhen (tvarName == "compatibleA") ("🧡 constrainTvar") (tvarName, tipe) $
+  let constraints = getRecordConstraints tvarName tipe
+  in
+  if Map.size constraints > 0 then
+    constraints
+      & Map.toList
+      & imap (\i (name, t) -> (name, FieldType (fromIntegral i) t))
+      & Map.fromList
+      & (\fields -> TRecord fields (Just tvarName))
+  else
+    TVar tvarName
+
+
 encoderAlias :: Bool -> Map.Map Module.Raw I.Interface -> Pkg.Name -> Src.Module -> Decls -> Data.Name.Name -> Alias -> Def
-encoderAlias isTest ifaces pkg modul decls aliasName alias@(Alias tvars tipe) =
+encoderAlias isTest_ ifaces pkg modul decls aliasName alias@(Alias tvars tipe) =
   let
-    !x = runTests isTest "encoderAlias" pkg modul decls generatedName finalGen alias (aliasAsModule cname aliasName alias)
+    !x = runTests isTest_ "encoderAlias" pkg modul decls generatedName finalGen alias (aliasAsModule cname aliasName alias)
 
     generatedName = Data.Name.fromChars $ "w3_encode_" ++ Data.Name.toChars aliasName
     cname = Module.Canonical pkg (Src.getName modul)
     ptvars = tvars & fmap (\tvar -> pvar $ Data.Name.fromChars $ "w3_x_c_" ++ Data.Name.toChars tvar )
 
+    normalisedTvarsType = normaliseTvarNames Map.empty tipe
+
     ptvarsTyped = tvars & fmap (\tvar ->
-        (pvar $ Data.Name.fromChars $ "w3_x_c_" ++ Data.Name.toChars tvar, TLambda (TVar tvar) tLamdera_Wire_Encoder_Holey)
+        let constrainedTvar = constrainTvar tvar normalisedTvarsType
+        in
+        ( pvar $ Data.Name.fromChars $ "w3_x_c_" ++ Data.Name.toChars tvar
+        , TLambda constrainedTvar tLamdera_Wire_Encoder_Holey
+        )
       )
 
     tvarsNameTyped = tvars & fmap (\tvar ->
@@ -385,9 +578,6 @@ encoderAlias isTest ifaces pkg modul decls aliasName alias@(Alias tvars tipe) =
 
     generatedBody = deepEncoderForType 0 ifaces cname tipe
 
-    aliasType = case tipe of
-                  TAlias _moduleNameCanonical _aliasName _aliasParams _aliasType -> _aliasType
-
     -- = Def (A.Located Name) [Pattern] Expr
     generated = Def (a (generatedName)) ptvars $
       -- debugEncoder (Data.Name.toElmString aliasName) $
@@ -395,10 +585,10 @@ encoderAlias isTest ifaces pkg modul decls aliasName alias@(Alias tvars tipe) =
 
     ttype = (TType cname aliasName (tvars & fmap TVar))
 
-    namedThingiesFigureThisOut = tvars & fmap (\tvar -> (tvar, ())) & Map.fromList
+    freeVars = tvars & fmap (\tvar -> (tvar, ())) & Map.fromList
 
     -- | TypedDef (A.Located Name) FreeVars [(Pattern, Type)] Expr Type
-    generatedTyped = TypedDef (a (generatedName)) namedThingiesFigureThisOut (ptvarsTyped) generatedBody $
+    generatedTyped = TypedDef (a (generatedName)) freeVars (ptvarsTyped) generatedBody $
       (TLambda
         (TAlias
             -- (Module.Canonical (Name "author" "project") "Test.Wire_Alias_1_Basic")
@@ -427,9 +617,9 @@ encoderAlias isTest ifaces pkg modul decls aliasName alias@(Alias tvars tipe) =
 
 
 decoderAlias :: Bool -> Map.Map Module.Raw I.Interface -> Pkg.Name -> Src.Module -> Decls -> Data.Name.Name -> Alias -> Def
-decoderAlias isTest ifaces pkg modul decls aliasName alias@(Alias tvars tipe) =
+decoderAlias isTest_ ifaces pkg modul decls aliasName alias@(Alias tvars tipe) =
   let
-    !x = runTests isTest "decoderAlias" pkg modul decls generatedName generated alias (aliasAsModule cname aliasName alias)
+    !x = runTests isTest_ "decoderAlias" pkg modul decls generatedName generated alias (aliasAsModule cname aliasName alias)
 
     generatedName = Data.Name.fromChars $ "w3_decode_" ++ Data.Name.toChars aliasName
     cname = Module.Canonical pkg (Src.getName modul)

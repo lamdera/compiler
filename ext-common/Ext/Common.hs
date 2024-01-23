@@ -98,7 +98,7 @@ data ProjectRoot = ProjectRootUnset | ProjectRootSet FilePath | ProjectRootConte
 {-# NOINLINE projectRootMvar #-}
 projectRootMvar :: MVar ProjectRoot
 projectRootMvar = unsafePerformIO $ do
-  rootM <- Ext.Common.getProjectRootMaybe
+  rootM <- getProjectRootMaybe
   newMVar $
     case rootM of
       Just root ->
@@ -120,13 +120,25 @@ getProjectRoot tag = do
       -- debug $ "🏠 read project root [" <> tag <> "]: " <> "invalid project root"
       -- @TODO this doesn't seem right... we have creations of this path in prod root...
       -- should we error out instead? Or just return the current directory?
-      pure "<unset-project-root>"
+      -- pure "<unset-project-root>"
+      subDir <- Dir.getCurrentDirectory
+      error $ "Fatal: I don't know where the project root is! This should generally be impossible, unless you've accidentally run lamdera in a folder that has no parent folders with an elm.json. My current working directory is " <> subDir <> "."
     ProjectRootSet root -> do
       -- debug $ "🏠 read project root [" <> tag <> "]: " <> root
       pure root
     ProjectRootContextual root -> do
       -- debug $ "🏠 read project root [" <> tag <> "]: " <> root
       pure root
+
+getProjectRoot_ :: String -> IO (Maybe FilePath)
+getProjectRoot_ tag = do
+  root <- readMVar projectRootMvar
+  case root of
+    ProjectRootUnset -> pure Nothing
+    ProjectRootSet root -> do
+      pure $ Just root
+    ProjectRootContextual root -> do
+      pure $ Just root
 
 
 getProjectRootMaybe :: IO (Maybe FilePath)
@@ -137,10 +149,12 @@ getProjectRootMaybe = do
 
 withProjectRoot :: FilePath -> IO a -> IO a
 withProjectRoot root io = do
-  originalRoot <- getProjectRoot "withProjectRoot"
+  originalRootM <- getProjectRoot_ "withProjectRoot"
   setProjectRoot root
   !res <- Dir.withCurrentDirectory root io
-  setProjectRoot originalRoot
+  case originalRootM of
+    Just originalRoot -> setProjectRoot originalRoot
+    Nothing -> pure ()
   pure res
 
 

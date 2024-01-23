@@ -33,6 +33,7 @@ import qualified Stuff
 import Terminal (Parser(..))
 
 
+import qualified Lamdera
 import qualified Lamdera.PostCompile
 
 -- FLAGS
@@ -45,6 +46,7 @@ data Flags =
     , _output :: Maybe Output
     , _report :: Maybe ReportType
     , _docs :: Maybe FilePath
+    , _noWire :: Bool -- @LAMDERA
     }
 
 
@@ -66,9 +68,10 @@ type Task a = Task.Task Exit.Make a
 
 
 run :: [FilePath] -> Flags -> IO ()
-run paths flags@(Flags _ _ _ report _) =
+run paths flags@(Flags _ _ _ report _ noWire) =
   do  style <- getStyle report
       maybeRoot <- Stuff.findRoot
+      Lamdera.onlyWhen noWire Lamdera.disableWire
       Reporting.attemptWithStyle style Exit.makeToReport $
         case maybeRoot of
           Just root -> runHelp root paths style flags
@@ -76,7 +79,7 @@ run paths flags@(Flags _ _ _ report _) =
 
 
 runHelp :: FilePath -> [FilePath] -> Reporting.Style -> Flags -> IO (Either Exit.Make ())
-runHelp root paths style (Flags debug optimize maybeOutput _ maybeDocs) =
+runHelp root paths style (Flags debug optimize maybeOutput _ maybeDocs _) =
   BW.withScope $ \scope ->
   Stuff.withRootLock root $ Task.run $
   do  desiredMode <- getMode debug optimize
@@ -329,7 +332,7 @@ isDevNull name =
 
 -- Clone of run that uses attemptWithStyle_cleanup
 run_cleanup :: IO () -> [FilePath] -> Flags -> IO ()
-run_cleanup cleanup paths flags@(Flags _ _ _ report _) =
+run_cleanup cleanup paths flags@(Flags _ _ _ report _ _) =
   do  style <- getStyle report
       maybeRoot <- Stuff.findRoot
       Reporting.attemptWithStyle_cleanup cleanup style Exit.makeToReport $

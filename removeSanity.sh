@@ -20,5 +20,5 @@ function replace_in_file() {
 
 export -f replace_in_file
 
-find builder -type f -print0 | xargs -0 -I {} bash -c 'replace_in_file "s/import Sanity ((!), debugFind) --/import/g" "$@"' _ {}
-find compiler -type f -print0 | xargs -0 -I {} bash -c 'replace_in_file "s/import Sanity ((!), debugFind) --/import/g" "$@"' _ {}
+find builder -type f -name "*.hs" -print0 | xargs -0 -I {} bash -c 'replace_in_file "s/import Sanity ((!), debugFind) --/import/g" "$@"' _ {}
+find compiler -type f -name "*.hs" -print0 | xargs -0 -I {} bash -c 'replace_in_file "s/import Sanity ((!), debugFind) --/import/g" "$@"' _ {}

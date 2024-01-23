@@ -19,11 +19,11 @@ RUN apk add --no-cache \
         zlib-static \
         curl
 
-RUN curl https://downloads.haskell.org/~ghcup/0.1.18.0/x86_64-linux-ghcup-0.1.18.0 -o /usr/local/bin/ghcup && chmod a+x /usr/local/bin/ghcup
+RUN curl https://downloads.haskell.org/~ghcup/0.1.19.5/x86_64-linux-ghcup-0.1.19.5 -o /usr/local/bin/ghcup && chmod a+x /usr/local/bin/ghcup
 
 # Setup GHC
-RUN ghcup install ghc 9.0.2 --set
-RUN ghcup install cabal 3.6.2.0 --set
+RUN ghcup install ghc 9.4.7 --set
+RUN ghcup install cabal 3.10.1.0 --set
 
 ENV PATH="${PATH}:/root/.ghcup/bin"
 
@@ -37,28 +37,11 @@ RUN cp crtbeginS.o crtbeginT.o
 RUN cp crtend.o crtend.o.orig
 RUN cp crtendS.o crtend.o
 
-# # Install packages
-# WORKDIR /lamdera
-# COPY elm.cabal ./
-# RUN cabal build --ghc-option=-optl=-static --ghc-option=-split-sections -O2 --only-dependencies
-
-# # Import source code
-# COPY builder builder
-# COPY compiler compiler
-# COPY reactor reactor
-# COPY terminal terminal
-# COPY LICENSE ./
-# COPY vendor/elm-format vendor/elm-format
-
-# RUN cabal build --ghc-option=-optl=-static --ghc-option=-split-sections -O2
-# RUN cp `cabal list-bin .` ./lamdera
-# RUN strip lamdera
-
 # Install packages
 WORKDIR /lamdera
 COPY elm.cabal ./
 COPY cabal.project ./
-COPY cabal.project.freeze ./
+# COPY cabal.project.freeze ./
 COPY vendor/elm-format vendor/elm-format
 
 RUN cabal update
@@ -83,6 +66,7 @@ COPY .git .git
 
 RUN cabal build $CABALOPTS --ghc-options="$GHCOPTS"
 
-RUN cp `cabal list-bin .` ./lamdera
+RUN cabal list-bin . | grep -v HEAD
+RUN cp `cabal list-bin . | grep -v HEAD` ./lamdera
 RUN ./lamdera --version-full
 RUN strip lamdera

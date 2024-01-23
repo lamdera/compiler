@@ -81,3 +81,4 @@ getLvars (A.At _ expr) =
         Just e3 -> [e1, e2, e3] & concatMap getLvars
         Nothing -> [e1, e2] & concatMap getLvars
     Shader source types -> []
+    _ -> error $ "getLvars: impossible expr: " ++ show expr

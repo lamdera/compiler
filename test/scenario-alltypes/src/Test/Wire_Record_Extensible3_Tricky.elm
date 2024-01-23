@@ -1,5 +1,7 @@
 module Test.Wire_Record_Extensible3_Tricky exposing (..)
 
+import Bytes.Decode
+import Bytes.Encode
 import Lamdera.Wire3
 import Test.Wire_Alias_2_Record
 import Test.Wire_Record_Extensible1_Basic
@@ -48,7 +50,7 @@ expected_w3_encode_Type w3_x_c_msg w3v =
     case w3v of
         DateType v0 ->
             Lamdera.Wire3.encodeSequenceWithoutLength
-                [ Lamdera.Wire3.encodeUnsignedInt8 0
+                [ Bytes.Encode.unsignedInt8 0
                 , (\w3_rec_var0 ->
                     Lamdera.Wire3.encodeSequenceWithoutLength
                         [ Lamdera.Wire3.encodeList w3_x_c_msg w3_rec_var0.attributes
@@ -60,7 +62,7 @@ expected_w3_encode_Type w3_x_c_msg w3v =
 
 
 expected_w3_decode_Type w3_x_c_msg =
-    Lamdera.Wire3.decodeUnsignedInt8
+    Bytes.Decode.unsignedInt8
         |> Lamdera.Wire3.andThenDecode
             (\w3v ->
                 case w3v of
@@ -84,13 +86,13 @@ type alias Config_ otherConfig msg =
 
 {-| Again, extensible record alias encoders never actually get used
 -}
-expected_w3_encode_Config_ : (otherConfig -> Lamdera.Wire3.Encoder) -> (msg -> Lamdera.Wire3.Encoder) -> Config_ otherConfig msg -> Lamdera.Wire3.Encoder
+expected_w3_encode_Config_ : ({ otherConfig | attributes : List msg } -> Lamdera.Wire3.Encoder) -> (msg -> Lamdera.Wire3.Encoder) -> Config_ otherConfig msg -> Lamdera.Wire3.Encoder
 expected_w3_encode_Config_ w3_x_c_otherConfig w3_x_c_msg =
-    Lamdera.Wire3.failEncode
+    w3_x_c_otherConfig
 
 
 expected_w3_decode_Config_ w3_x_c_otherConfig w3_x_c_msg =
-    Lamdera.Wire3.failDecode
+    w3_x_c_otherConfig
 
 
 
@@ -101,13 +103,13 @@ type alias Record a =
     { a | field : a }
 
 
-expected_w3_encode_Record : (a -> Lamdera.Wire3.Encoder) -> Record a -> Lamdera.Wire3.Encoder
+expected_w3_encode_Record : ({ a | field : a } -> Lamdera.Wire3.Encoder) -> Record a -> Lamdera.Wire3.Encoder
 expected_w3_encode_Record w3_x_c_a =
-    Lamdera.Wire3.failEncode
+    w3_x_c_a
 
 
 expected_w3_decode_Record w3_x_c_a =
-    Lamdera.Wire3.failDecode
+    w3_x_c_a
 
 
 type alias DoubleParamed =
@@ -174,7 +176,7 @@ expected_w3_encode_DatePickerType w3v =
     case w3v of
         DateTimeType_ v0 ->
             Lamdera.Wire3.encodeSequenceWithoutLength
-                [ Lamdera.Wire3.encodeUnsignedInt8 0
+                [ Bytes.Encode.unsignedInt8 0
                 , (\w3_rec_var0 ->
                     Lamdera.Wire3.encodeSequenceWithoutLength
                         [ Lamdera.Wire3.encodeBool w3_rec_var0.allowYearNavigation
@@ -187,7 +189,7 @@ expected_w3_encode_DatePickerType w3v =
 
         DateType_ v0 ->
             Lamdera.Wire3.encodeSequenceWithoutLength
-                [ Lamdera.Wire3.encodeUnsignedInt8 1
+                [ Bytes.Encode.unsignedInt8 1
                 , (\w3_rec_var0 ->
                     Lamdera.Wire3.encodeSequenceWithoutLength
                         [ Lamdera.Wire3.encodeBool w3_rec_var0.allowYearNavigation
@@ -199,7 +201,7 @@ expected_w3_encode_DatePickerType w3v =
 
         TimeType_ v0 ->
             Lamdera.Wire3.encodeSequenceWithoutLength
-                [ Lamdera.Wire3.encodeUnsignedInt8 2
+                [ Bytes.Encode.unsignedInt8 2
                 , (\w3_rec_var0 ->
                     Lamdera.Wire3.encodeSequenceWithoutLength
                         [ Lamdera.Wire3.encodeString w3_rec_var0.attributes
@@ -211,7 +213,7 @@ expected_w3_encode_DatePickerType w3v =
 
 
 expected_w3_decode_DatePickerType =
-    Lamdera.Wire3.decodeUnsignedInt8
+    Bytes.Decode.unsignedInt8
         |> Lamdera.Wire3.andThenDecode
             (\w3v ->
                 case w3v of
@@ -248,22 +250,22 @@ expected_w3_decode_DatePickerType =
             )
 
 
-expected_w3_encode_DatePickerConfig : (otherConfig -> Lamdera.Wire3.Encoder) -> (DatePickerConfig otherConfig -> Lamdera.Wire3.Encoder)
+expected_w3_encode_DatePickerConfig : ({ otherConfig | allowYearNavigation : Bool } -> Lamdera.Wire3.Encoder) -> (DatePickerConfig otherConfig -> Lamdera.Wire3.Encoder)
 expected_w3_encode_DatePickerConfig w3_x_c_otherConfig =
-    Lamdera.Wire3.failEncode
+    w3_x_c_otherConfig
 
 
 expected_w3_decode_DatePickerConfig w3_x_c_otherConfig =
-    Lamdera.Wire3.failDecode
+    w3_x_c_otherConfig
 
 
-expected_w3_encode_AddedConfig : (otherConfig -> Lamdera.Wire3.Encoder) -> (AddedConfig otherConfig -> Lamdera.Wire3.Encoder)
+expected_w3_encode_AddedConfig : ({ otherConfig | attributes : String.String } -> Lamdera.Wire3.Encoder) -> (AddedConfig otherConfig -> Lamdera.Wire3.Encoder)
 expected_w3_encode_AddedConfig w3_x_c_otherConfig =
-    Lamdera.Wire3.failEncode
+    w3_x_c_otherConfig
 
 
 expected_w3_decode_AddedConfig w3_x_c_otherConfig =
-    Lamdera.Wire3.failDecode
+    w3_x_c_otherConfig
 
 
 expected_w3_encode_TimePickerConfig : TimePickerConfig -> Lamdera.Wire3.Encoder
@@ -336,14 +338,14 @@ expected_w3_decode_TimePickerConfig =
        case w3v of
            Variation v0 v1 ->
                Lamdera.Wire3.encodeSequenceWithoutLength
-                   [ Lamdera.Wire3.encodeUnsignedInt8 0
+                   [ Bytes.Encode.unsignedInt8 0
                    , w3_x_c_variation v0
                    , Lamdera.Wire3.encodeList (w3_encode_Property w3_x_c_class Lamdera.Wire3.encodeNever) v1
                    ]
 
 
    expected_w3_decode_Property w3_x_c_class w3_x_c_variation =
-       Lamdera.Wire3.decodeUnsignedInt8
+       Bytes.Decode.unsignedInt8
            |> Lamdera.Wire3.andThenDecode
                (\w3v ->
                    case w3v of

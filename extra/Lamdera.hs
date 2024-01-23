@@ -12,6 +12,7 @@ module Lamdera
   , alternativeImplementationWhen
   , alternativeImplementationPassthrough
   , Ext.Common.atomicPutStrLn
+  , Ext.File.writeBinaryValueStrict
   , debug_
   , debug_note
   , debug
@@ -22,10 +23,10 @@ module Lamdera
   , debugPass
   , debugPassText
   , debugHaskell
+  , debugHaskellWhen
   , debugHaskellPass
   , debugHaskellPassWhen
   , debugHaskellPassDiffWhen
-  , debugHaskellWhen
   -- , PP.sShow
   , T.Text
   , (<>)
@@ -39,6 +40,9 @@ module Lamdera
   -- , isTypeSnapshot
   , isLamdera
   , isLamdera_
+  , disableWire
+  , isWireEnabled
+  , isWireEnabled_
   , isTest
   , isLiveMode
   , setLiveMode
@@ -183,6 +187,7 @@ import qualified Data.Name as N
 import qualified Data.Utf8 as Utf8
 
 import qualified Ext.Common
+import qualified Ext.File
 import Ext.Common (getProjectRoot, getProjectRootFor, getProjectRootMaybe, OSType(..), ostype, atomicPutStrLn)
 
 -- import CanSer.CanSer (ppElm)
@@ -405,6 +410,25 @@ isLamdera = do
 {-# NOINLINE isLamdera_ #-}
 isLamdera_ :: Bool
 isLamdera_ = unsafePerformIO $ isLamdera
+
+
+{-# NOINLINE useWire_ #-}
+useWire_ :: MVar Bool
+useWire_ = unsafePerformIO $ newMVar True
+
+disableWire :: IO ()
+disableWire = do
+  debug $ "⚡️ disableWire"
+  modifyMVar_ useWire_ (\_ -> pure False)
+
+{-# NOINLINE isWireEnabled #-}
+isWireEnabled :: IO Bool
+isWireEnabled = do
+  readMVar useWire_
+
+{-# NOINLINE isWireEnabled_ #-}
+isWireEnabled_ :: Bool
+isWireEnabled_ = unsafePerformIO $ isWireEnabled
 
 
 
@@ -755,14 +779,16 @@ lamderaBackendDevSnapshotPath = do
 
 
 lowerFirstLetter :: String -> Text
-lowerFirstLetter text =
-  case text of
+lowerFirstLetter string =
+  case string of
     first:rest -> T.pack $ [Char.toLower first] <> rest
+    [] -> T.pack string
 
 lowerFirstLetter_ :: Text -> Text
 lowerFirstLetter_ text =
   case T.unpack text of
     first:rest -> T.pack $ [Char.toLower first] <> rest
+    [] -> text
 
 
 findElmFiles :: FilePath -> IO [FilePath]
@@ -843,9 +869,9 @@ requireEnv name = do
   val <- lookupEnv name
   case val of
     Nothing ->
-      error $ Prelude.concat ["🌏👀  ENV var ", name, " is required but was not found"]
+      error $ Prelude.concat ["🌏👀  ENV var `", name, "` is required but was not found"]
     Just "" ->
-      error $ Prelude.concat ["🌏👀  ENV var ", name, " is required but was empty"]
+      error $ Prelude.concat ["🌏👀  ENV var `", name, "` is required but was empty"]
     Just v -> pure v
 
 

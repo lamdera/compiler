@@ -48,19 +48,16 @@ stuff root =
 details :: FilePath -> FilePath
 details root =
   stuff root </> "d.dat"
-    & Lamdera.alternativeImplementation (stuff root </> "d.x.dat")
 
 
 interfaces :: FilePath -> FilePath
 interfaces root =
   stuff root </> "i.dat"
-    & Lamdera.alternativeImplementation (stuff root </> "i.x.dat")
 
 
 objects :: FilePath -> FilePath
 objects root =
   stuff root </> "o.dat"
-    & Lamdera.alternativeImplementation (stuff root </> "o.x.dat")
 
 
 prepublishDir :: FilePath -> FilePath

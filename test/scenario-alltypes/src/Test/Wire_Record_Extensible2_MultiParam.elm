@@ -1,5 +1,7 @@
 module Test.Wire_Record_Extensible2_MultiParam exposing (..)
 
+import Bytes.Decode
+import Bytes.Encode
 import Lamdera.Wire3
 
 
@@ -13,13 +15,13 @@ type alias ExtensibleRecordType comparable a =
     { a | id : comparable }
 
 
-expected_w3_encode_ExtensibleRecordType : (comparable -> Lamdera.Wire3.Encoder) -> (a -> Lamdera.Wire3.Encoder) -> ExtensibleRecordType comparable a -> Lamdera.Wire3.Encoder
+expected_w3_encode_ExtensibleRecordType : (comparable -> Lamdera.Wire3.Encoder) -> ({ a | id : comparable } -> Lamdera.Wire3.Encoder) -> ExtensibleRecordType comparable a -> Lamdera.Wire3.Encoder
 expected_w3_encode_ExtensibleRecordType w3_x_c_comparable w3_x_c_a =
-    Lamdera.Wire3.failEncode
+    w3_x_c_a
 
 
 expected_w3_decode_ExtensibleRecordType w3_x_c_comparable w3_x_c_a =
-    Lamdera.Wire3.failDecode
+    w3_x_c_a
 
 
 
@@ -88,13 +90,13 @@ expected_w3_encode_C_ w3v =
     case w3v of
         NodeClicked_ v0 ->
             Lamdera.Wire3.encodeSequenceWithoutLength
-                [ Lamdera.Wire3.encodeUnsignedInt8 0
+                [ Bytes.Encode.unsignedInt8 0
                 , w3_encode_ExtensibleRecordTypeUsage_ v0
                 ]
 
 
 expected_w3_decode_C_ =
-    Lamdera.Wire3.decodeUnsignedInt8
+    Bytes.Decode.unsignedInt8
         |> Lamdera.Wire3.andThenDecode
             (\w3v ->
                 case w3v of

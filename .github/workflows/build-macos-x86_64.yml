@@ -3,6 +3,7 @@ on:
     branches:
       - distribute
       - macos
+      - macos-x86_64
 
 name: Build MacOS x86_64
 jobs:
