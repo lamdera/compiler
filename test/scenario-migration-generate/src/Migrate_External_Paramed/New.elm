@@ -22,7 +22,6 @@ type alias AnalyticsModel =
             String
             { position : Point2d String String
             }
-    , userId : Id UserId
     }
 
 
@@ -76,11 +75,3 @@ type Debounce a
         { input : List a
         , locked : Bool
         }
-
-
-type Id a =
-    Id String
-
-
-type UserId =
-    UserId

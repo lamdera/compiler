@@ -687,16 +687,7 @@ canAliasToMigration oldVersion newVersion scope interfaces recursionSet (typeNew
 
             paramMigrationPairs :: [(N.Name, N.Name)]
             paramMigrationPairs =
-                filter
-                    (\(_, newTVar) ->
-                        isTVarInUse
-                            newTVar
-                            (case aliasTypeNew of
-                                Can.Holey a -> debugHaskellPass "123123123123" newTVar a
-                                Can.Filled a -> debugHaskellPass "123123123123" newTVar a
-                            )
-                    )
-                    (zip tvarsOld tvarsNew)
+                zip tvarsOld tvarsNew
 
             paramMigrationFnsTypeSig :: [Text]
             paramMigrationFnsTypeSig =

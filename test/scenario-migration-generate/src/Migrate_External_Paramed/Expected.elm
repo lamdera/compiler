@@ -103,11 +103,11 @@ migrate_Migrate_External_Paramed_New_NColor old =
 
 migrate_Migrate_External_Paramed_New_Point2d : (units_old -> units_new) -> (coordinates_old -> coordinates_new) -> Migrate_External_Paramed.Old.Point2d units_old coordinates_old -> Migrate_External_Paramed.New.Point2d units_new coordinates_new
 migrate_Migrate_External_Paramed_New_Point2d migrate_units migrate_coordinates old =
-    old |> migrate_Migrate_External_Paramed_New_Point2d_ migrate_units migrate_coordinates
+    old |> migrate_Migrate_External_Paramed_New_Point2d_
 
 
-migrate_Migrate_External_Paramed_New_Point2d_ : (units_old -> units_new) -> (coordinates_old -> coordinates_new) -> Migrate_External_Paramed.Old.Point2d_ units_old coordinates_old -> Migrate_External_Paramed.New.Point2d_ units_new coordinates_new
-migrate_Migrate_External_Paramed_New_Point2d_ migrate_units migrate_coordinates old =
+migrate_Migrate_External_Paramed_New_Point2d_ : Migrate_External_Paramed.Old.Point2d_ units_old coordinates_old -> Migrate_External_Paramed.New.Point2d_ units_new coordinates_new
+migrate_Migrate_External_Paramed_New_Point2d_ old =
     case old of
         Migrate_External_Paramed.Old.Point2d_ p0 ->
             Migrate_External_Paramed.New.Point2d_ p0

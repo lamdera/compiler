@@ -49,7 +49,6 @@ migrate_Migrate_External_Paramed_New_AnalyticsModel old =
                     { position = rec.position |> migrate_Migrate_External_Paramed_New_Point2d identity identity
                     }
                 )
-    , userId = old.userId |> migrate_Migrate_External_Paramed_New_Id
     }
 
 
@@ -76,13 +75,6 @@ migrate_Migrate_External_Paramed_New_Debounce migrate_a old =
                 { input = p0.input |> List.map migrate_a
                 , locked = p0.locked
                 }
-
-
-migrate_Migrate_External_Paramed_New_Id : Migrate_External_Paramed.Old.Id a_old -> Migrate_External_Paramed.New.Id a_new
-migrate_Migrate_External_Paramed_New_Id old =
-    case old of
-        Migrate_External_Paramed.Old.Id p0 ->
-            Migrate_External_Paramed.New.Id p0
 
 
 migrate_Migrate_External_Paramed_New_IdDict : (k_old -> k_new) -> (v_old -> v_new) -> Migrate_External_Paramed.Old.IdDict k_old v_old -> Migrate_External_Paramed.New.IdDict k_new v_new
