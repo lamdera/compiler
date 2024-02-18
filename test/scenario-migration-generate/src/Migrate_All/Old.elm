@@ -57,6 +57,9 @@ type alias BackendModel =
 
     -- WIP
     , depthTests : Dict String Depth
+
+    -- Phantom type
+    , id : Id UserId
     }
 
 
@@ -154,3 +157,11 @@ type UnionThatGetsMoved
 
 type alias AliasThatGetsMoved =
     { someThing : String }
+
+
+type Id a =
+    Id String
+
+
+type UserId =
+    UserId

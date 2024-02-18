@@ -59,7 +59,7 @@ testMigrationGeneration scenario oldVersion newVersion = do
 
   io $ atomicPutStrLn <$> Ext.Common.requireBinary "elm-format"
 
-  let root = "/Users/mario/dev/projects/lamdera-compiler/test/scenario-migration-generate"
+  let root = "/Users/martinstewart/dev/projects/lamdera-compiler/test/scenario-migration-generate"
       typeCompares = zipWith3
         (\label local prod -> (label, T.unpack local, T.unpack prod))
         (Lamdera.Types.core)
@@ -81,7 +81,7 @@ testMigrationGeneration scenario oldVersion newVersion = do
         ]
 
   compilationStdout <- catchOutput $
-    Lamdera.Compile.makeDev "/Users/mario/dev/projects/lamdera-compiler/test/scenario-migration-generate" filenames
+    Lamdera.Compile.makeDev "/Users/martinstewart/dev/projects/lamdera-compiler/test/scenario-migration-generate" filenames
 
   compilationStdout `expectTextContains`
     "This `Unimplemented` value is a:\n\n    UnimplementedMigration"
@@ -105,7 +105,7 @@ testExamples :: Test ()
 testExamples = withTestEnv $ do
   failuresM <- io $ newMVar []
   let
-    project = "/Users/mario/dev/projects/lamdera-compiler/test/scenario-migration-generate"
+    project = "/Users/martinstewart/dev/projects/lamdera-compiler/test/scenario-migration-generate"
     testFiles =
         [
           -- "src/Test/Migrate_Record.elm"
