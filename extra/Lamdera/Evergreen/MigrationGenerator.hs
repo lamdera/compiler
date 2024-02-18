@@ -218,7 +218,7 @@ migrateUnionDefinition_ author pkg oldUnion newUnion tvarMapOld tvarMapNew oldVe
 
     tvarPairs :: [(Can.Type, Can.Type)]
     tvarPairs =
-      zip (loadTvars tvarsOld tvarMapOld) (loadTvars tvarsNew tvarMapNew)
+      zip (loadTvars (fmap fst paramMigrationPairs) tvarMapOld) (loadTvars (fmap snd paramMigrationPairs) tvarMapNew)
 
     tvarMigrations :: [Migration]
     tvarMigrations =  migrateTvars oldVersion newVersion scope interfaces recursionSet tvarMapOld tvarMapNew tvarPairs
@@ -254,12 +254,17 @@ migrateUnionDefinition_ author pkg oldUnion newUnion tvarMapOld tvarMapNew oldVe
     migration :: Text
     migration = migrationName <> " " <> tvarMigrationTextsCombined
 
-    paramMigrationPairs = zip tvarsOld tvarsNew
+    paramMigrationPairs :: [(N.Name, N.Name)]
+    paramMigrationPairs = filter (\(_, newTVar) -> isTVarInUseUnion newTVar) (zip tvarsOld tvarsNew)
 
     paramMigrationFnsTypeSig :: [Text]
     paramMigrationFnsTypeSig =
       paramMigrationPairs
-        & fmap (\(oldT, newT) -> T.concat [ "(", N.toText oldT, "_old -> ", N.toText newT, "_new)" ] )
+        & fmap (\(oldT, newT) -> T.concat [ "(", N.toText oldT, "_old -> ", N.toText newT, "_new)" ])
+
+    isTVarInUseUnion :: N.Name -> Bool
+    isTVarInUseUnion newTVar =
+        any (\(Can.Ctor _ _ _ params) -> any (isTVarInUse newTVar) params) (Can._u_alts newUnion)
 
     paramMigrationVars :: Text
     paramMigrationVars =

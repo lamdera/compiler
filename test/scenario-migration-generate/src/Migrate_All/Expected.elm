@@ -181,6 +181,7 @@ migrate_Migrate_All_New_BackendModel old =
     , url = old.url
     , userCache = old.userCache |> migrate_AssocList_Dict identity migrate_IncludedBySpecialCasedParam_Custom
     , apps = (Unimplemented {- Type `Dict (String) (Migrate_All.New.App)` was added in V2. I need you to set a default value. -})
+    , id = old.id |> migrate_Migrate_All_New_Id
     , depthTests = (Unimplemented {- Field of type `Dict (String) (Migrate_All.Old.Depth)` was removed in V2. I need you to do something with the `old.depthTests` value if you wish to keep the data, then remove this line. -})
     , removed = (Unimplemented {- Field of type `String` was removed in V2. I need you to do something with the `old.removed` value if you wish to keep the data, then remove this line. -})
     , removedRecord = (Unimplemented {- Field of type `Evergreen.V1.External.AllCoreTypes` was removed in V2. I need you to do something with the `old.removedRecord` value if you wish to keep the data, then remove this line. -})
@@ -195,6 +196,14 @@ migrate_Migrate_All_New_CustomType old =
 
         Migrate_All.Old.CustomTwo ->
             Migrate_All.New.CustomTwo
+
+
+migrate_Migrate_All_New_Id : Migrate_All.Old.Id a_old -> Migrate_All.New.Id a_new
+migrate_Migrate_All_New_Id old =
+    case old of
+        Migrate_All.Old.Id p0 ->
+            Migrate_All.New.Id p0
+
 
 
 migrate_Migrate_All_New_UserType : Migrate_All.Old.UserType -> Migrate_All.New.UserType

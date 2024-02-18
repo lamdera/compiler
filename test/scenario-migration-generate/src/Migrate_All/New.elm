@@ -56,6 +56,9 @@ type alias BackendModel =
 
     -- WIP
     , apps : Dict String App
+
+    -- Phantom type
+    , id : Id UserId
     }
 
 
@@ -144,3 +147,11 @@ type alias ConfigUses =
 
 type alias ConfigUse =
     ( String, String, List String )
+
+
+type Id a =
+    Id String
+
+
+type UserId =
+    UserId

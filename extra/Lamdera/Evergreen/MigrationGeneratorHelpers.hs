@@ -645,6 +645,35 @@ loadTvar tvarMap name =
       -- This would be the alternative:
       -- Can.Tvar name
 
+isTVarInUse :: N.Name -> Can.Type -> Bool
+isTVarInUse tVar typeValue =
+    case typeValue of
+        Can.TLambda a b -> isTVarInUse tVar a || isTVarInUse tVar b
+
+        Can.TVar name -> tVar == name
+
+        Can.TType _ _ typeVars -> any (isTVarInUse tVar) typeVars
+
+        Can.TRecord fields maybeExtension ->
+            any (\(Can.FieldType _ fieldType) -> isTVarInUse tVar fieldType) fields
+            || case maybeExtension of
+                Just extension -> tVar == extension
+                Nothing -> False
+
+        Can.TUnit -> False
+
+        Can.TTuple t0 t1 maybeT2 ->
+          isTVarInUse tVar t0
+              || isTVarInUse tVar t1
+              || case maybeT2 of
+                  Just t2 -> isTVarInUse tVar t2
+                  Nothing -> False
+
+        Can.TAlias moduleNameCanonical name fields aliasType ->
+            any (\(_, fieldType) -> isTVarInUse tVar fieldType) fields
+            || case aliasType of
+                Can.Holey a -> isTVarInUse tVar a
+                Can.Filled a -> isTVarInUse tVar a
 
 tvarResolveParams :: [Can.Type] -> [(N.Name, Can.Type)] -> [Can.Type]
 tvarResolveParams params tvarMap =
