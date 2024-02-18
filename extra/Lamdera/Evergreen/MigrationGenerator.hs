@@ -217,7 +217,7 @@ migrateUnionDefinition_ author pkg oldUnion newUnion tvarMapOld tvarMapNew oldVe
 
     tvarPairs :: [(Can.Type, Can.Type)]
     tvarPairs =
-      zip (loadTvars tvarsOld tvarMapOld) (loadTvars tvarsNew tvarMapNew)
+      zip (loadTvars (fmap fst paramMigrationPairs) tvarMapOld) (loadTvars (fmap snd paramMigrationPairs) tvarMapNew)
 
     tvarMigrations :: [Migration]
     tvarMigrations =  migrateTvars oldVersion newVersion scope interfaces recursionSet tvarMapOld tvarMapNew tvarPairs

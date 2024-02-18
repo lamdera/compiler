@@ -198,8 +198,8 @@ migrate_Migrate_All_New_CustomType old =
             Migrate_All.New.CustomTwo
 
 
-migrate_Migrate_All_New_Id : (a_old -> a_new) -> Migrate_All.Old.Id a_old -> Migrate_All.New.Id a_new
-migrate_Migrate_All_New_Id migrate_a old =
+migrate_Migrate_All_New_Id : Migrate_All.Old.Id a_old -> Migrate_All.New.Id a_new
+migrate_Migrate_All_New_Id old =
     case old of
         Migrate_All.Old.Id p0 ->
             Migrate_All.New.Id p0

@@ -49,6 +49,7 @@ migrate_Migrate_External_Paramed_New_AnalyticsModel old =
                     { position = rec.position |> migrate_Migrate_External_Paramed_New_Point2d identity identity
                     }
                 )
+    , userId = old.userId |> migrate_Migrate_External_Paramed_New_Id
     }
 
 
@@ -77,6 +78,13 @@ migrate_Migrate_External_Paramed_New_Debounce migrate_a old =
                 }
 
 
+migrate_Migrate_External_Paramed_New_Id : Migrate_External_Paramed.Old.Id a_old -> Migrate_External_Paramed.New.Id a_new
+migrate_Migrate_External_Paramed_New_Id old =
+    case old of
+        Migrate_External_Paramed.Old.Id p0 ->
+            Migrate_External_Paramed.New.Id p0
+
+
 migrate_Migrate_External_Paramed_New_IdDict : (k_old -> k_new) -> (v_old -> v_new) -> Migrate_External_Paramed.Old.IdDict k_old v_old -> Migrate_External_Paramed.New.IdDict k_new v_new
 migrate_Migrate_External_Paramed_New_IdDict migrate_k migrate_v old =
     case old of
@@ -103,7 +111,7 @@ migrate_Migrate_External_Paramed_New_NColor old =
 
 migrate_Migrate_External_Paramed_New_Point2d : (units_old -> units_new) -> (coordinates_old -> coordinates_new) -> Migrate_External_Paramed.Old.Point2d units_old coordinates_old -> Migrate_External_Paramed.New.Point2d units_new coordinates_new
 migrate_Migrate_External_Paramed_New_Point2d migrate_units migrate_coordinates old =
-    old |> migrate_Migrate_External_Paramed_New_Point2d_ migrate_units migrate_coordinates
+    old |> migrate_Migrate_External_Paramed_New_Point2d_
 
 
 migrate_Migrate_External_Paramed_New_Point2d_ : Migrate_External_Paramed.Old.Point2d_ units_old coordinates_old -> Migrate_External_Paramed.New.Point2d_ units_new coordinates_new
