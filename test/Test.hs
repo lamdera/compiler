@@ -278,13 +278,8 @@ liveReloadLive = do
   --   "src/Bytes/Encode.elm"
   --   "withDebug"
 
-target =
-    EasyTest.run
-        (tests
-            [ scope "Lamdera.Evergreen.TestMigrationHarness -> " $ Lamdera.Evergreen.TestMigrationHarness.suite
-            , scope "Lamdera.Evergreen.TestMigrationGenerator -> " $ Lamdera.Evergreen.TestMigrationGenerator.suite
-            ]
-        )
+target = EasyTest.run Test.WebGL.suite
+
 all =
   EasyTest.run allTests
 
