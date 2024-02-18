@@ -253,12 +253,17 @@ migrateUnionDefinition_ author pkg oldUnion newUnion tvarMapOld tvarMapNew oldVe
     migration :: Text
     migration = migrationName <> " " <> tvarMigrationTextsCombined
 
-    paramMigrationPairs = zip tvarsOld tvarsNew
+    paramMigrationPairs :: [(N.Name, N.Name)]
+    paramMigrationPairs = filter (\(_, newTVar) -> isTVarInUseUnion newTVar) (zip tvarsOld tvarsNew)
 
     paramMigrationFnsTypeSig :: [Text]
     paramMigrationFnsTypeSig =
       paramMigrationPairs
-        & fmap (\(oldT, newT) -> T.concat [ "(", N.toText oldT, "_old -> ", N.toText newT, "_new)" ] )
+        & fmap (\(oldT, newT) -> T.concat [ "(", N.toText oldT, "_old -> ", N.toText newT, "_new)" ])
+
+    isTVarInUseUnion :: N.Name -> Bool
+    isTVarInUseUnion newTVar =
+        any (\(Can.Ctor _ _ _ params) -> any (isTVarInUse newTVar) params) (Can._u_alts newUnion)
 
     paramMigrationVars :: Text
     paramMigrationVars =
@@ -660,11 +665,11 @@ canAliasToMigration oldVersion newVersion scope interfaces recursionSet (typeNew
             usageParamMigrationFns :: [Text]
             usageParamMigrationFns = usageParamMigrations & fmap migrationFn
 
-            tvarsNew :: [Text]
-            tvarsNew = tvarMapNew & fmap (N.toText . fst)
+            tvarsNew :: [N.Name]
+            tvarsNew = tvarMapNew & fmap fst
 
-            tvarsOld :: [Text]
-            tvarsOld = tvarMapOldReplaced & fmap (N.toText . fst)
+            tvarsOld :: [N.Name]
+            tvarsOld = tvarMapOldReplaced & fmap fst
 
             (MigrationNested migrationAliasedType imps subDefs) =
               let
@@ -680,17 +685,28 @@ canAliasToMigration oldVersion newVersion scope interfaces recursionSet (typeNew
             migrationName :: Text
             migrationName = migrationNameUnderscored newModule oldVersion newVersion typeNameNew
 
-            paramMigrationPairs = zip tvarsOld tvarsNew
+            paramMigrationPairs :: [(N.Name, N.Name)]
+            paramMigrationPairs =
+                filter
+                    (\(_, newTVar) ->
+                        isTVarInUse
+                            newTVar
+                            (case aliasTypeNew of
+                                Can.Holey a -> debugHaskellPass "123123123123" newTVar a
+                                Can.Filled a -> debugHaskellPass "123123123123" newTVar a
+                            )
+                    )
+                    (zip tvarsOld tvarsNew)
 
             paramMigrationFnsTypeSig :: [Text]
             paramMigrationFnsTypeSig =
               paramMigrationPairs
-                & fmap (\(oldT, newT) -> T.concat [ "(", oldT, "_old -> ", newT, "_new)" ] )
+                & fmap (\(oldT, newT) -> T.concat [ "(", N.toText oldT, "_old -> ", N.toText newT, "_new)" ] )
 
             paramMigrationVars :: Text
             paramMigrationVars =
               paramMigrationPairs
-                & fmap (\(oldT, newT) -> T.concat [ "migrate_", oldT ] )
+                & fmap (\(oldT, newT) -> T.concat [ "migrate_", N.toText oldT ] )
                 & T.intercalate " "
 
             oldType = T.concat [moduleNameOld & dropCan & N.toText, ".", typeNameOld & N.toText]
@@ -700,9 +716,9 @@ canAliasToMigration oldVersion newVersion scope interfaces recursionSet (typeNew
             migrationTypeSignature = T.concat
               [ paramMigrationFnsTypeSig & T.intercalate " -> " & suffixIfNonempty " -> "
               , " " , oldType , " "
-              , tvarsOld & fmap (\tvar -> T.concat [tvar, "_old"]) & T.intercalate " "
+              , tvarsOld & fmap (\tvar -> T.concat [N.toText tvar, "_old"]) & T.intercalate " "
               , " -> " , newType , " "
-              , tvarsNew & fmap (\tvar -> T.concat [tvar, "_new"]) & T.intercalate " "
+              , tvarsNew & fmap (\tvar -> T.concat [N.toText tvar, "_new"]) & T.intercalate " "
               ]
 
             applyOldValueIfNotRecord m =
