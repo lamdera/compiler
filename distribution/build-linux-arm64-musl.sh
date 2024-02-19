@@ -55,6 +55,7 @@ build_binary_docker() {
     cd $compilerRoot
 
     cleanup() {
+        echo "trap cleanup: build failed with exit code $?"
         # Work around ownership issues that prevent GH actions from managing the files later
         [ "$actions" == "true" ] && chown -R "$userId:$groupId" ./* || true
     }
@@ -83,6 +84,9 @@ build_binary_docker() {
     cabal build --only-dependencies $CABALOPTS --ghc-options="$GHCOPTS"
 
     # GOAL: build the Lamdera binary statically
+    cabal build $CABALOPTS --ghc-options="$GHCOPTS" || true
+
+    # GOAL: catch silly cache failures that work on a second build
     cabal build $CABALOPTS --ghc-options="$GHCOPTS"
 
     cp "$(cabal list-bin .)" "$bin"
