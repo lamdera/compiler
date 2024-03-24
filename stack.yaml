@@ -47,3 +47,8 @@ packages:
 # https://discourse.haskell.org/t/announce-ghcup-0-1-15-rc2-windows-pre-release/2616/14
 # however it seems stack automatically includes a bunch of paths, don't think this helped?
 # - C:\ghcup\msys64\mingw64\include
+
+nix:
+  packages:
+    - pkg-config
+    - zlib
