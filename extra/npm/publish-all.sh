@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -ex
 
 # The publish will fail if the package name and version combination already exists in the specified registry.
