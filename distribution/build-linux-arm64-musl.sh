@@ -103,7 +103,7 @@ declare -f build_binary_docker
 # docker -H ssh://root@lamdera-falkenstein-arm64-1 run \
 #     -v /root/compiler:/root/compiler \
 #     -it registry.gitlab.b-data.ch/ghc/ghc4pandoc:9.2.7 \
-#     /bin/bash
+#     /usr/bin/env bash
 
 mkdir -p $dist
 

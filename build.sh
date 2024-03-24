@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -euo pipefail
 
 PKG_ENV_FILE="_build/shake-package-env-$(ghc --numeric-version)"
