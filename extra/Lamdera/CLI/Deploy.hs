@@ -34,8 +34,9 @@ run () () = do
       appName <- Lamdera.Project.appNameOrThrow
       approveReset <- Reporting.ask $
         D.fillSep
-          [ "Non-master deploys will create/update a preview app.\n\nSee the docs for more info: https://dashboard.lamdera.app/docs/previews\n"
-          , D.dullyellow $ "Do you want to create/replace"
+          [ D.dullyellow $ "Non-master deploys will create/update a preview app.\n\n"
+          , "See the docs for more info: https://dashboard.lamdera.app/docs/previews\n"
+          , D.dullyellow $ "Do you want to create/replace:"
           , D.blue $ "https://" <> D.fromChars (unpack appName) <> "-" <> D.fromChars (unpack branchName) <> ".lamdera.app"
           , "?"
           , "[Y/n]: "
