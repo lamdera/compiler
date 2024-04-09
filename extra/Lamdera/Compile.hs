@@ -41,6 +41,7 @@ makeOptimizedWithCleanup cleanup root path = do
           , _report = Nothing
           , _docs = Nothing
           , _noWire = False
+          , _optimizeLegible = False
           }
   wait r
   remove tmp
@@ -67,6 +68,7 @@ make_ root = do
           , _report = Nothing
           , _docs = Nothing
           , _noWire = False
+          , _optimizeLegible = False
           }
   wait r
   -- The compilation process ends by printing to terminal in a way that overwrites
@@ -95,6 +97,7 @@ makeDev root paths = do
           , _report = Nothing
           , _docs = Nothing
           , _noWire = False
+          , _optimizeLegible = False
           }
   wait r
   -- The compilation process ends by printing to terminal in a way that overwrites
@@ -130,6 +133,7 @@ makeHarnessDevJs root = do
           , _report = Nothing
           , _docs = Nothing
           , _noWire = False
+          , _optimizeLegible = False
           }
   wait r
   remove tmp

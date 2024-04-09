@@ -17,6 +17,8 @@ import qualified Elm.Compiler.Type.Extract as Extract
 import qualified Generate.JavaScript.Name as JsName
 
 
+import Lamdera ((&))
+import qualified Lamdera
 
 -- MODE
 
@@ -55,6 +57,11 @@ addToBuckets field frequency buckets =
 addToShortNames :: [Name.Name] -> ShortFieldNames -> ShortFieldNames
 addToShortNames fields shortNames =
   List.foldl' addField shortNames fields
+    & Lamdera.alternativeImplementationWhen (Lamdera.isLongNamesEnabled_)
+        (List.foldl' (\shortNames field ->
+            Map.insert field (JsName.fromLocal field) shortNames
+          ) shortNames fields
+        )
 
 
 addField :: ShortFieldNames -> Name.Name -> ShortFieldNames
