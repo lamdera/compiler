@@ -5,6 +5,23 @@ packages:
     ./vendor/elm-format/avh4-lib
     ./vendor/elm-format
 
+-- In order to match stack's allow-newer behaviour, we have to syncronise from stack
+-- output the advisory of which packages get shifted bounds applied, i.e.:
+-- $ stack ghci
+-- Using main module:
+-- Warning: Ignoring elm-format-lib's bounds on text (>=2.0 && <3) and using text-1.2.5.0.
+--          Reason: allow-newer enabled.
+--
+-- This is slightly weird as its marked allow-newer in stack.yaml but it's actually allow-older behaviour?
+-- But in any case, replicating the bounds changes here works for the OS' where we have to do cabal builds
+allow-older:
+  , elm-format-lib:text
+  , elm-format-markdown:text
+  , avh4-lib:text
+  , elm-format-lib:aeson
+  , elm-format:text
+  , elm-format:aeson
+
 source-repository-package
     type: git
     location: https://github.com/noteed/language-glsl.git

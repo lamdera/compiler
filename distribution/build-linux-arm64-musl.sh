@@ -20,8 +20,8 @@ if [ "$GITHUB_ACTIONS" == "true" ]; then
 else
     mountRoot="/root/compiler"
     cacheRoot="/home/github/cabal-caches/linux-arm64"
-    rsyncCompilerPath="root@lamdera-falkenstein-arm64-1:$mountRoot"
-    dockerHost="-H ssh://root@lamdera-falkenstein-arm64-1"
+    rsyncCompilerPath="root@lamdera-community-build-arm64:$mountRoot"
+    dockerHost="-H ssh://root@lamdera-community-build-arm64"
 fi
 
 cd "$compilerRoot"                                                   # Move into the project root
@@ -41,7 +41,7 @@ else
         --exclude="elm-stuff" \
         ./ $rsyncCompilerPath
 
-    ssh root@lamdera-falkenstein-arm64-1 "mkdir -p $cacheRoot || true"
+    ssh root@lamdera-community-build-arm64 "mkdir -p $cacheRoot || true"
 fi
 
 
@@ -70,10 +70,10 @@ build_binary_docker() {
     ln -sf /root/cache ~/.cabal
 
     # GOAL: pin our dependencies so we can build them one by one
-    cabal update
+    # cabal update
     # We have to freeze the deps to get a cohesive deps set, otherwise `cabal build <dep>` will install the latest version instead of the one we need
-    rm cabal.project.freeze || true # Remove the freeze file so we can update the deps
-    cabal freeze
+    # rm cabal.project.freeze || true # Remove the freeze file so we can update the deps
+    # cabal freeze
 
     # Our options required for static linking
     CABALOPTS="--allow-newer -f-export-dynamic -fembed_data_files --enable-executable-static -j4"
@@ -99,11 +99,7 @@ declare -f build_binary_docker
 
 # GOAL: get a suitable build environment with GHC & Cabal build for arm64 in an Alpine container using MUSL instead of GLIBC, so we can build portable static binaries
 
-# Use it without the bash injection for manual testing
-# docker -H ssh://root@lamdera-falkenstein-arm64-1 run \
-#     -v /root/compiler:/root/compiler \
-#     -it registry.gitlab.b-data.ch/ghc/ghc4pandoc:9.2.7 \
-#     /usr/bin/env bash
+# For manual testing drop a `bash` line wherever you'd like within build_binary_docker and re-run this script
 
 mkdir -p $dist
 
@@ -111,7 +107,7 @@ mkdir -p $dist
 docker $dockerHost run \
     -v "$mountRoot:/root/compiler" \
     -v "$cacheRoot:/root/cache" \
-    $runMode registry.gitlab.b-data.ch/ghc/ghc4pandoc:9.2.7 \
+    $runMode glcr.b-data.ch/ghc/ghc-musl:9.2.8 \
     bash -c "$(declare -f build_binary_docker); build_binary_docker '$bin' '$GITHUB_ACTIONS' '$(id -u)' '$(id -g)'"
 
 
