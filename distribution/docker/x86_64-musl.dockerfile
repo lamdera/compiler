@@ -22,7 +22,7 @@ RUN apk add --no-cache \
 RUN curl https://downloads.haskell.org/~ghcup/0.1.19.5/x86_64-linux-ghcup-0.1.19.5 -o /usr/local/bin/ghcup && chmod a+x /usr/local/bin/ghcup
 
 # Setup GHC
-RUN ghcup install ghc 9.4.7 --set
+RUN ghcup install ghc 9.2.8 --set
 RUN ghcup install cabal 3.10.1.0 --set
 
 ENV PATH="${PATH}:/root/.ghcup/bin"
@@ -41,7 +41,7 @@ RUN cp crtendS.o crtend.o
 WORKDIR /lamdera
 COPY elm.cabal ./
 COPY cabal.project ./
-# COPY cabal.project.freeze ./
+COPY cabal.project.freeze ./
 COPY vendor/elm-format vendor/elm-format
 
 RUN cabal update
