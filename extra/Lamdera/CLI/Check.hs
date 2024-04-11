@@ -120,7 +120,7 @@ runHelp () flags@(Lamdera.CLI.Check.Flags destructiveMigration force) = do
   appName <- Lamdera.Project.appNameOrThrow
   (localTypes, externalTypeWarnings) <- getLocalInfo
 
-  if isPreviewBuild /= Nothing
+  if isPreviewBuild == Just "true"
     then do
       buildFirstDeploy root inProduction_ appName externalTypeWarnings
 
