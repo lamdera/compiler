@@ -590,7 +590,7 @@ buildProductionJsFiles root inProduction_ versionInfo = do
         , _report = Nothing
         , _docs = Nothing
         , _noWire = False
-        , _optimizeLegible = False
+        , _optimizeLegible = True
         }
 
     Make.run ["src" </> "LFR.elm"] $
