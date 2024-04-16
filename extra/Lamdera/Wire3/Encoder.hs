@@ -125,6 +125,16 @@ encoderForType depth ifaces cname tipe =
                     (TType (Module.Canonical (Name "elm" "core") "Set") "Set" [TVar "value"])
                     tLamdera_Wire_Encoder)))))
 
+    TType (Module.Canonical (Name "lamdera" "hashmap") "Set") "Set" [ptype] ->
+      (a (VarForeign mLamdera_Wire "encodeHashSet"
+           (Forall
+              (Map.fromList [("value", ())])
+              (TLambda
+                 (TLambda (TVar "value") tLamdera_Wire_Encoder)
+                 (TLambda
+                    (TType (Module.Canonical (Name "lamdera" "hashmap") "Set") "Set" [TVar "value"])
+                    tLamdera_Wire_Encoder)))))
+
     TType (Module.Canonical (Name "elm" "core") "Array") "Array" [ptype] ->
       (a (VarForeign mLamdera_Wire "encodeArray"
            (Forall
@@ -157,6 +167,16 @@ encoderForType depth ifaces cname tipe =
                         (TType (Module.Canonical (Name "elm" "core") "Dict") "Dict" [TVar "key", TVar "value"])
                         tLamdera_Wire_Encoder))))))
 
+    TType (Module.Canonical (Name "lamdera" "hashmap") "Hash.Dict") "Dict" [key, value] ->
+      (a (VarForeign mLamdera_Wire "encodeHashDict"
+            (Forall
+               (Map.fromList [("key", ()), ("value", ())])
+               (TLambda
+                  (TLambda (TVar "key") tLamdera_Wire_Encoder)
+                  (TLambda (TLambda (TVar "value") tLamdera_Wire_Encoder)
+                     (TLambda
+                        (TType (Module.Canonical (Name "lamdera" "hashmap") "Hash.Dict") "Dict" [TVar "key", TVar "value"])
+                        tLamdera_Wire_Encoder))))))
 
     TType (Module.Canonical (Name "elm" "bytes") "Bytes") "Bytes" _ ->
       (a (VarForeign mLamdera_Wire "encodeBytes" (Forall Map.empty (TLambda tipe tLamdera_Wire_Encoder))))
