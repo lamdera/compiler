@@ -585,30 +585,6 @@ decodeTime =
                         ]))))
           )))
 
-
---{-| -}
---encodeHashDict : (key -> Encoder) -> (value -> Encoder) -> Hash.Dict.Dict key value -> Encoder
---encodeHashDict encKey encValue d =
---    encodeList (encodePair encKey encValue) (Hash.Dict.toList d)
---
---
---{-| -}
---decodeHashDict : Decoder k -> Decoder value -> Decoder (Hash.Dict.Dict k value)
---decodeHashDict decKey decValue =
---    decodeList (decodePair decKey decValue) |> D.map Hash.Dict.fromList
---
---
---{-| -}
---encodeHashSet : (value -> Encoder) -> Hash.Set.Set value -> Encoder
---encodeHashSet encVal s =
---    encodeList encVal (Hash.Set.toList s)
---
---
---{-| -}
---decodeHashSet : Decoder k -> Decoder (Hash.Set.Set k)
---decodeHashSet decVal =
---    decodeList decVal |> D.map Hash.Set.fromList
-
 andThenDecode1 lambda =
   (a (Call (a (VarForeign mLamdera_Wire "andThenDecode"
               (Forall
