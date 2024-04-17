@@ -125,15 +125,8 @@ encoderForType depth ifaces cname tipe =
                     (TType (Module.Canonical (Name "elm" "core") "Set") "Set" [TVar "value"])
                     tLamdera_Wire_Encoder)))))
 
-    TType (Module.Canonical (Name "lamdera" "hashmap") "Set") "Set" [ptype] ->
-      (a (VarForeign mLamdera_Wire "encodeHashSet"
-           (Forall
-              (Map.fromList [("value", ())])
-              (TLambda
-                 (TLambda (TVar "value") tLamdera_Wire_Encoder)
-                 (TLambda
-                    (TType (Module.Canonical (Name "lamdera" "hashmap") "Set") "Set" [TVar "value"])
-                    tLamdera_Wire_Encoder)))))
+    TType (Module.Canonical (Name "lamdera" "hashmap") "Hash.Set") "Set" [ptype] ->
+      encodeHashSet
 
     TType (Module.Canonical (Name "elm" "core") "Array") "Array" [ptype] ->
       (a (VarForeign mLamdera_Wire "encodeArray"
@@ -168,15 +161,7 @@ encoderForType depth ifaces cname tipe =
                         tLamdera_Wire_Encoder))))))
 
     TType (Module.Canonical (Name "lamdera" "hashmap") "Hash.Dict") "Dict" [key, value] ->
-      (a (VarForeign mLamdera_Wire "encodeHashDict"
-            (Forall
-               (Map.fromList [("key", ()), ("value", ())])
-               (TLambda
-                  (TLambda (TVar "key") tLamdera_Wire_Encoder)
-                  (TLambda (TLambda (TVar "value") tLamdera_Wire_Encoder)
-                     (TLambda
-                        (TType (Module.Canonical (Name "lamdera" "hashmap") "Hash.Dict") "Dict" [TVar "key", TVar "value"])
-                        tLamdera_Wire_Encoder))))))
+      encodeHashDict
 
     TType (Module.Canonical (Name "elm" "bytes") "Bytes") "Bytes" _ ->
       (a (VarForeign mLamdera_Wire "encodeBytes" (Forall Map.empty (TLambda tipe tLamdera_Wire_Encoder))))
@@ -447,3 +432,104 @@ encodeTypeValue depth ifaces cname tipe value =
 
     TLambda t1 t2 ->
       call failEncode [ a Unit ]
+
+encodeHashDict :: Expr
+encodeHashDict =
+    (a (Call
+          (a (VarForeign
+                (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire3")
+                "encodeList"
+                (Forall
+                   (Map.fromList [("a", ())])
+                   (TLambda
+                      (TLambda
+                         (TVar "a")
+                         (TAlias
+                            (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire3")
+                            "Encoder"
+                            []
+                            (Filled (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Encode") "Encoder" []))))
+                      (TLambda
+                         (TType (Module.Canonical (Name "elm" "core") "List") "List" [TVar "a"])
+                         (TAlias
+                            (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire3")
+                            "Encoder"
+                            []
+                            (Filled (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Encode") "Encoder" []))))))))
+          [ (a (Call
+                  (a (VarForeign
+                        (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire3")
+                        "encodePair"
+                        (Forall
+                           (Map.fromList [("a", ()), ("b", ())])
+                           (TLambda
+                              (TLambda
+                                 (TVar "a")
+                                 (TAlias
+                                    (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire3")
+                                    "Encoder"
+                                    []
+                                    (Filled (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Encode") "Encoder" []))))
+                              (TLambda
+                                 (TLambda
+                                    (TVar "b")
+                                    (TAlias
+                                       (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire3")
+                                       "Encoder"
+                                       []
+                                       (Filled (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Encode") "Encoder" []))))
+                                 (TLambda
+                                    (TTuple (TVar "a") (TVar "b") Nothing)
+                                    (TAlias
+                                       (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire3")
+                                       "Encoder"
+                                       []
+                                       (Filled (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Encode") "Encoder" [])))))))))
+                  [(a (VarLocal "encKey")), (a (VarLocal "encValue"))]))
+          , (a (Call
+                  (a (VarForeign
+                        (Module.Canonical (Name "lamdera" "hashmap") "Hash.Dict")
+                        "toList"
+                        (Forall
+                           (Map.fromList [("k", ()), ("v", ())])
+                           (TLambda
+                              (TType (Module.Canonical (Name "lamdera" "hashmap") "Hash.Dict") "Dict" [TVar "k", TVar "v"])
+                              (TType (Module.Canonical (Name "elm" "core") "List") "List" [TTuple (TVar "k") (TVar "v") Nothing])))))
+                  [(a (VarLocal "d"))]))
+          ]))
+
+encodeHashSet :: Expr
+encodeHashSet =
+    (a (Call
+          (a (VarForeign
+                (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire3")
+                "encodeList"
+                (Forall
+                   (Map.fromList [("a", ())])
+                   (TLambda
+                      (TLambda
+                         (TVar "a")
+                         (TAlias
+                            (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire3")
+                            "Encoder"
+                            []
+                            (Filled (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Encode") "Encoder" []))))
+                      (TLambda
+                         (TType (Module.Canonical (Name "elm" "core") "List") "List" [TVar "a"])
+                         (TAlias
+                            (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire3")
+                            "Encoder"
+                            []
+                            (Filled (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Encode") "Encoder" []))))))))
+          [ (a (VarLocal "encVal"))
+          , (a (Call
+                  (a (VarForeign
+                        (Module.Canonical (Name "lamdera" "hashmap") "Hash.Set")
+                        "toList"
+                        (Forall
+                           (Map.fromList [("a", ())])
+                           (TLambda
+                              (TType (Module.Canonical (Name "lamdera" "hashmap") "Hash.Set") "Set" [TVar "a"])
+                              (TType (Module.Canonical (Name "elm" "core") "List") "List" [TVar "a"])))))
+                  [(a (VarLocal "s"))]))
+          ]))
