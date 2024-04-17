@@ -188,7 +188,7 @@ decoderForType ifaces cname tipe =
                              [TType (Module.Canonical (Name "elm" "core") "Set") "Set" [TVar "comparable"]])))))))
         [ decoderForType ifaces cname ptype ]))
 
-    TType (Module.Canonical (Name "lamdera" "hashmap") "Set") "Set" [ptype] ->
+    TType (Module.Canonical (Name "lamdera" "hashmap") "Hash.Set") "Set" [ptype] ->
       (a (Call
         (a (VarForeign mLamdera_Wire "decodeHashSet"
               (Forall
@@ -199,7 +199,7 @@ decoderForType ifaces cname tipe =
                     (TAlias
                        mLamdera_Wire
                        "Decoder"
-                       [("a", TType (Module.Canonical (Name "lamdera" "hashmap") "Set") "Set" [TVar "k"])]
+                       [("a", TType (Module.Canonical (Name "lamdera" "hashmap") "Hash.Set") "Set" [TVar "k"])]
                        (Filled
                           (TType
                              (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
@@ -225,45 +225,6 @@ decoderForType ifaces cname tipe =
                              "Decoder"
                              [TType (Module.Canonical (Name "elm" "core") "Array") "Array" [TVar "a"]])))))))
         [ decoderForType ifaces cname ptype ]))
-
-    TType (Module.Canonical (Name "lamdera" "hashmap") "Hash.Dict") "Dict" [key, val] ->
-        (a (Call
-              (a (VarForeign mLamdera_Wire "decodeHashDict"
-                    (Forall
-                       (Map.fromList [("k", ()), ("value", ())])
-                       (TLambda
-                          (TAlias mLamdera_Wire "Decoder" [("a", TVar "k")]
-                             (Filled
-                                (TType
-                                   (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
-                                   "Decoder"
-                                   [TVar "k"])))
-                          (TLambda
-                             (TAlias mLamdera_Wire "Decoder" [("a", TVar "value")]
-                                (Filled
-                                   (TType
-                                      (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
-                                      "Decoder"
-                                      [TVar "value"])))
-                             (TAlias mLamdera_Wire "Decoder"
-                                [ ( "a"
-                                  , TType
-                                      (Module.Canonical (Name "lamdera" "hashmap") "Hash.Dict")
-                                      "Dict"
-                                      [TVar "k", TVar "value"])
-                                ]
-                                (Filled
-                                   (TType
-                                      (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
-                                      "Decoder"
-                                      [ TType
-                                          (Module.Canonical (Name "lamdera" "hashmap") "Hash.Dict")
-                                          "Dict"
-                                          [TVar "k", TVar "value"]
-                                      ]))))))))
-              [ decoderForType ifaces cname key
-              , decoderForType ifaces cname val
-              ]))
 
     TType (Module.Canonical (Name "elm" "core") "Result") "Result" [err, a_] ->
         (a (Call
@@ -336,6 +297,45 @@ decoderForType ifaces cname tipe =
                                           (Module.Canonical (Name "elm" "core") "Dict")
                                           "Dict"
                                           [TVar "comparable", TVar "value"]
+                                      ]))))))))
+              [ decoderForType ifaces cname key
+              , decoderForType ifaces cname val
+              ]))
+
+    TType (Module.Canonical (Name "lamdera" "hashmap") "Hash.Dict") "Dict" [key, val] ->
+        (a (Call
+              (a (VarForeign mLamdera_Wire "decodeHashDict"
+                    (Forall
+                       (Map.fromList [("k", ()), ("value", ())])
+                       (TLambda
+                          (TAlias mLamdera_Wire "Decoder" [("a", TVar "k")]
+                             (Filled
+                                (TType
+                                   (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
+                                   "Decoder"
+                                   [TVar "k"])))
+                          (TLambda
+                             (TAlias mLamdera_Wire "Decoder" [("a", TVar "value")]
+                                (Filled
+                                   (TType
+                                      (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
+                                      "Decoder"
+                                      [TVar "value"])))
+                             (TAlias mLamdera_Wire "Decoder"
+                                [ ( "a"
+                                  , TType
+                                      (Module.Canonical (Name "lamdera" "hashmap") "Hash.Dict")
+                                      "Dict"
+                                      [TVar "k", TVar "value"])
+                                ]
+                                (Filled
+                                   (TType
+                                      (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
+                                      "Decoder"
+                                      [ TType
+                                          (Module.Canonical (Name "lamdera" "hashmap") "Hash.Dict")
+                                          "Dict"
+                                          [TVar "k", TVar "value"]
                                       ]))))))))
               [ decoderForType ifaces cname key
               , decoderForType ifaces cname val
