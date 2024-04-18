@@ -24,7 +24,7 @@ import qualified Data.Graph as Graph
 import qualified Data.List as List
 import qualified Data.Map.Utils as Map
 import qualified Data.Map.Strict as Map
-import Data.Map.Strict ((!))
+import Sanity ((!), debugFind) -- Data.Map.Strict ((!))
 import qualified Data.Maybe as Maybe
 import qualified Data.Name as Name
 import qualified Data.NonEmptyList as NE

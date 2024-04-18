@@ -13,7 +13,7 @@ module Elm.Compiler.Type.Extract
   where
 
 
-import Data.Map ((!))
+import Sanity ((!), debugFind) -- Data.Map ((!))
 import qualified Data.Map as Map
 import qualified Data.Maybe as Maybe
 import qualified Data.Name as Name

@@ -19,7 +19,7 @@ module Elm.Interface
 
 import Control.Monad (liftM, liftM3, liftM4, liftM5)
 import Data.Binary
-import Data.Map.Strict ((!))
+import Sanity ((!), debugFind) -- Data.Map.Strict ((!))
 import qualified Data.Map.Strict as Map
 import qualified Data.Map.Merge.Strict as Map
 import qualified Data.Name as Name

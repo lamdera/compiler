@@ -14,7 +14,7 @@ module Generate.JavaScript.Expression
 
 import qualified Data.IntMap as IntMap
 import qualified Data.List as List
-import Data.Map ((!))
+import Sanity ((!), debugFind) -- Data.Map ((!))
 import qualified Data.Map as Map
 import qualified Data.Name as Name
 import qualified Data.Set as Set

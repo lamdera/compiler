@@ -32,18 +32,18 @@ last identifier list =
     _ -> Prelude.last list
 
 
-{- An alternative version of (!) that will print the keys and missing key on failure -}
-debugFind :: (Ord c, Show c, HasCallStack) => Map.Map c a -> c -> a
-debugFind m k =
-  case Map.lookup k m of
-    Just v -> v
-    Nothing ->
-      error (sShow ("Sanity: (!) failed", take 10 (Map.keys m), "does not contain:", k))
+--{- An alternative version of (!) that will print the keys and missing key on failure -}
+--debugFind :: (Ord c, Show c, HasCallStack) => Map.Map c a -> c -> a
+--debugFind m k =
+--  case Map.lookup k m of
+--    Just v -> v
+--    Nothing ->
+--      error (sShow ("Sanity: (!) failed", take 10 (Map.keys m), "does not contain:", k))
 
 
 {- An alternative version of (!) that will print the keys, missing key & some added context -}
-debugFindCtx :: (Ord c, Show c, Show ctx, HasCallStack) => Map.Map c a -> c -> ctx -> a
-debugFindCtx m k ctx =
+debugFind :: (Ord c, Show c, Show ctx, HasCallStack) => Map.Map c a -> c -> ctx -> a
+debugFind m k ctx =
   case Map.lookup k m of
     Just v -> v
     Nothing ->

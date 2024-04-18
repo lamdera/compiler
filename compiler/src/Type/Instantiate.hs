@@ -8,7 +8,7 @@ module Type.Instantiate
 
 
 import qualified Data.Map.Strict as Map
-import Data.Map.Strict ((!))
+import Sanity ((!), debugFind) -- Data.Map.Strict ((!))
 import qualified Data.Name as Name
 
 import qualified AST.Canonical as Can

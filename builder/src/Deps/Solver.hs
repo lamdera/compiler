@@ -19,7 +19,7 @@ module Deps.Solver
 import Control.Monad (foldM)
 import Control.Concurrent (forkIO, newEmptyMVar, putMVar, readMVar)
 import qualified Data.Map as Map
-import Data.Map ((!))
+import Sanity ((!), debugFind) -- Data.Map ((!))
 import qualified System.Directory as Dir
 import System.FilePath ((</>))
 
