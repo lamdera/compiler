@@ -963,6 +963,7 @@ typeToMigration oldVersion newVersion scope interfaces recursionSet_ typeNew@(Ca
     ("elm", "core", "List", "List")     -> migrate1ParamCollection
     ("elm", "core", "Array", "Array")   -> migrate1ParamCollection
     ("elm", "core", "Set", "Set")       -> migrate1ParamCollection
+    ("lamdera", "hashmap", "Hash.Set", "Set") -> migrate1ParamCollection
 
     ("elm", "core", "Result", "Result") -> migrate2ParamCollection
       (\m_p0      -> T.concat [ "Result.mapError (", m_p0, ")" ])
@@ -973,6 +974,11 @@ typeToMigration oldVersion newVersion scope interfaces recursionSet_ typeNew@(Ca
       (\m_p0      -> T.concat [ "Dict.toList |> List.map (Tuple.mapFirst ", m_p0, ") |> Dict.fromList" ])
       (\m_p1      -> T.concat [ "Dict.map (\\k -> ", m_p1, ")" ])
       (\m_p0 m_p1 -> T.concat [ "Dict.toList |> List.map (Tuple.mapBoth ", m_p0, " ", m_p1, ") |> Dict.fromList" ])
+
+    ("lamdera", "hashmap", "Hash.Dict", "Dict")     -> migrate2ParamCollection
+      (\m_p0      -> T.concat [ "Hash.Dict.toList |> List.map (Tuple.mapFirst ", m_p0, ") |> Hash.Dict.fromList" ])
+      (\m_p1      -> T.concat [ "Hash.Dict.map (\\k -> ", m_p1, ")" ])
+      (\m_p0 m_p1 -> T.concat [ "Hash.Dict.toList |> List.map (Tuple.mapBoth ", m_p0, " ", m_p1, ") |> Hash.Dict.fromList" ])
 
     (author, pkg, module_, typeName_) ->
       if (Set.member recursionIdentifier recursionSet_) then

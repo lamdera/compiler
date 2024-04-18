@@ -117,6 +117,8 @@ isUnsupportedKernelType tipe =
     TType (Module.Canonical (Name "elm" "json") "Json.Decode") "Decoder" _ -> True -- js type
     TType (Module.Canonical (Name "elm" "json") "Json.Decode") "Value" _ -> True -- js type
 
+    TType (Module.Canonical (Name "lamdera" "hashmap") "JsArray") "JsArray" _ -> True
+
 
     -- JS types we are supporting through JS ref encodings. These serialisations
     -- CANNOT BE DECODED OUTSIDE OF THE JS SCOPE THEY WERE ENCODED IN!
@@ -753,6 +755,8 @@ tLamdera_Wire_Encoder_Holey =
 
 
 mLamdera_Wire = (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire3")
+mLamdera_HashmapDict = (Module.Canonical (Name "lamdera" "hashmap") "Hash.Dict")
+mLamdera_HashmapSet = (Module.Canonical (Name "lamdera" "hashmap") "Hash.Set")
 mBytes_Encode = (Module.Canonical (Name "elm" "bytes") "Bytes.Encode")
 mBytes_Decode = (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
 
@@ -781,6 +785,7 @@ unwrapAliasesDeep t =
     TType (Module.Canonical (Name "elm" "core") "Maybe") "Maybe" [a] -> TType (Module.Canonical (Name "elm" "core") "Maybe") "Maybe" [unwrapAliasesDeep a]
     TType (Module.Canonical (Name "elm" "core") "List") "List" [a]   -> TType (Module.Canonical (Name "elm" "core") "List") "List" [unwrapAliasesDeep a]
     TType (Module.Canonical (Name "elm" "core") "Set") "Set" [a]     -> TType (Module.Canonical (Name "elm" "core") "Set") "Set" [unwrapAliasesDeep a]
+    TType (Module.Canonical (Name "lamdera" "hashmap") "Hash.Set") "Set" [a] -> TType (Module.Canonical (Name "lamdera" "hashmap") "Hash.Set") "Set" [unwrapAliasesDeep a]
     TType (Module.Canonical (Name "elm" "core") "Array") "Array" [a] -> TType (Module.Canonical (Name "elm" "core") "Array") "Array" [unwrapAliasesDeep a]
 
     TType (Module.Canonical (Name "elm" "core") "Result") "Result" [err, a] ->
@@ -788,6 +793,9 @@ unwrapAliasesDeep t =
 
     TType (Module.Canonical (Name "elm" "core") "Dict") "Dict" [key, val] ->
       TType (Module.Canonical (Name "elm" "core") "Dict") "Dict" [unwrapAliasesDeep key, unwrapAliasesDeep val]
+
+    TType (Module.Canonical (Name "lamdera" "hashmap") "Hash.Dict") "Dict" [key, val] ->
+      TType (Module.Canonical (Name "lamdera" "hashmap") "Hash.Dict") "Dict" [unwrapAliasesDeep key, unwrapAliasesDeep val]
 
     TType moduleName typeName params ->
       -- t -- @TODO wrong to not de-alias params?

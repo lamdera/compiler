@@ -260,8 +260,10 @@ typeNameToStringQualified moduleName tipeName params = do
         ("elm", "core", "Maybe") -> coreType
         ("elm", "core", "List") -> coreType
         ("elm", "core", "Set") -> coreType
+        ("lamdera", "hashmap", "Hash.Set") -> coreType
         ("elm", "core", "Array") -> coreType
         ("elm", "core", "Dict") -> coreType
+        ("lamdera", "hashmap", "Hash.Dict") -> coreType
         ("elm", "core", "Result") -> coreType
         _ ->
           T.concat $ [moduleNameKey moduleName, ".", nameToText tipeName]
@@ -293,8 +295,10 @@ typeNameToStringQualifiedParams moduleName tipeName params = do
         ("elm", "core", "Maybe") -> coreType
         ("elm", "core", "List") -> coreType
         ("elm", "core", "Set") -> coreType
+        ("lamdera", "hashmap", "Hash.Set") -> coreType
         ("elm", "core", "Array") -> coreType
         ("elm", "core", "Dict") -> coreType
+        ("lamdera", "hashmap", "Hash.Dict") -> coreType
         ("elm", "core", "Result") -> coreType
         _ ->
           [moduleNameKey moduleName, ".", nameToText tipeName, " ", (params & fmap qualifiedTypeName & parenthesize & T.intercalate " ")]
