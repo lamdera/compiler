@@ -297,7 +297,7 @@ canonicalToDiffableType targetName currentModule interfaces recursionSet canonic
             p:[] ->
               DSet (canonicalToDiffableType targetName currentModule_ interfaces recursionSet p tvarMap)
             _ ->
-              DError "❗️impossible multi-param Set"
+              DError "❗️impossible multi-param Hash.Set"
 
         ("elm", "core", "Result", "Result") ->
           case tvarResolvedParams of
@@ -319,7 +319,7 @@ canonicalToDiffableType targetName currentModule interfaces recursionSet canonic
             result:err:_ ->
               DDict (canonicalToDiffableType targetName currentModule_ interfaces recursionSet result tvarMap) (canonicalToDiffableType targetName currentModule_ interfaces recursionSet err tvarMap)
             _ ->
-              DError "❗️impossible !2 param Dict type"
+              DError "❗️impossible !2 param Hash.Dict type"
 
         -- Values backed by JS Kernel types we cannot encode/decode
         ("elm", "virtual-dom", "VirtualDom", "Node")         -> kernelError
