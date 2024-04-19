@@ -37,6 +37,10 @@ data DiffableType
   | DKernelBrowser Text
   | DError Text
   | DExternalWarning (Text, Text, Text, Text) DiffableType
+  -- Lamdera lib types special cased with support for efficiency
+  | DLamderaHashMapDict DiffableType DiffableType
+  | DLamderaHashMapSet DiffableType
+
   deriving (Show)
 
 

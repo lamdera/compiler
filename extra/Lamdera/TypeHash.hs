@@ -334,6 +334,20 @@ canonicalToDiffableType targetName interfaces recursionSet canonical tvarMap =
             _ ->
               DError "❗️impossible !2 param Dict type"
 
+        ("lamdera", "hashmap", "Hash.Dict", "Dict") ->
+          case tvarResolvedParams of
+            key:value:_ ->
+              DLamderaHashMapDict (canonicalToDiffableType targetName interfaces recursionSet key tvarMap) (canonicalToDiffableType targetName interfaces recursionSet value tvarMap)
+            _ ->
+              DError "❗️impossible !2 param HashMap Dict type"
+
+        ("lamdera", "hashmap", "Hash.Set", "Set") ->
+          case tvarResolvedParams of
+            value:_ ->
+              DLamderaHashMapSet (canonicalToDiffableType targetName interfaces recursionSet value tvarMap)
+            _ ->
+              DError "❗️impossible !1 param HashMap Set type"
+
 
         -- Values backed by JS Kernel types we cannot encode/decode
         ("elm", "virtual-dom", "VirtualDom", "Node")         -> kernelError
@@ -547,6 +561,8 @@ diffableTypeToText dtype =
 
     DError err -> "[ERROR]"
     DExternalWarning _ tipe -> diffableTypeToText tipe
+    DLamderaHashMapDict key value -> "LD["<> diffableTypeToText key <>","<> diffableTypeToText value <>"]"
+    DLamderaHashMapSet tipe -> "LS["<> diffableTypeToText tipe <>"]"
 
 
 diffableTypeErrors :: DiffableType -> [Text]
@@ -590,6 +606,9 @@ diffableTypeErrors dtype =
       --   ++ diffableTypeErrors realtipe
       diffableTypeErrors realtipe
 
+    DLamderaHashMapDict key value -> diffableTypeErrors key ++ diffableTypeErrors value
+    DLamderaHashMapSet tipe -> diffableTypeErrors tipe
+
 
 diffableTypeExternalWarnings :: DiffableType -> [Text]
 diffableTypeExternalWarnings dtype =
@@ -630,3 +649,6 @@ diffableTypeExternalWarnings dtype =
     DExternalWarning (author, pkg, module_, tipe) realtipe ->
       [ module_ <> "." <> tipe <> " (" <> author <> "/" <> pkg <> ")"]
         ++ diffableTypeExternalWarnings realtipe
+
+    DLamderaHashMapDict key value -> diffableTypeExternalWarnings key ++ diffableTypeExternalWarnings value
+    DLamderaHashMapSet tipe -> diffableTypeExternalWarnings tipe
