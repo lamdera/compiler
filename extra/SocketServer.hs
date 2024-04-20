@@ -42,6 +42,8 @@ socketHandler mClients mLeader beState onJoined onReceive clientId sessionId pen
               Just leaderId ->
                 if leaderId == clientId
                   then do
+                    -- This client was the leader but is now disconnecting,
+                    -- so we need to elect a new leader
                     writeTVar mLeader (getNextLeader remainingClients)
                     pure True
 

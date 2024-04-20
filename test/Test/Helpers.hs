@@ -1,8 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TupleSections #-}
 
 module Test.Helpers where
 
-import System.Environment (lookupEnv)
 import System.FilePath ((</>))
 import Data.Text as T
 import qualified Data.Text.Encoding as T
@@ -24,20 +24,12 @@ aggressiveCacheClear project = do
 
 withDebug :: IO a -> IO a
 withDebug io = do
-  setEnv "LDEBUG" "1"
-  res <- io
-  unsetEnv "LDEBUG"
-  pure res
+  withEnvVars [ ("LDEBUG", "1") ] io
 
 
 withDebugPkg :: IO a -> IO a
 withDebugPkg io = do
-  setEnv "LDEBUG" "1"
-  setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
-  res <- io
-  unsetEnv "LDEBUG"
-  unsetEnv "LOVR"
-  pure res
+  withEnvVars [ ("LDEBUG", "1"), ("LOVR", "/Users/mario/dev/projects/lamdera/overrides") ] io
 
 
 withTestEnv :: EasyTest.Test a -> EasyTest.Test a
@@ -55,12 +47,17 @@ withTestEnv test = do
 
 
 withProdMode :: IO a -> IO a
-withProdMode io = do
-  setEnv "LDEBUG" "1"
-  setEnv "LAMDERA_APP_NAME" "test-local"
+withProdMode io =
+  -- The presence of LAMDERA_APP_NAME causes lamdera check to decide we're in production mode
+  withEnvVars [ ("LDEBUG", "1"), ("LAMDERA_APP_NAME", "test-local") ] io
+
+
+withEnvVars :: [(String, String)] -> IO a -> IO a
+withEnvVars vars io = do
+  originalVars <- traverse (\(k, _) -> (k,) <$> lookupEnv k) vars
+  traverse (uncurry setEnv) vars
   res <- io
-  unsetEnv "LDEBUG"
-  unsetEnv "LAMDERA_APP_NAME"
+  traverse (uncurry forceEnv) originalVars
   pure res
 
 

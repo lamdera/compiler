@@ -105,6 +105,7 @@ module Lamdera
   , getEnvMode
   , setEnvMode
   , setEnv
+  , forceEnv
   , unsetEnv
   , lookupEnv
   , requireEnv
@@ -873,6 +874,11 @@ setEnv name value = do
   debug $ Prelude.concat ["🌏✍️  ENV ", name, ":", value]
   Env.setEnv name value
 
+forceEnv :: String -> Maybe String -> IO ()
+forceEnv name value = do
+  case value of
+    Just v -> setEnv name v
+    Nothing -> unsetEnv name
 
 unsetEnv :: String -> IO ()
 unsetEnv name = do
