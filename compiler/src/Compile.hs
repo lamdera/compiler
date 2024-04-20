@@ -37,6 +37,8 @@ import qualified Data.Text as T
 import qualified Data.Utf8
 import qualified Lamdera.UiSourceMap
 import qualified Lamdera.Nitpick.DebugLog
+import qualified Lamdera.Evergreen.ModifyAST
+
 
 -- import StandaloneInstances
 
@@ -68,8 +70,11 @@ compile pkg ifaces modul = do
   canonical0  <- canonicalize pkg ifaces modul_
   -- ()          <- debugPassText "starting canonical2" moduleName (pure ())
 
-  -- Add Canonical Wire gens, i.e. the `w3_[en|de]code_TYPENAME` functions
-  canonical2 <- Lamdera.Wire3.Core.addWireGenerations canonical0 pkg ifaces modul_
+  canonical2 <-
+    -- Add Canonical Wire gens, i.e. the `w3_[en|de]code_TYPENAME` functions
+    Lamdera.Wire3.Core.addWireGenerations canonical0 pkg ifaces modul_
+      -- Allow migrations to access non-exposed unsafeCoerce in lamdera/core
+      & fmap Lamdera.Evergreen.ModifyAST.update
 
   -- () <- unsafePerformIO $ do
   --   case (pkg, Src.getName modul) of

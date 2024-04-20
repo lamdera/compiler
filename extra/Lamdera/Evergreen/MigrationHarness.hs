@@ -574,9 +574,9 @@ genSupportingCode = do
             priorResult |> Result.map Upgraded
 
 
-        unchanged : newModel -> Result String (UpgradeResult newModel msg)
+        unchanged : oldModel -> UpgradeResult newModel msg
         unchanged model =
-            Ok ( Upgraded ( model, Cmd.none ) )
+            Upgraded ( unsafeCoerce model, Cmd.none )
 
 
         upgradeIsCurrent : Result String ( newModel, Cmd msg ) -> Result String (UpgradeResult newModel msg)
