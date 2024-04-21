@@ -24,7 +24,7 @@ import StandaloneInstances
 
 {-|
 
-Finds any local vars `unsafeCoerce` within the `LamderaGenerated` module
+Finds any local vars `unsafeCoerce` within the `LamderaHelpers` module
 and replaces them with a foreign var `Lamdera.Effect.unsafeCoerce`.
 
 This allows us to use `unsafeCoerce` in the generated code without exposing
@@ -38,13 +38,14 @@ update canonical =
     decls :: Can.Decls = (Can._decls canonical)
     newDecls :: Can.Decls = updateDecls moduleName decls
   in
+  debugHaskellPass "🟠🟠🟠🟠🟠 update on" moduleName $
   canonical { Can._decls = newDecls }
 
 
 updateDecls :: Module.Canonical -> Can.Decls -> Can.Decls
 updateDecls fileName decls =
   case fileName of
-    Module.Canonical (Name "author" "project") "LamderaGenerated" ->
+    Module.Canonical (Name "author" "project") "LamderaHelpers" ->
       case decls of
         Can.Declare def nextDecl ->
           Can.Declare (updateDefs fileName def) (updateDecls fileName nextDecl)
@@ -147,6 +148,7 @@ updateExpr fileName functionName (Reporting.Annotation.At location_ expr_) =
       Can.Shader shaderSource shaderTypes -> Can.Shader shaderSource shaderTypes
   )
   & Reporting.Annotation.At location_
+  & debugHaskell "🟠🟠🟠🟠🟠 updateExpr"
 
 
 updateDefs :: Module.Canonical -> Can.Def -> Can.Def

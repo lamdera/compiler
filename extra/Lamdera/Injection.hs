@@ -157,6 +157,15 @@ source mode mains =
 injections :: Bool -> Bool -> Text
 injections isBackend isLocalDev =
   let
+    previousVersionInt =
+      -- @TODO maybe its time to consolidate the global config...
+      (unsafePerformIO $ lookupEnv "VERSION")
+        & maybe "0" id
+        & read
+        & subtract 1
+
+    previousVersion = show_ previousVersionInt
+
     isBackend_ =
       if isBackend
         then "true"
@@ -187,6 +196,7 @@ injections isBackend isLocalDev =
               , decodeWireAnalytics: $$author$$project$$LamderaHelpers$$decodeWireAnalytics
               , getUserModel : function() { return model.userModel }
               , setUserModel : function(userModel) { model.userModel = userModel }
+              , upgradeBackendModel_v$previousVersion : function() { return $$author$$project$$LamderaGenerated$$upgradeBackendModel_v$previousVersion(model) }
               }
           |]
         else

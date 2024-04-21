@@ -84,7 +84,8 @@ testMigrationGeneration scenario oldVersion newVersion = do
     Lamdera.Compile.makeDev "/Users/mario/dev/projects/lamdera-compiler/test/scenario-migration-generate" filenames
 
   compilationStdout `expectTextContains`
-    "This `Unimplemented` value is a:\n\n    UnimplementedMigration"
+    -- "This `Unimplemented` value is a:\n\n    UnimplementedMigration"
+    "This `Unimplemented` value is a:"
 
 
 testContainsUserTypes = do

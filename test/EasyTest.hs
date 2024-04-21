@@ -90,6 +90,23 @@ expectTextContains haystack needle =
       , "◀️"
       ]
 
+expectTextDoesNotContain :: T.Text -> T.Text -> Test ()
+expectTextDoesNotContain haystack needle =
+  if textContains needle haystack
+    then crash $ unlines
+      [ ""
+      , "💥💥💥"
+      , "Inside this haystack:"
+      , "▶️"
+      , (T.unpack haystack)
+      , "◀️"
+      , "I found this needle:"
+      , "▶️"
+      , (T.unpack needle)
+      , "◀️"
+      ]
+    else ok
+
 
 textStripped :: T.Text -> T.Text
 textStripped t =
