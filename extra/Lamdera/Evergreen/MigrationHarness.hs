@@ -79,7 +79,7 @@ generateFor nextVersion migrationFilepaths = do
       if vinfoVersion nextVersion > 1 then
         upgradeFor migrationSequence nextVersion "BackendModel"
       else
-        ""
+        "upgradeBackendModelPrevious = ()\n\n"
 
     final =
       [text|
@@ -169,8 +169,8 @@ upgradeFor migrationSequence nextVersion valueType = do
   case nextVersion of
     WithMigrations _ ->
         [untrimming|
-          upgrade${valueType}_v$currentVersion_ : T$currentVersion_.$valueType -> UpgradeResult T$nextVersion_.$valueType T$nextVersion_.$cmdMsgType
-          upgrade${valueType}_v$currentVersion_ model_v$currentVersion_ =
+          upgrade${valueType}Previous : T$currentVersion_.$valueType -> UpgradeResult T$nextVersion_.$valueType T$nextVersion_.$cmdMsgType
+          upgrade${valueType}Previous model_v$currentVersion_ =
               model_v$currentVersion_
                   |> M$nextVersion_.$valueTypeTitleCase
 
@@ -179,8 +179,8 @@ upgradeFor migrationSequence nextVersion valueType = do
 
     WithoutMigrations _ ->
         [untrimming|
-          upgrade${valueType}_v$currentVersion_ : T$nextVersion_.$valueType -> UpgradeResult T$nextVersion_.$valueType T$nextVersion_.$cmdMsgType
-          upgrade${valueType}_v$currentVersion_ model_v$currentVersion_ =
+          upgrade${valueType}Previous : T$nextVersion_.$valueType -> UpgradeResult T$nextVersion_.$valueType T$nextVersion_.$cmdMsgType
+          upgrade${valueType}Previous model_v$currentVersion_ =
               unchanged model_v$currentVersion_
 
 

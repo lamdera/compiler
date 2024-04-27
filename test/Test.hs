@@ -249,6 +249,9 @@ all =
 rerun seed =
   EasyTest.rerun seed allTests
 
+rerunJust label =
+  EasyTest.rerunOnly 0 label allTests
+
 rerunOnly seed label =
   EasyTest.rerunOnly seed label allTests
 

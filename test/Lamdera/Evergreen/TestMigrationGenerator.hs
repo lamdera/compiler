@@ -50,7 +50,7 @@ suite :: Test ()
 suite = tests
   [
     scope "migration-scenarios" testExamples
-  -- , scope "e2e migration: 1 -> 2" $ testMigrationGeneration "scenario-migration-generate" 1 2
+  , scope "e2e migration: 1 -> 2" $ testMigrationGeneration "scenario-migration-generate" 1 2
   , scope "containsUserTypes" testContainsUserTypes
   ]
 

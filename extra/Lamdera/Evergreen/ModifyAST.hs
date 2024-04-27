@@ -18,6 +18,7 @@ import qualified Elm.ModuleName as Module
 import qualified Reporting.Annotation
 import qualified Data.ByteString.Builder as B
 
+import qualified Lamdera.Wire3.Helpers
 import Lamdera
 import StandaloneInstances
 
@@ -35,11 +36,15 @@ update :: Can.Module -> Can.Module
 update canonical =
   let
     moduleName :: Module.Canonical = (Can._name canonical)
-    decls :: Can.Decls = (Can._decls canonical)
+    decls :: Can.Decls = (Can._decls canonical) & removeUnsafeCoercePlaceholder
     newDecls :: Can.Decls = updateDecls moduleName decls
   in
-  debugHaskellPass "🟠🟠🟠🟠🟠 update on" moduleName $
   canonical { Can._decls = newDecls }
+
+
+removeUnsafeCoercePlaceholder :: Can.Decls -> Can.Decls
+removeUnsafeCoercePlaceholder decls =
+  Lamdera.Wire3.Helpers.removeDefByName "unsafeCoerce" decls
 
 
 updateDecls :: Module.Canonical -> Can.Decls -> Can.Decls
@@ -66,6 +71,24 @@ updateDecls fileName decls =
 updateExpr :: Module.Canonical -> Name.Name -> Can.Expr -> Can.Expr
 updateExpr fileName functionName (Reporting.Annotation.At location_ expr_) =
     (case expr_ of
+      Can.Call (Reporting.Annotation.At location
+          (Can.VarTopLevel (Module.Canonical (Name "author" "project") "LamderaHelpers") "unsafeCoerce")
+        ) params ->
+        Can.Call
+          (Reporting.Annotation.At
+            location
+            (Can.VarForeign
+              (Module.Canonical (Name "lamdera" "core") "Lamdera.Effect")
+              "unsafeCoerce"
+              (Forall
+                (Map.fromList [("a", ()), ("b", ())])
+                (TLambda (TVar "a") (TVar "b"))
+              )
+            )
+          )
+          params
+
+      -- The recursive rest. Might be worth looking at revisiting recursion schemes again, esp if error messages have improved
       Can.VarLocal name -> Can.VarLocal name
       Can.VarTopLevel canonical name -> Can.VarTopLevel canonical name
       Can.VarKernel name name2 -> Can.VarKernel name name2
@@ -81,17 +104,6 @@ updateExpr fileName functionName (Reporting.Annotation.At location_ expr_) =
       Can.Negate expr -> Can.Negate ((updateExpr fileName functionName) expr)
       Can.Binop name canonical name2 annotation expr expr2 -> Can.Binop name canonical name2 annotation ((updateExpr fileName functionName) expr) ((updateExpr fileName functionName) expr2)
       Can.Lambda patterns expr -> Can.Lambda patterns ((updateExpr fileName functionName) expr)
-      Can.Call (Reporting.Annotation.At location (Can.VarLocal "unsafeCoerce") ) params ->
-        Can.Call
-          (Reporting.Annotation.At
-            location
-            (Can.VarForeign
-              (Module.Canonical (Name "lamdera" "core") "Lamdera.Effect")
-              "unsafeCoerce"
-              (Forall Map.empty (TLambda (TVar "a") (TVar "b")))
-            )
-          )
-          params
       Can.Call expr exprs -> Can.Call ((updateExpr fileName functionName) expr) (fmap (updateExpr fileName functionName) exprs)
       Can.If exprs expr ->
         Can.If
@@ -148,7 +160,6 @@ updateExpr fileName functionName (Reporting.Annotation.At location_ expr_) =
       Can.Shader shaderSource shaderTypes -> Can.Shader shaderSource shaderTypes
   )
   & Reporting.Annotation.At location_
-  & debugHaskell "🟠🟠🟠🟠🟠 updateExpr"
 
 
 updateDefs :: Module.Canonical -> Can.Def -> Can.Def

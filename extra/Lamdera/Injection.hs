@@ -196,7 +196,7 @@ injections isBackend isLocalDev =
               , decodeWireAnalytics: $$author$$project$$LamderaHelpers$$decodeWireAnalytics
               , getUserModel : function() { return model.userModel }
               , setUserModel : function(userModel) { model.userModel = userModel }
-              , upgradeBackendModel_v$previousVersion : function() { return $$author$$project$$LamderaGenerated$$upgradeBackendModel_v$previousVersion(model) }
+              , upgradeBackendModelPrevious : function() { model.userModel = $$author$$project$$LamderaGenerated$$upgradeBackendModelPrevious(model) }
               }
           |]
         else

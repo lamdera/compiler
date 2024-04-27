@@ -254,8 +254,8 @@ suite = tests
               2
 
 
-          upgradeBackendModel_v1 : T1.BackendModel -> UpgradeResult T2.BackendModel T2.BackendMsg
-          upgradeBackendModel_v1 model_v1 =
+          upgradeBackendModelPrevious : T1.BackendModel -> UpgradeResult T2.BackendModel T2.BackendMsg
+          upgradeBackendModelPrevious model_v1 =
               model_v1
                   |> M2.backendModel
 
@@ -438,8 +438,8 @@ suite = tests
               2
 
 
-          upgradeBackendModel_v1 : T2.BackendModel -> UpgradeResult T2.BackendModel T2.BackendMsg
-          upgradeBackendModel_v1 model_v1 =
+          upgradeBackendModelPrevious : T2.BackendModel -> UpgradeResult T2.BackendModel T2.BackendMsg
+          upgradeBackendModelPrevious model_v1 =
               unchanged model_v1
 
 

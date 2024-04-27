@@ -34,6 +34,8 @@ import qualified Reporting.Task as Task
 import qualified Stuff
 
 
+import Lamdera ((&))
+import qualified Lamdera
 import qualified Lamdera.AppConfig
 
 -- NOTE: This is used by Make, Repl, and Reactor right now. But it may be
@@ -77,7 +79,10 @@ prod root details (Build.Artifacts pkg _ roots modules) =
       checkForDebugUses objects
       let graph_ = objectsToGlobalGraph objects
       graph <- Task.io $ Lamdera.AppConfig.injectConfig graph_
+      longNamesEnabled <- Task.io $ Lamdera.isLongNamesEnabled
       let mode = Mode.Prod (Mode.shortenFieldNames graph)
+                   & Lamdera.alternativeImplementationWhen longNamesEnabled
+                       (Mode.Prod (Mode.legibleFieldNames graph))
       let mains = gatherMains pkg objects roots
       return $ JS.generate mode graph mains
 

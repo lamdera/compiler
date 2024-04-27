@@ -334,9 +334,11 @@ isDevNull name =
 
 -- Clone of run that uses attemptWithStyle_cleanup
 run_cleanup :: IO () -> [FilePath] -> Flags -> IO ()
-run_cleanup cleanup paths flags@(Flags _ _ _ report _ _ _) =
+run_cleanup cleanup paths flags@(Flags _ _ _ report _ noWire optimizeLegible) =
   do  style <- getStyle report
       maybeRoot <- Stuff.findRoot
+      Lamdera.onlyWhen noWire Lamdera.disableWire
+      Lamdera.onlyWhen optimizeLegible Lamdera.enableLongNames
       Reporting.attemptWithStyle_cleanup cleanup style Exit.makeToReport $
         case maybeRoot of
           Just root -> runHelp root paths style flags
