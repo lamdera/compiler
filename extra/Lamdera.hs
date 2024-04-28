@@ -91,6 +91,8 @@ module Lamdera
   , lamderaEnvModePath
   , lamderaExternalWarningsPath
   , lamderaBackendDevSnapshotPath
+  , withCompilerRoot
+  , withRuntimeRoot
   , Ext.Common.setProjectRoot
   , Ext.Common.getProjectRoot
   , Ext.Common.getProjectRootFor
@@ -796,9 +798,18 @@ lamderaBackendDevSnapshotPath = do
   pure $ lamderaCache root </> ".lamdera-bem-dev"
 
 
+withCompilerRoot :: FilePath -> FilePath
+withCompilerRoot path =
+  unsafePerformIO $ do
+    home <- Dir.getHomeDirectory
+    pure $ home </> "dev" </> "projects" </> "lamdera-compiler" </> path
 
 
-
+withRuntimeRoot :: FilePath -> FilePath
+withRuntimeRoot path =
+  unsafePerformIO $ do
+    home <- Dir.getHomeDirectory
+    pure $ home </> "dev" </> "projects" </> "lamdera-runtime" </> path
 
 
 lowerFirstLetter :: String -> Text
