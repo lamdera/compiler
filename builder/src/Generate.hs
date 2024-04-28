@@ -79,7 +79,7 @@ prod root details (Build.Artifacts pkg _ roots modules) =
       checkForDebugUses objects
       let graph_ = objectsToGlobalGraph objects
       graph <- Task.io $ Lamdera.AppConfig.injectConfig graph_
-      longNamesEnabled <- Task.io $ Lamdera.isLongNamesEnabled
+      longNamesEnabled <- Task.io $ Lamdera.useLongNames
       let mode = Mode.Prod (Mode.shortenFieldNames graph)
                    & Lamdera.alternativeImplementationWhen longNamesEnabled
                        (Mode.Prod (Mode.legibleFieldNames graph))

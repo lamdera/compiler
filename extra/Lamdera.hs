@@ -45,8 +45,7 @@ module Lamdera
   , isWireEnabled_
   , useLongNames_
   , enableLongNames
-  , isLongNamesEnabled
-  , isLongNamesEnabled_
+  , useLongNames
   , isTest
   , isLiveMode
   , setLiveMode
@@ -442,19 +441,15 @@ isWireEnabled_ = unsafePerformIO $ isWireEnabled
 useLongNames_ :: MVar Bool
 useLongNames_ = unsafePerformIO $ newMVar False
 
+{-# NOINLINE useLongNames #-}
+useLongNames :: IO Bool
+useLongNames = do
+  readMVar useLongNames_
+
 enableLongNames :: IO ()
 enableLongNames = do
   debug $ "🗜️ enableLongNames"
   modifyMVar_ useLongNames_ (\_ -> pure True)
-
-{-# NOINLINE isLongNamesEnabled #-}
-isLongNamesEnabled :: IO Bool
-isLongNamesEnabled = do
-  readMVar useLongNames_
-
-{-# NOINLINE isLongNamesEnabled_ #-}
-isLongNamesEnabled_ :: Bool
-isLongNamesEnabled_ = unsafePerformIO $ isLongNamesEnabled
 
 
 isTest :: IO Bool
