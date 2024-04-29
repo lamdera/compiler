@@ -246,6 +246,7 @@ Executable lamdera
         Lamdera.Evergreen.MigrationGeneratorUnion
         Lamdera.Evergreen.MigrationHarness
         Lamdera.Evergreen.MigrationSpecialCases
+        Lamdera.Evergreen.ModifyAST
         Lamdera.Evergreen.Snapshot
         Lamdera.Extensions
         Lamdera.Graph

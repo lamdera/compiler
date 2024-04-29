@@ -157,6 +157,15 @@ source mode mains =
 injections :: Bool -> Bool -> Text
 injections isBackend isLocalDev =
   let
+    previousVersionInt =
+      -- @TODO maybe its time to consolidate the global config...
+      (unsafePerformIO $ lookupEnv "VERSION")
+        & maybe "0" id
+        & read
+        & subtract 1
+
+    previousVersion = show_ previousVersionInt
+
     isBackend_ =
       if isBackend
         then "true"
@@ -185,6 +194,9 @@ injections isBackend isLocalDev =
             var fns =
               { decodeWirePayloadHeader: $$author$$project$$LamderaHelpers$$decodeWirePayloadHeader
               , decodeWireAnalytics: $$author$$project$$LamderaHelpers$$decodeWireAnalytics
+              , getUserModel : function() { return model.userModel }
+              , setUserModel : function(userModel) { model.userModel = userModel }
+              , upgradeBackendModelPrevious : function() { model.userModel = $$author$$project$$LamderaGenerated$$upgradeBackendModelPrevious(model) }
               }
           |]
         else
@@ -288,9 +300,20 @@ injections isBackend isLocalDev =
           model = null;
           stepper = null;
           ports = null;
+          _Platform_effectsQueue = [];
+
+          // Do we need to call these functions? Or will the `= []` be enough?
+          // _Platform_enqueueEffects(managers, $$elm$$core$$Platform$$Cmd$$none, $$elm$$core$$Platform$$Sub$$none);
+          // _Platform_enqueueEffects(managers, _Platform_batch(_List_Nil), _Platform_batch(_List_Nil));
         }
 
-        return ports ? { ports: ports, gm: function() { return model }, eum: function() { upgradeMode = true }, die: die, fns: fns } : {};
+        return ports ? {
+          ports: ports,
+          gm: function() { return model },
+          eum: function() { upgradeMode = true },
+          die: die,
+          fns: fns
+        } : {};
       }
   |]
 

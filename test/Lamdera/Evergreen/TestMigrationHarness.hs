@@ -14,6 +14,7 @@ import Test.Helpers
 import Lamdera
 import Lamdera.Evergreen.MigrationHarness (VersionInfo(..))
 import qualified Lamdera.Evergreen.MigrationHarness
+import qualified Lamdera.Compile
 
 
 all = do
@@ -152,6 +153,10 @@ suite = tests
               1
 
 
+          upgradeBackendModelPrevious =
+              ()
+
+
           decodeAndUpgradeBackendModel : Int -> Bytes -> UpgradeResult T1.BackendModel T1.BackendMsg
           decodeAndUpgradeBackendModel version bytes =
               case version of
@@ -253,6 +258,12 @@ suite = tests
               2
 
 
+          upgradeBackendModelPrevious : T1.BackendModel -> UpgradeResult T2.BackendModel T2.BackendMsg
+          upgradeBackendModelPrevious model_v1 =
+              model_v1
+                  |> M2.backendModel
+
+
           decodeAndUpgradeBackendModel : Int -> Bytes -> UpgradeResult T2.BackendModel T2.BackendMsg
           decodeAndUpgradeBackendModel version bytes =
               case version of
@@ -349,6 +360,164 @@ suite = tests
                   1 ->
                       decodeType 3 1 bytes T1.w3_decode_ToFrontend
                           |> thenMigrateMsg 3 M2.toFrontend T1.w3_encode_ToFrontend T2.w3_decode_ToFrontend 2
+                          |> upgradeSucceeds
+                          |> otherwiseError
+
+                  2 ->
+                      decodeType 3 version bytes T2.w3_decode_ToFrontend
+                          |> upgradeIsCurrent
+                          |> otherwiseError
+
+                  _ ->
+                      UnknownVersion ( version, "ToFrontend", bytes )
+        |]
+
+      scope "compile and run" $ do
+        let
+          project = "/Users/mario/dev/projects/lamdera-compiler/test/scenario-migration-generate/"
+          helpers = "src/LamderaHelpers.elm"
+          target = "src/LamderaGenerated.elm"
+          filenames = [target]
+
+          setup = do
+            writeUtf8 (project <> target) result
+            cp (withRuntimeRoot ("runtime/" <> helpers)) (project <> helpers)
+
+          cleanup _ = do
+            rm (project <> target)
+            rm (project <> helpers)
+
+          test _ = do
+
+            compilationStdout <- catchOutput $
+              Lamdera.Compile.makeDev (withCompilerRoot "test/scenario-migration-generate") filenames
+
+            compilationStdout `expectTextDoesNotContain` "I cannot find a `unsafeCoerce` variable"
+
+        using setup cleanup test
+
+
+  , scope "full first - (WithoutMigrations 2)" $ do
+
+      let
+        nextVersion = (WithoutMigrations 2)
+        migrationsFilenames = []
+      migrations <- io $ Lamdera.Evergreen.MigrationHarness.getMigrationsSequence migrationsFilenames nextVersion 2
+      result <- io $ withProdMode $ Lamdera.Evergreen.MigrationHarness.generateFor nextVersion migrationsFilenames
+
+      scope "full" $
+        expectEqualTextTrimmed result
+        [text|
+
+          module LamderaGenerated exposing (..)
+
+          import Evergreen.V1.Types as T1
+          import Lamdera.Migrations exposing (..)
+          import Lamdera.Wire3 exposing (Bytes, Decoder, Encoder, bytesDecode, bytesEncode)
+          import LamderaHelpers exposing (..)
+          import Types as T2
+
+
+          currentVersion : Int
+          currentVersion =
+              2
+
+
+          upgradeBackendModelPrevious : T2.BackendModel -> UpgradeResult T2.BackendModel T2.BackendMsg
+          upgradeBackendModelPrevious model_v1 =
+              unchanged model_v1
+
+
+          decodeAndUpgradeBackendModel : Int -> Bytes -> UpgradeResult T2.BackendModel T2.BackendMsg
+          decodeAndUpgradeBackendModel version bytes =
+              case version of
+                  1 ->
+                      decodeType 5 2 bytes T2.w3_decode_BackendModel
+                          |> upgradeSucceeds
+                          |> otherwiseError
+
+                  2 ->
+                      decodeType 5 version bytes T2.w3_decode_BackendModel
+                          |> upgradeIsCurrent
+                          |> otherwiseError
+
+                  _ ->
+                      UnknownVersion ( version, "BackendModel", bytes )
+
+
+          decodeAndUpgradeFrontendModel : Int -> Bytes -> UpgradeResult T2.FrontendModel T2.FrontendMsg
+          decodeAndUpgradeFrontendModel version bytes =
+              case version of
+                  1 ->
+                      decodeType 4 2 bytes T2.w3_decode_FrontendModel
+                          |> upgradeSucceeds
+                          |> otherwiseError
+
+                  2 ->
+                      decodeType 4 version bytes T2.w3_decode_FrontendModel
+                          |> upgradeIsCurrent
+                          |> otherwiseError
+
+                  _ ->
+                      UnknownVersion ( version, "FrontendModel", bytes )
+
+
+          decodeAndUpgradeFrontendMsg : Int -> Bytes -> UpgradeResult T2.FrontendMsg T2.FrontendMsg
+          decodeAndUpgradeFrontendMsg version bytes =
+              case version of
+                  1 ->
+                      decodeType 0 2 bytes T2.w3_decode_FrontendMsg
+                          |> upgradeSucceeds
+                          |> otherwiseError
+
+                  2 ->
+                      decodeType 0 version bytes T2.w3_decode_FrontendMsg
+                          |> upgradeIsCurrent
+                          |> otherwiseError
+
+                  _ ->
+                      UnknownVersion ( version, "FrontendMsg", bytes )
+
+
+          decodeAndUpgradeToBackend : Int -> Bytes -> UpgradeResult T2.ToBackend T2.BackendMsg
+          decodeAndUpgradeToBackend version bytes =
+              case version of
+                  1 ->
+                      decodeType 1 2 bytes T2.w3_decode_ToBackend
+                          |> upgradeSucceeds
+                          |> otherwiseError
+
+                  2 ->
+                      decodeType 1 version bytes T2.w3_decode_ToBackend
+                          |> upgradeIsCurrent
+                          |> otherwiseError
+
+                  _ ->
+                      UnknownVersion ( version, "ToBackend", bytes )
+
+
+          decodeAndUpgradeBackendMsg : Int -> Bytes -> UpgradeResult T2.BackendMsg T2.BackendMsg
+          decodeAndUpgradeBackendMsg version bytes =
+              case version of
+                  1 ->
+                      decodeType 2 2 bytes T2.w3_decode_BackendMsg
+                          |> upgradeSucceeds
+                          |> otherwiseError
+
+                  2 ->
+                      decodeType 2 version bytes T2.w3_decode_BackendMsg
+                          |> upgradeIsCurrent
+                          |> otherwiseError
+
+                  _ ->
+                      UnknownVersion ( version, "BackendMsg", bytes )
+
+
+          decodeAndUpgradeToFrontend : Int -> Bytes -> UpgradeResult T2.ToFrontend T2.FrontendMsg
+          decodeAndUpgradeToFrontend version bytes =
+              case version of
+                  1 ->
+                      decodeType 3 2 bytes T2.w3_decode_ToFrontend
                           |> upgradeSucceeds
                           |> otherwiseError
 

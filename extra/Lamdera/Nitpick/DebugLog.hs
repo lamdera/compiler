@@ -40,6 +40,7 @@ hasUselessDebugLogs canonical =
         first : rest -> Left $ E.LamderaBadDebugLog $ NE.List first rest
         [] -> Right ()
 
+
 checkDecls :: Can.Decls -> [A.Region]
 checkDecls decls =
     case decls of
@@ -51,7 +52,6 @@ checkDecls decls =
 
         Can.SaveTheEnvironment ->
             []
-
 
 
 checkDefs :: Can.Def -> [A.Region]

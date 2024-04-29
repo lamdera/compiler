@@ -9,6 +9,22 @@ import Types exposing (..)
 import Url
 
 
+main =
+    Browser.application
+        { init = flagInit
+        , update = update
+        , view = view
+        , subscriptions = \_ -> Sub.none
+        , onUrlRequest = UrlClicked
+        , onUrlChange = UrlChanged
+        }
+
+
+flagInit : () -> (Url.Url -> Nav.Key -> ( Model, Cmd FrontendMsg ))
+flagInit flags =
+    init
+
+
 type alias Model =
     FrontendModel
 
@@ -25,8 +41,16 @@ app =
         }
 
 
+testEquality =
+    NoOpFrontendMsg == NoOpFrontendMsg
+
+
 init : Url.Url -> Nav.Key -> ( Model, Cmd FrontendMsg )
 init url key =
+    let
+        x =
+            testEquality
+    in
     ( { key = key
       , message = "Welcome to Lamdera! You're looking at the auto-generated base implementation. Check out src/Frontend.elm to start coding!"
       }

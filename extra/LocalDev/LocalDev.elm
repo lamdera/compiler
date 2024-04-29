@@ -16,13 +16,13 @@ port module LocalDev exposing (main)
    be relied on in any way.
 
 -}
--- import Bytes
 -- import Http
 -- import LamderaGenerated
 -- import LamderaHelpers exposing (..)
 
 import Backend
 import Browser
+import Bytes
 import Env
 import Frontend
 import Html exposing (..)
@@ -273,6 +273,24 @@ init flags url key =
                             -- Prior backend model has failed to restore, notify the user of a resulting reset
                             ( ibem, iBeCmds, True )
 
+        _ =
+            case flags.b of
+                Nothing ->
+                    bem
+
+                Just backendModelBytes ->
+                    if Bytes.width backendModelBytes > 1024 then
+                        let
+                            -- The backend model is really large now, it's not useful to
+                            -- log to the console anymore and slows things down
+                            _ =
+                                log "☀️ Restored BackendModel <print skipped for 1MB+ model size>" ()
+                        in
+                        bem
+
+                    else
+                        log "☀️ Restored BackendModel" bem
+
         devbarInit =
             { expanded = False
             , location = BottomLeft
@@ -305,14 +323,6 @@ init flags url key =
                         -- Data might have reset since our last refresh
                         , showResetNotification = didReset
                     }
-    in
-    let
-        x =
-            if didReset || (bem == ibem) then
-                bem
-
-            else
-                log "☀️ Restored BackendModel" bem
 
         nodeType =
             case flags.nt of

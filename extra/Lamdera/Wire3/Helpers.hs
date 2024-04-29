@@ -328,6 +328,25 @@ removeDef def_ decls_ =
       SaveTheEnvironment
 
 
+removeDefByName :: Data.Name.Name -> Decls -> Decls
+removeDefByName name decls_ =
+  case decls_ of
+    Declare def decls ->
+      if (defName def == name) then
+        decls
+      else
+        Declare def (removeDefByName name decls)
+
+    DeclareRec def defs decls ->
+      if (defName def == name) then
+        decls
+      else
+        DeclareRec def (List.filter (\d -> defName d /= name) defs) (removeDefByName name decls)
+
+    SaveTheEnvironment ->
+      SaveTheEnvironment
+
+
 sameName :: Def -> Def -> Bool
 sameName d1 d2 =
   defName d1 == defName d2

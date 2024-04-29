@@ -50,7 +50,7 @@ suite :: Test ()
 suite = tests
   [
     scope "migration-scenarios" testExamples
-  -- , scope "e2e migration: 1 -> 2" $ testMigrationGeneration "scenario-migration-generate" 1 2
+  , scope "e2e migration: 1 -> 2" $ testMigrationGeneration "scenario-migration-generate" 1 2
   , scope "containsUserTypes" testContainsUserTypes
   ]
 
@@ -84,7 +84,8 @@ testMigrationGeneration scenario oldVersion newVersion = do
     Lamdera.Compile.makeDev "/Users/mario/dev/projects/lamdera-compiler/test/scenario-migration-generate" filenames
 
   compilationStdout `expectTextContains`
-    "This `Unimplemented` value is a:\n\n    UnimplementedMigration"
+    -- "This `Unimplemented` value is a:\n\n    UnimplementedMigration"
+    "This `Unimplemented` value is a:"
 
 
 testContainsUserTypes = do

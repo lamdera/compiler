@@ -108,6 +108,7 @@ For more information on how to use the GHCi debugger, see the GHC User's Guide.
 -- target = previewProject
 -- target = liveReloadLive
 target = Test.all
+-- target = rerunJust "Lamdera.Evergreen.TestMigrationHarness -> .full first - (WithMigrations 2)"
 -- target = checkUserConfig
 -- target = Test.Wire.buildAllPackages
 -- target = Lamdera.CLI.Login.run () ()
@@ -248,6 +249,9 @@ all =
 
 rerun seed =
   EasyTest.rerun seed allTests
+
+rerunJust label =
+  EasyTest.rerunOnly 0 label allTests
 
 rerunOnly seed label =
   EasyTest.rerunOnly seed label allTests

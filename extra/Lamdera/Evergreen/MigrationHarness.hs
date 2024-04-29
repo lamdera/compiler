@@ -75,6 +75,12 @@ generateFor nextVersion migrationFilepaths = do
   debug_ $ "Generated source for LamderaGenerated"
 
   let
+    upgradeBackendModel =
+      if vinfoVersion nextVersion > 1 then
+        upgradeFor migrationSequence nextVersion "BackendModel"
+      else
+        "upgradeBackendModelPrevious = ()\n\n"
+
     final =
       [text|
         module LamderaGenerated exposing (..)
@@ -87,7 +93,7 @@ generateFor nextVersion migrationFilepaths = do
         currentVersion =
             $nextVersion_
 
-
+        $upgradeBackendModel
         $decodeAndUpgrades
 
       |]
@@ -95,25 +101,25 @@ generateFor nextVersion migrationFilepaths = do
   pure $ Ext.ElmFormat.formatOrPassthrough final
 
 
+valueTypeToCmdMsgType :: Text -> Text
+valueTypeToCmdMsgType valueType =
+  case valueType of
+    "BackendModel"  -> "BackendMsg"
+    "FrontendModel" -> "FrontendMsg"
+    "FrontendMsg"   -> "FrontendMsg"
+    "ToBackend"     -> "BackendMsg"
+    "BackendMsg"    -> "BackendMsg"
+    "ToFrontend"    -> "FrontendMsg"
+    _               ->
+      error $ "Evergreen.Generation: impossible value type: " <> show valueType
+
 
 decodeAndUpgradeFor migrationSequence nextVersion valueType = do
   let
-    nextVersion_ = show_ $ vinfoVersion nextVersion
-
+    nextVersion_        = show_ $ vinfoVersion nextVersion
     historicMigrations_ = historicMigrations migrationSequence nextVersion valueType
-
-    cmdMsgType =
-      case valueType of
-        "BackendModel"  -> "BackendMsg"
-        "FrontendModel" -> "FrontendMsg"
-        "FrontendMsg"   -> "FrontendMsg"
-        "ToBackend"     -> "BackendMsg"
-        "BackendMsg"    -> "BackendMsg"
-        "ToFrontend"    -> "FrontendMsg"
-        _               ->
-          error $ "Evergreen.Generation: impossible value type: " <> show valueType
-
-    valueTypeInt = show_ $ tipeStringToInt valueType
+    cmdMsgType          = valueTypeToCmdMsgType valueType
+    valueTypeInt        = show_ $ tipeStringToInt valueType
 
     caseAll =
       if historicMigrations_ /= "" then
@@ -151,7 +157,37 @@ decodeAndUpgradeFor migrationSequence nextVersion valueType = do
   |]
 
 
-typeImports :: [(a, [VersionInfo])] -> VersionInfo -> [Text]
+upgradeFor migrationSequence nextVersion valueType = do
+  let
+    nextVersion_        = show_ $ vinfoVersion nextVersion
+    currentVersion_     = show_ $ (vinfoVersion nextVersion) - 1
+    historicMigrations_ = historicMigrations migrationSequence nextVersion valueType
+    cmdMsgType          = valueTypeToCmdMsgType valueType
+    valueTypeInt        = show_ $ tipeStringToInt valueType
+    valueTypeTitleCase  = lowerFirstLetter_ valueType
+
+  case nextVersion of
+    WithMigrations _ ->
+        [untrimming|
+          upgrade${valueType}Previous : T$currentVersion_.$valueType -> UpgradeResult T$nextVersion_.$valueType T$nextVersion_.$cmdMsgType
+          upgrade${valueType}Previous model_v$currentVersion_ =
+              model_v$currentVersion_
+                  |> M$nextVersion_.$valueTypeTitleCase
+
+
+        |]
+
+    WithoutMigrations _ ->
+        [untrimming|
+          upgrade${valueType}Previous : T$nextVersion_.$valueType -> UpgradeResult T$nextVersion_.$valueType T$nextVersion_.$cmdMsgType
+          upgrade${valueType}Previous model_v$currentVersion_ =
+              unchanged model_v$currentVersion_
+
+
+        |]
+
+
+typeImports :: (Show a) => [(a, [VersionInfo])] -> VersionInfo -> [Text]
 typeImports migrationSequence nextVersion =
   migrationSequence
     & List.head
@@ -379,12 +415,11 @@ data VersionInfo = WithMigrations Int | WithoutMigrations Int deriving (Eq, Show
 justWithMigrationVersions :: [VersionInfo] -> [Int]
 justWithMigrationVersions versions =
   versions
-    & fmap (\vinfo ->
+    & filterMap (\vinfo ->
       case vinfo of
         WithMigrations v -> Just v
         WithoutMigrations v -> Nothing
     )
-    & justs
 
 
 vinfoVersion :: VersionInfo -> Int
@@ -537,6 +572,11 @@ genSupportingCode = do
         upgradeSucceeds : Result String ( newModel, Cmd msg ) -> Result String (UpgradeResult newModel msg)
         upgradeSucceeds priorResult =
             priorResult |> Result.map Upgraded
+
+
+        unchanged : oldModel -> UpgradeResult newModel msg
+        unchanged model =
+            Upgraded ( unsafeCoerce model, Cmd.none )
 
 
         upgradeIsCurrent : Result String ( newModel, Cmd msg ) -> Result String (UpgradeResult newModel msg)

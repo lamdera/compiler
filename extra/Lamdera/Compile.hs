@@ -68,7 +68,7 @@ make_ root = do
           , _report = Nothing
           , _docs = Nothing
           , _noWire = False
-          , _optimizeLegible = False
+          , _optimizeLegible = True
           }
   wait r
   -- The compilation process ends by printing to terminal in a way that overwrites

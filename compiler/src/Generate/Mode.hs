@@ -3,6 +3,8 @@ module Generate.Mode
   , isDebug
   , ShortFieldNames
   , shortenFieldNames
+  -- @LAMDERA
+  , legibleFieldNames
   )
   where
 
@@ -57,14 +59,24 @@ addToBuckets field frequency buckets =
 addToShortNames :: [Name.Name] -> ShortFieldNames -> ShortFieldNames
 addToShortNames fields shortNames =
   List.foldl' addField shortNames fields
-    & Lamdera.alternativeImplementationWhen (Lamdera.isLongNamesEnabled_)
-        (List.foldl' (\shortNames field ->
-            Map.insert field (JsName.fromLocal field) shortNames
-          ) shortNames fields
-        )
 
 
 addField :: ShortFieldNames -> Name.Name -> ShortFieldNames
 addField shortNames field =
   let rename = JsName.fromInt (Map.size shortNames) in
   Map.insert field rename shortNames
+
+
+-- @LAMDERA
+
+legibleFieldNames :: Opt.GlobalGraph -> ShortFieldNames
+legibleFieldNames (Opt.GlobalGraph _ frequencies) =
+  Map.foldr addToNamesLegible Map.empty $
+    Map.foldrWithKey addToBuckets Map.empty frequencies
+
+addToNamesLegible :: [Name.Name] -> ShortFieldNames -> ShortFieldNames
+addToNamesLegible fields shortNames =
+  -- Does not shorten field names, but adds them to the short names map
+  List.foldl' (\shortNames field ->
+    Map.insert field (JsName.fromLocal field) shortNames
+  ) shortNames fields

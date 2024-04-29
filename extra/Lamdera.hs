@@ -45,8 +45,7 @@ module Lamdera
   , isWireEnabled_
   , useLongNames_
   , enableLongNames
-  , isLongNamesEnabled
-  , isLongNamesEnabled_
+  , useLongNames
   , isTest
   , isLiveMode
   , setLiveMode
@@ -91,6 +90,8 @@ module Lamdera
   , lamderaEnvModePath
   , lamderaExternalWarningsPath
   , lamderaBackendDevSnapshotPath
+  , withCompilerRoot
+  , withRuntimeRoot
   , Ext.Common.setProjectRoot
   , Ext.Common.getProjectRoot
   , Ext.Common.getProjectRootFor
@@ -105,6 +106,7 @@ module Lamdera
   , getEnvMode
   , setEnvMode
   , setEnv
+  , forceEnv
   , unsetEnv
   , lookupEnv
   , requireEnv
@@ -439,19 +441,15 @@ isWireEnabled_ = unsafePerformIO $ isWireEnabled
 useLongNames_ :: MVar Bool
 useLongNames_ = unsafePerformIO $ newMVar False
 
+{-# NOINLINE useLongNames #-}
+useLongNames :: IO Bool
+useLongNames = do
+  readMVar useLongNames_
+
 enableLongNames :: IO ()
 enableLongNames = do
   debug $ "🗜️ enableLongNames"
   modifyMVar_ useLongNames_ (\_ -> pure True)
-
-{-# NOINLINE isLongNamesEnabled #-}
-isLongNamesEnabled :: IO Bool
-isLongNamesEnabled = do
-  readMVar useLongNames_
-
-{-# NOINLINE isLongNamesEnabled_ #-}
-isLongNamesEnabled_ :: Bool
-isLongNamesEnabled_ = unsafePerformIO $ isLongNamesEnabled
 
 
 isTest :: IO Bool
@@ -795,9 +793,18 @@ lamderaBackendDevSnapshotPath = do
   pure $ lamderaCache root </> ".lamdera-bem-dev"
 
 
+withCompilerRoot :: FilePath -> FilePath
+withCompilerRoot path =
+  unsafePerformIO $ do
+    home <- Dir.getHomeDirectory
+    pure $ home </> "dev" </> "projects" </> "lamdera-compiler" </> path
 
 
-
+withRuntimeRoot :: FilePath -> FilePath
+withRuntimeRoot path =
+  unsafePerformIO $ do
+    home <- Dir.getHomeDirectory
+    pure $ home </> "dev" </> "projects" </> "lamdera-runtime" </> path
 
 
 lowerFirstLetter :: String -> Text
@@ -873,6 +880,11 @@ setEnv name value = do
   debug $ Prelude.concat ["🌏✍️  ENV ", name, ":", value]
   Env.setEnv name value
 
+forceEnv :: String -> Maybe String -> IO ()
+forceEnv name value = do
+  case value of
+    Just v -> setEnv name v
+    Nothing -> unsetEnv name
 
 unsetEnv :: String -> IO ()
 unsetEnv name = do
