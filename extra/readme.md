@@ -23,6 +23,14 @@ Otherwise:
 
 If in doubt, please ask!
 
+### Setup
+
+```
+brew install gcc pkg-config      # some headers like 'linux/random.h' are implicitly required to build Haskell libs
+brew install icdiff   # used for nice side-by-side diffs in test output
+stack install hindent # used for debugging haskell values
+```
+
 
 ### Tests
 
@@ -41,13 +49,7 @@ $ TOKEN="..." LDEBUG=1 LOVR=~/lamdera/overrides stack ghci
 
 ### Developing
 
-First, make sure you have deps installed:
-
-```
-stack install hindent # used for debugging haskell values
-brew install icdiff   # used for nice side-by-side diffs in test output
-```
-
+First, make sure you have deps installed from the Setup section above.
 
 I've found the fastest way to develop is using ghci with a little harness to invoke target code.
 
