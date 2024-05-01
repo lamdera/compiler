@@ -90,13 +90,14 @@ jobs:
       # Use a retry action because inexplicably sometimes stack install stalls
       # indefinitely after the `compiling Main` step, but then succeeds immediately
       # with a second stack install. 🤷🏻‍♂️
-      - uses: nick-fields/retry@v2
+      - uses: nick-fields/retry@v3
         with:
           timeout_minutes: 5
           max_attempts: 4
+          shell: bash # otherwise defaults to powershell on windows
           # https://gitlab.haskell.org/ghc/ghc/-/issues/20878
           # https://gitlab.haskell.org/ghc/ghc/-/issues/20010#note_359766
-          command: (rm -rf reactor/elm-stuff || true) && stack install --ghc-options '-optl"-Wl,-Bstatic,-lstdc++,-lgcc_s,-lwinpthread,-Bdynamic"'
+          command: stack install --ghc-options '-optl"-Wl,-Bstatic,-lstdc++,-lgcc_s,-lwinpthread,-Bdynamic"'
 
       - name: Copy binary files, dlls & check
         run: |
