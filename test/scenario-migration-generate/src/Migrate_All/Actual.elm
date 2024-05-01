@@ -180,6 +180,7 @@ migrate_Migrate_All_New_BackendModel old =
     , time = old.time
     , url = old.url
     , userCache = old.userCache |> migrate_AssocList_Dict identity migrate_IncludedBySpecialCasedParam_Custom
+    , nestedDictCustomType = old.nestedDictCustomType |> Dict.map (\k -> Dict.map (\k -> migrate_Migrate_All_New_UserType))
     , apps = (Unimplemented {- Type `Dict (String) (Migrate_All.New.App)` was added in V2. I need you to set a default value. -})
     , id = old.id |> migrate_Migrate_All_New_Id
     , depthTests = (Unimplemented {- Field of type `Dict (String) (Migrate_All.Old.Depth)` was removed in V2. I need you to do something with the `old.depthTests` value if you wish to keep the data, then remove this line. -})
@@ -304,6 +305,12 @@ migrate_Migrate_All_New_UserType old =
                             }
                         )
                 )
+
+        Migrate_All.Old.UserListTuple p0 ->
+            Migrate_All.New.UserListTuple (p0 |> List.map (Tuple.mapSecond migrate_Migrate_All_New_UserType))
+
+        Migrate_All.Old.UserListTriple p0 ->
+            Migrate_All.New.UserListTriple (p0 |> List.map (\( t1, t2, t3 ) -> ( t1, t2, t3 |> migrate_Migrate_All_New_UserType )))
 
         Migrate_All.Old.UserTuple p0 ->
             Migrate_All.New.UserTuple (p0 |> Tuple.mapSecond migrate_Migrate_All_New_UserType)

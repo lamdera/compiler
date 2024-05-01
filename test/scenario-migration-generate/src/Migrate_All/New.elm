@@ -54,6 +54,9 @@ type alias BackendModel =
     -- Special cased types
     , userCache : AssocList.Dict String Evergreen.V2.IncludedBySpecialCasedParam.Custom
 
+    -- TODO
+    , nestedDictCustomType : Dict String (Dict Int UserType)
+
     -- WIP
     , apps : Dict String App
 
@@ -79,6 +82,8 @@ type UserType
     | UserAnonymousNestedRemoved { name : String, subrecord : { userType : UserType } }
     | UserAnonymousNestedAddedRemoved { name : String, subrecord : { userType : UserType, added : Int } }
     | UserListAnonymous (List { name : String, userType : UserType })
+    | UserListTuple (List ( Int, UserType ))
+    | UserListTriple (List ( Int, String, UserType ))
     | UserTuple ( Int, UserType )
     | UserTriple ( Int, Float, UserType )
     | UserTvarAlias (Evergreen.V2.External.Paramed CustomType)

@@ -72,7 +72,7 @@ migrate_Types_BackendModel : Evergreen.V1.Types.BackendModel -> Evergreen.V2.Typ
 migrate_Types_BackendModel old =
     { unchangedCore = old.unchangedCore
     , unchangedUser = old.unchangedUser |> migrate_Types_UserType
-    , unchangedAllCoreTypes = old.unchangedAllCoreTypes
+    , unchangedAllCoreTypes = old.unchangedAllCoreTypes |> migrate_External_AllCoreTypes
     , unchangedResult = old.unchangedResult
     , unchangedDict = old.unchangedDict
     , unchangedAnonymousRecord =
@@ -99,29 +99,29 @@ migrate_Types_BackendModel old =
     , unchangedStringAlias = old.unchangedStringAlias
     , withCustomMaybe = old.withCustomMaybe |> Maybe.map migrate_Types_UserType
     , withCustomList = old.withCustomList |> List.map migrate_Types_UserType
-    , withCustomSet = old.withCustomSet |> Set.map Unimplemented -- Type changed from `Set Int` to `Set String`
+    , withCustomSet = old.withCustomSet |> Set.map (Unimplemented {- Type changed from `Int` to `String`. I need you to write this migration. -})
     , withCustomArray = old.withCustomArray |> Array.map migrate_Types_UserType
-    , withCustomDict = old.withCustomDict |> Dict.map (\k v -> v |> migrate_Types_UserType)
-    , withCustomResult = old.withCustomResult |> Result.mapError migrate_Types_UserType |> Result.map migrate_Types_UserType
+    , withCustomDict = old.withCustomDict |> Dict.map (\k -> migrate_Types_UserType)
+    , withCustomResult = old.withCustomResult |> Result.mapError migrate_Types_UserType >> Result.map migrate_Types_UserType
     , externalUnion = old.externalUnion |> migrate_External_ExternalUnion
-    , added = Unimplemented -- Type `Int` was added in V2. I need you to set a default value.
+    , added = (Unimplemented {- Type `Int` was added in V2. I need you to set a default value. -})
     , unionThatGetsMoved = old.unionThatGetsMoved |> migrate_External_UnionThatGetsMoved
-    , aliasThatGetsMoved = old.aliasThatGetsMoved
-    , typeToAlias = old.typeToAlias |> Unimplemented -- `TypeToAlias` was a concrete type, but now it's a type alias. I need you to write this migration.
-    , aliasToType = old.aliasToType |> Unimplemented -- `AliasToType` was a type alias, but now it's a custom type. I need you to write this migration.
+    , aliasThatGetsMoved = old.aliasThatGetsMoved |> migrate_External_AliasThatGetsMoved
+    , typeToAlias = old.typeToAlias |> (Unimplemented {- Type changed from `Evergreen.V1.Types.TypeToAlias` to `Evergreen.V2.Types.TypeToAlias`. I need you to write this migration. -})
+    , aliasToType = old.aliasToType |> (Unimplemented {- Type changed from `Evergreen.V1.Types.AliasToType` to `Evergreen.V2.Types.AliasToType`. I need you to write this migration. -})
     , time = old.time
     , userCache = old.userCache |> migrate_AssocList_Dict identity migrate_IncludedBySpecialCasedParam_Custom
-    , apps = Unimplemented -- Type `Dict (String) (Evergreen.V2.Types.App)` was added in V2. I need you to set a default value.
-    , depthTests = Unimplemented -- Field of type `Dict (String) (Evergreen.V1.Types.Depth)` was removed in V2. I need you to do something with the `old.depthTests` value if you wish to keep the data, then remove this line.
-    , removed = Unimplemented -- Field of type `String` was removed in V2. I need you to do something with the `old.removed` value if you wish to keep the data, then remove this line.
-    , removedRecord = Unimplemented -- Field of type `Evergreen.V1.External.AllCoreTypes` was removed in V2. I need you to do something with the `old.removedRecord` value if you wish to keep the data, then remove this line.
+    , apps = (Unimplemented {- Type `Dict (String) (Evergreen.V2.Types.App)` was added in V2. I need you to set a default value. -})
+    , depthTests = (Unimplemented {- Field of type `Dict (String) (Evergreen.V1.Types.Depth)` was removed in V2. I need you to do something with the `old.depthTests` value if you wish to keep the data, then remove this line. -})
+    , removed = (Unimplemented {- Field of type `String` was removed in V2. I need you to do something with the `old.removed` value if you wish to keep the data, then remove this line. -})
+    , removedRecord = (Unimplemented {- Field of type `Evergreen.V1.External.AllCoreTypes` was removed in V2. I need you to do something with the `old.removedRecord` value if you wish to keep the data, then remove this line. -})
     }
 
 
 migrate_Types_FrontendModel : Evergreen.V1.Types.FrontendModel -> Evergreen.V2.Types.FrontendModel
 migrate_Types_FrontendModel old =
     { basic = old.basic
-    , added = Unimplemented -- Type `Int` was added in V2. I need you to set a default value.
+    , added = (Unimplemented {- Type `Int` was added in V2. I need you to set a default value. -})
     , url = old.url
     , key = old.key
     }
@@ -147,23 +147,14 @@ migrate_Audio_Msg migrate_userMsg old =
         |> Tuple.first
 
 
+migrate_External_AliasThatGetsMoved : Evergreen.V1.Types.AliasThatGetsMoved -> Evergreen.V2.External.AliasThatGetsMoved
+migrate_External_AliasThatGetsMoved old =
+    old
+
+
 migrate_External_AllCoreTypes : Evergreen.V1.External.AllCoreTypes -> Evergreen.V2.External.AllCoreTypes
-migrate_External_AllCoreTypes p0 =
-    { int = p0.int
-    , float = p0.float
-    , bool = p0.bool
-    , char = p0.char
-    , string = p0.string
-    , maybeBool = p0.maybeBool
-    , listInt = p0.listInt
-    , setFloat = p0.setFloat
-    , arrayString = p0.arrayString
-    , dict = p0.dict
-    , result = p0.result
-    , time = p0.time
-    , order = p0.order
-    , unit = p0.unit
-    }
+migrate_External_AllCoreTypes old =
+    old
 
 
 migrate_External_ExternalUnion : Evergreen.V1.External.ExternalUnion -> Evergreen.V2.External.ExternalUnion
@@ -177,24 +168,24 @@ migrate_External_ExternalUnion old =
 
 
 migrate_External_Paramed : (a_old -> a_new) -> Evergreen.V1.External.Paramed a_old -> Evergreen.V2.External.Paramed a_new
-migrate_External_Paramed migrate_a p0 =
-    { subtype = p0.subtype |> migrate_a
-    , string = p0.string
+migrate_External_Paramed migrate_a old =
+    { subtype = old.subtype |> migrate_a
+    , string = old.string
     }
 
 
 migrate_External_Paramed2 : (a_old -> a_new) -> (b_old -> b_new) -> Evergreen.V1.External.Paramed2 a_old b_old -> Evergreen.V2.External.Paramed2 a_new b_new
-migrate_External_Paramed2 migrate_a migrate_b p0 =
-    { subtype = p0.subtype |> migrate_a
-    , subtype2 = p0.subtype2 |> migrate_b
-    , string = p0.string
+migrate_External_Paramed2 migrate_a migrate_b old =
+    { subtype = old.subtype |> migrate_a
+    , subtype2 = old.subtype2 |> migrate_b
+    , string = old.string
     }
 
 
 migrate_External_ParamedSub : (x_old -> x_new) -> Evergreen.V1.External.ParamedSub x_old -> Evergreen.V2.External.ParamedSub x_new
-migrate_External_ParamedSub migrate_x p0 =
-    { subtypeParamed = p0.subtypeParamed |> migrate_External_Paramed migrate_x
-    , string = p0.string
+migrate_External_ParamedSub migrate_x old =
+    { subtypeParamed = old.subtypeParamed |> migrate_External_Paramed migrate_x
+    , string = old.string
     }
 
 
@@ -236,7 +227,7 @@ migrate_Types_FrontendMsg_ old =
             Evergreen.V2.Types.Noop
 
         Evergreen.V1.Types.AllCoreTypes p0 ->
-            Evergreen.V2.Types.AllCoreTypes p0
+            Evergreen.V2.Types.AllCoreTypes (p0 |> migrate_External_AllCoreTypes)
 
 
 migrate_Types_UserType : Evergreen.V1.Types.UserType -> Evergreen.V2.Types.UserType
@@ -249,11 +240,12 @@ migrate_Types_UserType old =
             Evergreen.V2.Types.UserSecond
 
         Evergreen.V1.Types.UserRemoved ->
-            {- `UserRemoved` was removed or renamed in V2 so I couldn't figure out how to migrate it.
-               I need you to decide what happens to this Evergreen.V1.Types.UserRemoved value in a migration.
-               See https://lamdera.com/tips/modified-custom-type for more info.
-            -}
-            Unimplemented
+            (Unimplemented
+             {- `UserRemoved` was removed or renamed in V2 so I couldn't figure out how to migrate it.
+                I need you to decide what happens to this Evergreen.V1.Types.UserRemoved value in a migration.
+                See https://lamdera.com/tips/modified-custom-type for more info.
+             -}
+            )
 
         Evergreen.V1.Types.UserWithParam p0 ->
             Evergreen.V2.Types.UserWithParam p0
@@ -271,7 +263,7 @@ migrate_Types_UserType old =
             Evergreen.V2.Types.UserResultP2 (p0 |> Result.map migrate_Types_CustomType)
 
         Evergreen.V1.Types.UserResultPBoth p0 ->
-            Evergreen.V2.Types.UserResultPBoth (p0 |> Result.mapError migrate_Types_CustomType |> Result.map migrate_External_ExternalUnion)
+            Evergreen.V2.Types.UserResultPBoth (p0 |> Result.mapError migrate_Types_CustomType >> Result.map migrate_External_ExternalUnion)
 
         Evergreen.V1.Types.UserAnonymous p0 ->
             Evergreen.V2.Types.UserAnonymous
@@ -297,7 +289,7 @@ migrate_Types_UserType old =
                     p0.subrecord
                         |> (\rec1 ->
                                 { userType = rec1.userType |> migrate_Types_UserType
-                                , added = Unimplemented -- Type `Int` was added in V2. I need you to set a default value.
+                                , added = (Unimplemented {- Type `Int` was added in V2. I need you to set a default value. -})
                                 }
                            )
                 }
@@ -309,7 +301,7 @@ migrate_Types_UserType old =
                     p0.subrecord
                         |> (\rec1 ->
                                 { userType = rec1.userType |> migrate_Types_UserType
-                                , removed = Unimplemented -- Field of type `String` was removed in V2. I need you to do something with the `rec1.removed` value if you wish to keep the data, then remove this line.
+                                , removed = (Unimplemented {- Field of type `String` was removed in V2. I need you to do something with the `rec1.removed` value if you wish to keep the data, then remove this line. -})
                                 }
                            )
                 }
@@ -321,8 +313,8 @@ migrate_Types_UserType old =
                     p0.subrecord
                         |> (\rec1 ->
                                 { userType = rec1.userType |> migrate_Types_UserType
-                                , added = Unimplemented -- Type `Int` was added in V2. I need you to set a default value.
-                                , removed = Unimplemented -- Field of type `String` was removed in V2. I need you to do something with the `rec1.removed` value if you wish to keep the data, then remove this line.
+                                , added = (Unimplemented {- Type `Int` was added in V2. I need you to set a default value. -})
+                                , removed = (Unimplemented {- Field of type `String` was removed in V2. I need you to do something with the `rec1.removed` value if you wish to keep the data, then remove this line. -})
                                 }
                            )
                 }
@@ -351,4 +343,4 @@ migrate_Types_UserType old =
                This is just a reminder in case migrating some subset of the old data to this new value was important.
                See https://lamdera.com/tips/modified-custom-type for more info.
             -}
-            Unimplemented
+            (Unimplemented {- New constructors were added. I need you to resolve the above notices and then remove this case. -})
