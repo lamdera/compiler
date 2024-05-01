@@ -36,10 +36,17 @@ update :: Can.Module -> Can.Module
 update canonical =
   let
     moduleName :: Module.Canonical = (Can._name canonical)
-    decls :: Can.Decls = (Can._decls canonical) & removeUnsafeCoercePlaceholder
-    newDecls :: Can.Decls = updateDecls moduleName decls
   in
-  canonical { Can._decls = newDecls }
+  case moduleName of
+    Module.Canonical (Name "author" "project") "LamderaHelpers" ->
+      let
+        decls :: Can.Decls = (Can._decls canonical) & removeUnsafeCoercePlaceholder
+        newDecls :: Can.Decls = updateDecls moduleName decls
+      in
+      canonical { Can._decls = newDecls }
+
+    _ ->
+      canonical
 
 
 removeUnsafeCoercePlaceholder :: Can.Decls -> Can.Decls
