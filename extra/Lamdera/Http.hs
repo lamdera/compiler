@@ -35,13 +35,15 @@ jsonHeaders =
   ]
 
 
-normalJson :: String -> String -> D.Decoder () a -> IO (Either Error a)
+normalJson :: (Show a) => String -> String -> D.Decoder () a -> IO (Either Error a)
 normalJson debugIdentifier url decoder = do
   manager <- Http.getManager
   debug $ "HTTP GET " <> url <> " (" <> debugIdentifier <> ")"
   Http.get manager url jsonHeaders HttpError $ \body ->
     case D.fromByteString decoder body of
       Right content ->
+        -- Helpful for debugging
+        -- return $ Right $ debugNote "response" content
         return $ Right content
 
       Left problem ->
