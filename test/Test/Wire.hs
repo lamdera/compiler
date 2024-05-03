@@ -139,7 +139,7 @@ wire = do
 
 
     testFiles & filter ((/=) "") & mapM (\filename -> do
-        putStrLn $ "testing: " <> show filename
+        atomicPutStrLn $ "testing: " <> show filename
         -- Bust Elm's caching with this one weird trick!
         touch $ project </> filename
         Lamdera.Compile.makeDev project [filename] `catch` catchTestException filename

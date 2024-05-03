@@ -36,15 +36,15 @@ update :: Can.Module -> Can.Module
 update canonical =
   let
     moduleName :: Module.Canonical = (Can._name canonical)
+    decls :: Can.Decls = (Can._decls canonical) & removeUnsafeCoercePlaceholder
+    newDecls :: Can.Decls = updateDecls moduleName decls
+    newCanonical :: Can.Module = canonical { Can._decls = newDecls }
   in
   case moduleName of
     Module.Canonical (Name "author" "project") "LamderaHelpers" ->
-      let
-        decls :: Can.Decls = (Can._decls canonical) & removeUnsafeCoercePlaceholder
-        newDecls :: Can.Decls = updateDecls moduleName decls
-      in
-      canonical { Can._decls = newDecls }
-
+      newCanonical
+    Module.Canonical (Name "author" "project") "LamderaCheckBoth" ->
+      newCanonical
     _ ->
       canonical
 
@@ -77,23 +77,29 @@ updateDecls fileName decls =
 
 updateExpr :: Module.Canonical -> Name.Name -> Can.Expr -> Can.Expr
 updateExpr fileName functionName (Reporting.Annotation.At location_ expr_) =
+    let replaceCall location params =
+          Can.Call
+            (Reporting.Annotation.At location
+              (Can.VarForeign
+                (Module.Canonical (Name "lamdera" "core") "Lamdera.Effect")
+                "unsafeCoerce"
+                (Forall
+                  (Map.fromList [("a", ()), ("b", ())])
+                  (TLambda (TVar "a") (TVar "b"))
+                )
+              )
+            ) params
+    in
     (case expr_ of
       Can.Call (Reporting.Annotation.At location
           (Can.VarTopLevel (Module.Canonical (Name "author" "project") "LamderaHelpers") "unsafeCoerce")
         ) params ->
-        Can.Call
-          (Reporting.Annotation.At
-            location
-            (Can.VarForeign
-              (Module.Canonical (Name "lamdera" "core") "Lamdera.Effect")
-              "unsafeCoerce"
-              (Forall
-                (Map.fromList [("a", ()), ("b", ())])
-                (TLambda (TVar "a") (TVar "b"))
-              )
-            )
-          )
-          params
+          replaceCall location params
+
+      Can.Call (Reporting.Annotation.At location
+          (Can.VarTopLevel (Module.Canonical (Name "author" "project") "LamderaCheckBoth") "unsafeCoerce")
+        ) params ->
+          replaceCall location params
 
       -- The recursive rest. Might be worth looking at revisiting recursion schemes again, esp if error messages have improved
       Can.VarLocal name -> Can.VarLocal name

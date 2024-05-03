@@ -534,6 +534,8 @@ genSupportingCode = do
       -- In development, we aren't building with the harnesses, so rather than an extra
       -- file dependency, just inject the additional helpers we need to type check our migrations
       pure [text|
+        import Lamdera exposing (sendToFrontend)
+
 
         type UpgradeResult valueType msgType
             = AlreadyCurrent ( valueType, Cmd msgType )
@@ -577,6 +579,22 @@ genSupportingCode = do
         unchanged : oldModel -> UpgradeResult newModel msg
         unchanged model =
             Upgraded ( unsafeCoerce model, Cmd.none )
+
+
+        {-|
+        All local call-sites to this function will get replaced by the compiler
+        to point to Lamdera.Effect.unsafeCoerce instead, and this def will be removed
+        See lamdera-compiler/extra/Lamdera/Evergreen/ModifyAST.hs
+        -}
+        unsafeCoerce : a -> b
+        unsafeCoerce =
+            let
+                -- This is a hack to ensure the Lamdera.Effect module gets included
+                -- in overall compile scope given we cannot reference it directly
+                forceInclusion =
+                    sendToFrontend
+            in
+            Debug.todo "unsafeCoerce"
 
 
         upgradeIsCurrent : Result String ( newModel, Cmd msg ) -> Result String (UpgradeResult newModel msg)

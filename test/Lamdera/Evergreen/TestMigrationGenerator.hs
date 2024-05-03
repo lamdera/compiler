@@ -123,7 +123,7 @@ testExamples = withTestEnv $ do
 
   testFiles & mapM (\folder -> do
     scope folder $ do
-      io $ putStrLn $ "testing: " <> show folder
+      io $ atomicPutStrLn $ "testing: " <> show folder
       let
         oldVersion = 1
         newVersion = 2
