@@ -42,25 +42,20 @@ expected_w3_decode_DB w3_x_c_a =
             Random.w3_decode_Seed
 
 
-type alias ThisType a =
-    ( a, { a | id : Int } )
 
-
-v : ThisType { id : Int }
-v =
-    ( { id = 0 }, { id = 0 } )
-
-
-expected_w3_encode_ThisType :
-    ({ a | id : Int } -> Lamdera.Wire3.Encoder)
-    -> (ThisType a -> Lamdera.Wire3.Encoder)
-expected_w3_encode_ThisType w3_x_c_a =
-    Lamdera.Wire3.encodePair
-        w3_x_c_a
-        w3_x_c_a
-
-
-expected_w3_decode_ThisType w3_x_c_a =
-    Lamdera.Wire3.decodePair
-        w3_x_c_a
-        w3_x_c_a
+-- type alias ThisType a =
+--     ( a, { a | id : Int } )
+-- v : ThisType { id : Int }
+-- v =
+--     ( { id = 0 }, { id = 0 } )
+-- expected_w3_encode_ThisType :
+--     ({ a | id : Int } -> Lamdera.Wire3.Encoder)
+--     -> (ThisType a -> Lamdera.Wire3.Encoder)
+-- expected_w3_encode_ThisType w3_x_c_a =
+--     Lamdera.Wire3.encodePair
+--         w3_x_c_a
+--         w3_x_c_a
+-- expected_w3_decode_ThisType w3_x_c_a =
+--     Lamdera.Wire3.decodePair
+--         w3_x_c_a
+--         w3_x_c_a
