@@ -88,7 +88,7 @@ checkApiLoop inProduction appName token =
               url =
                 if textContains "-local" appName
                   then
-                    "http://localhost:8000/auth/cli/" <> mask
+                    "http://localhost:8082/auth/cli/" <> mask
                   else
                     "https://dashboard.lamdera.app/auth/cli/" <> mask
 
@@ -156,6 +156,7 @@ validateCliToken = do
 
 
     Nothing -> do
+      debug_ $ "Found no token in " <> elmHome
       Progress.report $ D.fillSep ["───>", D.red "No CLI auth, please run `lamdera login`"]
       exitFailure
 
@@ -167,7 +168,7 @@ fetchApiSession appName token =
     endpoint =
       if textContains "-local" appName
         then
-          "http://localhost:8000/_r/apiSessionJson"
+          "http://localhost:8082/_r/apiSessionJson"
           -- "https://" <> T.unpack appName <> ".lamdera.test/_i"
         else
           "https://dashboard.lamdera.app/_r/apiSessionJson"

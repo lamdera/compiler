@@ -1765,7 +1765,7 @@ getAppSnapshotFilenames appId =
 
         -- , url = "http://apps.lamdera.com:8080/v1/app/" ++ appId ++ "/snapshots"
         -- , url = "http://localhost:8080/v1/app/" ++ appId ++ "/snapshots"
-        , url = "http://localhost:8000/_x/list/snapshots"
+        , url = "/_x/list/snapshots"
         , body = LD.emptyBody
         , resolver = LD.stringResolver <| LD.handleJsonResponse <| Json.decoderList Json.decoderString
         , timeout = Nothing
@@ -1804,7 +1804,7 @@ getAppSnapshot snapshot =
 --     , headers = []
 --     -- , url = "http://apps.lamdera.com:8080/v1/app/" ++ appId ++ "/snapshot-retrieve/" ++ snapshot ++ "/" ++ token
 --     -- , url = "http://localhost:8080/v1/app/" ++ appId ++ "/snapshot-retrieve/" ++ snapshot ++ "/" ++ token
---     , url = "http://localhost:8000/_x/read/" ++ "snapshots/" ++ snapshot
+--     , url = "/_x/read/" ++ "snapshots/" ++ snapshot
 --     , body = LD.emptyBody
 --     , resolver = Http.bytesResolver handleBytesResponse
 --     , timeout = Nothing
