@@ -21,7 +21,7 @@ import qualified Reporting.Doc as D
 import qualified Reporting.Exit as Exit
 
 
-import qualified Lamdera.Checks
+import qualified Lamdera.Init
 
 -- RUN
 
@@ -93,7 +93,7 @@ init =
                   do  Dir.createDirectoryIfMissing True "src"
                       Outline.write "." $ Outline.App $
                         Outline.AppOutline V.compiler (NE.List (Outline.RelativeSrcDir "src") []) directs indirects Map.empty Map.empty
-                      Lamdera.Checks.writeDefaultImplementations
+                      Lamdera.Init.writeDefaultImplementations
                       putStrLn "Okay, I created it. Now read that link!"
                       return (Right ())
 

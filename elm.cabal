@@ -251,6 +251,7 @@ Executable lamdera
         Lamdera.Extensions
         Lamdera.Graph
         Lamdera.Hints
+        Lamdera.Init
         Lamdera.Injection
         Lamdera.Live
         Lamdera.Make
