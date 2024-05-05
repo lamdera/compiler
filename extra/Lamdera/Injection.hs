@@ -294,15 +294,16 @@ injections isBackend isLocalDev =
 
         const die = function() {
           //console.log('App dying');
+
+          // Needed to stop Time.every subscriptions.
+          // This must be done before clearing the stuff below.
+          _Platform_enqueueEffects(managers, _Platform_batch(_List_Nil), _Platform_batch(_List_Nil));
+
           managers = null;
           model = null;
           stepper = null;
           ports = null;
           _Platform_effectsQueue = [];
-
-          // Do we need to call these functions? Or will the `= []` be enough?
-          // _Platform_enqueueEffects(managers, $$elm$$core$$Platform$$Cmd$$none, $$elm$$core$$Platform$$Sub$$none);
-          // _Platform_enqueueEffects(managers, _Platform_batch(_List_Nil), _Platform_batch(_List_Nil));
         }
 
         return ports ? {
