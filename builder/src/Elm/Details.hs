@@ -253,8 +253,18 @@ verifyApp env time outline@(Outline.AppOutline elmVersion srcDirs direct _ _ _) 
         if Map.size stated == Map.size actual
           then verifyDependencies env time (ValidApp srcDirs) actual direct
           else Task.throw $ Exit.DetailsHandEditedDependencies
-            $ "The stated and actual dependencies do not match.\n\n"
-            ++ "Stated: " ++ show stated ++ "\n\nActual: " ++ show actual
+            $ let
+              stateds = stated & fmap (\k _ -> k)
+              actuals = actual & fmap (\k _ -> k)
+
+              -- first, everything in stated that's not in actual
+              missing = Map.difference stateds actuals & Map.toList & fmap fst & show
+              -- then, everything in actual that's not in stated
+              extra = Map.difference actuals stateds & Map.toList & fmap fst & show
+            in
+            "The stated and actual dependencies do not match.\n\n"
+            ++ "Stated missing in actual: " ++ show missing
+            ++ "\n\nActual missing in stated: " ++ show extra
   else
     Task.throw $ Exit.DetailsBadElmInAppOutline elmVersion
 
