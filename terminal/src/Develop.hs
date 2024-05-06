@@ -250,6 +250,7 @@ serveElm sentryCache path =
 compileToBuilder :: FilePath -> IO BS.ByteString
 compileToBuilder path =
   do
+      _ <- Lamdera.enableLongNames
       result <- compile path
 
       pure $
@@ -311,7 +312,7 @@ compile path =
                 Lamdera.PostCompile.check details artifacts Exit.ReactorBadBuild
                 Lamdera.TypeHash.buildCheckHashes artifacts
 
-                javascript <- Task.mapError Exit.ReactorBadGenerate $ Generate.dev root details artifacts
+                javascript <- Task.mapError Exit.ReactorBadGenerate $ Generate.prod root details artifacts
                 let (NE.List name _) = Build.getRootNames artifacts
                 return $ Html.sandwich root name javascript
 

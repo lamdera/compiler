@@ -101,9 +101,10 @@ repl root details ansi (Build.ReplArtifacts home modules localizer annotations) 
 
 checkForDebugUses :: Objects -> Task ()
 checkForDebugUses (Objects _ locals) =
-  case Map.keys (Map.filter Nitpick.hasDebugUses locals) of
-    []   -> return ()
-    m:ms -> Task.throw (Exit.GenerateCannotOptimizeDebugValues m ms)
+  return ()
+  -- case Map.keys (Map.filter Nitpick.hasDebugUses locals) of
+  --   []   -> return ()
+  --   m:ms -> Task.throw (Exit.GenerateCannotOptimizeDebugValues m ms)
 
 
 
