@@ -41,12 +41,10 @@ update canonical =
     newCanonical :: Can.Module = canonical { Can._decls = newDecls }
   in
   case moduleName of
-    Module.Canonical (Name "author" "project") "LamderaHelpers" ->
-      newCanonical
-    Module.Canonical (Name "author" "project") "LamderaCheckBoth" ->
-      newCanonical
-    _ ->
-      canonical
+    Module.Canonical (Name "author" "project") "LamderaHelpers" ->   newCanonical
+    Module.Canonical (Name "author" "project") "LamderaCheckBoth" -> newCanonical
+    Module.Canonical (Name "author" "project") "LamderaGenerated" -> newCanonical
+    _ -> canonical
 
 
 removeUnsafeCoercePlaceholder :: Can.Decls -> Can.Decls
@@ -56,23 +54,18 @@ removeUnsafeCoercePlaceholder decls =
 
 updateDecls :: Module.Canonical -> Can.Decls -> Can.Decls
 updateDecls fileName decls =
-  case fileName of
-    Module.Canonical (Name "author" "project") "LamderaHelpers" ->
-      case decls of
-        Can.Declare def nextDecl ->
-          Can.Declare (updateDefs fileName def) (updateDecls fileName nextDecl)
+  case decls of
+    Can.Declare def nextDecl ->
+      Can.Declare (updateDefs fileName def) (updateDecls fileName nextDecl)
 
-        Can.DeclareRec def remainingDefs nextDecl ->
-          Can.DeclareRec
-            (updateDefs fileName def)
-            (map (updateDefs fileName) remainingDefs)
-            (updateDecls fileName nextDecl)
+    Can.DeclareRec def remainingDefs nextDecl ->
+      Can.DeclareRec
+        (updateDefs fileName def)
+        (map (updateDefs fileName) remainingDefs)
+        (updateDecls fileName nextDecl)
 
-        Can.SaveTheEnvironment ->
-          Can.SaveTheEnvironment
-
-    _ ->
-        decls
+    Can.SaveTheEnvironment ->
+      Can.SaveTheEnvironment
 
 
 updateExpr :: Module.Canonical -> Name.Name -> Can.Expr -> Can.Expr
@@ -98,6 +91,11 @@ updateExpr fileName functionName (Reporting.Annotation.At location_ expr_) =
 
       Can.Call (Reporting.Annotation.At location
           (Can.VarTopLevel (Module.Canonical (Name "author" "project") "LamderaCheckBoth") "unsafeCoerce")
+        ) params ->
+          replaceCall location params
+
+      Can.Call (Reporting.Annotation.At location
+          (Can.VarTopLevel (Module.Canonical (Name "author" "project") "LamderaGenerated") "unsafeCoerce")
         ) params ->
           replaceCall location params
 

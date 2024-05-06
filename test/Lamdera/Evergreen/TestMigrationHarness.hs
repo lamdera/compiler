@@ -154,7 +154,7 @@ suite = tests
 
 
           upgradeBackendModelPrevious =
-              ()
+              unchanged
 
 
           decodeAndUpgradeBackendModel : Int -> Bytes -> UpgradeResult T1.BackendModel T1.BackendMsg
@@ -258,9 +258,11 @@ suite = tests
               2
 
 
-          upgradeBackendModelPrevious : T1.BackendModel -> UpgradeResult T2.BackendModel T2.BackendMsg
+          {-| upgradeBackendModelPrevious : T1.BackendModel -> UpgradeResult T2.BackendModel T2.BackendMsg
+          -}
+          upgradeBackendModelPrevious : previousModel -> UpgradeResult T2.BackendModel T2.BackendMsg
           upgradeBackendModelPrevious model_v1 =
-              model_v1
+              unsafeCoerce model_v1
                   |> M2.backendModel
 
 
@@ -423,7 +425,9 @@ suite = tests
               2
 
 
-          upgradeBackendModelPrevious : T2.BackendModel -> UpgradeResult T2.BackendModel T2.BackendMsg
+          {-| upgradeBackendModelPrevious : T1.BackendModel -> UpgradeResult T2.BackendModel T2.BackendMsg
+          -}
+          upgradeBackendModelPrevious : previousModel -> UpgradeResult T2.BackendModel T2.BackendMsg
           upgradeBackendModelPrevious model_v1 =
               unchanged model_v1
 

@@ -169,18 +169,25 @@ upgradeFor migrationSequence nextVersion valueType = do
   case nextVersion of
     WithMigrations _ ->
         [untrimming|
-          -- upgrade${valueType}Previous : T$currentVersion_.$valueType -> UpgradeResult T$nextVersion_.$valueType T$nextVersion_.$cmdMsgType
+          {-| upgrade${valueType}Previous : T$currentVersion_.$valueType -> UpgradeResult T$nextVersion_.$valueType T$nextVersion_.$cmdMsgType
+          -}
           upgrade${valueType}Previous : previousModel -> UpgradeResult T$nextVersion_.$valueType T$nextVersion_.$cmdMsgType
           upgrade${valueType}Previous model_v$currentVersion_ =
-              unsafeCoerce model_v$currentVersion_
-                  |> M$nextVersion_.$valueTypeTitleCase
+              case unsafeCoerce model_v$currentVersion_ |> M$nextVersion_.$valueTypeTitleCase of
+                ModelMigrated ( newValue, cmds ) ->
+                  Upgraded ( newValue, cmds )
+
+                ModelUnchanged ->
+                  -- Should be impossible in this context
+                  unchanged model_v$currentVersion_
 
 
         |]
 
     WithoutMigrations _ ->
         [untrimming|
-          -- upgrade${valueType}Previous : T$nextVersion_.$valueType -> UpgradeResult T$nextVersion_.$valueType T$nextVersion_.$cmdMsgType
+          {-| upgrade${valueType}Previous : T$currentVersion_.$valueType -> UpgradeResult T$nextVersion_.$valueType T$nextVersion_.$cmdMsgType
+          -}
           upgrade${valueType}Previous : previousModel -> UpgradeResult T$nextVersion_.$valueType T$nextVersion_.$cmdMsgType
           upgrade${valueType}Previous model_v$currentVersion_ =
               unchanged model_v$currentVersion_
@@ -531,7 +538,27 @@ genSupportingCode = do
     then
       -- In production, use shared injected code that the LBR/LFR runtime harnesses
       -- also reference to share types and type check everything together
-      pure "import LamderaHelpers exposing (..)\n"
+      pure [text|
+        import Lamdera exposing (sendToFrontend)
+        import LamderaHelpers exposing (..)
+
+
+        {-|
+          All local call-sites to this function will get replaced by the compiler
+          to point to Lamdera.Effect.unsafeCoerce instead, and this def will be removed
+          See lamdera-compiler/extra/Lamdera/Evergreen/ModifyAST.hs
+        -}
+        unsafeCoerce : a -> b
+        unsafeCoerce =
+            let
+                -- This is a hack to ensure the Lamdera.Effect module gets included
+                -- in overall compile scope given we cannot reference it directly
+                forceInclusion =
+                    sendToFrontend
+            in
+            Debug.todo "unsafeCoerce"
+
+      |]
     else
       -- In development, we aren't building with the harnesses, so rather than an extra
       -- file dependency, just inject the additional helpers we need to type check our migrations
