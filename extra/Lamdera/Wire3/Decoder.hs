@@ -188,9 +188,9 @@ decoderForType ifaces cname tipe =
                              [TType (Module.Canonical (Name "elm" "core") "Set") "Set" [TVar "comparable"]])))))))
         [ decoderForType ifaces cname ptype ]))
 
-    TType (Module.Canonical (Name "lamdera" "hashmap") "Hash.Set") "Set" [ptype] ->
+    TType (Module.Canonical (Name "lamdera" "containers") "OrderedSet") "OrderedSet" [ptype] ->
       (a (Call
-        (a (VarForeign mLamdera_HashmapSet "decodeSet"
+        (a (VarForeign mLamdera_OrderedSet "decodeSet"
               (Forall
                  (Map.fromList [("k", ())])
                  (TLambda
@@ -199,12 +199,12 @@ decoderForType ifaces cname tipe =
                     (TAlias
                        mLamdera_Wire
                        "Decoder"
-                       [("a", TType mLamdera_HashmapSet "Set" [TVar "k"])]
+                       [("a", TType mLamdera_OrderedSet "OrderedSet" [TVar "k"])]
                        (Filled
                           (TType
                              (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
                              "Decoder"
-                             [TType mLamdera_HashmapSet "Set" [TVar "k"]])))))))
+                             [TType mLamdera_OrderedSet "OrderedSet" [TVar "k"]])))))))
         [ decoderForType ifaces cname ptype ]))
 
     TType (Module.Canonical (Name "elm" "core") "Array") "Array" [ptype] ->
@@ -302,9 +302,9 @@ decoderForType ifaces cname tipe =
               , decoderForType ifaces cname val
               ]))
 
-    TType (Module.Canonical (Name "lamdera" "hashmap") "Hash.Dict") "Dict" [key, val] ->
+    TType (Module.Canonical (Name "lamdera" "containers") "OrderedDict") "OrderedDict" [key, val] ->
         (a (Call
-              (a (VarForeign mLamdera_HashmapDict "decodeDict"
+              (a (VarForeign mLamdera_Containers "decodeDict"
                     (Forall
                        (Map.fromList [("k", ()), ("value", ())])
                        (TLambda
@@ -324,8 +324,8 @@ decoderForType ifaces cname tipe =
                              (TAlias mLamdera_Wire "Decoder"
                                 [ ( "a"
                                   , TType
-                                      mLamdera_HashmapDict
-                                      "Dict"
+                                      mLamdera_Containers
+                                      "OrderedDict"
                                       [TVar "k", TVar "value"])
                                 ]
                                 (Filled
@@ -333,8 +333,8 @@ decoderForType ifaces cname tipe =
                                       (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
                                       "Decoder"
                                       [ TType
-                                          mLamdera_HashmapDict
-                                          "Dict"
+                                          mLamdera_Containers
+                                          "OrderedDict"
                                           [TVar "k", TVar "value"]
                                       ]))))))))
               [ decoderForType ifaces cname key

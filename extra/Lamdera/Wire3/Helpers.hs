@@ -42,7 +42,7 @@ shouldHaveCodecsGenerated name =
     Name "elm" "bytes" -> False
     Name "elm" "core" -> False
 
-    Name "lamdera" "hashmap" -> False
+    Name "lamdera" "containers" -> False
 
     -- Avoid cyclic imports; generated codecs rely on lamdera/codecs:Lamdera.Wire. This is our codec bootstrap module.
     Name "lamdera" "codecs" -> False
@@ -117,7 +117,7 @@ isUnsupportedKernelType tipe =
     TType (Module.Canonical (Name "elm" "json") "Json.Decode") "Decoder" _ -> True -- js type
     TType (Module.Canonical (Name "elm" "json") "Json.Decode") "Value" _ -> True -- js type
 
-    TType (Module.Canonical (Name "lamdera" "hashmap") "JsArray") "JsArray" _ -> True
+    TType (Module.Canonical (Name "lamdera" "containers") "JsArray2") "JsArray2" _ -> True
 
 
     -- JS types we are supporting through JS ref encodings. These serialisations
@@ -755,8 +755,8 @@ tLamdera_Wire_Encoder_Holey =
 
 
 mLamdera_Wire = (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire3")
-mLamdera_HashmapDict = (Module.Canonical (Name "lamdera" "hashmap") "Hash.Dict")
-mLamdera_HashmapSet = (Module.Canonical (Name "lamdera" "hashmap") "Hash.Set")
+mLamdera_OrderedDict = (Module.Canonical (Name "lamdera" "containers") "OrderedDict")
+mLamdera_OrderedSet = (Module.Canonical (Name "lamdera" "containers") "OrderedSet")
 mBytes_Encode = (Module.Canonical (Name "elm" "bytes") "Bytes.Encode")
 mBytes_Decode = (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
 
@@ -785,7 +785,7 @@ unwrapAliasesDeep t =
     TType (Module.Canonical (Name "elm" "core") "Maybe") "Maybe" [a] -> TType (Module.Canonical (Name "elm" "core") "Maybe") "Maybe" [unwrapAliasesDeep a]
     TType (Module.Canonical (Name "elm" "core") "List") "List" [a]   -> TType (Module.Canonical (Name "elm" "core") "List") "List" [unwrapAliasesDeep a]
     TType (Module.Canonical (Name "elm" "core") "Set") "Set" [a]     -> TType (Module.Canonical (Name "elm" "core") "Set") "Set" [unwrapAliasesDeep a]
-    TType (Module.Canonical (Name "lamdera" "hashmap") "Hash.Set") "Set" [a] -> TType (Module.Canonical (Name "lamdera" "hashmap") "Hash.Set") "Set" [unwrapAliasesDeep a]
+    TType (Module.Canonical (Name "lamdera" "containers") "OrderedSet") "OrderedSet" [a] -> TType (Module.Canonical (Name "lamdera" "containers") "OrderedSet") "OrderedSet" [unwrapAliasesDeep a]
     TType (Module.Canonical (Name "elm" "core") "Array") "Array" [a] -> TType (Module.Canonical (Name "elm" "core") "Array") "Array" [unwrapAliasesDeep a]
 
     TType (Module.Canonical (Name "elm" "core") "Result") "Result" [err, a] ->
@@ -794,8 +794,8 @@ unwrapAliasesDeep t =
     TType (Module.Canonical (Name "elm" "core") "Dict") "Dict" [key, val] ->
       TType (Module.Canonical (Name "elm" "core") "Dict") "Dict" [unwrapAliasesDeep key, unwrapAliasesDeep val]
 
-    TType (Module.Canonical (Name "lamdera" "hashmap") "Hash.Dict") "Dict" [key, val] ->
-      TType (Module.Canonical (Name "lamdera" "hashmap") "Hash.Dict") "Dict" [unwrapAliasesDeep key, unwrapAliasesDeep val]
+    TType (Module.Canonical (Name "lamdera" "containers") "OrderedDict") "OrderedDict" [key, val] ->
+      TType (Module.Canonical (Name "lamdera" "containers") "OrderedDict") "OrderedDict" [unwrapAliasesDeep key, unwrapAliasesDeep val]
 
     TType moduleName typeName params ->
       -- t -- @TODO wrong to not de-alias params?

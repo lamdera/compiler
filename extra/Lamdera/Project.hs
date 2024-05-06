@@ -112,10 +112,10 @@ lamderaCodecs =
   Elm.Package.Name (Utf8.fromChars "lamdera") (Utf8.fromChars "codecs")
 
 
-{-# NOINLINE lamderaHashmap #-}
-lamderaHashmap :: Elm.Package.Name
-lamderaHashmap =
-  Elm.Package.Name (Utf8.fromChars "lamdera") (Utf8.fromChars "hashmap")
+{-# NOINLINE lamderaContainers #-}
+lamderaContainers :: Elm.Package.Name
+lamderaContainers =
+  Elm.Package.Name (Utf8.fromChars "lamdera") (Utf8.fromChars "containers")
 
 
 {-# NOINLINE lamderaProgramTest #-}
