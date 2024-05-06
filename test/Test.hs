@@ -106,8 +106,8 @@ For more information on how to use the GHCi debugger, see the GHC User's Guide.
 -- target = buildTestHarnessToProductionJs
 -- target = checkProjectCompiles
 -- target = previewProject
--- target = liveReloadLive
-target = Test.all
+target = liveReloadLive
+-- target = Test.all
 -- target = rerunJust "Lamdera.Evergreen.TestMigrationHarness -> .full first - (WithMigrations 2)"
 -- target = checkUserConfig
 -- target = Test.Wire.buildAllPackages
@@ -205,8 +205,10 @@ liveReloadLive = do
   setEnv "LDEBUG" "1"
   setEnv "EXPERIMENTAL" "1"
 
-  let p = "/Users/mario/lamdera/test/v1"
+  -- let p = "/Users/mario/lamdera/test/v1"
   -- let p = "/Users/mario/dev/test/lamdera-init"
+  -- let p = "/Users/mario/dev/projects/refinable"
+  let p = withRuntimeRoot "test/scenario-migrations1"
   -- let p = "/Users/mario/lamdera/overrides/packages/elm/bytes/1.0.8/benchmarks"
 
   -- rmdir "/Users/mario/.elm"
