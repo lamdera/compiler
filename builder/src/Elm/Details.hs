@@ -253,6 +253,8 @@ verifyApp env time outline@(Outline.AppOutline elmVersion srcDirs direct _ _ _) 
         if Map.size stated == Map.size actual
           then verifyDependencies env time (ValidApp srcDirs) actual direct
           else Task.throw $ Exit.DetailsHandEditedDependencies
+            $ "The stated and actual dependencies do not match.\n\n"
+            ++ "Stated: " ++ show stated ++ "\n\nActual: " ++ show actual
   else
     Task.throw $ Exit.DetailsBadElmInAppOutline elmVersion
 
@@ -289,14 +291,17 @@ union tieBreaker deps1 deps2 =
 
 noDups :: k -> v -> v -> Task v
 noDups _ _ _ =
-  Task.throw Exit.DetailsHandEditedDependencies
+  Task.throw $ Exit.DetailsHandEditedDependencies
+    "The same dependency is listed in multiple places in your elm.json file."
 
 
-allowEqualDups :: (Eq v) => k -> v -> v -> Task v
+allowEqualDups :: (Eq v, Show v) => k -> v -> v -> Task v
 allowEqualDups _ v1 v2 =
   if v1 == v2
   then return v1
-  else Task.throw Exit.DetailsHandEditedDependencies
+  else Task.throw $ Exit.DetailsHandEditedDependencies
+    $ "The same dependency is listed in multiple places in your elm.json file, but with different constraints.\n\n"
+    ++ "Dep 1: " ++ show v1 ++ "\n\nDep 2: " ++ show v2
 
 
 

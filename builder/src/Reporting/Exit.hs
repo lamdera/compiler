@@ -1281,6 +1281,7 @@ data Details
   | DetailsBadElmInPkg C.Constraint
   | DetailsBadElmInAppOutline V.Version
   | DetailsHandEditedDependencies
+      String -- @LAMDERA addition: reason
   | DetailsBadOutline Outline
   | DetailsCannotGetRegistry RegistryProblem
   | DetailsBadDeps FilePath [DetailsBadDep]
@@ -1356,11 +1357,13 @@ toDetailsReport details =
         , D.reflow $ "Lamdera hint: modify your elm.json to \"elm-version\": \"0.19.1\"."
         ]
 
-    DetailsHandEditedDependencies ->
+    DetailsHandEditedDependencies reason ->
       Help.report "ERROR IN DEPENDENCIES" (Just "elm.json")
         "It looks like the dependencies elm.json in were edited by hand (or by a 3rd\
         \ party tool) leaving them in an invalid state."
-        [ D.fillSep
+        [ D.reflow $
+            "Reason: " ++ reason
+        , D.fillSep
             ["Try","to","change","them","back","to","what","they","were","before!"
             ,"It","is","much","more","reliable","to","add","dependencies","with",D.green "lamdera install" <> "."
             ]
