@@ -325,6 +325,7 @@ injections isBackend isLocalDev =
     // $$elm$$core$$Debug$$toString = _Debug_toString_UNUSED;
 
     // debugger
+    0;
 
   |]
 
