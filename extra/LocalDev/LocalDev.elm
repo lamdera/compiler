@@ -388,6 +388,136 @@ type LiveStatus
     | Offline
 
 
+msgToString : Msg -> String
+msgToString m =
+    case m of
+        FEMsg x ->
+            "FEMsg " ++ Debug.toString x
+
+        BEMsg backendMsg ->
+            "BEMsg " ++ Debug.toString backendMsg
+
+        BEtoFE clientId toFrontend ->
+            "BEtoFE " ++ clientId ++ " " ++ Debug.toString toFrontend
+
+        BEtoFEDelayed clientId toFrontend ->
+            "BEtoFEDelayed " ++ clientId ++ " " ++ Debug.toString toFrontend
+
+        FEtoBE toBackend ->
+            "FEtoBE " ++ Debug.toString toBackend
+
+        FEtoBEDelayed toBackend ->
+            "FEtoBEDelayed " ++ Debug.toString toBackend
+
+        FENewUrl url ->
+            "FENewUrl " ++ Debug.toString url
+
+        OnConnection d ->
+            "OnConnection " ++ Debug.toString d
+
+        OnDisconnection d ->
+            "OnDisconnection " ++ Debug.toString d
+
+        ReceivedToBackend ( s, c, bytes ) ->
+            "ReceivedToBackend " ++ s ++ " " ++ c ++ " " ++ Debug.toString bytes
+
+        ReceivedToFrontend args ->
+            "ReceivedToFrontend " ++ Debug.toString args
+
+        ReceivedBackendModel bytes ->
+            "ReceivedBackendModel " ++ Debug.toString bytes
+
+        RPCIn rpcArgsJson ->
+            "RPCIn " ++ Debug.toString rpcArgsJson
+
+        SetNodeTypeLeader bool ->
+            "SetNodeTypeLeader " ++ Debug.toString bool
+
+        SetLiveStatus bool ->
+            "SetLiveStatus " ++ Debug.toString bool
+
+        ReceivedClientId clientId ->
+            "ReceivedClientId " ++ clientId
+
+        ExpandedDevbar ->
+            "ExpandedDevbar"
+
+        CollapsedDevbar ->
+            "CollapsedDevbar"
+
+        ResetDebugStoreBoth ->
+            "ResetDebugStoreBoth"
+
+        ResetDebugStoreFE ->
+            "ResetDebugStoreFE"
+
+        ResetDebugStoreBE ->
+            "ResetDebugStoreBE"
+
+        ToggledFreezeMode ->
+            "ToggledFreezeMode"
+
+        ToggledNetworkDelay ->
+            "ToggledNetworkDelay"
+
+        ToggledLogging ->
+            "ToggledLogging"
+
+        QRCodeShow ->
+            "QRCodeShow"
+
+        QRCodeHide ->
+            "QRCodeHide"
+
+        ClickedLocation ->
+            "ClickedLocation"
+
+        PersistBackend reload ->
+            "PersistBackend"
+
+        Reload ->
+            "Reload"
+
+        EnvClicked ->
+            "EnvClicked"
+
+        EnvModeSelected _ ->
+            "EnvModeSelected"
+
+        EnvCleared ->
+            "EnvCleared"
+
+        ModelResetCleared ->
+            "ModelResetCleared"
+
+        VersionCheck _ ->
+            "VersionCheck"
+
+        VersionCheckResult _ ->
+            "VersionCheckResult"
+
+        LoadLatestSnapshotFilename ->
+            "LoadLatestSnapshotFilename"
+
+        LoadLatestSnapshotFilenamesResult _ ->
+            "LoadLatestSnapshotFilenamesResult"
+
+        LoadSnapshot _ ->
+            "LoadSnapshot"
+
+        LoadSnapshotLegacy _ ->
+            "LoadSnapshotLegacy"
+
+        LoadedSnapshot _ ->
+            "LoadedSnapshot"
+
+        LoadedSnapshotLegacy _ ->
+            "LoadedSnapshotLegacy"
+
+        Noop ->
+            "Noop"
+
+
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg m =
     let
@@ -397,9 +527,12 @@ update msg m =
 
             else
                 v
+
+        _ =
+            Debug.log "msg" (msgToString msg)
     in
-    -- case Debug.log "msg" msg of
-    case msg of
+    case Debug.log "msg" msg of
+        -- case msg of
         FEMsg frontendMsg ->
             let
                 x =

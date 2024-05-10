@@ -208,7 +208,9 @@ liveReloadLive = do
   -- let p = "/Users/mario/lamdera/test/v1"
   -- let p = "/Users/mario/dev/test/lamdera-init"
   -- let p = "/Users/mario/dev/projects/refinable"
+
   let p = withRuntimeRoot "test/scenario-migrations1"
+
   -- let p = "/Users/mario/lamdera/overrides/packages/elm/bytes/1.0.8/benchmarks"
 
   -- rmdir "/Users/mario/.elm"

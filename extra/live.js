@@ -78,6 +78,7 @@ const flushOutbound = function() {
 }
 
 const msgEmitter = function(payload) {
+  debugger
   if (connected) {
     ws.json(payload)
   } else {
@@ -96,6 +97,7 @@ const flushInbound = function() {
 
 const msgInbound = function(portname, arg) {
   if (app !== null) {
+    debugger
     app.ports[portname].send(arg)
   } else {
     bufferInbound.unshift({ n: portname, a: arg })
@@ -126,6 +128,7 @@ window.setupApp = function(name, elid) {
     }
     // window.app = app
     app.ports.send_ToFrontend.subscribe(function (payload) {
+      debugger
       if (payload.b !== null) {
         payload.b = bytesToBase64(payload.b)
       }
@@ -134,6 +137,7 @@ window.setupApp = function(name, elid) {
     })
 
     app.ports.save_BackendModel.subscribe(function (payload) {
+      debugger
       payload.b = bytesToBase64(payload.b)
       payload.f = (payload.f) ? "force" : ""
       msgEmitter(payload)
@@ -144,6 +148,7 @@ window.setupApp = function(name, elid) {
     })
 
     app.ports.send_ToBackend.subscribe(function (bytes) {
+      debugger
       var b64 = bytesToBase64(bytes)
       // console.log(`[S] ToBackend`, { t:"ToBackend", s: sessionId, c: clientId, b: b64 })
       msgEmitter({ t:"ToBackend", s: sessionId, c: clientId, b: b64 })
@@ -200,11 +205,13 @@ window.setupApp = function(name, elid) {
         break;
 
       case "ToBackend":
+        debugger
         // console.log(`[R] ToBackend`, d)
         app.ports.receive_ToBackend.send([d.s, d.c, base64ToBytes(d.b)])
         break;
 
       case "ToFrontend":
+        debugger
         // Only process messages for our clientId, or a broadcast
         if (d.c == clientId || d.c == sessionId || d.c == "b") {
           // console.log(`[R] ToFrontend`, d)
@@ -219,6 +226,7 @@ window.setupApp = function(name, elid) {
         break;
 
       case "p":
+        debugger
         if (app === null) {
           // We're being given a backend state to boot up with
           initBackendModel = base64ToBytes(d.b)
@@ -239,6 +247,7 @@ window.setupApp = function(name, elid) {
           var response = null
 
           const returnHandler = function(payload) {
+            debugger
             if (payload.r === d.r) {
               // console.log("got rpc resp:", payload)
               response = payload
@@ -251,6 +260,7 @@ window.setupApp = function(name, elid) {
           if (d.i) { d.i = JSON.parse(d.i); }
           if (d.j) { d.j = JSON.parse(d.j); }
 
+          debugger
           app.ports.rpcIn.send(d)
 
           // Is there a nicer way to do this?
