@@ -209,6 +209,144 @@ injections mode isBackend isLocalDev =
           shouldProxy = $$author$$project$$LocalDev$$shouldProxy(msg)
         |]
 
+    debugToAnsiStringOverride =
+      [text|
+        function _Debug_toAnsiString(ansi, value)
+        {
+          if (typeof value === 'function')
+          {
+            return _Debug_internalColor(ansi, '<function>');
+          }
+
+          if (typeof value === 'boolean')
+          {
+            return _Debug_ctorColor(ansi, value ? 'True' : 'False');
+          }
+
+          if (typeof value === 'number')
+          {
+            return _Debug_numberColor(ansi, value + '');
+          }
+
+          if (value instanceof String)
+          {
+            return _Debug_charColor(ansi, "'" + _Debug_addSlashes(value, true) + "'");
+          }
+
+          if (typeof value === 'string')
+          {
+            return _Debug_stringColor(ansi, '"' + _Debug_addSlashes(value, false) + '"');
+          }
+
+          if (typeof value === 'object' && '$$' in value)
+          {
+            var tag = value.$$;
+
+            if (typeof tag === 'number')
+            {
+              return _Debug_internalColor(ansi, '<internals>');
+            }
+
+            if (tag[0] === '#')
+            {
+              var output = [];
+              for (var k in value)
+              {
+                if (k === '$$') continue;
+                output.push(_Debug_toAnsiString(ansi, value[k]));
+              }
+              return '(' + output.join(',') + ')';
+            }
+
+            if (tag === 'Set_elm_builtin')
+            {
+              return _Debug_ctorColor(ansi, 'Set')
+                + _Debug_fadeColor(ansi, '.fromList') + ' '
+                + _Debug_toAnsiString(ansi, $$elm$$core$$Set$$toList(value));
+            }
+
+            if (tag === 'RBNode_elm_builtin' || tag === 'RBEmpty_elm_builtin')
+            {
+              return _Debug_ctorColor(ansi, 'Dict')
+                + _Debug_fadeColor(ansi, '.fromList') + ' '
+                + _Debug_toAnsiString(ansi, $$elm$$core$$Dict$$toList(value));
+            }
+
+            if (tag === 'OrderedSet_elm_builtin')
+            {
+              return _Debug_ctorColor(ansi, 'OrderedSet')
+                + _Debug_fadeColor(ansi, '.fromList') + ' '
+                + _Debug_toAnsiString(ansi, $$lamdera$$containers$$OrderedSet$$toList(value));
+            }
+
+            if (tag === 'OrderedDict_elm_builtin')
+            {
+              return _Debug_ctorColor(ansi, 'OrderedDict')
+                + _Debug_fadeColor(ansi, '.fromList') + ' '
+                + _Debug_toAnsiString(ansi, $$lamdera$$containers$$OrderedDict$$toList(value));
+            }
+
+            if (tag === 'Array_elm_builtin')
+            {
+              return _Debug_ctorColor(ansi, 'Array')
+                + _Debug_fadeColor(ansi, '.fromList') + ' '
+                + _Debug_toAnsiString(ansi, $$elm$$core$$Array$$toList(value));
+            }
+
+            if (tag === '::' || tag === '[]')
+            {
+              var output = '[';
+
+              value.b && (output += _Debug_toAnsiString(ansi, value.a), value = value.b)
+
+              for (; value.b; value = value.b) // WHILE_CONS
+              {
+                output += ',' + _Debug_toAnsiString(ansi, value.a);
+              }
+              return output + ']';
+            }
+
+            var output = '';
+            for (var i in value)
+            {
+              if (i === '$$') continue;
+              var str = _Debug_toAnsiString(ansi, value[i]);
+              var c0 = str[0];
+              var parenless = c0 === '{' || c0 === '(' || c0 === '[' || c0 === '<' || c0 === '"' || str.indexOf(' ') < 0;
+              output += ' ' + (parenless ? str : '(' + str + ')');
+            }
+            return _Debug_ctorColor(ansi, tag) + output;
+          }
+
+          if (typeof DataView === 'function' && value instanceof DataView)
+          {
+            return _Debug_stringColor(ansi, '<' + value.byteLength + ' bytes>');
+          }
+
+          if (typeof File !== 'undefined' && value instanceof File)
+          {
+            return _Debug_internalColor(ansi, '<' + value.name + '>');
+          }
+
+          if (typeof value === 'object')
+          {
+            var output = [];
+            for (var key in value)
+            {
+              var field = key[0] === '_' ? key.slice(1) : key;
+              output.push(_Debug_fadeColor(ansi, field) + ' = ' + _Debug_toAnsiString(ansi, value[key]));
+            }
+            if (output.length === 0)
+            {
+              return '{}';
+            }
+            return '{ ' + output.join(', ') + ' }';
+          }
+
+          return _Debug_internalColor(ansi, '<internals>');
+        }
+      |]
+
     equalsOverride =
         if isProdMode mode then
          [text|
@@ -221,8 +359,8 @@ injections mode isBackend isLocalDev =
                 }
                 else
                 {
-                  x = $$elm$$dict$$Dict$$toList(x);
-                  y = $$elm$$dict$$Dict$$toList(y);
+                  x = $$elm$$core$$Dict$$toList(x);
+                  y = $$elm$$core$$Dict$$toList(y);
                 }
               }
          |]
@@ -230,13 +368,13 @@ injections mode isBackend isLocalDev =
          [text|
             if (x.$$ === 'Set_elm_builtin')
             {
-              x = $$elm$$dict$$Set$$toList(x);
-              y = $$elm$$dict$$Set$$toList(y);
+              x = $$elm$$core$$Set$$toList(x);
+              y = $$elm$$core$$Set$$toList(y);
             }
             if (x.$$ === 'RBNode_elm_builtin' || x.$$ === 'RBEmpty_elm_builtin')
             {
-              x = $$elm$$dict$$Dict$$toList(x);
-              y = $$elm$$dict$$Dict$$toList(y);
+              x = $$elm$$core$$Dict$$toList(x);
+              y = $$elm$$core$$Dict$$toList(y);
             }
             if (x.$$ === 'OrderedDict_elm_builtin')
             {
@@ -252,140 +390,7 @@ injections mode isBackend isLocalDev =
   in
   [text|
 
-    function _Debug_toAnsiString(ansi, value)
-    {
-      if (typeof value === 'function')
-      {
-        return _Debug_internalColor(ansi, '<function>');
-      }
-
-      if (typeof value === 'boolean')
-      {
-        return _Debug_ctorColor(ansi, value ? 'True' : 'False');
-      }
-
-      if (typeof value === 'number')
-      {
-        return _Debug_numberColor(ansi, value + '');
-      }
-
-      if (value instanceof String)
-      {
-        return _Debug_charColor(ansi, "'" + _Debug_addSlashes(value, true) + "'");
-      }
-
-      if (typeof value === 'string')
-      {
-        return _Debug_stringColor(ansi, '"' + _Debug_addSlashes(value, false) + '"');
-      }
-
-      if (typeof value === 'object' && '$$' in value)
-      {
-        var tag = value.$$;
-
-        if (typeof tag === 'number')
-        {
-          return _Debug_internalColor(ansi, '<internals>');
-        }
-
-        if (tag[0] === '#')
-        {
-          var output = [];
-          for (var k in value)
-          {
-            if (k === '$$') continue;
-            output.push(_Debug_toAnsiString(ansi, value[k]));
-          }
-          return '(' + output.join(',') + ')';
-        }
-
-        if (tag === 'Set_elm_builtin')
-        {
-          return _Debug_ctorColor(ansi, 'Set')
-            + _Debug_fadeColor(ansi, '.fromList') + ' '
-            + _Debug_toAnsiString(ansi, __Set_toList(value));
-        }
-
-        if (tag === 'RBNode_elm_builtin' || tag === 'RBEmpty_elm_builtin')
-        {
-          return _Debug_ctorColor(ansi, 'Dict')
-            + _Debug_fadeColor(ansi, '.fromList') + ' '
-            + _Debug_toAnsiString(ansi, __Dict_toList(value));
-        }
-
-        if (tag === 'OrdreredSet_elm_builtin')
-        {
-          return _Debug_ctorColor(ansi, 'OrderedSet')
-            + _Debug_fadeColor(ansi, '.fromList') + ' '
-            + _Debug_toAnsiString(ansi, __OrderedSet_toList(value));
-        }
-
-        if (tag === 'OrdreredDict_elm_builtin')
-        {
-          return _Debug_ctorColor(ansi, 'OrderedDict')
-            + _Debug_fadeColor(ansi, '.fromList') + ' '
-            + _Debug_toAnsiString(ansi, __OrderedDict_toList(value));
-        }
-
-        if (tag === 'Array_elm_builtin')
-        {
-          return _Debug_ctorColor(ansi, 'Array')
-            + _Debug_fadeColor(ansi, '.fromList') + ' '
-            + _Debug_toAnsiString(ansi, __Array_toList(value));
-        }
-
-        if (tag === '::' || tag === '[]')
-        {
-          var output = '[';
-
-          value.b && (output += _Debug_toAnsiString(ansi, value.a), value = value.b)
-
-          for (; value.b; value = value.b) // WHILE_CONS
-          {
-            output += ',' + _Debug_toAnsiString(ansi, value.a);
-          }
-          return output + ']';
-        }
-
-        var output = '';
-        for (var i in value)
-        {
-          if (i === '$$') continue;
-          var str = _Debug_toAnsiString(ansi, value[i]);
-          var c0 = str[0];
-          var parenless = c0 === '{' || c0 === '(' || c0 === '[' || c0 === '<' || c0 === '"' || str.indexOf(' ') < 0;
-          output += ' ' + (parenless ? str : '(' + str + ')');
-        }
-        return _Debug_ctorColor(ansi, tag) + output;
-      }
-
-      if (typeof DataView === 'function' && value instanceof DataView)
-      {
-        return _Debug_stringColor(ansi, '<' + value.byteLength + ' bytes>');
-      }
-
-      if (typeof File !== 'undefined' && value instanceof File)
-      {
-        return _Debug_internalColor(ansi, '<' + value.name + '>');
-      }
-
-      if (typeof value === 'object')
-      {
-        var output = [];
-        for (var key in value)
-        {
-          var field = key[0] === '_' ? key.slice(1) : key;
-          output.push(_Debug_fadeColor(ansi, field) + ' = ' + _Debug_toAnsiString(ansi, value[key]));
-        }
-        if (output.length === 0)
-        {
-          return '{}';
-        }
-        return '{ ' + output.join(', ') + ' }';
-      }
-
-      return _Debug_internalColor(ansi, '<internals>');
-    }
+    $debugToAnsiStringOverride
 
     function _Debug_addSlashes(str, isChar)
     {
@@ -416,7 +421,7 @@ injections mode isBackend isLocalDev =
 
       if (typeof x !== 'object' || x === null || y === null)
       {
-        typeof x === 'function' && __Debug_crash(5);
+        typeof x === 'function' && $$elm$$core$$Debug$$crash(5);
         return false;
       }
 
