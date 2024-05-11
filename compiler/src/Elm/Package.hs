@@ -28,6 +28,7 @@ module Elm.Package
   , authorLamdera
   , lamderaCore
   , lamderaCodecs
+  , lamderaContainers
   , time
   , bytes
   )
@@ -410,6 +411,12 @@ lamderaCore =
 lamderaCodecs :: Name
 lamderaCodecs =
   toName (Utf8.fromChars "lamdera") "codecs"
+
+
+{-# NOINLINE lamderaContainers #-}
+lamderaContainers :: Name
+lamderaContainers =
+  toName (Utf8.fromChars "lamdera") "containers"
 
 
 {-# NOINLINE time #-}
