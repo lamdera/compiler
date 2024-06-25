@@ -38,6 +38,8 @@ import qualified Optimize.DecisionTree as DT
 import qualified Reporting.Annotation as A
 
 
+import qualified Lamdera
+
 
 -- EXPRESSIONS
 
@@ -119,7 +121,19 @@ generate mode expression =
       JsExpr $ generateCall mode func args
 
     Opt.TailCall name args ->
+      let
+        isNewValue :: (Name.Name, Opt.Expr) -> Bool
+        isNewValue (argName, arg) =
+          case arg of
+            Opt.VarLocal name -> name /= argName
+            _ -> True
+
+        argsWithNewValues :: [(Name.Name, Opt.Expr)]
+        argsWithNewValues =
+          filter isNewValue args
+      in
       JsBlock $ generateTailCall mode name args
+        Lamdera.& Lamdera.alternativeImplementation (generateTailCall mode name argsWithNewValues)
 
     Opt.If branches final ->
       generateIf mode branches final
@@ -691,6 +705,7 @@ strictNEq left right =
 
 
 -- TODO check if JS minifiers collapse unnecessary temporary variables
+-- @LAMDERA Note: we've removed unnecessary values in tail calls, see the `alternativeImplementation` above
 --
 generateTailCall :: Mode.Mode -> Name.Name -> [(Name.Name, Opt.Expr)] -> [JS.Stmt]
 generateTailCall mode name args =
