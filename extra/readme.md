@@ -28,6 +28,7 @@ If in doubt, please ask!
 ```
 brew install gcc pkg-config      # some headers like 'linux/random.h' are implicitly required to build Haskell libs
 brew install icdiff   # used for nice side-by-side diffs in test output
+git submodule init && git submodule update # Get and update Git submodules for this project
 stack install hindent # used for debugging haskell values
 ```
 
