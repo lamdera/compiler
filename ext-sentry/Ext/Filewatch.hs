@@ -54,6 +54,7 @@ watch root action = do
             --  This is really dumb of you because some people use `/data/...` as a folder...
             --  && not (List.isInfixOf "data" filepath)
              && not (List.isInfixOf "elm-pkg-js-includes.min.js" filepath)
+             && not (List.isInfixOf "tests" filepath)
 
         Ext.Common.debug $ "👀 file event " ++ show e ++ " with shouldRefresh:" ++ show shouldRefresh
         onlyWhen shouldRefresh $ Debounce.send trigger filepath
