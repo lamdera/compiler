@@ -292,12 +292,12 @@ canonicalToDiffableType targetName currentModule interfaces recursionSet canonic
             _ ->
               DError "❗️impossible multi-param Set"
 
-        ("lamdera", "containers", "OrderedSet", "OrderedSet") ->
+        ("lamdera", "containers", "SeqSet", "SeqSet") ->
           case tvarResolvedParams of
             p:[] ->
               DSet (canonicalToDiffableType targetName currentModule_ interfaces recursionSet p tvarMap)
             _ ->
-              DError "❗️impossible multi-param OrderedSet"
+              DError "❗️impossible multi-param SeqSet"
 
         ("elm", "core", "Result", "Result") ->
           case tvarResolvedParams of
@@ -314,12 +314,12 @@ canonicalToDiffableType targetName currentModule interfaces recursionSet canonic
             _ ->
               DError "❗️impossible !2 param Dict type"
 
-        ("lamdera", "containers", "OrderedDict", "OrderedDict") ->
+        ("lamdera", "containers", "SeqDict", "SeqDict") ->
           case tvarResolvedParams of
             result:err:_ ->
               DDict (canonicalToDiffableType targetName currentModule_ interfaces recursionSet result tvarMap) (canonicalToDiffableType targetName currentModule_ interfaces recursionSet err tvarMap)
             _ ->
-              DError "❗️impossible !2 param OrderedDict type"
+              DError "❗️impossible !2 param SeqDict type"
 
         -- Values backed by JS Kernel types we cannot encode/decode
         ("elm", "virtual-dom", "VirtualDom", "Node")         -> kernelError

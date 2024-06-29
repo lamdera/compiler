@@ -755,8 +755,8 @@ tLamdera_Wire_Encoder_Holey =
 
 
 mLamdera_Wire = (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire3")
-mLamdera_OrderedDict = (Module.Canonical (Name "lamdera" "containers") "OrderedDict")
-mLamdera_OrderedSet = (Module.Canonical (Name "lamdera" "containers") "OrderedSet")
+mLamdera_SeqDict = (Module.Canonical (Name "lamdera" "containers") "SeqDict")
+mLamdera_SeqSet = (Module.Canonical (Name "lamdera" "containers") "SeqSet")
 mBytes_Encode = (Module.Canonical (Name "elm" "bytes") "Bytes.Encode")
 mBytes_Decode = (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
 
@@ -785,7 +785,7 @@ unwrapAliasesDeep t =
     TType (Module.Canonical (Name "elm" "core") "Maybe") "Maybe" [a] -> TType (Module.Canonical (Name "elm" "core") "Maybe") "Maybe" [unwrapAliasesDeep a]
     TType (Module.Canonical (Name "elm" "core") "List") "List" [a]   -> TType (Module.Canonical (Name "elm" "core") "List") "List" [unwrapAliasesDeep a]
     TType (Module.Canonical (Name "elm" "core") "Set") "Set" [a]     -> TType (Module.Canonical (Name "elm" "core") "Set") "Set" [unwrapAliasesDeep a]
-    TType (Module.Canonical (Name "lamdera" "containers") "OrderedSet") "OrderedSet" [a] -> TType (Module.Canonical (Name "lamdera" "containers") "OrderedSet") "OrderedSet" [unwrapAliasesDeep a]
+    TType (Module.Canonical (Name "lamdera" "containers") "SeqSet") "SeqSet" [a] -> TType (Module.Canonical (Name "lamdera" "containers") "SeqSet") "SeqSet" [unwrapAliasesDeep a]
     TType (Module.Canonical (Name "elm" "core") "Array") "Array" [a] -> TType (Module.Canonical (Name "elm" "core") "Array") "Array" [unwrapAliasesDeep a]
 
     TType (Module.Canonical (Name "elm" "core") "Result") "Result" [err, a] ->
@@ -794,8 +794,8 @@ unwrapAliasesDeep t =
     TType (Module.Canonical (Name "elm" "core") "Dict") "Dict" [key, val] ->
       TType (Module.Canonical (Name "elm" "core") "Dict") "Dict" [unwrapAliasesDeep key, unwrapAliasesDeep val]
 
-    TType (Module.Canonical (Name "lamdera" "containers") "OrderedDict") "OrderedDict" [key, val] ->
-      TType (Module.Canonical (Name "lamdera" "containers") "OrderedDict") "OrderedDict" [unwrapAliasesDeep key, unwrapAliasesDeep val]
+    TType (Module.Canonical (Name "lamdera" "containers") "SeqDict") "SeqDict" [key, val] ->
+      TType (Module.Canonical (Name "lamdera" "containers") "SeqDict") "SeqDict" [unwrapAliasesDeep key, unwrapAliasesDeep val]
 
     TType moduleName typeName params ->
       -- t -- @TODO wrong to not de-alias params?

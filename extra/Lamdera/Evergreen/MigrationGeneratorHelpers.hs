@@ -260,10 +260,10 @@ typeNameToStringQualified moduleName tipeName params = do
         ("elm", "core", "Maybe") -> coreType
         ("elm", "core", "List") -> coreType
         ("elm", "core", "Set") -> coreType
-        ("lamdera", "containers", "OrderedSet") -> coreType
+        ("lamdera", "containers", "SeqSet") -> coreType
         ("elm", "core", "Array") -> coreType
         ("elm", "core", "Dict") -> coreType
-        ("lamdera", "containers", "OrderedDict") -> coreType
+        ("lamdera", "containers", "SeqDict") -> coreType
         ("elm", "core", "Result") -> coreType
         _ ->
           T.concat $ [moduleNameKey moduleName, ".", nameToText tipeName]
@@ -295,10 +295,10 @@ typeNameToStringQualifiedParams moduleName tipeName params = do
         ("elm", "core", "Maybe") -> coreType
         ("elm", "core", "List") -> coreType
         ("elm", "core", "Set") -> coreType
-        ("lamdera", "containers", "OrderedSet") -> coreType
+        ("lamdera", "containers", "SeqSet") -> coreType
         ("elm", "core", "Array") -> coreType
         ("elm", "core", "Dict") -> coreType
-        ("lamdera", "containers", "OrderedDict") -> coreType
+        ("lamdera", "containers", "SeqDict") -> coreType
         ("elm", "core", "Result") -> coreType
         _ ->
           [moduleNameKey moduleName, ".", nameToText tipeName, " ", (params & fmap qualifiedTypeName & parenthesize & T.intercalate " ")]

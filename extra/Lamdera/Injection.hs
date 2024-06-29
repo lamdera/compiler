@@ -272,18 +272,18 @@ injections mode isBackend isLocalDev =
                 + _Debug_toAnsiString(ansi, $$elm$$core$$Dict$$toList(value));
             }
 
-            if (tag === 'OrderedSet_elm_builtin')
+            if (tag === 'SeqSet_elm_builtin')
             {
-              return _Debug_ctorColor(ansi, 'OrderedSet')
+              return _Debug_ctorColor(ansi, 'SeqSet')
                 + _Debug_fadeColor(ansi, '.fromList') + ' '
-                + _Debug_toAnsiString(ansi, $$lamdera$$containers$$OrderedSet$$toList(value));
+                + _Debug_toAnsiString(ansi, $$lamdera$$containers$$SeqSet$$toList(value));
             }
 
-            if (tag === 'OrderedDict_elm_builtin')
+            if (tag === 'SeqDict_elm_builtin')
             {
-              return _Debug_ctorColor(ansi, 'OrderedDict')
+              return _Debug_ctorColor(ansi, 'SeqDict')
                 + _Debug_fadeColor(ansi, '.fromList') + ' '
-                + _Debug_toAnsiString(ansi, $$lamdera$$containers$$OrderedDict$$toList(value));
+                + _Debug_toAnsiString(ansi, $$lamdera$$containers$$SeqDict$$toList(value));
             }
 
             if (tag === 'Array_elm_builtin')
@@ -354,8 +354,8 @@ injections mode isBackend isLocalDev =
               {
                 if (x.$$ < -10)
                 {
-                  x = $$lamdera$$containers$$OrderedDict$$toList(x);
-                  y = $$lamdera$$containers$$OrderedDict$$toList(y);
+                  x = $$lamdera$$containers$$SeqDict$$toList(x);
+                  y = $$lamdera$$containers$$SeqDict$$toList(y);
                 }
                 else
                 {
@@ -376,15 +376,15 @@ injections mode isBackend isLocalDev =
               x = $$elm$$core$$Dict$$toList(x);
               y = $$elm$$core$$Dict$$toList(y);
             }
-            if (x.$$ === 'OrderedDict_elm_builtin')
+            if (x.$$ === 'SeqDict_elm_builtin')
             {
-              x = $$lamdera$$containers$$OrderedDict$$toList(x);
-              y = $$lamdera$$containers$$OrderedDict$$toList(y);
+              x = $$lamdera$$containers$$SeqDict$$toList(x);
+              y = $$lamdera$$containers$$SeqDict$$toList(y);
             }
-            if (x.$$ === 'OrderedSet_elm_builtin')
+            if (x.$$ === 'SeqSet_elm_builtin')
             {
-              x = $$lamdera$$containers$$OrderedSet$$toList(x);
-              y = $$lamdera$$containers$$OrderedSet$$toList(y);
+              x = $$lamdera$$containers$$SeqSet$$toList(x);
+              y = $$lamdera$$containers$$SeqSet$$toList(y);
             }
          |]
   in

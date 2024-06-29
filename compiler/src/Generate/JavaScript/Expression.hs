@@ -293,7 +293,7 @@ generateCtor mode (Opt.Global home name) index arity =
 
 ctorToInt :: ModuleName.Canonical -> Name.Name -> Index.ZeroBased -> Int
 ctorToInt home name index =
-  if home == ModuleName.orderedDict && name == "OrderedDict_elm_builtin" then
+  if home == ModuleName.seqDict && name == "SeqDict_elm_builtin" then
     -10 - Index.toHuman index
   else if home == ModuleName.dict && name == "RBNode_elm_builtin" || name == "RBEmpty_elm_builtin" then
     0 - Index.toHuman index

@@ -334,19 +334,19 @@ canonicalToDiffableType targetName interfaces recursionSet canonical tvarMap =
             _ ->
               DError "❗️impossible !2 param Dict type"
 
-        ("lamdera", "containers", "OrderedDict", "OrderedDict") ->
+        ("lamdera", "containers", "SeqDict", "SeqDict") ->
           case tvarResolvedParams of
             key:value:_ ->
-              DLamderaOrderedDict (canonicalToDiffableType targetName interfaces recursionSet key tvarMap) (canonicalToDiffableType targetName interfaces recursionSet value tvarMap)
+              DLamderaSeqDict (canonicalToDiffableType targetName interfaces recursionSet key tvarMap) (canonicalToDiffableType targetName interfaces recursionSet value tvarMap)
             _ ->
-              DError "❗️impossible !2 param OrderedDict type"
+              DError "❗️impossible !2 param SeqDict type"
 
-        ("lamdera", "containers", "OrderedSet", "OrderedSet") ->
+        ("lamdera", "containers", "SeqSet", "SeqSet") ->
           case tvarResolvedParams of
             value:_ ->
-              DLamderaOrderedSet (canonicalToDiffableType targetName interfaces recursionSet value tvarMap)
+              DLamderaSeqSet (canonicalToDiffableType targetName interfaces recursionSet value tvarMap)
             _ ->
-              DError "❗️impossible !1 param OrderedSet type"
+              DError "❗️impossible !1 param SeqSet type"
 
 
         -- Values backed by JS Kernel types we cannot encode/decode
@@ -561,8 +561,8 @@ diffableTypeToText dtype =
 
     DError err -> "[ERROR]"
     DExternalWarning _ tipe -> diffableTypeToText tipe
-    DLamderaOrderedDict key value -> "LD["<> diffableTypeToText key <>","<> diffableTypeToText value <>"]"
-    DLamderaOrderedSet tipe -> "LS["<> diffableTypeToText tipe <>"]"
+    DLamderaSeqDict key value -> "LD["<> diffableTypeToText key <>","<> diffableTypeToText value <>"]"
+    DLamderaSeqSet tipe -> "LS["<> diffableTypeToText tipe <>"]"
 
 
 diffableTypeErrors :: DiffableType -> [Text]
@@ -606,8 +606,8 @@ diffableTypeErrors dtype =
       --   ++ diffableTypeErrors realtipe
       diffableTypeErrors realtipe
 
-    DLamderaOrderedDict key value -> diffableTypeErrors key ++ diffableTypeErrors value
-    DLamderaOrderedSet tipe -> diffableTypeErrors tipe
+    DLamderaSeqDict key value -> diffableTypeErrors key ++ diffableTypeErrors value
+    DLamderaSeqSet tipe -> diffableTypeErrors tipe
 
 
 diffableTypeExternalWarnings :: DiffableType -> [Text]
@@ -650,5 +650,5 @@ diffableTypeExternalWarnings dtype =
       [ module_ <> "." <> tipe <> " (" <> author <> "/" <> pkg <> ")"]
         ++ diffableTypeExternalWarnings realtipe
 
-    DLamderaOrderedDict key value -> diffableTypeExternalWarnings key ++ diffableTypeExternalWarnings value
-    DLamderaOrderedSet tipe -> diffableTypeExternalWarnings tipe
+    DLamderaSeqDict key value -> diffableTypeExternalWarnings key ++ diffableTypeExternalWarnings value
+    DLamderaSeqSet tipe -> diffableTypeExternalWarnings tipe

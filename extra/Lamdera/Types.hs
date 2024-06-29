@@ -38,8 +38,8 @@ data DiffableType
   | DError Text
   | DExternalWarning (Text, Text, Text, Text) DiffableType
   -- Lamdera lib types special cased with support for efficiency
-  | DLamderaOrderedDict DiffableType DiffableType
-  | DLamderaOrderedSet DiffableType
+  | DLamderaSeqDict DiffableType DiffableType
+  | DLamderaSeqSet DiffableType
 
   deriving (Show)
 
