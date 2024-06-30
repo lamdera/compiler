@@ -10,7 +10,7 @@ module Canonicalize.Environment.Foreign
 import Control.Monad (foldM)
 import qualified Data.List as List
 import qualified Data.Map.Strict as Map
-import Sanity ((!), debugFind) -- Data.Map.Strict ((!))
+import Data.Map.Strict ((!))
 import qualified Data.Name as Name
 
 import qualified AST.Canonical as Can

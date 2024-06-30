@@ -12,7 +12,7 @@ import qualified Data.List as List
 import qualified Data.Map as Map
 import qualified Data.Name as Name
 import qualified Data.Set as Set
-import Sanity ((!), debugFind) -- Data.Map ((!))
+import Data.Map ((!))
 
 import qualified AST.Canonical as Can
 import qualified AST.Optimized as Opt

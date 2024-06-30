@@ -19,7 +19,7 @@ module Elm.Docs
 
 import qualified Data.Coerce as Coerce
 import qualified Data.List as List
-import Sanity ((!), debugFind) -- Data.Map ((!))
+import Data.Map ((!))
 import qualified Data.Map as Map
 import qualified Data.Map.Merge.Strict as Map
 import qualified Data.Name as Name

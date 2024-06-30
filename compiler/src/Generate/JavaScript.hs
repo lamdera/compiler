@@ -11,7 +11,7 @@ import Prelude hiding (cycle, print)
 import qualified Data.ByteString.Builder as B
 import Data.Monoid ((<>))
 import qualified Data.List as List
-import Sanity ((!), debugFind) -- Data.Map ((!))
+import Data.Map ((!))
 import qualified Data.Map as Map
 import qualified Data.Name as Name
 import qualified Data.Set as Set

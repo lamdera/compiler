@@ -12,7 +12,7 @@ import Prelude hiding (cycle, print)
 import Control.Concurrent (MVar, forkIO, newEmptyMVar, newMVar, putMVar, readMVar)
 import Control.Monad (liftM2)
 import qualified Data.ByteString.Builder as B
-import Sanity ((!), debugFind) -- Data.Map ((!))
+import Data.Map ((!))
 import qualified Data.Map as Map
 import qualified Data.Maybe as Maybe
 import qualified Data.Name as N

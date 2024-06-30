@@ -7,7 +7,7 @@ module Optimize.Case
 
 import Control.Arrow (second)
 import qualified Data.Map as Map
-import Sanity ((!), debugFind) -- Data.Map ((!))
+import Data.Map ((!))
 import qualified Data.Maybe as Maybe
 import qualified Data.Name as Name
 
