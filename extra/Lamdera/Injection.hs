@@ -209,6 +209,7 @@ injections mode isBackend isLocalDev =
           shouldProxy = $$author$$project$$LocalDev$$shouldProxy(msg)
         |]
 
+    {-| The _Debug_toAnsiString function is for overriding the kernel cdoe for `Debug.toString`. The reason for doing so it handle SeqSet and SetDict which we want display as `SeqDict.fromList [ ... ]` and `SeqSet.fromList [ ... ]`. -}
     debugToAnsiStringOverride =
       [text|
         function _Debug_toAnsiString(ansi, value)
@@ -347,6 +348,15 @@ injections mode isBackend isLocalDev =
         }
       |]
 
+    {-| This code overrides how == is handled in Elm for SeqDict and SeqSet.
+        The code for handling Dict and Set is also injected here though the behavior is unchanged.
+
+        The entire == function kernel code is overriden further down* and this is inserted into it,
+        but the rest of the equals function kernel code is the same regardless of whether --optimize is used or not so
+        it was cleaner to not write it all twice for --optimize and non--optimize.
+
+        *like with Dict and Set, the rest of the equals kernel code behavior is unchanged.
+     -}
     equalsOverride =
         if isProdMode mode then
          [text|
