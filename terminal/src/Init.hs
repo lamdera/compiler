@@ -106,6 +106,7 @@ defaults =
     , (Pkg.html, Con.anything)
     -- @LAMDERA
     , (Pkg.url, Con.anything)
+    , (Pkg.bytes, Con.anything)
     , (Pkg.lamderaCore, Con.exactly (V.Version 1 0 0))
     , (Pkg.lamderaCodecs, Con.exactly (V.Version 1 0 0))
     ]
