@@ -232,9 +232,6 @@ injections isBackend isLocalDev =
         //console.log('managers', managers)
         //console.log('ports', ports)
 
-        var dead = false;
-        var upgradeMode = false;
-
         function mtime() { // microseconds
           if (!isBackend) { return 0; }
           const hrTime = process.hrtime();
@@ -243,14 +240,6 @@ injections isBackend isLocalDev =
 
         function sendToApp(msg, viewMetadata)
         {
-          if(dead){ return }
-          if (upgradeMode) {
-            // console.log('sendToApp.inactive',msg);
-            // No more messages should run in upgrade mode
-            // @TODO redirect messages somewhere
-            _Platform_enqueueEffects(managers, $$elm$$core$$Platform$$Cmd$$none, $$elm$$core$$Platform$$Sub$$none);
-            return;
-          }
           //console.log('sendToApp.active',msg);
 
           $shouldProxy
@@ -308,8 +297,6 @@ injections isBackend isLocalDev =
 
         return ports ? {
           ports: ports,
-          gm: function() { return model },
-          eum: function() { upgradeMode = true },
           die: die,
           fns: fns
         } : {};
