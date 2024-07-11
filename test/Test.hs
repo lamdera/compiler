@@ -19,6 +19,7 @@ import qualified Test.Check
 import qualified Test.Wire
 import qualified Test.Ext.ElmPages.Check
 import qualified Test.TypeHashes
+import qualified Test.JsOutput
 import qualified Test.WebGL
 
 import qualified Lamdera.Evergreen.TestMigrationHarness
@@ -270,4 +271,5 @@ allTests =
     , scope "Lamdera.Evergreen.TestMigrationHarness -> " $ Lamdera.Evergreen.TestMigrationHarness.suite
     , scope "Lamdera.Evergreen.TestMigrationGenerator -> " $ Lamdera.Evergreen.TestMigrationGenerator.suite
     , scope "Test.WebGL -> " $ Test.WebGL.suite
+    , scope "Test.JsOutput -> " $ Test.JsOutput.suite
     ]
