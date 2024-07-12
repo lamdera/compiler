@@ -488,7 +488,6 @@ injections isBackend isLocalDev =
       _VirtualDom_addDomNodes(rootDomNode, oldVirtualNode, patches, eventNode);
       return (_VirtualDom_lastDomNode = _VirtualDom_applyPatchesHelp(rootDomNode, patches));
     }
-    }(this));
       |]
 
   --   // https://github.com/elm/bytes/issues/20
