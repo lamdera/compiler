@@ -348,15 +348,7 @@ injections isBackend isLocalDev =
           // to be re-created even though it is already the correct DOM.
           _VirtualDom_virtualize = function() {
             F2 = F2_backup; // Restore F2 as mentioned above.
-
-            // It's a bit weird to mutate the args object that has been passed in,
-            // but the VNode from the previous app can have references to the old
-            // app functions through Html.lazy, preventing the old app from being
-            // garbage collected, so we don't want to keep a reference to it.
-            var lastVNode = args.vn;
-            delete args.vn;
-
-            return lastVNode;
+            return args.vn;
           };
 
           _VirtualDom_applyPatches = function(rootDomNode, oldVirtualNode, patches, eventNode) {
@@ -392,6 +384,30 @@ injections isBackend isLocalDev =
         _VirtualDom_virtualize = _VirtualDom_virtualize_backup;
         _VirtualDom_applyPatches = _VirtualDom_applyPatches_backup;
         _VirtualDom_equalEvents = _VirtualDom_equalEvents_backup;
+
+        if (args && args.vn) {
+          // It's a bit weird to mutate the args object that has been passed in,
+          // but the VNode from the previous app can have references to the old
+          // app functions through Html.lazy, preventing the old app from being
+          // garbage collected, so we don't want to keep a reference to it.
+          delete args.vn;
+
+          // Html.map puts `.elm_event_node_ref = { __tagger: taggers, __parent: parent_elm_event_node_ref }`
+          // on the DOM node for its first non-Html.map child virtual DOM node. __parent is a reference to
+          // the .elm_event_node_ref of a parent Html.map further up the tree. Modifying one modifies the other,
+          // since they are the same object. The top-most Html.map nodes have __parent set to the sendToApp function.
+          // All the __tagger should be updated now to stuff from the new app, but the __parent sendToApp still points
+          // to the old app, so we need to update it to the current app.
+          // This relies on that fact that we do `List.map (Html.map FEMsg) body`. If that weren't the case, we could
+          // have to crawl the tree recursively to find the top-most Html.map nodes.
+          for (var i = 0; i < _VirtualDom_lastDomNode.childNodes.length; i++) {
+            var element = _VirtualDom_lastDomNode.childNodes[i];
+            if (element.elm_event_node_ref && typeof element.elm_event_node_ref.p === "function") {
+              element.elm_event_node_ref.p = sendToApp;
+            }
+          }
+        }
+
 
         var ports = _Platform_setupEffects(managers, sendToApp);
 
@@ -438,6 +454,10 @@ injections isBackend isLocalDev =
               }
               delete element.elmFs;
             }
+            // Leave element.elm_event_node_ref behind, because the first
+            // render in the new app crashes otherwise. It contains references
+            // to the old app, but all of that should go away after the first
+            // render, and the element.elm_event_node_ref.p stuff above.
           }
 
           // Remove the popstate and hashchange listeners.
