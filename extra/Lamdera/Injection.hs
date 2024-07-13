@@ -328,15 +328,12 @@ injections isBackend isLocalDev =
           };
         };
 
-        // To be able to remove the popstate and hashchange listeners.
-        var historyListenerCleanups = [];
+        // To get hold of the Browser.Navigation.key, and to be able to remove the popstate and hashchange listeners.
         _Browser_window = {
           navigator: _Browser_window_backup.navigator,
           addEventListener: function(eventName, listener) {
+            _Browser_navKey = listener;
             _Browser_window_backup.addEventListener(eventName, listener);
-            historyListenerCleanups.push(function() {
-              _Browser_window_backup.removeEventListener(eventName, listener);
-            });
           },
         };
 
@@ -402,7 +399,7 @@ injections isBackend isLocalDev =
           // have to crawl the tree recursively to find the top-most Html.map nodes.
           for (var i = 0; i < _VirtualDom_lastDomNode.childNodes.length; i++) {
             var element = _VirtualDom_lastDomNode.childNodes[i];
-            if (element.elm_event_node_ref && typeof element.elm_event_node_ref.p === "function") {
+            if (element.elm_event_node_ref && typeof element.elm_event_node_ref.p === 'function') {
               element.elm_event_node_ref.p = sendToApp;
             }
           }
@@ -461,14 +458,15 @@ injections isBackend isLocalDev =
           }
 
           // Remove the popstate and hashchange listeners.
-          for (var i = 0; i < historyListenerCleanups.length; i++) {
-            historyListenerCleanups[i]();
+          if (_Browser_navKey) {
+            _Browser_window.removeEventListener('popstate', _Browser_navKey);
+            _Browser_window.removeEventListener('hashchange', _Browser_navKey);
           }
 
           // Clear these new things we've added.
           _VirtualDom_lastVNode = null;
           _VirtualDom_lastDomNode = null;
-          historyListenerCleanups = [];
+          _Browser_navKey = null;
 
           // Stop rendering:
           stepper = function() {};
@@ -508,6 +506,33 @@ injections isBackend isLocalDev =
       _VirtualDom_addDomNodes(rootDomNode, oldVirtualNode, patches, eventNode);
       return (_VirtualDom_lastDomNode = _VirtualDom_applyPatchesHelp(rootDomNode, patches));
     }
+
+    // In Elm, Browser.Navigation.Key is a function behind the scenes. It is passed and called here.
+    // In Lamdera, the Key becomes an object after a Wire roundtrip, so we just take the key as a "password"
+    // but then call the actual function ourselves.
+    var _Browser_navKey = null;
+    var _Browser_go = F2(function(key, n) {
+      return A2($$elm$$core$$Task$$perform, $$elm$$core$$Basics$$never, _Scheduler_binding(function() {
+        n && history.go(n);
+        _Browser_navKey();
+      }));
+    });
+    // $$elm$$browser$$Browser$$Navigation$$back is not a direct assignment so it does not need to be replaced.
+    var $$elm$$browser$$Browser$$Navigation$$forward = _Browser_go;
+    var _Browser_pushUrl = F2(function(key, url) {
+      return A2($$elm$$core$$Task$$perform, $$elm$$core$$Basics$$never, _Scheduler_binding(function() {
+        history.pushState({}, "", url);
+        _Browser_navKey();
+      }));
+    });
+    var $$elm$$browser$$Browser$$Navigation$$pushUrl = _Browser_pushUrl;
+    var _Browser_replaceUrl = F2(function(key, url) {
+      return A2($$elm$$core$$Task$$perform, $$elm$$core$$Basics$$never, _Scheduler_binding(function() {
+        history.replaceState({}, "", url);
+        _Browser_navKey();
+      }));
+    });
+    var $$elm$$browser$$Browser$$Navigation$$replaceUrl = _Browser_replaceUrl;
       |]
 
   --   // https://github.com/elm/bytes/issues/20
