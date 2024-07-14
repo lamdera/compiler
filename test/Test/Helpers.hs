@@ -32,6 +32,11 @@ withDebugPkg io = do
   withEnvVars [ ("LDEBUG", "1"), ("LOVR", "/Users/mario/dev/projects/lamdera/overrides") ] io
 
 
+withElmHome :: String -> IO a -> IO a
+withElmHome elmHomePath io = do
+  withEnvVars [ ("ELM_HOME", elmHomePath) ] io
+
+
 withTestEnv :: EasyTest.Test a -> EasyTest.Test a
 withTestEnv test = do
   EasyTest.io $ do

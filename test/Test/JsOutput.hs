@@ -4,6 +4,7 @@ module Test.JsOutput where
 
 import Lamdera
 import EasyTest
+import Test.Helpers
 
 import qualified Init
 import Make (Flags(..))
@@ -22,19 +23,20 @@ suite =
 
       io $ rmdir elmHome
       io $ rmdir elmStuff
-      io $ setEnv "ELM_HOME" elmHome
 
-      io $ Ext.Common.withProjectRoot project $
-          Make.run ["src/Main.elm"] $
-            Make.Flags
-              { _debug = False
-              , _optimize = True
-              , _output = Just (Make.JS "elm-stuff/tmp.js")
-              , _report = Nothing
-              , _docs = Nothing
-              , _noWire = True
-              , _optimizeLegible = False
-              }
+      io $
+        Test.Helpers.withElmHome elmHome $
+          Ext.Common.withProjectRoot project $
+            Make.run ["src/Main.elm"] $
+              Make.Flags
+                { _debug = False
+                , _optimize = True
+                , _output = Just (Make.JS "elm-stuff/tmp.js")
+                , _report = Nothing
+                , _docs = Nothing
+                , _noWire = True
+                , _optimizeLegible = False
+                }
 
       textM <- io $ readUtf8Text $ elmStuff ++ "/tmp.js"
 
