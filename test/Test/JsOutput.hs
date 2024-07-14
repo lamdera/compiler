@@ -10,14 +10,14 @@ import qualified Init
 import Make (Flags(..))
 import qualified Make
 import qualified Ext.Common
+import qualified Lamdera.Relative
 
 suite :: Test ()
 suite =
   tests
     [ scope "a tail-call function will not re-assign values to itself unnecessarily" $ do
+      project <- io $ Lamdera.Relative.findDir "test/generated-javascript"
       let
-        project = "./test/generated-javascript"
-
         elmHome = project ++ "/elm-home"
         elmStuff = project ++ "/elm-stuff"
 
