@@ -627,12 +627,6 @@ injections mode isBackend isLocalDev =
         _VirtualDom_equalEvents = _VirtualDom_equalEvents_backup;
 
         if (args && args.vn) {
-          // It's a bit weird to mutate the args object that has been passed in,
-          // but the VNode from the previous app can have references to the old
-          // app functions through Html.lazy, preventing the old app from being
-          // garbage collected, so we don't want to keep a reference to it.
-          delete args.vn;
-
           // Html.map puts `.elm_event_node_ref = { __tagger: taggers, __parent: parent_elm_event_node_ref }`
           // on the DOM node for its first non-Html.map child virtual DOM node. __parent is a reference to
           // the .elm_event_node_ref of a parent Html.map further up the tree. Modifying one modifies the other,
@@ -655,9 +649,14 @@ injections mode isBackend isLocalDev =
         //console.log('managers', managers)
         //console.log('ports', ports)
 
+        var isBuried = false;
+
         function sendToApp(msg, viewMetadata)
         {
-          //console.log('sendToApp.active',msg);
+          if (isBuried) {
+            console.warn('Got message after app was buried:', msg);
+            return;
+          }
 
           $shouldProxy
 
@@ -670,6 +669,9 @@ injections mode isBackend isLocalDev =
 
         _Platform_enqueueEffects(managers, initPair.b, subscriptions(model));
 
+        // Stops the app from getting more input, and from rendering.
+        // It doesn't die completely: Already running cmds will still run, and
+        // hit the update function, which then redirects the messages to the new app.
         const die = function() {
           //console.log('App dying');
 
@@ -705,12 +707,9 @@ injections mode isBackend isLocalDev =
           if (_Browser_navKey) {
             _Browser_window.removeEventListener('popstate', _Browser_navKey);
             _Browser_window.removeEventListener('hashchange', _Browser_navKey);
+            // Remove reference to .a aka .__sendToApp which prevents GC.
+            delete _Browser_navKey.a;
           }
-
-          // Clear these new things we've added.
-          _VirtualDom_lastVNode = null;
-          _VirtualDom_lastDomNode = null;
-          _Browser_navKey = null;
 
           // Stop rendering:
           stepper = function() {};
@@ -722,9 +721,25 @@ injections mode isBackend isLocalDev =
           return toReturn;
         }
 
+        // This can't be done in the die function, because then it's not possible to
+        // trigger an outgoing port to redirect messages. This is supposed to be called
+        // when all pending commands are done.
+        const bury = function() {
+          // Clear effect managers, since they prevent sendToApp from being GC:ed,
+          // which prevents the whole app from being GC:ed.
+          _Platform_effectManagers = {};
+          // In case there still are any pending commands, setting this flag means
+          // that nothing happens when they finish.
+          isBuried = true;
+        };
+
+        // Clearing args means the flags (like the passed in model) can be GC:ed (in the new app).
+        args = null;
+
         return ports ? {
           ports: ports,
           die: die,
+          bury: bury,
         } : {};
       }
 
