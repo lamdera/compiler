@@ -274,7 +274,8 @@ injections isBackend isLocalDev =
 
         const die = function() {
           //console.log('App dying');
-          // @TODO: It's unclear if nulling these does anything useful. What are we trying to achieve when dying on the backend?
+          // @TODO: Compare to the frontend die and bury functions. Investigate what needs to be done here, and measure memory usage.
+          // Even if this function isn't ideal, clearing the model should at least go a long way towards not leaking too much memory.
           managers = null;
           model = null;
           stepper = null;
