@@ -21,10 +21,10 @@ suite =
         elmHome = project ++ "/elm-home"
         elmStuff = project ++ "/elm-stuff"
 
-      io $ rmdir elmHome
-      io $ rmdir elmStuff
+      maybeJsOutput <- io $ do
+        rmdir elmHome
+        rmdir elmStuff
 
-      io $
         Test.Helpers.withElmHome elmHome $
           Ext.Common.withProjectRoot project $
             Make.run ["src/Main.elm"] $
@@ -38,12 +38,14 @@ suite =
                 , _optimizeLegible = False
                 }
 
-      textM <- io $ readUtf8Text $ elmStuff ++ "/tmp.js"
+        fileContents <- readUtf8Text $ elmStuff ++ "/tmp.js"
 
-      io $ rmdir elmHome
-      io $ rmdir elmStuff
+        rmdir elmHome
+        rmdir elmStuff
 
-      case textM of
+        pure fileContents
+
+      case maybeJsOutput of
         Just jsOutput ->
           do
             expectTextContains jsOutput "$temp$list = xs"
