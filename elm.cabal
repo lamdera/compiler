@@ -315,6 +315,7 @@ Executable lamdera
         Test.Snapshot
         Test.TypeHashes
         Test.Wire
+        Test.JsOutput
         Test.WebGL
         Lamdera.Evergreen.TestMigrationHarness
         Lamdera.Evergreen.TestMigrationGenerator
