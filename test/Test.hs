@@ -260,5 +260,16 @@ rerunOnly seed label =
 
 allTests =
   tests
-    [ scope "Test.JsOutput -> " $ Test.JsOutput.suite
+    [ tests []
+    , scope "Test.Lamdera -> " $ Test.Lamdera.suite
+    , scope "Test.Snapshot -> " $ Test.Snapshot.suite
+    , scope "Test.Wire -> " $ Test.Wire.suite
+    -- Disable temporarily as the cache busting is crazy aggressive meaning 100mb redownload each run :|
+    -- , scope "Test.Ext.ElmPages.Check -> " $ Test.Ext.ElmPages.Check.suite
+    , scope "Test.TypeHashes -> " $ Test.TypeHashes.suite
+    , scope "Test.Check -> " $ Test.Check.suite
+    , scope "Lamdera.Evergreen.TestMigrationHarness -> " $ Lamdera.Evergreen.TestMigrationHarness.suite
+    , scope "Lamdera.Evergreen.TestMigrationGenerator -> " $ Lamdera.Evergreen.TestMigrationGenerator.suite
+    , scope "Test.WebGL -> " $ Test.WebGL.suite
+    , scope "Test.JsOutput -> " $ Test.JsOutput.suite
     ]
