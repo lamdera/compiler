@@ -201,6 +201,8 @@ injections isBackend isLocalDev =
   if isBackend
     then
       [text|
+    var isLamderaRuntime = typeof isLamdera !== 'undefined';
+
     function _Platform_initialize(flagDecoder, args, init, update, subscriptions, stepperBuilder)
       {
         var result = A2(_Json_run, flagDecoder, _Json_wrap(args ? args['flags'] : undefined));
@@ -222,7 +224,7 @@ injections isBackend isLocalDev =
         //console.log('ports', ports)
 
         function mtime() { // microseconds
-          if (!isBackend) { return 0; }
+          if (!isLamderaRuntime) { return 0; }
           const hrTime = process.hrtime();
           return Math.floor(hrTime[0] * 1000000 + hrTime[1] / 1000);
         }
@@ -241,7 +243,7 @@ injections isBackend isLocalDev =
           const updateDuration = mtime() - start;
           start = mtime();
 
-          if (loggingEnabled) {
+          if (isLamderaRuntime && loggingEnabled) {
             pos = pos + 1;
             const s = $$author$$project$$LBR$$serialize(msg);
             serializeDuration = mtime() - start;
