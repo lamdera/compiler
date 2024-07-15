@@ -37,7 +37,9 @@ import qualified Lamdera.Injection
 -- GENERATE
 
 
+
 type Graph = Map.Map Opt.Global Opt.Node
+type FnArgLookup = ModuleName.Canonical -> Name.Name -> Maybe Int
 type Mains = Map.Map ModuleName.Canonical Opt.Main
 
 
@@ -78,6 +80,31 @@ perfNote mode =
       <> " for better performance and smaller assets.');"
 
 
+makeArgLookup :: Graph -> ModuleName.Canonical -> Name.Name -> Maybe Int
+makeArgLookup graph home name =
+  case Map.lookup (Opt.Global home name) graph of
+    Just (Opt.Define _ (Opt.Function args _) _) ->
+      Just (length args)
+    Just (Opt.Ctor _ arity) ->
+      Just arity
+    Just (Opt.Link global) ->
+      case Map.lookup global graph of
+        Just (Opt.Cycle names _ defs _) ->
+          case List.find (\d -> defName d == name) defs of
+            Just (Opt.Def _ _ (Opt.Function args _)) ->
+              Just (length args)
+            Just (Opt.TailDef _ _ args _) ->
+              Just (length args)
+            _ ->
+              error (show names)
+        _ ->
+          Nothing
+    _ ->
+      Nothing
+
+defName :: Opt.Def -> Name.Name
+defName (Opt.Def _ name _) = name
+defName (Opt.TailDef _ name _ _) = name
 
 -- GENERATE FOR REPL
 
@@ -191,18 +218,34 @@ addGlobalHelp mode graph global state =
   let
     addDeps deps someState =
       Set.foldl' (addGlobal mode graph) someState deps
+
+    argLookup = makeArgLookup graph
   in
   case graph ! global of
+    Opt.Define region (Opt.Function args body) deps
+      | length args > 1 ->
+          addStmt
+            (addDeps deps state)
+            ( trackedFn region global args (Expr.generateFunctionImplementation mode argLookup home args body)
+            )
+
     Opt.Define expr deps ->
       addStmt (addDeps deps state) (
-        var global (Expr.generate mode expr)
+        var global (Expr.generate mode argLookup expr)
       )
 
     Opt.DefineTailFunc argNames body deps ->
       addStmt (addDeps deps state) (
         let (Opt.Global _ name) = global in
-        var global (Expr.generateTailDef mode name argNames body)
+        var global (Expr.generateTailDef mode argLookup name argNames body)
       )
+
+    Opt.Ctor index arity
+      | arity > 1 ->
+          addStmt
+            state
+            ( ctor global arity (Expr.generateCtorImplementation mode global index arity)
+            )
 
     Opt.Ctor index arity ->
       addStmt state (
@@ -214,7 +257,7 @@ addGlobalHelp mode graph global state =
 
     Opt.Cycle names values functions deps ->
       addStmt (addDeps deps state) (
-        generateCycle mode global names values functions
+        generateCycle mode argLookup global names values functions
       )
 
     Opt.Manager effectsType ->
@@ -267,6 +310,24 @@ var (Opt.Global home name) code =
   JS.Var (JsName.fromGlobal home name) (Expr.codeToExpr code)
 
 
+trackedFn :: A.Region -> Opt.Global -> [A.Located Name.Name] -> Expr.Code -> JS.Stmt
+trackedFn (A.Region startPos _) (Opt.Global home name) args code =
+  let directFnName = JsName.fromGlobalDirectFn home name
+      argNames = map (\(A.At _ arg) -> JsName.fromLocal arg) args
+   in JS.Block
+        [ JS.TrackedVar home startPos (JsName.fromGlobalHumanReadable home name) directFnName (Expr.codeToExpr code),
+          JS.Var (JsName.fromGlobal home name) $ Expr.codeToExpr (Expr.generateCurriedFunctionRef argNames directFnName)
+        ]
+
+ctor :: Opt.Global -> Int -> Expr.Code -> JS.Stmt
+ctor (Opt.Global home name) arity code =
+  let directFnName = JsName.fromGlobalDirectFn home name
+      argNames = Index.indexedMap (\i _ -> JsName.fromIndex i) [1 .. arity]
+   in JS.Block
+        [ JS.Var directFnName (Expr.codeToExpr code),
+          JS.Var (JsName.fromGlobal home name) $ Expr.codeToExpr (Expr.generateCurriedFunctionRef argNames directFnName)
+        ]
+
 isDebugger :: Opt.Global -> Bool
 isDebugger (Opt.Global (ModuleName.Canonical _ home) _) =
   home == Name.debugger
@@ -276,11 +337,11 @@ isDebugger (Opt.Global (ModuleName.Canonical _ home) _) =
 -- GENERATE CYCLES
 
 
-generateCycle :: Mode.Mode -> Opt.Global -> [Name.Name] -> [(Name.Name, Opt.Expr)] -> [Opt.Def] -> JS.Stmt
-generateCycle mode (Opt.Global home _) names values functions =
+generateCycle :: Mode.Mode -> FnArgLookup -> Opt.Global -> [Name.Name] -> [(Name.Name, Opt.Expr)] -> [Opt.Def] -> JS.Stmt
+generateCycle mode argLookup (Opt.Global home _) names values functions =
   JS.Block
-    [ JS.Block $ map (generateCycleFunc mode home) functions
-    , JS.Block $ map (generateSafeCycle mode home) values
+    [ JS.Block $ map (generateCycleFunc mode argLookup home) functions
+    , JS.Block $ map (generateSafeCycle mode argLookup home) values
     , case map (generateRealCycle home) values of
         [] ->
           JS.EmptyStmt
@@ -300,15 +361,46 @@ generateCycle mode (Opt.Global home _) names values functions =
     ]
 
 
-generateCycleFunc :: Mode.Mode -> ModuleName.Canonical -> Opt.Def -> JS.Stmt
-generateCycleFunc mode home def =
+generateCycleFunc :: Mode.Mode -> FnArgLookup -> ModuleName.Canonical -> Opt.Def -> JS.Stmt
+generateCycleFunc mode argLookup home def =
   case def of
+--    Opt.Def name expr ->
+--      JS.Var (JsName.fromGlobal home name) (Expr.codeToExpr (Expr.generate mode expr))
+--
+--    Opt.TailDef name args expr ->
+--      JS.Var (JsName.fromGlobal home name) (Expr.codeToExpr (Expr.generateTailDef mode name args expr))
+
+    Opt.Def name (Opt.Function args body)
+      | length args > 1 ->
+          JS.Var (Opt.Global home name) args (Expr.generateFunctionImplementation mode argLookup home args body)
     Opt.Def name expr ->
-      JS.Var (JsName.fromGlobal home name) (Expr.codeToExpr (Expr.generate mode expr))
+      JS.TrackedVar home startPos (JsName.fromGlobalHumanReadable home name) (JsName.fromGlobal home name) (Expr.codeToExpr (Expr.generate mode argLookup home expr))
+    Opt.TailDef (A.Region startPos _) name args expr
+      | length args > 1 ->
+          let directFnName = JsName.fromGlobalDirectFn home name
+              argNames = map (\(A.At _ arg) -> JsName.fromLocal arg) args
+           in JS.Block
+                [ JS.TrackedVar home startPos (JsName.fromGlobalHumanReadable home name) directFnName (Expr.codeToExpr (Expr.generateTailDefImplementation mode argLookup home name args expr)),
+                  JS.Var (JsName.fromGlobal home name) (Expr.codeToExpr (Expr.generateCurriedFunctionRef argNames directFnName))
+                ]
+    Opt.TailDef (A.Region startPos _) name args expr ->
+      JS.TrackedVar home startPos (JsName.fromGlobalHumanReadable home name) (JsName.fromGlobal home name) (Expr.codeToExpr (Expr.generateTailDef mode argLookup home name args expr))
 
-    Opt.TailDef name args expr ->
-      JS.Var (JsName.fromGlobal home name) (Expr.codeToExpr (Expr.generateTailDef mode name args expr))
-
+--    Opt.Def region name (Opt.Function args body)
+--      | length args > 1 ->
+--          trackedFn region (Opt.Global home name) args (Expr.generateFunctionImplementation mode argLookup home args body)
+--    Opt.Def (A.Region startPos _) name expr ->
+--      JS.TrackedVar home startPos (JsName.fromGlobalHumanReadable home name) (JsName.fromGlobal home name) (Expr.codeToExpr (Expr.generate mode argLookup home expr))
+--    Opt.TailDef (A.Region startPos _) name args expr
+--      | length args > 1 ->
+--          let directFnName = JsName.fromGlobalDirectFn home name
+--              argNames = map (\(A.At _ arg) -> JsName.fromLocal arg) args
+--           in JS.Block
+--                [ JS.TrackedVar home startPos (JsName.fromGlobalHumanReadable home name) directFnName (Expr.codeToExpr (Expr.generateTailDefImplementation mode argLookup home name args expr)),
+--                  JS.Var (JsName.fromGlobal home name) (Expr.codeToExpr (Expr.generateCurriedFunctionRef argNames directFnName))
+--                ]
+--    Opt.TailDef (A.Region startPos _) name args expr ->
+--      JS.TrackedVar home startPos (JsName.fromGlobalHumanReadable home name) (JsName.fromGlobal home name) (Expr.codeToExpr (Expr.generateTailDef mode argLookup home name args expr))
 
 generateSafeCycle :: Mode.Mode -> ModuleName.Canonical -> (Name.Name, Opt.Expr) -> JS.Stmt
 generateSafeCycle mode home (name, expr) =
