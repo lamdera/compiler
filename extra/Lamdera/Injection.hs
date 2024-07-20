@@ -229,9 +229,14 @@ injections isBackend isLocalDev =
           return Math.floor(hrTime[0] * 1000000 + hrTime[1] / 1000);
         }
 
+        var isBuried = false;
+
         function sendToApp(msg, viewMetadata)
         {
-          //console.log('sendToApp.active',msg);
+          if (isBuried) {
+            bugsnag.notify(new Error('Got message after app was buried: ' + (msg.$ || '(unknown message)')));
+            return;
+          }
 
           $shouldProxy
 
@@ -275,15 +280,23 @@ injections isBackend isLocalDev =
           }
 
         const die = function() {
-          //console.log('App dying');
-          // @TODO: Compare to the frontend die and bury functions. Investigate what needs to be done here, and measure memory usage.
-          // Even if this function isn't ideal, clearing the model should at least go a long way towards not leaking too much memory.
-          managers = null;
+          // In case there still are any pending commands, setting this flag means
+          // that nothing happens when they finish.
+          isBuried = true;
+
+          // The app won't be garbage collected until all pending commands are done.
+          // We can reclaim most memory immediately by manually clearing the model early.
           model = null;
-          stepper = null;
-          ports = null;
-          _Platform_effectsQueue = [];
+
+          // On the frontend, we have to clear the effect managers, since they prevent sendToApp from being GC:ed,
+          // which prevents the whole app from being GC:ed. On the backend, it does not seem to.
+          // We still do it here for consistency (it doesn't hurt).
+          _Platform_effectManagers = {};
         }
+
+        // On the frontend, clearing args helps garbage collection. On the backend, it does not seem to.
+        // We still do it here for consistency (it doesn't hurt).
+        args = null;
 
         return ports ? {
           ports: ports,
@@ -413,7 +426,7 @@ injections isBackend isLocalDev =
         function sendToApp(msg, viewMetadata)
         {
           if (isBuried) {
-            console.warn('Got message after app was buried:', msg);
+            window.lamdera.bs.notify(new Error('Got message after app was buried: ' + (msg.$ || '(unknown message)')));
             return;
           }
 
@@ -484,12 +497,17 @@ injections isBackend isLocalDev =
         // trigger an outgoing port to redirect messages. This is supposed to be called
         // when all pending commands are done.
         const bury = function() {
-          // Clear effect managers, since they prevent sendToApp from being GC:ed,
-          // which prevents the whole app from being GC:ed.
-          _Platform_effectManagers = {};
           // In case there still are any pending commands, setting this flag means
           // that nothing happens when they finish.
           isBuried = true;
+
+          // The app won't be garbage collected until all pending commands are done.
+          // We can reclaim most memory immediately by manually clearing the model early.
+          model = null;
+
+          // Clear effect managers, since they prevent sendToApp from being GC:ed,
+          // which prevents the whole app from being GC:ed.
+          _Platform_effectManagers = {};
         };
 
         // Clearing args means the flags (like the passed in model) can be GC:ed (in the new app).
