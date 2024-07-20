@@ -479,7 +479,16 @@ injections mode isBackend isLocalDev =
         {
           if (buriedTimestamp !== null) {
             const elapsed = Date.now() - buriedTimestamp;
-            bugsnag.notify(new Error('Got message ' + elapsed + ' ms after app was buried: ' + (msg.$ || '(unknown message)')));
+            let msgName = '(unknown message)';
+            if (msg.$) {
+              msgName = msg.$;
+              let current = msg;
+              while (current.a && current.a.$ && !current.b) {
+                current = current.a;
+                msgName = msgName + ' ' + current.$;
+              }
+            }
+            bugsnag.notify(new Error('Got message ' + elapsed + ' ms after app was buried: ' + msgName));
             return;
           }
 
@@ -672,7 +681,16 @@ injections mode isBackend isLocalDev =
         {
           if (buriedTimestamp !== null) {
             const elapsed = Date.now() - buriedTimestamp;
-            window.lamdera.bs.notify(new Error('Got message ' + elapsed + ' ms after app was buried: ' + (msg.$ || '(unknown message)')));
+            let msgName = '(unknown message)';
+            if (msg.$) {
+              msgName = msg.$;
+              let current = msg;
+              while (current.a && current.a.$ && !current.b) {
+                current = current.a;
+                msgName = msgName + ' ' + current.$;
+              }
+            }
+            window.lamdera.bs.notify(new Error('Got message ' + elapsed + ' ms after app was buried: ' + msgName));
             return;
           }
 
