@@ -473,12 +473,13 @@ injections mode isBackend isLocalDev =
           return Math.floor(hrTime[0] * 1000000 + hrTime[1] / 1000);
         }
 
-        var isBuried = false;
+        var buriedTimestamp = null;
 
         function sendToApp(msg, viewMetadata)
         {
-          if (isBuried) {
-            bugsnag.notify(new Error('Got message after app was buried: ' + (msg.$ || '(unknown message)')));
+          if (buriedTimestamp !== null) {
+            const elapsed = Date.now() - buriedTimestamp;
+            bugsnag.notify(new Error('Got message ' + elapsed + ' ms after app was buried: ' + (msg.$ || '(unknown message)')));
             return;
           }
 
@@ -526,7 +527,7 @@ injections mode isBackend isLocalDev =
         const die = function() {
           // In case there still are any pending commands, setting this flag means
           // that nothing happens when they finish.
-          isBuried = true;
+          buriedTimestamp = Date.now();
 
           // The app won't be garbage collected until all pending commands are done.
           // We can reclaim most memory immediately by manually clearing the model early.
@@ -665,12 +666,13 @@ injections mode isBackend isLocalDev =
         //console.log('managers', managers)
         //console.log('ports', ports)
 
-        var isBuried = false;
+        var buriedTimestamp = null;
 
         function sendToApp(msg, viewMetadata)
         {
-          if (isBuried) {
-            window.lamdera.bs.notify(new Error('Got message after app was buried: ' + (msg.$ || '(unknown message)')));
+          if (buriedTimestamp !== null) {
+            const elapsed = Date.now() - buriedTimestamp;
+            window.lamdera.bs.notify(new Error('Got message ' + elapsed + ' ms after app was buried: ' + (msg.$ || '(unknown message)')));
             return;
           }
 
@@ -743,7 +745,7 @@ injections mode isBackend isLocalDev =
         const bury = function() {
           // In case there still are any pending commands, setting this flag means
           // that nothing happens when they finish.
-          isBuried = true;
+          buriedTimestamp = Date.now();
 
           // The app won't be garbage collected until all pending commands are done.
           // We can reclaim most memory immediately by manually clearing the model early.
