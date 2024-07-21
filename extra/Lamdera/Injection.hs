@@ -176,40 +176,6 @@ injections outputType =
 
     previousVersion = show_ previousVersionInt
 
-    -- @TODO: Simplify once we know why there’s a try-catch.
-    -- Kinda silly to match on outputType twice.
-    runUpdate =
-      case outputType of
-        LamderaBackend ->
-          -- @TODO: Add comment about why we are swallowing errors
-          -- for non-lamdera runtime. Also, why explicitly catch errors?
-          -- Bugsnag would catch them anyway?
-          -- https://github.com/lamdera/compiler/commit/7bd9d403954c09f24bf0e57a86210e8e5c1a97ee
-          [text|
-            try {
-              var pair = A2(update, msg, model);
-            } catch(err) {
-              if (isLamderaRuntime) bugsnag.notify(err);
-              return;
-            }
-          |]
-
-        LamderaFrontend ->
-          -- @TODO: Add comment about why we are swallowing errors
-          [text|
-            try {
-              var pair = A2(update, msg, model);
-            } catch(err) {
-              return;
-            }
-          |]
-
-        -- LamderaLive or NotLamdera
-        _ ->
-          [text|
-            var pair = A2(update, msg, model);
-          |]
-
     shouldProxy =
       onlyIf (outputType == LamderaLive)
         [text|
@@ -250,8 +216,7 @@ injections outputType =
             return;
           }
 
-          $runUpdate
-
+          var pair = A2(update, msg, model);
           stepper(model = pair.a, viewMetadata);
           _Platform_enqueueEffects(managers, pair.b, subscriptions(model));
         }
@@ -331,7 +296,7 @@ injections outputType =
           var serializeDuration, logDuration = null;
           var start = mtime();
 
-          $runUpdate
+          var pair = A2(update, msg, model);
 
           const updateDuration = mtime() - start;
           start = mtime();
@@ -520,8 +485,7 @@ injections outputType =
 
           $shouldProxy
 
-          $runUpdate
-
+          var pair = A2(update, msg, model);
           stepper(model = pair.a, viewMetadata);
           _Platform_enqueueEffects(managers, pair.b, subscriptions(model));
         }
