@@ -656,6 +656,13 @@ injections outputType =
 
     -- LamderaFrontend or LamderaLive
     _ ->
+      let
+        shouldProxy =
+          onlyIf (outputType == LamderaLive)
+            [text|
+              shouldProxy = $$author$$project$$LocalDev$$shouldProxy(msg)
+            |]
+      in
       [text|
     function _Platform_initialize(flagDecoder, args, init, update, subscriptions, stepperBuilder)
       {
