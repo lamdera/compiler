@@ -166,16 +166,6 @@ source mode mains =
 
 injections :: OutputType -> Text
 injections outputType =
-  let
-    previousVersionInt =
-      -- @TODO maybe its time to consolidate the global config...
-      (unsafePerformIO $ lookupEnv "VERSION")
-        & maybe "0" id
-        & read
-        & subtract 1
-
-    previousVersion = show_ previousVersionInt
-  in
   case outputType of
     -- NotLamdera was added when we fixed the hot loading of a new app version in the browser.
     -- The frontend version of the injections – which used to be what you got when using the
