@@ -145,17 +145,27 @@ inspect graph =
   debugHaskellPass "graphModifications keys" (graph & Map.filterWithKey pick & Map.toList & take 5) graph
 
 
+data OutputType = LamderaBackend | LamderaFrontend | LamderaLive | NotLamdera deriving (Eq)
+
+
 source :: Mode.Mode -> Mains -> B.Builder
 source mode mains =
   let
-    isBackend = mains & mainsInclude ["Backend", "LBR"]
-    isLocalDev = mains & mainsInclude ["LocalDev"]
+    outputType =
+      if mains & mainsInclude ["Backend", "LBR"] then
+        LamderaBackend
+      else if mains & mainsInclude ["Frontend", "LFR"] then
+        LamderaFrontend
+      else if mains & mainsInclude ["LocalDev"] then
+        LamderaLive
+      else
+        NotLamdera
   in
-  B.byteString $ Text.encodeUtf8 $ injections isBackend isLocalDev
+  B.byteString $ Text.encodeUtf8 $ injections outputType
 
 
-injections :: Bool -> Bool -> Text
-injections isBackend isLocalDev =
+injections :: OutputType -> Text
+injections outputType =
   let
     previousVersionInt =
       -- @TODO maybe its time to consolidate the global config...
@@ -166,40 +176,113 @@ injections isBackend isLocalDev =
 
     previousVersion = show_ previousVersionInt
 
+    -- @TODO: Simplify once we know why there’s a try-catch.
+    -- Kinda silly to match on outputType twice.
     runUpdate =
-      if isLocalDev
-        then
+      case outputType of
+        LamderaBackend ->
+          -- @TODO: Add comment about why we are swallowing errors
+          -- for non-lamdera runtime. Also, why explicitly catch errors?
+          -- Bugsnag would catch them anyway?
+          -- https://github.com/lamdera/compiler/commit/7bd9d403954c09f24bf0e57a86210e8e5c1a97ee
+          [text|
+            try {
+              var pair = A2(update, msg, model);
+            } catch(err) {
+              if (isLamderaRuntime) bugsnag.notify(err);
+              return;
+            }
+          |]
+
+        LamderaFrontend ->
+          -- @TODO: Add comment about why we are swallowing errors
+          [text|
+            try {
+              var pair = A2(update, msg, model);
+            } catch(err) {
+              return;
+            }
+          |]
+
+        -- LamderaLive or NotLamdera
+        _ ->
           [text|
             var pair = A2(update, msg, model);
           |]
-        else
-          if isBackend
-            then
-              [text|
-                try {
-                  var pair = A2(update, msg, model);
-                } catch(err) {
-                  bugsnag.notify(err);
-                  return;
-                }
-              |]
-            else
-              [text|
-                try {
-                  var pair = A2(update, msg, model);
-                } catch(err) {
-                  return;
-                }
-              |]
 
     shouldProxy =
-      onlyIf isLocalDev
+      onlyIf (outputType == LamderaLive)
         [text|
           shouldProxy = $$author$$project$$LocalDev$$shouldProxy(msg)
         |]
   in
-  if isBackend
-    then
+  case outputType of
+    -- NotLamdera was added when we fixed the hot loading of a new app version in the browser.
+    -- The frontend version of the injections – which used to be what you got when using the
+    -- lamdera compiler for non-lamdera things – then became much more complicated.
+    -- In order not to break elm-pages (which calls `app.die()`) we preserved the old frontend
+    -- injections. Note that the `.die()` method is incomplete: It does not kill all apps completely
+    -- and does not help the garbage collector enough for a killed app to be fully garbage collected.
+    NotLamdera ->
+      [text|
+    function _Platform_initialize(flagDecoder, args, init, update, subscriptions, stepperBuilder)
+      {
+        var result = A2(_Json_run, flagDecoder, _Json_wrap(args ? args['flags'] : undefined));
+
+        // @TODO need to figure out how to get this to automatically escape by mode?
+        //$$elm$$core$$Result$$isOk(result) || _Debug_crash(2 /**/, _Json_errorToString(result.a) /**/);
+        $$elm$$core$$Result$$isOk(result) || _Debug_crash(2 /**_UNUSED/, _Json_errorToString(result.a) /**/);
+
+        var managers = {};
+        var initPair = init(result.a);
+        var model = (args && args['model']) || initPair.a;
+
+        var stepper = stepperBuilder(sendToApp, model);
+        var ports = _Platform_setupEffects(managers, sendToApp);
+
+        var upgradeMode = false;
+
+        function sendToApp(msg, viewMetadata)
+        {
+          if (upgradeMode) {
+            // No more messages should run in upgrade mode
+            _Platform_enqueueEffects(managers, $$elm$$core$$Platform$$Cmd$$none, $$elm$$core$$Platform$$Sub$$none);
+            return;
+          }
+
+          $runUpdate
+
+          stepper(model = pair.a, viewMetadata);
+          _Platform_enqueueEffects(managers, pair.b, subscriptions(model));
+        }
+
+        if ((args && args['model']) === undefined) {
+          _Platform_enqueueEffects(managers, initPair.b, subscriptions(model));
+        }
+
+        const die = function() {
+          // Stop all subscriptions.
+          // This must be done before clearing the stuff below.
+          _Platform_enqueueEffects(managers, _Platform_batch(_List_Nil), _Platform_batch(_List_Nil));
+
+          managers = null;
+          model = null;
+          stepper = null;
+          ports = null;
+          _Platform_effectsQueue = [];
+        }
+
+        return ports ? {
+          ports: ports,
+          gm: function() { return model },
+          eum: function() { upgradeMode = true },
+          die: die,
+          fns: {}
+        } : {};
+      }
+      |]
+
+    LamderaBackend ->
       [text|
     var isLamderaRuntime = typeof isLamdera !== 'undefined';
 
@@ -219,9 +302,6 @@ injections isBackend isLocalDev =
         var ports = _Platform_setupEffects(managers, sendToApp);
 
         var pos = 0;
-
-        //console.log('managers', managers)
-        //console.log('ports', ports)
 
         function mtime() { // microseconds
           if (!isLamderaRuntime) { return 0; }
@@ -248,8 +328,6 @@ injections isBackend isLocalDev =
             return;
           }
 
-          $shouldProxy
-
           var serializeDuration, logDuration = null;
           var start = mtime();
 
@@ -267,16 +345,8 @@ injections isBackend isLocalDev =
             logDuration = mtime() - start;
           }
 
-          // console.log(`model size: ${global.sizeof(pair.a)}`);
-          // console.log(pair.a);
-
           stepper(model = pair.a, viewMetadata);
-          //console.log('cmds', pair.b);
           _Platform_enqueueEffects(managers, pair.b, subscriptions(model));
-
-          //const stepEnqueueDuration = mtime() - start;
-
-          //console.log({serialize: serializeDuration, log: logDuration, update: updateDuration, stepEnqueue: stepEnqueueDuration})
         }
 
         if ((args && args['model']) === undefined) {
@@ -315,7 +385,9 @@ injections isBackend isLocalDev =
         } : {};
       }
       |]
-    else
+
+    -- LamderaFrontend or LamderaLive
+    _ ->
       [text|
     function _Platform_initialize(flagDecoder, args, init, update, subscriptions, stepperBuilder)
       {
@@ -425,11 +497,7 @@ injections isBackend isLocalDev =
           }
         }
 
-
         var ports = _Platform_setupEffects(managers, sendToApp);
-
-        //console.log('managers', managers)
-        //console.log('ports', ports)
 
         var buriedTimestamp = null;
 
@@ -455,7 +523,6 @@ injections isBackend isLocalDev =
           $runUpdate
 
           stepper(model = pair.a, viewMetadata);
-          //console.log('cmds', pair.b);
           _Platform_enqueueEffects(managers, pair.b, subscriptions(model));
         }
 
@@ -465,8 +532,6 @@ injections isBackend isLocalDev =
         // It doesn't die completely: Already running cmds will still run, and
         // hit the update function, which then redirects the messages to the new app.
         const die = function() {
-          //console.log('App dying');
-
           // Render one last time, synchronously, in case there is a scheduled
           // render with requestAnimationFrame (which then become no-ops).
           // Rendering mutates the vdom, and we want those mutations.
