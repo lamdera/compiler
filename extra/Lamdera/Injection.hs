@@ -467,11 +467,10 @@ injections isBackend isLocalDev =
         const die = function() {
           //console.log('App dying');
 
-          // Render one last time, synchronously, in case their is a scheduled
+          // Render one last time, synchronously, in case there is a scheduled
           // render with requestAnimationFrame (which then become no-ops).
           // Rendering mutates the vdom, and we want those mutations.
           stepper(model, true /* isSync */);
-          var toReturn = _VirtualDom_lastVNode;
 
           // Remove Elm's event listeners. Both the ones added
           // automatically on every <a> element, as well as the ones
@@ -510,7 +509,7 @@ injections isBackend isLocalDev =
           // in upgrade mode, and the update function stops doing its regular business
           // and just forwards messages instead.
 
-          return toReturn;
+          return _VirtualDom_lastVNode;
         }
 
         // This can't be done in the die function, because then it's not possible to
