@@ -175,12 +175,6 @@ injections outputType =
         & subtract 1
 
     previousVersion = show_ previousVersionInt
-
-    shouldProxy =
-      onlyIf (outputType == LamderaLive)
-        [text|
-          shouldProxy = $$author$$project$$LocalDev$$shouldProxy(msg)
-        |]
   in
   case outputType of
     -- NotLamdera was added when we fixed the hot loading of a new app version in the browser.
@@ -353,6 +347,13 @@ injections outputType =
 
     -- LamderaFrontend or LamderaLive
     _ ->
+      let
+        shouldProxy =
+          onlyIf (outputType == LamderaLive)
+            [text|
+              shouldProxy = $$author$$project$$LocalDev$$shouldProxy(msg)
+            |]
+      in
       [text|
     function _Platform_initialize(flagDecoder, args, init, update, subscriptions, stepperBuilder)
       {
