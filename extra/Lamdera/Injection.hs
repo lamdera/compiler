@@ -7,6 +7,7 @@ module Lamdera.Injection where
 -}
 
 import System.IO.Unsafe (unsafePerformIO)
+import qualified System.Exit as Exit
 import qualified File
 import qualified System.Environment as Env
 import qualified System.Directory as Dir
@@ -409,13 +410,19 @@ esbuildIncluder root esbuildPath includesPath = do
       Lamdera.debug_ "🏗️  Using cached elm-pkg-js-includes.min.js"
       pure $ Ext.Common.textToBuilder minFileContents
     Nothing -> do
-      Lamdera.debug_ "🏗️  Building elm-pkg-js-includes.js"
+      Lamdera.debug_ "🏗️  Building elm-pkg-js-includes.js with esbuild"
       -- packaged <- Ext.Common.cq_ esbuildPath [ includesPath, "--bundle", "--global-name=elmPkgJsIncludes" ] ""
       (exit, packaged, stdErr) <- Ext.Common.cq_ esbuildPath [ includesPath, "--bundle", "--minify", "--global-name=elmPkgJsIncludes" ] ""
-      packaged
-        & Ext.Common.stringToBuilder
-        -- & debugHaskell "minified elmpkgjs"
-        & pure
+      case exit of
+        Exit.ExitFailure code -> do
+          atomicPutStrLn stdErr
+          pure "ESBUILD ERRORS SEE CONSOLE"
+
+        Exit.ExitSuccess ->
+          packaged
+            & Ext.Common.stringToBuilder
+            -- & debugHaskell "minified elmpkgjs"
+            & pure
 
   -- Build individual files? Any point?
   -- elmPkgJsSources & mapM
