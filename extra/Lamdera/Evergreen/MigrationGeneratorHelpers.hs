@@ -579,6 +579,17 @@ unchangedForType t =
     "ToFrontend"    -> "MsgUnchanged"
     _               -> error $ "unchangedForType: impossible type: " <> show t
 
+destructiveForType :: N.Name -> Text
+destructiveForType t =
+  case N.toChars t of
+    "BackendModel"  -> "ModelReset"
+    "FrontendModel" -> "ModelReset"
+    "FrontendMsg"   -> "MsgOldValueIgnored"
+    "ToBackend"     -> "MsgOldValueIgnored"
+    "BackendMsg"    -> "MsgOldValueIgnored"
+    "ToFrontend"    -> "MsgOldValueIgnored"
+    _               -> error $ "destructiveForType: impossible type: " <> show t
+
 
 findTypeDef :: Can.Type -> Interfaces -> Maybe TypeDef
 findTypeDef tipe interfaces =
