@@ -264,6 +264,12 @@ injections outputType =
         {
           if (buriedTimestamp !== null) {
             const elapsed = Date.now() - buriedTimestamp;
+            // This tries to turn `HomePageMsg (WeatherWidgetMsg (WeatherReportReceived WeatherReport))`
+            // into `"HomePageMsg WeatherWidgetMsg WeatherReportReceived"`.
+            // The idea is that if the timeout for forwarding messages isn't enough, we want to know what
+            // message somebody used that took even longer, but without reporting the entire msg.
+            // Note that in `--optimize` mode, the above string would become something like `"1 3 6"`,
+            // but it's better than nothing.
             let msgName = '(unknown message)';
             if (msg.$) {
               msgName = msg.$;
