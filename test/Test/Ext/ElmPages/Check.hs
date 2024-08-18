@@ -20,7 +20,7 @@ all = EasyTest.run suite
 suite :: Test ()
 suite = tests $
   [ scope "isWireCompatible" $ do
-      p <- io $ Lamdera.Relative.findDir "test/scenario-elm-pages-incompatible-wire"
+      p <- io $ Lamdera.Relative.requireDir "test/scenario-elm-pages-incompatible-wire"
       actual <- io $ do
 
         atomicPutStrLn $ "project dir is" <> p

@@ -16,7 +16,7 @@ suite :: Test ()
 suite =
   tests
     [ scope "a tail-call function will not re-assign values to itself unnecessarily" $ do
-      project <- io $ Lamdera.Relative.findDir "test/generated-javascript"
+      project <- io $ Lamdera.Relative.requireDir "test/generated-javascript"
       let
         elmHome = project ++ "/elm-home"
         elmStuff = project ++ "/elm-stuff"

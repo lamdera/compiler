@@ -56,8 +56,8 @@ requireFile path = do
     Nothing -> error $ "could not find a relative path, seeking at:\n" <> path <> "\n" <> absPath
 
 
-findDir :: String -> IO String
-findDir path = do
+requireDir :: String -> IO String
+requireDir path = do
   fileExists <- doesDirectoryExist path
   if fileExists
     then Dir.makeAbsolute path

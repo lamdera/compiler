@@ -23,9 +23,8 @@ suite :: Test ()
 suite = tests
   [ scope "e2e test" $ do
 
-      project <- io $ Lamdera.Relative.findDir "test/scenario-alltypes"
+      project <- io $ Lamdera.Relative.requireDir "test/scenario-alltypes"
       let
-        -- project = "/Users/mario/lamdera/test/v1"
         expected =
           [text|
             ["64db237c2087232331047b907cade9a262601159","728c05b17597cebaad4eee0d43febe29298b0f0c","fa92f6879a3929d7992e184cf89bd93fea3e094b","b1675b2dec2ee3f023cd958159060fd7d5c5c21c","b1675b2dec2ee3f023cd958159060fd7d5c5c21c","b1675b2dec2ee3f023cd958159060fd7d5c5c21c"]
@@ -48,7 +47,7 @@ suite = tests
 
 
   , scope "all types" $ do
-      project <- io $ Lamdera.Relative.findDir "test/scenario-alltypes"
+      project <- io $ Lamdera.Relative.requireDir "test/scenario-alltypes"
       let
         file = project </> "src/Test/Wire_Alias_2_Record.elm"
         moduleName = "Test.Wire_Alias_2_Record"
@@ -83,19 +82,45 @@ suite = tests
       expectEqualTextTrimmed ttext expectedTypeText
 
   , scope "extensible record" $ do
+      project <- io $ Lamdera.Relative.requireDir "test/scenario-alltypes"
       let
-        file = "/Users/mario/dev/projects/lamdera-compiler/test/scenario-alltypes/src/Test/Wire_Record_Extensible1_Basic.elm"
-        project = "/Users/mario/dev/projects/lamdera-compiler/test/scenario-alltypes"
+        modulePath = "src/Test/Wire_Record_Extensible1_Basic.elm"
         moduleName = "Test.Wire_Record_Extensible1_Basic"
         typeName = "ColorOverlap"
 
-      io $ Lamdera.Compile.makeDev_ file
-
       (thash, ttext) <- io $ withDebug $ Ext.Common.withProjectRoot project $ do
-        Lamdera.TypeHash.calculateHashPair "src/Test/Wire_Record_Extensible1_Basic.elm" moduleName typeName
+        Lamdera.TypeHash.calculateHashPair modulePath moduleName typeName
 
       expectEqualTextTrimmed thash "4bef3232374b3dfe84546f3f132ad4eaaa2cbb2f"
       expectEqualTextTrimmed ttext "R[FIIIS]"
+
+  , scope "lamdera/containers types" $ do
+      project <- io $ Lamdera.Relative.requireDir "test/scenario-alltypes"
+
+      scope "Custom type usage" $ do
+        let
+          modulePath = "src/Test/Wire_Package_Types.elm"
+          moduleName = "Test.Wire_Package_Types"
+          typeName = "PackageTypes"
+
+        (thash, ttext) <- io $ withDebug $ Ext.Common.withProjectRoot project $ do
+          Lamdera.TypeHash.calculateHashPair modulePath moduleName typeName
+
+        expectEqualTextTrimmed thash "57c1aaab0b97e6ded9efa0a45eafa79a6f42c3f2"
+        expectEqualTextTrimmed ttext "C[[LD[C[[][]],S]][LS[C[[][]]]]]"
+
+      scope "Record usage" $ do
+        let
+          modulePath = "src/Test/Wire_Package_Types.elm"
+          moduleName = "Test.Wire_Package_Types"
+          typeName = "PackageTypesRecord"
+
+        (thash, ttext) <- io $ withDebug $ Ext.Common.withProjectRoot project $ do
+          Lamdera.TypeHash.calculateHashPair modulePath moduleName typeName
+
+        expectEqualTextTrimmed thash "4684f0e30ca7421c497e79b5dfc88cec77010699"
+        expectEqualTextTrimmed ttext "R[LD[C[[][]],S]LS[C[[][]]]]"
+
 
   , scope "sha1 should not collide" $ do
 

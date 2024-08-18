@@ -116,6 +116,7 @@ wire = do
           , "src/Test/Wire_Alias_4_TvarRename.elm"
           , "src/Test/Wire_Tvar_Ambiguous.elm"
           , "src/Test/Wire_Core_Types.elm"
+          , "src/Test/Wire_Package_Types.elm"
           , "src/Test/Wire_Recursive.elm"
           , "src/Test/Wire_Record_Extensible1_Basic.elm"
           , "src/Test/Wire_Record_Extensible2_MultiParam.elm"
