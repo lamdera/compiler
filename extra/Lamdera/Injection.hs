@@ -80,7 +80,7 @@ behaviors and limitations.
 See extra/Lamdera/ReverseProxy.hs for the proxy itself
 -}
 modifiedHttp_toTask isProd =
-  onlyIf (not isProd)
+  -- onlyIf (not isProd)
     -- Identical to original except for alterIfProxyRequired addition
     [text|
 
@@ -558,6 +558,19 @@ injections mode isBackend isLocalDev =
           fns: fns
         } : {};
       }
+
+    // Restore Debug.* from dev mode to see what happens
+    // $$elm$$core$$Debug$$log = _Debug_log_UNUSED;
+    $$elm$$core$$Debug$$log = F2(function(tag, value)
+      {
+        console.log(tag + ': ', value);
+        return value;
+      });
+    // $$elm$$core$$Debug$$toString = _Debug_toString_UNUSED;
+
+    // debugger
+    0;
+
   |]
 
   --   // https://github.com/elm/bytes/issues/20

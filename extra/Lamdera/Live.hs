@@ -25,20 +25,19 @@ lamderaLiveSrc =
     if Ext.Common.isDebug_
       then do
         Lamdera.debug $ "🗿  Using debug mode lamderaLive"
-        userHome <- Dir.getHomeDirectory
-        let overrideRoot = userHome </> "dev/projects/lamdera-compiler/extra"
+        let overrideRoot = withCompilerRoot "extra"
             overridePath = overrideRoot </> "live.js"
-            overridePathBuilt = overrideRoot </> "dist/live.js"
+            overridePathBuild = overrideRoot </> "dist/live.js"
 
         exists <- doesFileExist overridePath
         if exists
           then do
-            Lamdera.debug $ "🗿 Using " ++ overridePathBuilt ++ " for lamderaLive"
+            Lamdera.debug $ "🗿 Using overridePathBuild " ++ overridePathBuild ++ " for lamderaLive"
             Ext.Common.requireBinary "npm"
             Ext.Common.requireBinary "esbuild"
-            Ext.Common.bash $ "cd " <> overrideRoot <> " && npm i && esbuild " <> overridePath <> " --bundle --minify --target=chrome58,firefox57,safari11,edge16 > " <> overridePathBuilt
-            -- Ext.Common.bash $ "cd " <> overrideRoot <> " && npm i && esbuild " <> overridePath <> " --bundle --target=chrome58,firefox57,safari11,edge16 > " <> overridePathBuilt
-            overrideM <- readUtf8Text overridePathBuilt
+            -- Ext.Common.bash $ "cd " <> overrideRoot <> " && npm i && esbuild " <> overridePath <> " --bundle --minify --target=chrome58,firefox57,safari11,edge16 > " <> overridePathBuild
+            Ext.Common.bash $ "cd " <> overrideRoot <> " && npm i && esbuild " <> overridePath <> " --bundle --target=chrome58,firefox57,safari11,edge16 > " <> overridePathBuild
+            overrideM <- readUtf8Text overridePathBuild
             case overrideM of
               Just override -> do
                 pure (T.encodeUtf8Builder override)
