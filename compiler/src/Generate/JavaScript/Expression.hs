@@ -298,6 +298,18 @@ ctorToInt home name index =
   else
     Index.toMachine index
 
+  -- Elm uses this trick to detect `RBNode_elm_builtin` and `RBEmpty_elm_builtin` within equals
+  -- and we're just doing the same trick for SeqDict but 10 integers lower. See equalsOverride
+  -- for the other side of this
+  Lamdera.& Lamdera.alternativeImplementation (
+    if home == ModuleName.seqDict && name == "SeqDict_elm_builtin" then
+      -10 - Index.toHuman index
+    else if home == ModuleName.dict && name == "RBNode_elm_builtin" || name == "RBEmpty_elm_builtin" then
+      0 - Index.toHuman index
+    else
+      Index.toMachine index
+  )
+
 
 
 -- RECORDS

@@ -334,6 +334,20 @@ canonicalToDiffableType targetName interfaces recursionSet canonical tvarMap =
             _ ->
               DError "❗️impossible !2 param Dict type"
 
+        ("lamdera", "containers", "SeqDict", "SeqDict") ->
+          case tvarResolvedParams of
+            key:value:_ ->
+              DLamderaSeqDict (canonicalToDiffableType targetName interfaces recursionSet key tvarMap) (canonicalToDiffableType targetName interfaces recursionSet value tvarMap)
+            _ ->
+              DError "❗️impossible !2 param SeqDict type"
+
+        ("lamdera", "containers", "SeqSet", "SeqSet") ->
+          case tvarResolvedParams of
+            value:_ ->
+              DLamderaSeqSet (canonicalToDiffableType targetName interfaces recursionSet value tvarMap)
+            _ ->
+              DError "❗️impossible !1 param SeqSet type"
+
 
         -- Values backed by JS Kernel types we cannot encode/decode
         ("elm", "virtual-dom", "VirtualDom", "Node")         -> kernelError
@@ -547,6 +561,8 @@ diffableTypeToText dtype =
 
     DError err -> "[ERROR]"
     DExternalWarning _ tipe -> diffableTypeToText tipe
+    DLamderaSeqDict key value -> "LD["<> diffableTypeToText key <>","<> diffableTypeToText value <>"]"
+    DLamderaSeqSet tipe -> "LS["<> diffableTypeToText tipe <>"]"
 
 
 diffableTypeErrors :: DiffableType -> [Text]
@@ -590,6 +606,9 @@ diffableTypeErrors dtype =
       --   ++ diffableTypeErrors realtipe
       diffableTypeErrors realtipe
 
+    DLamderaSeqDict key value -> diffableTypeErrors key ++ diffableTypeErrors value
+    DLamderaSeqSet tipe -> diffableTypeErrors tipe
+
 
 diffableTypeExternalWarnings :: DiffableType -> [Text]
 diffableTypeExternalWarnings dtype =
@@ -630,3 +649,6 @@ diffableTypeExternalWarnings dtype =
     DExternalWarning (author, pkg, module_, tipe) realtipe ->
       [ module_ <> "." <> tipe <> " (" <> author <> "/" <> pkg <> ")"]
         ++ diffableTypeExternalWarnings realtipe
+
+    DLamderaSeqDict key value -> diffableTypeExternalWarnings key ++ diffableTypeExternalWarnings value
+    DLamderaSeqSet tipe -> diffableTypeExternalWarnings tipe

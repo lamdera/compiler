@@ -34,7 +34,7 @@ suite :: Test ()
 suite = tests $
   [ scope "Lamdera.Nitpick.DebugLog - lamdera check" $ do
 
-      project <- io $ Lamdera.Relative.findDir "test/project-scenarios/blank-injectable"
+      project <- io $ Lamdera.Relative.requireDir "test/project-scenarios/blank-injectable"
 
       io $ Ext.Common.bash $ "cd " <> project <> " && git init"
       io $ Ext.Common.bash $ "cd " <> project <> " && git remote add lamdera git@apps.lamdera.com:always-v0.git"

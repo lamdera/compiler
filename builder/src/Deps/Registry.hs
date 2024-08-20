@@ -254,7 +254,7 @@ lamderaCoreDeps =
   Map.fromList
     [ (Lamdera.Project.lamderaCodecs, KnownVersions { _newest = V.Version 1 0 0, _previous = [] })
     , (Lamdera.Project.lamderaCore, KnownVersions { _newest = V.Version 1 0 0, _previous = [] })
-    , (Lamdera.Project.lamderaHashmap, KnownVersions { _newest = V.Version 1 0 0, _previous = [] })
-    , (Lamdera.Project.lamderaProgramTest, KnownVersions { _newest = V.Version 3 0 0, _previous = [V.Version 1 0 0, V.Version 2 0 0] })
+    , (Lamdera.Project.lamderaContainers, KnownVersions { _newest = V.Version 1 0 0, _previous = [] })
+    , (Lamdera.Project.lamderaProgramTest, KnownVersions { _newest = V.Version 3 0 0, _previous = [ V.Version 1 0 0, V.Version 2 0 0] })
     , (Lamdera.Project.lamderaWebsocket, KnownVersions { _newest = V.Version 1 0 0, _previous = [] })
     ]

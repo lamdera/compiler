@@ -18,7 +18,7 @@ module Elm.ModuleName
   , jsonDecode, jsonEncode
   , webgl, texture, vector2, vector3, vector4, matrix4
   -- @LAMDERA
-  , bytes, lamderaWire3
+  , bytes, lamderaWire3, seqDict
   )
   where
 
@@ -296,3 +296,8 @@ bytes = Canonical Pkg.bytes "Bytes"
 {-# NOINLINE lamderaWire3 #-}
 lamderaWire3 :: Canonical
 lamderaWire3 = Canonical Pkg.lamderaCodecs "Lamdera.Wire3"
+
+
+{-# NOINLINE seqDict #-}
+seqDict :: Canonical
+seqDict = Canonical Pkg.lamderaContainers "SeqDict"

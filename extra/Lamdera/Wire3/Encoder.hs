@@ -125,6 +125,16 @@ encoderForType depth ifaces cname tipe =
                     (TType (Module.Canonical (Name "elm" "core") "Set") "Set" [TVar "value"])
                     tLamdera_Wire_Encoder)))))
 
+    TType (Module.Canonical (Name "lamdera" "containers") "SeqSet") "SeqSet" [ptype] ->
+      (a (VarForeign mLamdera_SeqSet "encodeSet"
+           (Forall
+              (Map.fromList [("value", ())])
+              (TLambda
+                 (TLambda (TVar "value") tLamdera_Wire_Encoder)
+                 (TLambda
+                    (TType mLamdera_SeqSet "SeqSet" [TVar "value"])
+                    tLamdera_Wire_Encoder)))))
+
     TType (Module.Canonical (Name "elm" "core") "Array") "Array" [ptype] ->
       (a (VarForeign mLamdera_Wire "encodeArray"
            (Forall
@@ -157,6 +167,16 @@ encoderForType depth ifaces cname tipe =
                         (TType (Module.Canonical (Name "elm" "core") "Dict") "Dict" [TVar "key", TVar "value"])
                         tLamdera_Wire_Encoder))))))
 
+    TType (Module.Canonical (Name "lamdera" "containers") "SeqDict") "SeqDict" [key, value] ->
+      (a (VarForeign mLamdera_SeqDict "encodeDict"
+            (Forall
+               (Map.fromList [("key", ()), ("value", ())])
+               (TLambda
+                  (TLambda (TVar "key") tLamdera_Wire_Encoder)
+                  (TLambda (TLambda (TVar "value") tLamdera_Wire_Encoder)
+                     (TLambda
+                        (TType mLamdera_SeqDict "SeqDict" [TVar "key", TVar "value"])
+                        tLamdera_Wire_Encoder))))))
 
     TType (Module.Canonical (Name "elm" "bytes") "Bytes") "Bytes" _ ->
       (a (VarForeign mLamdera_Wire "encodeBytes" (Forall Map.empty (TLambda tipe tLamdera_Wire_Encoder))))
@@ -274,6 +294,7 @@ deepEncoderForType depth ifaces cname tipe =
     TType (Module.Canonical (Name "elm" "core") "Maybe") "Maybe" [a] -> call (encoderForType depth ifaces cname tipe) [ deepEncoderForType depth ifaces cname a ]
     TType (Module.Canonical (Name "elm" "core") "List") "List" [a]   -> call (encoderForType depth ifaces cname tipe) [ deepEncoderForType depth ifaces cname a ]
     TType (Module.Canonical (Name "elm" "core") "Set") "Set" [a]     -> call (encoderForType depth ifaces cname tipe) [ deepEncoderForType depth ifaces cname a ]
+    TType (Module.Canonical (Name "lamdera" "containers") "SeqSet") "SeqSet" [a] -> call (encoderForType depth ifaces cname tipe) [ deepEncoderForType depth ifaces cname a ]
     TType (Module.Canonical (Name "elm" "core") "Array") "Array" [a] -> call (encoderForType depth ifaces cname tipe) [ deepEncoderForType depth ifaces cname a ]
 
     TType (Module.Canonical (Name "elm" "core") "Result") "Result" [err, a] ->
@@ -281,7 +302,8 @@ deepEncoderForType depth ifaces cname tipe =
 
     TType (Module.Canonical (Name "elm" "core") "Dict") "Dict" [key, val] ->
       call (encoderForType depth ifaces cname tipe) [ deepEncoderForType depth ifaces cname key, deepEncoderForType depth ifaces cname val ]
-
+    TType (Module.Canonical (Name "lamdera" "containers") "SeqDict") "SeqDict" [key, val] ->
+      call (encoderForType depth ifaces cname tipe) [ deepEncoderForType depth ifaces cname key, deepEncoderForType depth ifaces cname val ]
     TType (Module.Canonical (Name "elm" "bytes") "Bytes") "Bytes" _ -> encoderForType depth ifaces cname tipe
     TType (Module.Canonical (Name "elm" "time") "Time") "Posix" _ -> encoderForType depth ifaces cname tipe
 
@@ -367,6 +389,7 @@ encodeTypeValue depth ifaces cname tipe value =
     TType (Module.Canonical (Name "elm" "core") "Maybe") "Maybe" [a] -> call (encoderForType depth ifaces cname tipe) [ deepEncoderForType depth ifaces cname a, value ]
     TType (Module.Canonical (Name "elm" "core") "List") "List" [a]   -> call (encoderForType depth ifaces cname tipe) [ deepEncoderForType depth ifaces cname a, value ]
     TType (Module.Canonical (Name "elm" "core") "Set") "Set" [a]     -> call (encoderForType depth ifaces cname tipe) [ deepEncoderForType depth ifaces cname a, value ]
+    TType (Module.Canonical (Name "lamdera" "containers") "SeqSet") "SeqSet" [a] -> call (encoderForType depth ifaces cname tipe) [ deepEncoderForType depth ifaces cname a, value ]
     TType (Module.Canonical (Name "elm" "core") "Array") "Array" [a] -> call (encoderForType depth ifaces cname tipe) [ deepEncoderForType depth ifaces cname a, value ]
 
     TType (Module.Canonical (Name "elm" "core") "Result") "Result" [err, a] ->
@@ -374,7 +397,8 @@ encodeTypeValue depth ifaces cname tipe value =
 
     TType (Module.Canonical (Name "elm" "core") "Dict") "Dict" [key, val] ->
       call (encoderForType depth ifaces cname tipe) [ deepEncoderForType depth ifaces cname key, deepEncoderForType depth ifaces cname val, value ]
-
+    TType (Module.Canonical (Name "lamdera" "containers") "SeqDict") "SeqDict" [key, val] ->
+      call (encoderForType depth ifaces cname tipe) [ deepEncoderForType depth ifaces cname key, deepEncoderForType depth ifaces cname val, value ]
     TType (Module.Canonical (Name "elm" "bytes") "Bytes") "Bytes" _ -> call (encoderForType depth ifaces cname tipe) [ value ]
     TType (Module.Canonical (Name "elm" "time") "Time") "Posix" _ -> call (encoderForType depth ifaces cname tipe) [ value ]
 
