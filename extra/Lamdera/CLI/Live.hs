@@ -212,7 +212,10 @@ lamderaLocalDev =
 
 
 refreshClients (mClients, mLeader, mChan, beState) =
-  SocketServer.broadcastImpl mClients "{\"t\":\"r\"}" -- r is refresh, see live.js
+  SocketServer.broadcastImpl mClients "{\"t\":\"r\"}" -- r is refresh, see live.ts
+
+reloadClientsJS (mClients, mLeader, mChan, beState) =
+  SocketServer.broadcastImpl mClients "{\"t\":\"j\"}" -- j is refresh, see live.ts
 
 
 serveWebsocket root (mClients, mLeader, mChan, beState) =

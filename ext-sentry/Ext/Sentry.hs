@@ -15,13 +15,15 @@ import Ext.Common
 data Cache =
   Cache
     { jsOutput :: MVar BS.ByteString
+    , htmlWrapper :: MVar (BS.ByteString, BS.ByteString)
     }
 
 
 init :: IO Cache
 init = do
   mJsOutput <- newMVar "cacheInit!"
-  pure $ Cache mJsOutput
+  mHtmlWrapper <- newMVar ("cacheInit!", "cacheInit!")
+  pure $ Cache mJsOutput mHtmlWrapper
 
 
 getJsOutput :: Cache -> IO BS.ByteString
@@ -29,11 +31,20 @@ getJsOutput cache =
   readMVar $ jsOutput cache
 
 
-asyncUpdateJsOutput :: Cache -> IO BS.ByteString -> IO ()
-asyncUpdateJsOutput (Cache mJsOutput) recompile = do
+getHtmlOutput :: Cache -> IO BS.ByteString
+getHtmlOutput cache = do
+  (htmlPre, htmlPost) <- readMVar $ htmlWrapper cache
+  js <- getJsOutput cache
+  pure $ htmlPre <> js <> htmlPost
+
+
+asyncUpdateJsOutput :: Cache -> IO (BS.ByteString, BS.ByteString, BS.ByteString) -> IO ()
+asyncUpdateJsOutput (Cache mJsOutput mHtmlWrapper) recompile = do
   trackedForkIO "Ext.Sentry.asyncUpdateJsOutput" $ do
     takeMVar mJsOutput
-    !bs <- track "recompile" $ recompile
-    putMVar mJsOutput bs
+    takeMVar mHtmlWrapper
+    (!pre, !js, !post) <- track "recompile" $ recompile
+    putMVar mJsOutput js
+    putMVar mHtmlWrapper (pre, post)
     System.Mem.performMajorGC
     pure ()

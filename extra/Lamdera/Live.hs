@@ -15,7 +15,7 @@ import Data.FileEmbed (bsToExp)
 import qualified System.Directory as Dir
 
 import Lamdera
-import qualified Lamdera.Relative
+import qualified Lamdera.Relative as Relative
 import qualified Ext.Common
 
 
@@ -26,18 +26,18 @@ lamderaLiveSrc =
       then do
         Lamdera.debug $ "🗿  Using debug mode lamderaLive"
         userHome <- Dir.getHomeDirectory
-        let overrideRoot = userHome </> "dev/projects/lamdera-compiler/extra"
-            overridePath = overrideRoot </> "live.js"
-            overridePathBuilt = overrideRoot </> "dist/live.js"
+        overrideRoot <- Relative.findDir "extra"
+        overridePath <- Relative.requireFile $ overrideRoot </> "live.ts"
+        overridePathBuilt <- Relative.requireFile $ overrideRoot </> "dist/live.js"
 
         exists <- doesFileExist overridePath
         if exists
           then do
-            Lamdera.debug $ "🗿 Using " ++ overridePathBuilt ++ " for lamderaLive"
+            Lamdera.debug $ "🗿 Compiling " ++ overridePath ++ " to " ++ overridePathBuilt ++ " for lamderaLive"
             Ext.Common.requireBinary "npm"
             Ext.Common.requireBinary "esbuild"
-            Ext.Common.bash $ "cd " <> overrideRoot <> " && npm i && esbuild " <> overridePath <> " --bundle --minify --target=chrome58,firefox57,safari11,edge16 > " <> overridePathBuilt
-            -- Ext.Common.bash $ "cd " <> overrideRoot <> " && npm i && esbuild " <> overridePath <> " --bundle --target=chrome58,firefox57,safari11,edge16 > " <> overridePathBuilt
+            -- Ext.Common.bash $ "cd " <> overrideRoot <> " && npm i && esbuild " <> overridePath <> " --bundle --minify --target=chrome58,firefox57,safari11,edge16 > " <> overridePathBuilt
+            Ext.Common.bash $ "cd " <> overrideRoot <> " && npm i && esbuild " <> overridePath <> " --bundle --target=chrome58,firefox57,safari11,edge16 > " <> overridePathBuilt
             overrideM <- readUtf8Text overridePathBuilt
             case overrideM of
               Just override -> do
@@ -67,4 +67,4 @@ lamderaLiveHead root = do
 
 lamderaLive :: BS.ByteString
 lamderaLive =
-  $(bsToExp =<< runIO (Lamdera.Relative.readByteString "extra/dist/live.js"))
+  $(bsToExp =<< runIO (Relative.readByteString "extra/dist/live.js"))
