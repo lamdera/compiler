@@ -151,13 +151,13 @@ See `Sanity.hs` for other helpers.
 Run `./removeSanity.sh` to revert the debugging changes!
 
 
-### live.js
+### live.ts
 
 Used by `lamdera live`, this file needs to be packaged with parcel into `/extra/dist/live.js` and then inlined by the compiler.
 
 To package whenever changes are made to this file:
 
-- Run the esbuild instructions at the top of ./extra/live.js.
+- Run the esbuild instructions at the top of ./extra/live.ts.
 - Modify the `extra/Lamdera/Live.hs` file in some way (`x = 1` works well) to ensure it will get recompiled
 - Then re-run the main build with `stack install`.
 
@@ -173,4 +173,4 @@ The `$(...)` syntax is invoking Template Haskell.
 
 ⚠️ Because unchanged files aren't recompiled, you might need to add an `x = 1` to the bottom of the `.hs` file to force a change, and thus the expression to be re-evaluated. If you find you've updated a static file, but the complied binary still has the old one, this is likely the reason why.
 
-In development, using `LDEBUG=1` will cause `~/dev/projects/lamdera-compiler/extra/dist/live.js` to be dynamically included + rebuilt, helpful when working on it with `lamdera live` to see changes right away, see logic in `Lamdera.Live.lamderaLiveSrc`.
+In development, using `LDEBUG=1` will cause `~/dev/projects/lamdera-compiler/extra/dist/live.js` to be dynamically rebuild + included, helpful when working on it with `lamdera live` to see changes right away, see logic in `Lamdera.Live.lamderaLiveSrc`.

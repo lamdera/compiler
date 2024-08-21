@@ -106,8 +106,8 @@ For more information on how to use the GHCi debugger, see the GHC User's Guide.
 -- target = buildTestHarnessToProductionJs
 -- target = checkProjectCompiles
 -- target = previewProject
--- target = liveReloadLive
-target = Test.all
+target = liveReloadLive
+-- target = Test.all
 -- target = rerunJust "Lamdera.Evergreen.TestMigrationHarness -> .full first - (WithMigrations 2)"
 -- target = checkUserConfig
 -- target = Test.Wire.buildAllPackages

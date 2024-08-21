@@ -1,7 +1,17 @@
 // This file needs to be minified into dist for release:
 // cd extra
-// esbuild live.js --bundle --minify --target=chrome58,firefox57,safari11,edge16 > dist/live.js
+// esbuild live.ts --bundle --minify --target=chrome58,firefox57,safari11,edge16 > dist/live.js
 // `lamdera live` does this automatically LDEBUG mode
+
+declare global {
+  var elmPkgJsIncludes: any;
+  var Elm: any;
+}
+declare global {
+  interface Window {
+    setupApp: (name: string, elid: string) => void;
+  }
+}
 
 import * as Sockette from 'sockette';
 import * as Cookie  from 'js-cookie';
@@ -10,16 +20,16 @@ var clientId = ""
 const sessionId = getSessionId()
 var connected = false
 var disconnectedTime = null
-var bufferOutbound = []
-var bufferInbound = []
+var bufferOutbound: any[] = []
+var bufferInbound: any[] = []
 
-var leaderId = null
-var nodeType = "f"
+var leaderId: string | null = null
+var nodeType: 'f' | 'l' = "f"
 
 // Null checking as we might be on an error page, which doesn't initiate an app
 // but we still want the livereload to function
-var app = null
-var initBackendModel = null
+var app: { ports: any } | null = null
+var initBackendModel: DataView | null = null
 
 var msgHandler = function(e) {
   const d = JSON.parse(e.data)
@@ -108,24 +118,24 @@ window.setupApp = function(name, elid) {
     if (app !== null) { return } // Don't init when already initialised
     // console.log(`booting with`, { c: clientId, s: sessionId, nt: nodeType, b: initBackendModel })
 
+    let root = document.getElementById(elid)
+
     if (name !== "LocalDev") {
       console.warn('Not a Lamdera app, loading as normal Elm.')
-      app = name.split('.').reduce((o,i)=> o[i], Elm).init({ node: document.getElementById(elid) })
-      if (document.getElementById(elid)) {
-        document.getElementById(elid).innerText = 'This is a headless program, meaning there is nothing to show here.\n\nI started the program anyway though, and you can access it as `app` in the developer console.'
-      }
+      app = name.split('.').reduce((o,i)=> o[i], Elm).init({ node: root })
+      if (root) root.innerText = 'This is a headless program, meaning there is nothing to show here.\n\nI started the program anyway though, and you can access it as `app` in the developer console.'
       return;
     }
 
     app = Elm[name].init({
-      node: document.getElementById(elid),
+      node: root,
       flags: { c: clientId, s: sessionId, nt: nodeType, b: initBackendModel }
     })
-    if (document.getElementById(elid)) {
-      document.getElementById(elid).innerText = 'This is a headless program, meaning there is nothing to show here.\n\nI started the program anyway though, and you can access it as `app` in the developer console.'
-    }
+
+    if (root) root.innerText = 'This is a headless program, meaning there is nothing to show here.\n\nI started the program anyway though, and you can access it as `app` in the developer console.'
+
     // window.app = app
-    app.ports.send_ToFrontend.subscribe(function (payload) {
+    app?.ports.send_ToFrontend.subscribe(function (payload) {
       if (payload.b !== null) {
         payload.b = bytesToBase64(payload.b)
       }
@@ -133,17 +143,17 @@ window.setupApp = function(name, elid) {
       msgEmitter(payload)
     })
 
-    app.ports.save_BackendModel.subscribe(function (payload) {
+    app?.ports.save_BackendModel.subscribe(function (payload) {
       payload.b = bytesToBase64(payload.b)
       payload.f = (payload.f) ? "force" : ""
       msgEmitter(payload)
     })
 
-    app.ports.send_EnvMode.subscribe(function (payload) {
+    app?.ports.send_EnvMode.subscribe(function (payload) {
       msgEmitter(payload)
     })
 
-    app.ports.send_ToBackend.subscribe(function (bytes) {
+    app?.ports.send_ToBackend.subscribe(function (bytes) {
       var b64 = bytesToBase64(bytes)
       // console.log(`[S] ToBackend`, { t:"ToBackend", s: sessionId, c: clientId, b: b64 })
       msgEmitter({ t:"ToBackend", s: sessionId, c: clientId, b: b64 })
@@ -159,17 +169,42 @@ window.setupApp = function(name, elid) {
   msgHandler = function(e) {
 
     // console.log(`got message`,e)
-    let d = null;
+    let d: null
+      | { t: 'r' }
+      | { t: 'j' }
+      | { t: 's', c: string, l: string }
+      | { t: 'e', l: string }
+      | { t: 'ToBackend', s: string, c: string, b: string }
+      | { t: 'ToFrontend', c: string, b: DataView | null }
+      | { t: 'p', b: string }
+      | { t: 'q', r: string, i: string | null, j: string | null }
+      | { t: 'c', s: string, c: string }
+      | { t: 'd', s: string, c: string }
+      | { t: 'x' }
+
     try {
       d = JSON.parse(e.data)
     } catch(err) {
       console.log(err, e.data);
       return;
     }
+    if (!d) return console.warn(`unexpected empty parsed message`, e)
 
     switch(d.t) {
       case "r":
+        // @DEPRECATED Server issued page reload, being replaced by hot reloads
         document.location.reload()
+        break;
+
+      case "j":
+        // Javascript hot reload directive, compilation has started on the server
+        // and we're going to inject a script tag to load the new JS which will hang
+        // until the compilation is done. This also causes browser native UI's to indicate
+        // page load activity which is a nice indicator to users that something is happening.
+        const script = document.createElement('script');
+        script.src = '/_x/js';
+        document.head.appendChild(script);
+        // debugger
         break;
 
       case "s": // setup message, will get called again if websocket drops and reconnects
@@ -201,7 +236,7 @@ window.setupApp = function(name, elid) {
 
       case "ToBackend":
         // console.log(`[R] ToBackend`, d)
-        app.ports.receive_ToBackend.send([d.s, d.c, base64ToBytes(d.b)])
+        app?.ports.receive_ToBackend.send([d.s, d.c, base64ToBytes(d.b)])
         break;
 
       case "ToFrontend":
@@ -212,7 +247,7 @@ window.setupApp = function(name, elid) {
           if (d.b !== null) {
             d.b = base64ToBytes(d.b)
           }
-          app.ports.receive_ToFrontend.send(d)
+          app?.ports.receive_ToFrontend.send(d)
         } else {
           // console.log(`dropped message`, d)
         }
@@ -246,24 +281,24 @@ window.setupApp = function(name, elid) {
             }
           }
 
-          app.ports.rpcOut.subscribe(returnHandler)
+          app?.ports.rpcOut.subscribe(returnHandler)
 
           if (d.i) { d.i = JSON.parse(d.i); }
           if (d.j) { d.j = JSON.parse(d.j); }
 
-          app.ports.rpcIn.send(d)
+          app?.ports.rpcIn.send(d)
 
           // Is there a nicer way to do this?
           waitUntil(() => {
             return done
           }, 10000)
           .then((result) => {
-            app.ports.rpcOut.unsubscribe(returnHandler)
+            app?.ports.rpcOut.unsubscribe(returnHandler)
             msgEmitter(response)
           })
           .catch((error) => {
             console.log(error)
-            app.ports.rpcOut.unsubscribe(returnHandler)
+            app?.ports.rpcOut.unsubscribe(returnHandler)
           });
 
         } catch (error) {
@@ -315,12 +350,9 @@ var DEFAULT_TIMEOUT = 5000;
 
 function waitUntil(
   predicate,
-  timeout,
-  interval
+  timeout = DEFAULT_TIMEOUT,
+  interval = DEFAULT_INTERVAL
 ) {
-  var timerInterval = interval || DEFAULT_INTERVAL;
-  var timerTimeout = timeout || DEFAULT_TIMEOUT;
-
   return new Promise(function promiseCallback(resolve, reject) {
     var timer;
     var timeoutTimer;
@@ -342,7 +374,7 @@ function waitUntil(
           clearTimers();
           resolve(result);
         } else {
-          timer = setTimeout(doStep, timerInterval);
+          timer = setTimeout(doStep, interval);
         }
       } catch (e) {
         clearTimers();
@@ -350,11 +382,11 @@ function waitUntil(
       }
     };
 
-    timer = setTimeout(doStep, timerInterval);
+    timer = setTimeout(doStep, interval);
     timeoutTimer = setTimeout(function onTimeout() {
       clearTimers();
-      reject(new Error('Timed out after waiting for ' + timerTimeout + 'ms'));
-    }, timerTimeout);
+      reject(new Error('Timed out after waiting for ' + timeout + 'ms'));
+    }, timeout);
   });
 }
 
@@ -414,7 +446,7 @@ function bytesToBase64(bytes_) {
   return base64;
 }
 
-function base64ToBytes(b64) {
+function base64ToBytes(b64: string): DataView {
   return new DataView(Base64Binary.decodeArrayBuffer(b64))
 }
 

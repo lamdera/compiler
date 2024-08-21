@@ -41,13 +41,14 @@ import qualified Stuff
 
 import Lamdera
 import qualified Lamdera.CLI.Live as Live
+import qualified Lamdera.CLI.Live.Output
 import qualified Lamdera.Constrain
 import qualified Lamdera.ReverseProxy
 import qualified Lamdera.TypeHash
 import qualified Lamdera.PostCompile
 
 import qualified Data.List as List
-import Ext.Common (trackedForkIO, whenDebug)
+import Ext.Common (trackedForkIO, whenDebug, builderToBs)
 import qualified Ext.Filewatch as Filewatch
 import qualified Ext.Sentry as Sentry
 import Control.Concurrent.STM (atomically, newTVarIO, readTVar, writeTVar, TVar)
@@ -93,19 +94,28 @@ runWithRoot root (Flags maybePort) =
           -- Fork a recompile+cache update
           Sentry.asyncUpdateJsOutput sentryCache $ do
             debug_ $ "🛫  recompile triggered by: " ++ show events
-            harness <- Live.prepareLocalDev root
+            harnessPath <- Live.prepareLocalDev root
             let
               typesRootChanged = events & filter (\event ->
                      stringContains "src/Types.elm" event
                   || stringContains "src/Bridge.elm" event
                 ) & length & (\v -> v > 0)
+
+              elmCodeChanged = events & filter (\event ->
+                     stringContains ".elm" event
+                ) & length & (\v -> v > 0)
             onlyWhen typesRootChanged Lamdera.Constrain.resetTypeLocations
-            compileToBuilder harness
-          -- Simultaneously tell all clients to refresh. All those HTTP
+            -- compileToHtml harnessPath
+            compileToParts harnessPath
+
+
+          -- Simultaneously tell all clients to fetch new JS. All those HTTP
           -- requests will open but block on the cache mVar, and then release
           -- immediately when compilation is finished, effectively "pushing"
           -- the result to waiting browsers without paying the TCP+HTTP cost again
-          Live.refreshClients liveState
+          -- and giving the users a browser native loading indicator which we
+          -- wouldn't have if we waited for compilation then just pushed via Websocket
+          Live.reloadClientsJS liveState
 
       -- Warm the cache
       recompile []
@@ -123,8 +133,9 @@ runWithRoot root (Flags maybePort) =
 
       Live.withEnd liveState $
        httpServe (config port) $ gcatchlog "general" $
+        serveElmJS sentryCache
         -- Add /public/* as if it were /* to mirror production, but still render .elm files as an Elm app first
-        Live.serveLamderaPublicFiles root (serveElm sentryCache)
+        <|> Live.serveLamderaPublicFiles root (serveElm sentryCache)
         <|> (serveFiles root sentryCache)
         -- @WARNING, `serveDirectoryWith` implicitly uses Dir.getCurrentDirectory. We can't change '.' to `root` as it freaks out
         -- with the fully qualified path. And we can't use `System.Filepath.makeRelative` because it refuses to introduce `../`.
@@ -243,14 +254,22 @@ serveElm :: Sentry.Cache -> FilePath -> Snap ()
 serveElm sentryCache path =
   do  guard (takeExtension path == ".elm")
       modifyResponse (setContentType "text/html")
+      html <- liftIO $ Sentry.getHtmlOutput sentryCache
+      writeBS html
+
+serveElmJS :: Sentry.Cache -> Snap ()
+serveElmJS sentryCache =
+  do  path <- getSafePath
+      guard (path == "_x/js")
+      modifyResponse (setContentType "text/javascript")
       js <- liftIO $ Sentry.getJsOutput sentryCache
       writeBS js
 
 
-compileToBuilder :: FilePath -> IO BS.ByteString
-compileToBuilder path =
+compileToHtml :: FilePath -> IO BS.ByteString
+compileToHtml harnessPath =
   do
-      result <- compile path
+      result <- compileHtmlBuilder harnessPath
 
       pure $
         BSL.toStrict $
@@ -272,13 +291,38 @@ compileToBuilder path =
                     Exit.toJson $ Exit.reactorToReport exit
 
 
+compileToParts :: FilePath -> IO (BS.ByteString, BS.ByteString, BS.ByteString)
+compileToParts harnessPath =
+  do
+      result <- compilePartsBuilder harnessPath
+
+      case result of
+          Right (pre, js, post) ->
+            pure (builderToBs pre, builderToBs js, builderToBs post)
+
+          Left exit -> do
+            -- @LAMDERA because we do AST injection, sometimes we might get
+            -- an error that actually cannot be displayed, i.e, the reactorToReport
+            -- function itself throws an exception, mainly due to use of unsafe
+            -- functions like Prelude.last and invariants that for some reason haven't
+            -- held with our generated code (usually related to subsequent type inference)
+            -- We print out a less-processed version here in debug mode to aid with
+            -- debugging in these scenarios, as the browser will just get zero bytes
+            -- debugPass "serveElm error" (Exit.reactorToReport exit) (pure ())
+            pure
+              ( (builderToBs $ Help.makePageHtml "Errors" $ Just $ Exit.toJson $ Exit.reactorToReport exit)
+              , ""
+              , ""
+              )
+
+
 serveElm_ :: FilePath -> FilePath -> Snap ()
 serveElm_ root path =
   do  guard (takeExtension path == ".elm")
       modifyResponse (setContentType "text/html")
       liftIO $ atomicPutStrLn $ "⛑  manually compiling: " <> path
 
-      result <- liftIO $ compile (root </> path)
+      result <- liftIO $ compileHtmlBuilder (root </> path)
       case result of
         Right builder ->
           writeBuilder builder
@@ -296,8 +340,8 @@ serveElm_ root path =
             Exit.toJson $ Exit.reactorToReport exit
 
 
-compile :: FilePath -> IO (Either Exit.Reactor B.Builder)
-compile path =
+compileHtmlBuilder :: FilePath -> IO (Either Exit.Reactor B.Builder)
+compileHtmlBuilder path =
   do  maybeRoot <- Stuff.findRootHelp $ FP.splitDirectories $ FP.takeDirectory path
       case maybeRoot of
         Nothing ->
@@ -314,6 +358,26 @@ compile path =
                 javascript <- Task.mapError Exit.ReactorBadGenerate $ Generate.dev root details artifacts
                 let (NE.List name _) = Build.getRootNames artifacts
                 return $ Html.sandwich root name javascript
+
+
+compilePartsBuilder :: FilePath -> IO (Either Exit.Reactor (B.Builder, B.Builder, B.Builder))
+compilePartsBuilder path =
+  do  maybeRoot <- Stuff.findRootHelp $ FP.splitDirectories $ FP.takeDirectory path
+      case maybeRoot of
+        Nothing ->
+          return $ Left $ Exit.ReactorNoOutline
+
+        Just root ->
+          BW.withScope $ \scope -> Stuff.withRootLock root $ Task.run $
+            do  details <- Task.eio Exit.ReactorBadDetails $ Details.load Reporting.silent scope root
+                artifacts <- Task.eio Exit.ReactorBadBuild $ Build.fromPaths Reporting.silent root details (NE.List path [])
+
+                Lamdera.PostCompile.check details artifacts Exit.ReactorBadBuild
+                Lamdera.TypeHash.buildCheckHashes artifacts
+
+                javascript <- Task.mapError Exit.ReactorBadGenerate $ Generate.dev root details artifacts
+                let (NE.List name _) = Build.getRootNames artifacts
+                return $ Lamdera.CLI.Live.Output.parts root name javascript
 
 
 

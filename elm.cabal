@@ -229,6 +229,7 @@ Executable lamdera
 
         Lamdera.CLI
         Lamdera.CLI.Live
+        Lamdera.CLI.Live.Output
         Lamdera.CLI.Login
         Lamdera.CLI.Check
         Lamdera.CLI.Deploy
