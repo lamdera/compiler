@@ -36,12 +36,20 @@ findFile path = do
           pure Nothing
 
 
-loadFile :: String -> IO (Maybe Text)
-loadFile path = do
+readFile :: String -> IO (Maybe Text)
+readFile path = do
   found <- findFile path
   case found of
     Just absPath -> Lamdera.readUtf8Text absPath
     Nothing -> pure Nothing
+
+
+writeFile :: FilePath -> Text -> IO ()
+writeFile path content = do
+  found <- findFile path
+  case found of
+    Just absPath -> Lamdera.writeUtf8 absPath content
+    Nothing -> error $ "could not find a relative path, seeking at:\n" <> path
 
 
 requireFile :: String -> IO String

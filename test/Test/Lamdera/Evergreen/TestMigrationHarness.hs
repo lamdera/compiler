@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
 
-module Lamdera.Evergreen.TestMigrationHarness where
+module Test.Lamdera.Evergreen.TestMigrationHarness where
 
 import EasyTest
 import Control.Applicative

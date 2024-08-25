@@ -22,8 +22,8 @@ import qualified Test.TypeHashes
 import qualified Test.JsOutput
 import qualified Test.WebGL
 
-import qualified Lamdera.Evergreen.TestMigrationHarness
-import qualified Lamdera.Evergreen.TestMigrationGenerator
+import qualified Test.Lamdera.Evergreen.TestMigrationHarness
+import qualified Test.Lamdera.Evergreen.TestMigrationGenerator
 
 import Test.Helpers
 

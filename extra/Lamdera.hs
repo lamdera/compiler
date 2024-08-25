@@ -57,6 +57,7 @@ module Lamdera
   , unsafe
   , onlyWhen
   , onlyWhen_
+  , onlyWith
   , textContains
   , textHasPrefix
   , stringContains
@@ -518,6 +519,14 @@ onlyWhen_ :: Monad f => f Bool -> f () -> f ()
 onlyWhen_ condition io = do
   res <- condition
   unless (not res) io
+
+
+onlyWith :: FilePath -> (Text -> IO ()) -> IO ()
+onlyWith filepath io = do
+  fileM <- readUtf8Text filepath
+  case fileM of
+    Just file -> io file
+    Nothing -> pure ()
 
 
 textContains :: Text -> Text -> Bool
