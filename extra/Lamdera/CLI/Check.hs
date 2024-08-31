@@ -950,6 +950,9 @@ firstTwoChars str =
     _ -> ('_','_')
 
 
+-- Very basic extraction of Elm chunks based on any line
+-- that start with a non-space character grouped with any following
+-- lines that start with a space character.
 extractTopLevelExpressions :: Text -> [Text]
 extractTopLevelExpressions input =
     reverse $ foldl groupLines [] (T.lines input)
