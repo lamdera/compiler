@@ -22,6 +22,7 @@ import qualified Data.NonEmptyList as NE
 import qualified System.Directory as Dir
 import System.FilePath as FP
 import Snap.Core hiding (path)
+import qualified Snap.Core as SnapCore
 import Snap.Http.Server
 import Snap.Util.FileServe
 
@@ -54,6 +55,12 @@ import Control.Concurrent.STM (atomically, newTVarIO, readTVar, writeTVar, TVar)
 
 import StandaloneInstances
 
+import qualified ReplArtifacts
+import qualified Endpoint.Repl as Repl
+import qualified Endpoint.Package as Package
+
+import Data.IORef
+
 -- RUN THE DEV SERVER
 
 
@@ -69,6 +76,7 @@ run () flags = do
   Dir.setCurrentDirectory root
   runWithRoot root flags
 
+-- currentArtifacts <- liftIO $ readIORef artifactRef
 
 runWithRoot :: FilePath -> Flags -> IO ()
 runWithRoot root (Flags maybePort) =
@@ -86,6 +94,10 @@ runWithRoot root (Flags maybePort) =
       liveState <- liftIO $ Live.init
 
       sentryCache <- liftIO $ Sentry.init
+
+      initialArtifacts <- ReplArtifacts.loadRepl
+      artifactRef <- newIORef initialArtifacts
+
 
       let
         recompile :: [String] -> IO ()
@@ -121,6 +133,9 @@ runWithRoot root (Flags maybePort) =
 
       Lamdera.ReverseProxy.start
 
+      initialArtifacts <- ReplArtifacts.loadRepl
+      artifactRef <- newIORef initialArtifacts
+
       Live.withEnd liveState $
        httpServe (config port) $ gcatchlog "general" $
         -- Add /public/* as if it were /* to mirror production, but still render .elm files as an Elm app first
@@ -135,6 +150,9 @@ runWithRoot root (Flags maybePort) =
         <|> route [ ("_r/:endpoint", Live.serveRpc liveState port) ]
         <|> Live.openEditorHandler root
         <|> Live.serveExperimental root
+        <|> (SnapCore.path "repl" $ Repl.endpoint artifactRef)
+        <|> (SnapCore.path "packageList" $ Package.handlePost artifactRef)
+        <|> (SnapCore.path "reportOnInstalledPackages" $ Package.reportOnInstalledPackages)
         <|> serveAssets -- Compiler packaged static files
         <|> Live.serveUnmatchedUrlsToIndex root (serveElm sentryCache) -- Everything else without extensions goes to Lamdera LocalDev harness
         <|> error404 -- Will get hit for any non-matching extensioned paths i.e. /hello.blah

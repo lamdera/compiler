@@ -49,7 +49,7 @@ Executable worker
         Main.hs
 
     other-modules:
-        Artifacts
+        ReplArtifacts
         Cors
         Endpoint.Compile
         Endpoint.Donate
