@@ -56,7 +56,9 @@ watch root action = do
              && not (List.isInfixOf "elm-pkg-js-includes.min.js" filepath)
              && not (List.isInfixOf "tests" filepath)
 
-        Ext.Common.debug $ "👀 file event " ++ show e ++ " with shouldRefresh:" ++ show shouldRefresh
+          indicator = if shouldRefresh then "👀" else "🙈"
+
+        Ext.Common.debug $ indicator ++ " file event " ++ show e
         onlyWhen shouldRefresh $ Debounce.send trigger filepath
       )
 
