@@ -162,11 +162,11 @@ source mode mains =
       else
         NotLamdera
   in
-  B.byteString $ Text.encodeUtf8 $ injections outputType
+  B.byteString $ Text.encodeUtf8 $ injections outputType mode
 
 
-injections :: OutputType -> Text
-injections outputType =
+injections :: OutputType -> Mode.Mode -> Text
+injections outputType mode =
   let
     previousVersionInt =
       -- @TODO maybe its time to consolidate the global config...
@@ -464,8 +464,6 @@ injections outputType =
             return;
           }
 
-          $runUpdate
-
           stepper(model = pair.a, viewMetadata);
           _Platform_enqueueEffects(managers, pair.b, subscriptions(model));
         }
@@ -494,10 +492,6 @@ injections outputType =
           fns: {}
         } : {};
       }
-      |]
-
-    LamderaBackend ->
-      [text|
 
     $debugToAnsiStringOverride
 
