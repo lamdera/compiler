@@ -21,7 +21,6 @@ import Lamdera
 import Lamdera.Evergreen.Snapshot
 import qualified Lamdera.CLI.Check
 import qualified Lamdera.Offline
-import LamderaSharedBuildHelpers
 import qualified Ext.Common
 import qualified Lamdera.Compile
 import qualified Lamdera.Relative
@@ -58,7 +57,8 @@ suite = tests $
 
 
   , scope "production check -> AppConfig usages & injection" $ do
-      let project = "/Users/mario/dev/projects/lamdera-compiler/test/scenario-always-v0"
+      project <- io $ Lamdera.Relative.requireDir "test/scenario-always-v0"
+      let
           expectContains needle file = (project </> file) & expectFileContains needle
 
       io $ Ext.Common.bash $ "cd " <> project <> " && git init"
@@ -82,7 +82,7 @@ suite = tests $
       io $ cleanupCheckGen project
 
   , scope "detects false migration claims for changed types" $ do
-      project <- io $ Lamdera.Relative.findDir "test/project-scenarios/blank-injectable"
+      project <- io $ Lamdera.Relative.requireDir "test/project-scenarios/blank-injectable"
 
       let
         migration = [text|
@@ -226,136 +226,57 @@ expectFileContains needle file =
 
 {-| For quick and general local development testing via `stack ghci` as Test.Check.check -}
 check = do
-  -- touch "/Users/mario/lamdera/test/v1/src/WireTypes.elm"
-  -- touch "/Users/mario/lamdera/test/v1/src/Env.elm"
-  -- checkWithParamsProduction "/Users/mario/lamdera/test/v1" "always-v0"
-  -- checkWithParamsProduction "/Users/mario/dev/test/ascii-art" "ascii-art-local"
-  -- checkWithParamsProduction "/Users/mario/dev/test/lamdera-minilatex-app" "minilatex"
-  -- checkWithParamsProduction "/Users/mario/dev/lamdera-user-projects/beat-the-big-two" "beat-the-big-two"
-  -- checkWithParamsProduction "/Users/mario/dev/projects/lamdera-dashboard" "dashboard"
-  -- checkWithParamsProduction "/Users/mario/dev/projects/lamdera-test" "testapp"
-  -- checkWithParamsProduction "/Users/mario/lamdera/tmp/elm-audio-test0" "elm-audio-test0"
-  -- checkWithParamsProduction "/Users/mario/lamdera-builds/build-test-local/staging" "test-local"
-  checkWithParamsProduction "/Users/mario/dev/projects/bento-life" "life"
-
-
-mockBuildSh projectPath appName = do
-
-  -- @TODO this doesn't yet fully replicate the build.sh script!
-  -- if extracting this for https://trello.com/c/BcomTNnd, make
-  -- sure to step through build.sh step-by-step.
-
-  -- c "~/lamdera/scripts/makeDevPackages.sh"
-
-
-  setEnv "FORCEVERSION" "1"
-  setEnv "LDEBUG" "1"
-  requireEnv "TOKEN"
-  setEnv "LOVR" "/Users/mario/lamdera/overrides"
-  setEnv "LAMDERA_APP_NAME" appName
-  -- setEnv "ELM_HOME" "/Users/mario/elm-home-elmx-test"
-  -- setEnv "NOTPROD" "1"
-
-  -- clearPriorBuilds
-  -- clearPriorDeploys
-  -- clearSnapshots
-
-  clearBuildCache projectPath
-
-  copyRuntimeFiles projectPath
-  injectElmPkgJsIncludesDefaultIfMissing projectPath
-  injectFrontendAppConfig projectPath appName "1"
-  killAppZero appName
-
-  npmInstall projectPath
-  addRPCDefaultIfMissing projectPath
-  installElmHttpForRPC projectPath
-  rebuildLamderaCheckProd projectPath appName
-  parcelFrontendNoMinify projectPath
-  -- parcelFrontendMinify projectPath
-  clearEnv
-  bootNodejsApp projectPath appName
-
-
-rebuildLamderaCheckProd projectPath appName = do
-  launchAppZero $ T.pack appName
-
-  -- FORCEVERSION=1 LDEBUG=1 TOKEN=$TOKEN LOVR=${LOVR} ELM_HOME=$ELM_HOME_ LAMDERA_APP_NAME=${APP} $LAMDERA_COMPILER check # >> $LOG 2>&1
-  Ext.Common.withProjectRoot projectPath $
-    Lamdera.CLI.Check.run_
-
-  killAppZero appName
-
-
-installElmHttpForRPC projectPath = do
-  Ext.Common.withProjectRoot projectPath $ do
-    Lamdera.Offline.installHelper Pkg.http
-
+  checkWithParamsProduction "~/lamdera/test/v1" "always-v0"
 
 
 {-| Run the `lamdera check` pipeline with specific params -}
 checkWithParams projectPath = do
-  setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
-  setEnv "LDEBUG" "1"
-  setEnv "ELM_HOME" "/Users/mario/elm-home-elmx-test"
+  overrides <- Lamdera.Relative.requireDir "~/lamdera/overrides"
+  elmHome <- Lamdera.Relative.requireDir "~/elm-home-elmx-test"
 
-  Ext.Common.withProjectRoot projectPath $ Lamdera.CLI.Check.run_
-
-  unsetEnv "LOVR"
-  unsetEnv "LDEBUG"
-  unsetEnv "ELM_HOME"
+  withEnvVars [("LDEBUG", "1"), ("LOVR", overrides), ("ELM_HOME", elmHome)] $ do
+    Ext.Common.withProjectRoot projectPath $ Lamdera.CLI.Check.run_
 
 
 {-| Run the `lamdera check` pipeline as if it were run in production to invoke prod behaviour -}
 checkWithParamsProduction projectPath appName = do
-  setEnv "LAMDERA_APP_NAME" appName
-  -- setEnv "NOTPROD" "1"
-  -- setEnv "HOIST_REBUILD" "1"
-  -- setEnv "VERSION" "1"
-
   requireEnv "TOKEN"
-  cp "/Users/mario/lamdera/runtime/src/LBR.elm" (projectPath ++ "/src/LBR.elm")
-  cp "/Users/mario/lamdera/runtime/src/LFR.elm" (projectPath ++ "/src/LFR.elm")
-  cp "/Users/mario/lamdera/runtime/src/LamderaRPC.elm" (projectPath ++ "/src/LamderaRPC.elm")
 
-  rpcExists <- doesFileExist (projectPath ++ "/src/RPC.elm")
-  onlyWhen (not rpcExists) $
-    cp "/Users/mario/lamdera/runtime/src/RPC_Empty.elm" (projectPath ++ "/src/RPC.elm")
-  cp "/Users/mario/lamdera/runtime/src/LamderaHelpers.elm" (projectPath ++ "/src/LamderaHelpers.elm")
+  withEnvVars [("LAMDERA_APP_NAME", appName)] $ do
+    cp "~/lamdera/runtime/src/LBR.elm" (projectPath ++ "/src/LBR.elm")
+    cp "~/lamdera/runtime/src/LFR.elm" (projectPath ++ "/src/LFR.elm")
+    cp "~/lamdera/runtime/src/LamderaRPC.elm" (projectPath ++ "/src/LamderaRPC.elm")
 
-  checkWithParams projectPath
-  unsetEnv "LAMDERA_APP_NAME"
-  unsetEnv "NOTPROD"
-  unsetEnv "VERSION"
+    rpcExists <- doesFileExist (projectPath ++ "/src/RPC.elm")
+    onlyWhen (not rpcExists) $
+      cp "~/lamdera/runtime/src/RPC_Empty.elm" (projectPath ++ "/src/RPC.elm")
+    cp "~/lamdera/runtime/src/LamderaHelpers.elm" (projectPath ++ "/src/LamderaHelpers.elm")
+
+    checkWithParams projectPath
 
 
 {-| Run the `lamdera check` pipeline with specific params -}
 checkWithParamsNoDebug version projectPath appName = do
-  unsetEnv "LDEBUG"
+  project <- Lamdera.Relative.requireDir projectPath
+  overrides <- Lamdera.Relative.requireDir "~/lamdera/overrides"
+  elmHome <- Lamdera.Relative.requireDir "~/elm-home-elmx-test"
 
-  setEnv "LAMDERA_APP_NAME" appName
-  setEnv "VERSION" $ show version
-  setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
-  setEnv "ELM_HOME" "/Users/mario/elm-home-elmx-test"
-  setEnv "NOTPROD" "1"
+  withEnvVars [("LAMDERA_APP_NAME", appName), ("VERSION", show version), ("LOVR", overrides), ("ELM_HOME", elmHome), ("NOTPROD", "1")] $ do
+    debug $ "project is " ++ project
 
-  cp "/Users/mario/lamdera/runtime/src/LBR.elm" (projectPath ++ "/src/LBR.elm")
-  cp "/Users/mario/lamdera/runtime/src/LFR.elm" (projectPath ++ "/src/LFR.elm")
-  cp "/Users/mario/lamdera/runtime/src/RPC.elm" (projectPath ++ "/src/RPC.elm")
-  cp "/Users/mario/lamdera/runtime/src/LamderaHelpers.elm" (projectPath ++ "/src/LamderaHelpers.elm")
+    cp "~/lamdera/runtime/src/LBR.elm" (project ++ "/src/LBR.elm")
+    cp "~/lamdera/runtime/src/LFR.elm" (project ++ "/src/LFR.elm")
+    cp "~/lamdera/runtime/src/RPC_Empty.elm" (project ++ "/src/RPC.elm")
+    cp "~/lamdera/runtime/src/LamderaHelpers.elm" (project ++ "/src/LamderaHelpers.elm")
 
-  Ext.Common.withProjectRoot projectPath $ Lamdera.CLI.Check.run_
+    Ext.Common.withProjectRoot project $ do
+      callCommand "git init"
+      Lamdera.CLI.Check.run_
 
-  rm (projectPath ++ "/src/LBR.elm")
-  rm (projectPath ++ "/src/LFR.elm")
-  rm (projectPath ++ "/src/RPC.elm")
-  rm (projectPath ++ "/src/LamderaHelpers.elm")
-
-  unsetEnv "LAMDERA_APP_NAME"
-  unsetEnv "VERSION"
-  unsetEnv "LOVR"
-  unsetEnv "ELM_HOME"
-  unsetEnv "NOTPROD"
+    rm (project ++ "/src/LBR.elm")
+    rm (project ++ "/src/LFR.elm")
+    rm (project ++ "/src/RPC.elm")
+    rm (project ++ "/src/LamderaHelpers.elm")
 
 
 cleanupCheckGen project = do

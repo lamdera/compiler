@@ -16,7 +16,7 @@ timestamp() {
 }
 
 return=`pwd`
-dist=/Users/mario/dev/projects/lamdera-compiler/ext-package-cache/dist
+dist=~/dev/projects/lamdera-compiler/ext-package-cache/dist
 cache=$dist/elm-package-cache
 zip="elm-package-cache-$(timestamp)"
 

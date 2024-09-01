@@ -13,13 +13,14 @@ import Lamdera
 import Test.Main (captureProcessResult)
 import qualified Test.Main
 import qualified Ext.Common
+import qualified Lamdera.Relative
 
 
 aggressiveCacheClear :: FilePath -> IO ()
 aggressiveCacheClear project = do
   rmdir $ project </> "elm-stuff"
-  rmdir "/Users/mario/.elm"
-  rmdir "/Users/mario/elm-home-elmx-test" -- @TODO test without clean cache as well
+  rmdir "~/.elm"
+  rmdir "~/elm-home-elmx-test" -- @TODO test without clean cache as well
 
 
 withDebug :: IO a -> IO a
@@ -29,7 +30,8 @@ withDebug io = do
 
 withDebugPkg :: IO a -> IO a
 withDebugPkg io = do
-  withEnvVars [ ("LDEBUG", "1"), ("LOVR", "/Users/mario/dev/projects/lamdera/overrides") ] io
+  overrides <- Lamdera.Relative.requireDir "~/lamdera/overrides"
+  withEnvVars [ ("LDEBUG", "1"), ("LOVR", overrides) ] io
 
 
 withElmHome :: String -> IO a -> IO a
@@ -42,7 +44,8 @@ withTestEnv test = do
   EasyTest.io $ do
     setEnv "LDEBUG" "1"
     setEnv "LTEST" "1"
-    setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
+    overrides <- Lamdera.Relative.requireDir "~/lamdera/overrides"
+    setEnv "LOVR" overrides
   res <- test
   EasyTest.io $ do
     unsetEnv "LDEBUG"
@@ -67,11 +70,15 @@ withEnvVars vars io = do
 
 
 cp :: String -> String -> IO ()
-cp = Lamdera.copyFile
+cp src_ dest = do
+  src <- Lamdera.Relative.requireFile src_
+  Lamdera.copyFile src dest
 
 
 rm :: String -> IO ()
-rm path = Lamdera.remove path
+rm path_ = do
+  path <- Lamdera.Relative.requireFile path_
+  Lamdera.remove path
 
 
 catchOutput :: IO () -> EasyTest.Test Text

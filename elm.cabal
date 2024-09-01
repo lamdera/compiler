@@ -322,7 +322,6 @@ Executable lamdera
 
 
         -- Debug helpers --
-        LamderaSharedBuildHelpers
         StandaloneInstances
         CanSer.CanSer
         Sanity

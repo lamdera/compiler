@@ -59,7 +59,7 @@ suite = tests
 testMigrationGeneration scenario oldVersion newVersion = do
 
   io $ atomicPutStrLn <$> Ext.Common.requireBinary "elm-format"
-  projectRoot <- io $ Lamdera.Relative.findDir "test/scenario-migration-generate"
+  projectRoot <- io $ Lamdera.Relative.requireDir "test/scenario-migration-generate"
 
   let
       typeCompares = zipWith3
@@ -106,7 +106,7 @@ testContainsUserTypes = do
 testExamples :: Test ()
 testExamples = withTestEnv $ do
   failuresM <- io $ newMVar []
-  project <- io $ Lamdera.Relative.findDir "test/scenario-migration-generate"
+  project <- io $ Lamdera.Relative.requireDir "test/scenario-migration-generate"
   let
     testFiles =
         [

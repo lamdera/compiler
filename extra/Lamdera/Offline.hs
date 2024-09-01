@@ -26,65 +26,70 @@ import qualified System.Exit as Exit
 import Lamdera
 import qualified Json.Decode as Decode
 import qualified Lamdera.Http
+import qualified Lamdera.Relative
 import qualified Ext.Common
+import Test.Helpers
 
-
-buildAllPackagesRoot = "/Users/mario/lamdera-build-all-packages"
 
 buildAllPackages = do
+
+  buildAllPackagesRoot <- Lamdera.Relative.requireDir "~/lamdera-build-all-packages"
+
   mkdir buildAllPackagesRoot
 
-  setEnv "ELM_HOME" "/Users/mario/dev/projects/lamdera-compiler/ext-package-cache/dist/elm-package-cache"
-  setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
+  elmHome <- Lamdera.Relative.requireDir "ext-package-cache/dist/elm-package-cache"
+  setEnv "ELM_HOME" elmHome
+  overrides <- Lamdera.Relative.requireDir "~/lamdera/overrides"
+  setEnv "LOVR" overrides
 
-  res <- searchAllCurrentElmPackages
+  withEnvVars [("ELM_HOME", elmHome), ("LOVR", overrides)] $ do
+    res <- searchAllCurrentElmPackages
 
-  case res of
-    Right packages -> do
-      packages
-        -- & take 10
-        & imapM (\i pkgRaw ->
-            case stringToPackageName pkgRaw of
-              Just pkg -> do
-                putStrLn $ "🧮 " ++ show (i + 1) ++ " of " ++ (show (length packages))
-                tryStandaloneInstall pkg
-              Nothing ->
-                putStrLn $ "⚠️ failed to parse package name: " ++ Text.unpack pkgRaw
-          )
+    case res of
+      Right packages -> do
+        packages
+          -- & take 10
+          & imapM (\i pkgRaw ->
+              case stringToPackageName pkgRaw of
+                Just pkg -> do
+                  putStrLn $ "🧮 " ++ show (i + 1) ++ " of " ++ (show (length packages))
+                  tryStandaloneInstall pkg
+                Nothing ->
+                  putStrLn $ "⚠️ failed to parse package name: " ++ Text.unpack pkgRaw
+            )
 
-      pure ()
+        pure ()
 
-    Left err ->
-      Lamdera.Http.printHttpError err "I needed to get all current elm packages"
+      Left err ->
+        Lamdera.Http.printHttpError err "I needed to get all current elm packages"
 
-  -- Task.run $
-  --   do  env <- Task.eio Exit.InstallBadRegistry $ Solver.initEnv
-  --       case env of
-  --         Solver.Env cache manager connection latestRegistry ->
-  --           case latestRegistry of
-  --             Deps.Registry.Registry count versions -> do
-  --
-  --               versions
-  --                 & Map.take 10
-  --                 & Map.toList
-  --                 & mapM (\(pkg, versions) ->
-  --                     tryStandaloneInstall pkg versions
-  --                   )
-  --                 & Task.io
-  --
-  --               -- Task.io $ putStrLn $ "total ccount: " ++ show count
-  --               -- Task.io $ formatHaskellValue "vals" $
-  --
-  --       pure ()
+    -- Task.run $
+    --   do  env <- Task.eio Exit.InstallBadRegistry $ Solver.initEnv
+    --       case env of
+    --         Solver.Env cache manager connection latestRegistry ->
+    --           case latestRegistry of
+    --             Deps.Registry.Registry count versions -> do
+    --
+    --               versions
+    --                 & Map.take 10
+    --                 & Map.toList
+    --                 & mapM (\(pkg, versions) ->
+    --                     tryStandaloneInstall pkg versions
+    --                   )
+    --                 & Task.io
+    --
+    --               -- Task.io $ putStrLn $ "total ccount: " ++ show count
+    --               -- Task.io $ formatHaskellValue "vals" $
+    --
+    --       pure ()
 
-  unsetEnv "ELM_HOME"
-  unsetEnv "LOVR"
 
 
 markKnownBad pkg match =
   onlyWhen (textContains match (Text.pack $ Pkg.toChars pkg)) $ writeUtf8 "known_bad" ""
 
 tryStandaloneInstall pkg  = do
+  buildAllPackagesRoot <- Lamdera.Relative.requireDir "~/lamdera-build-all-packages"
   let
     pkgIdent =
       pkg

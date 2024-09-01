@@ -15,6 +15,7 @@ import Lamdera
 import Lamdera.Evergreen.MigrationHarness (VersionInfo(..))
 import qualified Lamdera.Evergreen.MigrationHarness
 import qualified Lamdera.Compile
+import qualified Lamdera.Relative
 
 
 all = do
@@ -375,8 +376,8 @@ suite = tests
         |]
 
       scope "compile and run" $ do
+        project <- io $ Lamdera.Relative.requireDir "test/scenario-migration-generate"
         let
-          project = "/Users/mario/dev/projects/lamdera-compiler/test/scenario-migration-generate/"
           helpers = "src/LamderaHelpers.elm"
           target = "src/LamderaGenerated.elm"
           filenames = [target]

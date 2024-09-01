@@ -10,7 +10,6 @@ import qualified System.Directory as Dir
 import qualified Stuff as PerUserCache
 import qualified Reporting
 import qualified Reporting.Doc as D
-import LamderaSharedBuildHelpers
 
 import Lamdera
 import Lamdera.Progress
@@ -58,8 +57,8 @@ run () () = do
           progress $ "Removing artifacts in " <> elmHome
           let packageDir = elmHome </> Lamdera.Version.elm </> "packages"
           onlyWhen_ (doesDirectoryExist packageDir) $ do
-            c $ "find " <> packageDir <> " | grep artifacts.dat | xargs rm -r"
-            c $ "find " <> packageDir <> " | grep artifacts.x.dat | xargs rm -r"
+            callCommand $ "find " <> packageDir <> " | grep artifacts.dat | xargs rm -r"
+            callCommand $ "find " <> packageDir <> " | grep artifacts.x.dat | xargs rm -r"
         else do
           nukeDir elmHome
 

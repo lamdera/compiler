@@ -16,6 +16,7 @@ import Lamdera.Evergreen.Snapshot
 import NeatInterpolation
 import qualified Test.Lamdera
 import qualified Lamdera.Compile
+import qualified Lamdera.Relative
 
 
 all = EasyTest.run suite
@@ -23,7 +24,7 @@ all = EasyTest.run suite
 
 generationFileCheck originalFile generatedFile expectedOutput = do
   -- original <- io $ readUtf8Text originalFile
-  generatedM <- io $ readUtf8Text generatedFile
+  generatedM <- io $ Lamdera.Relative.readFile generatedFile
 
   case generatedM of
     Just generated -> do
@@ -70,147 +71,56 @@ suite = tests $
         expected
 
 
-  , scope "alltypes e2e to disk for lamdera/test/v1/" $ do
+  , scope "alltypes e2e to disk for test/scenario-alltypes" $ do
 
-      io $ Test.Lamdera.snapshotWithParams 1 "/Users/mario/lamdera/test/v1" "test-local"
+      io $ Test.Lamdera.snapshotWithParams 1 "test/scenario-alltypes" "test-local"
 
       scope "-> Types.elm" $
         generationFileCheck
-        "/Users/mario/lamdera/test/v1/src/Types.elm"
-        "/Users/mario/lamdera/test/v1/src/Evergreen/V1/Types.elm"
+        "test/scenario-alltypes/src/Types.elm"
+        "test/scenario-alltypes/src/Evergreen/V1/Types.elm"
         [text|
           module Evergreen.V1.Types exposing (..)
 
+          import Browser
           import Browser.Navigation
-          import Dict
-          import Evergreen.V1.Fusion
-          import Evergreen.V1.WireTypes
-          import File
-          import Http
-          import Lamdera
-          import Set
-          import Time
+          import Url
 
 
           type alias FrontendModel =
               { key : Browser.Navigation.Key
-              , counter : Int
-              , sessionId : String
-              , clientId : String
-              , timestamps :
-                  List
-                      { label : String
-                      , time : Time.Posix
-                      }
-              , lastReceived : Time.Posix
-              , subCounter : Int
-              , rpcRes : Result Http.Error String
-              , rpcResJson : Result Http.Error String
-              , rpcResJsonFailure : Result Http.Error String
-              , rpcResRaw : Result Http.Error String
-              , backendTtype : Maybe Evergreen.V1.Fusion.TType
-              , backendVal : Evergreen.V1.Fusion.VType
-              , theta : Float
-              }
-
-
-          type Role
-              = Admin
-              | User
-
-
-          type alias Record =
-              { name : String
-              , age : Int
-              , roles : List Role
+              , message : String
               }
 
 
           type alias BackendModel =
-              { counter : Int
-              , clients : Set.Set Lamdera.ClientId
-              , currentTime : Time.Posix
-              , benchList : List Int
-              , benchDictRec : Dict.Dict String Record
-              , allTypes : Evergreen.V1.WireTypes.AllTypes
+              { message : String
               }
 
 
-          type ToBackend
-              = ClientJoin
-              | CounterIncremented
-              | CounterDecremented
-              | TestBackendHttp
-              | GrowBenchList Int
-              | GrowBenchDictRec Int
-              | ClearBenchList
-              | ClearBenchDictRec
-              | PatchedQuery Evergreen.V1.Fusion.FType
-              | FusionedQuery (List Evergreen.V1.Fusion.FType)
-              | MsgThatCausesACrash
-              | MsgThatCausesACrash2
-
-
           type FrontendMsg
-              = Increment
-              | Decrement
-              | RequestedSnapshot
-              | RequestedRestore
-              | RequestedMemcheck
-              | RequestedGc
-              | RequestedUpgrade
-              | TestFEWire
-              | HttpFinished (Result Http.Error ())
-              | Stamp FrontendMsg
-              | Test1000
-              | Test10000
-              | Start FrontendMsg Time.Posix
-              | Finish String Time.Posix
-              | SubCounterIncremented Time.Posix
-              | GrowBenchListClicked Int
-              | ClearBenchListClicked
-              | GrowBenchDictRecClicked Int
-              | ClearBenchDictRecClicked
-              | FNoop
-              | ExternalCustom_ (Evergreen.V1.WireTypes.ExternalCustom String)
-              | ExternalCustomBasic_ Evergreen.V1.WireTypes.ExternalCustomBasic
-              | ExternalRecord_ (Evergreen.V1.WireTypes.ExternalRecord (Evergreen.V1.WireTypes.AnotherParamRecord Int))
-              | ExternalAlias Evergreen.V1.WireTypes.ExternalAliasTuple
-              | TestRPC
-              | TestBackendHttp_
-              | RPCResWire (Result Http.Error Int)
-              | RPCResJson (Result Http.Error String)
-              | RPCResJsonFailure (Result Http.Error String)
-              | RPCResRaw (Result Http.Error String)
-              | EditLocal Evergreen.V1.Fusion.FType
-              | FusionQuery (List Evergreen.V1.Fusion.FType)
-              | ClickedSelectFile
-              | FileSelected File.File
-              | AnimationFrameDelta Float
-              | SendToBackend ToBackend
+              = UrlClicked Browser.UrlRequest
+              | UrlChanged Url.Url
+              | NoOpFrontendMsg
+
+
+          type ToBackend
+              = NoOpToBackend
 
 
           type BackendMsg
-              = NewTime Time.Posix
-              | DelayedNewValue Lamdera.SessionId Lamdera.ClientId
-              | HttpResult (Result Http.Error String)
-              | Noop
+              = NoOpBackendMsg
 
 
           type ToFrontend
-              = CounterNewValue Int Lamdera.SessionId Lamdera.ClientId
-              | BackendModelTypeInfo Evergreen.V1.Fusion.TType
-              | ReceivedBackendLType Evergreen.V1.Fusion.VType
-              | BenchStats
-                  { benchListSize : Int
-                  }
+              = NoOpToFrontend
 
         |]
 
       scope "-> WireTypes.elm" $
         generationFileCheck
-        "/Users/mario/lamdera/test/v1/src/WireTypes.elm"
-        "/Users/mario/lamdera/test/v1/src/Evergreen/V1/WireTypes.elm"
+        "test/scenario-alltypes/src/WireTypes.elm"
+        "test/scenario-alltypes/src/Evergreen/V1/WireTypes.elm"
         [text|
           module Evergreen.V1.WireTypes exposing (..)
 
