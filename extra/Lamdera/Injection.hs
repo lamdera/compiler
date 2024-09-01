@@ -233,6 +233,7 @@ injections outputType mode =
 
     lamderaContainersExtensions_ =
       Ext.Common.bsToText lamderaContainersExtensions
+        & Text.replace "$equalsOverride" equalsOverride
   in
   case outputType of
     -- NotLamdera was added when we fixed the hot loading of a new app version in the browser.

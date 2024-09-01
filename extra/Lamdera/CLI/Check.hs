@@ -739,6 +739,12 @@ ensureNoFalseClaims_ migrationPath migration changedTypes =
       name = lowerFirstLetter changedType
       relevantTopLevels = topLevels & filter (T.isPrefixOf (name))
       falseClaims = relevantTopLevels & filter (\topLevel -> "ModelUnchanged" `T.isInfixOf` topLevel || "MsgUnchanged" `T.isInfixOf` topLevel)
+
+      migrationHint =
+        if changedType `List.elem` ["BackendModel", "FrontendModel"]
+          then "If you're intending to reset, use `ModelReset` to explicitly reset a Model value back to it's `init` value, otherwise implement a migration as normal."
+          else "If you're intending to ignore old Msg values, use `MsgOldValueIgnored` to ignore old Msg values during a migration, otherwise implement a migration as normal."
+
     in
     -- atomicPutStrLn $ show (changedType, name, relevantTopLevels)
 
@@ -746,8 +752,7 @@ ensureNoFalseClaims_ migrationPath migration changedTypes =
       then
         Just $ Help.report "INCORRECT MIGRATION" (Just migrationPath)
           ("The " <> changedType <> " type has changed since last deploy, but the " <> show name <> " migration claims it has not.")
-          [ D.reflow $ "Migration: " <> migrationPath
-          , D.reflow "I need you to specify a migration: use ModelReset to explicitly reset a Model value, or use MsgOldValueIgnored to ignore old Msg values during a migration."
+          [ D.reflow migrationHint
           , D.reflow "See <https://dashboard.lamdera.app/docs/evergreen> for more info."
           ]
       else
