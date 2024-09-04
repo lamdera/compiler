@@ -52,7 +52,8 @@ watch root action = do
              && not (List.isInfixOf "elm-stuff" filepath)
              && not (List.isInfixOf "node_modules" filepath)
             --  This is really dumb of you because some people use `/data/...` as a folder...
-            --  && not (List.isInfixOf "data" filepath)
+            -- && not (List.isInfixOf "data" filepath)
+             && not (List.isInfixOf "tests" filepath)
              && not (List.isInfixOf "elm-pkg-js-includes.min.js" filepath)
              && not (List.isInfixOf "tests" filepath)
 
