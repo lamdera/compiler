@@ -177,6 +177,9 @@ upgradeFor migrationSequence nextVersion valueType = do
                 ModelMigrated ( newValue, cmds ) ->
                   Upgraded ( newValue, cmds )
 
+                ModelReset ->
+                  Reset
+
                 ModelUnchanged ->
                   -- Should be impossible in this context
                   unchanged model_v$currentVersion_
