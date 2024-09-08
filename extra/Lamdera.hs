@@ -57,6 +57,7 @@ module Lamdera
   , unsafe
   , onlyWhen
   , onlyWhen_
+  , onlyWith
   , textContains
   , textHasPrefix
   , stringContains
@@ -520,6 +521,14 @@ onlyWhen_ condition io = do
   unless (not res) io
 
 
+onlyWith :: FilePath -> (Text -> IO ()) -> IO ()
+onlyWith filepath io = do
+  fileM <- readUtf8Text filepath
+  case fileM of
+    Just file -> io file
+    Nothing -> pure ()
+
+
 textContains :: Text -> Text -> Bool
 textContains needle haystack = T.isInfixOf needle haystack
 
@@ -682,7 +691,7 @@ remove filepath =
       if exists_
         then Dir.removeFile filepath
         else do
-          debug_ $ "🗑❌  does not exist: " ++ show filepath
+          debug_ $ "🗑❌ remove: does not exist: " ++ show filepath
           return ()
 
 
@@ -693,7 +702,9 @@ rmdir filepath = do
     then do
       debug_ $ "🗑  rmdir: " ++ show filepath
       Dir.removeDirectoryRecursive filepath
-    else pure ()
+    else do
+      debug_ $ "🗑❌ rmdir: does not exist: " ++ show filepath
+      pure ()
 
 
 mkdir :: FilePath -> IO ()
@@ -903,9 +914,9 @@ requireEnv name = do
   val <- lookupEnv name
   case val of
     Nothing ->
-      error $ Prelude.concat ["🌏👀  ENV var `", name, "` is required but was not found"]
+      error $ Prelude.concat ["❌🌏👀  ENV var `", name, "` is required but was not found"]
     Just "" ->
-      error $ Prelude.concat ["🌏👀  ENV var `", name, "` is required but was empty"]
+      error $ Prelude.concat ["❌🌏👀  ENV var `", name, "` is required but was empty"]
     Just v -> pure v
 
 

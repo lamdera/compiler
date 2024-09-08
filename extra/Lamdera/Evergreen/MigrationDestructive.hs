@@ -21,7 +21,7 @@ generate oldVersion newVersion typeCompares = do
 
       typeCompareMigration :: (N.Name, String, String) -> Text
       typeCompareMigration (typename, oldhash, newhash) = do
-        let implementation = unchangedForType typename
+        let implementation = destructiveForType typename
             msgType = msgForType typename
             typenameCamel = lowerFirstLetter $ N.toChars typename
             typenameT = N.toText typename

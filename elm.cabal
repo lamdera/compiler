@@ -317,12 +317,11 @@ Executable lamdera
         Test.Wire
         Test.JsOutput
         Test.WebGL
-        Lamdera.Evergreen.TestMigrationHarness
-        Lamdera.Evergreen.TestMigrationGenerator
+        Test.Lamdera.Evergreen.TestMigrationHarness
+        Test.Lamdera.Evergreen.TestMigrationGenerator
 
 
         -- Debug helpers --
-        LamderaSharedBuildHelpers
         StandaloneInstances
         CanSer.CanSer
         Sanity

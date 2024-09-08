@@ -32,6 +32,14 @@ throw :: Help.Report -> IO a
 throw rep = throwDoc $ Help.reportToDoc rep
 
 
+throwMultiple :: [Help.Report] -> IO ()
+throwMultiple reps =
+  if length reps == 0
+    then pure ()
+    else
+      throwDoc $ D.stack $ map Help.reportToDoc reps
+
+
 throwDoc :: D.Doc -> IO a
 throwDoc doc = do
   Help.toStdout doc

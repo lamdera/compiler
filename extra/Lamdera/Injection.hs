@@ -233,6 +233,7 @@ injections outputType mode =
 
     lamderaContainersExtensions_ =
       Ext.Common.bsToText lamderaContainersExtensions
+        & Text.replace "$equalsOverride" equalsOverride
   in
   case outputType of
     -- NotLamdera was added when we fixed the hot loading of a new app version in the browser.
@@ -804,7 +805,7 @@ elmPkgJs mode =
                 minFile <- case hasNode of
                   Just node -> do
                     Ext.Common.bash $ "cd " <> takeDirectory esbuildConfigPath <> " && " <> node <> " " <> esbuildConfigPath
-                    Lamdera.Relative.loadFile $ root </> "elm-pkg-js-includes.min.js"
+                    Lamdera.Relative.readFile $ root </> "elm-pkg-js-includes.min.js"
                   Nothing ->
                     error "Could not find path to node"
 
@@ -832,7 +833,7 @@ elmPkgJs mode =
 
 esbuildIncluder :: FilePath -> FilePath -> FilePath -> IO B.Builder
 esbuildIncluder root esbuildPath includesPath = do
-  minFile <- Lamdera.Relative.loadFile $ root </> "elm-pkg-js-includes.min.js"
+  minFile <- Lamdera.Relative.readFile $ root </> "elm-pkg-js-includes.min.js"
   case minFile of
     Just minFileContents -> do
       Lamdera.debug_ "🏗️  Using cached elm-pkg-js-includes.min.js"
