@@ -242,17 +242,25 @@ checkWithParams projectPath = do
 checkWithParamsProduction projectPath appName = do
   requireEnv "TOKEN"
 
-  withEnvVars [("LAMDERA_APP_NAME", appName)] $ do
-    cp "~/lamdera/runtime/src/LBR.elm" (projectPath ++ "/src/LBR.elm")
-    cp "~/lamdera/runtime/src/LFR.elm" (projectPath ++ "/src/LFR.elm")
-    cp "~/lamdera/runtime/src/LamderaRPC.elm" (projectPath ++ "/src/LamderaRPC.elm")
+  overrides <- Lamdera.Relative.requireDir "~/lamdera/overrides"
+  elmHome <- Lamdera.Relative.requireDir "~/elm-home-elmx-test"
+  project <- Lamdera.Relative.requireDir projectPath
 
-    rpcExists <- doesFileExist (projectPath ++ "/src/RPC.elm")
+  withEnvVars
+    [ ("LAMDERA_APP_NAME", appName)
+    , ("LOVR", overrides)
+    , ("ELM_HOME", elmHome)
+    ] $ do
+    cp "~/lamdera/runtime/src/LBR.elm" (project ++ "/src/LBR.elm")
+    cp "~/lamdera/runtime/src/LFR.elm" (project ++ "/src/LFR.elm")
+    cp "~/lamdera/runtime/src/LamderaRPC.elm" (project ++ "/src/LamderaRPC.elm")
+
+    rpcExists <- doesFileExist (project ++ "/src/RPC.elm")
     onlyWhen (not rpcExists) $
-      cp "~/lamdera/runtime/src/RPC_Empty.elm" (projectPath ++ "/src/RPC.elm")
-    cp "~/lamdera/runtime/src/LamderaHelpers.elm" (projectPath ++ "/src/LamderaHelpers.elm")
+      cp "~/lamdera/runtime/src/RPC_Empty.elm" (project ++ "/src/RPC.elm")
+    cp "~/lamdera/runtime/src/LamderaHelpers.elm" (project ++ "/src/LamderaHelpers.elm")
 
-    checkWithParams projectPath
+    checkWithParams project
 
 
 {-| Run the `lamdera check` pipeline with specific params -}

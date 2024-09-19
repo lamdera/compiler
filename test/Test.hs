@@ -124,7 +124,7 @@ checkProjectCompiles = do
 liveReloadLive = do
   setEnv "LDEBUG" "1"
   setEnv "EXPERIMENTAL" "1"
-  let p = "~/lamdera/test/v1"
+  let p = "test/scenario-alltypes"
   trackedForkIO "Test.liveReloadLive" $ Develop.runWithRoot p (Develop.Flags Nothing)
 
   -- Doing this actually makes no sense in the :rr context, as the thread is long-running so it's the same as
