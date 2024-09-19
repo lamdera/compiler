@@ -1,9 +1,6 @@
 port module LocalDev exposing (main)
 
-{- This file is copyright © Cofoundry Ltd - All Rights Reserved.
-   Unauthorized copying of this file or its contents, via any medium is strictly prohibited.
-
-   ---
+{-
 
    Hello you curious thing!
 
