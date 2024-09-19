@@ -9,7 +9,6 @@ name: Build Linux arm64
 jobs:
   build:
     name: Build Linux arm64
-    # For some reason this OOM's on community m1 but not on local m1, so we use a dedicated linux-arm64 box for now
     runs-on: lamdera-community-linux-arm64
     steps:
       - name: Install SSH key
