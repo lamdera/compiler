@@ -132,12 +132,10 @@ serveUnmatchedUrlsToIndex root serveElm =
 
 prepareLocalDev :: FilePath -> IO FilePath
 prepareLocalDev root = do
-  overridePath <- Lamdera.Relative.requireFile "extra/LocalDev/LocalDev.elm"
+  overrideM <- Lamdera.Relative.readFile "extra/LocalDev/LocalDev.elm"
   let
     cache = lamderaCache root
     harnessPath = cache </> "LocalDev.elm"
-
-  overrideM <- readUtf8Text overridePath
 
   -- This needs to be moved to an on-demand action, as it has to query production and
   -- thus isn't appropriate to run on every single recompile
