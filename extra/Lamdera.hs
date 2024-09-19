@@ -111,7 +111,7 @@ module Lamdera
   , unsetEnv
   , lookupEnv
   , requireEnv
-  , openUrlInBrowser
+  , systemOpenPath
   , textSha1
   , (!!!)
   , toName
@@ -731,7 +731,7 @@ createDirIfMissing filepath =
 
 copyFile :: FilePath -> FilePath -> IO ()
 copyFile source dest = do
-  debug_ $ "✂️  copy: " ++ show source ++ " -> " ++ show dest
+  debug_ $ "📑  copy: " ++ show source ++ " -> " ++ show dest
   createDirIfMissing dest
   Dir.copyFileWithMetadata source dest
 
@@ -920,8 +920,8 @@ requireEnv name = do
     Just v -> pure v
 
 
-openUrlInBrowser :: Text -> IO ()
-openUrlInBrowser url = do
+systemOpenPath :: Text -> IO ()
+systemOpenPath url = do
   case ostype of
     MacOS -> do
       callCommand $ "open " <> T.unpack url
