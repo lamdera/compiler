@@ -71,13 +71,13 @@ withEnvVars vars io = do
 
 cp :: String -> String -> IO ()
 cp src_ dest = do
-  src <- Lamdera.Relative.requireFile src_
+  src <- Lamdera.Relative.requireFile "cp" src_
   Lamdera.copyFile src dest
 
 
 rm :: String -> IO ()
 rm path_ = do
-  path <- Lamdera.Relative.requireFile path_
+  path <- Lamdera.Relative.requireFile "rm" path_
   Lamdera.remove path
 
 

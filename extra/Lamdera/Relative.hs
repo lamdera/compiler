@@ -49,7 +49,7 @@ readFile path = do
 
 readByteString :: FilePath -> IO BS.ByteString
 readByteString path = do
-  fullPath <- requireFile path
+  fullPath <- requireFile "readByteString" path
   BS.readFile fullPath
 
 
@@ -58,15 +58,15 @@ writeFile path content = do
   found <- findFile path
   case found of
     Just absPath -> Lamdera.writeUtf8 absPath content
-    Nothing -> error $ "writeFile: could not find a relative path, seeking at:\n" <> path
+    Nothing -> error $ "❌ writeFile: could not find a relative path, seeking at:\n" <> path
 
 
-requireFile :: String -> IO FilePath
-requireFile path = do
+requireFile :: String -> String -> IO FilePath
+requireFile identifier path = do
   found <- findFile path
   case found of
     Just absPath -> pure absPath
-    Nothing -> error $ "requireFile: could not find a relative path, seeking at:\n" <> path
+    Nothing -> error $ "❌ requireFile:" <> identifier <> " could not find a relative path, seeking at:\n" <> path
 
 
 requireDir :: String -> IO FilePath
