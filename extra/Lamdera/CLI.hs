@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Lamdera.CLI (live, login, check, deploy, reset, annotate, eval) where
+module Lamdera.CLI (live, login, check, deploy, reset, update, annotate, eval) where
 
 import Text.Read (readMaybe)
 import qualified Text.PrettyPrint.ANSI.Leijen as P
@@ -13,6 +13,7 @@ import qualified Lamdera.CLI.Login
 import qualified Lamdera.CLI.Check
 import qualified Lamdera.CLI.Deploy
 import qualified Lamdera.CLI.Reset
+import qualified Lamdera.CLI.Update
 import qualified Lamdera.CLI.Annotate
 import qualified Lamdera.CLI.Interpreter
 
@@ -127,6 +128,25 @@ reset =
   in
   Terminal.Command "reset" (Common summary) details example noArgs noFlags Lamdera.CLI.Reset.run
 
+
+update :: Terminal.Command
+update =
+  let
+    summary =
+      "Update the Lamdera compiler to the latest version if out of date."
+
+    details =
+      "The latest versions of the Lamdera compiler are available at https://dashboard.lamdera.app/docs/download"
+
+    example =
+      reflow
+        "It will find the latest lamdera binary version, download it, and replace itself."
+
+    updateFlags =
+      flags Lamdera.CLI.Update.Flags
+        |-- onOff "force" "Force update to the latest published version, regardless of what version is installed currently."
+  in
+  Terminal.Command "update" (Common summary) details example noArgs updateFlags Lamdera.CLI.Update.run
 
 
 annotate :: Terminal.Command

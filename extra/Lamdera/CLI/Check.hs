@@ -511,6 +511,7 @@ getNextVersionInfo_ nextVersion prodVersion isHoistRebuild localTypesChangedFrom
 
 
 checkForLatestBinaryVersion inDebug = do
+  progressPointer "Checking version..."
   latestVersionText_ <- Lamdera.Update.fetchCurrentVersion
   case latestVersionText_ of
     Right latestVersionText -> do
@@ -551,12 +552,11 @@ checkForLatestBinaryVersion inDebug = do
       debug $ "comparing remote:" <> show latestVersion <> " local:" <> show localVersion
 
       onlyWhen (latestVersionText /= "skip" && latestVersion > localVersion) $ do
-          progressPointer "Checking version..."
           progressDoc $ D.stack
             [ D.red $ D.reflow $ "NOTE: There is a new lamdera version, please upgrade before you deploy."
             , D.reflow $ "Current: " <> Lamdera.Version.short
             , D.reflow $ "New:     " <> T.unpack latestVersionText
-            , D.reflow $ "You can download it here: <https://dashboard.lamdera.app/docs/download>"
+            , D.reflow $ "Run `lamdera upgrade`, or download it here: <https://dashboard.lamdera.app/docs/download>"
             ]
 
       onlyWhen (latestVersion < localVersion) $ do

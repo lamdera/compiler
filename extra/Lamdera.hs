@@ -1,5 +1,4 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE BangPatterns #-}
 
 module Lamdera
@@ -61,6 +60,7 @@ module Lamdera
   , textContains
   , textHasPrefix
   , stringContains
+  , stringHasPrefix
   , fileContains
   , formatHaskellValue
   , hindent
@@ -530,13 +530,16 @@ onlyWith filepath io = do
 
 
 textContains :: Text -> Text -> Bool
-textContains needle haystack = T.isInfixOf needle haystack
+textContains = T.isInfixOf
 
 textHasPrefix :: Text -> Text -> Bool
-textHasPrefix needle haystack = T.isPrefixOf needle haystack
+textHasPrefix = T.isPrefixOf
 
 stringContains :: String -> String -> Bool
-stringContains needle haystack = List.isInfixOf needle haystack
+stringContains = List.isInfixOf
+
+stringHasPrefix :: String -> String -> Bool
+stringHasPrefix = List.isPrefixOf
 
 fileContains :: FilePath -> Text -> IO Bool
 fileContains filename needle = do

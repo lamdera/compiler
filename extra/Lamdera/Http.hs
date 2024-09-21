@@ -1,22 +1,22 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE StandaloneDeriving #-}
 
 module Lamdera.Http where
 
 {- HTTP helpers and wrapper
 -}
 
-import qualified Json.Decode as D
-import qualified Json.Encode as E
-import qualified Network.HTTP.Types.Header as Http
-import Reporting.Exit
-import qualified Http
 import qualified Data.ByteString.Char8 as BS
 import qualified Network.HTTP.Client as HTTP
+import qualified Network.HTTP.Types.Header as Http
+
+import qualified Http
+import qualified Json.Decode as D
+import qualified Json.Encode as E
+import Reporting.Exit
 
 import Lamdera
-import qualified Lamdera.Version
 import Lamdera.Progress
+import qualified Lamdera.Version
 import StandaloneInstances
 
 
@@ -26,13 +26,19 @@ data WithErrorField a
   deriving (Show)
 
 
-jsonHeaders :: [Http.Header]
-jsonHeaders =
+defaultHeaders :: [Http.Header]
+defaultHeaders =
   [ ( Http.hUserAgent, "lamdera-" <> BS.pack Lamdera.Version.short )
-  , ( Http.hContentType, "application/json" )
-  , ( Http.hAccept, "application/json" )
   , ( Http.hAcceptEncoding, "gzip")
   ]
+
+
+jsonHeaders :: [Http.Header]
+jsonHeaders =
+  defaultHeaders ++
+    [ ( Http.hContentType, "application/json" )
+    , ( Http.hAccept, "application/json" )
+    ]
 
 
 normalJson :: (Show a) => String -> String -> D.Decoder () a -> IO (Either Error a)
@@ -69,10 +75,18 @@ normalRpcJson debugIdentifier body url decoder = do
         return $ Left (JsonError url problem)
 
 
+downloadToFile :: String -> FilePath -> IO (Either Error ())
+downloadToFile url path = do
+  manager <- Http.getManager
+  Http.get manager url [] HttpError $ \body -> do
+    BS.writeFile path body
+    pure $ Right ()
+
+
 printHttpError :: Error -> String -> IO ()
 printHttpError error reason =
   case error of
-    JsonError string dError -> putStrLn $ show error
+    JsonError string dError -> atomicPutStrLn $ show error
 
     HttpError httpError ->
       throw $ toHttpErrorReport "HTTP PROBLEM" httpError reason
