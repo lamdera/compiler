@@ -233,6 +233,7 @@ Executable lamdera
         Lamdera.CLI.Check
         Lamdera.CLI.Deploy
         Lamdera.CLI.Reset
+        Lamdera.CLI.Update
         -- CLI Experimental
         Lamdera.CLI.Annotate
         Lamdera.CLI.Interpreter
