@@ -303,10 +303,13 @@ lamderaGetArchive manager url onError err onSuccess =
               & T.splitOn "/"
               & (\x ->
                   case x of
-                    author:package:version:_ ->
-                      ("lamdera/" <> T.unpack package, T.unpack version)
-
-
+                    author:package:zippath:_ ->
+                      ( "lamdera/" <> T.unpack package
+                      , zippath
+                          & T.replace ".zip" ""
+                          & T.replace "pack-" ""
+                          & T.unpack
+                      )
                     _ ->
                       error $ "unexpected URL parts: " <> show x
               )
