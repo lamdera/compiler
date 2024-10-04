@@ -9,6 +9,7 @@ import qualified Data.Text as T
 import Data.Char (toLower, isAlphaNum)
 import System.Process (readProcess)
 import System.Exit (exitFailure)
+import Control.Monad.Except (catchError)
 
 import qualified Reporting.Doc as D
 import qualified Reporting.Exit.Help as Help
@@ -28,7 +29,7 @@ import qualified Lamdera.Progress
 maybeAppName :: IO (Maybe Text)
 maybeAppName = do
   appNameEnvM <- Env.lookupEnv "LAMDERA_APP_NAME"
-  lamderaRemotes <- getLamderaRemotes
+  lamderaRemotes <- getLamderaRemotes `catchError` (\_ -> pure [])
 
   if (lamderaRemotes == [] && appNameEnvM == Nothing)
     then
