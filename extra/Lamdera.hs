@@ -411,7 +411,14 @@ isExperimental_ = unsafePerformIO $ isExperimental
 isLamdera :: IO Bool
 isLamdera = do
   root <- getProjectRoot "Lamdera.isLamdera"
-  fileContains (root </> "elm.json") "lamdera/core"
+  hasElmJson <- Dir.doesFileExist (root </> "elm.json")
+  hasCore <- do
+    if hasElmJson
+      then fileContains (root </> "elm.json") "lamdera/core"
+      else pure False
+  hasTypes <- Dir.doesFileExist (root </> "src/Types.elm")
+  hasBackend <- Dir.doesFileExist (root </> "src/Backend.elm")
+  pure $ hasCore && hasTypes && hasBackend
 
 
 {-# NOINLINE isLamdera_ #-}
