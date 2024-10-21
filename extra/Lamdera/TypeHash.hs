@@ -49,10 +49,18 @@ calculateAndWrite = do
       pure res
 
 
-buildCheckHashes :: Build.Artifacts -> Task.Task Reporting.Exit.Reactor ([Text], [(Text, [Text], DiffableType)])
+buildCheckHashes :: Build.Artifacts -> Task.Task Reporting.Exit.Reactor ()
 buildCheckHashes artifacts = do
-  Task.eio Reporting.Exit.ReactorBadBuild $ do
-    calculateLamderaHashes
+    Task.eio Reporting.Exit.ReactorBadBuild $ do
+      root <- getProjectRoot "buildCheckHashes"
+      exists <- doesFileExist $ root ++ "/src/Types.elm"
+      if exists
+        then do
+          _ <- calculateLamderaHashes
+          pure $ Right ()
+        else
+          pure $ Right ()
+
     -- @TODO this guard isn't needed with the safe Map.lookup access now added downstream,
     -- however left this here as a reminder that we might want more intelligent treatment of
     -- hash checking in future when we have the memorycached daemon mode.
