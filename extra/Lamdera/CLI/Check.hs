@@ -113,6 +113,7 @@ runHelp () flags@(Lamdera.CLI.Check.Flags destructiveMigration force) = do
   checkGitInitialised root
 
   Lamdera.Legacy.temporaryCheckOldTypesNeedingMigration inProduction_ root
+  Lamdera.Legacy.temporaryCheckCodecsNeedsUpgrading inProduction_ root
 
   progressPointer_ "Checking project compiles..."
   -- In production, check optimized up-front for Debug.* usage immediate feedback

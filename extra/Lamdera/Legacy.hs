@@ -8,13 +8,25 @@ import qualified System.Directory as Dir
 import qualified Reporting
 import qualified Reporting.Doc as D
 import qualified Reporting.Exit.Help as Help
-import qualified Lamdera.Progress as Progress
+import qualified Stuff
 
 import Lamdera
+import qualified Lamdera.Progress as Progress
 
--- Legacy, to be removed at Beta
+
+-- Applies to < v1.3.0
+temporaryCheckCodecsNeedsUpgrading :: Bool -> FilePath -> IO ()
+temporaryCheckCodecsNeedsUpgrading inProduction root = do
+  elmHome <- Stuff.getElmHome
+  let
+    lamderaCodecs = elmHome </> "0.19.1/packages/lamdera/codecs/1.0.0"
+    lamderaMigrations = lamderaCodecs </> "/src/Lamdera/Migrations.elm"
+  latest <- fileContains lamderaMigrations "ModelReset"
+  onlyWhen (not latest) $ do
+    rmdir lamderaCodecs
 
 
+-- Applies to < alpha5
 temporaryCheckOldTypesNeedingMigration :: Bool -> FilePath -> IO ()
 temporaryCheckOldTypesNeedingMigration inProduction root = do
 
