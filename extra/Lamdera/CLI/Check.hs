@@ -148,6 +148,7 @@ offlineCheck root = do
     , D.reflow $ "- This means I won't make any new snapshots"
     , D.reflow $ "- I will assume the latest current migration on disk is the real latest migration"
     , D.reflow $ "- I will type check that migration under Evergreen"
+    , D.reflow $ "I recommend you either skip this check, or run it again when you're online."
     ]
 
   shouldContinue <- Reporting.ask $ D.stack [ D.reflow $ "Do you want me to continue despite this? [Y/n]: " ]
@@ -512,7 +513,7 @@ getNextVersionInfo_ nextVersion prodVersion isHoistRebuild localTypesChangedFrom
 
 
 checkForLatestBinaryVersion inDebug = do
-  progressPointer "Checking version..."
+  progressPointer "Checking lamdera version..."
   latestVersionText_ <- Lamdera.Update.fetchCurrentVersion
   case latestVersionText_ of
     Right latestVersionText -> do

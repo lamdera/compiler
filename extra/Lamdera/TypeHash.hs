@@ -427,9 +427,12 @@ canonicalToDiffableType targetName interfaces recursionSet canonical tvarMap =
 
             Nothing ->
               DError $ T.concat [
-                "The `", tipe, "` type from ", author, "/", pkg, ":", module_, " is referenced, but I can't find it! ",
-                "You can try `lamdera install ", author, "/", pkg, "`, otherwise this might be a type which has been ",
-                "intentionally hidden by the author, so it cannot be used!"
+                "The `", tipe, "` type from ", author, "/", pkg, ":", module_, " is referenced, but I can't reach it. ",
+                "You can try `lamdera install ", author, "/", pkg, "`, but if that doesn't help, then this type has ",
+                "been intentionally hidden by the author (an opaque type), meaning you won't be able to write a ",
+                "migration for this type if it ever changes, because this value cannot be created directly in Elm code. ",
+                "I've made this a problem now, so it's not a bigger problem later. ",
+                "Quick fix: vendor this package into your project."
               ]
 
     TAlias moduleName name tvarMap_ aliasType ->
