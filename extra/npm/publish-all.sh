@@ -3,7 +3,7 @@ set -ex
 
 # The publish will fail if the package name and version combination already exists in the specified registry.
 
-version="1.2.2"
+version="1.3.1"
 versionFull="0.19.1-$version"
 return=$(pwd)
 
