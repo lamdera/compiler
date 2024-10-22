@@ -78,12 +78,12 @@ loadLamderaAppGraph = do
 
 
 findSecretUses :: GlobalGraph -> Data.Name.Name -> Data.Name.Name -> Set.Set (Text, Text, [Text])
-findSecretUses graph module_ expr = do
+findSecretUses graph module_ exprName = do
   let
     entryNode =
       _g_nodes graph
          & Map.filterWithKey (\k a ->
-             k == Global (Canonical (Pkg.Name "author" "project") (module_)) (expr)
+             k == Global (Canonical (Pkg.Name "author" "project") (module_)) (exprName)
          )
 
   if not $ Map.null entryNode
@@ -97,8 +97,6 @@ traverse_ graph (global, currentNode) = do
     refs =
       nodeEnvRefs graph (global, currentNode)
 
-  -- onlyWhen (not $ Set.null refs) $ do
-    -- let
     (module_, expression) =
       case global of
         Global (Canonical (Pkg.Name "author" "project") (module_)) (expr) ->
@@ -186,35 +184,51 @@ nodeEnvRefs graph (global, node) =
   case node of
     Define expr globalDeps ->
       globalDeps
-        & Set.filter (\globalDep ->
-          case globalDep of
-            Global (Canonical (Pkg.Name "author" "project") "Env") expr ->
-              True
-            _ ->
-              False
-        )
-        & Set.filter (\globalDep ->
-          _g_nodes graph
-             & Map.lookup globalDep
-             & (\nodeM ->
-              case nodeM of
-                Just node ->
-                  case node of
-                    Define (Str _) _ ->
-                      -- Only select string values defined in Env.elm
-                      True
+        & Set.filter isEnvExpression
+        & Set.filter (hasEnvString graph)
 
-                    _ ->
-                      False
+    DefineTailFunc names expr globalDeps ->
+      globalDeps
+        & Set.filter isEnvExpression
+        & Set.filter (hasEnvString graph)
 
-                Nothing ->
-                  -- Should not be possible
-                  False
-             )
-        )
+    Cycle names namedExprs defs globalDeps ->
+      globalDeps
+        & Set.filter isEnvExpression
+        & Set.filter (hasEnvString graph)
 
     _ ->
       Set.empty
+
+
+isEnvExpression :: Global -> Bool
+isEnvExpression globalDep =
+  case globalDep of
+    Global (Canonical (Pkg.Name "author" "project") "Env") expr ->
+      True
+    _ ->
+      False
+
+
+hasEnvString :: GlobalGraph -> Global -> Bool
+hasEnvString graph globalDep =
+  _g_nodes graph
+    & Map.lookup globalDep
+    & (\nodeM ->
+    case nodeM of
+      Just node ->
+        case node of
+          Define (Str _) _ ->
+            -- Only select string values defined in Env.elm
+            True
+
+          _ ->
+            False
+
+      Nothing ->
+        -- Should not be possible
+        False
+    )
 
 
 readAppConfigUses :: IO [(Text, Text, Text)]

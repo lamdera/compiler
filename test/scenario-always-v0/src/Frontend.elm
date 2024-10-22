@@ -28,8 +28,22 @@ app =
 
 init : Url.Url -> Nav.Key -> ( Model, Cmd FrontendMsg )
 init url key =
+    let
+        both =
+            Env.both
+
+        selfRecursive =
+            -- This causes the `init` expression to change from a AST.Optimized.Define to a AST.Optimized.Cycle
+            -- which in the past wasn't properly handled by AppConfig.findSecretUses. This is a regression test.
+            init url key
+    in
     ( { key = key
-      , message = "Welcome to Lamdera! You're looking at the auto-generated base implementation. Check out src/Frontend.elm to start coding! frontendOnly:" ++ Env.frontendOnly ++ Env.both
+      , message =
+            "Welcome to Lamdera! You're looking at the auto-generated base implementation. Check out src/Frontend.elm to start coding!"
+                ++ " frontendOnly:"
+                ++ Env.frontendOnly
+                ++ " both:"
+                ++ both
       }
     , Cmd.none
     )
