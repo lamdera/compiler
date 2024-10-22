@@ -263,6 +263,11 @@ onlineCheck root appName inDebug localTypes externalTypeWarnings isHoistRebuild 
               debug $ "Reading migration source..."
               migrationSource <- T.decodeUtf8 <$> IO.readUtf8 nextMigrationPath
 
+              let resetWarning =
+                    if textContains "ModelReset" migrationSource
+                      then [ D.red $ D.reflow "WARNING: This migration contains a `ModelReset` which will reset the model to its `init` value. For BackendModel's this cannot be reversed without rolling back to a previous version and data snapshot." ]
+                      else []
+
               if textContains "Unimplemented" migrationSource
                 then do
                   Progress.throw $
@@ -288,7 +293,7 @@ onlineCheck root appName inDebug localTypes externalTypeWarnings isHoistRebuild 
                       , D.reflow "Evergreen migrations will be applied to the following types:"
                       , formattedChangedTypes
                       , D.reflow "See <https://dashboard.lamdera.app/docs/evergreen> for more info."
-                      ]
+                      ] ++ resetWarning
                       )
 
                   onlyWhen (not inProduction_) $ committedCheck root nextVersionInfo
@@ -803,13 +808,13 @@ committedCheck root versionInfo = do
         )
 
     addToGitApproved <- Reporting.ask $
-      D.stack [ D.reflow $ "Shall I `git add` for you? [Y/n]: " ]
+      D.stack [ D.reflow $ "Shall I run `git add` for you? [Y/n]: " ]
 
     if addToGitApproved
       then do
         mapM (\path -> callCommand $ "git add " <> path) missingPaths
         commitApproved <- Reporting.ask $
-          D.stack [ D.reflow $ "Shall I `git commit` for you? [Y/n]: " ]
+          D.stack [ D.reflow $ "Shall I run `git commit` for you? [Y/n]: " ]
 
         if commitApproved
           then do
