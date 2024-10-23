@@ -172,7 +172,7 @@ function _Utils_eqHelp(x, y, depth, stack)
     return true;
   }
 
-  $equalsOverride
+  // equals override injection marker
 
   for (var key in x)
   {

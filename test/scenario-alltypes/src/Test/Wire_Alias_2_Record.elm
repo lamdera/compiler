@@ -3,6 +3,8 @@ module Test.Wire_Alias_2_Record exposing (..)
 import Array exposing (Array)
 import Dict exposing (Dict)
 import Lamdera.Wire3
+import SeqDict exposing (SeqDict)
+import SeqSet exposing (SeqSet)
 import Set exposing (Set)
 import Test.External exposing (..)
 import Time
@@ -26,6 +28,8 @@ type alias AllTypes =
 
     -- , externalCustomBasic : ExternalCustomBasic
     -- , externalCustom : ExternalCustom Int
+    , seqDict : SeqDict String Int
+    , seqSet : SeqSet Int
     }
 
 
