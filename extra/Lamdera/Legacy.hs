@@ -21,8 +21,9 @@ temporaryCheckCodecsNeedsUpgrading inProduction root = do
   let
     lamderaCodecs = elmHome </> "0.19.1/packages/lamdera/codecs/1.0.0"
     lamderaMigrations = lamderaCodecs </> "/src/Lamdera/Migrations.elm"
+  exists_ <- Dir.doesFileExist lamderaMigrations
   latest <- fileContains lamderaMigrations "ModelReset"
-  onlyWhen (not latest) $ do
+  onlyWhen (exists_ && not latest) $ do
     rmdir lamderaCodecs
 
 
