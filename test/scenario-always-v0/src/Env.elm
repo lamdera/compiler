@@ -14,3 +14,7 @@ backendOnly =
 
 both =
     ""
+
+
+external =
+    "env.external"

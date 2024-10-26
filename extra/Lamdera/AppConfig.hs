@@ -118,7 +118,7 @@ traverse_ graph (global, currentNode) = do
 
     childResults =
       currentNode
-        & selectNextDeps
+        & selectNextDeps global
         & Set.map (\global -> do
             _g_nodes graph
                & Map.lookup global
@@ -135,8 +135,8 @@ traverse_ graph (global, currentNode) = do
     else Set.union res childResults
 
 
-selectNextDeps :: Node -> Set.Set Global
-selectNextDeps node =
+selectNextDeps :: Global -> Node -> Set.Set Global
+selectNextDeps (Global module_ _) node =
   case node of
     Define expr globalDeps ->
       globalDeps & onlyAuthorProjectDeps
@@ -151,10 +151,15 @@ selectNextDeps node =
     Link global ->
       Set.singleton global & onlyAuthorProjectDeps
     Cycle names namedExprs defs globalDeps ->
-      -- Cycle [N.Name] [(N.Name, Expr)] [Def] GlobalDeps ->
-      -- Need to confirm if we do indeed catch everything in a cycle
-      -- already, but in any case this causes an infinite loop!
-      Set.empty
+      case names of
+        [name] ->
+          -- We have a cycle, so remove ourself from
+          -- the deps and then continue as normal
+          globalDeps & onlyAuthorProjectDeps & Set.delete (Global module_ name)
+        _ ->
+          -- When do we have mulitple names...? What does it mean?
+          Set.empty
+
     Manager effectsType ->
       Set.empty
     Kernel kContent kContentM ->

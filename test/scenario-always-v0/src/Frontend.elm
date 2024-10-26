@@ -3,6 +3,7 @@ module Frontend exposing (..)
 import Browser exposing (UrlRequest(..))
 import Browser.Navigation as Nav
 import Env
+import External
 import Html
 import Html.Attributes as Attr
 import Lamdera
@@ -29,13 +30,16 @@ app =
 init : Url.Url -> Nav.Key -> ( Model, Cmd FrontendMsg )
 init url key =
     let
-        both =
-            Env.both
-
         selfRecursive =
             -- This causes the `init` expression to change from a AST.Optimized.Define to a AST.Optimized.Cycle
             -- which in the past wasn't properly handled by AppConfig.findSecretUses. This is a regression test.
             init url key
+
+        both =
+            Env.both
+
+        external =
+            External.something
     in
     ( { key = key
       , message =
@@ -44,6 +48,8 @@ init url key =
                 ++ Env.frontendOnly
                 ++ " both:"
                 ++ both
+                ++ " external:"
+                ++ external
       }
     , Cmd.none
     )

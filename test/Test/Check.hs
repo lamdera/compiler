@@ -72,6 +72,8 @@ suite = tests $
       "elm-stuff/lamdera/.lamdera-fe-config" & expectContains "both"
       "elm-stuff/lamdera/.lamdera-be-config" & expectContains "both"
 
+      "elm-stuff/lamdera/.lamdera-fe-config" & expectContains "external"
+
       "frontend-app.js" & expectContains "fe-only-from-dashboard"
       "backend-app.js" & expectContains "be-only-from-dashboard"
 
