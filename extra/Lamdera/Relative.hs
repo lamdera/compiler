@@ -35,7 +35,7 @@ findFile path_ = do
       if exists2
         then pure (Just absPath)
         else do
-          debug $ "findFile: could not find a relative path, sought at:\n" <> path_ <> " -> " <> path <> "\n" <> absPath
+          debug $ "🔎 findFile: could not find a relative path, sought at:\n" <> path_ <> " -> " <> path <> "\n" <> absPath
           pure Nothing
 
 
@@ -90,8 +90,8 @@ resolveHome path = do
   if "~" `List.isPrefixOf` path
     then do
       userHome <- Dir.getHomeDirectory
-      debug $ "resolveHome: resolved " <> path <> " to " <> userHome </> drop 1 path
+      debug $ "🏡 resolveHome: resolved " <> path <> " to " <> userHome </> drop 1 path
       pure $ userHome <> (drop 1 path)
     else do
-      debug $ "resolveHome: fallback to original path " <> path
+      debug $ "⏩ resolveHome: fallback to original path " <> path
       pure path
