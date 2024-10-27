@@ -62,13 +62,14 @@ writeUsage = do
     & writeUtf8 (cache </> ".lamdera-fe-config")
 
   findSecretUses graph "Backend" "app"
+    & Set.union (findSecretUses graph "RPC" "lamdera_handleEndpoints")
     & prep
     & writeUtf8 (cache </> ".lamdera-be-config")
 
 
 loadLamderaAppGraph :: IO GlobalGraph
 loadLamderaAppGraph = do
-  graph_ <- Lamdera.Graph.fullGraph ["src/Frontend.elm", "src/Backend.elm"]
+  graph_ <- Lamdera.Graph.fullGraph ["src/Frontend.elm", "src/Backend.elm", "src/RPC.elm"]
   case graph_ of
     Left err ->
       throw $ Reporting.Exit.makeToReport err
@@ -157,7 +158,7 @@ selectNextDeps (Global module_ _) node =
           -- the deps and then continue as normal
           globalDeps & onlyAuthorProjectDeps & Set.delete (Global module_ name)
         _ ->
-          -- When do we have mulitple names...? What does it mean?
+          -- When would we have mulitple names...? What does this mean?
           Set.empty
 
     Manager effectsType ->
@@ -374,6 +375,7 @@ checkUserConfig appName prodTokenM = do
 
     localConfigItems =
       findSecretUses graph "Backend" "app"
+        & Set.union (findSecretUses graph "RPC" "lamdera_handleEndpoints")
         & secretsNormalized
         & (++) localFrontendConfigItems
 

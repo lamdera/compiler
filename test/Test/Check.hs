@@ -67,12 +67,12 @@ suite = tests $
       _ <- io $ checkWithParamsProduction project "always-v0"
 
       "elm-stuff/lamdera/.lamdera-fe-config" & expectContains "frontendOnly"
-      "elm-stuff/lamdera/.lamdera-be-config" & expectContains "backendOnly"
-
       "elm-stuff/lamdera/.lamdera-fe-config" & expectContains "both"
-      "elm-stuff/lamdera/.lamdera-be-config" & expectContains "both"
-
       "elm-stuff/lamdera/.lamdera-fe-config" & expectContains "external"
+
+      "elm-stuff/lamdera/.lamdera-be-config" & expectContains "backendOnly"
+      "elm-stuff/lamdera/.lamdera-be-config" & expectContains "both"
+      "elm-stuff/lamdera/.lamdera-be-config" & expectContains "rpc"
 
       "frontend-app.js" & expectContains "fe-only-from-dashboard"
       "backend-app.js" & expectContains "be-only-from-dashboard"

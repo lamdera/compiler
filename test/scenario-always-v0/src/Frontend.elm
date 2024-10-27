@@ -30,10 +30,10 @@ app =
 init : Url.Url -> Nav.Key -> ( Model, Cmd FrontendMsg )
 init url key =
     let
-        selfRecursive =
+        selfRef =
             -- This causes the `init` expression to change from a AST.Optimized.Define to a AST.Optimized.Cycle
             -- which in the past wasn't properly handled by AppConfig.findSecretUses. This is a regression test.
-            init url key
+            init
 
         both =
             Env.both
