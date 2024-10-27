@@ -38,8 +38,9 @@ init url key =
         both =
             Env.both
 
-        external =
-            External.something
+        test =
+            -- This gives us a mututally recursive function AST.Optimized.Cycle with two names. This is a regression test.
+            \_ -> odd 1
     in
     ( { key = key
       , message =
@@ -48,11 +49,30 @@ init url key =
                 ++ Env.frontendOnly
                 ++ " both:"
                 ++ both
-                ++ " external:"
-                ++ external
       }
     , Cmd.none
     )
+
+
+odd n =
+    if n == 0 then
+        False
+
+    else
+        even (n - 1)
+
+
+even n =
+    if n == 0 then
+        let
+            external =
+                -- This calls Env.external
+                External.something
+        in
+        True
+
+    else
+        odd (n - 1)
 
 
 update : FrontendMsg -> Model -> ( Model, Cmd FrontendMsg )

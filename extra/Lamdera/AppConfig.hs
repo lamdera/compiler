@@ -152,14 +152,11 @@ selectNextDeps (Global module_ _) node =
     Link global ->
       Set.singleton global & onlyAuthorProjectDeps
     Cycle names namedExprs defs globalDeps ->
-      case names of
-        [name] ->
-          -- We have a cycle, so remove ourself from
-          -- the deps and then continue as normal
-          globalDeps & onlyAuthorProjectDeps & Set.delete (Global module_ name)
-        _ ->
-          -- When would we have mulitple names...? What does this mean?
-          Set.empty
+      -- Remove all the cycles from the deps, names has multiple values
+      -- when there are mutually recursive functions involved
+      Set.difference
+        (onlyAuthorProjectDeps globalDeps)
+        (names & fmap (\name -> Global module_ name) & Set.fromList)
 
     Manager effectsType ->
       Set.empty
