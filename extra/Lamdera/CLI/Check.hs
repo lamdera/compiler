@@ -563,7 +563,7 @@ checkForLatestBinaryVersion inDebug = do
             [ D.red $ D.reflow $ "NOTE: There is a new lamdera version, please upgrade before you deploy."
             , D.reflow $ "Current: " <> Lamdera.Version.short
             , D.reflow $ "New:     " <> T.unpack latestVersionText
-            , D.reflow $ "Run `lamdera upgrade`, or download it here: <https://dashboard.lamdera.app/docs/download>"
+            , D.reflow $ "Run `lamdera update`, or download it here: <https://dashboard.lamdera.app/docs/download>"
             ]
 
       onlyWhen (latestVersion < localVersion) $ do
