@@ -18,6 +18,7 @@ import qualified Lamdera.Progress as Progress
 temporaryCheckCodecsNeedsUpgrading :: Bool -> FilePath -> IO ()
 temporaryCheckCodecsNeedsUpgrading inProduction root = do
   elmHome <- Stuff.getElmHome
+  elmStuff <- Stuff.stuff root
   let
     lamderaCodecs = elmHome </> "0.19.1/packages/lamdera/codecs/1.0.0"
     lamderaMigrations = lamderaCodecs </> "/src/Lamdera/Migrations.elm"
@@ -25,6 +26,7 @@ temporaryCheckCodecsNeedsUpgrading inProduction root = do
   latest <- fileContains lamderaMigrations "ModelReset"
   onlyWhen (exists_ && not latest) $ do
     rmdir lamderaCodecs
+    rmdir elmStuff
 
 
 -- Applies to < alpha5
