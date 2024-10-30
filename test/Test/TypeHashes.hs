@@ -55,19 +55,21 @@ suite = tests
 
         expectedTypeText =
           [
-            "A[S]",     -- { arrayString : Array String
-            "B",        -- , bool : Bool
-            "Ch",       -- , char : Char
+            "A[S]",      -- { arrayString : Array String
+            "B",         -- , bool : Bool
+            "Ch",        -- , char : Char
             "D[S,L[I]]", -- , dict : Dict String (List Int)
-            "F",        -- , float : Float
-            "I",        -- , int : Int
-            "L[I]",     -- , listInt : List Int
-            "Ord",      -- , order : Order
-            "S[F]",     -- , setFloat : Set Float
-            "S",        -- , string : String
-            "C[[I]]",   -- , time : Time.Posix
-            "()",       -- , unit : ()
-            ""          -- }
+            "F",         -- , float : Float
+            "I",         -- , int : Int
+            "L[I]",      -- , listInt : List Int
+            "Ord",       -- , order : Order
+            "LD[S,I]",   -- , seqDict : SeqDict String Int
+            "LS[I]",     -- , seqSet : SeqSet Int
+            "S[F]",      -- , setFloat : Set Float
+            "S",         -- , string : String
+            "C[[I]]",    -- , time : Time.Posix
+            "()",        -- , unit : ()
+            ""           -- }
           ]
           & (\fields ->
                 mconcat fields & (\all_ -> "R[" <> all_ <> "]")
@@ -78,7 +80,7 @@ suite = tests
       (thash, ttext) <- io $ withDebug $ Ext.Common.withProjectRoot project $ do
         Lamdera.TypeHash.calculateHashPair "src/Test/Wire_Alias_2_Record.elm" moduleName typeName
 
-      expectEqualTextTrimmed thash "0b5ace6c03f080a53d547cda99731442119db2de"
+      expectEqualTextTrimmed thash "4e346cab5ac79557fd42fede3584ae0053a948c4"
       expectEqualTextTrimmed ttext expectedTypeText
 
   , scope "extensible record" $ do
