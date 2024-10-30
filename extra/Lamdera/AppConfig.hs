@@ -69,7 +69,13 @@ writeUsage = do
 
 loadLamderaAppGraph :: IO GlobalGraph
 loadLamderaAppGraph = do
-  graph_ <- Lamdera.Graph.fullGraph ["src/Frontend.elm", "src/Backend.elm", "src/RPC.elm"]
+  hasRPC <- doesFileExist "src/RPC.elm"
+  let paths =
+        if hasRPC
+          then ["src/Frontend.elm", "src/Backend.elm", "src/RPC.elm"]
+          else ["src/Frontend.elm", "src/Backend.elm"]
+
+  graph_ <- Lamdera.Graph.fullGraph paths
   case graph_ of
     Left err ->
       throw $ Reporting.Exit.makeToReport err
