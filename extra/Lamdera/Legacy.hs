@@ -18,8 +18,8 @@ import qualified Lamdera.Progress as Progress
 temporaryCheckCodecsNeedsUpgrading :: Bool -> FilePath -> IO ()
 temporaryCheckCodecsNeedsUpgrading inProduction root = do
   elmHome <- Stuff.getElmHome
-  elmStuff <- Stuff.stuff root
   let
+    elmStuff = root </> "elm-stuff"
     lamderaCodecs = elmHome </> "0.19.1/packages/lamdera/codecs/1.0.0"
     lamderaMigrations = lamderaCodecs </> "/src/Lamdera/Migrations.elm"
   exists_ <- Dir.doesFileExist lamderaMigrations

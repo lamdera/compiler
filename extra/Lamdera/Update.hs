@@ -64,6 +64,11 @@ getLatestVersion = do
       pure $ Left $ show err
 
 
+-- Check if our current version is the latest
 isLatest :: Lamdera.Version.Version -> Bool
-isLatest version =
-  version >= Lamdera.Version.raw
+isLatest latestVersion =
+  let
+    outOfDate = Lamdera.Version.raw < latestVersion
+    isOnLatest = not outOfDate
+  in
+  isOnLatest

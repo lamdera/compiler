@@ -54,9 +54,10 @@ run _ flags@(Flags force) = do
     Right latestVersion -> do
       if not (Lamdera.Update.isLatest latestVersion) || force
         then do
+          atomicPutStrLn $ "Local version: " <> Lamdera.Version.rawToString Lamdera.Version.raw <> ", found latest version: " <> Lamdera.Version.rawToString latestVersion
           updateApproved <- do
             Reporting.ask $ D.stack [ D.reflow $
-              "Replace " <> binaryPath <> " with version " <> Lamdera.Version.rawToString latestVersion <> "? [Y/n]: "
+              "Update " <> binaryPath <> " to version " <> Lamdera.Version.rawToString latestVersion <> "? [Y/n]: "
               ]
 
           onlyWhen updateApproved $ do
