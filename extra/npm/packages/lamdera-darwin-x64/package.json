@@ -1,6 +1,6 @@
 {
   "name": "@lamdera/compiler-darwin-x64",
-  "version": "0.19.1-1.3.1",
+  "version": "0.19.1-1.3.2",
   "description": "The macOS 64-bit binary for Lamdera.",
   "repository": "lamdera/compiler",
   "license": "BSD-3-Clause",
