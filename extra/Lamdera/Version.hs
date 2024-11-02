@@ -11,7 +11,7 @@ import qualified Elm.Version as V
 type Version = (Int, Int, Int)
 
 raw :: (Int, Int, Int)
-raw = (1,3,2)
+raw = (1,3,3)
 
 
 rawToString :: (Int, Int, Int) -> String
