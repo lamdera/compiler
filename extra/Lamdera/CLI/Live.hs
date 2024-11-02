@@ -116,6 +116,7 @@ directoryConfig =
     mimeTypes =
       defaultMimeTypes
         & HashMap.insert ".md" "text/plain"
+        & HashMap.insert ".webp" "image/webp"
   }
 
 
