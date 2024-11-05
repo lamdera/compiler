@@ -35,7 +35,7 @@ generate oldVersion newVersion typeCompares = do
 
   let header = [text|
 
-    module Evergreen.Migrate.V$new exposing (..)
+    module Evergreen.Migrate.V$new exposing (backendModel, backendMsg, frontendModel, frontendMsg, toBackend, toFrontend)
 
     import Evergreen.V$old.Types as Old
     import Evergreen.V$new.Types as New
