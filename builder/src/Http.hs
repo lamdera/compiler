@@ -45,6 +45,7 @@ import qualified Elm.Version as V
 
 
 import Lamdera
+import qualified Lamdera.Relative
 import qualified Data.Text as T
 
 -- MANAGER
@@ -321,7 +322,7 @@ lamderaGetArchive manager url onError err onSuccess =
               & (\x ->
                   case x of
                     package:version:_ ->
-                      (T.unpack package, T.unpack version)
+                      (T.unpack package, T.unpack version |> T.replace "/" "")
                     _ ->
                       error $ "unexpected URL parts: " <> show x
               )
@@ -331,15 +332,15 @@ lamderaGetArchive manager url onError err onSuccess =
         packageRoot = concat [pkgsPath & withDefault "<no-packages-path-override-set>", "/packages/", package, "/", version]
 
       zipPath <- do
-        exists <- doesFileExist packageZip
-        if exists
-          then pure packageZip
-          else do
+        overrideZipM <- Lamdera.Relative.findFile packageZip
+        case overrideZipM of
+          Just overrideZip -> pure overrideZip
+          Nothing -> do
             -- Backwards compatible support for when pack.zip was used without a version number
-            bareExists <- doesFileExist packageZipBare
-            if bareExists
-              then pure packageZipBare
-              else pure ""
+            zipBareM <- Lamdera.Relative.findFile packageZipBare
+            case zipBareM of
+              Just zipBare -> pure zipBare
+              Nothing -> pure ""
 
       -- debug_ $ "🔥: " <> show (package, packageZip, packageRoot, overrideExists, url)
 
