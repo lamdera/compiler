@@ -125,6 +125,12 @@ lamderaProgramTest =
   Elm.Package.Name (Utf8.fromChars "lamdera") (Utf8.fromChars "program-test")
 
 
+{-# NOINLINE lamderaFusion #-}
+lamderaFusion :: Elm.Package.Name
+lamderaFusion =
+  Elm.Package.Name (Utf8.fromChars "lamdera") (Utf8.fromChars "fusion")
+
+
 {-# NOINLINE lamderaWebsocket #-}
 lamderaWebsocket :: Elm.Package.Name
 lamderaWebsocket =
