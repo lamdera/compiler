@@ -322,7 +322,7 @@ lamderaGetArchive manager url onError err onSuccess =
               & (\x ->
                   case x of
                     package:version:_ ->
-                      (T.unpack package, T.unpack version |> T.replace "/" "")
+                      (T.unpack package, version & T.replace "/" "" & T.unpack)
                     _ ->
                       error $ "unexpected URL parts: " <> show x
               )
