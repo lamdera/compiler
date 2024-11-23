@@ -15,14 +15,10 @@ import qualified Lamdera.AppConfig
 import qualified Lamdera.Update
 import qualified Lamdera.Compile
 import qualified Lamdera.Evergreen.Snapshot
+import qualified Lamdera.Relative
 import Test.Helpers
 import Test.Check
 
--- import qualified Lamdera.CLI.Check
--- import qualified Lamdera.CLI.Reset
--- import qualified Lamdera.CLI.Live
--- import qualified Lamdera.ReverseProxy
--- import Test.Wire
 import qualified Ext.Common
 
 
@@ -30,7 +26,7 @@ all = run Test.Lamdera.suite
 
 suite :: Test ()
 suite = tests
-  [ pending $ scope "init should write .gitignore" $
+  [ scope "init should work as expected" $
       let
         tmpFolder = "tmp/new"
 
@@ -48,24 +44,16 @@ suite = tests
           io $ formatHaskellValue "actual" actual
 
           expectTextContains actual
-            "Hello! Lamdera projects always start with an elm.json file, as well as four\\nsource files: Frontend.elm , Backend.elm, Types.elm and Env.elm\\n\\nIf you're new to Elm, the best starting point is\\n<https://elm-lang.org/0.19.0/init>\\n\\nOtherwise check out <https://dashboard.lamdera.app/docs/building> for Lamdera\\nspecific information!\\n\\nKnowing all that, would you like me to create a starter implementation? [Y/n]: Okay, I created it! Now read those links, or get going with `lamdera live`.\\n"
+            "Hello! Lamdera projects always start with an elm.json file, as well as four\\nsource files: Frontend.elm , Backend.elm , Types.elm and Env.elm\\n\\nIf you're new to Elm, the best starting point is\\n<https://elm-lang.org/0.19.1/init>\\n\\nOtherwise check out <https://dashboard.lamdera.app/docs/building> for Lamdera\\nspecific information!\\n\\nKnowing all that, would you like me to create a starter implementation? [Y/n]:"
 
-          ignoreM <- io $ readUtf8Text $ tmpFolder </> ".gitignore"
-
-          case ignoreM of
-            Just ignore ->
-              expectTextContains ignore "elm-stuff"
-
-            Nothing ->
-              crash $ "Expected to find " <> tmpFolder <> "/.gitignore but didn't."
+          expectTextContains actual
+            "Okay, I created it! Now read those links, or get going with `lamdera live`.\\n"
 
       in
       using setup cleanup test
 
   , pending $ scope "warning about external packages" $ do
-      actual <- catchOutput $ Test.Check.checkWithParamsNoDebug 1 "/Users/mario/lamdera/test/v1" "test-local"
-
-      -- io $ formatHaskellValue "actual" actual
+      actual <- catchOutput $ Test.Check.checkWithParamsNoDebug 1 "~/lamdera/test/v1" "always-v0"
 
       expectTextContains actual
         "It appears you're all set to deploy the first version of 'test-local'!"
@@ -76,100 +64,48 @@ suite = tests
   ]
 
 
-compile :: IO ()
-compile = do
-  let project = "/Users/mario/lamdera/test/v1"
-  -- setEnv "LAMDERA_APP_NAME" "testapp"
-  requireEnv "TOKEN"
-
-  -- let project = "/Users/mario/dev/projects/elm-spa-example"
-  -- setEnv "LAMDERA_APP_NAME" "realworldish"
-
-  -- let project = "/Users/mario/dev/projects/lamdera-test"
-  -- setEnv "LAMDERA_APP_NAME" "lamderatest"
-
-  -- let project = "/Users/mario/tmp/lamdera-experiments"
-  -- setEnv "LAMDERA_APP_NAME" "lamderatest"
-
-  -- let project = "/Users/mario/dev/projects/lamdera-dashboard"
-  -- setEnv "LAMDERA_APP_NAME" "dashboard"
-
-  setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
-  setEnv "LDEBUG" "1"
-  setEnv "ELM_HOME" "/Users/mario/elm-home-elmx-test"
-
-  -- Bust Elm's caching with this one weird trick!
-  touch $ project </> "src/Frontend.elm"
-  touch $ project </> "src/Types.elm"
-  touch $ project </> "src/WireTypes.elm"
-
-  Lamdera.Compile.makeDev project ["src" </> "Frontend.elm"]
-
-  unsetEnv "TOKEN"
-  unsetEnv "LAMDERA_APP_NAME"
-  unsetEnv "LOVR"
-  unsetEnv "LDEBUG"
-  unsetEnv "ELM_HOME"
-
-
-
 {-| Run the type snapshot part of `lamdera check` only, with specific params -}
 snapshotWithParams :: Int -> FilePath -> String -> IO ()
 snapshotWithParams version projectPath appName = do
-  setEnv "LAMDERA_APP_NAME" appName
-  setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
-  setEnv "LDEBUG" "1"
-  setEnv "ELM_HOME" "/Users/mario/elm-home-elmx-test"
+  project <- Lamdera.Relative.requireDir projectPath
+  overrides <- Lamdera.Relative.requireDir "~/lamdera/overrides"
+  elmHome <- Lamdera.Relative.requireDir "~/elm-home-elmx-test"
 
-  Ext.Common.withProjectRoot projectPath $ do
-    Lamdera.Compile.makeDev projectPath ["src" </> "Types.elm"]
-    Lamdera.Evergreen.Snapshot.run version
+  withEnvVars [("LDEBUG", "1"), ("LAMDERA_APP_NAME", appName), ("LOVR", overrides), ("ELM_HOME", elmHome)] $ do
+    Ext.Common.withProjectRoot project $ do
+      Lamdera.Compile.makeDev project ["src" </> "Types.elm"]
+      debug $ "🎉 runinng snapshot in folder " <> project
+      Lamdera.Evergreen.Snapshot.run version
 
-  unsetEnv "LAMDERA_APP_NAME"
-  unsetEnv "LOVR"
-  unsetEnv "LDEBUG"
-  unsetEnv "ELM_HOME"
 
 
 {-| Another test harness for local development -}
 testWire = do
-  let project = "/Users/mario/lamdera/test/v1"
-  setEnv "LAMDERA_APP_NAME" "testapp"
-
-  -- let project = "/Users/mario/dev/projects/elm-spa-example"
-  -- setEnv "LAMDERA_APP_NAME" "realworldish"
-
-  -- let project = "/Users/mario/dev/projects/lamdera-test"
-  -- setEnv "LAMDERA_APP_NAME" "lamderatest"
-
-  -- let project = "/Users/mario/tmp/lamdera-experiments"
-  -- setEnv "LAMDERA_APP_NAME" "lamderatest"
-
-  -- let project = "/Users/mario/dev/projects/lamdera-dashboard"
-  -- setEnv "LAMDERA_APP_NAME" "dashboard"
+  project <- Lamdera.Relative.requireDir "~/lamdera/test/v1"
 
   -- Bust Elm's caching with this one weird trick!
   touch $ project </> "src/Types.elm"
-
-  setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
-  setEnv "LDEBUG" "1"
-  setEnv "ELM_HOME" "/Users/mario/elm-home-elmx-test"
+  overrides <- Lamdera.Relative.requireDir "~/lamdera/overrides"
+  elmHome <- Lamdera.Relative.requireDir "~/elm-home-elmx-test"
 
   let rootPaths = [ "src" </> "Frontend.elm" ]
 
-  Lamdera.Compile.makeDev project ["src" </> "Frontend.elm"]
+  withEnvVars [
+    ("LAMDERA_APP_NAME", "testapp"),
+    ("LOVR", overrides),
+    ("LDEBUG", "1"),
+    ("ELM_HOME", elmHome)
+    ] $
+    Lamdera.Compile.makeDev project ["src" </> "Frontend.elm"]
 
 
 config = do
   -- setEnv "LDEBUG" "1"
-  let project = "/Users/mario/lamdera/test/v1"
-  -- let project = "/Users/mario/dev/projects/lamdera-test"
-  Ext.Common.withProjectRoot project $ do
-    prodToken <- requireEnv "TOKEN"
-    Lamdera.AppConfig.checkUserConfig "test-local" (Just $ T.pack prodToken)
-
-    unsetEnv "TOKEN"
-    unsetEnv "LDEBUG"
+  project <- Lamdera.Relative.requireDir "~/lamdera/test/v1"
+  withEnvVars [("LDEBUG", "1")] $ do
+    Ext.Common.withProjectRoot project $ do
+      prodToken <- requireEnv "TOKEN"
+      Lamdera.AppConfig.checkUserConfig "test-local" (Just $ T.pack prodToken)
 
 
 http = do
@@ -178,39 +114,34 @@ http = do
 
 
 login = do
-  let project = "/Users/mario/lamdera/test/v1"
-  setEnv "LDEBUG" "1"
-  -- setEnv "LAMDERA_APP_NAME" "test-local"
-  Ext.Common.withProjectRoot project $
-    Lamdera.CLI.Login.run () ()
-  unsetEnv "LDEBUG"
-  unsetEnv "LAMDERA_APP_NAME"
+  project <- Lamdera.Relative.requireDir "~/lamdera/test/v1"
+  withEnvVars [("LDEBUG", "1")] $ do
+
+    Ext.Common.withProjectRoot project $
+      Lamdera.CLI.Login.run () ()
 
 
 compileCore = do
   withDebug $ do
-    let project = "/Users/mario/lamdera/overrides/packages/lamdera/core/1.0.0"
+    project <- Lamdera.Relative.requireDir "~/lamdera/overrides/packages/lamdera/core/1.0.0"
     aggressiveCacheClear project
     Lamdera.Compile.make_ project
 
 
 compileCodecs =
   withDebug $ do
-    let project = "/Users/mario/lamdera/overrides/packages/lamdera/codecs/1.0.0"
+    project <- Lamdera.Relative.requireDir "~/lamdera/overrides/packages/lamdera/codecs/1.0.0"
     aggressiveCacheClear project
     Lamdera.Compile.make_ project
 
 
 checkUserConfig = do
-  let projectPath = "/Users/mario/lamdera/test/v1"
-      appName = "always-v0"
-
-  setEnv "LDEBUG" "1"
+  projectPath <- Lamdera.Relative.requireDir "~/lamdera/test/v1"
+  let appName = "always-v0"
   adminToken <- requireEnv "TOKEN"
 
-  Ext.Common.withProjectRoot projectPath $
-    do
-        Lamdera.Compile.makeHarnessDevJs projectPath
-        Lamdera.AppConfig.checkUserConfig appName (Just (T.pack adminToken))
-
-  unsetEnv "LDEBUG"
+  withEnvVars [("LDEBUG", "1")] $ do
+    Ext.Common.withProjectRoot projectPath $
+      do
+          Lamdera.Compile.makeHarnessDevJs projectPath
+          Lamdera.AppConfig.checkUserConfig appName (Just (T.pack adminToken))

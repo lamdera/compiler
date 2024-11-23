@@ -26,7 +26,7 @@ https://github.com/Rob--W/cors-anywhere/blob/master/lib/cors-anywhere.js
 
 Uses a vendored version of the http-reverse-proxy package (Network.HTTP.ReverseProxy)
 
-/Users/mario/dev/projects/lamdera-compiler/extra/Network/HTTP/ReverseProxy.hs
+extra/Network/HTTP/ReverseProxy.hs
 
 -}
 

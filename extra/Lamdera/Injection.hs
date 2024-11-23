@@ -42,13 +42,13 @@ type Mains = Map.Map ModuleName.Canonical Opt.Main
 graphModifications :: Mode.Mode -> Mains -> Map.Map Opt.Global Opt.Node -> Map.Map Opt.Global Opt.Node
 graphModifications mode mains graph = do
   if mains & mainsInclude ["LocalDev"]
-    then graph & Map.mapWithKey (modify $ isProdMode mode)
+    then graph & Map.mapWithKey (modify $ isOptimizedMode mode)
            -- & inspect
     else graph
 
 
 modify :: Bool -> Opt.Global -> Opt.Node -> Opt.Node
-modify isProd v n =
+modify isOptimized v n =
   case (v, n) of
     (Opt.Global (ModuleName.Canonical (Pkg.Name "elm" "kernel") "Http") name, Opt.Kernel chunks deps) ->
       let newChunks =
@@ -58,7 +58,7 @@ modify isProd v n =
                     bs
                       & Text.decodeUtf8
                       & Text.replace "var _Http_toTask =" "var _Http_toTask_REPLACED ="
-                      & (<>) (modifiedHttp_toTask isProd)
+                      & (<>) (modifiedHttp_toTask isOptimized)
                       & Text.encodeUtf8
                       & Elm.Kernel.JS
                   _ ->
@@ -83,8 +83,8 @@ behaviors and limitations.
 
 See extra/Lamdera/ReverseProxy.hs for the proxy itself
 -}
-modifiedHttp_toTask isProd =
-  onlyIf (not isProd)
+modifiedHttp_toTask isOptimized =
+  onlyIf (not isOptimized)
     -- Identical to original except for alterIfProxyRequired addition
     [text|
 
@@ -191,7 +191,7 @@ injections outputType mode =
         *like with Dict and Set, the rest of the equals kernel code behavior is unchanged.
      -}
     equalsOverride =
-        if isProdMode mode then
+        if isOptimizedMode mode then
          [text|
               if (x.$$ < 0)
               {
@@ -233,6 +233,7 @@ injections outputType mode =
 
     lamderaContainersExtensions_ =
       Ext.Common.bsToText lamderaContainersExtensions
+        & Text.replace "// equals override injection marker" equalsOverride
   in
   case outputType of
     -- NotLamdera was added when we fixed the hot loading of a new app version in the browser.
@@ -243,6 +244,9 @@ injections outputType mode =
     -- and does not help the garbage collector enough for a killed app to be fully garbage collected.
     NotLamdera ->
       [text|
+
+    $lamderaContainersExtensions_
+
     function _Platform_initialize(flagDecoder, args, init, update, subscriptions, stepperBuilder)
       {
         var result = A2(_Json_run, flagDecoder, _Json_wrap(args ? args['flags'] : undefined));
@@ -804,7 +808,7 @@ elmPkgJs mode =
                 minFile <- case hasNode of
                   Just node -> do
                     Ext.Common.bash $ "cd " <> takeDirectory esbuildConfigPath <> " && " <> node <> " " <> esbuildConfigPath
-                    Lamdera.Relative.loadFile $ root </> "elm-pkg-js-includes.min.js"
+                    Lamdera.Relative.readFile $ root </> "elm-pkg-js-includes.min.js"
                   Nothing ->
                     error "Could not find path to node"
 
@@ -832,7 +836,7 @@ elmPkgJs mode =
 
 esbuildIncluder :: FilePath -> FilePath -> FilePath -> IO B.Builder
 esbuildIncluder root esbuildPath includesPath = do
-  minFile <- Lamdera.Relative.loadFile $ root </> "elm-pkg-js-includes.min.js"
+  minFile <- Lamdera.Relative.readFile $ root </> "elm-pkg-js-includes.min.js"
   case minFile of
     Just minFileContents -> do
       Lamdera.debug_ "🏗️  Using cached elm-pkg-js-includes.min.js"
@@ -907,8 +911,8 @@ onlyIf cond t =
     else ""
 
 
-isProdMode :: Mode.Mode -> Bool
-isProdMode mode =
+isOptimizedMode :: Mode.Mode -> Bool
+isOptimizedMode mode =
     case mode of
       Mode.Dev _ -> False
       Mode.Prod _ -> True

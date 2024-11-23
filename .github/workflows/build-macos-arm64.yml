@@ -9,7 +9,7 @@ name: Build MacOS arm64
 jobs:
   build:
     name: Build MacOS arm64
-    runs-on: lamdera-community-m1
+    runs-on: macos-latest
     steps:
       - name: Install SSH key
         uses: shimataro/ssh-key-action@v2
@@ -19,9 +19,11 @@ jobs:
           known_hosts: ${{ secrets.KNOWN_HOSTS }}
           if_key_exists: replace
       - uses: actions/checkout@v3
+      - uses: freckle/stack-cache-action@v2
       - run: echo "${HOME}/.local/bin" >> $GITHUB_PATH
       - name: Run distribution script
         run: |
-          test -x "$(which ghcup)" && curl https://downloads.haskell.org/~ghcup/aarch64-apple-darwin-ghcup -o ~/.local/bin/ghcup && chmod a+x ~/.local/bin/ghcup
+          mkdir -p ~/.local/bin
+          curl https://downloads.haskell.org/~ghcup/aarch64-apple-darwin-ghcup -o ~/.local/bin/ghcup && chmod a+x ~/.local/bin/ghcup
           cd distribution
           ./build-macos-arm64.sh

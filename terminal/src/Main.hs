@@ -45,6 +45,7 @@ main =
     , make
     , repl
     , Lamdera.CLI.reset
+    , Lamdera.CLI.update
     , Lamdera.CLI.annotate
     , Lamdera.CLI.eval
     -- , reactor

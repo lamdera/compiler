@@ -1,9 +1,6 @@
 port module LocalDev exposing (main)
 
-{- This file is copyright © Cofoundry Ltd - All Rights Reserved.
-   Unauthorized copying of this file or its contents, via any medium is strictly prohibited.
-
-   ---
+{-
 
    Hello you curious thing!
 
@@ -1245,7 +1242,7 @@ lamderaDevBar topDown devbar nodeType =
                 div
                     [ style "border-top" "1px solid #393939"
                     ]
-                    [ expandedUI topDown devbar
+                    [ expandedUI topDown devbar nodeType
                     ]
 
               else
@@ -1258,7 +1255,7 @@ lamderaDevBar topDown devbar nodeType =
                     [ style "border-bottom" "1px solid #393939"
                     , style "padding-bottom" "5px"
                     ]
-                    [ expandedUI topDown devbar ]
+                    [ expandedUI topDown devbar nodeType ]
 
               else
                 text ""
@@ -1386,7 +1383,7 @@ spacer width =
     span [ style "width" (String.fromInt width ++ "px"), style "display" "inline-block" ] []
 
 
-expandedUI topDown devbar =
+expandedUI topDown devbar nodeType =
     let
         modeText =
             case devbar.freeze of
@@ -1446,12 +1443,17 @@ expandedUI topDown devbar =
 
           else
             div [] [ versionInfo, envDocs ]
-        , case devbar.freeze of
-            False ->
-                buttonDev "Reset Backend" ResetDebugStoreBE
+        , case nodeType of
+            Leader ->
+                case devbar.freeze of
+                    False ->
+                        buttonDev "Reset Backend" ResetDebugStoreBE
 
-            True ->
-                buttonDev "Reset Both" ResetDebugStoreBoth
+                    True ->
+                        buttonDev "Reset Both" ResetDebugStoreBoth
+
+            Follower ->
+                div [ style "padding" "8px 8px", style "text-align" "center" ] [ text "Use leader tab (green dot) for reset options" ]
         , if devbar.freeze then
             buttonDev "Reset Frontend" ResetDebugStoreFE
 

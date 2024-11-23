@@ -13,8 +13,10 @@ import Control.Exception (SomeException, AsyncException(UserInterrupt), catch, f
 import System.FilePath ((</>))
 
 import EasyTest
+import Test.Helpers
 import Lamdera
 import qualified Lamdera.Compile
+import qualified Lamdera.Relative
 
 -- tests
 import qualified Lamdera.Wire3.Core
@@ -97,59 +99,52 @@ wire = do
   io $ do
     let project = "./test/scenario-alltypes"
 
-    setEnv "LOVR" "/Users/mario/dev/projects/lamdera/overrides"
-    setEnv "LTEST" "1"
-    setEnv "LDEBUG" "1"
-    setEnv "ELM_HOME" "/Users/mario/elm-home-elmx-test"
+    overrides <- Lamdera.Relative.requireDir "~/lamdera/overrides"
+    elmHome <- Lamdera.Relative.requireDir "~/elm-home-elmx-test"
 
-    let testFiles =
-          [ ""
-          , "src/Test/Wire_Union_1_Basic.elm"
-          , "src/Test/Wire_Union_2_Basic.elm"
-          , "src/Test/External.elm"
-          , "src/Test/Wire_Union_3_Params.elm"
-          , "src/Test/Wire_Union_4_Tricky.elm"
-          , "src/Test/Wire_Union_5_Massive.elm"
-          , "src/Test/Wire_Alias_1_Basic.elm"
-          , "src/Test/Wire_Alias_2_Record.elm"
-          , "src/Test/Wire_Alias_3_SubAlias.elm"
-          , "src/Test/Wire_Alias_4_TvarRename.elm"
-          , "src/Test/Wire_Tvar_Ambiguous.elm"
-          , "src/Test/Wire_Core_Types.elm"
-          , "src/Test/Wire_Package_Types.elm"
-          , "src/Test/Wire_Recursive.elm"
-          , "src/Test/Wire_Record_Extensible1_Basic.elm"
-          , "src/Test/Wire_Record_Extensible2_MultiParam.elm"
-          , "src/Test/Wire_Record_Extensible3_Tricky.elm"
-          , "src/Test/Wire_Record_Extensible4_DB.elm"
-          , "src/Test/Wire_Record_Extensible5_ElmCss.elm"
-          , "src/Test/Wire_Phantom.elm"
-          , "src/Test/Wire_Tvar_Deep.elm"
-          , "src/Test/Wire_Tvar_Deep2.elm"
-          , "src/Test/Wire_Tvar_Recursive_Reference.elm"
-          , "src/Test/Wire_Unsupported.elm"
-          , "src/Test/Wire_Unconstructable.elm"
-          ]
+    withEnvVars [("LDEBUG", "1"), ("LTEST", "1"), ("LOVR", overrides), ("ELM_HOME", elmHome)] $ do
+      let testFiles =
+            [ ""
+            , "src/Test/Wire_Union_1_Basic.elm"
+            , "src/Test/Wire_Union_2_Basic.elm"
+            , "src/Test/External.elm"
+            , "src/Test/Wire_Union_3_Params.elm"
+            , "src/Test/Wire_Union_4_Tricky.elm"
+            , "src/Test/Wire_Union_5_Massive.elm"
+            , "src/Test/Wire_Alias_1_Basic.elm"
+            , "src/Test/Wire_Alias_2_Record.elm"
+            , "src/Test/Wire_Alias_3_SubAlias.elm"
+            , "src/Test/Wire_Alias_4_TvarRename.elm"
+            , "src/Test/Wire_Tvar_Ambiguous.elm"
+            , "src/Test/Wire_Core_Types.elm"
+            , "src/Test/Wire_Package_Types.elm"
+            , "src/Test/Wire_Recursive.elm"
+            , "src/Test/Wire_Record_Extensible1_Basic.elm"
+            , "src/Test/Wire_Record_Extensible2_MultiParam.elm"
+            , "src/Test/Wire_Record_Extensible3_Tricky.elm"
+            , "src/Test/Wire_Record_Extensible4_DB.elm"
+            , "src/Test/Wire_Record_Extensible5_ElmCss.elm"
+            , "src/Test/Wire_Phantom.elm"
+            , "src/Test/Wire_Tvar_Deep.elm"
+            , "src/Test/Wire_Tvar_Deep2.elm"
+            , "src/Test/Wire_Tvar_Recursive_Reference.elm"
+            , "src/Test/Wire_Unsupported.elm"
+            , "src/Test/Wire_Unconstructable.elm"
+            ]
 
-    let
-      catchTestException :: FilePath -> SomeException -> IO a
-      catchTestException filename e = do
-        modifyMVar_ failuresM (\failures -> pure $ failures ++ filename)
-        putStrLn "🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥"
-        throw e
+      let
+        catchTestException :: FilePath -> SomeException -> IO a
+        catchTestException filename e = do
+          modifyMVar_ failuresM (\failures -> pure $ failures ++ filename)
+          putStrLn "🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥"
+          throw e
 
-
-    testFiles & filter ((/=) "") & mapM (\filename -> do
-        atomicPutStrLn $ "testing: " <> show filename
-        -- Bust Elm's caching with this one weird trick!
-        touch $ project </> filename
-        Lamdera.Compile.makeDev project [filename] `catch` catchTestException filename
-      )
-
-    unsetEnv "LOVR"
-    unsetEnv "LTEST"
-    unsetEnv "LDEBUG"
-    unsetEnv "ELM_HOME"
+      testFiles & filter ((/=) "") & mapM (\filename -> do
+          atomicPutStrLn $ "testing: " <> show filename
+          -- Bust Elm's caching with this one weird trick!
+          touch $ project </> filename
+          Lamdera.Compile.makeDev project [filename] `catch` catchTestException filename
+        )
 
   failures <- io $ readMVar failuresM
   if length failures > 0

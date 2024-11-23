@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
 
-module Lamdera.Evergreen.TestMigrationGenerator where
+module Test.Lamdera.Evergreen.TestMigrationGenerator where
 
 import EasyTest
 import Control.Exception (SomeException, AsyncException(UserInterrupt), catch, fromException, throw)
@@ -33,6 +33,7 @@ import qualified Lamdera.Types
 import qualified Lamdera.Evergreen.MigrationGenerator as MigrationGenerator
 import qualified Lamdera.Evergreen.MigrationGeneratorHelpers as Helpers
 import qualified Lamdera.Make
+import qualified Lamdera.Relative
 
 import qualified Ext.Query.Canonical
 import qualified Ext.Query.Optimized
@@ -58,21 +59,21 @@ suite = tests
 testMigrationGeneration scenario oldVersion newVersion = do
 
   io $ atomicPutStrLn <$> Ext.Common.requireBinary "elm-format"
+  projectRoot <- io $ Lamdera.Relative.requireDir "test/scenario-migration-generate"
 
-  let root = "/Users/mario/dev/projects/lamdera-compiler/test/scenario-migration-generate"
+  let
       typeCompares = zipWith3
         (\label local prod -> (label, T.unpack local, T.unpack prod))
         (Lamdera.Types.core)
         ["o","o","o","o","o","o"]
         ["x","x","x","o","o","o"]
 
+  mock <- io $ Lamdera.Relative.readFile $ "test/scenario-migration-generate/src/Evergreen/Migrate/V" <> show newVersion <> ".elm"
+  result <- io $ MigrationGenerator.betweenVersions typeCompares oldVersion newVersion projectRoot
 
-  mock <- io $ readUtf8Text $ "test/scenario-migration-generate/src/Evergreen/Migrate/V" <> show newVersion <> ".elm"
-  result <- io $ MigrationGenerator.betweenVersions typeCompares oldVersion newVersion root
+  _ <- io $ Lamdera.Relative.writeFile ("test/scenario-migration-generate/src/Evergreen/Migrate/VX" <> show newVersion <> ".elm") result
 
-  _ <- io $ writeUtf8 ("test/scenario-migration-generate/src/Evergreen/Migrate/VX" <> show newVersion <> ".elm") result
-
-  expectEqualTextTrimmed (mock & withDefault "failed to load file") result
+  expectEqualTextTrimmed result (mock & withDefault "failed to load file")
 
   let filenames =
         [ "src/Evergreen/V" <> show oldVersion <> "/Types.elm"
@@ -81,7 +82,7 @@ testMigrationGeneration scenario oldVersion newVersion = do
         ]
 
   compilationStdout <- catchOutput $
-    Lamdera.Compile.makeDev "/Users/mario/dev/projects/lamdera-compiler/test/scenario-migration-generate" filenames
+    Lamdera.Compile.makeDev projectRoot filenames
 
   compilationStdout `expectTextContains`
     -- "This `Unimplemented` value is a:\n\n    UnimplementedMigration"
@@ -105,8 +106,8 @@ testContainsUserTypes = do
 testExamples :: Test ()
 testExamples = withTestEnv $ do
   failuresM <- io $ newMVar []
+  project <- io $ Lamdera.Relative.requireDir "test/scenario-migration-generate"
   let
-    project = "/Users/mario/dev/projects/lamdera-compiler/test/scenario-migration-generate"
     testFiles =
         [
           -- "src/Test/Migrate_Record.elm"

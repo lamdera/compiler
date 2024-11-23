@@ -25,9 +25,9 @@ function _Debug_toAnsiString(ansi, value)
     return _Debug_stringColor(ansi, '"' + _Debug_addSlashes(value, false) + '"');
   }
 
-  if (typeof value === 'object' && '$$' in value)
+  if (typeof value === 'object' && '$' in value)
   {
-    var tag = value.$$;
+    var tag = value.$;
 
     if (typeof tag === 'number')
     {
@@ -39,7 +39,7 @@ function _Debug_toAnsiString(ansi, value)
       var output = [];
       for (var k in value)
       {
-        if (k === '$$') continue;
+        if (k === '$') continue;
         output.push(_Debug_toAnsiString(ansi, value[k]));
       }
       return '(' + output.join(',') + ')';
@@ -49,35 +49,35 @@ function _Debug_toAnsiString(ansi, value)
     {
       return _Debug_ctorColor(ansi, 'Set')
         + _Debug_fadeColor(ansi, '.fromList') + ' '
-        + _Debug_toAnsiString(ansi, $$elm$$core$$Set$$toList(value));
+        + _Debug_toAnsiString(ansi, $elm$core$Set$toList(value));
     }
 
     if (tag === 'RBNode_elm_builtin' || tag === 'RBEmpty_elm_builtin')
     {
       return _Debug_ctorColor(ansi, 'Dict')
         + _Debug_fadeColor(ansi, '.fromList') + ' '
-        + _Debug_toAnsiString(ansi, $$elm$$core$$Dict$$toList(value));
+        + _Debug_toAnsiString(ansi, $elm$core$Dict$toList(value));
     }
 
     if (tag === 'SeqSet_elm_builtin')
     {
       return _Debug_ctorColor(ansi, 'SeqSet')
         + _Debug_fadeColor(ansi, '.fromList') + ' '
-        + _Debug_toAnsiString(ansi, $$lamdera$$containers$$SeqSet$$toList(value));
+        + _Debug_toAnsiString(ansi, $lamdera$containers$SeqSet$toList(value));
     }
 
     if (tag === 'SeqDict_elm_builtin')
     {
       return _Debug_ctorColor(ansi, 'SeqDict')
         + _Debug_fadeColor(ansi, '.fromList') + ' '
-        + _Debug_toAnsiString(ansi, $$lamdera$$containers$$SeqDict$$toList(value));
+        + _Debug_toAnsiString(ansi, $lamdera$containers$SeqDict$toList(value));
     }
 
     if (tag === 'Array_elm_builtin')
     {
       return _Debug_ctorColor(ansi, 'Array')
         + _Debug_fadeColor(ansi, '.fromList') + ' '
-        + _Debug_toAnsiString(ansi, $$elm$$core$$Array$$toList(value));
+        + _Debug_toAnsiString(ansi, $elm$core$Array$toList(value));
     }
 
     if (tag === '::' || tag === '[]')
@@ -96,7 +96,7 @@ function _Debug_toAnsiString(ansi, value)
     var output = '';
     for (var i in value)
     {
-      if (i === '$$') continue;
+      if (i === '$') continue;
       var str = _Debug_toAnsiString(ansi, value[i]);
       var c0 = str[0];
       var parenless = c0 === '{' || c0 === '(' || c0 === '[' || c0 === '<' || c0 === '"' || str.indexOf(' ') < 0;
@@ -162,7 +162,7 @@ function _Utils_eqHelp(x, y, depth, stack)
 
   if (typeof x !== 'object' || x === null || y === null)
   {
-    typeof x === 'function' && $$elm$$core$$Debug$$crash(5);
+    typeof x === 'function' && $elm$core$Debug$crash(5);
     return false;
   }
 
@@ -172,7 +172,7 @@ function _Utils_eqHelp(x, y, depth, stack)
     return true;
   }
 
-  $equalsOverride
+  // equals override injection marker
 
   for (var key in x)
   {

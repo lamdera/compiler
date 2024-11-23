@@ -1,5 +1,4 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE BangPatterns #-}
 
 module Lamdera
@@ -57,9 +56,11 @@ module Lamdera
   , unsafe
   , onlyWhen
   , onlyWhen_
+  , onlyWith
   , textContains
   , textHasPrefix
   , stringContains
+  , stringHasPrefix
   , fileContains
   , formatHaskellValue
   , hindent
@@ -110,7 +111,7 @@ module Lamdera
   , unsetEnv
   , lookupEnv
   , requireEnv
-  , openUrlInBrowser
+  , systemOpenPath
   , textSha1
   , (!!!)
   , toName
@@ -410,7 +411,14 @@ isExperimental_ = unsafePerformIO $ isExperimental
 isLamdera :: IO Bool
 isLamdera = do
   root <- getProjectRoot "Lamdera.isLamdera"
-  fileContains (root </> "elm.json") "lamdera/core"
+  hasElmJson <- Dir.doesFileExist (root </> "elm.json")
+  hasCore <- do
+    if hasElmJson
+      then fileContains (root </> "elm.json") "lamdera/core"
+      else pure False
+  hasTypes <- Dir.doesFileExist (root </> "src/Types.elm")
+  hasBackend <- Dir.doesFileExist (root </> "src/Backend.elm")
+  pure $ hasCore && hasTypes && hasBackend
 
 
 {-# NOINLINE isLamdera_ #-}
@@ -520,14 +528,25 @@ onlyWhen_ condition io = do
   unless (not res) io
 
 
+onlyWith :: FilePath -> (Text -> IO ()) -> IO ()
+onlyWith filepath io = do
+  fileM <- readUtf8Text filepath
+  case fileM of
+    Just file -> io file
+    Nothing -> pure ()
+
+
 textContains :: Text -> Text -> Bool
-textContains needle haystack = T.isInfixOf needle haystack
+textContains = T.isInfixOf
 
 textHasPrefix :: Text -> Text -> Bool
-textHasPrefix needle haystack = T.isPrefixOf needle haystack
+textHasPrefix = T.isPrefixOf
 
 stringContains :: String -> String -> Bool
-stringContains needle haystack = List.isInfixOf needle haystack
+stringContains = List.isInfixOf
+
+stringHasPrefix :: String -> String -> Bool
+stringHasPrefix = List.isPrefixOf
 
 fileContains :: FilePath -> Text -> IO Bool
 fileContains filename needle = do
@@ -682,7 +701,7 @@ remove filepath =
       if exists_
         then Dir.removeFile filepath
         else do
-          debug_ $ "🗑❌  does not exist: " ++ show filepath
+          debug_ $ "🗑❌ remove: does not exist: " ++ show filepath
           return ()
 
 
@@ -693,7 +712,9 @@ rmdir filepath = do
     then do
       debug_ $ "🗑  rmdir: " ++ show filepath
       Dir.removeDirectoryRecursive filepath
-    else pure ()
+    else do
+      debug_ $ "🗑❌ rmdir: does not exist: " ++ show filepath
+      pure ()
 
 
 mkdir :: FilePath -> IO ()
@@ -720,7 +741,7 @@ createDirIfMissing filepath =
 
 copyFile :: FilePath -> FilePath -> IO ()
 copyFile source dest = do
-  debug_ $ "✂️  copy: " ++ show source ++ " -> " ++ show dest
+  debug_ $ "📑  copy: " ++ show source ++ " -> " ++ show dest
   createDirIfMissing dest
   Dir.copyFileWithMetadata source dest
 
@@ -903,14 +924,14 @@ requireEnv name = do
   val <- lookupEnv name
   case val of
     Nothing ->
-      error $ Prelude.concat ["🌏👀  ENV var `", name, "` is required but was not found"]
+      error $ Prelude.concat ["❌🌏👀  ENV var `", name, "` is required but was not found"]
     Just "" ->
-      error $ Prelude.concat ["🌏👀  ENV var `", name, "` is required but was empty"]
+      error $ Prelude.concat ["❌🌏👀  ENV var `", name, "` is required but was empty"]
     Just v -> pure v
 
 
-openUrlInBrowser :: Text -> IO ()
-openUrlInBrowser url = do
+systemOpenPath :: Text -> IO ()
+systemOpenPath url = do
   case ostype of
     MacOS -> do
       callCommand $ "open " <> T.unpack url

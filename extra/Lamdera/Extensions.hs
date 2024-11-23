@@ -11,6 +11,7 @@ import qualified Data.Text.Encoding as TE
 
 import Lamdera
 import Lamdera.Project
+import qualified Lamdera.Relative
 
 
 -- The idea is to keep extension code in here, but so far the extensions have
@@ -40,7 +41,8 @@ elmJsonOverride pkg@(Pkg.Name author project) vsn original =
             packageRoot = (pkgsPath & withDefault "<no-packages-path-override-set>") <> "/packages/" <> Pkg.toUrl pkg ++ "/" ++ V.toChars vsn
             elmJson = packageRoot <> "/elm.json"
 
-          resM <- readUtf8Text elmJson
+          debug $ "Looking for json override: " <> elmJson
+          resM <- Lamdera.Relative.readFile elmJson
           case resM of
             Just res -> do
               debug $ "🔁  Serving local elm.json: " <> elmJson
@@ -66,7 +68,8 @@ endpointJsonOverride pkg@(Pkg.Name author project) vsn original =
             packageRoot = (pkgsPath & withDefault "<no-packages-path-override-set>") <> "/packages/" <> Pkg.toUrl pkg ++ "/" ++ V.toChars vsn
             endpointJson = packageRoot <> "/endpoint.json"
 
-          resM <- readUtf8Text endpointJson
+          debug $ "Looking for endpoint override: " <> endpointJson
+          resM <- Lamdera.Relative.readFile endpointJson
           case resM of
             Just res -> do
               debug $ "🔁  Serving local endpoint.json: " <> endpointJson

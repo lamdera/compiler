@@ -309,7 +309,7 @@ migrateUnionDefinition_ author pkg oldUnion newUnion tvarMapOld tvarMapNew oldVe
               Just $ T.concat [
                 "        {- @NOTICE `", N.toText newConstructorName, params, "` was added in V", show_ newVersion, ".\n",
                 "        This is just a reminder in case migrating some subset of the old data to this new value was important.\n",
-                "        See https://lamdera.com/tips/modified-custom-type for more info.\n",
+                "        See https://dashboard.lamdera.app/tips/modified-custom-type for more info.\n",
                 "        -}\n"
                 ]
             Just _ ->
@@ -446,7 +446,7 @@ genOldConstructorMigration oldModuleName moduleScope typeName interfaces tvarMap
               "           (Unimplemented\n",
               "           {- `", N.toText oldConstructorName, "` was removed or renamed in V", show_ newVersion, " so I couldn't figure out how to migrate it.\n",
               "           I need you to decide what happens to this ", N.toText oldModuleName, ".", N.toText oldConstructorName, " value in a migration.\n",
-              "           See https://lamdera.com/tips/modified-custom-type for more info.\n",
+              "           See https://dashboard.lamdera.app/tips/modified-custom-type for more info.\n",
               "           -})\n"
             ]
         in
@@ -973,12 +973,12 @@ typeToMigration oldVersion newVersion scope interfaces recursionSet_ typeNew@(Ca
     ("elm", "core", "Dict", "Dict")     -> migrate2ParamCollection
       (\m_p0      -> T.concat [ "Dict.toList |> List.map (Tuple.mapFirst ", m_p0, ") |> Dict.fromList" ])
       (\m_p1      -> T.concat [ "Dict.map (\\k -> ", m_p1, ")" ])
-      (\m_p0 m_p1 -> T.concat [ "Dict.toList |> List.map (Tuple.mapBoth ", m_p0, " ", m_p1, ") |> Dict.fromList" ])
+      (\m_p0 m_p1 -> T.concat [ "Dict.toList |> List.map (Tuple.mapBoth (", m_p0, ") (", m_p1, ")) |> Dict.fromList" ])
 
     ("lamdera", "containers", "SeqDict", "SeqDict")     -> migrate2ParamCollection
       (\m_p0      -> T.concat [ "SeqDict.toList |> List.map (Tuple.mapFirst ", m_p0, ") |> SeqDict.fromList" ])
       (\m_p1      -> T.concat [ "SeqDict.map (\\k -> ", m_p1, ")" ])
-      (\m_p0 m_p1 -> T.concat [ "SeqDict.toList |> List.map (Tuple.mapBoth ", m_p0, " ", m_p1, ") |> SeqDict.fromList" ])
+      (\m_p0 m_p1 -> T.concat [ "SeqDict.toList |> List.map (Tuple.mapBoth (", m_p0, ") (", m_p1, ")) |> SeqDict.fromList" ])
 
     (author, pkg, module_, typeName_) ->
       if (Set.member recursionIdentifier recursionSet_) then

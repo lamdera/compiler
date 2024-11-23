@@ -1,6 +1,6 @@
 {
   "name": "@lamdera/compiler-linux-arm64",
-  "version": "0.19.1-1.2.2",
+  "version": "0.19.1-1.3.2",
   "description": "The Linux ARM 64-bit binary for Lamdera.",
   "repository": "lamdera/compiler",
   "license": "BSD-3-Clause",

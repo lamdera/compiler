@@ -94,7 +94,7 @@ checkApiLoop inProduction appName token =
 
             putStrLn $ "───> Opening " <> T.unpack url
             sleep 1000
-            openUrlInBrowser url
+            systemOpenPath url
             putStrLn $ "───> Waiting for authorization..."
             sleep 1000
             pure False

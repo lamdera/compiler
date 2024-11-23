@@ -233,6 +233,7 @@ Executable lamdera
         Lamdera.CLI.Check
         Lamdera.CLI.Deploy
         Lamdera.CLI.Reset
+        Lamdera.CLI.Update
         -- CLI Experimental
         Lamdera.CLI.Annotate
         Lamdera.CLI.Interpreter
@@ -317,12 +318,11 @@ Executable lamdera
         Test.Wire
         Test.JsOutput
         Test.WebGL
-        Lamdera.Evergreen.TestMigrationHarness
-        Lamdera.Evergreen.TestMigrationGenerator
+        Test.Lamdera.Evergreen.TestMigrationHarness
+        Test.Lamdera.Evergreen.TestMigrationGenerator
 
 
         -- Debug helpers --
-        LamderaSharedBuildHelpers
         StandaloneInstances
         CanSer.CanSer
         Sanity

@@ -177,6 +177,9 @@ upgradeFor migrationSequence nextVersion valueType = do
                 ModelMigrated ( newValue, cmds ) ->
                   Upgraded ( newValue, cmds )
 
+                ModelReset ->
+                  Reset
+
                 ModelUnchanged ->
                   -- Should be impossible in this context
                   unchanged model_v$currentVersion_
@@ -569,6 +572,7 @@ genSupportingCode = do
         type UpgradeResult valueType msgType
             = AlreadyCurrent ( valueType, Cmd msgType )
             | Upgraded ( valueType, Cmd msgType )
+            | Reset
             | UnknownVersion ( Int, String, Bytes )
             | UnknownType String
             | DecoderError String
@@ -647,6 +651,9 @@ genSupportingCode = do
                 Ok upgradeResult ->
                     upgradeResult
 
+                Err "reset" ->
+                    Reset
+
                 Err err ->
                     DecoderError err
 
@@ -663,6 +670,10 @@ genSupportingCode = do
             case migrationFn oldValue of
                 ModelMigrated ( newValue, cmds ) ->
                     Ok ( newValue, cmds )
+
+                ModelReset ->
+                    -- @TODO rework our intermediate type so we don't have to do this hack
+                    Err "reset"
 
                 ModelUnchanged ->
                     oldValue

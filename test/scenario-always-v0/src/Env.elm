@@ -14,3 +14,11 @@ backendOnly =
 
 both =
     ""
+
+
+external =
+    "env.external"
+
+
+rpc =
+    "env.rpc"

@@ -21,6 +21,7 @@ import qualified Reporting.Doc as D
 import qualified Reporting.Exit as Exit
 
 
+import qualified Lamdera
 import qualified Lamdera.Init
 
 -- RUN
@@ -47,14 +48,14 @@ question =
     [ D.fillSep
         ["Hello!"
         ,"Lamdera","projects","always","start","with","an",D.green "elm.json","file,"
-        ,"as","well","as","three","source","files:",D.green "Frontend.elm",",",D.green "Backend.elm","and",D.green "Types.elm"
+        ,"as","well","as","four","source","files:",D.green "Frontend.elm",",",D.green "Backend.elm",",",D.green "Types.elm","and",D.green "Env.elm"
         ]
     , D.fillSep
         ["If","you're","new","to","Elm,","the","best","starting","point","is"
         , D.cyan (D.fromChars (D.makeLink "init"))
         ]
     , D.fillSep
-        ["Otherwise","check","out",D.cyan ("<https://dashboard.lamdera.app/docs/starting>")
+        ["Otherwise","check","out",D.cyan ("<https://dashboard.lamdera.app/docs/building>")
         ,"for","Lamdera","specific","information!"
         ]
     , "Knowing all that, would you like me to create a starter implementation? [Y/n]: "
@@ -95,6 +96,7 @@ init =
                         Outline.AppOutline V.compiler (NE.List (Outline.RelativeSrcDir "src") []) directs indirects Map.empty Map.empty
                       Lamdera.Init.writeDefaultImplementations
                       putStrLn "Okay, I created it. Now read that link!"
+                        Lamdera.& Lamdera.alternativeImplementation (putStrLn "Okay, I created it! Now read those links, or get going with `lamdera live`.")
                       return (Right ())
 
 

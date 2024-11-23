@@ -4,7 +4,7 @@
 
 module Lamdera.CLI.Check where
 
-import Control.Monad.Except (catchError, throwError)
+import Control.Monad.Except (catchError, throwError, forM_, when)
 import Data.Maybe (fromMaybe)
 import NeatInterpolation
 import qualified Data.List as List
@@ -29,6 +29,7 @@ import Make (Flags(..))
 import qualified Make
 
 import qualified Elm.Outline
+import qualified Elm.ModuleName
 
 import Lamdera
 import qualified Lamdera.Version
@@ -112,6 +113,7 @@ runHelp () flags@(Lamdera.CLI.Check.Flags destructiveMigration force) = do
   checkGitInitialised root
 
   Lamdera.Legacy.temporaryCheckOldTypesNeedingMigration inProduction_ root
+  Lamdera.Legacy.temporaryCheckCodecsNeedsUpgrading inProduction_ root
 
   progressPointer_ "Checking project compiles..."
   -- In production, check optimized up-front for Debug.* usage immediate feedback
@@ -146,6 +148,7 @@ offlineCheck root = do
     , D.reflow $ "- This means I won't make any new snapshots"
     , D.reflow $ "- I will assume the latest current migration on disk is the real latest migration"
     , D.reflow $ "- I will type check that migration under Evergreen"
+    , D.reflow $ "I recommend you either skip this check, or run it again when you're online."
     ]
 
   shouldContinue <- Reporting.ask $ D.stack [ D.reflow $ "Do you want me to continue despite this? [Y/n]: " ]
@@ -180,7 +183,7 @@ offlineCheck root = do
               ]
 
         else do
-          migrationCheck root nextVersionInfo
+          migrationCheck root nextVersionInfo []
     else do
       pure ()
 
@@ -260,6 +263,11 @@ onlineCheck root appName inDebug localTypes externalTypeWarnings isHoistRebuild 
               debug $ "Reading migration source..."
               migrationSource <- T.decodeUtf8 <$> IO.readUtf8 nextMigrationPath
 
+              let resetWarning =
+                    if textContains "ModelReset" migrationSource
+                      then [ D.red $ D.reflow "WARNING: This migration contains a `ModelReset` which will reset the model to its `init` value. For BackendModel's this cannot be reversed without rolling back to a previous version and data snapshot." ]
+                      else []
+
               if textContains "Unimplemented" migrationSource
                 then do
                   Progress.throw $
@@ -272,7 +280,7 @@ onlineCheck root appName inDebug localTypes externalTypeWarnings isHoistRebuild 
                       ]
 
                 else do
-                  migrationCheck root nextVersionInfo
+                  migrationCheck root nextVersionInfo changedTypes
                   onlyWhen (not inProduction_) $ showExternalTypeWarnings externalTypeWarnings
 
                   checkUserProjectCompiles root True
@@ -285,7 +293,7 @@ onlineCheck root appName inDebug localTypes externalTypeWarnings isHoistRebuild 
                       , D.reflow "Evergreen migrations will be applied to the following types:"
                       , formattedChangedTypes
                       , D.reflow "See <https://dashboard.lamdera.app/docs/evergreen> for more info."
-                      ]
+                      ] ++ resetWarning
                       )
 
                   onlyWhen (not inProduction_) $ committedCheck root nextVersionInfo
@@ -341,7 +349,7 @@ onlineCheck root appName inDebug localTypes externalTypeWarnings isHoistRebuild 
                 , D.reflow "See <https://dashboard.lamdera.app/docs/evergreen> for more info."
                 ]
 
-          migrationCheck root nextVersionInfo
+          migrationCheck root nextVersionInfo []
           onlyWhen (not inProduction_) $ showExternalTypeWarnings externalTypeWarnings
 
           checkUserProjectCompiles root True
@@ -510,6 +518,7 @@ getNextVersionInfo_ nextVersion prodVersion isHoistRebuild localTypesChangedFrom
 
 
 checkForLatestBinaryVersion inDebug = do
+  progressPointer "Checking lamdera version..."
   latestVersionText_ <- Lamdera.Update.fetchCurrentVersion
   case latestVersionText_ of
     Right latestVersionText -> do
@@ -550,12 +559,11 @@ checkForLatestBinaryVersion inDebug = do
       debug $ "comparing remote:" <> show latestVersion <> " local:" <> show localVersion
 
       onlyWhen (latestVersionText /= "skip" && latestVersion > localVersion) $ do
-          progressPointer "Checking version..."
           progressDoc $ D.stack
             [ D.red $ D.reflow $ "NOTE: There is a new lamdera version, please upgrade before you deploy."
             , D.reflow $ "Current: " <> Lamdera.Version.short
             , D.reflow $ "New:     " <> T.unpack latestVersionText
-            , D.reflow $ "You can download it here: <https://dashboard.lamdera.app/docs/download>"
+            , D.reflow $ "Run `lamdera update`, or download it here: <https://dashboard.lamdera.app/docs/download>"
             ]
 
       onlyWhen (latestVersion < localVersion) $ do
@@ -656,8 +664,8 @@ checkUserProjectCompiles root optimized = do
       Lamdera.Compile.makeDev root ["src" </> "Backend.elm"]
 
 
-migrationCheck :: FilePath -> VersionInfo -> IO ()
-migrationCheck root nextVersion = do
+migrationCheck :: FilePath -> VersionInfo -> [(Elm.ModuleName.Raw, String, String)] -> IO ()
+migrationCheck root nextVersion changedTypes = do
   let
     version = vinfoVersion nextVersion
     migrationPath = (root </> "src/Evergreen/Migrate/V") <> show version <> ".elm"
@@ -667,9 +675,11 @@ migrationCheck root nextVersion = do
 
   migrationExists <- Dir.doesFileExist migrationPath
 
-  onlyWhen migrationExists $ do
-    copyFile migrationPath migrationPathBk
-    replaceSnapshotTypeReferences migrationPath version
+  onlyWith migrationPath $ (\migration -> do
+      ensureNoFalseClaims migrationPath migration changedTypes
+      copyFile migrationPath migrationPathBk
+      replaceSnapshotTypeReferences migrationPath version
+    )
 
   let cache = lamderaCache root
   let lamderaCheckBothPath = cache </> "LamderaCheckBoth.elm"
@@ -720,6 +730,42 @@ migrationCheck root nextVersion = do
     copyFile migrationPathBk migrationPath
     remove migrationPathBk
 
+ensureNoFalseClaims :: FilePath -> Text -> [(Elm.ModuleName.Raw, String, String)] -> IO ()
+ensureNoFalseClaims migrationPath migration changedTypes = do
+  Progress.throwMultiple $ ensureNoFalseClaims_ migrationPath migration changedTypes
+
+ensureNoFalseClaims_ :: FilePath -> Text -> [(Elm.ModuleName.Raw, String, String)] -> [Help.Report]
+ensureNoFalseClaims_ migrationPath migration changedTypes =
+  let
+    topLevels = extractTopLevelExpressions migration
+  in
+  -- Ensure that no changed types claim to be ModelUnchanged or MsgUnchanged in the corresponding topLevel migration
+  changedTypes & filterMap (\(changedType_, _, _) ->
+    let
+      changedType = Elm.ModuleName.toChars changedType_
+      name = lowerFirstLetter changedType
+      relevantTopLevels = topLevels & filter (T.isPrefixOf (name))
+      falseClaims = relevantTopLevels & filter (\topLevel -> "ModelUnchanged" `T.isInfixOf` topLevel || "MsgUnchanged" `T.isInfixOf` topLevel)
+
+      migrationHint =
+        if changedType `List.elem` ["BackendModel", "FrontendModel"]
+          then "If you're intending to reset, use `ModelReset` to explicitly reset a Model value back to it's `init` value, otherwise implement a migration as normal."
+          else "If you're intending to ignore old Msg values, use `MsgOldValueIgnored` to ignore old Msg values during a migration, otherwise implement a migration as normal."
+
+    in
+    -- atomicPutStrLn $ show (changedType, name, relevantTopLevels)
+
+    if length falseClaims > 0
+      then
+        Just $ Help.report "INCORRECT MIGRATION" (Just migrationPath)
+          ("The " <> changedType <> " type has changed since last deploy, but the " <> show name <> " migration claims it has not.")
+          [ D.reflow migrationHint
+          , D.reflow "See <https://dashboard.lamdera.app/docs/evergreen> for more info."
+          ]
+      else
+        Nothing
+    )
+
 
 committedCheck :: FilePath -> VersionInfo -> IO ()
 committedCheck root versionInfo = do
@@ -762,13 +808,13 @@ committedCheck root versionInfo = do
         )
 
     addToGitApproved <- Reporting.ask $
-      D.stack [ D.reflow $ "Shall I `git add` for you? [Y/n]: " ]
+      D.stack [ D.reflow $ "Shall I run `git add` for you? [Y/n]: " ]
 
     if addToGitApproved
       then do
         mapM (\path -> callCommand $ "git add " <> path) missingPaths
         commitApproved <- Reporting.ask $
-          D.stack [ D.reflow $ "Shall I `git commit` for you? [Y/n]: " ]
+          D.stack [ D.reflow $ "Shall I run `git commit` for you? [Y/n]: " ]
 
         if commitApproved
           then do
@@ -914,6 +960,23 @@ firstTwoChars str =
   case str of
     first:second:_ -> (first, second)
     _ -> ('_','_')
+
+
+-- Very basic extraction of Elm chunks based on any line
+-- that start with a non-space character grouped with any following
+-- lines that start with a space character.
+extractTopLevelExpressions :: Text -> [Text]
+extractTopLevelExpressions input =
+    reverse $ foldl groupLines [] (T.lines input)
+  where
+    groupLines :: [Text] -> Text -> [Text]
+    groupLines [] line = [line]
+    groupLines acc line
+        | isTopLevel line = line : acc
+        | otherwise = (T.unlines [T.strip (head acc), line]) : tail acc
+
+    isTopLevel :: Text -> Bool
+    isTopLevel line = not (T.null line) && T.head line /= ' '
 
 
 writeLamderaGenerated :: FilePath -> Bool -> VersionInfo -> IO ()

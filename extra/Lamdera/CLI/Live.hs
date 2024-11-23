@@ -116,6 +116,7 @@ directoryConfig =
     mimeTypes =
       defaultMimeTypes
         & HashMap.insert ".md" "text/plain"
+        & HashMap.insert ".webp" "image/webp"
   }
 
 
@@ -132,12 +133,10 @@ serveUnmatchedUrlsToIndex root serveElm =
 
 prepareLocalDev :: FilePath -> IO FilePath
 prepareLocalDev root = do
+  overrideM <- Lamdera.Relative.readFile "extra/LocalDev/LocalDev.elm"
   let
     cache = lamderaCache root
     harnessPath = cache </> "LocalDev.elm"
-    overridePath = "/Users/mario/dev/projects/lamdera-compiler/extra/LocalDev/LocalDev.elm"
-
-  overrideM <- readUtf8Text overridePath
 
   -- This needs to be moved to an on-demand action, as it has to query production and
   -- thus isn't appropriate to run on every single recompile

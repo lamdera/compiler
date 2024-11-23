@@ -90,6 +90,26 @@ expectTextContains haystack needle =
       , "◀️"
       ]
 
+expectTextContainsAll :: T.Text -> [T.Text] -> Test ()
+expectTextContainsAll haystack needles =
+  let
+    missingNeedles = filter (\needle -> not $ textContains needle haystack) needles
+  in
+  if null missingNeedles
+    then ok
+    else crash $ unlines
+      [ ""
+      , "💥💥💥"
+      , "Inside this haystack:"
+      , "▶️"
+      , (T.unpack haystack)
+      , "◀️"
+      , "I could not find these needles:"
+      , "▶️"
+      , (T.unpack $ T.intercalate "◀️\n▶️" missingNeedles)
+      , "◀️"
+      ]
+
 expectTextDoesNotContain :: T.Text -> T.Text -> Test ()
 expectTextDoesNotContain haystack needle =
   if textContains needle haystack

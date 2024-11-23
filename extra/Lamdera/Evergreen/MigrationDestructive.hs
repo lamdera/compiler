@@ -21,7 +21,7 @@ generate oldVersion newVersion typeCompares = do
 
       typeCompareMigration :: (N.Name, String, String) -> Text
       typeCompareMigration (typename, oldhash, newhash) = do
-        let implementation = unchangedForType typename
+        let implementation = destructiveForType typename
             msgType = msgForType typename
             typenameCamel = lowerFirstLetter $ N.toChars typename
             typenameT = N.toText typename
@@ -35,7 +35,7 @@ generate oldVersion newVersion typeCompares = do
 
   let header = [text|
 
-    module Evergreen.Migrate.V$new exposing (..)
+    module Evergreen.Migrate.V$new exposing (backendModel, backendMsg, frontendModel, frontendMsg, toBackend, toFrontend)
 
     import Evergreen.V$old.Types as Old
     import Evergreen.V$new.Types as New

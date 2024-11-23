@@ -219,7 +219,7 @@ migrate_Migrate_All_New_UserType old =
             (Unimplemented
              {- `UserRemoved` was removed or renamed in V2 so I couldn't figure out how to migrate it.
                 I need you to decide what happens to this Migrate_All.Old.UserRemoved value in a migration.
-                See https://lamdera.com/tips/modified-custom-type for more info.
+                See https://dashboard.lamdera.app/tips/modified-custom-type for more info.
              -}
             )
 
@@ -336,10 +336,10 @@ migrate_Migrate_All_New_UserType old =
         notices ->
             {- @NOTICE `UserAdded` was added in V2.
                This is just a reminder in case migrating some subset of the old data to this new value was important.
-               See https://lamdera.com/tips/modified-custom-type for more info.
+               See https://dashboard.lamdera.app/tips/modified-custom-type for more info.
             -}
             {- @NOTICE `UserAddedParam Int` was added in V2.
                This is just a reminder in case migrating some subset of the old data to this new value was important.
-               See https://lamdera.com/tips/modified-custom-type for more info.
+               See https://dashboard.lamdera.app/tips/modified-custom-type for more info.
             -}
             (Unimplemented {- New constructors were added. I need you to resolve the above notices and then remove this case. -})

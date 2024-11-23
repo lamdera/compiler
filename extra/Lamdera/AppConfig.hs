@@ -62,13 +62,20 @@ writeUsage = do
     & writeUtf8 (cache </> ".lamdera-fe-config")
 
   findSecretUses graph "Backend" "app"
+    & Set.union (findSecretUses graph "RPC" "lamdera_handleEndpoints")
     & prep
     & writeUtf8 (cache </> ".lamdera-be-config")
 
 
 loadLamderaAppGraph :: IO GlobalGraph
 loadLamderaAppGraph = do
-  graph_ <- Lamdera.Graph.fullGraph ["src/Frontend.elm", "src/Backend.elm"]
+  hasRPC <- doesFileExist "src/RPC.elm"
+  let paths =
+        if hasRPC
+          then ["src/Frontend.elm", "src/Backend.elm", "src/RPC.elm"]
+          else ["src/Frontend.elm", "src/Backend.elm"]
+
+  graph_ <- Lamdera.Graph.fullGraph paths
   case graph_ of
     Left err ->
       throw $ Reporting.Exit.makeToReport err
@@ -78,12 +85,12 @@ loadLamderaAppGraph = do
 
 
 findSecretUses :: GlobalGraph -> Data.Name.Name -> Data.Name.Name -> Set.Set (Text, Text, [Text])
-findSecretUses graph module_ expr = do
+findSecretUses graph module_ exprName = do
   let
     entryNode =
       _g_nodes graph
          & Map.filterWithKey (\k a ->
-             k == Global (Canonical (Pkg.Name "author" "project") (module_)) (expr)
+             k == Global (Canonical (Pkg.Name "author" "project") (module_)) (exprName)
          )
 
   if not $ Map.null entryNode
@@ -97,8 +104,6 @@ traverse_ graph (global, currentNode) = do
     refs =
       nodeEnvRefs graph (global, currentNode)
 
-  -- onlyWhen (not $ Set.null refs) $ do
-    -- let
     (module_, expression) =
       case global of
         Global (Canonical (Pkg.Name "author" "project") (module_)) (expr) ->
@@ -120,7 +125,7 @@ traverse_ graph (global, currentNode) = do
 
     childResults =
       currentNode
-        & selectNextDeps
+        & selectNextDeps global
         & Set.map (\global -> do
             _g_nodes graph
                & Map.lookup global
@@ -137,8 +142,8 @@ traverse_ graph (global, currentNode) = do
     else Set.union res childResults
 
 
-selectNextDeps :: Node -> Set.Set Global
-selectNextDeps node =
+selectNextDeps :: Global -> Node -> Set.Set Global
+selectNextDeps (Global module_ _) node =
   case node of
     Define expr globalDeps ->
       globalDeps & onlyAuthorProjectDeps
@@ -153,10 +158,12 @@ selectNextDeps node =
     Link global ->
       Set.singleton global & onlyAuthorProjectDeps
     Cycle names namedExprs defs globalDeps ->
-      -- Cycle [N.Name] [(N.Name, Expr)] [Def] GlobalDeps ->
-      -- Need to confirm if we do indeed catch everything in a cycle
-      -- already, but in any case this causes an infinite loop!
-      Set.empty
+      -- Remove all the cycles from the deps, names has multiple values
+      -- when there are mutually recursive functions involved
+      Set.difference
+        (onlyAuthorProjectDeps globalDeps)
+        (names & fmap (\name -> Global module_ name) & Set.fromList)
+
     Manager effectsType ->
       Set.empty
     Kernel kContent kContentM ->
@@ -186,35 +193,51 @@ nodeEnvRefs graph (global, node) =
   case node of
     Define expr globalDeps ->
       globalDeps
-        & Set.filter (\globalDep ->
-          case globalDep of
-            Global (Canonical (Pkg.Name "author" "project") "Env") expr ->
-              True
-            _ ->
-              False
-        )
-        & Set.filter (\globalDep ->
-          _g_nodes graph
-             & Map.lookup globalDep
-             & (\nodeM ->
-              case nodeM of
-                Just node ->
-                  case node of
-                    Define (Str _) _ ->
-                      -- Only select string values defined in Env.elm
-                      True
+        & Set.filter isEnvExpression
+        & Set.filter (hasEnvString graph)
 
-                    _ ->
-                      False
+    DefineTailFunc names expr globalDeps ->
+      globalDeps
+        & Set.filter isEnvExpression
+        & Set.filter (hasEnvString graph)
 
-                Nothing ->
-                  -- Should not be possible
-                  False
-             )
-        )
+    Cycle names namedExprs defs globalDeps ->
+      globalDeps
+        & Set.filter isEnvExpression
+        & Set.filter (hasEnvString graph)
 
     _ ->
       Set.empty
+
+
+isEnvExpression :: Global -> Bool
+isEnvExpression globalDep =
+  case globalDep of
+    Global (Canonical (Pkg.Name "author" "project") "Env") expr ->
+      True
+    _ ->
+      False
+
+
+hasEnvString :: GlobalGraph -> Global -> Bool
+hasEnvString graph globalDep =
+  _g_nodes graph
+    & Map.lookup globalDep
+    & (\nodeM ->
+    case nodeM of
+      Just node ->
+        case node of
+          Define (Str _) _ ->
+            -- Only select string values defined in Env.elm
+            True
+
+          _ ->
+            False
+
+      Nothing ->
+        -- Should not be possible
+        False
+    )
 
 
 readAppConfigUses :: IO [(Text, Text, Text)]
@@ -355,6 +378,7 @@ checkUserConfig appName prodTokenM = do
 
     localConfigItems =
       findSecretUses graph "Backend" "app"
+        & Set.union (findSecretUses graph "RPC" "lamdera_handleEndpoints")
         & secretsNormalized
         & (++) localFrontendConfigItems
 
