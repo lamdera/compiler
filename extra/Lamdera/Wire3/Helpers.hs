@@ -587,6 +587,67 @@ decodeTime =
                         ]))))
           )))
 
+decodeVec2 =
+    (a (Binop
+        "|>"
+        (Module.Canonical (Name "elm" "core") "Basics")
+        "apR"
+        (Forall
+           (Map.fromList [("a", ()), ("b", ())])
+           (TLambda (TVar "a") (TLambda (TLambda (TVar "a") (TVar "b")) (TVar "b"))))
+        (a (VarForeign
+              mLamdera_Wire
+              "decodeInt"
+              (Forall
+                 (Map.fromList [])
+                 (TAlias
+                    mLamdera_Wire
+                    "Decoder"
+                    [("a", TType (Module.Canonical (Name "elm" "core") "Basics") "Int" [])]
+                    (Filled
+                       (TType
+                          (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
+                          "Decoder"
+                          [TType (Module.Canonical (Name "elm" "core") "Basics") "Int" []]))))))
+        (andThenDecode1
+               (a (Lambda
+                      [(a (PVar "t"))]
+                      (a (Call
+                            (a (VarForeign
+                                  mLamdera_Wire
+                                  "succeedDecode"
+                                  (Forall
+                                     (Map.fromList [("a", ())])
+                                     (TLambda
+                                        (TVar "a")
+                                        (TAlias
+                                           mLamdera_Wire
+                                           "Decoder"
+                                           [("a", TVar "a")]
+                                           (Filled
+                                              (TType
+                                                 (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
+                                                 "Decoder"
+                                                 [TVar "a"])))))))
+                            [ (a (Call
+                                    (a (VarForeign
+                                          (Module.Canonical (Name "elm" "time") "Time")
+                                          "millisToPosix"
+                                          (Forall
+                                             (Map.fromList [])
+                                             (TLambda
+                                                (TType
+                                                   (Module.Canonical (Name "elm" "core") "Basics")
+                                                   "Int"
+                                                   [])
+                                                (TType
+                                                   (Module.Canonical (Name "elm" "time") "Time")
+                                                   "Posix"
+                                                   [])))))
+                                    [(a (VarLocal "t"))]))
+                            ]))))
+              )))
+
 andThenDecode1 lambda =
   (a (Call (a (VarForeign mLamdera_Wire "andThenDecode"
               (Forall

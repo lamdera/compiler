@@ -210,6 +210,81 @@ encoderForType depth ifaces cname tipe =
                           [(a (VarLocal "t"))]))
                   ]))))
 
+    TType (Module.Canonical (Name "elm-explorations" "linear-algebra") "Math.Vector2") "Vec2" _ ->
+      (a (Lambda
+            [(a (PVar "vec2"))]
+            (a (Let
+                  (Def
+                     (a ("v"))
+                     []
+                     (a (Call
+                           (a (VarForeign
+                                 (Module.Canonical (Name "elm-explorations" "linear-algebra") "Math.Vector2")
+                                 "toRecord"
+                                 (Forall
+                                    (Map.fromList [])
+                                    (TLambda
+                                       (TType (Module.Canonical (Name "elm-explorations" "linear-algebra") "Math.Vector2") "Vec2" [])
+                                       (TRecord
+                                          (Map.fromList
+                                             [ ("x", FieldType 0 (TType (Module.Canonical (Name "elm" "core") "Basics") "Float" []))
+                                             , ("y", FieldType 0 (TType (Module.Canonical (Name "elm" "core") "Basics") "Float" []))
+                                             ])
+                                          Nothing)))))
+                           [(a (VarLocal "vec2"))])))
+                  (a (Call
+                        (a (VarForeign
+                              (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire3")
+                              "encodeSequenceWithoutLength"
+                              (Forall
+                                 (Map.fromList [])
+                                 (TLambda
+                                    (TType
+                                       (Module.Canonical (Name "elm" "core") "List")
+                                       "List"
+                                       [ TAlias
+                                           (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire3")
+                                           "Encoder"
+                                           []
+                                           (Filled (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Encode") "Encoder" []))
+                                       ])
+                                    (TAlias
+                                       (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire3")
+                                       "Encoder"
+                                       []
+                                       (Filled (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Encode") "Encoder" [])))))))
+                        [ (a (List
+                                [ (a (Call
+                                        (a (VarForeign
+                                              (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire3")
+                                              "encodeFloat"
+                                              (Forall
+                                                 (Map.fromList [])
+                                                 (TLambda
+                                                    (TType (Module.Canonical (Name "elm" "core") "Basics") "Float" [])
+                                                    (TAlias
+                                                       (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire3")
+                                                       "Encoder"
+                                                       []
+                                                       (Filled (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Encode") "Encoder" [])))))))
+                                        [(a (Access (a (VarLocal "v")) (a ("x"))))]))
+                                , (a (Call
+                                        (a (VarForeign
+                                              (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire3")
+                                              "encodeFloat"
+                                              (Forall
+                                                 (Map.fromList [])
+                                                 (TLambda
+                                                    (TType (Module.Canonical (Name "elm" "core") "Basics") "Float" [])
+                                                    (TAlias
+                                                       (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire3")
+                                                       "Encoder"
+                                                       []
+                                                       (Filled (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Encode") "Encoder" [])))))))
+                                        [(a (Access (a (VarLocal "v")) (a ("y"))))]))
+                                ]))
+                        ]))))))
+
 
     -- Frontend only JS reference types
     TType (Module.Canonical (Name "elm" "file") "File") "File" _ ->
@@ -306,6 +381,7 @@ deepEncoderForType depth ifaces cname tipe =
       call (encoderForType depth ifaces cname tipe) [ deepEncoderForType depth ifaces cname key, deepEncoderForType depth ifaces cname val ]
     TType (Module.Canonical (Name "elm" "bytes") "Bytes") "Bytes" _ -> encoderForType depth ifaces cname tipe
     TType (Module.Canonical (Name "elm" "time") "Time") "Posix" _ -> encoderForType depth ifaces cname tipe
+    TType (Module.Canonical (Name "elm-explorations" "linear-algebra") "Math.Vector2") "Vec2" _ -> encoderForType depth ifaces cname tipe
 
     -- Frontend only JS reference types
     TType (Module.Canonical (Name "elm" "file") "File") "File" _ -> encoderForType depth ifaces cname tipe
@@ -401,6 +477,7 @@ encodeTypeValue depth ifaces cname tipe value =
       call (encoderForType depth ifaces cname tipe) [ deepEncoderForType depth ifaces cname key, deepEncoderForType depth ifaces cname val, value ]
     TType (Module.Canonical (Name "elm" "bytes") "Bytes") "Bytes" _ -> call (encoderForType depth ifaces cname tipe) [ value ]
     TType (Module.Canonical (Name "elm" "time") "Time") "Posix" _ -> call (encoderForType depth ifaces cname tipe) [ value ]
+    (TType (Module.Canonical (Name "elm-explorations" "linear-algebra") "Math.Vector2") "Vec2" [])  -> call (encoderForType depth ifaces cname tipe) [ value ]
 
     -- Frontend only JS reference types
     TType (Module.Canonical (Name "elm" "file") "File") "File" _ -> call (encoderForType depth ifaces cname tipe) [ value ]

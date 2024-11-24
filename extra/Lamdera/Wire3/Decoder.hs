@@ -347,6 +347,8 @@ decoderForType ifaces cname tipe =
     TType (Module.Canonical (Name "elm" "time") "Time") "Posix" params ->
       decodeTime
 
+    TType (Module.Canonical (Name "elm-explorations" "linear-algebra") "Math.Vector2") "Vec2" params ->
+      decodeVec2
 
     -- Frontend only JS reference types
     TType (Module.Canonical (Name "elm" "file") "File") "File" params -> callDecoder "decodeRef" tipe
