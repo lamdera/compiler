@@ -235,8 +235,7 @@ expected_w3_encode_LinearAlgebraRecord =
                     Math.Matrix4.toRecord w3_rec_var0.sMat4
               in
               Lamdera.Wire3.encodeSequenceWithoutLength
-                [ Bytes.Encode.unsignedInt8 0
-                , Lamdera.Wire3.encodeFloat m.m11
+                [ Lamdera.Wire3.encodeFloat m.m11
                 , Lamdera.Wire3.encodeFloat m.m21
                 , Lamdera.Wire3.encodeFloat m.m31
                 , Lamdera.Wire3.encodeFloat m.m41
@@ -258,8 +257,7 @@ expected_w3_encode_LinearAlgebraRecord =
                     Math.Vector4.toRecord w3_rec_var0.sVec4
               in
               Lamdera.Wire3.encodeSequenceWithoutLength
-                [ Bytes.Encode.unsignedInt8 1
-                , Lamdera.Wire3.encodeFloat v.x
+                [ Lamdera.Wire3.encodeFloat v.x
                 , Lamdera.Wire3.encodeFloat v.y
                 , Lamdera.Wire3.encodeFloat v.z
                 , Lamdera.Wire3.encodeFloat v.w
@@ -269,8 +267,7 @@ expected_w3_encode_LinearAlgebraRecord =
                     Math.Vector3.toRecord w3_rec_var0.sVec3
               in
               Lamdera.Wire3.encodeSequenceWithoutLength
-                [ Bytes.Encode.unsignedInt8 2
-                , Lamdera.Wire3.encodeFloat v.x
+                [ Lamdera.Wire3.encodeFloat v.x
                 , Lamdera.Wire3.encodeFloat v.y
                 , Lamdera.Wire3.encodeFloat v.z
                 ]
@@ -279,8 +276,7 @@ expected_w3_encode_LinearAlgebraRecord =
                     Math.Vector2.toRecord w3_rec_var0.sVec2
               in
               Lamdera.Wire3.encodeSequenceWithoutLength
-                [ Bytes.Encode.unsignedInt8 3
-                , Lamdera.Wire3.encodeFloat v.x
+                [ Lamdera.Wire3.encodeFloat v.x
                 , Lamdera.Wire3.encodeFloat v.y
                 ]
             ]
@@ -288,7 +284,7 @@ expected_w3_encode_LinearAlgebraRecord =
 
 expected_w3_decode_LinearAlgebraRecord =
     Lamdera.Wire3.succeedDecode
-        (\sMat4 sVec4 sVec3 sVec2 -> { sMat4 = sMat4, sVec4 = sVec4, sVec3 = sVec3, sVec2 = sVec2 })
+        (\sMat40 sVec20 sVec30 sVec40 -> { sMat4 = sMat40, sVec2 = sVec20, sVec3 = sVec30, sVec4 = sVec40 })
         |> Lamdera.Wire3.andMapDecode
             (Lamdera.Wire3.succeedDecode
                 (\m11 m21 m31 m41 m12 m22 m32 m42 m13 m23 m33 m43 m14 m24 m34 m44 ->
@@ -312,9 +308,7 @@ expected_w3_decode_LinearAlgebraRecord =
                 |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeFloat
             )
         |> Lamdera.Wire3.andMapDecode
-            (Lamdera.Wire3.succeedDecode Math.Vector4.vec4
-                |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeFloat
-                |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeFloat
+            (Lamdera.Wire3.succeedDecode Math.Vector2.vec2
                 |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeFloat
                 |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeFloat
             )
@@ -325,7 +319,9 @@ expected_w3_decode_LinearAlgebraRecord =
                 |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeFloat
             )
         |> Lamdera.Wire3.andMapDecode
-            (Lamdera.Wire3.succeedDecode Math.Vector2.vec2
+            (Lamdera.Wire3.succeedDecode Math.Vector4.vec4
+                |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeFloat
+                |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeFloat
                 |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeFloat
                 |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeFloat
             )
