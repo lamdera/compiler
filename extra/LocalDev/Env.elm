@@ -1,5 +1,10 @@
 module Env exposing (..)
 
 
-empty =
-    ""
+mode =
+    Development
+
+
+type Mode
+    = Development
+    | Production
