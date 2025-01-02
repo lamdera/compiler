@@ -9,43 +9,31 @@ The integration philosophy is:
 - Inject as small a surface area into actual compiler code as feasibly possible
   - You'll see this done with certain tricks using `&` and `$` to, wherever possible, only add additional lines to source, without modifying any existing lines
   - This means merge conflicts are minimized when trying to stay up to date with upstream Elm Compiler
-  - Sometimes entire functions are added to the bottom of files, usually when the current file defines a bunch of types that are needed and it's messier to have it external
+  - Sometimes entire functions are added to the bottom of core files, this is usually when the current file defines a bunch of types that are needed in the extension code, and it's problematic/messier to externalise that code and cause cyclic dependencies
 
 The idea is that searching the project for `import.*Lamdera` and `@LAMDERA` will reveal every single `/builder` and `/compiler` core file that has some Lamdera related modification.
 
-Alternatively the [diff of `master` and `lamdera` branches](https://github.com/lamdera/compiler/compare/master...lamdera) gives a nice overview of all modifications in the "Files Changed" view.
+Alternatively the [diffing `elm/compiler` and `lamdera/compiler`](https://github.com/lamdera/compiler/compare/master...lamdera) gives a nice overview of all core file modifications in the "Files Changed" view.
 
 Otherwise:
 
-  - Use Elm compiler source liberally inside `/extra`
+  - Reference/use Elm compiler source liberally inside `/extra`
   - We don't want to reinvent the wheel on core compiler concepts, and can lean heavily on Haskell's type system to tell us when there are problems due to core type changes upstream in future
-  - Future developers might find things might seem obviously duplicated - if there's no comment and blame history is not helpful, it was likely accidental (didn't know compiler already had that functionality/code) or transient (i.e. features carried up from 0.19 over the years)
+  - Future developers might find things that might seem obviously duplicated - if there's no comment and blame history is not helpful, it was likely accidental (didn't know compiler already had that functionality/code) or transient (i.e. features carried up from 0.19 over the years)
 
 If in doubt, please ask!
 
 ### Setup
 
-```
-brew install gcc pkg-config      # some headers like 'linux/random.h' are implicitly required to build Haskell libs
-brew install icdiff   # used for nice side-by-side diffs in test output
-git submodule init && git submodule update # Get and update Git submodules for this project
-stack install hindent # used for debugging haskell values
-```
+:warning: We'd like to move to `devbox` to make this a one-shot env setup in future; contributions welcome.
 
-
-### Tests
-
-The `test` folder contains tests for aspects of the additional functionality. Most are at the acceptance test level, these have been the most useful so far.
-
-The test framework is a very lightweight vendored copy of `EasyTest.hs`, defined entirely in that one file. There are some `test/Test/Helpers.hs` too.
-
-The easiest way to run is from the project root:
+In the meantime, here's our setup on MacOS:
 
 ```
-$ TOKEN="..." LDEBUG=1 LOVR=~/lamdera/overrides stack ghci
-λ: Test.all
-...
-✅  38 tests passed, no failures!
+brew install gcc pkg-config                # some headers like 'linux/random.h' are implicitly required to build Haskell libs
+brew install icdiff                        # for nice side-by-side diffs in test output
+git submodule init && git submodule update # setup Git submodule deps for this project
+stack install hindent                      # used for debugging haskell values
 ```
 
 ### Developing
@@ -82,11 +70,36 @@ By default it's `target = Test.all`, so `:rr` will recompile and run all tests.
 
 Press up arrow to get history of prior commands!
 
-#### Tests
+#### Debugging in VSCode
 
-`test/Test.hs` is the entrypoint for all tests. Use `Test.all` in ghci to run everything (it is also the `:rr` target by default).
+https://marketplace.visualstudio.com/items?itemName=phoityne.phoityne-vscode
 
-Using the test framework in `test/EasyTest`, a vendored version of [easytest](https://github.com/joelburget/easytest) back when it had fun emojis! It's only a single file and easy to read.
+```
+stack install haskell-dap ghci-dap haskell-debug-adapter
+```
+
+
+
+### Tests
+
+:warning: The compiler tests need work, a few of them are not isolated (i.e they reach out into the world and expect things to exist).
+
+The `test` folder contains tests for aspects of the additional functionality. Most are at the acceptance test level, these have been the most useful so far.
+
+The test framework is a vendored copy of the very lightweight [`easytest`](https://github.com/joelburget/easytest) lib, defined entirely in that one file. There are some `test/Test/Helpers.hs` too.
+
+The easiest way to run is from the project root:
+
+```
+$ TOKEN="..." LDEBUG=1 LOVR=~/lamdera/overrides stack ghci
+λ: Test.all
+...
+✅  38 tests passed, no failures!
+```
+
+`test/Test.hs` is the entrypoint for all tests. Use `Test.all` in ghci to run everything (it is also the `:rr` target by default, see notes above).
+
+Using the test framework in `test/EasyTest`, a vendored version of  back when it had fun emojis! It's only a single file and easy to read.
 
 
 #### Testing functions directly

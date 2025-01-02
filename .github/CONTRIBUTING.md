@@ -1,43 +1,25 @@
-# Contributing to Elm
+# Contributing to the Lamdera compiler
 
-Thanks helping with the development of Elm! This document describes the basic
-standards for opening pull requests and making the review process as smooth as
-possible.
+Thanks contributing to the Lamdera compiler!
 
-## Licensing
-
-You need to sign the [contributor agreement](ContributorAgreement.pdf)
-and send it to <info@elm-lang.org> before opening your pull request.
+The Lamdera **compiler** is a free, open-source and open-contribution [un-fork of the Elm compiler](https://dashboard.lamdera.app/releases/open-source-compiler).
 
 ## Style Guide
 
-  * Haskell &mdash; conform to [these guidelines][haskell]
-  * JavaScript &mdash; use [Google's JS style guide][js]
-
-[haskell]: https://gist.github.com/evancz/0a1f3717c92fe71702be
-[js]: https://google.github.io/styleguide/javascriptguide.xml
+We don't have a particular style enforcement tool in place, but generally
+we prefer Elm-like layout that's indented with two spaces, with no trailing
+whitespace.
 
 ## Branches
 
-  * [The master branch][master] is the home of the next release of the compiler
+  * [The lamdera-next branch][lamdera-next] is the home of the next release of the compiler
     so new features and improvements get merged there. Most pull requests
-    should target this branch!
+    should target this branch, it is the repo default branch.
 
-  * [The stable branch][stable] is for tagging releases and critical bug fixes.
-    This branch is handy for folks who want to build the most recent public
-    release from source.
+[lamdera-next]: https://github.com/lamdera/compiler
 
-[master]: http://github.com/elm-lang/elm/tree/master
-[stable]: http://github.com/elm-lang/elm/tree/stable
+## Development guide
 
-If you are working on a fairly large feature, we will probably want to merge it
-in as its own branch and do some testing before bringing it into the master
-branch. This way we can keep releases of the master branch independent of new
-features.
+Check out the [extra/readme.md](extra/readme.md) for more information on how to get started with development.
 
-Note that the master branch of the compiler should always be in sync with the
-master branch of the [website][], and the stable branch of the compiler should
-always be in sync with the stable branch of the [website][]. Make sure that
-your changes maintain this compatibility.
-
-[website]: https://github.com/elm-lang/elm-lang.org
+If you're planning on embarking on a feature, come chat with us on the [Lamdera Discord](https://dashboard.lamdera.app/docs/discuss) as it's possible we're already working on it, or have some thoughts that will be helpful to get the best result and ensure it can be merged quickly.

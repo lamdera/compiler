@@ -4,7 +4,7 @@ Elm is [a delightful language for reliable webapps](https://elm-lang.org/).
 
 The Lamdera compiler extends the official Elm compiler with tooling that works for any regular Elm frontend project, as well as specific features for Elm projects on [Lamdera: A delightful platform for full-stack Elm web apps](https://lamdera.com).
 
-The Lamdera **compiler** is free, open-source and open-contribution [un-fork of the Elm compiler](https://dashboard.lamdera.app/releases/open-source-compiler).
+The Lamdera **compiler** is a free, open-source and open-contribution [un-fork of the Elm compiler](https://dashboard.lamdera.app/releases/open-source-compiler).
 
 The Lamdera **platform** is a paid service with a free tier to try, and is how we keep our work funded and sustainable.
 
