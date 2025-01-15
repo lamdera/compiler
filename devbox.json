@@ -1,0 +1,28 @@
+{
+  "$schema": "https://raw.githubusercontent.com/jetify-com/devbox/0.13.7/.schema/devbox.schema.json",
+  "packages": {
+    "gcc":           "14.2",
+    "pkg-config":    "0.29.2",
+    "icdiff":        "latest",
+    "stack":         "latest",
+    "cabal-install": "latest",
+    "zlib": {
+      "version": "latest",
+      "outputs": ["out", "dev"]
+    },
+    "hpack": "latest"
+  },
+  "env": {
+    "LD_LIBRARY_PATH": "$DEVBOX_PACKAGES_DIR/lib:$LD_LIBRARY_PATH"
+  },
+  "shell": {
+    "init_hook": [
+      "echo 'Welcome to devbox!' > /dev/null"
+    ],
+    "scripts": {
+      "test": [
+        "echo \"Error: no test specified\" && exit 1"
+      ]
+    }
+  }
+}
