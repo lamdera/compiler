@@ -1,8 +1,8 @@
 {
   "$schema": "https://raw.githubusercontent.com/jetify-com/devbox/0.13.7/.schema/devbox.schema.json",
   "packages": {
-    "gcc":           "14.2",
-    "pkg-config":    "0.29.2",
+    "gcc":           "latest",
+    "pkg-config":    "latest",
     "icdiff":        "latest",
     "stack":         "latest",
     "cabal-install": "latest",
