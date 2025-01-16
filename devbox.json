@@ -1,0 +1,19 @@
+{
+  "$schema": "https://raw.githubusercontent.com/jetify-com/devbox/0.13.7/.schema/devbox.schema.json",
+  "packages": {
+    "gcc":           "latest",
+    "pkg-config":    "latest",
+    "icdiff":        "latest",
+    "stack":         "latest",
+    "cabal-install": "latest",
+    "zlib": {
+      "version": "latest",
+      "outputs": ["out", "dev"]
+    },
+    "hpack": "latest"
+  },
+  "env": {
+    "CC": "clang",
+    "LD_LIBRARY_PATH": "$DEVBOX_PACKAGES_DIR/lib:$LD_LIBRARY_PATH"
+  }
+}
