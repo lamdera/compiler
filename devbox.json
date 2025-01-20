@@ -1,19 +1,32 @@
 {
   "$schema": "https://raw.githubusercontent.com/jetify-com/devbox/0.13.7/.schema/devbox.schema.json",
   "packages": {
-    "gcc":           "latest",
-    "pkg-config":    "latest",
-    "icdiff":        "latest",
-    "stack":         "latest",
-    "cabal-install": "latest",
+    "pkg-config":              "latest",
+    "icdiff":                  "latest",
+    "cabal-install":           "latest",
+
     "zlib": {
       "version": "latest",
       "outputs": ["out", "dev"]
     },
-    "hpack": "latest"
+
+    "path:./nix/devbox#stack": "",
+    "path:./nix/devbox#ghc":   "",
+    "path:./nix/devbox#cc":    "",
+    "path:./nix/devbox#hls":    "",
+
+    "path:./nix/devbox#apple_sdk_CoreServices": {
+      "platforms": ["x86_64-darwin", "aarch64-darwin"]
+    },
+    "path:./nix/devbox#apple_sdk_Cocoa": {
+      "platforms": ["x86_64-darwin", "aarch64-darwin"]
+    },
+    "path:./nix/devbox#apple_sdk_CoreFoundation": {
+      "platforms": ["x86_64-darwin", "aarch64-darwin"]
+    }
   },
   "env": {
-    "CC": "clang",
+    "PATH":            "$DEVBOX_PACKAGES_DIR/bin:$PATH:/usr/bin",
     "LD_LIBRARY_PATH": "$DEVBOX_PACKAGES_DIR/lib:$LD_LIBRARY_PATH"
   }
 }
