@@ -91,10 +91,10 @@ command =
     example =
       stack
         [ reflow "Examples:"
-        , P.indent 2 $ P.green "lamdera format Main.elm                     # formats Main.elm"
-        , P.indent 2 $ P.green "lamdera format Main.elm --output Main2.elm  # formats Main.elm as Main2.elm"
-        , P.indent 2 $ P.green "lamdera format src/                         # format all *.elm files in the src directory"
-        , ""
+        , P.vcat [ P.indent 2 $ P.green "lamdera format Main.elm                     # formats Main.elm"
+                 , P.indent 2 $ P.green "lamdera format Main.elm --output Main2.elm  # formats Main.elm as Main2.elm"
+                 , P.indent 2 $ P.green "lamdera format src/                         # format all *.elm files in the src directory"
+                 ]
         , reflow "Full guide to using elm-format at <https://github.com/avh4/elm-format>"
         ]
 
@@ -138,7 +138,31 @@ run inputs flags =
           TIO.putStrLn "Please specify at least one .elm file to format."
           Exit.exitFailure
       paths ->
-        mapM_ (formatFile flags) paths
+        do
+          elmFilePaths <- concat <$> mapM expandPath paths
+          if null elmFilePaths
+            then return ()
+            else do
+              TIO.putStrLn "This will overwrite the following files to use Elm's preferred style:\n"
+              mapM_ (\f -> TIO.putStrLn $ "    " <> T.pack f) elmFilePaths
+              TIO.putStrLn "\nThis cannot be undone! Make sure to back up these files before proceeding.\n"
+              if _yes flags
+                then formatFiles flags elmFilePaths
+                else do
+                  TIO.putStrLn "Are you sure you want to overwrite these files with formatted versions? (y/n) "
+                  answer <- getLine
+                  case answer of
+                    "Y" -> formatFiles flags elmFilePaths
+                    "y" -> formatFiles flags elmFilePaths
+                    "" -> formatFiles flags elmFilePaths
+                    _ -> return ()
+
+expandPath :: FilePath -> IO [FilePath]
+expandPath path = do
+  isDir <- Dir.doesDirectoryExist path
+  if isDir
+    then findElmFiles path
+    else return [path | FP.isExtensionOf "elm" path]
 
 formatText :: Format -> T.Text -> IO ()
 formatText flags input =
@@ -155,8 +179,6 @@ formatFile flags path = do
   isDir <- Dir.doesDirectoryExist path
   if isDir
     then do
-      contents <- Dir.listDirectory path
-      let elmFiles = filter (FP.isExtensionOf "elm") contents
       elmFilePaths <- findElmFiles path
       if null elmFilePaths
         then return ()
@@ -210,7 +232,9 @@ formatSingleFile flags path = do
           Nothing -> TIO.writeFile path formatted
     Left err -> do
       TIO.putStrLn err
-      Exit.exitFailure
+      if _validate flags
+        then Exit.exitFailure
+        else return ()
 
 stack :: [P.Doc] -> P.Doc
 stack docs =

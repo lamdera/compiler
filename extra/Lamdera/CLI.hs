@@ -198,27 +198,7 @@ eval =
 
 
 format :: Terminal.Command
-format =
-  let
-    summary =
-      "Format Elm source files."
-
-    details =
-      "Usage: lamdera format [INPUT] [--output FILE] [--yes] [--validate] [--stdin]\n\n" ++
-      "  Format Elm source files."
-
-    example =
-      stack
-        [ reflow "Examples:"
-        , P.vcat [ P.indent 2 $ P.green "lamdera format Main.el                     # formats Main.elm"
-                 , P.indent 2 $ P.green "lamdera format Main.elm --output Main2.elm  # formats Main.elm as Main2.elm"
-                 , P.indent 2 $ P.green "lamdera format src/                         # format all *.elm files in the src directory"
-                 ]
-        , ""
-        , reflow "Full guide to using elm-format at <https://github.com/avh4/elm-format>"
-        ]
-  in
-  Lamdera.CLI.Format.command
+format = Lamdera.CLI.Format.command
 
 
 -- HELPERS
