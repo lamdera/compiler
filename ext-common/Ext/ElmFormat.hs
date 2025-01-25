@@ -9,6 +9,7 @@ module Ext.ElmFormat where
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text as Text
+import System.IO (FilePath)
 
 import System.IO.Unsafe (unsafePerformIO)
 import qualified System.Process
@@ -20,30 +21,34 @@ import qualified ElmFormat.Cli
 -- import qualified ElmFormat.Render.Text as Render
 import ElmVersion
 import ElmFormat.Messages
+import Reporting.Annotation (Located(..), Region(..), Position(..))
+import CommandLine.InfoFormatter (ToConsole(..))
 
 
-formatWithEmbedded :: Text -> Either ElmFormat.Messages.InfoMessage Text
-formatWithEmbedded inputText = do
-  ElmFormat.Cli.format ElmVersion.Elm_0_19 ("stdin:nofilepath", inputText)
+formatWithEmbedded :: FilePath -> Text -> Either ElmFormat.Messages.InfoMessage Text
+formatWithEmbedded filePath inputText = do
+  ElmFormat.Cli.format ElmVersion.Elm_0_19 (filePath, inputText)
 
 
-format :: Text -> (Either Text Text)
-format text = do
-  case formatWithEmbedded text of
-    Left err ->
-      Left $ Lamdera.show_ err
-    Right formatted ->
-      Right formatted
+format :: FilePath -> Text -> (Either Text Text)
+format filePath text = do
+  case formatWithEmbedded filePath text of
+    Left err -> Left $ toConsole err
+    Right formatted -> Right formatted
 
 
 formatOrPassthrough :: Text -> Text
 formatOrPassthrough text = do
-  case format text of
+  case format "stdin" text of
     Right formatted -> formatted
-    Left err -> do
-      -- let !_ = Lamdera.debug $ "🔥💅 warning: " <> show err
-      text
+    Left _ -> text
 
+
+formatOrPassthroughFile :: FilePath -> Text -> Text
+formatOrPassthroughFile filePath text = do
+  case format filePath text of
+    Right formatted -> formatted
+    Left _ -> text
 
 
 -- Old versions that rely on local elm-format binary

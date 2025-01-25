@@ -142,7 +142,7 @@ run inputs flags =
 
 formatText :: Format -> T.Text -> IO ()
 formatText flags input =
-  case ElmFormat.format input of
+  case ElmFormat.format "stdin" input of
     Right formatted ->
       TIO.putStr formatted
     Left err ->
@@ -199,26 +199,18 @@ formatSingleFile :: Format -> FilePath -> IO ()
 formatSingleFile flags path = do
   TIO.putStrLn $ "Processing file " <> T.pack path
   input <- TIO.readFile path
-  case ElmFormat.format input of
-    Right formatted ->
-      if _validate flags
-        then
-          if input == formatted
-            then return ()
-            else do
-              TIO.putStrLn $ "File " <> T.pack path <> " would be reformatted"
-              Exit.exitFailure
+  case ElmFormat.format path input of
+    Right formatted -> 
+      if _validate flags && formatted /= input
+        then do
+          TIO.putStrLn $ "File " <> T.pack path <> " would be reformatted"
+          Exit.exitFailure
         else case _output flags of
-          Just outputPath ->
-            TIO.writeFile outputPath formatted
-          Nothing ->
-            TIO.writeFile path formatted
-    Left err ->
-      do
-        TIO.putStrLn $ "Unable to parse file " <> T.pack path <> ": " <> err <> " To see a detailed explanation, run elm make on the file."
-        if _validate flags
-          then Exit.exitFailure
-          else return ()
+          Just outputPath -> TIO.writeFile outputPath formatted
+          Nothing -> TIO.writeFile path formatted
+    Left err -> do
+      TIO.putStrLn err
+      Exit.exitFailure
 
 stack :: [P.Doc] -> P.Doc
 stack docs =
