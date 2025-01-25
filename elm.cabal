@@ -237,6 +237,7 @@ Executable lamdera
         -- CLI Experimental
         Lamdera.CLI.Annotate
         Lamdera.CLI.Interpreter
+        Lamdera.CLI.Format
 
         Lamdera.AppConfig
         Lamdera.Checks

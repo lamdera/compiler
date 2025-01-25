@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Lamdera.CLI (live, login, check, deploy, reset, update, annotate, eval) where
+module Lamdera.CLI (live, login, check, deploy, reset, update, annotate, eval, format) where
 
 import Text.Read (readMaybe)
 import qualified Text.PrettyPrint.ANSI.Leijen as P
@@ -16,6 +16,7 @@ import qualified Lamdera.CLI.Reset
 import qualified Lamdera.CLI.Update
 import qualified Lamdera.CLI.Annotate
 import qualified Lamdera.CLI.Interpreter
+import qualified Lamdera.CLI.Format
 
 
 live :: Terminal.Command
@@ -191,6 +192,33 @@ eval =
         ]
   in
   Terminal.Command "eval" (Common summary) details example args noFlags Lamdera.CLI.Interpreter.run
+
+
+-- FORMAT
+
+
+format :: Terminal.Command
+format =
+  let
+    summary =
+      "Format Elm source files."
+
+    details =
+      "Usage: lamdera format [INPUT] [--output FILE] [--yes] [--validate] [--stdin]\n\n" ++
+      "  Format Elm source files."
+
+    example =
+      stack
+        [ reflow "Examples:"
+        , P.vcat [ P.indent 2 $ P.green "lamdera format Main.el                     # formats Main.elm"
+                 , P.indent 2 $ P.green "lamdera format Main.elm --output Main2.elm  # formats Main.elm as Main2.elm"
+                 , P.indent 2 $ P.green "lamdera format src/                         # format all *.elm files in the src directory"
+                 ]
+        , ""
+        , reflow "Full guide to using elm-format at <https://github.com/avh4/elm-format>"
+        ]
+  in
+  Lamdera.CLI.Format.command
 
 
 -- HELPERS
