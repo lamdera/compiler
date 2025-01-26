@@ -484,6 +484,7 @@ injections outputType mode =
 
     $lamderaContainersExtensions_
 
+    var _VirtualDom_equalEvents; // For lydell’s vdom.
     function _Platform_initialize(flagDecoder, args, init, update, subscriptions, stepperBuilder)
       {
         var result = A2(_Json_run, flagDecoder, _Json_wrap(args ? args['flags'] : undefined));
@@ -542,10 +543,16 @@ injections outputType mode =
           };
 
           _VirtualDom_applyPatches = function(rootDomNode, oldVirtualNode, patches, eventNode) {
-            if (patches.length !== 0) {
-              _VirtualDom_addDomNodes(rootDomNode, oldVirtualNode, patches, eventNode);
+            if (typeof _VirtualDom_wrap === 'function') { // For lydell’s vdom.
+              _VirtualDom_renderCount++;
+              var diffReturn = _VirtualDom_diffHelp(oldVirtualNode, patches, eventNode);
+              _VirtualDom_lastDomNode = diffReturn.w;
+            } else {
+              if (patches.length !== 0) {
+                _VirtualDom_addDomNodes(rootDomNode, oldVirtualNode, patches, eventNode);
+              }
+              _VirtualDom_lastDomNode = _VirtualDom_applyPatchesHelp(rootDomNode, patches);
             }
-            _VirtualDom_lastDomNode = _VirtualDom_applyPatchesHelp(rootDomNode, patches);
             // Restore the event listeners on the <a> elements:
             var aElements = _VirtualDom_lastDomNode.getElementsByTagName('a');
             for (var i = 0; i < aElements.length; i++) {
@@ -703,6 +710,10 @@ injections outputType mode =
     function _VirtualDom_diff(x, y)
     {
       _VirtualDom_lastVNode = y;
+      if (typeof _VirtualDom_wrap === 'function') // For lydell’s vdom.
+      {
+        return y;
+      }
       var patches = [];
       _VirtualDom_diffHelp(x, y, patches, 0);
       return patches;
@@ -712,6 +723,13 @@ injections outputType mode =
     var _VirtualDom_lastDomNode = null;
     function _VirtualDom_applyPatches(rootDomNode, oldVirtualNode, patches, eventNode)
     {
+      if (typeof _VirtualDom_wrap === 'function') // For lydell’s vdom.
+      {
+        _VirtualDom_renderCount++;
+        var diffReturn = _VirtualDom_diffHelp(oldVirtualNode, patches, eventNode);
+        return (_VirtualDom_lastDomNode = diffReturn.w);
+      }
+
       if (patches.length === 0)
       {
         return (_VirtualDom_lastDomNode = rootDomNode);
