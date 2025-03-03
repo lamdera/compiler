@@ -602,6 +602,9 @@ cmp idealOp backupOp backupInt left right =
 isLiteral :: JS.Expr -> Bool
 isLiteral expr =
   case expr of
+    JS.Char _ ->
+      True
+
     JS.String _ ->
       True
 
