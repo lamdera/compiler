@@ -599,6 +599,7 @@ buildProductionJsFiles root inProduction_ versionInfo = do
         , _docs = Nothing
         , _noWire = False
         , _optimizeLegible = True
+        , _optimizeChars = True
         }
 
     Make.run ["src" </> "LFR.elm"] $
@@ -610,6 +611,7 @@ buildProductionJsFiles root inProduction_ versionInfo = do
         , _docs = Nothing
         , _noWire = False
         , _optimizeLegible = False
+        , _optimizeChars = True
         }
 
     Lamdera.AppConfig.writeUsage
@@ -713,6 +715,7 @@ migrationCheck root nextVersion changedTypes = do
           , _docs = Nothing
           , _noWire = False
           , _optimizeLegible = False
+          , _optimizeChars = False
           }
 
   -- @TODO this is because the migrationCheck does weird terminal stuff that mangles the display... how to fix this?

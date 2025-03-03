@@ -51,22 +51,22 @@ type Task a =
   Task.Task Exit.Generate a
 
 
-debug :: FilePath -> Details.Details -> Build.Artifacts -> Task B.Builder
-debug root details (Build.Artifacts pkg ifaces roots modules) =
+debug :: Bool -> FilePath -> Details.Details -> Build.Artifacts -> Task B.Builder
+debug optimizeChars root details (Build.Artifacts pkg ifaces roots modules) =
   do  loading <- loadObjects root details modules
       types   <- loadTypes root ifaces modules
       objects <- finalizeObjects loading
-      let mode = Mode.Dev (Just types)
+      let mode = Mode.Dev (Just types) optimizeChars
       let graph_ = objectsToGlobalGraph objects
       graph <- Task.io $ Lamdera.AppConfig.injectConfig graph_
       let mains = gatherMains pkg objects roots
       return $ JS.generate mode graph mains
 
 
-dev :: FilePath -> Details.Details -> Build.Artifacts -> Task B.Builder
-dev root details (Build.Artifacts pkg _ roots modules) =
+dev :: Bool -> FilePath -> Details.Details -> Build.Artifacts -> Task B.Builder
+dev optimizeChars root details (Build.Artifacts pkg _ roots modules) =
   do  objects <- finalizeObjects =<< loadObjects root details modules
-      let mode = Mode.Dev Nothing
+      let mode = Mode.Dev Nothing optimizeChars
       let graph_ = objectsToGlobalGraph objects
       graph <- Task.io $ Lamdera.AppConfig.injectConfig graph_
       let mains = gatherMains pkg objects roots

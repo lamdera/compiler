@@ -36,6 +36,7 @@ suite =
                 , _docs = Nothing
                 , _noWire = True
                 , _optimizeLegible = False
+                , _optimizeChars = False
                 }
 
         fileContents <- readUtf8Text $ elmStuff ++ "/tmp.js"

@@ -48,6 +48,7 @@ data Flags =
     , _docs :: Maybe FilePath
     , _noWire :: Bool -- @LAMDERA
     , _optimizeLegible :: Bool -- @LAMDERA
+    , _optimizeChars :: Bool -- @LAMDERA
     }
 
 
@@ -69,7 +70,7 @@ type Task a = Task.Task Exit.Make a
 
 
 run :: [FilePath] -> Flags -> IO ()
-run paths flags@(Flags _ _ _ report _ noWire optimizeLegible) =
+run paths flags@(Flags _ _ _ report _ noWire optimizeLegible optimizeChars) =
   do  style <- getStyle report
       maybeRoot <- Stuff.findRoot
       Lamdera.onlyWhen noWire Lamdera.disableWire
@@ -81,10 +82,10 @@ run paths flags@(Flags _ _ _ report _ noWire optimizeLegible) =
 
 
 runHelp :: FilePath -> [FilePath] -> Reporting.Style -> Flags -> IO (Either Exit.Make ())
-runHelp root paths style (Flags debug optimize maybeOutput _ maybeDocs _ optimizeLegible) =
+runHelp root paths style (Flags debug optimize maybeOutput _ maybeDocs _ optimizeLegible optimizeChars) =
   BW.withScope $ \scope ->
   Stuff.withRootLock root $ Task.run $
-  do  desiredMode <- getMode debug (optimize || optimizeLegible)
+  do  desiredMode <- getMode debug (optimize || optimizeLegible) optimizeChars
       details <- Task.eio Exit.MakeBadDetails (Details.load style scope root)
       case paths of
         [] ->
@@ -138,12 +139,12 @@ getStyle report =
     Just Json -> return Reporting.json
 
 
-getMode :: Bool -> Bool -> Task DesiredMode
-getMode debug optimize =
+getMode :: Bool -> Bool -> Bool -> Task DesiredMode
+getMode debug optimize optimizeChars =
   case (debug, optimize) of
     (True , True ) -> Task.throw Exit.MakeCannotOptimizeAndDebug
-    (True , False) -> return Debug
-    (False, False) -> return Dev
+    (True , False) -> return (Debug optimizeChars)
+    (False, False) -> return (Dev optimizeChars)
     (False, True ) -> return Prod
 
 
@@ -261,16 +262,16 @@ generate style target builder names =
 -- TO BUILDER
 
 
-data DesiredMode = Debug | Dev | Prod
+data DesiredMode = Debug Bool | Dev Bool | Prod
 
 
 toBuilder :: FilePath -> Details.Details -> DesiredMode -> Build.Artifacts -> Task B.Builder
 toBuilder root details desiredMode artifacts =
   Task.mapError Exit.MakeBadGenerate $
     case desiredMode of
-      Debug -> Generate.debug root details artifacts
-      Dev   -> Generate.dev   root details artifacts
-      Prod  -> Generate.prod  root details artifacts
+      Debug optimizeChars -> Generate.debug optimizeChars root details artifacts
+      Dev   optimizeChars -> Generate.dev   optimizeChars root details artifacts
+      Prod                  -> Generate.prod                  root details artifacts
 
 
 
@@ -334,7 +335,7 @@ isDevNull name =
 
 -- Clone of run that uses attemptWithStyle_cleanup
 run_cleanup :: IO () -> [FilePath] -> Flags -> IO ()
-run_cleanup cleanup paths flags@(Flags _ _ _ report _ noWire optimizeLegible) =
+run_cleanup cleanup paths flags@(Flags _ _ _ report _ noWire optimizeLegible optimizeChars) =
   do  style <- getStyle report
       maybeRoot <- Stuff.findRoot
       Lamdera.onlyWhen noWire Lamdera.disableWire

@@ -790,7 +790,7 @@ See: https://github.com/supermario/elm-pkg-js
 elmPkgJs :: Mode.Mode -> B.Builder
 elmPkgJs mode =
   case mode of
-    Mode.Dev _ -> do
+    Mode.Dev _ _ -> do
       unsafePerformIO $ do
         root <- getProjectRoot "elmPkgJs"
         elmPkgJsSources <- safeListDirectory $ root </> "elm-pkg-js"
@@ -914,7 +914,7 @@ onlyIf cond t =
 isOptimizedMode :: Mode.Mode -> Bool
 isOptimizedMode mode =
     case mode of
-      Mode.Dev _ -> False
+      Mode.Dev _ _ -> False
       Mode.Prod _ -> True
 
 

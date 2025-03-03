@@ -26,14 +26,18 @@ import qualified Lamdera
 
 
 data Mode
-  = Dev (Maybe Extract.Types)
+  = Dev (Maybe Extract.Types) OptimizeChars
   | Prod ShortFieldNames
+
+
+type OptimizeChars =
+  Bool
 
 
 isDebug :: Mode -> Bool
 isDebug mode =
   case mode of
-    Dev mi -> Maybe.isJust mi
+    Dev mi _ -> Maybe.isJust mi
     Prod _ -> False
 
 

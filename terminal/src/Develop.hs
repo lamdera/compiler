@@ -311,7 +311,7 @@ compile path =
                 Lamdera.PostCompile.check details artifacts Exit.ReactorBadBuild
                 Lamdera.TypeHash.buildCheckHashes artifacts
 
-                javascript <- Task.mapError Exit.ReactorBadGenerate $ Generate.dev root details artifacts
+                javascript <- Task.mapError Exit.ReactorBadGenerate $ Generate.dev True root details artifacts
                 let (NE.List name _) = Build.getRootNames artifacts
                 return $ Html.sandwich root name javascript
 
