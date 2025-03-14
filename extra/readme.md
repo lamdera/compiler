@@ -13,7 +13,7 @@ The integration philosophy is:
 
 The idea is that searching the project for `import.*Lamdera` and `@LAMDERA` will reveal every single `/builder` and `/compiler` core file that has some Lamdera related modification.
 
-Alternatively the [diffing `elm/compiler` and `lamdera/compiler`](https://github.com/lamdera/compiler/compare/master...lamdera) gives a nice overview of all core file modifications in the "Files Changed" view.
+Alternatively the [diffing `elm/compiler` and `lamdera/compiler`](https://github.com/lamdera/compiler/compare/master...lamdera-next) gives a nice overview of all core file modifications in the "Files Changed" view.
 
 Otherwise:
 
