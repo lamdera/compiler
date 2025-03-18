@@ -13,6 +13,7 @@ import qualified Reporting.Doc as D
 
 import Lamdera
 import Lamdera.Progress
+import qualified Lamdera.CLI.Login
 import qualified Lamdera.Version
 
 
@@ -26,7 +27,7 @@ run () () = do
   let
     elmStuff = (root & withDefault "./") </> "elm-stuff"
     lamderaLegacy = (root & withDefault "./") </> "lamdera-stuff"
-    lamderaCliLogin = elmHome </> ".lamdera-cli"
+    lamderaCliLogin = elmHome </> Lamdera.CLI.Login.tokenFile
 
   progress "Here is the plan:\n"
 

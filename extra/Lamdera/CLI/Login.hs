@@ -3,35 +3,23 @@
 
 module Lamdera.CLI.Login where
 
-import Prelude hiding (init)
-
 import qualified Data.UUID as UUID
 import qualified Data.UUID.V4 as UUID
-import Control.Monad
-import Data.Maybe (fromMaybe)
 import System.Exit (exitFailure)
-import qualified System.IO as IO
+import System.FilePath ((</>))
 
--- HTTP
 import qualified Data.Text as T
-import qualified Data.ByteString.Builder as BS
-import qualified Network.HTTP.Types as Http
-import qualified Network.HTTP.Client as Client
-import qualified Reporting.Task as Task
 import qualified Json.Decode as D
 import qualified Json.Encode as E
 import qualified Json.String
-import qualified Reporting.Exit
 
 import qualified Stuff as PerUserCache
-import System.FilePath ((</>))
 import qualified Reporting.Doc as D
 
 import Lamdera
 import qualified Lamdera.Http
 import qualified Lamdera.Project
 import qualified Lamdera.Progress as Progress
-import StandaloneInstances
 
 
 run :: () -> () -> IO ()
@@ -43,21 +31,20 @@ run () () = do
 
   token <- do
     elmHome <- PerUserCache.getElmHome
-    existingToken <- readUtf8Text (elmHome </> ".lamdera-cli")
+    existingToken <- getToken
     newToken <- UUID.toText <$> UUID.nextRandom
     case existingToken of
       Just token -> do
-
         apiSession <- fetchApiSession appName token
 
         case apiSession of
           Right "success" -> do
-            writeUtf8 (elmHome </> ".lamdera-cli") token
+            writeToken token
             Progress.report $ D.fillSep ["───>", D.dullgreen "Logged in!"]
 
           Right _ -> do
             Progress.report $ D.fillSep ["───>", D.red "Unexpected response, starting again: ", D.fromChars $ show apiSession ]
-            remove (elmHome </> ".lamdera-cli")
+            removeToken
             checkApiLoop inProduction appName newToken
 
           Left err -> do
@@ -67,7 +54,7 @@ run () () = do
                 exitFailure
               else do
                 Progress.report $ D.fillSep ["───>", D.red "Existing token invalid, starting again"]
-                remove (elmHome </> ".lamdera-cli")
+                removeToken
                 checkApiLoop inProduction appName newToken
 
       Nothing -> do
@@ -109,7 +96,7 @@ checkApiLoop inProduction appName token =
 
           "success" -> do
             elmHome <- PerUserCache.getElmHome
-            writeUtf8 (elmHome </> ".lamdera-cli") token
+            writeToken token
             Progress.report $ D.fillSep ["───>", D.dullgreen "Logged in!"]
             pure True
 
@@ -123,15 +110,37 @@ checkApiLoop inProduction appName token =
         pure True
 
 
+tokenFile :: FilePath
+tokenFile = ".lamdera-cli"
+
+
+getToken :: IO (Maybe Text)
+getToken = do
+  elmHome <- PerUserCache.getElmHome
+  tokenM <- readUtf8Text (elmHome </> tokenFile)
+  pure $ fmap T.strip tokenM
+
+
+writeToken :: Text -> IO ()
+writeToken token = do
+  elmHome <- PerUserCache.getElmHome
+  writeUtf8 (elmHome </> tokenFile) token
+
+
+removeToken :: IO ()
+removeToken = do
+  elmHome <- PerUserCache.getElmHome
+  remove (elmHome </> tokenFile)
+
+
 validateCliToken :: IO Text
 validateCliToken = do
   appName <- Lamdera.Project.appNameOrThrow
   elmHome <- PerUserCache.getElmHome
-  existingToken <- readUtf8Text (elmHome </> ".lamdera-cli")
+  existingToken <- getToken
 
   case existingToken of
     Just token -> do
-
       apiSession <- fetchApiSession appName token
 
       case apiSession of
@@ -146,12 +155,12 @@ validateCliToken = do
 
             _ -> do
               Progress.report $ D.fillSep ["───>", D.red "Invalid CLI auth, please re-run `lamdera login`"]
-              remove (elmHome </> ".lamdera-cli")
+              removeToken
               exitFailure
 
         _ -> do
           Progress.report $ D.fillSep ["───>", D.red "Invalid CLI auth, please re-run `lamdera login`"]
-          remove (elmHome </> ".lamdera-cli")
+          removeToken
           exitFailure
 
 
@@ -159,7 +168,6 @@ validateCliToken = do
       debug_ $ "Found no token in " <> elmHome
       Progress.report $ D.fillSep ["───>", D.red "No CLI auth, please run `lamdera login`"]
       exitFailure
-
 
 
 fetchApiSession :: Text -> Text -> IO (Either Lamdera.Http.Error Text)
