@@ -53,4 +53,53 @@ suite =
 
         Nothing ->
           crash "JS output could not be read."
+    , scope "direct function calls (lamdera/compiler PR #41)" $ do
+      project <- io $ Lamdera.Relative.requireDir "test/direct-fn-calls"
+      let
+        elmHome = project ++ "/elm-home"
+        elmStuff = project ++ "/elm-stuff"
+
+      maybeJsOutput <- io $ do
+        rmdir elmHome
+        rmdir elmStuff
+
+        Test.Helpers.withElmHome elmHome $
+          Ext.Common.withProjectRoot project $
+            Make.run ["src/Main.elm"] $
+              Make.Flags
+                { _debug = False
+                , _optimize = True
+                , _output = Just (Make.JS "elm-stuff/tmp.js")
+                , _report = Nothing
+                , _docs = Nothing
+                , _noWire = True
+                , _optimizeLegible = False
+                }
+
+        fileContents <- readUtf8Text $ elmStuff ++ "/tmp.js"
+
+        rmdir elmHome
+        rmdir elmStuff
+
+        pure fileContents
+
+      case maybeJsOutput of
+        Just jsOutput ->
+          do
+            expectTextContains jsOutput "$fn2$ = function (x, y) {"
+            expectTextContains jsOutput "$fn3$ = function (x, y, z) {"
+            expectTextContains jsOutput "$Ctor2$ = function (a, b) {"
+            expectTextContains jsOutput "$Ctor3$ = function (a, b, c) {"
+            expectTextContains jsOutput "$N2$ = function (a, b) {"
+            expectTextContains jsOutput "x1 = $author$project$Main$fn1(0)"
+            expectTextContains jsOutput "x2 = $author$project$Main$fn2$(0, 0)"
+            expectTextContains jsOutput "x3 = $author$project$Main$fn3$(0, 0, 0)"
+            expectTextContains jsOutput "c1 = $author$project$Main$Ctor1("
+            expectTextContains jsOutput "c2 = $author$project$Main$Ctor2$("
+            expectTextContains jsOutput "c3 = $author$project$Main$Ctor3$("
+            expectTextContains jsOutput "n1 = 0"
+            expectTextContains jsOutput "n2 = $author$project$Main$N2$(0, 0)"
+
+        Nothing ->
+          crash "JS output could not be read."
     ]
