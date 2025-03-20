@@ -38,6 +38,7 @@ import qualified Lamdera.Injection
 
 
 type Graph = Map.Map Opt.Global Opt.Node
+type FnArgLookup = ModuleName.Canonical -> Name.Name -> Maybe Int
 type Mains = Map.Map ModuleName.Canonical Opt.Main
 
 
@@ -191,18 +192,34 @@ addGlobalHelp mode graph global state =
   let
     addDeps deps someState =
       Set.foldl' (addGlobal mode graph) someState deps
+    
+    argLookup = makeArgLookup graph
   in
   case graph ! global of
+    -- @LAMDERA
+    Opt.Define (Opt.Function args body) deps
+      | length args > 1 ->
+          addStmt
+            (addDeps deps state)
+            (fn global args (Expr.generateFunctionImplementation mode argLookup args body))
+
     Opt.Define expr deps ->
       addStmt (addDeps deps state) (
-        var global (Expr.generate mode expr)
+        var global (Expr.generate mode argLookup expr)
       )
 
     Opt.DefineTailFunc argNames body deps ->
       addStmt (addDeps deps state) (
         let (Opt.Global _ name) = global in
-        var global (Expr.generateTailDef mode name argNames body)
+        var global (Expr.generateTailDef mode argLookup name argNames body)
       )
+
+    -- @LAMDERA
+    Opt.Ctor index arity
+      | arity > 1 ->
+          addStmt
+            state
+            (ctor global arity (Expr.generateCtorImplementation mode global index arity))
 
     Opt.Ctor index arity ->
       addStmt state (
@@ -214,7 +231,7 @@ addGlobalHelp mode graph global state =
 
     Opt.Cycle names values functions deps ->
       addStmt (addDeps deps state) (
-        generateCycle mode global names values functions
+        generateCycle mode argLookup global names values functions
       )
 
     Opt.Manager effectsType ->
@@ -276,11 +293,11 @@ isDebugger (Opt.Global (ModuleName.Canonical _ home) _) =
 -- GENERATE CYCLES
 
 
-generateCycle :: Mode.Mode -> Opt.Global -> [Name.Name] -> [(Name.Name, Opt.Expr)] -> [Opt.Def] -> JS.Stmt
-generateCycle mode (Opt.Global home _) names values functions =
+generateCycle :: Mode.Mode -> FnArgLookup -> Opt.Global -> [Name.Name] -> [(Name.Name, Opt.Expr)] -> [Opt.Def] -> JS.Stmt
+generateCycle mode argLookup (Opt.Global home _) names values functions =
   JS.Block
-    [ JS.Block $ map (generateCycleFunc mode home) functions
-    , JS.Block $ map (generateSafeCycle mode home) values
+    [ JS.Block $ map (generateCycleFunc mode argLookup home) functions
+    , JS.Block $ map (generateSafeCycle mode argLookup home) values
     , case map (generateRealCycle home) values of
         [] ->
           JS.EmptyStmt
@@ -300,20 +317,37 @@ generateCycle mode (Opt.Global home _) names values functions =
     ]
 
 
-generateCycleFunc :: Mode.Mode -> ModuleName.Canonical -> Opt.Def -> JS.Stmt
-generateCycleFunc mode home def =
+generateCycleFunc :: Mode.Mode -> FnArgLookup -> ModuleName.Canonical -> Opt.Def -> JS.Stmt
+generateCycleFunc mode argLookup home def =
   case def of
+    -- @LAMDERA
+    Opt.Def name (Opt.Function args body)
+      | length args > 1 ->
+          fn (Opt.Global home name) args (Expr.generateFunctionImplementation mode argLookup args body)
+    
     Opt.Def name expr ->
-      JS.Var (JsName.fromGlobal home name) (Expr.codeToExpr (Expr.generate mode expr))
-
+      JS.Var (JsName.fromGlobal home name) (Expr.codeToExpr (Expr.generate mode argLookup expr))
+    
+    -- @LAMDERA
+    Opt.TailDef name args expr
+      | length args > 1 ->
+          let
+            directFnName = JsName.fromGlobalDirectFn home name
+            argNames = map JsName.fromLocal args
+          in
+          JS.Block
+            [ JS.Var directFnName (Expr.codeToExpr (Expr.generateTailDefImplementation mode argLookup name args expr))
+            , JS.Var (JsName.fromGlobal home name) (Expr.codeToExpr (Expr.generateCurriedFunctionRef argNames directFnName))
+            ]
+    
     Opt.TailDef name args expr ->
-      JS.Var (JsName.fromGlobal home name) (Expr.codeToExpr (Expr.generateTailDef mode name args expr))
+      JS.Var (JsName.fromGlobal home name) (Expr.codeToExpr (Expr.generateTailDef mode argLookup name args expr))
 
 
-generateSafeCycle :: Mode.Mode -> ModuleName.Canonical -> (Name.Name, Opt.Expr) -> JS.Stmt
-generateSafeCycle mode home (name, expr) =
+generateSafeCycle :: Mode.Mode -> FnArgLookup -> ModuleName.Canonical -> (Name.Name, Opt.Expr) -> JS.Stmt
+generateSafeCycle mode argLookup home (name, expr) =
   JS.FunctionStmt (JsName.fromCycle home name) [] $
-    Expr.codeToStmtList (Expr.generate mode expr)
+    Expr.codeToStmtList (Expr.generate mode argLookup expr)
 
 
 generateRealCycle :: ModuleName.Canonical -> (Name.Name, expr) -> JS.Stmt
@@ -432,7 +466,7 @@ generatePort mode (Opt.Global home name) makePort converter =
   JS.Var (JsName.fromGlobal home name) $
     JS.Call (JS.Ref (JsName.fromKernel Name.platform makePort))
       [ JS.String (Name.toBuilder name)
-      , Expr.codeToExpr (Expr.generate mode converter)
+      , Expr.codeToExpr (Expr.generate mode (\_ _ -> Nothing) converter)
       ]
 
 
@@ -523,7 +557,7 @@ generateExports mode (Trie maybeMain subs) =
 
         Just (home, main) ->
           "{'init':"
-          <> JS.exprToBuilder (Expr.generateMain mode home main)
+          <> JS.exprToBuilder (Expr.generateMain mode (\_ _ -> Nothing) home main)
           <> end
     in
     case Map.toList subs of
@@ -591,3 +625,66 @@ checkedMerge a b =
 
     (Just _, Just _) ->
       error "cannot have two modules with the same name"
+
+
+
+-- @LAMDERA
+-- FUNCTION ARGUMENT LOOKUP
+
+
+makeArgLookup :: Graph -> FnArgLookup
+makeArgLookup graph home name =
+  case Map.lookup (Opt.Global home name) graph of
+    Just (Opt.Define (Opt.Function args _) _) ->
+      Just (length args)
+
+    Just (Opt.Ctor _ arity) ->
+      Just arity
+
+    Just (Opt.Link global) ->
+      case Map.lookup global graph of
+        Just (Opt.Cycle names _ defs _) ->
+          case List.find (\d -> defName d == name) defs of
+            Just (Opt.Def _ (Opt.Function args _)) ->
+              Just (length args)
+
+            Just (Opt.TailDef _ args _) ->
+              Just (length args)
+
+            _ ->
+              error (show names)
+
+        _ ->
+          Nothing
+
+    _ ->
+      Nothing
+
+
+defName :: Opt.Def -> Name.Name
+defName (Opt.Def name _) = name
+defName (Opt.TailDef name _ _) = name
+
+
+fn :: Opt.Global -> [Name.Name] -> Expr.Code -> JS.Stmt
+fn (Opt.Global home name) args code =
+  let
+    directFnName = JsName.fromGlobalDirectFn home name
+    argNames = map JsName.fromLocal args
+  in
+  JS.Block
+    [ JS.Var directFnName (Expr.codeToExpr code)
+    , JS.Var (JsName.fromGlobal home name) $ Expr.codeToExpr (Expr.generateCurriedFunctionRef argNames directFnName)
+    ]
+
+
+ctor :: Opt.Global -> Int -> Expr.Code -> JS.Stmt
+ctor (Opt.Global home name) arity code =
+  let
+    directFnName = JsName.fromGlobalDirectFn home name
+    argNames = Index.indexedMap (\i _ -> JsName.fromIndex i) [1 .. arity]
+  in
+  JS.Block
+    [ JS.Var directFnName (Expr.codeToExpr code)
+    , JS.Var (JsName.fromGlobal home name) $ Expr.codeToExpr (Expr.generateCurriedFunctionRef argNames directFnName)
+    ]

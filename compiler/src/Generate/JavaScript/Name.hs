@@ -14,6 +14,7 @@ module Generate.JavaScript.Name
   , makeLabel
   , makeTemp
   , dollar
+  , fromGlobalDirectFn -- @LAMDERA exposed
   )
   where
 
@@ -259,3 +260,12 @@ addRenaming keyword maybeBadFields =
 
     Just (BadFields renamings) ->
       BadFields $ Map.insert keyword (unsafeIntToAscii width [] (maxName - Map.size renamings)) renamings
+
+
+
+-- @LAMDERA
+
+
+fromGlobalDirectFn :: ModuleName.Canonical -> Name.Name -> Name
+fromGlobalDirectFn home name =
+  Name $ homeToBuilder home <> usd <> Name.toBuilder name <> usd
