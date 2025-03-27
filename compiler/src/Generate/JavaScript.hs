@@ -652,7 +652,10 @@ makeArgLookup graph home name =
               Just (length args)
 
             _ ->
-              error (show names)
+              -- This disables direct function calls eg. for mutually recursive
+              -- functions (with or without partial application). These are
+              -- technically possible but not implemented here.
+              Nothing
 
         _ ->
           Nothing
