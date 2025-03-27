@@ -656,6 +656,14 @@ makeArgLookup graph home name =
                 Just (_, Opt.VarGlobal (Opt.Global home_ name_)) ->
                   makeArgLookup graph home_ name_
 
+                Just (_, Opt.Call (Opt.VarGlobal (Opt.Global home_ name_)) args) ->
+                  case makeArgLookup graph home_ name_ of
+                    Just otherFn ->
+                      Just (otherFn - length args)
+                
+                    Nothing -> 
+                      error (show names)
+
                 _ -> 
                   error (show names)
 

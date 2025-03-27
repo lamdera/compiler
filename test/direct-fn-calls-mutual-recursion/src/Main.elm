@@ -7,7 +7,9 @@ main : Html msg
 main =
     Html.div []
         [ Html.text (a1 1)
+        , Html.text (a2 1)
         , Html.text (b1 1 1)
+        , Html.text (b2 1 1)
         ]
 
 
