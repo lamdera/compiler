@@ -102,4 +102,52 @@ suite =
 
         Nothing ->
           crash "JS output could not be read."
+    , scope "direct function calls - mutual recursion" $ do
+      project <- io $ Lamdera.Relative.requireDir "test/direct-fn-calls-mutual-recursion"
+      let
+        elmHome = project ++ "/elm-home"
+        elmStuff = project ++ "/elm-stuff"
+
+      maybeJsOutput <- io $ do
+        rmdir elmHome
+        rmdir elmStuff
+
+        Test.Helpers.withElmHome elmHome $
+          Ext.Common.withProjectRoot project $
+            Make.run ["src/Main.elm"] $
+              Make.Flags
+                { _debug = False
+                , _optimize = True
+                , _output = Just (Make.JS "elm-stuff/tmp.js")
+                , _report = Nothing
+                , _docs = Nothing
+                , _noWire = True
+                , _optimizeLegible = False
+                }
+
+        fileContents <- readUtf8Text $ elmStuff ++ "/tmp.js"
+
+        rmdir elmHome
+        rmdir elmStuff
+
+        pure fileContents
+
+      case maybeJsOutput of
+        Just jsOutput ->
+          do
+            expectTextContains jsOutput "$Main$a2 = function (n) {"
+            expectTextContains jsOutput "$Main$cyclic$a1() {"
+            expectTextContains jsOutput "$Main$a1 ="
+            expectTextContains jsOutput "$Main$cyclic$a1 = function () {"
+            expectTextContains jsOutput "$Main$a1(1)"
+
+            expectTextContains jsOutput "$Main$b2$ = function (m, n) {"
+            expectTextContains jsOutput "$Main$cyclic$b1()"
+            expectTextContains jsOutput "$Main$b2 = F2("
+            expectTextContains jsOutput "$Main$cyclic$b1() {"
+            expectTextContains jsOutput "$Main$b1 ="
+            expectTextContains jsOutput "$Main$cyclic$b1 = function () {"
+
+        Nothing ->
+          crash "JS output could not be read."
     ]

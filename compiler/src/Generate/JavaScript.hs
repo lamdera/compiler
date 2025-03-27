@@ -643,7 +643,7 @@ makeArgLookup graph home name =
 
     Just (Opt.Link global) ->
       case Map.lookup global graph of
-        Just (Opt.Cycle names _ defs _) ->
+        Just (Opt.Cycle names values defs _) ->
           case List.find (\d -> defName d == name) defs of
             Just (Opt.Def _ (Opt.Function args _)) ->
               Just (length args)
@@ -652,7 +652,12 @@ makeArgLookup graph home name =
               Just (length args)
 
             _ ->
-              error (show names)
+              case List.find (\(valueName,_) -> valueName == name) values of
+                Just (_, Opt.VarGlobal (Opt.Global home_ name_)) ->
+                  makeArgLookup graph home_ name_
+
+                _ -> 
+                  error (show names)
 
         _ ->
           Nothing
