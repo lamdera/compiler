@@ -298,7 +298,7 @@ generateCycle mode argLookup (Opt.Global home _) names values functions =
   JS.Block
     [ JS.Block $ map (generateCycleFunc mode argLookup home) functions
     , JS.Block $ map (generateSafeCycle mode argLookup home) values
-    , case map (generateRealCycle home) values of
+    , case map (generateRealCycle mode argLookup home) values of
         [] ->
           JS.EmptyStmt
 
@@ -350,16 +350,21 @@ generateSafeCycle mode argLookup home (name, expr) =
     Expr.codeToStmtList (Expr.generate mode argLookup expr)
 
 
-generateRealCycle :: ModuleName.Canonical -> (Name.Name, expr) -> JS.Stmt
-generateRealCycle home (name, _) =
+generateRealCycle :: Mode.Mode -> FnArgLookup -> ModuleName.Canonical -> (Name.Name, Opt.Expr) -> JS.Stmt
+generateRealCycle mode argLookup home (name, code) =
   let
     safeName = JsName.fromCycle home name
     realName = JsName.fromGlobal home name
+    directFnName = JsName.fromGlobalDirectFn home name
   in
   JS.Block
     [ JS.Var realName (JS.Call (JS.Ref safeName) [])
     , JS.ExprStmt $ JS.Assign (JS.LRef safeName) $
         JS.Function Nothing [] [ JS.Return (JS.Ref realName) ]
+    , JS.Var directFnName
+        (JS.Function Nothing (error "TODO args")
+          (Expr.codeToStmtList (Expr.generate mode argLookup (error "TODO call with our args and generated args")))
+        )
     ]
 
 
