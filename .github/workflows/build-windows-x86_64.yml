@@ -114,7 +114,7 @@ jobs:
           dest: lamdera.zip
 
       - name: Archive lamdera.zip artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: lamdera-next.zip
           path: lamdera.zip
