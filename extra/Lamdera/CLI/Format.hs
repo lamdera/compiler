@@ -121,7 +121,6 @@ run inputs flags =
       TIO.putStrLn "  --yes                 Reply 'yes' to all automated prompts."
       TIO.putStrLn "  --validate            Check if files are formatted without changing them."
       TIO.putStrLn "  --stdin               Read from stdin, output to stdout.\n"
-      TIO.putStrLn "Note: All flags must use double dashes (--flag). Single dashes (-flag) are not supported.\n"
       TIO.putStrLn "Examples:"
       TIO.putStrLn "  lamdera format Main.elm                     # formats Main.elm"
       TIO.putStrLn "  lamdera format Main.elm --output Main2.elm  # formats Main.elm as Main2.elm"
@@ -166,7 +165,7 @@ expandPath path = do
 
 formatText :: Format -> T.Text -> IO ()
 formatText flags input =
-  case ElmFormat.format "stdin" input of
+  case ElmFormat.format "stdin:nofilepath" input of
     Right formatted ->
       TIO.putStr formatted
     Left err ->

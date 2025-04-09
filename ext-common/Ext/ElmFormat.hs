@@ -39,7 +39,7 @@ format filePath text = do
 
 formatOrPassthrough :: Text -> Text
 formatOrPassthrough text = do
-  case format "stdin" text of
+  case format "stdin:nofilepath" text of
     Right formatted -> formatted
     Left _ -> text
 
