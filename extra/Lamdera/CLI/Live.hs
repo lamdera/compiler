@@ -24,7 +24,7 @@ import qualified System.Directory as Dir
 import System.FilePath as FP
 import Control.Applicative ((<|>))
 import Control.Arrow ((***))
-import Control.Concurrent.STM (atomically, newTVarIO, readTVar, writeTVar, TVar)
+import Control.Concurrent.STM (atomically, newTVarIO, readTVar, readTVarIO, writeTVar, TVar)
 import Control.Exception (finally, throw)
 import Language.Haskell.TH (runIO)
 import Data.FileEmbed (bsToExp)
@@ -91,7 +91,7 @@ withEnd (mClients, mLeader, mChan, beState) io = do
   let
     end = do
       debug "[backendSt] 🧠"
-      text <- atomically $ readTVar beState
+      text <- readTVarIO beState
       bePath <- lamderaBackendDevSnapshotPath
       writeUtf8 bePath text
 
@@ -252,14 +252,14 @@ serveWebsocket root (mClients, mLeader, mChan, beState) =
                 onlyWhen leaderChanged $ do
                   sendToLeader mClients mLeader (\leader -> do
                       -- Tell the new leader about the backend state they need
-                      atomically $ readTVar beState
+                      readTVarIO beState
                     )
                   -- Tell everyone about the new leader (also causes actual leader to go active as leader)
                   broadcastLeader mClients mLeader
 
                 SocketServer.broadcastImpl mClients $ "{\"t\":\"c\",\"s\":\"" <> sessionId <> "\",\"c\":\"" <> clientId <> "\"}"
 
-                leader <- atomically $ readTVar mLeader
+                leader <- readTVarIO mLeader
                 case leader of
                   Just leaderId ->
                     pure $ Just $ "{\"t\":\"s\",\"c\":\"" <> clientId <> "\",\"l\":\"" <> leaderId <> "\"}"
@@ -648,7 +648,7 @@ serveRpc (mClients, mLeader, mChan, beState) port = do
           | otherwise -> loopRead
         Nothing -> loopRead
 
-  leader <- liftIO $ atomically $ readTVar mLeader
+  leader <- liftIO $ readTVarIO mLeader
   case leader of
     Just leaderId -> do
       liftIO $ sendToLeader mClients mLeader (\leader_ -> pure requestPayload)
