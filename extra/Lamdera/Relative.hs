@@ -1,3 +1,4 @@
+{-# LANGUAGE TupleSections #-}
 module Lamdera.Relative where
 
 import qualified Data.ByteString as BS
@@ -39,11 +40,39 @@ findFile path_ = do
           pure Nothing
 
 
+findDir :: String -> IO (Maybe FilePath)
+findDir path_ = do
+  path <- resolveHome path_
+  dirExists <- doesDirectoryExist path
+  if dirExists
+    then Just <$> Dir.makeAbsolute path
+    else do
+      -- We're likely using a GHCI build mode that's changed our currentDirectory, so now Haskell is confused.
+      -- Only thing we can really do now is guess from a standard-ish location relative to home
+      absPath <- prefixCompilerPath path
+      exists2 <- doesDirectoryExist absPath
+      if exists2
+        then pure (Just absPath)
+        else do
+          debug $ "🔎 findDir: could not find a relative path, sought at:\n" <> path_ <> " -> " <> path <> "\n" <> absPath
+          pure Nothing
+
+
 readFile :: String -> IO (Maybe Text)
 readFile path = do
   found <- findFile path
   case found of
     Just absPath -> Lamdera.readUtf8Text absPath
+    Nothing -> pure Nothing
+
+
+readDir :: String -> IO (Maybe [(FilePath, BS.ByteString)])
+readDir path = do
+  found <- findDir path
+  case found of
+    Just absPath -> do
+      filePaths <- Dir.listDirectory absPath
+      Just <$> mapM (\filePath -> (filePath ,) <$> BS.readFile (absPath </> filePath)) filePaths
     Nothing -> pure Nothing
 
 
@@ -70,19 +99,11 @@ requireFile identifier path = do
 
 
 requireDir :: String -> IO FilePath
-requireDir path_ = do
-  path <- resolveHome path_
-  dirExists <- doesDirectoryExist path
-  if dirExists
-    then Dir.makeAbsolute path
-    else do
-      -- We're likely using a GHCI build mode that's changed our currentDirectory, so now Haskell is confused.
-      -- Only thing we can really do now is guess from a standard-ish location relative to home
-      absPath <- prefixCompilerPath path
-      exists2 <- doesDirectoryExist absPath
-      if exists2
-        then pure absPath
-        else error $ "requireDir: could not find a relative path, seeking at:\n" <> path <> "\n" <> absPath
+requireDir path = do
+  found <- findDir path
+  case found of
+    Just absPath -> pure absPath
+    Nothing -> error $ "❌ requireDir: could not find a relative path, seeking at:\n" <> path
 
 
 resolveHome :: String -> IO FilePath

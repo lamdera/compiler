@@ -18,6 +18,7 @@ import qualified Data.Text.Lazy.Builder as TLB
 import qualified Data.Map as Map
 import qualified Data.HashMap.Strict as HashMap
 import qualified Data.List as List
+import Data.Maybe (fromMaybe)
 import GHC.Word (Word64)
 
 import qualified System.Directory as Dir
@@ -26,13 +27,13 @@ import Control.Applicative ((<|>))
 import Control.Arrow ((***))
 import Control.Concurrent.STM (atomically, newTVarIO, readTVar, readTVarIO, writeTVar, TVar)
 import Control.Exception (finally, throw)
-import Language.Haskell.TH (runIO)
+import qualified Language.Haskell.TH as TH
 import Data.FileEmbed (bsToExp)
 import qualified Data.Aeson.Encoding as A
 
 import Snap.Core hiding (path, headers)
 import qualified Data.CaseInsensitive as CI (original, mk)
-import qualified Data.Bifunctor (first)
+import Data.Bifunctor (second)
 
 import qualified Develop.Generate.Help as Generate
 import qualified Develop.StaticFiles as StaticFiles
@@ -137,6 +138,7 @@ prepareLocalDev root = do
   let
     cache = lamderaCache root
     harnessPath = cache </> "LocalDev.elm"
+    modulesPath = cache </> "LocalDev"
 
   -- This needs to be moved to an on-demand action, as it has to query production and
   -- thus isn't appropriate to run on every single recompile
@@ -145,20 +147,23 @@ prepareLocalDev root = do
 
   rpcExists <- doesFileExist $ root </> "src" </> "RPC.elm"
 
-  case overrideM of
-    Just override -> do
-      writeIfDifferent harnessPath
-        (override
-          & replaceVersionMarker
-          & replaceRpcMarker rpcExists
-        )
+  writeIfDifferent harnessPath
+    (fromMaybe lamderaLocalDev overrideM
+      & replaceVersionMarker
+      & replaceRpcMarker rpcExists
+    )
 
-    Nothing ->
-      writeIfDifferent harnessPath
-        (lamderaLocalDev
-          & replaceVersionMarker
-          & replaceRpcMarker rpcExists
-        )
+  -- write modules used by LocalDev.elm
+
+  overrideModulesM <- Lamdera.Relative.readDir "extra/LocalDev/LocalDev"
+  let modules =
+        case overrideModulesM of
+          Just pairs ->
+            second T.decodeUtf8 <$> pairs
+          Nothing ->
+            lamderaLocalDevModules
+
+  mapM_ (\(path, content) -> writeIfDifferent (modulesPath </> path) content) modules
 
   pure harnessPath
 
@@ -207,7 +212,17 @@ replaceRpcMarker shouldReplace localdev =
 
 lamderaLocalDev :: Text
 lamderaLocalDev =
-  T.decodeUtf8 $(bsToExp =<< runIO (Lamdera.Relative.readByteString "extra/LocalDev/LocalDev.elm"))
+  T.decodeUtf8 $(bsToExp =<< TH.runIO (Lamdera.Relative.readByteString "extra/LocalDev/LocalDev.elm"))
+
+
+lamderaLocalDevModules :: [(FilePath, Text)]
+lamderaLocalDevModules =
+  second T.decodeUtf8 <$>
+    $(do  bsPairs <- TH.runIO (Lamdera.Relative.readDir "extra/LocalDev/LocalDev")
+          TH.ListE <$> mapM (\(fp, bs) -> do
+            bsExp <- bsToExp bs
+            return $ TH.TupE [Just (TH.LitE (TH.StringL fp)), Just bsExp]) (fromMaybe [] bsPairs)
+    )
 
 
 refreshClients (mClients, mLeader, mChan, beState) =
