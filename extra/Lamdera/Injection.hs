@@ -545,8 +545,12 @@ injections outputType mode =
           _VirtualDom_applyPatches = function(rootDomNode, oldVirtualNode, patches, eventNode) {
             if (typeof _VirtualDom_wrap === 'function') { // For lydell’s vdom.
               _VirtualDom_renderCount++;
+              var instance = rootDomNode.elmInstance || _VirtualDom_instanceCount++;
+              _VirtualDom_instance = '_' + instance;
               var diffReturn = _VirtualDom_diffHelp(oldVirtualNode, patches, eventNode);
               _VirtualDom_lastDomNode = diffReturn.w;
+              _VirtualDom_lastDomNode.elmInstance = instance;
+              _VirtualDom_instance = '';
             } else {
               if (patches.length !== 0) {
                 _VirtualDom_addDomNodes(rootDomNode, oldVirtualNode, patches, eventNode);
@@ -726,8 +730,13 @@ injections outputType mode =
       if (typeof _VirtualDom_wrap === 'function') // For lydell’s vdom.
       {
         _VirtualDom_renderCount++;
+        var instance = rootDomNode.elmInstance || _VirtualDom_instanceCount++;
+        _VirtualDom_instance = '_' + instance;
         var diffReturn = _VirtualDom_diffHelp(oldVirtualNode, patches, eventNode);
-        return (_VirtualDom_lastDomNode = diffReturn.w);
+        _VirtualDom_lastDomNode = diffReturn.w;
+        _VirtualDom_lastDomNode.elmInstance = instance;
+        _VirtualDom_instance = '';
+        return _VirtualDom_lastDomNode;
       }
 
       if (patches.length === 0)
