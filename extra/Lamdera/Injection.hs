@@ -29,8 +29,11 @@ import qualified Elm.Package as Pkg
 import qualified Elm.ModuleName as ModuleName
 import qualified AST.Optimized as Opt
 import qualified Elm.Kernel
+import qualified Elm.Outline
+import qualified Elm.Version
 
 import Lamdera
+import qualified Lamdera.Project
 import qualified Lamdera.Relative
 import StandaloneInstances
 import qualified Ext.Common
@@ -798,6 +801,7 @@ elmPkgJs mode =
         includesPathM <- Lamdera.Relative.findFile $ root </> "elm-pkg-js-includes.js"
         esbuildConfigPathM <- Lamdera.Relative.findFile $ root </> "esbuild.config.js"
         esbuildPathM <- Dir.findExecutable "esbuild"
+        elmJson <- Elm.Outline.read root True
 
         case (esbuildConfigPathM, esbuildPathM, includesPathM) of
           (Just esbuildConfigPath, _, _) ->
@@ -819,19 +823,36 @@ elmPkgJs mode =
                     error "no min file after compile, run `node esbuild.config.js` to check errors"
               else do
                 Lamdera.debug_ "🏗️🟠  Using dumbJsPackager, ignoring esbuild.config.js in non-dev mode"
-                dumbJsPackager root elmPkgJsSources
+                dumbJsPackager (useProgramTestOverrides elmJson) root elmPkgJsSources
           (_, Just esbuildPath, Just includesPath) ->
             if Ext.Common.isDebug_
               then do
                 esbuildIncluder root esbuildPath includesPath
               else do
                 Lamdera.debug_ "🏗️🟠  Using dumbJsPackager, ignoring esbuild in non-dev mode"
-                dumbJsPackager root elmPkgJsSources
+                dumbJsPackager (useProgramTestOverrides elmJson) root elmPkgJsSources
           _ -> do
             Lamdera.debug_ "🏗️  Using dumbJsPackager"
-            dumbJsPackager root elmPkgJsSources
+            dumbJsPackager (useProgramTestOverrides elmJson) root elmPkgJsSources
     _ ->
       ""
+
+
+useProgramTestOverrides :: Either a Elm.Outline.Outline -> Bool
+useProgramTestOverrides elmJson =
+    case elmJson of
+        Right (Elm.Outline.App (Elm.Outline.AppOutline _ _ direct _ _ _)) ->
+            case Map.lookup Lamdera.Project.lamderaProgramTest direct of
+                Just (Elm.Version.Version major _ _) ->
+                    if major >= 3 then
+                        True
+                    else
+                        False
+
+                Nothing ->
+                    False
+        _ ->
+            False
 
 
 esbuildIncluder :: FilePath -> FilePath -> FilePath -> IO B.Builder
@@ -869,11 +890,14 @@ esbuildIncluder root esbuildPath includesPath = do
   --   )
 
 
+lamderaTestRecordingJs :: Text
+lamderaTestRecordingJs =
+  Text.decodeUtf8 $(bsToExp =<< runIO (Lamdera.Relative.readByteString "extra/test-recording.js"))
 
 
 -- Tries to be clever by injecting `{}` as the `exports` value. Falls over if the target files have been compiled
 -- by a packager or if they don't use the `export.init` syntax, i.e. `export async function init() {...}`
-dumbJsPackager root elmPkgJsSources = do
+dumbJsPackager addTestRecording root elmPkgJsSources = do
   wrappedPkgImports <-
     mapM
       (\f ->
@@ -888,7 +912,14 @@ dumbJsPackager root elmPkgJsSources = do
       elmPkgJsSources
 
   pure $ B.byteString $ mconcat
-    [ "const pkgExports = {\n" <> mconcat wrappedPkgImports <> "\n}\n"
+    [ "const pkgExports = {\n"
+        <> mconcat wrappedPkgImports
+        <> (if addTestRecording then
+               "'program-test-recording.js': function(exports){\n" <> Text.encodeUtf8 lamderaTestRecordingJs <> "\nreturn exports;},\n"
+           else
+               ""
+           )
+        <> "\n}\n"
     , "if (typeof window !== 'undefined') {"
     , "  window.elmPkgJsIncludes = {"
     , "    init: async function(app) {"

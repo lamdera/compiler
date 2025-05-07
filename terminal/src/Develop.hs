@@ -49,6 +49,7 @@ import qualified Lamdera.ReverseProxy
 import qualified Lamdera.TypeHash
 import qualified Lamdera.PostCompile
 import qualified Lamdera.Project
+import qualified Lamdera.Injection
 
 import qualified Data.List as List
 import Ext.Common (trackedForkIO, whenDebug)
@@ -99,7 +100,7 @@ runWithRoot root (Flags maybePort) =
           -- Fork a recompile+cache update
           Sentry.asyncUpdateJsOutput sentryCache $ do
             debug_ $ "🛫  recompile triggered by: " ++ show events
-            harness <- Live.prepareLocalDev (useLocalDevOverrides elmJson) root
+            harness <- Live.prepareLocalDev (Lamdera.Injection.useProgramTestOverrides elmJson) root
             let
               typesRootChanged = events & filter (\event ->
                      stringContains "src/Types.elm" event
@@ -145,21 +146,7 @@ runWithRoot root (Flags maybePort) =
         <|> Live.serveUnmatchedUrlsToIndex root (serveElm sentryCache) -- Everything else without extensions goes to Lamdera LocalDev harness
         <|> error404 -- Will get hit for any non-matching extensioned paths i.e. /hello.blah
 
-useLocalDevOverrides :: Either a Elm.Outline.Outline -> Bool
-useLocalDevOverrides elmJson =
-    case elmJson of
-        Right (Elm.Outline.App (Elm.Outline.AppOutline _ _ direct _ _ _)) ->
-            case Map.lookup Lamdera.Project.lamderaProgramTest direct of
-                Just (Elm.Version.Version major _ _) ->
-                    if major >= 3 then
-                        True
-                    else
-                        False
 
-                Nothing ->
-                    False
-        _ ->
-            False
 
 -- Try narrow down source of exceptions with generalised error catch
 gcatchlog :: String -> Snap () -> Snap ()

@@ -131,9 +131,14 @@ serveUnmatchedUrlsToIndex root serveElm =
       serveElm (lamderaCache root </> "LocalDev.elm")
 
 
-prepareLocalDev :: FilePath -> IO FilePath
-prepareLocalDev root = do
-  overrideM <- Lamdera.Relative.readFile "extra/LocalDev/LocalDev.elm"
+prepareLocalDev :: Bool -> FilePath -> IO FilePath
+prepareLocalDev useProgramTestOverrides root = do
+  overrideM <-
+    Lamdera.Relative.readFile $
+        if useProgramTestOverrides then
+            "extra/LocalDev/LocalDevProgramTest.elm"
+        else
+            "extra/LocalDev/LocalDev.elm"
   let
     cache = lamderaCache root
     harnessPath = cache </> "LocalDev.elm"
@@ -155,7 +160,7 @@ prepareLocalDev root = do
 
     Nothing ->
       writeIfDifferent harnessPath
-        (lamderaLocalDev
+        ((if useProgramTestOverrides then lamderaLocalDevProgramTest else lamderaLocalDev)
           & replaceVersionMarker
           & replaceRpcMarker rpcExists
         )
@@ -208,6 +213,11 @@ replaceRpcMarker shouldReplace localdev =
 lamderaLocalDev :: Text
 lamderaLocalDev =
   T.decodeUtf8 $(bsToExp =<< runIO (Lamdera.Relative.readByteString "extra/LocalDev/LocalDev.elm"))
+
+
+lamderaLocalDevProgramTest :: Text
+lamderaLocalDevProgramTest =
+  T.decodeUtf8 $(bsToExp =<< runIO (Lamdera.Relative.readByteString "extra/LocalDev/LocalDevProgramTest.elm"))
 
 
 refreshClients (mClients, mLeader, mChan, beState) =
