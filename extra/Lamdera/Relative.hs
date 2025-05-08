@@ -5,6 +5,7 @@ import qualified Data.ByteString as BS
 import qualified System.Directory as Dir
 import System.FilePath ((</>))
 import qualified Data.List as List
+import Control.Monad (forM)
 
 import Lamdera
 
@@ -66,14 +67,26 @@ readFile path = do
     Nothing -> pure Nothing
 
 
-readDir :: String -> IO (Maybe [(FilePath, BS.ByteString)])
-readDir path = do
+readDir :: (BS.ByteString -> a) -> String -> IO (Maybe [(FilePath, a)])
+readDir bsMapper path = do
   found <- findDir path
   case found of
-    Just absPath -> do
-      filePaths <- Dir.listDirectory absPath
-      Just <$> mapM (\filePath -> (filePath ,) <$> BS.readFile (absPath </> filePath)) filePaths
+    Just absPath -> Just <$> readDirHelp bsMapper absPath ""
     Nothing -> pure Nothing
+
+
+readDirHelp :: (BS.ByteString -> a) -> FilePath -> FilePath -> IO [(FilePath, a)]
+readDirHelp bsMapper absPath relPath = do
+  contents <- Dir.listDirectory absPath
+  fmap concat $ forM contents $ \entry -> do
+    let newAbsPath = absPath </> entry
+        newRelPath = relPath </> entry
+    isDir <- Dir.doesDirectoryExist newAbsPath
+    if isDir
+      then readDirHelp bsMapper newAbsPath newRelPath
+      else do
+        content <- BS.readFile newAbsPath
+        pure [(newRelPath, bsMapper content)]
 
 
 readByteString :: FilePath -> IO BS.ByteString

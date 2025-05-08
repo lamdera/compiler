@@ -134,11 +134,7 @@ serveUnmatchedUrlsToIndex root serveElm =
 
 prepareLocalDev :: FilePath -> IO FilePath
 prepareLocalDev root = do
-  overrideM <- Lamdera.Relative.readFile "extra/LocalDev/LocalDev.elm"
-  let
-    cache = lamderaCache root
-    harnessPath = cache </> "LocalDev.elm"
-    modulesPath = cache </> "LocalDev"
+  overrideM <- Lamdera.Relative.readDir T.decodeUtf8 "extra/LocalDev/runtime-src"
 
   -- This needs to be moved to an on-demand action, as it has to query production and
   -- thus isn't appropriate to run on every single recompile
@@ -147,25 +143,23 @@ prepareLocalDev root = do
 
   rpcExists <- doesFileExist $ root </> "src" </> "RPC.elm"
 
-  writeIfDifferent harnessPath
-    (fromMaybe lamderaLocalDev overrideM
-      & replaceVersionMarker
-      & replaceRpcMarker rpcExists
-    )
+  let
+    cache = lamderaCache root
+    harnessPath = "LocalDev.elm"
 
-  -- write modules used by LocalDev.elm
+    patchedContent path content =
+      if path == harnessPath
+        then content & replaceVersionMarker & replaceRpcMarker rpcExists
+        else content
 
-  overrideModulesM <- Lamdera.Relative.readDir "extra/LocalDev/LocalDev"
-  let modules =
-        case overrideModulesM of
-          Just pairs ->
-            second T.decodeUtf8 <$> pairs
-          Nothing ->
-            lamderaLocalDevModules
+    processFile (path, content) =
+      writeIfDifferent (cache </> path) $ patchedContent path content
 
-  mapM_ (\(path, content) -> writeIfDifferent (modulesPath </> path) content) modules
+    files = fromMaybe lamderaLocalDevDir overrideM
 
-  pure harnessPath
+  mapM_ processFile files
+
+  pure $ cache </> harnessPath
 
 
 replaceVersionMarker :: Text -> Text
@@ -210,19 +204,13 @@ replaceRpcMarker shouldReplace localdev =
           \            {-}"
 
 
-lamderaLocalDev :: Text
-lamderaLocalDev =
-  T.decodeUtf8 $(bsToExp =<< TH.runIO (Lamdera.Relative.readByteString "extra/LocalDev/LocalDev.elm"))
-
-
-lamderaLocalDevModules :: [(FilePath, Text)]
-lamderaLocalDevModules =
-  second T.decodeUtf8 <$>
-    $(do  bsPairs <- TH.runIO (Lamdera.Relative.readDir "extra/LocalDev/LocalDev")
-          TH.ListE <$> mapM (\(fp, bs) -> do
-            bsExp <- bsToExp bs
-            return $ TH.TupE [Just (TH.LitE (TH.StringL fp)), Just bsExp]) (fromMaybe [] bsPairs)
-    )
+lamderaLocalDevDir :: [(FilePath, Text)]
+lamderaLocalDevDir =
+  $(do
+      bsPairs <- TH.runIO (Lamdera.Relative.readDir id "extra/LocalDev/runtime-src")
+      let toTuple (fp, bs) = [| (fp, T.decodeUtf8 $(bsToExp bs)) |]
+      TH.ListE <$> mapM toTuple (fromMaybe [] bsPairs)
+   )
 
 
 refreshClients (mClients, mLeader, mChan, beState) =
