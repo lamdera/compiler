@@ -844,7 +844,7 @@ useProgramTestOverrides elmJson =
         Right (Elm.Outline.App (Elm.Outline.AppOutline _ _ direct _ _ _)) ->
             case Map.lookup Lamdera.Project.lamderaProgramTest direct of
                 Just (Elm.Version.Version major _ _) ->
-                    if major >= 3 then
+                    if major >= 4 then
                         True
                     else
                         False
