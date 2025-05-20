@@ -42,7 +42,7 @@ See the [Lamdera overview](https://dashboard.lamdera.app/docs/overview) for more
 
 ## Development
 
-Interested in contributing? See [extra/readme.md](extra/readme.md).
+Looking for build instructions or interested in contributing? See [extra/readme.md](extra/readme.md).
 
 ## Help
 

@@ -36,6 +36,37 @@ git submodule init && git submodule update # setup Git submodule deps for this p
 stack install hindent                      # used for debugging haskell values
 ```
 
+A setup for an apt based Linux, Ubuntu or Debian etc is:
+
+```
+sudo apt-get install haskell-stack
+sudo stack upgrade
+git submodule init && git submodule update # setup Git submodule deps for this project
+stack install hindent                      # used for debugging haskell values
+```
+
+### Build Instructions
+
+To create a build of the compiler binary and install it locally run:
+
+```
+stack install
+```
+
+To create a distribition of the compiler binary run one of the scripts in the `distribution` folder. Prior 
+to running these scripts you will need to ensure you have docker installed; these builds use Alpine Linux 
+as that is one way of getting a clean build with statically linked libc (musl) for a standalone cross-distribution binary.
+
+```
+ls -1 distribution/build*.sh
+
+distribution/build-linux-arm32v7-musl.sh
+distribution/build-linux-arm64-musl.sh
+distribution/build-linux-x86_64-musl.sh
+distribution/build-macos-arm64.sh
+distribution/build-macos-x86_64.sh
+```
+
 ### Developing
 
 First, make sure you have deps installed from the Setup section above.
