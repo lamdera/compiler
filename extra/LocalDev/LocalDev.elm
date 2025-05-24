@@ -1183,55 +1183,41 @@ lamderaPane devbar nodeType =
 
 
 withOverlay dismiss html =
-    div
-        [ style "font-family" "system-ui, Helvetica Neue, sans-serif"
-        , style "font-size" "14px"
-        , style "display" "block"
-        , style "position" "fixed"
-        , style "top" "0"
-        , style "left" "0"
-        , style "height" "100vh"
-        , style "width" "100vw"
-        , style "background-color" "#2e333588"
-        , style "-webkit-backdrop-filter" "blur(3px)"
-        , style "backdrop-filter" "blur(3px)"
-        , style "display" "flex"
-        , style "justify-content" "center"
-        , style "align-items" "center"
-        , onClick dismiss
-        ]
-        html
-
-
-envIndicator =
-    let
-        ( label, color ) =
-            envMeta
-    in
-    div []
-        [ div
-            [ style "text-align" "center"
-            , style "border-top" "1px solid #393939"
-            , style "border-radius" "0px 0px 5px 5px"
-            , style "font-size" "10px"
-            , style "padding" "1px 4px 2px 4px"
-            , style "cursor" "pointer"
-            , style "color" "#fff"
-            , onClick EnvClicked
+    Html.node "template"
+        [ Html.Attributes.attribute "shadowrootmode" "open" ]
+        [ Html.node "style" []
+            [ text """
+                :host {
+                  all: initial;
+                  font-family: system-ui, Helvetica Neue, sans-serif;
+                  font-size: 14px;
+                }
+                .lamdera-overlay-bg {
+                  display: flex;
+                  position: fixed;
+                  top: 0; left: 0; width: 100vw; height: 100vh;
+                  background: #2e333588;
+                  -webkit-backdrop-filter: blur(3px);
+                  backdrop-filter: blur(3px);
+                  justify-content: center;
+                  align-items: center;
+                  z-index: 99999;
+                }
+                .devbar-link {
+                  all: unset;
+                  color: #0074d9;
+                  cursor: pointer;
+                  text-decoration: underline;
+                  display: inline-flex;
+                  align-items: center;
+                }
+            """ ]
+        , div
+            [ class "lamdera-overlay-bg"
+            , onClick dismiss
             ]
-            [ text <| "Env: ", span [ style "color" color ] [ text label ] ]
+            html
         ]
-
-
-envMeta =
-    case Env.mode of
-        Env.Production ->
-            ( "Prod", red )
-
-        -- Env.Preview ->
-        --     ( "Preview", blue )
-        Env.Development ->
-            ( "Dev", green )
 
 
 lamderaDevBar topDown devbar nodeType =
@@ -1590,9 +1576,11 @@ buttonDevOff label icon_ msg =
 
 buttonDevLink label url color =
     a
-        [ style "color" color
+        [ class "devbar-link"
+        , style "all" "unset"
+        , style "color" color
         , style "cursor" "pointer"
-        , style "text-decoration" "none"
+        , style "text-decoration" "underline"
         , style "display" "block"
         , style "display" "flex"
         , style "justify-content" "center"
