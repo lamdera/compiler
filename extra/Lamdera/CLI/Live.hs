@@ -619,10 +619,10 @@ serveRpc (mClients, mLeader, mChan, beState) port = do
                     values =
                       case vals of
                         [] -> "null"
-                        val:[] -> T.concat ["\"", (T.decodeUtf8 val & escapeJsonString), "\""]
+                        val:[] -> T.decodeUtf8 val & escapeJsonString
                         _ ->
                           vals
-                            & fmap (\v -> T.concat ["\"", (T.decodeUtf8 v & escapeJsonString), "\""])
+                            & fmap (escapeJsonString . T.decodeUtf8)
                             & T.intercalate ","
                             & (\v -> T.concat ["[", v, "]"])
                   in
