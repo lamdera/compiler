@@ -73,7 +73,7 @@ testMigrationGeneration scenario oldVersion newVersion = do
 
   _ <- io $ Lamdera.Relative.writeFile ("test/scenario-migration-generate/src/Evergreen/Migrate/VX" <> show newVersion <> ".elm") result
 
-  expectEqualTextTrimmed (mock & withDefault "failed to load file") result
+  expectEqualTextTrimmed result (mock & withDefault "failed to load file")
 
   let filenames =
         [ "src/Evergreen/V" <> show oldVersion <> "/Types.elm"
