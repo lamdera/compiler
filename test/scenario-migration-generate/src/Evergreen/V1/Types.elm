@@ -50,11 +50,7 @@ type alias BackendModel =
 
     -- WIP
     , depthTests : Dict String Depth
-    , user : User
     }
-
-type alias User =
-    ( Int, { name : String, userType : UserType, parents: ( { name : String, userType : UserType }, { name : String, userType : UserType } ) } )
 
 
 type UserType

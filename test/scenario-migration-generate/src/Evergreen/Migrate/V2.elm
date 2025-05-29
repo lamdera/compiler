@@ -112,7 +112,6 @@ migrate_Types_BackendModel old =
     , time = old.time
     , userCache = old.userCache |> migrate_AssocList_Dict identity migrate_IncludedBySpecialCasedParam_Custom
     , apps = (Unimplemented {- Type `Dict (String) (Evergreen.V2.Types.App)` was added in V2. I need you to set a default value. -})
-    , user = old.user |> migrate_Types_User
     , depthTests = (Unimplemented {- Field of type `Dict (String) (Evergreen.V1.Types.Depth)` was removed in V2. I need you to do something with the `old.depthTests` value if you wish to keep the data, then remove this line. -})
     , removed = (Unimplemented {- Field of type `String` was removed in V2. I need you to do something with the `old.removed` value if you wish to keep the data, then remove this line. -})
     , removedRecord = (Unimplemented {- Field of type `Evergreen.V1.External.AllCoreTypes` was removed in V2. I need you to do something with the `old.removedRecord` value if you wish to keep the data, then remove this line. -})
@@ -229,30 +228,6 @@ migrate_Types_FrontendMsg_ old =
 
         Evergreen.V1.Types.AllCoreTypes p0 ->
             Evergreen.V2.Types.AllCoreTypes (p0 |> migrate_External_AllCoreTypes)
-
-
-migrate_Types_User : Evergreen.V1.Types.User -> Evergreen.V2.Types.User
-migrate_Types_User old =
-    old
-        |> Tuple.mapSecond
-            (\rec ->
-                { name = rec.name
-                , userType = rec.userType |> migrate_Types_UserType
-                , parents =
-                    rec.parents
-                        |> Tuple.mapBoth
-                            (\rec1 ->
-                                { name = rec1.name
-                                , userType = rec1.userType |> migrate_Types_UserType
-                                }
-                            )
-                            (\rec1 ->
-                                { name = rec1.name
-                                , userType = rec1.userType |> migrate_Types_UserType
-                                }
-                            )
-                }
-            )
 
 
 migrate_Types_UserType : Evergreen.V1.Types.UserType -> Evergreen.V2.Types.UserType
