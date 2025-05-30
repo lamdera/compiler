@@ -895,7 +895,7 @@ recordMigration oldVersion newVersion scope interfaces recursionSet typeNew type
 typeToMigration :: Int -> Int -> ModuleName.Canonical -> Interfaces -> RecursionSet -> Can.Type -> Can.Type -> TvarMap -> TvarMap -> Text -> Migration
 typeToMigration oldVersion newVersion scope interfaces recursionSet_ typeNew@(Can.TType newModuleName name params) typeOld@(Can.TType oldModuleName oldName paramsOld) tvarMapOld tvarMapNew oldValueRef =
   let
-    -- @TODO try removing the recursion setting here – it should only be relevant in migrateTypeDef right?
+    -- @TODO try removing the recursion setting here – it should only be relevant in migrateTypeDef right?
     recursionIdentifier :: (ModuleName.Canonical, N.Name)
     recursionIdentifier = (newModuleName, name)
 
