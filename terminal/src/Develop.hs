@@ -17,6 +17,7 @@ import qualified Data.ByteString.Builder as B
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BSL
 import qualified Data.HashMap.Strict as HashMap
+import qualified Data.Map as Map
 import Data.Monoid ((<>))
 import qualified Data.NonEmptyList as NE
 import qualified System.Directory as Dir
@@ -28,6 +29,8 @@ import Snap.Util.FileServe
 import qualified BackgroundWriter as BW
 import qualified Build
 import qualified Elm.Details as Details
+import qualified Elm.Outline
+import qualified Elm.Version
 import qualified Develop.Generate.Help as Help
 import qualified Develop.Generate.Index as Index
 import qualified Develop.StaticFiles as StaticFiles
@@ -45,6 +48,8 @@ import qualified Lamdera.Constrain
 import qualified Lamdera.ReverseProxy
 import qualified Lamdera.TypeHash
 import qualified Lamdera.PostCompile
+import qualified Lamdera.Project
+import qualified Lamdera.Injection
 
 import qualified Data.List as List
 import Ext.Common (trackedForkIO, whenDebug)
@@ -87,13 +92,15 @@ runWithRoot root (Flags maybePort) =
 
       sentryCache <- liftIO $ Sentry.init
 
+      elmJson <- Elm.Outline.read root True
+
       let
         recompile :: [String] -> IO ()
         recompile events = do
           -- Fork a recompile+cache update
           Sentry.asyncUpdateJsOutput sentryCache $ do
             debug_ $ "🛫  recompile triggered by: " ++ show events
-            harness <- Live.prepareLocalDev root
+            harness <- Live.prepareLocalDev (Lamdera.Injection.useProgramTestOverrides elmJson) root
             let
               typesRootChanged = events & filter (\event ->
                      stringContains "src/Types.elm" event
@@ -138,6 +145,7 @@ runWithRoot root (Flags maybePort) =
         <|> serveAssets -- Compiler packaged static files
         <|> Live.serveUnmatchedUrlsToIndex root (serveElm sentryCache) -- Everything else without extensions goes to Lamdera LocalDev harness
         <|> error404 -- Will get hit for any non-matching extensioned paths i.e. /hello.blah
+
 
 
 -- Try narrow down source of exceptions with generalised error catch
