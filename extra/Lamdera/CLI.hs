@@ -16,7 +16,6 @@ import qualified Lamdera.CLI.Reset
 import qualified Lamdera.CLI.Update
 import qualified Lamdera.CLI.Annotate
 import qualified Lamdera.CLI.Interpreter
-import qualified Lamdera.CLI.Format
 
 
 live :: Terminal.Command
@@ -195,10 +194,22 @@ eval =
 
 
 -- FORMAT
+-- @LAMDERA Stub - intercepted in Terminal.hs
 
 
 format :: Terminal.Command
-format = Lamdera.CLI.Format.command
+format =
+  let
+    summary =
+      "Format Elm source files."
+
+    details =
+      "The `format` command is handled directly by elm-format for perfect compatibility."
+
+    example =
+      reflow "See elm-format documentation at <https://github.com/avh4/elm-format>"
+  in
+  Terminal.Command "format" (Common summary) details example noArgs noFlags (\_ _ -> return ())
 
 
 -- HELPERS
