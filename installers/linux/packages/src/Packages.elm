@@ -68,24 +68,30 @@ packages =
             , arm64 = "c3ca8a90c0c7cb0fbeeab8f164271854cd449fdab5f30894fb09fba2e575b595"
             }
         }
+    , elmJson
+        { version = "0.2.13"
+        , hashes =
+            { x86_64 = "83cbab79f6c237d3f96b69baf519bdd7634d0e0373a390594d37591c0295f965"
+            , arm64 = ""
+            }
+        }
     ]
         |> List.concatMap
             (\f ->
-                List.map
+                List.filterMap
                     (\arch ->
-                        let
-                            data : PackageData
-                            data =
-                                f arch
-                        in
-                        { name = data.name
-                        , version = data.version
-                        , url = data.url
-                        , description = data.description
-                        , maintainer = data.maintainer
-                        , hash = getHash arch data.hashes
-                        , arch = arch
-                        }
+                        f arch
+                            |> Maybe.map
+                                (\data ->
+                                    { name = data.name
+                                    , version = data.version
+                                    , url = data.url
+                                    , description = data.description
+                                    , maintainer = data.maintainer
+                                    , hash = getHash arch data.hashes
+                                    , arch = arch
+                                    }
+                                )
                     )
                     arches
             )
@@ -101,13 +107,7 @@ type alias PackageData =
     }
 
 
-lamdera :
-    { lamderaVersion : String
-    , elmVersion : String
-    , hashes : Hashes
-    }
-    -> Arch
-    -> PackageData
+lamdera : { lamderaVersion : String, elmVersion : String, hashes : Hashes } -> Arch -> Maybe PackageData
 lamdera { lamderaVersion, elmVersion, hashes } arch =
     let
         lamderaArch : String
@@ -134,9 +134,10 @@ lamdera { lamderaVersion, elmVersion, hashes } arch =
     , maintainer = "Mario Rogic <hello@mario.net.au>"
     , hashes = hashes
     }
+        |> Just
 
 
-elmFormat : { version : String, hashes : Hashes } -> Arch -> PackageData
+elmFormat : { version : String, hashes : Hashes } -> Arch -> Maybe PackageData
 elmFormat { version, hashes } arch =
     let
         elmFormatArch : String
@@ -159,9 +160,10 @@ elmFormat { version, hashes } arch =
     , maintainer = "Aaron VonderHaar <gruen0aermel@gmail.com>"
     , hashes = hashes
     }
+        |> Just
 
 
-elmTestRs : { version : String, hashes : Hashes } -> Arch -> PackageData
+elmTestRs : { version : String, hashes : Hashes } -> Arch -> Maybe PackageData
 elmTestRs { version, hashes } arch =
     let
         elmTestRsArch : String
@@ -184,6 +186,29 @@ elmTestRs { version, hashes } arch =
     , maintainer = "Matthieu Pizenberg <matthieu@pizenberg.fr>"
     , hashes = hashes
     }
+        |> Just
+
+
+elmJson : { version : String, hashes : Hashes } -> Arch -> Maybe PackageData
+elmJson { version, hashes } arch =
+    case arch of
+        X86_64 ->
+            let
+                url : String
+                url =
+                    "https://github.com/zwilias/elm-json/releases/download/v" ++ version ++ "/elm-json-v" ++ version ++ "-x86_64-unknown-linux-musl.tar.gz"
+            in
+            { name = "elm-json"
+            , version = version
+            , url = url
+            , description = "Install, upgrade and uninstall Elm dependencies"
+            , maintainer = "Ilias Van Peer <mail@ilias.xyz>"
+            , hashes = hashes
+            }
+                |> Just
+
+        Arm64 ->
+            Nothing
 
 
 getHash : Arch -> Hashes -> String
