@@ -5,7 +5,7 @@ import BackendTask exposing (BackendTask)
 import BackendTask.Do as Do
 import FatalError exposing (FatalError)
 import Json.Encode
-import Packages exposing (Package)
+import Packages exposing (Arch(..), Package)
 import Pages.Script as Script exposing (Script)
 
 
@@ -19,11 +19,11 @@ task =
     logExec "👷 Creating temporary work directory" "mkdir" [ "-p", "work" ] <| \_ ->
     logExec "👷 Creating output directory" "mkdir" [ "-p", "out" ] <| \_ ->
     Do.each Packages.packages
-        (\({ name, version, url, debianArch } as package) ->
+        (\({ name, version, url, arch } as package) ->
             let
                 fullName : String
                 fullName =
-                    name ++ "-" ++ version ++ "-" ++ debianArch
+                    name ++ "-" ++ version ++ "-" ++ archToDebian arch
 
                 binaryPath : String
                 binaryPath =
@@ -60,6 +60,16 @@ task =
     Do.noop
 
 
+archToDebian : Arch -> String
+archToDebian arch =
+    case arch of
+        X86_64 ->
+            "amd64"
+
+        Arm64 ->
+            "aarch64"
+
+
 prepareDeb : { package : Package, binaryPath : String } -> BackendTask FatalError ()
 prepareDeb { package, binaryPath } =
     let
@@ -91,7 +101,7 @@ prepareDeb { package, binaryPath } =
         )
     <| \_ ->
     logExecs "  🌀 📦 Creating the package"
-        [ ( "dpkg-deb", [ "--root-owner-group", "--build", debPath, "out/" ++ debName ++ "_" ++ package.debianArch ++ ".deb" ] ) ]
+        [ ( "dpkg-deb", [ "--root-owner-group", "--build", debPath, "out/" ++ debName ++ "_" ++ archToDebian package.arch ++ ".deb" ] ) ]
     <| \_ ->
     Do.noop
 
@@ -102,7 +112,7 @@ controlFile { package, revision } =
     , "Version: " ++ package.version ++ "-" ++ revision
     , "Section: base"
     , "Priority: optional"
-    , "Architecture: " ++ package.debianArch
+    , "Architecture: " ++ archToDebian package.arch
 
     -- , "Depends:"
     , "Maintainer: " ++ package.maintainer

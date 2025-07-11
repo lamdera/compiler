@@ -1,14 +1,32 @@
-module Packages exposing (Package, packages)
+module Packages exposing (Arch(..), Package, packages)
 
 
 type alias Package =
     { name : String
     , version : String
     , url : String
-    , debianArch : String
+    , arch : Arch
     , maintainer : String
     , description : String
     , hash : String
+    }
+
+
+type Arch
+    = X86_64
+    | Arm64
+
+
+arches : List Arch
+arches =
+    [ X86_64
+    , Arm64
+    ]
+
+
+type alias Hashes =
+    { x86_64 : String
+    , arm64 : String
     }
 
 
@@ -23,43 +41,78 @@ packages =
             }
         }
     ]
-        |> List.concat
+        |> List.concatMap
+            (\f ->
+                List.map
+                    (\arch ->
+                        let
+                            data : PackageData
+                            data =
+                                f arch
+                        in
+                        { name = data.name
+                        , version = data.version
+                        , url = data.url
+                        , description = data.description
+                        , maintainer = data.maintainer
+                        , hash = getHash arch data.hashes
+                        , arch = arch
+                        }
+                    )
+                    arches
+            )
+
+
+type alias PackageData =
+    { name : String
+    , version : String
+    , url : String
+    , description : String
+    , maintainer : String
+    , hashes : Hashes
+    }
 
 
 lamdera :
     { lamderaVersion : String
     , elmVersion : String
-    , hashes : { x86_64 : String, arm64 : String }
+    , hashes : Hashes
     }
-    -> List Package
-lamdera { lamderaVersion, elmVersion, hashes } =
+    -> Arch
+    -> PackageData
+lamdera { lamderaVersion, elmVersion, hashes } arch =
     let
-        go :
-            { lamderaArch : String
-            , debianArch : String
-            , hash : String
-            }
-            -> Package
-        go data =
-            let
-                fullName : String
-                fullName =
-                    "lamdera-" ++ lamderaVersion ++ "-linux-" ++ data.lamderaArch
+        lamderaArch : String
+        lamderaArch =
+            case arch of
+                X86_64 ->
+                    "x86_64"
 
-                url : String
-                url =
-                    "https://static.lamdera.com/bin/" ++ fullName
-            in
-            { name = "lamdera"
-            , version = lamderaVersion ++ "-" ++ elmVersion
-            , url = url
-            , debianArch = data.debianArch
-            , description = "A delightful platform for full-stack web apps"
-            , maintainer = "Mario Rogic <hello@mario.net.au>"
-            , hash = data.hash
-            }
+                Arm64 ->
+                    "arm64"
+
+        fullName : String
+        fullName =
+            "lamdera-" ++ lamderaVersion ++ "-linux-" ++ lamderaArch
+
+        url : String
+        url =
+            "https://static.lamdera.com/bin/" ++ fullName
     in
-    [ { lamderaArch = "x86_64", debianArch = "amd64", hash = hashes.x86_64 }
-    , { lamderaArch = "arm64", debianArch = "aarch64", hash = hashes.arm64 }
-    ]
-        |> List.map go
+    { name = "lamdera"
+    , version = lamderaVersion ++ "-" ++ elmVersion
+    , url = url
+    , description = "A delightful platform for full-stack web apps"
+    , maintainer = "Mario Rogic <hello@mario.net.au>"
+    , hashes = hashes
+    }
+
+
+getHash : Arch -> Hashes -> String
+getHash arch hashes =
+    case arch of
+        X86_64 ->
+            hashes.x86_64
+
+        Arm64 ->
+            hashes.arm64
