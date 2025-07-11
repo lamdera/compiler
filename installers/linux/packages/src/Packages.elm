@@ -54,6 +54,20 @@ packages =
             , arm64 = "0be0046a81432e6e16340b8093cafa35a454e84956522d53f6a28f815dceac23"
             }
         }
+    , elmTestRs
+        { version = "3.0"
+        , hashes =
+            { x86_64 = "c72702d32a2a9e051667febeeef486a1794798d0770be1a9da95895e10b6db0f"
+            , arm64 = "bf468f39f9a9700f7ca0ed29719f9c9051e4b3796976ae0752a5186fdb8f0449"
+            }
+        }
+    , elmTestRs
+        { version = "3.0.1"
+        , hashes =
+            { x86_64 = "3d99e394f2a90ddf5fcb579b7c9c822b62c2a71c5621cb9e2c5d5b37f8a9d5a7"
+            , arm64 = "c3ca8a90c0c7cb0fbeeab8f164271854cd449fdab5f30894fb09fba2e575b595"
+            }
+        }
     ]
         |> List.concatMap
             (\f ->
@@ -143,6 +157,31 @@ elmFormat { version, hashes } arch =
     , url = url
     , description = "Formats Elm source code according to a standard set of rules based on the official Elm Style Guide"
     , maintainer = "Aaron VonderHaar <gruen0aermel@gmail.com>"
+    , hashes = hashes
+    }
+
+
+elmTestRs : { version : String, hashes : Hashes } -> Arch -> PackageData
+elmTestRs { version, hashes } arch =
+    let
+        elmTestRsArch : String
+        elmTestRsArch =
+            case arch of
+                X86_64 ->
+                    ""
+
+                Arm64 ->
+                    "-arm-64"
+
+        url : String
+        url =
+            "https://github.com/mpizenberg/elm-test-rs/releases/download/v" ++ version ++ "/elm-test-rs_linux" ++ elmTestRsArch ++ ".tar.gz"
+    in
+    { name = "elm-test-rs"
+    , version = version
+    , url = url
+    , description = "Fast and portable executable to run your Elm tests"
+    , maintainer = "Matthieu Pizenberg <matthieu@pizenberg.fr>"
     , hashes = hashes
     }
 
