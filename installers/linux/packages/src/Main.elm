@@ -35,8 +35,25 @@ task =
                 , ( "chmod", [ "+x", binaryPath ] )
                 ]
             <| \_ ->
-            Do.do (prepareDeb { package = package, binaryPath = binaryPath }) <| \_ ->
-            Do.noop
+            logExec "  🕵️ Verifying hash" "sha512sum" [ binaryPath ] <| \actualHash ->
+            let
+                expectedHash : String
+                expectedHash =
+                    package.hash ++ "  " ++ binaryPath
+            in
+            if String.trim actualHash == expectedHash then
+                Do.do (prepareDeb { package = package, binaryPath = binaryPath }) <| \_ ->
+                Do.noop
+
+            else
+                BackendTask.fail
+                    (FatalError.fromString
+                        ("Invalid hash:\n  expected: "
+                            ++ expectedHash
+                            ++ ",\n  got:      "
+                            ++ String.trim actualHash
+                        )
+                    )
         )
     <| \_ ->
     logExec "🧹 Cleaning up temporary work directory" "rm" [ "-r", "work" ] <| \_ ->
@@ -95,14 +112,14 @@ controlFile { package, revision } =
         |> String.join "\n"
 
 
-logExec : String -> String -> List String -> (() -> BackendTask FatalError b) -> BackendTask FatalError b
+logExec : String -> String -> List String -> (String -> BackendTask FatalError a) -> BackendTask FatalError a
 logExec msg cmd args k =
     logCyan msg <| \_ ->
     Do.log (formatCmd cmd args) <| \_ ->
-    Do.exec cmd args k
+    Do.command cmd args k
 
 
-logExecs : String -> List ( String, List String ) -> (() -> BackendTask FatalError b) -> BackendTask FatalError b
+logExecs : String -> List ( String, List String ) -> (() -> BackendTask FatalError a) -> BackendTask FatalError a
 logExecs msg cmds k =
     logCyan msg <| \_ ->
     Do.each cmds
@@ -115,7 +132,7 @@ logExecs msg cmds k =
     k ()
 
 
-logCyan : String -> ((() -> BackendTask FatalError b) -> BackendTask FatalError b)
+logCyan : String -> ((() -> BackendTask FatalError a) -> BackendTask FatalError a)
 logCyan msg =
     Do.log (Ansi.Color.fontColor Ansi.Color.cyan msg)
 
