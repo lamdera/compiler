@@ -36,8 +36,22 @@ packages =
         { lamderaVersion = "1.3.2"
         , elmVersion = "0.19.1"
         , hashes =
-            { x86_64 = "f270decbbd305905a4ba31cfaa77c9708f976941816d4834df6b995f8a7531187da3414d7695351f72e09c1c0557726deed7a38ee107139ef6fd7f08ac4fc647"
-            , arm64 = "ff388e08436ad4ab69a8baf5189b293971bafc7bef46ef342131d1013687c7b026705e7021c9543257ab999a2ff51db8655283a44955faa6e7c832c26916df0f"
+            { x86_64 = "15a69bfa98155651749e31c68d05a04fcf48bdccb86bce77b7c8872f545cecfa"
+            , arm64 = "68a16bbbd2ed0ee19c36112a4c2d0abca66cf17465747e55adf2596b0921f8d7"
+            }
+        }
+    , elmFormat
+        { version = "0.8.7"
+        , hashes =
+            { x86_64 = "44344c7b6f838dc5d9495dfe4253280a698c2251ee8cfa29b6d1a032b6efb13b"
+            , arm64 = "fe99b3925201598121aeea6b31b55bd3ab6dad743bce27082d8e01e723bd160e"
+            }
+        }
+    , elmFormat
+        { version = "0.8.8"
+        , hashes =
+            { x86_64 = "ee749898a07871e5dcbe7adf77a6c3d95de2fcde2e15de30e4fa7457faf05a71"
+            , arm64 = "0be0046a81432e6e16340b8093cafa35a454e84956522d53f6a28f815dceac23"
             }
         }
     ]
@@ -104,6 +118,31 @@ lamdera { lamderaVersion, elmVersion, hashes } arch =
     , url = url
     , description = "A delightful platform for full-stack web apps"
     , maintainer = "Mario Rogic <hello@mario.net.au>"
+    , hashes = hashes
+    }
+
+
+elmFormat : { version : String, hashes : Hashes } -> Arch -> PackageData
+elmFormat { version, hashes } arch =
+    let
+        elmFormatArch : String
+        elmFormatArch =
+            case arch of
+                X86_64 ->
+                    "x64"
+
+                Arm64 ->
+                    "aarch64"
+
+        url : String
+        url =
+            "https://github.com/avh4/elm-format/releases/download/" ++ version ++ "/elm-format-" ++ version ++ "-linux-" ++ elmFormatArch ++ ".tgz"
+    in
+    { name = "elm-format"
+    , version = version
+    , url = url
+    , description = "Formats Elm source code according to a standard set of rules based on the official Elm Style Guide"
+    , maintainer = "Aaron VonderHaar <gruen0aermel@gmail.com>"
     , hashes = hashes
     }
 

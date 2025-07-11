@@ -35,7 +35,7 @@ task =
                 , ( "chmod", [ "+x", binaryPath ] )
                 ]
             <| \_ ->
-            logExec "  🕵️ Verifying hash" "sha512sum" [ binaryPath ] <| \actualHash ->
+            logExec "  🕵️ Verifying hash" "sha256sum" [ binaryPath ] <| \actualHash ->
             let
                 expectedHash : String
                 expectedHash =
