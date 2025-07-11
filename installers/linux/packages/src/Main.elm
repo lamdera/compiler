@@ -5,8 +5,8 @@ import BackendTask exposing (BackendTask)
 import BackendTask.Do as Do
 import FatalError exposing (FatalError)
 import Json.Encode
+import Packages exposing (Package)
 import Pages.Script as Script exposing (Script)
-import Versions
 
 
 run : Script
@@ -18,66 +18,24 @@ task : BackendTask FatalError ()
 task =
     logExec "👷 Creating temporary work directory" "mkdir" [ "-p", "work" ] <| \_ ->
     logExec "👷 Creating output directory" "mkdir" [ "-p", "out" ] <| \_ ->
-    Do.each Versions.versions
-        (\{ lamderaVersion, elmVersion } ->
-            Do.each Versions.architectures
-                (\arch ->
-                    let
-                        fullName : String
-                        fullName =
-                            "lamdera-" ++ lamderaVersion ++ "-linux-" ++ arch.lamderaName
+    Do.each Packages.packages
+        (\({ name, version, url, debianArch } as package) ->
+            let
+                fullName : String
+                fullName =
+                    name ++ "-" ++ version ++ "-" ++ debianArch
 
-                        url : String
-                        url =
-                            "https://static.lamdera.com/bin/" ++ fullName
-
-                        binaryPath : String
-                        binaryPath =
-                            "work/" ++ fullName
-                    in
-                    Do.log (Ansi.Color.fontColor Ansi.Color.brightYellow ("🏃 " ++ fullName)) <| \_ ->
-                    logExecs "  🔽 Downloading"
-                        [ ( "curl", [ url, "-sSL", "-o", binaryPath ] )
-                        , ( "chmod", [ "+x", binaryPath ] )
-                        ]
-                    <| \_ ->
-                    let
-                        revision =
-                            "1"
-
-                        debName : String
-                        debName =
-                            "lamdera_" ++ lamderaVersion ++ "-" ++ elmVersion ++ "-" ++ revision
-
-                        debPath : String
-                        debPath =
-                            "work/" ++ debName
-                    in
-                    logExecs "  🌀 📁 Preparing folders for .deb "
-                        [ ( "mkdir", [ "-p", debPath ++ "/usr/local/bin" ] )
-                        , ( "cp", [ binaryPath, debPath ++ "/usr/local/bin/lamdera" ] )
-                        , ( "mkdir", [ debPath ++ "/DEBIAN" ] )
-                        ]
-                    <| \_ ->
-                    Do.log (Ansi.Color.fontColor Ansi.Color.cyan "  🌀 📰 Writing DEBIAN/control file") <| \_ ->
-                    Do.allowFatal
-                        (Script.writeFile
-                            { path = debPath ++ "/DEBIAN/control"
-                            , body =
-                                controlFile
-                                    { arch = arch
-                                    , lamderaVersion = lamderaVersion
-                                    , elmVersion = elmVersion
-                                    , revision = revision
-                                    }
-                            }
-                        )
-                    <| \_ ->
-                    logExec "  🌀 📦 Creating the package" "dpkg-deb" [ "--root-owner-group", "--build", debPath, "out/" ++ debName ++ "_" ++ arch.debianName ++ ".deb" ] <| \_ ->
-                    logExec "  🌀 🧹 Cleaning up .deb packaging folder" "rm" [ "-r", debPath ] <| \_ ->
-                    Do.noop
-                )
+                binaryPath : String
+                binaryPath =
+                    "work/" ++ fullName
+            in
+            Do.log (Ansi.Color.fontColor Ansi.Color.brightYellow ("🏃 " ++ fullName)) <| \_ ->
+            logExecs "  🔽 Downloading"
+                [ ( "curl", [ url, "-sSL", "-o", binaryPath ] )
+                , ( "chmod", [ "+x", binaryPath ] )
+                ]
             <| \_ ->
+            Do.do (prepareDeb { package = package, binaryPath = binaryPath }) <| \_ ->
             Do.noop
         )
     <| \_ ->
@@ -85,17 +43,53 @@ task =
     Do.noop
 
 
-controlFile : { arch : { debianName : String, lamderaName : String }, lamderaVersion : String, elmVersion : String, revision : String } -> String
-controlFile { arch, lamderaVersion, elmVersion, revision } =
-    [ "Package: lamdera"
-    , "Version: " ++ lamderaVersion ++ "-" ++ elmVersion ++ "-" ++ revision
+prepareDeb : { package : Package, binaryPath : String } -> BackendTask FatalError ()
+prepareDeb { package, binaryPath } =
+    let
+        revision : String
+        revision =
+            "1"
+
+        debName : String
+        debName =
+            package.name ++ "_" ++ package.version ++ "-" ++ revision
+
+        debPath : String
+        debPath =
+            "work/" ++ debName
+    in
+    logExecs "  🌀 📁 Preparing folders for .deb "
+        [ ( "rm", [ "-rf", debPath ] )
+        , ( "mkdir", [ "-p", debPath ++ "/usr/local/bin" ] )
+        , ( "cp", [ binaryPath, debPath ++ "/usr/local/bin/" ++ package.name ] )
+        , ( "mkdir", [ debPath ++ "/DEBIAN" ] )
+        ]
+    <| \_ ->
+    logCyan "  🌀 📰 Writing DEBIAN/control file" <| \_ ->
+    Do.allowFatal
+        (Script.writeFile
+            { path = debPath ++ "/DEBIAN/control"
+            , body = controlFile { package = package, revision = revision }
+            }
+        )
+    <| \_ ->
+    logExecs "  🌀 📦 Creating the package"
+        [ ( "dpkg-deb", [ "--root-owner-group", "--build", debPath, "out/" ++ debName ++ "_" ++ package.debianArch ++ ".deb" ] ) ]
+    <| \_ ->
+    Do.noop
+
+
+controlFile : { package : Package, revision : String } -> String
+controlFile { package, revision } =
+    [ "Package: " ++ package.name
+    , "Version: " ++ package.version ++ "-" ++ revision
     , "Section: base"
     , "Priority: optional"
-    , "Architecture: " ++ arch.debianName
+    , "Architecture: " ++ package.debianArch
 
     -- , "Depends:"
-    , "Maintainer: Mario Rogic <hello@mario.net.au>"
-    , "Description: A delightful platform for full-stack web apps"
+    , "Maintainer: " ++ package.maintainer
+    , "Description: " ++ package.description
     , ""
     ]
         |> String.join "\n"
@@ -103,14 +97,14 @@ controlFile { arch, lamderaVersion, elmVersion, revision } =
 
 logExec : String -> String -> List String -> (() -> BackendTask FatalError b) -> BackendTask FatalError b
 logExec msg cmd args k =
-    Do.log (Ansi.Color.fontColor Ansi.Color.cyan msg) <| \_ ->
+    logCyan msg <| \_ ->
     Do.log (formatCmd cmd args) <| \_ ->
     Do.exec cmd args k
 
 
 logExecs : String -> List ( String, List String ) -> (() -> BackendTask FatalError b) -> BackendTask FatalError b
 logExecs msg cmds k =
-    Do.log (Ansi.Color.fontColor Ansi.Color.cyan msg) <| \_ ->
+    logCyan msg <| \_ ->
     Do.each cmds
         (\( cmd, args ) ->
             Do.log (formatCmd cmd args) <| \_ ->
@@ -119,6 +113,11 @@ logExecs msg cmds k =
         )
     <| \_ ->
     k ()
+
+
+logCyan : String -> ((() -> BackendTask FatalError b) -> BackendTask FatalError b)
+logCyan msg =
+    Do.log (Ansi.Color.fontColor Ansi.Color.cyan msg)
 
 
 formatCmd : String -> List String -> String
