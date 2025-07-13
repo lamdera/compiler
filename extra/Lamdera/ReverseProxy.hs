@@ -118,8 +118,11 @@ modReq newPathInfo hostname request =
         request
           & requestHeaders
           & fmap (\(header, contents) ->
-            if header == hHost
-              then (header, T.encodeUtf8 hostname)
-              else (header, contents)
-          )
+              if header == hHost then
+                (header, T.encodeUtf8 hostname)
+              else if header == hUserAgent then
+                (header, "node")
+              else
+                (header, contents)
+            )
     }
