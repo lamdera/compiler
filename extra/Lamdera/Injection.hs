@@ -543,14 +543,14 @@ injections outputType mode =
           };
 
           _VirtualDom_applyPatches = function(rootDomNode, oldVirtualNode, patches, eventNode) {
-            if (typeof _VirtualDom_wrap === 'function') { // For lydell’s vdom.
-              _VirtualDom_renderCount++;
-              var instance = rootDomNode.elmInstance || _VirtualDom_instanceCount++;
-              _VirtualDom_instance = '_' + instance;
-              var diffReturn = _VirtualDom_diffHelp(oldVirtualNode, patches, eventNode);
-              _VirtualDom_lastDomNode = diffReturn.w;
-              _VirtualDom_lastDomNode.elmInstance = instance;
-              _VirtualDom_instance = '';
+            if (typeof _VirtualDom_createTNode === 'function') { // For lydell’s vdom.
+              var tNode = rootDomNode.elmTree;
+              var diffReturn = _VirtualDom_diffHelp(oldVirtualNode, patches, eventNode, tNode);
+              _VirtualDom_lastDomNode = diffReturn.r;
+              if (_VirtualDom_lastDomNode !== rootDomNode) {
+                delete rootDomNode.elmTree;
+                _VirtualDom_lastDomNode.elmTree = tNode;
+              }
             } else {
               if (patches.length !== 0) {
                 _VirtualDom_addDomNodes(rootDomNode, oldVirtualNode, patches, eventNode);
@@ -714,7 +714,7 @@ injections outputType mode =
     function _VirtualDom_diff(x, y)
     {
       _VirtualDom_lastVNode = y;
-      if (typeof _VirtualDom_wrap === 'function') // For lydell’s vdom.
+      if (typeof _VirtualDom_createTNode === 'function') // For lydell’s vdom.
       {
         return y;
       }
@@ -727,15 +727,15 @@ injections outputType mode =
     var _VirtualDom_lastDomNode = null;
     function _VirtualDom_applyPatches(rootDomNode, oldVirtualNode, patches, eventNode)
     {
-      if (typeof _VirtualDom_wrap === 'function') // For lydell’s vdom.
+      if (typeof _VirtualDom_createTNode === 'function') // For lydell’s vdom.
       {
-        _VirtualDom_renderCount++;
-        var instance = rootDomNode.elmInstance || _VirtualDom_instanceCount++;
-        _VirtualDom_instance = '_' + instance;
-        var diffReturn = _VirtualDom_diffHelp(oldVirtualNode, patches, eventNode);
-        _VirtualDom_lastDomNode = diffReturn.w;
-        _VirtualDom_lastDomNode.elmInstance = instance;
-        _VirtualDom_instance = '';
+        var tNode = rootDomNode.elmTree;
+        var diffReturn = _VirtualDom_diffHelp(oldVirtualNode, patches, eventNode, tNode);
+        _VirtualDom_lastDomNode = diffReturn.r;
+        if (_VirtualDom_lastDomNode !== rootDomNode) {
+          delete rootDomNode.elmTree;
+          _VirtualDom_lastDomNode.elmTree = tNode;
+        }
         return _VirtualDom_lastDomNode;
       }
 
