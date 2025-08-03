@@ -46,4 +46,14 @@ suite = tests
         actual <- catchOutput $ Lamdera.Compile.makeDev project [ "src/Frontend.elm", "src/Backend.elm", "src/Types.elm" ]
 
         expectTextContains actual "Success! Compiled 3 modules."
+
+  , scope "compilation should fail with WebGL.Texture in backend contexts" $ do
+        project <- io $ Lamdera.Relative.requireDir "test/scenario-webgl-texture"
+
+        _ <- io $ rmdir (project </> "elm-stuff")
+
+        actual <- catchOutput $ Lamdera.Compile.makeDev project [ "src/TestBadWebGL.elm" ]
+
+        -- Should fail with kernel error for browser-only types
+        expectTextContains actual "can only be used in the frontend"
   ]
