@@ -17,6 +17,7 @@ import qualified Data.Maybe as Maybe
 import qualified Data.NonEmptyList as NE
 import qualified System.Directory as Dir
 import qualified System.FilePath as FP
+import qualified System.IO
 
 import qualified AST.Optimized as Opt
 import qualified BackgroundWriter as BW
@@ -48,6 +49,7 @@ data Flags =
     , _docs :: Maybe FilePath
     , _noWire :: Bool -- @LAMDERA
     , _optimizeLegible :: Bool -- @LAMDERA
+    , _experimentalJsTsExports :: Bool -- @LAMDERA - Export all exposed functions for JS/TS interop
     }
 
 
@@ -69,11 +71,12 @@ type Task a = Task.Task Exit.Make a
 
 
 run :: [FilePath] -> Flags -> IO ()
-run paths flags@(Flags _ _ _ report _ noWire optimizeLegible) =
+run paths flags@(Flags _ _ _ report _ noWire optimizeLegible experimentalJsTsExports) =
   do  style <- getStyle report
       maybeRoot <- Stuff.findRoot
       Lamdera.onlyWhen noWire Lamdera.disableWire
       Lamdera.onlyWhen optimizeLegible Lamdera.enableLongNames
+      Lamdera.onlyWhen experimentalJsTsExports Lamdera.enableExportAllFunctions
       Reporting.attemptWithStyle style Exit.makeToReport $
         case maybeRoot of
           Just root -> runHelp root paths style flags
@@ -81,7 +84,7 @@ run paths flags@(Flags _ _ _ report _ noWire optimizeLegible) =
 
 
 runHelp :: FilePath -> [FilePath] -> Reporting.Style -> Flags -> IO (Either Exit.Make ())
-runHelp root paths style (Flags debug optimize maybeOutput _ maybeDocs _ optimizeLegible) =
+runHelp root paths style (Flags debug optimize maybeOutput _ maybeDocs _ optimizeLegible experimentalJsTsExports) =
   BW.withScope $ \scope ->
   Stuff.withRootLock root $ Task.run $
   do  desiredMode <- getMode debug (optimize || optimizeLegible)
@@ -111,13 +114,21 @@ runHelp root paths style (Flags debug optimize maybeOutput _ maybeDocs _ optimiz
                   return ()
 
                 Just (JS target) ->
-                  case getNoMains artifacts of
-                    [] ->
-                      do  builder <- toBuilder root details desiredMode artifacts
-                          generate style target builder (Build.getRootNames artifacts)
+                  if experimentalJsTsExports
+                  then do  -- Generate with TypeScript when experimental JS/TS exports is enabled
+                    (jsBuilder, tsBuilder) <- toBuilderWithTypeScript root details desiredMode artifacts True
+                    generate style target jsBuilder (Build.getRootNames artifacts)
+                    -- Generate TypeScript declarations alongside JS
+                    let tsTarget = if target == "-" then "-" else FP.replaceExtension target "d.ts"
+                    generateTypeScript style tsTarget tsBuilder (Build.getRootNames artifacts)
+                  else 
+                    case getNoMains artifacts of
+                      [] ->
+                        do  builder <- toBuilder root details desiredMode artifacts
+                            generate style target builder (Build.getRootNames artifacts)
 
-                    name:names ->
-                      Task.throw (Exit.MakeNonMainFilesIntoJavaScript name names)
+                      name:names ->
+                        Task.throw (Exit.MakeNonMainFilesIntoJavaScript name names)
 
                 Just (Html target) ->
                   do  name <- hasOneMain artifacts
@@ -252,9 +263,13 @@ getNoMain modules root =
 generate :: Reporting.Style -> FilePath -> B.Builder -> NE.List ModuleName.Raw -> Task ()
 generate style target builder names =
   Task.io $
-    do  Dir.createDirectoryIfMissing True (FP.takeDirectory target)
-        File.writeBuilder target builder
-        Reporting.reportGenerate style names target
+    if target == "-" then
+      do  B.hPutBuilder System.IO.stdout builder
+          return ()  -- No reporting when outputting to stdout
+    else
+      do  Dir.createDirectoryIfMissing True (FP.takeDirectory target)
+          File.writeBuilder target builder
+          Reporting.reportGenerate style names target
 
 
 
@@ -271,6 +286,35 @@ toBuilder root details desiredMode artifacts =
       Debug -> Generate.debug root details artifacts
       Dev   -> Generate.dev   root details artifacts
       Prod  -> Generate.prod  root details artifacts
+
+toBuilderWithExportFlag :: FilePath -> Details.Details -> DesiredMode -> Build.Artifacts -> Bool -> Task B.Builder
+toBuilderWithExportFlag root details desiredMode artifacts experimentalJsTsExports =
+  Task.mapError Exit.MakeBadGenerate $
+    case desiredMode of
+      Debug -> Generate.debug root details artifacts  -- TODO: Add export flag support
+      Dev   -> Generate.devWithExportFlag root details artifacts experimentalJsTsExports
+      Prod  -> Generate.prod  root details artifacts  -- TODO: Add export flag support
+
+
+toBuilderWithTypeScript :: FilePath -> Details.Details -> DesiredMode -> Build.Artifacts -> Bool -> Task (B.Builder, B.Builder)
+toBuilderWithTypeScript root details desiredMode artifacts experimentalJsTsExports =
+  Task.mapError Exit.MakeBadGenerate $
+    case desiredMode of
+      Debug -> Generate.debugWithTypeScript root details artifacts experimentalJsTsExports
+      Dev   -> Generate.devWithTypeScript root details artifacts experimentalJsTsExports
+      Prod  -> Generate.prodWithTypeScript root details artifacts experimentalJsTsExports
+
+
+generateTypeScript :: Reporting.Style -> FilePath -> B.Builder -> NE.List ModuleName.Raw -> Task ()
+generateTypeScript style target builder names =
+  Task.io $
+    if target == "-" then
+      -- Skip TypeScript generation when outputting to stdout
+      return ()
+    else
+      do  Dir.createDirectoryIfMissing True (FP.takeDirectory target)
+          File.writeBuilder target builder
+          -- No special reporting for .d.ts files, they're generated alongside .js
 
 
 
@@ -295,7 +339,7 @@ output =
     , _plural = "output files"
     , _parser = parseOutput
     , _suggest = \_ -> return []
-    , _examples = \_ -> return [ "elm.js", "index.html", "/dev/null" ]
+    , _examples = \_ -> return [ "elm.js", "index.html", "/dev/null", "-" ]
     }
 
 
@@ -304,6 +348,7 @@ parseOutput name
   | isDevNull name      = Just DevNull
   | hasExt ".html" name = Just (Html name)
   | hasExt ".js"   name = Just (JS name)
+  | name == "-"         = Just (JS "-")
   | otherwise           = Nothing
 
 
@@ -334,7 +379,7 @@ isDevNull name =
 
 -- Clone of run that uses attemptWithStyle_cleanup
 run_cleanup :: IO () -> [FilePath] -> Flags -> IO ()
-run_cleanup cleanup paths flags@(Flags _ _ _ report _ noWire optimizeLegible) =
+run_cleanup cleanup paths flags@(Flags _ _ _ report _ noWire optimizeLegible _) =
   do  style <- getStyle report
       maybeRoot <- Stuff.findRoot
       Lamdera.onlyWhen noWire Lamdera.disableWire

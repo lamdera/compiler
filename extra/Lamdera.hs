@@ -45,6 +45,9 @@ module Lamdera
   , useLongNames_
   , enableLongNames
   , useLongNames
+  , enableExportAllFunctions
+  , isExportAllFunctionsEnabled
+  , isExportAllFunctionsEnabled_
   , isTest
   , isLiveMode
   , setLiveMode
@@ -458,6 +461,25 @@ enableLongNames :: IO ()
 enableLongNames = do
   debug $ "🗜️ enableLongNames"
   modifyMVar_ useLongNames_ (\_ -> pure True)
+
+
+{-# NOINLINE exportAllFunctions_ #-}
+exportAllFunctions_ :: MVar Bool
+exportAllFunctions_ = unsafePerformIO $ newMVar False
+
+{-# NOINLINE isExportAllFunctionsEnabled #-}
+isExportAllFunctionsEnabled :: IO Bool
+isExportAllFunctionsEnabled = do
+  readMVar exportAllFunctions_
+
+{-# NOINLINE isExportAllFunctionsEnabled_ #-}
+isExportAllFunctionsEnabled_ :: Bool
+isExportAllFunctionsEnabled_ = unsafePerformIO $ isExportAllFunctionsEnabled
+
+enableExportAllFunctions :: IO ()
+enableExportAllFunctions = do
+  debug $ "📤 enableExportAllFunctions"
+  modifyMVar_ exportAllFunctions_ (\_ -> pure True)
 
 
 isTest :: IO Bool

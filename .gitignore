@@ -14,6 +14,20 @@ extra/node_modules
 extra/.cache
 .stack-work
 
+# elm-format submodule build artifacts
+vendor/elm-format/.stack-work/
+vendor/elm-format/**/.stack-work/
+vendor/elm-format/src/Main
+
+# tools node_modules
+tools/*/node_modules/
+tools/**/node_modules/
+
+# test artifacts
+test/Test/Export/elm-stuff/
+test/Test/Export/*.js
+test/Test/Export/*.d.ts
+
 # @TESTS
 elm-home
 

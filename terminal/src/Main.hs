@@ -212,6 +212,7 @@ make =
         |-- flag "docs" Make.docsFile "Generate a JSON file of documentation for a package. Eventually it will be possible to preview docs with `reactor` because it is quite hard to deal with these JSON files directly."
         |-- onOff "no-wire" "Explicitly disable Lamdera's wire codegen."
         |-- onOff "optimize-legible" "Same as --optimize but without identifier shortening, handy for debugging optimised code or for when identifiers are more useful than smaller JS compilations."
+        |-- onOff "experimental-js-ts-exports" "EXPERIMENTAL: Export all exposed module functions for direct JavaScript/TypeScript interop. Functions will be available as ModuleName.functionName with both curried and direct versions."
   in
   Terminal.Command "make" Uncommon details example (zeroOrMore elmFile) makeFlags Make.run
 
