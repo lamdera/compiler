@@ -37,4 +37,13 @@ suite = tests
         actual <- catchOutput $ Lamdera.Compile.makeDev project [ "src/Triangle.elm" ]
 
         expectTextContains actual "Success! Compiled 1 module."
+
+  , scope "compile Elm app with WebGL.Texture in FrontendModel" $ do
+        project <- io $ Lamdera.Relative.requireDir "test/scenario-webgl-texture"
+
+        _ <- io $ rmdir (project </> "elm-stuff")
+
+        actual <- catchOutput $ Lamdera.Compile.makeDev project [ "src/Frontend.elm", "src/Backend.elm", "src/Types.elm" ]
+
+        expectTextContains actual "Success! Compiled 3 modules."
   ]
