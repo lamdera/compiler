@@ -36,6 +36,7 @@ suite =
                 , _docs = Nothing
                 , _noWire = True
                 , _optimizeLegible = False
+                , _experimentalJsTsExports = False
                 }
 
         fileContents <- readUtf8Text $ elmStuff ++ "/tmp.js"
@@ -74,6 +75,7 @@ suite =
                 , _docs = Nothing
                 , _noWire = True
                 , _optimizeLegible = False
+                , _experimentalJsTsExports = False
                 }
 
         fileContents <- readUtf8Text $ elmStuff ++ "/tmp.js"
@@ -123,6 +125,7 @@ suite =
                 , _docs = Nothing
                 , _noWire = True
                 , _optimizeLegible = False
+                , _experimentalJsTsExports = False
                 }
 
         fileContents <- readUtf8Text $ elmStuff ++ "/tmp.js"
@@ -174,6 +177,7 @@ suite =
                 , _docs = Nothing
                 , _noWire = True
                 , _optimizeLegible = False
+                , _experimentalJsTsExports = False
                 }
 
         fileContents <- readUtf8Text $ elmStuff ++ "/tmp.js"

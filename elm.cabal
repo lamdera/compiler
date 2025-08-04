@@ -172,6 +172,7 @@ Executable lamdera
         Generate.JavaScript.Functions
         Generate.JavaScript.Name
         Generate.Mode
+        Generate.TypeScript
         Nitpick.Debug
         Nitpick.PatternMatches
         Optimize.Case
@@ -318,6 +319,7 @@ Executable lamdera
         Test.Wire
         Test.JsOutput
         Test.WebGL
+        Test.TypeScript
         Test.Lamdera.Evergreen.TestMigrationHarness
         Test.Lamdera.Evergreen.TestMigrationGenerator
 

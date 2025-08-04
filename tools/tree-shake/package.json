@@ -1,0 +1,17 @@
+{
+  "name": "elm-tree-shake",
+  "version": "1.0.0",
+  "description": "Dead code elimination for Elm compiled output",
+  "main": "elm-tree-shake.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": ["elm", "tree-shake", "dead-code-elimination"],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "acorn": "^8.11.2",
+    "acorn-walk": "^8.3.0",
+    "escodegen": "^2.1.0"
+  }
+}
