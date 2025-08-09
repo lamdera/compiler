@@ -30,7 +30,9 @@ import qualified Terminal.Chomp as Chomp
 import qualified Terminal.Error as Error
 
 
+import qualified Lamdera
 import qualified Lamdera.Version
+import qualified Lamdera.CLI.Format
 import qualified Sanity
 
 -- COMMAND
@@ -86,6 +88,7 @@ app intro outro commands =
               Exit.exitSuccess
 
         command : chunks ->
+          Lamdera.alternativeImplementationWhen (command == "format") (Lamdera.CLI.Format.run chunks) $
           do  case List.find (\cmd -> toName cmd == command) commands of
                 Nothing ->
                   Error.exitWithUnknown command (map toName commands)

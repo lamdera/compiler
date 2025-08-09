@@ -66,7 +66,7 @@ socketHandler mClients mLeader beState onJoined onReceive clientId sessionId pen
         onlyWhen leaderChanged $ do
           sendToLeader mClients mLeader (\leader -> do
               -- Tell the new leader about the backend state they need
-              atomically $ readTVar beState
+              readTVarIO beState
             )
           -- Tell everyone about the new leader (also causes actual leader to go active as leader)
           broadcastLeader mClients mLeader
@@ -105,7 +105,7 @@ getNextLeader clients =
 
 broadcastLeader :: TVar [Client] -> TVar (Maybe ClientId) -> IO ()
 broadcastLeader mClients mLeader = do
-  leader <- atomically $ readTVar mLeader
+  leader <- readTVarIO mLeader
   case leader of
     Just leaderId ->
       broadcastImpl mClients $ "{\"t\":\"e\",\"l\":\"" <> leaderId <> "\"}"
@@ -116,7 +116,7 @@ broadcastLeader mClients mLeader = do
 
 sendToLeader :: TVar [Client] -> TVar (Maybe ClientId) -> (ClientId -> IO Text) -> IO ()
 sendToLeader mClients mLeader fn = do
-  leader <- atomically $ readTVar mLeader
+  leader <- readTVarIO mLeader
   case leader of
     Just leaderId -> do
       text <- fn leaderId
@@ -147,13 +147,13 @@ type Client = (ClientId, WS.Connection)
 
 sendImpl :: TVar [Client] -> ClientId -> T.Text -> IO ()
 sendImpl mClients clientId message = do
-  clients <- atomically $ readTVar mClients
+  clients <- readTVarIO mClients
   send_ clients clientId message
 
 
 broadcastImpl :: TVar [Client] -> T.Text -> IO ()
 broadcastImpl mClients message = do
-  clients <- atomically $ readTVar mClients
+  clients <- readTVarIO mClients
   broadcast_ clients message
 
 

@@ -202,7 +202,7 @@ read root shouldCheckLamdera =
                 then Left Exit.OutlineNoPkgCore
                 else Right outline
 
-            App (AppOutline _ srcDirs direct indirect _ _)
+            App (AppOutline version srcDirs@(NE.List srcHead srcTail) direct indirect testDirect testIndirect)
               | Map.notMember Pkg.core direct ->
                   return $ Left Exit.OutlineNoAppCore
 
@@ -219,8 +219,9 @@ read root shouldCheckLamdera =
                           do  maybeDups <- detectDuplicates root (NE.toList srcDirs)
                               case maybeDups of
                                 Nothing ->
+                                  let newSrcDirs = NE.List srcHead (AbsoluteSrcDir (Lamdera.lamderaCache root) : srcTail) in
                                   Lamdera.alternativeImplementationPassthrough (Lamdera.Checks.runChecks root shouldCheckLamdera direct) $
-                                  return $ Right outline
+                                  return $ Right (App (AppOutline version newSrcDirs direct indirect testDirect testIndirect))
 
                                 Just (canonicalDir, (dir1,dir2)) ->
                                   return $ Left (Exit.OutlineHasDuplicateSrcDirs canonicalDir dir1 dir2)

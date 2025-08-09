@@ -21,12 +21,36 @@ To uninstall, simply delete the `lamdera` binary.
 
 ## Usage
 
-All `elm` commands work in Lamdera, except:
+The Lamdera compiler is an [un-fork](/releases/open-source-compiler) of the Elm compiler, with additional features and extensions.
 
-- `reactor` which is replaced with `live`
-- `publish` / `bump` / `diff` are removed, continue to use `elm` for Elm package publishing
+## Extended & backwards compatible
 
-See [differences](https://dashboard.lamdera.app/docs/differences) for more info.
+The Lamdera compiler can be used to compile any existing Elm 0.19 project using the same commands as the official compiler.
+
+The Lamdera compiler CLI has the following differences from the official Elm compiler:
+
+|                         | elm/compiler | lamdera/compiler | Notes |
+|-------------------------|--------------|------------------|-------|
+| Elm 0.19 language       | ✅           | ✅               |       |
+| `repl`                  | ✅           | ✅               |       |
+| `init`                  | ✅           | ⚠️               | Initialises an Elm project setup for Lamdera |
+| `reactor`               | ✅           | ⚠️               | Renamed to `live`, full stack, live/hot reload, with [interactive UI source maps](/releases/v1-1-0) |
+| `make`                  | ✅           | ✅ ➕            | Adds:<br/>`--optimize-legible` non-obfuscated build<br/>`--no-wire` skips [Lamdera Wire](https://dashboard.lamdera.app/docs/wire) gen |
+| `install`               | ✅           | ✅ ➕            | Adds `lamdera/*` packages |
+| `diff` `bump` `publish` | ✅           | ❌ Deactivated   | All Lamdera projects use Elm packages from the Elm ecosystem, so continue to use `elm` for this. |
+| `format`                | ❌           | ✅               | Embeds [elm-format](https://github.com/avh4/elm-format) |
+
+You should be able to use the `lamdera` compiler on any Elm frontend project as-is.
+
+Lamdera projects are just Elm projects with some additional packages, and a few specific files to set things up for type-safe Elm with a Frontend *and* a Backend. You can [read more here](https://dashboard.lamdera.app/docs) if that interests you.
+
+## Forwards compatible
+
+We love the Elm language – Lamdera would be impossible without it, and our entire platform is built on it.
+
+We plan to continue to upgrade the Lamdera compiler and platform in line with future Elm releases, so Lamdera’s goal has been and continues to be one that looks towards staying forwards compatible. You can read about [Lamdera’s proactive forwards-compatibility approach & techniques](https://github.com/lamdera/compiler/blob/lamdera-next/extra/readme.md).
+
+Given Evan has unwaveringly held to the core design ethos of Elm (immutable, inferred, pure), we believe future Elm releases will stay compatible with Lamdera.
 
 
 ## Getting started
@@ -42,7 +66,7 @@ See the [Lamdera overview](https://dashboard.lamdera.app/docs/overview) for more
 
 ## Development
 
-Interested in contributing? See [extra/readme.md](extra/readme.md).
+Looking for build instructions or interested in contributing? See [extra/readme.md](extra/readme.md).
 
 ## Help
 

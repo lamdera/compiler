@@ -38,7 +38,7 @@ jobs:
       #     restore-keys: |
       #       ${{ runner.os }}-
 
-      # Now setup Haskell, given we're comitted to actually doing a lib build
+      # Now setup Haskell, given we're committed to actually doing a lib build
       - uses: haskell-actions/setup@v2
         # if: steps.cache.outputs.cache-hit != 'true'
         with:

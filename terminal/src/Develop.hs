@@ -113,10 +113,10 @@ runWithRoot root (Flags maybePort) =
       Filewatch.watch root recompile
 
       whenDebug $ do
-        -- Watch LocalDev.elm changes when in Debug mode to assist with development
+        -- Watch LocalDev changes when in Debug mode to assist with development
         home <- Dir.getHomeDirectory
-        let override = home <> "/dev/projects/lamdera-compiler/extra/LocalDev/LocalDev.elm"
-        onlyWhen_ (doesFileExist override) $ do
+        let override = home <> "/dev/projects/lamdera-compiler/extra/LocalDev"
+        onlyWhen_ (doesDirectoryExist override) $ do
           Filewatch.watchFile override recompile
 
       Lamdera.ReverseProxy.start

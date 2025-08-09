@@ -800,7 +800,7 @@ committedCheck root versionInfo = do
     Progress.report $
       Help.reportToDoc $
       Help.report "UNCOMMITTED FILES" (Just "src/Evergreen/")
-        ("I need type and migration files to be comitted otherwise I cannot deploy!")
+        ("I need type and migration files to be committed otherwise I cannot deploy!")
         ([ D.reflow "Here is a shortcut:"
          , D.dullyellow (D.reflow $ "git add " <> (List.intercalate " " missingPaths))
          , D.dullyellow (D.reflow $ "git commit -m \"Preparing for v" <> show version <> "\"")
