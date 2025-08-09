@@ -4,7 +4,8 @@ import Lamdera exposing (ClientId, SessionId)
 import Types exposing (..)
 
 
-type alias Model = BackendModel
+type alias Model =
+    BackendModel
 
 
 app =
@@ -18,7 +19,7 @@ app =
 
 init : ( Model, Cmd BackendMsg )
 init =
-    ( { message = "Hello from backend!" }
+    ( { message = "Hello from backend!", texture = Nothing }
     , Cmd.none
     )
 

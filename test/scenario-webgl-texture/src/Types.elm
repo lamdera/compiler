@@ -14,6 +14,7 @@ type alias FrontendModel =
 
 type alias BackendModel =
     { message : String
+    , texture : Maybe Texture.Texture -- This should also cause an error
     }
 
 

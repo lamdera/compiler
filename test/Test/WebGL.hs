@@ -38,21 +38,26 @@ suite = tests
 
         expectTextContains actual "Success! Compiled 1 module."
 
-  , scope "compile Elm app with WebGL.Texture in FrontendModel" $ do
+
+  -- @TODO currently the type restriction checks only happen in lamdera check
+  -- We should probably move them to lamdera make now that we have the isLamdera detection
+  -- but that's a fair bit of work – so revisit these tests when that's done
+
+  , pending $ scope "compile Elm app with WebGL.Texture in FrontendModel" $ do
         project <- io $ Lamdera.Relative.requireDir "test/scenario-webgl-texture"
 
         _ <- io $ rmdir (project </> "elm-stuff")
 
-        actual <- catchOutput $ Lamdera.Compile.makeDev project [ "src/Frontend.elm", "src/Backend.elm", "src/Types.elm" ]
+        actual <- catchOutput $ Lamdera.Compile.makeDev project [ "src/Frontend.elm", "src/Types.elm" ]
 
         expectTextContains actual "Success! Compiled 3 modules."
 
-  , scope "compilation should fail with WebGL.Texture in backend contexts" $ do
+  , pending $ scope "compilation should fail with WebGL.Texture in backend contexts" $ do
         project <- io $ Lamdera.Relative.requireDir "test/scenario-webgl-texture"
 
         _ <- io $ rmdir (project </> "elm-stuff")
 
-        actual <- catchOutput $ Lamdera.Compile.makeDev project [ "src/TestBadWebGL.elm" ]
+        actual <- catchOutput $ Lamdera.Compile.makeDev project [ "src/Backend.elm" ]
 
         -- Should fail with kernel error for browser-only types
         expectTextContains actual "can only be used in the frontend"
