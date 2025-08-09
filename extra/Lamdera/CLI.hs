@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Lamdera.CLI (live, login, check, deploy, reset, update, annotate, eval) where
+module Lamdera.CLI (live, login, check, deploy, reset, update, annotate, eval, format) where
 
 import Text.Read (readMaybe)
 import qualified Text.PrettyPrint.ANSI.Leijen as P
@@ -191,6 +191,25 @@ eval =
         ]
   in
   Terminal.Command "eval" (Common summary) details example args noFlags Lamdera.CLI.Interpreter.run
+
+
+-- FORMAT
+-- @LAMDERA Stub - intercepted in Terminal.hs
+
+
+format :: Terminal.Command
+format =
+  let
+    summary =
+      "Format Elm source files."
+
+    details =
+      "The `format` command is handled directly by elm-format for perfect compatibility."
+
+    example =
+      reflow "See elm-format documentation at <https://github.com/avh4/elm-format>"
+  in
+  Terminal.Command "format" (Common summary) details example noArgs noFlags (\_ _ -> return ())
 
 
 -- HELPERS
