@@ -514,53 +514,17 @@ detectEditor editorName editorExistsCheck openIO = do
       pure Nothing
 
 
-serveRpc (mClients, mLeader, mChan, beState) port = do
-
-  mEndpoint <- getParam "endpoint"
-  rbody <- readRequestBody _10MB
-  mSid <- getCookie "sid"
-  requestHeaders :: [(BS.ByteString, BS.ByteString)] <- fmap (\(cs, s) -> (CI.original cs, s)) <$> listHeaders <$> getRequest
-
-  -- E.chars perfoms character escaping, as header values can often have " within them
-  let requestHeadersJson = requestHeaders & fmap (Ext.Common.bsToUtf8 *** (E.chars . Ext.Common.bsToString)) & E.object
-
-  contentType :: Maybe BS.ByteString <- getHeader "Content-Type" <$> getRequest
-
-  debug $ "RPC:↘️ " ++ show (contentType, mEndpoint, mSid, rbody)
-
-  randBytes <- liftIO $ getEntropy 20
-  let newSid = BSL.toStrict $ B.toLazyByteString $ B.byteStringHex randBytes
-
-  sid <-
-    case mSid of
-      Nothing -> do
-        let cookie = Cookie "sid" newSid Nothing Nothing Nothing False False
-        modifyResponse $ addResponseCookie cookie
-
-        pure $ TE.decodeUtf8 $ newSid
-
-      Just sid_ ->
-        pure $ TE.decodeUtf8 $ cookieValue sid_
-
-  onlyWhen (mEndpoint == Nothing) $ error500 "no endpoint present"
-
-  -- Using UUIDv4 here instead of UUIDv1 like in production is merely a matter
-  -- of ergonomics; The UUIDv1 package only has `nextUUID :: IO (Maybe UUID)`
-  -- as it returns Nothing for requests too close together, so using UUIDv4
-  -- was more practical than implementing a UUIDv1 with retry
-  reqId <- liftIO $ UUID.toText <$> UUID.nextRandom
-  outChan <- newBChanListener mChan
-
+-- | Generate RPC request payload based on content type and request data
+generateRpcRequestPayload ::
+  Maybe BS.ByteString  -- ^ Content-Type header
+  -> BSL.ByteString    -- ^ Request body
+  -> BS.ByteString     -- ^ Endpoint
+  -> Text              -- ^ Session ID
+  -> Text              -- ^ Request ID
+  -> E.Value           -- ^ Request headers JSON
+  -> Text              -- ^ Final JSON payload
+generateRpcRequestPayload contentType rbody endpoint sid reqId requestHeadersJson =
   let
-    endpoint =
-      case mEndpoint of
-        Just endpoint_ ->
-          endpoint_
-
-        Nothing ->
-          -- Should be impossible given we already checked above
-          error "impossible: no endpoint present"
-
     -- Unfortunately the JSON string encoding logic is hidden inside Data.Aeson.Encoding.Internal
     -- so off we go with all the silly format hops
     escapeJsonString :: Text -> Text
@@ -613,10 +577,10 @@ serveRpc (mClients, mLeader, mChan, beState) port = do
                     values =
                       case vals of
                         [] -> "null"
-                        val:[] -> T.concat ["\"", (TE.decodeUtf8 val & escapeJsonString), "\""]
+                        val:[] -> TE.decodeUtf8 val & escapeJsonString
                         _ ->
                           vals
-                            & fmap (\v -> T.concat ["\"", (TE.decodeUtf8 v & escapeJsonString), "\""])
+                            & fmap (escapeJsonString . TE.decodeUtf8)
                             & T.intercalate ","
                             & (\v -> T.concat ["[", v, "]"])
                   in
@@ -630,6 +594,58 @@ serveRpc (mClients, mLeader, mChan, beState) port = do
           fallbackStringBody
         Nothing ->
           fallbackStringBody
+  in
+  requestPayload
+
+
+serveRpc (mClients, mLeader, mChan, beState) port = do
+
+  mEndpoint <- getParam "endpoint"
+  rbody <- readRequestBody _10MB
+  mSid <- getCookie "sid"
+  requestHeaders :: [(BS.ByteString, BS.ByteString)] <- fmap (\(cs, s) -> (CI.original cs, s)) <$> listHeaders <$> getRequest
+
+  -- E.chars perfoms character escaping, as header values can often have " within them
+  let requestHeadersJson = requestHeaders & fmap (Ext.Common.bsToUtf8 *** (E.chars . Ext.Common.bsToString)) & E.object
+
+  contentType :: Maybe BS.ByteString <- getHeader "Content-Type" <$> getRequest
+
+  debug $ "RPC:↘️ " ++ show (contentType, mEndpoint, mSid, rbody)
+
+  randBytes <- liftIO $ getEntropy 20
+  let newSid = BSL.toStrict $ B.toLazyByteString $ B.byteStringHex randBytes
+
+  sid <-
+    case mSid of
+      Nothing -> do
+        let cookie = Cookie "sid" newSid Nothing Nothing Nothing False False
+        modifyResponse $ addResponseCookie cookie
+
+        pure $ TE.decodeUtf8 $ newSid
+
+      Just sid_ ->
+        pure $ TE.decodeUtf8 $ cookieValue sid_
+
+  onlyWhen (mEndpoint == Nothing) $ error500 "no endpoint present"
+
+  -- Using UUIDv4 here instead of UUIDv1 like in production is merely a matter
+  -- of ergonomics; The UUIDv1 package only has `nextUUID :: IO (Maybe UUID)`
+  -- as it returns Nothing for requests too close together, so using UUIDv4
+  -- was more practical than implementing a UUIDv1 with retry
+  reqId <- liftIO $ UUID.toText <$> UUID.nextRandom
+  outChan <- newBChanListener mChan
+
+  let
+    endpoint =
+      case mEndpoint of
+        Just endpoint_ ->
+          endpoint_
+
+        Nothing ->
+          -- Should be impossible given we already checked above
+          error "impossible: no endpoint present"
+
+    requestPayload = generateRpcRequestPayload contentType rbody endpoint sid reqId requestHeadersJson
 
     loopRead :: IO Text
     loopRead = do
