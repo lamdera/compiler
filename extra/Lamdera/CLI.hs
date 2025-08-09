@@ -204,7 +204,7 @@ format =
       "Format Elm source files."
 
     details =
-      "The `format` command is handled directly by elm-format for perfect compatibility."
+      "The `format` command is proxied to the embedded copy of elm-format."
 
     example =
       reflow "See elm-format documentation at <https://github.com/avh4/elm-format>"

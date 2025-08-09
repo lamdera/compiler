@@ -30,6 +30,7 @@ import qualified Terminal.Chomp as Chomp
 import qualified Terminal.Error as Error
 
 
+import qualified Lamdera
 import qualified Lamdera.Version
 import qualified Lamdera.CLI.Format
 import qualified Sanity
@@ -87,25 +88,22 @@ app intro outro commands =
               Exit.exitSuccess
 
         command : chunks ->
-          -- @LAMDERA format intercept
-          if command == "format" then
-            do  Lamdera.CLI.Format.run chunks
-          else
-            do  case List.find (\cmd -> toName cmd == command) commands of
-                  Nothing ->
-                    Error.exitWithUnknown command (map toName commands)
+          Lamdera.alternativeImplementationWhen (command == "format") (Lamdera.CLI.Format.run chunks) $
+          do  case List.find (\cmd -> toName cmd == command) commands of
+                Nothing ->
+                  Error.exitWithUnknown command (map toName commands)
 
-                  Just (Command _ _ details example args_ flags_ callback) ->
-                    if elem "--help" chunks then
-                      Error.exitWithHelp (Just command) details example args_ flags_
+                Just (Command _ _ details example args_ flags_ callback) ->
+                  if elem "--help" chunks then
+                    Error.exitWithHelp (Just command) details example args_ flags_
 
-                    else
-                      case snd $ Chomp.chomp Nothing chunks args_ flags_ of
-                        Right (argsValue, flagsValue) ->
-                          callback argsValue flagsValue
+                  else
+                    case snd $ Chomp.chomp Nothing chunks args_ flags_ of
+                      Right (argsValue, flagsValue) ->
+                        callback argsValue flagsValue
 
-                        Left err ->
-                          Error.exitWithError err
+                      Left err ->
+                        Error.exitWithError err
 
 
 
