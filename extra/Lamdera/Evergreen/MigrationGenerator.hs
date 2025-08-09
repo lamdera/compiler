@@ -579,20 +579,41 @@ canToMigration_ oldVersion newVersion scope interfaces recursionSet typeNew type
       case typeOld of
         Can.TTuple a2 b2 c2m ->
           let
+            -- Helper function to detect if a migration needs lambda wrapping for tuple operations
+            needsLambdaWrap :: Can.Type -> Bool
+            needsLambdaWrap t = isRecord t
+
+            -- Generate unique variable name based on current context to avoid shadowing
+            tupleVarName = nextUniqueRef oldValueRef
+
+            -- Generate migrations with appropriate value references for tuple operations
+            nestedValueRef1 = if needsLambdaWrap a1 then tupleVarName else oldValueRef
             m1@(MigrationNested mfn1 imps1 subDefs1) =
-              canToMigration oldVersion newVersion scope interfaces recursionSet a1 (Just a2) tvarMapOld tvarMapNew oldValueRef
+              canToMigration oldVersion newVersion scope interfaces recursionSet a1 (Just a2) tvarMapOld tvarMapNew nestedValueRef1
+            
+            nestedValueRef2 = if needsLambdaWrap b1 then tupleVarName else oldValueRef
             m2@(MigrationNested mfn2 imps2 subDefs2) =
-              canToMigration oldVersion newVersion scope interfaces recursionSet b1 (Just b2) tvarMapOld tvarMapNew oldValueRef
+              canToMigration oldVersion newVersion scope interfaces recursionSet b1 (Just b2) tvarMapOld tvarMapNew nestedValueRef2
+
+            -- Helper function to wrap migrations that need lambda wrapping
+            wrapIfNeeded :: Can.Type -> Text -> Text
+            wrapIfNeeded t migration =
+              if needsLambdaWrap t && T.strip migration /= "" then
+                T.concat ["(\\", tupleVarName, " -> ", migration, ")"]
+              else
+                migration
 
             migrateTuple :: (Text -> Text) -> (Text -> Text) -> (Text -> Text -> Text) -> Migration
             migrateTuple handle1 handle2 handleBoth =
               let
+                wrappedMfn1 = wrapIfNeeded a1 mfn1
+                wrappedMfn2 = wrapIfNeeded b1 mfn2
                 (migration, migrationDefs) =
                   case (T.strip mfn1 == "", T.strip mfn2 == "") of
                     (True, True)   -> ("", Map.empty) -- No migration necessary
-                    (False, True)  -> (handle1 mfn1, subDefs1)
-                    (True, False)  -> (handle2 mfn2, subDefs2)
-                    (False, False) -> (handleBoth mfn1 mfn2, subDefs1 <> subDefs2)
+                    (False, True)  -> (handle1 wrappedMfn1, subDefs1)
+                    (True, False)  -> (handle2 wrappedMfn2, subDefs2)
+                    (False, False) -> (handleBoth wrappedMfn1 wrappedMfn2, subDefs1 <> subDefs2)
               in
               xMigrationNested (migration, imps1 <> imps2, migrationDefs)
           in
