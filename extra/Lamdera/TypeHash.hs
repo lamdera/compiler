@@ -275,7 +275,7 @@ canonicalToDiffableType targetName interfaces recursionSet canonical tvarMap =
         kernelErrorBrowserOnly =
           case identifier of
             (author, pkg, module_, tipe) ->
-              DError $ "must not contain the Frontent-only type `" <> tipe <> "` from " <> author <> "/" <> pkg <> ":" <> module_
+              DError $ "must not contain the Frontend-only type `" <> tipe <> "` from " <> author <> "/" <> pkg <> ":" <> module_
 
         lamderaCodecsError =
           case identifier of
@@ -391,6 +391,12 @@ canonicalToDiffableType targetName interfaces recursionSet canonical tvarMap =
         ("elm", "file", "File", "File") ->
           if targetName `elem` ["FrontendMsg", "FrontendModel"] then
             DKernelBrowser "File.File"
+          else
+            kernelErrorBrowserOnly
+
+        ("elm-explorations", "webgl", "WebGL.Texture", "Texture") ->
+          if targetName `elem` ["FrontendMsg", "FrontendModel"] then
+            DKernelBrowser "WebGL.Texture.Texture"
           else
             kernelErrorBrowserOnly
 

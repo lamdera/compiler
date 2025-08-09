@@ -21,11 +21,8 @@ import qualified Test.Ext.ElmPages.Check
 import qualified Test.TypeHashes
 import qualified Test.JsOutput
 import qualified Test.WebGL
-<<<<<<< HEAD
 import qualified Test.Lamdera.Live
-=======
 import qualified Test.BackwardsCompat
->>>>>>> bdcb71f7 (Test Lamdera HTML injections don't happen on vanilla Elm projects)
 
 import qualified Test.Lamdera.Evergreen.TestMigrationHarness
 import qualified Test.Lamdera.Evergreen.TestMigrationGenerator
