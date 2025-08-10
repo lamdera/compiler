@@ -349,7 +349,8 @@ decoderForType ifaces cname tipe =
 
 
     -- Frontend only JS reference types
-    TType (Module.Canonical (Name "elm" "browser") "Browser.Navigation") "Key" params -> callDecoder "decodeRef" tipe
+    -- See Injection.hs for why we don’t decode `Browser.Navigation.Key` as a reference.
+    -- TType (Module.Canonical (Name "elm" "browser") "Browser.Navigation") "Key" params -> callDecoder "decodeRef" tipe
     TType (Module.Canonical (Name "elm" "file") "File") "File" params -> callDecoder "decodeRef" tipe
     TType (Module.Canonical (Name "elm-explorations" "webgl") "WebGL.Texture") "Texture" params -> callDecoder "decodeRef" tipe
 
