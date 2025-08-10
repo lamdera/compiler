@@ -648,6 +648,7 @@ canonicalToFt version scope interfaces recursionSet canonical tvarMap =
 
 
         -- Kernel concessions for Frontend Model and Msg
+        ("elm", "browser", "Browser.Navigation", "Key") -> ("Browser.Navigation.Key", Set.singleton moduleName, Map.empty)
         ("elm", "file", "File", "File") -> ("File.File", Set.singleton moduleName, Map.empty)
         ("elm-explorations", "webgl", "WebGL.Texture", "Texture") -> ("WebGL.Texture.Texture", Set.singleton moduleName, Map.empty)
 
