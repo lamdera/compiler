@@ -171,76 +171,10 @@ source mode mains =
 
 injections :: OutputType -> Mode.Mode -> Text
 injections outputType mode =
-  let
-    previousVersionInt =
-      -- @TODO maybe its time to consolidate the global config...
-      (unsafePerformIO $ lookupEnv "VERSION")
-        & maybe "0" id
-        & read
-        & subtract 1
-
-    previousVersion = show_ previousVersionInt
-
-    {-| This code overrides how == is handled in Elm for SeqDict and SeqSet.
-        The code for handling Dict and Set is also injected here though the behavior is unchanged.
-
-        The entire == function kernel code is overriden further down* and this is inserted into it,
-        but the rest of the equals function kernel code is the same regardless of whether --optimize is used or not so
-        it was cleaner to not write it all twice for --optimize and non--optimize.
-
-        *like with Dict and Set, the rest of the equals kernel code behavior is unchanged.
-     -}
-    equalsOverride =
-        if isOptimizedMode mode then
-         [text|
-              if (x.$$ < 0)
-              {
-                if (x.$$ < -10)
-                {
-                  x = $$lamdera$$containers$$SeqDict$$toList(x);
-                  y = $$lamdera$$containers$$SeqDict$$toList(y);
-                }
-                else
-                {
-                  x = $$elm$$core$$Dict$$toList(x);
-                  y = $$elm$$core$$Dict$$toList(y);
-                }
-              }
-         |]
-       else
-         [text|
-            if (x.$$ === 'Set_elm_builtin')
-            {
-              x = $$elm$$core$$Set$$toList(x);
-              y = $$elm$$core$$Set$$toList(y);
-            }
-            if (x.$$ === 'RBNode_elm_builtin' || x.$$ === 'RBEmpty_elm_builtin')
-            {
-              x = $$elm$$core$$Dict$$toList(x);
-              y = $$elm$$core$$Dict$$toList(y);
-            }
-            if (x.$$ === 'SeqDict_elm_builtin')
-            {
-              x = $$lamdera$$containers$$SeqDict$$toList(x);
-              y = $$lamdera$$containers$$SeqDict$$toList(y);
-            }
-            if (x.$$ === 'SeqSet_elm_builtin')
-            {
-              x = $$lamdera$$containers$$SeqSet$$toList(x);
-              y = $$lamdera$$containers$$SeqSet$$toList(y);
-            }
-         |]
-
-    lamderaContainersExtensions_ =
-      Ext.Common.bsToText lamderaContainersExtensions
-        & Text.replace "// equals override injection marker" equalsOverride
-  in
   case outputType of
     NotLamdera ->
       [text|
 
-    $lamderaContainersExtensions_
-    
     function _Lamdera_inject(app) {
       app.die = app.stop;
     }
@@ -248,8 +182,6 @@ injections outputType mode =
 
     LamderaBackend ->
       [text|
-
-    $lamderaContainersExtensions_
 
     var isLamderaRuntime = typeof isLamdera !== 'undefined';
 
@@ -297,8 +229,6 @@ injections outputType mode =
     LamderaFrontend ->
       [text|
 
-    $lamderaContainersExtensions_
-
     function _Lamdera_inject(app) {
       app.die = app.stop;
     }
@@ -306,8 +236,6 @@ injections outputType mode =
 
     LamderaLive ->
       [text|
-
-    $lamderaContainersExtensions_
 
     function _Lamdera_inject(app, callUpdate) {
       app.die = app.stop;
@@ -497,14 +425,3 @@ mainsInclude list mains =
         else False
     _ ->
       False
-
-{-|
-  Overrides to the following functions to add support for lamdera/containers SeqDict and SeqSet,
-  displaying as `SeqDict.fromList [ ... ]` and `SeqSet.fromList [ ... ]`
-
-  _Debug_toAnsiString
-  _Utils_eqHelp
--}
-lamderaContainersExtensions :: BS.ByteString
-lamderaContainersExtensions =
-  $(bsToExp =<< runIO (Lamdera.Relative.readByteString "extra/Lamdera/Injection/lamdera-containers-extensions.js"))
