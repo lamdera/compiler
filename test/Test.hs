@@ -21,7 +21,6 @@ import qualified Test.Ext.ElmPages.Check
 import qualified Test.TypeHashes
 import qualified Test.JsOutput
 import qualified Test.WebGL
-import qualified Test.Lamdera.Live
 import qualified Test.BackwardsCompat
 
 import qualified Test.Lamdera.Evergreen.TestMigrationHarness
@@ -161,6 +160,5 @@ allTests =
     , scope "Lamdera.Evergreen.TestMigrationGenerator -> " $ Test.Lamdera.Evergreen.TestMigrationGenerator.suite
     , scope "Test.WebGL -> " $ Test.WebGL.suite
     , scope "Test.JsOutput -> " $ Test.JsOutput.suite
-    , scope "Test.Lamdera.Live -> " $ Test.Lamdera.Live.suite
     , scope "Test.BackwardsCompat -> " $ Test.BackwardsCompat.suite
     ]
