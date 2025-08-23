@@ -84,7 +84,7 @@ sandwich_ root moduleName javascript =
 
 <body>
 
-<pre id="elm"></pre>
+<pre data-elm id="elm"></pre>
 
 <script>
 try {
