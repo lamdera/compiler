@@ -42,6 +42,7 @@ import qualified Stuff
 import Lamdera
 import qualified Lamdera.CLI.Live as Live
 import qualified Lamdera.Constrain
+import qualified Lamdera.Repl
 import qualified Lamdera.ReverseProxy
 import qualified Lamdera.TypeHash
 import qualified Lamdera.PostCompile
@@ -133,6 +134,7 @@ runWithRoot root (Flags maybePort) =
         <|> serveDirectoryWith directoryConfig "."
         <|> Live.serveWebsocket root liveState
         <|> route [ ("_r/:endpoint", Live.serveRpc liveState port) ]
+        <|> route [ ("_c", Lamdera.Repl.serve root Live.jsonResponse Live.error404) ]
         <|> Live.openEditorHandler root
         <|> Live.serveExperimental root
         <|> serveAssets -- Compiler packaged static files
