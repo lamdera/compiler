@@ -264,6 +264,8 @@ injections outputType mode =
 
         var upgradeMode = false;
 
+        var errorHandler = args && args['errorHandler'];
+
         function sendToApp(msg, viewMetadata)
         {
           if (upgradeMode) {
@@ -272,9 +274,13 @@ injections outputType mode =
             return;
           }
 
-          var pair = A2(update, msg, model);
-          stepper(model = pair.a, viewMetadata);
-          _Platform_enqueueEffects(managers, pair.b, subscriptions(model));
+          try {
+            var pair = A2(update, msg, model);
+            stepper(model = pair.a, viewMetadata);
+            _Platform_enqueueEffects(managers, pair.b, subscriptions(model));
+          } catch (e) {
+            if (errorHandler !== undefined) { errorHandler(e) } else { throw e }
+          }
         }
 
         if ((args && args['model']) === undefined) {
@@ -478,6 +484,17 @@ injections outputType mode =
           onlyIf (outputType == LamderaLive)
             [text|
               shouldProxy = $$author$$project$$LocalDev$$shouldProxy(msg)
+            |]
+
+        exportFns =
+          onlyIf (outputType == LamderaLive)
+            [text|
+              fns :
+                { getModel : function() { return model }
+                , setBem : function(m) { model.bem = m; return m }
+                , setFem : function(m) { model.fem = m; return m }
+                , sendToApp : function(m) { sendToApp(m, true) }
+                },
             |]
       in
       [text|
@@ -695,6 +712,7 @@ injections outputType mode =
           ports: ports,
           die: die,
           bury: bury,
+          $exportFns
         } : {};
       }
 
@@ -873,35 +891,39 @@ esbuildIncluder root esbuildPath includesPath = do
 
 -- Tries to be clever by injecting `{}` as the `exports` value. Falls over if the target files have been compiled
 -- by a packager or if they don't use the `export.init` syntax, i.e. `export async function init() {...}`
-dumbJsPackager root elmPkgJsSources = do
-  wrappedPkgImports <-
-    mapM
-      (\f ->
-        if ".js" `Text.isSuffixOf` (Text.pack f)
-          then do
-            contents <- File.readUtf8 (root </> "elm-pkg-js" </> f)
-            pure $
-              "'" <> Text.encodeUtf8 (Text.pack f) <> "': function(exports){\n" <> contents <> "\nreturn exports;},\n"
-          else
-            pure ""
-      )
-      elmPkgJsSources
+dumbJsPackager root elmPkgJsSources =
+  if null elmPkgJsSources
+    then
+      pure ""
 
-  pure $ B.byteString $ mconcat
-    [ "const pkgExports = {\n" <> mconcat wrappedPkgImports <> "\n}\n"
-    , "if (typeof window !== 'undefined') {"
-    , "  window.elmPkgJsIncludes = {"
-    , "    init: async function(app) {"
-    , "      for (var pkgId in pkgExports) {"
-    , "        if (pkgExports.hasOwnProperty(pkgId)) {"
-    , "          pkgExports[pkgId]({}).init(app)"
-    , "        }"
-    , "      }"
-    , "    }"
-    , "  }"
-    , "}"
-    ]
+    else do
+      wrappedPkgImports <-
+        mapM
+          (\f ->
+            if ".js" `Text.isSuffixOf` (Text.pack f)
+              then do
+                contents <- File.readUtf8 (root </> "elm-pkg-js" </> f)
+                pure $
+                  "'" <> Text.encodeUtf8 (Text.pack f) <> "': function(exports){\n" <> contents <> "\nreturn exports;},\n"
+              else
+                pure ""
+          )
+          elmPkgJsSources
 
+      pure $ B.byteString $ mconcat
+        [ "const pkgExports = {\n" <> mconcat wrappedPkgImports <> "\n}\n"
+        , "if (typeof window !== 'undefined') {"
+        , "  window.elmPkgJsIncludes = {"
+        , "    init: async function(app) {"
+        , "      for (var pkgId in pkgExports) {"
+        , "        if (pkgExports.hasOwnProperty(pkgId)) {"
+        , "          pkgExports[pkgId]({}).init(app)"
+        , "        }"
+        , "      }"
+        , "    }"
+        , "  }"
+        , "}"
+        ]
 
 
 onlyIf :: Bool -> Text -> Text
