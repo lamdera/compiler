@@ -292,6 +292,9 @@ init flags url key =
                     else
                         log "☀️ Restored BackendModel" bem
 
+        replInitialModel =
+            Repl.initialModel (showVersion currentVersion)
+
         devbarInit =
             { expanded = False
             , location = BottomLeft
@@ -304,7 +307,7 @@ init flags url key =
             , versionCheck = VersionUnchecked
             , qrCodeShow = False
             , snapshotFilenames = []
-            , replModel = Repl.initialModel
+            , replModel = replInitialModel
             }
 
         devbar =
@@ -326,7 +329,7 @@ init flags url key =
                         , showResetNotification = didReset
 
                         -- REPL state can't be restored
-                        , replModel = Repl.initialModel
+                        , replModel = replInitialModel
                     }
 
         nodeType =

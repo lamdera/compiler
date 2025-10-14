@@ -1,5 +1,6 @@
 module Repl.Interface exposing
     ( bem
+    , broadcast
     , fem
     , sendToBE
     , sendToFE
@@ -71,6 +72,16 @@ sendToFE =
 checkedSendToFE : Lamdera.ClientId -> Types.ToFrontend -> Types.ToFrontend
 checkedSendToFE c m =
     sendToFET ( c, m )
+
+
+broadcast : Types.ToFrontend -> Types.ToFrontend
+broadcast =
+    onlyInLeader checkedBroadcast
+
+
+checkedBroadcast : Types.ToFrontend -> Types.ToFrontend
+checkedBroadcast m =
+    sendToFET ( "b", m )
 
 
 sendToFET : ( Lamdera.ClientId, Types.ToFrontend ) -> Types.ToFrontend

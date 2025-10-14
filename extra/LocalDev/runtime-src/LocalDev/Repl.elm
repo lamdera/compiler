@@ -20,7 +20,13 @@ import Task
 -- MODEL
 
 
-type Model
+type alias Model =
+    { version : String
+    , state : State
+    }
+
+
+type State
     = Stopped
     | Loading
     | LoadError String
@@ -81,14 +87,16 @@ type alias RunningModel =
     }
 
 
-initialModel : Model
-initialModel =
-    Stopped
+initialModel : String -> Model
+initialModel version =
+    { version = version
+    , state = Stopped
+    }
 
 
 isShown : Model -> Bool
-isShown replModel =
-    case replModel of
+isShown model =
+    case model.state of
         Stopped ->
             False
 
@@ -111,7 +119,7 @@ isShown replModel =
 
 view : Bool -> Model -> Html Msg
 view leftRight model =
-    case model of
+    case model.state of
         Stopped ->
             viewHidden
 
@@ -327,27 +335,39 @@ update : Msg -> Model -> ( Model, Cmd Msg, Bool )
 update msg model =
     case msg of
         ToggleClicked ->
-            toggleClicked model
+            updateState toggleClicked model
 
         RetryClicked ->
-            retryClicked model
+            updateState retryClicked model
 
         InputChanged newInput ->
-            inputChanged newInput model
+            updateState (inputChanged newInput) model
 
         FormSubmitted ->
-            formSubmitted model
+            updateState formSubmitted model
 
         WorkerReplyReceived workerReplyWire ->
-            workerReplyReceived workerReplyWire model
+            updateState (workerReplyReceived workerReplyWire) model
 
         NoOp ->
             ( model, Cmd.none, False )
 
 
-toggleClicked : Model -> ( Model, Cmd Msg, Bool )
+updateState : (Model -> ( State, Cmd Msg, Bool )) -> Model -> ( Model, Cmd Msg, Bool )
+updateState updateFn model =
+    case updateFn model of
+        ( state, cmd, replStopped ) ->
+            ( { version = model.version
+              , state = state
+              }
+            , cmd
+            , replStopped
+            )
+
+
+toggleClicked : Model -> ( State, Cmd Msg, Bool )
 toggleClicked model =
-    case model of
+    case model.state of
         Stopped ->
             ( Loading
             , callWorker ""
@@ -392,9 +412,9 @@ focusInput =
         )
 
 
-retryClicked : Model -> ( Model, Cmd Msg, Bool )
+retryClicked : Model -> ( State, Cmd Msg, Bool )
 retryClicked model =
-    case model of
+    case model.state of
         LoadError _ ->
             ( Loading
             , callWorker ""
@@ -408,31 +428,31 @@ retryClicked model =
             )
 
         _ ->
-            ( model
+            ( model.state
             , Cmd.none
             , False
             )
 
 
-inputChanged : String -> Model -> ( Model, Cmd Msg, Bool )
+inputChanged : String -> Model -> ( State, Cmd Msg, Bool )
 inputChanged newInput model =
-    ( setInput newInput model
+    ( setInput newInput model.state
     , Cmd.none
     , False
     )
 
 
-formSubmitted : Model -> ( Model, Cmd Msg, Bool )
+formSubmitted : Model -> ( State, Cmd Msg, Bool )
 formSubmitted model =
-    case model of
+    case model.state of
         Running runningModel ->
-            ( addOutput [ promptString runningModel.prefill ++ runningModel.input ] model
+            ( addOutput [ promptString runningModel.prefill ++ runningModel.input ] model.state
             , callWorker runningModel.input
             , False
             )
 
         _ ->
-            ( model
+            ( model.state
             , Cmd.none
             , False
             )
@@ -443,12 +463,12 @@ callWorker input =
     sendToWorkerPort (userInputCodec.encode (UserInput input))
 
 
-workerReplyReceived : WorkerReplyWire -> Model -> ( Model, Cmd Msg, Bool )
+workerReplyReceived : WorkerReplyWire -> Model -> ( State, Cmd Msg, Bool )
 workerReplyReceived workerReplyWire model =
     handleWorkerReply (workerReplyCodec.decode workerReplyWire) model
 
 
-handleWorkerReply : WorkerReply -> Model -> ( Model, Cmd Msg, Bool )
+handleWorkerReply : WorkerReply -> Model -> ( State, Cmd Msg, Bool )
 handleWorkerReply workerReply model =
     case workerReply.workerState of
         WorkerStateRunning maybePrefill ->
@@ -461,39 +481,39 @@ handleWorkerReply workerReply model =
             handleWorkerReplyCrashed error model
 
 
-handleWorkerReplyRunning : Maybe String -> List String -> Model -> ( Model, Cmd Msg, Bool )
+handleWorkerReplyRunning : Maybe String -> List String -> Model -> ( State, Cmd Msg, Bool )
 handleWorkerReplyRunning maybePrefill messages model =
-    case model of
+    case model.state of
         Loading ->
             ( Running
                 { shown = True
                 , input = Maybe.withDefault "" maybePrefill
                 , prefill = maybePrefill
-                , output = messages
+                , output = addLamderaWelcomeMessage model.version messages
                 }
             , focusInput
             , False
             )
 
-        Running _ ->
-            ( model
+        Running runningState ->
+            ( model.state
                 |> setInput (Maybe.withDefault "" maybePrefill)
                 |> setPrefill maybePrefill
-                |> addOutput messages
+                |> addOutput (changeOutput runningState.input messages)
             , Cmd.none
             , False
             )
 
         _ ->
-            ( model
+            ( model.state
             , Cmd.none
             , False
             )
 
 
-handleWorkerReplyStopped : Model -> ( Model, Cmd Msg, Bool )
+handleWorkerReplyStopped : Model -> ( State, Cmd Msg, Bool )
 handleWorkerReplyStopped model =
-    case model of
+    case model.state of
         Running _ ->
             ( Stopped
             , Cmd.none
@@ -501,15 +521,15 @@ handleWorkerReplyStopped model =
             )
 
         _ ->
-            ( model
+            ( model.state
             , Cmd.none
             , False
             )
 
 
-handleWorkerReplyCrashed : String -> Model -> ( Model, Cmd Msg, Bool )
+handleWorkerReplyCrashed : String -> Model -> ( State, Cmd Msg, Bool )
 handleWorkerReplyCrashed error model =
-    case model of
+    case model.state of
         Loading ->
             ( LoadError error
             , Cmd.none
@@ -523,7 +543,7 @@ handleWorkerReplyCrashed error model =
             )
 
         _ ->
-            ( model
+            ( model.state
             , Cmd.none
             , False
             )
@@ -533,28 +553,28 @@ handleWorkerReplyCrashed error model =
 -- HELPER
 
 
-setInput : String -> Model -> Model
+setInput : String -> State -> State
 setInput input =
     modifyRunningModel <|
         \runningModel ->
             { runningModel | input = input }
 
 
-setPrefill : Maybe String -> Model -> Model
+setPrefill : Maybe String -> State -> State
 setPrefill prefill =
     modifyRunningModel <|
         \runningModel ->
             { runningModel | prefill = prefill }
 
 
-addOutput : List String -> Model -> Model
+addOutput : List String -> State -> State
 addOutput newOutput =
     modifyRunningModel <|
         \runningModel ->
             { runningModel | output = newOutput ++ runningModel.output }
 
 
-modifyRunningModel : (RunningModel -> RunningModel) -> Model -> Model
+modifyRunningModel : (RunningModel -> RunningModel) -> State -> State
 modifyRunningModel fun model =
     case model of
         Running runningModel ->
@@ -632,3 +652,111 @@ type alias ReplCodec value wire =
     { encode : value -> wire
     , decode : wire -> value
     }
+
+
+
+-- SPECIAL OUTPUT
+
+
+addLamderaWelcomeMessage : String -> List String -> List String
+addLamderaWelcomeMessage lamderaVersion messages =
+    case messages of
+        [ welcomeMessage ] ->
+            case String.lines welcomeMessage of
+                [ startLine, text, lastLine ] ->
+                    case String.words startLine of
+                        [ leadingDashes, elmName, elmVersion, _ ] ->
+                            [ String.join "\n"
+                                [ [ leadingDashes, elmName, elmVersion, "/", "Lamdera", lamderaVersion, "-" ]
+                                    |> String.join " "
+                                    |> String.padRight 80 '-'
+                                , text
+                                , "Say :lamdera for Lamdera features! See " ++ replDocUrl
+                                , lastLine
+                                ]
+                            ]
+
+                        _ ->
+                            messages
+
+                _ ->
+                    messages
+
+        _ ->
+            messages
+
+
+changeOutput : String -> List String -> List String
+changeOutput input messages =
+    if input == ":lamdera" && messages /= [] then
+        [ """
+The Lamdera REPL defines the following functions:
+
+  fem      : Types.FrontendModel
+  setFem   : Types.FrontendModel -> Types.FrontendModel
+  updateFE : Types.FrontendMsg -> Types.FrontendMsg
+  sendToBE : Types.ToBackend -> Types.ToBackend
+
+In the leader tab (green dot) you can also call:
+
+  bem       : Types.BackendModel
+  setBem    : Types.BackendModel -> Types.BackendModel
+  updateBE  : Types.BackendMsg -> Types.BackendMsg
+  sendToFE  : Lamdera.ClientId -> Types.ToFrontend -> Types.ToFrontend
+  broadcast : Types.ToFrontend -> Types.ToFrontend
+
+More info at """ ++ replDocUrl ++ """
+"""
+        ]
+
+    else if String.startsWith ":" input then
+        case messages of
+            [ lines ] ->
+                case String.lines lines of
+                    [ err, "", c1, c2, c3, "", inf, "" ] ->
+                        [ String.join "\n"
+                            [ err
+                            , ""
+                            , String.left 11 c1 ++ "  " ++ String.dropLeft 11 c1
+                            , String.left 11 c2 ++ "  " ++ String.dropLeft 11 c2
+                            , String.left 11 c3 ++ "  " ++ String.dropLeft 11 c3
+                            , "  :lamdera   Show information about Lamdera REPL extensions"
+                            , ""
+                            , inf
+                            , "and at " ++ replDocUrl
+                            , ""
+                            ]
+                        ]
+
+                    _ ->
+                        messages
+
+            _ ->
+                messages
+
+    else
+        case messages of
+            [ lines ] ->
+                if String.startsWith "TODO in module `Repl.Interface`" lines then
+                    [ String.join "\n"
+                        [ ""
+                        , "This backend function can only by used in the leader tab (green dot)"
+                        , ""
+                        , "For more info say :lamdera"
+                        , "or look at " ++ replDocUrl
+                        , ""
+                        ]
+                    ]
+
+                else
+                    messages
+
+            _ ->
+                messages
+
+
+replDocUrl : String
+replDocUrl =
+    -- The length of this string shouldn't change in order to get a nice welcome message!
+    -- ......................................."
+    "<https://dashboard.lamdera.app/docs/repl>"
