@@ -19,7 +19,6 @@ port module LocalDev exposing (main)
 
 import Backend
 import Browser
-import Browser.Dom
 import Bytes
 import Env
 import Frontend
@@ -30,8 +29,8 @@ import Html.Lazy
 import Lamdera exposing (ClientId, Key, SessionId, Url)
 import Lamdera.Debug as LD
 import Lamdera.Json as Json
+import Lamdera.Repl as Repl
 import Lamdera.Wire3 as Wire exposing (Bytes)
-import LocalDev.Repl as Repl
 import Process
 import Task exposing (Task)
 import Types exposing (BackendModel, BackendMsg, FrontendModel, FrontendMsg, ToBackend, ToFrontend)

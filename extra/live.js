@@ -166,7 +166,7 @@ window.setupApp = function(name, elid) {
 
     function interpret(code) {
       code = code.replace(
-        /\$author\$project\$Repl\$Interface\$jsImpl\('(.*)'\);$/gm,
+        /\$author\$project\$Lamdera\$Repl\$Interface\$jsImpl\('(.*)'\);$/gm,
         (_,p) => p.replace(/\\/g, "")+';'
       )
       try {
@@ -191,7 +191,7 @@ window.setupApp = function(name, elid) {
           , ['mountLocal', '~/.elm', '.elm']
           , ['srcDir', 'elm-stuff/lamdera', '']
           , ['import', 'Lamdera', 'import Lamdera']
-          , ['import', 'Repl.Interface', 'import Repl.Interface exposing (..)']
+          , ['import', 'Lamdera.Repl.Interface', 'import Lamdera.Repl.Interface exposing (..)']
           , ['import', 'Types', 'import Types']
           , ['start', payload, '']
           ],

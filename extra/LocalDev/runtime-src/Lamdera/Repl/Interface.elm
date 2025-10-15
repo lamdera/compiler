@@ -1,4 +1,4 @@
-module Repl.Interface exposing
+module Lamdera.Repl.Interface exposing
     ( bem
     , broadcast
     , fem

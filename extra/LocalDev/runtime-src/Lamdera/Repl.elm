@@ -1,4 +1,4 @@
-port module LocalDev.Repl exposing
+port module Lamdera.Repl exposing
     ( Model
     , Msg(..)
     , initialModel
@@ -737,7 +737,7 @@ More info at """ ++ replDocUrl ++ """
     else
         case messages of
             [ lines ] ->
-                if String.startsWith "TODO in module `Repl.Interface`" lines then
+                if String.startsWith "TODO in module `Lamdera.Repl.Interface`" lines then
                     [ String.join "\n"
                         [ ""
                         , "This backend function can only by used in the leader tab (green dot)"
