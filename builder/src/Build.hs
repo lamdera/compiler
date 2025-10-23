@@ -58,6 +58,9 @@ import qualified Reporting.Render.Type.Localizer as L
 import qualified Stuff
 
 
+import Lamdera
+
+
 
 -- ENVIRONMENT
 
@@ -1121,6 +1124,8 @@ crawlRoot env@(Env _ _ projectType _ buildID _ _) mvar root =
               do  let deps = map Src.getImportName imports
                   let local = Details.Local path time deps (any isMain values) buildID buildID
                   crawlDeps env mvar deps (SOutsideOk local source modul)
+                    & Lamdera.alternativeImplementationWhen (lamderaIsLiveHarnessModule modul)
+                        (crawlDeps (lamderaLiveHarnessEnv env) mvar deps (SOutsideOk local source modul))
 
             Left syntaxError ->
               return $ SOutsideErr $
@@ -1249,3 +1254,21 @@ addOutside root modules =
     ROutsideOk name iface objs -> Fresh name iface objs : modules
     ROutsideErr _              -> modules
     ROutsideBlocked            -> modules
+
+
+
+-- @LAMDERA
+
+
+{- Alternative implementation extended with support for additional
+source directories when compiling the Lamdera Live harness module
+-}
+lamderaIsLiveHarnessModule :: Src.Module -> Bool
+lamderaIsLiveHarnessModule modul =
+  Src.getName modul == "LocalDev"
+
+
+lamderaLiveHarnessEnv :: Env -> Env
+lamderaLiveHarnessEnv env =
+  -- adds the Lamdera cache directory as an additional source directory
+  env { _srcDirs = AbsoluteSrcDir (Lamdera.lamderaCache $ _root env) : _srcDirs env }
