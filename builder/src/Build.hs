@@ -1123,9 +1123,9 @@ crawlRoot env@(Env _ _ projectType _ buildID _ _) mvar root =
             Right modul@(Src.Module _ _ _ imports values _ _ _ _) ->
               do  let deps = map Src.getImportName imports
                   let local = Details.Local path time deps (any isMain values) buildID buildID
-                  Lamdera.alternativeImplementationWhen (lamderaIsLiveHarnessModule modul)
-                    (crawlDeps (lamderaLiveHarnessEnv env) mvar deps (SOutsideOk local source modul)) $
-                    crawlDeps env mvar deps (SOutsideOk local source modul)
+                  crawlDeps env mvar deps (SOutsideOk local source modul)
+                    & Lamdera.alternativeImplementationWhen (lamderaIsLiveHarnessModule modul)
+                        (crawlDeps (lamderaLiveHarnessEnv env) mvar deps (SOutsideOk local source modul))
 
             Left syntaxError ->
               return $ SOutsideErr $
