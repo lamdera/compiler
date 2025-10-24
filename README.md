@@ -15,7 +15,9 @@ New to Elm? Check out the [Home Page](http://elm-lang.org/), [Try Online](http:/
 
 ## Installation
 
-See [Lamdera downloads](https://dashboard.lamdera.app/docs/download) for binary and nix installations (recommended). Or if you have node, `npx lamdera` lets you try it out quickly.
+Recommended: see [Lamdera downloads](https://dashboard.lamdera.app/docs/download) for binary and nix installations.
+
+`npx lamdera` lets you try it out quickly if you have NodeJS installed, simply replace any `elm` command with `npx lamdera`.
 
 To uninstall, simply delete the `lamdera` binary.
 

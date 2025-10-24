@@ -41,7 +41,7 @@ type Mains = Map.Map ModuleName.Canonical Opt.Main
 
 graphModifications :: Mode.Mode -> Mains -> Map.Map Opt.Global Opt.Node -> Map.Map Opt.Global Opt.Node
 graphModifications mode mains graph = do
-  if mains & mainsInclude ["LocalDev"]
+  if mains & mainsInclude ["Lamdera.Live"]
     then graph & Map.mapWithKey (modify $ isOptimizedMode mode)
            -- & inspect
     else graph
@@ -161,7 +161,7 @@ source mode mains =
         LamderaBackend
       else if mains & mainsInclude ["Frontend", "LFR"] then
         LamderaFrontend
-      else if mains & mainsInclude ["LocalDev"] then
+      else if mains & mainsInclude ["Lamdera.Live"] then
         LamderaLive
       else
         NotLamdera
@@ -483,7 +483,7 @@ injections outputType mode =
         shouldProxy =
           onlyIf (outputType == LamderaLive)
             [text|
-              shouldProxy = $$author$$project$$LocalDev$$shouldProxy(msg)
+              shouldProxy = $$author$$project$$Lamdera$$Live$$shouldProxy(msg)
             |]
 
         exportFns =

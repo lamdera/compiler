@@ -138,7 +138,7 @@ runWithRoot root (Flags maybePort) =
         <|> Live.openEditorHandler root
         <|> Live.serveExperimental root
         <|> serveAssets -- Compiler packaged static files
-        <|> Live.serveUnmatchedUrlsToIndex root (serveElm sentryCache) -- Everything else without extensions goes to Lamdera LocalDev harness
+        <|> Live.serveUnmatchedUrlsToIndex root (serveElm sentryCache) -- Everything else without extensions goes to Lamdera.Live harness
         <|> error404 -- Will get hit for any non-matching extensioned paths i.e. /hello.blah
 
 

@@ -108,16 +108,17 @@ window.setupApp = function(name, elid) {
     if (app !== null) { return } // Don't init when already initialised
     // console.log(`booting with`, { c: clientId, s: sessionId, nt: nodeType, b: initBackendModel })
 
-    if (name !== "LocalDev") {
+    const elm = name.split('.').reduce((o,i)=> o[i], Elm)
+    if (name !== "Lamdera.Live") {
       console.warn('Not a Lamdera app, loading as normal Elm.')
-      app = name.split('.').reduce((o,i)=> o[i], Elm).init({ node: document.getElementById(elid) })
+      app = elm.init({ node: document.getElementById(elid) })
       if (document.getElementById(elid)) {
         document.getElementById(elid).innerText = 'This is a headless program, meaning there is nothing to show here.\n\nI started the program anyway though, and you can access it as `app` in the developer console.'
       }
       return;
     }
 
-    app = Elm[name].init({
+    app = elm.init({
       node: document.getElementById(elid),
       flags: { c: clientId, s: sessionId, nt: nodeType, b: initBackendModel }
     })

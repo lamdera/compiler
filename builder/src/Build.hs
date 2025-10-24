@@ -1265,7 +1265,7 @@ source directories when compiling the Lamdera Live harness module
 -}
 lamderaIsLiveHarnessModule :: Src.Module -> Bool
 lamderaIsLiveHarnessModule modul =
-  Src.getName modul == "LocalDev"
+  Src.getName modul == "Lamdera.Live"
 
 
 lamderaLiveHarnessEnv :: Env -> Env
