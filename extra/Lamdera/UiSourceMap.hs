@@ -28,7 +28,7 @@ import StandaloneInstances
 updateDecls :: Module.Canonical -> Can.Decls -> Can.Decls
 updateDecls fileName decls =
     case fileName of
-        Module.Canonical (Name "author" "project") "LocalDev" ->
+        Module.Canonical (Name "author" "project") "Lamdera.Live" ->
             decls
 
         Module.Canonical (Name "author" "project") _ ->
