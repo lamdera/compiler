@@ -21,6 +21,7 @@ import System.FilePath ((</>), takeDirectory)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import qualified Data.Map as Map
+import Data.Maybe (catMaybes)
 import NeatInterpolation
 
 import qualified Data.Name as Name
@@ -153,20 +154,17 @@ inspect graph =
 data OutputType = LamderaBackend | LamderaFrontend | LamderaLive | NotLamdera deriving (Eq)
 
 
+outputType :: Mains -> OutputType
+outputType mains
+  | mains & mainsInclude ["Backend", "LBR"]  = LamderaBackend
+  | mains & mainsInclude ["Frontend", "LFR"] = LamderaFrontend
+  | mains & mainsInclude ["Lamdera.Live"]    = LamderaLive
+  | otherwise                                = NotLamdera
+
+
 source :: Mode.Mode -> Mains -> B.Builder
 source mode mains =
-  let
-    outputType =
-      if mains & mainsInclude ["Backend", "LBR"] then
-        LamderaBackend
-      else if mains & mainsInclude ["Frontend", "LFR"] then
-        LamderaFrontend
-      else if mains & mainsInclude ["Lamdera.Live"] then
-        LamderaLive
-      else
-        NotLamdera
-  in
-  B.byteString $ Text.encodeUtf8 $ injections outputType mode
+  B.byteString $ Text.encodeUtf8 $ injections (outputType mains) mode
 
 
 injections :: OutputType -> Mode.Mode -> Text
@@ -805,13 +803,19 @@ injections outputType mode =
 See: https://github.com/supermario/elm-pkg-js
 -}
 {-# NOINLINE elmPkgJs #-}
-elmPkgJs :: Mode.Mode -> B.Builder
-elmPkgJs mode =
+elmPkgJs :: Mode.Mode -> Mains -> B.Builder
+elmPkgJs mode mains =
   case mode of
     Mode.Dev _ -> do
       unsafePerformIO $ do
         root <- getProjectRoot "elmPkgJs"
         elmPkgJsSources <- safeListDirectory $ root </> "elm-pkg-js"
+
+        let
+          precompiledElmPkgJs =
+            case outputType mains of
+              LamderaLive -> precompiledLamderaLiveElmPkgJs
+              _           -> []
 
         includesPathM <- Lamdera.Relative.findFile $ root </> "elm-pkg-js-includes.js"
         esbuildConfigPathM <- Lamdera.Relative.findFile $ root </> "esbuild.config.js"
@@ -837,17 +841,17 @@ elmPkgJs mode =
                     error "no min file after compile, run `node esbuild.config.js` to check errors"
               else do
                 Lamdera.debug_ "🏗️🟠  Using dumbJsPackager, ignoring esbuild.config.js in non-dev mode"
-                dumbJsPackager root elmPkgJsSources
+                dumbJsPackager root elmPkgJsSources precompiledElmPkgJs
           (_, Just esbuildPath, Just includesPath) ->
             if Ext.Common.isDebug_
               then do
                 esbuildIncluder root esbuildPath includesPath
               else do
                 Lamdera.debug_ "🏗️🟠  Using dumbJsPackager, ignoring esbuild in non-dev mode"
-                dumbJsPackager root elmPkgJsSources
+                dumbJsPackager root elmPkgJsSources precompiledElmPkgJs
           _ -> do
             Lamdera.debug_ "🏗️  Using dumbJsPackager"
-            dumbJsPackager root elmPkgJsSources
+            dumbJsPackager root elmPkgJsSources precompiledElmPkgJs
     _ ->
       ""
 
@@ -887,28 +891,41 @@ esbuildIncluder root esbuildPath includesPath = do
   --   )
 
 
+precompiledLamderaLiveElmPkgJs :: [(String, BS.ByteString)]
+precompiledLamderaLiveElmPkgJs =
+  [ ("repl", $(bsToExp =<< runIO (Lamdera.Relative.readByteString "extra/elm-pkg-js/repl.js")))
+  ]
+
+
+mapMaybeM :: (Monad m) => (a -> m (Maybe b)) -> [a] -> m [b]
+mapMaybeM f xs = fmap catMaybes (traverse f xs)
 
 
 -- Tries to be clever by injecting `{}` as the `exports` value. Falls over if the target files have been compiled
 -- by a packager or if they don't use the `export.init` syntax, i.e. `export async function init() {...}`
-dumbJsPackager root elmPkgJsSources =
-  if null elmPkgJsSources
+dumbJsPackager root elmPkgJsSources precompiledElmPkgJs =
+  if null elmPkgJsSources && null precompiledElmPkgJs
     then
       pure ""
 
     else do
-      wrappedPkgImports <-
-        mapM
+      fileContents <-
+        mapMaybeM
           (\f ->
-            if ".js" `Text.isSuffixOf` (Text.pack f)
+            if ".js" `Text.isSuffixOf` Text.pack f
               then do
                 contents <- File.readUtf8 (root </> "elm-pkg-js" </> f)
-                pure $
-                  "'" <> Text.encodeUtf8 (Text.pack f) <> "': function(exports){\n" <> contents <> "\nreturn exports;},\n"
+                pure $ Just (f, contents)
               else
-                pure ""
+                pure Nothing
           )
           elmPkgJsSources
+
+      let
+        wrappedPkgImports =
+          [ "'" <> Text.encodeUtf8 (Text.pack filename) <> "': function(exports){\n" <> contents <> "\nreturn exports;},\n"
+          | (filename, contents) <- fileContents ++ precompiledElmPkgJs
+          ]
 
       pure $ B.byteString $ mconcat
         [ "const pkgExports = {\n" <> mconcat wrappedPkgImports <> "\n}\n"
