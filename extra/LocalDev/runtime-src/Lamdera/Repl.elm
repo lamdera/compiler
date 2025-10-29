@@ -152,17 +152,16 @@ viewHidden =
 viewShown : Bool -> String -> List (Html Msg) -> Html Msg
 viewShown leftRight justify content =
     Html.div
-        (styles.container
+        (styles.content
             (if leftRight then
                 "left"
 
              else
                 "right"
             )
+            justify
         )
-        [ Html.div (styles.content justify)
-            content
-        ]
+        content
 
 
 viewLoading : List (Html Msg)
@@ -241,24 +240,17 @@ adjustTrailingNewLines text =
 
 
 styles =
-    { container =
-        \borderPosition ->
-            [ style "position" "relative"
-            , style "width" "600px"
+    { content =
+        \borderPosition justify ->
+            [ style "width" "580px"
+            , style "contain" "size"
             , style ("border-" ++ borderPosition) "1px solid #393939"
-            , style "font-family" "monospace"
-            , style "user-select" "text"
-            ]
-    , content =
-        \justify ->
-            [ style "position" "absolute"
-            , style "top" "5px"
-            , style "left" "10px"
-            , style "bottom" "5px"
-            , style "right" "10px"
+            , style "padding" "5px 10px"
+            , style "justify-content" justify
             , style "display" "flex"
             , style "flex-direction" "column"
-            , style "justify-content" justify
+            , style "font-family" "monospace"
+            , style "user-select" "text"
             ]
     , output =
         [ style "display" "flex"
