@@ -14,12 +14,17 @@ compilerRoot="$scriptDir/.."
 
 if [ "$GITHUB_ACTIONS" == "true" ]; then
     mountRoot="$compilerRoot"
-    cacheRoot="/home/github/cabal-caches/linux-arm64"
+    cacheRoot="/home/github/user-build-cache/linux-arm64"
+    rsyncCompilerPath=""
+    dockerHost=""
+elif [ "$LOCAL_DOCKER" == "true" ]; then
+    mountRoot="$compilerRoot"
+    cacheRoot="$HOME/.docker/user-build-cache/linux-arm64"
     rsyncCompilerPath=""
     dockerHost=""
 else
     mountRoot="/root/compiler"
-    cacheRoot="/home/github/cabal-caches/linux-arm64"
+    cacheRoot="/home/github/user-build-cache/linux-arm64"
     rsyncCompilerPath="root@lamdera-community-build-arm64:$mountRoot"
     dockerHost="-H ssh://root@lamdera-community-build-arm64"
 fi
@@ -65,15 +70,18 @@ build_binary_docker() {
 
     # GOAL: get the cabal caches into the mounted folder so they persist outside the Docker run lifetime and we don't needlessly rebuild hundreds of super expensive deps repeatedly forever
     # This is documented but doesn't seem to work https://cabal.readthedocs.io/en/3.6/installing-packages.html#environment-variables
-    export CABAL_DIR=/root/cache
-    mkdir -p /root/cache || true
-    ln -sf /root/cache ~/.cabal
+    export CABAL_DIR=/root/cache/cabal
+    export STACK_ROOT=/root/cache/stack
+    export STACK_WORK=/root/cache/stack-work
+
+    mkdir -p /root/cache/cabal || true
+    ln -sf /root/cache/cabal ~/.cabal
+
+    cabal update
 
     # GOAL: pin our dependencies so we can build them one by one
-    # cabal update
+    # We do this once outside of the build script, see distribution/sync-cabal-freeze.sh
     # We have to freeze the deps to get a cohesive deps set, otherwise `cabal build <dep>` will install the latest version instead of the one we need
-    # rm cabal.project.freeze || true # Remove the freeze file so we can update the deps
-    # cabal freeze
 
     # Our options required for static linking
     CABALOPTS="--allow-newer -f-export-dynamic -fembed_data_files --enable-executable-static -j4"
@@ -109,7 +117,7 @@ docker $dockerHost run \
     -v "$cacheRoot:/root/cache" \
     $runMode glcr.b-data.ch/ghc/ghc-musl:9.2.8 \
     bash -c "$(declare -f build_binary_docker); build_binary_docker '$bin' '$GITHUB_ACTIONS' '$(id -u)' '$(id -g)'"
-
+# From https://github.com/benz0li/ghc-musl
 
 if [ -z "$rsyncCompilerPath" ]; then
     echo "rsyncCompilerPath is empty, skipping"
