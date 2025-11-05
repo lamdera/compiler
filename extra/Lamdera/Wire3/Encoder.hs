@@ -178,6 +178,39 @@ encoderForType depth ifaces cname tipe =
                         (TType mLamdera_SeqDict "SeqDict" [TVar "key", TVar "value"])
                         tLamdera_Wire_Encoder))))))
 
+    TType (Module.Canonical (Name "lamdera" "containers") "BiSeqDict") "BiSeqDict" [key, value] ->
+      (a (VarForeign mLamdera_BiSeqDict "encodeBiSeqDict"
+            (Forall
+               (Map.fromList [("key", ()), ("value", ())])
+               (TLambda
+                  (TLambda (TVar "key") tLamdera_Wire_Encoder)
+                  (TLambda (TLambda (TVar "value") tLamdera_Wire_Encoder)
+                     (TLambda
+                        (TType mLamdera_BiSeqDict "BiSeqDict" [TVar "key", TVar "value"])
+                        tLamdera_Wire_Encoder))))))
+
+    TType (Module.Canonical (Name "lamdera" "containers") "MultiSeqDict") "MultiSeqDict" [key, value] ->
+      (a (VarForeign mLamdera_MultiSeqDict "encodeMultiSeqDict"
+            (Forall
+               (Map.fromList [("key", ()), ("value", ())])
+               (TLambda
+                  (TLambda (TVar "key") tLamdera_Wire_Encoder)
+                  (TLambda (TLambda (TVar "value") tLamdera_Wire_Encoder)
+                     (TLambda
+                        (TType mLamdera_MultiSeqDict "MultiSeqDict" [TVar "key", TVar "value"])
+                        tLamdera_Wire_Encoder))))))
+
+    TType (Module.Canonical (Name "lamdera" "containers") "MultiBiSeqDict") "MultiBiSeqDict" [key, value] ->
+      (a (VarForeign mLamdera_MultiBiSeqDict "encodeMultiBiSeqDict"
+            (Forall
+               (Map.fromList [("key", ()), ("value", ())])
+               (TLambda
+                  (TLambda (TVar "key") tLamdera_Wire_Encoder)
+                  (TLambda (TLambda (TVar "value") tLamdera_Wire_Encoder)
+                     (TLambda
+                        (TType mLamdera_MultiBiSeqDict "MultiBiSeqDict" [TVar "key", TVar "value"])
+                        tLamdera_Wire_Encoder))))))
+
     TType (Module.Canonical (Name "elm" "bytes") "Bytes") "Bytes" _ ->
       (a (VarForeign mLamdera_Wire "encodeBytes" (Forall Map.empty (TLambda tipe tLamdera_Wire_Encoder))))
 
@@ -306,6 +339,12 @@ deepEncoderForType depth ifaces cname tipe =
       call (encoderForType depth ifaces cname tipe) [ deepEncoderForType depth ifaces cname key, deepEncoderForType depth ifaces cname val ]
     TType (Module.Canonical (Name "lamdera" "containers") "SeqDict") "SeqDict" [key, val] ->
       call (encoderForType depth ifaces cname tipe) [ deepEncoderForType depth ifaces cname key, deepEncoderForType depth ifaces cname val ]
+    TType (Module.Canonical (Name "lamdera" "containers") "BiSeqDict") "BiSeqDict" [key, val] ->
+      call (encoderForType depth ifaces cname tipe) [ deepEncoderForType depth ifaces cname key, deepEncoderForType depth ifaces cname val ]
+    TType (Module.Canonical (Name "lamdera" "containers") "MultiSeqDict") "MultiSeqDict" [key, val] ->
+      call (encoderForType depth ifaces cname tipe) [ deepEncoderForType depth ifaces cname key, deepEncoderForType depth ifaces cname val ]
+    TType (Module.Canonical (Name "lamdera" "containers") "MultiBiSeqDict") "MultiBiSeqDict" [key, val] ->
+      call (encoderForType depth ifaces cname tipe) [ deepEncoderForType depth ifaces cname key, deepEncoderForType depth ifaces cname val ]
     TType (Module.Canonical (Name "elm" "bytes") "Bytes") "Bytes" _ -> encoderForType depth ifaces cname tipe
     TType (Module.Canonical (Name "elm" "time") "Time") "Posix" _ -> encoderForType depth ifaces cname tipe
 
@@ -400,6 +439,12 @@ encodeTypeValue depth ifaces cname tipe value =
     TType (Module.Canonical (Name "elm" "core") "Dict") "Dict" [key, val] ->
       call (encoderForType depth ifaces cname tipe) [ deepEncoderForType depth ifaces cname key, deepEncoderForType depth ifaces cname val, value ]
     TType (Module.Canonical (Name "lamdera" "containers") "SeqDict") "SeqDict" [key, val] ->
+      call (encoderForType depth ifaces cname tipe) [ deepEncoderForType depth ifaces cname key, deepEncoderForType depth ifaces cname val, value ]
+    TType (Module.Canonical (Name "lamdera" "containers") "BiSeqDict") "BiSeqDict" [key, val] ->
+      call (encoderForType depth ifaces cname tipe) [ deepEncoderForType depth ifaces cname key, deepEncoderForType depth ifaces cname val, value ]
+    TType (Module.Canonical (Name "lamdera" "containers") "MultiSeqDict") "MultiSeqDict" [key, val] ->
+      call (encoderForType depth ifaces cname tipe) [ deepEncoderForType depth ifaces cname key, deepEncoderForType depth ifaces cname val, value ]
+    TType (Module.Canonical (Name "lamdera" "containers") "MultiBiSeqDict") "MultiBiSeqDict" [key, val] ->
       call (encoderForType depth ifaces cname tipe) [ deepEncoderForType depth ifaces cname key, deepEncoderForType depth ifaces cname val, value ]
     TType (Module.Canonical (Name "elm" "bytes") "Bytes") "Bytes" _ -> call (encoderForType depth ifaces cname tipe) [ value ]
     TType (Module.Canonical (Name "elm" "time") "Time") "Posix" _ -> call (encoderForType depth ifaces cname tipe) [ value ]

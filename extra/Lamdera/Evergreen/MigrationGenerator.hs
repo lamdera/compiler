@@ -1001,6 +1001,21 @@ typeToMigration oldVersion newVersion scope interfaces recursionSet_ typeNew@(Ca
       (\m_p1      -> T.concat [ "SeqDict.map (\\k -> ", m_p1, ")" ])
       (\m_p0 m_p1 -> T.concat [ "SeqDict.toList |> List.map (Tuple.mapBoth (", m_p0, ") (", m_p1, ")) |> SeqDict.fromList" ])
 
+    ("lamdera", "containers", "BiSeqDict", "BiSeqDict")     -> migrate2ParamCollection
+      (\m_p0      -> T.concat [ "BiSeqDict.toList |> List.map (Tuple.mapFirst ", m_p0, ") |> BiSeqDict.fromList" ])
+      (\m_p1      -> T.concat [ "BiSeqDict.map (\\k -> ", m_p1, ")" ])
+      (\m_p0 m_p1 -> T.concat [ "BiSeqDict.toList |> List.map (Tuple.mapBoth (", m_p0, ") (", m_p1, ")) |> BiSeqDict.fromList" ])
+
+    ("lamdera", "containers", "MultiSeqDict", "MultiSeqDict")     -> migrate2ParamCollection
+      (\m_p0      -> T.concat [ "MultiSeqDict.toList |> List.map (Tuple.mapFirst ", m_p0, ") |> MultiSeqDict.fromList" ])
+      (\m_p1      -> T.concat [ "MultiSeqDict.map (\\k -> ", m_p1, ")" ])
+      (\m_p0 m_p1 -> T.concat [ "MultiSeqDict.toList |> List.map (Tuple.mapBoth (", m_p0, ") (", m_p1, ")) |> MultiSeqDict.fromList" ])
+
+    ("lamdera", "containers", "MultiBiSeqDict", "MultiBiSeqDict")     -> migrate2ParamCollection
+      (\m_p0      -> T.concat [ "MultiBiSeqDict.toList |> List.map (Tuple.mapFirst ", m_p0, ") |> MultiBiSeqDict.fromList" ])
+      (\m_p1      -> T.concat [ "MultiBiSeqDict.map (\\k -> ", m_p1, ")" ])
+      (\m_p0 m_p1 -> T.concat [ "MultiBiSeqDict.toList |> List.map (Tuple.mapBoth (", m_p0, ") (", m_p1, ")) |> MultiBiSeqDict.fromList" ])
+
     (author, pkg, module_, typeName_) ->
       if (Set.member recursionIdentifier recursionSet_) then
         handleSeenRecursiveType oldVersion newVersion scope identifierNew interfaces newRecursionSet typeNew typeOld tvarMapOld tvarMapNew oldValueRef
