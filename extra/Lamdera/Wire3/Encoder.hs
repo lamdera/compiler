@@ -225,7 +225,38 @@ encoderForType depth ifaces cname tipe =
         decoder =
           if cname == moduleName
             -- Referenced type is defined in the current module
-            then (a (VarTopLevel moduleName generatedName))
+            then
+              -- Check if the generated name exists, if not provide helpful error
+              case foreignTypeSig moduleName generatedName ifaces of
+                Just _ -> (a (VarTopLevel moduleName generatedName))
+                Nothing ->
+                  let
+                    typeNameStr = Data.Name.toChars typeName
+                    customEncoderName = Data.Name.fromChars $ "encode" ++ typeNameStr
+                  in
+                  case foreignTypeSig moduleName customEncoderName ifaces of
+                    Just _ ->
+                      error $ unlines
+                        [ ""
+                        , "-- WIRE3 ENCODER NOT SUPPORTED -----------------------------------------"
+                        , ""
+                        , "I found a custom Wire3 encoder for an opaque type:"
+                        , ""
+                        , "    " ++ typeNameStr
+                        , ""
+                        , "This type cannot be used in BackendModel or FrontendModel without"
+                        , "compiler support."
+                        , ""
+                        , "To fix this:"
+                        , ""
+                        , "1. Remove this type from your BackendModel/FrontendModel, OR"
+                        , ""
+                        , "2. Expose the type constructor in the module (less efficient), OR"
+                        , ""
+                        , "3. Add compiler support (contact Lamdera team)"
+                        , ""
+                        ]
+                    Nothing -> (a (VarTopLevel moduleName generatedName))
             else (a (VarForeign moduleName generatedName (getForeignSig tipe moduleName generatedName ifaces)))
 
       in
