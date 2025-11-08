@@ -233,9 +233,13 @@ encoderForType depth ifaces cname tipe =
                   let
                     typeNameStr = Data.Name.toChars typeName
                     customEncoderName = Data.Name.fromChars $ "encode" ++ typeNameStr
+
+                    -- Only show error for user packages, not elm/* core packages
+                    isUserPackage = case moduleName of
+                      Module.Canonical (Name author _) _ -> author /= "elm" && author /= "lamdera"
                   in
-                  case foreignTypeSig moduleName customEncoderName ifaces of
-                    Just _ ->
+                  case (foreignTypeSig moduleName customEncoderName ifaces, isUserPackage) of
+                    (Just _, True) ->
                       error $ unlines
                         [ ""
                         , "-- WIRE3 ENCODER NOT SUPPORTED -----------------------------------------"
@@ -256,7 +260,7 @@ encoderForType depth ifaces cname tipe =
                         , "3. Add compiler support (contact Lamdera team)"
                         , ""
                         ]
-                    Nothing -> (a (VarTopLevel moduleName generatedName))
+                    _ -> (a (VarTopLevel moduleName generatedName))
             else (a (VarForeign moduleName generatedName (getForeignSig tipe moduleName generatedName ifaces)))
 
       in

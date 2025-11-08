@@ -70,9 +70,13 @@ getForeignSig tipe moduleName generatedName ifaces =
               genNameStr = Data.Name.toChars generatedName
               typeNameStr = drop 10 genNameStr  -- Remove "w3_encode_" prefix (10 chars)
               customEncoderName = Data.Name.fromChars $ "encode" ++ typeNameStr
+
+              -- Only show error for user packages, not elm/* core packages
+              isUserPackage = case moduleName of
+                Module.Canonical (Name author _) _ -> author /= "elm" && author /= "lamdera"
             in
-            case foreignTypeSig moduleName customEncoderName ifaces of
-              Just _ ->
+            case (foreignTypeSig moduleName customEncoderName ifaces, isUserPackage) of
+              (Just _, True) ->
                 error $ unlines
                   [ ""
                   , "-- WIRE3 ENCODER NOT SUPPORTED -----------------------------------------"
@@ -93,7 +97,7 @@ getForeignSig tipe moduleName generatedName ifaces =
                   , "3. Add compiler support (contact Lamdera team)"
                   , ""
                   ]
-              Nothing ->
+              _ ->
                 (Forall
                    (Map.fromList [("a", ())])
                    (TLambda (TVar "a") tLamdera_Wire_Encoder))
@@ -104,9 +108,13 @@ getForeignSig tipe moduleName generatedName ifaces =
                 genNameStr = Data.Name.toChars generatedName
                 typeNameStr = drop 10 genNameStr  -- Remove "w3_decode_" prefix (10 chars)
                 customDecoderName = Data.Name.fromChars $ "decode" ++ typeNameStr
+
+                -- Only show error for user packages, not elm/* core packages
+                isUserPackage = case moduleName of
+                  Module.Canonical (Name author _) _ -> author /= "elm" && author /= "lamdera"
               in
-              case foreignTypeSig moduleName customDecoderName ifaces of
-                Just _ ->
+              case (foreignTypeSig moduleName customDecoderName ifaces, isUserPackage) of
+                (Just _, True) ->
                   error $ unlines
                     [ ""
                     , "-- WIRE3 DECODER NOT SUPPORTED -----------------------------------------"
@@ -127,7 +135,7 @@ getForeignSig tipe moduleName generatedName ifaces =
                     , "3. Add compiler support (contact Lamdera team)"
                     , ""
                     ]
-                Nothing ->
+                _ ->
                   (Forall
                      (Map.fromList [("a", ())])
                      (TAlias
