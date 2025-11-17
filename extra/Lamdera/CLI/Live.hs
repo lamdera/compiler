@@ -113,14 +113,14 @@ directoryConfig =
 
 
 -- So that Elm's Navigation routing can work on any URL, serve any unmatched
--- non-extensioned paths to the "index" (in this case the src/LocalDev.elm
+-- non-extensioned paths to the "index" (in this case the Lamdera/Live.elm
 -- harness as we're local in the reactor). Extensioned paths will continue to
 -- the next handler, namely `error404` (see `run` fn at top of file)
 serveUnmatchedUrlsToIndex :: FilePath -> (FilePath -> Snap()) -> Snap ()
 serveUnmatchedUrlsToIndex root serveElm =
   do  file <- getSafePath
       guard (takeExtension file == "")
-      serveElm (lamderaCache root </> "LocalDev.elm")
+      serveElm (lamderaCache root </> "Lamdera" </> "Live.elm")
 
 
 prepareLocalDev :: FilePath -> IO FilePath
@@ -136,7 +136,7 @@ prepareLocalDev root = do
 
   let
     cache = lamderaCache root
-    harnessPath = "LocalDev.elm"
+    harnessPath = "Lamdera" </> "Live.elm"
 
     patchedContent path content =
       if path == harnessPath
@@ -154,19 +154,19 @@ prepareLocalDev root = do
 
 
 replaceVersionMarker :: Text -> Text
-replaceVersionMarker localdev = do
+replaceVersionMarker lamderaLive = do
   let (m,mi,p) = Lamdera.Version.raw
-  localdev & T.replace
+  lamderaLive & T.replace
     "( 0, 0, 0 )"
     (T.concat ["( ", show_ m , ", ", show_ mi , ", ", show_ p , " )"])
 
 
 replaceRpcMarker :: Bool -> Text -> Text
-replaceRpcMarker shouldReplace localdev =
+replaceRpcMarker shouldReplace lamderaLive =
   if not shouldReplace
-    then localdev
+    then lamderaLive
     else
-      localdev
+      lamderaLive
         & T.replace
           "-- MKRRI"
           "import RPC\n\

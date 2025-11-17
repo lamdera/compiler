@@ -1,4 +1,4 @@
-port module LocalDev exposing (main)
+port module Lamdera.Live exposing (main)
 
 {-
 

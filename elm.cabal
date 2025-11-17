@@ -314,7 +314,6 @@ Executable lamdera
         Test.Check
         Test.Helpers
         Test.Lamdera
-        Test.Lamdera.Live
         Test.Snapshot
         Test.TypeHashes
         Test.Wire
