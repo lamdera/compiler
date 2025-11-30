@@ -56,8 +56,11 @@ exports.init = async function(app) {
     }
 
     function loadWorker(payload) {
-      fetch('_c/_repl-worker.js')
-        .then(response => response.text())
+      fetch('/_c/_repl-worker.js')
+        .then(response => {
+          if (response.ok) return response.text()
+          else throw new Error("HTTP " + response.status + " " + response.statusText)
+        })
         .then(code => (window.eval(code), initWorker(payload)))
         .catch(sendWorkerError)
     }
