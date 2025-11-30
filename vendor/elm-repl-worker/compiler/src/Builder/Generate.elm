@@ -57,24 +57,32 @@ type alias GlobalState f g h =
 type LocalState f g h = LocalState
   {- mvLocalGraph -} (MVar.State (GlobalState f g h) (Maybe Opt.LocalGraph))
   {- mvTypes -} (MVar.State (GlobalState f g h) (Maybe Extract.Types))
+  {- cache -} (File.BinCache Opt.LocalGraph)
 
 
 initialState : LocalState f g h
 initialState = LocalState
   {- mvLocalGraph -} (MVar.initialState "LocalGraph")
   {- mvTypes -} (MVar.initialState "Types")
+  {- caches -} File.emptyCache
 
 
 lensMVLocalGraph : Lens (GlobalState f g h) (MVar.State (GlobalState f g h) (Maybe Opt.LocalGraph))
 lensMVLocalGraph =
-  { getter = \(Global.State _ _ _ _ (LocalState x _ ) _ _ _) -> x
-  , setter = \x (Global.State a b c d (LocalState _ bi) f g h) -> Global.State a b c d (LocalState x bi) f g h
+  { getter = \(Global.State _ _ _ _ (LocalState x _ _) _ _ _) -> x
+  , setter = \x (Global.State a b c d (LocalState _ bi ci) f g h) -> Global.State a b c d (LocalState x bi ci) f g h
   }
 
 lensMVTypes : Lens (GlobalState f g h) (MVar.State (GlobalState f g h) (Maybe Extract.Types))
 lensMVTypes =
-  { getter = \(Global.State _ _ _ _ (LocalState _ x) _ _ _) -> x
-  , setter = \x (Global.State a b c d (LocalState ai _) f g h) -> Global.State a b c d (LocalState ai x) f g h
+  { getter = \(Global.State _ _ _ _ (LocalState _ x _) _ _ _) -> x
+  , setter = \x (Global.State a b c d (LocalState ai _ ci) f g h) -> Global.State a b c d (LocalState ai x ci) f g h
+  }
+
+lensLocalGraphCache : Lens (GlobalState f g h) (File.BinCache Opt.LocalGraph)
+lensLocalGraphCache =
+  { getter = \(Global.State _ _ _ _ (LocalState _ _ x) _ _ _) -> x
+  , setter = \x (Global.State a b c d (LocalState ai bi _) f g h) -> Global.State a b c d (LocalState ai bi x) f g h
   }
 
 
@@ -199,7 +207,7 @@ loadObject root modul =
 
     Build.Cached name _ _ ->
       IO.bind (MVar.newEmpty lensMVLocalGraph) <| \mvar ->
-      IO.bind (MVar.wait lensMVLocalGraph mvar <| \() -> File.readBinary Opt.bLocalGraph (Stuff.elmo root name)) <| \_ ->
+      IO.bind (MVar.wait lensMVLocalGraph mvar <| \() -> File.readBinaryCache lensLocalGraphCache Opt.bLocalGraph (Stuff.elmo root name)) <| \_ ->
       IO.return (name, mvar)
 
 

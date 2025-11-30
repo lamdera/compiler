@@ -13,6 +13,7 @@ module Builder.File exposing
   , remove
   --, removeDir
   , toMillis
+  , BinCache, emptyCache, readBinaryCache
   )
 
 
@@ -21,11 +22,13 @@ import Bytes exposing (Bytes)
 import Bytes.Decode
 import Bytes.Encode
 import Extra.Data.Binary as B
-import Extra.System.Dir as Dir exposing (FilePath)
+import Extra.System.Dir as Dir exposing (FileName, FilePath)
 
 import Extra.System.IO as IO
 import Extra.Type.Either exposing (Either(..))
-import Extra.Type.List as MList
+import Extra.Type.Lens as Lens
+import Extra.Type.List as MList exposing (TList)
+import Extra.Type.Map as Map
 import Time as T
 import Zip
 import Zip.Entry
@@ -217,3 +220,43 @@ remove path =
     if exists_
       then Dir.removeFile path
       else IO.return ()
+
+
+
+-- CACHE
+
+
+type alias BinCache v = Map.Map (TList FileName) v
+
+
+emptyCache : BinCache v
+emptyCache =
+  Map.empty
+
+
+readBinaryCache : Lens.Lens (Dir.GlobalState c d e f g h) (BinCache v) -> B.Binary v -> FilePath -> IO c d e f g h (Maybe v)
+readBinaryCache lensCache binA path =
+  IO.bind (getCache lensCache path) <| \maybeCachedValue ->
+    case maybeCachedValue of
+      Just value ->
+        IO.return (Just value)
+
+      Nothing ->
+        IO.bind (readBinary binA path) <| \maybeValue ->
+          case maybeValue of
+            Just value ->
+              IO.bind (setCache lensCache path value) <| \_ ->
+              IO.return (Just value)
+
+            Nothing ->
+              IO.return Nothing
+
+
+getCache : Lens.Lens (Dir.GlobalState c d e f g h) (BinCache v) -> FilePath -> IO c d e f g h (Maybe v)
+getCache lens path =
+  IO.getLens lens |> IO.fmap (Map.lookup (Dir.getNames path))
+
+
+setCache : Lens.Lens (Dir.GlobalState c d e f g h) (BinCache v) -> FilePath -> v -> IO c d e f g h ()
+setCache lens path value =
+  IO.modifyLens lens (Map.insert (Dir.getNames path) value)

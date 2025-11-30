@@ -71,6 +71,7 @@ type LocalState d e f g h = LocalState
   {- mvResultMap -} (MVar.State (GlobalState d e f g h) (Map.Map ModuleName.Raw (MVar (Maybe TResult))))
   {- mvInterfaces -} (MVar.State (GlobalState d e f g h) (Maybe Interfaces))
   {- mvGlobalGraph -} (MVar.State (GlobalState d e f g h) (Maybe Opt.GlobalGraph))
+  {- caches -} (File.BinCache Details, File.BinCache Opt.GlobalGraph, File.BinCache Interfaces)
 
 
 initialState : LocalState d e f g h
@@ -83,54 +84,73 @@ initialState = LocalState
   {- mvResultMap -} (MVar.initialState "ResultDict")
   {- mvInterfaces -} (MVar.initialState "Interfaces")
   {- mvGlobalGraph -} (MVar.initialState "GlobalGraph")
+  {- caches -} (File.emptyCache, File.emptyCache, File.emptyCache)
 
 
 lensMVDep : Lens (GlobalState d e f g h) (MVar.State (GlobalState d e f g h) Dep)
 lensMVDep =
-  { getter = \(Global.State _ _ (LocalState x _ _ _ _ _ _ _) _ _ _ _ _) -> x
-  , setter = \x (Global.State a b (LocalState _ bi ci di ei fi gi hi) d e f g h) -> Global.State a b (LocalState x bi ci di ei fi gi hi) d e f g h
+  { getter = \(Global.State _ _ (LocalState x _ _ _ _ _ _ _ _) _ _ _ _ _) -> x
+  , setter = \x (Global.State a b (LocalState _ bi ci di ei fi gi hi ji) d e f g h) -> Global.State a b (LocalState x bi ci di ei fi gi hi ji) d e f g h
   }
 
 lensMVDepMap : Lens (GlobalState d e f g h) (MVar.State (GlobalState d e f g h) (Map.Map Pkg.Comparable (MVar Dep)))
 lensMVDepMap =
-  { getter = \(Global.State _ _ (LocalState _ x _ _ _ _ _ _) _ _ _ _ _) -> x
-  , setter = \x (Global.State a b (LocalState ai _ ci di ei fi gi hi) d e f g h) -> Global.State a b (LocalState ai x ci di ei fi gi hi) d e f g h
+  { getter = \(Global.State _ _ (LocalState _ x _ _ _ _ _ _ _) _ _ _ _ _) -> x
+  , setter = \x (Global.State a b (LocalState ai _ ci di ei fi gi hi ji) d e f g h) -> Global.State a b (LocalState ai x ci di ei fi gi hi ji) d e f g h
   }
 
 lensMVStatus : Lens (GlobalState d e f g h) (MVar.State (GlobalState d e f g h) (Maybe Status))
 lensMVStatus =
-  { getter = \(Global.State _ _ (LocalState _ _ x _ _ _ _ _) _ _ _ _ _) -> x
-  , setter = \x (Global.State a b (LocalState ai bi _ di ei fi gi hi) d e f g h) -> Global.State a b (LocalState ai bi x di ei fi gi hi) d e f g h
+  { getter = \(Global.State _ _ (LocalState _ _ x _ _ _ _ _ _) _ _ _ _ _) -> x
+  , setter = \x (Global.State a b (LocalState ai bi _ di ei fi gi hi ji) d e f g h) -> Global.State a b (LocalState ai bi x di ei fi gi hi ji) d e f g h
   }
 
 lensMVStatusMap : Lens (GlobalState d e f g h) (MVar.State (GlobalState d e f g h) StatusDict)
 lensMVStatusMap =
-  { getter = \(Global.State _ _ (LocalState _ _ _ x _ _ _ _) _ _ _ _ _) -> x
-  , setter = \x (Global.State a b (LocalState ai bi ci _ ei fi gi hi) d e f g h) -> Global.State a b (LocalState ai bi ci x ei fi gi hi) d e f g h
+  { getter = \(Global.State _ _ (LocalState _ _ _ x _ _ _ _ _) _ _ _ _ _) -> x
+  , setter = \x (Global.State a b (LocalState ai bi ci _ ei fi gi hi ji) d e f g h) -> Global.State a b (LocalState ai bi ci x ei fi gi hi ji) d e f g h
   }
 
 lensMVResult : Lens (GlobalState d e f g h) (MVar.State (GlobalState d e f g h) (Maybe TResult))
 lensMVResult =
-  { getter = \(Global.State _ _ (LocalState _ _ _ _ x _ _ _) _ _ _ _ _) -> x
-  , setter = \x (Global.State a b (LocalState ai bi ci di _ fi gi hi) d e f g h) -> Global.State a b (LocalState ai bi ci di x fi gi hi) d e f g h
+  { getter = \(Global.State _ _ (LocalState _ _ _ _ x _ _ _ _) _ _ _ _ _) -> x
+  , setter = \x (Global.State a b (LocalState ai bi ci di _ fi gi hi ji) d e f g h) -> Global.State a b (LocalState ai bi ci di x fi gi hi ji) d e f g h
   }
 
 lensMVResultMap : Lens (GlobalState d e f g h) (MVar.State (GlobalState d e f g h) (Map.Map ModuleName.Raw (MVar (Maybe TResult))))
 lensMVResultMap =
-  { getter = \(Global.State _ _ (LocalState _ _ _ _ _ x _ _) _ _ _ _ _) -> x
-  , setter = \x (Global.State a b (LocalState ai bi ci di ei _ gi hi) d e f g h) -> Global.State a b (LocalState ai bi ci di ei x gi hi) d e f g h
+  { getter = \(Global.State _ _ (LocalState _ _ _ _ _ x _ _ _) _ _ _ _ _) -> x
+  , setter = \x (Global.State a b (LocalState ai bi ci di ei _ gi hi ji) d e f g h) -> Global.State a b (LocalState ai bi ci di ei x gi hi ji) d e f g h
   }
 
 lensMVInterfaces : Lens (GlobalState d e f g h) (MVar.State (GlobalState d e f g h) (Maybe Interfaces))
 lensMVInterfaces =
-  { getter = \(Global.State _ _ (LocalState _ _ _ _ _ _ x _) _ _ _ _ _) -> x
-  , setter = \x (Global.State a b (LocalState ai bi ci di ei fi _ hi) d e f g h) -> Global.State a b (LocalState ai bi ci di ei fi x hi) d e f g h
+  { getter = \(Global.State _ _ (LocalState _ _ _ _ _ _ x _ _) _ _ _ _ _) -> x
+  , setter = \x (Global.State a b (LocalState ai bi ci di ei fi _ hi ji) d e f g h) -> Global.State a b (LocalState ai bi ci di ei fi x hi ji) d e f g h
   }
 
 lensMVGlobalGraph : Lens (GlobalState d e f g h) (MVar.State (GlobalState d e f g h) (Maybe Opt.GlobalGraph))
 lensMVGlobalGraph =
-  { getter = \(Global.State _ _ (LocalState _ _ _ _ _ _ _ x) _ _ _ _ _) -> x
-  , setter = \x (Global.State a b (LocalState ai bi ci di ei fi gi _) d e f g h) -> Global.State a b (LocalState ai bi ci di ei fi gi x) d e f g h
+  { getter = \(Global.State _ _ (LocalState _ _ _ _ _ _ _ x _) _ _ _ _ _) -> x
+  , setter = \x (Global.State a b (LocalState ai bi ci di ei fi gi _ ji) d e f g h) -> Global.State a b (LocalState ai bi ci di ei fi gi x ji) d e f g h
+  }
+
+lensDetailsCache : Lens (GlobalState d e f g h) (File.BinCache Details)
+lensDetailsCache =
+  { getter = \(Global.State _ _ (LocalState _ _ _ _ _ _ _ _ (x, _, _)) _ _ _ _ _) -> x
+  , setter = \x (Global.State a b (LocalState ai bi ci di ei fi gi hi (_, bii, cii)) d e f g h) -> Global.State a b (LocalState ai bi ci di ei fi gi hi (x, bii, cii)) d e f g h
+  }
+
+lensGlobalGraphCache : Lens (GlobalState d e f g h) (File.BinCache Opt.GlobalGraph)
+lensGlobalGraphCache =
+  { getter = \(Global.State _ _ (LocalState _ _ _ _ _ _ _ _ (_, x, _)) _ _ _ _ _) -> x
+  , setter = \x (Global.State a b (LocalState ai bi ci di ei fi gi hi (aii, _, cii)) d e f g h) -> Global.State a b (LocalState ai bi ci di ei fi gi hi (aii, x, cii)) d e f g h
+  }
+
+lensInterfacesCache : Lens (GlobalState d e f g h) (File.BinCache Interfaces)
+lensInterfacesCache =
+  { getter = \(Global.State _ _ (LocalState _ _ _ _ _ _ _ _ (_, _, x)) _ _ _ _ _) -> x
+  , setter = \x (Global.State a b (LocalState ai bi ci di ei fi gi hi (aii, bii, _)) d e f g h) -> Global.State a b (LocalState ai bi ci di ei fi gi hi (aii, bii, x)) d e f g h
   }
 
 
@@ -150,14 +170,14 @@ loadObjects : FilePath -> Details -> IO d e f g h (MVar (Maybe Opt.GlobalGraph))
 loadObjects root (Details _ _ _ _ _ extras) =
   case extras of
     ArtifactsFresh _ o -> MVar.new lensMVGlobalGraph (Just o)
-    ArtifactsCached    -> fork lensMVGlobalGraph (\() -> File.readBinary Opt.bGlobalGraph (Stuff.objects root))
+    ArtifactsCached    -> fork lensMVGlobalGraph (\() -> File.readBinaryCache lensGlobalGraphCache Opt.bGlobalGraph (Stuff.objects root))
 
 
 loadInterfaces : FilePath -> Details -> IO d e f g h (MVar (Maybe Interfaces))
 loadInterfaces root (Details _ _ _ _ _ extras) =
   case extras of
     ArtifactsFresh i _ -> MVar.new lensMVInterfaces (Just i)
-    ArtifactsCached    -> fork lensMVInterfaces (\() -> File.readBinary bInterfaces (Stuff.interfaces root))
+    ArtifactsCached    -> fork lensMVInterfaces (\() -> File.readBinaryCache lensInterfacesCache bInterfaces (Stuff.interfaces root))
 
 
 
@@ -241,7 +261,7 @@ type alias Interfaces =
 load : FilePath -> IO d e f g h (Either Exit.Details Details)
 load root =
   IO.bind (File.getTime (Dir.addName root "elm.json")) <| \newTime ->
-  IO.bind (File.readBinary bDetails (Stuff.details root)) <| \maybeDetails ->
+  IO.bind (File.readBinaryCache lensDetailsCache bDetails (Stuff.details root)) <| \maybeDetails ->
   case maybeDetails of
     Nothing ->
       generate root newTime
