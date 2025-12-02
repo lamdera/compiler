@@ -62,6 +62,7 @@ import Extra.Type.Lens exposing (Lens)
 import Extra.Type.List as MList exposing (TList)
 import Extra.Type.Map as Map
 import Extra.Type.Maybe as MMaybe
+import Extra.Type.Set as Set
 import Global
 import Terminal.Command as Command
 import Unicode as UChar
@@ -117,7 +118,7 @@ type InterpreterInput
 
 
 type InterpreterResult
-  = InterpreterSuccess
+  = InterpreterSuccess Bool
   | InterpreterFailure
 
 
@@ -493,11 +494,12 @@ type State =
     {- imports -} (Map.Map N.Name String)
     {- types -} (Map.Map N.Name String)
     {- decls -} (Map.Map N.Name String)
+    {- NEW: captures -} (Set.Set N.Name)
 
 
 initialState : State
 initialState =
-  State Map.empty Map.empty Map.empty
+  State Map.empty Map.empty Map.empty Set.empty
 
 
 
@@ -505,7 +507,7 @@ initialState =
 
 
 eval : Env h -> State -> Input -> IO h Outcome
-eval env ((State imports types decls) as state) input =
+eval env ((State imports types decls captures) as state) input =
   case input of
     Skip ->
       IO.return (Loop state)
@@ -523,11 +525,11 @@ eval env ((State imports types decls) as state) input =
       IO.return (Loop state)
 
     Import name src ->
-      let newState = State (Map.insert name src imports) types decls in
+      let newState = State (Map.insert name src imports) types decls captures in
       IO.fmap Loop <| attemptEval env state newState OutputNothing
 
     Type name src ->
-      let newState = State imports (Map.insert name src types) decls in
+      let newState = State imports (Map.insert name src types) decls captures in
       IO.fmap Loop <| attemptEval env state newState OutputNothing
 
     Port ->
@@ -535,7 +537,7 @@ eval env ((State imports types decls) as state) input =
       IO.return (Loop state)
 
     Decl name src ->
-      let newState = State imports types (Map.insert name src decls) in
+      let newState = State imports types (Map.insert name src decls) (Set.delete name captures) in
       IO.fmap Loop <| attemptEval env state newState (OutputDecl name)
 
     Expr src ->
@@ -553,7 +555,7 @@ type Output
 
 
 attemptEval : Env h -> State -> State -> Output -> IO h State
-attemptEval (Env root interpreter ansi) oldState newState output =
+attemptEval (Env root interpreter ansi) oldState ((State _ _ _ captures) as newState) output =
   IO.bind
     (Task.run <|
       Task.bind
@@ -564,7 +566,7 @@ attemptEval (Env root interpreter ansi) oldState newState output =
         (Task.eio identity <|
           Build.fromRepl root details (toByteString newState output)) <| \artifacts ->
 
-      MMaybe.traverse Task.pure Task.fmap (Task.mapError Exit.ReplBadGenerate << Generate.repl root details ansi artifacts) (toPrintName output)) <| \result ->
+      MMaybe.traverse Task.pure Task.fmap (Task.mapError Exit.ReplBadGenerate << Generate.repl root details ansi captures artifacts) (toPrintName output)) <| \result ->
 
   case result of
     Left exit ->
@@ -577,8 +579,16 @@ attemptEval (Env root interpreter ansi) oldState newState output =
     Right (Just javascript) ->
       IO.bind (interpret interpreter (InterpretValue javascript)) <| \interpreterResult ->
       case interpreterResult of
-        InterpreterSuccess -> IO.return newState
-        InterpreterFailure -> IO.return oldState
+        InterpreterSuccess captured -> IO.return (addCapture output captured newState)
+        InterpreterFailure          -> IO.return oldState
+
+
+{- NEW: addCapture -}
+addCapture : Output -> Bool -> State -> State
+addCapture output captured ((State imports types decls captures) as state) =
+  case (output, captured) of
+    (OutputDecl name, True) -> State imports types decls (Set.insert name captures)
+    _                       -> state
 
 
 
@@ -586,7 +596,7 @@ attemptEval (Env root interpreter ansi) oldState newState output =
 
 
 toByteString : State -> Output -> String
-toByteString (State imports types decls) output =
+toByteString (State imports types decls _) output =
   String.concat
     [ "module " ++ N.toBuilder N.replModule ++ " exposing (..)\n"
     , Map.foldr (++) "" imports

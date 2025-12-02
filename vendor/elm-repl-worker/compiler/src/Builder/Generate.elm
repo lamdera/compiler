@@ -34,6 +34,7 @@ import Extra.Type.Lens exposing (Lens)
 import Extra.Type.List as MList exposing (TList)
 import Extra.Type.Map as Map
 import Extra.Type.Maybe as MMaybe
+import Extra.Type.Set as Set
 import Extra.System.IO as IO
 import Extra.System.MVar as MVar
 import Global
@@ -129,12 +130,11 @@ prod root details (Build.Artifacts pkg _ roots modules) =
   Task.return <| JS.generate mode graph mains
 
 
-repl : FilePath -> Details.Details -> Bool -> Build.ReplArtifacts -> N.Name -> Task z f g h String
-repl root details ansi (Build.ReplArtifacts home modules localizer annotations) name =
+repl : FilePath -> Details.Details -> Bool -> Set.Set N.Name -> Build.ReplArtifacts -> N.Name -> Task z f g h String
+repl root details ansi captures (Build.ReplArtifacts home modules localizer annotations) name =
   Task.bind (Task.andThen finalizeObjects <| loadObjects root details modules) <| \objects ->
   let graph = objectsToGlobalGraph objects in
-  Task.return <| JS.generateForRepl ansi localizer graph home name (Map.ex annotations name)
-
+  Task.return <| JS.generateForRepl ansi captures localizer graph home name (Map.ex annotations name)
 
 
 -- CHECK FOR DEBUG

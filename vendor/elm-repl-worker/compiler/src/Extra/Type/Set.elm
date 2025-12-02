@@ -1,5 +1,6 @@
 module Extra.Type.Set exposing
     ( Set
+    , delete
     , difference
     , empty
     , foldl
@@ -20,6 +21,11 @@ import Set
 
 type alias Set comparable =
     Set.Set comparable
+
+
+delete : comparable -> Set comparable -> Set comparable
+delete =
+    Set.remove
 
 
 difference : Set comparable -> Set comparable -> Set comparable

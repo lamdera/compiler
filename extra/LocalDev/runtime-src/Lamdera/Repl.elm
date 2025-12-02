@@ -618,6 +618,7 @@ secondInitialCommand =
 remainingInitialCommands : List String
 remainingInitialCommands =
     [ "import Types"
+    , "clearCaptures ()"
     ]
 
 
@@ -781,6 +782,10 @@ In the leader tab (green dot) you can also call:
   updateBE  : Types.BackendMsg -> Types.BackendMsg
   sendToFE  : Lamdera.ClientId -> Types.ToFrontend -> Types.ToFrontend
   broadcast : Types.ToFrontend -> Types.ToFrontend
+
+To create snapshots of the models, you can use:
+
+  capture   : a -> a
 
 More info at """ ++ replDocUrl ++ """
 """)

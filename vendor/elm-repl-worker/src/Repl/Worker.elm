@@ -296,10 +296,10 @@ callJavaScript javaScript =
     IO.bind (workerToJavaScriptRequester.request javaScript) <|
         \javaScriptResponse ->
             case javaScriptResponse of
-                Api.JavaScriptOutput output ->
+                Api.JavaScriptOutput output captured ->
                     IO.bindSequence
                         [ Terminal.putLine output ]
-                        (IO.return Repl.InterpreterSuccess)
+                        (IO.return (Repl.InterpreterSuccess captured))
 
                 Api.JavaScriptError error ->
                     IO.bindSequence

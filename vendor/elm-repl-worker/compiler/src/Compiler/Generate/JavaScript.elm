@@ -11,6 +11,7 @@ import Compiler.Data.Index as Index
 import Compiler.Data.Name as Name
 import Compiler.Elm.Kernel as K
 import Compiler.Elm.ModuleName as ModuleName
+import Compiler.Elm.Package as Pkg
 import Compiler.Generate.JavaScript.Builder as JS
 import Compiler.Generate.JavaScript.Expression as Expr
 import Compiler.Generate.JavaScript.Functions as Functions
@@ -47,7 +48,7 @@ generate mode (Opt.GlobalGraph graph _) mains =
 
 addMain : Mode.Mode -> Graph -> ModuleName.Comparable -> Opt.Main -> State -> State
 addMain mode graph home _ state =
-  addGlobal mode graph state (Opt.toGlobalComparable <| Opt.Global (ModuleName.fromComparable home) "main")
+  addGlobal mode Set.empty graph state (Opt.toGlobalComparable <| Opt.Global (ModuleName.fromComparable home) "main")
 
 
 perfNote : Mode.Mode -> String
@@ -71,21 +72,31 @@ perfNote mode =
 -- GENERATE FOR REPL
 
 
-generateForRepl : Bool -> L.Localizer -> Opt.GlobalGraph -> ModuleName.Canonical -> Name.Name -> Can.Annotation -> String
-generateForRepl ansi localizer (Opt.GlobalGraph graph _) home name (Can.Forall _ tipe) =
+generateForRepl : Bool -> Set.Set Name.Name -> L.Localizer -> Opt.GlobalGraph -> ModuleName.Canonical -> Name.Name -> Can.Annotation -> String
+generateForRepl ansi captures localizer (Opt.GlobalGraph graph _) home name (Can.Forall _ tipe) =
   let
     mode = Mode.Dev Nothing
-    debugState = addGlobal mode graph emptyState (Opt.toGlobalComparable <| Opt.Global ModuleName.debug "toString")
-    evalState = addGlobal mode graph debugState (Opt.toGlobalComparable <| Opt.Global home name)
+
+    andAddGlobal moduleName defName state =
+      addGlobal mode captures graph state (Opt.toGlobalComparable <| Opt.Global moduleName defName)
+
+    {- NEW: capture support -}
+    (andFinishCaptureGlobals, finishCaptureCall) = finishCaptureInfos andAddGlobal name
+
+    evalState =
+      emptyState
+        |> andAddGlobal ModuleName.debug "toString"
+        |> andAddGlobal home name
+        |> andFinishCaptureGlobals
   in
   ""--"process.on('uncaughtException', function(err) { process.stderr.write(err.toString() + '\\n'); process.exit(1); });"
   ++ Functions.functions
   ++ stateToBuilder evalState
-  ++ print ansi localizer home name tipe
+  ++ print ansi localizer home name tipe finishCaptureCall
 
 
-print : Bool -> L.Localizer -> ModuleName.Canonical -> Name.Name -> Can.Type -> String
-print ansi localizer home name tipe =
+print : Bool -> L.Localizer -> ModuleName.Canonical -> Name.Name -> Can.Type -> String -> String
+print ansi localizer home name tipe finishCaptureCall =
   let
     value = JsName.toBuilder (JsName.fromGlobal home name)
     toString = JsName.toBuilder (JsName.fromKernel Name.debug "toAnsiString")
@@ -94,7 +105,8 @@ print ansi localizer home name tipe =
   in
   "var _value = " ++ toString ++ "(" ++ bool ++ ", " ++ value ++ ");\n"
   ++ "var _type = " ++ JE.encodeUgly (JE.chars (D.toString tipeDoc)) ++ ";\n"
-  ++ "function _print(t) { return _value + (" ++ bool ++ " ? '\u{001b}[90m' + t + '\u{001b}[0m' : t); }\n"
+  ++ "var _captured = " ++ finishCaptureCall ++ ";\n"
+  ++ "function _print(t) { return _captured + _value + (" ++ bool ++ " ? '\u{001b}[90m' + t + '\u{001b}[0m' : t); }\n"
   ++ "var _result = (_value.length + 3 + _type.length >= 80 || _type.indexOf('\\n') >= 0)\n"
   ++ "  ? _print('\\n    : ' + _type.split('\\n').join('\\n      '))\n"
   ++ "  : _print(' : ' + _type);\n"
@@ -130,26 +142,27 @@ prependBuilders revBuilders monolith =
 -- ADD DEPENDENCIES
 
 
-addGlobal : Mode.Mode -> Graph -> State -> Opt.GlobalComparable -> State
-addGlobal mode graph ((State revKernels builders seen) as state) global =
+addGlobal : Mode.Mode -> Set.Set Name.Name -> Graph -> State -> Opt.GlobalComparable -> State
+addGlobal mode captures graph ((State revKernels builders seen) as state) global =
   if Set.member global seen then
     state
   else
-    addGlobalHelp mode graph global <|
+    addGlobalHelp mode captures graph global <|
       State revKernels builders (Set.insert global seen)
 
 
-addGlobalHelp : Mode.Mode -> Graph -> Opt.GlobalComparable -> State -> State
-addGlobalHelp mode graph comparable state =
+addGlobalHelp : Mode.Mode -> Set.Set Name.Name -> Graph -> Opt.GlobalComparable -> State -> State
+addGlobalHelp mode captures graph comparable state =
   let
     global = Opt.fromGlobalComparable comparable
     addDeps deps someState =
-      Set.foldl (addGlobal mode graph) someState deps
+      Set.foldl (addGlobal mode captures graph) someState deps
   in
   case Map.ex graph comparable of
     Opt.Define expr deps ->
-      addStmt (addDeps deps state) (
-        var global (Expr.generate mode expr)
+      let (newExpr, newDeps) = handleCaptures captures comparable expr deps in
+      addStmt (addDeps newDeps state) (
+        var global (Expr.generate mode newExpr)
       )
 
     Opt.DefineTailFunc argNames body deps ->
@@ -164,7 +177,7 @@ addGlobalHelp mode graph comparable state =
       )
 
     Opt.Link linkedGlobal ->
-      addGlobal mode graph state (Opt.toGlobalComparable linkedGlobal)
+      addGlobal mode captures graph state (Opt.toGlobalComparable linkedGlobal)
 
     Opt.Cycle names values functions deps ->
       addStmt (addDeps deps state) (
@@ -186,7 +199,7 @@ addGlobalHelp mode graph comparable state =
       )
 
     Opt.Box ->
-      addStmt (addGlobal mode graph state (Opt.toGlobalComparable identity_)) (
+      addStmt (addGlobal mode captures graph state (Opt.toGlobalComparable identity_)) (
         generateBox mode global
       )
 
@@ -408,7 +421,7 @@ generateManager mode graph (Opt.Global ((ModuleName.Canonical _ moduleName) as h
       JS.ExprStmt <| JS.Assign managerLVar <|
         JS.Call (JS.Ref (JsName.fromKernel Name.platform "createManager")) args
   in
-  addStmt (MList.foldl (addGlobal mode graph) state deps) <|
+  addStmt (MList.foldl (addGlobal mode Set.empty graph) state deps) <|
     JS.Block (createManager :: stmts)
 
 
@@ -542,3 +555,41 @@ checkedMerge a b =
 
     (Just _, Just _) ->
       Debug.todo "cannot have two modules with the same name"
+
+
+
+{- NEW: CAPTURES -}
+
+
+handleCaptures : Set.Set Name.Name -> Opt.GlobalComparable -> Opt.Expr -> Set.Set Opt.GlobalComparable -> ( Opt.Expr, Set.Set Opt.GlobalComparable )
+handleCaptures captures (_, name) expr deps =
+  if Set.member name captures then
+    ( Opt.Call
+        (Opt.VarGlobal replayFunction)
+        [Opt.Tuple (Opt.Str name) (Opt.Function ["_v0"] expr) Nothing]
+    , Set.insert (Opt.toGlobalComparable replayFunction) deps
+    )
+  else
+    ( expr, deps )
+
+
+replayFunction : Opt.Global
+replayFunction =
+  Opt.Global replInterfaceModule "replay"
+
+
+finishCaptureInfos : (ModuleName.Canonical -> Name.Name -> State -> State) -> Name.Name -> ( State -> State, String )
+finishCaptureInfos andAddGlobal name =
+  if name == Name.replValueToPrint then
+    ( identity
+    , "'f'"
+    )
+  else
+    ( andAddGlobal replInterfaceModule "finishCapture"
+    , JsName.toBuilder (JsName.fromGlobal replInterfaceModule "finishCapture") ++ "('" ++ name ++ "')"
+    )
+
+
+replInterfaceModule : ModuleName.Canonical
+replInterfaceModule =
+  ModuleName.Canonical Pkg.dummyName "Lamdera.Repl.Interface"

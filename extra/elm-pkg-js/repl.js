@@ -4,6 +4,7 @@
 exports.init = async function(app) {
 
     let worker = null
+    let captures = Object.create(null)
 
     function sendToWorker(data) {
       worker.ports.receiveFromClientPort.send(data)
@@ -13,16 +14,13 @@ exports.init = async function(app) {
       app.ports.receiveFromWorkerPort.send(data)
     }
 
-    // this survives esbuild --minify
-    getApp = () => app
-
     function interpret(code) {
       code = code.replace(
         /\$author\$project\$Lamdera\$Repl\$Interface\$jsImpl\('(.*)'\);$/gm,
         (_,p) => p.replace(/\\/g, "")+';'
       )
       try {
-        const evalResult = (0, eval)(code + '\n_result;')
+        const evalResult = eval(code + '\n_result;')
         worker.ports.receiveFromJavaScriptPort.send([true, evalResult])
       } catch (error) {
         worker.ports.receiveFromJavaScriptPort.send([false, error.message])

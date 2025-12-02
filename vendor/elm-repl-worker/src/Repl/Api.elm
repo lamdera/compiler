@@ -109,7 +109,7 @@ javaScriptRequestCodec =
 
 
 type JavaScriptResponse
-    = JavaScriptOutput String
+    = JavaScriptOutput String Bool
     | JavaScriptError String
 
 
@@ -122,8 +122,8 @@ javaScriptResponseCodec =
     { encode =
         \response ->
             case response of
-                JavaScriptOutput output ->
-                    ( True, output )
+                JavaScriptOutput output captured ->
+                    ( True, String.cons (capturedCodec.encode captured) output )
 
                 JavaScriptError error ->
                     ( False, error )
@@ -131,8 +131,26 @@ javaScriptResponseCodec =
         \wire ->
             case wire of
                 ( True, output ) ->
-                    JavaScriptOutput output
+                    case String.uncons output of
+                        Just ( firstChar, rest ) ->
+                            JavaScriptOutput rest (capturedCodec.decode firstChar)
+
+                        Nothing ->
+                            JavaScriptOutput output False
 
                 ( False, error ) ->
                     JavaScriptError error
+    }
+
+
+capturedCodec : Port.SafeCodec Bool Char
+capturedCodec =
+    { encode =
+        \captured ->
+            if captured then
+                't'
+
+            else
+                'f'
+    , decode = \wire -> wire == 't'
     }
