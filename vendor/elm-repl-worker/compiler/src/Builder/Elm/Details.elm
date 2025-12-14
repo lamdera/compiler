@@ -479,7 +479,7 @@ verifyDep (Env _ cache manager _ _) depsMVar solution pkg ((Solver.Details vsn d
   IO.bind (Dir.doesDirectoryExist (Dir.addName (Stuff.package cache pkg vsn) "src")) <| \exists ->
   if exists
     then
-      IO.bind (File.readBinary bArtifactCache (Dir.addName (Stuff.package cache pkg vsn) "artifacts.dat")) <| \maybeCache ->
+      IO.bind (File.readBinary bArtifactCache (Dir.addName (Stuff.package cache pkg vsn) "artifacts.x.dat")) <| \maybeCache ->
       case maybeCache of
         Nothing ->
           build cache depsMVar pkg details fingerprint Set.empty
@@ -567,7 +567,7 @@ build cache depsMVar pkg (Solver.Details vsn _) f fs =
 
                 Just results ->
                   let
-                    path = Dir.addName (Stuff.package cache pkg vsn) "artifacts.dat"
+                    path = Dir.addName (Stuff.package cache pkg vsn) "artifacts.x.dat"
                     ifaces = gatherInterfaces exposedDict results
                     objects = gatherObjects results
                     artifacts = Artifacts ifaces objects
