@@ -26,7 +26,6 @@ import Extra.Type.Map as Map
 -- CHUNK
 
 
-{- NEW: Async -}
 type Chunk
   = JS String
   | ElmVar ModuleName.Canonical Name.Name
@@ -36,7 +35,6 @@ type Chunk
   | JsEnum Int
   | Debug
   | Prod
-  | Async
 
 
 
@@ -59,7 +57,6 @@ addField chunk fields =
     JsEnum _   -> fields
     Debug      -> fields
     Prod       -> fields
-    Async      -> fields
 
 
 
@@ -197,9 +194,6 @@ chompTag vs es fs src pos end row col revChunks =
     else if name == "PROD" then
       chompChunks vs es fs src newPos end row newCol newPos (Prod :: revChunks)
 
-    else if name == "ASYNC" then
-      chompChunks vs es fs src newPos end row newCol newPos (Async :: revChunks)
-
     else
       case Map.lookup name vs of
         Just chunk ->
@@ -335,7 +329,7 @@ toName exposed =
 bChunk : B.Binary Chunk
 bChunk =
   B.custom "problem deserializing Elm.Kernel.Chunk"
-    (\p0 p1 p2 p3 p4 p5 p6 p7 p8 chunk ->
+    (\p0 p1 p2 p3 p4 p5 p6 p7 chunk ->
       case chunk of
         JS a       -> p0 a
         ElmVar a b -> p1 a b
@@ -345,7 +339,6 @@ bChunk =
         JsEnum a   -> p5 a
         Debug      -> p6
         Prod       -> p7
-        Async      -> p8
     )
     |> B.var1 0 JS B.bString
     |> B.var2 1 ElmVar ModuleName.bCanonical Name.bName
@@ -355,5 +348,4 @@ bChunk =
     |> B.var1 5 JsEnum B.bWord64
     |> B.var0 6 Debug
     |> B.var0 7 Prod
-    |> B.var0 8 Async
     |> B.finish

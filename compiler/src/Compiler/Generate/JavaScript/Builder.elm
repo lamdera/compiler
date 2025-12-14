@@ -35,7 +35,6 @@ import Extra.Type.Maybe as MMaybe
 -- For this to be worth it, I think it would be necessary to avoid
 -- returning tuples when generating expressions.
 --
-{- NEW: AsyncCall, AsyncFunction -}
 type Expr
   = CString String
   | CFloat String
@@ -53,8 +52,6 @@ type Expr
   | Assign LValue Expr
   | Call Expr (TList Expr)
   | Function (Maybe Name) (TList Name) (TList Stmt)
-  | AsyncCall Expr (TList Expr)
-  | AsyncFunction (Maybe Name) (TList Name) (TList Stmt)
 
 
 type LValue
@@ -426,25 +423,6 @@ fromExpr ((Level indent toNextLevel) as level) grouping expression =
     Function maybeName args stmts ->
       Tuple.pair Many <|
         "function " ++ MMaybe.maybe "" Name.toBuilder maybeName ++ "(" ++ commaSep (MList.map Name.toBuilder args) ++ ") {\n"
-        ++
-          fromStmtBlock nextLevel stmts
-        ++
-        indent ++ "}"
-
-    AsyncCall function args ->
-      Tuple.pair Many <|
-        let
-          (_      , funcB) = fromExpr level Atomic function
-          (anyMany, argsB) = linesMap (fromExpr nextLevel Whatever) args
-        in
-        "await " ++ if anyMany then
-          funcB ++ "(\n" ++ deeperIndent ++ commaNewlineSep level argsB ++ ")"
-        else
-          funcB ++ "(" ++ commaSep argsB ++ ")"
-
-    AsyncFunction maybeName args stmts ->
-      Tuple.pair Many <|
-        "async function " ++ MMaybe.maybe "" Name.toBuilder maybeName ++ "(" ++ commaSep (MList.map Name.toBuilder args) ++ ") {\n"
         ++
           fromStmtBlock nextLevel stmts
         ++

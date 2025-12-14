@@ -5,13 +5,11 @@ module Compiler.Elm.Constraint exposing
   , anything
   , toChars
   , satisfies
-  --, check
   , intersect
   , goodElm
   , defaultElm
   , untilNextMajor
   , untilNextMinor
-  --, expand
   --
   , Error(..)
   , decoder

@@ -1,14 +1,10 @@
 {- MANUALLY FORMATTED -}
 module Builder.Reporting.Exit exposing
   ( Init(..), initToReport
-  --, Diff(..), diffToReport
   , Make(..), makeToReport
-  --, Bump(..), bumpToReport
   , Repl(..), replToReport
-  --, Publish(..), publishToReport
   , Install(..), installToReport
   , Reactor(..), reactorToReport
-  --, newPackageOverview
   --
   , Solver(..)
   , Outline(..)
@@ -19,12 +15,9 @@ module Builder.Reporting.Exit exposing
   , RegistryProblem(..), toRegistryProblemReport
   , BuildProblem(..), toBuildProblemReport
   , BuildProjectProblem(..)
-  --, DocsProblem(..)
   , Generate(..)
   ----
-  --, toString
-  --, toStderr
-  , toClient -- toJson
+  , toClient
   )
 
 

@@ -1,22 +1,14 @@
 {- MANUALLY FORMATTED -}
 module Compiler.Json.Encode exposing
   ( write
-  --, encode
-  --, writeUgly
   , encodeUgly
-  , Value(..)
-  --, array
+  , Value
   , object
   , string
   , name
   , chars
-  --, bool
-  --, int
-  --, number
-  --, null
   , dict
   , list
-  --, (==>)
   )
 
 

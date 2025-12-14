@@ -8,9 +8,6 @@ module Compiler.Generate.JavaScript.Expression exposing
   , Code
   , codeToExpr
   , codeToStmtList
-  --
-  , isBreakpointDef
-  , generateAsync
   )
 
 
@@ -45,12 +42,7 @@ generateJsExpr mode expression =
 
 
 generate : Mode.Mode -> Opt.Expr -> Code
-generate = generateAsync False Nothing
-
-
-{- NEW: generateAsync -}
-generateAsync : Bool -> Maybe ( Name.Name, Name.Name ) -> Mode.Mode -> Opt.Expr -> Code
-generateAsync isAsyncDef maybeBpNames mode expression =
+generate mode expression =
   case expression of
     Opt.CBool bool ->
       JsExpr <| JS.CBool bool
@@ -115,14 +107,10 @@ generateAsync isAsyncDef maybeBpNames mode expression =
               ]
 
     Opt.Function args body ->
-      generateFunctionAsync
-        (isAsyncDef || isBreakpointFun args mode)
-        (MList.map JsName.fromLocal args)
-        (generate mode body)
+      generateFunction (MList.map JsName.fromLocal args) (generate mode body)
 
     Opt.Call func args ->
-      let ( newMode, newFunc, newArgs ) = breakpointDefCall func args mode maybeBpNames in
-      JsExpr <| generateCall newMode newFunc newArgs
+      JsExpr <| generateCall mode func args
 
     Opt.TailCall name args ->
       JsBlock <| generateTailCall mode name args
@@ -358,25 +346,19 @@ positionToJsExpr (A.Position line column) =
 
 
 generateFunction : TList JsName.Name -> Code -> Code
-generateFunction = generateFunctionAsync False
-
-
-{- NEW: generateFunctionAsync -}
-generateFunctionAsync : Bool -> TList JsName.Name -> Code -> Code
-generateFunctionAsync isAsyncDef args body =
-  let func = if isAsyncDef then JS.AsyncFunction else JS.Function in
+generateFunction args body =
   case Map.lookup (MList.length args) funcHelpers of
     Just helper ->
       JsExpr <|
         JS.Call helper
-          [ func Nothing args <|
+          [ JS.Function Nothing args <|
               codeToStmtList body
           ]
 
     Nothing ->
       let
         addArg arg code =
-          JsExpr <| func Nothing [arg] <|
+          JsExpr <| JS.Function Nothing [arg] <|
             codeToStmtList code
       in
       MList.foldr addArg body args
@@ -396,9 +378,8 @@ generateCall : Mode.Mode -> Opt.Expr -> TList Opt.Expr -> JS.Expr
 generateCall mode func args =
   case func of
     Opt.VarGlobal ((Opt.Global (ModuleName.Canonical pkg _) _) as global) ->
-      if Mode.isAsyncActive mode && pkg == Pkg.dummyName then generateCallHelpAsync True mode func args
-      else if pkg == Pkg.core then generateCoreCall mode global args
-      else generateCallHelp mode (addAsyncGlobal mode "elm" "browser" "Browser" "sandbox" func) args
+      if pkg == Pkg.core then generateCoreCall mode global args
+      else generateCallHelp mode func args
 
     Opt.VarBox _ ->
       case mode of
@@ -414,17 +395,12 @@ generateCall mode func args =
               generateCallHelp mode func args
 
     _ ->
-      generateCallHelpAsync (isSuspendCall func mode) mode func args
+      generateCallHelp mode func args
 
 
 generateCallHelp : Mode.Mode -> Opt.Expr -> TList Opt.Expr -> JS.Expr
-generateCallHelp = generateCallHelpAsync False
-
-
-{- NEW: generateCallHelpAsync -}
-generateCallHelpAsync : Bool -> Mode.Mode -> Opt.Expr -> TList Opt.Expr -> JS.Expr
-generateCallHelpAsync isAsync mode func args =
-  generateNormalCallAsync isAsync
+generateCallHelp mode func args =
+  generateNormalCall
     (generateJsExpr mode func)
     (MList.map (generateJsExpr mode) args)
 
@@ -435,19 +411,13 @@ generateGlobalCall home name args =
 
 
 generateNormalCall : JS.Expr -> TList JS.Expr -> JS.Expr
-generateNormalCall = generateNormalCallAsync False
-
-
-{- NEW: generateNormalCallAsync -}
-generateNormalCallAsync : Bool -> JS.Expr -> TList JS.Expr -> JS.Expr
-generateNormalCallAsync isAsync func args =
-  let call = if isAsync then JS.AsyncCall else JS.Call in
+generateNormalCall func args =
   case Map.lookup (MList.length args) callHelpers of
     Just helper ->
-      call helper (func::args)
+      JS.Call helper (func::args)
 
     Nothing ->
-      MList.foldl (\f a -> call f [a]) func args
+      MList.foldl (\f a -> JS.Call f [a]) func args
 
 
 callHelpers : Map.Map Int JS.Expr
@@ -1061,7 +1031,7 @@ generateMain : Mode.Mode -> ModuleName.Canonical -> Opt.Main -> JS.Expr
 generateMain mode home main =
   case main of
     Opt.Static ->
-      JS.Ref (JsName.fromKernel Name.virtualDom (addAsyncName mode "init"))
+      JS.Ref (JsName.fromKernel Name.virtualDom "init")
         |> hash (JS.Ref (JsName.fromGlobal home "main"))
         |> hash (JS.CInt 0)
         |> hash (JS.CInt 0)
@@ -1083,76 +1053,11 @@ toDebugMetadata mode msgType =
     Mode.Prod _ ->
       JS.CInt 0
 
-    Mode.Dev (Mode.DevDebug interfaces) ->
+    Mode.Dev Nothing ->
+      JS.CInt 0
+
+    Mode.Dev (Just interfaces) ->
       JS.Json <| Encode.object <|
         [ ( "versions", Encode.object [ ( "elm", V.encode V.compiler ) ] )
         , ( "types"   , Type.encodeMetadata (Extract.fromMsg interfaces msgType) )
         ]
-
-    Mode.Dev _ ->
-      JS.CInt 0
-
-
-
--- BREAKPOINTS
-
-
-{- NEW: isBreakpointDef -}
-isBreakpointDef : Opt.Expr -> TList Opt.Expr -> Bool
-isBreakpointDef func args =
-  getBreakpointDefSuspendFun func args /= Nothing
-
-
-breakpointDefCall : Opt.Expr -> TList Opt.Expr -> Mode.Mode -> Maybe ( Name.Name, Name.Name ) -> ( Mode.Mode, Opt.Expr, TList Opt.Expr )
-breakpointDefCall func args mode maybeBpNames =
-  case ( mode, getBreakpointDefSuspendFun func args, maybeBpNames ) of
-    ( Mode.Dev (Mode.DevAsync True suspendFuns), Just suspendFun, Just ( moduleName, bpName ) ) ->
-      ( Mode.Dev (Mode.DevAsync True (Set.insert suspendFun suspendFuns))
-      , Opt.VarKernel "Breakpoint" "named"
-      , [ Opt.Str moduleName, Opt.Str bpName, Opt.Call func args ]
-      )
-
-    _ -> ( mode, func, args )
-
-
-getBreakpointDefSuspendFun : Opt.Expr -> TList Opt.Expr -> Maybe String
-getBreakpointDefSuspendFun func args =
-  case ( func, args ) of
-    ( Opt.VarGlobal (Opt.Global (ModuleName.Canonical pkg moduleName) "apL"), [ Opt.VarGlobal (Opt.Global (ModuleName.Canonical (Pkg.Name "elm" "breakpoint") "Breakpoint") "new"), Opt.Function (arg :: _) _ ] ) ->
-
-      if pkg == Pkg.core && moduleName == Name.basics
-      then Just arg
-      else Nothing
-
-    _ -> Nothing
-
-
-isBreakpointFun : TList Name.Name -> Mode.Mode -> Bool
-isBreakpointFun args mode =
-  case ( args, mode ) of
-    ( arg :: _, Mode.Dev (Mode.DevAsync True suspendFuns) ) -> Set.member arg suspendFuns
-    _ -> False
-
-
-isSuspendCall : Opt.Expr -> Mode.Mode -> Bool
-isSuspendCall func mode =
-  case ( func, mode ) of
-    ( Opt.VarLocal name, Mode.Dev (Mode.DevAsync True suspendFuns) ) -> Set.member name suspendFuns
-    _ -> False
-
-
-addAsyncGlobal : Mode.Mode -> String -> String -> String -> String -> Opt.Expr -> Opt.Expr
-addAsyncGlobal mode author pkg moduleName name expr =
-  case expr of
-    Opt.VarGlobal (Opt.Global (ModuleName.Canonical (Pkg.Name a p) m) n) ->
-      if a == author && p == pkg && m == moduleName && n == name then
-        Opt.VarGlobal (Opt.Global (ModuleName.Canonical (Pkg.Name a p) m) (addAsyncName mode n))
-      else
-        expr
-    _ ->
-      expr
-
-
-addAsyncName : Mode.Mode -> Name.Name -> Name.Name
-addAsyncName mode name =
-  if Mode.isAsync mode then name ++ "_async" else name

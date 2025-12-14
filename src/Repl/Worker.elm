@@ -13,7 +13,6 @@ import Extra.System.IO.Port as Port
 import Extra.Type.Either exposing (Either(..))
 import Extra.Type.Lens exposing (Lens)
 import Extra.Type.List as MList exposing (TList)
-import Extra.Type.Map as Map exposing (Map)
 import Global
 import Repl.Api as Api
 import Terminal.Command as Terminal
@@ -66,14 +65,8 @@ type LocalState
     = LocalState
         -- javaScriptCont
         (Maybe (Port.SyncCont Model Api.JavaScriptResponse))
-        -- replMode
-        ReplMode
         -- replState
         ReplState
-
-
-type alias ReplMode =
-    ( Map String String, Map String String, Map String String )
 
 
 type ReplState
@@ -86,30 +79,21 @@ initialLocalState =
     LocalState
         -- javaScriptCont
         Nothing
-        -- replMode
-        ( Map.empty, Map.empty, Map.empty )
         -- replState
         ReplStopped
 
 
 lensJavaScriptCont : Port.SyncLens Model Api.JavaScriptResponse
 lensJavaScriptCont =
-    { getter = \(Global.State _ _ _ _ _ _ _ (LocalState x _ _)) -> x
-    , setter = \x (Global.State a b c d e f g (LocalState _ bi ci)) -> Global.State a b c d e f g (LocalState x bi ci)
-    }
-
-
-lensReplMode : Lens Model ReplMode
-lensReplMode =
-    { getter = \(Global.State _ _ _ _ _ _ _ (LocalState _ x _)) -> x
-    , setter = \x (Global.State a b c d e f g (LocalState ai _ ci)) -> Global.State a b c d e f g (LocalState ai x ci)
+    { getter = \(Global.State _ _ _ _ _ _ _ (LocalState x _)) -> x
+    , setter = \x (Global.State a b c d e f g (LocalState _ bi)) -> Global.State a b c d e f g (LocalState x bi)
     }
 
 
 lensReplState : Lens Model ReplState
 lensReplState =
-    { getter = \(Global.State _ _ _ _ _ _ _ (LocalState _ _ x)) -> x
-    , setter = \x (Global.State a b c d e f g (LocalState ai bi _)) -> Global.State a b c d e f g (LocalState ai bi x)
+    { getter = \(Global.State _ _ _ _ _ _ _ (LocalState _ x)) -> x
+    , setter = \x (Global.State a b c d e f g (LocalState ai _)) -> Global.State a b c d e f g (LocalState ai x)
     }
 
 
@@ -150,21 +134,6 @@ flagToMsg ( config, val1, val2 ) =
 
         "currentDir" ->
             Dir.setCurrentDirectory (Dir.fromString val1)
-
-        "import" ->
-            IO.modifyLens lensReplMode <|
-                \( imports, types, decls ) ->
-                    ( Map.insert val1 (val2 ++ "\n") imports, types, decls )
-
-        "type" ->
-            IO.modifyLens lensReplMode <|
-                \( imports, types, decls ) ->
-                    ( imports, Map.insert val1 (val2 ++ "\n") types, decls )
-
-        "decl" ->
-            IO.modifyLens lensReplMode <|
-                \( imports, types, decls ) ->
-                    ( imports, types, Map.insert val1 (val2 ++ "\n") decls )
 
         "start" ->
             IO.bind (handleClientCall { userInput = val1 }) clientToWorkerLowLevelSend
@@ -242,8 +211,8 @@ handleClientCall { userInput } =
 
 
 handleClientRequestHelp : Repl.Env LocalState -> Repl.State -> Repl.Lines -> IO Api.WorkerState
-handleClientRequestHelp ((Repl.Env _ _ _ mode _ _) as env) state lines =
-    case Repl.categorize mode lines of
+handleClientRequestHelp env state lines =
+    case Repl.categorize lines of
         Repl.Done input ->
             IO.bind (Repl.eval env state input) <|
                 \outcome ->
@@ -289,30 +258,19 @@ withRunningRepl callback =
 startRepl : (Repl.Env LocalState -> Repl.State -> IO Api.WorkerState) -> IO Api.WorkerState
 startRepl replCallback =
     IO.bind getEnv <|
-        \envResult ->
-            case envResult of
-                Left error ->
-                    IO.return (Api.WorkerStateStopped (Just (errorToString error)))
-
-                Right env ->
-                    IO.bindSequence
-                        [ Repl.printWelcomeMessage ]
-                        (replCallback env (Repl.initialState env))
+        \env ->
+            IO.bindSequence
+                [ Repl.printWelcomeMessage ]
+                (replCallback env Repl.initialState)
 
 
-getEnv : IO (Either Exit.Repl (Repl.Env LocalState))
+getEnv : IO (Repl.Env LocalState)
 getEnv =
-    IO.bind (IO.getLens lensReplMode) <|
-        \( imports, types, decls ) ->
-            Repl.initEnv
-                (Repl.Flags
-                    -- interpreter
-                    workerInterpreter
-                    -- mode
-                    (Repl.Configured imports types decls)
-                    -- htmlEnabled
-                    False
-                )
+    Repl.initEnv
+        (Repl.Flags
+            -- interpreter
+            workerInterpreter
+        )
 
 
 
@@ -326,9 +284,6 @@ workerInterpreter input =
             IO.bind
                 (callJavaScript javaScript)
                 (Repl.continueInterpreter IO.noOp)
-
-        Repl.InterpretHtml _ _ ->
-            IO.noOp
 
         Repl.ShowError error ->
             IO.bindSequence

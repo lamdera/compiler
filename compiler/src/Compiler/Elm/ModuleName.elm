@@ -5,7 +5,6 @@ module Compiler.Elm.ModuleName exposing
   , toFileNames
   , toHyphenName
   --
-  --, encode
   , decoder
   --
   , Canonical(..), toString, bCanonical

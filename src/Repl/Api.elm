@@ -81,7 +81,7 @@ workerResponseCodec =
 
 clientToWorkerLowLevelSendFun : Port.LowLevelSendFun s WorkerResponse WorkerResponseWire
 clientToWorkerLowLevelSendFun =
-    Port.lowLevelSend workerResponseCodec
+    Port.lowLevelSendFun workerResponseCodec
 
 
 

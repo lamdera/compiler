@@ -1,13 +1,9 @@
 {- MANUALLY FORMATTED -}
 module Compiler.Elm.Compiler.Type exposing
   ( Type(..)
-  --, RT.Context(..)
-  --, toDoc
   , DebugMetadata(..)
   , Alias(..)
   , Union(..)
-  --, encode
-  --, decoder
   , encodeMetadata
   )
 

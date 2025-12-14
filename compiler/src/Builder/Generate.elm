@@ -8,8 +8,6 @@ module Builder.Generate exposing
   , GlobalState
   , LocalState
   , initialState
-  --
-  , async
   )
 
 
@@ -36,7 +34,6 @@ import Extra.Type.Lens exposing (Lens)
 import Extra.Type.List as MList exposing (TList)
 import Extra.Type.Map as Map
 import Extra.Type.Maybe as MMaybe
-import Extra.Type.Set as Set
 import Extra.System.IO as IO
 import Extra.System.MVar as MVar
 import Global
@@ -99,7 +96,7 @@ debug root details (Build.Artifacts pkg ifaces roots modules) =
   Task.bind (loadObjects root details modules) <| \loading ->
   Task.bind (loadTypes root ifaces modules) <| \types ->
   Task.bind (finalizeObjects loading) <| \objects ->
-  let mode = Mode.Dev (Mode.DevDebug types) in
+  let mode = Mode.Dev (Just types) in
   let graph = objectsToGlobalGraph objects in
   let mains = gatherMains pkg objects roots in
   Task.return <| JS.generate mode graph mains
@@ -108,17 +105,7 @@ debug root details (Build.Artifacts pkg ifaces roots modules) =
 dev : FilePath -> Details.Details -> Build.Artifacts -> Task z f g h String
 dev root details (Build.Artifacts pkg _ roots modules) =
   Task.bind (Task.andThen finalizeObjects <| loadObjects root details modules) <| \objects ->
-  let mode = Mode.Dev Mode.DevNormal in
-  let graph = objectsToGlobalGraph objects in
-  let mains = gatherMains pkg objects roots in
-  Task.return <| JS.generate mode graph mains
-
-
-{- NEW: async -}
-async : FilePath -> Details.Details -> Build.Artifacts -> Task z f g h String
-async root details (Build.Artifacts pkg _ roots modules) =
-  Task.bind (Task.andThen finalizeObjects <| loadObjects root details modules) <| \objects ->
-  let mode = Mode.Dev (Mode.DevAsync True Set.empty) in
+  let mode = Mode.Dev Nothing in
   let graph = objectsToGlobalGraph objects in
   let mains = gatherMains pkg objects roots in
   Task.return <| JS.generate mode graph mains
@@ -134,11 +121,11 @@ prod root details (Build.Artifacts pkg _ roots modules) =
   Task.return <| JS.generate mode graph mains
 
 
-repl : FilePath -> Details.Details -> Bool -> Bool -> Build.ReplArtifacts -> N.Name -> Task z f g h (JS.CodeKind, String)
-repl root details ansi htmlEnabled (Build.ReplArtifacts home modules localizer annotations) name =
+repl : FilePath -> Details.Details -> Bool -> Build.ReplArtifacts -> N.Name -> Task z f g h String
+repl root details ansi (Build.ReplArtifacts home modules localizer annotations) name =
   Task.bind (Task.andThen finalizeObjects <| loadObjects root details modules) <| \objects ->
   let graph = objectsToGlobalGraph objects in
-  Task.return <| JS.generateForRepl ansi htmlEnabled localizer graph home name (Map.ex annotations name)
+  Task.return <| JS.generateForRepl ansi localizer graph home name (Map.ex annotations name)
 
 
 

@@ -1,12 +1,10 @@
 {- MANUALLY FORMATTED -}
 module Compiler.Data.Bag exposing
-  ( Bag(..)
+  ( Bag
   , empty
   , one
   , append
-  --, map
   , toList
-  --, fromList
   )
 
 

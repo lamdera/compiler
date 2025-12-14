@@ -3,7 +3,6 @@ module Compiler.Elm.Package exposing
   ( Name(..), bName
   , Author
   , Project
-  --, Canonical(..)
   , isKernel
   , toChars
   , toUrl
@@ -12,8 +11,8 @@ module Compiler.Elm.Package exposing
   --
   , dummyName, kernel, core
   , browser, virtualDom, html
-  , json--, http, url
-  , webgl--, linearAlgebra
+  , json
+  , webgl
   --
   , suggestions
   , nearbyNames

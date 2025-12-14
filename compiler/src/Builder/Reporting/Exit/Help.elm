@@ -6,10 +6,7 @@ module Builder.Reporting.Exit.Help exposing
   , jsonReport
   , compilerReport
   , reportToDoc
-  , reportToClient -- reportToJson
-  --, toString
-  --, toStdout
-  --, toStderr
+  , reportToClient
   )
 
 

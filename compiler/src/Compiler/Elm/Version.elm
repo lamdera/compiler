@@ -1,6 +1,6 @@
 module Compiler.Elm.Version exposing
     ( Comparable
-    , Version(..)
+    , Version
     , bComparable
     , bVersion
     , bumpMajor

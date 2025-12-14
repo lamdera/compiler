@@ -3,12 +3,6 @@ module Terminal.Terminal exposing
   ( app
   , Command, command
   , Summary, common, uncommon
-  --, Flags, noFlags, flags, (|--)
-  --, Flag, flag, onOff
-  --, Parser(..)
-  --, Args, noArgs, required, optional, zeroOrMore, oneOrMore, oneOf
-  --, require0, require1, require2, require3, require4, require5
-  --, RequiredArgs, args, exactly, (!), (?), (...)
   )
 
 

@@ -3,13 +3,9 @@ module Builder.Stuff exposing
   ( details
   , interfaces
   , objects
-  --, prepublishDir
   , elmi
   , elmo
-  --, temp
   , findRoot
-  --, withRootLock
-  --, withRegistryLock
   , PackageCache
   , getPackageCache
   , registry

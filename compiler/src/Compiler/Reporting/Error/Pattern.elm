@@ -1,7 +1,6 @@
 {- MANUALLY FORMATTED -}
 module Compiler.Reporting.Error.Pattern exposing
-  ( {-P.Error(..)
-  ,-} toReport
+  ( toReport
   )
 
 

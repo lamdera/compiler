@@ -5,7 +5,6 @@ module Builder.Deps.Registry exposing
   , read
   , fetch
   , update
-  --, latest
   , getVersions
   , getVersionsE
   )

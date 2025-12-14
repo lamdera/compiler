@@ -8,14 +8,12 @@ module Builder.Build exposing
   , Module(..)
   , CachedInterface(..)
   , ReplArtifacts(..)
-  , DocsGoal, DocsGoalKind(..), ignoreDocs
+  , DocsGoal, DocsGoalKind, ignoreDocs
   --
   , GlobalState
   , LocalState
   , initialState
   , lensMVCachedInterface
-  --
-  , findModulePath
   )
 
 
@@ -1299,14 +1297,3 @@ finalizeReplArtifacts ((Env root projectType _ _ _ _) as env) source ((Src.Modul
     DepsNotFound problems ->
       IO.return <| Left <| Exit.ReplBadInput source <| Error.BadImports <|
         toImportErrors env resultMVars imports problems
-
-
-{- NEW: findModulePath -}
-findModulePath : FilePath -> Details.Details -> ModuleName.Raw -> IO e f g h (Maybe FilePath)
-findModulePath root details name =
-  IO.bind (makeEnv root details) <| \(Env _ _ srcDirs _ _ _) ->
-  let fileNames = ModuleName.toFileNames name in
-  IO.rmap (MList.filterM IO.pure IO.liftA2 File.exists (MList.map (\d -> addRelative d fileNames) srcDirs)) <| \paths ->
-  case paths of
-    [path] -> Just path
-    _ -> Nothing

@@ -1,6 +1,6 @@
 module Extra.System.Dir exposing
     ( Directory
-    , Entry(..)
+    , Entry
     , FileName
     , FilePath
     , GlobalState

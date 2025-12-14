@@ -1,13 +1,6 @@
 {- MANUALLY FORMATTED -}
 module Terminal.Terminal.Error exposing
-  ( {-Error(..)
-  , ArgError(..)
-  , FlagError(..)
-  , Expectation(..)
-  , exitWithHelp
-  , exitWithError
-  , exitWithUnknown
-  ,-} exitWithOverview
+  ( exitWithOverview
   )
 
 
