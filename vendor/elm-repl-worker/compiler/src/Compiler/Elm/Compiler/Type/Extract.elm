@@ -1,6 +1,6 @@
 {- MANUALLY FORMATTED -}
 module Compiler.Elm.Compiler.Type.Extract exposing
-  ( Types(..)
+  ( Types
   , mergeMany
   , merge
   , fromInterface

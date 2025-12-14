@@ -3,12 +3,6 @@ module Terminal.Terminal.Internal exposing
   ( Command(..)
   , toName
   , Summary(..)
-  --, Flags(..)
-  --, Flag(..)
-  --, Parser(..)
-  --, Args(..)
-  --, CompleteArgs(..)
-  --, RequiredArgs(..)
   )
 
 

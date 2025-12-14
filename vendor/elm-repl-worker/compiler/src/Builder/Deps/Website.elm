@@ -1,7 +1,6 @@
 {- MANUALLY FORMATTED -}
 module Builder.Deps.Website exposing
-  ( {-domain
-  ,-} route
+  ( route
   , metadata
   )
 

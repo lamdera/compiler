@@ -1,7 +1,6 @@
 {- MANUALLY FORMATTED -}
 module Compiler.Type.Instantiate exposing
-  ( {- FreeVars
-  ,-} fromSrcType
+  ( fromSrcType
   )
 
 

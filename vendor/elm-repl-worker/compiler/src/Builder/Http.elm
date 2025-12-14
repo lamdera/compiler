@@ -3,21 +3,10 @@ module Builder.Http exposing
   ( Manager
   , getManager
   , toUrl
-  ---- fetch
   , get
   , post
-  --, Header
-  --, accept
   , Error(..)
-  ---- archives
-  --, Sha
-  --, shaToChars
   , getArchive
-  ---- upload
-  --, upload
-  --, filePart
-  --, jsonPart
-  --, stringPart
   )
 
 

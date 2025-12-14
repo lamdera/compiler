@@ -3,7 +3,6 @@ module Compiler.Reporting.Error exposing
   ( Module(..)
   , Error(..)
   , toDoc
-  --, toJson
   , toClient
   )
 

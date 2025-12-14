@@ -1,9 +1,9 @@
 module Compiler.Elm.Interface exposing
-    ( Alias(..)
+    ( Alias
     , Binop(..)
     , DependencyInterface(..)
     , Interface(..)
-    , Union(..)
+    , Union
     , bDependencyInterface
     , bInterface
     , extractAlias

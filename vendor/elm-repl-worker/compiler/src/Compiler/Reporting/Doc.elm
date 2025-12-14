@@ -1,10 +1,9 @@
 {- MANUALLY FORMATTED -}
 module Compiler.Reporting.Doc exposing
   ( Doc
-  --, (<+>), (<>)
-  , align, cat, empty{-, fill-}, fillSep, hang
+  , align, cat, empty, fillSep, hang
   , hcat, hsep, indent, sep, vcat
-  , red, redS, cyan, cyanS{-, magenta-}, green, greenS, blue, blackS, yellow
+  , red, redS, cyan, cyanS, green, greenS, blue, blackS, yellow
   , dullred, dullcyan, dullyellow, dullyellowS
   --
   , fromChars
@@ -13,11 +12,8 @@ module Compiler.Reporting.Doc exposing
   , fromPackage
   , fromInt
   --
-  --, toAnsi
   , toString
   , toLine
-  --
-  --, encode
   --
   , stack
   , reflow
@@ -35,7 +31,6 @@ module Compiler.Reporting.Doc exposing
   , makeNakedLink
   --
   , args
-  --, moreArgs
   , ordinal
   , intToOrdinal
   , cycle

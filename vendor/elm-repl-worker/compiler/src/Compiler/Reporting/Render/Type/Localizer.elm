@@ -4,7 +4,6 @@ module Compiler.Reporting.Render.Type.Localizer exposing
   , toDoc
   , toChars
   , empty
-  --, fromNames
   , fromModule
   )
 

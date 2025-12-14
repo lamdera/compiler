@@ -2,7 +2,6 @@ module Compiler.AST.Source exposing
     ( Alias(..)
     , Comment(..)
     , Def(..)
-    --, Docs(..)
     , Effects(..)
     , Exposed(..)
     , Exposing(..)

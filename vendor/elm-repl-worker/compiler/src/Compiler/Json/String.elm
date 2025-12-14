@@ -1,13 +1,11 @@
 {- MANUALLY FORMATTED -}
 module Compiler.Json.String exposing
   ( TString
-  --, isEmpty
   --
   , fromPtr
   , fromName
   , fromChars
   , fromSnippet
-  --, fromComment
   --
   , toChars
   , toBuilder

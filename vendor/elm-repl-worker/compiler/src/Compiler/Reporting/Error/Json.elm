@@ -2,7 +2,7 @@
 module Compiler.Reporting.Error.Json exposing
   ( toReport
   , FailureToReport(..)
-  , Context(..)
+  , Context
   , Reason(..)
   )
 

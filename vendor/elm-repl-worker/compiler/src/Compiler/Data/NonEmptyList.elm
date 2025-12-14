@@ -1,7 +1,6 @@
 {- MANUALLY FORMATTED -}
 module Compiler.Data.NonEmptyList exposing
   ( TList(..), fmap, bTList
-  , singleton
   , toList
   , sortBy
   --
@@ -25,11 +24,6 @@ import Extra.Type.List as MList
 
 type TList a =
   CList a (MList.TList a)
-
-
-singleton : a -> TList a
-singleton a =
-  CList a []
 
 
 toList : TList a -> MList.TList a

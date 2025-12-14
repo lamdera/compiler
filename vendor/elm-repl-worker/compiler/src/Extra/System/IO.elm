@@ -1,7 +1,7 @@
 module Extra.System.IO exposing
     ( Cont
     , IO
-    , ION(..)
+    , ION
     , andThen
     , bind
     , bindSequence

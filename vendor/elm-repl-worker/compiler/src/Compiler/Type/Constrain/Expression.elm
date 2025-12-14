@@ -1,7 +1,6 @@
 {- MANUALLY FORMATTED -}
 module Compiler.Type.Constrain.Expression exposing
-  ( {- constrain
-  ,-} constrainDef
+  ( constrainDef
   , constrainRecursiveDefs
   )
 

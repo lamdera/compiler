@@ -1,8 +1,6 @@
 {- MANUALLY FORMATTED -}
 module Terminal.Helpers exposing
-  ( {-version
-  , elmFile
-  ,-} parsePackage
+  ( parsePackage
   )
 
 

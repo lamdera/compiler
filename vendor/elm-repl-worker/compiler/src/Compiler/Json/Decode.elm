@@ -4,17 +4,14 @@ module Compiler.Json.Decode exposing
   , Decoder, fmap, pure, andMap, return, bind, andThen
   , string
   , customString
-  --, bool
-  --, int
   , list
   , nonEmptyList
-  --, pair
-  ----
+  --
   , KeyDecoder(..)
   , dict
   , pairs
   , field
-  ----
+  --
   , oneOf
   , failure
   , mapError

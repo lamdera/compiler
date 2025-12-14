@@ -4,16 +4,13 @@ module Compiler.Type.Type exposing
   , exists
   , Variable
   , FlatType(..)
-  --, Type(..)
   , Descriptor(..)
-  --, Content(..)
   , SuperType(..)
   , noRank
   , outermostRank
   , Mark
   , noMark
   , nextMark
-  --, (==>)
   , int, float, char, string, bool, never
   , texture
   , mkFlexVar
