@@ -96,7 +96,12 @@ onlyInLeader a =
             a
 
         Follower ->
-            Debug.todo "Use leader tab (green dot) for backend functions.\n"
+            Debug.todo """
+This backend function can only by used in the leader tab (green dot)
+
+For more info say :lamdera
+or look at <docs>
+"""
 
 
 nt : NodeType

@@ -42,9 +42,6 @@ exports.init = async function(app) {
           , ['mountLocal', '.', '.']
           , ['mountLocal', '~/.elm', '.elm']
           , ['srcDir', 'elm-stuff/lamdera', '']
-          , ['import', 'Lamdera', 'import Lamdera']
-          , ['import', 'Lamdera.Repl.Interface', 'import Lamdera.Repl.Interface exposing (..)']
-          , ['import', 'Types', 'import Types']
           , ['start', payload, '']
           ],
         errorHandler: sendWorkerError,

@@ -83,6 +83,7 @@ type alias RunningModel =
     { shown : Bool
     , input : String
     , prefill : Maybe String
+    , pendingCommands : List String
     , output : List String
     }
 
@@ -362,7 +363,7 @@ toggleClicked model =
     case model.state of
         Stopped ->
             ( Loading
-            , callWorker ""
+            , callWorker firstInitialCommand
             , False
             )
 
@@ -379,7 +380,11 @@ toggleClicked model =
             )
 
         Running runningModel ->
-            ( Running { runningModel | shown = not runningModel.shown }
+            ( Running
+                { runningModel
+                    | shown =
+                        not runningModel.shown
+                }
             , if runningModel.shown then
                 Cmd.none
 
@@ -409,13 +414,13 @@ retryClicked model =
     case model.state of
         LoadError _ ->
             ( Loading
-            , callWorker ""
+            , callWorker firstInitialCommand
             , False
             )
 
         Crashed _ ->
             ( Loading
-            , callWorker ""
+            , callWorker firstInitialCommand
             , False
             )
 
@@ -428,7 +433,16 @@ retryClicked model =
 
 inputChanged : String -> Model -> ( State, Cmd Msg, Bool )
 inputChanged newInput model =
-    ( setInput newInput model.state
+    ( case model.state of
+        Running runningModel ->
+            Running
+                { runningModel
+                    | input =
+                        newInput
+                }
+
+        _ ->
+            model.state
     , Cmd.none
     , False
     )
@@ -438,7 +452,12 @@ formSubmitted : Model -> ( State, Cmd Msg, Bool )
 formSubmitted model =
     case model.state of
         Running runningModel ->
-            ( addOutput [ promptString runningModel.prefill ++ runningModel.input ] model.state
+            ( Running
+                { runningModel
+                    | output =
+                        (promptString runningModel.prefill ++ runningModel.input)
+                            :: runningModel.output
+                }
             , callWorker runningModel.input
             , False
             )
@@ -477,30 +496,71 @@ handleWorkerReplyRunning : Maybe String -> List String -> Model -> ( State, Cmd 
 handleWorkerReplyRunning maybePrefill messages model =
     case model.state of
         Loading ->
-            ( Running
-                { shown = True
-                , input = Maybe.withDefault "" maybePrefill
-                , prefill = maybePrefill
-                , output = addLamderaWelcomeMessage model.version messages
-                }
-            , focusInput
-            , False
-            )
+            handleWorkerReplyRunningWhileLoading maybePrefill messages model.version
 
-        Running runningState ->
-            ( model.state
-                |> setInput (Maybe.withDefault "" maybePrefill)
-                |> setPrefill maybePrefill
-                |> addOutput (changeOutput runningState.input messages)
-            , Cmd.none
-            , False
-            )
+        Running runningModel ->
+            handleWorkerReplyRunningWhileRunning maybePrefill messages model.version runningModel
 
         _ ->
             ( model.state
             , Cmd.none
             , False
             )
+
+
+handleWorkerReplyRunningWhileLoading : Maybe String -> List String -> String -> ( State, Cmd Msg, Bool )
+handleWorkerReplyRunningWhileLoading maybePrefill messages version =
+    ( Running
+        { shown = True
+        , input = Maybe.withDefault "" maybePrefill
+        , prefill = maybePrefill
+        , pendingCommands = remainingInitialCommands
+        , output = handleMessages version "" messages
+        }
+    , callWorker secondInitialCommand
+    , False
+    )
+
+
+handleWorkerReplyRunningWhileRunning : Maybe String -> List String -> String -> RunningModel -> ( State, Cmd Msg, Bool )
+handleWorkerReplyRunningWhileRunning maybePrefill messages version runningModel =
+    case runningModel.pendingCommands of
+        nextCommand :: remainingCommands ->
+            ( Running
+                { shown = runningModel.shown
+                , input = Maybe.withDefault "" maybePrefill
+                , prefill = maybePrefill
+                , pendingCommands = remainingCommands
+                , output = handleMessages version runningModel.input messages ++ runningModel.output
+                }
+            , callWorker nextCommand
+            , False
+            )
+
+        [] ->
+            if runningModel.input == ":reset" then
+                ( Running
+                    { shown = runningModel.shown
+                    , input = Maybe.withDefault "" maybePrefill
+                    , prefill = maybePrefill
+                    , pendingCommands = secondInitialCommand :: remainingInitialCommands
+                    , output = handleMessages version runningModel.input messages ++ runningModel.output
+                    }
+                , callWorker firstInitialCommand
+                , False
+                )
+
+            else
+                ( Running
+                    { shown = runningModel.shown
+                    , input = Maybe.withDefault "" maybePrefill
+                    , prefill = maybePrefill
+                    , pendingCommands = []
+                    , output = handleMessages version runningModel.input messages ++ runningModel.output
+                    }
+                , focusInput
+                , False
+                )
 
 
 handleWorkerReplyStopped : Model -> ( State, Cmd Msg, Bool )
@@ -542,38 +602,23 @@ handleWorkerReplyCrashed error model =
 
 
 
--- HELPER
+-- INITIAL COMMANDS
 
 
-setInput : String -> State -> State
-setInput input =
-    modifyRunningModel <|
-        \runningModel ->
-            { runningModel | input = input }
+firstInitialCommand : String
+firstInitialCommand =
+    "import Lamdera"
 
 
-setPrefill : Maybe String -> State -> State
-setPrefill prefill =
-    modifyRunningModel <|
-        \runningModel ->
-            { runningModel | prefill = prefill }
+secondInitialCommand : String
+secondInitialCommand =
+    "import Lamdera.Repl.Interface exposing (..)"
 
 
-addOutput : List String -> State -> State
-addOutput newOutput =
-    modifyRunningModel <|
-        \runningModel ->
-            { runningModel | output = newOutput ++ runningModel.output }
-
-
-modifyRunningModel : (RunningModel -> RunningModel) -> State -> State
-modifyRunningModel fun model =
-    case model of
-        Running runningModel ->
-            Running (fun runningModel)
-
-        _ ->
-            model
+remainingInitialCommands : List String
+remainingInitialCommands =
+    [ "import Types"
+    ]
 
 
 
@@ -650,38 +695,78 @@ type alias ReplCodec value wire =
 -- SPECIAL OUTPUT
 
 
-addLamderaWelcomeMessage : String -> List String -> List String
-addLamderaWelcomeMessage lamderaVersion messages =
-    case messages of
-        [ welcomeMessage ] ->
-            case String.lines welcomeMessage of
-                [ startLine, text, lastLine ] ->
-                    case String.words startLine of
-                        [ leadingDashes, elmName, elmVersion, _ ] ->
-                            [ String.join "\n"
-                                [ [ leadingDashes, elmName, elmVersion, "/", "Lamdera", lamderaVersion, "-" ]
-                                    |> String.join " "
-                                    |> String.padRight 80 '-'
-                                , text
-                                , "Say :lamdera for Lamdera features! See " ++ replDocUrl
-                                , lastLine
-                                ]
-                            ]
+handleMessages : String -> String -> List String -> List String
+handleMessages version input messages =
+    List.concatMap (handleMessage version input) messages
 
-                        _ ->
-                            messages
+
+handleMessage : String -> String -> String -> List String
+handleMessage version input message =
+    applyFirstMatchingHandler version input message <|
+        [ initialCommandOutputHandler
+        , colonLamderaHandler
+        , otherColonHandler
+        , interfaceTodoHandler
+        ]
+
+
+type MessageHandlerResult
+    = NotMatched
+    | MatchedNoMessage
+    | MatchedMessage String
+
+
+applyFirstMatchingHandler : String -> String -> String -> List (String -> String -> String -> MessageHandlerResult) -> List String
+applyFirstMatchingHandler version input message handlerList =
+    case handlerList of
+        nextHandler :: remainingHandlers ->
+            case nextHandler version input message of
+                MatchedMessage newMessage ->
+                    [ newMessage ]
+
+                MatchedNoMessage ->
+                    []
+
+                NotMatched ->
+                    applyFirstMatchingHandler version input message remainingHandlers
+
+        [] ->
+            [ message ]
+
+
+initialCommandOutputHandler : String -> String -> String -> MessageHandlerResult
+initialCommandOutputHandler lamderaVersion input message =
+    case ( input, String.lines message ) of
+        ( "", [ startLine, text, lastLine ] ) ->
+            case String.words startLine of
+                [ leadingDashes, elmName, elmVersion, _ ] ->
+                    MatchedMessage
+                        (String.join
+                            "\n"
+                            [ [ leadingDashes, elmName, elmVersion, "/", "Lamdera", lamderaVersion, "-" ]
+                                |> String.join " "
+                                |> String.padRight 80 '-'
+                            , text
+                            , "Say :lamdera for Lamdera features! See " ++ replDocUrl
+                            , lastLine
+                            ]
+                        )
 
                 _ ->
-                    messages
+                    MatchedNoMessage
+
+        ( "", _ ) ->
+            MatchedNoMessage
 
         _ ->
-            messages
+            NotMatched
 
 
-changeOutput : String -> List String -> List String
-changeOutput input messages =
-    if input == ":lamdera" && messages /= [] then
-        [ """
+colonLamderaHandler : String -> String -> String -> MessageHandlerResult
+colonLamderaHandler _ input _ =
+    if input == ":lamdera" then
+        MatchedMessage
+            ("""
 The Lamdera REPL defines the following functions:
 
   fem      : Types.FrontendModel
@@ -698,53 +783,51 @@ In the leader tab (green dot) you can also call:
   broadcast : Types.ToFrontend -> Types.ToFrontend
 
 More info at """ ++ replDocUrl ++ """
-"""
-        ]
-
-    else if String.startsWith ":" input then
-        case messages of
-            [ lines ] ->
-                case String.lines lines of
-                    [ err, "", c1, c2, c3, "", inf, "" ] ->
-                        [ String.join "\n"
-                            [ err
-                            , ""
-                            , String.left 11 c1 ++ "  " ++ String.dropLeft 11 c1
-                            , String.left 11 c2 ++ "  " ++ String.dropLeft 11 c2
-                            , String.left 11 c3 ++ "  " ++ String.dropLeft 11 c3
-                            , "  :lamdera   Show information about Lamdera REPL extensions"
-                            , ""
-                            , inf
-                            , "and at " ++ replDocUrl
-                            , ""
-                            ]
-                        ]
-
-                    _ ->
-                        messages
-
-            _ ->
-                messages
+""")
 
     else
-        case messages of
-            [ lines ] ->
-                if String.startsWith "TODO in module `Lamdera.Repl.Interface`" lines then
-                    [ String.join "\n"
-                        [ ""
-                        , "This backend function can only by used in the leader tab (green dot)"
+        NotMatched
+
+
+otherColonHandler : String -> String -> String -> MessageHandlerResult
+otherColonHandler _ input message =
+    if String.startsWith ":" input then
+        case String.lines message of
+            [ err, "", c1, c2, c3, "", inf, "" ] ->
+                MatchedMessage
+                    (String.join "\n"
+                        [ err
                         , ""
-                        , "For more info say :lamdera"
-                        , "or look at " ++ replDocUrl
+                        , String.left 11 c1 ++ "  " ++ String.dropLeft 11 c1
+                        , String.left 11 c2 ++ "  " ++ String.dropLeft 11 c2
+                        , String.left 11 c3 ++ "  " ++ String.dropLeft 11 c3
+                        , "  :lamdera   Show information about Lamdera REPL extensions"
+                        , ""
+                        , inf
+                        , "and at " ++ replDocUrl
                         , ""
                         ]
-                    ]
-
-                else
-                    messages
+                    )
 
             _ ->
-                messages
+                MatchedMessage message
+
+    else
+        NotMatched
+
+
+interfaceTodoHandler : String -> String -> String -> MessageHandlerResult
+interfaceTodoHandler _ _ message =
+    if String.startsWith "TODO in module `Lamdera.Repl.Interface`" message then
+        MatchedMessage
+            (String.lines message
+                |> List.drop 2
+                |> String.join "\n"
+                |> String.replace "<docs>" replDocUrl
+            )
+
+    else
+        NotMatched
 
 
 replDocUrl : String
