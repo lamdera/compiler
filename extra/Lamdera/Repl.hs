@@ -158,4 +158,4 @@ serveDirHelper path = do
 getMTime :: FilePath -> IO JE.Value
 getMTime path = do
   mtime <- Dir.getModificationTime path
-  return $ JE.int $ round (P.utcTimeToPOSIXSeconds mtime * 1000)
+  return $ JE.int $ truncate (P.utcTimeToPOSIXSeconds mtime * 1000)
