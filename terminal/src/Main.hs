@@ -48,6 +48,7 @@ main =
     , Lamdera.CLI.update
     , Lamdera.CLI.annotate
     , Lamdera.CLI.eval
+    , Lamdera.CLI.backend
     , Lamdera.CLI.format
     -- , reactor
     -- , bump

@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Lamdera.CLI (live, login, check, deploy, reset, update, annotate, eval, format) where
+module Lamdera.CLI (live, login, check, deploy, reset, update, annotate, eval, backend, format) where
 
 import Text.Read (readMaybe)
 import qualified Text.PrettyPrint.ANSI.Leijen as P
@@ -16,6 +16,7 @@ import qualified Lamdera.CLI.Reset
 import qualified Lamdera.CLI.Update
 import qualified Lamdera.CLI.Annotate
 import qualified Lamdera.CLI.Interpreter
+import qualified Lamdera.CLI.Backend
 
 
 live :: Terminal.Command
@@ -191,6 +192,68 @@ eval =
         ]
   in
   Terminal.Command "eval" (Common summary) details example args noFlags Lamdera.CLI.Interpreter.run
+
+
+backend :: Terminal.Command
+backend =
+  let
+    summary =
+      "Access the backend model."
+
+    details =
+      "The `backend` command gives you access to the backend model of the `lamdera live` session."
+
+    example =
+      stack
+        [ "It evaluates the given expression (see below) and returns its value."
+        , "In the expression, you can access the backend model under the name `model`."
+        , reflow
+            "The variable `model` contains the backend model of the current `lamdera live` session. \
+            \ If the `lamdera live` server is not running, \
+            \ it contains the saved backend model of the last `lamdera live` session."
+        ]
+
+    backendFlags =
+      flags Lamdera.CLI.Backend.Flags
+        |-- flag "eval" expression "The expression to evaluate (default: `model`)."
+        |-- flag "import" import_ "Additional 'import' statement for evaluating the expression."
+        |-- flag "interpreter" interpreter "Path to an alternate JS interpreter, like node or nodejs."
+  in
+  Terminal.Command "backend" (Common summary) details example noArgs backendFlags Lamdera.CLI.Backend.run
+
+
+interpreter :: Parser String
+interpreter =
+  Parser
+    { _singular = "interpreter"
+    , _plural = "interpreters"
+    , _parser = Just
+    , _suggest = \_ -> return []
+    , _examples = \_ -> return ["node","nodejs"]
+    }
+
+
+import_ :: Parser String
+import_ =
+  Parser
+    { _singular = "import statement"
+    , _plural = "import statements"
+    , _parser = Just
+    , _suggest = \_ -> return []
+    , _examples = \_ -> return ["import Dict","import Set as S"]
+    }
+
+
+expression :: Parser String
+expression =
+  Parser
+    { _singular = "expression"
+    , _plural = "expressions"
+    , _parser = Just
+    , _suggest = \_ -> return []
+    , _examples = \_ -> return ["model","Debug.toString model"]
+    }
+
 
 
 -- FORMAT

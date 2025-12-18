@@ -137,6 +137,7 @@ runWithRoot root (Flags maybePort) =
         <|> route [ ("_c", Lamdera.Repl.serve root Live.jsonResponse Live.error404) ]
         <|> Live.openEditorHandler root
         <|> Live.serveExperimental root
+        <|> Live.serveBem liveState
         <|> serveAssets -- Compiler packaged static files
         <|> Live.serveUnmatchedUrlsToIndex root (serveElm sentryCache) -- Everything else without extensions goes to Lamdera.Live harness
         <|> error404 -- Will get hit for any non-matching extensioned paths i.e. /hello.blah
