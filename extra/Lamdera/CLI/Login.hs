@@ -1,7 +1,12 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
 
-module Lamdera.CLI.Login where
+module Lamdera.CLI.Login
+  ( tokenFile
+  , validateCliToken
+  , run
+  )
+  where
 
 import qualified Data.UUID as UUID
 import qualified Data.UUID.V4 as UUID
