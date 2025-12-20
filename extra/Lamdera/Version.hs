@@ -44,3 +44,8 @@ full =
 elm :: String
 elm =
   V.toChars V.compiler
+
+
+artifacts :: String
+artifacts =
+  "artifacts." <> medium <> ".dat"

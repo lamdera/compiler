@@ -58,8 +58,7 @@ run () () = do
           progress $ "Removing artifacts in " <> elmHome
           let packageDir = elmHome </> Lamdera.Version.elm </> "packages"
           onlyWhen_ (doesDirectoryExist packageDir) $ do
-            callCommand $ "find " <> packageDir <> " | grep artifacts.dat | xargs rm -r"
-            callCommand $ "find " <> packageDir <> " | grep artifacts.x.dat | xargs rm -r"
+            callCommand $ "find " <> packageDir <> " | grep 'artifacts.*\\.dat' | xargs rm -r"
         else do
           nukeDir elmHome
 

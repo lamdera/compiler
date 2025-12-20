@@ -64,6 +64,7 @@ import qualified Lamdera
 import Lamdera ((&))
 import qualified Lamdera.Extensions
 import qualified System.IO as IO
+import qualified Lamdera.Version
 
 -- DETAILS
 
@@ -406,7 +407,7 @@ verifyDep (Env key _ _ cache manager _ _) depsMVar solution pkg details@(Solver.
         then
           do  Reporting.report key Reporting.DCached
               maybeCache <- File.readBinary (Stuff.package cache pkg vsn </> "artifacts.dat")
-                              & Lamdera.alternativeImplementation (File.readBinary (Stuff.package cache pkg vsn </> "artifacts.x.dat"))
+                              & Lamdera.alternativeImplementation (File.readBinary (Stuff.package cache pkg vsn </> Lamdera.Version.artifacts))
               case maybeCache of
                 Nothing ->
                   build key cache depsMVar pkg details fingerprint Set.empty
@@ -501,7 +502,7 @@ build key cache depsMVar pkg (Solver.Details vsn _) f fs =
                                 Just results ->
                                   let
                                     path = Stuff.package cache pkg vsn </> "artifacts.dat"
-                                             & Lamdera.alternativeImplementation (Stuff.package cache pkg vsn </> "artifacts.x.dat")
+                                             & Lamdera.alternativeImplementation (Stuff.package cache pkg vsn </> Lamdera.Version.artifacts)
                                     ifaces = gatherInterfaces exposedDict results
                                     objects = gatherObjects results
                                     artifacts = Artifacts ifaces objects
