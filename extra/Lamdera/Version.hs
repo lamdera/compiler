@@ -23,6 +23,10 @@ short :: String
 short = rawToString raw
 
 
+medium :: String
+medium = "lamdera-" <> short <> "-" <> elm
+
+
 full :: String
 full =
   let
@@ -31,7 +35,7 @@ full =
           | otherwise  = ""
   in
   concat
-    [ "lamdera-", short, "-", elm, "-", Ext.Common.os, "-", Ext.Common.arch, "-", giHash gi, dirty
+    [ medium, "-", Ext.Common.os, "-", Ext.Common.arch, "-", giHash gi, dirty
     , " (", giCommitDate gi, ")"
     , " (branch:", giBranch gi, ")"
     ]

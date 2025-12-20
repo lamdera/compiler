@@ -36,6 +36,7 @@ import qualified Elm.Version as V
 
 import Lamdera ((&))
 import qualified Lamdera
+import qualified Lamdera.Version
 
 -- PATHS
 
@@ -68,6 +69,9 @@ prepublishDir root =
 compilerVersion :: FilePath
 compilerVersion =
   V.toChars V.compiler
+    -- Note: If we want to optimize disk usage, we could version just the artifacts.x.dat file for ELM_HOME but use elm-stuff/lamdera-1.3.3-0.19.1.
+    -- Hmm … we actually HAVE to use ~/.elm/0.19.2 because that’s where IDE:s will look for files
+    & Lamdera.alternativeImplementation Lamdera.Version.medium
 
 
 
