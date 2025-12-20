@@ -63,7 +63,7 @@ import qualified Stuff
 import qualified Lamdera
 import Lamdera ((&))
 import qualified Lamdera.Extensions
-import qualified System.IO as IO
+import qualified Lamdera.PackageReplacements
 import qualified Lamdera.Version
 
 -- DETAILS
@@ -624,7 +624,7 @@ crawlModule foreignDeps mvar pkg src docsStatus name =
 crawlFile :: Map.Map ModuleName.Raw ForeignInterface -> MVar StatusDict -> Pkg.Name -> FilePath -> DocsStatus -> ModuleName.Raw -> FilePath -> IO (Maybe Status)
 crawlFile foreignDeps mvar pkg src docsStatus expectedName path =
   do  bytes <- File.readUtf8 path
-      IO.hPutStrLn IO.stderr $ "File: " <> ModuleName.toChars expectedName <> " from " <> Pkg.toChars pkg
+               & Lamdera.alternativeImplementationPassthrough (Lamdera.PackageReplacements.get pkg expectedName Lamdera.PackageReplacements.elm)
       case Parse.fromByteString (Parse.Package pkg) bytes of
         Right modul@(Src.Module (Just (A.At _ actualName)) _ _ imports _ _ _ _ _) | expectedName == actualName ->
           do  deps <- crawlImports foreignDeps mvar pkg src imports
@@ -652,7 +652,7 @@ crawlKernel foreignDeps mvar pkg src name =
       if exists
         then
           do  bytes <- File.readUtf8 path
-              IO.hPutStrLn IO.stderr $ "Kernel: " <> ModuleName.toChars name <> " from " <> Pkg.toChars pkg
+                       & Lamdera.alternativeImplementationPassthrough (Lamdera.PackageReplacements.get pkg name Lamdera.PackageReplacements.kernel)
               case Kernel.fromByteString pkg (Map.mapMaybe getDepHome foreignDeps) bytes of
                 Nothing ->
                   return Nothing
