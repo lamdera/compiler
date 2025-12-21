@@ -9,24 +9,13 @@ import Data.ByteString
 import Lamdera.PackageReplacementsTH (loadReplacements)
 
 
-type ReplacementMap = Map.Map ( Pkg.Name, ModuleName.Raw ) ByteString
-
-
-elm :: ReplacementMap
-elm =
-  -- TODO: Use TemplateHaskell to populate this map from extra/package-replacements/*
-  -- Use `git diff master... --name-only` to know which files need to be included
+replacementMap :: Map.Map ( Pkg.Name, ModuleName.Raw ) ByteString
+replacementMap =
   $(loadReplacements)
 
 
-kernel :: ReplacementMap
-kernel =
-  -- TODO: Same here.
-  Map.empty
-
-
-get :: Pkg.Name -> ModuleName.Raw -> ReplacementMap -> IO ByteString -> IO ByteString
-get pkg name replacementMap original =
+get :: Pkg.Name -> ModuleName.Raw -> IO ByteString -> IO ByteString
+get pkg name original =
   maybe original return (Map.lookup (pkg, name) replacementMap)
 
 

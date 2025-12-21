@@ -100,7 +100,7 @@ For more information on how to use the GHCi debugger, see the GHC User's Guide.
 -- Current target for ghci :rr command. See ~/.ghci config file, which should contain
 -- something like `:def rr const $ return $ unlines [":r","Test.target"]`
 
-target = Lamdera.PackageReplacements.elm
+target = Lamdera.PackageReplacements.replacementMap
 
 checkProject = do
   let (p, v) = ("~/dev/test/lamdera-init", "1")
