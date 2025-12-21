@@ -6,6 +6,7 @@ import qualified Data.Map as Map
 import qualified Elm.ModuleName as ModuleName
 import qualified Elm.Package as Pkg
 import Data.ByteString
+import Lamdera.PackageReplacementsTH (loadReplacements)
 
 
 type ReplacementMap = Map.Map ( Pkg.Name, ModuleName.Raw ) ByteString
@@ -15,7 +16,7 @@ elm :: ReplacementMap
 elm =
   -- TODO: Use TemplateHaskell to populate this map from extra/package-replacements/*
   -- Use `git diff master... --name-only` to know which files need to be included
-  Map.empty
+  $(loadReplacements)
 
 
 kernel :: ReplacementMap
