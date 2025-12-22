@@ -3,9 +3,9 @@
 module Lamdera.Relative where
 
 import qualified Data.ByteString as BS
+import qualified Data.FileEmbed as FE
 import qualified System.Directory as Dir
 import System.FilePath ((</>))
-import qualified System.FilePath as FP
 import qualified Data.List as List
 import Control.Monad (forM)
 import qualified Language.Haskell.TH.Syntax as TH
@@ -22,12 +22,7 @@ expectedCompilerPath =
 
 compilerPath :: FilePath
 compilerPath =
-  $(do
-      loc <- TH.location
-      absThisFile <- TH.runIO (Dir.makeAbsolute (TH.loc_filename loc))
-      let root = FP.takeDirectory (FP.takeDirectory (FP.takeDirectory absThisFile))
-      TH.lift root
-   )
+  $(FE.makeRelativeToProject "" >>= TH.lift)
 
 
 prefixCompilerPath :: String -> IO FilePath
