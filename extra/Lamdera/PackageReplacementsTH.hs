@@ -80,14 +80,11 @@ parseModuleName (authorProject, filePath) =
   else
     Nothing
 
-bs :: ByteString
-bs = "test"
-
 entryToExp
   :: ((String, String), FilePath, String)
   -> Q Exp
 entryToExp ((author, project), path, moduleName) = do
-  -- bs <- runIO (Data.ByteString.readFile path)
+  bs <- runIO (Data.ByteString.readFile path)
 
   [|
     ( ( Pkg.toName (Utf8.fromChars author) project
