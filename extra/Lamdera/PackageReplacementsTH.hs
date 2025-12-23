@@ -7,6 +7,7 @@ module Lamdera.PackageReplacementsTH where
 import qualified Data.Map as Map
 import qualified Elm.ModuleName as ModuleName
 import qualified Elm.Package as Pkg
+import qualified Elm.Version as V
 import Data.ByteString
 
 import Language.Haskell.TH
@@ -19,6 +20,8 @@ import Data.List
 import qualified Data.Utf8 as Utf8
 import qualified Data.Name as Name
 import qualified Data.Maybe
+import qualified Json.Decode as D
+import Control.Exception (throwIO)
 
 
 loadReplacements :: Q Exp
@@ -29,6 +32,12 @@ loadReplacements = do
   listE      <- mapM entryToExp entriesWithModuleNames
   [| Map.fromList $(pure (ListE listE)) |]
 
+loadVersions :: Q Exp
+loadVersions = do
+  submodules <- runIO findSubmodules
+  entries    <- runIO (collectVersionPerSubmodule submodules)
+  listE      <- mapM entry2ToExp entries
+  [| Map.fromList $(pure (ListE listE)) |]
 
 findSubmodules :: IO [(String, String, FilePath)]
 findSubmodules = do
@@ -51,6 +60,15 @@ gitChangedFilesIn dir = do
            ""
   pure (lines out)
 
+readVersion :: FilePath -> IO V.Version
+readVersion fp = do
+  bs <- Data.ByteString.readFile (fp </> "elm.json")
+  case D.fromByteString (D.field "version" V.decoder) bs of
+    Left _ ->
+      throwIO (userError "nope")
+
+    Right version ->
+      return version
 
 collectEntriesPerSubmodule
   :: [(String, String, FilePath)]
@@ -63,6 +81,15 @@ collectEntriesPerSubmodule subs =
         [ ((author, project), dir </> fp)
         | fp <- changed
         ]
+
+collectVersionPerSubmodule
+  :: [(String, String, FilePath)]
+  -> IO [((String, String), V.Version)]
+collectVersionPerSubmodule subs =
+  forM subs $ \(author, project, dir) -> do
+    version <- readVersion dir
+    pure
+      ((author, project), version)
 
 parseModuleName :: ((String, String), FilePath) -> Maybe ((String, String), FilePath, String)
 parseModuleName (authorProject, filePath) =
@@ -93,3 +120,17 @@ entryToExp ((author, project), path, moduleName) = do
     , $(lift bs)
     )
    |]
+
+entry2ToExp
+  :: ((String, String), V.Version)
+  -> Q Exp
+entry2ToExp ((author, project), version) =
+  [|
+    ( Pkg.toName (Utf8.fromChars author) project
+    , $(liftVersion version)
+    )
+   |]
+
+liftVersion :: V.Version -> Q Exp
+liftVersion (V.Version major minor patch) =
+  [| V.Version major minor patch |]
