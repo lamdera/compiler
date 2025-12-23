@@ -68,6 +68,7 @@ import qualified Reporting.Render.Code as Code
 import Lamdera
 import qualified Lamdera.Error
 import qualified Elm.Constraint as Con
+import qualified Lamdera.Version
 
 -- RENDERERS
 
@@ -961,6 +962,8 @@ data Outline
   | OutlineNoAppCore
   | OutlineNoAppJson
   | OutlineLamderaMissingDeps
+  | OutlineLamderaReplacementPackageVersionTooLow Pkg.Name V.Version V.Version
+  | OutlineLamderaReplacementPackageVersionTooHigh Pkg.Name V.Version V.Version
 
 
 data OutlineProblem
@@ -1059,6 +1062,25 @@ toOutlineReport problem =
         [ D.reflow "You can install it with:"
         , D.indent 4 $ D.green $ "lamdera install lamdera/core"
         , D.reflow "Note: if you're trying to run a normal Elm app, use the elm binary instead."
+        ]
+
+    OutlineLamderaReplacementPackageVersionTooLow name replacedVersion elmJsonVersion ->
+      Help.report "UNSUPPORTED VERSION" (Just "elm.json")
+        ("This version of the Lamdera compiler supports the following range for \"" <> Pkg.toChars name <> "\":")
+        [ D.indent 4 $ D.green $ "\"" <> D.fromVersion (Lamdera.Version.resetPatch replacedVersion) <> " <= v <= " <> D.fromVersion replacedVersion <> "\""
+        , D.reflow "But your elm.json contains:"
+        , D.indent 4 $ D.red $ "\"" <> D.fromPackage name <> "\": \"" <> D.fromVersion elmJsonVersion <> "\""
+        , D.reflow "You need to update that package!"
+        ]
+
+    OutlineLamderaReplacementPackageVersionTooHigh name replacedVersion elmJsonVersion ->
+      Help.report "UNSUPPORTED VERSION" (Just "elm.json")
+        ("This version of the Lamdera compiler supports the following range for \"" <> Pkg.toChars name <> "\":")
+        [ D.indent 4 $ D.green $ "\"" <> D.fromVersion (Lamdera.Version.resetPatch replacedVersion) <> " <= v <= " <> D.fromVersion replacedVersion <> "\""
+        , D.reflow "But your elm.json contains:"
+        , D.indent 4 $ D.red $ "\"" <> D.fromPackage name <> "\": \"" <> D.fromVersion elmJsonVersion <> "\""
+        , D.reflow "You need to update the Lamdera compiler. And if there is no later version, ask the Lamdera community to release a new version!"
+        , D.reflow "You can also downgrade that package for now."
         ]
 
 

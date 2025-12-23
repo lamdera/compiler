@@ -37,7 +37,7 @@ loadVersions = do
   submodules <- runIO findSubmodules
   entries    <- runIO (collectVersionPerSubmodule submodules)
   listE      <- mapM entry2ToExp entries
-  [| Map.fromList $(pure (ListE listE)) |]
+  [| $(pure (ListE listE)) |]
 
 findSubmodules :: IO [(String, String, FilePath)]
 findSubmodules = do

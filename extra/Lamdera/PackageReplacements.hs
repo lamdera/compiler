@@ -20,6 +20,6 @@ get pkg name original =
   maybe original return (Map.lookup (pkg, name) replacementMap)
 
 
-versions :: Map.Map Pkg.Name V.Version
+versions :: [ ( Pkg.Name, V.Version ) ]
 versions =
   $(loadVersions)

@@ -30,19 +30,26 @@ import Lamdera
 import Lamdera.Progress
 import qualified Lamdera.Init
 import qualified Ext.Common
+import qualified Lamdera.PackageReplacements as PackageReplacements
+import Data.Foldable (traverse_)
 
 
-runChecks :: FilePath -> Bool -> Map.Map Pkg.Name V.Version -> IO (Either Exit.Outline outline) -> IO (Either Exit.Outline outline)
-runChecks root shouldCheckLamdera direct default_ = do
+runChecks :: FilePath -> Bool -> Map.Map Pkg.Name V.Version -> Map.Map Pkg.Name V.Version -> IO (Either Exit.Outline outline) -> IO (Either Exit.Outline outline)
+runChecks root shouldCheckLamdera direct indirect default_ = do
   -- atomicPutStrLn $ "runchecks but with " <> show shouldCheckLamdera
-  if Map.member Pkg.lamderaCore direct
-    then do
-      onlyWhen shouldCheckLamdera (Lamdera.Checks.runChecks_ root)
-      default_
-    else
-      if shouldCheckLamdera
-        then return $ Left Exit.OutlineLamderaMissingDeps
-        else default_
+  case checkPackageReplacementsVersions (Map.union direct indirect) of
+    Left err ->
+      return $ Left err
+
+    Right () ->
+      if Map.member Pkg.lamderaCore direct
+        then do
+          onlyWhen shouldCheckLamdera (Lamdera.Checks.runChecks_ root)
+          default_
+        else
+          if shouldCheckLamdera
+            then return $ Left Exit.OutlineLamderaMissingDeps
+            else default_
 
 
 runChecks_ :: FilePath -> IO ()
@@ -144,3 +151,43 @@ checkMsgHasTypes typeNames = do
     results = fmap (\search -> T.isInfixOf ("type " <> search) source) typeNames
 
   pure $ Prelude.all ((==) True) results
+
+checkPackageReplacementsVersions :: Map.Map Pkg.Name V.Version -> Either Exit.Outline ()
+checkPackageReplacementsVersions allDeps =
+  traverse_ (checkPackageReplacementVersion allDeps) PackageReplacements.versions
+
+checkPackageReplacementVersion :: Map.Map Pkg.Name V.Version -> ( Pkg.Name, V.Version ) -> Either Exit.Outline ()
+checkPackageReplacementVersion allDeps ( name, replacedVersion@(V.Version replacedMajor replacedMinor replacedPatch) ) =
+  case Map.lookup name allDeps of
+    Nothing ->
+      Right ()
+
+    Just elmJsonVersion@(V.Version elmJsonMajor elmJsonMinor elmJsonPatch) ->
+      -- 🤷 This can’t happen. Only 1.x versions exists of all elm/* packages we replace. But we code it to be a hard error.
+      if elmJsonMajor < replacedMajor then
+        Left (Exit.OutlineLamderaReplacementPackageVersionTooLow name replacedVersion elmJsonVersion)
+
+      -- ❌ It’s very unlikely that Evan will suddenly release 2.x of some package. But if that happens, this should be a hard error.
+      else if elmJsonMajor > replacedMajor then
+        Left (Exit.OutlineLamderaReplacementPackageVersionTooHigh name replacedVersion elmJsonVersion)
+
+      -- 🤷 This can’t happen. Only 1.0.x versions exists of all elm/* packages we replace. But we code it to be a hard error.
+      else if elmJsonMinor < replacedMinor then
+        Left (Exit.OutlineLamderaReplacementPackageVersionTooLow name replacedVersion elmJsonVersion)
+
+      -- ❌ It’s unlikely that Evan will suddenly release 1.1.x of some package. But if that happens, this should be a hard error.
+      else if elmJsonMinor > replacedMinor then
+        Left (Exit.OutlineLamderaReplacementPackageVersionTooHigh name replacedVersion elmJsonVersion)
+
+      -- ✅ This is very likely to happen. Lots of people probably have "elm/virtual-dom": "1.0.3" in their elm.json, and haven’t bothered updating to the more recent 1.0.4 version. If we made this a hard error, it would be annoying for lots of people. It’s better to simply allow the fork patch version to be greater than specified.
+      else if elmJsonPatch < replacedPatch then
+        Right ()
+
+      -- 🚨 This is somewhat likely. As mentioned, elm/virtual-dom 1.0.4 was released, and a little bit later 1.0.5 was released with a security fix. If a user tries to put "elm/virtual-dom": "1.0.5" in their elm.json, I should be a hard error, informing them that you can’t go above 1.0.4 with this release of the Lamdera compiler. (Silently using 1.0.4 anyway would be misleading, leading to a false sense of security.) They need to wait for a new Lamdera compiler version that has pulled in the security fix. (This is an example – the Lamdera compiler did support the latest version (1.0.5) at the time of writing.)
+      else if elmJsonPatch > replacedPatch then
+        Left (Exit.OutlineLamderaReplacementPackageVersionTooHigh name replacedVersion elmJsonVersion)
+
+      -- The version matches exactly.
+      else
+        Right ()
+

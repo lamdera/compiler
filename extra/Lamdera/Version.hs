@@ -49,3 +49,8 @@ elm =
 artifacts :: String
 artifacts =
   "artifacts." <> medium <> ".dat"
+
+
+resetPatch :: V.Version -> V.Version
+resetPatch (V.Version major minor _patch) =
+  V.Version major minor 0
