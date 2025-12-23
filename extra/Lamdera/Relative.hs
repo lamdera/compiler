@@ -1,22 +1,28 @@
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
 module Lamdera.Relative where
 
 import qualified Data.ByteString as BS
+import qualified Data.FileEmbed as FE
 import qualified System.Directory as Dir
 import System.FilePath ((</>))
 import qualified Data.List as List
 import Control.Monad (forM)
+import qualified Language.Haskell.TH.Syntax as TH
 
 import Lamdera
 
 -- These help with loading relative file paths from the compiler codebase when we're developing in GHCI and the current working directory isn't reliably set
 -- This happens because the Elm compiler relies on the current working directory to find project roots, so in our test suite we end up needing to modify this value a fair bit
--- These helpers currently expect that the lamdera-compiler codebase is checked out to `~/dev/projects/lamdera-compiler`
 
 expectedCompilerPath :: IO FilePath
-expectedCompilerPath = do
-  userHome <- Dir.getHomeDirectory
-  pure $ userHome </> "dev/projects/lamdera-compiler"
+expectedCompilerPath =
+  pure compilerPath
+
+
+compilerPath :: FilePath
+compilerPath =
+  $(FE.makeRelativeToProject "" >>= TH.lift)
 
 
 prefixCompilerPath :: String -> IO FilePath

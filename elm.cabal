@@ -262,6 +262,7 @@ Executable lamdera
         Lamdera.PostCompile
         Lamdera.Project
         Lamdera.Relative
+        Lamdera.Repl
         Lamdera.Reporting.Evergreen
         Lamdera.Reporting.Suggestions
         Lamdera.TypeHash
