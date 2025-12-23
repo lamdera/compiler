@@ -123,6 +123,7 @@ isUnsupportedKernelType tipe =
     -- JS types we are supporting through JS ref encodings. These serialisations
     -- CANNOT BE DECODED OUTSIDE OF THE JS SCOPE THEY WERE ENCODED IN!
     TType (Module.Canonical (Name "elm" "file") "File") "File" _ -> False
+    TType (Module.Canonical (Name "elm-explorations" "webgl") "WebGL.Texture") "Texture" _ -> False
 
 
     TAlias moduleName typeName tvars (Holey tipe) -> isUnsupportedKernelType tipe

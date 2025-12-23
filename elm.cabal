@@ -237,6 +237,7 @@ Executable lamdera
         -- CLI Experimental
         Lamdera.CLI.Annotate
         Lamdera.CLI.Interpreter
+        Lamdera.CLI.Format
 
         Lamdera.AppConfig
         Lamdera.Checks
@@ -261,6 +262,7 @@ Executable lamdera
         Lamdera.PostCompile
         Lamdera.Project
         Lamdera.Relative
+        Lamdera.Repl
         Lamdera.Reporting.Evergreen
         Lamdera.Reporting.Suggestions
         Lamdera.TypeHash
@@ -318,6 +320,7 @@ Executable lamdera
         Test.Wire
         Test.JsOutput
         Test.WebGL
+        Test.BackwardsCompat
         Test.Lamdera.Evergreen.TestMigrationHarness
         Test.Lamdera.Evergreen.TestMigrationGenerator
 

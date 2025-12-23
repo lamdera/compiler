@@ -53,11 +53,63 @@ data Artifacts =
     }
 
 
+{- The original compile function for reference -}
 compile :: Pkg.Name -> Map.Map ModuleName.Raw I.Interface -> Src.Module -> Either E.Error Artifacts
-compile pkg ifaces modul = do
- -- Allow global opt-out of Lamdera compile modifications
- Lamdera.alternativeImplementationWhen (not Lamdera.isWireEnabled_) (compile_ pkg ifaces modul) $ do
+compile pkg ifaces modul =
+  Lamdera.alternativeImplementationWhen Lamdera.isWireEnabled_ (compile_ pkg ifaces modul) $
+  do  canonical   <- canonicalize pkg ifaces modul
+      annotations <- typeCheck modul canonical
+      ()          <- nitpick canonical
+      objects     <- optimize modul annotations canonical
+      return (Artifacts canonical annotations objects)
 
+
+-- PHASES
+
+
+canonicalize :: Pkg.Name -> Map.Map ModuleName.Raw I.Interface -> Src.Module -> Either E.Error Can.Module
+canonicalize pkg ifaces modul =
+  case snd $ R.run $ Canonicalize.canonicalize pkg ifaces modul of
+    Right canonical ->
+      Right canonical
+
+    Left errors ->
+      Left $ E.BadNames errors
+
+
+typeCheck :: Src.Module -> Can.Module -> Either E.Error (Map.Map Name.Name Can.Annotation)
+typeCheck modul canonical =
+  case unsafePerformIO (Type.run =<< Type.constrain canonical) of
+    Right annotations ->
+      Right annotations
+
+    Left errors ->
+      Left (E.BadTypes (Localizer.fromModule modul) errors)
+
+
+nitpick :: Can.Module -> Either E.Error ()
+nitpick canonical =
+  case PatternMatches.check canonical of
+    Right () ->
+      Right ()
+
+    Left errors ->
+      Left (E.BadPatterns errors)
+
+
+optimize :: Src.Module -> Map.Map Name.Name Can.Annotation -> Can.Module -> Either E.Error Opt.LocalGraph
+optimize modul annotations canonical =
+  case snd $ R.run $ Optimize.optimize annotations canonical of
+    Right localGraph ->
+      Right localGraph
+
+    Left errors ->
+      Left (E.BadMains (Localizer.fromModule modul) errors)
+
+-- @LAMDERA
+
+compile_ :: Pkg.Name -> Map.Map ModuleName.Raw I.Interface -> Src.Module -> Either E.Error Artifacts
+compile_ pkg ifaces modul = do
   -- @TEMPORARY debugging
   -- Inject stub definitions for wire functions, so the canonicalize phase can run
   -- Necessary for user-code which references yet-to-be generated functions
@@ -107,56 +159,3 @@ compile pkg ifaces modul = do
 
   objects     <- optimize modul_ annotations canonical3
   return (Artifacts canonical3 annotations objects)
-
-
-{- The original compile function for reference -}
-compile_ :: Pkg.Name -> Map.Map ModuleName.Raw I.Interface -> Src.Module -> Either E.Error Artifacts
-compile_ pkg ifaces modul =
-  do  canonical   <- canonicalize pkg ifaces modul
-      annotations <- typeCheck modul canonical
-      ()          <- nitpick canonical
-      objects     <- optimize modul annotations canonical
-      return (Artifacts canonical annotations objects)
-
-
--- PHASES
-
-
-canonicalize :: Pkg.Name -> Map.Map ModuleName.Raw I.Interface -> Src.Module -> Either E.Error Can.Module
-canonicalize pkg ifaces modul =
-  case snd $ R.run $ Canonicalize.canonicalize pkg ifaces modul of
-    Right canonical ->
-      Right canonical
-
-    Left errors ->
-      Left $ E.BadNames errors
-
-
-typeCheck :: Src.Module -> Can.Module -> Either E.Error (Map.Map Name.Name Can.Annotation)
-typeCheck modul canonical =
-  case unsafePerformIO (Type.run =<< Type.constrain canonical) of
-    Right annotations ->
-      Right annotations
-
-    Left errors ->
-      Left (E.BadTypes (Localizer.fromModule modul) errors)
-
-
-nitpick :: Can.Module -> Either E.Error ()
-nitpick canonical =
-  case PatternMatches.check canonical of
-    Right () ->
-      Right ()
-
-    Left errors ->
-      Left (E.BadPatterns errors)
-
-
-optimize :: Src.Module -> Map.Map Name.Name Can.Annotation -> Can.Module -> Either E.Error Opt.LocalGraph
-optimize modul annotations canonical =
-  case snd $ R.run $ Optimize.optimize annotations canonical of
-    Right localGraph ->
-      Right localGraph
-
-    Left errors ->
-      Left (E.BadMains (Localizer.fromModule modul) errors)

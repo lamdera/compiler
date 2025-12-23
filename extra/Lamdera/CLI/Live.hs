@@ -11,31 +11,27 @@ import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BSL
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
-import qualified Data.Text.IO as T
-import qualified Data.Text.Encoding as T
-import qualified Data.Text.Lazy.Encoding as TL
-import qualified Data.Text.Lazy.Builder as TLB
+import qualified Data.Text.Encoding as TE
+import qualified Data.Text.Lazy.Encoding as TLE
 import qualified Data.Map as Map
 import qualified Data.HashMap.Strict as HashMap
 import qualified Data.List as List
+import Data.Maybe (fromMaybe)
 import GHC.Word (Word64)
 
 import qualified System.Directory as Dir
-import System.FilePath as FP
+import System.FilePath ((</>), takeExtension)
 import Control.Applicative ((<|>))
 import Control.Arrow ((***))
-import Control.Concurrent.STM (atomically, newTVarIO, readTVar, writeTVar, TVar)
-import Control.Exception (finally, throw)
-import Language.Haskell.TH (runIO)
+import Control.Concurrent.STM (atomically, newTVarIO, readTVar, readTVarIO, writeTVar, TVar)
+import Control.Exception (finally)
+import qualified Language.Haskell.TH as TH
 import Data.FileEmbed (bsToExp)
 import qualified Data.Aeson.Encoding as A
 
 import Snap.Core hiding (path, headers)
-import qualified Data.CaseInsensitive as CI (original, mk)
-import qualified Data.Bifunctor (first)
+import qualified Data.CaseInsensitive as CI
 
-import qualified Develop.Generate.Help as Generate
-import qualified Develop.StaticFiles as StaticFiles
 import qualified Json.Decode as D
 import qualified Json.Encode as E
 import qualified Json.String
@@ -45,19 +41,15 @@ import Lamdera
 import qualified Data.UUID as UUID
 import qualified Data.UUID.V4 as UUID
 import BroadcastChan
-import Control.Timeout
-import Data.Time.Clock (getCurrentTime, diffUTCTime)
-import qualified Network.WebSockets      as WS
+import Control.Timeout (timeout)
 import qualified Network.WebSockets.Snap as WS
 import SocketServer
-import Data.Word (Word8)
-import System.Process
 
-import System.Entropy
+import System.Entropy (getEntropy)
 import Snap.Util.FileServe (
-    getSafePath, serveDirectoryWith, defaultDirectoryConfig, defaultMimeTypes, mimeTypes, MimeMap, DirectoryConfig
+    getSafePath, serveDirectoryWith, defaultDirectoryConfig, defaultMimeTypes, mimeTypes, DirectoryConfig
   )
-import Control.Monad (guard, void)
+import Control.Monad (guard)
 
 import qualified Lamdera.CLI.Check
 import qualified Lamdera.Relative
@@ -91,7 +83,7 @@ withEnd (mClients, mLeader, mChan, beState) io = do
   let
     end = do
       debug "[backendSt] 🧠"
-      text <- atomically $ readTVar beState
+      text <- readTVarIO beState
       bePath <- lamderaBackendDevSnapshotPath
       writeUtf8 bePath text
 
@@ -121,22 +113,19 @@ directoryConfig =
 
 
 -- So that Elm's Navigation routing can work on any URL, serve any unmatched
--- non-extensioned paths to the "index" (in this case the src/LocalDev.elm
+-- non-extensioned paths to the "index" (in this case the Lamdera/Live.elm
 -- harness as we're local in the reactor). Extensioned paths will continue to
 -- the next handler, namely `error404` (see `run` fn at top of file)
 serveUnmatchedUrlsToIndex :: FilePath -> (FilePath -> Snap()) -> Snap ()
 serveUnmatchedUrlsToIndex root serveElm =
   do  file <- getSafePath
       guard (takeExtension file == "")
-      serveElm (lamderaCache root </> "LocalDev.elm")
+      serveElm (lamderaCache root </> "Lamdera" </> "Live.elm")
 
 
 prepareLocalDev :: FilePath -> IO FilePath
 prepareLocalDev root = do
-  overrideM <- Lamdera.Relative.readFile "extra/LocalDev/LocalDev.elm"
-  let
-    cache = lamderaCache root
-    harnessPath = cache </> "LocalDev.elm"
+  overrideM <- Lamdera.Relative.readDir TE.decodeUtf8 "extra/LocalDev/runtime-src"
 
   -- This needs to be moved to an on-demand action, as it has to query production and
   -- thus isn't appropriate to run on every single recompile
@@ -145,38 +134,39 @@ prepareLocalDev root = do
 
   rpcExists <- doesFileExist $ root </> "src" </> "RPC.elm"
 
-  case overrideM of
-    Just override -> do
-      writeIfDifferent harnessPath
-        (override
-          & replaceVersionMarker
-          & replaceRpcMarker rpcExists
-        )
+  let
+    cache = lamderaCache root
+    harnessPath = "Lamdera" </> "Live.elm"
 
-    Nothing ->
-      writeIfDifferent harnessPath
-        (lamderaLocalDev
-          & replaceVersionMarker
-          & replaceRpcMarker rpcExists
-        )
+    patchedContent path content =
+      if path == harnessPath
+        then content & replaceVersionMarker & replaceRpcMarker rpcExists
+        else content
 
-  pure harnessPath
+    processFile (path, content) =
+      writeIfDifferent (cache </> path) $ patchedContent path content
+
+    files = fromMaybe lamderaLocalDevDir overrideM
+
+  mapM_ processFile files
+
+  pure $ cache </> harnessPath
 
 
 replaceVersionMarker :: Text -> Text
-replaceVersionMarker localdev = do
+replaceVersionMarker lamderaLive = do
   let (m,mi,p) = Lamdera.Version.raw
-  localdev & T.replace
+  lamderaLive & T.replace
     "( 0, 0, 0 )"
     (T.concat ["( ", show_ m , ", ", show_ mi , ", ", show_ p , " )"])
 
 
 replaceRpcMarker :: Bool -> Text -> Text
-replaceRpcMarker shouldReplace localdev =
+replaceRpcMarker shouldReplace lamderaLive =
   if not shouldReplace
-    then localdev
+    then lamderaLive
     else
-      localdev
+      lamderaLive
         & T.replace
           "-- MKRRI"
           "import RPC\n\
@@ -205,9 +195,13 @@ replaceRpcMarker shouldReplace localdev =
           \            {-}"
 
 
-lamderaLocalDev :: Text
-lamderaLocalDev =
-  T.decodeUtf8 $(bsToExp =<< runIO (Lamdera.Relative.readByteString "extra/LocalDev/LocalDev.elm"))
+lamderaLocalDevDir :: [(FilePath, Text)]
+lamderaLocalDevDir =
+  $(do
+      bsPairs <- TH.runIO (Lamdera.Relative.readDir id "extra/LocalDev/runtime-src")
+      let toTuple (fp, bs) = [| (fp, TE.decodeUtf8 $(bsToExp bs)) |]
+      TH.ListE <$> mapM toTuple (fromMaybe [] bsPairs)
+   )
 
 
 refreshClients (mClients, mLeader, mChan, beState) =
@@ -229,10 +223,10 @@ serveWebsocket root (mClients, mLeader, mChan, beState) =
             let cookie = Cookie "sid" newSid Nothing Nothing Nothing False False
             modifyResponse $ addResponseCookie cookie
 
-            pure $ T.decodeUtf8 $ newSid
+            pure $ TE.decodeUtf8 $ newSid
 
           Just sid_ ->
-            pure $ T.decodeUtf8 $ cookieValue sid_
+            pure $ TE.decodeUtf8 $ cookieValue sid_
 
       case mKey of
         Just key -> do
@@ -252,14 +246,14 @@ serveWebsocket root (mClients, mLeader, mChan, beState) =
                 onlyWhen leaderChanged $ do
                   sendToLeader mClients mLeader (\leader -> do
                       -- Tell the new leader about the backend state they need
-                      atomically $ readTVar beState
+                      readTVarIO beState
                     )
                   -- Tell everyone about the new leader (also causes actual leader to go active as leader)
                   broadcastLeader mClients mLeader
 
                 SocketServer.broadcastImpl mClients $ "{\"t\":\"c\",\"s\":\"" <> sessionId <> "\",\"c\":\"" <> clientId <> "\"}"
 
-                leader <- atomically $ readTVar mLeader
+                leader <- readTVarIO mLeader
                 case leader of
                   Just leaderId ->
                     pure $ Just $ "{\"t\":\"s\",\"c\":\"" <> clientId <> "\",\"l\":\"" <> leaderId <> "\"}"
@@ -308,7 +302,7 @@ serveWebsocket root (mClients, mLeader, mChan, beState) =
                       SocketServer.broadcastImpl mClients text
 
           WS.runWebSocketsSnap $
-            SocketServer.socketHandler mClients mLeader beState onJoined onReceive (T.decodeUtf8 key) sessionId
+            SocketServer.socketHandler mClients mLeader beState onJoined onReceive (TE.decodeUtf8 key) sessionId
 
         Nothing ->
           error404 "missing sec-websocket-key header"
@@ -399,9 +393,9 @@ serveExperimentalWrite root path = do
     Just "image/jpeg"               -> Lamdera.writeBinary fullpath rbody
 
     _ ->
-      writeIfDifferent fullpath (TL.toStrict $ TL.decodeUtf8 rbody)
+      writeIfDifferent fullpath (TL.toStrict $ TLE.decodeUtf8 rbody)
 
-  jsonResponse $ B.byteString $ "{ written: '" <> T.encodeUtf8 (T.pack fullpath) <> "'}"
+  jsonResponse $ B.byteString $ "{ written: '" <> TE.encodeUtf8 (T.pack fullpath) <> "'}"
 
 
 serveExperimentalList :: FilePath -> Text -> Snap ()
@@ -520,60 +514,24 @@ detectEditor editorName editorExistsCheck openIO = do
       pure Nothing
 
 
-serveRpc (mClients, mLeader, mChan, beState) port = do
-
-  mEndpoint <- getParam "endpoint"
-  rbody <- readRequestBody _10MB
-  mSid <- getCookie "sid"
-  requestHeaders :: [(BS.ByteString, BS.ByteString)] <- fmap (\(cs, s) -> (CI.original cs, s)) <$> listHeaders <$> getRequest
-
-  -- E.chars perfoms character escaping, as header values can often have " within them
-  let requestHeadersJson = requestHeaders & fmap (Ext.Common.bsToUtf8 *** (E.chars . Ext.Common.bsToString)) & E.object
-
-  contentType :: Maybe BS.ByteString <- getHeader "Content-Type" <$> getRequest
-
-  debug $ "RPC:↘️ " ++ show (contentType, mEndpoint, mSid, rbody)
-
-  randBytes <- liftIO $ getEntropy 20
-  let newSid = BSL.toStrict $ B.toLazyByteString $ B.byteStringHex randBytes
-
-  sid <-
-    case mSid of
-      Nothing -> do
-        let cookie = Cookie "sid" newSid Nothing Nothing Nothing False False
-        modifyResponse $ addResponseCookie cookie
-
-        pure $ T.decodeUtf8 $ newSid
-
-      Just sid_ ->
-        pure $ T.decodeUtf8 $ cookieValue sid_
-
-  onlyWhen (mEndpoint == Nothing) $ error500 "no endpoint present"
-
-  -- Using UUIDv4 here instead of UUIDv1 like in production is merely a matter
-  -- of ergonomics; The UUIDv1 package only has `nextUUID :: IO (Maybe UUID)`
-  -- as it returns Nothing for requests too close together, so using UUIDv4
-  -- was more practical than implementing a UUIDv1 with retry
-  reqId <- liftIO $ UUID.toText <$> UUID.nextRandom
-  outChan <- newBChanListener mChan
-
+-- | Generate RPC request payload based on content type and request data
+generateRpcRequestPayload ::
+  Maybe BS.ByteString  -- ^ Content-Type header
+  -> BSL.ByteString    -- ^ Request body
+  -> BS.ByteString     -- ^ Endpoint
+  -> Text              -- ^ Session ID
+  -> Text              -- ^ Request ID
+  -> E.Value           -- ^ Request headers JSON
+  -> Text              -- ^ Final JSON payload
+generateRpcRequestPayload contentType rbody endpoint sid reqId requestHeadersJson =
   let
-    endpoint =
-      case mEndpoint of
-        Just endpoint_ ->
-          endpoint_
-
-        Nothing ->
-          -- Should be impossible given we already checked above
-          error "impossible: no endpoint present"
-
     -- Unfortunately the JSON string encoding logic is hidden inside Data.Aeson.Encoding.Internal
     -- so off we go with all the silly format hops
     escapeJsonString :: Text -> Text
-    escapeJsonString t = A.text t & A.encodingToLazyByteString & BSL.toStrict & T.decodeUtf8
+    escapeJsonString t = A.text t & A.encodingToLazyByteString & BSL.toStrict & TE.decodeUtf8
 
     escapedBody =
-      rbody & TL.decodeUtf8 & TL.toStrict & escapeText
+      rbody & TLE.decodeUtf8 & TL.toStrict & escapeText
 
     escapeText :: Text -> E.Value
     escapeText t =
@@ -588,14 +546,14 @@ serveRpc (mClients, mLeader, mChan, beState) port = do
       E.object
           [ ("t", E.string "q")
           , ("s", E.text sid)
-          , ("e", E.text $ T.decodeUtf8 endpoint)
+          , ("e", E.text $ TE.decodeUtf8 endpoint)
           , ("r", E.text reqId)
           , ("h", E.String $ Ext.Common.textToBuilder $ encodeToText requestHeadersJson)
           , value
           ]
         & encodeToText
 
-    encodeToText encoder = encoder & E.encode & B.toLazyByteString & BSL.toStrict & T.decodeUtf8
+    encodeToText encoder = encoder & E.encode & B.toLazyByteString & BSL.toStrict & TE.decodeUtf8
 
     requestPayload =
       case contentType of
@@ -619,14 +577,14 @@ serveRpc (mClients, mLeader, mChan, beState) port = do
                     values =
                       case vals of
                         [] -> "null"
-                        val:[] -> T.concat ["\"", (T.decodeUtf8 val & escapeJsonString), "\""]
+                        val:[] -> TE.decodeUtf8 val & escapeJsonString
                         _ ->
                           vals
-                            & fmap (\v -> T.concat ["\"", (T.decodeUtf8 v & escapeJsonString), "\""])
+                            & fmap (escapeJsonString . TE.decodeUtf8)
                             & T.intercalate ","
                             & (\v -> T.concat ["[", v, "]"])
                   in
-                  T.concat ["\"", T.decodeUtf8 key, "\":", values]
+                  T.concat ["\"", TE.decodeUtf8 key, "\":", values]
                 )
                 & (\v -> T.concat ["{", (v & T.intercalate ","), "}"])
           in
@@ -636,6 +594,58 @@ serveRpc (mClients, mLeader, mChan, beState) port = do
           fallbackStringBody
         Nothing ->
           fallbackStringBody
+  in
+  requestPayload
+
+
+serveRpc (mClients, mLeader, mChan, beState) port = do
+
+  mEndpoint <- getParam "endpoint"
+  rbody <- readRequestBody _10MB
+  mSid <- getCookie "sid"
+  requestHeaders :: [(BS.ByteString, BS.ByteString)] <- fmap (\(cs, s) -> (CI.original cs, s)) <$> listHeaders <$> getRequest
+
+  -- E.chars perfoms character escaping, as header values can often have " within them
+  let requestHeadersJson = requestHeaders & fmap (Ext.Common.bsToUtf8 *** (E.chars . Ext.Common.bsToString)) & E.object
+
+  contentType :: Maybe BS.ByteString <- getHeader "Content-Type" <$> getRequest
+
+  debug $ "RPC:↘️ " ++ show (contentType, mEndpoint, mSid, rbody)
+
+  randBytes <- liftIO $ getEntropy 20
+  let newSid = BSL.toStrict $ B.toLazyByteString $ B.byteStringHex randBytes
+
+  sid <-
+    case mSid of
+      Nothing -> do
+        let cookie = Cookie "sid" newSid Nothing Nothing Nothing False False
+        modifyResponse $ addResponseCookie cookie
+
+        pure $ TE.decodeUtf8 $ newSid
+
+      Just sid_ ->
+        pure $ TE.decodeUtf8 $ cookieValue sid_
+
+  onlyWhen (mEndpoint == Nothing) $ error500 "no endpoint present"
+
+  -- Using UUIDv4 here instead of UUIDv1 like in production is merely a matter
+  -- of ergonomics; The UUIDv1 package only has `nextUUID :: IO (Maybe UUID)`
+  -- as it returns Nothing for requests too close together, so using UUIDv4
+  -- was more practical than implementing a UUIDv1 with retry
+  reqId <- liftIO $ UUID.toText <$> UUID.nextRandom
+  outChan <- newBChanListener mChan
+
+  let
+    endpoint =
+      case mEndpoint of
+        Just endpoint_ ->
+          endpoint_
+
+        Nothing ->
+          -- Should be impossible given we already checked above
+          error "impossible: no endpoint present"
+
+    requestPayload = generateRpcRequestPayload contentType rbody endpoint sid reqId requestHeadersJson
 
     loopRead :: IO Text
     loopRead = do
@@ -648,7 +658,7 @@ serveRpc (mClients, mLeader, mChan, beState) port = do
           | otherwise -> loopRead
         Nothing -> loopRead
 
-  leader <- liftIO $ atomically $ readTVar mLeader
+  leader <- liftIO $ readTVarIO mLeader
   case leader of
     Just leaderId -> do
       liftIO $ sendToLeader mClients mLeader (\leader_ -> pure requestPayload)
@@ -672,12 +682,12 @@ serveRpc (mClients, mLeader, mChan, beState) port = do
                     ])
 
             decodeResult =
-              D.fromByteString decoder (T.encodeUtf8 chanText)
+              D.fromByteString decoder (TE.encodeUtf8 chanText)
 
           case decodeResult of
             Right (statusCode, statusText, headers, (bodyType, bodyEncoded)) -> do
 
-              let response = TL.toStrict $ TL.decodeUtf8 $ B.toLazyByteString bodyEncoded
+              let response = TL.toStrict $ TLE.decodeUtf8 $ B.toLazyByteString bodyEncoded
               debugT $ "RPC:↙️  response:" <> response
               debug $ show (statusCode, statusText)
               onlyWhen (bodyType == "i") (modifyResponse $ setContentType "application/octet-stream")
@@ -694,12 +704,12 @@ serveRpc (mClients, mLeader, mChan, beState) port = do
 
             Left jsonProblem -> do
               debugT $ "😢 rpc response decoding failed: " <> show_ jsonProblem <> "\n" <> chanText
-              writeBuilder $ B.byteString $ "rpc response decoding failed for " <> T.encodeUtf8 chanText
+              writeBuilder $ B.byteString $ "rpc response decoding failed for " <> TE.encodeUtf8 chanText
 
 
         Nothing -> do
           debugT $ "⏰ RPC timed out for:" <> requestPayload
-          writeBuilder $ B.byteString $ T.encodeUtf8 $ "error:timeout:" <> show_ seconds <> "s"
+          writeBuilder $ B.byteString $ TE.encodeUtf8 $ "error:timeout:" <> show_ seconds <> "s"
 
 
     Nothing -> do
@@ -721,7 +731,7 @@ _10MB =
 logger :: BS.ByteString -> IO ()
 logger =
   (\bs ->
-    atomicPutStrLn $ T.unpack $ T.decodeUtf8 bs
+    atomicPutStrLn $ T.unpack $ TE.decodeUtf8 bs
   )
 
 jsonResponse :: B.Builder -> Snap ()

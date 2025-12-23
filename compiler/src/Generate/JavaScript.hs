@@ -55,7 +55,7 @@ generate mode (Opt.GlobalGraph graph_ _) mains =
   <> toMainExports mode mains
   <> Lamdera.Injection.source mode mains
   <> "}(this));"
-  <> "\n" <> Lamdera.Injection.elmPkgJs mode <> "\n"
+  <> "\n" <> Lamdera.Injection.elmPkgJs mode mains <> "\n"
 
 addMain :: Mode.Mode -> Graph -> ModuleName.Canonical -> Opt.Main -> State -> State
 addMain mode graph home _ state =

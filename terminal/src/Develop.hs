@@ -42,6 +42,7 @@ import qualified Stuff
 import Lamdera
 import qualified Lamdera.CLI.Live as Live
 import qualified Lamdera.Constrain
+import qualified Lamdera.Repl
 import qualified Lamdera.ReverseProxy
 import qualified Lamdera.TypeHash
 import qualified Lamdera.PostCompile
@@ -113,10 +114,10 @@ runWithRoot root (Flags maybePort) =
       Filewatch.watch root recompile
 
       whenDebug $ do
-        -- Watch LocalDev.elm changes when in Debug mode to assist with development
+        -- Watch LocalDev changes when in Debug mode to assist with development
         home <- Dir.getHomeDirectory
-        let override = home <> "/dev/projects/lamdera-compiler/extra/LocalDev/LocalDev.elm"
-        onlyWhen_ (doesFileExist override) $ do
+        let override = home <> "/dev/projects/lamdera-compiler/extra/LocalDev"
+        onlyWhen_ (doesDirectoryExist override) $ do
           Filewatch.watchFile override recompile
 
       Lamdera.ReverseProxy.start
@@ -133,10 +134,11 @@ runWithRoot root (Flags maybePort) =
         <|> serveDirectoryWith directoryConfig "."
         <|> Live.serveWebsocket root liveState
         <|> route [ ("_r/:endpoint", Live.serveRpc liveState port) ]
+        <|> route [ ("_c", Lamdera.Repl.serve root Live.jsonResponse Live.error404) ]
         <|> Live.openEditorHandler root
         <|> Live.serveExperimental root
         <|> serveAssets -- Compiler packaged static files
-        <|> Live.serveUnmatchedUrlsToIndex root (serveElm sentryCache) -- Everything else without extensions goes to Lamdera LocalDev harness
+        <|> Live.serveUnmatchedUrlsToIndex root (serveElm sentryCache) -- Everything else without extensions goes to Lamdera.Live harness
         <|> error404 -- Will get hit for any non-matching extensioned paths i.e. /hello.blah
 
 

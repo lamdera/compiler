@@ -112,6 +112,30 @@ makeDev_ path =
   makeDev (FP.takeDirectory path) [path]
 
 
+makeDevHtml :: FilePath -> [FilePath] -> IO ()
+makeDevHtml root paths = do
+  debug $ "🏗   makeDevHtml: lamdera make " <> root <> "/"
+
+  r <- async $
+    Ext.Common.withProjectRoot root $ do
+      Make.run paths $
+        Make.Flags
+          { _debug = True
+          , _optimize = False
+          , _output = Nothing
+          , _report = Nothing
+          , _docs = Nothing
+          , _noWire = False
+          , _optimizeLegible = False
+          }
+  wait r
+  -- The compilation process ends by printing to terminal in a way that overwrites
+  -- the progress bar – which messes with subsequent output if it gets written to
+  -- stdout too quickly, as it doesn't seem to flush fast enough. Adding a small
+  -- delay seems to solve the problem.
+  sleep 10
+
+
 -- Runs `lamdera make` of harness file with JS file output
 makeHarnessDevJs :: FilePath -> IO ()
 makeHarnessDevJs root = do

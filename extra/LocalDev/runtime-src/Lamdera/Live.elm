@@ -1,4 +1,4 @@
-port module LocalDev exposing (main)
+port module Lamdera.Live exposing (main)
 
 {-
 
@@ -29,6 +29,7 @@ import Html.Lazy
 import Lamdera exposing (ClientId, Key, SessionId, Url)
 import Lamdera.Debug as LD
 import Lamdera.Json as Json
+import Lamdera.Repl as Repl
 import Lamdera.Wire3 as Wire exposing (Bytes)
 import Process
 import Task exposing (Task)
@@ -147,6 +148,7 @@ type Msg
     | LoadedSnapshot (Result LD.HttpError ( Bytes, Int ))
     | LoadedSnapshotLegacy (Result LD.HttpError ( List Int, Int ))
     | Noop
+    | ReplMsg Repl.Msg
 
 
 type alias Model =
@@ -174,6 +176,7 @@ type alias DevBar =
     , versionCheck : VersionCheck
     , qrCodeShow : Bool
     , snapshotFilenames : List String
+    , replModel : Repl.Model
     }
 
 
@@ -288,6 +291,9 @@ init flags url key =
                     else
                         log "☀️ Restored BackendModel" bem
 
+        replInitialModel =
+            Repl.initialModel (showVersion currentVersion)
+
         devbarInit =
             { expanded = False
             , location = BottomLeft
@@ -300,6 +306,7 @@ init flags url key =
             , versionCheck = VersionUnchecked
             , qrCodeShow = False
             , snapshotFilenames = []
+            , replModel = replInitialModel
             }
 
         devbar =
@@ -314,11 +321,14 @@ init flags url key =
                         | expanded = False
 
                         -- If we've just loaded the page, then we must have connectivity,
-                        -- so avoid an odd scenario where we persisted debvar while disconnected
+                        -- so avoid an odd scenario where we persisted devbar while disconnected
                         , liveStatus = Online
 
                         -- Data might have reset since our last refresh
                         , showResetNotification = didReset
+
+                        -- REPL state can't be restored
+                        , replModel = replInitialModel
                     }
 
         nodeType =
@@ -969,8 +979,26 @@ update msg m =
         Noop ->
             ( m, Cmd.none )
 
+        ReplMsg replMsg ->
+            let
+                devbar =
+                    m.devbar
 
-subscriptions { nodeType, fem, bem, bemDirty } =
+                ( newReplModel, replCmd, replStopped ) =
+                    Repl.update replMsg devbar.replModel
+
+                newDevbar =
+                    { devbar
+                        | replModel = newReplModel
+                        , expanded = not replStopped
+                    }
+            in
+            ( { m | devbar = newDevbar }
+            , Cmd.map ReplMsg replCmd
+            )
+
+
+subscriptions { nodeType, fem, bem, bemDirty, devbar } =
     Sub.batch
         [ Sub.map FEMsg (userFrontendApp.subscriptions fem)
         , if nodeType == Leader then
@@ -993,6 +1021,7 @@ subscriptions { nodeType, fem, bem, bemDirty } =
         , onConnection OnConnection
         , onDisconnection OnDisconnection
         , LD.every (10 * 60 * 1000) VersionCheck
+        , Sub.map ReplMsg (Repl.subscriptions devbar.replModel)
         ]
 
 
@@ -1164,22 +1193,31 @@ lamderaPane devbar nodeType =
         , style "background-color" charcoal
         , style "border-radius" "5px"
         , onMouseEnter ExpandedDevbar
-        , onMouseLeave CollapsedDevbar
+        , onMouseLeave (collapsedUnlessReplShown devbar.replModel)
         , style "user-select" "none"
         ]
         (case devbar.location of
             TopLeft ->
-                lamderaDevBar True devbar nodeType
+                lamderaDevBar True True devbar nodeType
 
             TopRight ->
-                lamderaDevBar True devbar nodeType
+                lamderaDevBar True False devbar nodeType
 
             BottomRight ->
-                lamderaDevBar False devbar nodeType
+                lamderaDevBar False False devbar nodeType
 
             BottomLeft ->
-                lamderaDevBar False devbar nodeType
+                lamderaDevBar False True devbar nodeType
         )
+
+
+collapsedUnlessReplShown : Repl.Model -> Msg
+collapsedUnlessReplShown replModel =
+    if Repl.isShown replModel then
+        Noop
+
+    else
+        CollapsedDevbar
 
 
 withOverlay dismiss html =
@@ -1234,33 +1272,41 @@ envMeta =
             ( "Dev", green )
 
 
-lamderaDevBar topDown devbar nodeType =
-    case topDown of
-        True ->
-            [ pill devbar nodeType
-            , if devbar.expanded then
+lamderaDevBar topDown leftRight devbar nodeType =
+    if devbar.expanded then
+        let
+            pillAndExpanded =
                 div
-                    [ style "border-top" "1px solid #393939"
-                    ]
-                    [ expandedUI topDown devbar nodeType
-                    ]
+                    [ style "display" "flex"
+                    , style "flex-direction"
+                        (if topDown then
+                            "column"
 
-              else
-                text ""
+                         else
+                            "column-reverse"
+                        )
+                    ]
+                    [ pill devbar nodeType
+                    , expandedUI topDown devbar nodeType
+                    ]
+        in
+        [ div
+            [ style "display" "flex"
+            , style "flex-direction"
+                (if leftRight then
+                    "row"
+
+                 else
+                    "row-reverse"
+                )
             ]
-
-        False ->
-            [ if devbar.expanded then
-                div
-                    [ style "border-bottom" "1px solid #393939"
-                    , style "padding-bottom" "5px"
-                    ]
-                    [ expandedUI topDown devbar nodeType ]
-
-              else
-                text ""
-            , pill devbar nodeType
+            [ pillAndExpanded
+            , Html.map ReplMsg (Repl.view leftRight devbar.replModel)
             ]
+        ]
+
+    else
+        [ pill devbar nodeType ]
 
 
 pill devbar nodeType =
@@ -1385,6 +1431,13 @@ spacer width =
 
 expandedUI topDown devbar nodeType =
     let
+        ( borderPos, borderRadius ) =
+            if topDown then
+                ( "border-top", "0 0 5px 5px" )
+
+            else
+                ( "border-bottom", "5px 5px 0 0" )
+
         modeText =
             case devbar.freeze of
                 False ->
@@ -1394,14 +1447,6 @@ expandedUI topDown devbar nodeType =
                     "Active"
 
         envDocs =
-            let
-                borderPos =
-                    if topDown then
-                        "border-top"
-
-                    else
-                        "border-bottom"
-            in
             div
                 [ style "display" "flex"
                 , style "justify-content" "space-evenly"
@@ -1417,14 +1462,6 @@ expandedUI topDown devbar nodeType =
                 ]
 
         versionInfo =
-            let
-                ( borderPos, borderRadius ) =
-                    if topDown then
-                        ( "border-top", "0 0 5px 5px" )
-
-                    else
-                        ( "border-bottom", "5px 5px 0 0" )
-            in
             div
                 [ style "text-align" "center"
                 , style "font-size" "10px"
@@ -1437,20 +1474,34 @@ expandedUI topDown devbar nodeType =
                 [ text <| "Version: " ++ showVersion currentVersion
                 ]
     in
-    div [ style "width" "175px" ]
+    div
+        (style "width" "175px"
+            :: (if topDown then
+                    [ style borderPos "1px solid #393939" ]
+
+                else
+                    [ style borderPos "1px solid #393939"
+                    , style "padding-bottom" "5px"
+                    ]
+               )
+        )
         [ if topDown then
             text ""
 
           else
             div [] [ versionInfo, envDocs ]
+        , if Repl.isShown devbar.replModel then
+            buttonDev "Hide Repl" (ReplMsg Repl.ToggleClicked)
+
+          else
+            buttonDev "Show Repl" (ReplMsg Repl.ToggleClicked)
         , case nodeType of
             Leader ->
-                case devbar.freeze of
-                    False ->
-                        buttonDev "Reset Backend" ResetDebugStoreBE
+                if devbar.freeze then
+                    buttonDev "Reset Both" ResetDebugStoreBoth
 
-                    True ->
-                        buttonDev "Reset Both" ResetDebugStoreBoth
+                else
+                    buttonDev "Reset Backend" ResetDebugStoreBE
 
             Follower ->
                 div [ style "padding" "8px 8px", style "text-align" "center" ] [ text "Use leader tab (green dot) for reset options" ]

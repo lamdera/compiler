@@ -350,6 +350,7 @@ decoderForType ifaces cname tipe =
 
     -- Frontend only JS reference types
     TType (Module.Canonical (Name "elm" "file") "File") "File" params -> callDecoder "decodeRef" tipe
+    TType (Module.Canonical (Name "elm-explorations" "webgl") "WebGL.Texture") "Texture" params -> callDecoder "decodeRef" tipe
 
 
     TType moduleName typeName params ->
