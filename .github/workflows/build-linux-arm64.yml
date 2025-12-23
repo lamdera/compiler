@@ -9,7 +9,7 @@ name: Build Linux arm64
 jobs:
   build:
     name: Build Linux arm64
-    runs-on: lamdera-community-linux-arm64
+    runs-on: ubuntu-24.04-arm
     steps:
       - name: Install SSH key
         uses: shimataro/ssh-key-action@v2
@@ -20,6 +20,8 @@ jobs:
           if_key_exists: replace
       - uses: actions/checkout@v3
       - run: echo "${HOME}/.local/bin" >> $GITHUB_PATH
+      - name: Install git submodules
+        run: git submodule update --init --recursive
       - name: Run distribution script
         run: |
           cd distribution
