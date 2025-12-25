@@ -20,6 +20,9 @@ get pkg name original =
   maybe original return (Map.lookup (pkg, name) replacementMap)
 
 
-versions :: [ ( Pkg.Name, V.Version ) ]
+type Commit = String
+
+
+versions :: [ ( Pkg.Name, V.Version, Commit ) ]
 versions =
   $(PackageReplacementsTH.loadVersions)

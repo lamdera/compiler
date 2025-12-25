@@ -58,6 +58,12 @@ gitChangedFilesIn dir = do
   pure (lines out)
 
 
+gitCommitHashIn :: FilePath -> IO String
+gitCommitHashIn dir = do
+  out <- readProcess "git" ["-C", dir, "rev-parse", "HEAD"] ""
+  pure (init out) -- Drop trailing newline.
+
+
 readVersion :: FilePath -> IO V.Version
 readVersion fp = do
   bytes <- B.readFile (fp </> "elm.json")
@@ -81,11 +87,12 @@ collectEntriesPerSubmodule subs =
 
 collectVersionPerSubmodule
   :: [(String, String, FilePath)]
-  -> IO [((String, String), V.Version)]
+  -> IO [((String, String), V.Version, String)]
 collectVersionPerSubmodule subs =
   forM subs $ \(author, project, dir) -> do
     version <- readVersion dir
-    pure ((author, project), version)
+    commit <- gitCommitHashIn dir
+    pure ((author, project), version, commit)
 
 
 parseModuleName :: ((String, String), FilePath) -> Maybe ((String, String), FilePath, String)
@@ -122,12 +129,13 @@ entryToExp ((author, project), path, moduleName) = do
 
 
 entry2ToExp
-  :: ((String, String), V.Version)
+  :: ((String, String), V.Version, String)
   -> Q Exp
-entry2ToExp ((author, project), version) =
+entry2ToExp ((author, project), version, commit) =
   [|
     ( Pkg.toName (Utf8.fromChars author) project
     , $(liftVersion version)
+    , commit
     )
    |]
 

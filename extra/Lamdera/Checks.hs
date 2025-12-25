@@ -156,8 +156,8 @@ checkPackageReplacementsVersions :: Map.Map Pkg.Name V.Version -> Either Exit.Ou
 checkPackageReplacementsVersions allDeps =
   traverse_ (checkPackageReplacementVersion allDeps) PackageReplacements.versions
 
-checkPackageReplacementVersion :: Map.Map Pkg.Name V.Version -> ( Pkg.Name, V.Version ) -> Either Exit.Outline ()
-checkPackageReplacementVersion allDeps ( name, replacedVersion@(V.Version replacedMajor replacedMinor replacedPatch) ) =
+checkPackageReplacementVersion :: Map.Map Pkg.Name V.Version -> ( Pkg.Name, V.Version, String ) -> Either Exit.Outline ()
+checkPackageReplacementVersion allDeps ( name, replacedVersion@(V.Version replacedMajor replacedMinor replacedPatch), _ ) =
   case Map.lookup name allDeps of
     Nothing ->
       Right ()
