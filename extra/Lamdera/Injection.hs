@@ -266,9 +266,7 @@ injections outputType mode =
     LamderaLive ->
       [text|
 
-    function _Lamdera_inject(app, callUpdate, model, sendToApp, args) {
-      var errorHandler = args && args['errorHandler'];
-
+    function _Lamdera_inject(app, callUpdate, model, sendToApp) {
       app.die = app.stop;
       
       app.fns =
@@ -280,14 +278,7 @@ injections outputType mode =
 
       callUpdate.call = function(update, msg, model) {
         shouldProxy = $$author$$project$$Lamdera$$Live$$shouldProxy(msg);
-        if (errorHandler !== undefined) {
-          return A2(update, msg, model);
-        }
-        try {
-          return A2(update, msg, model);
-        } catch (e) {
-          errorHandler(e);
-        }
+        return A2(update, msg, model);
       };
     }
       |]
