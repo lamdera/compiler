@@ -47,29 +47,30 @@ findSubmodules = do
   authors <- listDirectory root
   fmap Data.List.concat $
     forM authors $ \author -> do
-      let aDir = root </> author
-      projects <- listDirectory aDir
-      pure (fmap (\project -> (author, project, aDir </> project)) projects)
+      let dir = root </> author
+      projects <- listDirectory dir
+      pure (fmap (\project -> (author, project, dir </> project)) projects)
 
 
 gitChangedFilesIn :: FilePath -> IO [FilePath]
 gitChangedFilesIn dir = do
-  out <- readProcess "git" ["-C", dir, "diff", "origin/master...", "--name-only"] ""
-  pure (lines out)
+  stdout <- readProcess "git" ["-C", dir, "diff", "origin/master...", "--name-only"] ""
+  pure (lines stdout)
 
 
 gitCommitHashIn :: FilePath -> IO String
 gitCommitHashIn dir = do
-  out <- readProcess "git" ["-C", dir, "rev-parse", "HEAD"] ""
-  pure (init out) -- Drop trailing newline.
+  stdout <- readProcess "git" ["-C", dir, "rev-parse", "HEAD"] ""
+  pure (init stdout) -- Drop trailing newline.
 
 
 readVersion :: FilePath -> IO V.Version
-readVersion fp = do
-  bytes <- B.readFile (fp </> "elm.json")
+readVersion dir = do
+  let elmJsonPath = dir </> "elm.json"
+  bytes <- B.readFile elmJsonPath
   case D.fromByteString (D.field "version" V.decoder) bytes of
     Left _ ->
-      throwIO (userError "nope")
+      throwIO (userError ("Failed to decode version from: " <> elmJsonPath))
 
     Right version ->
       return version
@@ -131,15 +132,10 @@ entryToExp ((author, project), path, moduleName) = do
 entry2ToExp
   :: ((String, String), V.Version, String)
   -> Q Exp
-entry2ToExp ((author, project), version, commit) =
+entry2ToExp ((author, project), V.Version major minor patch, commit) =
   [|
     ( Pkg.toName (Utf8.fromChars author) project
-    , $(liftVersion version)
+    , V.Version major minor patch
     , commit
     )
    |]
-
-
-liftVersion :: V.Version -> Q Exp
-liftVersion (V.Version major minor patch) =
-  [| V.Version major minor patch |]
