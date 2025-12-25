@@ -85,8 +85,8 @@ data Flags =
   Flags
     { _eval :: Maybe String
     , _import :: Maybe String
-    , _portFlag :: Maybe Int
     , _repl :: Bool
+    , _portFlag :: Maybe Int
     , _noColors :: Bool
     , _interpreterFlag :: Maybe String
     }

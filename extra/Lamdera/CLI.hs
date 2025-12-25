@@ -216,11 +216,11 @@ backend =
     backendFlags =
       flags Lamdera.CLI.Backend.Flags
         |-- flag "eval" expression "The expression to evaluate (default: `model`)."
-        |-- flag "import" import_ "Additional 'import' statement for evaluating the expression."
-        |-- flag "port" port_ "The port of the `lamdera live` server (default: 8000)."
+        |-- flag "import" import_ "Additional 'import' statements used when evaluating the expression."
         |-- onOff "repl" "Start a REPL session instead of evaluating a single expression."
-        |-- onOff "no-colors" "Turn off the colors in the REPL. This can help if you are having trouble reading the values. Some terminals use a custom color scheme that diverges significantly from the standard ANSI colors, so another path may be to pick a more standard color scheme."
-        |-- flag "interpreter" interpreter "Path to an alternate JS interpreter, like node or nodejs."
+        |-- flag "port" port_ "The port of the `lamdera live` server (default: 8000)."
+        |-- onOff "no-colors" "Disable colors in the output. This can help if your terminal uses a non-standard color scheme that makes values hard to read."
+        |-- flag "interpreter" interpreter "Path to an alternative JavaScript interpreter, such as `node` or `nodejs`."
   in
   Terminal.Command "backend" (Common summary) details example noArgs backendFlags Lamdera.CLI.Backend.run
 
