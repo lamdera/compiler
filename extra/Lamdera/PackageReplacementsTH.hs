@@ -4,63 +4,63 @@
 
 module Lamdera.PackageReplacementsTH where
 
+import Control.Exception (throwIO)
+import Control.Monad (forM)
+import qualified Data.ByteString as B
+import qualified Data.List as List
 import qualified Data.Map as Map
+import qualified Data.Maybe as Maybe
+import qualified Data.Name as Name
+import qualified Data.Utf8 as Utf8
 import qualified Elm.ModuleName as ModuleName
 import qualified Elm.Package as Pkg
 import qualified Elm.Version as V
-import qualified Data.ByteString as B
-
-import Language.Haskell.TH
-import Language.Haskell.TH.Syntax
-import System.Directory
-import System.FilePath
-import System.Process
-import Control.Monad
-import Data.List
-import qualified Data.Utf8 as Utf8
-import qualified Data.Name as Name
-import qualified Data.Maybe
 import qualified Json.Decode as D
-import Control.Exception (throwIO)
+import qualified Language.Haskell.TH as TH
+import qualified Language.Haskell.TH.Syntax
+import qualified System.Directory as Dir
+import qualified System.FilePath as FP
+import System.FilePath ((</>))
+import qualified System.Process
 
 
-loadReplacements :: Q Exp
+loadReplacements :: TH.Q TH.Exp
 loadReplacements = do
-  submodules <- runIO findSubmodules
-  entries <- runIO (collectEntriesPerSubmodule submodules)
-  let entriesWithModuleNames = Data.Maybe.mapMaybe parseModuleName entries
+  submodules <- TH.runIO findSubmodules
+  entries <- TH.runIO (collectEntriesPerSubmodule submodules)
+  let entriesWithModuleNames = Maybe.mapMaybe parseModuleName entries
   listE <- mapM entryToExp entriesWithModuleNames
-  [| Map.fromList $(pure (ListE listE)) |]
+  [| Map.fromList $(pure (TH.ListE listE)) |]
 
 
-loadVersions :: Q Exp
+loadVersions :: TH.Q TH.Exp
 loadVersions = do
-  submodules <- runIO findSubmodules
-  entries <- runIO (collectVersionPerSubmodule submodules)
+  submodules <- TH.runIO findSubmodules
+  entries <- TH.runIO (collectVersionPerSubmodule submodules)
   listE <- mapM entry2ToExp entries
-  [| $(pure (ListE listE)) |]
+  [| $(pure (TH.ListE listE)) |]
 
 
 findSubmodules :: IO [(String, String, FilePath)]
 findSubmodules = do
   let root = "extra/package-replacements"
-  authors <- listDirectory root
-  fmap (Data.List.sort . Data.List.concat) $
+  authors <- Dir.listDirectory root
+  fmap (List.sort . List.concat) $
     forM authors $ \author -> do
       let dir = root </> author
-      projects <- listDirectory dir
+      projects <- Dir.listDirectory dir
       pure (fmap (\project -> (author, project, dir </> project)) projects)
 
 
 gitChangedFilesIn :: FilePath -> IO [FilePath]
 gitChangedFilesIn dir = do
-  stdout <- readProcess "git" ["-C", dir, "diff", "origin/master...", "--name-only"] ""
+  stdout <- System.Process.readProcess "git" ["-C", dir, "diff", "origin/master...", "--name-only"] ""
   pure (lines stdout)
 
 
 gitCommitHashIn :: FilePath -> IO String
 gitCommitHashIn dir = do
-  stdout <- readProcess "git" ["-C", dir, "rev-parse", "HEAD"] ""
+  stdout <- System.Process.readProcess "git" ["-C", dir, "rev-parse", "HEAD"] ""
   pure (init stdout) -- Drop trailing newline.
 
 
@@ -80,7 +80,7 @@ collectEntriesPerSubmodule
   :: [(String, String, FilePath)]
   -> IO [((String, String), FilePath)]
 collectEntriesPerSubmodule subs =
-  fmap Data.List.concat $
+  fmap List.concat $
     forM subs $ \(author, project, dir) -> do
       changed <- gitChangedFilesIn dir
       pure (fmap (\fp -> ((author, project), dir </> fp)) changed)
@@ -100,12 +100,12 @@ parseModuleName :: ((String, String), FilePath) -> Maybe ((String, String), File
 parseModuleName (authorProject, filePath) =
   let
     ext =
-      takeExtension filePath
+      FP.takeExtension filePath
   in
   if ext == ".js" || ext == ".elm" then
-    case splitDirectories (dropExtension filePath) of
+    case FP.splitDirectories (FP.dropExtension filePath) of
       "extra" : "package-replacements" : _ : _ : "src" : rest ->
-        Just (authorProject, filePath, Data.List.intercalate "." rest)
+        Just (authorProject, filePath, List.intercalate "." rest)
 
       _ ->
         Nothing
@@ -116,22 +116,22 @@ parseModuleName (authorProject, filePath) =
 
 entryToExp
   :: ((String, String), FilePath, String)
-  -> Q Exp
+  -> TH.Q TH.Exp
 entryToExp ((author, project), path, moduleName) = do
-  bytes <- runIO (B.readFile path)
+  bytes <- TH.runIO (B.readFile path)
 
   [|
     ( ( Pkg.toName (Utf8.fromChars author) project
       , Name.fromChars moduleName
       )
-    , $(lift bytes)
+    , $(Language.Haskell.TH.Syntax.lift bytes)
     )
    |]
 
 
 entry2ToExp
   :: ((String, String), V.Version, String)
-  -> Q Exp
+  -> TH.Q TH.Exp
 entry2ToExp ((author, project), V.Version major minor patch, commit) =
   [|
     ( Pkg.toName (Utf8.fromChars author) project

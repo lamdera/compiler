@@ -2,12 +2,12 @@
 
 module Lamdera.PackageReplacements where
 
+import qualified Data.ByteString as B (ByteString)
 import qualified Data.Map as Map
 import qualified Elm.ModuleName as ModuleName
 import qualified Elm.Package as Pkg
-import qualified Data.ByteString as B (ByteString)
-import qualified Lamdera.PackageReplacementsTH as PackageReplacementsTH
 import qualified Elm.Version as V
+import qualified Lamdera.PackageReplacementsTH as PackageReplacementsTH
 
 
 replacementMap :: Map.Map ( Pkg.Name, ModuleName.Raw ) B.ByteString
