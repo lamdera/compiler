@@ -45,7 +45,7 @@ findSubmodules :: IO [(String, String, FilePath)]
 findSubmodules = do
   let root = "extra/package-replacements"
   authors <- listDirectory root
-  fmap Data.List.concat $
+  fmap (Data.List.sort . Data.List.concat) $
     forM authors $ \author -> do
       let dir = root </> author
       projects <- listDirectory dir
