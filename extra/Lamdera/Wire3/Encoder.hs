@@ -212,9 +212,8 @@ encoderForType depth ifaces cname tipe =
 
 
     -- Frontend only JS reference types
-    -- See Injection.hs for why we don’t encode `Browser.Navigation.Key` as a reference.
-    -- TType (Module.Canonical (Name "elm" "browser") "Browser.Navigation") "Key" _ ->
-    --   (a (VarForeign mLamdera_Wire "encodeRef" (Forall Map.empty (TLambda tipe tLamdera_Wire_Encoder))))
+    TType (Module.Canonical (Name "elm" "browser") "Browser.Navigation") "Key" _ ->
+      (a (VarForeign mLamdera_Wire "encodeRef" (Forall Map.empty (TLambda tipe tLamdera_Wire_Encoder))))
     TType (Module.Canonical (Name "elm" "file") "File") "File" _ ->
       (a (VarForeign mLamdera_Wire "encodeRef" (Forall Map.empty (TLambda tipe tLamdera_Wire_Encoder))))
     TType (Module.Canonical (Name "elm-explorations" "webgl") "WebGL.Texture") "Texture" _ ->

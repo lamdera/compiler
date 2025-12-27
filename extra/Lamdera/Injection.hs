@@ -247,38 +247,6 @@ injections outputType mode =
     function _Lamdera_inject(app) {
       app.die = app.stop;
     }
-
-    // In Elm, Browser.Navigation.Key is a function behind the scenes. It is passed and called here.
-    // In Lamdera, the Key becomes an object after a Wire roundtrip, so we just take the key as a "password"
-    // but then call the actual function ourselves. We _could_ Wire it as a reference, but then we have a
-    // new problem: The key function is from the _old_ app and references functions and data from the old app.
-    // So we would need to be able to update it, both so that it works and to not leak memory from the old app.
-    // That could be doable by introducing a special reference Wire encoding specifically for Browser.Navigation.Key.
-    // But even if we do that we still have a problem: Migrating from apps that doesn't have that new Wire encoding yet.
-    // As long as we want to support migrating such apps, we have to stay with the solution below.
-    var _Lamdera_navKey = function() {};
-    var _Browser_go = F2(function(key, n) {
-      return A2($$elm$$core$$Task$$perform, $$elm$$core$$Basics$$never, _Scheduler_binding(function() {
-        n && history.go(n);
-        _Lamdera_navKey();
-      }));
-    });
-    // $$elm$$browser$$Browser$$Navigation$$back is not a direct assignment so it does not need to be replaced.
-    var $$elm$$browser$$Browser$$Navigation$$forward = _Browser_go;
-    var _Browser_pushUrl = F2(function(key, url) {
-      return A2($$elm$$core$$Task$$perform, $$elm$$core$$Basics$$never, _Scheduler_binding(function() {
-        history.pushState({}, "", url);
-        _Lamdera_navKey();
-      }));
-    });
-    var $$elm$$browser$$Browser$$Navigation$$pushUrl = _Browser_pushUrl;
-    var _Browser_replaceUrl = F2(function(key, url) {
-      return A2($$elm$$core$$Task$$perform, $$elm$$core$$Basics$$never, _Scheduler_binding(function() {
-        history.replaceState({}, "", url);
-        _Lamdera_navKey();
-      }));
-    });
-    var $$elm$$browser$$Browser$$Navigation$$replaceUrl = _Browser_replaceUrl;
       |]
 
     LamderaLive ->

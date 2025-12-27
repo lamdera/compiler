@@ -122,8 +122,7 @@ isUnsupportedKernelType tipe =
 
     -- JS types we are supporting through JS ref encodings. These serialisations
     -- CANNOT BE DECODED OUTSIDE OF THE JS SCOPE THEY WERE ENCODED IN!
-    -- See Injection.hs for why we don’t encode `Browser.Navigation.Key` as a reference.
-    -- TType (Module.Canonical (Name "elm" "browser") "Browser.Navigation") "File" _ -> False
+    TType (Module.Canonical (Name "elm" "browser") "Browser.Navigation") "File" _ -> False
     TType (Module.Canonical (Name "elm" "file") "File") "File" _ -> False
     TType (Module.Canonical (Name "elm-explorations" "webgl") "WebGL.Texture") "Texture" _ -> False
 
