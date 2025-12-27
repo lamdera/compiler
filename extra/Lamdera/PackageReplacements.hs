@@ -1,6 +1,6 @@
 {-# LANGUAGE TemplateHaskell #-}
 
-module Lamdera.PackageReplacements where
+module Lamdera.PackageReplacements (replacementMap, get, versions) where
 
 import qualified Data.ByteString as B (ByteString)
 import qualified Data.Map as Map

@@ -1,7 +1,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Lamdera.PackageReplacementsTH where
+module Lamdera.PackageReplacementsTH (loadReplacements, loadVersions) where
 
 import Control.Exception (throwIO)
 import Control.Monad (forM)
@@ -38,22 +38,57 @@ loadReplacements :: TH.Q TH.Exp
 loadReplacements = do
   Language.Haskell.TH.Syntax.addDependentFile lock
   submodules <- TH.runIO findSubmodules
-  entries <- TH.runIO (collectEntriesPerSubmodule submodules)
-  let entriesWithModuleNames = Maybe.mapMaybe parseModuleName entries
-  listE <- mapM entryToExp entriesWithModuleNames
-  [| Map.fromList $(pure (TH.ListE listE)) |]
+  listItems <- submodulesToReplacementsListItems submodules
+  [| Map.fromList $(pure (TH.ListE listItems)) |]
 
 
 loadVersions :: TH.Q TH.Exp
 loadVersions = do
   Language.Haskell.TH.Syntax.addDependentFile lock
   submodules <- TH.runIO findSubmodules
-  entries <- TH.runIO (collectVersionPerSubmodule submodules)
-  listE <- mapM entry2ToExp entries
-  [| $(pure (TH.ListE listE)) |]
+  listItems <- submodulesToVersionsListItems submodules
+  [| $(pure (TH.ListE listItems)) |]
 
 
-findSubmodules :: IO [(String, String, FilePath)]
+submodulesToReplacementsListItems :: [Submodule] -> TH.Q [TH.Exp]
+submodulesToReplacementsListItems submodules =
+  fmap List.concat $
+    forM submodules $ \(author, project, dir) -> do
+      changedFiles <- TH.runIO (gitChangedFilesIn dir)
+      let modules = Maybe.mapMaybe (\filePath -> fmap (filePath,) (parseModuleName filePath)) changedFiles
+      forM modules $ \(filePath, moduleName) -> do
+        bytes <- TH.runIO (B.readFile (dir </> filePath))
+
+        [|
+          ( ( Pkg.toName (Utf8.fromChars author) project
+            , Name.fromChars moduleName
+            )
+          , $(Language.Haskell.TH.Syntax.lift bytes)
+          )
+         |]
+
+
+submodulesToVersionsListItems :: [Submodule] -> TH.Q [TH.Exp]
+submodulesToVersionsListItems submodules =
+  forM submodules $ \(author, project, dir) -> do
+    V.Version major minor patch <- TH.runIO (readVersion dir)
+    commit <- TH.runIO (gitCommitHashIn dir)
+    [|
+      ( Pkg.toName (Utf8.fromChars author) project
+      , V.Version major minor patch
+      , commit
+      )
+     |]
+
+
+type Submodule =
+  ( String -- author
+  , String -- project
+  , FilePath -- directory
+  )
+
+
+findSubmodules :: IO [Submodule]
 findSubmodules = do
   authors <- listDirectory root
   fmap (List.sort . List.concat) $
@@ -66,7 +101,8 @@ findSubmodules = do
 listDirectory :: FilePath -> IO [FilePath]
 listDirectory dir = do
   items <- Dir.listDirectory dir
-  pure (List.filter (notElem '.') items) -- Skip items with a period – which are likely files.
+  pure (List.filter (notElem '.') items) -- Skip items with a period – which likely are files.
+
 
 gitChangedFilesIn :: FilePath -> IO [FilePath]
 gitChangedFilesIn dir = do
@@ -80,6 +116,24 @@ gitCommitHashIn dir = do
   pure (init stdout) -- Drop trailing newline.
 
 
+parseModuleName :: FilePath -> Maybe String
+parseModuleName filePath =
+  let
+    ext =
+      FP.takeExtension filePath
+  in
+  if ext == ".js" || ext == ".elm" then
+    case FP.splitDirectories (FP.dropExtension filePath) of
+      "src" : rest ->
+        Just (List.intercalate "." rest)
+
+      _ ->
+        Nothing
+
+  else
+    Nothing
+
+
 readVersion :: FilePath -> IO V.Version
 readVersion dir = do
   let elmJsonPath = dir </> "elm.json"
@@ -90,68 +144,3 @@ readVersion dir = do
 
     Right version ->
       return version
-
-
-collectEntriesPerSubmodule
-  :: [(String, String, FilePath)]
-  -> IO [((String, String), FilePath)]
-collectEntriesPerSubmodule subs =
-  fmap List.concat $
-    forM subs $ \(author, project, dir) -> do
-      changed <- gitChangedFilesIn dir
-      pure (fmap (\fp -> ((author, project), dir </> fp)) changed)
-
-
-collectVersionPerSubmodule
-  :: [(String, String, FilePath)]
-  -> IO [((String, String), V.Version, String)]
-collectVersionPerSubmodule subs =
-  forM subs $ \(author, project, dir) -> do
-    version <- readVersion dir
-    commit <- gitCommitHashIn dir
-    pure ((author, project), version, commit)
-
-
-parseModuleName :: ((String, String), FilePath) -> Maybe ((String, String), FilePath, String)
-parseModuleName (authorProject, filePath) =
-  let
-    ext =
-      FP.takeExtension filePath
-  in
-  if ext == ".js" || ext == ".elm" then
-    case FP.splitDirectories (FP.dropExtension filePath) of
-      "extra" : "package-replacements" : _ : _ : "src" : rest ->
-        Just (authorProject, filePath, List.intercalate "." rest)
-
-      _ ->
-        Nothing
-
-  else
-    Nothing
-
-
-entryToExp
-  :: ((String, String), FilePath, String)
-  -> TH.Q TH.Exp
-entryToExp ((author, project), path, moduleName) = do
-  bytes <- TH.runIO (B.readFile path)
-
-  [|
-    ( ( Pkg.toName (Utf8.fromChars author) project
-      , Name.fromChars moduleName
-      )
-    , $(Language.Haskell.TH.Syntax.lift bytes)
-    )
-   |]
-
-
-entry2ToExp
-  :: ((String, String), V.Version, String)
-  -> TH.Q TH.Exp
-entry2ToExp ((author, project), V.Version major minor patch, commit) =
-  [|
-    ( Pkg.toName (Utf8.fromChars author) project
-    , V.Version major minor patch
-    , commit
-    )
-   |]
