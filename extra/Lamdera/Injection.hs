@@ -254,7 +254,7 @@ injections outputType mode =
 
     function _Lamdera_inject(app, callUpdate, model, sendToApp) {
       app.die = app.stop;
-      
+
       app.fns =
         { getModel : function() { return model }
         , setBem : function(m) { model.bem = m; return m }
