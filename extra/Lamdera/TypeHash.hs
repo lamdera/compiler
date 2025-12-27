@@ -388,12 +388,6 @@ canonicalToDiffableType targetName interfaces recursionSet canonical tvarMap =
 
 
         -- Frontend JS Kernel types
-        ("elm", "browser", "Browser.Navigation", "Key") ->
-          if targetName `elem` ["FrontendMsg", "FrontendModel"] then
-            DKernelBrowser "Browser.Navigation.Key"
-          else
-            kernelErrorBrowserOnly
-
         ("elm", "file", "File", "File") ->
           if targetName `elem` ["FrontendMsg", "FrontendModel"] then
             DKernelBrowser "File.File"
