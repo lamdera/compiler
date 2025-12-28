@@ -77,27 +77,38 @@ lamderaReplSrc = $(do
           "\n❌ Error in Lamdera.Repl.lamderaRepl during the compiler " ++ err ++ " phase.\
           \\n  Try running `lamdera make src/Repl/Worker.elm` directly."
 
-  minifierResult <- TH.runIO $ do
-    putStr "🚀 Minifying `repl-worker.js` in `extra`..."
-    Ext.Common.requireBinary "npm"
-    Ext.Common.requireBinary "esbuild"
-    BS.writeFile ("extra" </> "repl-worker.js") compiledCode
-    Ext.Common.bash $ "cd extra && npm i && esbuild repl-worker.js --minify --target=chrome58,firefox57,safari11,edge16 > " ++ ("dist" </> "repl-worker.js")
-    Dir.doesFileExist ("extra" </> "dist" </> "repl-worker.js")
-
-  minifiedCode <-
-    if minifierResult
-      then
-        TH.runIO $ do
-          putStrLn " ✅"
-          minifiedCode_ <- BS.readFile ("extra" </> "dist" </> "repl-worker.js")
-          Dir.removeFile ("extra" </> "repl-worker.js")
-          Dir.removeFile ("extra" </> "dist" </> "repl-worker.js")
-          return minifiedCode_
-      else
-        error
-          "\n❌ Error in Lamdera.Repl.lamderaRepl during minification.\
-          \\n  Try running `esbuild repl-worker.js --minify` directly."
+  minifiedCode <- TH.runIO $ do
+    isGithubActions <- Lamdera.lookupEnv "GITHUB_ACTIONS"
+    case isGithubActions of
+      Just "true" -> do
+        putStr "🚀 Loading pre-built `repl-worker.js` from `extra/dist`..."
+        let distFile = "extra" </> "dist" </> "repl-worker.js"
+        exists <- Dir.doesFileExist distFile
+        if exists
+          then do
+            putStrLn " ✅"
+            BS.readFile distFile
+          else
+            error
+              "\n❌ Error in Lamdera.Repl.lamderaRepl: pre-built repl-worker.js not found.\
+              \\n  Expected file at: extra/dist/repl-worker.js\
+              \\n  Run `stack install` locally to build and commit to the repository."
+      _ -> do
+        putStr "🚀 Minifying `repl-worker.js` in `extra`..."
+        Ext.Common.requireBinary "esbuild"
+        BS.writeFile ("extra" </> "repl-worker.js") compiledCode
+        Ext.Common.bash $ "cd extra && esbuild repl-worker.js --minify --target=chrome58,firefox57,safari11,edge16 > " ++ ("dist" </> "repl-worker.js")
+        minifierResult <- Dir.doesFileExist ("extra" </> "dist" </> "repl-worker.js")
+        if minifierResult
+          then do
+            putStrLn " ✅"
+            minifiedCode_ <- BS.readFile ("extra" </> "dist" </> "repl-worker.js")
+            Dir.removeFile ("extra" </> "repl-worker.js")
+            return minifiedCode_
+          else
+            error
+              "\n❌ Error in Lamdera.Repl.lamderaRepl during minification.\
+              \\n  Try running `esbuild repl-worker.js --minify` directly."
 
   Data.FileEmbed.bsToExp minifiedCode)
 
