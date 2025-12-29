@@ -94,10 +94,12 @@ jobs:
         with:
           timeout_minutes: 5
           max_attempts: 4
-          shell: bash # otherwise defaults to powershell on windows
+          shell: bash
           # https://gitlab.haskell.org/ghc/ghc/-/issues/20878
           # https://gitlab.haskell.org/ghc/ghc/-/issues/20010#note_359766
-          command: stack install --ghc-options '-optl"-Wl,-Bstatic,-lstdc++,-lgcc_s,-lwinpthread,-Bdynamic"'
+          command: |
+            export LANG=C.UTF-8
+            stack install --ghc-options '-optl"-Wl,-Bstatic,-lstdc++,-lgcc_s,-lwinpthread,-Bdynamic"'
 
       - name: Copy binary files, dlls & check
         run: |
@@ -114,7 +116,7 @@ jobs:
           dest: lamdera.zip
 
       - name: Archive lamdera.zip artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: lamdera-next.zip
           path: lamdera.zip
@@ -122,10 +124,10 @@ jobs:
   upload:
     needs: install
     name: Upload lamdera-next.zip to SFTP
-    runs-on: lamdera-community-linux-x86_64
+    runs-on: ubuntu-latest
     steps:
       - name: Download artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v6
         with:
           name: lamdera-next.zip
 

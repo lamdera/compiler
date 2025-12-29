@@ -1,6 +1,7 @@
 FROM alpine:3.15 AS build
 
 RUN apk add --no-cache \
+        bash \
         alpine-sdk \
         autoconf \
         gcc \
@@ -37,40 +38,4 @@ RUN cp crtbeginS.o crtbeginT.o
 RUN cp crtend.o crtend.o.orig
 RUN cp crtendS.o crtend.o
 
-# Install packages
-WORKDIR /lamdera
-COPY elm.cabal ./
-COPY cabal.project ./
-COPY cabal.project.freeze ./
-COPY vendor/elm-format vendor/elm-format
-
-RUN cabal update
-
-ENV CABALOPTS="-f-export-dynamic -fembed_data_files --enable-executable-static -j4"
-ENV GHCOPTS="-j4 +RTS -A256m -RTS -split-sections -optc-Os -optl=-pthread"
-RUN cabal build $CABALOPTS --ghc-options="$GHCOPTS" --only-dependencies
-
-# Import source code
-COPY builder builder
-COPY compiler compiler
-COPY reactor reactor
-COPY terminal terminal
-COPY LICENSE ./
-
-COPY ext-common ext-common
-COPY ext-elm-pages ext-elm-pages
-COPY ext-sentry ext-sentry
-COPY extra extra
-COPY test test
-COPY .git .git
-COPY vendor/elm-repl-worker vendor/elm-repl-worker
-
-ARG GITHUB_ACTIONS
-ENV GITHUB_ACTIONS=${GITHUB_ACTIONS}
-
-RUN cabal build $CABALOPTS --ghc-options="$GHCOPTS"
-
-RUN cabal list-bin . | grep -v HEAD
-RUN cp `cabal list-bin . | grep -v HEAD` ./lamdera
-RUN ./lamdera --version-full
-RUN strip lamdera
+WORKDIR /root/compiler
