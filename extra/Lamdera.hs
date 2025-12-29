@@ -94,6 +94,7 @@ module Lamdera
   , withCompilerRoot
   , withRuntimeRoot
   , Ext.Common.setProjectRoot
+  , Ext.Common.withProjectRoot
   , Ext.Common.getProjectRoot
   , Ext.Common.getProjectRootFor
   , Ext.Common.getProjectRootMaybe

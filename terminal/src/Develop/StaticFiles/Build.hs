@@ -40,6 +40,7 @@ buildReactorFrontEnd =
   BW.withScope $ \scope ->
   Dir.withCurrentDirectory "reactor" $
   do  root <- Dir.getCurrentDirectory
+      putStrLn $ "🚀 Building reactor frontend at: " ++ root
       runTaskUnsafe $
         do  details    <- Task.eio Exit.ReactorBadDetails $ Details.load Reporting.silent scope root
             artifacts  <- Task.eio Exit.ReactorBadBuild $ Build.fromPaths Reporting.silent root details paths
