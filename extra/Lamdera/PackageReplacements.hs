@@ -4,7 +4,7 @@ module Lamdera.PackageReplacements
   ( replacementMap
   , getReplacement
   , versions
-  , getVersion
+  , getVersionConstraint
   , virtualDomVersion
   , virtualDomConstraint
   ) where
@@ -36,16 +36,14 @@ versions =
   $(PackageReplacementsTH.loadVersions)
 
 
-getVersion :: ( Pkg.Name, C.Constraint ) -> ( Pkg.Name, C.Constraint )
-getVersion ( name, originalConstraint ) =
-  ( name
-  , case Map.lookup name versions of
-      Just ( version, _ ) ->
-        C.exactly version
+getVersionConstraint :: Pkg.Name -> C.Constraint -> C.Constraint
+getVersionConstraint name originalConstraint =
+  case Map.lookup name versions of
+    Just ( version, _ ) ->
+      C.exactly version
 
-      Nothing ->
-        originalConstraint
-  )
+    Nothing ->
+      originalConstraint
 
 
 virtualDomVersion :: Maybe V.Version

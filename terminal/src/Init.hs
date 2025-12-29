@@ -107,11 +107,8 @@ defaults :: Map.Map Pkg.Name Con.Constraint
 defaults =
   Map.fromList
     [ (Pkg.core, Con.anything)
-      Lamdera.& Lamdera.alternativeImplementationPassthrough PackageReplacements.getVersion
     , (Pkg.browser, Con.anything)
-      Lamdera.& Lamdera.alternativeImplementationPassthrough PackageReplacements.getVersion
     , (Pkg.html, Con.anything)
-      Lamdera.& Lamdera.alternativeImplementationPassthrough PackageReplacements.getVersion
     -- @LAMDERA
     , (Pkg.url, Con.anything)
     , (Pkg.bytes, Con.anything)
@@ -119,3 +116,4 @@ defaults =
     , (Pkg.lamderaCodecs, Con.exactly (V.Version 1 0 0))
     , (Pkg.virtualDom, PackageReplacements.virtualDomConstraint)
     ]
+    Lamdera.& Map.mapWithKey PackageReplacements.getVersionConstraint
