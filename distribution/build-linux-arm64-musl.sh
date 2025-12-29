@@ -58,6 +58,7 @@ build_binary_docker() {
     local groupId="$4"
     local compilerRoot="/root/compiler"
     cd $compilerRoot
+    export GITHUB_ACTIONS=$actions
 
     cleanup() {
         echo "trap cleanup: build failed with exit code $?"

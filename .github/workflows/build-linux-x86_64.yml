@@ -9,7 +9,7 @@ name: Build Linux x86_64
 jobs:
   build:
     name: Build Linux x86_64
-    runs-on: lamdera-community-linux-x86_64
+    runs-on: ubuntu-latest
     steps:
       - name: Install SSH key
         uses: shimataro/ssh-key-action@v2

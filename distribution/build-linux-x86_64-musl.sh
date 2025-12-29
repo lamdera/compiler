@@ -16,6 +16,7 @@ git submodule init && git submodule update
 
                                                           # Build in Docker
 docker build --progress=plain --platform linux/amd64 \
+  --build-arg GITHUB_ACTIONS="$GITHUB_ACTIONS" \
   -t "$buildTag:latest" \
   -f distribution/docker/$arch-musl.dockerfile .
 

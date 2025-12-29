@@ -63,6 +63,10 @@ COPY ext-sentry ext-sentry
 COPY extra extra
 COPY test test
 COPY .git .git
+COPY vendor/elm-repl-worker vendor/elm-repl-worker
+
+ARG GITHUB_ACTIONS
+ENV GITHUB_ACTIONS=${GITHUB_ACTIONS}
 
 RUN cabal build $CABALOPTS --ghc-options="$GHCOPTS"
 
