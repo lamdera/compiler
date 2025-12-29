@@ -5,8 +5,8 @@ module Lamdera.PackageReplacements
   , getReplacement
   , versions
   , getVersion
-  , defaultVirtualDomVersion
-  , defaultVirtualDomConstraint
+  , virtualDomVersion
+  , virtualDomConstraint
   ) where
 
 import qualified Data.ByteString as B (ByteString)
@@ -48,11 +48,11 @@ getVersion ( name, originalConstraint ) =
   )
 
 
-defaultVirtualDomVersion :: Maybe V.Version
-defaultVirtualDomVersion =
+virtualDomVersion :: Maybe V.Version
+virtualDomVersion =
   fst <$> Map.lookup Pkg.virtualDom versions
 
 
-defaultVirtualDomConstraint :: C.Constraint
-defaultVirtualDomConstraint =
-  maybe C.anything C.exactly defaultVirtualDomVersion
+virtualDomConstraint :: C.Constraint
+virtualDomConstraint =
+  maybe C.anything C.exactly virtualDomVersion

@@ -92,7 +92,7 @@ init =
                     directs = Map.intersection solution defaults
                               Lamdera.& Map.delete Pkg.virtualDom
                     indirects = Map.difference solution defaults
-                                Lamdera.& maybe id (Map.insert Pkg.virtualDom) PackageReplacements.defaultVirtualDomVersion
+                                Lamdera.& maybe id (Map.insert Pkg.virtualDom) PackageReplacements.virtualDomVersion
                   in
                   do  Dir.createDirectoryIfMissing True "src"
                       Outline.write "." $ Outline.App $
@@ -117,5 +117,5 @@ defaults =
     , (Pkg.bytes, Con.anything)
     , (Pkg.lamderaCore, Con.exactly (V.Version 1 0 0))
     , (Pkg.lamderaCodecs, Con.exactly (V.Version 1 0 0))
-    , (Pkg.virtualDom, PackageReplacements.defaultVirtualDomConstraint)
+    , (Pkg.virtualDom, PackageReplacements.virtualDomConstraint)
     ]
