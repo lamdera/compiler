@@ -154,10 +154,10 @@ checkMsgHasTypes typeNames = do
 
 checkPackageReplacementsVersions :: Map.Map Pkg.Name V.Version -> Either Exit.Outline ()
 checkPackageReplacementsVersions allDeps =
-  traverse_ (checkPackageReplacementVersion allDeps) PackageReplacements.versions
+  traverse_ (checkPackageReplacementVersion allDeps) (Map.toList PackageReplacements.versions)
 
-checkPackageReplacementVersion :: Map.Map Pkg.Name V.Version -> ( Pkg.Name, V.Version, String ) -> Either Exit.Outline ()
-checkPackageReplacementVersion allDeps ( name, replacedVersion@(V.Version replacedMajor replacedMinor replacedPatch), _ ) =
+checkPackageReplacementVersion :: Map.Map Pkg.Name V.Version -> ( Pkg.Name, ( V.Version, String ) ) -> Either Exit.Outline ()
+checkPackageReplacementVersion allDeps ( name, ( replacedVersion@(V.Version replacedMajor replacedMinor replacedPatch), _ ) ) =
   case Map.lookup name allDeps of
     Nothing ->
       Right ()

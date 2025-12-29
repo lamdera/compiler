@@ -23,6 +23,7 @@ import qualified Reporting.Exit as Exit
 
 import qualified Lamdera
 import qualified Lamdera.Init
+import qualified Lamdera.PackageReplacements as PackageReplacements
 
 -- RUN
 
@@ -89,7 +90,9 @@ init =
                   let
                     solution = Map.map (\(Solver.Details vsn _) -> vsn) details
                     directs = Map.intersection solution defaults
+                              Lamdera.& Map.delete Pkg.virtualDom
                     indirects = Map.difference solution defaults
+                                Lamdera.& maybe id (Map.insert Pkg.virtualDom) PackageReplacements.defaultVirtualDomVersion
                   in
                   do  Dir.createDirectoryIfMissing True "src"
                       Outline.write "." $ Outline.App $
@@ -104,11 +107,15 @@ defaults :: Map.Map Pkg.Name Con.Constraint
 defaults =
   Map.fromList
     [ (Pkg.core, Con.anything)
+      Lamdera.& Lamdera.alternativeImplementationPassthrough PackageReplacements.getVersion
     , (Pkg.browser, Con.anything)
+      Lamdera.& Lamdera.alternativeImplementationPassthrough PackageReplacements.getVersion
     , (Pkg.html, Con.anything)
+      Lamdera.& Lamdera.alternativeImplementationPassthrough PackageReplacements.getVersion
     -- @LAMDERA
     , (Pkg.url, Con.anything)
     , (Pkg.bytes, Con.anything)
     , (Pkg.lamderaCore, Con.exactly (V.Version 1 0 0))
     , (Pkg.lamderaCodecs, Con.exactly (V.Version 1 0 0))
+    , (Pkg.virtualDom, PackageReplacements.defaultVirtualDomConstraint)
     ]

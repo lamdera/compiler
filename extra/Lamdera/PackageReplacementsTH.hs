@@ -48,7 +48,7 @@ loadVersions = do
   Language.Haskell.TH.Syntax.addDependentFile lock
   submodules <- TH.runIO findSubmodules
   listItems <- submodulesToVersionsListItems submodules
-  [| $(pure (TH.ListE listItems)) |]
+  [| Map.fromList $(pure (TH.ListE listItems)) |]
 
 
 submodulesToReplacementsListItems :: [Submodule] -> TH.Q [TH.Exp]
@@ -76,8 +76,9 @@ submodulesToVersionsListItems submodules =
     commit <- TH.runIO (gitCommitHashIn dir)
     [|
       ( Pkg.toName (Utf8.fromChars author) project
-      , V.Version major minor patch
-      , commit
+      , ( V.Version major minor patch
+        , commit
+        )
       )
      |]
 
