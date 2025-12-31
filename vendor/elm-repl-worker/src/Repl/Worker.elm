@@ -214,18 +214,21 @@ handleClientRequestHelp : Repl.Env LocalState -> Repl.State -> Repl.Lines -> IO 
 handleClientRequestHelp env state lines =
     case Repl.categorize lines of
         Repl.Done input ->
-            IO.bind (Repl.eval env state input) <|
-                \outcome ->
-                    case outcome of
-                        Repl.Loop newState ->
-                            IO.bindSequence
-                                [ IO.putLens lensReplState (ReplRunning env newState Nothing) ]
-                                (IO.return (Api.WorkerStateRunning Nothing))
+            IO.bindSequence
+                [ IO.putLens lensReplState (ReplRunning env state Nothing) ]
+                (IO.bind (Repl.eval env state input) <|
+                    \outcome ->
+                        case outcome of
+                            Repl.Loop newState ->
+                                IO.bindSequence
+                                    [ IO.putLens lensReplState (ReplRunning env newState Nothing) ]
+                                    (IO.return (Api.WorkerStateRunning Nothing))
 
-                        Repl.End ->
-                            IO.bindSequence
-                                [ IO.putLens lensReplState ReplStopped ]
-                                (IO.return (Api.WorkerStateStopped Nothing))
+                            Repl.End ->
+                                IO.bindSequence
+                                    [ IO.putLens lensReplState ReplStopped ]
+                                    (IO.return (Api.WorkerStateStopped Nothing))
+                )
 
         Repl.Continue prefill ->
             IO.bindSequence

@@ -14,7 +14,7 @@ compilerRoot="$scriptDir/.."
 
 if [ "$GITHUB_ACTIONS" == "true" ]; then
     mountRoot="$compilerRoot"
-    cacheRoot="/home/github/user-build-cache/linux-arm64"
+    cacheRoot="$GITHUB_WORKSPACE/user-build-cache/linux-arm64"
     rsyncCompilerPath=""
     dockerHost=""
 elif [ "$LOCAL_DOCKER" == "true" ]; then
@@ -58,6 +58,7 @@ build_binary_docker() {
     local groupId="$4"
     local compilerRoot="/root/compiler"
     cd $compilerRoot
+    export GITHUB_ACTIONS=$actions
 
     cleanup() {
         echo "trap cleanup: build failed with exit code $?"

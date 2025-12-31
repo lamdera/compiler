@@ -9,7 +9,7 @@ name: Build Linux x86_64
 jobs:
   build:
     name: Build Linux x86_64
-    runs-on: lamdera-community-linux-x86_64
+    runs-on: ubuntu-latest
     steps:
       - name: Install SSH key
         uses: shimataro/ssh-key-action@v2
@@ -20,6 +20,15 @@ jobs:
           if_key_exists: replace
       - uses: actions/checkout@v3
       - run: echo "${HOME}/.local/bin" >> $GITHUB_PATH
+      - name: Create cache directory
+        run: mkdir -p ${{ github.workspace }}/user-build-cache/linux-x86_64
+      - name: Cache Cabal/Stack build artifacts
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/user-build-cache/linux-x86_64
+          key: linux-x86_64-cabal-${{ hashFiles('cabal.project.freeze') }}
+          restore-keys: |
+            linux-x86_64-cabal-
       - name: Run distribution script
         run: |
           cd distribution

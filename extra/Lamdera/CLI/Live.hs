@@ -331,6 +331,14 @@ openEditorHandler root = do
     & withDefault pass
 
 
+serveBem :: LiveState -> Snap ()
+serveBem (_ ,_ ,_ , beState) = do
+  path <- getSafePath
+  guard (path == "_x/bem")
+  bemText <- liftIO $ readTVarIO beState
+  writeText bemText
+
+
 serveExperimental :: FilePath -> Snap ()
 serveExperimental root = do
   fullpath <- T.pack <$> getSafePath
