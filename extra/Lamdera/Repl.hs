@@ -28,6 +28,7 @@ import qualified Stuff
 
 import qualified Lamdera
 import qualified Ext.Common
+import qualified Lamdera.Version
 
 
 
@@ -97,6 +98,7 @@ lamderaReplSrc = $(do
         putStr "-- Minifying `repl-worker.js` in `extra`..."
         Ext.Common.requireBinary "esbuild"
         BS.writeFile ("extra" </> "repl-worker.js") compiledCode
+        Ext.Common.bash $ "cd extra && perl -pi -e 's/artifacts.x.dat/" <> Lamdera.Version.artifacts <> "/g' repl-worker.js"
         Ext.Common.bash $ "cd extra && esbuild repl-worker.js --minify --target=chrome58,firefox57,safari11,edge16 > " ++ ("dist" </> "repl-worker.js")
         minifierResult <- Dir.doesFileExist ("extra" </> "dist" </> "repl-worker.js")
         if minifierResult
