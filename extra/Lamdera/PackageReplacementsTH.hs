@@ -7,6 +7,7 @@ module Lamdera.PackageReplacementsTH (loadReplacements, loadVersions) where
 import Control.Exception (throwIO)
 import Control.Monad (forM)
 import qualified Data.ByteString as B
+import qualified Data.FileEmbed
 import qualified Data.List as List
 import qualified Data.Map as Map
 import qualified Data.Maybe as Maybe
@@ -64,7 +65,7 @@ submodulesToReplacementsListItems submodules =
           ( ( Pkg.toName (Utf8.fromChars author) project
             , Name.fromChars moduleName
             )
-          , $(Language.Haskell.TH.Syntax.lift bytes)
+          , $(Data.FileEmbed.bsToExp bytes)
           )
          |]
 
