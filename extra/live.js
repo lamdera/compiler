@@ -137,6 +137,7 @@ window.setupApp = function(name, elid) {
     })
 
     app.ports.save_BackendModel.subscribe(function (payload) {
+      initBackendModel = payload.b
       payload.b = bytesToBase64(payload.b)
       payload.f = (payload.f) ? "force" : ""
       msgEmitter(payload)
@@ -176,8 +177,10 @@ window.setupApp = function(name, elid) {
 
     switch(d.t) {
       case "r":
-        if (freezeMode) {
-          hotReload()
+        if (app !== null && freezeMode) {
+          hotReload().then(() => {
+            app.ports.verifyBackendModelDecodableAfterHotReload.send(initBackendModel)
+          })
         } else {
           document.location.reload()
         }
@@ -494,7 +497,7 @@ let errorDialog = null
 // TODO: Reset BackendModel if needed (like happens on init)
 // and: try to to that for FrontendModel as well?
 function hotReload() {
-  fetch("/")
+  return fetch("/")
     .then(response => response.text())
     .then(html => {
       if (errorDialog) {

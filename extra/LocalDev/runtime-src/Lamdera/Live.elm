@@ -19,6 +19,7 @@ port module Lamdera.Live exposing (main)
 
 import Backend
 import Browser
+import Browser.Navigation
 import Bytes
 import Env
 import Frontend
@@ -103,6 +104,9 @@ port onDisconnection : (ConnectionMsg -> msg) -> Sub msg
 port setFreezeMode : Bool -> Cmd msg
 
 
+port verifyBackendModelDecodableAfterHotReload : (Bytes -> msg) -> Sub msg
+
+
 type alias ConnectionMsg =
     { s : SessionId, c : ClientId }
 
@@ -152,6 +156,7 @@ type Msg
     | LoadedSnapshotLegacy (Result LD.HttpError ( List Int, Int ))
     | Noop
     | ReplMsg Repl.Msg
+    | VerifyBackendModelDecodableAfterHotReload Bytes
 
 
 type alias Model =
@@ -1001,6 +1006,20 @@ update msg m =
             , Cmd.map ReplMsg replCmd
             )
 
+        VerifyBackendModelDecodableAfterHotReload backendModelBytes ->
+            case m.nodeType of
+                Follower ->
+                    ( m, Cmd.none )
+
+                Leader ->
+                    case Wire.bytesDecode Types.w3_decode_BackendModel backendModelBytes of
+                        Just _ ->
+                            ( m, Cmd.none )
+
+                        Nothing ->
+                            -- Reload the page. In `init`, the backend model will be reset.
+                            ( m, Browser.Navigation.reload )
+
 
 subscriptions { nodeType, fem, bem, bemDirty, devbar } =
     Sub.batch
@@ -1026,6 +1045,7 @@ subscriptions { nodeType, fem, bem, bemDirty, devbar } =
         , onDisconnection OnDisconnection
         , LD.every (10 * 60 * 1000) VersionCheck
         , Sub.map ReplMsg (Repl.subscriptions devbar.replModel)
+        , verifyBackendModelDecodableAfterHotReload VerifyBackendModelDecodableAfterHotReload
         ]
 
 
