@@ -505,8 +505,6 @@ var Base64Binary = {
 
 let errorDialog = null
 
-// TODO: Reset BackendModel if needed (like happens on init)
-// and: try to to that for FrontendModel as well?
 function hotReload() {
   return fetch("/")
     .then(response => response.text())
