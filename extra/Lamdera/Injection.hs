@@ -53,7 +53,7 @@ versionsComment =
     & foldMap (\( name@(Pkg.Name _ project), ( version, commit ) ) ->
       "// "
       <> B.stringUtf8 (Pkg.toChars name)
-      <> ": https://github.com/lydell/" <> Utf8.toBuilder project <> "/commit/" <> B.stringUtf8 commit
+      <> ": https://github.com/lamdera/elm-" <> Utf8.toBuilder project <> "/commit/" <> B.stringUtf8 commit
       <> " (based on v" <> B.stringUtf8 (V.toChars version) <> ")\n"
     )
   )
