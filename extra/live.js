@@ -531,8 +531,8 @@ function hotReload() {
         errorDialog = dialog
       } else {
         const compiledElmJs = html.slice(index1, index2)
-        var f = new Function(compiledElmJs)
-        var newScope = {}
+        const f = new Function(compiledElmJs)
+        const newScope = {}
         f.call(newScope)
         Elm.hot.reload(newScope)
       }
