@@ -224,7 +224,7 @@ In development, using `LDEBUG=1` will cause `~/dev/projects/lamdera-compiler/ext
 Lamdera replaces some Elm packages. This is to:
 
 - Include [elm-safe-virtual-dom](https://github.com/lydell/elm-safe-virtual-dom) by default. It is also _needed_ to do app upgrades in production.
-- [Add hot reloading and make it possible to stop Elm apps](https://github.com/elm/core/pull/1155). The ability to stop apps is needed to do app upgrades in production. Hot reloading is going to be used by `lamdera live`.
+- [Add hot reloading and make it possible to stop Elm apps](https://github.com/elm/core/pull/1155). The ability to stop apps is needed to do app upgrades in production. Hot reloading is used by `lamdera live`.
 - Include some Kernel JS for [lamdera/containers](https://github.com/lamdera/containers).
 - A few smaller changes to make app upgrades in production possible.
 
@@ -236,6 +236,6 @@ Most of the above used to be done in hacky ways in `Injection.hs`. That wasn’t
 - `lock.txt` which is a text file that changes as the submodules change.
 - `lock.sh` which generates `lock.txt`.
 
-`extra/Lamdera/PackageReplacementsTH.hs` is a Template Haskell file which reads the `$author/$project/` submodules and generates some Haskell code in `extra/Lamdera/PackageReplacements.hs`. It uses `lock.txt` to know when to recompile. If you make changes in a submodule, you need to run `lock.sh` to see your changes – see that file for more information.
+`extra/Lamdera/PackageReplacementsTH.hs` is a Template Haskell file which reads the `$author/$project/` submodules and generates some Haskell code in `extra/Lamdera/PackageReplacements.hs`. It uses `lock.txt` to know when to recompile. If you make changes in a submodule, you need to run `lock.sh` to have your changes included in the binary – see that file for more information. And then you need to run `lamdera reset` to clear `artifacts.*.dat` files in `ELM_HOME`, and cache files in `elm-stuff/` (in non-development, this is solved by versioning those files, but in development the version is never bumped).
 
 The generated Haskell code contains the `.elm` and `.js` files in the replaced packages that have been changed. So the `lamdera` binary comes with some package code baked in, that cannot be updated without installing a new `lamdera` version.
