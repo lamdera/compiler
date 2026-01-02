@@ -100,6 +100,9 @@ port onConnection : (ConnectionMsg -> msg) -> Sub msg
 port onDisconnection : (ConnectionMsg -> msg) -> Sub msg
 
 
+port setFreezeMode : Bool -> Cmd msg
+
+
 type alias ConnectionMsg =
     { s : SessionId, c : ClientId }
 
@@ -284,7 +287,7 @@ init flags url key =
                             -- The backend model is really large now, it's not useful to
                             -- log to the console anymore and slows things down
                             _ =
-                                log "☀️ Restored BackendModel <print skipped for 1MB+ model size>" ()
+                                log "☀️ Restored BackendModel <print skipped for 1KiB+ model size>" ()
                         in
                         bem
 
@@ -364,6 +367,7 @@ init flags url key =
           else
             Cmd.none
         , LD.now |> Task.perform VersionCheck
+        , setFreezeMode devbar.freeze
         ]
     )
 
@@ -690,7 +694,7 @@ update msg m =
                         m.fem
             in
             ( { m | devbar = LD.debugS "d" newDevbar, fem = newFem }
-            , Cmd.none
+            , setFreezeMode newDevbar.freeze
             )
 
         ToggledNetworkDelay ->
