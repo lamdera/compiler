@@ -21,6 +21,7 @@ var freezeMode = false
 // but we still want the livereload to function
 var app = null
 var initBackendModel = null
+var initFrontendModel = null
 
 var msgHandler = function(e) {
   const d = JSON.parse(e.data)
@@ -120,9 +121,13 @@ window.setupApp = function(name, elid) {
       return;
     }
 
+    const femLsKey = "lamdera-debug-fem"
+    const frontendModelString = localStorage.getItem(femLsKey)
+    initFrontendModel = frontendModelString === null ? null : base64ToBytes(frontendModelString)
+
     app = elm.init({
       node: document.getElementById(elid),
-      flags: { c: clientId, s: sessionId, nt: nodeType, b: initBackendModel }
+      flags: { c: clientId, s: sessionId, nt: nodeType, b: initBackendModel, f: initFrontendModel }
     })
     if (document.getElementById(elid)) {
       document.getElementById(elid).innerText = 'This is a headless program, meaning there is nothing to show here.\n\nI started the program anyway though, and you can access it as `app` in the developer console.'
@@ -141,6 +146,11 @@ window.setupApp = function(name, elid) {
       payload.b = bytesToBase64(payload.b)
       payload.f = (payload.f) ? "force" : ""
       msgEmitter(payload)
+    })
+
+    app.ports.save_FrontendModel.subscribe(function (bytes) {
+      initFrontendModel = bytes
+      localStorage.setItem(femLsKey, bytesToBase64(bytes))
     })
 
     app.ports.send_EnvMode.subscribe(function (payload) {
@@ -180,6 +190,7 @@ window.setupApp = function(name, elid) {
         if (app !== null && freezeMode) {
           hotReload().then(() => {
             app.ports.verifyBackendModelDecodableAfterHotReload.send(initBackendModel)
+            app.ports.verifyFrontendModelDecodableAfterHotReload.send(initFrontendModel)
           })
         } else {
           document.location.reload()

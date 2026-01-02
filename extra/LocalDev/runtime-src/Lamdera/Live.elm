@@ -56,6 +56,9 @@ port receive_ToBackend : (( SessionId, ClientId, Bytes ) -> msg) -> Sub msg
 port save_BackendModel : { t : String, f : Bool, b : Bytes } -> Cmd msg
 
 
+port save_FrontendModel : Bytes -> Cmd msg
+
+
 port send_EnvMode : { t : String, v : String } -> Cmd msg
 
 
@@ -105,6 +108,9 @@ port setFreezeMode : Bool -> Cmd msg
 
 
 port verifyBackendModelDecodableAfterHotReload : (Bytes -> msg) -> Sub msg
+
+
+port verifyFrontendModelDecodableAfterHotReload : (Bytes -> msg) -> Sub msg
 
 
 type alias ConnectionMsg =
@@ -157,6 +163,7 @@ type Msg
     | Noop
     | ReplMsg Repl.Msg
     | VerifyBackendModelDecodableAfterHotReload Bytes
+    | VerifyFrontendModelDecodableAfterHotReload Bytes
 
 
 type alias Model =
@@ -169,6 +176,7 @@ type alias Model =
     , clientId : String
     , nodeType : NodeType
     , devbar : DevBar
+    , resetModelNames : List String
     }
 
 
@@ -180,7 +188,6 @@ type alias DevBar =
     , logging : Bool
     , liveStatus : LiveStatus
     , showModeChanger : Bool
-    , showResetNotification : Bool
     , versionCheck : VersionCheck
     , qrCodeShow : Bool
     , snapshotFilenames : List String
@@ -225,7 +232,7 @@ userBackendApp =
 
 
 type alias Flags =
-    { s : String, c : String, nt : String, b : Maybe Bytes }
+    { s : String, c : String, nt : String, b : Maybe Bytes, f : Maybe Bytes }
 
 
 init : Flags -> Url -> Key -> ( Model, Cmd Msg )
@@ -247,19 +254,28 @@ init flags url key =
         ( ibem, iBeCmds ) =
             userBackendApp.init
 
-        ( fem, newFeCmds ) =
-            case LD.debugR "fe" ifem of
+        ( fem, newFeCmds, femReset ) =
+            case flags.f of
                 Nothing ->
-                    ( ifem, iFeCmds )
+                    ( ifem, iFeCmds, Nothing )
 
-                Just rfem ->
+                Just frontendModelBytes ->
                     if devbar.freeze then
-                        ( rfem, Cmd.none )
+                        case Wire.bytesDecode Types.w3_decode_FrontendModel frontendModelBytes of
+                            Just restoredFem ->
+                                ( restoredFem
+                                , Cmd.none
+                                , Nothing
+                                )
+
+                            Nothing ->
+                                -- Prior frontend model has failed to restore, notify the user of a resulting reset
+                                ( ifem, iFeCmds, Just "FrontendModel" )
 
                     else
-                        ( ifem, iFeCmds )
+                        ( ifem, iFeCmds, Nothing )
 
-        ( bem, newBeCmds, didReset ) =
+        ( bem, newBeCmds, bemReset ) =
             case flags.b of
                 Nothing ->
                     let
@@ -267,19 +283,19 @@ init flags url key =
                             Debug.log "☀️ Initializing new app" ""
                     in
                     -- No existing model, brand new app
-                    ( ibem, iBeCmds, False )
+                    ( ibem, iBeCmds, Nothing )
 
                 Just backendModelBytes ->
                     case Wire.bytesDecode Types.w3_decode_BackendModel backendModelBytes of
                         Just restoredBem ->
                             ( restoredBem
                             , Cmd.none
-                            , False
+                            , Nothing
                             )
 
                         Nothing ->
                             -- Prior backend model has failed to restore, notify the user of a resulting reset
-                            ( ibem, iBeCmds, True )
+                            ( ibem, iBeCmds, Just "BackendModel" )
 
         _ =
             case flags.b of
@@ -310,7 +326,6 @@ init flags url key =
             , logging = True
             , liveStatus = Online
             , showModeChanger = False
-            , showResetNotification = didReset
             , versionCheck = VersionUnchecked
             , qrCodeShow = False
             , snapshotFilenames = []
@@ -331,9 +346,6 @@ init flags url key =
                         -- If we've just loaded the page, then we must have connectivity,
                         -- so avoid an odd scenario where we persisted devbar while disconnected
                         , liveStatus = Online
-
-                        -- Data might have reset since our last refresh
-                        , showResetNotification = didReset
 
                         -- REPL state can't be restored
                         , replModel = replInitialModel
@@ -363,6 +375,7 @@ init flags url key =
       , sessionId = flags.s
       , clientId = flags.c
       , devbar = devbar
+      , resetModelNames = List.filterMap identity [ femReset, bemReset ]
       }
     , Cmd.batch
         [ Cmd.map FEMsg newFeCmds
@@ -379,10 +392,10 @@ init flags url key =
 
 storeFE m newFem =
     if m.devbar.freeze then
-        LD.debugS "fe" newFem
+        save_FrontendModel (Wire.bytesEncode (Types.w3_encode_FrontendModel newFem))
 
     else
-        newFem
+        Cmd.none
 
 
 type NodeType
@@ -424,8 +437,11 @@ update msg m =
                 ( newFem, newFeCmds ) =
                     userFrontendApp.update frontendMsg m.fem
             in
-            ( { m | fem = storeFE m newFem }
-            , Cmd.map FEMsg newFeCmds
+            ( { m | fem = newFem }
+            , Cmd.batch
+                [ Cmd.map FEMsg newFeCmds
+                , storeFE m newFem
+                ]
             )
 
         BEMsg backendMsg ->
@@ -553,8 +569,11 @@ update msg m =
                         ( newFem, newFeCmds ) =
                             userFrontendApp.updateFromBackend toFrontend m.fem
                     in
-                    ( { m | fem = storeFE m newFem }
-                    , Cmd.map FEMsg newFeCmds
+                    ( { m | fem = newFem }
+                    , Cmd.batch
+                        [ Cmd.map FEMsg newFeCmds
+                        , storeFE m newFem
+                        ]
                     )
 
                 Nothing ->
@@ -646,12 +665,13 @@ update msg m =
                     userBackendApp.init
             in
             ( { m
-                | fem = LD.debugS "fe" newFem
+                | fem = newFem
                 , bem = newBem
                 , bemDirty = True
               }
             , Cmd.batch
                 [ trigger (PersistBackend True)
+                , storeFE m newFem
                 ]
             )
 
@@ -661,10 +681,11 @@ update msg m =
                     userFrontendApp.init m.originalUrl m.originalKey
             in
             ( { m
-                | fem = LD.debugS "fe" newFem
+                | fem = newFem
               }
             , Cmd.batch
                 [ Cmd.map FEMsg newFeCmds
+                , storeFE m newFem
                 ]
             )
 
@@ -691,15 +712,14 @@ update msg m =
                 newDevbar =
                     { devbar | freeze = not m.devbar.freeze }
 
-                newFem =
-                    if newDevbar.freeze then
-                        LD.debugS "fe" m.fem
-
-                    else
-                        m.fem
+                newModel =
+                    { m | devbar = LD.debugS "d" newDevbar }
             in
-            ( { m | devbar = LD.debugS "d" newDevbar, fem = newFem }
-            , setFreezeMode newDevbar.freeze
+            ( newModel
+            , Cmd.batch
+                [ setFreezeMode newDevbar.freeze
+                , storeFE newModel newModel.fem
+                ]
             )
 
         ToggledNetworkDelay ->
@@ -808,11 +828,7 @@ update msg m =
             ( { m | devbar = { devbar | showModeChanger = False } }, Cmd.none )
 
         ModelResetCleared ->
-            let
-                devbar =
-                    m.devbar
-            in
-            ( { m | devbar = { devbar | showResetNotification = False } }, Cmd.none )
+            ( { m | resetModelNames = [] }, Cmd.none )
 
         VersionCheck timeCurrent ->
             let
@@ -1020,6 +1036,15 @@ update msg m =
                             -- Reload the page. In `init`, the backend model will be reset.
                             ( m, Browser.Navigation.reload )
 
+        VerifyFrontendModelDecodableAfterHotReload frontendModelBytes ->
+            case Wire.bytesDecode Types.w3_decode_FrontendModel frontendModelBytes of
+                Just _ ->
+                    ( m, Cmd.none )
+
+                Nothing ->
+                    -- Reload the page. In `init`, the frontend model will be reset.
+                    ( m, Browser.Navigation.reload )
+
 
 subscriptions { nodeType, fem, bem, bemDirty, devbar } =
     Sub.batch
@@ -1046,6 +1071,7 @@ subscriptions { nodeType, fem, bem, bemDirty, devbar } =
         , LD.every (10 * 60 * 1000) VersionCheck
         , Sub.map ReplMsg (Repl.subscriptions devbar.replModel)
         , verifyBackendModelDecodableAfterHotReload VerifyBackendModelDecodableAfterHotReload
+        , verifyFrontendModelDecodableAfterHotReload VerifyFrontendModelDecodableAfterHotReload
         ]
 
 
@@ -1081,14 +1107,15 @@ yForLocation location =
 
 lamderaUI :
     DevBar
+    -> List String
     -> NodeType
     -> List (Html Msg)
-lamderaUI devbar nodeType =
+lamderaUI devbar resetModelNames nodeType =
     case devbar.liveStatus of
         Online ->
             [ Html.Lazy.lazy2 lamderaPane devbar nodeType
             , Html.Lazy.lazy envModeChanger devbar.showModeChanger
-            , Html.Lazy.lazy resetNotification devbar.showResetNotification
+            , Html.Lazy.lazy resetNotification resetModelNames
             ]
 
         Offline ->
@@ -1169,8 +1196,8 @@ envModeChanger showModeChanger =
         text ""
 
 
-resetNotification showReset =
-    if showReset then
+resetNotification resetModelNames =
+    if not (List.isEmpty resetModelNames) then
         withOverlay ModelResetCleared
             [ div
                 [ onClick ClickedLocation
@@ -1185,8 +1212,22 @@ resetNotification showReset =
                 [ icon iconWarning 18 yellow
                 , spacer 8
                 , div [ style "text-align" "center" ]
-                    [ div [ style "padding" "5px" ] [ text "It looks like your BackendModel type has changed!" ]
-                    , div [ style "padding" "5px" ] [ text "I've reset the BackendModel to its init value." ]
+                    [ div [ style "padding" "5px" ]
+                        [ case resetModelNames of
+                            [ modelName ] ->
+                                text ("It looks like your " ++ modelName ++ " type has changed!")
+
+                            _ ->
+                                text ("It looks like your " ++ String.join " and " resetModelNames ++ " types have changed!")
+                        ]
+                    , div [ style "padding" "5px" ]
+                        [ case resetModelNames of
+                            [ modelName ] ->
+                                text ("I've reset the " ++ modelName ++ " to its init value.")
+
+                            _ ->
+                                text ("I've reset the " ++ String.join " and " resetModelNames ++ " to their init values.")
+                        ]
                     , div
                         [ onClick ModelResetCleared
                         , style "padding" "8px 20px"
@@ -1688,6 +1729,7 @@ mapDocument model msg { title, body } =
         List.map (Html.map msg) body
             ++ lamderaUI
                 model.devbar
+                model.resetModelNames
                 model.nodeType
     }
 
