@@ -386,12 +386,13 @@ init flags url key =
             Cmd.none
         , LD.now |> Task.perform VersionCheck
         , setFreezeMode devbar.freeze
+        , storeFE devbar fem
         ]
     )
 
 
-storeFE m newFem =
-    if m.devbar.freeze then
+storeFE devbar newFem =
+    if devbar.freeze then
         save_FrontendModel (Wire.bytesEncode (Types.w3_encode_FrontendModel newFem))
 
     else
@@ -440,7 +441,7 @@ update msg m =
             ( { m | fem = newFem }
             , Cmd.batch
                 [ Cmd.map FEMsg newFeCmds
-                , storeFE m newFem
+                , storeFE m.devbar newFem
                 ]
             )
 
@@ -572,7 +573,7 @@ update msg m =
                     ( { m | fem = newFem }
                     , Cmd.batch
                         [ Cmd.map FEMsg newFeCmds
-                        , storeFE m newFem
+                        , storeFE m.devbar newFem
                         ]
                     )
 
@@ -671,7 +672,7 @@ update msg m =
               }
             , Cmd.batch
                 [ trigger (PersistBackend True)
-                , storeFE m newFem
+                , storeFE m.devbar newFem
                 ]
             )
 
@@ -685,7 +686,7 @@ update msg m =
               }
             , Cmd.batch
                 [ Cmd.map FEMsg newFeCmds
-                , storeFE m newFem
+                , storeFE m.devbar newFem
                 ]
             )
 
@@ -711,14 +712,11 @@ update msg m =
 
                 newDevbar =
                     { devbar | freeze = not m.devbar.freeze }
-
-                newModel =
-                    { m | devbar = LD.debugS "d" newDevbar }
             in
-            ( newModel
+            ( { m | devbar = LD.debugS "d" newDevbar }
             , Cmd.batch
                 [ setFreezeMode newDevbar.freeze
-                , storeFE newModel newModel.fem
+                , storeFE newDevbar m.fem
                 ]
             )
 
