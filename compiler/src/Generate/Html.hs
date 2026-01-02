@@ -88,7 +88,9 @@ sandwich_ root moduleName javascript =
 
 <script>
 try {
+// lamdera-elm-js-start
 |] <> javascript <> [r|
+// lamdera-elm-js-end
 |] <> Lamdera.Live.lamderaLiveSrc <> Lamdera.UiSourceMap.src <> [r|
   setupApp("|] <> name <> [r|", "elm")
 }

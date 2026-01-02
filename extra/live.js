@@ -30,7 +30,8 @@ var msgHandler = function(e) {
   }
 }
 
-const ws = Sockette.default(((window.location.protocol === "https:") ? "wss://" : "ws://") + window.location.host + "/_w", {
+// Don't connect if we are inside the error iframe.
+const ws = window.location.href === "about:srcdoc" ? null : Sockette.default(((window.location.protocol === "https:") ? "wss://" : "ws://") + window.location.host + "/_w", {
   timeout: 2e3,
   maxAttempts: Infinity,
   onopen: e => {
@@ -170,7 +171,9 @@ window.setupApp = function(name, elid) {
 
     switch(d.t) {
       case "r":
-        document.location.reload()
+        console.log("Hot reload!")
+        // document.location.reload()
+        hotReload()
         break;
 
       case "s": // setup message, will get called again if websocket drops and reconnects
@@ -477,4 +480,46 @@ var Base64Binary = {
 
 		return uarray;
 	}
+}
+
+let errorDialog = null
+
+// TODO: Reset BackendModel if needed (like happens on init)
+// and: try to to that for FrontendModel as well?
+// TODO: Only if Freeze mode is enabled
+function hotReload() {
+  fetch("/")
+    .then(response => response.text())
+    .then(html => {
+      if (errorDialog) {
+        errorDialog.remove()
+        errorDialog = null
+      }
+      const index1 = html.indexOf("\n// lamdera-elm-js-start")
+      const index2 = html.indexOf("\n// lamdera-elm-js-end", index1)
+      if (index1 === -1 || index2 === -1) {
+        const dialog = document.createElement("dialog")
+        const iframe = document.createElement("iframe")
+        iframe.srcdoc = html
+        dialog.style.all = "initial"
+        iframe.style.all = "initial"
+        iframe.style.position = "fixed"
+        iframe.style.inset = "0"
+        iframe.style.width = "100%"
+        iframe.style.height = "100%"
+        dialog.appendChild(iframe)
+        document.documentElement.appendChild(dialog)
+        dialog.showModal()
+        errorDialog = dialog
+      } else {
+        const compiledElmJs = html.slice(index1, index2)
+        var f = new Function(compiledElmJs)
+        var newScope = {}
+        f.call(newScope)
+        Elm.hot.reload(newScope)
+      }
+    })
+    .catch(error => {
+      console.error(error)
+    })
 }
