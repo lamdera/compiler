@@ -189,8 +189,12 @@ window.setupApp = function(name, elid) {
       case "r":
         if (app !== null && freezeMode) {
           hotReload().then(() => {
-            app.ports.verifyBackendModelDecodableAfterHotReload.send(initBackendModel)
-            app.ports.verifyFrontendModelDecodableAfterHotReload.send(initFrontendModel)
+            if (initBackendModel !== null) {
+              app.ports.verifyBackendModelDecodableAfterHotReload.send(initBackendModel)
+            }
+            if (initFrontendModel !== null) {
+              app.ports.verifyFrontendModelDecodableAfterHotReload.send(initFrontendModel)
+            }
           })
         } else {
           document.location.reload()
