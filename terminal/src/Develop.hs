@@ -54,6 +54,8 @@ import qualified Ext.Sentry as Sentry
 import Control.Concurrent.STM (atomically, newTVarIO, readTVar, writeTVar, TVar)
 
 import StandaloneInstances
+import qualified Reporting.Exit.Help as Help
+import qualified Reporting.Error as Error
 
 -- RUN THE DEV SERVER
 
@@ -272,7 +274,22 @@ compileToBuilder path =
                   -- debugging in these scenarios, as the browser will just get zero bytes
                   -- debugPass "serveElm error" (Exit.reactorToReport exit) (pure ())
                   Help.makePageHtml "Errors" $ Just $
-                    Exit.toJson $ Exit.reactorToReport exit
+                    Exit.toJson $ relativeErrorFilePaths $ Exit.reactorToReport exit
+
+
+relativeErrorFilePaths :: Help.Report -> Help.Report
+relativeErrorFilePaths report =
+  case report of
+    Help.CompilerReport root e es ->
+      Help.CompilerReport root (relativeErrorFilePath root e) (fmap (relativeErrorFilePath root) es)
+
+    Help.Report {} ->
+      report
+
+
+relativeErrorFilePath :: FilePath -> Error.Module -> Error.Module
+relativeErrorFilePath root (Error.Module name absolutePath modificationTime source error) =
+  Error.Module name (FP.makeRelative root absolutePath) modificationTime source error
 
 
 serveElm_ :: FilePath -> FilePath -> Snap ()

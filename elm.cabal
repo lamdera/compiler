@@ -266,6 +266,7 @@ Executable lamdera
         Lamdera.Repl
         Lamdera.Reporting.Evergreen
         Lamdera.Reporting.Suggestions
+        Lamdera.String
         Lamdera.TypeHash
         Lamdera.Types
         Lamdera.Update

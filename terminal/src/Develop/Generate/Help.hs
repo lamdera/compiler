@@ -33,7 +33,9 @@ makePageHtml moduleName maybeFlags =
 </head>
 <body>
 <script>
+var app = // @LAMDERA
 Elm.|] <> Name.toBuilder moduleName <> [r|.init({ flags: |] <> maybe "undefined" Encode.encode maybeFlags <> [r| });
+if (app.ports && app.ports.jumpTo) app.ports.jumpTo.subscribe(url => fetch(url)); // @LAMDERA
 |] <> Lamdera.Live.lamderaLiveSrc <> Lamdera.UiSourceMap.src <> [r|
 </script>
 </body>
