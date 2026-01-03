@@ -202,13 +202,13 @@ injections outputType mode =
 
     var isLamderaRuntime = typeof isLamdera !== 'undefined';
 
-    function _Lamdera_inject(app, callUpdate, model) {
+    function _Lamdera_inject(app, callUpdate, getModel) {
       app.die = app.stop;
 
       app.fns =
         { decodeWirePayloadHeader: $$author$$project$$LamderaHelpers$$decodeWirePayloadHeader
         , decodeWireAnalytics: $$author$$project$$LamderaHelpers$$decodeWireAnalytics
-        , getUserModel : function() { return model.userModel }
+        , getUserModel : function() { return getModel().userModel }
         };
 
       var pos = 0;
@@ -253,13 +253,13 @@ injections outputType mode =
     LamderaLive ->
       [text|
 
-    function _Lamdera_inject(app, callUpdate, model, sendToApp) {
+    function _Lamdera_inject(app, callUpdate, getModel, sendToApp) {
       app.die = app.stop;
 
       app.fns =
-        { getModel : function() { return model }
-        , setBem : function(m) { model.bem = m; return m }
-        , setFem : function(m) { model.fem = m; return m }
+        { getModel : getModel
+        , setBem : function(m) { getModel().bem = m; return m }
+        , setFem : function(m) { getModel().fem = m; return m }
         , sendToApp : function(m) { sendToApp(m, true) }
         };
 
