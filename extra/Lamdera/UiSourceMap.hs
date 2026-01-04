@@ -601,6 +601,6 @@ url.pathname += node.fileName;
 url.searchParams.append("row", node.row);
 url.searchParams.append("column", node.column);
 fetch(url)
-    .then(response => response.ok ? undefined : response.json().then(json => alert(json.error)))
+    .then(response => response.ok ? undefined : response.text().then(message => alert(message)))
     .catch(error => alert(error.message));
   |]

@@ -26,7 +26,7 @@ import System.FilePath ((</>))
 import Control.Applicative ((<|>))
 import Control.Arrow ((***))
 import Control.Concurrent.STM (atomically, newTVarIO, readTVar, readTVarIO, writeTVar, TVar)
-import Control.Exception (finally)
+import Control.Exception (finally, try, SomeException)
 import qualified Language.Haskell.TH as TH
 import Data.FileEmbed (bsToExp)
 import qualified Data.Aeson.Encoding as A
@@ -57,6 +57,7 @@ import qualified Lamdera.CLI.Check
 import qualified Lamdera.Relative
 import qualified Lamdera.Version
 import qualified Ext.Common
+import qualified GHC.IO.Exception
 
 
 
@@ -325,7 +326,7 @@ openEditorHandler root = do
           serveEditorOpen root (FP.joinPath rest) row column
 
         _ ->
-          error400 "Unexpected request, expecting format: /_x/editor/<filename>?row=<row>&column=<column>"
+          error400PlainText "Unexpected request, expecting format: /_x/editor/<filename>?row=<row>&column=<column>"
 
     _ ->
       pass
@@ -437,7 +438,7 @@ serveEditorOpen root path row column = do
       tryOpenInDetectedEditor root fullpath row column
 
     else do
-      error404 "File not found"
+      error400PlainText "File not found"
 
 
 tryOpenInDetectedEditor :: FilePath -> FilePath -> Int -> Int -> Snap ()
@@ -451,48 +452,58 @@ tryOpenInDetectedEditor root file row column = do
       debug "📝  found the following editors, opening first:"
       justs res & fmap fst & show & debug
 
-      liftIO $ openEditor file row column
-      jsonResponse $ "{ status: 'tried opening editor " <> editor <> "' }"
+      runRes <- liftIO (try (openEditor file row column) :: IO (Either SomeException (GHC.IO.Exception.ExitCode, String, String)))
+      case runRes of
+        Right (exit, stdout, stderr) ->
+          case exit of
+            GHC.IO.Exception.ExitSuccess ->
+              noContentResponse
+
+            GHC.IO.Exception.ExitFailure exitCode ->
+              error400PlainText $ Ext.Common.stringToBuilder $ "exit " <> show exitCode <> ": " <> stdout <> stderr
+
+        Left err ->
+          error400PlainText $ Ext.Common.stringToBuilder $ show err
 
 
-type EditorOpenIO = (FilePath -> Int -> Int -> IO String)
+type EditorOpenIO = (FilePath -> Int -> Int -> IO (GHC.IO.Exception.ExitCode, String, String))
 
 
 editors :: FilePath -> [IO (Maybe (B.Builder, EditorOpenIO))]
 editors projectRoot =
   [ detectEditor "custom-*nix"
       (Dir.doesFileExist (projectRoot </> "openEditor.sh"))
-      (\file row column -> Ext.Common.execCombineStdOutErr (projectRoot </> "openEditor.sh") [file, show row, show column] "")
+      (\file row column -> Ext.Common.c_ (projectRoot </> "openEditor.sh") [file, show row, show column] "")
 
   , detectEditor "custom-windows"
       (do
         exists <- Dir.doesFileExist (projectRoot </> "openEditor.bat")
         pure $ exists && ostype == Windows
       )
-      (\file row column -> Ext.Common.execCombineStdOutErr (projectRoot </> "openEditor.bat") [file, show row, show column] "")
+      (\file row column -> Ext.Common.c_ (projectRoot </> "openEditor.bat") [file, show row, show column] "")
 
   , detectExecutable "code-insiders"
       (\executablePath file row column -> do
-        Ext.Common.execCombineStdOutErr executablePath [ "-g", file <> ":" <> show row <> ":" <> show column] ""
+        Ext.Common.c_ executablePath [ "-g", file <> ":" <> show row <> ":" <> show column] ""
       )
 
   , detectExecutable "code"
       (\executablePath file row column -> do
-        Ext.Common.execCombineStdOutErr executablePath [ "-g", file <> ":" <> show row <> ":" <> show column] ""
+        Ext.Common.c_ executablePath [ "-g", file <> ":" <> show row <> ":" <> show column] ""
       )
 
   , detectEditor "intellij-ce"
       (Dir.doesDirectoryExist "/Applications/IntelliJ IDEA CE.app")
       (\file row column -> do
         -- IntelliJ seems to number it's columns from 1 index
-        Ext.Common.execCombineStdOutErr "open" ["-na", "IntelliJ IDEA CE.app", "--args", "--line", show row, "--column", show (column - 1), file] ""
+        Ext.Common.c_ "open" ["-na", "IntelliJ IDEA CE.app", "--args", "--line", show row, "--column", show (column - 1), file] ""
       )
 
   , detectEditor "intellij"
       (Dir.doesDirectoryExist "/Applications/IntelliJ IDEA.app")
       (\file row column -> do
         -- IntelliJ seems to number it's columns from 1 index
-        Ext.Common.execCombineStdOutErr "open" ["-na", "IntelliJ IDEA.app", "--args", "--line", show row, "--column", show (column - 1), file] ""
+        Ext.Common.c_ "open" ["-na", "IntelliJ IDEA.app", "--args", "--line", show row, "--column", show (column - 1), file] ""
       )
   ]
 
@@ -735,6 +746,14 @@ logger =
     atomicPutStrLn $ T.unpack $ TE.decodeUtf8 bs
   )
 
+
+noContentResponse :: Snap ()
+noContentResponse = do
+  modifyResponse $ setResponseStatus 204 "No Content"
+  r <- getResponse
+  finishWith r
+
+
 jsonResponse :: B.Builder -> Snap ()
 jsonResponse s =
   do  modifyResponse $ setContentType "application/json; charset=utf-8"
@@ -772,11 +791,11 @@ error503 s =
       r <- getResponse
       finishWith r
 
-error400 :: B.Builder -> Snap ()
-error400 s =
+error400PlainText :: B.Builder -> Snap ()
+error400PlainText s =
   do  modifyResponse $ setResponseStatus 400 "Bad Request"
-      modifyResponse $ setContentType "application/json; charset=utf-8"
-      writeBuilder $ "{\"error\":\"" <> s <> "\"}"
+      modifyResponse $ setContentType "text/plain; charset=utf-8"
+      writeBuilder s
       r <- getResponse
       finishWith r
 
