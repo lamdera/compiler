@@ -64,20 +64,19 @@ newAttributes isElmUi fileName moduleName functionName location originalAttribut
     let
         a = Reporting.Annotation.At location
     in
-    a (Call
-          (a (VarForeign
-                (Module.Canonical (Name "elm" "core") "List")
-                "append"
-                (Forall
-                   (Map.fromList [("a", ())])
-                   (TLambda
-                      (TType (Module.Canonical (Name "elm" "core") "List") "List" [TVar "a"])
-                      (TLambda
-                         (TType (Module.Canonical (Name "elm" "core") "List") "List" [TVar "a"])
-                         (TType (Module.Canonical (Name "elm" "core") "List") "List" [TVar "a"]))))))
-          [ updateExpr fileName moduleName functionName originalAttributes
-          , newAttributesHelper isElmUi fileName moduleName functionName location
-          ])
+    a (Binop
+        "::"
+        (Module.Canonical (Name "elm" "core") "List")
+        "cons"
+        (Forall
+           (Map.fromList [("a", ())])
+           (TLambda
+              (TVar "a")
+              (TLambda
+                 (TType (Module.Canonical (Name "elm" "core") "List") "List" [TVar "a"])
+                 (TType (Module.Canonical (Name "elm" "core") "List") "List" [TVar "a"]))))
+        (newProperty isElmUi fileName moduleName functionName location)
+        (updateExpr fileName moduleName functionName originalAttributes))
 
 
 propertyName :: ES.String
@@ -90,8 +89,8 @@ propertyNameText =
     T.pack (ES.toChars propertyName)
 
 
-newAttributesHelper :: Bool -> FilePath -> Module.Canonical -> Name.Name -> Reporting.Annotation.Region -> Can.Expr
-newAttributesHelper isElmUi fileName (Module.Canonical _ moduleName) functionName location =
+newProperty :: Bool -> FilePath -> Module.Canonical -> Name.Name -> Reporting.Annotation.Region -> Can.Expr
+newProperty isElmUi fileName (Module.Canonical _ moduleName) functionName location =
     let
         (Reporting.Annotation.Region (Reporting.Annotation.Position row column) _) =
             location
@@ -139,28 +138,26 @@ newAttributesHelper isElmUi fileName (Module.Canonical _ moduleName) functionNam
                 ])
     in
     if isElmUi then
-        a (List
-              [ a (Call
-                      (a (VarForeign
-                            (Module.Canonical (Name "mdgriffith" "elm-ui") "Element")
-                            "htmlAttribute"
-                            (Forall
-                               (Map.fromList [("msg", ())])
-                               (TLambda
-                                  (TAlias
-                                     (Module.Canonical (Name "elm" "html") "Html")
-                                     "Attribute"
-                                     [("msg", TVar "msg")]
-                                     (Filled (TType (Module.Canonical (Name "elm" "virtual-dom") "VirtualDom") "Attribute" [TVar "msg"])))
-                                  (TAlias
-                                     (Module.Canonical (Name "mdgriffith" "elm-ui") "Element")
-                                     "Attribute"
-                                     [("msg", TVar "msg")]
-                                     (Filled (TType (Module.Canonical (Name "mdgriffith" "elm-ui") "Internal.Model") "Attribute" [TUnit, TVar "msg"])))))))
-                      [ propertyCall ])
-              ])
+        a (Call
+            (a (VarForeign
+                  (Module.Canonical (Name "mdgriffith" "elm-ui") "Element")
+                  "htmlAttribute"
+                  (Forall
+                     (Map.fromList [("msg", ())])
+                     (TLambda
+                        (TAlias
+                           (Module.Canonical (Name "elm" "html") "Html")
+                           "Attribute"
+                           [("msg", TVar "msg")]
+                           (Filled (TType (Module.Canonical (Name "elm" "virtual-dom") "VirtualDom") "Attribute" [TVar "msg"])))
+                        (TAlias
+                           (Module.Canonical (Name "mdgriffith" "elm-ui") "Element")
+                           "Attribute"
+                           [("msg", TVar "msg")]
+                           (Filled (TType (Module.Canonical (Name "mdgriffith" "elm-ui") "Internal.Model") "Attribute" [TUnit, TVar "msg"])))))))
+            [ propertyCall ])
     else
-        a (List [ propertyCall ])
+        propertyCall
 
 htmlNodes :: Set.Set Name.Name
 htmlNodes =
