@@ -80,14 +80,14 @@ newAttributes isElmUi fileName moduleName functionName location originalAttribut
           ])
 
 
-attributeName :: ES.String
-attributeName =
-    "data-lamdera-source"
+propertyName :: ES.String
+propertyName =
+    "lamderaSource"
 
 
-attributeNameText :: Text
-attributeNameText =
-    T.pack (ES.toChars attributeName)
+propertyNameText :: Text
+propertyNameText =
+    T.pack (ES.toChars propertyName)
 
 
 newAttributesHelper :: Bool -> FilePath -> Module.Canonical -> Name.Name -> Reporting.Annotation.Region -> Can.Expr
@@ -96,7 +96,7 @@ newAttributesHelper isElmUi fileName (Module.Canonical _ moduleName) functionNam
         (Reporting.Annotation.Region (Reporting.Annotation.Position row column) _) =
             location
 
-        attributeValue =
+        propertyValue =
             [ Name.toChars moduleName
             , Name.toChars functionName
             , show row
@@ -108,6 +108,35 @@ newAttributesHelper isElmUi fileName (Module.Canonical _ moduleName) functionNam
 
         a =
             Reporting.Annotation.At location
+
+        propertyCall =
+            a (Call
+                (a (VarForeign
+                      (Module.Canonical (Name "elm" "html") "Html.Attributes")
+                      "property"
+                      (Forall
+                         (Map.fromList [("msg", ())])
+                         (TLambda
+                            (TType (Module.Canonical (Name "elm" "core") "String") "String" [])
+                            (TLambda
+                               (TType (Module.Canonical (Name "elm" "json") "Json.Encode") "Value" [])
+                               (TAlias
+                                  (Module.Canonical (Name "elm" "html") "Html")
+                                  "Attribute"
+                                  [("msg", TVar "msg")]
+                                  (Filled (TType (Module.Canonical (Name "elm" "virtual-dom") "VirtualDom") "Attribute" [TVar "msg"]))))))))
+                [ a (Str propertyName)
+                , a (Call
+                      (a (VarForeign
+                            (Module.Canonical (Name "elm" "json") "Json.Encode")
+                            "string"
+                            (Forall
+                               Map.empty
+                               (TLambda
+                                  (TType (Module.Canonical (Name "elm" "core") "String") "String" [])
+                                  (TType (Module.Canonical (Name "elm" "json") "Json.Encode") "Value" [])))))
+                      [a (Str propertyValue)])
+                ])
     in
     if isElmUi then
         a (List
@@ -128,43 +157,10 @@ newAttributesHelper isElmUi fileName (Module.Canonical _ moduleName) functionNam
                                      "Attribute"
                                      [("msg", TVar "msg")]
                                      (Filled (TType (Module.Canonical (Name "mdgriffith" "elm-ui") "Internal.Model") "Attribute" [TUnit, TVar "msg"])))))))
-                      [ a (Call
-                              (a (VarForeign
-                                    (Module.Canonical (Name "elm" "html") "Html.Attributes")
-                                    "attribute"
-                                    (Forall
-                                       (Map.fromList [("msg", ())])
-                                       (TLambda
-                                          (TType (Module.Canonical (Name "elm" "core") "String") "String" [])
-                                          (TLambda
-                                             (TType (Module.Canonical (Name "elm" "core") "String") "String" [])
-                                             (TAlias
-                                                (Module.Canonical (Name "elm" "html") "Html")
-                                                "Attribute"
-                                                [("msg", TVar "msg")]
-                                                (Filled (TType (Module.Canonical (Name "elm" "virtual-dom") "VirtualDom") "Attribute" [TVar "msg"]))))))))
-                              [a (Str attributeName), a (Str attributeValue)])
-                      ])
+                      [ propertyCall ])
               ])
     else
-        a (List
-              [ a (Call
-                      (a (VarForeign
-                            (Module.Canonical (Name "elm" "html") "Html.Attributes")
-                            "attribute"
-                            (Forall
-                               (Map.fromList [("msg", ())])
-                               (TLambda
-                                  (TType (Module.Canonical (Name "elm" "core") "String") "String" [])
-                                  (TLambda
-                                     (TType (Module.Canonical (Name "elm" "core") "String") "String" [])
-                                     (TAlias
-                                        (Module.Canonical (Name "elm" "html") "Html")
-                                        "Attribute"
-                                        [("msg", TVar "msg")]
-                                        (Filled (TType (Module.Canonical (Name "elm" "virtual-dom") "VirtualDom") "Attribute" [TVar "msg"]))))))))
-                      [a (Str attributeName), a (Str attributeValue)])
-              ])
+        a (List [ propertyCall ])
 
 htmlNodes :: Set.Set Name.Name
 htmlNodes =
@@ -513,18 +509,18 @@ src :: B.Builder
 src =
   [text|
 ;(function() {
-var attributeName = "$attributeNameText";
+var propertyName = "$propertyNameText";
 var mouseX = 0;
 var mouseY = 0;
 var backgroundDiv = null;
 function getNodesWithLineNumber(targets) {
     return targets
         .map(target => {
-            let attribute = target.getAttribute(attributeName);
-            if (attribute === null) {
+            let property = target[propertyName];
+            if (property === undefined) {
                 return null;
             }
-            let [moduleName, functionName, row, column, ...fileName] = attribute.split(",");
+            let [moduleName, functionName, row, column, ...fileName] = property.split(",");
             return {fileName: fileName.join(","), moduleName, functionName, row, column};
         })
         .filter(Boolean);
