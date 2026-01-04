@@ -33,6 +33,9 @@ updateDecls fileName moduleName decls =
         Module.Canonical (Name "author" "project") "Lamdera.Live" ->
             decls
 
+        Module.Canonical (Name "author" "project") "Lamdera.Repl" ->
+            decls
+
         Module.Canonical (Name "author" "project") _ ->
             case decls of
                 Can.Declare def nextDecl ->
