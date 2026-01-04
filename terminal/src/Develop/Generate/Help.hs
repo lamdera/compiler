@@ -17,6 +17,7 @@ import qualified Json.Encode as Encode
 
 import qualified Lamdera.Live
 import qualified Lamdera.UiSourceMap
+import qualified Data.Text.Encoding as T
 
 -- PAGES
 
@@ -35,7 +36,7 @@ makePageHtml moduleName maybeFlags =
 <script>
 var app = // @LAMDERA
 Elm.|] <> Name.toBuilder moduleName <> [r|.init({ flags: |] <> maybe "undefined" Encode.encode maybeFlags <> [r| });
-if (app.ports && app.ports.jumpTo) app.ports.jumpTo.subscribe(url => fetch(url)); // @LAMDERA
+if (app.ports && app.ports.jumpTo) app.ports.jumpTo.subscribe(node => { |] <> T.encodeUtf8Builder Lamdera.UiSourceMap.openEditorSrc <> [r| }); // @LAMDERA
 |] <> Lamdera.Live.lamderaLiveSrc <> Lamdera.UiSourceMap.src <> [r|
 </script>
 </body>

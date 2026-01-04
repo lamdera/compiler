@@ -325,7 +325,7 @@ openEditorHandler root = do
           serveEditorOpen root (FP.joinPath rest) row column
 
         _ ->
-          error404 "unexpected identifier, expecting format: <filename>:<row>:<column>"
+          error400 "Unexpected request, expecting format: /_x/editor/<filename>?row=<row>&column=<column>"
 
     _ ->
       pass
@@ -437,7 +437,7 @@ serveEditorOpen root path row column = do
       tryOpenInDetectedEditor root fullpath row column
 
     else do
-      error404 "file not found"
+      error404 "File not found"
 
 
 tryOpenInDetectedEditor :: FilePath -> FilePath -> Int -> Int -> Snap ()
@@ -445,8 +445,7 @@ tryOpenInDetectedEditor root file row column = do
   res <- liftIO $ sequence (editors root)
   case justs res of
     [] ->
-      -- @TODO give more helpful error that guides user how to configure things?
-      error404 "No supported editors found"
+      error404 "No supported editors found. See the Lamdera docs for more information."
 
     (editor, openEditor):_ -> do
       debug "📝  found the following editors, opening first:"

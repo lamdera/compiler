@@ -16,12 +16,7 @@ import Elm.Error as Error
 -- PORTS
 
 
-port jumpTo : String -> Cmd msg
-
-
-jumpUrl : String -> Error.Region -> String
-jumpUrl filePath region =
-  "/_x/editor/" ++ filePath ++ "?row=" ++ String.fromInt region.start.line ++ "&column=" ++ String.fromInt region.start.column
+port jumpTo : { fileName : String, row : Int, column : Int } -> Cmd msg
 
 
 
@@ -31,7 +26,7 @@ jumpUrl filePath region =
 main =
   Browser.document
     { init = \flags -> (D.decodeValue Error.decoder flags, Cmd.none)
-    , update = \(filePath, region) result -> (result, jumpTo (jumpUrl filePath region))
+    , update = \(filePath, region) result -> (result, jumpTo { fileName = filePath, row = region.start.line, column = region.start.column })
     , view = view
     , subscriptions = \_ -> Sub.none
     }

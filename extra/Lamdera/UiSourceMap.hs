@@ -3,7 +3,7 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# OPTIONS_GHC -Wall -fno-warn-unused-do-bind #-}
 module Lamdera.UiSourceMap
-    (updateDecls, src)
+    (updateDecls, src, openEditorSrc)
     where
 
 import qualified Data.Map as Map
@@ -575,7 +575,7 @@ window.addEventListener(
                     button.addEventListener("mouseleave", function(){ this.style.setProperty("background", "rgb(46, 51, 53)", "important") });
                     button.onclick = function() {
                         backgroundDiv.remove();
-                        fetch("/_x/editor/" + node.fileName + "?row=" + node.row + "&column=" + node.column);
+                        $openEditorSrc
                     };
                     div.appendChild(button);
                 });
@@ -591,3 +591,16 @@ window.addEventListener(
 }());
   |]
   & T.encodeUtf8Builder
+
+
+openEditorSrc :: Text
+openEditorSrc =
+  [text|
+let url = new URL("/_x/editor/", window.top.location);
+url.pathname += node.fileName;
+url.searchParams.append("row", node.row);
+url.searchParams.append("column", node.column);
+fetch(url)
+    .then(response => response.ok ? undefined : response.json().then(json => alert(json.error)))
+    .catch(error => alert(error.message));
+  |]
