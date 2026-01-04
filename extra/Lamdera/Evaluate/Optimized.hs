@@ -63,6 +63,7 @@ exampleDef =
 --   run exampleDef (Map.fromList [("x", Int x)])
 
 
+run :: Node -> Locals -> Globals -> Expr
 run def args nodes =
   case def of
     Define expr funcDeps ->

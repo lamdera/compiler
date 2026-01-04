@@ -52,15 +52,25 @@ printAnnotations root file expressionName = do
     debug_ "Getting artifacts..."
 
     (Compile.Artifacts canonical annotations objects) <- Ext.Query.Canonical.loadSingleArtifacts file
+    let _decls = Can._decls canonical
 
     case annotations & Map.lookup expressionName of
       Just annotation -> do
+        putStrLn $ "annotation:"
         hindentPrint annotation
-        putStrLn $ "----------------------------------------"
-        putStrLn $ T.unpack $ canonicalTypeToString annotation
+        -- putStrLn $ T.unpack $ canonicalTypeToString annotation
+        pure ()
 
       Nothing ->
-        putStrLn "Oops! Something went wrong!"
+        putStrLn "Oops! Couldn't find expression in annotations!"
+
+    case _decls & Ext.Query.Canonical.findDef expressionName of
+      Just c -> do
+        putStrLn "declaration:"
+        hindentPrint c
+        pure ()
+      Nothing ->
+        putStrLn "Oops! Couldn't find expression in canonical!"
 
   pure ()
 
