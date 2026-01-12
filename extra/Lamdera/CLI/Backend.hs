@@ -655,10 +655,14 @@ interpret interpreter javascript =
   let
     createProcess = (Proc.proc interpreter []) { Proc.std_in = Proc.CreatePipe }
   in
-  Proc.withCreateProcess createProcess $ \(Just stdin) _ _ handle ->
-    do  B.hPutBuilder stdin javascript
-        IO.hClose stdin
-        Proc.waitForProcess handle
+  Proc.withCreateProcess createProcess $ \mStdin _ _ handle ->
+    case mStdin of
+      Just stdin ->
+        do  B.hPutBuilder stdin javascript
+            IO.hClose stdin
+            Proc.waitForProcess handle
+      Nothing ->
+        error "Pipe to interpreter not available"
 
 
 
@@ -849,7 +853,7 @@ addMatch string isFinished name _ completions =
   let
     suggestion = N.toChars name
   in
-  if List.isPrefixOf string suggestion then
+  if string `List.isPrefixOf` suggestion then
     Repl.Completion suggestion suggestion isFinished : completions
   else
     completions
