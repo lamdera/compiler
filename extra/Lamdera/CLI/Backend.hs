@@ -185,8 +185,7 @@ runEval :: Env -> Maybe String -> Maybe B.Builder -> IO Exit.ExitCode
 runEval env expr importFlag =
   do  let importState = initialState { _importFlag = importFlag }
           exprInput   = Expr $ BS_UTF8.fromString $ Maybe.fromMaybe "model" expr
-      _ <- eval env importState exprInput
-      return Exit.ExitSuccess
+      outcomeExitCode <$> eval env importState exprInput
 
 
 runRepl :: Env -> IO Exit.ExitCode
@@ -244,8 +243,15 @@ initEnv flags =
 
 
 data Outcome
-  = Loop State
+  = Loop Exit.ExitCode State
   | End Exit.ExitCode
+
+
+outcomeExitCode :: Outcome -> Exit.ExitCode
+outcomeExitCode outcome =
+  case outcome of
+    Loop exitCode _ -> exitCode
+    End exitCode    -> exitCode
 
 
 type M =
@@ -257,7 +263,7 @@ loop env state =
   do  input <- Repl.handleInterrupt (return Skip) read
       outcome <- liftIO (eval env state input)
       case outcome of
-        Loop state ->
+        Loop _ state ->
           do  lift (State.put state)
               loop env state
 
@@ -555,42 +561,52 @@ initialState =
 -- EVAL
 
 
+evalSuccess :: Exit.ExitCode
+evalSuccess =
+  Exit.ExitSuccess
+
+
+evalFailure :: Exit.ExitCode
+evalFailure =
+  Exit.ExitFailure 1
+
+
 eval :: Env -> State -> Input -> IO Outcome
 eval env state@(State imports types decls _) input =
-  Repl.handleInterrupt (putStrLn "<cancelled>" >> return (Loop state)) $
+  Repl.handleInterrupt (putStrLn "<cancelled>" >> return (Loop evalFailure state)) $
   case input of
     Skip ->
-      return (Loop state)
+      return (Loop evalSuccess state)
 
     Exit ->
-      return (End Exit.ExitSuccess)
+      return (End evalSuccess)
 
     Reset ->
       do  putStrLn "<reset>"
-          return (Loop initialState)
+          return (Loop evalSuccess initialState)
 
     Help maybeUnknownCommand ->
       do  putStrLn (toHelpMessage maybeUnknownCommand)
-          return (Loop state)
+          return (Loop evalSuccess state)
 
     Import name src ->
       do  let newState = state { _imports = Map.insert name (B.byteString src) imports }
-          Loop <$> attemptEval env state newState OutputNothing
+          attemptEval env state newState OutputNothing
 
     Type name src ->
       do  let newState = state { _types = Map.insert name (B.byteString src) types }
-          Loop <$> attemptEval env state newState OutputNothing
+          attemptEval env state newState OutputNothing
 
     Port ->
       do  putStrLn "I cannot handle port declarations."
-          return (Loop state)
+          return (Loop evalFailure state)
 
     Decl name src ->
       do  let newState = state { _decls = Map.insert name (B.byteString src) decls }
-          Loop <$> attemptEval env state newState (OutputDecl name)
+          attemptEval env state newState (OutputDecl name)
 
     Expr src ->
-      Loop <$> attemptEval env state state (OutputExpr src)
+      attemptEval env state state (OutputExpr src)
 
 
 
@@ -603,7 +619,7 @@ data Output
   | OutputExpr BS.ByteString
 
 
-attemptEval :: Env -> State -> State -> Output -> IO State
+attemptEval :: Env -> State -> State -> Output -> IO Outcome
 attemptEval (Env root interpreter ansi port) oldState newState output =
   do  result <-
         BW.withScope $ \scope ->
@@ -622,16 +638,16 @@ attemptEval (Env root interpreter ansi port) oldState newState output =
       case result of
         Left exit ->
           do  Exit.toStderr (Exit.replToReport exit)
-              return oldState
+              return $ Loop evalFailure oldState
 
         Right Nothing ->
-          return newState
+          return $ Loop evalSuccess newState
 
         Right (Just javascript) ->
           do  exitCode <- interpret interpreter javascript
               case exitCode of
-                Exit.ExitSuccess   -> return newState
-                Exit.ExitFailure _ -> return oldState
+                Exit.ExitSuccess   -> return $ Loop evalSuccess newState
+                Exit.ExitFailure _ -> return $ Loop evalFailure oldState
 
 
 interpret :: FilePath -> B.Builder -> IO Exit.ExitCode
