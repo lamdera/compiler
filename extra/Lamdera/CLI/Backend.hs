@@ -2,6 +2,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Lamdera.CLI.Backend
   ( Flags(..)
+  , importParser
   , run
   --
   , Lines(..)
@@ -50,6 +51,7 @@ import qualified Elm.Version as V
 import qualified Generate
 import qualified Parse.Expression as PE
 import qualified Parse.Declaration as PD
+import qualified Parse.Keyword as PK
 import qualified Parse.Module as PM
 import qualified Parse.Primitives as P
 import qualified Parse.Space as PS
@@ -66,6 +68,7 @@ import qualified Reporting.Render.Code as Code
 import qualified Reporting.Report as Report
 import qualified Reporting.Task as Task
 import qualified Stuff
+import qualified Terminal
 
 import qualified Sanity
 
@@ -75,21 +78,98 @@ import qualified Json.Decode
 import qualified Json.String
 import qualified Lamdera
 import qualified Lamdera.Http
+import qualified Lamdera.Parse.Extra as Extra
 
 
 
--- RUN
+-- FLAGS
 
 
 data Flags =
   Flags
     { _eval :: Maybe String
-    , _import :: Maybe String
+    , _import :: Maybe B.Builder
     , _repl :: Bool
     , _portFlag :: Maybe Int
     , _noColors :: Bool
     , _interpreterFlag :: Maybe String
     }
+
+
+importParser :: Terminal.Parser B.Builder
+importParser =
+  Terminal.Parser
+    { Terminal._singular = "module imports"
+    , Terminal._plural = "module imports"
+    , Terminal._parser = Just . parseImport
+    , Terminal._suggest = \_ -> return []
+    , Terminal._examples = \_ -> return ["Dict", "Dict, Set as S exposing (size)"]
+    }
+
+
+parseImport :: String -> B.Builder
+parseImport input =
+  parseImportHelp (T.pack input) mempty
+
+
+parseImportHelp :: T.Text -> B.Builder -> B.Builder
+parseImportHelp input output =
+  case T.strip input of
+    ""       -> output
+    stripped -> parseImportHelpStep stripped output
+
+
+parseImportHelpStep :: T.Text -> B.Builder -> B.Builder
+parseImportHelpStep stripped output =
+  let
+    withImport
+      | Extra.startsWith (PV.moduleName (,)) (fromText stripped) = "import " <> stripped
+      | otherwise = stripped
+
+    code =
+      fromText withImport <> "\n"
+
+    result =
+      Extra.fromByteStringWithContext PM.chompImport ES.ImportEnd code
+  in
+  case result of
+    Right (newOutput, _, rest) ->
+      parseImportHelp (toText rest) (output <> B.byteString newOutput)
+
+    Left (newOutput, ES.ImportEnd _ _, rest)
+      | Extra.startsWith (PV.moduleName (,)) rest ->
+          parseImportHelp (addNewline newOutput rest) output
+
+      | Extra.startsWith (PK.import_ (,)) rest ->
+          parseImportHelp (addNewline newOutput rest) output
+
+      | not $ Extra.startsWith (PV.lower (,)) rest ->
+          parseImportHelp (stripDelimiter newOutput rest) output
+
+    Left (newOutput, _, rest) ->
+      output <> B.byteString newOutput <> B.byteString rest
+
+
+stripDelimiter :: BS.ByteString -> BS.ByteString -> T.Text
+stripDelimiter before after =
+  addNewline before (BS.drop 1 after)
+
+
+addNewline :: BS.ByteString -> BS.ByteString -> T.Text
+addNewline before after =
+  T.stripEnd (toText before) <> "\n" <> toText after
+
+
+fromText :: T.Text -> BS.ByteString
+fromText = BS_UTF8.fromString . T.unpack
+
+
+toText :: BS.ByteString -> T.Text
+toText = T.pack . BS_UTF8.toString
+
+
+
+-- RUN
 
 
 run :: () -> Flags -> IO ()
@@ -101,7 +181,7 @@ run () flags =
       Exit.exitWith exitCode
 
 
-runEval :: Env -> Maybe String -> Maybe String -> IO Exit.ExitCode
+runEval :: Env -> Maybe String -> Maybe B.Builder -> IO Exit.ExitCode
 runEval env expr importFlag =
   do  let importState = initialState { _importFlag = importFlag }
           exprInput   = Expr $ BS_UTF8.fromString $ Maybe.fromMaybe "model" expr
@@ -462,7 +542,7 @@ data State =
     { _imports :: Map.Map N.Name B.Builder
     , _types :: Map.Map N.Name B.Builder
     , _decls :: Map.Map N.Name B.Builder
-    , _importFlag :: Maybe String
+    , _importFlag :: Maybe B.Builder
     }
 
 
@@ -575,7 +655,7 @@ toByteString (State imports types decls importFlag) output =
     mconcat
       [ "module ", N.toBuilder N.replModule, " exposing (..)\n"
       , Map.foldr mappend mempty imports
-      , maybe mempty (B.stringUtf8 . (++ "\n")) importFlag
+      , maybe "" (<> "\n") importFlag
       , Map.foldr mappend mempty types
       , Map.foldr mappend mempty decls
       , outputToBuilder output
