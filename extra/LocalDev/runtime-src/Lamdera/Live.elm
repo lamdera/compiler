@@ -1187,7 +1187,7 @@ lamderaPane devbar nodeType =
         [ style "font-family" "system-ui, Helvetica Neue, sans-serif"
         , style "font-size" "12px"
         , style "position" "fixed"
-        , style "z-index" "100000"
+        , style "z-index" "2147483647"
         , xForLocation devbar.location
         , yForLocation devbar.location
         , style "color" white
