@@ -5,6 +5,7 @@ module Lamdera.CLI.Deploy where
 import System.Process
 import Data.List
 import Data.Text (pack, strip, unpack)
+import Control.Monad
 
 import qualified Reporting
 import qualified Reporting.Doc as D
@@ -17,16 +18,11 @@ run :: () -> () -> IO ()
 run () () = do
   branch <- Lamdera.getGitBranch
   case branch of
-    "main" -> do
+    b | b == "main" || b == "master" -> do
       debug_ "Starting check..."
       Lamdera.CLI.Check.run_
-      _ <- readProcess "git" ["push", "lamdera", "main"] ""
-      pure ()
-
-    "master" -> do
-      debug_ "Starting check..."
-      Lamdera.CLI.Check.run_
-      _ <- readProcess "git" ["push", "lamdera", "master"] ""
+      Lamdera.CLI.Check.progressPointer "Pushing to lamdera..."
+      _ <- readProcess "git" ["push", "lamdera", unpack b] ""
       pure ()
 
     _ -> do
@@ -42,14 +38,8 @@ run () () = do
           , "[Y/n]: "
           ]
 
-      if approveReset
-        then do
-          if Lamdera.isDebug_
-            then System.Process.readProcess "git" ["push", "preview", "-f"] ""
-            else System.Process.readProcess "git" ["push", "lamdera", "-f"] ""
-          pure ()
-        else
-          pure ()
-
-  pure ()
-
+      when approveReset $ do
+        if Lamdera.isDebug_
+          then System.Process.readProcess "git" ["push", "preview", "-f"] ""
+          else System.Process.readProcess "git" ["push", "lamdera", "-f"] ""
+        pure ()
