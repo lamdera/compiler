@@ -54,6 +54,7 @@ import qualified Ext.Sentry as Sentry
 import Control.Concurrent.STM (atomically, newTVarIO, readTVar, writeTVar, TVar)
 
 import StandaloneInstances
+import qualified Lamdera.Relative
 
 -- RUN THE DEV SERVER
 
@@ -115,8 +116,7 @@ runWithRoot root (Flags maybePort) =
 
       whenDebug $ do
         -- Watch LocalDev changes when in Debug mode to assist with development
-        home <- Dir.getHomeDirectory
-        let override = home <> "/dev/projects/lamdera-compiler/extra/LocalDev"
+        let override = Lamdera.Relative.compilerPath </> "extra/LocalDev"
         onlyWhen_ (doesDirectoryExist override) $ do
           Filewatch.watchFile override recompile
 
