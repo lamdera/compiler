@@ -48,7 +48,7 @@ import qualified Lamdera.TypeHash
 import qualified Lamdera.PostCompile
 
 import qualified Data.List as List
-import Ext.Common (trackedForkIO, whenDebug)
+import Ext.Common (trackedForkIO, whenDebug, stringToText)
 import qualified Ext.Filewatch as Filewatch
 import qualified Ext.Sentry as Sentry
 import Control.Concurrent.STM (atomically, newTVarIO, readTVar, writeTVar, TVar)
@@ -61,6 +61,7 @@ import StandaloneInstances
 data Flags =
   Flags
     { _port :: Maybe Int
+    , _open :: Bool
     }
 
 
@@ -72,7 +73,7 @@ run () flags = do
 
 
 runWithRoot :: FilePath -> Flags -> IO ()
-runWithRoot root (Flags maybePort) =
+runWithRoot root (Flags maybePort shouldOpenBrowser) =
   do
       Lamdera.setLiveMode True
       let port = maybe 8000 id maybePort
@@ -121,6 +122,8 @@ runWithRoot root (Flags maybePort) =
           Filewatch.watchFile override recompile
 
       Lamdera.ReverseProxy.start
+
+      onlyWhen shouldOpenBrowser $ systemOpenPath $ stringToText $ "http://localhost:" ++ show port
 
       Live.withEnd liveState $
        httpServe (config port) $ gcatchlog "general" $
