@@ -60,7 +60,10 @@ debug root details (Build.Artifacts pkg ifaces roots modules) =
       let graph_ = objectsToGlobalGraph objects
       graph <- Task.io $ Lamdera.AppConfig.injectConfig graph_
       let mains = gatherMains pkg objects roots
+      esmEnabled <- Task.io $ Lamdera.useEsm
       return $ JS.generate mode graph mains
+        & Lamdera.alternativeImplementationWhen esmEnabled
+            (JS.generateEsm mode graph mains)
 
 
 dev :: FilePath -> Details.Details -> Build.Artifacts -> Task B.Builder
@@ -70,7 +73,10 @@ dev root details (Build.Artifacts pkg _ roots modules) =
       let graph_ = objectsToGlobalGraph objects
       graph <- Task.io $ Lamdera.AppConfig.injectConfig graph_
       let mains = gatherMains pkg objects roots
+      esmEnabled <- Task.io $ Lamdera.useEsm
       return $ JS.generate mode graph mains
+        & Lamdera.alternativeImplementationWhen esmEnabled
+            (JS.generateEsm mode graph mains)
 
 
 prod :: FilePath -> Details.Details -> Build.Artifacts -> Task B.Builder
@@ -84,7 +90,10 @@ prod root details (Build.Artifacts pkg _ roots modules) =
                    & Lamdera.alternativeImplementationWhen longNamesEnabled
                        (Mode.Prod (Mode.legibleFieldNames graph))
       let mains = gatherMains pkg objects roots
+      esmEnabled <- Task.io $ Lamdera.useEsm
       return $ JS.generate mode graph mains
+        & Lamdera.alternativeImplementationWhen esmEnabled
+            (JS.generateEsm mode graph mains)
 
 
 repl :: FilePath -> Details.Details -> Bool -> Build.ReplArtifacts -> N.Name -> Task B.Builder

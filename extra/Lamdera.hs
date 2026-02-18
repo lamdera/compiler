@@ -45,6 +45,9 @@ module Lamdera
   , useLongNames_
   , enableLongNames
   , useLongNames
+  , useEsm_
+  , enableEsm
+  , useEsm
   , isTest
   , isLiveMode
   , setLiveMode
@@ -460,6 +463,19 @@ enableLongNames = do
   debug $ "🗜️ enableLongNames"
   modifyMVar_ useLongNames_ (\_ -> pure True)
 
+{-# NOINLINE useEsm_ #-}
+useEsm_ :: MVar Bool
+useEsm_ = unsafePerformIO $ newMVar False
+
+{-# NOINLINE useEsm #-}
+useEsm :: IO Bool
+useEsm = do
+  readMVar useEsm_
+
+enableEsm :: IO ()
+enableEsm = do
+  debug $ "🗜️ enableEsm"
+  modifyMVar_ useEsm_ (\_ -> pure True)
 
 isTest :: IO Bool
 isTest = do

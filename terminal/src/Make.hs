@@ -48,6 +48,7 @@ data Flags =
     , _docs :: Maybe FilePath
     , _noWire :: Bool -- @LAMDERA
     , _optimizeLegible :: Bool -- @LAMDERA
+    , _esm :: Bool -- @LAMDERA
     }
 
 
@@ -69,11 +70,12 @@ type Task a = Task.Task Exit.Make a
 
 
 run :: [FilePath] -> Flags -> IO ()
-run paths flags@(Flags _ _ _ report _ noWire optimizeLegible) =
+run paths flags@(Flags _ _ _ report _ noWire optimizeLegible esm) =
   do  style <- getStyle report
       maybeRoot <- Stuff.findRoot
       Lamdera.onlyWhen noWire Lamdera.disableWire
       Lamdera.onlyWhen optimizeLegible Lamdera.enableLongNames
+      Lamdera.onlyWhen esm Lamdera.enableEsm
       Reporting.attemptWithStyle style Exit.makeToReport $
         case maybeRoot of
           Just root -> runHelp root paths style flags
@@ -81,7 +83,7 @@ run paths flags@(Flags _ _ _ report _ noWire optimizeLegible) =
 
 
 runHelp :: FilePath -> [FilePath] -> Reporting.Style -> Flags -> IO (Either Exit.Make ())
-runHelp root paths style (Flags debug optimize maybeOutput _ maybeDocs _ optimizeLegible) =
+runHelp root paths style (Flags debug optimize maybeOutput _ maybeDocs _ optimizeLegible _) =
   BW.withScope $ \scope ->
   Stuff.withRootLock root $ Task.run $
   do  desiredMode <- getMode debug (optimize || optimizeLegible)
@@ -304,6 +306,7 @@ parseOutput name
   | isDevNull name      = Just DevNull
   | hasExt ".html" name = Just (Html name)
   | hasExt ".js"   name = Just (JS name)
+  | hasExt ".mjs"  name = Just (JS name) -- @LAMDERA
   | otherwise           = Nothing
 
 
@@ -334,11 +337,12 @@ isDevNull name =
 
 -- Clone of run that uses attemptWithStyle_cleanup
 run_cleanup :: IO () -> [FilePath] -> Flags -> IO ()
-run_cleanup cleanup paths flags@(Flags _ _ _ report _ noWire optimizeLegible) =
+run_cleanup cleanup paths flags@(Flags _ _ _ report _ noWire optimizeLegible esm) =
   do  style <- getStyle report
       maybeRoot <- Stuff.findRoot
       Lamdera.onlyWhen noWire Lamdera.disableWire
       Lamdera.onlyWhen optimizeLegible Lamdera.enableLongNames
+      Lamdera.onlyWhen esm Lamdera.enableEsm
       Reporting.attemptWithStyle_cleanup cleanup style Exit.makeToReport $
         case maybeRoot of
           Just root -> runHelp root paths style flags
