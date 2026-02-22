@@ -399,6 +399,11 @@ serveExperimentalWrite root path = do
   liftIO $ case contentType of
     Just "application/octet-stream" -> Lamdera.writeBinary fullpath rbody
     Just "image/jpeg"               -> Lamdera.writeBinary fullpath rbody
+    Just "image/png"                -> Lamdera.writeBinary fullpath rbody
+    Just "image/gif"                -> Lamdera.writeBinary fullpath rbody
+    Just "image/webp"               -> Lamdera.writeBinary fullpath rbody
+    Just "image/svg+xml"            -> Lamdera.writeBinary fullpath rbody
+    Just "application/pdf"          -> Lamdera.writeBinary fullpath rbody
 
     _ ->
       writeIfDifferent fullpath (TL.toStrict $ TLE.decodeUtf8 rbody)
