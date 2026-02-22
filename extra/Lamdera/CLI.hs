@@ -217,7 +217,10 @@ backend =
     backendFlags =
       flags Lamdera.CLI.Backend.Flags
         |-- flag "eval" expression "The expression to evaluate (default: `model`)."
-        |-- flag "import" import_ "Additional 'import' statements used when evaluating the expression."
+        |-- flag "import" Lamdera.CLI.Backend.importParser
+              "Additional module imports used when evaluating the expression.\
+              \ For the allowed syntax, see the Lamdera documentation.\
+              \ Examples are 'Dict' or 'Dict, Set as S exposing (size)'."
         |-- onOff "repl" "Start a REPL session instead of evaluating a single expression."
         |-- flag "port" port_ "The port of the `lamdera live` server (default: 8000)."
         |-- onOff "no-colors" "Disable colors in the output. This can help if your terminal uses a non-standard color scheme that makes values hard to read."
@@ -234,17 +237,6 @@ interpreter =
     , _parser = Just
     , _suggest = \_ -> return []
     , _examples = \_ -> return ["node","nodejs"]
-    }
-
-
-import_ :: Parser String
-import_ =
-  Parser
-    { _singular = "import statement"
-    , _plural = "import statements"
-    , _parser = Just
-    , _suggest = \_ -> return []
-    , _examples = \_ -> return ["import Dict","import Set as S"]
     }
 
 

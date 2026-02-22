@@ -2,6 +2,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Lamdera.CLI.Backend
   ( Flags(..)
+  , importParser
   , run
   --
   , Lines(..)
@@ -50,6 +51,7 @@ import qualified Elm.Version as V
 import qualified Generate
 import qualified Parse.Expression as PE
 import qualified Parse.Declaration as PD
+import qualified Parse.Keyword as PK
 import qualified Parse.Module as PM
 import qualified Parse.Primitives as P
 import qualified Parse.Space as PS
@@ -66,6 +68,7 @@ import qualified Reporting.Render.Code as Code
 import qualified Reporting.Report as Report
 import qualified Reporting.Task as Task
 import qualified Stuff
+import qualified Terminal
 
 import qualified Sanity
 
@@ -75,21 +78,98 @@ import qualified Json.Decode
 import qualified Json.String
 import qualified Lamdera
 import qualified Lamdera.Http
+import qualified Lamdera.Parse.Extra as Extra
 
 
 
--- RUN
+-- FLAGS
 
 
 data Flags =
   Flags
     { _eval :: Maybe String
-    , _import :: Maybe String
+    , _import :: Maybe B.Builder
     , _repl :: Bool
     , _portFlag :: Maybe Int
     , _noColors :: Bool
     , _interpreterFlag :: Maybe String
     }
+
+
+importParser :: Terminal.Parser B.Builder
+importParser =
+  Terminal.Parser
+    { Terminal._singular = "module imports"
+    , Terminal._plural = "module imports"
+    , Terminal._parser = Just . parseImport
+    , Terminal._suggest = \_ -> return []
+    , Terminal._examples = \_ -> return ["Dict", "Dict, Set as S exposing (size)"]
+    }
+
+
+parseImport :: String -> B.Builder
+parseImport input =
+  parseImportHelp (T.pack input) mempty
+
+
+parseImportHelp :: T.Text -> B.Builder -> B.Builder
+parseImportHelp input output =
+  case T.strip input of
+    ""       -> output
+    stripped -> parseImportHelpStep stripped output
+
+
+parseImportHelpStep :: T.Text -> B.Builder -> B.Builder
+parseImportHelpStep stripped output =
+  let
+    withImport
+      | Extra.startsWith (PV.moduleName (,)) (fromText stripped) = "import " <> stripped
+      | otherwise = stripped
+
+    code =
+      fromText withImport <> "\n"
+
+    result =
+      Extra.fromByteStringWithContext PM.chompImport ES.ImportEnd code
+  in
+  case result of
+    Right (newOutput, _, rest) ->
+      parseImportHelp (toText rest) (output <> B.byteString newOutput)
+
+    Left (newOutput, ES.ImportEnd _ _, rest)
+      | Extra.startsWith (PV.moduleName (,)) rest ->
+          parseImportHelp (addNewline newOutput rest) output
+
+      | Extra.startsWith (PK.import_ (,)) rest ->
+          parseImportHelp (addNewline newOutput rest) output
+
+      | not $ Extra.startsWith (PV.lower (,)) rest ->
+          parseImportHelp (stripDelimiter newOutput rest) output
+
+    Left (newOutput, _, rest) ->
+      output <> B.byteString newOutput <> B.byteString rest
+
+
+stripDelimiter :: BS.ByteString -> BS.ByteString -> T.Text
+stripDelimiter before after =
+  addNewline before (BS.drop 1 after)
+
+
+addNewline :: BS.ByteString -> BS.ByteString -> T.Text
+addNewline before after =
+  T.stripEnd (toText before) <> "\n" <> toText after
+
+
+fromText :: T.Text -> BS.ByteString
+fromText = BS_UTF8.fromString . T.unpack
+
+
+toText :: BS.ByteString -> T.Text
+toText = T.pack . BS_UTF8.toString
+
+
+
+-- RUN
 
 
 run :: () -> Flags -> IO ()
@@ -101,12 +181,11 @@ run () flags =
       Exit.exitWith exitCode
 
 
-runEval :: Env -> Maybe String -> Maybe String -> IO Exit.ExitCode
+runEval :: Env -> Maybe String -> Maybe B.Builder -> IO Exit.ExitCode
 runEval env expr importFlag =
   do  let importState = initialState { _importFlag = importFlag }
           exprInput   = Expr $ BS_UTF8.fromString $ Maybe.fromMaybe "model" expr
-      _ <- eval env importState exprInput
-      return Exit.ExitSuccess
+      outcomeExitCode <$> eval env importState exprInput
 
 
 runRepl :: Env -> IO Exit.ExitCode
@@ -164,8 +243,15 @@ initEnv flags =
 
 
 data Outcome
-  = Loop State
+  = Loop Exit.ExitCode State
   | End Exit.ExitCode
+
+
+outcomeExitCode :: Outcome -> Exit.ExitCode
+outcomeExitCode outcome =
+  case outcome of
+    Loop exitCode _ -> exitCode
+    End exitCode    -> exitCode
 
 
 type M =
@@ -177,7 +263,7 @@ loop env state =
   do  input <- Repl.handleInterrupt (return Skip) read
       outcome <- liftIO (eval env state input)
       case outcome of
-        Loop state ->
+        Loop _ state ->
           do  lift (State.put state)
               loop env state
 
@@ -462,7 +548,7 @@ data State =
     { _imports :: Map.Map N.Name B.Builder
     , _types :: Map.Map N.Name B.Builder
     , _decls :: Map.Map N.Name B.Builder
-    , _importFlag :: Maybe String
+    , _importFlag :: Maybe B.Builder
     }
 
 
@@ -475,42 +561,52 @@ initialState =
 -- EVAL
 
 
+evalSuccess :: Exit.ExitCode
+evalSuccess =
+  Exit.ExitSuccess
+
+
+evalFailure :: Exit.ExitCode
+evalFailure =
+  Exit.ExitFailure 1
+
+
 eval :: Env -> State -> Input -> IO Outcome
 eval env state@(State imports types decls _) input =
-  Repl.handleInterrupt (putStrLn "<cancelled>" >> return (Loop state)) $
+  Repl.handleInterrupt (putStrLn "<cancelled>" >> return (Loop evalFailure state)) $
   case input of
     Skip ->
-      return (Loop state)
+      return (Loop evalSuccess state)
 
     Exit ->
-      return (End Exit.ExitSuccess)
+      return (End evalSuccess)
 
     Reset ->
       do  putStrLn "<reset>"
-          return (Loop initialState)
+          return (Loop evalSuccess initialState)
 
     Help maybeUnknownCommand ->
       do  putStrLn (toHelpMessage maybeUnknownCommand)
-          return (Loop state)
+          return (Loop evalSuccess state)
 
     Import name src ->
       do  let newState = state { _imports = Map.insert name (B.byteString src) imports }
-          Loop <$> attemptEval env state newState OutputNothing
+          attemptEval env state newState OutputNothing
 
     Type name src ->
       do  let newState = state { _types = Map.insert name (B.byteString src) types }
-          Loop <$> attemptEval env state newState OutputNothing
+          attemptEval env state newState OutputNothing
 
     Port ->
       do  putStrLn "I cannot handle port declarations."
-          return (Loop state)
+          return (Loop evalFailure state)
 
     Decl name src ->
       do  let newState = state { _decls = Map.insert name (B.byteString src) decls }
-          Loop <$> attemptEval env state newState (OutputDecl name)
+          attemptEval env state newState (OutputDecl name)
 
     Expr src ->
-      Loop <$> attemptEval env state state (OutputExpr src)
+      attemptEval env state state (OutputExpr src)
 
 
 
@@ -523,7 +619,7 @@ data Output
   | OutputExpr BS.ByteString
 
 
-attemptEval :: Env -> State -> State -> Output -> IO State
+attemptEval :: Env -> State -> State -> Output -> IO Outcome
 attemptEval (Env root interpreter ansi port) oldState newState output =
   do  result <-
         BW.withScope $ \scope ->
@@ -542,16 +638,16 @@ attemptEval (Env root interpreter ansi port) oldState newState output =
       case result of
         Left exit ->
           do  Exit.toStderr (Exit.replToReport exit)
-              return oldState
+              return $ Loop evalFailure oldState
 
         Right Nothing ->
-          return newState
+          return $ Loop evalSuccess newState
 
         Right (Just javascript) ->
           do  exitCode <- interpret interpreter javascript
               case exitCode of
-                Exit.ExitSuccess   -> return newState
-                Exit.ExitFailure _ -> return oldState
+                Exit.ExitSuccess   -> return $ Loop evalSuccess newState
+                Exit.ExitFailure _ -> return $ Loop evalFailure oldState
 
 
 interpret :: FilePath -> B.Builder -> IO Exit.ExitCode
@@ -559,10 +655,14 @@ interpret interpreter javascript =
   let
     createProcess = (Proc.proc interpreter []) { Proc.std_in = Proc.CreatePipe }
   in
-  Proc.withCreateProcess createProcess $ \(Just stdin) _ _ handle ->
-    do  B.hPutBuilder stdin javascript
-        IO.hClose stdin
-        Proc.waitForProcess handle
+  Proc.withCreateProcess createProcess $ \mStdin _ _ handle ->
+    case mStdin of
+      Just stdin ->
+        do  B.hPutBuilder stdin javascript
+            IO.hClose stdin
+            Proc.waitForProcess handle
+      Nothing ->
+        error "Pipe to interpreter not available"
 
 
 
@@ -575,7 +675,7 @@ toByteString (State imports types decls importFlag) output =
     mconcat
       [ "module ", N.toBuilder N.replModule, " exposing (..)\n"
       , Map.foldr mappend mempty imports
-      , maybe mempty (B.stringUtf8 . (++ "\n")) importFlag
+      , maybe "" (<> "\n") importFlag
       , Map.foldr mappend mempty types
       , Map.foldr mappend mempty decls
       , outputToBuilder output
@@ -753,7 +853,7 @@ addMatch string isFinished name _ completions =
   let
     suggestion = N.toChars name
   in
-  if List.isPrefixOf string suggestion then
+  if string `List.isPrefixOf` suggestion then
     Repl.Completion suggestion suggestion isFinished : completions
   else
     completions
