@@ -1,13 +1,22 @@
-module Errors exposing (main)
+-- @LAMDERA: Added `jumpTo` from `worker/src/Errors.elm` and adapted it for Lamdera.
+port module Errors exposing (main)
 
 
 import Browser
 import Char
 import Html exposing (..)
 import Html.Attributes exposing (..)
+import Html.Events exposing (onClick)
 import String
 import Json.Decode as D
 import Elm.Error as Error
+
+
+
+-- PORTS
+
+
+port jumpTo : { fileName : String, row : Int, column : Int } -> Cmd msg
 
 
 
@@ -17,17 +26,20 @@ import Elm.Error as Error
 main =
   Browser.document
     { init = \flags -> (D.decodeValue Error.decoder flags, Cmd.none)
-    , update = \_ exit -> (exit, Cmd.none)
+    , update = \(filePath, region) result -> (result, jumpTo { fileName = filePath, row = region.start.line, column = region.start.column })
     , view = view
     , subscriptions = \_ -> Sub.none
     }
+
+
+type alias Msg = (String, Error.Region)
 
 
 
 -- VIEW
 
 
-view : Result D.Error Error.Error -> Browser.Document msg
+view : Result D.Error Error.Error -> Browser.Document Msg
 view result =
   { title = "Problem!"
   , body =
@@ -40,7 +52,7 @@ view result =
   }
 
 
-viewError : Error.Error -> Html msg
+viewError : Error.Error -> Html Msg
 viewError error =
   div
     [ style "width" "100%"
@@ -65,11 +77,11 @@ viewError error =
     ]
 
 
-viewErrorHelp : Error.Error -> List (Html msg)
+viewErrorHelp : Error.Error -> List (Html Msg)
 viewErrorHelp error =
   case error of
     Error.GeneralProblem { path, title, message } ->
-      viewHeader title path :: viewMessage message
+      viewHeader title path Nothing :: viewMessage message
 
     Error.ModuleProblems badModules ->
       viewBadModules badModules
@@ -79,30 +91,54 @@ viewErrorHelp error =
 -- VIEW HEADER
 
 
-viewHeader : String -> Maybe String -> Html msg
-viewHeader title maybeFilePath =
+viewHeader : String -> Maybe String -> Maybe Error.Region -> Html Msg
+viewHeader title maybeFilePath maybeRegion =
   let
     left = "-- " ++ title ++ " "
-    right =
-      case maybeFilePath of
-        Nothing ->
-          ""
-        Just filePath ->
-          " " ++ filePath
+
+    (rightLength, rightElements) =
+      case (maybeFilePath, maybeRegion) of
+        (Just filePath, Nothing) ->
+          let
+            fullText =
+              " " ++ filePath
+          in
+          ( String.length fullText
+          , [text fullText]
+          )
+
+        (Just filePath, Just region) ->
+          let
+            fullText =
+              filePath ++ ":" ++ String.fromInt region.start.line ++ ":" ++ String.fromInt region.start.column
+          in
+          ( 1 + String.length fullText
+          , [ text " "
+            , span
+                [ style "cursor" "pointer"
+                , style "text-decoration" "underline"
+                , onClick (filePath, region)
+                ]
+                [ text fullText ]
+
+            ]
+          )
+
+        _ ->
+          (0, [])
   in
-  span [ style "color" "rgb(51,187,200)" ] [ text (fill left right ++ "\n\n") ]
-
-
-fill : String -> String -> String
-fill left right =
-  left ++ String.repeat (80 - String.length left - String.length right) "-" ++ right
+  span [ style "color" "rgb(51,187,200)" ]
+    ( text (left ++ String.repeat (80 - String.length left - rightLength) "-")
+      :: rightElements
+      ++ [ text "\n\n" ]
+    )
 
 
 
 -- VIEW BAD MODULES
 
 
-viewBadModules : List Error.BadModule -> List (Html msg)
+viewBadModules : List Error.BadModule -> List (Html Msg)
 viewBadModules badModules =
   case badModules of
     [] ->
@@ -115,14 +151,14 @@ viewBadModules badModules =
       viewBadModule a :: viewSeparator a.name b.name :: viewBadModules (b :: cs)
 
 
-viewBadModule : Error.BadModule -> Html msg
+viewBadModule : Error.BadModule -> Html Msg
 viewBadModule { path, problems } =
   span [] (List.map (viewProblem path) problems)
 
 
-viewProblem : String -> Error.Problem -> Html msg
+viewProblem : String -> Error.Problem -> Html Msg
 viewProblem filePath problem =
-  span [] (viewHeader problem.title (Just filePath) :: viewMessage problem.message)
+  span [] (viewHeader problem.title (Just filePath) (Just problem.region) :: viewMessage problem.message)
 
 
 viewSeparator : String -> String -> Html msg

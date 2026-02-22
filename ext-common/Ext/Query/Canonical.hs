@@ -54,7 +54,7 @@ loadSingleArtifacts path = do
   source <- File.readUtf8 path
   case Parse.fromByteString Parse.Application source of
     Right modul ->
-      case Compile.compile Pkg.dummyName ifaces modul of
+      case Compile.compile Nothing Pkg.dummyName ifaces modul of
         Right artifacts ->
           pure artifacts
 

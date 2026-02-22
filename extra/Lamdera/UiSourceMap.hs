@@ -3,7 +3,7 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# OPTIONS_GHC -Wall -fno-warn-unused-do-bind #-}
 module Lamdera.UiSourceMap
-    (updateDecls, src)
+    (updateDecls, src, openEditorSrc)
     where
 
 import qualified Data.Map as Map
@@ -13,7 +13,6 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import NeatInterpolation
 
-import qualified Data.Utf8
 import AST.Canonical
 import Elm.Package
 import qualified AST.Canonical as Can
@@ -22,25 +21,31 @@ import qualified Reporting.Annotation
 import qualified Data.ByteString.Builder as B
 
 import Lamdera
-import StandaloneInstances
+import StandaloneInstances()
+import qualified Elm.String as ES
+import qualified Data.List as List
+import qualified Lamdera.String
 
 
-updateDecls :: Module.Canonical -> Can.Decls -> Can.Decls
-updateDecls fileName decls =
-    case fileName of
+updateDecls :: FilePath -> Module.Canonical -> Can.Decls -> Can.Decls
+updateDecls fileName moduleName decls =
+    case moduleName of
         Module.Canonical (Name "author" "project") "Lamdera.Live" ->
+            decls
+
+        Module.Canonical (Name "author" "project") "Lamdera.Repl" ->
             decls
 
         Module.Canonical (Name "author" "project") _ ->
             case decls of
                 Can.Declare def nextDecl ->
-                    Can.Declare (updateDefs fileName def) (updateDecls fileName nextDecl)
+                    Can.Declare (updateDefs fileName moduleName def) (updateDecls fileName moduleName nextDecl)
 
                 Can.DeclareRec def remainingDefs nextDecl ->
                     Can.DeclareRec
-                        (updateDefs fileName def)
-                        (map (updateDefs fileName) remainingDefs)
-                        (updateDecls fileName nextDecl)
+                        (updateDefs fileName moduleName def)
+                        (map (updateDefs fileName moduleName) remainingDefs)
+                        (updateDecls fileName moduleName nextDecl)
 
                 Can.SaveTheEnvironment ->
                     Can.SaveTheEnvironment
@@ -52,109 +57,110 @@ updateDecls fileName decls =
 
 
 newAttributes :: Bool
+                -> FilePath
                 -> Module.Canonical
                 -> Name.Name
                 -> Reporting.Annotation.Region
                 -> Expr
                 -> Reporting.Annotation.Located Expr_
-newAttributes isElmUi fileName functionName location originalAttributes =
+newAttributes isElmUi fileName moduleName functionName location originalAttributes =
     let
         a = Reporting.Annotation.At location
     in
-    (a (Call
-          (a (VarForeign
-                (Module.Canonical (Name "elm" "core") "List")
-                "append"
-                (Forall
-                   (Map.fromList [("a", ())])
-                   (TLambda
-                      (TType (Module.Canonical (Name "elm" "core") "List") "List" [TVar "a"])
-                      (TLambda
-                         (TType (Module.Canonical (Name "elm" "core") "List") "List" [TVar "a"])
-                         (TType (Module.Canonical (Name "elm" "core") "List") "List" [TVar "a"]))))))
-          [ updateExpr fileName functionName originalAttributes
-          , newAttributesHelper isElmUi fileName functionName location
-          ]))
+    a (Binop
+        "::"
+        (Module.Canonical (Name "elm" "core") "List")
+        "cons"
+        (Forall
+           (Map.fromList [("a", ())])
+           (TLambda
+              (TVar "a")
+              (TLambda
+                 (TType (Module.Canonical (Name "elm" "core") "List") "List" [TVar "a"])
+                 (TType (Module.Canonical (Name "elm" "core") "List") "List" [TVar "a"]))))
+        (newProperty isElmUi fileName moduleName functionName location)
+        (updateExpr fileName moduleName functionName originalAttributes))
 
 
-moduleToFilePath :: Module.Canonical -> String
-moduleToFilePath ((Module.Canonical pkg moduleName)) =
-    moduleName & Name.toText & T.replace "." "/" & (\v -> v <> ".elm") & T.unpack
+propertyName :: ES.String
+propertyName =
+    "lamderaSource"
 
 
-newAttributesHelper :: Bool -> Module.Canonical -> Name.Name -> Reporting.Annotation.Region -> Can.Expr
-newAttributesHelper isElmUi module_ functionName location =
+propertyNameText :: Text
+propertyNameText =
+    T.pack (ES.toChars propertyName)
+
+
+newProperty :: Bool -> FilePath -> Module.Canonical -> Name.Name -> Reporting.Annotation.Region -> Can.Expr
+newProperty isElmUi fileName (Module.Canonical _ moduleName) functionName location =
     let
         (Reporting.Annotation.Region (Reporting.Annotation.Position row column) _) =
             location
 
-        lineNumber =
-            Name.toChars functionName
-                ++ "," ++ (moduleToFilePath module_)
-                ++ ":" ++ show row
-                ++ ":" ++ show column
-
-                & Data.Utf8.fromChars
+        propertyValue =
+            [ Name.toChars moduleName
+            , Name.toChars functionName
+            , show row
+            , show column
+            , fileName
+            ]
+            & List.intercalate ","
+            & Lamdera.String.fromChars
 
         a =
             Reporting.Annotation.At location
-    in
-    if isElmUi then
-        (a (List
-              [ (a (Call
+
+        propertyCall =
+            a (Call
+                (a (VarForeign
+                      (Module.Canonical (Name "elm" "html") "Html.Attributes")
+                      "property"
+                      (Forall
+                         (Map.fromList [("msg", ())])
+                         (TLambda
+                            (TType (Module.Canonical (Name "elm" "core") "String") "String" [])
+                            (TLambda
+                               (TType (Module.Canonical (Name "elm" "json") "Json.Encode") "Value" [])
+                               (TAlias
+                                  (Module.Canonical (Name "elm" "html") "Html")
+                                  "Attribute"
+                                  [("msg", TVar "msg")]
+                                  (Filled (TType (Module.Canonical (Name "elm" "virtual-dom") "VirtualDom") "Attribute" [TVar "msg"]))))))))
+                [ a (Str propertyName)
+                , a (Call
                       (a (VarForeign
-                            (Module.Canonical (Name "mdgriffith" "elm-ui") "Element")
-                            "htmlAttribute"
+                            (Module.Canonical (Name "elm" "json") "Json.Encode")
+                            "string"
                             (Forall
-                               (Map.fromList [("msg", ())])
-                               (TLambda
-                                  (TAlias
-                                     (Module.Canonical (Name "elm" "html") "Html")
-                                     "Attribute"
-                                     [("msg", TVar "msg")]
-                                     (Filled (TType (Module.Canonical (Name "elm" "virtual-dom") "VirtualDom") "Attribute" [TVar "msg"])))
-                                  (TAlias
-                                     (Module.Canonical (Name "mdgriffith" "elm-ui") "Element")
-                                     "Attribute"
-                                     [("msg", TVar "msg")]
-                                     (Filled (TType (Module.Canonical (Name "mdgriffith" "elm-ui") "Internal.Model") "Attribute" [TUnit, TVar "msg"])))))))
-                      [ (a (Call
-                              (a (VarForeign
-                                    (Module.Canonical (Name "elm" "html") "Html.Attributes")
-                                    "attribute"
-                                    (Forall
-                                       (Map.fromList [("msg", ())])
-                                       (TLambda
-                                          (TType (Module.Canonical (Name "elm" "core") "String") "String" [])
-                                          (TLambda
-                                             (TType (Module.Canonical (Name "elm" "core") "String") "String" [])
-                                             (TAlias
-                                                (Module.Canonical (Name "elm" "html") "Html")
-                                                "Attribute"
-                                                [("msg", TVar "msg")]
-                                                (Filled (TType (Module.Canonical (Name "elm" "virtual-dom") "VirtualDom") "Attribute" [TVar "msg"]))))))))
-                              [(a (Str "line-number-attribute")), (a (Str lineNumber))]))
-                      ]))
-              ]))
-    else
-        (a (List
-              [ (a (Call
-                      (a (VarForeign
-                            (Module.Canonical (Name "elm" "html") "Html.Attributes")
-                            "attribute"
-                            (Forall
-                               (Map.fromList [("msg", ())])
+                               Map.empty
                                (TLambda
                                   (TType (Module.Canonical (Name "elm" "core") "String") "String" [])
-                                  (TLambda
-                                     (TType (Module.Canonical (Name "elm" "core") "String") "String" [])
-                                     (TAlias
-                                        (Module.Canonical (Name "elm" "html") "Html")
-                                        "Attribute"
-                                        [("msg", TVar "msg")]
-                                        (Filled (TType (Module.Canonical (Name "elm" "virtual-dom") "VirtualDom") "Attribute" [TVar "msg"]))))))))
-                      [(a (Str "line-number-attribute")), (a (Str lineNumber))]))
-              ]))
+                                  (TType (Module.Canonical (Name "elm" "json") "Json.Encode") "Value" [])))))
+                      [a (Str propertyValue)])
+                ])
+    in
+    if isElmUi then
+        a (Call
+            (a (VarForeign
+                  (Module.Canonical (Name "mdgriffith" "elm-ui") "Element")
+                  "htmlAttribute"
+                  (Forall
+                     (Map.fromList [("msg", ())])
+                     (TLambda
+                        (TAlias
+                           (Module.Canonical (Name "elm" "html") "Html")
+                           "Attribute"
+                           [("msg", TVar "msg")]
+                           (Filled (TType (Module.Canonical (Name "elm" "virtual-dom") "VirtualDom") "Attribute" [TVar "msg"])))
+                        (TAlias
+                           (Module.Canonical (Name "mdgriffith" "elm-ui") "Element")
+                           "Attribute"
+                           [("msg", TVar "msg")]
+                           (Filled (TType (Module.Canonical (Name "mdgriffith" "elm-ui") "Internal.Model") "Attribute" [TUnit, TVar "msg"])))))))
+            [ propertyCall ])
+    else
+        propertyCall
 
 htmlNodes :: Set.Set Name.Name
 htmlNodes =
@@ -257,8 +263,8 @@ htmlNodes =
         , "menu"
         ]
 
-updateExpr :: Module.Canonical -> Name.Name -> Can.Expr -> Can.Expr
-updateExpr fileName functionName (Reporting.Annotation.At location_ expr_) =
+updateExpr :: FilePath -> Module.Canonical -> Name.Name -> Can.Expr -> Can.Expr
+updateExpr fileName moduleName functionName (Reporting.Annotation.At location_ expr_) =
     (case expr_ of
         Can.VarLocal name ->
             Can.VarLocal name
@@ -294,22 +300,22 @@ updateExpr fileName functionName (Reporting.Annotation.At location_ expr_) =
             Can.Float float
 
         Can.List exprs ->
-            Can.List (fmap (updateExpr fileName functionName) exprs)
+            Can.List (fmap (updateExpr fileName moduleName functionName) exprs)
 
         Can.Negate expr ->
-            Can.Negate ((updateExpr fileName functionName) expr)
+            Can.Negate (updateExpr fileName moduleName functionName expr)
 
         Can.Binop name canonical name2 annotation expr expr2 ->
-            Can.Binop name canonical name2 annotation ((updateExpr fileName functionName) expr) ((updateExpr fileName functionName) expr2)
+            Can.Binop name canonical name2 annotation (updateExpr fileName moduleName functionName expr) (updateExpr fileName moduleName functionName expr2)
 
         Can.Lambda patterns expr ->
-            Can.Lambda patterns ((updateExpr fileName functionName) expr)
+            Can.Lambda patterns (updateExpr fileName moduleName functionName expr)
 
         Can.Call
             (Reporting.Annotation.At
                 location
                 (Can.VarForeign
-                    (Module.Canonical (Name "elm" "html") moduleName)
+                    (Module.Canonical (Name "elm" "html") htmlModuleName)
                     functionName_
                     annotation
                 )
@@ -317,30 +323,29 @@ updateExpr fileName functionName (Reporting.Annotation.At location_ expr_) =
             (firstParam : rest) ->
             let
                 expr =
-                    (Reporting.Annotation.At
+                    Reporting.Annotation.At
                         location
                         (Can.VarForeign
-                            (Module.Canonical (Name "elm" "html") moduleName)
+                            (Module.Canonical (Name "elm" "html") htmlModuleName)
                             functionName_
                             annotation
                         )
-                    )
             in
-            if Set.member functionName_ htmlNodes && moduleName == "Html" then
+            if Set.member functionName_ htmlNodes && htmlModuleName == "Html" then
                 Can.Call
                     expr
-                    (newAttributes False fileName functionName location firstParam
-                        : fmap (updateExpr fileName functionName) rest)
+                    (newAttributes False fileName moduleName functionName location firstParam
+                        : fmap (updateExpr fileName moduleName functionName) rest)
             else
                 Can.Call
-                    ((updateExpr fileName functionName) expr)
-                    (fmap (updateExpr fileName functionName) (firstParam : rest))
+                    (updateExpr fileName moduleName functionName expr)
+                    (fmap (updateExpr fileName moduleName functionName) (firstParam : rest))
 
         Can.Call
             (Reporting.Annotation.At
                 location
                 (Can.VarForeign
-                    (Module.Canonical (Name "mdgriffith" "elm-ui") moduleName)
+                    (Module.Canonical (Name "mdgriffith" "elm-ui") elmUiModuleName)
                     functionName_
                     annotation
                 )
@@ -348,14 +353,13 @@ updateExpr fileName functionName (Reporting.Annotation.At location_ expr_) =
             (firstParam : rest) ->
             let
                 expr =
-                    (Reporting.Annotation.At
+                    Reporting.Annotation.At
                         location
                         (Can.VarForeign
-                            (Module.Canonical (Name "mdgriffith" "elm-ui") moduleName)
+                            (Module.Canonical (Name "mdgriffith" "elm-ui") elmUiModuleName)
                             functionName_
                             annotation
                         )
-                    )
 
                 isElement =
                     (functionName_ == "el"
@@ -372,14 +376,14 @@ updateExpr fileName functionName (Reporting.Annotation.At location_ expr_) =
                         || functionName_ == "downloadAs"
                         || functionName_ == "image"
                     )
-                        && moduleName == "Element"
+                        && elmUiModuleName == "Element"
 
                 isKeyed =
                     (functionName_ == "el"
                         || functionName_ == "row"
                         || functionName_ == "column"
                     )
-                        && moduleName == "Element.Keyed"
+                        && elmUiModuleName == "Element.Keyed"
 
                 isInput =
                     (functionName_ == "button"
@@ -396,55 +400,55 @@ updateExpr fileName functionName (Reporting.Annotation.At location_ expr_) =
                         || functionName_ == "radio"
                         || functionName_ == "radioRow"
                     )
-                        && moduleName == "Element.Input"
+                        && elmUiModuleName == "Element.Input"
             in
             if isElement || isKeyed || isInput then
                 Can.Call
                     expr
-                    (newAttributes True fileName functionName location firstParam
-                        : fmap (updateExpr fileName functionName) rest)
+                    (newAttributes True fileName moduleName functionName location firstParam
+                        : fmap (updateExpr fileName moduleName functionName) rest)
             else
                 Can.Call
-                    ((updateExpr fileName functionName) expr)
-                    (fmap (updateExpr fileName functionName) (firstParam : rest))
+                    (updateExpr fileName moduleName functionName expr)
+                    (fmap (updateExpr fileName moduleName functionName) (firstParam : rest))
 
         Can.Call expr exprs ->
-            Can.Call ((updateExpr fileName functionName) expr) (fmap (updateExpr fileName functionName) exprs)
+            Can.Call (updateExpr fileName moduleName functionName expr) (fmap (updateExpr fileName moduleName functionName) exprs)
 
         Can.If exprs expr ->
             Can.If
                 (fmap
                     (\(first, second) ->
-                        ((updateExpr fileName functionName) first
-                        , (updateExpr fileName functionName) second
+                        ( updateExpr fileName moduleName functionName first
+                        , updateExpr fileName moduleName functionName second
                         )
                     )
                     exprs
                 )
-                ((updateExpr fileName functionName) expr)
+                (updateExpr fileName moduleName functionName expr)
 
         Can.Let def expr ->
             Can.Let
-                (updateDefs fileName def)
-                ((updateExpr fileName functionName) expr)
+                (updateDefs fileName moduleName def)
+                (updateExpr fileName moduleName functionName expr)
 
         Can.LetRec defs expr ->
             Can.LetRec
-                (fmap (updateDefs fileName) defs)
-                ((updateExpr fileName functionName) expr)
+                (fmap (updateDefs fileName moduleName) defs)
+                (updateExpr fileName moduleName functionName expr)
 
         Can.LetDestruct pattern expr expr2 ->
             Can.LetDestruct
                 pattern
-                ((updateExpr fileName functionName) expr)
-                ((updateExpr fileName functionName) expr2)
+                (updateExpr fileName moduleName functionName expr)
+                (updateExpr fileName moduleName functionName expr2)
 
         Can.Case expr caseBranches ->
             Can.Case
-                ((updateExpr fileName functionName) expr)
+                (updateExpr fileName moduleName functionName expr)
                 (fmap
                     (\(Can.CaseBranch pattern caseExpr) ->
-                        Can.CaseBranch pattern ((updateExpr fileName functionName) caseExpr)
+                        Can.CaseBranch pattern (updateExpr fileName moduleName functionName caseExpr)
                     )
                     caseBranches
                 )
@@ -453,102 +457,100 @@ updateExpr fileName functionName (Reporting.Annotation.At location_ expr_) =
             Can.Accessor name
 
         Can.Access expr name ->
-            Can.Access ((updateExpr fileName functionName) expr) name
+            Can.Access (updateExpr fileName moduleName functionName expr) name
 
         Can.Update name expr fieldUpdates ->
             Can.Update
                 name
-                ((updateExpr fileName functionName) expr)
+                (updateExpr fileName moduleName functionName expr)
                 (fmap
                     (\(Can.FieldUpdate region expr__) ->
-                        Can.FieldUpdate region (updateExpr fileName functionName expr__)
+                        Can.FieldUpdate region (updateExpr fileName moduleName functionName expr__)
                     )
                     fieldUpdates
                 )
 
         Can.Record fields ->
-            Can.Record (fmap (\field -> updateExpr fileName functionName field) fields)
+            Can.Record (fmap (updateExpr fileName moduleName functionName) fields)
 
         Can.Unit ->
             Can.Unit
 
         Can.Tuple expr expr2 maybeExpr ->
             Can.Tuple
-                ((updateExpr fileName functionName) expr)
-                ((updateExpr fileName functionName) expr2)
-                (fmap (updateExpr fileName functionName) maybeExpr)
+                (updateExpr fileName moduleName functionName expr)
+                (updateExpr fileName moduleName functionName expr2)
+                (fmap (updateExpr fileName moduleName functionName) maybeExpr)
 
         Can.Shader shaderSource shaderTypes ->
             Can.Shader shaderSource shaderTypes
     )
     & Reporting.Annotation.At location_
 
-updateDefs :: Module.Canonical -> Can.Def -> Can.Def
-updateDefs fileName def =
+updateDefs :: FilePath -> Module.Canonical -> Can.Def -> Can.Def
+updateDefs fileName moduleName def =
     case def of
         Can.Def name patterns expr ->
             Can.Def
                 name
                 patterns
-                ((updateExpr fileName (Reporting.Annotation.toValue name)) expr)
+                (updateExpr fileName moduleName (Reporting.Annotation.toValue name) expr)
 
         Can.TypedDef name freeVars patterns expr type_ ->
             Can.TypedDef
                 name
                 freeVars
                 patterns
-                ((updateExpr fileName (Reporting.Annotation.toValue name)) expr)
+                (updateExpr fileName moduleName (Reporting.Annotation.toValue name) expr)
                 type_
 
 
-{-|123 is used as a suffix to reduce the chances of a name collision-}
 src :: B.Builder
 src =
   [text|
-
-var mouseX123 = 0;
-var mouseY123 = 0;
-var backgroundDiv123 = null;
-function getNodesWithLineNumber123(node) {
-    let list = [];
-    if (node.parentNode) {
-        list = getNodesWithLineNumber123(node.parentNode);
-    }
-    if (node.attributes) {
-        let attribute = node.attributes.getNamedItem("line-number-attribute");
-        if (attribute) {
-            let components = attribute.value.split(",");
-            return [{ functionName : components[0], path: components[1] }].concat(list);
-        }
-    }
-    return list;
+;(function() {
+var propertyName = "$propertyNameText";
+var mouseX = 0;
+var mouseY = 0;
+var backgroundDiv = null;
+function getNodesWithLineNumber(targets) {
+    return targets
+        .map(target => {
+            let property = target[propertyName];
+            if (property === undefined) {
+                return null;
+            }
+            let [moduleName, functionName, row, column, ...fileName] = property.split(",");
+            return {fileName: fileName.join(","), moduleName, functionName, row, column};
+        })
+        .filter(Boolean);
 }
 
 window.addEventListener(
     "mousemove",
     function (event) {
-        mouseX123 = event.clientX;
-        mouseY123 = event.clientY;
+        mouseX = event.clientX;
+        mouseY = event.clientY;
     });
 
 window.addEventListener(
     "keydown",
     function(event) {
-        if (event.ctrlKey && event.altKey && event.keyCode == 88)
+        if (event.ctrlKey && event.altKey && event.keyCode == 88) // x
         {
-            let target = document.elementFromPoint(mouseX123, mouseY123);
-            let nodes = getNodesWithLineNumber123(target);
+            let targets = document.elementsFromPoint(mouseX, mouseY);
+            let nodes = getNodesWithLineNumber(targets);
 
             if (nodes.length > 0) {
-                if (backgroundDiv123) { backgroundDiv123.remove(); }
+                if (backgroundDiv) { backgroundDiv.remove(); }
 
-                backgroundDiv123 = document.createElement("div");
-                backgroundDiv123.style.setProperty("left", "0px", "important");
-                backgroundDiv123.style.setProperty("top", "0px", "important");
-                backgroundDiv123.style.setProperty("position", "fixed", "important");
-                backgroundDiv123.style.setProperty("width", "100%", "important");
-                backgroundDiv123.style.setProperty("height", "100%", "important");
-                backgroundDiv123.onclick = function() { backgroundDiv123.remove(); };
+                backgroundDiv = document.createElement("div");
+                backgroundDiv.style.setProperty("left", "0px", "important");
+                backgroundDiv.style.setProperty("top", "0px", "important");
+                backgroundDiv.style.setProperty("position", "fixed", "important");
+                backgroundDiv.style.setProperty("width", "100%", "important");
+                backgroundDiv.style.setProperty("height", "100%", "important");
+                backgroundDiv.onclick = function() { backgroundDiv.remove(); };
 
                 let div = document.createElement("div");
                 div.style.setProperty("position", "absolute", "important");
@@ -562,10 +564,8 @@ window.addEventListener(
                 div.style.setProperty("font-family", 'system-ui, "Helvetica Neue", sans-serif', "important");
 
                 nodes.forEach(node => {
-                    let splitPath = node.path.split(":");
-                    let moduleName = splitPath[0].substring(0,splitPath[0].length-3);
                     let button = document.createElement("button");
-                    button.textContent = moduleName + node.functionName + ":" + splitPath[1];
+                    button.textContent = node.moduleName + "." + node.functionName + ":" + node.row;
                     button.style.setProperty("padding", "4px", "important");
                     button.style.setProperty("text-align", "right", "important");
                     button.style.setProperty("border", "none", "important");
@@ -574,22 +574,33 @@ window.addEventListener(
                     button.addEventListener("mouseenter", function(){ this.style.setProperty("background", "rgb(65, 65, 65)", "important") });
                     button.addEventListener("mouseleave", function(){ this.style.setProperty("background", "rgb(46, 51, 53)", "important") });
                     button.onclick = function() {
-                        backgroundDiv123.remove();
-                        let xmlHttpReq = new XMLHttpRequest();
-                        xmlHttpReq.open("GET", "/_x/editor/src/" + node.path, true);
-                        xmlHttpReq.send(null);
+                        backgroundDiv.remove();
+                        $openEditorSrc
                     };
                     div.appendChild(button);
                 });
 
-                backgroundDiv123.appendChild(div);
-                document.body.appendChild(backgroundDiv123);
+                backgroundDiv.appendChild(div);
+                document.body.appendChild(backgroundDiv);
 
-                div.style.setProperty("left", Math.min(mouseX123, window.innerWidth - div.offsetWidth) + "px", "important");
-                div.style.setProperty("top", Math.min(mouseY123, window.innerHeight - div.offsetHeight) + "px", "important");
+                div.style.setProperty("left", Math.min(mouseX, window.innerWidth - div.offsetWidth) + "px", "important");
+                div.style.setProperty("top", Math.min(mouseY, window.innerHeight - div.offsetHeight) + "px", "important");
             }
         }
     });
-
+}());
   |]
   & T.encodeUtf8Builder
+
+
+openEditorSrc :: Text
+openEditorSrc =
+  [text|
+let url = new URL("/_x/editor/", window.top.location);
+url.pathname += node.fileName;
+url.searchParams.append("row", node.row);
+url.searchParams.append("column", node.column);
+fetch(url)
+    .then(response => response.ok ? undefined : response.text().then(message => alert(message)))
+    .catch(error => alert(error.message));
+  |]

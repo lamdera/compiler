@@ -420,12 +420,6 @@ cq_ bin args input = do
   pure $ (exit, stdOut, stdErr)
 
 
-execCombineStdOutErr :: String -> [String] -> String -> IO String
-execCombineStdOutErr bin args input = do
-  (exit, stdOut, stdErr) <- c_ bin args input
-  pure $ stdErr <> stdOut
-
-
 requireBinary :: String -> IO FilePath
 requireBinary name = do
   x <- Dir.findExecutable name

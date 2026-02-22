@@ -689,7 +689,7 @@ compile pkg mvar status =
               return Nothing
 
             Just results ->
-              case Compile.compile pkg (Map.mapMaybe getInterface results) modul of
+              case Compile.compile Nothing pkg (Map.mapMaybe getInterface results) modul of
                 Left _ ->
                   return Nothing
 
