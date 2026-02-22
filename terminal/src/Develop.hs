@@ -48,13 +48,15 @@ import qualified Lamdera.TypeHash
 import qualified Lamdera.PostCompile
 
 import qualified Data.List as List
-import Ext.Common (trackedForkIO, whenDebug)
+import Ext.Common (trackedForkIO, whenDebug, stringToText)
 import qualified Ext.Filewatch as Filewatch
 import qualified Ext.Sentry as Sentry
 import Control.Concurrent.STM (atomically, newTVarIO, readTVar, writeTVar, TVar)
 
 import StandaloneInstances
 import qualified Lamdera.Relative
+import qualified Reporting.Exit.Help as Help
+import qualified Reporting.Error as Error
 
 -- RUN THE DEV SERVER
 
@@ -62,6 +64,7 @@ import qualified Lamdera.Relative
 data Flags =
   Flags
     { _port :: Maybe Int
+    , _open :: Bool
     }
 
 
@@ -73,7 +76,7 @@ run () flags = do
 
 
 runWithRoot :: FilePath -> Flags -> IO ()
-runWithRoot root (Flags maybePort) =
+runWithRoot root (Flags maybePort shouldOpenBrowser) =
   do
       Lamdera.setLiveMode True
       let port = maybe 8000 id maybePort
@@ -121,6 +124,8 @@ runWithRoot root (Flags maybePort) =
           Filewatch.watchFile override recompile
 
       Lamdera.ReverseProxy.start
+
+      onlyWhen shouldOpenBrowser $ systemOpenPath $ stringToText $ "http://localhost:" ++ show port
 
       Live.withEnd liveState $
        httpServe (config port) $ gcatchlog "general" $
@@ -272,7 +277,22 @@ compileToBuilder path =
                   -- debugging in these scenarios, as the browser will just get zero bytes
                   -- debugPass "serveElm error" (Exit.reactorToReport exit) (pure ())
                   Help.makePageHtml "Errors" $ Just $
-                    Exit.toJson $ Exit.reactorToReport exit
+                    Exit.toJson $ relativeErrorFilePaths $ Exit.reactorToReport exit
+
+
+relativeErrorFilePaths :: Help.Report -> Help.Report
+relativeErrorFilePaths report =
+  case report of
+    Help.CompilerReport root e es ->
+      Help.CompilerReport root (relativeErrorFilePath root e) (fmap (relativeErrorFilePath root) es)
+
+    Help.Report {} ->
+      report
+
+
+relativeErrorFilePath :: FilePath -> Error.Module -> Error.Module
+relativeErrorFilePath root (Error.Module name absolutePath modificationTime source error) =
+  Error.Module name (FP.makeRelative root absolutePath) modificationTime source error
 
 
 serveElm_ :: FilePath -> FilePath -> Snap ()

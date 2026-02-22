@@ -708,7 +708,7 @@ compile (Env key root projectType _ buildID _ _) docsNeed (Details.Local path ti
   let
     pkg = projectTypeToPkg projectType
   in
-  case Compile.compile pkg ifaces modul of
+  case Compile.compile (Just (FP.makeRelative root path)) pkg ifaces modul of
     Right (Compile.Artifacts canonical annotations objects) ->
       case makeDocs docsNeed canonical of
         Left err ->
@@ -926,7 +926,7 @@ finalizeReplArtifacts env@(Env _ root projectType _ _ _ _) source modul@(Src.Mod
       projectTypeToPkg projectType
 
     compileInput ifaces =
-      case Compile.compile pkg ifaces modul of
+      case Compile.compile Nothing pkg ifaces modul of
         Right (Compile.Artifacts canonical annotations objects) ->
           let
             h = Can._name canonical
@@ -1173,12 +1173,12 @@ checkRoot env@(Env _ root _ _ _ _ _) results rootStatus =
 
 
 compileOutside :: Env -> Details.Local -> B.ByteString -> Map.Map ModuleName.Raw I.Interface -> Src.Module -> IO RootResult
-compileOutside (Env key _ projectType _ _ _ _) (Details.Local path time _ _ _ _) source ifaces modul =
+compileOutside (Env key root projectType _ _ _ _) (Details.Local path time _ _ _ _) source ifaces modul =
   let
     pkg = projectTypeToPkg projectType
     name = Src.getName modul
   in
-  case Compile.compile pkg ifaces modul of
+  case Compile.compile (Just (FP.makeRelative root path)) pkg ifaces modul of
     Right (Compile.Artifacts canonical annotations objects) ->
       do  Reporting.report key Reporting.BDone
           return $ ROutsideOk name (I.fromModule pkg canonical annotations) objects

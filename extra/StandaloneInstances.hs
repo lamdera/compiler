@@ -82,8 +82,8 @@ deriving instance Show AST.Optimized.GlobalGraph
 deriving instance Show AST.Optimized.Node
 deriving instance Show AST.Optimized.Choice
 deriving instance Show AST.Optimized.Expr
-instance (Show a) => Show (AST.Optimized.Decider a) where
-  show _ = "\"<AST.Optimized.Decider a>\""
+
+deriving instance (Show a) => Show (AST.Optimized.Decider a)
 deriving instance Show AST.Optimized.Def
 deriving instance Show AST.Optimized.Destructor
 deriving instance Show AST.Optimized.Path

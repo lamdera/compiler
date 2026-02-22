@@ -262,12 +262,14 @@ Executable lamdera
         Lamdera.Offline
         Lamdera.PackageReplacements
         Lamdera.PackageReplacementsTH
+        Lamdera.Parse.Extra
         Lamdera.PostCompile
         Lamdera.Project
         Lamdera.Relative
         Lamdera.Repl
         Lamdera.Reporting.Evergreen
         Lamdera.Reporting.Suggestions
+        Lamdera.String
         Lamdera.TypeHash
         Lamdera.Types
         Lamdera.Update

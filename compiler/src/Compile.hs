@@ -30,14 +30,11 @@ import qualified Type.Solve as Type
 
 import qualified Lamdera.Wire3.Core
 import qualified Lamdera.Wire3.Interfaces
-import qualified Lamdera.Wire3.Helpers as Lamdera.Wire
 import Lamdera
-import qualified CanSer.CanSer as ToSource
-import qualified Data.Text as T
-import qualified Data.Utf8
 import qualified Lamdera.UiSourceMap
 import qualified Lamdera.Nitpick.DebugLog
 import qualified Lamdera.Evergreen.ModifyAST
+import qualified System.FilePath as FP
 
 
 -- import StandaloneInstances
@@ -53,10 +50,10 @@ data Artifacts =
     }
 
 
-{- The original compile function for reference -}
-compile :: Pkg.Name -> Map.Map ModuleName.Raw I.Interface -> Src.Module -> Either E.Error Artifacts
-compile pkg ifaces modul =
-  Lamdera.alternativeImplementationWhen Lamdera.isWireEnabled_ (compile_ pkg ifaces modul) $
+{- The original compile function for reference. `maybePath` parameter added by Lamdera. -}
+compile :: Maybe FilePath -> Pkg.Name -> Map.Map ModuleName.Raw I.Interface -> Src.Module -> Either E.Error Artifacts
+compile maybePath pkg ifaces modul =
+  Lamdera.alternativeImplementationWhen Lamdera.isWireEnabled_ (compile_ maybePath pkg ifaces modul) $
   do  canonical   <- canonicalize pkg ifaces modul
       annotations <- typeCheck modul canonical
       ()          <- nitpick canonical
@@ -108,8 +105,8 @@ optimize modul annotations canonical =
 
 -- @LAMDERA
 
-compile_ :: Pkg.Name -> Map.Map ModuleName.Raw I.Interface -> Src.Module -> Either E.Error Artifacts
-compile_ pkg ifaces modul = do
+compile_ :: Maybe FilePath -> Pkg.Name -> Map.Map ModuleName.Raw I.Interface -> Src.Module -> Either E.Error Artifacts
+compile_ maybePath pkg ifaces modul = do
   -- @TEMPORARY debugging
   -- Inject stub definitions for wire functions, so the canonicalize phase can run
   -- Necessary for user-code which references yet-to-be generated functions
@@ -151,8 +148,13 @@ compile_ pkg ifaces modul = do
       canonical3 :: Can.Module
       canonical3 =
         if (Lamdera.unsafePerformIO Lamdera.isLiveMode)
-          then Lamdera.UiSourceMap.updateDecls (Can._name canonical2) (Can._decls canonical2)
-                 & (\newDecls -> canonical2 { Can._decls = newDecls })
+          then
+            case maybePath of
+              Just path ->
+                Lamdera.UiSourceMap.updateDecls path (Can._name canonical2) (Can._decls canonical2)
+                     & (\newDecls -> canonical2 { Can._decls = newDecls })
+              Nothing ->
+                canonical2
           else canonical2
 
   -- ()          <- debugPassText "starting optimize" moduleName (pure ())

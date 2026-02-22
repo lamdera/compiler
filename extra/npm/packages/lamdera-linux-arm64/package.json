@@ -1,8 +1,11 @@
 {
   "name": "@lamdera/compiler-linux-arm64",
-  "version": "0.19.1-1.3.2",
+  "version": "0.19.1-1.4.0",
   "description": "The Linux ARM 64-bit binary for Lamdera.",
-  "repository": "lamdera/compiler",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lamdera/compiler.git"
+  },
   "license": "BSD-3-Clause",
   "os": [
     "linux"

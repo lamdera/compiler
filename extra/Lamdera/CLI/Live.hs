@@ -9,6 +9,7 @@ module Lamdera.CLI.Live where
 import qualified Data.ByteString.Builder as B
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BSL
+import qualified Data.ByteString.Char8
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Encoding as TE
@@ -20,11 +21,12 @@ import Data.Maybe (fromMaybe)
 import GHC.Word (Word64)
 
 import qualified System.Directory as Dir
-import System.FilePath ((</>), takeExtension)
+import qualified System.FilePath as FP
+import System.FilePath ((</>))
 import Control.Applicative ((<|>))
 import Control.Arrow ((***))
 import Control.Concurrent.STM (atomically, newTVarIO, readTVar, readTVarIO, writeTVar, TVar)
-import Control.Exception (finally)
+import Control.Exception (finally, try, SomeException)
 import qualified Language.Haskell.TH as TH
 import Data.FileEmbed (bsToExp)
 import qualified Data.Aeson.Encoding as A
@@ -49,12 +51,13 @@ import System.Entropy (getEntropy)
 import Snap.Util.FileServe (
     getSafePath, serveDirectoryWith, defaultDirectoryConfig, defaultMimeTypes, mimeTypes, DirectoryConfig
   )
-import Control.Monad (guard)
+import Control.Monad (guard, mfilter)
 
 import qualified Lamdera.CLI.Check
 import qualified Lamdera.Relative
 import qualified Lamdera.Version
 import qualified Ext.Common
+import qualified GHC.IO.Exception
 
 
 
@@ -119,7 +122,7 @@ directoryConfig =
 serveUnmatchedUrlsToIndex :: FilePath -> (FilePath -> Snap()) -> Snap ()
 serveUnmatchedUrlsToIndex root serveElm =
   do  file <- getSafePath
-      guard (takeExtension file == "")
+      guard (FP.takeExtension file == "")
       serveElm (lamderaCache root </> "Lamdera" </> "Live.elm")
 
 
@@ -309,26 +312,24 @@ serveWebsocket root (mClients, mLeader, mChan, beState) =
 
 openEditorHandler :: FilePath -> Snap ()
 openEditorHandler root = do
-  fullpath <- T.pack <$> getSafePath
-  let
-    handlers =
-      -- *nix dir paths
-      [ ("_x/editor", serveEditorOpen root)
-      -- Windows dir paths
-      , ("_x\\editor", serveEditorOpen root)
-      ]
-  handlers
-    & List.find (\(prefix, handler) ->
-      prefix `T.isPrefixOf` fullpath
-    )
-    & fmap (\(prefix, handler) -> do
-      let path =
-            fullpath & T.replace (prefix <>  "/") ""  -- Strip when sub-dirs
-                     & T.replace (prefix <>  "\\") "" -- Strip when sub-dirs windows
-                     & T.replace prefix ""            -- Strip when root dir
-      handler path
-    )
-    & withDefault pass
+  fullpath <- getSafePath
+  debug $ "_x/editor fullpath: " ++ fullpath
+  case FP.splitDirectories fullpath of
+    "_x" : "editor" : rest -> do
+      maybeRow <- getQueryParam "row"
+      maybeColumn <- getQueryParam "column"
+
+      let parseNonNegative = mfilter (>= 0) . readMaybe . Data.ByteString.Char8.unpack
+
+      case (maybeRow >>= parseNonNegative, maybeColumn >>= parseNonNegative) of
+        (Just row, Just column) ->
+          serveEditorOpen root (FP.joinPath rest) row column
+
+        _ ->
+          error400PlainText "Unexpected request, expecting format: /_x/editor/<filename>?row=<row>&column=<column>"
+
+    _ ->
+      pass
 
 
 serveBem :: LiveState -> Snap ()
@@ -399,6 +400,11 @@ serveExperimentalWrite root path = do
   liftIO $ case contentType of
     Just "application/octet-stream" -> Lamdera.writeBinary fullpath rbody
     Just "image/jpeg"               -> Lamdera.writeBinary fullpath rbody
+    Just "image/png"                -> Lamdera.writeBinary fullpath rbody
+    Just "image/gif"                -> Lamdera.writeBinary fullpath rbody
+    Just "image/webp"               -> Lamdera.writeBinary fullpath rbody
+    Just "image/svg+xml"            -> Lamdera.writeBinary fullpath rbody
+    Just "application/pdf"          -> Lamdera.writeBinary fullpath rbody
 
     _ ->
       writeIfDifferent fullpath (TL.toStrict $ TLE.decodeUtf8 rbody)
@@ -426,80 +432,83 @@ serveExperimentalList root path = do
       error404 "folder not found"
 
 
-serveEditorOpen :: FilePath -> Text -> Snap ()
-serveEditorOpen root path = do
+serveEditorOpen :: FilePath -> FilePath -> Int -> Int -> Snap ()
+serveEditorOpen root path row column = do
   debug $ "_x/editor received: " ++ show path
-  case path & T.splitOn ":" of
-    file:row:column:xs -> do
-      let fullpath = (root </> T.unpack file)
-      debug $ "_x/editor: " ++ show fullpath
-      exists_ <- liftIO $ Dir.doesFileExist fullpath
-      if exists_
-        then do
-          tryOpenInDetectedEditor root fullpath row column
+  let fullpath = root </> path
+  debug $ "_x/editor: " ++ show fullpath
+  exists_ <- liftIO $ Dir.doesFileExist fullpath
+  if exists_
+    then do
+      tryOpenInDetectedEditor root fullpath row column
 
-        else do
-          error404 "file not found"
-    _ ->
-      error404 "unexpected identifier, expecting format: <filename>:<row>:<column>"
+    else do
+      error400PlainText "File not found"
 
 
-tryOpenInDetectedEditor :: FilePath -> FilePath -> Text -> Text -> Snap ()
+tryOpenInDetectedEditor :: FilePath -> FilePath -> Int -> Int -> Snap ()
 tryOpenInDetectedEditor root file row column = do
-  res <- liftIO $ mapM id (editors root)
+  res <- liftIO $ sequence (editors root)
   case justs res of
     [] ->
-      -- @TODO give more helpful error that guides user how to configure things?
-      error404 "No supported editors found"
+      error404 "No supported editors found. See the Lamdera docs for more information."
 
-    (editor, openEditor):xs -> do
+    (editor, openEditor):_ -> do
       debug "📝  found the following editors, opening first:"
       justs res & fmap fst & show & debug
 
-      liftIO $ openEditor file row column
-      jsonResponse $ "{ status: 'tried opening editor " <> editor <> "' }"
+      runRes <- liftIO (try (openEditor file row column) :: IO (Either SomeException (GHC.IO.Exception.ExitCode, String, String)))
+      case runRes of
+        Right (exit, stdout, stderr) ->
+          case exit of
+            GHC.IO.Exception.ExitSuccess ->
+              noContentResponse
+
+            GHC.IO.Exception.ExitFailure exitCode ->
+              error400PlainText $ Ext.Common.stringToBuilder $ "exit " <> show exitCode <> ": " <> stdout <> stderr
+
+        Left err ->
+          error400PlainText $ Ext.Common.stringToBuilder $ show err
 
 
-type EditorOpenIO = (FilePath -> Text -> Text -> IO String)
+type EditorOpenIO = (FilePath -> Int -> Int -> IO (GHC.IO.Exception.ExitCode, String, String))
 
 
 editors :: FilePath -> [IO (Maybe (B.Builder, EditorOpenIO))]
 editors projectRoot =
   [ detectEditor "custom-*nix"
       (Dir.doesFileExist (projectRoot </> "openEditor.sh"))
-      (\file row column -> Ext.Common.execCombineStdOutErr (projectRoot </> "openEditor.sh") [file, T.unpack row, T.unpack column] "")
+      (\file row column -> Ext.Common.c_ (projectRoot </> "openEditor.sh") [file, show row, show column] "")
 
   , detectEditor "custom-windows"
       (do
         exists <- Dir.doesFileExist (projectRoot </> "openEditor.bat")
         pure $ exists && ostype == Windows
       )
-      (\file row column -> Ext.Common.execCombineStdOutErr (projectRoot </> "openEditor.bat") [file, T.unpack row, T.unpack column] "")
+      (\file row column -> Ext.Common.c_ (projectRoot </> "openEditor.bat") [file, show row, show column] "")
 
   , detectExecutable "code-insiders"
       (\executablePath file row column -> do
-        Ext.Common.execCombineStdOutErr executablePath [ "-g", file <> ":" <> T.unpack row <> ":" <> T.unpack column] ""
+        Ext.Common.c_ executablePath [ "-g", file <> ":" <> show row <> ":" <> show column] ""
       )
 
   , detectExecutable "code"
       (\executablePath file row column -> do
-        Ext.Common.execCombineStdOutErr executablePath [ "-g", file <> ":" <> T.unpack row <> ":" <> T.unpack column] ""
+        Ext.Common.c_ executablePath [ "-g", file <> ":" <> show row <> ":" <> show column] ""
       )
 
   , detectEditor "intellij-ce"
       (Dir.doesDirectoryExist "/Applications/IntelliJ IDEA CE.app")
       (\file row column -> do
-        let column_ :: Int = column & readMaybeText & withDefault 1
         -- IntelliJ seems to number it's columns from 1 index
-        Ext.Common.execCombineStdOutErr "open" ["-na", "IntelliJ IDEA CE.app", "--args", "--line", T.unpack row, "--column", show (column_ - 1), file] ""
+        Ext.Common.c_ "open" ["-na", "IntelliJ IDEA CE.app", "--args", "--line", show row, "--column", show (column - 1), file] ""
       )
 
   , detectEditor "intellij"
       (Dir.doesDirectoryExist "/Applications/IntelliJ IDEA.app")
       (\file row column -> do
-        let column_ :: Int = column & readMaybeText & withDefault 1
         -- IntelliJ seems to number it's columns from 1 index
-        Ext.Common.execCombineStdOutErr "open" ["-na", "IntelliJ IDEA.app", "--args", "--line", T.unpack row, "--column", show (column_ - 1), file] ""
+        Ext.Common.c_ "open" ["-na", "IntelliJ IDEA.app", "--args", "--line", show row, "--column", show (column - 1), file] ""
       )
   ]
 
@@ -742,6 +751,14 @@ logger =
     atomicPutStrLn $ T.unpack $ TE.decodeUtf8 bs
   )
 
+
+noContentResponse :: Snap ()
+noContentResponse = do
+  modifyResponse $ setResponseStatus 204 "No Content"
+  r <- getResponse
+  finishWith r
+
+
 jsonResponse :: B.Builder -> Snap ()
 jsonResponse s =
   do  modifyResponse $ setContentType "application/json; charset=utf-8"
@@ -779,11 +796,11 @@ error503 s =
       r <- getResponse
       finishWith r
 
-error400 :: B.Builder -> Snap ()
-error400 s =
+error400PlainText :: B.Builder -> Snap ()
+error400PlainText s =
   do  modifyResponse $ setResponseStatus 400 "Bad Request"
-      modifyResponse $ setContentType "application/json; charset=utf-8"
-      writeBuilder $ "{\"error\":\"" <> s <> "\"}"
+      modifyResponse $ setContentType "text/plain; charset=utf-8"
+      writeBuilder s
       r <- getResponse
       finishWith r
 
