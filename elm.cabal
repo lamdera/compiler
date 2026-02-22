@@ -260,6 +260,8 @@ Executable lamdera
         Lamdera.Make
         Lamdera.Nitpick.DebugLog
         Lamdera.Offline
+        Lamdera.PackageReplacements
+        Lamdera.PackageReplacementsTH
         Lamdera.Parse.Extra
         Lamdera.PostCompile
         Lamdera.Project

@@ -36,6 +36,7 @@ import qualified Elm.Version as V
 
 import Lamdera ((&))
 import qualified Lamdera
+import qualified Lamdera.Version
 
 -- PATHS
 
@@ -43,6 +44,7 @@ import qualified Lamdera
 stuff :: FilePath -> FilePath
 stuff root =
   root </> "elm-stuff" </> compilerVersion
+  & Lamdera.alternativeImplementation (root </> "elm-stuff" </> Lamdera.Version.medium)
 
 
 details :: FilePath -> FilePath

@@ -63,6 +63,8 @@ import qualified Stuff
 import qualified Lamdera
 import Lamdera ((&))
 import qualified Lamdera.Extensions
+import qualified Lamdera.PackageReplacements
+import qualified Lamdera.Version
 
 -- DETAILS
 
@@ -405,7 +407,7 @@ verifyDep (Env key _ _ cache manager _ _) depsMVar solution pkg details@(Solver.
         then
           do  Reporting.report key Reporting.DCached
               maybeCache <- File.readBinary (Stuff.package cache pkg vsn </> "artifacts.dat")
-                              & Lamdera.alternativeImplementation (File.readBinary (Stuff.package cache pkg vsn </> "artifacts.x.dat"))
+                              & Lamdera.alternativeImplementation (File.readBinary (Stuff.package cache pkg vsn </> Lamdera.Version.artifacts))
               case maybeCache of
                 Nothing ->
                   build key cache depsMVar pkg details fingerprint Set.empty
@@ -500,7 +502,7 @@ build key cache depsMVar pkg (Solver.Details vsn _) f fs =
                                 Just results ->
                                   let
                                     path = Stuff.package cache pkg vsn </> "artifacts.dat"
-                                             & Lamdera.alternativeImplementation (Stuff.package cache pkg vsn </> "artifacts.x.dat")
+                                             & Lamdera.alternativeImplementation (Stuff.package cache pkg vsn </> Lamdera.Version.artifacts)
                                     ifaces = gatherInterfaces exposedDict results
                                     objects = gatherObjects results
                                     artifacts = Artifacts ifaces objects
@@ -622,6 +624,7 @@ crawlModule foreignDeps mvar pkg src docsStatus name =
 crawlFile :: Map.Map ModuleName.Raw ForeignInterface -> MVar StatusDict -> Pkg.Name -> FilePath -> DocsStatus -> ModuleName.Raw -> FilePath -> IO (Maybe Status)
 crawlFile foreignDeps mvar pkg src docsStatus expectedName path =
   do  bytes <- File.readUtf8 path
+               & Lamdera.alternativeImplementationPassthrough (Lamdera.PackageReplacements.getReplacement pkg expectedName)
       case Parse.fromByteString (Parse.Package pkg) bytes of
         Right modul@(Src.Module (Just (A.At _ actualName)) _ _ imports _ _ _ _ _) | expectedName == actualName ->
           do  deps <- crawlImports foreignDeps mvar pkg src imports
@@ -649,6 +652,7 @@ crawlKernel foreignDeps mvar pkg src name =
       if exists
         then
           do  bytes <- File.readUtf8 path
+                       & Lamdera.alternativeImplementationPassthrough (Lamdera.PackageReplacements.getReplacement pkg name)
               case Kernel.fromByteString pkg (Map.mapMaybe getDepHome foreignDeps) bytes of
                 Nothing ->
                   return Nothing

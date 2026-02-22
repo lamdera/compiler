@@ -219,7 +219,7 @@ read root shouldCheckLamdera =
                           do  maybeDups <- detectDuplicates root (NE.toList srcDirs)
                               case maybeDups of
                                 Nothing ->
-                                  Lamdera.alternativeImplementationPassthrough (Lamdera.Checks.runChecks root shouldCheckLamdera direct) $
+                                  Lamdera.alternativeImplementationPassthrough (Lamdera.Checks.runChecks root shouldCheckLamdera direct indirect) $
                                   return $ Right outline
 
                                 Just (canonicalDir, (dir1,dir2)) ->

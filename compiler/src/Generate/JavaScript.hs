@@ -48,6 +48,7 @@ generate mode (Opt.GlobalGraph graph_ _) mains =
     graph = Lamdera.Injection.graphModifications mode mains graph_
     state = Map.foldrWithKey (addMain mode graph) emptyState mains
   in
+  Lamdera.Injection.versionsComment <>
   "(function(scope){\n'use strict';"
   <> Functions.functions
   -- <> perfNote mode -- @NOTE given user never manages JS generation in Lamdera, hide the perf note

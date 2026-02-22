@@ -23,6 +23,7 @@ import qualified Reporting.Exit as Exit
 
 import qualified Lamdera
 import qualified Lamdera.Init
+import qualified Lamdera.PackageReplacements as PackageReplacements
 
 -- RUN
 
@@ -74,6 +75,15 @@ init =
           return (Left (Exit.InitRegistryProblem problem))
 
         Right (Solver.Env cache _ connection registry) ->
+          let
+            -- @LAMDERA
+            defaults =
+              Init.defaults
+                -- Add constraint for indirect dependency of `Init.defaults`.
+                Lamdera.& Map.insert Pkg.virtualDom Con.anything
+                -- Change version constraints to that of the replacement package (if any).
+                Lamdera.& Map.mapWithKey PackageReplacements.getVersionConstraint
+          in
           do  result <- Solver.verify cache connection registry defaults
               case result of
                 Solver.Err exit ->
@@ -89,7 +99,9 @@ init =
                   let
                     solution = Map.map (\(Solver.Details vsn _) -> vsn) details
                     directs = Map.intersection solution defaults
+                              Lamdera.& Lamdera.alternativeImplementation (Map.intersection solution Init.defaults)
                     indirects = Map.difference solution defaults
+                                Lamdera.& Lamdera.alternativeImplementation (Map.difference solution directs)
                   in
                   do  Dir.createDirectoryIfMissing True "src"
                       Outline.write "." $ Outline.App $

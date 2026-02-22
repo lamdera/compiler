@@ -24,9 +24,8 @@ lamderaLiveSrc =
   Lamdera.unsafe $
     if Ext.Common.isDebug_
       then do
-        Lamdera.debug $ "🗿  Using debug mode lamderaLive"
-        userHome <- Dir.getHomeDirectory
-        let overrideRoot = userHome </> "dev/projects/lamdera-compiler/extra"
+        Lamdera.debug "🗿  Using debug mode lamderaLive"
+        let overrideRoot = Lamdera.Relative.compilerPath </> "extra"
             overridePath = overrideRoot </> "live.js"
             overridePathBuilt = overrideRoot </> "dist/live.js"
 

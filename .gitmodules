@@ -4,3 +4,19 @@
 [submodule "vendor/elm-format"]
 	path = vendor/elm-format
 	url = git@github.com:lamdera/elm-format.git
+[submodule "extra/package-replacements/elm/virtual-dom"]
+	path = extra/package-replacements/elm/virtual-dom
+	url = git@github.com:lamdera/elm-virtual-dom.git
+	branch = lamdera
+[submodule "extra/package-replacements/elm/browser"]
+	path = extra/package-replacements/elm/browser
+	url = git@github.com:lamdera/elm-browser.git
+	branch = lamdera
+[submodule "extra/package-replacements/elm/html"]
+	path = extra/package-replacements/elm/html
+	url = git@github.com:lamdera/elm-html.git
+	branch = lamdera
+[submodule "extra/package-replacements/elm/core"]
+	path = extra/package-replacements/elm/core
+	url = git@github.com:lamdera/elm-core.git
+	branch = lamdera

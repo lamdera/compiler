@@ -31,6 +31,7 @@ module Elm.Package
   , lamderaContainers
   , time
   , bytes
+  , toName
   )
   where
 

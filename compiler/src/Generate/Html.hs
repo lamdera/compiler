@@ -32,7 +32,7 @@ sandwich root moduleName javascript =
 
 <body>
 
-<pre id="elm"></pre>
+<pre data-elm id="elm"></pre>
 
 <script>
 try {
@@ -84,11 +84,13 @@ sandwich_ root moduleName javascript =
 
 <body>
 
-<pre id="elm"></pre>
+<pre data-elm id="elm"></pre>
 
 <script>
 try {
+// lamdera-elm-js-start
 |] <> javascript <> [r|
+// lamdera-elm-js-end
 |] <> Lamdera.Live.lamderaLiveSrc <> Lamdera.UiSourceMap.src <> [r|
   setupApp("|] <> name <> [r|", "elm")
 }
