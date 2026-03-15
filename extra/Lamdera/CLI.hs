@@ -1,10 +1,11 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Lamdera.CLI (live, login, check, deploy, reset, update, annotate, eval, backend, format) where
+module Lamdera.CLI (live, login, project, teams, ssh, env, check, deploy, reset, update, annotate, eval, backend, format) where
 
 import Text.Read (readMaybe)
 import qualified Text.PrettyPrint.ANSI.Leijen as P
 import qualified Data.List as List
+import qualified Data.Char as Char
 
 import Terminal hiding (args)
 import Terminal.Helpers
@@ -17,6 +18,7 @@ import qualified Lamdera.CLI.Update
 import qualified Lamdera.CLI.Annotate
 import qualified Lamdera.CLI.Interpreter
 import qualified Lamdera.CLI.Backend
+import qualified Lamdera.CLI.Dashboard
 
 
 live :: Terminal.Command
@@ -69,6 +71,136 @@ login =
         \ established session for other CLI operations requiring Dashboard info."
   in
   Terminal.Command "login" (Common summary) details example noArgs noFlags Lamdera.CLI.Login.run
+
+
+project :: Terminal.Command
+project =
+  let
+    summary =
+      "Create and manage Lamdera projects on the Dashboard."
+
+    details =
+      "The `project` command currently supports the `add` workflow:"
+
+    example =
+      stack
+        [ reflow "For example:"
+        , P.indent 4 $ P.green "lamdera project add my-client-app --scope=client-team --remote"
+        , P.indent 4 $ P.green "lamdera project add"
+        , reflow "It creates the remote project first, and can add the local `lamdera` git remote afterwards."
+        ]
+
+    projectArgs =
+      oneOf
+        [ require1 (\_ -> Lamdera.CLI.Dashboard.ProjectAdd Nothing) projectAddActionParser
+        , require2 (\_ name -> Lamdera.CLI.Dashboard.ProjectAdd (Just name)) projectAddActionParser projectNameParser
+        ]
+
+    projectFlags =
+      flags Lamdera.CLI.Dashboard.ProjectFlags
+        |-- flag "scope" scopeParser "Team scope to create the project under. Omit this to use your personal account."
+        |-- flag "team" teamParser "Alias for `--scope`."
+        |-- flag "plan" planParser "Requested plan for the new app. Supported values are `play`, `hobby`, `pro`, and `enterprise`."
+        |-- onOff "remote" "Automatically add the local `lamdera` git remote after the app is created."
+  in
+  Terminal.Command "project" (Common summary) details example projectArgs projectFlags Lamdera.CLI.Dashboard.runProject
+
+
+teams :: Terminal.Command
+teams =
+  let
+    summary =
+      "Create and manage Lamdera teams on the Dashboard."
+
+    details =
+      "The `teams` command currently supports the `add` workflow:"
+
+    example =
+      stack
+        [ reflow "For example:"
+        , P.indent 4 $ P.green "lamdera teams add client-team billing@example.com"
+        , P.indent 4 $ P.green "lamdera teams add"
+        ]
+  in
+  Terminal.Command "teams" (Common summary) details example teamsArgs noFlags Lamdera.CLI.Dashboard.runTeams
+  where
+    teamsArgs =
+      oneOf
+        [ require1 (\_ -> Lamdera.CLI.Dashboard.TeamAdd Nothing Nothing) teamsAddActionParser
+        , require2 (\_ name -> Lamdera.CLI.Dashboard.TeamAdd (Just name) Nothing) teamsAddActionParser teamNameParser
+        , require3 (\_ name email -> Lamdera.CLI.Dashboard.TeamAdd (Just name) (Just email)) teamsAddActionParser teamNameParser emailParser
+        ]
+
+
+ssh :: Terminal.Command
+ssh =
+  let
+    summary =
+      "Manage SSH keys for Lamdera deploy access."
+
+    details =
+      "The `ssh` command currently supports the `add` workflow:"
+
+    example =
+      stack
+        [ reflow "For example:"
+        , P.indent 4 $ P.green "lamdera ssh add ~/.ssh/id_ed25519.pub"
+        , P.indent 4 $ P.green "lamdera ssh add ~/.ssh/id_ed25519.pub laptop"
+        ]
+
+    sshArgs =
+      oneOf
+        [ require2 (\_ path -> Lamdera.CLI.Dashboard.SshAdd path Nothing) sshAddActionParser publicKeyFileParser
+        , require3 (\_ path label -> Lamdera.CLI.Dashboard.SshAdd path (Just label)) sshAddActionParser publicKeyFileParser sshKeyLabelParser
+        ]
+
+    sshKeyFlags =
+      flags Lamdera.CLI.Dashboard.SshKeyFlags
+        |-- flag "label" sshKeyLabelParser "Optional label shown in the Dashboard for this key."
+  in
+  Terminal.Command "ssh" (Common summary) details example sshArgs sshKeyFlags Lamdera.CLI.Dashboard.runSsh
+
+
+env :: Terminal.Command
+env =
+  let
+    summary =
+      "Manage Lamdera environment variables."
+
+    details =
+      "The `env` command supports `ls`, `add`, `update`, and `rm`. The environment argument is accepted for compatibility, but Lamdera applies env vars to the target app:"
+
+    example =
+      stack
+        [ reflow "For example:"
+        , P.indent 4 $ P.green "lamdera env ls --project=my-client-app"
+        , P.indent 4 $ P.green "lamdera env add API_KEY production"
+        , P.indent 4 $ P.green "lamdera env update API_KEY production"
+        , P.indent 4 $ P.green "lamdera env rm API_KEY production"
+        , P.indent 4 $ P.green "lamdera env set API_KEY secret-value"
+        ]
+
+    envArgs =
+      oneOf
+        [ require1 (\_ -> Lamdera.CLI.Dashboard.EnvList) envListActionParser
+        , require2 (\_ name -> Lamdera.CLI.Dashboard.EnvAdd name Nothing Nothing) envAddActionParser envNameParser
+        , require3 (\_ name environment -> Lamdera.CLI.Dashboard.EnvAdd name (Just environment) Nothing) envAddActionParser envNameParser envEnvironmentParser
+        , require4 (\_ name environment value -> Lamdera.CLI.Dashboard.EnvAdd name (Just environment) (Just value)) envAddActionParser envNameParser envEnvironmentParser envValueParser
+        , require2 (\_ name -> Lamdera.CLI.Dashboard.EnvUpdate name Nothing Nothing) envUpdateActionParser envNameParser
+        , require3 (\_ name environment -> Lamdera.CLI.Dashboard.EnvUpdate name (Just environment) Nothing) envUpdateActionParser envNameParser envEnvironmentParser
+        , require4 (\_ name environment value -> Lamdera.CLI.Dashboard.EnvUpdate name (Just environment) (Just value)) envUpdateActionParser envNameParser envEnvironmentParser envValueParser
+        , require3 (\_ name value -> Lamdera.CLI.Dashboard.EnvSet name value) envSetActionParser envNameParser envValueParser
+        , require2 (\_ name -> Lamdera.CLI.Dashboard.EnvRemove name Nothing) envRemoveActionParser envNameParser
+        , require3 (\_ name environment -> Lamdera.CLI.Dashboard.EnvRemove name (Just environment)) envRemoveActionParser envNameParser envEnvironmentParser
+        ]
+
+    envFlags =
+      flags Lamdera.CLI.Dashboard.EnvFlags
+        |-- flag "project" appNameParser "Target project name. If omitted, Lamdera will try to infer it from the current repo."
+        |-- flag "app" appNameParser "Alias for `--project`."
+        |-- onOff "public" "Store the variable as public instead of secret. Secret values remain backend-only."
+  in
+  Terminal.Command "env" (Common summary) details example envArgs envFlags Lamdera.CLI.Dashboard.runEnv
 
 
 check :: Terminal.Command
@@ -282,3 +414,173 @@ stack docs =
 reflow :: String -> P.Doc
 reflow string =
   P.fillSep $ map P.text $ words string
+
+
+nonEmptyParser :: String -> String -> [String] -> Parser String
+nonEmptyParser singular plural examples =
+  Parser
+    { _singular = singular
+    , _plural = plural
+    , _parser = parseNonEmpty
+    , _suggest = \_ -> return []
+    , _examples = \_ -> return examples
+    }
+
+
+literalParser :: String -> [String] -> [String] -> Parser String
+literalParser singular accepted examples =
+  let
+    acceptedLower =
+      map (map Char.toLower) accepted
+  in
+  Parser
+    { _singular = singular
+    , _plural = singular <> "s"
+    , _parser = \value ->
+        let normalized = map Char.toLower value in
+        if elem normalized acceptedLower
+          then Just normalized
+          else Nothing
+    , _suggest = \_ -> return accepted
+    , _examples = \_ -> return examples
+    }
+
+
+parseNonEmpty :: String -> Maybe String
+parseNonEmpty value =
+  if null value
+    then Nothing
+    else Just value
+
+
+projectNameParser :: Parser String
+projectNameParser =
+  nonEmptyParser "project name" "project names" ["my-client-app"]
+
+
+teamNameParser :: Parser String
+teamNameParser =
+  nonEmptyParser "team name" "team names" ["client-team"]
+
+
+teamParser :: Parser String
+teamParser =
+  nonEmptyParser "team" "teams" ["client-team"]
+
+
+scopeParser :: Parser String
+scopeParser =
+  nonEmptyParser "scope" "scopes" ["client-team"]
+
+
+appNameParser :: Parser String
+appNameParser =
+  nonEmptyParser "project name" "project names" ["my-client-app"]
+
+
+publicKeyFileParser :: Parser FilePath
+publicKeyFileParser =
+  Parser
+    { _singular = "public key file"
+    , _plural = "public key files"
+    , _parser = parseNonEmpty
+    , _suggest = \_ -> return []
+    , _examples = \_ -> return ["~/.ssh/id_ed25519.pub"]
+    }
+
+
+sshKeyLabelParser :: Parser String
+sshKeyLabelParser =
+  nonEmptyParser "label" "labels" ["laptop"]
+
+
+emailParser :: Parser String
+emailParser =
+  Parser
+    { _singular = "email"
+    , _plural = "emails"
+    , _parser = \value ->
+        if '@' `elem` value && '.' `elem` value
+          then Just value
+          else Nothing
+    , _suggest = \_ -> return []
+    , _examples = \_ -> return ["billing@example.com"]
+    }
+
+
+planParser :: Parser String
+planParser =
+  literalParser "plan" ["play", "hobby", "pro", "enterprise"] ["hobby", "pro"]
+
+
+projectAddActionParser :: Parser String
+projectAddActionParser =
+  literalParser "action" ["add"] ["add"]
+
+
+teamsAddActionParser :: Parser String
+teamsAddActionParser =
+  literalParser "action" ["add"] ["add"]
+
+
+sshAddActionParser :: Parser String
+sshAddActionParser =
+  literalParser "action" ["add"] ["add"]
+
+
+envListActionParser :: Parser String
+envListActionParser =
+  literalParser "action" ["list", "ls"] ["ls"]
+
+
+envAddActionParser :: Parser String
+envAddActionParser =
+  literalParser "action" ["add"] ["add"]
+
+
+envUpdateActionParser :: Parser String
+envUpdateActionParser =
+  literalParser "action" ["update"] ["update"]
+
+
+envSetActionParser :: Parser String
+envSetActionParser =
+  literalParser "action" ["set"] ["set"]
+
+
+envRemoveActionParser :: Parser String
+envRemoveActionParser =
+  literalParser "action" ["remove", "rm"] ["remove"]
+
+
+envEnvironmentParser :: Parser String
+envEnvironmentParser =
+  literalParser "environment" ["production", "prod", "preview", "development", "dev"] ["production", "preview", "development"]
+
+
+envNameParser :: Parser String
+envNameParser =
+  Parser
+    { _singular = "environment variable name"
+    , _plural = "environment variable names"
+    , _parser = parseEnvName
+    , _suggest = \_ -> return []
+    , _examples = \_ -> return ["apiKey", "stripeSecret"]
+    }
+
+
+parseEnvName :: String -> Maybe String
+parseEnvName chars =
+  case chars of
+    first : rest ->
+      if (Char.isAlpha first || first == '_') && all (\c -> Char.isAlphaNum c || c == '_') rest
+        then Just chars
+        else Nothing
+
+    _ ->
+      Nothing
+
+
+envValueParser :: Parser String
+envValueParser =
+  nonEmptyParser "environment variable value" "environment variable values" ["secret-value"]

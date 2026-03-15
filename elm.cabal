@@ -232,6 +232,7 @@ Executable lamdera
         Lamdera.CLI.Login
         Lamdera.CLI.Check
         Lamdera.CLI.Deploy
+        Lamdera.CLI.Dashboard
         Lamdera.CLI.Reset
         Lamdera.CLI.Update
         -- CLI Experimental
@@ -243,6 +244,7 @@ Executable lamdera
         Lamdera.AppConfig
         Lamdera.Checks
         Lamdera.Constrain
+        Lamdera.Dashboard
         Lamdera.Evergreen.MigrationDestructive
         Lamdera.Evergreen.MigrationGenerator
         Lamdera.Evergreen.MigrationGeneratorHelpers
