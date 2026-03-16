@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Generate.JavaScript
   ( generate
+  , generateEsm
   , generateForRepl
   , generateForReplEndpoint
   )
@@ -692,3 +693,26 @@ ctor (Opt.Global home name) arity code =
     [ JS.Var directFnName (Expr.codeToExpr code)
     , JS.Var (JsName.fromGlobal home name) $ Expr.codeToExpr (Expr.generateCurriedFunctionRef argNames directFnName)
     ]
+
+
+generateEsm :: Mode.Mode -> Opt.GlobalGraph -> Mains -> B.Builder
+generateEsm mode (Opt.GlobalGraph graph_ _) mains =
+  let
+    graph = Lamdera.Injection.graphModifications mode mains graph_
+    state = Map.foldrWithKey (addMain mode graph) emptyState mains
+  in
+  Functions.functions
+  -- <> perfNote mode -- @NOTE given user never manages JS generation in Lamdera, hide the perf note
+  <> stateToBuilder state
+  <> toMainEsmExports mode mains
+  <> Lamdera.Injection.source mode mains
+  <> "\n" <> Lamdera.Injection.elmPkgJs mode mains <> "\n"
+
+
+toMainEsmExports :: Mode.Mode -> Mains -> B.Builder
+toMainEsmExports mode mains =
+  let
+    exports = generateExports mode (Map.foldrWithKey addToTrie emptyTrie mains)
+  in
+  "export const Elm = " <> exports <> ";"
+
