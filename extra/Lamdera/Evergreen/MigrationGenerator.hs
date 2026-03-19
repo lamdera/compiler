@@ -922,6 +922,11 @@ typeToMigration oldVersion newVersion scope interfaces recursionSet_ typeNew@(Ca
               canToMigration oldVersion newVersion scope interfaces newRecursionSet p0 (Just (p0o)) tvarMapOld tvarMapNew anonymousValueRef
           in
           T.concat [ "(\\", anonymousValueRef, " -> ", migration, ")"]
+        else if "|>" `T.isInfixOf` migrate_p0 then
+          -- Pipeline migrations (e.g. nested Dict/SeqDict) must be wrapped in a
+          -- lambda so they can be passed as function arguments to Tuple.mapBoth,
+          -- List.map, etc.
+          T.concat [ "(\\v__ -> v__ |> ", migrate_p0, ")" ]
         else
           T.concat [ migrate_p0 ]
 
