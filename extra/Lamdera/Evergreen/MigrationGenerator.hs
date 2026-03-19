@@ -172,7 +172,7 @@ coreTypeMigration typeDidChange oldVersion newVersion interfaces newModule typeN
 
         (Just typeDefOld@(Union mOld typeNameOld unionOld), Just (Union mNew typeNameNew unionNew)) -> do
           let
-            unionDefMigration = migrateUnionDefinition typeDefOld oldVersion newVersion newModule identifier typeName interfaces recursionSet [] [] unionNew
+            unionDefMigration = migrateUnionDefinition typeDefOld oldVersion newVersion newModule identifier typeNameOld interfaces recursionSet [] [] unionNew
 
             (MigrationNested migrationImpl imps subDefs) = unionDefMigration
             migration = T.concat ["\n    ", migrationWrapperForType typeName, " ( ", migrationImpl, " old, Cmd.none )"]
@@ -193,16 +193,18 @@ coreTypeMigration typeDidChange oldVersion newVersion interfaces newModule typeN
 
 -- A top level Custom Type definition i.e. `type Herp = Derp ...`
 migrateUnionDefinition :: TypeDef -> Int -> Int -> ModuleName.Canonical -> TypeIdentifier -> N.Name -> Interfaces -> RecursionSet -> TvarMap -> TvarMap -> Can.Union -> Migration
-migrateUnionDefinition typeDefOld oldVersion newVersion scope identifier@(author, pkg, newModule, tipe) typeNameNew interfaces recursionSet tvarMapOld tvarMapNew newUnion =
+migrateUnionDefinition typeDefOld oldVersion newVersion scope identifier@(author, pkg, newModule, tipe) typeNameOld interfaces recursionSet tvarMapOld tvarMapNew newUnion =
+  let typeNameNew = tipe
+  in
   case typeDefOld of
-    (Alias moduleNameOld typeNameOld aliasOld) ->
+    (Alias moduleNameOld typeNameOld_ aliasOld) ->
       unimplemented "" ("`" <> N.toText typeNameNew <> "` was a type alias, but now it's a custom type. I need you to write this migration.")
-    (Union moduleNameOld typeNameOld unionOld) ->
-      migrateUnionDefinition_ author pkg unionOld newUnion tvarMapOld tvarMapNew oldVersion newVersion typeNameNew newModule identifier (dropCan moduleNameOld) interfaces recursionSet scope
+    (Union moduleNameOld typeNameOld_ unionOld) ->
+      migrateUnionDefinition_ author pkg unionOld newUnion tvarMapOld tvarMapNew oldVersion newVersion typeNameOld typeNameNew newModule identifier (dropCan moduleNameOld) interfaces recursionSet scope
 
 
-migrateUnionDefinition_ :: Pkg.Author -> Pkg.Project -> Can.Union -> Can.Union -> TvarMap -> TvarMap -> Int -> Int -> N.Name -> N.Name -> TypeIdentifier -> N.Name -> Interfaces -> RecursionSet -> ModuleName.Canonical -> Migration
-migrateUnionDefinition_ author pkg oldUnion newUnion tvarMapOld tvarMapNew oldVersion newVersion typeName newModule identifier oldModuleName interfaces recursionSet scope =
+migrateUnionDefinition_ :: Pkg.Author -> Pkg.Project -> Can.Union -> Can.Union -> TvarMap -> TvarMap -> Int -> Int -> N.Name -> N.Name -> N.Name -> TypeIdentifier -> N.Name -> Interfaces -> RecursionSet -> ModuleName.Canonical -> Migration
+migrateUnionDefinition_ author pkg oldUnion newUnion tvarMapOld tvarMapNew oldVersion newVersion typeNameOld typeName newModule identifier oldModuleName interfaces recursionSet scope =
   let
     oldModuleNameCanonical :: ModuleName.Canonical
     oldModuleNameCanonical = ModuleName.Canonical (Pkg.Name author pkg) oldModuleName
@@ -276,7 +278,7 @@ migrateUnionDefinition_ author pkg oldUnion newUnion tvarMapOld tvarMapNew oldVe
     migrationTypeSignature = T.concat
       [ paramMigrationFnsTypeSig & T.intercalate " -> " & suffixIfNonempty " -> "
       , " "
-      , oldModuleName & N.toText, ".", typeName & N.toText
+      , oldModuleName & N.toText, ".", typeNameOld & N.toText
       , " "
       , tvarsOld & fmap (\tvar -> T.concat [N.toText tvar, "_old"]) & T.intercalate " "
       , " -> "
@@ -1051,7 +1053,7 @@ migrateTypeDef typeOld typeNew oldVersion newVersion interfaces tvarMapOld tvarM
       in
       -- @TODO use unionOld instead of typeDefOld
       -- @TODO pass params
-      migrateUnionDefinition typeDefOld oldVersion newVersion mNew identifier typeNameNew interfaces newRecursionSet tvarMapOld tvarMapNew unionNew
+      migrateUnionDefinition typeDefOld oldVersion newVersion mNew identifier typeNameOld interfaces newRecursionSet tvarMapOld tvarMapNew unionNew
         & debugMigrationIncludes_ "migrateTypeDef:Union" (typeOld, typeNew)
 
     -- @ADVANCED handle case where user is aliasing a custom type?
