@@ -416,7 +416,14 @@ decoderForType ifaces cname tipe =
                      let extendedRecord = TRecord resolved Nothing & resolveTvar tvars_
                      in decoderForType ifaces cname extendedRecord
                     Nothing -> normalDecoder
-                otherTypes -> normalDecoder
+                _ ->
+                  -- Resolve extensible records through TAlias chains,
+                  -- e.g. Color = ColorValue { red, green, blue, alpha }
+                  case resolveTvar tvars_ tipe of
+                    TAlias _ _ _ (Filled (TRecord fieldMap Nothing)) ->
+                      let fields = fieldMap & fieldsToList & List.sortOn (\(name, field) -> name)
+                      in decodeRecord ifaces cname fields
+                    _ -> normalDecoder
             Filled tipe ->
               case tipe of
                 TRecord fieldMap extensibleName ->

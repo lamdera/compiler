@@ -365,7 +365,14 @@ inlineIfRecordOrCall depth ifaces cname tipe tvars aType =
               in deepEncoderForType depth ifaces cname extendedRecord
             Nothing -> normalEncoder
 
-        otherTypes -> normalEncoder
+        _ ->
+          -- Resolve extensible records through TAlias chains,
+          -- e.g. Color = ColorValue { red, green, blue, alpha }
+          case resolveTvar tvars tipe of
+            TAlias _ _ _ (Filled (TRecord fieldMap Nothing)) ->
+              let extendedRecord = TRecord fieldMap Nothing
+              in deepEncoderForType depth ifaces cname extendedRecord
+            _ -> normalEncoder
     Filled _ -> normalEncoder
 
 {-| Called for encoding tvar type values, i.e.
