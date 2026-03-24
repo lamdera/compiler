@@ -49,6 +49,58 @@
         }
       }
     },
+    "esbuild@latest": {
+      "last_modified": "2026-02-23T15:40:43Z",
+      "resolved": "github:NixOS/nixpkgs/80d901ec0377e19ac3f7bb8c035201e2e098cc97#esbuild",
+      "source": "devbox-search",
+      "version": "0.27.2",
+      "systems": {
+        "aarch64-darwin": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/aycv5d6pznr5hh8mccln9q8y68w11r1k-esbuild-0.27.2",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/aycv5d6pznr5hh8mccln9q8y68w11r1k-esbuild-0.27.2"
+        },
+        "aarch64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/xsalvlvxy35002zh9ncz5zdkw13w34i8-esbuild-0.27.2",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/xsalvlvxy35002zh9ncz5zdkw13w34i8-esbuild-0.27.2"
+        },
+        "x86_64-darwin": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/4i8glmmrwa1mqwz2rdjlb1q1fl53f90m-esbuild-0.27.2",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/4i8glmmrwa1mqwz2rdjlb1q1fl53f90m-esbuild-0.27.2"
+        },
+        "x86_64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/fqzfs9x193zsnsp5c1188hdx8rbfpd0f-esbuild-0.27.2",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/fqzfs9x193zsnsp5c1188hdx8rbfpd0f-esbuild-0.27.2"
+        }
+      }
+    },
+    "github:NixOS/nixpkgs/nixpkgs-unstable": {
+      "last_modified": "2026-03-23T13:48:00Z",
+      "resolved": "github:NixOS/nixpkgs/fdc7b8f7b30fdbedec91b71ed82f36e1637483ed?lastModified=1774273680&narHash=sha256-a%2B%2BtZ1RQsDb1I0NHrFwdGuRlR5TORvCEUksM459wKUA%3D"
+    },
     "icdiff@latest": {
       "last_modified": "2024-12-23T21:10:33Z",
       "resolved": "github:NixOS/nixpkgs/de1864217bfa9b5845f465e771e0ecb48b30e02d#icdiff",

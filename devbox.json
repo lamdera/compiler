@@ -4,6 +4,7 @@
     "pkg-config":              "latest",
     "icdiff":                  "latest",
     "cabal-install":           "latest",
+    "esbuild":                 "latest",
 
     "zlib": {
       "version": "latest",
