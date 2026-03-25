@@ -30,6 +30,14 @@ type alias SubSubRecordAlias threadedTvar =
     }
 
 
+type alias ExternalExtensibleBase compatible =
+    { compatible | base : String }
+
+
+type alias ExternalRecordViaExtensible =
+    ExternalExtensibleBase { red : Int, green : Int }
+
+
 expected_w3_encode_ExternalRecordBasic : ExternalRecordBasic -> Lamdera.Wire3.Encoder
 expected_w3_encode_ExternalRecordBasic =
     \w3_rec_var0 -> Lamdera.Wire3.encodeSequenceWithoutLength [ Lamdera.Wire3.encodeInt w3_rec_var0.int ]
@@ -113,3 +121,30 @@ expected_w3_decode_ExternalCustomThreaded w3_x_c_threadedTvar w3_x_c_threadedTva
                     _ ->
                         Lamdera.Wire3.failDecode
             )
+
+
+expected_w3_encode_ExternalExtensibleBase : ({ compatible | base : String.String } -> Lamdera.Wire3.Encoder) -> ExternalExtensibleBase compatible -> Lamdera.Wire3.Encoder
+expected_w3_encode_ExternalExtensibleBase w3_x_c_compatible =
+    w3_x_c_compatible
+
+
+expected_w3_decode_ExternalExtensibleBase w3_x_c_compatible =
+    w3_x_c_compatible
+
+
+expected_w3_encode_ExternalRecordViaExtensible : ExternalRecordViaExtensible -> Lamdera.Wire3.Encoder
+expected_w3_encode_ExternalRecordViaExtensible =
+    \w3_rec_var0 ->
+        Lamdera.Wire3.encodeSequenceWithoutLength
+            [ Lamdera.Wire3.encodeString w3_rec_var0.base
+            , Lamdera.Wire3.encodeInt w3_rec_var0.green
+            , Lamdera.Wire3.encodeInt w3_rec_var0.red
+            ]
+
+
+expected_w3_decode_ExternalRecordViaExtensible =
+    Lamdera.Wire3.succeedDecode
+        (\base0 green0 red0 -> { base = base0, green = green0, red = red0 })
+        |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeString
+        |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeInt
+        |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeInt
