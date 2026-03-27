@@ -433,8 +433,8 @@ decoderForType mode ifaces cname tipe =
                   -- from modules it doesn't import — see reachesExtensibleRecord.
                   if reachesExtensibleRecord tipe
                     then
-                      case resolveTvar tvars_ tipe of
-                        TAlias _ _ _ (Filled (TRecord fieldMap Nothing)) ->
+                      case resolveToRecord (resolveTvar tvars_ tipe) of
+                        Just (TRecord fieldMap Nothing) ->
                           let fields = fieldMap & fieldsToList & Lexical.sortOn (\(name, field) -> name)
                           in decodeRecord mode ifaces cname fields
                         _ -> normalDecoder

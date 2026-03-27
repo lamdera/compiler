@@ -118,6 +118,7 @@ wireTestFiles =
   , "src/Test/Wire_Record_Extensible3_Tricky.elm"
   , "src/Test/Wire_Record_Extensible4_DB.elm"
   , "src/Test/Wire_Record_Extensible5_ElmCss.elm"
+  , "src/Test/Wire_Record_Extensible6_TwoLevel.elm"
   , "src/Test/Wire_Record_Extensible7_ParamConstraint.elm"
   , "src/Test/Wire_Record_Extensible8_NestedRecordArg.elm"
   , "src/Test/Wire_Record_Extensible9_Unimported.elm"

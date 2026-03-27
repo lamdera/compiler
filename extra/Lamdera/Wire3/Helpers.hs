@@ -266,6 +266,24 @@ reachesExtensibleRecord tipe =
     _ -> False
 
 
+{-| The record at the end of an alias chain that reachesExtensibleRecord, when the chain
+is filled all the way down, e.g. for `Concrete = Level2 { field : Bool }` with
+`Level2 c = Level1 { c | field2 : Int }` and `Level1 c = { c | field1 : String }`.
+
+One alias layer around the record is the case that always worked, and is matched exactly
+as before, so its codecs don't change. Each further layer is resolved with its own type
+variables first: before this, a chain of three or more stopped at the first layer and
+fell back to the alias codec, which dropped the outer extension's fields and failed to
+type check (lamdera/compiler#88).
+-}
+resolveToRecord :: Type -> Maybe Type
+resolveToRecord tipe =
+  case tipe of
+    TAlias _ _ _ (Filled record@(TRecord _ Nothing)) -> Just record
+    TAlias _ _ tvars (Filled inner@(TAlias _ _ _ _)) -> resolveToRecord (resolveTvar tvars inner)
+    _ -> Nothing
+
+
 containsUnsupportedTypes :: Type -> Bool
 containsUnsupportedTypes tipe =
   case tipe of

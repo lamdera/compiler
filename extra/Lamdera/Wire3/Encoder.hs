@@ -381,10 +381,10 @@ inlineIfRecordOrCall depth ifaces cname tipe tvars aType =
           -- import — see reachesExtensibleRecord.
           if reachesExtensibleRecord tipe
             then
-              case resolveTvar tvars tipe of
-                TAlias _ _ _ (Filled extendedRecord@(TRecord _ Nothing)) ->
+              case resolveToRecord (resolveTvar tvars tipe) of
+                Just extendedRecord ->
                   deepEncoderForType depth ifaces cname extendedRecord
-                _ -> normalEncoder
+                Nothing -> normalEncoder
             else normalEncoder
     Filled _ -> normalEncoder
 
