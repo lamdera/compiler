@@ -219,6 +219,23 @@ resolvedRecordFieldMapM fieldMap extensibleName tvarMap =
     Nothing -> Nothing
 
 
+{-| Recursively resolve TAlias chains until we find a TRecord.
+Used by Encoder/Decoder to handle multi-level extensible record chains,
+e.g. Level2 compatible = Level1 { compatible | field2 : Int }
+     Concrete = Level2 { concreteField : Bool }
+
+A single resolveTvar call may produce TAlias _ _ _ (Filled (TAlias _ _ _ (Filled (TRecord ...))))
+which requires peeling off multiple layers.
+-}
+resolveToRecord :: Type -> Maybe Type
+resolveToRecord tipe =
+  case tipe of
+    record@(TRecord _ Nothing) -> Just record
+    TAlias _ _ tvars (Filled inner) ->
+      resolveToRecord (resolveTvar tvars inner)
+    _ -> Nothing
+
+
 resolveFieldMap tipe tvarMap =
   case tipe of
     TRecord fieldMapExtended maybeNameExtended ->
