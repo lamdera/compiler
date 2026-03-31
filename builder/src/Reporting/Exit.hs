@@ -962,6 +962,7 @@ data Outline
   | OutlineNoAppCore
   | OutlineNoAppJson
   | OutlineLamderaMissingDeps
+  | OutlineLamderaMissingCodecs
   | OutlineLamderaReplacementPackageVersionTooLow Pkg.Name V.Version V.Version
   | OutlineLamderaReplacementPackageVersionTooHigh Pkg.Name V.Version V.Version
 
@@ -1062,6 +1063,13 @@ toOutlineReport problem =
         [ D.reflow "You can install it with:"
         , D.indent 4 $ D.green $ "lamdera install lamdera/core"
         , D.reflow "Note: if you're trying to run a normal Elm app, use the elm binary instead."
+        ]
+
+    OutlineLamderaMissingCodecs ->
+      Help.report "MISSING DEPENDENCY" (Just "elm.json")
+        "A Lamdera application must have \"lamdera/codecs\" as a dependency."
+        [ D.reflow "Wire code generation relies on this package. You can install it with:"
+        , D.indent 4 $ D.green $ "lamdera install lamdera/codecs"
         ]
 
     OutlineLamderaReplacementPackageVersionTooLow name replacedVersion elmJsonVersion ->

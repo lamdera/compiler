@@ -12,7 +12,6 @@ import Prelude hiding (cycle, print)
 import qualified Data.ByteString.Builder as B
 import Data.Monoid ((<>))
 import qualified Data.List as List
-import Data.Map ((!))
 import qualified Data.Map as Map
 import qualified Data.Name as Name
 import qualified Data.Set as Set
@@ -23,6 +22,7 @@ import qualified AST.Optimized as Opt
 import qualified Data.Index as Index
 import qualified Elm.Kernel as K
 import qualified Elm.ModuleName as ModuleName
+import qualified Elm.Package as Pkg
 import qualified Generate.JavaScript.Builder as JS
 import qualified Generate.JavaScript.Expression as Expr
 import qualified Generate.JavaScript.Functions as Functions
@@ -194,10 +194,10 @@ addGlobalHelp mode graph global state =
   let
     addDeps deps someState =
       Set.foldl' (addGlobal mode graph) someState deps
-    
+
     argLookup = makeArgLookup graph
   in
-  case graph ! global of
+  case Map.findWithDefault (error $ globalNotFound global) global graph of
     -- @LAMDERA
     Opt.Define (Opt.Function args body) deps
       | length args > 1 ->
@@ -715,4 +715,13 @@ toMainEsmExports mode mains =
     exports = generateExports mode (Map.foldrWithKey addToTrie emptyTrie mains)
   in
   "export const Elm = " <> exports <> ";"
+
+
+globalNotFound :: Opt.Global -> String
+globalNotFound (Opt.Global (ModuleName.Canonical pkg modul) name) =
+  "Global not found in dependency graph: "
+  ++ Pkg.toChars pkg ++ ":" ++ Name.toChars modul ++ "." ++ Name.toChars name
+  ++ "\n    This likely means a required package is missing from elm.json."
+  ++ "\n    If you are using the Lamdera compiler, make sure lamdera/codecs is installed:"
+  ++ "\n        lamdera install lamdera/codecs"
 

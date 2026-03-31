@@ -42,10 +42,14 @@ runChecks root shouldCheckLamdera direct indirect default_ = do
       return $ Left err
 
     Right () ->
+      let allDeps = Map.union direct indirect in
       if Map.member Pkg.lamderaCore direct
-        then do
-          onlyWhen shouldCheckLamdera (Lamdera.Checks.runChecks_ root)
-          default_
+        then
+          if not (Map.member Pkg.lamderaCodecs allDeps)
+            then return $ Left Exit.OutlineLamderaMissingCodecs
+            else do
+              onlyWhen shouldCheckLamdera (Lamdera.Checks.runChecks_ root)
+              default_
         else
           if shouldCheckLamdera
             then return $ Left Exit.OutlineLamderaMissingDeps
