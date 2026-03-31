@@ -6,6 +6,38 @@
 import * as Sockette from 'sockette';
 import * as Cookie  from 'js-cookie';
 
+// Custom element that isolates Lamdera's dev overlay from user CSS.
+// Elm's vdom patcher calls standard DOM methods (appendChild, childNodes, etc.)
+// on parent nodes. By proxying these to a container inside a shadow root, Elm
+// renders seamlessly while the shadow boundary blocks external stylesheets.
+// Inherited CSS properties are cut off by `all: initial` on the host.
+if (typeof customElements !== 'undefined') {
+  class LamderaDevbar extends HTMLElement {
+    constructor() {
+      super();
+      var shadow = this.attachShadow({ mode: 'open' });
+      var style = document.createElement('style');
+      style.textContent = ':host { all: initial; display: block; }';
+      shadow.appendChild(style);
+      this._c = document.createElement('div');
+      shadow.appendChild(this._c);
+    }
+    appendChild(n) { return this._c.appendChild(n); }
+    insertBefore(n, r) { return this._c.insertBefore(n, r); }
+    removeChild(n) { return this._c.removeChild(n); }
+    replaceChild(n, o) { return this._c.replaceChild(n, o); }
+    get childNodes() { return this._c.childNodes; }
+    get firstChild() { return this._c.firstChild; }
+    get lastChild() { return this._c.lastChild; }
+    get children() { return this._c.children; }
+    get innerHTML() { return this._c.innerHTML; }
+    set innerHTML(v) { this._c.innerHTML = v; }
+    get textContent() { return this._c.textContent; }
+    set textContent(v) { this._c.textContent = v; }
+  }
+  customElements.define('lamdera-devbar', LamderaDevbar);
+}
+
 var clientId = ""
 const sessionId = getSessionId()
 var connected = false
