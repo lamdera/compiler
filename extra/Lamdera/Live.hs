@@ -64,6 +64,18 @@ lamderaLiveHead root = do
       pure (False, "")
 
 
+lamderaHtmlLang :: FilePath -> IO B.Builder
+lamderaHtmlLang root = do
+  langM <- readUtf8Text $ root </> "html-lang"
+  pure $ maybe "<html>" toHtmlTag langM
+  where
+    toHtmlTag lang =
+      let trimmed = T.strip lang in
+      if T.null trimmed
+        then "<html>"
+        else "<html lang=\"" <> T.encodeUtf8Builder trimmed <> "\">"
+
+
 lamderaLive :: BS.ByteString
 lamderaLive =
   $(bsToExp =<< runIO (Lamdera.Relative.readByteString "extra/dist/live.js"))
