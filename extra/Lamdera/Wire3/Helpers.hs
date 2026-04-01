@@ -1094,3 +1094,99 @@ identity =
       )
       -- [v]
     -- )
+
+
+
+{-| Wraps a decoder expression with a validation step.
+
+Given a decoder for type T and a validator function `w3_validate_T : T -> Result String ()`,
+generates AST equivalent to:
+
+    <decoder>
+        |> Lamdera.Wire3.andThenDecode
+            (\w3_decoded_val ->
+                case w3_validate_T w3_decoded_val of
+                    Ok _ ->
+                        Lamdera.Wire3.succeedDecode w3_decoded_val
+                    Err w3_val_err ->
+                        let
+                            _ = Lamdera.Wire3.debug w3_val_err
+                        in
+                        Lamdera.Wire3.failDecode
+            )
+-}
+wrapWithValidation :: Module.Canonical -> Data.Name.Name -> Data.Name.Name -> Expr -> Expr
+wrapWithValidation cname typeName decoderName decoderExpr =
+  let
+    validateName = Data.Name.fromChars $ "w3_validate_" ++ Data.Name.toChars typeName
+
+    mResult = Module.Canonical (Name "elm" "core") "Result"
+    tString = TType (Module.Canonical (Name "elm" "core") "String") "String" []
+
+    resultUnion = Union
+      { _u_vars = ["x", "a"]
+      , _u_alts =
+          [ Ctor "Err" (Index.ZeroBased 1) 1 [TVar "x"]
+          , Ctor "Ok" (Index.ZeroBased 0) 1 [TVar "a"]
+          ]
+      , _u_numAlts = 2
+      , _u_opts = Normal
+      }
+
+    -- Pattern for `Ok _`
+    okPattern = a $ PCtor
+      { _p_home = mResult
+      , _p_type = "Result"
+      , _p_union = resultUnion
+      , _p_name = "Ok"
+      , _p_index = Index.ZeroBased 0
+      , _p_args = [PatternCtorArg
+          { _index = Index.ZeroBased 0
+          , _type = TUnit
+          , _arg = a PAnything
+          }]
+      }
+
+    -- Pattern for `Err w3_val_err`
+    errPattern = a $ PCtor
+      { _p_home = mResult
+      , _p_type = "Result"
+      , _p_union = resultUnion
+      , _p_name = "Err"
+      , _p_index = Index.ZeroBased 1
+      , _p_args = [PatternCtorArg
+          { _index = Index.ZeroBased 0
+          , _type = tString
+          , _arg = pvar "w3_val_err"
+          }]
+      }
+
+    -- `w3_validate_T w3_decoded_val`
+    validatorCall =
+      call (a (VarTopLevel cname validateName)) [lvar "w3_decoded_val"]
+
+    -- `Lamdera.Wire3.succeedDecode w3_decoded_val`
+    okBranch = CaseBranch okPattern (succeedDecode (lvar "w3_decoded_val"))
+
+    -- `let _ = Lamdera.Wire3.debug w3_val_err in Lamdera.Wire3.failDecode`
+    errBranch = CaseBranch errPattern $
+      (a (Let
+            (Def
+               (a ("_"))
+               []
+               (a (Call
+                     (a (VarForeign mLamdera_Wire "debug"
+                       (Forall
+                         (Map.fromList [("a", ())])
+                         (TLambda (TType (Module.Canonical (Name "elm" "core") "String") "String" []) (TVar "a")))
+                     ))
+                     [lvar "w3_val_err"]
+                  )
+               ))
+             (failDecode (Data.Name.toChars decoderName <> " validation failed"))
+      ))
+  in
+  decoderExpr |> andThenDecode1
+    (lambda1 (pvar "w3_decoded_val") $
+      caseof validatorCall [okBranch, errBranch]
+    )

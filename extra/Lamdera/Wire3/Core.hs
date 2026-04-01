@@ -339,11 +339,16 @@ decoderUnion isTest_ ifaces pkg modul decls unionName union =
     !x = runTests isTest_ "decoderUnion" pkg modul decls generatedName generated union (unionAsModule cname unionName union)
 
     generatedName = Data.Name.fromChars $ "w3_decode_" ++ Data.Name.toChars unionName
+    validateName = Data.Name.fromChars $ "w3_validate_" ++ Data.Name.toChars unionName
     cname = Module.Canonical pkg (Src.getName modul)
     tvars = _u_vars union
     tvarsTypesig = tvars & foldl (\acc name -> Map.insert name () acc ) Map.empty
     ptvars = tvars & fmap (\tvar -> pvar $ Data.Name.fromChars $ "w3_x_c_" ++ Data.Name.toChars tvar )
     unionType = TType cname unionName (fmap TVar tvars)
+
+    hasValidator = case findDef validateName decls of
+      Just _  -> True
+      Nothing -> False
 
     vctor :: Data.Name.Name -> Index.ZeroBased -> [Type] -> Expr
     vctor tagName index paramTypes =
@@ -361,13 +366,7 @@ decoderUnion isTest_ ifaces pkg modul decls unionName union =
       -- | numCtors <= 4294967295 = decodeUnsignedInt32
       | otherwise = error $ "Unhandled custom type variant size (" ++ show numCtors ++ "), please report this issue for the custom type " ++ Data.Name.toChars unionName
 
-    generated =
-      Def
-      -- TypedDef
-        (a (generatedName))
-        -- Map.empty
-        ptvars $
-        -- debugDecoder (Data.Name.toElmString unionName)
+    baseDecoder =
         (variantIntDecoder |> andThenDecode1
               (lambda1 (pvar "w3v") $
                 caseof (lvar "w3v") $
@@ -382,13 +381,20 @@ decoderUnion isTest_ ifaces pkg modul decls unionName union =
                     & (\l -> l ++ [CaseBranch pAny_ $ failDecode (Data.Name.toChars generatedName <> " unexpected union tag index")])
               )
             )
-        -- (TAlias
-        --   (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire3")
-        --   "Decoder"
-        --   [("a", unionType)]
-        --   (Holey (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [TVar "a"])))
+
+    decoderBody =
+      if hasValidator
+        then wrapWithValidation cname unionName generatedName baseDecoder
+        else baseDecoder
+
+    generated =
+      Def
+        (a (generatedName))
+        ptvars $
+        decoderBody
   in
   generated
+
 
 
 -- Takes a tvar name and a type, and recursively searches for any extensible record constraints
