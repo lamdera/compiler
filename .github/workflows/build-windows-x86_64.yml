@@ -87,6 +87,14 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-
 
+      # Fetch origin/master in package-replacement submodules so the TH code can diff against it
+      - name: Fetch origin/master in submodules
+        shell: bash
+        run: |
+          for dir in extra/package-replacements/*/*; do
+            [ -d "$dir" ] && git -C "$dir" fetch origin master:refs/remotes/origin/master
+          done
+
       # Use a retry action because inexplicably sometimes stack install stalls
       # indefinitely after the `compiling Main` step, but then succeeds immediately
       # with a second stack install. 🤷🏻‍♂️

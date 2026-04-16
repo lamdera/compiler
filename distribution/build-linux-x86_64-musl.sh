@@ -28,6 +28,11 @@ fi
 
 cd "$compilerRoot"                                        # Move into the project root
 git submodule init && git submodule update
+# Fetch origin/master in package-replacement submodules so the TH code can diff against it.
+# Docker has no SSH so this must happen on the host where git+ssh works.
+for dir in extra/package-replacements/*/*; do
+    [ -d "$dir" ] && git -C "$dir" fetch origin master:refs/remotes/origin/master
+done
 
 mkdir -p "$cacheRoot" || true
 
@@ -55,6 +60,10 @@ build_binary_docker() {
     trap cleanup EXIT
 
     git config --global --add safe.directory /root/compiler
+    # Also mark submodule directories as safe (they're mounted from the host with different ownership)
+    for submodule in $(git -C /root/compiler submodule foreach --quiet 'echo $toplevel/$sm_path'); do
+        git config --global --add safe.directory "$submodule"
+    done
 
     # GOAL: get the cabal caches into the mounted folder so they persist outside the Docker run lifetime and we don't needlessly rebuild hundreds of super expensive deps repeatedly forever
     # This is documented but doesn't seem to work https://cabal.readthedocs.io/en/3.6/installing-packages.html#environment-variables
