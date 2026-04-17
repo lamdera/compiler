@@ -38,7 +38,7 @@ Executable lamdera
         ghc-options: -O0 -Wall -Werror
     else
         -- Make everything an error, ignoring the ones that already sit in core
-        ghc-options: -O2 -rtsopts -threaded "-with-rtsopts=-N -qg -A128m"
+        ghc-options: -O2 -rtsopts -threaded "-with-rtsopts=-N -qg -A1g"
             -Werror
             -Wno-error=noncanonical-monad-instances
             -Wno-error=unused-imports
