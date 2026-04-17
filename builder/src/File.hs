@@ -19,7 +19,6 @@ module File
 import qualified Codec.Archive.Zip as Zip
 import Control.Exception (catch)
 import qualified Data.Binary as Binary
-import qualified System.Environment as Env
 import qualified System.IO.Unsafe as Unsafe
 import qualified Data.IORef as IORef
 import qualified Data.ByteString as BS
@@ -39,6 +38,7 @@ import qualified System.IO as IO
 import System.IO.Error (ioeGetErrorType, annotateIOError, modifyIOError)
 
 
+import qualified Ext.Common as Ext
 import Lamdera ((&), alternativeImplementation)
 
 -- TIME
@@ -79,11 +79,7 @@ readNanos = Unsafe.unsafePerformIO (IORef.newIORef 0)
 
 {-# NOINLINE timingEnabled #-}
 timingEnabled :: Bool
-timingEnabled = Unsafe.unsafePerformIO $ do
-  m <- Env.lookupEnv "LDEBUG_FILE_TIMING"
-  case m of
-    Just _ -> return True
-    Nothing -> return False
+timingEnabled = Ext.envFlag "LDEBUG_FILE_TIMING"
 
 
 timeIt :: IORef.IORef Integer -> IO a -> IO a

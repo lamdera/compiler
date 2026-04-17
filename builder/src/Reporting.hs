@@ -351,6 +351,7 @@ buildLoop chan done =
 
         Right result ->
           do  (writeMs, readMs) <- File.getFileTimings
+              buildPoolMs       <- I.getDedupTimings
               let
                 !message = toFinalMessage done result
                 !width = 12 + length (show done)
@@ -358,15 +359,13 @@ buildLoop chan done =
                 if length message < width
                 then '\r' : replicate width ' ' ++ '\r' : message
                 else '\r' : message
-              if writeMs > 0 || readMs > 0
-                then Lamdera.atomicPutStrLn $
-                  "[FILE-TIMING] writeBinary=" ++ show writeMs ++ "ms readBinary=" ++ show readMs ++ "ms"
-                else return ()
-              (buildPoolMs, _) <- I.getDedupTimings
-              if buildPoolMs > 0
-                then Lamdera.atomicPutStrLn $
+              when (writeMs > 0 || readMs > 0) $
+                Lamdera.atomicPutStrLn $
+                  "[FILE-TIMING] writeBinary=" ++ show writeMs
+                  ++ "ms readBinary=" ++ show readMs ++ "ms"
+              when (buildPoolMs > 0) $
+                Lamdera.atomicPutStrLn $
                   "[DEDUP-TIMING] buildPool=" ++ show buildPoolMs ++ "ms"
-                else return ()
 
 
 toFinalMessage :: Int -> BResult a -> [Char]

@@ -25,7 +25,6 @@ import Data.Binary.Put (putWord32le)
 import Data.Binary.Get (getWord32le, lookAhead)
 import qualified Data.IORef as IORef
 import qualified Data.Time.Clock as Clock
-import qualified System.Environment as Env
 import qualified System.IO.Unsafe as Unsafe
 import Data.Map.Strict ((!))
 import qualified Data.Map.Strict as Map
@@ -35,9 +34,9 @@ import qualified Data.Name as Name
 
 import qualified AST.Canonical as Can
 import qualified AST.Utils.Binop as Binop
-import qualified Data.Index as Index
 import qualified Elm.ModuleName as ModuleName
 import qualified Elm.Package as Pkg
+import qualified Ext.Common as Ext
 import qualified Reporting.Annotation as A
 
 
@@ -362,6 +361,10 @@ internType tipe state = case tipe of
            in registerShape (SAlias home name argEntries (SFilled idT)) s2
 
 
+-- Direct recursion is measurably faster than mapAccumL here because the
+-- intermediate (acc, x) tuples mapAccumL builds in a generic shape add GC
+-- pressure on the hot pool-building path.
+
 internTypes :: [Can.Type] -> InternState -> ([Word32], InternState)
 internTypes ts state =
   case ts of
@@ -445,13 +448,12 @@ internCtorsP cs state =
   case cs of
     [] -> ([], state)
     Can.Ctor n idx numArgs ts : rest ->
-      let (ids, s1)    = internTypes ts state
-          (rs, s2)     = internCtorsP rest s1
-          numTs        = length ts
+      let (ids, s1) = internTypes ts state
+          (rs, s2)  = internCtorsP rest s1
           p = do put n
                  put idx
                  put numArgs
-                 put numTs
+                 put (length ts)
                  mapM_ putWord32le ids
       in (p : rs, s2)
 
@@ -499,79 +501,51 @@ internMapP f m state0 =
 buildPoolNanos :: IORef.IORef Integer
 buildPoolNanos = Unsafe.unsafePerformIO (IORef.newIORef 0)
 
-{-# NOINLINE serializeNanos #-}
-serializeNanos :: IORef.IORef Integer
-serializeNanos = Unsafe.unsafePerformIO (IORef.newIORef 0)
 
 {-# NOINLINE dedupTimingEnabled #-}
 dedupTimingEnabled :: Bool
-dedupTimingEnabled = Unsafe.unsafePerformIO $ do
-  m <- Env.lookupEnv "LDEBUG_DEDUP_TIMING"
-  case m of
-    Just _ -> return True
-    Nothing -> return False
+dedupTimingEnabled = Ext.envFlag "LDEBUG_DEDUP_TIMING"
 
 
-getDedupTimings :: IO (Double, Double)
+getDedupTimings :: IO Double
 getDedupTimings = do
   b <- IORef.readIORef buildPoolNanos
-  s <- IORef.readIORef serializeNanos
-  return (fromIntegral b / 1e6, fromIntegral s / 1e6)
+  return (fromIntegral b / 1e6)
 
 
 putInterfaceDedup :: Interface -> Put
 putInterfaceDedup iface =
-  if dedupTimingEnabled
-    then putInterfaceDedupTimed iface
-    else putInterfaceDedupRaw iface
-
-
-putInterfaceDedupRaw :: Interface -> Put
-putInterfaceDedupRaw iface =
   let (valuesPuts,  s1) = internMapP internAnnotationP (_values iface)  emptyIntern
       (unionsPuts,  s2) = internMapP internUnionP      (_unions iface)  s1
-      (aliasesPuts, s3) = internMapP internAliasP      (_aliases iface) s2
-      (binopsPuts,  s4) = internMapP internBinopP      (_binops iface)  s3
-      shapes            = reverse (_list s4)
+      (aliasesPuts, s3) = internMapP internAliasP     (_aliases iface) s2
+      (binopsPuts,  s4) = internMapP internBinopP     (_binops iface)  s3
+      !state4           = if dedupTimingEnabled then recordPoolTime s4 else s4
+      shapes            = reverse (_list state4)
   in
-  do  putWord32le (_size s4)
+  do  putWord32le (_size state4)
       mapM_ putShape shapes
       put (_home iface)
-      putKeyedPuts valuesPuts
-      putKeyedPuts unionsPuts
-      putKeyedPuts aliasesPuts
-      putKeyedPuts binopsPuts
+      putMapPuts valuesPuts
+      putMapPuts unionsPuts
+      putMapPuts aliasesPuts
+      putMapPuts binopsPuts
 
 
-putInterfaceDedupTimed :: Interface -> Put
-putInterfaceDedupTimed iface =
-  let !state4 = Unsafe.unsafePerformIO $ do
-        t0 <- Clock.getCurrentTime
-        let (vs, s1) = internMapP internAnnotationP (_values iface)  emptyIntern
-            (us, s2) = internMapP internUnionP      (_unions iface)  s1
-            (als, s3) = internMapP internAliasP     (_aliases iface) s2
-            (bs, s4) = internMapP internBinopP      (_binops iface)  s3
-            !sz = _size s4
-        t1 <- Clock.getCurrentTime
-        let dt    = Clock.diffUTCTime t1 t0
-            nanos = round (realToFrac dt * 1e9 :: Double) :: Integer
-        IORef.atomicModifyIORef' buildPoolNanos (\acc -> (acc + nanos, ()))
-        sz `seq` length vs `seq` length us `seq` length als `seq` length bs
-            `seq` return (s4, vs, us, als, bs)
-      (s4, valuesPuts, unionsPuts, aliasesPuts, binopsPuts) = state4
-      shapes = reverse (_list s4)
-  in
-  do  putWord32le (_size s4)
-      mapM_ putShape shapes
-      put (_home iface)
-      putKeyedPuts valuesPuts
-      putKeyedPuts unionsPuts
-      putKeyedPuts aliasesPuts
-      putKeyedPuts binopsPuts
+-- Force pool construction inside a clock and accumulate the duration.
+-- Returns the (forced) state unchanged.
+recordPoolTime :: InternState -> InternState
+recordPoolTime s = Unsafe.unsafePerformIO $ do
+  t0 <- Clock.getCurrentTime
+  _size s `seq` length (_list s) `seq` return ()
+  t1 <- Clock.getCurrentTime
+  let dt    = Clock.diffUTCTime t1 t0
+      nanos = round (realToFrac dt * 1e9 :: Double) :: Integer
+  IORef.atomicModifyIORef' buildPoolNanos (\acc -> (acc + nanos, ()))
+  return s
 
 
-putKeyedPuts :: Binary k => [(k, Put)] -> Put
-putKeyedPuts kps = do
+putMapPuts :: Binary k => [(k, Put)] -> Put
+putMapPuts kps = do
   put (length kps)
   mapM_ (\(k, p) -> put k >> p) kps
 
@@ -788,8 +762,3 @@ getMapWith getValue = do
     v <- getValue
     return (k, v)
   return (Map.fromList pairs)
-
-
--- Suppress unused-import warnings for Index (re-exported for callers if any)
-_unusedIndex :: Index.ZeroBased -> Index.ZeroBased
-_unusedIndex i = i
