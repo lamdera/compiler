@@ -11,6 +11,7 @@ module File
   , exists
   , remove
   , removeDir
+  , getFileTimings
   )
   where
 
@@ -18,6 +19,9 @@ module File
 import qualified Codec.Archive.Zip as Zip
 import Control.Exception (catch)
 import qualified Data.Binary as Binary
+import qualified System.Environment as Env
+import qualified System.IO.Unsafe as Unsafe
+import qualified Data.IORef as IORef
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Internal as BS
 import qualified Data.ByteString.Builder as B
@@ -65,16 +69,57 @@ instance Binary.Binary Time where
 -- BINARY
 
 
+{-# NOINLINE writeNanos #-}
+writeNanos :: IORef.IORef Integer
+writeNanos = Unsafe.unsafePerformIO (IORef.newIORef 0)
+
+{-# NOINLINE readNanos #-}
+readNanos :: IORef.IORef Integer
+readNanos = Unsafe.unsafePerformIO (IORef.newIORef 0)
+
+{-# NOINLINE timingEnabled #-}
+timingEnabled :: Bool
+timingEnabled = Unsafe.unsafePerformIO $ do
+  m <- Env.lookupEnv "LDEBUG_FILE_TIMING"
+  case m of
+    Just _ -> return True
+    Nothing -> return False
+
+
+timeIt :: IORef.IORef Integer -> IO a -> IO a
+timeIt ref action =
+  if timingEnabled
+    then do
+      t0 <- Time.getCurrentTime
+      result <- action
+      t1 <- Time.getCurrentTime
+      let dt = Time.diffUTCTime t1 t0
+          nanos = round (realToFrac dt * 1e9 :: Double) :: Integer
+      IORef.atomicModifyIORef' ref (\acc -> (acc + nanos, ()))
+      return result
+    else action
+
+
+-- | Get accumulated write/read times in milliseconds (for reporting).
+getFileTimings :: IO (Double, Double)
+getFileTimings = do
+  w <- IORef.readIORef writeNanos
+  r <- IORef.readIORef readNanos
+  return (fromIntegral w / 1e6, fromIntegral r / 1e6)
+
+
 writeBinary :: (Binary.Binary a) => FilePath -> a -> IO ()
 writeBinary path value =
-  do  let dir = FP.dropFileName path
+  timeIt writeNanos $ do
+      let dir = FP.dropFileName path
       Dir.createDirectoryIfMissing True dir
       Binary.encodeFile path value
 
 
 readBinary :: (Binary.Binary a) => FilePath -> IO (Maybe a)
 readBinary path =
-  do  pathExists <- Dir.doesFileExist path
+  timeIt readNanos $ do
+      pathExists <- Dir.doesFileExist path
       if pathExists
         then
           do  result <- Binary.decodeFileOrFail path
