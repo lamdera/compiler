@@ -7,7 +7,7 @@ module Data.Name
   , toElmString
   , toBuilder
   --
-  , fromPtr
+  , fromAddr
   , fromChars
   --
   , getKernel
@@ -56,6 +56,7 @@ import GHC.Exts
   , sizeofByteArray#
   , unsafeFreezeByteArray#
   )
+import GHC.Exts (Int(I#), isTrue#)
 import GHC.ST (ST(ST), runST)
 import GHC.Prim
 import GHC.Word (Word8(W8#))
@@ -118,9 +119,9 @@ toBuilder =
 -- FROM
 
 
-fromPtr :: Ptr Word8 -> Ptr Word8 -> Name
-fromPtr =
-  Utf8.fromPtr
+fromAddr :: Addr# -> Addr# -> IO Name
+fromAddr =
+  Utf8.fromAddr
 
 
 fromChars :: [Char] -> Name
