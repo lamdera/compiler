@@ -905,7 +905,7 @@ map4 fn a b c d =
   Control.Monad.liftM4 fn a b c d
 
 
-required :: B.ByteString -> Decoder e a -> Decoder e (a -> b) -> Decoder e b
+required :: BS.ByteString -> Decoder e a -> Decoder e (a -> b) -> Decoder e b
 required key valDecoder decoder =
     custom (field key valDecoder) decoder
 
@@ -914,7 +914,7 @@ required key valDecoder decoder =
 --     custom (optionalDecoder [ key ] valDecoder fallback) decoder
 
 -- @TODO this isn't quite right yet and will totally gobble up all errors, not just null ones...
-optional :: B.ByteString -> Decoder e a -> a -> Decoder e (a -> b) -> Decoder e b
+optional :: BS.ByteString -> Decoder e a -> a -> Decoder e (a -> b) -> Decoder e b
 optional key valDecoder fallback decoder  =
     custom (withDefault fallback (field key valDecoder)) decoder
 
@@ -935,7 +935,7 @@ null fallback =
         err (Expecting region TNull)
 
 
-at :: [B.ByteString] -> Decoder e a -> Decoder e a
+at :: [BS.ByteString] -> Decoder e a -> Decoder e a
 at fields decoder =
     foldr field decoder fields
 
@@ -967,7 +967,7 @@ textParser =
     cok (Json.fromPtr pos end & (T.pack . Json.toChars)) (P.State src end end indent row newCol)
 
 
--- optionalDecoder :: [B.ByteString] -> Decoder e a -> a -> Decoder e a
+-- optionalDecoder :: [BS.ByteString] -> Decoder e a -> a -> Decoder e a
 -- optionalDecoder path valDecoder fallback =
 --     let
 --         nullOr decoder =

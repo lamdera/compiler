@@ -72,12 +72,17 @@ moveTo targetRow targetCol pos end row col =
     (# pos, row, col #)
 
   else
-    case P.unsafeIndex pos of
+    case unsafeIndex pos of
       0x0A {- \n -} ->
         moveTo targetRow targetCol (plusPtr pos 1) end (row + 1) 1
 
       _ ->
         moveTo targetRow targetCol (plusPtr pos 1) end row (col + 1)
+
+
+unsafeIndex :: Ptr Word8 -> Word8
+unsafeIndex ptr =
+  B.accursedUnutterablePerformIO (peek ptr)
 
 
 startsWith :: P.Parser x a -> B.ByteString -> Bool
