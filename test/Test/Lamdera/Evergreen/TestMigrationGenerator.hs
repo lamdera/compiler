@@ -114,6 +114,8 @@ testExamples = withTestEnv $ do
         -- , "src/Test/Migrate_External_Wrap.elm"
           "src/Migrate_External_Paramed"
         , "src/Migrate_All"
+        , "src/Migrate_Union_Renamed"
+        , "src/Migrate_Nested_Dict"
         ]
 
     catchTestException :: FilePath -> SomeException -> IO a
