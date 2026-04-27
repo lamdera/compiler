@@ -295,7 +295,8 @@ getConstraints pkg vsn =
                 if outlineExists
                   then
                     do  bytes <- File.readUtf8 path
-                        case D.fromByteString constraintsDecoder bytes of
+                        result <- D.fromByteString constraintsDecoder bytes
+                        case result of
                           Right cs ->
                             case connection of
                               Online _ ->
@@ -307,7 +308,7 @@ getConstraints pkg vsn =
                                       then ok (toNewState cs) cs back
                                       else back state
 
-                          Left  _  ->
+                          Left _ ->
                             do  File.remove path
                                 err (Exit.SolverBadCacheData pkg vsn)
                   else
@@ -324,14 +325,15 @@ getConstraints pkg vsn =
                                 err (Exit.SolverBadHttp pkg vsn httpProblem)
 
                               Right body ->
-                                case D.fromByteString constraintsDecoder body of
-                                  Right cs ->
-                                    do  Dir.createDirectoryIfMissing True home
-                                        File.writeUtf8 path body
-                                        ok (toNewState cs) cs back
+                                do  conResult <- D.fromByteString constraintsDecoder body
+                                    case conResult of
+                                      Right cs ->
+                                        do  Dir.createDirectoryIfMissing True home
+                                            File.writeUtf8 path body
+                                            ok (toNewState cs) cs back
 
-                                  Left _ ->
-                                    err (Exit.SolverBadHttpData pkg vsn url)
+                                      Left _ ->
+                                        err (Exit.SolverBadHttpData pkg vsn url)
 
 
 constraintsDecoder :: D.Decoder () Constraints
