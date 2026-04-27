@@ -43,9 +43,9 @@ type Expr = A.Located Expr_
 
 
 data Expr_
-  = Chr ES.String
+  = Chr Char
   | Str ES.String
-  | Int Int
+  | Int Integer
   | Float EF.Float
   | Var VarType Name
   | VarQual VarType Name Name
@@ -97,9 +97,9 @@ data Pattern_
   | PCtorQual A.Region Name Name [Pattern]
   | PList [Pattern]
   | PCons Pattern Pattern
-  | PChr ES.String
+  | PChr Char
   | PStr ES.String
-  | PInt Int
+  | PInt Integer
 
 
 
