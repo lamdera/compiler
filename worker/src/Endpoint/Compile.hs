@@ -7,6 +7,7 @@ module Endpoint.Compile
   where
 
 
+import Control.Monad.IO.Class (liftIO)
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Builder as B
 import qualified Data.ByteString.Lazy as LBS
@@ -18,7 +19,8 @@ import Snap.Core
 import Snap.Util.FileUploads
 import qualified System.Directory as Dir
 import qualified System.IO.Streams as Stream
-import Text.RawString.QQ (r)
+
+import Literals (b)
 
 import qualified Artifacts as A
 import qualified Cors
@@ -73,7 +75,8 @@ endpoint artifacts =
       case result of
         ([("code",source)], 0) ->
           do  modifyResponse $ setContentType "text/html; charset=utf-8"
-              case compile artifacts source of
+              outcome <- liftIO $ compile artifacts source
+              case outcome of
                 Success builder ->
                   writeBuilder builder
 
@@ -109,36 +112,37 @@ data Outcome
   | BadInput ModuleName.Raw Error.Error
 
 
-compile :: A.Artifacts -> B.ByteString -> Outcome
+compile :: A.Artifacts -> B.ByteString -> IO Outcome
 compile (A.Artifacts interfaces objects) source =
-  case Parse.fromByteString Parse.Application source of
-    Left err ->
-      BadInput N._Main (Error.BadSyntax err)
-
-    Right modul@(Src.Module _ _ _ imports _ _ _ _ _) ->
-      case checkImports interfaces imports of
+  do  result <- Parse.fromByteString Parse.Application source
+      case result of
         Left err ->
-          BadInput (Src.getName modul) (Error.BadImports err)
+          return $ BadInput N._Main (Error.BadSyntax err)
 
-        Right ifaces ->
-          case Compile.compile Pkg.dummyName ifaces modul of
+        Right modul@(Src.Module _ _ _ imports _ _ _ _ _) ->
+          case checkImports interfaces imports of
             Left err ->
-              BadInput (Src.getName modul) err
+              return $ BadInput (Src.getName modul) (Error.BadImports err)
 
-            Right (Compile.Artifacts canModule _ locals) ->
-              case locals of
-                Opt.LocalGraph Nothing _ _ ->
-                  NoMain
+            Right ifaces ->
+              case Compile.compile Pkg.dummyName ifaces modul of
+                Left err ->
+                  return $ BadInput (Src.getName modul) err
 
-                Opt.LocalGraph (Just main_) _ _ ->
-                  let
-                    mode  = Mode.Dev Nothing
-                    home  = Can._name canModule
-                    name  = ModuleName._module home
-                    mains = Map.singleton home main_
-                    graph = Opt.addLocalGraph locals objects
-                  in
-                  Success $ Html.sandwich name $ JS.generate mode graph mains
+                Right (Compile.Artifacts canModule _ locals) ->
+                  case locals of
+                    Opt.LocalGraph Nothing _ _ ->
+                      return NoMain
+
+                    Opt.LocalGraph (Just main_) _ _ ->
+                      let
+                        mode  = Mode.Dev Nothing
+                        home  = Can._name canModule
+                        name  = ModuleName._module home
+                        mains = Map.singleton home main_
+                        graph = Opt.addLocalGraph locals objects
+                      in
+                      return $ Success $ Html.sandwich name $ JS.generate mode graph mains
 
 
 checkImports :: Map.Map ModuleName.Raw I.Interface -> [Src.Import] -> Either (NE.List Import.Error) (Map.Map ModuleName.Raw I.Interface)
@@ -168,7 +172,7 @@ checkImports interfaces imports =
 
 renderReport :: Help.Report -> B.Builder
 renderReport report =
-  [r|<!DOCTYPE HTML>
+  [b|<!DOCTYPE HTML>
 <html>
 <head>
   <meta charset="UTF-8">
@@ -177,7 +181,7 @@ renderReport report =
 </head>
 <body>
   <script>
-    var app = Elm.Errors.init({flags:|] <> Encode.encodeUgly (Exit.toJson report) <> [r|});
+    var app = Elm.Errors.init({flags:|] <> Encode.encodeUgly (Exit.toJson report) <> [b|});
     app.ports.jumpTo.subscribe(function(region) {
       window.parent.postMessage(JSON.stringify(region), '*');
     });
