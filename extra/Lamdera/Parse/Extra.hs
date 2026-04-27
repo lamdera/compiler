@@ -59,11 +59,11 @@ getOffset =
 
 toOffset :: P.Cursor -> P.Parser x Int
 toOffset targetRow targetCol =
-  P.Parser $ \(P.State src pos end indent row col) cok _ _ _ ->
+  P.Parser $ \_ (P.State pos end indent cursor) cok _ _ _ ->
     let
-      (# newPos, newRow, newCol #) = moveTo targetRow targetCol pos end row col
+      (# newPos, newRow, newCol #) = moveTo targetRow targetCol pos end cursor
     in
-    cok (minusPtr newPos (unsafeForeignPtrToPtr src)) (P.State src newPos end indent newRow newCol)
+    cok (minusPtr newPos (unsafeForeignPtrToPtr src)) (P.State newPos end indent newRow newCol)
 
 
 moveTo :: P.Cursor -> Ptr Word8 -> Ptr Word8 -> P.Cursor -> (# Ptr Word8, P.Cursor #)
@@ -100,6 +100,6 @@ stopAfter = (<* ignoreRest)
 
 ignoreRest :: P.Parser x ()
 ignoreRest =
-  P.Parser $ \(P.State src pos _ indent row col) _ eok _ _ ->
+  P.Parser $ \_ (P.State pos _ indent cursor) _ eok _ _ ->
     -- set end to current pos to avoid errors in P.fromByteString when pos is not at the end of input
-    eok () (P.State src pos pos indent row col)
+    eok () (P.State pos pos indent cursor)
