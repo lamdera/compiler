@@ -9,7 +9,8 @@ module Generate.Html
 import qualified Data.ByteString.Builder as B
 import Data.Monoid ((<>))
 import qualified Data.Name as Name
-import Text.RawString.QQ (r)
+
+import Literals (b)
 
 import qualified Lamdera
 import qualified Lamdera.Live
@@ -22,11 +23,11 @@ sandwich :: FilePath -> Name.Name -> B.Builder -> B.Builder
 sandwich root moduleName javascript =
   Lamdera.alternativeImplementationWhen Lamdera.isLamdera_ (sandwich_ root moduleName javascript) $
   let name = Name.toBuilder moduleName in
-  [r|<!DOCTYPE HTML>
+  [b|<!DOCTYPE HTML>
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>|] <> name <> [r|</title>
+  <title>|] <> name <> [b|</title>
   <style>body { padding: 0; margin: 0; }</style>
 </head>
 
@@ -36,9 +37,9 @@ sandwich root moduleName javascript =
 
 <script>
 try {
-|] <> javascript <> [r|
+|] <> javascript <> [b|
 
-  var app = Elm.|] <> name <> [r|.init({ node: document.getElementById("elm") });
+  var app = Elm.|] <> name <> [b|.init({ node: document.getElementById("elm") });
 }
 catch (e)
 {

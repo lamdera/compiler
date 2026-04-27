@@ -11,9 +11,9 @@ module Develop.Generate.Help
 import qualified Data.ByteString.Builder as B
 import Data.Monoid ((<>))
 import qualified Data.Name as Name
-import Text.RawString.QQ (r)
 
 import qualified Json.Encode as Encode
+import Literals (b)
 
 import qualified Lamdera.Live
 import qualified Lamdera.UiSourceMap
@@ -24,7 +24,7 @@ import qualified Data.Text.Encoding as T
 
 makePageHtml :: Name.Name -> Maybe Encode.Value -> B.Builder
 makePageHtml moduleName maybeFlags =
-  [r|<!DOCTYPE HTML>
+  [b|<!DOCTYPE HTML>
 <html>
 <head>
   <meta charset="UTF-8">
@@ -35,9 +35,9 @@ makePageHtml moduleName maybeFlags =
 <body>
 <script>
 var app = // @LAMDERA
-Elm.|] <> Name.toBuilder moduleName <> [r|.init({ flags: |] <> maybe "undefined" Encode.encode maybeFlags <> [r| });
-if (app.ports && app.ports.jumpTo) app.ports.jumpTo.subscribe(node => { |] <> T.encodeUtf8Builder Lamdera.UiSourceMap.openEditorSrc <> [r| }); // @LAMDERA
-|] <> Lamdera.Live.lamderaLiveSrc <> Lamdera.UiSourceMap.src <> [r|
+Elm.|] <> Name.toBuilder moduleName <> [b|.init({ flags: |] <> maybe "undefined" Encode.encode maybeFlags <> [b| });
+if (app.ports && app.ports.jumpTo) app.ports.jumpTo.subscribe(node => { |] <> T.encodeUtf8Builder Lamdera.UiSourceMap.openEditorSrc <> [b| }); // @LAMDERA
+|] <> Lamdera.Live.lamderaLiveSrc <> Lamdera.UiSourceMap.src <> [b|
 </script>
 </body>
 </html>
@@ -50,12 +50,12 @@ if (app.ports && app.ports.jumpTo) app.ports.jumpTo.subscribe(node => { |] <> T.
 
 makeCodeHtml :: FilePath -> B.Builder -> B.Builder
 makeCodeHtml title code =
-  [r|<!DOCTYPE HTML>
+  [b|<!DOCTYPE HTML>
 <html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, minimum-scale=1.0">
-  <title>|] <> B.stringUtf8 title <> [r|</title>
+  <title>|] <> B.stringUtf8 title <> [b|</title>
   <style type="text/css">
     @import url(/_elm/source-code-pro.ttf);
     html, head, body, pre { margin: 0; height: 100%; }
@@ -66,7 +66,7 @@ makeCodeHtml title code =
   <script>if (hljs) { hljs.initHighlightingOnLoad(); }</script>
 </head>
 <body style="background-color: #F0F0F0;">
-<pre><code>|] <> code <> Lamdera.UiSourceMap.src <> [r|</code></pre>
+<pre><code>|] <> code <> Lamdera.UiSourceMap.src <> [b|</code></pre>
 </body>
 </html>
 |]

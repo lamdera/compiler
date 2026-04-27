@@ -368,7 +368,6 @@ Executable lamdera
           -- >= 2.4 && < 2.7,
         parsec,
         process,
-        raw-strings-qq,
         scientific,
         SHA,
         snap-core,
