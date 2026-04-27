@@ -62,6 +62,7 @@ Executable lamdera
     Hs-Source-Dirs:
         compiler/src
         builder/src
+        src/utils
         terminal/impl
         terminal/src
         -- Lamdera
@@ -96,7 +97,7 @@ Executable lamdera
         Develop.Generate.Help
         Develop.Generate.Index
         Develop.StaticFiles
-        Develop.StaticFiles.Build
+        Develop.StaticFiles_TH
 
         -- from builder/
         Build
@@ -152,6 +153,7 @@ Executable lamdera
         AST.Canonical
         AST.Optimized
         AST.Source
+        AST.Prim.Variable
         AST.Utils.Binop
         AST.Utils.Shader
         AST.Utils.Type
@@ -183,6 +185,7 @@ Executable lamdera
         Parse.Declaration
         Parse.Expression
         Parse.Keyword
+        Parse.Keyword_TH
         Parse.Module
         Parse.Number
         Parse.Pattern
@@ -353,6 +356,10 @@ Executable lamdera
         Ext.ElmPages
         Test.Ext.ElmPages.Check
 
+        -- utils
+        Bytes
+        Literals
+
     Build-depends:
         ansi-terminal,
         ansi-wl-pprint < 1,
@@ -362,7 +369,6 @@ Executable lamdera
         containers,
         directory,
         edit-distance,
-        file-embed,
         filelock,
         filepath,
         ghc-prim,
