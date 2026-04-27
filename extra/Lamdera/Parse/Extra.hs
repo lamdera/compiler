@@ -16,7 +16,7 @@ import Foreign.ForeignPtr.Unsafe (unsafeForeignPtrToPtr)
 import qualified Parse.Primitives as P
 
 
-fromByteStringWithContext :: P.Parser x a -> (P.Row -> P.Col -> x) -> B.ByteString -> Either (B.ByteString, x, B.ByteString) (B.ByteString, a, B.ByteString)
+fromByteStringWithContext :: P.Parser x a -> (P.Cursor -> x) -> B.ByteString -> Either (B.ByteString, x, B.ByteString) (B.ByteString, a, B.ByteString)
 fromByteStringWithContext parser toEnd src =
   let
     parserWithContext =
@@ -29,7 +29,7 @@ fromByteStringWithContext parser toEnd src =
   fromByteStringIgnoringRest parserWithContext toEndWithContext src
 
 
-specializeAtPos :: (x -> P.Row -> P.Col -> y) -> P.Parser x a -> P.Parser y a
+specializeAtPos :: (x -> P.Cursor -> y) -> P.Parser x a -> P.Parser y a
 specializeAtPos addContext (P.Parser parser) =
   P.Parser $ \state cok eok cerr eerr ->
     let
@@ -39,7 +39,7 @@ specializeAtPos addContext (P.Parser parser) =
     parser state cok eok cerr' eerr'
 
 
-specializer :: B.ByteString -> value -> P.Row -> P.Col -> (B.ByteString, value, B.ByteString)
+specializer :: B.ByteString -> value -> P.Cursor -> (B.ByteString, value, B.ByteString)
 specializer src value row col =
   withContext src value
     $ either id id
@@ -57,7 +57,7 @@ getOffset =
     eok (minusPtr pos (unsafeForeignPtrToPtr src)) state
 
 
-toOffset :: P.Row -> P.Col -> P.Parser x Int
+toOffset :: P.Cursor -> P.Parser x Int
 toOffset targetRow targetCol =
   P.Parser $ \(P.State src pos end indent row col) cok _ _ _ ->
     let
@@ -66,7 +66,7 @@ toOffset targetRow targetCol =
     cok (minusPtr newPos (unsafeForeignPtrToPtr src)) (P.State src newPos end indent newRow newCol)
 
 
-moveTo :: P.Row -> P.Col -> Ptr Word8 -> Ptr Word8 -> P.Row -> P.Col -> (# Ptr Word8, P.Row, P.Col #)
+moveTo :: P.Cursor -> Ptr Word8 -> Ptr Word8 -> P.Cursor -> (# Ptr Word8, P.Cursor #)
 moveTo targetRow targetCol pos end row col =
   if pos >= end || row > targetRow || row == targetRow && col >= targetCol then
     (# pos, row, col #)
@@ -85,7 +85,7 @@ startsWith parser =
   isRight . fromByteStringIgnoringRest (P.specialize (\_ _ _ -> ()) parser) (\_ _ -> ())
 
 
-fromByteStringIgnoringRest :: P.Parser x a -> (P.Row -> P.Col -> x) -> B.ByteString -> Either x a
+fromByteStringIgnoringRest :: P.Parser x a -> (P.Cursor -> x) -> B.ByteString -> Either x a
 fromByteStringIgnoringRest = P.fromByteString . stopAfter
 
 
