@@ -61,12 +61,12 @@ packages:
   original:
     hackage: fsnotify-0.4.1.0
 - completed:
-    hackage: broadcast-chan-0.3.0@sha256:c4253564e2c5cdec9e1c0b74f80eef9a68d6f1e2ff134ac473f502b17ca74e49,10678
+    hackage: broadcast-chan-0.2.1.2@sha256:5959056eac6a707766e0c1e4f24aeea802679b98fd4651ff377aab258b989865,6011
     pantry-tree:
-      sha256: f0d09accbd178bb1a1ce7fc675506d57146a93ea887d02356882c56fcad676d4
-      size: 1527
+      sha256: f671c3d869a28af47eb5998c6afa3e811f1af8c7da995ef81b480fb2c21efd8c
+      size: 755
   original:
-    hackage: broadcast-chan-0.3.0@sha256:c4253564e2c5cdec9e1c0b74f80eef9a68d6f1e2ff134ac473f502b17ca74e49,10678
+    hackage: broadcast-chan-0.2.1.2
 - completed:
     hackage: paramtree-0.1.2@sha256:52b28d40a919b669c78e1d05eee19cbfc65ceb063226b75373f720bf15310d7d,2403
     pantry-tree:
