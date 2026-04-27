@@ -43,17 +43,17 @@ npm publish
 ```
 
 
-## 4. Tag the `latest-0.19.1` version
+## 4. Tag the `latest-0.19.2` version
 
 Many compiler releases have needed multiple `npm` publications. Maybe something does not work on Windows or some dependency becomes insecure. Normal `npm` problems.
 
 The convention for each Elm release is to create a tag the latest one.
 
 ```bash
-npm dist-tag add elm@0.19.1-3 latest-0.19.1
+npm dist-tag add elm@0.19.2-3 latest-0.19.2
 ```
 
-That way people who want a specific version can point to `latest-0.19.1` or `latest-0.18.0` instead of knowing the particular names of all the various publications.
+That way people who want a specific version can point to `latest-0.19.2` or `latest-0.18.0` instead of knowing the particular names of all the various publications.
 
 You can read more about dist-tags [here](https://docs.npmjs.com/cli/dist-tag).
 
