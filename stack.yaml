@@ -1,5 +1,5 @@
 # resolver: nightly-2023-09-27
-resolver: lts-20.26 # ghc 9.2.8
+resolver: lts-23.28 # ghc 9.8.4
 system-ghc: false
 ghc-options:
   "$locals": -Wincomplete-patterns -lstdc++
@@ -16,7 +16,8 @@ extra-deps:
 - fsnotify-0.4.1.0
 #- ansi-wl-pprint-0.6.9@sha256:fb737bc96e2aef34ad595d54ced7a73f648c521ebcb00fe0679aff45ccd49212,2448
 #- optparse-applicative-0.17.1.0@sha256:cb5f5f0dc9749846fc0e3df0041a8efee6368cc1cff07336acd4c3b02a951ed6,5147
-
+- broadcast-chan-0.3.0@sha256:c4253564e2c5cdec9e1c0b74f80eef9a68d6f1e2ff134ac473f502b17ca74e49,10678
+- paramtree-0.1.2@sha256:52b28d40a919b669c78e1d05eee19cbfc65ceb063226b75373f720bf15310d7d,2403
 # Required to build on windows
 - regex-posix-0.96.0.1
 # elm-format vendoring
