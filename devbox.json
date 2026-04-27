@@ -14,7 +14,6 @@
     "path:./nix/devbox#stack": "",
     "path:./nix/devbox#ghc":   "",
     "path:./nix/devbox#cc":    "",
-    "path:./nix/devbox#hls":    "",
 
     "path:./nix/devbox#apple_sdk_CoreServices": {
       "platforms": ["x86_64-darwin", "aarch64-darwin"]
