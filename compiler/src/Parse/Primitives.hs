@@ -234,7 +234,7 @@ oowfHelp fpc state cok eok cerr parsers fallback =
 instance Monad (Parser x) where
   {-# INLINE return #-}
   return value =
-    Parser $ \state _ eok _ _ ->
+    Parser $ \_ state _ eok _ _ ->
       eok value state
 
   {-# INLINE (>>=) #-}
