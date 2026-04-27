@@ -405,6 +405,7 @@ Executable lamdera
         text,
         -- Extra
         aeson,
+        file-embed,
         neat-interpolation,
         natural-sort,
         listsafe,
