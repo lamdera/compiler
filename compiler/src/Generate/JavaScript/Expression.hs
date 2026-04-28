@@ -59,55 +59,35 @@ generateJsExpr mode argLookup expression =
 generate :: Mode.Mode -> FnArgLookup -> Opt.Expr -> Code
 generate mode argLookup expression =
   case expression of
-    Opt.Bool bool ->
-      JsExpr $ JS.Bool bool
-
-    Opt.Chr char ->
+    Opt.Bool b -> JsExpr $ JS.Bool b
+    Opt.Chr c ->
       JsExpr $
         case mode of
-          Mode.Dev _ ->
-            JS.Call toChar [ JS.String (P.primBounded charUtf8 char) ]
+          Mode.Dev  _ -> JS.Call toChar [ JS.String (P.primBounded charUtf8 c) ]
+          Mode.Prod _ -> JS.String (P.primBounded charUtf8 c)
 
-          Mode.Prod _ ->
-            JS.String (P.primBounded charUtf8 char)
+    Opt.Str      s -> JsExpr $ JS.String (Utf8.toBuilder s)
+    Opt.Int      i -> JsExpr $ JS.Int i
+    Opt.Float    f -> JsExpr $ JS.Float (Utf8.toBuilder f)
+    Opt.VarLocal x -> JsExpr $ JS.Ref (JsName.fromLocal x)
 
-    Opt.Str string ->
-      JsExpr $ JS.String (Utf8.toBuilder string)
-
-    Opt.Int int ->
-      JsExpr $ JS.Int int
-
-    Opt.Float float ->
-      JsExpr $ JS.Float (Utf8.toBuilder float)
-
-    Opt.VarLocal name ->
-      JsExpr $ JS.Ref (JsName.fromLocal name)
-
-    Opt.VarGlobal (Opt.Global home name) ->
-      JsExpr $ JS.Ref (JsName.fromGlobal home name)
+    Opt.VarGlobal (Opt.Global h n) ->
+      JsExpr $ JS.Ref (JsName.fromGlobal h n)
 
     Opt.VarEnum (Opt.Global home name) index ->
       case mode of
-        Mode.Dev _ ->
-          JsExpr $ JS.Ref (JsName.fromGlobal home name)
-
-        Mode.Prod _ ->
-          JsExpr $ JS.Int (Index.toMachine index)
+        Mode.Dev  _ -> JsExpr $ JS.Ref (JsName.fromGlobal home name)
+        Mode.Prod _ -> JsExpr $ JS.Int (Index.toMachine index)
 
     Opt.VarBox (Opt.Global home name) ->
       JsExpr $ JS.Ref $
         case mode of
-          Mode.Dev _ -> JsName.fromGlobal home name
+          Mode.Dev  _ -> JsName.fromGlobal home name
           Mode.Prod _ -> JsName.fromGlobal ModuleName.basics Name.identity
 
-    Opt.VarCycle home name ->
-      JsExpr $ JS.Call (JS.Ref (JsName.fromCycle home name)) []
-
-    Opt.VarDebug name home region unhandledValueName ->
-      JsExpr $ generateDebug name home region unhandledValueName
-
-    Opt.VarKernel home name ->
-      JsExpr $ JS.Ref (JsName.fromKernel home name)
+    Opt.VarCycle h n     -> JsExpr $ JS.Call (JS.Ref (JsName.fromCycle h n)) []
+    Opt.VarDebug n h r u -> JsExpr $ generateDebug n h r u
+    Opt.VarKernel  h n   -> JsExpr $ JS.Ref (JsName.fromKernel h n)
 
     Opt.List entries ->
       case entries of
@@ -124,8 +104,7 @@ generate mode argLookup expression =
     Opt.Function args body ->
       generateFunction (map JsName.fromLocal args) (generate mode argLookup body)
 
-    Opt.Call func args ->
-      JsExpr $ generateCall mode argLookup func args
+    Opt.Call func args -> JsExpr $ generateCall mode argLookup func args
 
     Opt.TailCall name args ->
       let
@@ -179,11 +158,8 @@ generate mode argLookup expression =
 
     Opt.Unit ->
       case mode of
-        Mode.Dev _ ->
-          JsExpr $ JS.Ref (JsName.fromKernel Name.utils "Tuple0")
-
-        Mode.Prod _ ->
-          JsExpr $ JS.Int 0
+        Mode.Dev  _ -> JsExpr $ JS.Ref (JsName.fromKernel Name.utils "Tuple0")
+        Mode.Prod _ -> JsExpr $ JS.Int 0
 
     Opt.Tuple a b maybeC ->
       JsExpr $
@@ -223,21 +199,16 @@ generate mode argLookup expression =
 
 
 data Code
-    = JsExpr JS.Expr
-    | JsBlock [JS.Stmt]
+  = JsExpr JS.Expr
+  | JsBlock [JS.Stmt]
 
 
 codeToExpr :: Code -> JS.Expr
 codeToExpr code =
   case code of
-    JsExpr expr ->
-      expr
-
-    JsBlock [ JS.Return expr ] ->
-      expr
-
-    JsBlock stmts ->
-      JS.Call (JS.Function Nothing [] stmts) []
+    JsExpr             expr  -> expr
+    JsBlock [JS.Return expr] -> expr
+    JsBlock stmts            -> JS.Call (JS.Function Nothing [] stmts) []
 
 
 codeToStmtList :: Code -> [JS.Stmt]
@@ -291,7 +262,7 @@ generateCtor mode (Opt.Global home name) index arity =
 
     ctorTag =
       case mode of
-        Mode.Dev _ -> JS.String (Name.toBuilder name)
+        Mode.Dev  _ -> JS.String (Name.toBuilder name)
         Mode.Prod _ -> JS.Int (ctorToInt home name index)
   in
   generateFunction argNames $ JsExpr $ JS.Object $
@@ -334,11 +305,8 @@ generateRecord mode argLookup fields =
 generateField :: Mode.Mode -> Name.Name -> JsName.Name
 generateField mode name =
   case mode of
-    Mode.Dev _ ->
-      JsName.fromLocal name
-
-    Mode.Prod fields ->
-      fields ! name
+    Mode.Dev _       -> JsName.fromLocal name
+    Mode.Prod fields -> fields ! name
 
 
 
@@ -424,16 +392,11 @@ generateCall mode argLookup func args =
 
     Opt.VarBox _ ->
       case mode of
-        Mode.Dev _ ->
-          generateCallHelp mode argLookup func args
-
+        Mode.Dev _ -> generateCallHelp mode argLookup func args
         Mode.Prod _ ->
           case args of
-            [arg] ->
-              generateJsExpr mode argLookup arg
-
-            _ ->
-              generateCallHelp mode argLookup func args
+            [arg] -> generateJsExpr mode argLookup arg
+            _     -> generateCallHelp mode argLookup func args
 
     _ ->
       generateCallHelp mode argLookup func args
@@ -461,11 +424,8 @@ generateGlobalCall home name argLookup args =
 generateNormalCall :: JS.Expr -> [JS.Expr] -> JS.Expr
 generateNormalCall func args =
   case IntMap.lookup (length args) callHelpers of
-    Just helper ->
-      JS.Call helper (func:args)
-
-    Nothing ->
-      List.foldl' (\f a -> JS.Call f [a]) func args
+    Just helper -> JS.Call helper (func:args)
+    Nothing     -> List.foldl' (\f a -> JS.Call f [a]) func args
 
 
 {-# NOINLINE callHelpers #-}
@@ -480,21 +440,12 @@ callHelpers =
 
 
 generateCoreCall :: Mode.Mode -> FnArgLookup -> Opt.Global -> [Opt.Expr] -> JS.Expr
-generateCoreCall mode argLookup (Opt.Global home@(ModuleName.Canonical _ moduleName) name) args =
-  if moduleName == Name.basics then
-    generateBasicsCall mode argLookup home name args
-
-  else if moduleName == Name.bitwise then
-    generateBitwiseCall home name argLookup (map (generateJsExpr mode argLookup) args)
-
-  else if moduleName == Name.tuple then
-    generateTupleCall home name argLookup (map (generateJsExpr mode argLookup) args)
-
-  else if moduleName == Name.jsArray then
-    generateJsArrayCall home name argLookup (map (generateJsExpr mode argLookup) args)
-
-  else
-    generateGlobalCall home name argLookup (map (generateJsExpr mode argLookup) args)
+generateCoreCall mode argLookup (Opt.Global home@(ModuleName.Canonical _ moduleName) name) args
+  | moduleName == Name.basics  = generateBasicsCall mode argLookup home name args
+  | moduleName == Name.bitwise = generateBitwiseCall home name argLookup (map (generateJsExpr mode argLookup) args)
+  | moduleName == Name.tuple   = generateTupleCall   home name argLookup (map (generateJsExpr mode argLookup) args)
+  | moduleName == Name.jsArray = generateJsArrayCall home name argLookup (map (generateJsExpr mode argLookup) args)
+  | otherwise                  = generateGlobalCall  home name argLookup (map (generateJsExpr mode argLookup) args)
 
 
 generateTupleCall :: ModuleName.Canonical -> Name.Name -> FnArgLookup -> [JS.Expr] -> JS.Expr
@@ -616,33 +567,19 @@ cmp idealOp backupOp backupInt left right =
 isLiteral :: JS.Expr -> Bool
 isLiteral expr =
   case expr of
-    JS.String _ ->
-      True
-
-    JS.Float _ ->
-      True
-
-    JS.Int _ ->
-      True
-
-    JS.Bool _ ->
-      True
-
-    _ ->
-      False
+    JS.String _ -> True
+    JS.Float  _ -> True
+    JS.Int    _ -> True
+    JS.Bool   _ -> True
+    _           -> False
 
 
 apply :: Opt.Expr -> Opt.Expr -> Opt.Expr
 apply func value =
   case func of
-    Opt.Accessor field ->
-      Opt.Access value field
-
-    Opt.Call f args ->
-      Opt.Call f (args ++ [value])
-
-    _ ->
-      Opt.Call func [value]
+    Opt.Accessor field -> Opt.Access value field
+    Opt.Call f args    -> Opt.Call f (args ++ [value])
+    _                  -> Opt.Call func [value]
 
 
 append :: Mode.Mode -> FnArgLookup -> Opt.Expr -> Opt.Expr -> JS.Expr
@@ -673,11 +610,8 @@ toSeqs mode argLookup expr =
 isStringLiteral :: JS.Expr -> Bool
 isStringLiteral expr =
   case expr of
-    JS.String _ ->
-      True
-
-    _ ->
-      False
+    JS.String _ -> True
+    _           -> False
 
 
 
@@ -708,22 +642,13 @@ strictEq left right =
 strictNEq :: JS.Expr -> JS.Expr -> JS.Expr
 strictNEq left right =
   case left of
-    JS.Int 0 ->
-      JS.Prefix JS.PrefixNot (JS.Prefix JS.PrefixNot right)
-
-    JS.Bool bool ->
-      if bool then JS.Prefix JS.PrefixNot right else right
-
+    JS.Int  0 -> JS.Prefix JS.PrefixNot (JS.Prefix JS.PrefixNot right)
+    JS.Bool b -> if b then JS.Prefix JS.PrefixNot right else right
     _ ->
       case right of
-        JS.Int 0 ->
-          JS.Prefix JS.PrefixNot (JS.Prefix JS.PrefixNot left)
-
-        JS.Bool bool ->
-          if bool then JS.Prefix JS.PrefixNot left else left
-
-        _ ->
-          JS.Infix JS.OpNe left right
+        JS.Int  0 -> JS.Prefix JS.PrefixNot (JS.Prefix JS.PrefixNot left)
+        JS.Bool b -> if b then JS.Prefix JS.PrefixNot left else left
+        _         -> JS.Infix JS.OpNe left right
 
 
 
@@ -778,22 +703,13 @@ generateTailDef mode argLookup name argNames body =
 generatePath :: Mode.Mode -> Opt.Path -> JS.Expr
 generatePath mode path =
   case path of
-    Opt.Index index subPath ->
-      JS.Access (generatePath mode subPath) (JsName.fromIndex index)
-
-    Opt.Root name ->
-      JS.Ref (JsName.fromLocal name)
-
-    Opt.Field field subPath ->
-      JS.Access (generatePath mode subPath) (generateField mode field)
-
-    Opt.Unbox subPath ->
+    Opt.Root  n   -> JS.Ref (JsName.fromLocal n)
+    Opt.Index i p -> JS.Access (generatePath mode p) (JsName.fromIndex i)
+    Opt.Field f p -> JS.Access (generatePath mode p) (generateField mode f)
+    Opt.Unbox p ->
       case mode of
-        Mode.Dev _ ->
-          JS.Access (generatePath mode subPath) (JsName.fromIndex Index.first)
-
-        Mode.Prod _ ->
-          generatePath mode subPath
+        Mode.Dev  _ -> JS.Access (generatePath mode p) (JsName.fromIndex Index.first)
+        Mode.Prod _ -> generatePath mode p
 
 
 
@@ -834,7 +750,7 @@ isBlock :: Code -> Bool
 isBlock code =
   case code of
     JsBlock _ -> True
-    JsExpr _ -> False
+    JsExpr  _ -> False
 
 
 crushIfs :: [(Opt.Expr, Opt.Expr)] -> Opt.Expr -> ([(Opt.Expr, Opt.Expr)], Opt.Expr)
@@ -918,7 +834,7 @@ generateIfTest mode root (path, test) =
       let
         tag =
           case mode of
-            Mode.Dev _ -> JS.Access value JsName.dollar
+            Mode.Dev  _ -> JS.Access value JsName.dollar
             Mode.Prod _ ->
               case opts of
                 Can.Normal -> JS.Access value JsName.dollar
@@ -930,14 +846,9 @@ generateIfTest mode root (path, test) =
           Mode.Dev _ -> JS.String (Name.toBuilder name)
           Mode.Prod _ -> JS.Int (ctorToInt home name index)
 
-    DT.IsBool True ->
-      value
-
-    DT.IsBool False ->
-      JS.Prefix JS.PrefixNot value
-
-    DT.IsInt int ->
-      strictEq value (JS.Int int)
+    DT.IsBool True  -> value
+    DT.IsBool False -> JS.Prefix JS.PrefixNot value
+    DT.IsInt i      -> strictEq value (JS.Int i)
 
     DT.IsChr char ->
       strictEq (JS.String (P.primBounded charUtf8 char)) $
@@ -972,29 +883,16 @@ generateCaseValue mode test =
   case test of
     DT.IsCtor home name index _ _ ->
       case mode of
-        Mode.Dev _ -> JS.String (Name.toBuilder name)
+        Mode.Dev  _ -> JS.String (Name.toBuilder name)
         Mode.Prod _ -> JS.Int (ctorToInt home name index)
 
-    DT.IsInt int ->
-      JS.Int int
-
-    DT.IsChr char ->
-      JS.String (P.primBounded charUtf8 char)
-
-    DT.IsStr string ->
-      JS.String (Utf8.toBuilder string)
-
-    DT.IsBool _ ->
-      error "COMPILER BUG - there should never be three tests on a boolean"
-
-    DT.IsCons ->
-      error "COMPILER BUG - there should never be three tests on a list"
-
-    DT.IsNil ->
-      error "COMPILER BUG - there should never be three tests on a list"
-
-    DT.IsTuple ->
-      error "COMPILER BUG - there should never be three tests on a tuple"
+    DT.IsInt  i -> JS.Int i
+    DT.IsChr  c -> JS.String (P.primBounded charUtf8 c)
+    DT.IsStr  s -> JS.String (Utf8.toBuilder s)
+    DT.IsBool _ -> error "COMPILER BUG - there should never be three tests on a boolean"
+    DT.IsCons   -> error "COMPILER BUG - there should never be three tests on a list"
+    DT.IsNil    -> error "COMPILER BUG - there should never be three tests on a list"
+    DT.IsTuple  -> error "COMPILER BUG - there should never be three tests on a tuple"
 
 
 generateCaseTest :: Mode.Mode -> Name.Name -> DT.Path -> DT.Test -> JS.Expr
@@ -1008,45 +906,24 @@ generateCaseTest mode root path exampleTest =
         value
       else
         case mode of
-          Mode.Dev _ ->
-            JS.Access value JsName.dollar
-
+          Mode.Dev  _ -> JS.Access value JsName.dollar
           Mode.Prod _ ->
             case opts of
-              Can.Normal ->
-                JS.Access value JsName.dollar
+              Can.Normal -> JS.Access value JsName.dollar
+              Can.Enum   -> value
+              Can.Unbox  -> value
 
-              Can.Enum ->
-                value
-
-              Can.Unbox ->
-                value
-
-    DT.IsInt _ ->
-      value
-
-    DT.IsStr _ ->
-      value
-
+    DT.IsInt _ -> value
+    DT.IsStr _ -> value
     DT.IsChr _ ->
       case mode of
-        Mode.Dev _ ->
-          JS.Call (JS.Access value (JsName.fromLocal "valueOf")) []
+        Mode.Dev  _ -> JS.Call (JS.Access value (JsName.fromLocal "valueOf")) []
+        Mode.Prod _ -> value
 
-        Mode.Prod _ ->
-          value
-
-    DT.IsBool _ ->
-      error "COMPILER BUG - there should never be three tests on a list"
-
-    DT.IsCons ->
-      error "COMPILER BUG - there should never be three tests on a list"
-
-    DT.IsNil ->
-      error "COMPILER BUG - there should never be three tests on a list"
-
-    DT.IsTuple ->
-      error "COMPILER BUG - there should never be three tests on a list"
+    DT.IsBool _ -> error "COMPILER BUG - there should never be three tests on a list"
+    DT.IsCons   -> error "COMPILER BUG - there should never be three tests on a list"
+    DT.IsNil    -> error "COMPILER BUG - there should never be three tests on a list"
+    DT.IsTuple  -> error "COMPILER BUG - there should never be three tests on a list"
 
 
 
@@ -1056,16 +933,13 @@ generateCaseTest mode root path exampleTest =
 pathToJsExpr :: Mode.Mode -> Name.Name -> DT.Path -> JS.Expr
 pathToJsExpr mode root path =
   case path of
-    DT.Index index subPath ->
-      JS.Access (pathToJsExpr mode root subPath) (JsName.fromIndex index)
+    DT.Index i p ->
+      JS.Access (pathToJsExpr mode root p) (JsName.fromIndex i)
 
-    DT.Unbox subPath ->
+    DT.Unbox p ->
       case mode of
-        Mode.Dev _ ->
-          JS.Access (pathToJsExpr mode root subPath) (JsName.fromIndex Index.first)
-
-        Mode.Prod _ ->
-          pathToJsExpr mode root subPath
+        Mode.Dev  _ -> JS.Access (pathToJsExpr mode root p) (JsName.fromIndex Index.first)
+        Mode.Prod _ -> pathToJsExpr mode root p
 
     DT.Empty ->
       JS.Ref (JsName.fromLocal root)
