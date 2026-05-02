@@ -170,7 +170,8 @@ instance Show AST.Utils.Shader.Source where
   show _ = "<shader source>"
 deriving instance Show AST.Utils.Shader.Types
 deriving instance Show AST.Utils.Shader.Type
-deriving instance Show Parse.Primitives.Snippet
+instance Show Parse.Primitives.Snippet where
+  show _ = "<parse snippet>"
 
 -- deriving instance Eq AST.Source.Module
 -- deriving instance Eq AST.Source.Exposing
@@ -216,10 +217,11 @@ deriving instance Show Reporting.Annotation.Position
 instance (Show a) => Show (Reporting.Annotation.Located a) where
   show (Reporting.Annotation.At _region a) = "(a (" ++ show a ++ "))"
 
-instance (Eq a) => Eq (Reporting.Annotation.Located a) where
-  -- Comparison that ignores the actual regions – this is helpful to us in our generation checking
-  -- as locations are not important for now
-  (==) (Reporting.Annotation.At _r1 a) (Reporting.Annotation.At _r2 b) = a == b
+-- already defined in Reporting.Annotation:
+-- instance (Eq a) => Eq (Reporting.Annotation.Located a) where
+--   -- Comparison that ignores the actual regions – this is helpful to us in our generation checking
+--   -- as locations are not important for now
+--   (==) (Reporting.Annotation.At _r1 a) (Reporting.Annotation.At _r2 b) = a == b
 
 -- instance (Eq a) => Eq (Reporting.Annotation.Located a) where
 --   (==) a b = show (Reporting.Annotation.At region a) = "(a (" ++ show a ++ "))"

@@ -623,8 +623,8 @@ crawlModule foreignDeps mvar pkg src docsStatus name =
 crawlFile :: Map.Map ModuleName.Raw ForeignInterface -> MVar StatusDict -> Pkg.Name -> FilePath -> DocsStatus -> ModuleName.Raw -> FilePath -> IO (Maybe Status)
 crawlFile foreignDeps mvar pkg src docsStatus expectedName path =
   do  bytes <- File.readUtf8 path
-      result <- Parse.fromByteString (Parse.Package pkg) bytes
                & Lamdera.alternativeImplementationPassthrough (Lamdera.PackageReplacements.getReplacement pkg expectedName)
+      result <- Parse.fromByteString (Parse.Package pkg) bytes
       case result of
         Right modul@(Src.Module (Just (A.At _ actualName)) _ _ imports _ _ _ _ _) | expectedName == actualName ->
           do  deps <- crawlImports foreignDeps mvar pkg src imports
@@ -652,8 +652,8 @@ crawlKernel foreignDeps mvar pkg src name =
       if exists
         then
           do  bytes <- File.readUtf8 path
-              result <- Kernel.fromByteString pkg (Map.mapMaybe getDepHome foreignDeps) bytes
                        & Lamdera.alternativeImplementationPassthrough (Lamdera.PackageReplacements.getReplacement pkg name)
+              result <- Kernel.fromByteString pkg (Map.mapMaybe getDepHome foreignDeps) bytes
               case result of
                 Nothing ->
                   return Nothing

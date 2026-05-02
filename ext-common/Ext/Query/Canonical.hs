@@ -8,7 +8,7 @@ module Ext.Query.Canonical where
 import qualified Data.Map as Map
 import qualified Data.List as List
 import qualified Data.ByteString as BS
-import Data.Word (Word16)
+import Data.Word (Word32)
 import qualified System.Directory as Dir
 
 -- elm/compiler
@@ -51,7 +51,8 @@ loadSingleArtifacts :: FilePath -> IO Compile.Artifacts
 loadSingleArtifacts path = do
   ifaces <- Ext.Query.Interfaces.all [path]
   source <- File.readUtf8 path
-  case Parse.fromByteString Parse.Application source of
+  result <- Parse.fromByteString Parse.Application source
+  case result of
     Right modul ->
       case Compile.compile Nothing Pkg.dummyName ifaces modul of
         Right artifacts ->
@@ -69,7 +70,8 @@ loadFileSource path = do
 
   Ext.Common.withProjectRoot project $ do
     source <- File.readUtf8 path
-    case Parse.fromByteString Parse.Application source of
+    result <- Parse.fromByteString Parse.Application source
+    case result of
       Right modul -> do
         -- hindentPrintLabelled "module source" modul
         pure $ (source, modul)
@@ -133,9 +135,11 @@ loadFileSourceValue path name = do
 
 
 -- Stripped down version of Reporting.Render.Code.render
-render :: Code.Source -> Region -> Maybe Region -> [(Word16, String)]
-render (Code.Source sourceLines) region@(Region (Position startLine _) (Position endLine _)) maybeSubRegion =
+render :: Code.Source -> Region -> Maybe Region -> [(Word32, String)]
+render (Code.Source sourceLines) region@(Region startCur endCur) maybeSubRegion =
   let
+    startLine = A.toRow startCur
+    endLine = A.toRow endCur
     relevantLines =
       sourceLines
         & drop (fromIntegral (startLine - 1))

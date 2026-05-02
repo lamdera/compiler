@@ -959,12 +959,13 @@ textKeyDecoder =
 
 textParser :: P.Parser x T.Text
 textParser =
-  P.Parser $ \(P.State src pos end indent row col) cok _ cerr _ ->
+  P.Parser $ \_ (P.State pos end indent cur) cok _ cerr _ ->
     let
-      len = minusPtr end pos
-      newCol = col + fromIntegral len
+      len = minusAddr# end pos
+      newCur = P.slide cur (wordToWord64# (int2Word# len))
     in
-    cok (Json.fromPtr pos end & (T.pack . Json.toChars)) (P.State src end end indent row newCol)
+    do  str <- Json.fromAddr pos end
+        cok (T.pack (Json.toChars str)) (P.State end end indent newCur)
 
 
 -- optionalDecoder :: [BS.ByteString] -> Decoder e a -> a -> Decoder e a
