@@ -245,8 +245,10 @@ readAppConfigUses = do
   cache <- lamderaCache_
   feConfig <- readUtf8Text $ cache </> ".lamdera-fe-config"
   beConfig <- readUtf8Text $ cache </> ".lamdera-be-config"
+  feUses <- extract feConfig
+  beUses <- extract beConfig
 
-  pure $ extract feConfig ++ extract beConfig
+  pure $ feUses ++ beUses
 
 
 readAppFrontendConfigUses :: IO [(Text, Text, Text)]
@@ -254,9 +256,10 @@ readAppFrontendConfigUses = do
   cache <- lamderaCache_
   feConfig <- readUtf8Text $ cache </> ".lamdera-fe-config"
 
-  pure $ extract feConfig
+  extract feConfig
 
 
+extract :: Maybe Text -> IO [(Text, Text, Text)]
 extract rawConfig = do
   let
     decoder =
@@ -269,21 +272,22 @@ extract rawConfig = do
   case rawConfig of
     Just config -> do
       let bytes = T.encodeUtf8 config
-      case D.fromByteString decoder bytes of
+      result <- D.fromByteString decoder bytes
+      case result of
         Right values ->
-          values
+          return $ values
             & concatMap (\(module_, expr, configs) ->
               configs & fmap (\config -> (module_, expr, config))
             )
 
         Left problem -> do
           -- let !_ = debugHaskell "❌ config extraction failed" problem
-          []
+          return []
           -- return $ Left $ E.BadJson endpoint jsonProblem
 
     Nothing -> do
       let !_ = debugNote "❌ config read failed:" rawConfig
-      []
+      return []
 
 
 

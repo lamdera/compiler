@@ -45,8 +45,9 @@ normalJson :: (Show a) => String -> String -> D.Decoder () a -> IO (Either Error
 normalJson debugIdentifier url decoder = do
   manager <- Http.getManager
   debug $ "HTTP GET " <> url <> " (" <> debugIdentifier <> ")"
-  Http.get manager url jsonHeaders HttpError $ \body ->
-    case D.fromByteString decoder body of
+  Http.get manager url jsonHeaders HttpError $ \body -> do
+    result <- D.fromByteString decoder body
+    case result of
       Right content ->
         -- Helpful for debugging
         -- return $ Right $ debugNote "response" content
@@ -66,8 +67,9 @@ normalRpcJson :: String -> E.Value -> String -> D.Decoder () a -> IO (Either Err
 normalRpcJson debugIdentifier body url decoder = do
   manager <- Http.getManager
   debug $ "POSTING   " <> url <> " (" <> debugIdentifier <> ", " <> show body <> ")"
-  Http.postBody manager url jsonHeaders body HttpError $ \body ->
-    case D.fromByteString decoder body of
+  Http.postBody manager url jsonHeaders body HttpError $ \body -> do
+    result <- D.fromByteString decoder body
+    case result of
       Right content ->
         return $ Right content
 

@@ -12,7 +12,7 @@ import NeatInterpolation
 import Algorithms.NaturalSort
 import qualified Data.List as List
 import System.FilePath ((</>))
-import Control.Monad.Except (catchError, liftIO)
+import Control.Monad.Except (catchError)
 import Text.Read (readMaybe)
 import Data.Maybe (fromMaybe)
 import Data.List
@@ -41,7 +41,7 @@ generateFor nextVersion migrationFilepaths = do
 
   let migrationsLimit = 3
 
-  migrationSequence <- liftIO $ getMigrationsSequence migrationFilepaths nextVersion migrationsLimit `catchError`
+  migrationSequence <- getMigrationsSequence migrationFilepaths nextVersion migrationsLimit `catchError`
     (\err -> do
       debug $ show err
       debug "getMigrationsSequence was empty - that should only be true on v1 deploy"

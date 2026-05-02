@@ -830,32 +830,37 @@ isDecimalDigit w =
 value :: Decoder x E.Value
 value =
   Decoder $ \ast ok err ->
-    ok $ toEncodeValue ast
+    ok =<< toEncodeValue ast
 
 
-toEncodeValue :: A.Located AST_ -> E.Value
+toEncodeValue :: A.Located AST_ -> IO E.Value
 toEncodeValue (A.At region ast) =
   case ast of
     Array ast_list ->
-      E.Array $ fmap toEncodeValue ast_list
+      E.Array <$> mapM toEncodeValue ast_list
 
     Object keyVals ->
-      E.Object $ fmap (\(snippet, ast) -> (Json.fromSnippet snippet, toEncodeValue ast)) keyVals
+      E.Object <$> mapM (\(snippet, ast) -> do
+        key <- Json.fromSnippet snippet
+        val <- toEncodeValue ast
+        return (key, val)
+      )
+      keyVals
 
     String snippet ->
-      E.string $ Json.fromSnippet snippet
+      E.string <$> Json.fromSnippet snippet
 
     Int int ->
-      E.Integer int
+      return $ E.Integer int
 
     TRUE ->
-      E.Boolean True
+      return $ E.Boolean True
 
     FALSE ->
-      E.Boolean False
+      return $ E.Boolean False
 
     NULL ->
-      E.Null
+      return $ E.Null
 
 
 index :: Int -> Decoder e a -> Decoder e a

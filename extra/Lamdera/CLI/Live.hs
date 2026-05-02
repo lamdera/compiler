@@ -698,9 +698,7 @@ serveRpc (mClients, mLeader, mChan, beState) port = do
                     , D.field "vs" (D.string & fmap (\v -> ("vs", Json.String.toBuilder v))) -- String
                     ])
 
-            decodeResult =
-              D.fromByteString decoder (TE.encodeUtf8 chanText)
-
+          decodeResult <- liftIO $ D.fromByteString decoder (TE.encodeUtf8 chanText)
           case decodeResult of
             Right (statusCode, statusText, headers, (bodyType, bodyEncoded)) -> do
 
