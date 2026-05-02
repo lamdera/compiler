@@ -1,7 +1,7 @@
-{-# OPTIONS_GHC -Wall #-}
 {-# LANGUAGE OverloadedStrings, QuasiQuotes #-}
 module Endpoint.Compile
-  ( endpoint
+  ( endpoint_V1
+  , endpoint_V2
   , loadErrorJS
   )
   where
@@ -17,7 +17,7 @@ import qualified Data.Name as N
 import qualified Data.NonEmptyList as NE
 import Snap.Core
 import Snap.Util.FileUploads
-import qualified System.Directory as Dir
+import System.FilePath ((</>))
 import qualified System.IO.Streams as Stream
 
 import Literals (b)
@@ -65,11 +65,40 @@ allowedOrigins =
 
 
 
+-- ENDPOINT (V1)
+
+
+endpoint_V1 :: A.Artifacts -> Snap ()
+endpoint_V1 artifacts =
+  endpoint artifacts $ \result ->
+    case result of
+      Ok name js -> writeBuilder $ Html.sandwich name js
+      Err report -> writeBuilder $ renderProblem_V1 report
+
+
+
+-- ENDPOINT (V2)
+
+
+endpoint_V2 :: A.Artifacts -> Snap ()
+endpoint_V2 artifacts =
+  endpoint artifacts $ \result ->
+    case result of
+      Ok name js -> writeBuilder $ renderSuccess_V2 name js
+      Err report -> writeBuilder $ renderProblem_V2 report
+
+
+
 -- ENDPOINT
 
 
-endpoint :: A.Artifacts -> Snap ()
-endpoint artifacts =
+data Result
+  = Ok N.Name B.Builder
+  | Err Help.Report
+
+
+endpoint :: A.Artifacts -> (Result -> Snap ()) -> Snap ()
+endpoint artifacts callback =
   Cors.allow POST allowedOrigins $
   do  result <- foldMultipart defaultUploadPolicy ignoreFile 0
       case result of
@@ -77,15 +106,9 @@ endpoint artifacts =
           do  modifyResponse $ setContentType "text/html; charset=utf-8"
               outcome <- liftIO $ compile artifacts source
               case outcome of
-                Success builder ->
-                  writeBuilder builder
-
-                NoMain ->
-                  writeBuilder $ renderReport noMain
-
-                BadInput name err ->
-                  writeBuilder $ renderReport $
-                    Help.compilerReport "/" (Error.Module name "/try" File.zeroTime source err) []
+                Success name js -> callback $ Ok name js
+                NoMain          -> callback $ Err noMain
+                BadInput name x -> callback $ Err $ Help.compilerReport "/" (Error.Module name "/try" File.zeroTime source x) []
 
         _ ->
           do  modifyResponse $ setResponseStatus 400 "Bad Request"
@@ -107,7 +130,7 @@ ignoreFile _ _ count =
 
 
 data Outcome
-  = Success B.Builder
+  = Success N.Name B.Builder
   | NoMain
   | BadInput ModuleName.Raw Error.Error
 
@@ -142,7 +165,7 @@ compile (A.Artifacts interfaces objects) source =
                         mains = Map.singleton home main_
                         graph = Opt.addLocalGraph locals objects
                       in
-                      return $ Success $ Html.sandwich name $ JS.generate mode graph mains
+                      return $ Success name $ JS.generate mode graph mains
 
 
 checkImports :: Map.Map ModuleName.Raw I.Interface -> [Src.Import] -> Either (NE.List Import.Error) (Map.Map ModuleName.Raw I.Interface)
@@ -167,11 +190,11 @@ checkImports interfaces imports =
 
 
 
--- RENDER REPORT
+-- RENDER PROBLEM (V1)
 
 
-renderReport :: Help.Report -> B.Builder
-renderReport report =
+renderProblem_V1 :: Help.Report -> B.Builder
+renderProblem_V1 report =
   [b|<!DOCTYPE HTML>
 <html>
 <head>
@@ -183,8 +206,73 @@ renderReport report =
   <script>
     var app = Elm.Errors.init({flags:|] <> Encode.encodeUgly (Exit.toJson report) <> [b|});
     app.ports.jumpTo.subscribe(function(region) {
-      window.parent.postMessage(JSON.stringify(region), '*');
+      window.parent.postMessage(JSON.stringify(region), "*");
     });
+  </script>
+</body>
+</html>|]
+
+
+
+-- RENDER SUCCESS (V2)
+
+
+renderSuccess_V2 :: N.Name -> B.Builder -> B.Builder
+renderSuccess_V2 moduleName javascript =
+  let name = N.toBuilder moduleName in
+  [b|<!DOCTYPE HTML>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>|] <> name <> [b|</title>
+  <style>body { padding: 0; margin: 0; }</style>
+</head>
+
+<body>
+
+<pre id="elm"></pre>
+
+<script>
+window.parent.postMessage("SUCCESS", "*");
+
+try {
+|] <> javascript <> [b|
+
+  var app = Elm.|] <> name <> [b|.init({ node: document.getElementById("elm") });
+}
+catch (e)
+{
+  // display initialization errors (e.g. bad flags, infinite recursion)
+  var header = document.createElement("h1");
+  header.style.fontFamily = "monospace";
+  header.innerText = "Initialization Error";
+  var pre = document.getElementById("elm");
+  document.body.insertBefore(header, pre);
+  pre.innerText = e;
+  throw e;
+}
+</script>
+
+</body>
+</html>|]
+
+
+
+-- RENDER PROBLEM (V2)
+
+
+renderProblem_V2 :: Help.Report -> B.Builder
+renderProblem_V2 report =
+  [b|<!DOCTYPE HTML>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>body { padding: 0; margin: 0; display: none; }</style>
+</head>
+<body>
+  <script>
+    var errors = |] <> Encode.encodeUgly (Exit.toJson report) <> [b|;
+    window.parent.postMessage(JSON.stringify(errors), "*");
   </script>
 </body>
 </html>|]
@@ -220,8 +308,8 @@ noMain =
 -- LOAD ERROR JS
 
 
-loadErrorJS :: IO B.ByteString
-loadErrorJS =
+loadErrorJS :: A.Root -> IO B.ByteString
+loadErrorJS (A.Root root) =
   let
     run work =
       do  result <- work
@@ -230,8 +318,7 @@ loadErrorJS =
             Left _ -> error "problem building src/Errors.elm"
   in
   BW.withScope $ \scope ->
-    do  root <- Dir.getCurrentDirectory
-        details <- run $ Details.load Reporting.silent scope root
-        artifacts <- run $ Build.fromPaths Reporting.silent root details (NE.List "src/Errors.elm" [])
+    do  details <- run $ Details.load Reporting.silent scope root
+        artifacts <- run $ Build.fromPaths Reporting.silent root details (NE.List (root </> "src" </> "Errors.elm") [])
         javascript <- run $ Task.run $ Generate.prod root details artifacts
         return $ LBS.toStrict $ B.toLazyByteString javascript
