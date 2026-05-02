@@ -329,7 +329,7 @@ lamderaGetArchive manager url onError err onSuccess =
 
         packageZip = concat [pkgsPath & withDefault "<no-packages-path-override-set>", "/packages/", package, "/pack-", version, ".zip"]
         packageZipBare = concat [pkgsPath & withDefault "<no-packages-path-override-set>", "/packages/", package, "/pack.zip"]
-        packageRoot = concat [pkgsPath & withDefault "<no-packages-path-override-set>", "/packages/", package, "/", version]
+        -- packageRoot = concat [pkgsPath & withDefault "<no-packages-path-override-set>", "/packages/", package, "/", version]
 
       zipPath <- do
         overrideZipM <- Lamdera.Relative.findFile packageZip

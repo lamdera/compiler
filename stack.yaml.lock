@@ -61,6 +61,20 @@ packages:
   original:
     hackage: fsnotify-0.4.1.0
 - completed:
+    hackage: ansi-wl-pprint-0.6.9@sha256:fb737bc96e2aef34ad595d54ced7a73f648c521ebcb00fe0679aff45ccd49212,2448
+    pantry-tree:
+      sha256: ebb02b32915c04146b193949c3c48d9e8200c152f38947e8d23ca25b0997e188
+      size: 472
+  original:
+    hackage: ansi-wl-pprint-0.6.9@sha256:fb737bc96e2aef34ad595d54ced7a73f648c521ebcb00fe0679aff45ccd49212,2448
+- completed:
+    hackage: optparse-applicative-0.17.1.0@sha256:cb5f5f0dc9749846fc0e3df0041a8efee6368cc1cff07336acd4c3b02a951ed6,5147
+    pantry-tree:
+      sha256: be7241e9c51c9e2bb4b9966b1a308258ed93b471d125611f068dc0279fcdc669
+      size: 3124
+  original:
+    hackage: optparse-applicative-0.17.1.0@sha256:cb5f5f0dc9749846fc0e3df0041a8efee6368cc1cff07336acd4c3b02a951ed6,5147
+- completed:
     hackage: broadcast-chan-0.2.1.2@sha256:5959056eac6a707766e0c1e4f24aeea802679b98fd4651ff377aab258b989865,6011
     pantry-tree:
       sha256: f671c3d869a28af47eb5998c6afa3e811f1af8c7da995ef81b480fb2c21efd8c

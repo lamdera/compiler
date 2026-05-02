@@ -1,4 +1,3 @@
-{-# OPTIONS_GHC -Wall #-}
 {-# LANGUAGE ExtendedLiterals, OverloadedStrings #-}
 module Elm.Constraint
   ( Constraint(..) -- @LAMDERA exposed

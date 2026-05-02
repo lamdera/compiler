@@ -181,6 +181,7 @@ showValue (A.At region (Src.Value name pattern expr mtype)) = do
 tShow x v =
   x ++ show v
 
+x :: String
 x =
   "❤️ 💔 ♥️ 💗 💓 💕 💖  💛 💙 💜 💚"
 

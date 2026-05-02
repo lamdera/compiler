@@ -1,4 +1,3 @@
-{-# OPTIONS_GHC -Wall #-}
 {-# LANGUAGE MagicHash, OverloadedStrings #-}
 module Reporting.Render.Code
   ( Source(..)  -- @LAMDERA exposed

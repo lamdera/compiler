@@ -1,4 +1,3 @@
-{-# OPTIONS_GHC -Wall #-}
 {-# LANGUAGE EmptyDataDecls, FlexibleInstances, MagicHash #-}
 module Elm.Float
   ( Float

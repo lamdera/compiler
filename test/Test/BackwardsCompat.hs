@@ -13,7 +13,7 @@ suite = tests $
   [ scope "an vanilla elm project compiled with lamdera should not inject lamdera html modifications" $
     let
       project = "./test/scenario-empty-elm-init"
-      bashInScenario c = bash $ "cd " ++ project ++ " && " ++ c
+      -- bashInScenario c = bash $ "cd " ++ project ++ " && " ++ c
 
       setup = do
         rmdir $ project ++ "/elm-home"

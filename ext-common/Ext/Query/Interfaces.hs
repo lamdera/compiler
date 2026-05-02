@@ -1,4 +1,3 @@
-{-# OPTIONS_GHC -Wall #-}
 
 module Ext.Query.Interfaces where
 

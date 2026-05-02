@@ -197,9 +197,9 @@ unionToDiffableType targetName typeName interfaces recursionSet tvarMap unionInt
       let
         newTvarMap = tvarMap <> zip (_u_vars union) params
 
-        debug dtype =
-          debugHaskell ("\n✴️ inserting for union " <> typeName) (newTvarMap, dtype)
-            & snd
+        -- debug dtype =
+        --   debugHaskell ("\n✴️ inserting for union " <> typeName) (newTvarMap, dtype)
+        --     & snd
       in
       _u_alts union
         -- Sort constructors by name, this allows our diff to be stable to ordering changes

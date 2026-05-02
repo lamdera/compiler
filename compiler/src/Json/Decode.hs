@@ -1,4 +1,4 @@
-{-# OPTIONS_GHC -Wall -fno-warn-unused-do-bind -fno-warn-name-shadowing #-}
+{-# OPTIONS_GHC -fno-warn-unused-do-bind -fno-warn-name-shadowing #-}
 {-# LANGUAGE BangPatterns, ExtendedLiterals, MagicHash, OverloadedStrings,
 QuasiQuotes, Rank2Types, UnboxedTuples
 #-}

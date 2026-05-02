@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -Wno-x-partial #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE BangPatterns #-}
@@ -161,9 +162,9 @@ upgradeFor migrationSequence nextVersion valueType = do
   let
     nextVersion_        = show_ $ vinfoVersion nextVersion
     currentVersion_     = show_ $ (vinfoVersion nextVersion) - 1
-    historicMigrations_ = historicMigrations migrationSequence nextVersion valueType
+    -- historicMigrations_ = historicMigrations migrationSequence nextVersion valueType
     cmdMsgType          = valueTypeToCmdMsgType valueType
-    valueTypeInt        = show_ $ tipeStringToInt valueType
+    -- valueTypeInt        = show_ $ tipeStringToInt valueType
     valueTypeTitleCase  = lowerFirstLetter_ valueType
 
   case nextVersion of
@@ -267,7 +268,7 @@ coreTypes = [ "BackendModel", "FrontendModel", "FrontendMsg", "ToBackend", "Back
 historicMigration :: [(Int, [VersionInfo])] -> Int -> [VersionInfo] -> VersionInfo -> Text -> Text
 historicMigration migrationSequence forVersion migrationsForVersion finalVersion tipe =
   let
-    (startVersion:subsequentVersions) = migrationsForVersion
+    (startVersion:_subsequentVersions) = migrationsForVersion
 
     typeMigration =
       migrationForType migrationSequence migrationsForVersion startVersion finalVersion tipe
@@ -287,7 +288,7 @@ migrationForType migrationSequence migrationsForVersion startVersion finalVersio
   let
     -- !_ = debugHaskell "migrationForType" (migrationSequence, migrationsForVersion, startVersion, tipe)
 
-    (v, allMigrations) = List.head migrationSequence
+    (_v, allMigrations) = List.head migrationSequence
 
     intermediateMigrations =
       migrationsForVersion
@@ -448,12 +449,12 @@ getMigrationsSequence migrationFilepaths nextVersion depth =
   let
     versions = migrationVersions migrationFilepaths
 
-    toVersionInfo :: Int -> VersionInfo
-    toVersionInfo version =
-      if List.elem version versions then
-        WithMigrations version
-      else
-        WithoutMigrations version
+    -- toVersionInfo :: Int -> VersionInfo
+    -- toVersionInfo version =
+    --   if List.elem version versions then
+    --     WithMigrations version
+    --   else
+    --     WithoutMigrations version
 
     sequences :: [(Int,[VersionInfo])]
     sequences =

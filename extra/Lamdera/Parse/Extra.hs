@@ -1,4 +1,3 @@
-{-# OPTIONS_GHC -Wall -fno-warn-name-shadowing #-}
 {-# LANGUAGE UnboxedTuples #-}
 module Lamdera.Parse.Extra
   ( fromByteStringWithContext

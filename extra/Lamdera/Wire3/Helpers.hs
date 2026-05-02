@@ -666,6 +666,7 @@ succeedDecode value =
         ]))
 
 
+failDecode :: String -> Expr
 failDecode identifier =
   -- debugDecoder (Utf8.fromChars $ "failDecode:" ++ identifier) $
   (a (VarForeign mLamdera_Wire "failDecode"

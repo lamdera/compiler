@@ -1,4 +1,3 @@
-{-# OPTIONS_GHC -Wall #-}
 {-# LANGUAGE BangPatterns, EmptyDataDecls, ExtendedLiterals, MagicHash,
 OverloadedStrings, UnboxedTuples
 #-}

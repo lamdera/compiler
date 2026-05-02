@@ -1,4 +1,3 @@
-{-# OPTIONS_GHC -Wall #-}
 {-# LANGUAGE QuasiQuotes #-}
 module Parse.Keyword
   ( type_, alias_, port_

@@ -1,4 +1,4 @@
-{-# OPTIONS_GHC -Wall -fno-warn-name-shadowing #-}
+{-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 {-# LANGUAGE BangPatterns, ExtendedLiterals, OverloadedStrings #-}
 module Repl
   ( Flags(..)

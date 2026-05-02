@@ -1,4 +1,4 @@
-{-# OPTIONS_GHC -Wall -fno-warn-unused-do-bind #-}
+{-# OPTIONS_GHC -fno-warn-unused-do-bind #-}
 {-# LANGUAGE BangPatterns, ExtendedLiterals, MagicHash, OverloadedStrings #-}
 module Parse.Declaration
   ( Decl(..)

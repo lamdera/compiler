@@ -1,4 +1,3 @@
-{-# OPTIONS_GHC -Wall #-}
 {-# LANGUAGE ExtendedLiterals, MagicHash, OverloadedStrings #-}
 module Reporting.Error.Json
   ( toReport

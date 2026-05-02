@@ -88,7 +88,7 @@ testWire = do
   overrides <- Lamdera.Relative.requireDir "~/lamdera/overrides"
   elmHome <- Lamdera.Relative.requireDir "~/elm-home-elmx-test"
 
-  let rootPaths = [ "src" </> "Frontend.elm" ]
+  -- let rootPaths = [ "src" </> "Frontend.elm" ]
 
   withEnvVars [
     ("LAMDERA_APP_NAME", "testapp"),

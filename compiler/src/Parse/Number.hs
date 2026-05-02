@@ -1,4 +1,3 @@
-{-# OPTIONS_GHC -Wall #-}
 {-# LANGUAGE BangPatterns, ExtendedLiterals, MagicHash, UnboxedTuples, UnliftedDatatypes #-}
 module Parse.Number
   ( Number(..)

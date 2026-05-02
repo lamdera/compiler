@@ -245,8 +245,8 @@ migrateUnionDefinition_ author pkg oldUnion newUnion tvarMapOld tvarMapNew oldVe
     moduleScope :: Text
     moduleScope = nameToText newModule <> "."
 
-    moduleScopeOld :: Text
-    moduleScopeOld = nameToText oldModuleName <> "."
+    -- moduleScopeOld :: Text
+    -- moduleScopeOld = nameToText oldModuleName <> "."
 
     migrationName :: Text
     migrationName = migrationNameUnderscored newModule oldVersion newVersion typeName
@@ -470,8 +470,8 @@ migrateAliasDefinition oldVersion newVersion moduleOld scope identifier@(author,
     (MigrationNested migration imps subDefs) = canToMigration oldVersion newVersion scope interfaces recursionSet typeNew (Just typeOld) tvarMapOld tvarMapNew oldValueRef
 
     -- @TODO remove
-    oldModuleNameCanonical :: ModuleName.Canonical
-    oldModuleNameCanonical = moduleOld
+    -- oldModuleNameCanonical :: ModuleName.Canonical
+    -- oldModuleNameCanonical = moduleOld
 
     newModuleNameCanonical :: ModuleName.Canonical
     newModuleNameCanonical = ModuleName.Canonical (Pkg.Name author pkg) newModule
@@ -485,7 +485,7 @@ migrateAliasDefinition oldVersion newVersion moduleOld scope identifier@(author,
     tvarMigrationTextsCombined :: Text
     tvarMigrationTextsCombined = tvarMigrations & fmap migrationFn & parenthesize & T.intercalate " "
 
-    moduleName = (ModuleName.Canonical (Pkg.Name author pkg) newModule)
+    -- moduleName = (ModuleName.Canonical (Pkg.Name author pkg) newModule)
 
     newModuleName = newModule & N.toText
     oldModuleName = moduleOld & dropCan & N.toText
@@ -588,11 +588,11 @@ canToMigration_ oldVersion newVersion scope interfaces recursionSet typeNew type
 
             -- Generate migrations with appropriate value references for tuple operations
             nestedValueRef1 = if needsLambdaWrap a1 then tupleVarName else oldValueRef
-            m1@(MigrationNested mfn1 imps1 subDefs1) =
+            (MigrationNested mfn1 imps1 subDefs1) =
               canToMigration oldVersion newVersion scope interfaces recursionSet a1 (Just a2) tvarMapOld tvarMapNew nestedValueRef1
             
             nestedValueRef2 = if needsLambdaWrap b1 then tupleVarName else oldValueRef
-            m2@(MigrationNested mfn2 imps2 subDefs2) =
+            (MigrationNested mfn2 imps2 subDefs2) =
               canToMigration oldVersion newVersion scope interfaces recursionSet b1 (Just b2) tvarMapOld tvarMapNew nestedValueRef2
 
             -- Helper function to wrap migrations that need lambda wrapping
@@ -705,7 +705,7 @@ canAliasToMigration oldVersion newVersion scope interfaces recursionSet (typeNew
               in
               canToMigration oldVersion newVersion moduleNameNew interfaces recursionSet cType (Just cTypeOld) tvarMapOldReplaced tvarMapNew "old"
 
-            typeScope = if moduleNameNew == scope then "" else T.concat [nameToText module_, "."]
+            -- typeScope = if moduleNameNew == scope then "" else T.concat [nameToText module_, "."]
 
             migrationName :: Text
             migrationName = migrationNameUnderscored newModule oldVersion newVersion typeNameNew
@@ -778,7 +778,7 @@ canAliasToMigration oldVersion newVersion scope interfaces recursionSet (typeNew
       -- If an alias is filled, then it can't have any open holes within it either?
       -- So we can take this opportunity to reset tvars to reduce likeliness of naming conflicts?
       let
-        (MigrationNested subt imps subDefs) = canToMigration oldVersion newVersion moduleNameNew interfaces recursionSet cType (Just typeOld) tvarMapOld tvarMapNew oldValueRef
+        (MigrationNested _subt imps subDefs) = canToMigration oldVersion newVersion moduleNameNew interfaces recursionSet cType (Just typeOld) tvarMapOld tvarMapNew oldValueRef
       in
       debugMigrationIncludes_ "canAliasToMigration:Filled" (typeOld, typeNew) $
       xMigrationNested (
@@ -847,7 +847,7 @@ recordMigration oldVersion newVersion scope interfaces recursionSet typeNew@(Can
 
                   Nothing ->
                     -- This field did not exist in the old version. We need an init!
-                    let (MigrationNested migration imps subDefs) = canToMigration oldVersion newVersion scope interfaces recursionSet fieldTypeNew Nothing tvarMapOld tvarMap oldValueRef
+                    let (MigrationNested _migration imps subDefs) = canToMigration oldVersion newVersion scope interfaces recursionSet fieldTypeNew Nothing tvarMapOld tvarMap oldValueRef
                     in
                     ( N.toText fieldName, xMigrationNested (T.concat["(Unimplemented {- Type `", qualifiedType fieldTypeNew, "` was added in V", show_ newVersion, ". I need you to set a default value. -})"], imps, subDefs) )
             )
@@ -1095,7 +1095,7 @@ migrateTvars oldVersion newVersion scope interfaces recursionSet tvarMapOld tvar
             isAnonymous = isAnonymousRecord paramNew
             anonymousValueRef = "rec"
             valueRef = if isAnonymous then anonymousValueRef else ("p" <> show_ i)
-            ft@(MigrationNested fn imps subDefs) =
+            ft@(MigrationNested fn _imps _subDefs) =
               canToMigration oldVersion newVersion scope interfaces recursionSet paramNew (Just paramOld) tvarMapOld tvarMapNew valueRef
           in
           if fn == "" then

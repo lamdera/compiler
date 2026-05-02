@@ -1,4 +1,3 @@
-{-# OPTIONS_GHC -Wall #-}
 {-# LANGUAGE BangPatterns, BinaryLiterals, ExtendedLiterals, MagicHash #-}
 module Parse.Symbol
   ( BadOperator(..)

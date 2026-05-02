@@ -27,7 +27,7 @@ fullGraph paths = do
     let
       debug_ = True
       optimize = False
-      maybeDocs = Nothing
+      -- maybeDocs = Nothing
 
     style <- Reporting.terminal
 

@@ -1,4 +1,3 @@
-{-# OPTIONS_GHC -Wall #-}
 {-# LANGUAGE ExtendedLiterals, MagicHash #-}
 module Reporting.Annotation
   ( Located(..)
