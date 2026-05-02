@@ -97,11 +97,11 @@ lamderaReplSrc = $(do
               \\n  Run `stack install` locally to build and commit to the repository."
       _ -> do
         putStr $ "-- Minifying `" <> tempFile <> "`..."
-        Ext.Common.requireBinary "esbuild"
+        _ <- Ext.Common.requireBinary "esbuild"
         BS.writeFile tempFile compiledCode
         Lamdera.replaceInFile "artifacts.x.dat" (T.pack Lamdera.Version.artifacts) tempFile
         let esbuildCommand = "esbuild " <> tempFile <> " --minify --target=chrome58,firefox57,safari11,edge16 > " <> distFile
-        Ext.Common.bash esbuildCommand
+        _ <- Ext.Common.bash esbuildCommand
         minifierResult <- Dir.doesFileExist distFile
         if minifierResult
           then do
