@@ -141,7 +141,9 @@ instance Functor (Parser x) where
 
 instance Applicative.Applicative (Parser x) where
   {-# INLINE pure #-}
-  pure = return
+  pure value =
+    Parser $ \_ state _ eok _ _ ->
+      eok value state
 
   {-# INLINE (<*>) #-}
   (<*>) (Parser parserFunc) (Parser parserArg) =
@@ -232,11 +234,6 @@ oowfHelp fpc state cok eok cerr parsers fallback =
 
 
 instance Monad (Parser x) where
-  {-# INLINE return #-}
-  return value =
-    Parser $ \_ state _ eok _ _ ->
-      eok value state
-
   {-# INLINE (>>=) #-}
   (Parser parserA) >>= callback =
     Parser $ \fpc state cok eok cerr eerr ->

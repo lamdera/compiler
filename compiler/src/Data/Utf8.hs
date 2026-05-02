@@ -372,10 +372,10 @@ toCharsHelp ba offset# len# =
 
 {-# INLINE chr2 #-}
 chr2 :: ByteArray# -> Int# -> Word# -> Char
-chr2 ba# offset# firstWord# =
+chr2 ba offset# firstWord# =
   let
     !i1# = word2Int# firstWord#
-    !i2# = word8ToInt# (indexWord8Array# ba# (offset# +# 1#))
+    !i2# = word8ToInt# (indexWord8Array# ba (offset# +# 1#))
     !c1# = uncheckedIShiftL# (i1# -# 0xC0#) 6#
     !c2# = i2# -# 0x80#
   in
@@ -384,11 +384,11 @@ chr2 ba# offset# firstWord# =
 
 {-# INLINE chr3 #-}
 chr3 :: ByteArray# -> Int# -> Word# -> Char
-chr3 ba# offset# firstWord# =
+chr3 ba offset# firstWord# =
   let
     !i1# = word2Int# firstWord#
-    !i2# = word8ToInt# (indexWord8Array# ba# (offset# +# 1#))
-    !i3# = word8ToInt# (indexWord8Array# ba# (offset# +# 2#))
+    !i2# = word8ToInt# (indexWord8Array# ba (offset# +# 1#))
+    !i3# = word8ToInt# (indexWord8Array# ba (offset# +# 2#))
     !c1# = uncheckedIShiftL# (i1# -# 0xE0#) 12#
     !c2# = uncheckedIShiftL# (i2# -# 0x80#) 6#
     !c3# = i3# -# 0x80#
@@ -398,12 +398,12 @@ chr3 ba# offset# firstWord# =
 
 {-# INLINE chr4 #-}
 chr4 :: ByteArray# -> Int# -> Word# -> Char
-chr4 ba# offset# firstWord# =
+chr4 ba offset# firstWord# =
   let
     !i1# = word2Int# firstWord#
-    !i2# = word8ToInt# (indexWord8Array# ba# (offset# +# 1#))
-    !i3# = word8ToInt# (indexWord8Array# ba# (offset# +# 2#))
-    !i4# = word8ToInt# (indexWord8Array# ba# (offset# +# 3#))
+    !i2# = word8ToInt# (indexWord8Array# ba (offset# +# 1#))
+    !i3# = word8ToInt# (indexWord8Array# ba (offset# +# 2#))
+    !i4# = word8ToInt# (indexWord8Array# ba (offset# +# 3#))
     !c1# = uncheckedIShiftL# (i1# -# 0xF0#) 18#
     !c2# = uncheckedIShiftL# (i2# -# 0x80#) 12#
     !c3# = uncheckedIShiftL# (i3# -# 0x80#) 6#

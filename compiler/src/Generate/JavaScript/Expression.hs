@@ -105,25 +105,24 @@ generate mode argLookup expression =
     Opt.Function args body ->
       generateFunction (map JsName.fromLocal args) (generate mode argLookup body)
 
-    Opt.Call func args -> JsExpr $ generateCall mode argLookup func args
+    Opt.Call f xs -> JsExpr $ generateCall mode argLookup f xs
 
-    Opt.TailCall name args ->
-      let
-        isNewValue :: (Name.Name, Opt.Expr) -> Bool
-        isNewValue (argName, arg) =
-          case arg of
-            Opt.VarLocal name -> name /= argName
-            _ -> True
+    Opt.TailCall name args -> JsBlock $ generateTailCall mode argLookup name args
+      Lamdera.& Lamdera.alternativeImplementation (
+        let
+          isNewValue :: (Name.Name, Opt.Expr) -> Bool
+          isNewValue (argName, arg) =
+            case arg of
+              Opt.VarLocal name -> name /= argName
+              _ -> True
 
-        argsWithNewValues :: [(Name.Name, Opt.Expr)]
-        argsWithNewValues =
-          filter isNewValue args
-      in
-      JsBlock $ generateTailCall mode argLookup name args
-        Lamdera.& Lamdera.alternativeImplementation (generateTailCall mode argLookup name argsWithNewValues)
+          argsWithNewValues :: [(Name.Name, Opt.Expr)]
+          argsWithNewValues =
+            filter isNewValue args
+        in
+        generateTailCall mode argLookup name argsWithNewValues)
 
-    Opt.If branches final ->
-      generateIf mode argLookup branches final
+    Opt.If bs f -> generateIf mode argLookup bs f
 
     Opt.Let def body ->
       JsBlock $
@@ -393,7 +392,7 @@ generateCall mode argLookup func args =
 
     Opt.VarBox _ ->
       case mode of
-        Mode.Dev _ -> generateCallHelp mode argLookup func args
+        Mode.Dev  _ -> generateCallHelp mode argLookup func args
         Mode.Prod _ ->
           case args of
             [arg] -> generateJsExpr mode argLookup arg
