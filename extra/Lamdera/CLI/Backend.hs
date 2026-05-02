@@ -1,5 +1,5 @@
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE BangPatterns, ExtendedLiterals, OverloadedStrings #-}
 module Lamdera.CLI.Backend
   ( Flags(..)
   , importParser
@@ -36,6 +36,7 @@ import qualified System.Directory as Dir
 import qualified System.Exit as Exit
 import System.FilePath ((</>))
 import qualified System.IO as IO
+import System.IO.Unsafe (unsafePerformIO)
 import qualified System.Process as Proc
 
 import qualified AST.Source as Src
@@ -57,7 +58,6 @@ import qualified Parse.Primitives as P
 import qualified Parse.Space as PS
 import qualified Parse.Type as PT
 import qualified Parse.Variable as PV
-import Parse.Primitives (Row, Col)
 import qualified Reporting
 import qualified Reporting.Annotation as A
 import Reporting.Doc ((<+>))
@@ -109,45 +109,48 @@ importParser =
 
 parseImport :: String -> B.Builder
 parseImport input =
-  parseImportHelp (T.pack input) mempty
+  unsafePerformIO $ parseImportHelp (T.pack input) mempty
 
 
-parseImportHelp :: T.Text -> B.Builder -> B.Builder
+parseImportHelp :: T.Text -> B.Builder -> IO B.Builder
 parseImportHelp input output =
   case T.strip input of
-    ""       -> output
+    ""       -> return output
     stripped -> parseImportHelpStep stripped output
 
 
-parseImportHelpStep :: T.Text -> B.Builder -> B.Builder
+parseImportHelpStep :: T.Text -> B.Builder -> IO B.Builder
 parseImportHelpStep stripped output =
-  let
-    withImport
-      | Extra.startsWith (PV.moduleName (,)) (fromText stripped) = "import " <> stripped
-      | otherwise = stripped
+  do  isModule <- Extra.startsWith (PV.moduleName err) (fromText stripped)
+      let
+        withImport
+          | isModule  = "import " <> stripped
+          | otherwise = stripped
 
-    code =
-      fromText withImport <> "\n"
+        code =
+          fromText withImport <> "\n"
 
-    result =
-      Extra.fromByteStringWithContext PM.chompImport ES.ImportEnd code
-  in
-  case result of
-    Right (newOutput, _, rest) ->
-      parseImportHelp (toText rest) (output <> B.byteString newOutput)
+      result <- Extra.fromByteStringWithContext PM.chompImport code
+      case result of
+        Right (newOutput, _, rest) ->
+          parseImportHelp (toText rest) (output <> B.byteString newOutput)
 
-    Left (newOutput, ES.ImportEnd _ _, rest)
-      | Extra.startsWith (PV.moduleName (,)) rest ->
-          parseImportHelp (addNewline newOutput rest) output
+        Left (newOutput, ES.ImportEnd _, rest) ->
+          do  restIsModule <- Extra.startsWith (PV.moduleName err) rest
+              if restIsModule
+                then parseImportHelp (addNewline newOutput rest) output
+                else
+                  do  restIsImport <- Extra.startsWith (PK.import_ err) rest
+                      if restIsImport
+                        then parseImportHelp (addNewline newOutput rest) output
+                        else
+                          do  restIsLower <- Extra.startsWith (PV.lower err) rest
+                              if restIsLower
+                                then return $ output <> B.byteString newOutput <> B.byteString rest
+                                else parseImportHelp (stripDelimiter newOutput rest) output
 
-      | Extra.startsWith (PK.import_ (,)) rest ->
-          parseImportHelp (addNewline newOutput rest) output
-
-      | not $ Extra.startsWith (PV.lower (,)) rest ->
-          parseImportHelp (stripDelimiter newOutput rest) output
-
-    Left (newOutput, _, rest) ->
-      output <> B.byteString newOutput <> B.byteString rest
+        Left (newOutput, _, rest) ->
+          return $ output <> B.byteString newOutput <> B.byteString rest
 
 
 stripDelimiter :: BS.ByteString -> BS.ByteString -> T.Text
@@ -166,6 +169,18 @@ fromText = BS_UTF8.fromString . T.unpack
 
 toText :: BS.ByteString -> T.Text
 toText = T.pack . BS_UTF8.toString
+
+
+
+-- PARSER HELPER
+
+
+err :: P.Cursor -> ()
+err _ = ()
+
+
+err_ :: a -> P.Cursor -> ()
+err_ _ _ = ()
 
 
 
@@ -296,12 +311,11 @@ read =
           return Exit
 
         Just chars ->
-          let
-            lines = Lines (stripLegacyBackslash chars) []
-          in
-          case categorize lines of
-            Done input -> return input
-            Continue p -> readMore lines p
+          do  let lines = Lines (stripLegacyBackslash chars) []
+              cat <- liftIO $ categorize lines
+              case cat of
+                Done input -> return input
+                Continue p -> readMore lines p
 
 
 readMore :: Lines -> Prefill -> Repl.InputT M Input
@@ -312,12 +326,11 @@ readMore previousLines prefill =
           return Skip
 
         Just chars ->
-          let
-            lines = addLine (stripLegacyBackslash chars) previousLines
-          in
-          case categorize lines of
-            Done input -> return input
-            Continue p -> readMore lines p
+          do  let lines = addLine (stripLegacyBackslash chars) previousLines
+              cat <- liftIO $ categorize lines
+              case cat of
+                Done input -> return input
+                Continue p -> readMore lines p
 
 
 -- For compatibility with 0.19.0 such that readers of "Programming Elm" by @jfairbank
@@ -405,76 +418,75 @@ data CategorizedInput
   | Continue Prefill
 
 
-categorize :: Lines -> CategorizedInput
+categorize :: Lines -> IO CategorizedInput
 categorize lines
-  | isBlank lines                    = Done Skip
-  | startsWithColon lines            = Done (toCommand lines)
+  | isBlank lines                    = pure $ Done Skip
+  | startsWithColon lines            = pure $ Done (toCommand lines)
   | startsWithKeyword "import" lines = attemptImport lines
   | otherwise                        = attemptDeclOrExpr lines
 
 
-attemptImport :: Lines -> CategorizedInput
+attemptImport :: Lines -> IO CategorizedInput
 attemptImport lines =
   let
     src = linesToByteString lines
-    parser = P.specialize (\_ _ _ -> ()) PM.chompImport
+    parser = P.specialize (\_ _ -> ()) PM.chompImport
   in
-  case P.fromByteString parser (\_ _ -> ()) src of
-    Right (Src.Import (A.At _ name) _ _) ->
-      Done (Import name src)
-
-    Left () ->
-      ifFail lines (Import "ERR" src)
+  do  result <- P.fromByteString parser (\_ -> ()) src
+      case result of
+        Right (Src.Import (A.At _ name) _ _) -> return $ Done (Import name src)
+        Left ()                              -> ifFail lines (Import "ERR" src)
 
 
-ifFail :: Lines -> Input -> CategorizedInput
+ifFail :: Lines -> Input -> IO CategorizedInput
 ifFail lines input =
-  if endsWithBlankLine lines
-  then Done input
-  else Continue Indent
+  pure $
+    if endsWithBlankLine lines
+    then Done input
+    else Continue Indent
 
 
-ifDone :: Lines -> Input -> CategorizedInput
+ifDone :: Lines -> Input -> IO CategorizedInput
 ifDone lines input =
-  if isSingleLine lines || endsWithBlankLine lines
-  then Done input
-  else Continue Indent
+  pure $
+    if isSingleLine lines || endsWithBlankLine lines
+    then Done input
+    else Continue Indent
 
 
-attemptDeclOrExpr :: Lines -> CategorizedInput
+attemptDeclOrExpr :: Lines -> IO CategorizedInput
 attemptDeclOrExpr lines =
   let
     src = linesToByteString lines
     exprParser = P.specialize (toExprPosition src) PE.expression
     declParser = P.specialize (toDeclPosition src) PD.declaration
   in
-  case P.fromByteString declParser (,) src of
-    Right (decl, _) ->
-      case decl of
-        PD.Value _ (A.At _ (Src.Value (A.At _ name) _ _ _)) -> ifDone lines (Decl name src)
-        PD.Union _ (A.At _ (Src.Union (A.At _ name) _ _  )) -> ifDone lines (Type name src)
-        PD.Alias _ (A.At _ (Src.Alias (A.At _ name) _ _  )) -> ifDone lines (Type name src)
-        PD.Port  _ _                                        -> Done Port
+  do  dResult <- P.fromByteString declParser A.Position src
+      case dResult of
+        Right (decl, _) ->
+          case decl of
+            PD.Value _ (A.At _ (Src.Value (A.At _ name) _ _ _)) -> ifDone lines (Decl name src)
+            PD.Union _ (A.At _ (Src.Union (A.At _ name) _ _  )) -> ifDone lines (Type name src)
+            PD.Alias _ (A.At _ (Src.Alias (A.At _ name) _ _  )) -> ifDone lines (Type name src)
+            PD.Port  _ _                                        -> pure $ Done Port
 
-    Left declPosition
-      | startsWithKeyword "type" lines ->
-          ifFail lines (Type "ERR" src)
+        Left declPosition
+          | startsWithKeyword "type" lines -> ifFail lines (Type "ERR" src)
+          | startsWithKeyword "port" lines -> pure $ Done Port
+          | otherwise ->
+              do  eResult <- P.fromByteString exprParser A.Position src
+                  case eResult of
+                    Right _ ->
+                      ifDone lines (Expr src)
 
-      | startsWithKeyword "port" lines ->
-          Done Port
-
-      | otherwise ->
-          case P.fromByteString exprParser (,) src of
-            Right _ ->
-              ifDone lines (Expr src)
-
-            Left exprPosition ->
-              if exprPosition >= declPosition then
-                ifFail lines (Expr src)
-              else
-                case P.fromByteString annotation (\_ _ -> ()) src of
-                  Right name -> Continue (DefStart name)
-                  Left ()    -> ifFail lines (Decl "ERR" src)
+                    Left exprPosition ->
+                      if exprPosition >= declPosition then
+                        ifFail lines (Expr src)
+                      else
+                        do  tResult <- P.fromByteString annotation (\_ -> ()) src
+                            case tResult of
+                              Right name -> pure $ Continue (DefStart name)
+                              Left ()    -> ifFail lines (Decl "ERR" src)
 
 
 startsWithColon :: Lines -> Bool
@@ -505,34 +517,30 @@ startsWithKeyword keyword lines =
       c:_ -> not (Char.isAlphaNum c)
 
 
-toExprPosition :: BS.ByteString -> ES.Expr -> Row -> Col -> (Row, Col)
-toExprPosition src expr row col =
+toExprPosition :: BS.ByteString -> ES.Expr -> P.Cursor -> A.Position
+toExprPosition src expr cur =
   let
-    decl = ES.DeclDef N.replValueToPrint (ES.DeclDefBody expr row col) row col
+    decl = ES.DeclDef N.replValueToPrint (ES.DeclDefBody expr cur) cur
   in
-  toDeclPosition src decl row col
+  toDeclPosition src decl cur
 
 
-toDeclPosition :: BS.ByteString -> ES.Decl -> Row -> Col -> (Row, Col)
-toDeclPosition src decl r c =
+toDeclPosition :: BS.ByteString -> ES.Decl -> P.Cursor -> A.Position
+toDeclPosition src decl c =
   let
-    err = ES.ParseError (ES.Declarations decl r c)
+    err = ES.ParseError (ES.Declarations decl c)
     report = ES.toReport (Code.toSource src) err
 
-    (Report.Report _ (A.Region (A.Position row col) _) _ _) = report
+    !(Report.Report _ (A.Region cur _) _ _) = report
   in
-  (row, col)
+  A.Position cur
 
 
 annotation :: P.Parser () N.Name
 annotation =
-  let
-    err _ _ = ()
-    err_ _ _ _ = ()
-  in
   do  name <- PV.lower err
       PS.chompAndCheckIndent err_ err
-      P.word1 0x3A {-:-} err
+      P.word1 0x3A#Word8 {-:-} err
       PS.chompAndCheckIndent err_ err
       (_, _) <- P.specialize err_ PT.expression
       PS.checkFreshLine err
@@ -629,9 +637,9 @@ attemptEval (Env root interpreter ansi port) oldState newState output =
                 Details.load Reporting.silent scope root
 
             artifacts <-
-              Task.eio id $ do
-                modelState <- addBackendModel port newState
-                Build.fromRepl root details (toByteString modelState output)
+              Task.eio id $
+                do  modelState <- addBackendModel port newState
+                    Build.fromRepl root details (toByteString modelState output)
 
             traverse (Task.mapError Exit.ReplBadGenerate . Generate.repl root details ansi artifacts) (toPrintName output)
 
@@ -853,7 +861,7 @@ addMatch string isFinished name _ completions =
   let
     suggestion = N.toChars name
   in
-  if string `List.isPrefixOf` suggestion then
+  if List.isPrefixOf string suggestion then
     Repl.Completion suggestion suggestion isFinished : completions
   else
     completions
@@ -945,7 +953,7 @@ getBackendModel port =
 
 
 getBackendModelFromServer :: Int -> IO (Either Lamdera.Http.Error T.Text)
-getBackendModelFromServer port = do
+getBackendModelFromServer port =
   Lamdera.Http.normalJson "backend-model" ("http://localhost:" ++ show port ++ "/_x/bem") backendModelDecoder
 
 
@@ -953,11 +961,14 @@ getBackendModelFromFile :: IO (Maybe T.Text)
 getBackendModelFromFile =
   do  path <- Lamdera.lamderaBackendDevSnapshotPath
       maybeJson <- Lamdera.readUtf8Text path
-      return $
-        do  json <- maybeJson
-            case Json.Decode.fromByteString backendModelDecoder (BS_UTF8.fromString (T.unpack json)) of
-              Right model -> Just model
-              Left _      -> Nothing
+      case maybeJson of
+        Nothing ->
+          return Nothing
+        Just json ->
+          do  result <- Json.Decode.fromByteString backendModelDecoder (BS_UTF8.fromString (T.unpack json))
+              case result of
+                Right model -> return $ Just model
+                Left _      -> return Nothing
 
 
 backendModelDecoder :: Json.Decode.Decoder () T.Text

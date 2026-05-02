@@ -1,4 +1,4 @@
-{-# LANGUAGE UnboxedTuples #-}
+{-# LANGUAGE BangPatterns, ExtendedLiterals, MagicHash #-}
 module Lamdera.Parse.Extra
   ( fromByteStringWithContext
   , startsWith
@@ -6,99 +6,100 @@ module Lamdera.Parse.Extra
   where
 
 
+import qualified Bytes
 import qualified Data.ByteString.Internal as B
 import Data.Either (isRight)
-import Data.Word (Word8)
-import Foreign.Ptr (Ptr, minusPtr, plusPtr)
-import Foreign.ForeignPtr.Unsafe (unsafeForeignPtrToPtr)
+import GHC.ForeignPtr (ForeignPtr(..))
+import GHC.Exts (isTrue#)
+import GHC.Int (Int(..))
+import GHC.Prim
 
 import qualified Parse.Primitives as P
 
 
-fromByteStringWithContext :: P.Parser x a -> (P.Cursor -> x) -> B.ByteString -> Either (B.ByteString, x, B.ByteString) (B.ByteString, a, B.ByteString)
-fromByteStringWithContext parser toEnd src =
-  let
-    parserWithContext =
-      do  value <- specializeAtPos (specializer src) parser
-          withContext src value <$> getOffset
-
-    toEndWithContext row col =
-      specializer src (toEnd row col) row col
-  in
-  fromByteStringIgnoringRest parserWithContext toEndWithContext src
+fromByteStringWithContext :: P.Parser x a -> B.ByteString -> IO (Either (B.ByteString, x, B.ByteString) (B.ByteString, a, B.ByteString))
+fromByteStringWithContext parser src =
+  fromByteStringIgnoringRestHelp (toOkWithContext src) (toErrWithContext src) parser src
 
 
-specializeAtPos :: (x -> P.Cursor -> y) -> P.Parser x a -> P.Parser y a
-specializeAtPos addContext (P.Parser parser) =
-  P.Parser $ \state cok eok cerr eerr ->
-    let
-      cerr' r c tx = cerr r c (addContext (tx r c))
-      eerr' r c tx = eerr r c (addContext (tx r c))
-    in
-    parser state cok eok cerr' eerr'
+toOkWithContext :: B.ByteString -> a -> P.State -> IO (Either (B.ByteString, x, B.ByteString) (B.ByteString, a, B.ByteString))
+toOkWithContext src value state =
+  return $ Right $ withContext src value (offsetFromState src state)
 
 
-specializer :: B.ByteString -> value -> P.Cursor -> (B.ByteString, value, B.ByteString)
-specializer src value row col =
-  withContext src value
-    $ either id id
-    $ fromByteStringIgnoringRest (toOffset row col) (\_ _ -> 0) src
+toErrWithContext :: B.ByteString -> P.Cursor -> (P.Cursor -> x) -> IO (Either (B.ByteString, x, B.ByteString) (B.ByteString, a, B.ByteString))
+toErrWithContext src cursor toError =
+  return $ Left $ withContext src (toError cursor) (offsetFromCursor src cursor)
 
 
 withContext :: B.ByteString -> value -> Int -> (B.ByteString, value, B.ByteString)
-withContext (B.PS fptr _ length) value offset =
-  (B.fromForeignPtr fptr 0 offset, value, B.fromForeignPtr fptr offset (length - offset))
+withContext src value offset =
+  (lowLevelTake offset src, value, lowLevelDrop offset src)
 
 
-getOffset :: P.Parser x Int
-getOffset =
-  P.Parser $ \state@(P.State src pos _ _ _ _) _ eok _ _ ->
-    eok (minusPtr pos (unsafeForeignPtrToPtr src)) state
+lowLevelTake :: Int -> B.ByteString -> B.ByteString
+lowLevelTake (I# n) bs@(B.BS (ForeignPtr start fpc) (I# len))
+  | isTrue# (n <=# 0#)   = B.empty
+  | isTrue# (n >=# len)  = bs
+  | otherwise            = B.BS (ForeignPtr start fpc) (I# n)
 
 
-toOffset :: P.Cursor -> P.Parser x Int
-toOffset targetRow targetCol =
-  P.Parser $ \_ (P.State pos end indent cursor) cok _ _ _ ->
-    let
-      (# newPos, newRow, newCol #) = moveTo targetRow targetCol pos end cursor
-    in
-    cok (minusPtr newPos (unsafeForeignPtrToPtr src)) (P.State newPos end indent newRow newCol)
+lowLevelDrop :: Int -> B.ByteString -> B.ByteString
+lowLevelDrop (I# n) bs@(B.BS (ForeignPtr start fpc) (I# len))
+  | isTrue# (n <=# 0#)   = bs
+  | isTrue# (n >=# len)  = B.empty
+  | otherwise            = B.BS (ForeignPtr (plusAddr# start n) fpc) (I# (len -# n))
 
 
-moveTo :: P.Cursor -> Ptr Word8 -> Ptr Word8 -> P.Cursor -> (# Ptr Word8, P.Cursor #)
-moveTo targetRow targetCol pos end row col =
-  if pos >= end || row > targetRow || row == targetRow && col >= targetCol then
-    (# pos, row, col #)
-
-  else
-    case unsafeIndex pos of
-      0x0A {- \n -} ->
-        moveTo targetRow targetCol (plusPtr pos 1) end (row + 1) 1
-
-      _ ->
-        moveTo targetRow targetCol (plusPtr pos 1) end row (col + 1)
+offsetFromState :: B.ByteString -> P.State -> Int
+offsetFromState (B.BS (ForeignPtr start _) _) (P.State pos _ _ _) =
+  I# (minusAddr# pos start)
 
 
-unsafeIndex :: Ptr Word8 -> Word8
-unsafeIndex ptr =
-  B.accursedUnutterablePerformIO (peek ptr)
+offsetFromCursor :: B.ByteString -> P.Cursor -> Int
+offsetFromCursor (B.BS (ForeignPtr start _) (I# len)) target =
+  let
+    end = plusAddr# start len
+
+    go pos cur
+      | isTrue# (geWord64# cur target) = minusAddr# pos start
+      | P.notLtAddr pos end = len
+      | otherwise =
+          case indexWord8OffAddr# pos 0# of
+            0x0A#Word8 {- \n -} ->
+              go (plusAddr# pos 1#) (P.newline cur)
+
+            word ->
+              let !newPos = P.skipUtf8 pos end word in
+              if P.ltAddr pos newPos
+              then go newPos (P.slide cur 1#Word64)
+              else minusAddr# pos start
+  in
+  I# (go start 0#Word64)
 
 
-startsWith :: P.Parser x a -> B.ByteString -> Bool
-startsWith parser =
-  isRight . fromByteStringIgnoringRest (P.specialize (\_ _ _ -> ()) parser) (\_ _ -> ())
+startsWith :: P.Parser x a -> B.ByteString -> IO Bool
+startsWith parser src =
+  isRight <$> fromByteStringIgnoringRest parser src
 
 
-fromByteStringIgnoringRest :: P.Parser x a -> (P.Cursor -> x) -> B.ByteString -> Either x a
-fromByteStringIgnoringRest = P.fromByteString . stopAfter
+fromByteStringIgnoringRest :: P.Parser x a -> B.ByteString -> IO (Either x a)
+fromByteStringIgnoringRest = fromByteStringIgnoringRestHelp toOk toErr
 
 
-stopAfter :: P.Parser x a -> P.Parser x a
-stopAfter = (<* ignoreRest)
+fromByteStringIgnoringRestHelp :: (a -> P.State -> IO b) -> (P.Cursor -> (P.Cursor -> x) -> IO b) -> P.Parser x a -> B.ByteString -> IO b
+fromByteStringIgnoringRestHelp toOk' toErr' (P.Parser parser) (B.BS (ForeignPtr pos fpc) (I# len)) =
+  do  !result <- parser fpc state toOk' toOk' toErr' toErr'
+      Bytes.touch fpc result
+  where
+    state = P.State pos (plusAddr# pos len) 0#Word32 0#Word64
 
 
-ignoreRest :: P.Parser x ()
-ignoreRest =
-  P.Parser $ \_ (P.State pos _ indent cursor) _ eok _ _ ->
-    -- set end to current pos to avoid errors in P.fromByteString when pos is not at the end of input
-    eok () (P.State pos pos indent cursor)
+toOk :: a -> P.State -> IO (Either x a)
+toOk a _ =
+  return (Right a)
+
+
+toErr :: P.Cursor -> (P.Cursor -> x) -> IO (Either x a)
+toErr cur toError =
+  return (Left (toError cur))
