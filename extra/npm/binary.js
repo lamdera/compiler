@@ -29,7 +29,16 @@ module.exports = function()
 	{
 		if (error && error.code === 'MODULE_NOT_FOUND')
 		{
-			exitFailure(version, missingSubPackageHelp(subPackageName));
+			// Check if we have a previously downloaded binary from the postinstall fallback
+			var downloadedPath = downloadedBinPath(subPackageName, fileName);
+			if (fs.existsSync(downloadedPath))
+			{
+				subBinaryPath = downloadedPath;
+			}
+			else
+			{
+				exitFailure(version, missingSubPackageHelp(subPackageName));
+			}
 		}
 		else
 		{
@@ -65,6 +74,20 @@ module.exports = function()
 
 	return binaryPath;
 }
+
+
+// DOWNLOADED BIN PATH
+//
+// Returns the path where a directly-downloaded binary would be stored.
+// This is used by both binary.js (to check for it) and install.js (to write it).
+
+
+function downloadedBinPath(subPackageName, fileName)
+{
+	return path.join(__dirname, 'downloaded-' + subPackageName.replace('/', '-') + '-' + fileName);
+}
+
+module.exports.downloadedBinPath = downloadedBinPath;
 
 
 
