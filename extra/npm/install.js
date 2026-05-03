@@ -191,4 +191,11 @@ async function checkAndPreparePackage()
 	}
 }
 
-checkAndPreparePackage();
+// Allow testing of internal functions when required as a module,
+// but run main when executed directly (node install.js).
+if (require.main === module)
+{
+	checkAndPreparePackage();
+}
+
+module.exports = { fetch: fetch, extractFileFromTarGzip: extractFileFromTarGzip, downloadDirectlyFromNPM: downloadDirectlyFromNPM };
