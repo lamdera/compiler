@@ -3,3 +3,5 @@ elm-stuff/
 dist/
 .elm-pages/
 functions/render/elm-pages-cli.js
+elm-pages/
+package-lock.json
