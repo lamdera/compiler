@@ -1,0 +1,13 @@
+{
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "generate": "elm-pages bundle-script GenerateRoundtrip --output generate.mjs && node generate.mjs",
+    "test": "npx elm-test --compiler=lamdera"
+  },
+  "devDependencies": {
+    "elm-codegen": "^0.6.3",
+    "elm-pages": "^3.3.0",
+    "elm-test": "^0.19.1-revision12"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "elm-codegen-version": "0.6.0",
+  "codegen-helpers": {
+    "packages": {
+      "elm/core": "1.0.5",
+      "elm/bytes": "1.0.8",
+      "elm/time": "1.0.0",
+      "elm-explorations/test": "2.2.0"
+    },
+    "local": []
+  }
+}
