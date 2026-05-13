@@ -187,6 +187,7 @@ addWireGenerations_ canonical pkg ifaces modul =
     aliasDefs =
       (Can._aliases canonical)
         & Map.toList
+        & filter (\(_, Alias _ tipe) -> not (isLambdaType tipe))
         & concatMap (\(name, alias) ->
             [ (encoderAlias isTest_ ifaces pkg modul decls_ name alias)
             , (decoderAlias isTest_ ifaces pkg modul decls_ name alias)

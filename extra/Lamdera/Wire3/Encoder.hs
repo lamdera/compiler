@@ -333,7 +333,8 @@ deepEncoderForType depth ifaces cname tipe =
       encoderForType depth ifaces cname tipe
 
     TAlias moduleName typeName tvars aType ->
-      if isUnsupportedKernelType tipe
+      let innerType = case aType of { Holey t -> t; Filled t -> t }
+      in if isUnsupportedKernelType tipe || isLambdaType innerType
         then failEncode
         else inlineIfRecordOrCall depth ifaces cname tipe tvars aType
 
@@ -432,10 +433,14 @@ encodeTypeValue depth ifaces cname tipe value =
         then call failEncode [ a Unit ]
         else
           let
+            innerType = case aType of { Holey t -> t; Filled t -> t }
             normalEncoder =
               call (encoderForType depth ifaces cname tipe) $
                 fmap (\(tvarName, tvarType) -> deepEncoderForType depth ifaces cname tvarType) tvars ++ [ value ]
           in
+          if isLambdaType innerType
+            then call failEncode [ a Unit ]
+            else
           case aType of
             Holey tipe ->
               case tipe of

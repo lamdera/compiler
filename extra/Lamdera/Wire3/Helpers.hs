@@ -135,6 +135,13 @@ isUnsupportedKernelType tipe =
     _ -> False
 
 
+isLambdaType :: Type -> Bool
+isLambdaType tipe =
+  case tipe of
+    TLambda _ _ -> True
+    _ -> False
+
+
 containsUnsupportedTypes :: Type -> Bool
 containsUnsupportedTypes tipe =
   case tipe of

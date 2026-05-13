@@ -384,6 +384,7 @@ decoderForType ifaces cname tipe =
     TAlias moduleName typeName tvars_ aType ->
       let
         generatedName = Data.Name.fromChars $ "w3_decode_" ++ Data.Name.toChars typeName
+        innerType = case aType of { Holey t -> t; Filled t -> t }
 
         decoder =
           if cname == moduleName
@@ -406,6 +407,8 @@ decoderForType ifaces cname tipe =
       in
       if isUnsupportedKernelType tipe
       then failDecode (Data.Name.toChars generatedName <> " isUnsupportedKernelType")
+      else if isLambdaType innerType
+      then failDecode "lambda"
       else
          case aType of
             Holey tipe ->
