@@ -38,6 +38,10 @@ main =
     -- @LAMDERA additions + removals
     [ Lamdera.CLI.live
     , Lamdera.CLI.login
+    , Lamdera.CLI.project
+    , Lamdera.CLI.teams
+    , Lamdera.CLI.ssh
+    , Lamdera.CLI.env
     , Lamdera.CLI.check
     , Lamdera.CLI.deploy
     , init
