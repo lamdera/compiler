@@ -9,7 +9,7 @@ import Test.Helpers
 import qualified Lamdera.Compile
 
 suite :: Test ()
-suite = tests $
+suite = requireOverrides $ tests $
   [ scope "an vanilla elm project compiled with lamdera should not inject lamdera html modifications" $
     let
       project = "./test/scenario-empty-elm-init"

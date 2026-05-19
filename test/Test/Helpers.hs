@@ -14,6 +14,23 @@ import Test.Main (captureProcessResult)
 import qualified Test.Main
 import qualified Ext.Common
 import qualified Lamdera.Relative
+import qualified System.Directory as Dir
+
+
+hasOverrides :: IO Bool
+hasOverrides = do
+  home <- Dir.getHomeDirectory
+  Dir.doesDirectoryExist (home </> "lamdera" </> "overrides" </> "packages")
+
+
+requireOverrides :: EasyTest.Test a -> EasyTest.Test a
+requireOverrides test = do
+  available <- EasyTest.io hasOverrides
+  case available of
+    True -> test
+    False -> do
+      EasyTest.noteScoped "SKIPPED (overrides not available)"
+      EasyTest.skip >> EasyTest.done
 
 
 aggressiveCacheClear :: FilePath -> IO ()

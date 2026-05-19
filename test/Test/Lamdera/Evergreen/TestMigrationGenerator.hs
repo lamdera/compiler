@@ -50,8 +50,8 @@ all = do
 suite :: Test ()
 suite = tests
   [
-    scope "migration-scenarios" testExamples
-  , scope "e2e migration: 1 -> 2" $ testMigrationGeneration "scenario-migration-generate" 1 2
+    scope "migration-scenarios" $ requireOverrides testExamples
+  , scope "e2e migration: 1 -> 2" $ requireOverrides $ testMigrationGeneration "scenario-migration-generate" 1 2
   , scope "containsUserTypes" testContainsUserTypes
   ]
 
