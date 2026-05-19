@@ -10,7 +10,7 @@ jobs:
     name: Run tests
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - uses: freckle/stack-cache-action@v2
 
@@ -23,15 +23,15 @@ jobs:
           ghcup install stack recommended
           ghcup set stack recommended
 
-      - name: Clone runtime repo (overrides)
-        uses: actions/checkout@v3
-        with:
-          repository: lamdera/runtime
-          ssh-key: ${{ secrets.GH_USER_SCP_KEY }}
-          path: _runtime
-
       - name: Set up test environment
+        env:
+          SSH_KEY: ${{ secrets.GH_USER_SCP_KEY }}
         run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+          git clone --depth 1 git@github.com:lamdera/runtime.git _runtime
           mkdir -p ~/lamdera
           ln -s $GITHUB_WORKSPACE/_runtime/overrides ~/lamdera/overrides
           mkdir -p ~/elm-home-elmx-test
