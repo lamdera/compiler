@@ -1,0 +1,40 @@
+on:
+  push:
+    branches:
+      - lamdera-next
+  pull_request:
+
+name: Test
+jobs:
+  test:
+    name: Run tests
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: freckle/stack-cache-action@v2
+
+      - run: echo "${HOME}/.local/bin" >> $GITHUB_PATH
+
+      - name: Install ghcup & stack
+        run: |
+          mkdir -p ~/.local/bin
+          curl https://downloads.haskell.org/~ghcup/aarch64-apple-darwin-ghcup -o ~/.local/bin/ghcup && chmod a+x ~/.local/bin/ghcup
+          ghcup install stack recommended
+          ghcup set stack recommended
+
+      - name: Clone runtime repo (overrides)
+        uses: actions/checkout@v3
+        with:
+          repository: lamdera/runtime
+          ssh-key: ${{ secrets.GH_USER_SCP_KEY }}
+          path: _runtime
+
+      - name: Set up test environment
+        run: |
+          mkdir -p ~/lamdera
+          ln -s $GITHUB_WORKSPACE/_runtime/overrides ~/lamdera/overrides
+          mkdir -p ~/elm-home-elmx-test
+
+      - name: Build & run tests
+        run: stack test

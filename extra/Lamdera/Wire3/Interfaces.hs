@@ -158,6 +158,11 @@ unionStubs unions =
 aliasStubs :: [Located Alias] -> [Located Value]
 aliasStubs aliases =
   aliases
+    & filter (\(A.At _ (Src.Alias _ _ (A.At _ tipe))) ->
+        case tipe of
+          TLambda _ _ -> False
+          _ -> True
+      )
     & concatMap (\(A.At _ (Src.Alias (A.At _ name) _ _)) ->
       [ _Debug_todo $ Data.Name.fromChars $ "w3_encode_" ++ Data.Name.toChars name
       , _Debug_todo $ Data.Name.fromChars $ "w3_decode_" ++ Data.Name.toChars name

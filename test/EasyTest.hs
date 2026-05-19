@@ -17,12 +17,14 @@ import Control.Monad.Reader
 import Data.List
 import Data.Map (Map)
 import Data.Word
+import Data.IORef
 import GHC.Stack
 import System.Random (Random)
 import qualified Control.Concurrent.Async as A
 import qualified Data.Map as Map
 import qualified System.Random as Random
 import qualified Text.PrettyPrint.ANSI.Leijen as P
+import System.IO (hFlush, hPutStr, stdout)
 
 import Data.Function ((&))
 import qualified Data.Text as T
@@ -48,7 +50,8 @@ data Env =
       , messages :: String
       , results :: TBQueue (Maybe (TMVar (String, Status)))
       , note_ :: String -> IO ()
-      , allow :: String }
+      , allow :: String
+      , outputBuffer :: IORef [String] }
 
 newtype Test a = Test (ReaderT Env IO (Maybe a))
 
@@ -236,13 +239,32 @@ run = runOnly ""
 rerun :: Int -> Test a -> IO ()
 rerun seed = rerunOnly seed []
 
+spinnerFrames :: [Char]
+spinnerFrames = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+
+showProgress :: IORef Int -> String -> IO ()
+showProgress spinnerRef msg = do
+  idx <- readIORef spinnerRef
+  let spinner = spinnerFrames !! (idx `mod` length spinnerFrames)
+      truncated = if length msg > 72 then take 69 msg ++ "..." else msg
+  hPutStr stdout $ "\r\ESC[K " ++ [spinner] ++ "  " ++ truncated
+  hFlush stdout
+  writeIORef spinnerRef (idx + 1)
+
+clearProgress :: IO ()
+clearProgress = do
+  hPutStr stdout "\r\ESC[K"
+  hFlush stdout
+
 run' :: Int -> (String -> IO ()) -> String -> Test a -> IO ()
 run' seed note allow (Test t) = do
   let !rng = Random.mkStdGen seed
   resultsQ <- atomically (newTBQueue 50)
   rngVar <- newTVarIO rng
-  note $ "Randomness seed for this run is " ++ show seed ++ ""
   results <- atomically $ newTVar Map.empty
+  failedOutputMap <- newIORef (Map.empty :: Map String [String])
+  spinnerRef <- newIORef (0 :: Int)
+  buf <- newIORef ([] :: [String])
   rs <- A.async . forever $ do
     -- note, totally fine if this bombs once queue is empty
     Just result <- atomically $ readTBQueue resultsQ
@@ -251,32 +273,42 @@ run' seed note allow (Test t) = do
     resultsMap <- readTVarIO results
     case Map.findWithDefault Skipped msgs resultsMap of
       Skipped -> pure ()
-      Pending -> note $ "🚧  " ++ msgs
-      Passed n -> note $ "\129412  " ++ (if n <= 1 then msgs else "(" ++ show n ++ ") " ++ msgs)
-      Failed -> note $ "💥  " ++ msgs
-  let line = "------------------------------------------------------------"
-  note "Raw test output to follow ... "
-  note line
-  e <- try (runReaderT (void t) (Env rngVar [] resultsQ note allow)) :: IO (Either SomeException ())
+      Pending -> do
+        clearProgress
+        note $ "🚧  " ++ msgs
+      Passed _ -> do
+        showProgress spinnerRef msgs
+      Failed -> do
+        clearProgress
+        -- Capture buffered output for this failure
+        buffered <- atomicModifyIORef buf (\b -> ([], b))
+        modifyIORef failedOutputMap (Map.insertWith (++) msgs (reverse buffered))
+        note $ "💥  " ++ msgs
+  let bufNote msg = modifyIORef buf (msg :)
+  e <- try (runReaderT (void t) (Env rngVar [] resultsQ bufNote allow buf)) :: IO (Either SomeException ())
   case e of
-    Left e -> note $ "Exception while running tests: " ++ show e
+    Left e -> do
+      clearProgress
+      note $ "Exception while running tests: " ++ show e
     Right () -> pure ()
   atomically $ writeTBQueue resultsQ Nothing
   _ <- A.waitCatch rs
+  clearProgress
   resultsMap <- readTVarIO results
+  failedOutputs <- readIORef failedOutputMap
   let
     resultsList = Map.toList resultsMap
     succeededList = [ n | (_, Passed n) <- resultsList ]
     succeeded = length succeededList
-    -- totalTestCases = foldl' (+) 0 succeededList
     failures = [ a | (a, Failed) <- resultsList ]
     failed = length failures
     pendings = [ a | (a, Pending) <- resultsList ]
     pending = length pendings
     pendingSuffix = if pending == 0 then "👍 🎉" else ""
     testsPlural n = show n ++ " " ++ if n == 1 then "test" else "tests"
+    line = "------------------------------------------------------------"
   note line
-  note "\n"
+  note ""
   when (pending > 0) $ do
     note $ "🚧  " ++ testsPlural pending ++ " still pending (pending scopes below):"
     note $ "    " ++ intercalate "\n    " (map (show . takeWhile (/= '\n')) pendings)
@@ -292,11 +324,20 @@ run' seed note allow (Test t) = do
       note $ "  " ++ show succeeded ++ (if failed == 0 then " PASSED" else " passed")
       note $ "  " ++ show (length failures) ++ (if failed == 0 then " failed" else " FAILED (failed scopes below)")
       note $ "    " ++ intercalate "\n    " (map (show . takeWhile (/= '\n')) failures)
+      -- Print captured output for each failure
+      forM_ failures $ \failScope -> do
+        case Map.lookup failScope failedOutputs of
+          Just output | not (null output) -> do
+            note ""
+            note $ "  ┌─ " ++ failScope
+            mapM_ (\l -> note $ "  │ " ++ l) output
+            note $ "  └─"
+          _ -> pure ()
       note ""
       note "  To rerun with same random seed:\n"
       note $ "    Test.rerun " ++ show seed
       note $ "    Test.rerunOnly " ++ show seed ++ " " ++ "\"" ++ hd ++ "\""
-      note "\n"
+      note ""
       note line
       note "❌"
       fail "test failures"
