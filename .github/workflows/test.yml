@@ -25,16 +25,21 @@ jobs:
 
       - name: Set up test environment
         env:
-          SSH_KEY: ${{ secrets.GH_USER_SCP_KEY }}
+          SSH_KEY: ${{ secrets.RUNTIME_DEPLOY_KEY }}
         run: |
-          mkdir -p ~/.ssh
-          echo "$SSH_KEY" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan github.com >> ~/.ssh/known_hosts
-          git clone --depth 1 git@github.com:lamdera/runtime.git _runtime
-          mkdir -p ~/lamdera
-          ln -s $GITHUB_WORKSPACE/_runtime/overrides ~/lamdera/overrides
           mkdir -p ~/elm-home-elmx-test
+          mkdir -p ~/lamdera
+          if [ -n "$SSH_KEY" ]; then
+            mkdir -p ~/.ssh
+            echo "$SSH_KEY" > ~/.ssh/id_ed25519
+            chmod 600 ~/.ssh/id_ed25519
+            ssh-keyscan github.com >> ~/.ssh/known_hosts
+            git clone --depth 1 git@github.com:lamdera/runtime.git _runtime
+            ln -s $GITHUB_WORKSPACE/_runtime/overrides ~/lamdera/overrides
+          else
+            echo "⚠️  RUNTIME_DEPLOY_KEY not set — Wire tests requiring overrides will be skipped"
+            mkdir -p ~/lamdera/overrides
+          fi
 
       - name: Build & run tests
         run: stack test
