@@ -14,14 +14,14 @@ jobs:
 
       - uses: freckle/stack-cache-action@v2
 
-      - run: echo "${HOME}/.local/bin" >> $GITHUB_PATH
-
       - name: Install ghcup & stack
         run: |
           mkdir -p ~/.local/bin
           curl https://downloads.haskell.org/~ghcup/aarch64-apple-darwin-ghcup -o ~/.local/bin/ghcup && chmod a+x ~/.local/bin/ghcup
-          ghcup install stack recommended
-          ghcup set stack recommended
+          echo "${HOME}/.local/bin" >> $GITHUB_PATH
+          echo "${HOME}/.ghcup/bin" >> $GITHUB_PATH
+          ~/.local/bin/ghcup install stack recommended
+          ~/.local/bin/ghcup set stack recommended
 
       - name: Set up test environment
         env:
