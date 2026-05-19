@@ -61,34 +61,56 @@ versionsComment =
 
 graphModifications :: Mode.Mode -> Mains -> Map.Map Opt.Global Opt.Node -> Map.Map Opt.Global Opt.Node
 graphModifications mode mains graph = do
-  if mains & mainsInclude ["Lamdera.Live"]
-    then graph & Map.mapWithKey (modify $ isOptimizedMode mode)
-           -- & inspect
-    else graph
+  graph
+    & Map.mapWithKey (modify (mains & mainsInclude ["Lamdera.Live"]) $ isOptimizedMode mode)
+    -- & inspect
 
 
-modify :: Bool -> Opt.Global -> Opt.Node -> Opt.Node
-modify isOptimized v n =
+modify :: Bool -> Bool -> Opt.Global -> Opt.Node -> Opt.Node
+modify isLamderaLive isOptimized v n =
   case (v, n) of
+    (Opt.Global (ModuleName.Canonical (Pkg.Name "elm" "kernel") name) _, Opt.Kernel chunks deps)
+      | name `elem` ["Browser", "Debugger", "Platform"] ->
+          Opt.Kernel (chunks & fmap renameLamderaPlatformInitialize) deps
+
     (Opt.Global (ModuleName.Canonical (Pkg.Name "elm" "kernel") "Http") name, Opt.Kernel chunks deps) ->
-      let newChunks =
-              chunks & fmap (\chunk ->
-                case chunk of
-                  Elm.Kernel.JS bs | bs & Text.decodeUtf8 & Text.isInfixOf "var _Http_toTask =" ->
-                    bs
-                      & Text.decodeUtf8
-                      & Text.replace "var _Http_toTask =" "var _Http_toTask_REPLACED ="
-                      & (<>) (modifiedHttp_toTask isOptimized)
-                      & Text.encodeUtf8
-                      & Elm.Kernel.JS
-                  _ ->
-                    chunk
-              )
-      in
-      Opt.Kernel newChunks deps
+      if not isLamderaLive then
+        n
+      else
+        let newChunks =
+                chunks & fmap (\chunk ->
+                  case chunk of
+                    Elm.Kernel.JS bs | bs & Text.decodeUtf8 & Text.isInfixOf "var _Http_toTask =" ->
+                      bs
+                        & Text.decodeUtf8
+                        & Text.replace "var _Http_toTask =" "var _Http_toTask_REPLACED ="
+                        & (<>) (modifiedHttp_toTask isOptimized)
+                        & Text.encodeUtf8
+                        & Elm.Kernel.JS
+                    _ ->
+                      chunk
+                )
+        in
+        Opt.Kernel newChunks deps
 
     _ ->
       n
+
+
+renameLamderaPlatformInitialize :: Elm.Kernel.Chunk -> Elm.Kernel.Chunk
+renameLamderaPlatformInitialize chunk =
+  case chunk of
+    Elm.Kernel.JS bs ->
+      bs
+        & Text.decodeUtf8
+        & Text.replace "function _Platform_initialize(" "function _Platform_initialize_Lamdera("
+        & Text.replace "return _Platform_initialize(" "return _Platform_initialize_Lamdera("
+        & Text.replace "return __Platform_initialize(" "return _Platform_initialize_Lamdera("
+        & Text.encodeUtf8
+        & Elm.Kernel.JS
+
+    _ ->
+      chunk
 
 
 {- Approach taken from cors-anywhere:
