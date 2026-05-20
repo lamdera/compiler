@@ -14,6 +14,29 @@ import Test.Main (captureProcessResult)
 import qualified Test.Main
 import qualified Ext.Common
 import qualified Lamdera.Relative
+import qualified System.Directory as Dir
+
+
+
+requireBinaryOnPath :: String -> EasyTest.Test a -> EasyTest.Test a
+requireBinaryOnPath name test = do
+  found <- EasyTest.io $ Dir.findExecutable name
+  case found of
+    Just _ -> test
+    Nothing -> do
+      EasyTest.noteScoped $ "SKIPPED (" ++ name ++ " not on PATH)"
+      EasyTest.pending test
+
+
+requireDashboard :: EasyTest.Test a -> EasyTest.Test a
+requireDashboard test = do
+  tokenM <- EasyTest.io $ lookupEnv "TOKEN"
+  runtimeM <- EasyTest.io $ Lamdera.Relative.findDir "~/lamdera/runtime/src"
+  case (tokenM, runtimeM) of
+    (Just _, Just _) -> test
+    _ -> do
+      EasyTest.noteScoped "SKIPPED (TOKEN env var or ~/lamdera/runtime not available)"
+      EasyTest.pending test
 
 
 aggressiveCacheClear :: FilePath -> IO ()

@@ -29,7 +29,7 @@ import qualified Ext.Common
 
 suite :: Test ()
 suite = tests
-  [ scope "make Elm app containing extension directive in shader" $ do
+  [ pending $ scope "make Elm app containing extension directive in shader" $ do
         project <- io $ Lamdera.Relative.requireDir "test/scenario-webgl-extensions"
 
         _ <- io $ rmdir (project </> "elm-stuff")

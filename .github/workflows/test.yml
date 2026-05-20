@@ -1,0 +1,45 @@
+on:
+  push:
+    branches:
+      - lamdera-next
+  pull_request:
+
+name: Test
+jobs:
+  test:
+    name: Run tests
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Install ghcup & stack
+        run: |
+          mkdir -p ~/.local/bin
+          curl https://downloads.haskell.org/~ghcup/aarch64-apple-darwin-ghcup -o ~/.local/bin/ghcup && chmod a+x ~/.local/bin/ghcup
+          echo "${HOME}/.local/bin" >> $GITHUB_PATH
+          echo "${HOME}/.ghcup/bin" >> $GITHUB_PATH
+          ~/.local/bin/ghcup install stack recommended
+          ~/.local/bin/ghcup set stack recommended
+
+      - name: Cache Stack dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.stack
+            .stack-work
+          key: stack-${{ runner.os }}-${{ hashFiles('stack.yaml.lock') }}-${{ hashFiles('elm.cabal') }}
+          restore-keys: |
+            stack-${{ runner.os }}-${{ hashFiles('stack.yaml.lock') }}-
+            stack-${{ runner.os }}-
+
+      - name: Set up test environment
+        run: |
+          mkdir -p ~/elm-home-elmx-test
+          mkdir -p ~/lamdera/overrides/packages
+
+      - name: Build & run tests
+        run: stack test || stack test
+        timeout-minutes: 45

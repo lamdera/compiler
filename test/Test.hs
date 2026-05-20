@@ -22,6 +22,7 @@ import qualified Test.TypeHashes
 import qualified Test.JsOutput
 import qualified Test.WebGL
 import qualified Test.BackwardsCompat
+import qualified Test.EasyTestSpinner
 
 import qualified Test.Lamdera.Evergreen.TestMigrationHarness
 import qualified Test.Lamdera.Evergreen.TestMigrationGenerator
@@ -161,4 +162,5 @@ allTests =
     , scope "Test.WebGL -> " $ Test.WebGL.suite
     , scope "Test.JsOutput -> " $ Test.JsOutput.suite
     , scope "Test.BackwardsCompat -> " $ Test.BackwardsCompat.suite
+    , scope "Test.EasyTestSpinner -> " $ Test.EasyTestSpinner.suite
     ]

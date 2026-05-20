@@ -17,18 +17,22 @@ import Control.Monad.Reader
 import Data.List
 import Data.Map (Map)
 import Data.Word
+import Data.IORef
 import GHC.Stack
 import System.Random (Random)
 import qualified Control.Concurrent.Async as A
 import qualified Data.Map as Map
 import qualified System.Random as Random
 import qualified Text.PrettyPrint.ANSI.Leijen as P
+import System.IO (Handle, hFlush, hPutStr, stdout, stderr, hClose, hSetBuffering, BufferMode(..))
+import GHC.IO.Handle (hDuplicate, hDuplicateTo)
 
 import Data.Function ((&))
 import qualified Data.Text as T
 import Data.TreeDiff
-import System.IO (openTempFile, hClose)
+import System.IO (openTempFile)
 import System.Process (readProcessWithExitCode)
+import qualified System.Directory as Dir
 import Lamdera
 import qualified Ext.Common
 
@@ -48,12 +52,53 @@ data Env =
       , messages :: String
       , results :: TBQueue (Maybe (TMVar (String, Status)))
       , note_ :: String -> IO ()
-      , allow :: String }
+      , allow :: String
+      , outputBuffer :: IORef [String] }
 
 newtype Test a = Test (ReaderT Env IO (Maybe a))
 
 io :: IO a -> Test a
 io = liftIO
+
+ioSilenced :: IO a -> Test a
+ioSilenced action = do
+  buf <- asks outputBuffer
+  result <- liftIO $ withCapturedOutput action
+  case result of
+    Left (captured, err) -> do
+      liftIO $ modifyIORef buf ((captured ++ "\n" ++ show err) :)
+      Test $ do
+        putResult Failed
+        pure Nothing
+    Right (a, captured) -> do
+      liftIO $ modifyIORef buf (captured :)
+      pure a
+
+withCapturedOutput :: IO a -> IO (Either (String, SomeException) (a, String))
+withCapturedOutput action = do
+  tmpDir <- Dir.getTemporaryDirectory
+  (tmpPath, tmpHandle) <- openTempFile tmpDir "test-output-"
+  hSetBuffering tmpHandle LineBuffering
+  oldStdout <- hDuplicate stdout
+  oldStderr <- hDuplicate stderr
+  hFlush stdout
+  hFlush stderr
+  hDuplicateTo tmpHandle stdout
+  hDuplicateTo tmpHandle stderr
+  hClose tmpHandle
+  result <- try action
+  hFlush stdout
+  hFlush stderr
+  hDuplicateTo oldStdout stdout
+  hDuplicateTo oldStderr stderr
+  hClose oldStdout
+  hClose oldStderr
+  captured <- readFile tmpPath
+  length captured `seq` pure ()
+  Dir.removeFile tmpPath
+  case result of
+    Left err -> pure $ Left (captured, err)
+    Right a -> pure $ Right (a, captured)
 
 atomicLogger :: IO (String -> IO ())
 atomicLogger = do
@@ -236,13 +281,63 @@ run = runOnly ""
 rerun :: Int -> Test a -> IO ()
 rerun seed = rerunOnly seed []
 
+spinnerFrames :: [Char]
+spinnerFrames = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+
+showProgress :: Handle -> Int -> IORef Int -> IORef String -> String -> IO ()
+showProgress tty cols spinnerRef lastMsgRef msg = do
+  writeIORef lastMsgRef msg
+  renderSpinner tty cols spinnerRef msg
+
+getTerminalWidth :: IO Int
+getTerminalWidth = do
+  (_, out, _) <- readProcessWithExitCode "sh" ["-c", "stty size < /dev/tty"] ""
+  pure $ case words out of
+    [_, cols] -> maybe 80 id (readMaybe cols)
+    _         -> 80
+  where
+    readMaybe s = case reads s of
+      [(n, "")] -> Just n
+      _         -> Nothing
+
+renderSpinner :: Handle -> Int -> IORef Int -> String -> IO ()
+renderSpinner tty cols spinnerRef msg = do
+  idx <- readIORef spinnerRef
+  let spinner = spinnerFrames !! (idx `mod` length spinnerFrames)
+      prefix = " " ++ [spinner] ++ "  "
+      maxMsg = cols - length prefix - 3
+      truncated = if length msg > maxMsg then take maxMsg msg ++ "..." else msg
+  hPutStr tty $ "\r\ESC[K\ESC[35m" ++ prefix ++ truncated ++ "\ESC[0m"
+  hFlush tty
+  writeIORef spinnerRef (idx + 1)
+
+clearProgress :: Handle -> IO ()
+clearProgress tty = do
+  hPutStr tty "\r\ESC[K"
+  hFlush tty
+
 run' :: Int -> (String -> IO ()) -> String -> Test a -> IO ()
 run' seed note allow (Test t) = do
   let !rng = Random.mkStdGen seed
   resultsQ <- atomically (newTBQueue 50)
   rngVar <- newTVarIO rng
-  note $ "Randomness seed for this run is " ++ show seed ++ ""
   results <- atomically $ newTVar Map.empty
+  failedOutputMap <- newIORef (Map.empty :: Map String [String])
+  spinnerRef <- newIORef (0 :: Int)
+  lastMsgRef <- newIORef ""
+  spinnerActive <- newIORef True
+  tty <- hDuplicate stdout
+  cols <- getTerminalWidth
+  buf <- newIORef ([] :: [String])
+  ticker <- A.async $ do
+    let tick = do
+          active <- readIORef spinnerActive
+          when active $ do
+            msg <- readIORef lastMsgRef
+            when (not $ null msg) $ renderSpinner tty cols spinnerRef msg
+          threadDelay 120000
+          tick
+    tick
   rs <- A.async . forever $ do
     -- note, totally fine if this bombs once queue is empty
     Just result <- atomically $ readTBQueue resultsQ
@@ -251,32 +346,45 @@ run' seed note allow (Test t) = do
     resultsMap <- readTVarIO results
     case Map.findWithDefault Skipped msgs resultsMap of
       Skipped -> pure ()
-      Pending -> note $ "🚧  " ++ msgs
-      Passed n -> note $ "\129412  " ++ (if n <= 1 then msgs else "(" ++ show n ++ ") " ++ msgs)
-      Failed -> note $ "💥  " ++ msgs
-  let line = "------------------------------------------------------------"
-  note "Raw test output to follow ... "
-  note line
-  e <- try (runReaderT (void t) (Env rngVar [] resultsQ note allow)) :: IO (Either SomeException ())
+      Pending -> do
+        clearProgress tty
+        note $ "🚧  " ++ msgs
+      Passed _ -> do
+        showProgress tty cols spinnerRef lastMsgRef msgs
+      Failed -> do
+        clearProgress tty
+        -- Capture buffered output for this failure
+        buffered <- atomicModifyIORef buf (\b -> ([], b))
+        modifyIORef failedOutputMap (Map.insertWith (++) msgs (reverse buffered))
+        note $ "💥  " ++ msgs
+  let bufNote msg = modifyIORef buf (msg :)
+  e <- try (runReaderT (void t) (Env rngVar [] resultsQ bufNote allow buf)) :: IO (Either SomeException ())
   case e of
-    Left e -> note $ "Exception while running tests: " ++ show e
+    Left e -> do
+      clearProgress tty
+      note $ "Exception while running tests: " ++ show e
     Right () -> pure ()
   atomically $ writeTBQueue resultsQ Nothing
   _ <- A.waitCatch rs
+  writeIORef spinnerActive False
+  A.cancel ticker
+  clearProgress tty
+  hClose tty
   resultsMap <- readTVarIO results
+  failedOutputs <- readIORef failedOutputMap
   let
     resultsList = Map.toList resultsMap
     succeededList = [ n | (_, Passed n) <- resultsList ]
     succeeded = length succeededList
-    -- totalTestCases = foldl' (+) 0 succeededList
     failures = [ a | (a, Failed) <- resultsList ]
     failed = length failures
     pendings = [ a | (a, Pending) <- resultsList ]
     pending = length pendings
     pendingSuffix = if pending == 0 then "👍 🎉" else ""
     testsPlural n = show n ++ " " ++ if n == 1 then "test" else "tests"
+    line = "------------------------------------------------------------"
   note line
-  note "\n"
+  note ""
   when (pending > 0) $ do
     note $ "🚧  " ++ testsPlural pending ++ " still pending (pending scopes below):"
     note $ "    " ++ intercalate "\n    " (map (show . takeWhile (/= '\n')) pendings)
@@ -292,11 +400,20 @@ run' seed note allow (Test t) = do
       note $ "  " ++ show succeeded ++ (if failed == 0 then " PASSED" else " passed")
       note $ "  " ++ show (length failures) ++ (if failed == 0 then " failed" else " FAILED (failed scopes below)")
       note $ "    " ++ intercalate "\n    " (map (show . takeWhile (/= '\n')) failures)
+      -- Print captured output for each failure
+      forM_ failures $ \failScope -> do
+        case Map.lookup failScope failedOutputs of
+          Just output | not (null output) -> do
+            note ""
+            note $ "  ┌─ " ++ failScope
+            mapM_ (\l -> note $ "  │ " ++ l) output
+            note $ "  └─"
+          _ -> pure ()
       note ""
       note "  To rerun with same random seed:\n"
       note $ "    Test.rerun " ++ show seed
       note $ "    Test.rerunOnly " ++ show seed ++ " " ++ "\"" ++ hd ++ "\""
-      note "\n"
+      note ""
       note line
       note "❌"
       fail "test failures"

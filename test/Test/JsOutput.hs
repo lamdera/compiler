@@ -21,7 +21,7 @@ suite =
         elmHome = project ++ "/elm-home"
         elmStuff = project ++ "/elm-stuff"
 
-      maybeJsOutput <- io $ do
+      maybeJsOutput <- ioSilenced $ do
         rmdir elmHome
         rmdir elmStuff
 
@@ -60,7 +60,7 @@ suite =
         elmHome = project ++ "/elm-home"
         elmStuff = project ++ "/elm-stuff"
 
-      maybeJsOutput <- io $ do
+      maybeJsOutput <- ioSilenced $ do
         rmdir elmHome
         rmdir elmStuff
 
@@ -110,7 +110,7 @@ suite =
         elmHome = project ++ "/elm-home"
         elmStuff = project ++ "/elm-stuff"
 
-      maybeJsOutput <- io $ do
+      maybeJsOutput <- ioSilenced $ do
         rmdir elmHome
         rmdir elmStuff
 
@@ -162,7 +162,7 @@ suite =
         elmHome = project ++ "/elm-home"
         elmStuff = project ++ "/elm-stuff"
 
-      maybeJsOutput <- io $ do
+      maybeJsOutput <- ioSilenced $ do
         rmdir elmHome
         rmdir elmStuff
 

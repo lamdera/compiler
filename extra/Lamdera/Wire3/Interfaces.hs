@@ -148,9 +148,11 @@ isModeValue value =
 unionStubs :: [Located Union] -> [Located Value]
 unionStubs unions =
   unions
-    & concatMap (\(A.At _ (Src.Union (A.At _ name) _ _)) ->
-      [ _Debug_todo $ Data.Name.fromChars $ "w3_encode_" ++ Data.Name.toChars name
-      , _Debug_todo $ Data.Name.fromChars $ "w3_decode_" ++ Data.Name.toChars name
+    & concatMap (\(A.At _ (Src.Union (A.At _ name) tvars _)) ->
+      let nParams = length tvars
+      in
+      [ _Debug_todo_with_params nParams $ Data.Name.fromChars $ "w3_encode_" ++ Data.Name.toChars name
+      , _Debug_todo_with_params nParams $ Data.Name.fromChars $ "w3_decode_" ++ Data.Name.toChars name
       ]
     )
 
@@ -158,9 +160,16 @@ unionStubs unions =
 aliasStubs :: [Located Alias] -> [Located Value]
 aliasStubs aliases =
   aliases
-    & concatMap (\(A.At _ (Src.Alias (A.At _ name) _ _)) ->
-      [ _Debug_todo $ Data.Name.fromChars $ "w3_encode_" ++ Data.Name.toChars name
-      , _Debug_todo $ Data.Name.fromChars $ "w3_decode_" ++ Data.Name.toChars name
+    & filter (\(A.At _ (Src.Alias _ _ (A.At _ tipe))) ->
+        case tipe of
+          TLambda _ _ -> False
+          _ -> True
+      )
+    & concatMap (\(A.At _ (Src.Alias (A.At _ name) tvars _)) ->
+      let nParams = length tvars
+      in
+      [ _Debug_todo_with_params nParams $ Data.Name.fromChars $ "w3_encode_" ++ Data.Name.toChars name
+      , _Debug_todo_with_params nParams $ Data.Name.fromChars $ "w3_decode_" ++ Data.Name.toChars name
       ]
     )
 
@@ -185,11 +194,15 @@ x =
   "❤️ 💔 ♥️ 💗 💓 💕 💖  💛 💙 💜 💚"
 
 _Debug_todo :: Data.Name.Name -> A.Located Src.Value
-_Debug_todo functionName =
+_Debug_todo functionName = _Debug_todo_with_params 0 functionName
+
+_Debug_todo_with_params :: Int -> Data.Name.Name -> A.Located Src.Value
+_Debug_todo_with_params nParams functionName =
   let functionName_ = Utf8.fromChars . Data.Name.toChars $ functionName
+      params = [ a (Src.PVar (Data.Name.fromChars $ "_w3_p" ++ show i)) | i <- [0..nParams-1] ]
   in
   a $ Src.Value
         (a functionName)
-        []
+        params
         (a (Src.Call (a (Src.VarQual Src.LowVar "Debug" "todo")) [a (Src.Str functionName_)]))
         Nothing

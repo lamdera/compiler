@@ -23,14 +23,17 @@ makeOptimized root path = do
 makeOptimizedWithCleanup :: IO () -> FilePath -> FilePath -> IO ()
 makeOptimizedWithCleanup cleanup root path = do
   debug $ "🏗   makeOptimizedWithCleanup: lamdera make --optimize " <> root <> "/" <> path
+
+  absRoot <- Dir.makeAbsolute root
+
   let
-    tmp = lamderaCache root <> "/tmp.js"
-    scaffold = lamderaCache root <> "/Main_.elm"
+    tmp = lamderaCache absRoot <> "/tmp.js"
+    scaffold = lamderaCache absRoot <> "/Main_.elm"
 
   writeUtf8 scaffold $ "module Main_ exposing (..)\n\nimport " <> (T.pack $ FP.takeFileName $ FP.dropExtensions path) <> "\nimport Html\n\nmain = Html.text \"\""
 
   r <- async $
-    Ext.Common.withProjectRoot root $
+    Ext.Common.withProjectRoot absRoot $
       Make.run_cleanup cleanup [scaffold] $
         Make.Flags
           { _debug = False

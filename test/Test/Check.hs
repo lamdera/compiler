@@ -31,7 +31,7 @@ all = EasyTest.run suite
 
 suite :: Test ()
 suite = tests $
-  [ scope "Lamdera.Nitpick.DebugLog - lamdera check" $ do
+  [ scope "Lamdera.Nitpick.DebugLog - lamdera check" $ requireDashboard $ do
 
       project <- io $ Lamdera.Relative.requireDir "test/project-scenarios/blank-injectable"
 
@@ -56,7 +56,7 @@ suite = tests $
             "There are uses of the `Debug` module in the following modules:"
 
 
-  , scope "production check -> AppConfig usages & injection" $ do
+  , scope "production check -> AppConfig usages & injection" $ requireDashboard $ do
       project <- io $ Lamdera.Relative.requireDir "test/scenario-always-v0"
       let
           expectContains needle file = (project </> file) & expectFileContains needle

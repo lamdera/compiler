@@ -19,7 +19,7 @@ all = EasyTest.run suite
 
 suite :: Test ()
 suite = tests $
-  [ scope "isWireCompatible" $ do
+  [ scope "isWireCompatible" $ requireBinaryOnPath "elm-pages" $ do
       p <- io $ Lamdera.Relative.requireDir "test/scenario-elm-pages-incompatible-wire"
       actual <- io $ do
 

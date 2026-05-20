@@ -30,15 +30,15 @@ suite = tests
             ["64db237c2087232331047b907cade9a262601159","728c05b17597cebaad4eee0d43febe29298b0f0c","fa92f6879a3929d7992e184cf89bd93fea3e094b","b1675b2dec2ee3f023cd958159060fd7d5c5c21c","b1675b2dec2ee3f023cd958159060fd7d5c5c21c","b1675b2dec2ee3f023cd958159060fd7d5c5c21c"]
           |]
 
-      io $ withDebug $ Ext.Common.withProjectRoot project $ do
+      ioSilenced $ withDebug $ Ext.Common.withProjectRoot project $ do
         Lamdera.TypeHash.calculateAndWrite
 
 
       Lamdera.Types.core & mapM
         (\coreType ->
-          io $ do
+          ioSilenced $ do
             (thash, ttext) <- withDebug $ Ext.Common.withProjectRoot project $ Lamdera.TypeHash.calculateHashPair "src/Types.elm" "Types" coreType
-            atomicPutStrLn $ show ttext
+            pure ()
         )
 
       actual <- io $ readUtf8Text $ lamderaHashesPath project
@@ -75,9 +75,9 @@ suite = tests
                 mconcat fields & (\all_ -> "R[" <> all_ <> "]")
             )
 
-      io $ Lamdera.Compile.makeDev_ file
+      ioSilenced $ Lamdera.Compile.makeDev_ file
 
-      (thash, ttext) <- io $ withDebug $ Ext.Common.withProjectRoot project $ do
+      (thash, ttext) <- ioSilenced $ withDebug $ Ext.Common.withProjectRoot project $ do
         Lamdera.TypeHash.calculateHashPair "src/Test/Wire_Alias_2_Record.elm" moduleName typeName
 
       expectEqualTextTrimmed thash "4e346cab5ac79557fd42fede3584ae0053a948c4"
@@ -90,7 +90,7 @@ suite = tests
         moduleName = "Test.Wire_Record_Extensible1_Basic"
         typeName = "ColorOverlap"
 
-      (thash, ttext) <- io $ withDebug $ Ext.Common.withProjectRoot project $ do
+      (thash, ttext) <- ioSilenced $ withDebug $ Ext.Common.withProjectRoot project $ do
         Lamdera.TypeHash.calculateHashPair modulePath moduleName typeName
 
       expectEqualTextTrimmed thash "4bef3232374b3dfe84546f3f132ad4eaaa2cbb2f"
@@ -105,7 +105,7 @@ suite = tests
           moduleName = "Test.Wire_Package_Types"
           typeName = "PackageTypes"
 
-        (thash, ttext) <- io $ withDebug $ Ext.Common.withProjectRoot project $ do
+        (thash, ttext) <- ioSilenced $ withDebug $ Ext.Common.withProjectRoot project $ do
           Lamdera.TypeHash.calculateHashPair modulePath moduleName typeName
 
         expectEqualTextTrimmed thash "57c1aaab0b97e6ded9efa0a45eafa79a6f42c3f2"
@@ -117,7 +117,7 @@ suite = tests
           moduleName = "Test.Wire_Package_Types"
           typeName = "PackageTypesRecord"
 
-        (thash, ttext) <- io $ withDebug $ Ext.Common.withProjectRoot project $ do
+        (thash, ttext) <- ioSilenced $ withDebug $ Ext.Common.withProjectRoot project $ do
           Lamdera.TypeHash.calculateHashPair modulePath moduleName typeName
 
         expectEqualTextTrimmed thash "4684f0e30ca7421c497e79b5dfc88cec77010699"
@@ -164,9 +164,6 @@ suite = tests
       let
         sha_first = textSha1 "C[[R[SS]][S][Res[S,L[R[SS]]]][Res[S,R[SL[C[[][]]]SS]]][D[S,I]][D[S,R[C[[I]]SC[[I]]SC[[S]]L[C[[][]]]SS]]][D[S,R[C[[I]]SSS]]][][][Res[S,R[SL[C[[][]]]SS]]]]"
         sha_second = textSha1 "C[[R[SS]][S][Res[S,L[R[SS]]]][Res[S,R[SL[C[[][]]]SS]]][D[S,I]][D[S,R[C[[I]]SC[[I]]SC[[S]]L[C[[][]]]SS]]][D[S,R[C[[I]]SSS]]][][][][Res[S,R[SL[C[[][]]]SS]]]]"
-
-      io $ atomicPutStrLn $ show sha_first
-      io $ atomicPutStrLn $ show sha_second
 
       expect $ sha_first /= sha_second
   ]
