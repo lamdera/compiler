@@ -37,6 +37,6 @@ COPY .git .git
 
 RUN cabal build $CABALOPTS --ghc-options="$GHCOPTS"
 
-RUN cp `cabal list-bin .` ./lamdera
+RUN cp `cabal list-bin exe:lamdera` ./lamdera
 RUN ./lamdera --version-full
 RUN strip lamdera

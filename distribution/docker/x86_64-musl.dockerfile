@@ -70,7 +70,7 @@ ENV GITHUB_ACTIONS=${GITHUB_ACTIONS}
 
 RUN cabal build $CABALOPTS --ghc-options="$GHCOPTS"
 
-RUN cabal list-bin . | grep -v HEAD
-RUN cp `cabal list-bin . | grep -v HEAD` ./lamdera
+RUN cabal list-bin exe:lamdera | grep -v HEAD
+RUN cp `cabal list-bin exe:lamdera | grep -v HEAD` ./lamdera
 RUN ./lamdera --version-full
 RUN strip lamdera

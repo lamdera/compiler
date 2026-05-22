@@ -107,7 +107,7 @@ build_binary_docker() {
     # GOAL: catch silly cache failures that work on a second build
     cabal build $CABALOPTS --ghc-options="$GHCOPTS"
 
-    cp "$(cabal list-bin .)" "$bin"
+    cp "$(cabal list-bin exe:lamdera)" "$bin"
     strip "$bin"
 
     # Work around ownership issues that prevent GH actions from managing the files later

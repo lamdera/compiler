@@ -84,5 +84,5 @@ COPY terminal terminal
 COPY LICENSE ./
 
 RUN cabal build --ghc-option=-optl=-static --ghc-option=-split-sections -O2
-RUN cp `cabal list-bin .` ./lamdera
+RUN cp `cabal list-bin exe:lamdera` ./lamdera
 RUN strip lamdera
