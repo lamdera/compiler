@@ -124,6 +124,9 @@ wireTestFiles =
   , "src/Test/Wire_Union_ForeignRecordAlias.elm"
   , "src/Test/Wire_Validate.elm"
   , "src/Test/Wire_Validate_Number.elm"
+  , "src/Test/Wire_Validate_Recursive.elm"
+  , "src/Test/Wire_Validate_RecursiveRecord.elm"
+  , "src/Test/Wire_Validate_RecursiveExtra.elm"
   ]
 
 
