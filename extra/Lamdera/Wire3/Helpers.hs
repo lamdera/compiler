@@ -1094,3 +1094,85 @@ identity =
       )
       -- [v]
     -- )
+
+
+{-
+
+WIRE VALIDATION HELPERS
+
+User code can opt a custom type into post-decode validation by defining a
+function `w3_validate_<TypeName> : <TypeName> <tvars> -> Result String ()` in
+the same module as the type. The generated `w3_decode_<TypeName>` then calls
+it; see Lamdera.Wire3.Decoder.wrapWithValidator and Lamdera.Wire3.Core.
+
+-}
+
+w3ValidatePrefix :: String
+w3ValidatePrefix = "w3_validate_"
+
+
+isValidatorName :: Data.Name.Name -> Bool
+isValidatorName name =
+  List.isPrefixOf w3ValidatePrefix (Data.Name.toChars name)
+
+
+-- "w3_validate_MyType" -> "MyType"
+validatorTypeName :: Data.Name.Name -> Data.Name.Name
+validatorTypeName name =
+  Data.Name.fromChars $ drop (length w3ValidatePrefix) (Data.Name.toChars name)
+
+
+-- "MyType" -> "w3_validate_MyType"
+validatorNameFor :: Data.Name.Name -> Data.Name.Name
+validatorNameFor typeName =
+  Data.Name.fromChars $ w3ValidatePrefix ++ Data.Name.toChars typeName
+
+
+allValidatorDefs :: Decls -> [Def]
+allValidatorDefs decls =
+  declsToList decls & filter (isValidatorName . defName)
+
+
+findValidatorDef :: Decls -> Data.Name.Name -> Maybe Def
+findValidatorDef decls typeName =
+  findDef (validatorNameFor typeName) decls
+
+
+{- Append `tailDecls` after every definition in `decls`, replacing the terminal
+SaveTheEnvironment. Used to place generated wire functions *after* user
+definitions when a module contains w3_validate_* functions: the generated
+decoders reference those user functions via VarTopLevel, and a VarTopLevel only
+resolves to definitions appearing earlier in the topologically-sorted Decls. -}
+spliceDeclsAtEnd :: Decls -> Decls -> Decls
+spliceDeclsAtEnd decls tailDecls =
+  case decls of
+    Declare def rest ->
+      Declare def (spliceDeclsAtEnd rest tailDecls)
+    DeclareRec def defs rest ->
+      DeclareRec def defs (spliceDeclsAtEnd rest tailDecls)
+    SaveTheEnvironment ->
+      tailDecls
+
+
+{- Like addLetLog, but logs a dynamic Expr (e.g. an error string bound in a
+pattern) rather than a static identifier. Equivalent to writing:
+
+  let _ = Lamdera.Wire3.debug <logValue>
+  in <functionBody>
+-}
+addLetLogValue :: Expr -> Expr -> Expr
+addLetLogValue logValue functionBody =
+  (a (Let
+        (Def
+           (a ("_"))
+           []
+           (a (Call
+                 (a (VarForeign mLamdera_Wire "debug"
+                   (Forall
+                     (Map.fromList [("a", ())])
+                     (TLambda (TType (Module.Canonical (Name "elm" "core") "String") "String" []) (TVar "a")))
+                 ))
+                 [ logValue ]
+              )))
+         functionBody
+  ))

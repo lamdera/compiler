@@ -30,6 +30,7 @@ suite = tests $
   [ scope "compile all Elm wire expectations" wire
   , scope "wire codegen has no Debug remnants under --optimize" wireOptimized
   , scope "function tests" functions
+  , scope "w3_validate compile errors" wireValidateErrors
   ]
 
 functions :: Test ()
@@ -121,6 +122,8 @@ wireTestFiles =
   , "src/Test/Wire_Unsupported.elm"
   , "src/Test/Wire_Unconstructable.elm"
   , "src/Test/Wire_Union_ForeignRecordAlias.elm"
+  , "src/Test/Wire_Validate.elm"
+  , "src/Test/Wire_Validate_Number.elm"
   ]
 
 
@@ -187,3 +190,45 @@ wireOptimized = do
       remove scaffoldPath
 
   scope "scenario-alltypes --optimize no exceptions" $ ok
+
+
+{- Each fixture below defines a `w3_validate_*` function that should be rejected
+by the compiler. We compile each one and assert the expected wire-validation
+error appears in the output. (These modules are intentionally NOT in
+wireTestFiles, since they must fail to compile.) -}
+wireValidateErrors :: Test ()
+wireValidateErrors = do
+  let project = "./test/scenario-alltypes"
+
+  overrides <- io $ Lamdera.Relative.requireDir "~/lamdera/overrides"
+  elmHome <- io $ Lamdera.Relative.requireDir "~/elm-home-elmx-test"
+
+  let
+    compileCapture filename =
+      catchOutput $
+        withEnvVars [("LDEBUG", "1"), ("LTEST", "1"), ("LOVR", overrides), ("ELM_HOME", elmHome)] $ do
+          -- Bust Elm's caching so the wire generation actually re-runs.
+          touch $ project </> filename
+          Lamdera.Compile.makeDev project [filename]
+
+  tests
+    [ scope "validator for a type that isn't defined (req 1)" $ do
+        actual <- compileCapture "src/Test/Wire_Validate_Err_NoType.elm"
+        expectTextContains actual "no matching custom type"
+
+    , scope "validator for a type alias (req 5)" $ do
+        actual <- compileCapture "src/Test/Wire_Validate_Err_Alias.elm"
+        expectTextContains actual "found a type alias"
+
+    , scope "validator without a type annotation (req 2)" $ do
+        actual <- compileCapture "src/Test/Wire_Validate_Err_NoAnnotation.elm"
+        expectTextContains actual "missing type annotation"
+
+    , scope "validator with the wrong result type (req 2)" $ do
+        actual <- compileCapture "src/Test/Wire_Validate_Err_BadSig.elm"
+        expectTextContains actual "wrong type signature"
+
+    , scope "validator using a concrete type argument (req 3)" $ do
+        actual <- compileCapture "src/Test/Wire_Validate_Err_TvarConcrete.elm"
+        expectTextContains actual "wrong type signature"
+    ]
