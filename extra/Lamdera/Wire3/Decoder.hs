@@ -467,3 +467,94 @@ decodeRecord ifaces cname fields =
                 )
           ) fields
     & foldlPairs (|>)
+
+
+{- Wrap a generated custom-type decoder so that, after producing a value, it
+calls the user-defined `w3_validate_<TypeName>` function from the current
+module. If that returns `Ok ()` the value decodes successfully; if it returns
+`Err msg` we log the message via Lamdera.Wire3.debug and fail the decode.
+
+This produces, in effect:
+
+    <decoderBody>
+        |> Lamdera.Wire3.andThenDecode
+            (\w3_validate_value ->
+                case w3_validate_<TypeName> w3_validate_value of
+                    Ok _ ->
+                        Lamdera.Wire3.succeedDecode w3_validate_value
+
+                    Err w3_validate_err ->
+                        let _ = Lamdera.Wire3.debug w3_validate_err
+                        in Lamdera.Wire3.failDecode
+            )
+-}
+wrapWithValidator :: Map.Map Module.Raw I.Interface -> Module.Canonical -> Data.Name.Name -> Expr -> Expr
+wrapWithValidator ifaces cname typeName decoderBody =
+  let
+    validateRef = a (VarTopLevel cname (validatorNameFor typeName))
+    valueVar = "w3_validate_value"
+    errVar = "w3_validate_err"
+    resultUnion = lookupResultUnion ifaces
+
+    validationCase =
+      caseof (call validateRef [lvar valueVar])
+        [ CaseBranch
+            (resultCtorPattern resultUnion "Ok" (a PAnything))
+            (succeedDecode (lvar valueVar))
+        , CaseBranch
+            (resultCtorPattern resultUnion "Err" (a (PVar errVar)))
+            (addLetLogValue (lvar errVar)
+               (failDecode (Data.Name.toChars (validatorNameFor typeName) <> " returned an Err")))
+        ]
+  in
+  decoderBody |> andThenDecode1 (lambda1 (pvar valueVar) validationCase)
+
+
+{- The canonical elm/core Result union, used to build `Ok`/`Err` patterns.
+Result is always a default import so it's expected to be present in ifaces; we
+fall back to a hand-written definition just in case. -}
+lookupResultUnion :: Map.Map Module.Raw I.Interface -> Union
+lookupResultUnion ifaces =
+  case Map.lookup "Result" ifaces of
+    Just iface ->
+      case Map.lookup "Result" (I._unions iface) of
+        Just iunion -> I.extractUnion iunion
+        Nothing -> hardcodedResultUnion
+    Nothing -> hardcodedResultUnion
+
+
+hardcodedResultUnion :: Union
+hardcodedResultUnion =
+  Union
+    { _u_vars = ["error", "value"]
+    , _u_alts =
+        [ Ctor "Ok" (Index.ZeroBased 0) 1 [TVar "value"]
+        , Ctor "Err" (Index.ZeroBased 1) 1 [TVar "error"]
+        ]
+    , _u_numAlts = 2
+    , _u_opts = Normal
+    }
+
+
+-- Build a pattern like `Ok <argPattern>` / `Err <argPattern>` for the given Result union.
+resultCtorPattern :: Union -> Data.Name.Name -> Pattern -> Pattern
+resultCtorPattern union ctorName argPattern =
+  case List.find (\(Ctor n _ _ _) -> n == ctorName) (_u_alts union) of
+    Just (Ctor _ index _ paramTypes) ->
+      a (PCtor
+           { _p_home = Module.Canonical (Name "elm" "core") "Result"
+           , _p_type = "Result"
+           , _p_union = union
+           , _p_name = ctorName
+           , _p_index = index
+           , _p_args =
+               imap (\i paramType ->
+                   PatternCtorArg
+                     { _index = Index.ZeroBased i
+                     , _type = paramType
+                     , _arg = argPattern
+                     }
+                 ) paramTypes
+           })
+    Nothing ->
+      error "Lamdera.Wire3: impossible - elm/core Result union missing Ok/Err constructor"
