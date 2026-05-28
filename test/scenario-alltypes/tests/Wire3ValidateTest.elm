@@ -24,6 +24,8 @@ import Test.Wire_Validate
     exposing
         ( Container
         , Validated(..)
+        , w3_decodeWithoutValidate_Container
+        , w3_decodeWithoutValidate_Validated
         , w3_decode_Container
         , w3_decode_Validated
         , w3_encode_Container
@@ -32,6 +34,7 @@ import Test.Wire_Validate
 import Test.Wire_Validate_Recursive
     exposing
         ( Tree(..)
+        , w3_decodeWithoutValidate_Tree
         , w3_decode_Tree
         , w3_encode_Tree
         )
@@ -55,6 +58,31 @@ roundtripContainer : Container -> Maybe Container
 roundtripContainer value =
     Bytes.Decode.decode
         w3_decode_Container
+        (Bytes.Encode.encode (w3_encode_Container value))
+
+
+{-| Sibling round-trips using the non-validating decoder variant. These should
+accept values the validating variant rejects, because no `w3_validate_*` is
+called at any level.
+-}
+roundtripValidatedWithoutValidate : Validated -> Maybe Validated
+roundtripValidatedWithoutValidate value =
+    Bytes.Decode.decode
+        w3_decodeWithoutValidate_Validated
+        (Bytes.Encode.encode (w3_encode_Validated value))
+
+
+roundtripTreeWithoutValidate : Tree -> Maybe Tree
+roundtripTreeWithoutValidate value =
+    Bytes.Decode.decode
+        w3_decodeWithoutValidate_Tree
+        (Bytes.Encode.encode (w3_encode_Tree value))
+
+
+roundtripContainerWithoutValidate : Container -> Maybe Container
+roundtripContainerWithoutValidate value =
+    Bytes.Decode.decode
+        w3_decodeWithoutValidate_Container
         (Bytes.Encode.encode (w3_encode_Container value))
 
 
@@ -135,5 +163,37 @@ suite =
                         , items = [ ValidatedInt 1, ValidatedString "" ]
                         }
                         |> Expect.equal Nothing
+            ]
+        , describe "w3_decodeWithoutValidate_ skips validation entirely"
+            [ test "Validated: a value that fails validation still decodes" <|
+                \_ ->
+                    -- w3_decode_Validated would reject this (ValidatedInt < 0),
+                    -- but w3_decodeWithoutValidate_Validated never calls
+                    -- w3_validate_Validated, so the round-trip succeeds.
+                    roundtripValidatedWithoutValidate (ValidatedInt (-1))
+                        |> Expect.equal (Just (ValidatedInt (-1)))
+            , test "Validated: an empty string still decodes" <|
+                \_ ->
+                    roundtripValidatedWithoutValidate (ValidatedString "")
+                        |> Expect.equal (Just (ValidatedString ""))
+            , test "Tree: validation does not cascade -- a deeply-nested negative leaf still decodes" <|
+                \_ ->
+                    let
+                        tree =
+                            Branch (Leaf 1) (Branch (Leaf 2) (Leaf (-3)))
+                    in
+                    roundtripTreeWithoutValidate tree
+                        |> Expect.equal (Just tree)
+            , test "Container: an invalid Validated field still decodes (the alias variant uses non-validating field decoders)" <|
+                \_ ->
+                    let
+                        c : Container
+                        c =
+                            { item = ValidatedInt (-1)
+                            , items = [ ValidatedString "" ]
+                            }
+                    in
+                    roundtripContainerWithoutValidate c
+                        |> Expect.equal (Just c)
             ]
         ]

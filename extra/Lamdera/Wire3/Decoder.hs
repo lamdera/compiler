@@ -37,8 +37,8 @@ callDecoder name tipe =
   (a (VarForeign mLamdera_Wire name (Forall Map.empty (TAlias mLamdera_Wire "Decoder" [("a", tipe)] (Filled (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [tipe]))))))
 
 
-decoderForType :: Map.Map Module.Raw I.Interface -> Module.Canonical -> Type -> Expr
-decoderForType ifaces cname tipe =
+decoderForType :: DecoderVariant -> Map.Map Module.Raw I.Interface -> Module.Canonical -> Type -> Expr
+decoderForType variant ifaces cname tipe =
    if containsUnsupportedTypes tipe then
     failDecode "contains unsupported types"
   else
@@ -89,8 +89,8 @@ decoderForType ifaces cname tipe =
                                       (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
                                       "Decoder"
                                       [TTuple (TVar "a") (TVar "b") Nothing]))))))))
-              [ decoderForType ifaces cname a_
-              , decoderForType ifaces cname b
+              [ decoderForType variant ifaces cname a_
+              , decoderForType variant ifaces cname b
               ]))
 
     TTuple a_ b (Just c) ->
@@ -126,9 +126,9 @@ decoderForType ifaces cname tipe =
                                   (Filled
                                      (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder"
                                         [TTuple (TVar "a") (TVar "b") (Just (TVar "c"))])))))))))
-             [ decoderForType ifaces cname a_
-             , decoderForType ifaces cname b
-             , decoderForType ifaces cname c
+             [ decoderForType variant ifaces cname a_
+             , decoderForType variant ifaces cname b
+             , decoderForType variant ifaces cname c
              ]))
 
     TType (Module.Canonical (Name "elm" "core") "Maybe") "Maybe" [ptype] ->
@@ -148,7 +148,7 @@ decoderForType ifaces cname tipe =
                              (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
                              "Decoder"
                              [TType (Module.Canonical (Name "elm" "core") "Maybe") "Maybe" [TVar "a"]])))))))
-        [ decoderForType ifaces cname ptype ]))
+        [ decoderForType variant ifaces cname ptype ]))
 
     TType (Module.Canonical (Name "elm" "core") "List") "List" [ptype] ->
       (a (Call
@@ -167,7 +167,7 @@ decoderForType ifaces cname tipe =
                              (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
                              "Decoder"
                              [TType (Module.Canonical (Name "elm" "core") "List") "List" [TVar "a"]])))))))
-        [ decoderForType ifaces cname ptype ]))
+        [ decoderForType variant ifaces cname ptype ]))
 
     TType (Module.Canonical (Name "elm" "core") "Set") "Set" [ptype] ->
       (a (Call
@@ -186,7 +186,7 @@ decoderForType ifaces cname tipe =
                              (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
                              "Decoder"
                              [TType (Module.Canonical (Name "elm" "core") "Set") "Set" [TVar "comparable"]])))))))
-        [ decoderForType ifaces cname ptype ]))
+        [ decoderForType variant ifaces cname ptype ]))
 
     TType (Module.Canonical (Name "lamdera" "containers") "SeqSet") "SeqSet" [ptype] ->
       (a (Call
@@ -205,7 +205,7 @@ decoderForType ifaces cname tipe =
                              (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
                              "Decoder"
                              [TType mLamdera_SeqSet "SeqSet" [TVar "k"]])))))))
-        [ decoderForType ifaces cname ptype ]))
+        [ decoderForType variant ifaces cname ptype ]))
 
     TType (Module.Canonical (Name "elm" "core") "Array") "Array" [ptype] ->
       (a (Call
@@ -224,7 +224,7 @@ decoderForType ifaces cname tipe =
                              (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
                              "Decoder"
                              [TType (Module.Canonical (Name "elm" "core") "Array") "Array" [TVar "a"]])))))))
-        [ decoderForType ifaces cname ptype ]))
+        [ decoderForType variant ifaces cname ptype ]))
 
     TType (Module.Canonical (Name "elm" "core") "Result") "Result" [err, a_] ->
         (a (Call
@@ -259,8 +259,8 @@ decoderForType ifaces cname tipe =
                                           "Result"
                                           [TVar "err", TVar "val"]
                                       ]))))))))
-              [ decoderForType ifaces cname err
-              , decoderForType ifaces cname a_
+              [ decoderForType variant ifaces cname err
+              , decoderForType variant ifaces cname a_
               ]))
 
     TType (Module.Canonical (Name "elm" "core") "Dict") "Dict" [key, val] ->
@@ -298,8 +298,8 @@ decoderForType ifaces cname tipe =
                                           "Dict"
                                           [TVar "comparable", TVar "value"]
                                       ]))))))))
-              [ decoderForType ifaces cname key
-              , decoderForType ifaces cname val
+              [ decoderForType variant ifaces cname key
+              , decoderForType variant ifaces cname val
               ]))
 
     TType (Module.Canonical (Name "lamdera" "containers") "SeqDict") "SeqDict" [key, val] ->
@@ -337,8 +337,8 @@ decoderForType ifaces cname tipe =
                                           "SeqDict"
                                           [TVar "k", TVar "value"]
                                       ]))))))))
-              [ decoderForType ifaces cname key
-              , decoderForType ifaces cname val
+              [ decoderForType variant ifaces cname key
+              , decoderForType variant ifaces cname val
               ]))
 
     TType (Module.Canonical (Name "elm" "bytes") "Bytes") "Bytes" _ ->
@@ -355,7 +355,7 @@ decoderForType ifaces cname tipe =
 
     TType moduleName typeName params ->
       let
-        generatedName = Data.Name.fromChars $ "w3_decode_" ++ Data.Name.toChars typeName
+        generatedName = decoderNameFor variant typeName
 
         decoder =
           if cname == moduleName
@@ -368,7 +368,7 @@ decoderForType ifaces cname tipe =
         else
           case params of
             [] -> decoder
-            _  -> call decoder $ fmap (decoderForType ifaces cname) params
+            _  -> call decoder $ fmap (decoderForType variant ifaces cname) params
 
     TRecord fieldMap maybeExtensible ->
       -- | TRecord (Map.Map Name FieldType) (Maybe Name)
@@ -379,11 +379,11 @@ decoderForType ifaces cname tipe =
         Nothing ->
           let fields = fieldMap & fieldsToList & List.sortOn (\(name, field) -> name)
           in
-          decodeRecord ifaces cname fields
+          decodeRecord variant ifaces cname fields
 
     TAlias moduleName typeName tvars_ aType ->
       let
-        generatedName = Data.Name.fromChars $ "w3_decode_" ++ Data.Name.toChars typeName
+        generatedName = decoderNameFor variant typeName
         innerType = case aType of { Holey t -> t; Filled t -> t }
 
         decoder =
@@ -402,7 +402,7 @@ decoderForType ifaces cname tipe =
                      TVar name ->
                         lvar $ Data.Name.fromChars $ "w3_x_c_" ++ Data.Name.toChars name
                      _ ->
-                        decoderForType ifaces cname tvarType
+                        decoderForType variant ifaces cname tvarType
                ) tvars_
       in
       if isUnsupportedKernelType tipe
@@ -417,7 +417,7 @@ decoderForType ifaces cname tipe =
                   case resolvedRecordFieldMapM fieldMap extensibleName tvars_ of
                     Just resolved ->
                      let extendedRecord = TRecord resolved Nothing & resolveTvar tvars_
-                     in decoderForType ifaces cname extendedRecord
+                     in decoderForType variant ifaces cname extendedRecord
                     Nothing -> normalDecoder
                 _ ->
                   -- Resolve extensible records through TAlias chains,
@@ -425,7 +425,7 @@ decoderForType ifaces cname tipe =
                   case resolveTvar tvars_ tipe of
                     TAlias _ _ _ (Filled (TRecord fieldMap Nothing)) ->
                       let fields = fieldMap & fieldsToList & List.sortOn (\(name, field) -> name)
-                      in decodeRecord ifaces cname fields
+                      in decodeRecord variant ifaces cname fields
                     _ -> normalDecoder
             Filled tipe ->
               case tipe of
@@ -433,7 +433,7 @@ decoderForType ifaces cname tipe =
                     case resolvedRecordFieldMapM fieldMap extensibleName tvars_ of
                     Just resolved ->
                       let extendedRecord = TRecord resolved Nothing & resolveTvar tvars_
-                      in decoderForType ifaces cname extendedRecord
+                      in decoderForType variant ifaces cname extendedRecord
                     Nothing -> normalDecoder
                 otherTypes -> normalDecoder
 
@@ -444,8 +444,8 @@ decoderForType ifaces cname tipe =
       failDecode "lambda"
 
 
-decodeRecord :: Map.Map Module.Raw I.Interface -> Module.Canonical -> [(Data.Name.Name, Type)] -> Expr
-decodeRecord ifaces cname fields =
+decodeRecord :: DecoderVariant -> Map.Map Module.Raw I.Interface -> Module.Canonical -> [(Data.Name.Name, Type)] -> Expr
+decodeRecord variant ifaces cname fields =
   let
     pvars :: [Pattern]
     pvars =
@@ -463,7 +463,7 @@ decodeRecord ifaces cname fields =
   ++ fmap (\(name, field) ->
                 andMapDecode1 (
                   -- debugDecoder (Utf8.fromChars $ "." <> Data.Name.toChars name) $
-                    decoderForType ifaces cname field
+                    decoderForType variant ifaces cname field
                 )
           ) fields
     & foldlPairs (|>)

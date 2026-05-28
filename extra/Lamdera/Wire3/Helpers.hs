@@ -64,13 +64,16 @@ getForeignSig tipe moduleName generatedName ifaces =
       Nothing ->
         -- If a foreign type gen function cannot be find, it must be banned!
         -- So add type-sig for failure encoder or decoder as appropriate.
-        if T.isPrefixOf "w3_encode_" (T.pack $ Data.Name.toChars generatedName)
+        let nameText = T.pack $ Data.Name.toChars generatedName
+        in
+        if T.isPrefixOf "w3_encode_" nameText
           then
             (Forall
                (Map.fromList [("a", ())])
                (TLambda (TVar "a") tLamdera_Wire_Encoder))
 
-          else if T.isPrefixOf "w3_decode_" (T.pack $ Data.Name.toChars generatedName)
+          else if T.isPrefixOf "w3_decode_" nameText
+                || T.isPrefixOf "w3_decodeWithoutValidate_" nameText
             then
               (Forall
                  (Map.fromList [("a", ())])
@@ -1176,3 +1179,28 @@ addLetLogValue logValue functionBody =
               )))
          functionBody
   ))
+
+
+{- Decoders come in two flavours. The "validating" `w3_decode_<TypeName>` is the
+default and calls the module-local `w3_validate_<TypeName>` after decoding (if
+one is defined). The "non-validating" `w3_decodeWithoutValidate_<TypeName>` is
+always generated alongside it and decodes the same payload without ever calling
+any validator -- it behaves exactly as `w3_decode_<TypeName>` did before
+validators existed. The two variants recurse into different nested decoders so
+the choice cascades through the whole structure. -}
+data DecoderVariant
+  = Validating
+  | NonValidating
+  deriving (Eq, Show)
+
+
+decoderNamePrefix :: DecoderVariant -> String
+decoderNamePrefix variant =
+  case variant of
+    Validating    -> "w3_decode_"
+    NonValidating -> "w3_decodeWithoutValidate_"
+
+
+decoderNameFor :: DecoderVariant -> Data.Name.Name -> Data.Name.Name
+decoderNameFor variant typeName =
+  Data.Name.fromChars $ decoderNamePrefix variant ++ Data.Name.toChars typeName

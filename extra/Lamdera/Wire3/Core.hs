@@ -180,7 +180,8 @@ addWireGenerations_ canonical pkg ifaces modul =
         & Map.toList
         & concatMap (\(name, union) ->
             [ (encoderUnion isTest_ ifaces pkg modul decls_ name union)
-            , (decoderUnion isTest_ ifaces pkg modul decls_ name union)
+            , (decoderUnion Validating    isTest_ ifaces pkg modul decls_ name union)
+            , (decoderUnion NonValidating isTest_ ifaces pkg modul decls_ name union)
             ]
         )
 
@@ -190,7 +191,8 @@ addWireGenerations_ canonical pkg ifaces modul =
         & filter (\(_, Alias _ tipe) -> not (isLambdaType tipe))
         & concatMap (\(name, alias) ->
             [ (encoderAlias isTest_ ifaces pkg modul decls_ name alias)
-            , (decoderAlias isTest_ ifaces pkg modul decls_ name alias)
+            , (decoderAlias Validating    isTest_ ifaces pkg modul decls_ name alias)
+            , (decoderAlias NonValidating isTest_ ifaces pkg modul decls_ name alias)
             ]
         )
 
@@ -473,12 +475,12 @@ encoderUnion isTest_ ifaces pkg modul decls unionName union =
   finalGen
 
 
-decoderUnion :: Bool -> Map.Map Module.Raw I.Interface -> Pkg.Name -> Src.Module -> Decls -> Data.Name.Name -> Union -> Def
-decoderUnion isTest_ ifaces pkg modul decls unionName union =
+decoderUnion :: DecoderVariant -> Bool -> Map.Map Module.Raw I.Interface -> Pkg.Name -> Src.Module -> Decls -> Data.Name.Name -> Union -> Def
+decoderUnion variant isTest_ ifaces pkg modul decls unionName union =
   let
     !x = runTests isTest_ "decoderUnion" pkg modul decls generatedName generated union (unionAsModule cname unionName union)
 
-    generatedName = Data.Name.fromChars $ "w3_decode_" ++ Data.Name.toChars unionName
+    generatedName = decoderNameFor variant unionName
     cname = Module.Canonical pkg (Src.getName modul)
     tvars = _u_vars union
     tvarsTypesig = tvars & foldl (\acc name -> Map.insert name () acc ) Map.empty
@@ -511,20 +513,27 @@ decoderUnion isTest_ ifaces pkg modul decls unionName union =
                     & imap (\i (Ctor tagName tagIndex numParams paramTypes) ->
                         CaseBranch (pint i) $
                           ([(succeedDecode (vctor tagName tagIndex paramTypes))]
-                          ++ fmap (\paramType -> andMapDecode1 ((decoderForType ifaces cname paramType))) paramTypes)
+                          ++ fmap (\paramType -> andMapDecode1 ((decoderForType variant ifaces cname paramType))) paramTypes)
                             & foldlPairs (|>)
                     )
                     & (\l -> l ++ [CaseBranch pAny_ $ failDecode (Data.Name.toChars generatedName <> " unexpected union tag index")])
               )
             )
 
-    {- If the current module defines `w3_validate_<unionName>`, the decoder calls
-    it after producing a value. The function's existence and signature are
+    {- The Validating variant wraps the decoder with a call to
+    `w3_validate_<unionName>` (when one is defined) so its result gates the
+    decode. The NonValidating variant -- generated in parallel as
+    `w3_decodeWithoutValidate_<unionName>` -- never wraps, matching the
+    pre-validator behaviour. The validator's existence and signature are
     verified by checkValidators in addWireGenerations_ before this runs. -}
     finalBody =
-      case findValidatorDef decls unionName of
-        Just _  -> wrapWithValidator ifaces cname unionName baseBody
-        Nothing -> baseBody
+      case variant of
+        Validating ->
+          case findValidatorDef decls unionName of
+            Just _  -> wrapWithValidator ifaces cname unionName baseBody
+            Nothing -> baseBody
+        NonValidating ->
+          baseBody
 
     generated =
       Def
@@ -768,17 +777,17 @@ encoderAlias isTest_ ifaces pkg modul decls aliasName alias@(Alias tvars tipe) =
   finalGen
 
 
-decoderAlias :: Bool -> Map.Map Module.Raw I.Interface -> Pkg.Name -> Src.Module -> Decls -> Data.Name.Name -> Alias -> Def
-decoderAlias isTest_ ifaces pkg modul decls aliasName alias@(Alias tvars tipe) =
+decoderAlias :: DecoderVariant -> Bool -> Map.Map Module.Raw I.Interface -> Pkg.Name -> Src.Module -> Decls -> Data.Name.Name -> Alias -> Def
+decoderAlias variant isTest_ ifaces pkg modul decls aliasName alias@(Alias tvars tipe) =
   let
     !x = runTests isTest_ "decoderAlias" pkg modul decls generatedName generated alias (aliasAsModule cname aliasName alias)
 
-    generatedName = Data.Name.fromChars $ "w3_decode_" ++ Data.Name.toChars aliasName
+    generatedName = decoderNameFor variant aliasName
     cname = Module.Canonical pkg (Src.getName modul)
     ptvars = tvars & fmap (\tvar -> pvar $ Data.Name.fromChars $ "w3_x_c_" ++ Data.Name.toChars tvar )
 
     generated = Def (a (generatedName)) ptvars $
       -- debugDecoder (Data.Name.toElmString aliasName) $
-      decoderForType ifaces cname tipe
+      decoderForType variant ifaces cname tipe
   in
   generated
