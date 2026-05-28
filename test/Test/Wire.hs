@@ -124,6 +124,8 @@ wireTestFiles =
   , "src/Test/Wire_Union_ForeignRecordAlias.elm"
   , "src/Test/Wire_Validate.elm"
   , "src/Test/Wire_Validate_Number.elm"
+  , "src/Test/Wire_Validate_MultiTvar.elm"
+  , "src/Test/Wire_Validate_Phantom.elm"
   , "src/Test/Wire_Validate_Recursive.elm"
   , "src/Test/Wire_Validate_RecursiveRecord.elm"
   , "src/Test/Wire_Validate_RecursiveExtra.elm"
@@ -233,5 +235,21 @@ wireValidateErrors = do
 
     , scope "validator using a concrete type argument (req 3)" $ do
         actual <- compileCapture "src/Test/Wire_Validate_Err_TvarConcrete.elm"
+        expectTextContains actual "wrong type signature"
+
+    , scope "validator with wrong Result Ok type" $ do
+        actual <- compileCapture "src/Test/Wire_Validate_Err_WrongOkType.elm"
+        expectTextContains actual "wrong type signature"
+
+    , scope "validator with a renamed (non-matching) type variable" $ do
+        actual <- compileCapture "src/Test/Wire_Validate_Err_TvarRename.elm"
+        expectTextContains actual "wrong type signature"
+
+    , scope "validator with swapped multi-tvar order" $ do
+        actual <- compileCapture "src/Test/Wire_Validate_Err_TvarSwap.elm"
+        expectTextContains actual "wrong type signature"
+
+    , scope "validator declared as a value (wrong arg count)" $ do
+        actual <- compileCapture "src/Test/Wire_Validate_Err_ArgCount.elm"
         expectTextContains actual "wrong type signature"
     ]
