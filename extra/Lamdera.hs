@@ -134,6 +134,8 @@ module Lamdera
   , icdiff
   , withStdinYesAll
   , getGitBranch
+  , GitRepoStatus(..)
+  , gitRepoStatus
   , launchAppZero
   , killAppZero
   , head_
@@ -174,7 +176,7 @@ import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BSL
 import Data.FileEmbed (bsToExp)
 import Language.Haskell.TH (runIO)
-import System.FilePath as FP ((</>), joinPath, splitDirectories, takeDirectory)
+import System.FilePath as FP ((</>), joinPath, splitDirectories, takeDirectory, isAbsolute)
 import qualified System.Directory as Dir
 import Control.Monad (unless, filterM)
 import System.Info
@@ -1115,6 +1117,64 @@ getGitBranch = do
   -- (exit, stdout, stderr) <- System.Process.readProcessWithExitCode "git" ["branch","--show-current"] ""
   (exit, stdout, stderr) <- System.Process.readProcessWithExitCode "git" ["symbolic-ref", "--short", "-q", "HEAD"] ""
   stdout & pack & strip & pure
+
+
+{-| Describes how the `.git` entry at a project root presents itself.
+
+In a normal clone `.git` is a directory. In a git worktree it is instead a text
+file containing a single `gitdir: <path>` line pointing at the real git
+directory under the main checkout's `.git/worktrees/<name>`. The `git` binary
+resolves this transparently, but our own existence checks need to be aware of
+it so we don't mistake a worktree for an uninitialised project. -}
+data GitRepoStatus
+  = GitRepoMissing                 -- ^ no `.git` at all -> safe to `git init`
+  | GitRepoDir                     -- ^ `.git` is a normal directory
+  | GitRepoWorktree FilePath       -- ^ `.git` is a file pointing at an existing gitdir
+  | GitRepoWorktreeBroken String   -- ^ `.git` is a file but malformed / dangling (reason)
+  deriving (Eq, Show)
+
+
+{-| Inspect the `.git` entry at a project root, following the worktree `gitdir:`
+pointer the same way `git` does. When `.git` is a file we verify it has the
+expected `gitdir: <path>` format and that the target directory exists, returning
+a specific reason for each failure case. -}
+gitRepoStatus :: FilePath -> IO GitRepoStatus
+gitRepoStatus root = do
+  let dotGit = root </> ".git"
+  isDir  <- Dir.doesDirectoryExist dotGit
+  isFile <- Dir.doesFileExist dotGit
+  if isDir
+    then pure GitRepoDir
+    else if not isFile
+      then pure GitRepoMissing
+      else do
+        contentsM <- readUtf8Text dotGit
+        case contentsM >>= parseGitdirPointer of
+          Nothing ->
+            pure $ GitRepoWorktreeBroken
+              ("Found a `.git` file at " <> dotGit <>
+               " but it does not contain the expected `gitdir: <path>` pointer.")
+          Just rel -> do
+            let target = if FP.isAbsolute rel then rel else root </> rel
+            targetExists <- Dir.doesDirectoryExist target
+            if targetExists
+              then pure (GitRepoWorktree target)
+              else pure $ GitRepoWorktreeBroken
+                ("The `.git` file at " <> dotGit <>
+                 " points to a git directory that does not exist: " <> target)
+
+
+{-| Parse the `gitdir: <path>` pointer from the first line of a worktree `.git`
+file, returning the path. -}
+parseGitdirPointer :: Text -> Maybe FilePath
+parseGitdirPointer contents =
+  case T.lines contents of
+    [] -> Nothing
+    (firstLine:_) ->
+      let trimmed = T.strip firstLine
+      in if T.isPrefixOf "gitdir:" trimmed
+           then Just $ T.unpack $ T.strip $ T.drop (T.length "gitdir:") trimmed
+           else Nothing
 
 
 launchAppZero :: Text -> IO ()

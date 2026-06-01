@@ -4,7 +4,6 @@
 module Lamdera.Init where
 
 import System.FilePath ((</>))
-import qualified System.Directory as Dir
 import NeatInterpolation
 
 import Lamdera
@@ -22,7 +21,8 @@ writeDefaultImplementations = do
           else writeUtf8 (root </> filename) implementation
       )
   writeLineIfMissing "elm-stuff" (root </> ".gitignore")
-  onlyWhen_ (fmap not $ Dir.doesDirectoryExist (root </> ".git")) $ do
+  status <- gitRepoStatus root
+  onlyWhen_ (status == GitRepoMissing) $ do
     Ext.Common.cq_ "git" ["init"] ""
     pure ()
 

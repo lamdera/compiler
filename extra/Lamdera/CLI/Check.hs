@@ -1023,27 +1023,38 @@ showExternalTypeWarnings warnings = do
 
 checkGitInitialised :: FilePath -> IO ()
 checkGitInitialised root = do
-  gitInitialised <- Dir.doesDirectoryExist $ root </> ".git"
-  onlyWhen (not gitInitialised) $ do
-    appName <- getInput $
-      D.vcat
-        [ "It looks like your project is missing a git repository!"
-        , "I can initialize it for you."
-        , "What is your Lamdera app name? [enter to skip]: "
-        ]
+  status <- gitRepoStatus root
+  case status of
+    GitRepoDir -> pure ()
+    GitRepoWorktree _ -> pure ()
+    GitRepoWorktreeBroken reason ->
+      -- Don't offer `git init` here – that would clobber a worktree's `.git` file.
+      Progress.throw
+        $ Help.report "BROKEN GIT WORKTREE" (Nothing)
+          (reason)
+          [ D.reflow "This looks like a git worktree whose `.git` file is malformed or points to a git directory that no longer exists."
+          , D.reflow "Try re-creating the worktree, or run `git worktree repair` from the main checkout."
+          ]
+    GitRepoMissing -> do
+      appName <- getInput $
+        D.vcat
+          [ "It looks like your project is missing a git repository!"
+          , "I can initialize it for you."
+          , "What is your Lamdera app name? [enter to skip]: "
+          ]
 
-    if appName == ""
-      then do
-        Progress.throw
-          $ Help.report "SKIPPING GIT INITIALISATION" (Nothing)
-            ("Okay, I'll let you set it up then!")
-            [ D.reflow "See <https://dashboard.lamdera.app/docs/building> for more."]
-      else do
-        progressPointer_ "Initialising git..."
-        callCommand $ "cd " <> root <> " && git init"
-        let gitAddRemoteCmd = "git remote add lamdera git@apps.lamdera.com:" <> appName <> ".git"
-        atomicPutStrLn $ "Adding remote: " <> gitAddRemoteCmd
-        callCommand $ "cd " <> root <> " && " <> gitAddRemoteCmd
+      if appName == ""
+        then do
+          Progress.throw
+            $ Help.report "SKIPPING GIT INITIALISATION" (Nothing)
+              ("Okay, I'll let you set it up then!")
+              [ D.reflow "See <https://dashboard.lamdera.app/docs/building> for more."]
+        else do
+          progressPointer_ "Initialising git..."
+          callCommand $ "cd " <> root <> " && git init"
+          let gitAddRemoteCmd = "git remote add lamdera git@apps.lamdera.com:" <> appName <> ".git"
+          atomicPutStrLn $ "Adding remote: " <> gitAddRemoteCmd
+          callCommand $ "cd " <> root <> " && " <> gitAddRemoteCmd
 
 
 genericExit :: String -> IO a
