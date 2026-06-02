@@ -246,16 +246,33 @@ addWireGenerations_ canonical pkg ifaces modul =
               )
               exports
             & Export
+
+    {- When generated wire functions are appended after user code (the
+    moduleHasValidators path), the user's own top-level code must not also
+    reference a generated w3_encode_*/w3_decode_* function in this module: the
+    reference would resolve to a definition that now appears later, which the
+    type checker can't see (it would otherwise crash with an internal Map.!).
+    Detect that and report a clear error. When there are no validators we keep
+    the original prepend behaviour, where such references are fine. -}
+    wireRefCheck =
+      if moduleHasValidators
+        then checkNoUserWireRefs newDefs existingDecls
+        else Right ()
   in
   case checkValidators cname (Can._unions canonical) (Can._aliases canonical) decls_ of
     Left err ->
       Left err
 
     Right () ->
-      Right $ canonical
-        { _decls = extendedDecls
-        , _exports = extendedExports
-        }
+      case wireRefCheck of
+        Left err ->
+          Left err
+
+        Right () ->
+          Right $ canonical
+            { _decls = extendedDecls
+            , _exports = extendedExports
+            }
 
 
 {-
@@ -373,6 +390,55 @@ validatorBadSignatureError typeName union =
         "The wire validation function `w3_validate_" ++ Data.Name.toChars typeName
         ++ "` has the wrong type signature. It must be exactly:"
     , D.fromChars $ "    " ++ validatorSignatureString typeName union
+    ]
+
+
+{-
+
+When a module defines any w3_validate_* function, the generated wire functions
+are emitted *after* the user's definitions (so the generated decoders can call
+the validators). That ordering means the user's own top-level code cannot also
+reference a generated w3_encode_*/w3_decode_* function in the same module -- such
+a reference would point at a definition that now appears later in the Decls,
+which the type-inference solver can't resolve (it would crash with an internal
+Map.! lookup error). We catch that here and report it as a normal compile error.
+
+`generatedDefs` are the freshly generated wire defs (their names are what we
+forbid referencing); `userDecls` is the user's code with the wire stubs removed.
+
+-}
+checkNoUserWireRefs :: [Def] -> Decls -> Either D.Doc ()
+checkNoUserWireRefs generatedDefs userDecls =
+  let
+    generatedNames = fmap defName generatedDefs
+
+    conflicts =
+      [ (defName userDef, ref)
+      | userDef <- declsToList userDecls
+      , ref     <- defTopLevelRefs userDef
+      , ref `elem` generatedNames
+      ]
+  in
+  case conflicts of
+    [] ->
+      Right ()
+
+    ((userName, genName) : _) ->
+      Left (validatorWireRefError userName genName)
+
+
+validatorWireRefError :: Data.Name.Name -> Data.Name.Name -> D.Doc
+validatorWireRefError userName genName =
+  D.stack
+    [ D.fromChars $ Data.Name.toChars userName ++ ": cannot reference generated wire functions in a module that defines a validator"
+    , D.reflow $
+        "`" ++ Data.Name.toChars userName ++ "` references the generated wire function `"
+        ++ Data.Name.toChars genName ++ "`, but this module also defines one or more `w3_validate_*` functions."
+    , D.reflow
+        "When a module defines a wire validator, the generated wire functions (w3_encode_*/w3_decode_*) must be placed after your own definitions so the generated decoders can call your validators. As a result, your top-level code in this module can't also reference those generated functions."
+    , D.reflow $
+        "To fix this, move `" ++ Data.Name.toChars userName ++ "` (or just its reference to `"
+        ++ Data.Name.toChars genName ++ "`) into a different module, or remove the validator(s) from this module."
     ]
 
 

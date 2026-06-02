@@ -252,4 +252,12 @@ wireValidateErrors = do
     , scope "validator declared as a value (wrong arg count)" $ do
         actual <- compileCapture "src/Test/Wire_Validate_Err_ArgCount.elm"
         expectTextContains actual "wrong type signature"
+
+    , scope "validator module referencing a generated encoder in user code" $ do
+        actual <- compileCapture "src/Test/Wire_Validate_Err_WireRef.elm"
+        expectTextContains actual "cannot reference generated wire functions"
+
+    , scope "validator module referencing a generated decoder in user code" $ do
+        actual <- compileCapture "src/Test/Wire_Validate_Err_WireRefDecode.elm"
+        expectTextContains actual "cannot reference generated wire functions"
     ]

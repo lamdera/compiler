@@ -1176,3 +1176,57 @@ addLetLogValue logValue functionBody =
               )))
          functionBody
   ))
+
+
+{- A total collector of every VarTopLevel reference in an expression, recursing
+through let/case/record/etc.
+
+Unlike getLvars in Lamdera.Wire3.Graph -- which is specialised to generated wire
+expressions and intentionally `error`s on shapes that generated code never emits
+(e.g. a multi-branch `if`) and ignores `case` scrutinees -- this handles every
+Expr_ constructor, so it is safe to run over arbitrary user code. -}
+topLevelRefsInExpr :: Expr -> [Data.Name.Name]
+topLevelRefsInExpr (A.At _ expr) =
+  case expr of
+    VarLocal _              -> []
+    VarTopLevel _ name      -> [name]
+    VarKernel _ _           -> []
+    VarForeign _ _ _        -> []
+    VarCtor _ _ _ _ _       -> []
+    VarDebug _ _ _          -> []
+    VarOperator _ _ _ _     -> []
+    Chr _                   -> []
+    Str _                   -> []
+    Int _                   -> []
+    Float _                 -> []
+    List es                 -> concatMap topLevelRefsInExpr es
+    Negate e                -> topLevelRefsInExpr e
+    Binop _ _ _ _ e1 e2     -> topLevelRefsInExpr e1 ++ topLevelRefsInExpr e2
+    Lambda _ e              -> topLevelRefsInExpr e
+    Call e es               -> topLevelRefsInExpr e ++ concatMap topLevelRefsInExpr es
+    If branches finalElse   ->
+      concatMap (\(c, t) -> topLevelRefsInExpr c ++ topLevelRefsInExpr t) branches
+        ++ topLevelRefsInExpr finalElse
+    Let def e               -> defTopLevelRefs def ++ topLevelRefsInExpr e
+    LetRec defs e           -> concatMap defTopLevelRefs defs ++ topLevelRefsInExpr e
+    LetDestruct _ e1 e2     -> topLevelRefsInExpr e1 ++ topLevelRefsInExpr e2
+    Case scrutinee branches ->
+      topLevelRefsInExpr scrutinee
+        ++ concatMap (\(CaseBranch _ e) -> topLevelRefsInExpr e) branches
+    Accessor _              -> []
+    Access e _              -> topLevelRefsInExpr e
+    Update _ e fieldUpdates ->
+      topLevelRefsInExpr e
+        ++ concatMap (\(FieldUpdate _ ue) -> topLevelRefsInExpr ue) (Map.elems fieldUpdates)
+    Record fields           -> concatMap topLevelRefsInExpr (Map.elems fields)
+    Unit                    -> []
+    Tuple e1 e2 me3         ->
+      topLevelRefsInExpr e1 ++ topLevelRefsInExpr e2 ++ maybe [] topLevelRefsInExpr me3
+    Shader _ _              -> []
+
+
+defTopLevelRefs :: Def -> [Data.Name.Name]
+defTopLevelRefs def =
+  case def of
+    Def _ _ e          -> topLevelRefsInExpr e
+    TypedDef _ _ _ e _ -> topLevelRefsInExpr e
