@@ -180,7 +180,8 @@ addWireGenerations_ canonical pkg ifaces modul =
         & Map.toList
         & concatMap (\(name, union) ->
             [ (encoderUnion isTest_ ifaces pkg modul decls_ name union)
-            , (decoderUnion isTest_ ifaces pkg modul decls_ name union)
+            , (decoderUnion DecodeValidating isTest_ ifaces pkg modul decls_ name union)
+            , (decoderUnion DecodeUnsafe     isTest_ ifaces pkg modul decls_ name union)
             ]
         )
 
@@ -190,7 +191,8 @@ addWireGenerations_ canonical pkg ifaces modul =
         & filter (\(_, Alias _ tipe) -> not (isLambdaType tipe))
         & concatMap (\(name, alias) ->
             [ (encoderAlias isTest_ ifaces pkg modul decls_ name alias)
-            , (decoderAlias isTest_ ifaces pkg modul decls_ name alias)
+            , (decoderAlias DecodeValidating isTest_ ifaces pkg modul decls_ name alias)
+            , (decoderAlias DecodeUnsafe     isTest_ ifaces pkg modul decls_ name alias)
             ]
         )
 
@@ -539,12 +541,12 @@ encoderUnion isTest_ ifaces pkg modul decls unionName union =
   finalGen
 
 
-decoderUnion :: Bool -> Map.Map Module.Raw I.Interface -> Pkg.Name -> Src.Module -> Decls -> Data.Name.Name -> Union -> Def
-decoderUnion isTest_ ifaces pkg modul decls unionName union =
+decoderUnion :: DecodeMode -> Bool -> Map.Map Module.Raw I.Interface -> Pkg.Name -> Src.Module -> Decls -> Data.Name.Name -> Union -> Def
+decoderUnion mode isTest_ ifaces pkg modul decls unionName union =
   let
     !x = runTests isTest_ "decoderUnion" pkg modul decls generatedName generated union (unionAsModule cname unionName union)
 
-    generatedName = Data.Name.fromChars $ "w3_decode_" ++ Data.Name.toChars unionName
+    generatedName = Data.Name.fromChars $ decodePrefix mode ++ Data.Name.toChars unionName
     cname = Module.Canonical pkg (Src.getName modul)
     tvars = _u_vars union
     tvarsTypesig = tvars & foldl (\acc name -> Map.insert name () acc ) Map.empty
@@ -577,20 +579,26 @@ decoderUnion isTest_ ifaces pkg modul decls unionName union =
                     & imap (\i (Ctor tagName tagIndex numParams paramTypes) ->
                         CaseBranch (pint i) $
                           ([(succeedDecode (vctor tagName tagIndex paramTypes))]
-                          ++ fmap (\paramType -> andMapDecode1 ((decoderForType ifaces cname paramType))) paramTypes)
+                          ++ fmap (\paramType -> andMapDecode1 ((decoderForType mode ifaces cname paramType))) paramTypes)
                             & foldlPairs (|>)
                     )
                     & (\l -> l ++ [CaseBranch pAny_ $ failDecode (Data.Name.toChars generatedName <> " unexpected union tag index")])
               )
             )
 
-    {- If the current module defines `w3_validate_<unionName>`, the decoder calls
-    it after producing a value. The function's existence and signature are
-    verified by checkValidators in addWireGenerations_ before this runs. -}
+    {- Only the validating chain (w3_decode_*) attaches the validator. If the
+    current module defines `w3_validate_<unionName>`, the validating decoder
+    calls it after producing a value (its existence and signature are verified by
+    checkValidators in addWireGenerations_ before this runs). The unsafe chain
+    (w3_unsafe_decode_*) never validates. -}
     finalBody =
-      case findValidatorDef decls unionName of
-        Just _  -> wrapWithValidator ifaces cname unionName baseBody
-        Nothing -> baseBody
+      case mode of
+        DecodeValidating ->
+          case findValidatorDef decls unionName of
+            Just _  -> wrapWithValidator ifaces cname unionName baseBody
+            Nothing -> baseBody
+        DecodeUnsafe ->
+          baseBody
 
     generated =
       Def
@@ -834,17 +842,17 @@ encoderAlias isTest_ ifaces pkg modul decls aliasName alias@(Alias tvars tipe) =
   finalGen
 
 
-decoderAlias :: Bool -> Map.Map Module.Raw I.Interface -> Pkg.Name -> Src.Module -> Decls -> Data.Name.Name -> Alias -> Def
-decoderAlias isTest_ ifaces pkg modul decls aliasName alias@(Alias tvars tipe) =
+decoderAlias :: DecodeMode -> Bool -> Map.Map Module.Raw I.Interface -> Pkg.Name -> Src.Module -> Decls -> Data.Name.Name -> Alias -> Def
+decoderAlias mode isTest_ ifaces pkg modul decls aliasName alias@(Alias tvars tipe) =
   let
     !x = runTests isTest_ "decoderAlias" pkg modul decls generatedName generated alias (aliasAsModule cname aliasName alias)
 
-    generatedName = Data.Name.fromChars $ "w3_decode_" ++ Data.Name.toChars aliasName
+    generatedName = Data.Name.fromChars $ decodePrefix mode ++ Data.Name.toChars aliasName
     cname = Module.Canonical pkg (Src.getName modul)
     ptvars = tvars & fmap (\tvar -> pvar $ Data.Name.fromChars $ "w3_x_c_" ++ Data.Name.toChars tvar )
 
     generated = Def (a (generatedName)) ptvars $
       -- debugDecoder (Data.Name.toElmString aliasName) $
-      decoderForType ifaces cname tipe
+      decoderForType mode ifaces cname tipe
   in
   generated

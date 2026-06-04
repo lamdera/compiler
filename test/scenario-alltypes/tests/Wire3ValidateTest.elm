@@ -28,12 +28,15 @@ import Test.Wire_Validate
         , w3_decode_Validated
         , w3_encode_Container
         , w3_encode_Validated
+        , w3_unsafe_decode_Container
+        , w3_unsafe_decode_Validated
         )
 import Test.Wire_Validate_Recursive
     exposing
         ( Tree(..)
         , w3_decode_Tree
         , w3_encode_Tree
+        , w3_unsafe_decode_Tree
         )
 
 
@@ -55,6 +58,30 @@ roundtripContainer : Container -> Maybe Container
 roundtripContainer value =
     Bytes.Decode.decode
         w3_decode_Container
+        (Bytes.Encode.encode (w3_encode_Container value))
+
+
+{-| Same round-trips, but decoding via the w3_unsafe_decode_* chain, which never
+runs the validators. Encoding is shared (there is only one encoder).
+-}
+roundtripValidatedUnsafe : Validated -> Maybe Validated
+roundtripValidatedUnsafe value =
+    Bytes.Decode.decode
+        w3_unsafe_decode_Validated
+        (Bytes.Encode.encode (w3_encode_Validated value))
+
+
+roundtripTreeUnsafe : Tree -> Maybe Tree
+roundtripTreeUnsafe value =
+    Bytes.Decode.decode
+        w3_unsafe_decode_Tree
+        (Bytes.Encode.encode (w3_encode_Tree value))
+
+
+roundtripContainerUnsafe : Container -> Maybe Container
+roundtripContainerUnsafe value =
+    Bytes.Decode.decode
+        w3_unsafe_decode_Container
         (Bytes.Encode.encode (w3_encode_Container value))
 
 
@@ -135,5 +162,40 @@ suite =
                         , items = [ ValidatedInt 1, ValidatedString "" ]
                         }
                         |> Expect.equal Nothing
+            ]
+        , describe "w3_unsafe_decode_* never validates (trusted-data path)"
+            [ test "an invalid ValidatedInt round-trips via unsafe decode" <|
+                \_ ->
+                    -- The validating decoder rejects this (see below); the unsafe
+                    -- decoder must accept it unchanged.
+                    roundtripValidatedUnsafe (ValidatedInt (-1))
+                        |> Expect.equal (Just (ValidatedInt (-1)))
+            , test "an invalid ValidatedString round-trips via unsafe decode" <|
+                \_ ->
+                    roundtripValidatedUnsafe (ValidatedString "")
+                        |> Expect.equal (Just (ValidatedString ""))
+            , test "the validating decoder still rejects the same value" <|
+                \_ ->
+                    roundtripValidated (ValidatedInt (-1))
+                        |> Expect.equal Nothing
+            , test "unsafe decode does not validate nested nodes (deep bad leaf)" <|
+                \_ ->
+                    let
+                        tree =
+                            Branch (Leaf 1) (Branch (Leaf 2) (Leaf (-3)))
+                    in
+                    roundtripTreeUnsafe tree
+                        |> Expect.equal (Just tree)
+            , test "unsafe decode does not validate aggregate fields" <|
+                \_ ->
+                    let
+                        c : Container
+                        c =
+                            { item = ValidatedInt (-1)
+                            , items = [ ValidatedString "" ]
+                            }
+                    in
+                    roundtripContainerUnsafe c
+                        |> Expect.equal (Just c)
             ]
         ]

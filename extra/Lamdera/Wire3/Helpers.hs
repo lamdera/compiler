@@ -53,6 +53,32 @@ shouldHaveCodecsGenerated name =
     _ -> True
 
 
+{- Which decoder chain we are generating.
+
+Every custom type and alias gets TWO decoders:
+
+  * w3_decode_<T>        (DecodeValidating) -- applies w3_validate_<T> if present
+                          and recurses through the validating chain. Used by the
+                          Lamdera runtime for attacker-controlled, backend-inbound
+                          data.
+
+  * w3_unsafe_decode_<T> (DecodeUnsafe)     -- never validates and recurses
+                          through the unsafe chain. Behaves like w3_decode_<T> did
+                          before validation existed. Used for trusted data
+                          (persistence, evergreen migrations, etc).
+
+The two chains are otherwise identical; the only difference is the prefix used
+when referencing nested user-type decoders (and, for unions, whether the
+validator hook is attached). -}
+data DecodeMode = DecodeValidating | DecodeUnsafe
+  deriving (Eq, Show)
+
+
+decodePrefix :: DecodeMode -> String
+decodePrefix DecodeValidating = "w3_decode_"
+decodePrefix DecodeUnsafe     = "w3_unsafe_decode_"
+
+
 getForeignSig tipe moduleName generatedName ifaces =
   -- debugHaskell (T.pack $ "❎❎❎❎❎ ALIAS ENCODER foreignTypeSig for " ++ (Data.Name.toChars generatedName)) $
     case foreignTypeSig moduleName generatedName ifaces of
@@ -71,6 +97,7 @@ getForeignSig tipe moduleName generatedName ifaces =
                (TLambda (TVar "a") tLamdera_Wire_Encoder))
 
           else if T.isPrefixOf "w3_decode_" (T.pack $ Data.Name.toChars generatedName)
+                  || T.isPrefixOf "w3_unsafe_decode_" (T.pack $ Data.Name.toChars generatedName)
             then
               (Forall
                  (Map.fromList [("a", ())])
