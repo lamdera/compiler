@@ -37,6 +37,7 @@ import qualified Lamdera.Version
 
 import qualified Lamdera.AppConfig
 import qualified Lamdera.Checks
+import qualified Lamdera.CompileMeta
 import qualified Lamdera.Compile
 import qualified Lamdera.Http
 import qualified Lamdera.Legacy
@@ -615,6 +616,7 @@ buildProductionJsFiles root inProduction_ versionInfo = do
         }
 
     Lamdera.AppConfig.writeUsage
+    Lamdera.CompileMeta.write
 
 
 replaceSnapshotTypeReferences migrationPath version = do

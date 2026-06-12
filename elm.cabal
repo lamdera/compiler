@@ -350,6 +350,7 @@ Executable lamdera
 
         Lamdera.AppConfig
         Lamdera.Checks
+        Lamdera.CompileMeta
         Lamdera.Constrain
         Lamdera.Evergreen.MigrationDestructive
         Lamdera.Evergreen.MigrationGenerator
