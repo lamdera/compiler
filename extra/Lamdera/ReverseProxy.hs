@@ -117,6 +117,7 @@ modReq newPathInfo hostname request =
     , requestHeaders =
         request
           & requestHeaders
+          & filter (\(header, _) -> header `notElem` [hOrigin, hReferer])
           & fmap (\(header, contents) ->
               if header == hHost then
                 (header, T.encodeUtf8 hostname)
