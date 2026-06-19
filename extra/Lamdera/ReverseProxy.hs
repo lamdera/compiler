@@ -11,6 +11,7 @@ import Network.HTTP.Types.Header
 import Network.HTTP.Types.Status
 import Network.Wai
 import Network.Wai.Handler.Warp
+import qualified Data.ByteString as BS
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as T
 import Text.Read (readMaybe)
@@ -117,6 +118,7 @@ modReq newPathInfo hostname request =
     , requestHeaders =
         request
           & requestHeaders
+          & filter (\(header, value) -> not (header == hOrigin && isLocalhostOrigin value))
           & fmap (\(header, contents) ->
               if header == hHost then
                 (header, T.encodeUtf8 hostname)
@@ -126,3 +128,8 @@ modReq newPathInfo hostname request =
                 (header, contents)
             )
     }
+
+
+isLocalhostOrigin :: BS.ByteString -> Bool
+isLocalhostOrigin value =
+  "http://localhost:" `BS.isPrefixOf` value
