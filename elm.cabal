@@ -38,6 +38,108 @@ Executable lamdera
     -- extra-libraries: msys-stdc++-6
     -- build-depends: system-cxx-std-lib
 
+    build-depends:
+        ansi-terminal,
+        ansi-wl-pprint < 1,
+        base,
+        binary,
+        bytestring,
+        containers,
+        directory,
+        edit-distance,
+        filelock,
+        filepath,
+        ghc-prim,
+        haskeline,
+        HTTP,
+        http-client,
+        http-client-tls,
+        http-types,
+        language-glsl,
+        mtl,
+        network,
+          -- >= 2.4 && < 2.7,
+        parsec,
+        process,
+        scientific,
+        SHA,
+        snap-core,
+        snap-server,
+        template-haskell,
+        time,
+        unordered-containers,
+        utf8-string,
+        vector,
+        zip-archive,
+
+
+        -- @LAMDERA
+
+        -- Windows metapackage
+        --system-cxx-std-lib,
+
+        -- @TODO need to remove and use Utf8 module instead somehow? Or compat it.
+        text,
+        -- Extra
+        aeson,
+        file-embed,
+        neat-interpolation,
+        natural-sort,
+        listsafe,
+        safe,
+        filemanip,
+        unix-compat,
+        githash,
+        temporary,
+
+        -- Live
+        websockets,
+        websockets-snap,
+        stm,
+        uuid,
+        broadcast-chan,
+        timeout,
+        entropy,
+        -- Debug
+        unicode-show,
+        network-info,
+
+        -- Future
+        conduit-extra,
+        warp,
+        wai,
+        stringsearch,
+
+        -- Interpreter
+        deepseq,
+
+        -- Vendor http-reverse-proxy
+        wai-logger,
+        unliftio,
+        streaming-commons,
+        conduit,
+        word8,
+        case-insensitive,
+        blaze-builder,
+
+        -- Test
+        async,
+        random,
+        tree-diff,
+        main-tester,
+
+        -- elmx
+        clock,
+        fold-debounce,
+        formatting,
+        fsnotify,
+        command,
+        lifted-base,
+
+        -- elm-format local vendor package
+        elm-format-lib,
+        elm-format
+
     hs-source-dirs:
         compiler/src
         builder/src
@@ -338,105 +440,3 @@ Executable lamdera
         -- utils
         Bytes
         Literals
-
-    Build-depends:
-        ansi-terminal,
-        ansi-wl-pprint < 1,
-        base,
-        binary,
-        bytestring,
-        containers,
-        directory,
-        edit-distance,
-        filelock,
-        filepath,
-        ghc-prim,
-        haskeline,
-        HTTP,
-        http-client,
-        http-client-tls,
-        http-types,
-        language-glsl,
-        mtl,
-        network,
-          -- >= 2.4 && < 2.7,
-        parsec,
-        process,
-        scientific,
-        SHA,
-        snap-core,
-        snap-server,
-        template-haskell,
-        time,
-        unordered-containers,
-        utf8-string,
-        vector,
-        zip-archive,
-
-
-        -- @LAMDERA
-
-        -- Windows metapackage
-        --system-cxx-std-lib,
-
-        -- @TODO need to remove and use Utf8 module instead somehow? Or compat it.
-        text,
-        -- Extra
-        aeson,
-        file-embed,
-        neat-interpolation,
-        natural-sort,
-        listsafe,
-        safe,
-        filemanip,
-        unix-compat,
-        githash,
-        temporary,
-
-        -- Live
-        websockets,
-        websockets-snap,
-        stm,
-        uuid,
-        broadcast-chan,
-        timeout,
-        entropy,
-        -- Debug
-        unicode-show,
-        network-info,
-
-        -- Future
-        conduit-extra,
-        warp,
-        wai,
-        stringsearch,
-
-        -- Interpreter
-        deepseq,
-
-        -- Vendor http-reverse-proxy
-        wai-logger,
-        unliftio,
-        streaming-commons,
-        conduit,
-        word8,
-        case-insensitive,
-        blaze-builder,
-
-        -- Test
-        async,
-        random,
-        tree-diff,
-        main-tester,
-
-        -- elmx
-        clock,
-        fold-debounce,
-        formatting,
-        fsnotify,
-        command,
-        lifted-base,
-
-        -- elm-format local vendor package
-        elm-format-lib,
-        elm-format
