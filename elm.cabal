@@ -1,4 +1,4 @@
-cabal-version: 2.2
+cabal-version: 2.4
 
 Name: elm
 Version: 0.19.1
@@ -18,6 +18,13 @@ License-file: LICENSE
 Author:     Evan Czaplicki
 Maintainer: info@elm-lang.org
 Copyright:  Copyright (c) 2011-present, Evan Czaplicki
+
+-- Embedded via Template Haskell (addDependentFile): listed here so cabal
+-- re-invokes ghc when they change, otherwise `cabal build` says
+-- "Up to date" without ever giving ghc a chance to notice
+Extra-source-files:
+    extra/dist/live.js
+    extra/LocalDev/runtime-src/**/*.elm
 
 Category: Compiler, Language
 

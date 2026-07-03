@@ -31,6 +31,7 @@ import Lamdera exposing (ClientId, Key, SessionId, Url)
 import Lamdera.Debug as LD
 import Lamdera.Json as Json
 import Lamdera.Repl as Repl
+import Lamdera.TimeTravel as TimeTravel
 import Lamdera.Wire3 as Wire exposing (Bytes)
 import Process
 import Task exposing (Task)
@@ -113,6 +114,18 @@ port verifyBackendModelDecodableAfterHotReload : (Bytes -> msg) -> Sub msg
 port verifyFrontendModelDecodableAfterHotReload : (Bytes -> msg) -> Sub msg
 
 
+-- Time travel debugger: cross-tab event bus (BroadcastChannel in live.js)
+
+
+port tt_broadcast : TimeTravel.BusMsg -> Cmd msg
+
+
+port tt_receive : (TimeTravel.BusMsg -> msg) -> Sub msg
+
+
+port tt_dump : List TimeTravel.BusMsg -> Cmd msg
+
+
 type alias ConnectionMsg =
     { s : SessionId, c : ClientId }
 
@@ -162,6 +175,9 @@ type Msg
     | LoadedSnapshotLegacy (Result LD.HttpError ( List Int, Int ))
     | Noop
     | ReplMsg Repl.Msg
+    | TimeTravelMsg TimeTravel.Msg
+    | TTBusReceived TimeTravel.BusMsg
+    | ScrubBroadcastDue Int
     | VerifyBackendModelDecodableAfterHotReload Bytes
     | VerifyFrontendModelDecodableAfterHotReload Bytes
 
@@ -177,6 +193,10 @@ type alias Model =
     , nodeType : NodeType
     , devbar : DevBar
     , resetModelNames : List String
+    , history : TimeTravel.History
+    , viewerMode : Bool -- detached time travel popup: no websocket, no user app
+    , remotePreview : Maybe FrontendModel -- state another tab's scrubbing tells us to display
+    , scrubGeneration : Int -- debounce token for scrub preview broadcasts
     }
 
 
@@ -359,12 +379,37 @@ init flags url key =
                 "f" ->
                     Follower
 
+                "v" ->
+                    Follower
+
                 _ ->
                     let
                         _ =
                             Debug.log "error" ("decodeNodeType saw an unexpected value: " ++ flags.nt)
                     in
                     Follower
+
+        viewerMode =
+            flags.nt == "v"
+
+        historyInit =
+            TimeTravel.init
+
+        initFrame =
+            { source = flags.c
+            , session = ""
+            , kind = TimeTravel.KindInit
+            , label = "Init"
+            , fem = Just fem
+            , femBytes = Nothing
+            , bem =
+                if nodeType == Leader then
+                    Just bem
+
+                else
+                    Nothing
+            , bemBytes = Nothing
+            }
     in
     ( { fem = fem
       , bem = bem
@@ -376,18 +421,34 @@ init flags url key =
       , clientId = flags.c
       , devbar = devbar
       , resetModelNames = List.filterMap identity [ femReset, bemReset ]
-      }
-    , Cmd.batch
-        [ Cmd.map FEMsg newFeCmds
-        , if nodeType == Leader then
-            Cmd.map BEMsg newBeCmds
+      , history =
+            if viewerMode then
+                { historyInit | open = True }
 
-          else
-            Cmd.none
-        , LD.now |> Task.perform VersionCheck
-        , setFreezeMode devbar.freeze
-        , storeFE devbar fem
-        ]
+            else
+                TimeTravel.record initFrame historyInit
+      , viewerMode = viewerMode
+      , remotePreview = Nothing
+      , scrubGeneration = 0
+      }
+    , if viewerMode then
+        -- The viewer only listens to the event bus; running the user
+        -- app's init commands would make it behave like a real client
+        Cmd.none
+
+      else
+        Cmd.batch
+            [ Cmd.map FEMsg newFeCmds
+            , if nodeType == Leader then
+                Cmd.map BEMsg newBeCmds
+
+              else
+                Cmd.none
+            , LD.now |> Task.perform VersionCheck
+            , setFreezeMode devbar.freeze
+            , storeFE devbar fem
+            , (\bus -> tt_broadcast { bus | o = flags.c }) (TimeTravel.frameToBus initFrame)
+            ]
     )
 
 
@@ -397,6 +458,134 @@ storeFE devbar newFem =
 
     else
         Cmd.none
+
+
+{-| Stamp the bus message with this client's identity before emitting;
+the server echoes broadcasts back to us, receivers drop by origin.
+-}
+emitBus : Model -> TimeTravel.BusMsg -> Cmd Msg
+emitBus m bus =
+    tt_broadcast { bus | o = m.clientId }
+
+
+{-| Record a local event in this tab's timeline and share it with every
+other client (and the popup viewer) over the event bus.
+-}
+track : TimeTravel.Frame -> Model -> ( Model, Cmd Msg )
+track frame m =
+    if m.viewerMode then
+        ( m, Cmd.none )
+
+    else
+        ( { m | history = TimeTravel.record frame m.history }
+        , emitBus m (TimeTravel.frameToBus frame)
+        )
+
+
+localFrame : Model -> TimeTravel.Kind -> String -> String -> Maybe FrontendModel -> Maybe BackendModel -> TimeTravel.Frame
+localFrame m kind session label fem bem =
+    { source = m.clientId
+    , session = session
+    , kind = kind
+    , label = label
+    , fem = fem
+    , femBytes = Nothing
+    , bem = bem
+    , bemBytes = Nothing
+    }
+
+
+{-| While a panel scrubs the timeline, tell every other client to display
+its own state at the selected instant ("master tab" mode).
+ponytail: one preview msg per client per slider tick; throttle if it ever
+matters on huge models.
+-}
+broadcastPreviews : Model -> Cmd Msg
+broadcastPreviews m =
+    case m.history.selected of
+        Just index ->
+            TimeTravel.previewOrders m.clientId index m.history.frames
+                |> List.map (emitBus m)
+                |> Cmd.batch
+
+        Nothing ->
+            Cmd.none
+
+
+{-| Restore the whole system to a point in the unified timeline: this
+tab's frontend model directly, other clients' via restore orders on the
+bus, and the backend either directly (leader) or via an order the leader
+will pick up.
+-}
+applyRestoreAt : Int -> Model -> ( Model, Cmd Msg )
+applyRestoreAt index m =
+    let
+        frames =
+            m.history.frames
+
+        ( mine, remote ) =
+            TimeTravel.femSourcesUpTo index frames
+                |> List.partition (\( c, _ ) -> c == m.clientId)
+
+        myNewFem =
+            mine |> List.head |> Maybe.andThen (\( _, f ) -> f.fem)
+
+        remoteCmds =
+            remote
+                |> List.filterMap
+                    (\( c, f ) ->
+                        f.femBytes |> Maybe.map (TimeTravel.restoreFemBus c >> emitBus m)
+                    )
+
+        ( newBem, newBemDirty, bemCmds ) =
+            case TimeTravel.bemUpTo index frames of
+                Nothing ->
+                    ( m.bem, m.bemDirty, [] )
+
+                Just f ->
+                    if m.nodeType == Leader then
+                        case f.bem of
+                            Just bem ->
+                                ( bem, True, [] )
+
+                            Nothing ->
+                                ( m.bem, m.bemDirty, [] )
+
+                    else
+                        case f.bemBytes of
+                            Just bytes ->
+                                ( m.bem, m.bemDirty, [ emitBus m (TimeTravel.restoreBemBus bytes) ] )
+
+                            Nothing ->
+                                ( m.bem, m.bemDirty, [] )
+
+        m1 =
+            { m
+                | fem = myNewFem |> Maybe.withDefault m.fem
+                , bem = newBem
+                , bemDirty = newBemDirty
+                , history = TimeTravel.truncateAt index m.history
+                , remotePreview = Nothing
+            }
+
+        ( m2, shareCmd ) =
+            case myNewFem of
+                Just newFem ->
+                    track (localFrame m1 TimeTravel.KindRestored "" "Restored via time travel" (Just newFem) Nothing) m1
+
+                Nothing ->
+                    ( m1, Cmd.none )
+    in
+    ( m2
+    , Cmd.batch
+        (shareCmd
+            -- restore is a commit: previews everywhere must end
+            :: emitBus m TimeTravel.resumeBus
+            :: (myNewFem |> Maybe.map (storeFE m.devbar) |> Maybe.withDefault Cmd.none)
+            :: remoteCmds
+            ++ bemCmds
+        )
+    )
 
 
 type NodeType
@@ -437,11 +626,16 @@ update msg m =
 
                 ( newFem, newFeCmds ) =
                     userFrontendApp.update frontendMsg m.fem
+
+                ( m2, shareCmd ) =
+                    track (localFrame m TimeTravel.KindFrontend "" (Debug.toString frontendMsg) (Just newFem) Nothing)
+                        { m | fem = newFem }
             in
-            ( { m | fem = newFem }
+            ( m2
             , Cmd.batch
                 [ Cmd.map FEMsg newFeCmds
                 , storeFE m.devbar newFem
+                , shareCmd
                 ]
             )
 
@@ -458,10 +652,15 @@ update msg m =
 
                         ( newBem, newBeCmds ) =
                             userBackendApp.update backendMsg m.bem
+
+                        ( m2, shareCmd ) =
+                            track (localFrame m TimeTravel.KindBackend "" (Debug.toString backendMsg) Nothing (Just newBem))
+                                { m | bem = newBem, bemDirty = True }
                     in
-                    ( { m | bem = newBem, bemDirty = True }
+                    ( m2
                     , Cmd.batch
                         [ Cmd.map BEMsg newBeCmds
+                        , shareCmd
                         ]
                     )
 
@@ -546,10 +745,19 @@ update msg m =
 
                                 ( newBem, newBeCmds ) =
                                     userBackendApp.updateFromFrontend s c toBackend m.bem
+
+                                frame =
+                                    localFrame m TimeTravel.KindToBackend s (Debug.toString toBackend) Nothing (Just newBem)
+
+                                ( m2, shareCmd ) =
+                                    -- attribute the event to the client that sent it
+                                    track { frame | source = c }
+                                        { m | bem = newBem, bemDirty = True }
                             in
-                            ( { m | bem = newBem, bemDirty = True }
+                            ( m2
                             , Cmd.batch
                                 [ Cmd.map BEMsg newBeCmds
+                                , shareCmd
                                 ]
                             )
 
@@ -569,11 +777,16 @@ update msg m =
 
                         ( newFem, newFeCmds ) =
                             userFrontendApp.updateFromBackend toFrontend m.fem
+
+                        ( m2, shareCmd ) =
+                            track (localFrame m TimeTravel.KindToFrontend "" (Debug.toString toFrontend) (Just newFem) Nothing)
+                                { m | fem = newFem }
                     in
-                    ( { m | fem = newFem }
+                    ( m2
                     , Cmd.batch
                         [ Cmd.map FEMsg newFeCmds
                         , storeFE m.devbar newFem
+                        , shareCmd
                         ]
                     )
 
@@ -1020,6 +1233,145 @@ update msg m =
             , Cmd.map ReplMsg replCmd
             )
 
+        TimeTravelMsg timeTravelMsg ->
+            let
+                ( newHistory, effect ) =
+                    TimeTravel.update timeTravelMsg m.history
+
+                devbar =
+                    m.devbar
+
+                -- Collapse the devbar so it doesn't cover the panel it just opened
+                m1 =
+                    { m | history = newHistory, devbar = { devbar | expanded = False } }
+            in
+            case effect of
+                TimeTravel.NoEffect ->
+                    ( m1, Cmd.none )
+
+                TimeTravel.Scrubbed ->
+                    -- "Master tab" mode: every other tab displays its own
+                    -- state at the instant we're looking at. Debounced:
+                    -- fast slider drags only broadcast the final position,
+                    -- otherwise the preview queue lags behind and tabs get
+                    -- stuck mid-history
+                    let
+                        generation =
+                            m1.scrubGeneration + 1
+                    in
+                    ( { m1 | scrubGeneration = generation }
+                    , delay 80 (ScrubBroadcastDue generation)
+                    )
+
+                TimeTravel.ScrubEnded ->
+                    ( m1, emitBus m1 TimeTravel.resumeBus )
+
+                TimeTravel.RequestRestore index ->
+                    applyRestoreAt index m1
+
+        ScrubBroadcastDue generation ->
+            -- Only the latest scrub position fires, and only while still
+            -- travelling (Resume/Restore in the meantime cancels it)
+            if generation == m.scrubGeneration && m.history.selected /= Nothing then
+                ( m, broadcastPreviews m )
+
+            else
+                ( m, Cmd.none )
+
+        TTBusReceived bus ->
+            if bus.o == m.clientId then
+                -- Our own message echoed back by the server
+                ( m, Cmd.none )
+
+            else
+            case bus.t of
+                "f" ->
+                    -- An event from another tab (or the leader's backend events)
+                    ( { m | history = TimeTravel.record (TimeTravel.frameFromBus bus) m.history }
+                    , Cmd.none
+                    )
+
+                "rf" ->
+                    -- A restore order for a specific client's frontend model
+                    if not m.viewerMode && bus.c == m.clientId then
+                        case bus.f |> Maybe.andThen (Wire.bytesDecode Types.w3_decode_FrontendModel) of
+                            Just newFem ->
+                                let
+                                    ( m2, shareCmd ) =
+                                        track (localFrame m TimeTravel.KindRestored "" "Restored via time travel" (Just newFem) Nothing)
+                                            { m | fem = newFem, remotePreview = Nothing }
+                                in
+                                ( m2, Cmd.batch [ storeFE m.devbar newFem, shareCmd ] )
+
+                            Nothing ->
+                                ( m, Cmd.none )
+
+                    else
+                        ( m, Cmd.none )
+
+                "tv" ->
+                    -- Another tab is scrubbing: display our state at that
+                    -- instant. No payload = we didn't exist yet (or the
+                    -- state can't be decoded): show our init state rather
+                    -- than freeze on a stale preview
+                    if not m.viewerMode && bus.c == m.clientId then
+                        ( { m
+                            | remotePreview =
+                                case bus.f |> Maybe.andThen (Wire.bytesDecode Types.w3_decode_FrontendModel) of
+                                    Just fem ->
+                                        Just fem
+
+                                    Nothing ->
+                                        Just (Tuple.first (userFrontendApp.init m.originalUrl m.originalKey))
+                          }
+                        , Cmd.none
+                        )
+
+                    else
+                        ( m, Cmd.none )
+
+                "tvr" ->
+                    -- Scrubbing ended: back to rendering the live state
+                    ( { m | remotePreview = Nothing }, Cmd.none )
+
+                "hello" ->
+                    -- A popup viewer just registered with this tab: send it
+                    -- our full timeline so it doesn't start empty
+                    ( m, tt_dump (TimeTravel.dumpAll m.history) )
+
+                "po" ->
+                    -- Our popup viewer opened (local notification from
+                    -- live.js): hide the inline panel, the popup owns it now
+                    ( { m | history = TimeTravel.setPoppedOut True m.history }, Cmd.none )
+
+                "pc" ->
+                    -- Our popup viewer closed: bring the inline panel back,
+                    -- and end any scrub it may have left running
+                    ( { m | history = TimeTravel.setPoppedOut False m.history, remotePreview = Nothing }
+                    , emitBus m TimeTravel.resumeBus
+                    )
+
+                "rb" ->
+                    -- A restore order for the backend model; only the leader runs it
+                    if m.nodeType == Leader then
+                        case bus.b |> Maybe.andThen (Wire.bytesDecode Types.w3_decode_BackendModel) of
+                            Just newBem ->
+                                let
+                                    ( m2, shareCmd ) =
+                                        track (localFrame m TimeTravel.KindRestored "" "Backend restored via time travel" Nothing (Just newBem))
+                                            { m | bem = newBem, bemDirty = True }
+                                in
+                                ( m2, shareCmd )
+
+                            Nothing ->
+                                ( m, Cmd.none )
+
+                    else
+                        ( m, Cmd.none )
+
+                _ ->
+                    ( m, Cmd.none )
+
         VerifyBackendModelDecodableAfterHotReload backendModelBytes ->
             case m.nodeType of
                 Follower ->
@@ -1044,33 +1396,40 @@ update msg m =
                     ( m, Browser.Navigation.reload )
 
 
-subscriptions { nodeType, fem, bem, bemDirty, devbar } =
-    Sub.batch
-        [ Sub.map FEMsg (userFrontendApp.subscriptions fem)
-        , if nodeType == Leader then
-            Sub.map BEMsg (userBackendApp.subscriptions bem)
+subscriptions { nodeType, fem, bem, bemDirty, devbar, viewerMode } =
+    if viewerMode then
+        -- The popup viewer only listens to the time travel event bus:
+        -- running the user app's subscriptions would make it a live client
+        tt_receive TTBusReceived
 
-          else
-            Sub.none
-        , if nodeType == Leader && bemDirty then
-            LD.every 1000 (always (PersistBackend False))
+    else
+        Sub.batch
+            [ Sub.map FEMsg (userFrontendApp.subscriptions fem)
+            , if nodeType == Leader then
+                Sub.map BEMsg (userBackendApp.subscriptions bem)
 
-          else
-            Sub.none
-        , setNodeTypeLeader SetNodeTypeLeader
-        , setLiveStatus SetLiveStatus
-        , setClientId ReceivedClientId
-        , receive_ToBackend ReceivedToBackend
-        , receive_ToFrontend ReceivedToFrontend
-        , receive_BackendModel ReceivedBackendModel
-        , rpcIn RPCIn
-        , onConnection OnConnection
-        , onDisconnection OnDisconnection
-        , LD.every (10 * 60 * 1000) VersionCheck
-        , Sub.map ReplMsg (Repl.subscriptions devbar.replModel)
-        , verifyBackendModelDecodableAfterHotReload VerifyBackendModelDecodableAfterHotReload
-        , verifyFrontendModelDecodableAfterHotReload VerifyFrontendModelDecodableAfterHotReload
-        ]
+              else
+                Sub.none
+            , if nodeType == Leader && bemDirty then
+                LD.every 1000 (always (PersistBackend False))
+
+              else
+                Sub.none
+            , setNodeTypeLeader SetNodeTypeLeader
+            , setLiveStatus SetLiveStatus
+            , setClientId ReceivedClientId
+            , receive_ToBackend ReceivedToBackend
+            , receive_ToFrontend ReceivedToFrontend
+            , receive_BackendModel ReceivedBackendModel
+            , rpcIn RPCIn
+            , onConnection OnConnection
+            , onDisconnection OnDisconnection
+            , LD.every (10 * 60 * 1000) VersionCheck
+            , Sub.map ReplMsg (Repl.subscriptions devbar.replModel)
+            , verifyBackendModelDecodableAfterHotReload VerifyBackendModelDecodableAfterHotReload
+            , verifyFrontendModelDecodableAfterHotReload VerifyFrontendModelDecodableAfterHotReload
+            , tt_receive TTBusReceived
+            ]
 
 
 xForLocation location =
@@ -1559,6 +1918,7 @@ expandedUI topDown devbar nodeType =
 
           else
             buttonDev "Show Repl" (ReplMsg Repl.ToggleClicked)
+        , buttonDev "Time Travel" (TimeTravelMsg TimeTravel.TogglePanel)
         , case nodeType of
             Leader ->
                 if devbar.freeze then
@@ -1726,11 +2086,35 @@ mapDocument model msg { title, body } =
     { title = title
     , body =
         List.map (Html.map msg) body
+            ++ [ Html.map TimeTravelMsg
+                    (TimeTravel.view { myClientId = model.clientId, fullScreen = False } model.history)
+               ]
             ++ lamderaUI
                 model.devbar
                 model.resetModelNames
                 model.nodeType
     }
+
+
+remotePreviewBanner : Html Msg
+remotePreviewBanner =
+    div
+        [ style "font-family" "system-ui, Helvetica Neue, sans-serif"
+        , style "font-size" "12px"
+        , style "position" "fixed"
+        , style "top" "0"
+        , style "left" "50%"
+        , style "transform" "translateX(-50%)"
+        , style "z-index" "2147483646"
+        , style "background-color" "#4d420f"
+        , style "color" "#FFCB64"
+        , style "border" "1px solid #FFCB64"
+        , style "border-top" "none"
+        , style "border-radius" "0 0 5px 5px"
+        , style "padding" "4px 12px"
+        , style "pointer-events" "none"
+        ]
+        [ text "⏪ Time travelling — showing this tab's state at the instant selected in another tab" ]
 
 
 icon fn size hex =
@@ -1831,7 +2215,35 @@ main =
         { init = init
         , view =
             \model ->
-                mapDocument model FEMsg (userFrontendApp.view model.fem)
+                if model.viewerMode then
+                    { title = "Lamdera Time Travel"
+                    , body =
+                        [ Html.map TimeTravelMsg
+                            (TimeTravel.view { myClientId = model.clientId, fullScreen = True } model.history)
+                        ]
+                    }
+
+                else
+                    case TimeTravel.travellingFem model.clientId model.history of
+                        Just fem ->
+                            -- Viewing the past: render the historical frontend model
+                            -- with user events neutralised, so the old view can't
+                            -- dispatch msgs against the present state
+                            mapDocument model (always Noop) (userFrontendApp.view fem)
+
+                        Nothing ->
+                            case model.remotePreview of
+                                Just fem ->
+                                    -- Another tab's panel is scrubbing: show
+                                    -- this tab's state at that instant
+                                    let
+                                        doc =
+                                            mapDocument model (always Noop) (userFrontendApp.view fem)
+                                    in
+                                    { doc | body = remotePreviewBanner :: doc.body }
+
+                                Nothing ->
+                                    mapDocument model FEMsg (userFrontendApp.view model.fem)
         , update = update
         , subscriptions = subscriptions
         , onUrlRequest = \ureq -> FEMsg (userFrontendApp.onUrlRequest ureq)

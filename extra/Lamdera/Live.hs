@@ -11,6 +11,7 @@ import qualified System.Directory as Dir
 import System.FilePath as FP
 import Control.Exception (finally, throw)
 import Language.Haskell.TH (runIO)
+import qualified Language.Haskell.TH.Syntax as TH
 import Data.FileEmbed (bsToExp)
 import qualified System.Directory as Dir
 
@@ -66,4 +67,13 @@ lamderaLiveHead root = do
 
 lamderaLive :: BS.ByteString
 lamderaLive =
-  $(bsToExp =<< runIO (Lamdera.Relative.readByteString "extra/dist/live.js"))
+  $(do
+      -- addDependentFile so editing live.js retriggers compilation of this
+      -- module; cabal only hashes .hs contents and would otherwise keep
+      -- serving the stale embedded copy
+      path <- runIO (Lamdera.Relative.requireFile "lamderaLive" "extra/dist/live.js")
+      TH.addDependentFile path
+      bsToExp =<< runIO (BS.readFile path)
+   )
+
+-- embed-stamp: 47236bfe4973eb8b27780f61edc5800ecdb083b7

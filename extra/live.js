@@ -17,6 +17,88 @@ var leaderId = null
 var nodeType = "f"
 var freezeMode = false
 
+// Time travel debugger: cross-client event bus + detached popup viewer mode.
+// The bus runs through the lamdera live websocket (the server re-broadcasts
+// any unrecognised message to every client), so it reaches other profiles,
+// incognito windows and other devices — unlike BroadcastChannel.
+// The viewer popup has no websocket (it must never count as an app client);
+// its opener tab relays the bus to it over window.postMessage.
+const ttViewerMode = window.location.search.indexOf('lamdera-tt=viewer') !== -1
+var ttViewers = [] // viewer popup windows registered via tt-hello
+
+function ttForwardToViewers(payload) {
+  ttViewers = ttViewers.filter(function (w) { return !w.closed })
+  ttViewers.forEach(function (w) { w.postMessage({ t: 'tt-down', d: payload }, window.location.origin) })
+}
+
+function ttEncode(payload) {
+  var d = Object.assign({}, payload)
+  if (d.f) { d.f = bytesToBase64(d.f) }
+  if (d.b) { d.b = bytesToBase64(d.b) }
+  return d
+}
+
+function ttDecode(d) {
+  var p = Object.assign({}, d)
+  if (p.f) { p.f = base64ToBytes(p.f) }
+  if (p.b) { p.b = base64ToBytes(p.b) }
+  return p
+}
+
+var ttDumpTarget = null // viewer awaiting the history dump after tt-hello
+
+window.addEventListener('message', function (e) {
+  if (!e.data) { return }
+  if (e.data.t === 'tt-hello' && e.source) {
+    ttViewers.push(e.source)
+    // ask our Elm app to dump its timeline for this fresh viewer
+    ttDumpTarget = e.source
+    ttNotify('hello')
+  } else if (e.data.t === 'tt-up') {
+    // A viewer popup emitted an order: relay it to the server; the ws echo
+    // brings it back to this tab and to every other client
+    msgEmitter({ t: 'tt', d: ttEncode(e.data.d) })
+  } else if (e.data.t === 'tt-down' && ttViewerMode) {
+    if (app !== null && app.ports.tt_receive) { app.ports.tt_receive.send(e.data.d) }
+  } else if (e.data.t === 'tt-down-batch' && ttViewerMode) {
+    if (app !== null && app.ports.tt_receive) {
+      e.data.d.forEach(function (p) { app.ports.tt_receive.send(p) })
+    }
+  }
+})
+
+// Local-only notifications to this tab's Elm app (never hit the server)
+function ttNotify(t) {
+  if (app !== null && app.ports.tt_receive) {
+    app.ports.tt_receive.send({ t: t, o: '', k: '', c: '', s: '', l: '', f: null, b: null })
+  }
+}
+
+// Pop out: a real popup window, opened synchronously inside the native
+// click so the user gesture is preserved (Elm ports are async and would
+// trip the popup blocker). While it lives, the inline panel hides ("po");
+// when it closes, the inline panel comes back ("pc").
+var ttPopupWindow = null
+var ttPopupPoller = null
+
+document.addEventListener('click', function (e) {
+  var el = e.target && e.target.closest ? e.target.closest('#lamdera-tt-popout') : null
+  if (!el) { return }
+  e.preventDefault()
+  e.stopPropagation()
+  if (ttPopupWindow && !ttPopupWindow.closed) { ttPopupWindow.focus(); return }
+  ttPopupWindow = window.open(window.location.pathname + '?lamdera-tt=viewer', 'lamdera-tt-viewer', 'popup=yes,width=1280,height=800')
+  if (!ttPopupWindow) { return } // blocked: keep the inline panel
+  ttNotify('po')
+  ttPopupPoller = setInterval(function () {
+    if (ttPopupWindow === null || ttPopupWindow.closed) {
+      clearInterval(ttPopupPoller)
+      ttPopupWindow = null
+      ttNotify('pc')
+    }
+  }, 500)
+}, true)
+
 // Null checking as we might be on an error page, which doesn't initiate an app
 // but we still want the livereload to function
 var app = null
@@ -32,8 +114,8 @@ var msgHandler = function(e) {
   }
 }
 
-// Don't connect if we are inside the error iframe.
-const ws = window.location.href === "about:srcdoc" ? null : Sockette.default(((window.location.protocol === "https:") ? "wss://" : "ws://") + window.location.host + "/_w", {
+// Don't connect if we are inside the error iframe, or the time travel viewer popup.
+const ws = (window.location.href === "about:srcdoc" || ttViewerMode) ? null : Sockette.default(((window.location.protocol === "https:") ? "wss://" : "ws://") + window.location.host + "/_w", {
   timeout: 2e3,
   maxAttempts: Infinity,
   onopen: e => {
@@ -123,11 +205,11 @@ window.setupApp = function(name, elid) {
 
     const femLsKey = "lamdera-debug-fem"
     const frontendModelString = localStorage.getItem(femLsKey)
-    initFrontendModel = frontendModelString === null ? null : base64ToBytes(frontendModelString)
+    initFrontendModel = (frontendModelString === null || ttViewerMode) ? null : base64ToBytes(frontendModelString)
 
     app = elm.init({
       node: document.getElementById(elid),
-      flags: { c: clientId, s: sessionId, nt: nodeType, b: initBackendModel, f: initFrontendModel }
+      flags: { c: clientId, s: sessionId, nt: ttViewerMode ? "v" : nodeType, b: ttViewerMode ? null : initBackendModel, f: initFrontendModel }
     })
     if (document.getElementById(elid)) {
       document.getElementById(elid).innerText = 'This is a headless program, meaning there is nothing to show here.\n\nI started the program anyway though, and you can access it as `app` in the developer console.'
@@ -149,6 +231,7 @@ window.setupApp = function(name, elid) {
     })
 
     app.ports.save_FrontendModel.subscribe(function (bytes) {
+      if (ttViewerMode) { return } // never clobber the real tabs' saved model
       initFrontendModel = bytes
       localStorage.setItem(femLsKey, bytesToBase64(bytes))
     })
@@ -169,6 +252,36 @@ window.setupApp = function(name, elid) {
 
     // Auto-generated by extra/Lamdera/Injection.hs
     if (typeof elmPkgJsIncludes !== "undefined") elmPkgJsIncludes.init(app)
+
+    // Time travel event bus
+    if (app.ports.tt_broadcast && app.ports.tt_receive) {
+      if (ttViewerMode) {
+        // Viewer popup: everything goes through the opener tab
+        app.ports.tt_broadcast.subscribe(function (payload) {
+          if (window.opener && !window.opener.closed) {
+            window.opener.postMessage({ t: 'tt-up', d: payload }, window.location.origin)
+          }
+        })
+        if (window.opener && !window.opener.closed) {
+          window.opener.postMessage({ t: 'tt-hello' }, window.location.origin)
+        }
+      } else {
+        app.ports.tt_broadcast.subscribe(function (payload) {
+          ttForwardToViewers(payload)
+          msgEmitter({ t: 'tt', d: ttEncode(payload) })
+        })
+        // Full-history dump for a freshly opened viewer: one ordered batch,
+        // sent only to the viewer that said hello (never to the server)
+        if (app.ports.tt_dump) {
+          app.ports.tt_dump.subscribe(function (frames) {
+            if (ttDumpTarget && !ttDumpTarget.closed) {
+              ttDumpTarget.postMessage({ t: 'tt-down-batch', d: frames }, window.location.origin)
+            }
+            ttDumpTarget = null
+          })
+        }
+      }
+    }
 
     flushInbound()
   }
@@ -313,6 +426,16 @@ window.setupApp = function(name, elid) {
         msgInbound("onDisconnection", { s: d.s, c: d.c })
         break;
 
+      case "tt":
+        // Time travel bus, re-broadcast by the server to every client;
+        // drop our own echo, forward the rest to Elm and any viewer popups
+        if (d.d && d.d.o !== clientId) {
+          var ttPayload = ttDecode(d.d)
+          ttForwardToViewers(ttPayload)
+          if (app !== null && app.ports.tt_receive) { app.ports.tt_receive.send(ttPayload) }
+        }
+        break;
+
       case "x":
         // Dummy msg to ignore, i.e. for initial backendModel state which is empty
         break;
@@ -320,6 +443,13 @@ window.setupApp = function(name, elid) {
       default:
         console.warn(`unexpected msg`, d)
     }
+  }
+
+  // The viewer popup has no websocket, so no "s" setup message will ever
+  // arrive: boot immediately with a fixed identity.
+  if (ttViewerMode) {
+    clientId = "viewer"
+    initApp()
   }
 }
 
