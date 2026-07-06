@@ -327,8 +327,8 @@ compile path =
           return $ Left $ Exit.ReactorNoOutline
 
         Just root ->
-          BW.withScope $ \scope -> Stuff.withRootLock root $ Task.run $
-            do  details <- Task.eio Exit.ReactorBadDetails $ Details.load Reporting.silent scope root
+          Stuff.withRootLock root $ Task.run $
+            do  details <- Task.eio Exit.ReactorBadDetails $ BW.withScope $ \scope -> Details.load Reporting.silent scope root
                 artifacts <- Task.eio Exit.ReactorBadBuild $ Build.fromPaths Reporting.silent root details (NE.List path [])
 
                 Lamdera.PostCompile.check details artifacts Exit.ReactorBadBuild
