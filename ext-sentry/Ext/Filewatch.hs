@@ -49,6 +49,8 @@ watch root action = do
           -- https://github.com/haskell-fswatch/hfsnotify/issues/101
           shouldRefresh = do
                 not (List.isInfixOf ".git" filepath)
+             && not (List.isInfixOf ".jj" filepath)
+             && not (List.isInfixOf ".watchman-cookie-" filepath)
              && not (List.isInfixOf "elm-stuff" filepath)
              && not (List.isInfixOf "node_modules" filepath)
             --  This is really dumb of you because some people use `/data/...` as a folder...
