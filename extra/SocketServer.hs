@@ -60,9 +60,6 @@ socketHandler mClients mLeader beState onJoined onReceive clientId sessionId pen
 
           pure changed
 
-        -- Lamdera.debugT ("[websocket] 🚫 " <> clientId)
-        SocketServer.broadcastImpl mClients $ "{\"t\":\"d\",\"s\":\"" <> sessionId <> "\",\"c\":\""<> clientId <> "\"}"
-
         onlyWhen leaderChanged $ do
           sendToLeader mClients mLeader (\leader -> do
               -- Tell the new leader about the backend state they need
@@ -70,6 +67,10 @@ socketHandler mClients mLeader beState onJoined onReceive clientId sessionId pen
             )
           -- Tell everyone about the new leader (also causes actual leader to go active as leader)
           broadcastLeader mClients mLeader
+
+        -- Broadcast the disconnect (after the election of a new leader so it can process the disconnect event).
+        -- Lamdera.debugT ("[websocket] 🚫 " <> clientId)
+        SocketServer.broadcastImpl mClients $ "{\"t\":\"d\",\"s\":\"" <> sessionId <> "\",\"c\":\""<> clientId <> "\"}"
 
         pure ()
 
