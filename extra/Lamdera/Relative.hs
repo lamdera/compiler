@@ -101,6 +101,29 @@ readByteString path = do
   BS.readFile fullPath
 
 
+-- All files under a dir (absolute paths), for Template Haskell dependency
+-- registration: embedding splices should addDependentFile these so content
+-- changes retrigger compilation of the embedding module (cabal tracks .hs
+-- content hashes only, so embedded files are otherwise invisible to it)
+listDirAbs :: String -> IO [FilePath]
+listDirAbs path = do
+  found <- findDir path
+  case found of
+    Just absPath -> listDirAbsHelp absPath
+    Nothing -> pure []
+
+
+listDirAbsHelp :: FilePath -> IO [FilePath]
+listDirAbsHelp absPath = do
+  contents <- Dir.listDirectory absPath
+  fmap concat $ forM contents $ \entry -> do
+    let newAbsPath = absPath </> entry
+    isDir <- Dir.doesDirectoryExist newAbsPath
+    if isDir
+      then listDirAbsHelp newAbsPath
+      else pure [newAbsPath]
+
+
 writeFile :: FilePath -> Text -> IO ()
 writeFile path content = do
   found <- findFile path

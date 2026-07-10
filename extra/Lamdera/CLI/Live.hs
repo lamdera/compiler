@@ -28,6 +28,7 @@ import Control.Arrow ((***))
 import Control.Concurrent.STM (atomically, newTVarIO, readTVar, readTVarIO, writeTVar, TVar)
 import Control.Exception (finally, try, SomeException)
 import qualified Language.Haskell.TH as TH
+import qualified Language.Haskell.TH.Syntax as THS
 import Data.FileEmbed (bsToExp)
 import qualified Data.Aeson.Encoding as A
 
@@ -201,6 +202,10 @@ replaceRpcMarker shouldReplace lamderaLive =
 lamderaLocalDevDir :: [(FilePath, Text)]
 lamderaLocalDevDir =
   $(do
+      -- addDependentFile so editing the runtime harness retriggers
+      -- compilation of this module; cabal only hashes .hs contents
+      TH.runIO (Lamdera.Relative.listDirAbs "extra/LocalDev/runtime-src")
+        >>= mapM_ THS.addDependentFile
       bsPairs <- TH.runIO (Lamdera.Relative.readDir id "extra/LocalDev/runtime-src")
       let toTuple (fp, bs) = [| (fp, TE.decodeUtf8 $(bsToExp bs)) |]
       TH.ListE <$> mapM toTuple (fromMaybe [] bsPairs)
@@ -822,3 +827,5 @@ passOnIndex pwd =
 
 
 x = 1
+
+-- embed-stamp: 47236bfe4973eb8b27780f61edc5800ecdb083b7
