@@ -99,16 +99,21 @@ build_binary_docker() {
     # libgcc; the static musl exe link doesn't pull it by default → undefined refs from the
     # RTS (NonMoving.c). Link libgcc explicitly.
     GHCOPTS="-j4 +RTS -A256m -RTS -split-sections -optc-Os -optl=-pthread -optl-lgcc"
+    # @LAMDERA The lamdera package must be GHC -j1: its reactor + elm-repl-worker TH each
+    # run an elm compile at build time and download elm packages into ELM_HOME; under -j
+    # the two splices download the same packages concurrently and deadlock on the package
+    # file lock (0% CPU hang). Deps have no such TH, so they stay -j4.
+    GHCOPTS_LAMDERA="-j1 +RTS -A256m -RTS -split-sections -optc-Os -optl=-pthread -optl-lgcc"
 
     # GOAL: build non-elm/elm-format deps first to save time and cut out baseline issues
     # cabal build --dry-run | grep ' - ' | grep -v 'elm-' | grep -v 'avh4' | cut -d' ' -f3 | sed 's/-[^-]*$//' | xargs -I{} cabal build {} --only-dependencies $CABALOPTS --ghc-options="$GHCOPTS"
     cabal build --only-dependencies $CABALOPTS --ghc-options="$GHCOPTS"
 
     # GOAL: build the Lamdera binary statically
-    cabal build $CABALOPTS --ghc-options="$GHCOPTS" || true
+    cabal build $CABALOPTS --ghc-options="$GHCOPTS_LAMDERA" || true
 
     # GOAL: catch silly cache failures that work on a second build
-    cabal build $CABALOPTS --ghc-options="$GHCOPTS"
+    cabal build $CABALOPTS --ghc-options="$GHCOPTS_LAMDERA"
 
     cp "$(cabal list-bin exe:lamdera)" "$bin"
     strip "$bin"
