@@ -31,6 +31,11 @@ fi
 
 cd "$compilerRoot"                                                   # Move into the project root
 git submodule init && git submodule update
+# Fetch origin/master in package-replacement submodules so the TH code can diff against it.
+# Docker has no SSH so this must happen on the host where git+ssh works.
+for dir in extra/package-replacements/*/*; do
+    [ -d "$dir" ] && git -C "$dir" fetch origin master:refs/remotes/origin/master
+done
 
 if [ -z "$rsyncCompilerPath" ]; then
     echo "rsyncCompilerPath is empty, skipping"
@@ -68,6 +73,10 @@ build_binary_docker() {
     trap cleanup EXIT
 
     git config --global --add safe.directory /root/compiler
+    # Also mark submodule directories as safe (they're mounted from the host with different ownership)
+    for submodule in $(git -C /root/compiler submodule foreach --quiet 'echo $toplevel/$sm_path'); do
+        git config --global --add safe.directory "$submodule"
+    done
 
     # GOAL: get the cabal caches into the mounted folder so they persist outside the Docker run lifetime and we don't needlessly rebuild hundreds of super expensive deps repeatedly forever
     # This is documented but doesn't seem to work https://cabal.readthedocs.io/en/3.6/installing-packages.html#environment-variables
@@ -86,7 +95,10 @@ build_binary_docker() {
 
     # Our options required for static linking
     CABALOPTS="--allow-newer -f-export-dynamic -fembed_data_files --enable-executable-static -j4"
-    GHCOPTS="-j4 +RTS -A256m -RTS -split-sections -optc-Os -optl=-pthread"
+    # -optl-lgcc: aarch64/gcc uses outline-atomics helpers (__aarch64_*_sync) that live in
+    # libgcc; the static musl exe link doesn't pull it by default → undefined refs from the
+    # RTS (NonMoving.c). Link libgcc explicitly.
+    GHCOPTS="-j4 +RTS -A256m -RTS -split-sections -optc-Os -optl=-pthread -optl-lgcc"
 
     # GOAL: build non-elm/elm-format deps first to save time and cut out baseline issues
     # cabal build --dry-run | grep ' - ' | grep -v 'elm-' | grep -v 'avh4' | cut -d' ' -f3 | sed 's/-[^-]*$//' | xargs -I{} cabal build {} --only-dependencies $CABALOPTS --ghc-options="$GHCOPTS"
@@ -98,7 +110,7 @@ build_binary_docker() {
     # GOAL: catch silly cache failures that work on a second build
     cabal build $CABALOPTS --ghc-options="$GHCOPTS"
 
-    cp "$(cabal list-bin .)" "$bin"
+    cp "$(cabal list-bin exe:lamdera)" "$bin"
     strip "$bin"
 
     # Work around ownership issues that prevent GH actions from managing the files later
@@ -112,13 +124,21 @@ declare -f build_binary_docker
 
 mkdir -p $dist
 
+# @LAMDERA build our own alpine 3.17 base rather than the external ghc-musl:9.8.4 image.
+# 3.17 is the sweet spot: musl 1.2.3 still has sendfile64 (snap-server hard-codes it) AND
+# gcc 12 libgcc has the aarch64 outline-atomics the GHC RTS needs; it also bakes in
+# esbuild/node for the reactor/repl-worker TH. See distribution/docker/arm64-musl-base.dockerfile.
+# (Previously used glcr.b-data.ch/ghc/ghc-musl:9.8.4, but its newer alpine dropped sendfile64.)
+docker $dockerHost build --progress=plain \
+    -t lamdera-arm64-musl-base:latest \
+    -f distribution/docker/arm64-musl-base.dockerfile .
+
 [ "$GITHUB_ACTIONS" == "true" ] && runMode="--rm -i" || runMode="-it"
 docker $dockerHost run \
     -v "$mountRoot:/root/compiler" \
     -v "$cacheRoot:/root/cache" \
-    $runMode glcr.b-data.ch/ghc/ghc-musl:9.2.8 \
+    $runMode lamdera-arm64-musl-base:latest \
     bash -c "$(declare -f build_binary_docker); build_binary_docker '$bin' '$GITHUB_ACTIONS' '$(id -u)' '$(id -g)'"
-# From https://github.com/benz0li/ghc-musl
 
 if [ -z "$rsyncCompilerPath" ]; then
     echo "rsyncCompilerPath is empty, skipping"
