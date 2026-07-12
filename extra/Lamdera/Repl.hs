@@ -27,6 +27,7 @@ import qualified Reporting.Task as Task
 import qualified Stuff
 
 import qualified Lamdera
+import qualified Lamdera.Relative
 import qualified Ext.Common
 import qualified Lamdera.Version
 
@@ -59,14 +60,18 @@ lamderaReplSrc = $(do
   compilerResult <- TH.runIO $ do
     putStr "-- Compiling `src/Repl/Worker.elm` in `vendor/elm-repl-worker`..."
     BW.withScope $ \scope -> do
-      Dir.withCurrentDirectory ("vendor" </> "elm-repl-worker") $ do
-        root <- Dir.getCurrentDirectory
-        Lamdera.withProjectRoot root $ do
-          Task.run $ do
-            details    <- Task.eio (const "details") $ Details.load Reporting.silent scope root
-            artifacts  <- Task.eio (const "build") $ Build.fromPaths Reporting.silent root details mainPaths
-            javascript <- Task.mapError (const "generate") $ Generate.dev root details artifacts
-            return $ LBS.toStrict (B.toLazyByteString javascript)
+      -- @LAMDERA Resolve an absolute root via Lamdera.Relative rather than chdir'ing the
+      -- process-global CWD. This TH runs under GHC's parallel upsweep (-j), where a
+      -- withCurrentDirectory here races other TH splices (Develop.StaticFiles) and fails
+      -- intermittently ("changeWorkingDirectory: does not exist"). Passing absolute paths
+      -- keeps Build.getRootInfo's canonicalizePath CWD-independent.
+      root <- Lamdera.Relative.requireDir ("vendor" </> "elm-repl-worker")
+      Lamdera.withProjectRoot root $ do
+        Task.run $ do
+          details    <- Task.eio (const "details") $ Details.load Reporting.silent scope root
+          artifacts  <- Task.eio (const "build") $ Build.fromPaths Reporting.silent root details (fmap (root </>) mainPaths)
+          javascript <- Task.mapError (const "generate") $ Generate.dev root details artifacts
+          return $ LBS.toStrict (B.toLazyByteString javascript)
 
   compiledCode <-
     case compilerResult of

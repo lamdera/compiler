@@ -12,13 +12,13 @@ import qualified Data.ByteString.Lazy as LBS
 import qualified Data.NonEmptyList as NE
 import GHC.ForeignPtr (ForeignPtr(..), ForeignPtrContents(..))
 import Language.Haskell.TH.Syntax (Q, Exp(..), Lit(..), Bytes(Bytes), runIO)
-import qualified System.Directory as Dir
 import System.FilePath ((</>))
 
 import qualified BackgroundWriter as BW
 import qualified Build
 import qualified Elm.Details as Details
 import qualified Generate
+import qualified Lamdera.Relative
 import qualified Reporting
 import qualified Reporting.Exit as Exit
 import qualified Reporting.Task as Task
@@ -32,11 +32,15 @@ buildReactorFrontEnd :: Q Exp -- BS.ByteString
 buildReactorFrontEnd =
   fmap bsToExp $ runIO $
   BW.withScope $ \scope ->
-  Dir.withCurrentDirectory "reactor" $
-  do  root <- Dir.getCurrentDirectory
+  -- @LAMDERA Resolve an absolute root via Lamdera.Relative rather than chdir'ing the
+  -- process-global CWD. This TH runs under GHC's parallel upsweep (-j), where a
+  -- withCurrentDirectory here races other TH splices (Lamdera.Repl) and fails
+  -- intermittently ("changeWorkingDirectory: does not exist"). Passing absolute paths
+  -- keeps Build.getRootInfo's canonicalizePath CWD-independent.
+  do  root <- Lamdera.Relative.requireDir "reactor"
       runTaskUnsafe $
         do  details    <- Task.eio Exit.ReactorBadDetails $ Details.load Reporting.silent scope root
-            artifacts  <- Task.eio Exit.ReactorBadBuild $ Build.fromPaths Reporting.silent root details paths
+            artifacts  <- Task.eio Exit.ReactorBadBuild $ Build.fromPaths Reporting.silent root details (fmap (root </>) paths)
             javascript <- Task.mapError Exit.ReactorBadGenerate $ Generate.prod root details artifacts
             return (LBS.toStrict (B.toLazyByteString javascript))
 
