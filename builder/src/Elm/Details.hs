@@ -245,9 +245,22 @@ verifyPkg env time (Outline.PkgOutline pkg _ _ _ exposed direct testDirect elm) 
     Task.throw $ Exit.DetailsBadElmInPkg elm
 
 
+-- @LAMDERA A Lamdera compiler built on elm 0.19.2 still accepts apps whose elm.json
+-- declares an older 0.19.x (0.19.1) - and any 0.19.x up to the compiler's own version -
+-- so existing deployed apps build unmodified without a forced elm.json bump. 0.19.1 and
+-- 0.19.2 are language/compiler compatible; and caches can't go stale across the bump
+-- because every cache path is keyed by the elm version (elm-stuff/lamdera-<ver>-<elm>/,
+-- Stuff.stuff), so 0.19.2 writes fresh caches and never reads 0.19.1's Region-format data.
+isCompatibleAppElmVersion :: V.Version -> Bool
+isCompatibleAppElmVersion elmVersion =
+  case elmVersion of
+    V.Version 0 19 _ -> elmVersion <= V.compiler
+    _                -> False
+
+
 verifyApp :: Env -> File.Time -> Outline.AppOutline -> Task Details
 verifyApp env time outline@(Outline.AppOutline elmVersion srcDirs direct _ _ _) =
-  if elmVersion == V.compiler
+  if isCompatibleAppElmVersion elmVersion -- @LAMDERA was: elmVersion == V.compiler
   then
     do  stated <- checkAppDeps outline
         actual <- verifyConstraints env (Map.map Con.exactly stated)
