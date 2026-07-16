@@ -11,11 +11,13 @@ module Lamdera.TimeTravel exposing
     , frameFromBus
     , frameToBus
     , init
+    , pauseRuntimeBus
     , previewOrders
     , record
     , restoreBemBus
     , restoreFemBus
     , resumeBus
+    , resumeRuntimeBus
     , setPoppedOut
     , travellingFem
     , truncateAt
@@ -128,7 +130,8 @@ record frame history =
 
 {-| The message exchanged between clients over the websocket-relayed bus.
 t: "f" = frame, "rf" = restore a client's frontend model, "rb" = restore
-the backend model (applied by the leader), "tv"/"tvr" = scrub previews.
+the backend model (applied by the leader), "tv"/"tvr" = scrub previews,
+"tp"/"tpr" = pause/resume the user runtimes while a panel is open.
 o is the emitting client (the server echoes broadcasts back to the sender,
 so receivers drop messages whose origin is themselves).
 -}
@@ -198,6 +201,23 @@ previewOrders myClientId index frames =
 resumeBus : BusMsg
 resumeBus =
     { t = "tvr", o = "", k = "", c = "", s = "", l = "", f = Nothing, b = Nothing }
+
+
+{-| Ask the live server to register this websocket as a pause owner. The
+server, rather than the payload, owns the identity so a client cannot release
+another panel's pause.
+-}
+pauseRuntimeBus : BusMsg
+pauseRuntimeBus =
+    { t = "tp", o = "", k = "", c = "", s = "", l = "", f = Nothing, b = Nothing }
+
+
+{-| Ask the live server to release this websocket's pause ownership. Runtimes
+resume only after every open panel has released its connection.
+-}
+resumeRuntimeBus : BusMsg
+resumeRuntimeBus =
+    { t = "tpr", o = "", k = "", c = "", s = "", l = "", f = Nothing, b = Nothing }
 
 
 frameToBus : Frame -> BusMsg
@@ -590,14 +610,14 @@ viewHeader config travelling currentIndex count =
                     "viewing #" ++ String.fromInt currentIndex ++ " of " ++ String.fromInt (count - 1)
 
                  else
-                    String.fromInt count ++ " events (live)"
+                    String.fromInt count ++ " events (runtime paused)"
                 )
             ]
         , headerButton "◀" (SelectFrame (currentIndex - 1))
         , headerButton "▶" (SelectFrame (currentIndex + 1))
         , if travelling then
             span [ style "display" "flex", style "gap" "10px" ]
-                [ headerButtonColored "Resume ⏵" green Resume
+                [ headerButtonColored "Latest ⏵" green Resume
                 , headerButtonColored "Restore all here" yellow RestoreHere
                 ]
 

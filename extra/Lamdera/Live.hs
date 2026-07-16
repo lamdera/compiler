@@ -76,4 +76,4 @@ lamderaLive =
       bsToExp =<< runIO (BS.readFile path)
    )
 
--- embed-stamp: 47236bfe4973eb8b27780f61edc5800ecdb083b7
+-- embed-stamp: eda48fc4fa4be3b8ee2210ef91e6d3d7d528b865

@@ -114,6 +114,7 @@ port verifyBackendModelDecodableAfterHotReload : (Bytes -> msg) -> Sub msg
 port verifyFrontendModelDecodableAfterHotReload : (Bytes -> msg) -> Sub msg
 
 
+
 -- Time travel debugger: cross-tab event bus (BroadcastChannel in live.js)
 
 
@@ -194,6 +195,9 @@ type alias Model =
     , devbar : DevBar
     , resetModelNames : List String
     , history : TimeTravel.History
+    , timeTravelPaused : Bool
+    , pendingStartup : Cmd Msg
+    , deferredConnections : List ( Bool, ConnectionMsg )
     , viewerMode : Bool -- detached time travel popup: no websocket, no user app
     , remotePreview : Maybe FrontendModel -- state another tab's scrubbing tells us to display
     , scrubGeneration : Int -- debounce token for scrub preview broadcasts
@@ -252,7 +256,7 @@ userBackendApp =
 
 
 type alias Flags =
-    { s : String, c : String, nt : String, b : Maybe Bytes, f : Maybe Bytes }
+    { s : String, c : String, nt : String, p : Bool, b : Maybe Bytes, f : Maybe Bytes }
 
 
 init : Flags -> Url -> Key -> ( Model, Cmd Msg )
@@ -410,6 +414,16 @@ init flags url key =
                     Nothing
             , bemBytes = Nothing
             }
+
+        userStartupCmd =
+            Cmd.batch
+                [ Cmd.map FEMsg newFeCmds
+                , if nodeType == Leader then
+                    Cmd.map BEMsg newBeCmds
+
+                  else
+                    Cmd.none
+                ]
     in
     ( { fem = fem
       , bem = bem
@@ -427,6 +441,14 @@ init flags url key =
 
             else
                 TimeTravel.record initFrame historyInit
+      , timeTravelPaused = flags.p
+      , pendingStartup =
+            if flags.p && not viewerMode then
+                userStartupCmd
+
+            else
+                Cmd.none
+      , deferredConnections = []
       , viewerMode = viewerMode
       , remotePreview = Nothing
       , scrubGeneration = 0
@@ -438,12 +460,11 @@ init flags url key =
 
       else
         Cmd.batch
-            [ Cmd.map FEMsg newFeCmds
-            , if nodeType == Leader then
-                Cmd.map BEMsg newBeCmds
+            [ if flags.p then
+                Cmd.none
 
               else
-                Cmd.none
+                userStartupCmd
             , LD.now |> Task.perform VersionCheck
             , setFreezeMode devbar.freeze
             , storeFE devbar fem
@@ -466,6 +487,65 @@ the server echoes broadcasts back to us, receivers drop by origin.
 emitBus : Model -> TimeTravel.BusMsg -> Cmd Msg
 emitBus m bus =
     tt_broadcast { bus | o = m.clientId }
+
+
+runtimePaused : Model -> Bool
+runtimePaused m =
+    m.timeTravelPaused
+
+
+{-| Messages produced by the user's frontend/backend runtime. They are dropped
+while any time-travel panel owns the global pause; debugger and live-control
+messages keep flowing so the panel can scrub, restore, close, and synchronize
+other tabs.
+-}
+isUserRuntimeMsg : Msg -> Bool
+isUserRuntimeMsg msg =
+    case msg of
+        FEMsg _ ->
+            True
+
+        BEMsg _ ->
+            True
+
+        BEtoFE _ _ ->
+            True
+
+        BEtoFEDelayed _ _ ->
+            True
+
+        FEtoBE _ ->
+            True
+
+        FEtoBEDelayed _ ->
+            True
+
+        FENewUrl _ ->
+            True
+
+        OnConnection _ ->
+            True
+
+        OnDisconnection _ ->
+            True
+
+        ReceivedToBackend _ ->
+            True
+
+        ReceivedToFrontend _ ->
+            True
+
+        RPCIn _ ->
+            True
+
+        PersistBackend _ ->
+            True
+
+        Reload ->
+            True
+
+        _ ->
+            False
 
 
 {-| Record a local event in this tab's timeline and share it with every
@@ -609,6 +689,31 @@ type LiveStatus
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg m =
+    if runtimePaused m then
+        case msg of
+            OnConnection connection ->
+                ( { m | deferredConnections = ( True, connection ) :: m.deferredConnections }
+                , Cmd.none
+                )
+
+            OnDisconnection connection ->
+                ( { m | deferredConnections = ( False, connection ) :: m.deferredConnections }
+                , Cmd.none
+                )
+
+            _ ->
+                if isUserRuntimeMsg msg then
+                    ( m, Cmd.none )
+
+                else
+                    updateAllowed msg m
+
+    else
+        updateAllowed msg m
+
+
+updateAllowed : Msg -> Model -> ( Model, Cmd Msg )
+updateAllowed msg m =
     let
         log t v =
             if m.devbar.logging then
@@ -854,7 +959,19 @@ update msg m =
             )
 
         ReceivedClientId clientId ->
-            ( { m | clientId = clientId }, Cmd.none )
+            let
+                m1 =
+                    { m | clientId = clientId }
+            in
+            if m.history.open && not m.viewerMode then
+                -- A websocket reconnect gets a new client id. Re-register
+                -- this still-open panel as a pause owner on the server.
+                ( { m1 | timeTravelPaused = True }
+                , emitBus m1 TimeTravel.pauseRuntimeBus
+                )
+
+            else
+                ( m1, Cmd.none )
 
         ExpandedDevbar ->
             let
@@ -1241,13 +1358,37 @@ update msg m =
                 devbar =
                     m.devbar
 
-                -- Collapse the devbar so it doesn't cover the panel it just opened
-                m1 =
+                panelOpened =
+                    not m.history.open && newHistory.open
+
+                panelClosed =
+                    m.history.open && not newHistory.open
+
+                baseModel =
                     { m | history = newHistory, devbar = { devbar | expanded = False } }
+
+                ( m1, panelCmd ) =
+                    if m.viewerMode then
+                        ( baseModel, Cmd.none )
+
+                    else if panelOpened then
+                        -- Freeze this tab synchronously; the server then
+                        -- authoritatively pauses every client and the leader.
+                        ( { baseModel | timeTravelPaused = True }
+                        , emitBus baseModel TimeTravel.pauseRuntimeBus
+                        )
+
+                    else if panelClosed then
+                        -- Do not optimistically resume: another tab may also
+                        -- own a panel. The server answers with tp/tpr.
+                        ( baseModel, emitBus baseModel TimeTravel.resumeRuntimeBus )
+
+                    else
+                        ( baseModel, Cmd.none )
             in
             case effect of
                 TimeTravel.NoEffect ->
-                    ( m1, Cmd.none )
+                    ( m1, panelCmd )
 
                 TimeTravel.Scrubbed ->
                     -- "Master tab" mode: every other tab displays its own
@@ -1260,14 +1401,26 @@ update msg m =
                             m1.scrubGeneration + 1
                     in
                     ( { m1 | scrubGeneration = generation }
-                    , delay 80 (ScrubBroadcastDue generation)
+                    , Cmd.batch
+                        [ panelCmd
+                        , delay 80 (ScrubBroadcastDue generation)
+                        ]
                     )
 
                 TimeTravel.ScrubEnded ->
-                    ( m1, emitBus m1 TimeTravel.resumeBus )
+                    ( m1
+                    , Cmd.batch
+                        [ panelCmd
+                        , emitBus m1 TimeTravel.resumeBus
+                        ]
+                    )
 
                 TimeTravel.RequestRestore index ->
-                    applyRestoreAt index m1
+                    let
+                        ( restored, restoreCmd ) =
+                            applyRestoreAt index m1
+                    in
+                    ( restored, Cmd.batch [ panelCmd, restoreCmd ] )
 
         ScrubBroadcastDue generation ->
             -- Only the latest scrub position fires, and only while still
@@ -1284,93 +1437,127 @@ update msg m =
                 ( m, Cmd.none )
 
             else
-            case bus.t of
-                "f" ->
-                    -- An event from another tab (or the leader's backend events)
-                    ( { m | history = TimeTravel.record (TimeTravel.frameFromBus bus) m.history }
-                    , Cmd.none
-                    )
+                case bus.t of
+                    "tp" ->
+                        -- Authoritative live-server status: at least one
+                        -- time-travel panel is open somewhere.
+                        ( { m | timeTravelPaused = True }, Cmd.none )
 
-                "rf" ->
-                    -- A restore order for a specific client's frontend model
-                    if not m.viewerMode && bus.c == m.clientId then
-                        case bus.f |> Maybe.andThen (Wire.bytesDecode Types.w3_decode_FrontendModel) of
-                            Just newFem ->
-                                let
-                                    ( m2, shareCmd ) =
-                                        track (localFrame m TimeTravel.KindRestored "" "Restored via time travel" (Just newFem) Nothing)
-                                            { m | fem = newFem, remotePreview = Nothing }
-                                in
-                                ( m2, Cmd.batch [ storeFE m.devbar newFem, shareCmd ] )
+                    "tpr" ->
+                        -- The server only resumes after the last panel owner
+                        -- closes or disconnects. New tabs that joined while paused
+                        -- now start their deferred init commands, and connection
+                        -- lifecycle hooks are replayed after the freeze ends.
+                        let
+                            connectionCmds =
+                                m.deferredConnections
+                                    |> List.reverse
+                                    |> List.map
+                                        (\( connected, connection ) ->
+                                            trigger
+                                                (if connected then
+                                                    OnConnection connection
 
-                            Nothing ->
-                                ( m, Cmd.none )
-
-                    else
-                        ( m, Cmd.none )
-
-                "tv" ->
-                    -- Another tab is scrubbing: display our state at that
-                    -- instant. No payload = we didn't exist yet (or the
-                    -- state can't be decoded): show our init state rather
-                    -- than freeze on a stale preview
-                    if not m.viewerMode && bus.c == m.clientId then
+                                                 else
+                                                    OnDisconnection connection
+                                                )
+                                        )
+                        in
                         ( { m
-                            | remotePreview =
-                                case bus.f |> Maybe.andThen (Wire.bytesDecode Types.w3_decode_FrontendModel) of
-                                    Just fem ->
-                                        Just fem
-
-                                    Nothing ->
-                                        Just (Tuple.first (userFrontendApp.init m.originalUrl m.originalKey))
+                            | timeTravelPaused = False
+                            , remotePreview = Nothing
+                            , pendingStartup = Cmd.none
+                            , deferredConnections = []
                           }
+                        , Cmd.batch (m.pendingStartup :: connectionCmds)
+                        )
+
+                    "f" ->
+                        -- An event from another tab (or the leader's backend events)
+                        ( { m | history = TimeTravel.record (TimeTravel.frameFromBus bus) m.history }
                         , Cmd.none
                         )
 
-                    else
+                    "rf" ->
+                        -- A restore order for a specific client's frontend model
+                        if not m.viewerMode && bus.c == m.clientId then
+                            case bus.f |> Maybe.andThen (Wire.bytesDecode Types.w3_decode_FrontendModel) of
+                                Just newFem ->
+                                    let
+                                        ( m2, shareCmd ) =
+                                            track (localFrame m TimeTravel.KindRestored "" "Restored via time travel" (Just newFem) Nothing)
+                                                { m | fem = newFem, remotePreview = Nothing }
+                                    in
+                                    ( m2, Cmd.batch [ storeFE m.devbar newFem, shareCmd ] )
+
+                                Nothing ->
+                                    ( m, Cmd.none )
+
+                        else
+                            ( m, Cmd.none )
+
+                    "tv" ->
+                        -- Another tab is scrubbing: display our state at that
+                        -- instant. No payload = we didn't exist yet (or the
+                        -- state can't be decoded): show our init state rather
+                        -- than freeze on a stale preview
+                        if not m.viewerMode && bus.c == m.clientId then
+                            ( { m
+                                | remotePreview =
+                                    case bus.f |> Maybe.andThen (Wire.bytesDecode Types.w3_decode_FrontendModel) of
+                                        Just fem ->
+                                            Just fem
+
+                                        Nothing ->
+                                            Just (Tuple.first (userFrontendApp.init m.originalUrl m.originalKey))
+                              }
+                            , Cmd.none
+                            )
+
+                        else
+                            ( m, Cmd.none )
+
+                    "tvr" ->
+                        -- Scrubbing ended: back to rendering the live state
+                        ( { m | remotePreview = Nothing }, Cmd.none )
+
+                    "hello" ->
+                        -- A popup viewer just registered with this tab: send it
+                        -- our full timeline so it doesn't start empty
+                        ( m, tt_dump (TimeTravel.dumpAll m.history) )
+
+                    "po" ->
+                        -- Our popup viewer opened (local notification from
+                        -- live.js): hide the inline panel, the popup owns it now
+                        ( { m | history = TimeTravel.setPoppedOut True m.history }, Cmd.none )
+
+                    "pc" ->
+                        -- Our popup viewer closed: bring the inline panel back,
+                        -- and end any scrub it may have left running
+                        ( { m | history = TimeTravel.setPoppedOut False m.history, remotePreview = Nothing }
+                        , emitBus m TimeTravel.resumeBus
+                        )
+
+                    "rb" ->
+                        -- A restore order for the backend model; only the leader runs it
+                        if m.nodeType == Leader then
+                            case bus.b |> Maybe.andThen (Wire.bytesDecode Types.w3_decode_BackendModel) of
+                                Just newBem ->
+                                    let
+                                        ( m2, shareCmd ) =
+                                            track (localFrame m TimeTravel.KindRestored "" "Backend restored via time travel" Nothing (Just newBem))
+                                                { m | bem = newBem, bemDirty = True }
+                                    in
+                                    ( m2, shareCmd )
+
+                                Nothing ->
+                                    ( m, Cmd.none )
+
+                        else
+                            ( m, Cmd.none )
+
+                    _ ->
                         ( m, Cmd.none )
-
-                "tvr" ->
-                    -- Scrubbing ended: back to rendering the live state
-                    ( { m | remotePreview = Nothing }, Cmd.none )
-
-                "hello" ->
-                    -- A popup viewer just registered with this tab: send it
-                    -- our full timeline so it doesn't start empty
-                    ( m, tt_dump (TimeTravel.dumpAll m.history) )
-
-                "po" ->
-                    -- Our popup viewer opened (local notification from
-                    -- live.js): hide the inline panel, the popup owns it now
-                    ( { m | history = TimeTravel.setPoppedOut True m.history }, Cmd.none )
-
-                "pc" ->
-                    -- Our popup viewer closed: bring the inline panel back,
-                    -- and end any scrub it may have left running
-                    ( { m | history = TimeTravel.setPoppedOut False m.history, remotePreview = Nothing }
-                    , emitBus m TimeTravel.resumeBus
-                    )
-
-                "rb" ->
-                    -- A restore order for the backend model; only the leader runs it
-                    if m.nodeType == Leader then
-                        case bus.b |> Maybe.andThen (Wire.bytesDecode Types.w3_decode_BackendModel) of
-                            Just newBem ->
-                                let
-                                    ( m2, shareCmd ) =
-                                        track (localFrame m TimeTravel.KindRestored "" "Backend restored via time travel" Nothing (Just newBem))
-                                            { m | bem = newBem, bemDirty = True }
-                                in
-                                ( m2, shareCmd )
-
-                            Nothing ->
-                                ( m, Cmd.none )
-
-                    else
-                        ( m, Cmd.none )
-
-                _ ->
-                    ( m, Cmd.none )
 
         VerifyBackendModelDecodableAfterHotReload backendModelBytes ->
             case m.nodeType of
@@ -1396,7 +1583,7 @@ update msg m =
                     ( m, Browser.Navigation.reload )
 
 
-subscriptions { nodeType, fem, bem, bemDirty, devbar, viewerMode } =
+subscriptions { nodeType, fem, bem, bemDirty, devbar, viewerMode, timeTravelPaused } =
     if viewerMode then
         -- The popup viewer only listens to the time travel event bus:
         -- running the user app's subscriptions would make it a live client
@@ -1404,13 +1591,20 @@ subscriptions { nodeType, fem, bem, bemDirty, devbar, viewerMode } =
 
     else
         Sub.batch
-            [ Sub.map FEMsg (userFrontendApp.subscriptions fem)
-            , if nodeType == Leader then
+            [ if timeTravelPaused then
+                Sub.none
+
+              else
+                Sub.map FEMsg (userFrontendApp.subscriptions fem)
+            , if timeTravelPaused then
+                Sub.none
+
+              else if nodeType == Leader then
                 Sub.map BEMsg (userBackendApp.subscriptions bem)
 
               else
                 Sub.none
-            , if nodeType == Leader && bemDirty then
+            , if not timeTravelPaused && nodeType == Leader && bemDirty then
                 LD.every 1000 (always (PersistBackend False))
 
               else
@@ -2243,7 +2437,11 @@ main =
                                     { doc | body = remotePreviewBanner :: doc.body }
 
                                 Nothing ->
-                                    mapDocument model FEMsg (userFrontendApp.view model.fem)
+                                    if runtimePaused model then
+                                        mapDocument model (always Noop) (userFrontendApp.view model.fem)
+
+                                    else
+                                        mapDocument model FEMsg (userFrontendApp.view model.fem)
         , update = update
         , subscriptions = subscriptions
         , onUrlRequest = \ureq -> FEMsg (userFrontendApp.onUrlRequest ureq)

@@ -16,6 +16,9 @@ var bufferInbound = []
 var leaderId = null
 var nodeType = "f"
 var freezeMode = false
+var timeTravelPaused = false
+var timeTravelPauseOwner = false
+var timeTravelPauseVersion = -1
 
 // Time travel debugger: cross-client event bus + detached popup viewer mode.
 // The bus runs through the lamdera live websocket (the server re-broadcasts
@@ -55,9 +58,15 @@ window.addEventListener('message', function (e) {
     ttDumpTarget = e.source
     ttNotify('hello')
   } else if (e.data.t === 'tt-up') {
-    // A viewer popup emitted an order: relay it to the server; the ws echo
-    // brings it back to this tab and to every other client
-    msgEmitter({ t: 'tt', d: ttEncode(e.data.d) })
+    // A viewer popup emitted an order: runtime pause ownership is handled
+    // authoritatively by the server; all other debugger traffic uses the
+    // relayed event bus.
+    if (e.data.d.t === 'tp' || e.data.d.t === 'tpr') {
+      timeTravelPauseOwner = e.data.d.t === 'tp'
+      msgEmitter({ t: e.data.d.t })
+    } else {
+      msgEmitter({ t: 'tt', d: ttEncode(e.data.d) })
+    }
   } else if (e.data.t === 'tt-down' && ttViewerMode) {
     if (app !== null && app.ports.tt_receive) { app.ports.tt_receive.send(e.data.d) }
   } else if (e.data.t === 'tt-down-batch' && ttViewerMode) {
@@ -119,6 +128,9 @@ const ws = (window.location.href === "about:srcdoc" || ttViewerMode) ? null : So
   timeout: 2e3,
   maxAttempts: Infinity,
   onopen: e => {
+    // Pause versions are scoped to one live-server process. A reconnect may
+    // target a freshly restarted server whose counter begins again at zero.
+    timeTravelPauseVersion = -1
     if (clientId !== "") {
       connected = true
       // If we've been disconnected longer than 10s, refresh entirely, as it's likely
@@ -209,7 +221,7 @@ window.setupApp = function(name, elid) {
 
     app = elm.init({
       node: document.getElementById(elid),
-      flags: { c: clientId, s: sessionId, nt: ttViewerMode ? "v" : nodeType, b: ttViewerMode ? null : initBackendModel, f: initFrontendModel }
+      flags: { c: clientId, s: sessionId, nt: ttViewerMode ? "v" : nodeType, p: timeTravelPaused, b: ttViewerMode ? null : initBackendModel, f: initFrontendModel }
     })
     if (document.getElementById(elid)) {
       document.getElementById(elid).innerText = 'This is a headless program, meaning there is nothing to show here.\n\nI started the program anyway though, and you can access it as `app` in the developer console.'
@@ -267,8 +279,13 @@ window.setupApp = function(name, elid) {
         }
       } else {
         app.ports.tt_broadcast.subscribe(function (payload) {
-          ttForwardToViewers(payload)
-          msgEmitter({ t: 'tt', d: ttEncode(payload) })
+          if (payload.t === 'tp' || payload.t === 'tpr') {
+            timeTravelPauseOwner = payload.t === 'tp'
+            msgEmitter({ t: payload.t })
+          } else {
+            ttForwardToViewers(payload)
+            msgEmitter({ t: 'tt', d: ttEncode(payload) })
+          }
         })
         // Full-history dump for a freshly opened viewer: one ordered batch,
         // sent only to the viewer that said hello (never to the server)
@@ -316,7 +333,23 @@ window.setupApp = function(name, elid) {
 
       case "s": // setup message, will get called again if websocket drops and reconnects
         clientId = d.c
-        if (app !== null) { app.ports.setClientId.send(clientId) }
+        const setupPauseVersion = Number.isInteger(d.v) ? d.v : 0
+        if (setupPauseVersion >= timeTravelPauseVersion) {
+          timeTravelPauseVersion = setupPauseVersion
+          timeTravelPaused = d.p === true
+        }
+
+        // The websocket client id changes on reconnect. Keep a locally open
+        // panel frozen while its ownership is registered under the new id.
+        if (timeTravelPauseOwner) {
+          timeTravelPaused = true
+          msgEmitter({ t: 'tp' })
+        }
+
+        if (app !== null) {
+          ttNotify(timeTravelPaused ? 'tp' : 'tpr')
+          app.ports.setClientId.send(clientId)
+        }
 
         leaderId = d.l
         if (clientId == leaderId) {
@@ -328,6 +361,26 @@ window.setupApp = function(name, elid) {
         }
 
         initApp()
+        break;
+
+      case "tp":
+      case "tpr":
+        // Authoritative global runtime status from the live server. It keeps
+        // multiple open panels and newly connected tabs consistent. Statuses
+        // carry a monotonic version because websocket sends from different
+        // client threads may complete out of order.
+        const pauseVersion = Number.isInteger(d.v) ? d.v : timeTravelPauseVersion + 1
+        if (pauseVersion < timeTravelPauseVersion) { break }
+        timeTravelPauseVersion = pauseVersion
+        timeTravelPaused = d.t === "tp" || timeTravelPauseOwner
+        if (d.t === "tpr" && timeTravelPauseOwner) {
+          // The old websocket may just have disconnected. Re-register without
+          // briefly waking the local runtime that still owns an open panel.
+          msgEmitter({ t: 'tp' })
+        }
+        const pausePayload = { t: timeTravelPaused ? 'tp' : 'tpr', o: '', k: '', c: '', s: '', l: '', f: null, b: null }
+        ttForwardToViewers(pausePayload)
+        if (app !== null && app.ports.tt_receive) { app.ports.tt_receive.send(pausePayload) }
         break;
 
       case "e": // leader has been elected

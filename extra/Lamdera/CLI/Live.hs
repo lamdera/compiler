@@ -25,7 +25,8 @@ import qualified System.FilePath as FP
 import System.FilePath ((</>))
 import Control.Applicative ((<|>))
 import Control.Arrow ((***))
-import Control.Concurrent.STM (atomically, newTVarIO, readTVar, readTVarIO, writeTVar, TVar)
+import Control.Concurrent.Async (race)
+import Control.Concurrent.STM (atomically, check, newTVarIO, readTVar, readTVarIO, writeTVar, TVar)
 import Control.Exception (finally, try, SomeException)
 import qualified Language.Haskell.TH as TH
 import qualified Language.Haskell.TH.Syntax as THS
@@ -62,7 +63,10 @@ import qualified GHC.IO.Exception
 
 
 
-type LiveState = (TVar [Client], TVar (Maybe ClientId), BroadcastChan In Text, TVar Text)
+type PauseState = ([ClientId], Int)
+
+
+type LiveState = (TVar [Client], TVar (Maybe ClientId), BroadcastChan In Text, TVar Text, TVar PauseState)
 
 
 init :: IO LiveState
@@ -70,6 +74,7 @@ init = do
   mClients <- liftIO $ SocketServer.clientsInit
   mLeader <- liftIO $ SocketServer.leaderInit
   mChan <- liftIO $ newBroadcastChan
+  pauseState <- liftIO $ newTVarIO ([], 0)
 
   beState <- do
     bePath <- liftIO $ lamderaBackendDevSnapshotPath
@@ -79,11 +84,11 @@ init = do
         Just text -> text
         Nothing -> "{\"t\":\"x\"}"
 
-  pure (mClients, mLeader, mChan, beState)
+  pure (mClients, mLeader, mChan, beState, pauseState)
 
 
 withEnd :: LiveState -> IO () -> IO ()
-withEnd (mClients, mLeader, mChan, beState) io = do
+withEnd (mClients, mLeader, mChan, beState, pauseState) io = do
   let
     end = do
       debug "[backendSt] 🧠"
@@ -212,11 +217,47 @@ lamderaLocalDevDir =
    )
 
 
-refreshClients (mClients, mLeader, mChan, beState) =
+refreshClients (mClients, mLeader, mChan, beState, pauseState) =
   SocketServer.broadcastImpl mClients "{\"t\":\"r\"}" -- r is refresh, see live.js
 
 
-serveWebsocket root (mClients, mLeader, mChan, beState) =
+pauseStatusText :: Bool -> Int -> Text
+pauseStatusText paused version =
+  if paused
+    then "{\"t\":\"tp\",\"v\":" <> T.pack (show version) <> "}"
+    else "{\"t\":\"tpr\",\"v\":" <> T.pack (show version) <> "}"
+
+
+runtimePauseSnapshot :: TVar PauseState -> IO (Bool, Int)
+runtimePauseSnapshot pauseState = do
+  (owners, version) <- readTVarIO pauseState
+  pure (not $ List.null owners, version)
+
+
+runtimePausedIO :: TVar PauseState -> IO Bool
+runtimePausedIO pauseState =
+  fst <$> runtimePauseSnapshot pauseState
+
+
+setPauseOwner :: TVar [Client] -> TVar PauseState -> ClientId -> Bool -> IO ()
+setPauseOwner mClients pauseState clientId shouldOwn = do
+  (paused, version) <- atomically $ do
+    (owners, oldVersion) <- readTVar pauseState
+    let alreadyOwns = clientId `List.elem` owners
+    let changed = shouldOwn /= alreadyOwns
+    let updatedOwners =
+          if shouldOwn
+            then if alreadyOwns then owners else clientId : owners
+            else List.filter (/= clientId) owners
+    let updatedVersion = if changed then oldVersion + 1 else oldVersion
+    writeTVar pauseState (updatedOwners, updatedVersion)
+    pure (not $ List.null updatedOwners, updatedVersion)
+  -- Different websocket threads can finish their sends out of order. The
+  -- monotonic version lets live.js ignore any stale status that arrives late.
+  SocketServer.broadcastImpl mClients $ pauseStatusText paused version
+
+
+serveWebsocket root (mClients, mLeader, mChan, beState, pauseState) =
   do  file <- getSafePath
       guard (file == "_w")
       mKey <- getHeader "sec-websocket-key" <$> getRequest
@@ -263,16 +304,31 @@ serveWebsocket root (mClients, mLeader, mChan, beState) =
 
                 leader <- readTVarIO mLeader
                 case leader of
-                  Just leaderId ->
-                    pure $ Just $ "{\"t\":\"s\",\"c\":\"" <> clientId <> "\",\"l\":\"" <> leaderId <> "\"}"
+                  Just leaderId -> do
+                    (paused, pauseVersion) <- runtimePauseSnapshot pauseState
+                    let pausedJson = if paused then "true" else "false"
+                    pure $ Just $ "{\"t\":\"s\",\"c\":\"" <> clientId <> "\",\"l\":\"" <> leaderId <> "\",\"p\":" <> pausedJson <> ",\"v\":" <> T.pack (show pauseVersion) <> "}"
 
                   Nothing ->
                     -- Impossible
                     pure Nothing
 
+              onLeft clientId =
+                -- A closed/crashed tab must never leave every other runtime
+                -- paused forever.
+                setPauseOwner mClients pauseState clientId False
+
               onReceive clientId text = do
                 -- debugT $ "[socketRecieve ] " <> text
-                if T.isPrefixOf "{\"t\":\"env\"," text
+                if T.isPrefixOf "{\"t\":\"tpr\"" text
+                  then do
+                    setPauseOwner mClients pauseState clientId False
+
+                  else if T.isPrefixOf "{\"t\":\"tp\"" text
+                  then do
+                    setPauseOwner mClients pauseState clientId True
+
+                  else if T.isPrefixOf "{\"t\":\"env\"," text
                   then do
                     -- This is a bit dodge, but avoids needing to pull in all of Aeson
                     setEnvMode root $ (T.splitOn "\"" text) !! 7
@@ -287,16 +343,27 @@ serveWebsocket root (mClients, mLeader, mChan, beState) =
                   else if T.isSuffixOf "\"t\":\"p\"}" text
                     then do
                       -- debug "[backendSt] 💾"
-                      atomically $ writeTVar beState text
-                      onlyWhen (textContains "force" text) $ do
-                        debug "[refresh  ] 🔄 "
-                        -- Force due to backend reset, force a refresh
-                        SocketServer.broadcastImpl mClients "{\"t\":\"r\"}"
+                      paused <- runtimePausedIO pauseState
+                      onlyWhen (not paused) $ do
+                        atomically $ writeTVar beState text
+                        onlyWhen (textContains "force" text) $ do
+                          debug "[refresh  ] 🔄 "
+                          -- Force due to backend reset, force a refresh
+                          SocketServer.broadcastImpl mClients "{\"t\":\"r\"}"
 
                     else if T.isPrefixOf "{\"t\":\"ToBackend\"," text
 
                       then do
-                        sendToLeader mClients mLeader (\l -> pure text)
+                        paused <- runtimePausedIO pauseState
+                        onlyWhen (not paused) $
+                          sendToLeader mClients mLeader (\l -> pure text)
+
+
+                    else if T.isPrefixOf "{\"t\":\"ToFrontend\"," text
+                      then do
+                        paused <- runtimePausedIO pauseState
+                        onlyWhen (not paused) $
+                          SocketServer.broadcastImpl mClients text
 
 
                     else if T.isPrefixOf "{\"t\":\"qr\"," text
@@ -310,7 +377,7 @@ serveWebsocket root (mClients, mLeader, mChan, beState) =
                       SocketServer.broadcastImpl mClients text
 
           WS.runWebSocketsSnap $
-            SocketServer.socketHandler mClients mLeader beState onJoined onReceive (TE.decodeUtf8 key) sessionId
+            SocketServer.socketHandler mClients mLeader beState onJoined onLeft onReceive (TE.decodeUtf8 key) sessionId
 
         Nothing ->
           error404 "missing sec-websocket-key header"
@@ -338,7 +405,7 @@ openEditorHandler root = do
 
 
 serveBem :: LiveState -> Snap ()
-serveBem (_ ,_ ,_ , beState) = do
+serveBem (_ ,_ ,_ , beState, _) = do
   path <- getSafePath
   guard (path == "_x/bem")
   bemText <- liftIO $ readTVarIO beState
@@ -620,7 +687,11 @@ generateRpcRequestPayload contentType rbody endpoint sid reqId requestHeadersJso
   requestPayload
 
 
-serveRpc (mClients, mLeader, mChan, beState) port = do
+serveRpc (mClients, mLeader, mChan, beState, pauseState) port = do
+
+  paused <- liftIO $ runtimePausedIO pauseState
+  onlyWhen paused $
+    error503 "lamdera live is paused while the time travel debugger is open"
 
   mEndpoint <- getParam "endpoint"
   rbody <- readRequestBody _10MB
@@ -683,13 +754,21 @@ serveRpc (mClients, mLeader, mChan, beState) port = do
   leader <- liftIO $ readTVarIO mLeader
   case leader of
     Just leaderId -> do
+      (pausedBeforeSend, pauseVersionBeforeSend) <- liftIO $ runtimePauseSnapshot pauseState
+      onlyWhen pausedBeforeSend $
+        error503 "lamdera live is paused while the time travel debugger is open"
+
       liftIO $ sendToLeader mClients mLeader (\leader_ -> pure requestPayload)
 
-      let seconds = 10
-      chanTextM <- liftIO $ timeout seconds $ loopRead
+      let waitForPauseChange = atomically $ do
+            (_, currentPauseVersion) <- readTVar pauseState
+            check (currentPauseVersion /= pauseVersionBeforeSend)
 
-      case chanTextM of
-        Just chanText -> do
+      let seconds = 10
+      resultM <- liftIO $ timeout seconds $ race loopRead waitForPauseChange
+
+      case resultM of
+        Just (Left chanText) -> do
           let
             decoder :: D.Decoder D.ParseError (Int, BS.ByteString, [(Text, Text)], (String, B.Builder))
             decoder =
@@ -728,6 +807,9 @@ serveRpc (mClients, mLeader, mChan, beState) port = do
               debugT $ "😢 rpc response decoding failed: " <> show_ jsonProblem <> "\n" <> chanText
               writeBuilder $ B.byteString $ "rpc response decoding failed for " <> TE.encodeUtf8 chanText
 
+
+        Just (Right ()) ->
+          error503 "lamdera live was paused before the RPC completed"
 
         Nothing -> do
           debugT $ "⏰ RPC timed out for:" <> requestPayload
@@ -828,4 +910,4 @@ passOnIndex pwd =
 
 x = 1
 
--- embed-stamp: 47236bfe4973eb8b27780f61edc5800ecdb083b7
+-- embed-stamp: eda48fc4fa4be3b8ee2210ef91e6d3d7d528b865
