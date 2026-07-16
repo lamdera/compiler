@@ -22,7 +22,7 @@ writeDefaultImplementations = do
       )
   writeLineIfMissing "elm-stuff" (root </> ".gitignore")
   status <- gitRepoStatus root
-  onlyWhen_ (status == GitRepoMissing) $ do
+  onlyWhen (status == GitRepoMissing) $ do
     Ext.Common.cq_ "git" ["init"] ""
     pure ()
 
