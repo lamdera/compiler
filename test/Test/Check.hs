@@ -6,6 +6,7 @@ module Test.Check where
 
 import System.FilePath ((</>))
 import qualified System.Directory as Dir
+import System.IO.Temp (withSystemTempDirectory)
 import qualified Data.Text as T
 import qualified Data.Map as Map
 import qualified Data.Set as Set
@@ -193,6 +194,54 @@ suite = tests $
         ,"bar : something"
         ,"bar =\n  and bar too, including it's type sig\n"]
         (Lamdera.CLI.Check.extractTopLevelExpressions input)
+
+  , scope "gitRepoStatus detects directories, worktrees, and broken pointers" $ do
+
+      -- No `.git` at all -> safe to offer `git init`
+      missing <- io $ withSystemTempDirectory "lamdera-git-missing" $ \tmp ->
+        gitRepoStatus tmp
+      scope "no .git -> GitRepoMissing" $ expectEqual GitRepoMissing missing
+
+      -- Normal clone: `.git` is a directory
+      normal <- io $ withSystemTempDirectory "lamdera-git-dir" $ \tmp -> do
+        Ext.Common.bash $ "cd " <> tmp <> " && git init -q"
+        gitRepoStatus tmp
+      scope ".git directory -> GitRepoDir" $ expectEqual GitRepoDir normal
+
+      -- Worktree: `.git` is a file pointing at an existing gitdir
+      worktree <- io $ withSystemTempDirectory "lamdera-git-wt" $ \tmp -> do
+        let mainDir = tmp </> "main"
+            wtDir = tmp </> "wt"
+        Dir.createDirectoryIfMissing True mainDir
+        Ext.Common.bash $ "cd " <> mainDir
+          <> " && git init -q"
+          <> " && git config user.email test@example.com"
+          <> " && git config user.name test"
+          <> " && git commit -q --allow-empty -m init"
+          <> " && git worktree add -q " <> wtDir
+        gitRepoStatus wtDir
+      scope "worktree .git file -> GitRepoWorktree" $
+        case worktree of
+          GitRepoWorktree _ -> ok
+          other -> crash $ "expected GitRepoWorktree, got " <> show other
+
+      -- `.git` is a file but doesn't contain a `gitdir:` pointer
+      malformed <- io $ withSystemTempDirectory "lamdera-git-malformed" $ \tmp -> do
+        writeUtf8 (tmp </> ".git") "not a gitdir line\n"
+        gitRepoStatus tmp
+      scope "malformed .git file -> GitRepoWorktreeBroken" $
+        case malformed of
+          GitRepoWorktreeBroken _ -> ok
+          other -> crash $ "expected GitRepoWorktreeBroken (malformed), got " <> show other
+
+      -- `.git` file points at a gitdir that doesn't exist
+      dangling <- io $ withSystemTempDirectory "lamdera-git-dangling" $ \tmp -> do
+        writeUtf8 (tmp </> ".git") "gitdir: /no/such/git/dir\n"
+        gitRepoStatus tmp
+      scope "dangling gitdir pointer -> GitRepoWorktreeBroken" $
+        case dangling of
+          GitRepoWorktreeBroken _ -> ok
+          other -> crash $ "expected GitRepoWorktreeBroken (dangling), got " <> show other
   ]
 
 
