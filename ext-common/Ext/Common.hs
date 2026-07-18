@@ -79,6 +79,17 @@ isDebug_ :: Bool
 isDebug_ = unsafePerformIO $ isDebug
 
 
+-- Cached presence check for an environment variable. Intended for top-level
+-- bindings with a {-# NOINLINE #-} pragma so the env lookup happens once at
+-- program start, then the result is reused on every call.
+envFlag :: String -> Bool
+envFlag name = unsafePerformIO $ do
+  m <- Env.lookupEnv name
+  case m of
+    Just _ -> return True
+    Nothing -> return False
+
+
 isProdEnv =
   case ostype of
     MacOS -> False

@@ -36,6 +36,9 @@ import qualified System.Exit as Exit
 import qualified System.Info as Info
 import System.IO (hFlush, hPutStr, hPutStrLn, stderr, stdout)
 
+import qualified File
+import qualified Elm.Interface as I
+
 import qualified Elm.ModuleName as ModuleName
 import qualified Elm.Package as Pkg
 import qualified Elm.Version as V
@@ -347,14 +350,22 @@ buildLoop chan done =
               buildLoop chan done1
 
         Right result ->
-          let
-            !message = toFinalMessage done result
-            !width = 12 + length (show done)
-          in
-          Lamdera.atomicPutStrLn $
-            if length message < width
-            then '\r' : replicate width ' ' ++ '\r' : message
-            else '\r' : message
+          do  (writeMs, readMs) <- File.getFileTimings
+              buildPoolMs       <- I.getDedupTimings
+              let
+                !message = toFinalMessage done result
+                !width = 12 + length (show done)
+              Lamdera.atomicPutStrLn $
+                if length message < width
+                then '\r' : replicate width ' ' ++ '\r' : message
+                else '\r' : message
+              when (writeMs > 0 || readMs > 0) $
+                Lamdera.atomicPutStrLn $
+                  "[FILE-TIMING] writeBinary=" ++ show writeMs
+                  ++ "ms readBinary=" ++ show readMs ++ "ms"
+              when (buildPoolMs > 0) $
+                Lamdera.atomicPutStrLn $
+                  "[DEDUP-TIMING] buildPool=" ++ show buildPoolMs ++ "ms"
 
 
 toFinalMessage :: Int -> BResult a -> [Char]
