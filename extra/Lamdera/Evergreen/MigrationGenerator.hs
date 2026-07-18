@@ -33,8 +33,8 @@ import qualified Lamdera.Wire3.Helpers
 import Lamdera.Evergreen.MigrationGeneratorHelpers
 import Lamdera.Evergreen.MigrationSpecialCases
 
-betweenVersions :: CoreTypeDiffs -> Int -> Int -> String -> IO Text
-betweenVersions coreTypeDiffs oldVersion newVersion root = do
+betweenVersions :: Bool -> CoreTypeDiffs -> Int -> Int -> String -> IO Text
+betweenVersions onlyPreserveBackend coreTypeDiffs oldVersion newVersion root = do
     let
         paths = NE.List ("src/Evergreen/V" <> show oldVersion <> "/Types.elm") ["src/Evergreen/V" <> show newVersion <> "/Types.elm"]
         moduleNameString = "Evergreen.V" <> show newVersion <> ".Types"
@@ -46,26 +46,29 @@ betweenVersions coreTypeDiffs oldVersion newVersion root = do
       case Map.lookup (N.fromChars moduleNameString) interfaces of
         Just interface -> do
           debug $ "starting generatefor"
-          generateFor coreTypeDiffs oldVersion newVersion interfaces (interfaces Sanity.! (N.fromChars $ "Evergreen.V" <> show newVersion <> ".Types"))
+          generateFor onlyPreserveBackend coreTypeDiffs oldVersion newVersion interfaces (interfaces Sanity.! (N.fromChars $ "Evergreen.V" <> show newVersion <> ".Types"))
 
         Nothing ->
           error $ "Fatal: could not find the module `" <> moduleNameString <> "`, please report this issue in Discord with your project code."
 
     pure $ Ext.ElmFormat.formatOrPassthrough res
 
-generateFor :: CoreTypeDiffs -> Int -> Int -> Interfaces -> Interface.Interface -> IO Text
-generateFor coreTypeDiffs oldVersion newVersion interfaces iface_Types = do
+generateFor :: Bool -> CoreTypeDiffs -> Int -> Int -> Interfaces -> Interface.Interface -> IO Text
+generateFor onlyPreserveBackend coreTypeDiffs oldVersion newVersion interfaces iface_Types = do
   let
     moduleName :: ModuleName.Canonical
     moduleName = ModuleName.Canonical (Pkg.Name "author" "project") (N.fromChars $ "Evergreen.V" <> show newVersion <> ".Types")
 
     migrationModuleText = T.concat ["Evergreen.Migrate.V", show_ newVersion]
 
+    typeDidChange t oldHash newHash =
+      oldHash /= newHash && not (onlyPreserveBackend && t /= N.fromChars "BackendModel")
+
     coreMigrations :: [(N.Name, Migration)]
     coreMigrations =
       coreTypeDiffs
         & fmap (\(t, oldHash, newHash) ->
-            (t, coreTypeMigration (oldHash /= newHash) oldVersion newVersion interfaces moduleName t iface_Types)
+            (t, coreTypeMigration (typeDidChange t oldHash newHash) oldVersion newVersion interfaces moduleName t iface_Types)
         )
   pure $ migrationsToFile migrationModuleText oldVersion newVersion coreMigrations moduleName
 

@@ -60,15 +60,16 @@ data Flags =
   Flags
     { _destructiveMigration :: Bool
     , _force :: Bool
+    , _onlyPreserveBackend :: Bool
     }
 
 
 run_ :: IO ()
-run_ = run () (Lamdera.CLI.Check.Flags { _destructiveMigration = False, _force = False })
+run_ = run () (Lamdera.CLI.Check.Flags { _destructiveMigration = False, _force = False, _onlyPreserveBackend = False })
 
 
 run :: () -> Lamdera.CLI.Check.Flags -> IO ()
-run () flags@(Lamdera.CLI.Check.Flags destructiveMigration force) = do
+run () flags@(Lamdera.CLI.Check.Flags destructiveMigration force onlyPreserveBackend) = do
   debug_ "Starting check..."
 
   inProduction_ <- Lamdera.inProduction
@@ -94,7 +95,7 @@ run () flags@(Lamdera.CLI.Check.Flags destructiveMigration force) = do
 
 
 runHelp :: () -> Lamdera.CLI.Check.Flags -> IO ()
-runHelp () flags@(Lamdera.CLI.Check.Flags destructiveMigration force) = do
+runHelp () flags@(Lamdera.CLI.Check.Flags destructiveMigration force onlyPreserveBackend) = do
   Lamdera.setCheckMode True
 
   -- appNameEnvM <- Env.lookupEnv "LAMDERA_APP_NAME"
@@ -321,7 +322,7 @@ onlineCheck root appName inDebug localTypes externalTypeWarnings isHoistRebuild 
                       then
                         Lamdera.Evergreen.MigrationDestructive.generate lastLocalTypeChangeVersion nextVersion typeCompares
                       else
-                        Lamdera.Evergreen.MigrationGenerator.betweenVersions typeCompares lastLocalTypeChangeVersion nextVersion root
+                        Lamdera.Evergreen.MigrationGenerator.betweenVersions onlyPreserveBackend typeCompares lastLocalTypeChangeVersion nextVersion root
                   writeUtf8 nextMigrationPath defaultMigrations
 
                   Progress.throw $

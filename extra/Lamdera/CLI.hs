@@ -90,6 +90,7 @@ check =
       flags Lamdera.CLI.Check.Flags
         |-- onOff "destructive-migration" "Generate a migration that will drop all production data when deployed, instead of the usual automatic migration generation."
         |-- onOff "force" "Force a production check for Evergreen, even if we're on a non main/master branch (i.e. a preview). You shouldn't be using this unless you know what you're doing."
+        |-- onOff "only-preserve-backend" "Generate migrations that only preserve the BackendModel; all other types use ModelUnchanged/MsgUnchanged."
   in
   Terminal.Command "check" (Common summary) details example noArgs checkFlags Lamdera.CLI.Check.run
 
