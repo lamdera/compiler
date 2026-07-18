@@ -148,10 +148,11 @@ suite =
             expectTextContains jsOutput "$Main$b2$ = function (m, n) {"
             expectTextContains jsOutput "$Main$cyclic$b1()"
             expectTextContains jsOutput "$Main$b2 = F2("
-            expectTextContains jsOutput "$Main$cyclic$b1 = "
+            expectTextContains jsOutput "$Main$cyclic$b1() {"
             expectTextContains jsOutput "$Main$b1 ="
+            expectTextContains jsOutput "$Main$b1$ = function ("
             expectTextContains jsOutput "$Main$cyclic$b1 = function () {"
-            expectTextContains jsOutput "$Main$b1, 1, 1)" -- A2
+            expectTextContains jsOutput "$Main$b1$(1, 1)"
             expectTextContains jsOutput "$Main$b2$(1, 1)"
 
         Nothing ->
@@ -196,7 +197,9 @@ suite =
             expectTextContains jsOutput "$Main$a2, 1, 2);"
             expectTextContains jsOutput "$Main$a1 ="
             expectTextContains jsOutput "$Main$cyclic$a1 = function () {"
-            expectTextContains jsOutput "$Main$a1, 3, 4, 5)" -- A3
+            expectTextContains jsOutput "$Main$a1$ = function ("
+            expectTextContains jsOutput "$Main$a2(1, 2, "
+            expectTextContains jsOutput "$Main$a1$(3, 4, 5)"
             expectTextContains jsOutput "$Main$a2$(1, 2, 3, 4, 5)"
 
         Nothing ->

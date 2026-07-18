@@ -300,7 +300,7 @@ generateCycle mode argLookup (Opt.Global home _) names values functions =
   JS.Block
     [ JS.Block $ map (generateCycleFunc mode argLookup home) functions
     , JS.Block $ map (generateSafeCycle mode argLookup home) values
-    , case map (generateRealCycle home) values of
+    , case map (generateRealCycle mode argLookup home) values of
         [] ->
           JS.EmptyStmt
 
@@ -352,16 +352,21 @@ generateSafeCycle mode argLookup home (name, expr) =
     Expr.codeToStmtList (Expr.generate mode argLookup expr)
 
 
-generateRealCycle :: ModuleName.Canonical -> (Name.Name, expr) -> JS.Stmt
-generateRealCycle home (name, _) =
+generateRealCycle :: Mode.Mode -> FnArgLookup -> ModuleName.Canonical -> (Name.Name, Opt.Expr) -> JS.Stmt
+generateRealCycle mode argLookup home (name, code) =
   let
     safeName = JsName.fromCycle home name
     realName = JsName.fromGlobal home name
+    directFnName = JsName.fromGlobalDirectFn home name
   in
   JS.Block
     [ JS.Var realName (JS.Call (JS.Ref safeName) [])
     , JS.ExprStmt $ JS.Assign (JS.LRef safeName) $
         JS.Function Nothing [] [ JS.Return (JS.Ref realName) ]
+    , JS.Var directFnName
+        (JS.Function Nothing (error "TODO args")
+          (Expr.codeToStmtList (Expr.generate mode argLookup (error "TODO call with our args and generated args")))
+        )
     ]
 
 
@@ -645,7 +650,7 @@ makeArgLookup graph home name =
 
     Just (Opt.Link global) ->
       case Map.lookup global graph of
-        Just (Opt.Cycle names _ defs _) ->
+        Just (Opt.Cycle names values defs _) ->
           case List.find (\d -> defName d == name) defs of
             Just (Opt.Def _ (Opt.Function args _)) ->
               Just (length args)
@@ -654,10 +659,20 @@ makeArgLookup graph home name =
               Just (length args)
 
             _ ->
-              -- This disables direct function calls eg. for mutually recursive
-              -- functions (with or without partial application). These are
-              -- technically possible but not implemented here.
-              Nothing
+              case List.find (\(valueName,_) -> valueName == name) values of
+                Just (_, Opt.VarGlobal (Opt.Global home_ name_)) ->
+                  makeArgLookup graph home_ name_
+
+                Just (_, Opt.Call (Opt.VarGlobal (Opt.Global home_ name_)) args) ->
+                  case makeArgLookup graph home_ name_ of
+                    Just otherFn ->
+                      Just (otherFn - length args)
+                
+                    Nothing -> 
+                      error (show names)
+
+                _ -> 
+                  error (show names)
 
         _ ->
           Nothing
