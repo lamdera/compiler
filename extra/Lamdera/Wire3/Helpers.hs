@@ -66,19 +66,83 @@ getForeignSig tipe moduleName generatedName ifaces =
         -- So add type-sig for failure encoder or decoder as appropriate.
         if T.isPrefixOf "w3_encode_" (T.pack $ Data.Name.toChars generatedName)
           then
-            (Forall
-               (Map.fromList [("a", ())])
-               (TLambda (TVar "a") tLamdera_Wire_Encoder))
+            let
+              genNameStr = Data.Name.toChars generatedName
+              typeNameStr = drop 10 genNameStr  -- Remove "w3_encode_" prefix (10 chars)
+              customEncoderName = Data.Name.fromChars $ "encode" ++ typeNameStr
+
+              -- Only show error for user packages, not elm/* core packages
+              isUserPackage = case moduleName of
+                Module.Canonical (Name author _) _ -> author /= "elm" && author /= "lamdera"
+            in
+            case (foreignTypeSig moduleName customEncoderName ifaces, isUserPackage) of
+              (Just _, True) ->
+                error $ unlines
+                  [ ""
+                  , "-- WIRE3 ENCODER NOT SUPPORTED -----------------------------------------"
+                  , ""
+                  , "I found a custom Wire3 encoder for an opaque type:"
+                  , ""
+                  , "    " ++ typeNameStr
+                  , ""
+                  , "This type cannot be used in BackendModel or FrontendModel without"
+                  , "compiler support."
+                  , ""
+                  , "To fix this:"
+                  , ""
+                  , "1. Remove this type from your BackendModel/FrontendModel, OR"
+                  , ""
+                  , "2. Expose the type constructor in the module (less efficient), OR"
+                  , ""
+                  , "3. Add compiler support (contact Lamdera team)"
+                  , ""
+                  ]
+              _ ->
+                (Forall
+                   (Map.fromList [("a", ())])
+                   (TLambda (TVar "a") tLamdera_Wire_Encoder))
 
           else if T.isPrefixOf "w3_decode_" (T.pack $ Data.Name.toChars generatedName)
             then
-              (Forall
-                 (Map.fromList [("a", ())])
-                 (TAlias
-                    mLamdera_Wire
-                    "Decoder"
-                    [("a", TVar "a")]
-                    (Filled (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [TVar "a"]))))
+              let
+                genNameStr = Data.Name.toChars generatedName
+                typeNameStr = drop 10 genNameStr  -- Remove "w3_decode_" prefix (10 chars)
+                customDecoderName = Data.Name.fromChars $ "decode" ++ typeNameStr
+
+                -- Only show error for user packages, not elm/* core packages
+                isUserPackage = case moduleName of
+                  Module.Canonical (Name author _) _ -> author /= "elm" && author /= "lamdera"
+              in
+              case (foreignTypeSig moduleName customDecoderName ifaces, isUserPackage) of
+                (Just _, True) ->
+                  error $ unlines
+                    [ ""
+                    , "-- WIRE3 DECODER NOT SUPPORTED -----------------------------------------"
+                    , ""
+                    , "I found a custom Wire3 decoder for an opaque type:"
+                    , ""
+                    , "    " ++ typeNameStr
+                    , ""
+                    , "This type cannot be used in BackendModel or FrontendModel without"
+                    , "compiler support."
+                    , ""
+                    , "To fix this:"
+                    , ""
+                    , "1. Remove this type from your BackendModel/FrontendModel, OR"
+                    , ""
+                    , "2. Expose the type constructor in the module (less efficient), OR"
+                    , ""
+                    , "3. Add compiler support (contact Lamdera team)"
+                    , ""
+                    ]
+                _ ->
+                  (Forall
+                     (Map.fromList [("a", ())])
+                     (TAlias
+                        mLamdera_Wire
+                        "Decoder"
+                        [("a", TVar "a")]
+                        (Filled (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [TVar "a"]))))
             else
               error $ "impossible getForeignSig on non-wire function: " ++ Data.Name.toChars generatedName
 
