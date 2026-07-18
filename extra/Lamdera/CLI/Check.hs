@@ -455,6 +455,9 @@ getLocalInfo = do
 
 getProdInfo :: Text -> Bool -> Maybe String -> Int -> Bool -> [Text] -> IO (Int, [Text], Int)
 getProdInfo appName inProduction_ forceNotProd forceVersion isHoistRebuild localTypes = do
+  -- LAMDERA_BOOTSTRAP, when set, treats the app as a fresh v0 instead of
+  -- fetching prior version info.
+  bootstrapM <- Env.lookupEnv "LAMDERA_BOOTSTRAP"
   (prodVersion, productionTypes) <-
     if isHoistRebuild
       then do
@@ -465,6 +468,11 @@ getProdInfo appName inProduction_ forceNotProd forceVersion isHoistRebuild local
           else do
             debug_ $ "❗️Gen with forced version: " <> show forceVersion
             pure (forceVersion, localTypes)
+
+      else if bootstrapM /= Nothing
+      then do
+        debug_ "❗️[LAMDERA_BOOTSTRAP] skipping production info fetch, assuming fresh v0 app"
+        pure (0, localTypes)
 
       else do
 
@@ -625,23 +633,29 @@ replaceSnapshotTypeReferences migrationPath version = do
 
 
 fetchProductionInfo :: Text -> Bool -> IO (Either Lamdera.Http.Error (Int, [Text]))
-fetchProductionInfo appName useLocal =
+fetchProductionInfo appName useLocal = do
+  -- Prefer a local unix socket when present, otherwise use HTTP.
+  appSocket <- Lamdera.Http.socketPathIfExists appName
   let
     endpoint =
-      if (textContains "-local" appName && ostype == MacOS) || useLocal
-        then
-          -- "https://" <> T.unpack appName <> ".lamdera.test/_i"
-          "http://" <> T.unpack appName <> ".lamdera.test/_i"
+      case appSocket of
+        Just _ ->
+          "http://" <> T.unpack appName <> ".lamdera.app/_i"
 
-        else
-          "https://" <> T.unpack appName <> ".lamdera.app/_i"
+        Nothing ->
+          if (textContains "-local" appName && ostype == MacOS) || useLocal
+            then
+              -- "https://" <> T.unpack appName <> ".lamdera.test/_i"
+              "http://" <> T.unpack appName <> ".lamdera.test/_i"
+
+            else
+              "https://" <> T.unpack appName <> ".lamdera.app/_i"
 
     decoder =
       D.succeed (,)
         & D.required "v" D.int
         & D.required "h" (D.list D.text)
-  in
-  Lamdera.Http.normalJson "lamdera-info" endpoint decoder
+  Lamdera.Http.normalJsonVia appSocket "lamdera-info" endpoint decoder
 
 
 checkUserProjectCompiles :: FilePath -> Bool -> IO ()

@@ -291,13 +291,20 @@ extract rawConfig = do
 
 fetchAppConfigItems :: Text -> Text -> IO (Either Lamdera.Http.Error (WithErrorField [(Text, Text, Bool, Bool)]))
 fetchAppConfigItems appName token = do
+  -- Prefer a local unix socket when present, otherwise use HTTP.
+  dashboardSocket <- Lamdera.Http.socketPathIfExists "dashboard"
   let
     endpoint =
-      if textContains "-local" appName
-        then
-          "http://localhost:8082/_r/configItemsJson"
-        else
-          "https://dashboard.lamdera.app/_r/configItemsJson"
+      case dashboardSocket of
+        Just _ ->
+          "http://dashboard.lamdera.app/_r/configItemsJson"
+
+        Nothing ->
+          if textContains "-local" appName
+            then
+              "http://localhost:8082/_r/configItemsJson"
+            else
+              "https://dashboard.lamdera.app/_r/configItemsJson"
 
     body =
       E.object
@@ -318,7 +325,7 @@ fetchAppConfigItems appName token = do
             & fmap ErrorField
         ]
 
-  Lamdera.Http.normalRpcJson "fetchAppConfigItems" body endpoint decoder
+  Lamdera.Http.normalRpcJsonVia dashboardSocket "fetchAppConfigItems" body endpoint decoder
 
 
 resultOrThrow :: Either Error (WithErrorField a) -> String -> IO a
@@ -349,6 +356,17 @@ throwRequestFail text =
 
 checkUserConfig :: Text -> Maybe Text -> IO ()
 checkUserConfig appName prodTokenM = do
+  -- LAMDERA_BOOTSTRAP, when set, skips the config check.
+  bootstrapM <- Env.lookupEnv "LAMDERA_BOOTSTRAP"
+  case bootstrapM of
+    Just _ ->
+      progress "Config items okay (LAMDERA_BOOTSTRAP: skipped prod config check)."
+    Nothing ->
+      checkUserConfig_ appName prodTokenM
+
+
+checkUserConfig_ :: Text -> Maybe Text -> IO ()
+checkUserConfig_ appName prodTokenM = do
   token <-
     case prodTokenM of
       Just token ->
@@ -466,7 +484,10 @@ injectConfig graph = do
   -- isTypeSnapshot <- Lamdera.isTypeSnapshot -- @TODO confirm this is right
   inProduction <- Lamdera.inProduction
 
-  if inProduction -- && not isTypeSnapshot  -- @TODO confirm this is right
+  -- LAMDERA_BOOTSTRAP, when set, skips config injection.
+  bootstrapM <- Env.lookupEnv "LAMDERA_BOOTSTRAP"
+
+  if inProduction && bootstrapM == Nothing -- && not isTypeSnapshot  -- @TODO confirm this is right
     then do
       debug "💉 Injecting production config"
 

@@ -52,3 +52,4 @@ nix:
   packages:
     - pkg-config
     - zlib
+    - esbuild

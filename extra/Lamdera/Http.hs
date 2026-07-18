@@ -6,8 +6,12 @@ module Lamdera.Http where
 -}
 
 import qualified Data.ByteString.Char8 as BS
+import qualified Data.Text as T
 import qualified Network.HTTP.Client as HTTP
 import qualified Network.HTTP.Types.Header as Http
+import qualified Network.Socket as NS
+import qualified Network.Socket.ByteString as NSB
+import qualified System.Directory as Dir
 
 import qualified Http
 import qualified Json.Decode as D
@@ -41,10 +45,58 @@ jsonHeaders =
     ]
 
 
+{-| The directory holding unix sockets: /run/lamdera-sockets if present, else
+~/lamdera-sockets. -}
+socketDir :: IO FilePath
+socketDir = do
+  onServer <- Dir.doesDirectoryExist "/run/lamdera-sockets"
+  if onServer
+    then pure "/run/lamdera-sockets"
+    else do
+      home <- Dir.getHomeDirectory
+      pure (home <> "/lamdera-sockets")
+
+
+{-| The unix socket path for a given name, if one exists locally. -}
+socketPathIfExists :: Text -> IO (Maybe FilePath)
+socketPathIfExists name = do
+  dir <- socketDir
+  let path = dir <> "/" <> T.unpack name <> ".sock"
+  -- Sockets aren't regular files, so doesPathExist (not doesFileExist).
+  exists <- Dir.doesPathExist path
+  pure $ if exists then Just path else Nothing
+
+
+{-| An HTTP Manager that connects to a unix socket instead of a TCP host/port.
+The request URL's host is still used for the Host header; the raw connection
+override ignores it and dials the socket. -}
+socketManager :: FilePath -> IO HTTP.Manager
+socketManager path =
+  HTTP.newManager HTTP.defaultManagerSettings
+    { HTTP.managerRawConnection = pure $ \_ _ _ -> do
+        sock <- NS.socket NS.AF_UNIX NS.Stream NS.defaultProtocol
+        NS.connect sock (NS.SockAddrUnix path)
+        HTTP.makeConnection
+          (NSB.recv sock 8192)
+          (NSB.sendAll sock)
+          (NS.close sock)
+    }
+
+
+managerFor :: Maybe FilePath -> IO HTTP.Manager
+managerFor Nothing = Http.getManager
+managerFor (Just path) = socketManager path
+
+
 normalJson :: (Show a) => String -> String -> D.Decoder () a -> IO (Either Error a)
-normalJson debugIdentifier url decoder = do
-  manager <- Http.getManager
-  debug $ "HTTP GET " <> url <> " (" <> debugIdentifier <> ")"
+normalJson = normalJsonVia Nothing
+
+
+{-| Like normalJson, but routed over a unix socket when a path is given. -}
+normalJsonVia :: (Show a) => Maybe FilePath -> String -> String -> D.Decoder () a -> IO (Either Error a)
+normalJsonVia msocket debugIdentifier url decoder = do
+  manager <- managerFor msocket
+  debug $ "HTTP GET " <> url <> " (" <> debugIdentifier <> ")" <> maybe "" (\s -> " via socket " <> s) msocket
   Http.get manager url jsonHeaders HttpError $ \body ->
     case D.fromByteString decoder body of
       Right content ->
@@ -63,9 +115,14 @@ data Error
 
 
 normalRpcJson :: String -> E.Value -> String -> D.Decoder () a -> IO (Either Error a)
-normalRpcJson debugIdentifier body url decoder = do
-  manager <- Http.getManager
-  debug $ "POSTING   " <> url <> " (" <> debugIdentifier <> ", " <> show body <> ")"
+normalRpcJson = normalRpcJsonVia Nothing
+
+
+{-| Like normalRpcJson, but routed over a unix socket when a path is given. -}
+normalRpcJsonVia :: Maybe FilePath -> String -> E.Value -> String -> D.Decoder () a -> IO (Either Error a)
+normalRpcJsonVia msocket debugIdentifier body url decoder = do
+  manager <- managerFor msocket
+  debug $ "POSTING   " <> url <> " (" <> debugIdentifier <> ", " <> show body <> ")" <> maybe "" (\s -> " via socket " <> s) msocket
   Http.postBody manager url jsonHeaders body HttpError $ \body ->
     case D.fromByteString decoder body of
       Right content ->
