@@ -57,6 +57,7 @@ import qualified Reporting.Annotation as A
 
 
 import qualified Json.Encode as E -- @LAMDERA
+import qualified Data.Scientific as Sci
 import qualified Data.Text as T
 import qualified Control.Monad
 
@@ -477,6 +478,7 @@ data AST_
   | Object [(P.Snippet, AST)]
   | String P.Snippet
   | Int Int
+  | Number Sci.Scientific -- @LAMDERA
   | TRUE
   | FALSE
   | NULL
@@ -531,7 +533,7 @@ pValue =
     [ String <$> pString Start
     , pObject
     , pArray
-    , pInt
+    , pNumber
     , K.k4 0x74 0x72 0x75 0x65      Start >> return TRUE
     , K.k5 0x66 0x61 0x6C 0x73 0x65 Start >> return FALSE
     , K.k4 0x6E 0x75 0x6C 0x6C      Start >> return NULL
@@ -744,73 +746,128 @@ eatSpaces pos end row col =
 
 
 
--- INTS
+-- NUMBERS
+--
+-- @LAMDERA: this parser originally only accepted non-negative integers (the
+-- only number shape elm.json uses) and rejected anything else with NoFloats.
+-- That made `lamdera live` unable to relay RPC responses containing values
+-- like 42.5 or -3. Plain integers still come out as `Int`; numbers with a
+-- minus sign, a fraction or an exponent come out as `Number`.
 
 
-pInt :: Parser AST_
-pInt =
+pNumber :: Parser AST_
+pNumber =
   P.Parser $ \(P.State src pos end indent row col) cok _ cerr eerr ->
-    if pos >= end then
+    let
+      (negative, digitsPos) =
+        if pos < end && P.unsafeIndex pos == 0x2D {---} then
+          (True, plusPtr pos 1)
+        else
+          (False, pos)
+    in
+    if digitsPos >= end || not (isDecimalDigit (P.unsafeIndex digitsPos)) then
       eerr row col Start
 
+    else if P.unsafeIndex digitsPos == 0x30 {-0-} && plusPtr digitsPos 1 < end && isDecimalDigit (P.unsafeIndex (plusPtr digitsPos 1)) then
+      cerr row (col + fromIntegral (minusPtr digitsPos pos) + 1) NoLeadingZeros
+
     else
-      let !word = P.unsafeIndex pos in
-      if not (isDecimalDigit word) then
-        eerr row col Start
-
-      else if word == 0x30 {-0-} then
-
-        let
-          !pos1 = plusPtr pos 1
-          !newState = P.State src pos1 end indent row (col + 1)
-        in
-        if pos1 < end then
-          let !word1 = P.unsafeIndex pos1 in
-          if isDecimalDigit word1 then
-            cerr row (col + 1) NoLeadingZeros
-          else if word1 == 0x2E {-.-} then
-            cerr row (col + 1) NoFloats
+      case chompNumber digitsPos end of
+        Right (coefficient, exponent, isInt, newPos) ->
+          let
+            !len = fromIntegral (minusPtr newPos pos)
+            !newState = P.State src newPos end indent row (col + len)
+            !signed = if negative then negate coefficient else coefficient
+          in
+          if isInt then
+            cok (Int (fromInteger signed)) newState
           else
-            cok (Int 0) newState
-        else
-          cok (Int 0) newState
+            cok (Number (Sci.scientific signed exponent)) newState
 
+        Left errPos ->
+          cerr row (col + fromIntegral (minusPtr errPos pos)) NoFloats
+
+
+{-| Chomps digits [ '.' digits ] [ ('e'|'E') ['+'|'-'] digits ] starting at a
+decimal digit. Returns the coefficient with the decimal point removed, the
+base 10 exponent, whether the literal was a plain integer, and the position
+after the literal. Malformed tails like "1." or "2e" report the position of
+the missing digits.
+-}
+chompNumber :: Ptr Word8 -> Ptr Word8 -> Either (Ptr Word8) (Integer, Int, Bool, Ptr Word8)
+chompNumber pos end =
+  let
+    (intPart, afterInt) = chompDigits pos end 0
+  in
+  case wordAt afterInt end of
+    Just 0x2E {-.-} ->
+      let
+        (coefficient, afterFraction) = chompDigits (plusPtr afterInt 1) end intPart
+      in
+      if afterFraction == plusPtr afterInt 1 then
+        Left afterFraction
       else
         let
-          (# status, n, newPos #) =
-            chompInt (plusPtr pos 1) end (fromIntegral (word - 0x30 {-0-}))
-
-          !len = fromIntegral (minusPtr newPos pos)
+          !fractionDigits = fromIntegral (minusPtr afterFraction afterInt) - 1
         in
-        case status of
-          GoodInt ->
-            let
-              !newState =
-                P.State src newPos end indent row (col + len)
-            in
-            cok (Int n) newState
+        case wordAt afterFraction end of
+          Just word | isExponentStart word ->
+            fmap
+              (\(e, afterExponent) -> (coefficient, e - fractionDigits, False, afterExponent))
+              (chompExponent afterFraction end)
 
-          BadIntEnd ->
-            cerr row (col + len) NoFloats
+          _ ->
+            Right (coefficient, negate fractionDigits, False, afterFraction)
+
+    Just word | isExponentStart word ->
+      fmap
+        (\(e, afterExponent) -> (intPart, e, False, afterExponent))
+        (chompExponent afterInt end)
+
+    _ ->
+      Right (intPart, 0, True, afterInt)
 
 
-data IntStatus = GoodInt | BadIntEnd
+{-| Position is at 'e' or 'E'. -}
+chompExponent :: Ptr Word8 -> Ptr Word8 -> Either (Ptr Word8) (Int, Ptr Word8)
+chompExponent pos end =
+  let
+    afterMarker = plusPtr pos 1
 
+    (negative, digitsPos) =
+      case wordAt afterMarker end of
+        Just 0x2D {---} -> (True, plusPtr afterMarker 1)
+        Just 0x2B {-+-} -> (False, plusPtr afterMarker 1)
+        _ -> (False, afterMarker)
 
-chompInt :: Ptr Word8 -> Ptr Word8 -> Int -> (# IntStatus, Int, Ptr Word8 #)
-chompInt pos end n =
-  if pos < end then
-    let !word = P.unsafeIndex pos in
-    if isDecimalDigit word then
-      let !m = 10 * n + fromIntegral (word - 0x30 {-0-}) in
-      chompInt (plusPtr pos 1) end m
-    else if word == 0x2E {-.-} || word == 0x65 {-e-} || word == 0x45 {-E-} then
-      (# BadIntEnd, n, pos #)
-    else
-      (# GoodInt, n, pos #)
-
+    (e, newPos) = chompDigits digitsPos end 0
+  in
+  if newPos == digitsPos then
+    Left newPos
   else
-    (# GoodInt, n, pos #)
+    Right (if negative then negate (fromInteger e) else fromInteger e, newPos)
+
+
+chompDigits :: Ptr Word8 -> Ptr Word8 -> Integer -> (Integer, Ptr Word8)
+chompDigits pos end n =
+  case wordAt pos end of
+    Just word | isDecimalDigit word ->
+      chompDigits (plusPtr pos 1) end (10 * n + fromIntegral (word - 0x30 {-0-}))
+
+    _ ->
+      (n, pos)
+
+
+{-# INLINE wordAt #-}
+wordAt :: Ptr Word8 -> Ptr Word8 -> Maybe Word8
+wordAt pos end =
+  if pos < end then Just (P.unsafeIndex pos) else Nothing
+
+
+{-# INLINE isExponentStart #-}
+isExponentStart :: Word8 -> Bool
+isExponentStart word =
+  word == 0x65 {-e-} || word == 0x45 {-E-}
 
 
 {-# INLINE isDecimalDigit #-}
@@ -841,6 +898,9 @@ toEncodeValue (A.At region ast) =
 
     Int int ->
       E.Integer int
+
+    Number sci ->
+      E.Number sci
 
     TRUE ->
       E.Boolean True
