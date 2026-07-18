@@ -13,6 +13,7 @@ import qualified Data.Name as Name
 import qualified Data.NonEmptyList as NE
 import qualified Data.Vector as Vector
 import qualified Data.Vector.Mutable as MVector
+import qualified Data.IORef as IORef
 
 import qualified AST.Canonical as Can
 import qualified Reporting.Annotation as A
@@ -30,12 +31,19 @@ import qualified Type.UnionFind as UF
 -- RUN SOLVER
 
 
+-- | Cache for srcTypeToVar to avoid redundant conversion of large monomorphic types
+-- (e.g. FrontendModel with 100+ fields appearing in many function signatures).
+-- Keyed by (rank, Can.Type). Only used when flexVars is empty (truly monomorphic context).
+type SolveCache = IORef.IORef (Map.Map (Int, Can.Type) Variable)
+
+
 run :: Constraint -> IO (Either (NE.List Error.Error) (Map.Map Name.Name Can.Annotation))
 run constraint =
   do  pools <- MVector.replicate 8 []
+      cache <- IORef.newIORef Map.empty
 
       (State env _ errors) <-
-        solve Map.empty outermostRank pools emptyState constraint
+        solve cache Map.empty outermostRank pools emptyState constraint
 
       case errors of
         [] ->
@@ -72,8 +80,8 @@ data State =
     }
 
 
-solve :: Env -> Int -> Pools -> State -> Constraint -> IO State
-solve env rank pools state constraint =
+solve :: SolveCache -> Env -> Int -> Pools -> State -> Constraint -> IO State
+solve cache env rank pools state constraint =
   case constraint of
     CTrue ->
       return state
@@ -112,7 +120,7 @@ solve env rank pools state constraint =
                       Error.typeReplace expectation expectedType
 
     CForeign region name (Can.Forall freeVars srcType) expectation ->
-      do  actual <- srcTypeToVariable rank pools freeVars srcType
+      do  actual <- srcTypeToVariable cache rank pools freeVars srcType
           expected <- expectedToVariable rank pools expectation
           answer <- Unify.unify actual expected
           case answer of
@@ -142,17 +150,17 @@ solve env rank pools state constraint =
                       (Error.ptypeReplace expectation expectedType)
 
     CAnd constraints ->
-      foldM (solve env rank pools) state constraints
+      foldM (solve cache env rank pools) state constraints
 
     CLet [] flexs _ headerCon CTrue ->
       do  introduce rank pools flexs
-          solve env rank pools state headerCon
+          solve cache env rank pools state headerCon
 
     CLet [] [] header headerCon subCon ->
-      do  state1 <- solve env rank pools state headerCon
+      do  state1 <- solve cache env rank pools state headerCon
           locals <- traverse (A.traverse (typeToVariable rank pools)) header
           let newEnv = Map.union env (Map.map A.toValue locals)
-          state2 <- solve newEnv rank pools state1 subCon
+          state2 <- solve cache newEnv rank pools state1 subCon
           foldM occurs state2 $ Map.toList locals
 
     CLet rigids flexs header headerCon subCon ->
@@ -175,7 +183,7 @@ solve env rank pools state constraint =
           -- run solver in next pool
           locals <- traverse (A.traverse (typeToVariable nextRank nextPools)) header
           (State savedEnv mark errors) <-
-            solve env nextRank nextPools state headerCon
+            solve cache env nextRank nextPools state headerCon
 
           let youngMark = mark
           let visitMark = nextMark youngMark
@@ -190,7 +198,7 @@ solve env rank pools state constraint =
 
           let newEnv = Map.union env (Map.map A.toValue locals)
           let tempState = State savedEnv finalMark errors
-          newState <- solve newEnv rank nextPools tempState subCon
+          newState <- solve cache newEnv rank nextPools tempState subCon
 
           foldM occurs newState (Map.toList locals)
 
@@ -499,8 +507,8 @@ unit1 =
 -- SOURCE TYPE TO VARIABLE
 
 
-srcTypeToVariable :: Int -> Pools -> Map.Map Name.Name () -> Can.Type -> IO Variable
-srcTypeToVariable rank pools freeVars srcType =
+srcTypeToVariable :: SolveCache -> Int -> Pools -> Map.Map Name.Name () -> Can.Type -> IO Variable
+srcTypeToVariable cache rank pools freeVars srcType =
   let
     nameToContent name
       | Name.isNumberType     name = FlexSuper Number (Just name)
@@ -514,12 +522,33 @@ srcTypeToVariable rank pools freeVars srcType =
   in
   do  flexVars <- Map.traverseWithKey makeVar freeVars
       MVector.modify pools (Map.elems flexVars ++) rank
-      srcTypeToVar rank pools flexVars srcType
+      srcTypeToVar cache rank pools flexVars srcType
 
 
-srcTypeToVar :: Int -> Pools -> Map.Map Name.Name Variable -> Can.Type -> IO Variable
-srcTypeToVar rank pools flexVars srcType =
-  let go = srcTypeToVar rank pools flexVars in
+srcTypeToVar :: SolveCache -> Int -> Pools -> Map.Map Name.Name Variable -> Can.Type -> IO Variable
+srcTypeToVar cache rank pools flexVars srcType =
+  -- Memoize when no flex vars are in scope (truly monomorphic context).
+  -- This is safe because the resulting Variable depends only on (rank, srcType).
+  -- Sharing the Variable between call sites is correct: unifications target the
+  -- shared Variable's descriptor, but for concrete types the descriptor matches
+  -- everywhere it's used. Free type variables (TVar) would break this, hence the
+  -- guard on flexVars.
+  if Map.null flexVars
+    then do
+      cached <- IORef.readIORef cache
+      case Map.lookup (rank, srcType) cached of
+        Just v -> return v
+        Nothing -> do
+          v <- srcTypeToVarReal cache rank pools flexVars srcType
+          IORef.modifyIORef' cache (Map.insert (rank, srcType) v)
+          return v
+    else
+      srcTypeToVarReal cache rank pools flexVars srcType
+
+
+srcTypeToVarReal :: SolveCache -> Int -> Pools -> Map.Map Name.Name Variable -> Can.Type -> IO Variable
+srcTypeToVarReal cache rank pools flexVars srcType =
+  let go = srcTypeToVar cache rank pools flexVars in
   case srcType of
     Can.TLambda argument result ->
       do  argVar <- go argument
@@ -534,7 +563,7 @@ srcTypeToVar rank pools flexVars srcType =
           register rank pools (Structure (App1 home name argVars))
 
     Can.TRecord fields maybeExt ->
-      do  fieldVars <- traverse (srcFieldTypeToVar rank pools flexVars) fields
+      do  fieldVars <- traverse (srcFieldTypeToVar cache rank pools flexVars) fields
           extVar <-
             case maybeExt of
               Nothing -> register rank pools emptyRecord1
@@ -555,7 +584,7 @@ srcTypeToVar rank pools flexVars srcType =
           aliasVar <-
             case aliasType of
               Can.Holey tipe ->
-                srcTypeToVar rank pools (Map.fromList argVars) tipe
+                srcTypeToVar cache rank pools (Map.fromList argVars) tipe
 
               Can.Filled tipe ->
                 go tipe
@@ -563,9 +592,9 @@ srcTypeToVar rank pools flexVars srcType =
           register rank pools (Alias home name argVars aliasVar)
 
 
-srcFieldTypeToVar :: Int -> Pools -> Map.Map Name.Name Variable -> Can.FieldType -> IO Variable
-srcFieldTypeToVar rank pools flexVars (Can.FieldType _ srcTipe) =
-  srcTypeToVar rank pools flexVars srcTipe
+srcFieldTypeToVar :: SolveCache -> Int -> Pools -> Map.Map Name.Name Variable -> Can.FieldType -> IO Variable
+srcFieldTypeToVar cache rank pools flexVars (Can.FieldType _ srcTipe) =
+  srcTypeToVar cache rank pools flexVars srcTipe
 
 
 
