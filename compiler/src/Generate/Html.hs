@@ -71,9 +71,12 @@ sandwich_ root moduleName javascript =
           customHead
         else
           "<title>" <> name <> "</title>"
+
+    htmlTag = Lamdera.unsafe $ Lamdera.Live.lamderaHtmlLang root
   in
-  [r|<!DOCTYPE HTML>
-<html>
+  "<!DOCTYPE HTML>\n"
+  <> htmlTag
+  <> [r|
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, minimum-scale=1.0">
