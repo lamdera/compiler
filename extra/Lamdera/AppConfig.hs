@@ -10,6 +10,8 @@ import qualified Data.Set as Set
 import qualified Data.List as List
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
+import Data.Char (ord)
+import Numeric (showHex)
 import qualified System.Environment as Env
 import System.FilePath ((</>))
 import System.Exit (exitFailure)
@@ -511,7 +513,7 @@ injectConfig graph = do
                             Just (name, value, used, secret) -> do
                               -- let !_ = debugNote ("Injecting prod value for Env." <> name) value
                               -- Exists in prod, drop
-                              Define (Str (Utf8.fromChars . T.unpack $ value)) gDeps
+                              Define (Str (Utf8.fromChars . T.unpack $ escapeInjectedStr value)) gDeps
 
                             Nothing -> do
                               let !_ = debugHaskell "impossible missing config item" (t, prodConfigMap)
@@ -528,3 +530,25 @@ injectConfig graph = do
             }
     else
       pure graph
+
+
+-- Injected config values are placed into Opt.Str nodes and emitted by the JS
+-- generator inside single quotes. Literal strings are escaped for that context
+-- by the parser, but injected values bypass it, so escape them here. Escapes are
+-- value-preserving.
+escapeInjectedStr :: Text -> Text
+escapeInjectedStr = T.concatMap escapeInjectedChar
+
+
+escapeInjectedChar :: Char -> Text
+escapeInjectedChar c =
+  case c of
+    '\\'     -> "\\\\"
+    '\''     -> "\\'"
+    '\n'     -> "\\n"
+    '\r'     -> "\\r"
+    '\t'     -> "\\t"
+    '\x2028' -> "\\u2028"
+    '\x2029' -> "\\u2029"
+    _ | c < '\x20' -> "\\u" <> T.justifyRight 4 '0' (T.pack (showHex (ord c) ""))
+      | otherwise  -> T.singleton c
