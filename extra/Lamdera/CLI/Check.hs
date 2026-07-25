@@ -477,31 +477,25 @@ getProdInfo appName inProduction_ forceNotProd forceVersion isHoistRebuild local
 
       else do
 
+        -- /_i is answered by the real app once deployed, and by an appzero
+        -- placeholder (v0) for a freshly-created app before its first deploy — so a
+        -- fresh-v0 build always has a positive source of prod info. A genuine
+        -- failure to reach it means the app is misconfigured/crashed, not new.
         prodInfo_ <- fetchProductionInfo appName (forceNotProd /= Nothing)
         case prodInfo_ of
           Right (pv, pt) ->
             -- Everything is as it should be
             pure (pv, pt)
 
-          Left err -> do
-            -- The app didn't answer. If it isn't deployed yet (no socket) this is a
-            -- genuine first deploy → fresh v0. Otherwise an existing app should be
-            -- answering, so fail rather than risk treating a live app as new.
-            appSocket <- Lamdera.Http.socketPathIfExists appName
-            case appSocket of
-              Nothing -> do
-                debug_ "❗️no prior deploy (no socket) — assuming fresh v0 app"
-                pure (0, localTypes)
+          Left err ->
+            if (inProduction_)
+              then do
+                debug_ $ show err
+                genericExit "FATAL: application info could not be obtained. Please report this to support."
 
-              Just _ ->
-                if (inProduction_)
-                  then do
-                    debug_ $ show err
-                    genericExit "FATAL: application info could not be obtained. Please report this to support."
-
-                  else do
-                    Lamdera.Http.printHttpError err "I needed to query production application info"
-                    exitFailure
+              else do
+                Lamdera.Http.printHttpError err "I needed to query production application info"
+                exitFailure
   let
     nextVersion =
       if isHoistRebuild then
