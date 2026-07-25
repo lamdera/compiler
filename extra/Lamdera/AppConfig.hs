@@ -356,13 +356,12 @@ throwRequestFail text =
 
 checkUserConfig :: Text -> Maybe Text -> IO ()
 checkUserConfig appName prodTokenM = do
-  -- LAMDERA_BOOTSTRAP, when set, skips the config check.
-  bootstrapM <- Env.lookupEnv "LAMDERA_BOOTSTRAP"
-  case bootstrapM of
-    Just _ ->
-      progress "Config items okay (LAMDERA_BOOTSTRAP: skipped prod config check)."
-    Nothing ->
-      checkUserConfig_ appName prodTokenM
+  -- Bootstrap (local test env only, and only while no dashboard is deployed yet)
+  -- skips the config check. See Lamdera.Http.bootstrapActive.
+  bootstrap <- Lamdera.Http.bootstrapActive
+  if bootstrap
+    then progress "Config items okay (bootstrap: skipped prod config check)."
+    else checkUserConfig_ appName prodTokenM
 
 
 checkUserConfig_ :: Text -> Maybe Text -> IO ()
@@ -484,10 +483,11 @@ injectConfig graph = do
   -- isTypeSnapshot <- Lamdera.isTypeSnapshot -- @TODO confirm this is right
   inProduction <- Lamdera.inProduction
 
-  -- LAMDERA_BOOTSTRAP, when set, skips config injection.
-  bootstrapM <- Env.lookupEnv "LAMDERA_BOOTSTRAP"
+  -- Bootstrap (local test env only, and only while no dashboard is deployed yet)
+  -- skips config injection. See Lamdera.Http.bootstrapActive.
+  bootstrap <- Lamdera.Http.bootstrapActive
 
-  if inProduction && bootstrapM == Nothing -- && not isTypeSnapshot  -- @TODO confirm this is right
+  if inProduction && not bootstrap -- && not isTypeSnapshot  -- @TODO confirm this is right
     then do
       debug "💉 Injecting production config"
 

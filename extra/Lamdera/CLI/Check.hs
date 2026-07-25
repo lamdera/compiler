@@ -455,9 +455,10 @@ getLocalInfo = do
 
 getProdInfo :: Text -> Bool -> Maybe String -> Int -> Bool -> [Text] -> IO (Int, [Text], Int)
 getProdInfo appName inProduction_ forceNotProd forceVersion isHoistRebuild localTypes = do
-  -- LAMDERA_BOOTSTRAP, when set, treats the app as a fresh v0 instead of
-  -- fetching prior version info.
-  bootstrapM <- Env.lookupEnv "LAMDERA_BOOTSTRAP"
+  -- Bootstrap (local test env only, and only while no dashboard is deployed yet)
+  -- treats the app as a fresh v0 instead of fetching prior version info.
+  -- See Lamdera.Http.bootstrapActive.
+  bootstrap <- Lamdera.Http.bootstrapActive
   (prodVersion, productionTypes) <-
     if isHoistRebuild
       then do
@@ -469,9 +470,9 @@ getProdInfo appName inProduction_ forceNotProd forceVersion isHoistRebuild local
             debug_ $ "❗️Gen with forced version: " <> show forceVersion
             pure (forceVersion, localTypes)
 
-      else if bootstrapM /= Nothing
+      else if bootstrap
       then do
-        debug_ "❗️[LAMDERA_BOOTSTRAP] skipping production info fetch, assuming fresh v0 app"
+        debug_ "❗️[bootstrap] skipping production info fetch, assuming fresh v0 app"
         pure (0, localTypes)
 
       else do
@@ -482,15 +483,25 @@ getProdInfo appName inProduction_ forceNotProd forceVersion isHoistRebuild local
             -- Everything is as it should be
             pure (pv, pt)
 
-          Left err ->
-            if (inProduction_)
-              then do
-                debug_ $ show err
-                genericExit "FATAL: application info could not be obtained. Please report this to support."
+          Left err -> do
+            -- The app didn't answer. If it isn't deployed yet (no socket) this is a
+            -- genuine first deploy → fresh v0. Otherwise an existing app should be
+            -- answering, so fail rather than risk treating a live app as new.
+            appSocket <- Lamdera.Http.socketPathIfExists appName
+            case appSocket of
+              Nothing -> do
+                debug_ "❗️no prior deploy (no socket) — assuming fresh v0 app"
+                pure (0, localTypes)
 
-              else do
-                Lamdera.Http.printHttpError err "I needed to query production application info"
-                exitFailure
+              Just _ ->
+                if (inProduction_)
+                  then do
+                    debug_ $ show err
+                    genericExit "FATAL: application info could not be obtained. Please report this to support."
+
+                  else do
+                    Lamdera.Http.printHttpError err "I needed to query production application info"
+                    exitFailure
   let
     nextVersion =
       if isHoistRebuild then

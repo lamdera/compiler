@@ -12,6 +12,7 @@ import qualified Network.HTTP.Types.Header as Http
 import qualified Network.Socket as NS
 import qualified Network.Socket.ByteString as NSB
 import qualified System.Directory as Dir
+import qualified System.Environment as Env
 
 import qualified Http
 import qualified Json.Decode as D
@@ -65,6 +66,27 @@ socketPathIfExists name = do
   -- Sockets aren't regular files, so doesPathExist (not doesFileExist).
   exists <- Dir.doesPathExist path
   pure $ if exists then Just path else Nothing
+
+
+{-| Whether bootstrap mode is active for this build.
+
+Bootstrap is ONLY ever used by the local test environment — LAMDERA_BOOTSTRAP is
+never set in production, so production behaviour is unchanged. Even when it is
+set, it is only active while the dashboard itself is not yet deployed: standing
+up the very first app (the dashboard) has no dashboard to answer config/prod-info
+queries, so those are skipped. Once a dashboard socket exists, every deploy after
+that — including every subsequent version of any app — takes the real path.
+-}
+bootstrapActive :: IO Bool
+bootstrapActive = do
+  envM <- Env.lookupEnv "LAMDERA_BOOTSTRAP"
+  case envM of
+    Nothing ->
+      pure False
+
+    Just _ -> do
+      dashboardSocket <- socketPathIfExists "dashboard"
+      pure (dashboardSocket == Nothing)
 
 
 {-| An HTTP Manager that connects to a unix socket instead of a TCP host/port.
