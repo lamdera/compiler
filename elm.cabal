@@ -340,6 +340,7 @@ Executable lamdera
         Lamdera.CLI.Login
         Lamdera.CLI.Check
         Lamdera.CLI.Deploy
+        Lamdera.CLI.Env
         Lamdera.CLI.Reset
         Lamdera.CLI.Update
         -- CLI Experimental
@@ -458,6 +459,7 @@ Executable lamdera
         -- ext-sentry
         Ext.Sentry
         Ext.Filewatch
+        Test.Ext.Filewatch
 
         -- ext-elm-pages
         Ext.ElmPages

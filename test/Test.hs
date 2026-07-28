@@ -18,6 +18,7 @@ import qualified Test.Caching
 import qualified Test.Check
 import qualified Test.Wire
 import qualified Test.Ext.ElmPages.Check
+import qualified Test.Ext.Filewatch
 import qualified Test.TypeHashes
 import qualified Test.JsOutput
 import qualified Test.WebGL
@@ -155,6 +156,7 @@ allTests =
     , scope "Test.Wire -> " $ Test.Wire.suite
     -- Disable temporarily as the cache busting is crazy aggressive meaning 100mb redownload each run :|
     , scope "Test.Ext.ElmPages.Check -> " $ Test.Ext.ElmPages.Check.suite
+    , scope "Test.Ext.Filewatch -> " $ Test.Ext.Filewatch.suite
     , scope "Test.TypeHashes -> " $ Test.TypeHashes.suite
     , scope "Test.Check -> " $ Test.Check.suite
     -- , scope "Lamdera.Evergreen.TestMigrationHarness -> " $ Test.Lamdera.Evergreen.TestMigrationHarness.suite
