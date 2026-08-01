@@ -105,6 +105,7 @@ wireTestFiles =
   , "src/Test/Wire_Alias_2_Record.elm"
   , "src/Test/Wire_Alias_3_SubAlias.elm"
   , "src/Test/Wire_Alias_4_TvarRename.elm"
+  , "src/Test/Wire_Alias_5_ParamChain.elm"
   , "src/Test/Wire_Tvar_Ambiguous.elm"
   , "src/Test/Wire_Core_Types.elm"
   , "src/Test/Wire_Package_Types.elm"
