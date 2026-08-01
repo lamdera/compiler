@@ -101,7 +101,18 @@ expected_w3_decode_C_ =
             (\w3v ->
                 case w3v of
                     0 ->
-                        Lamdera.Wire3.succeedDecode NodeClicked_ |> Lamdera.Wire3.andMapDecode w3_decode_ExtensibleRecordTypeUsage_
+                        -- ExtensibleRecordTypeUsage_ is an extensible-record alias chain, so the
+                        -- decoder reifies it inline here rather than calling
+                        -- w3_decode_ExtensibleRecordTypeUsage_. Same bytes either way — this is
+                        -- exactly that codec's body. Note the encoder above still CALLS the named
+                        -- codec: Encoder.hs and Decoder.hs resolve this case through different
+                        -- branches. Equivalent on the wire, but worth knowing when reading these.
+                        Lamdera.Wire3.succeedDecode NodeClicked_
+                            |> Lamdera.Wire3.andMapDecode
+                                (Lamdera.Wire3.succeedDecode (\id0 name0 -> { id = id0, name = name0 })
+                                    |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeInt
+                                    |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeString
+                                )
 
                     _ ->
                         Lamdera.Wire3.failDecode

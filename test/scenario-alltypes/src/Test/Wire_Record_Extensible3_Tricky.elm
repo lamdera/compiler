@@ -26,7 +26,19 @@ expected_w3_encode_Config =
 
 expected_w3_decode_Config =
     Lamdera.Wire3.succeedDecode (\overlayColor0 -> { overlayColor = overlayColor0 })
-        |> Lamdera.Wire3.andMapDecode Test.Wire_Record_Extensible1_Basic.w3_decode_Color
+        -- Color is an extensible-record alias chain (Color = ColorValue { ... }), so the
+        -- decoder reifies it inline rather than calling w3_decode_Color. This body is
+        -- identical to expected_w3_decode_Color in Wire_Record_Extensible1_Basic — same
+        -- fields, same order, same bytes. The encoder above still calls the named codec.
+        |> Lamdera.Wire3.andMapDecode
+            (Lamdera.Wire3.succeedDecode
+                (\alpha0 blue0 green0 red0 value0 -> { alpha = alpha0, blue = blue0, green = green0, red = red0, value = value0 })
+                |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeFloat
+                |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeInt
+                |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeInt
+                |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeInt
+                |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeString
+            )
 
 
 
