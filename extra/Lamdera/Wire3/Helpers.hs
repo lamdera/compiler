@@ -142,6 +142,39 @@ isLambdaType tipe =
     _ -> False
 
 
+{-| Does this type reach an EXTENSIBLE record (a TRecord carrying an extension tvar) by
+following the alias chain?
+
+The TAlias chain-resolution branches in Encoder/Decoder exist to reify extensible records
+reached through an alias chain — see 6447c47e, e.g.
+
+    type alias Color = ColorValue { red : Int, green : Int, blue : Int, alpha : Int }
+    type alias ColorValue compatible = { compatible | value : String, color : Compatible }
+
+There the chain MUST be inlined, because the alias's own codec would only see the extension
+fields and lose the base ones.
+
+For a plain (non-extensible) chain that inlining is both unnecessary and harmful. The
+alias's own codec is already correct, and inlining copies the inner record's field types
+into the REFERENCING module — which can then reference codecs from modules it does not
+import. foreignTypeSig has no interface for those, so getForeignSig falls back to its
+non-parameterized failure signatures (`a -> Encoder` / `Decoder a`) and the reference dies
+with TOO MANY ARGS. That is what broke `type alias Frame p = Model p` where Model's record
+held a `Form.Field String`, with Form imported by Frame but not by the referencing module.
+
+Only the alias spine is followed: an extensible record sitting inside a record FIELD is
+handled by that field's own codegen, and treating it as a reason to inline here would
+reintroduce the same over-inlining.
+-}
+reachesExtensibleRecord :: Type -> Bool
+reachesExtensibleRecord tipe =
+  case tipe of
+    TRecord _ (Just _) -> True
+    TAlias _ _ _ (Holey inner) -> reachesExtensibleRecord inner
+    TAlias _ _ _ (Filled inner) -> reachesExtensibleRecord inner
+    _ -> False
+
+
 containsUnsupportedTypes :: Type -> Bool
 containsUnsupportedTypes tipe =
   case tipe of
@@ -835,7 +868,11 @@ resolveTvar tvarMap t =
       case List.find (\(t,ti) -> t == a) tvarMap of
         Just (tvarName,tvarType) ->
 
-          case extractTvarsInTvars [(tvarName,tvarType)] of
+          -- extractFreeTvarsInType, not extractTvarsInType: a Holey alias's body mentions
+          -- its own BOUND parameters, and counting those made a fully concrete argument
+          -- look generic, so we skipped substituting it and left a dangling tvar codec
+          -- reference in the generated code. See extractFreeTvarsInType for the detail.
+          case extractFreeTvarsInType tvarType of
             [] -> tvarType
             _ ->
               {- The var we looked up itself has tvars. This means this particular function we're dealing with
@@ -958,6 +995,57 @@ extractTvarsInType t =
 
     TAlias moduleName typeName tvars (Holey tipe) -> extractTvarsInType tipe ++ extractTvarsInTvars tvars
     TAlias moduleName typeName tvars (Filled tipe) -> extractTvarsInType tipe ++ extractTvarsInTvars tvars
+
+
+{-| Free type variables of a type, treating a Holey alias body's own parameters as BOUND.
+
+Deliberately different from extractTvarsInType above, which counts them. That one builds
+the Forall quantifier for a foreign codec's type signature, where an alias's parameters
+really do appear and must be quantified — so it has to descend into the Holey body.
+
+This one answers a different question: "is this applied type still generic?" A Holey alias
+carries its own parameter names as TVars in its unsubstituted body, but they are bound by
+the alias, so only the applied arguments can contribute free tvars.
+
+Using the wrong one here made resolveTvar treat a fully concrete argument as still generic
+and skip substitution, so an alias chain like
+
+    type alias Frame p = Model p
+    type alias Model p = { email : Field String, page : p }
+
+inlined at a concrete `Frame PageModel` reference emitted a w3_x_c_p tvar-codec reference
+that only exists as a parameter on Frame/Model's own codecs. In a decoder that is an
+unbound name, which crashes type inference with a Map.! that surfaces as "thread blocked
+indefinitely in an MVar operation"; in an encoder it surfaces as TOO MANY ARGS. A nested
+`Field String` was enough to trigger it, since Field's Holey body mentions its bound
+`input` tvar.
+
+-}
+extractFreeTvarsInType :: Type -> [Data.Name.Name]
+extractFreeTvarsInType t =
+  case t of
+    TLambda t1 t2 -> [t1,t2] & concatMap extractFreeTvarsInType
+    TVar a -> [a]
+    TType modul typename tvars -> tvars & concatMap extractFreeTvarsInType
+
+    TRecord fieldMap maybeExtensible ->
+      fieldMap
+        & concatMap (\(FieldType index tipe) ->
+            extractFreeTvarsInType tipe
+          )
+
+    TUnit -> []
+
+    TTuple a b Nothing  -> [a,b] & concatMap extractFreeTvarsInType
+    TTuple a b (Just c) -> [a,b,c] & concatMap extractFreeTvarsInType
+
+    -- Holey: body tvars are the alias's own parameters, i.e. bound — only the applied
+    -- arguments can be free. Filled: already substituted, so the body is fair game.
+    TAlias moduleName typeName tvars (Holey _) ->
+      tvars & concatMap (\(_, tvarType) -> extractFreeTvarsInType tvarType)
+    TAlias moduleName typeName tvars (Filled tipe) ->
+      extractFreeTvarsInType tipe
+        ++ (tvars & concatMap (\(_, tvarType) -> extractFreeTvarsInType tvarType))
 
 
 
