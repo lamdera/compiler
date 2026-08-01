@@ -369,10 +369,18 @@ inlineIfRecordOrCall depth ifaces cname tipe tvars aType =
         _ ->
           -- Resolve extensible records through TAlias chains,
           -- e.g. Color = ColorValue { red, green, blue, alpha }
-          case resolveTvar tvars tipe of
-            TAlias _ _ _ (Filled extendedRecord@(TRecord _ Nothing)) ->
-              deepEncoderForType depth ifaces cname extendedRecord
-            _ -> normalEncoder
+          --
+          -- Guarded on reachesExtensibleRecord: only an extensible record actually needs
+          -- reifying here. Inlining a plain chain pulls the inner record's field types into
+          -- the referencing module, which can reference codecs from modules it doesn't
+          -- import — see reachesExtensibleRecord.
+          if reachesExtensibleRecord tipe
+            then
+              case resolveTvar tvars tipe of
+                TAlias _ _ _ (Filled extendedRecord@(TRecord _ Nothing)) ->
+                  deepEncoderForType depth ifaces cname extendedRecord
+                _ -> normalEncoder
+            else normalEncoder
     Filled _ -> normalEncoder
 
 {-| Called for encoding tvar type values, i.e.
