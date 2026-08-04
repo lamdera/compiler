@@ -1478,6 +1478,25 @@ data PackageProblem
   | PP_BadArchiveHash String String String
 
 
+-- lamdera: pull the URL out of a 404 so we can explain a deleted tag / renamed repo
+-- specifically, instead of the generic "is your firewall interfering?" HTTP report.
+archiveNotFound :: Http.Error -> Maybe String
+archiveNotFound err =
+  case err of
+    Http.BadHttp url (HTTP.StatusCodeException response _) ->
+      if HTTP.statusCode (HTTP.responseStatus response) == 404
+        then Just url
+        else Nothing
+
+    _ ->
+      Nothing
+
+
+packagePage :: Pkg.Name -> String
+packagePage pkg =
+  "https://package.elm-lang.org/packages/" ++ Pkg.toChars pkg ++ "/"
+
+
 toPackageProblemReport :: Pkg.Name -> V.Version -> PackageProblem -> Help.Report
 toPackageProblemReport pkg vsn problem =
   let
@@ -1501,9 +1520,45 @@ toPackageProblemReport pkg vsn problem =
             \ to the body or change its contents entirely. Could that be the problem?"
         ]
 
+    -- lamdera: a 404 here is almost never a transient network problem, so do not send
+    -- people down the firewall/proxy path the generic HTTP report suggests. Published
+    -- Elm versions are immutable, but the GitHub repos they point at are not.
     PP_BadArchiveRequest httpError ->
-      toHttpErrorReport "PROBLEM DOWNLOADING PACKAGE" httpError $
-        "I was trying to download the source code for " ++ thePackage
+      case archiveNotFound httpError of
+        Nothing ->
+          toHttpErrorReport "PROBLEM DOWNLOADING PACKAGE" httpError $
+            "I was trying to download the source code for " ++ thePackage
+
+        Just url ->
+          Help.report "PACKAGE SOURCE UNAVAILABLE" Nothing
+            (
+              "I need the source code for " ++ thePackage ++ ", but it is gone from the\
+              \ location the package registry has on file:"
+            )
+            [ D.indent 4 $ D.dullyellow $ D.fromChars url
+            , D.reflow $
+                "That address came back as 404 Not Found. Published Elm packages are immutable,\
+                \ but the GitHub repositories they are served from are not, so this normally means\
+                \ one of these happened after the version was published:"
+            , D.indent 4 $ D.vcat $ map D.fromChars $
+                [ "- the author deleted or moved the git tag for this version"
+                , "- the author deleted or renamed the repository"
+                , "- the repository was made private"
+                ]
+            , D.reflow $
+                "Nobody can download this exact version anymore, even though the registry still\
+                \ lists it. It is not something you did, and there is nothing to fix in your code.\
+                \ Here is what tends to work:"
+            , D.indent 4 $ D.reflow $
+                "1. Switch to a version that is still published. You can see what is actually\
+                \ available here:"
+            , D.indent 7 $ D.dullyellow $ D.fromChars $ packagePage pkg
+            , D.indent 4 $ D.reflow $
+                "2. If you (or your CI) have built this project before, this package is still in\
+                \ that machine's ELM_HOME cache. Copying it across will unblock you right now."
+            , D.indent 4 $ D.reflow $
+                "3. Let the author know, so they can restore the tag for everyone else."
+            ]
 
     PP_BadArchiveContent url ->
       Help.report "PROBLEM DOWNLOADING PACKAGE" Nothing
@@ -1519,20 +1574,41 @@ toPackageProblemReport pkg vsn problem =
         ]
 
     PP_BadArchiveHash url expectedHash actualHash ->
-      Help.report "CORRUPT PACKAGE DATA" Nothing
+      Help.report "PACKAGE SOURCE HAS CHANGED" Nothing
         (
           "I downloaded the source code for " ++ thePackage ++ " from:"
         )
         [ D.indent 4 $ D.dullyellow $ D.fromChars url
-        , D.reflow "But it looks like the hash of the archive has changed since publication:"
+        , D.reflow $
+            "It downloaded fine, but it does not match what the package registry recorded\
+            \ when this version was published:"
         , D.vcat $ map D.fromChars $
             [ "  Expected: " ++ expectedHash
             , "    Actual: " ++ actualHash
             ]
+        -- lamdera: by far the most common cause in practice is a GitHub account rename.
+        -- The archive GitHub builds contains a top-level folder named after the CURRENT
+        -- owner and repo, so a rename changes the bytes (and thus the hash) of every
+        -- version of that package, forever, while the code inside stays identical.
         , D.reflow $
-            "This usually means that the package author moved the version\
-            \ tag, so report it to them and see if that is the issue. Folks\
-            \ on Elm slack can probably help as well."
+            "The usual cause is the author renaming their GitHub account or repository. The\
+            \ archive GitHub builds has a top-level folder named after the current owner and\
+            \ repository, so a rename changes the bytes of the archive - and therefore this\
+            \ hash - even though the code inside is untouched. Moving a git tag does it too."
+        , D.reflow $
+            "I cannot tell that apart from the source having genuinely been altered, so I stop\
+            \ here rather than build against something I cannot verify. Here is what tends to\
+            \ work:"
+        , D.indent 4 $ D.reflow $
+            "1. Check whether the package has moved. If this address now redirects somewhere\
+            \ else, a rename is your answer:"
+        , D.indent 7 $ D.dullyellow $ D.fromChars $ packagePage pkg
+        , D.indent 4 $ D.reflow $
+            "2. If you (or your CI) have built this project before, this package is still in\
+            \ that machine's ELM_HOME cache, and copying it across will unblock you now."
+        , D.indent 4 $ D.reflow $
+            "3. Let the author know. Once a name changes, the only real fix is for them to\
+            \ publish a new version under the new name."
         ]
 
 
