@@ -121,6 +121,7 @@ wireTestFiles =
   , "src/Test/Wire_Unsupported.elm"
   , "src/Test/Wire_Unconstructable.elm"
   , "src/Test/Wire_Union_ForeignRecordAlias.elm"
+  , "src/Test/Wire_Record_Extensible6_TwoLevel.elm"
   ]
 
 
