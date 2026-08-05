@@ -6,6 +6,7 @@ module Http
   -- fetch
   , get
   , post
+  , getRedirectTarget
   , Header
   , accept
   , Error(..)
@@ -35,8 +36,8 @@ import qualified Data.String as String
 import Network.HTTP (urlEncodeVars)
 import Network.HTTP.Client
 import Network.HTTP.Client.TLS (tlsManagerSettings)
-import Network.HTTP.Types.Header (Header, hAccept, hAcceptEncoding, hUserAgent)
-import Network.HTTP.Types.Method (Method, methodGet, methodPost)
+import Network.HTTP.Types.Header (Header, hAccept, hAcceptEncoding, hLocation, hUserAgent)
+import Network.HTTP.Types.Method (Method, methodGet, methodHead, methodPost)
 import qualified Network.HTTP.Client as Multi (RequestBody(RequestBodyLBS))
 import qualified Network.HTTP.Client.MultipartFormData as Multi
 
@@ -79,6 +80,33 @@ get =
 post :: Manager -> String -> [Header] -> (Error -> e) -> (BS.ByteString -> IO (Either e a)) -> IO (Either e a)
 post =
   fetch methodPost
+
+
+-- lamdera: ask where a URL redirects to, without downloading the body. Used to tell
+-- people where a renamed GitHub repo actually lives now, so a failed package download
+-- can point at the new location instead of just saying "something moved".
+--
+-- Deliberately total: any failure at all (offline, DNS, timeout, weird proxy) comes
+-- back as Nothing so the caller just falls back to a less specific message. This only
+-- ever runs on a path that has already failed.
+getRedirectTarget :: Manager -> String -> IO (Maybe String)
+getRedirectTarget manager url =
+  handle ignoreRedirectProbeFailure $
+  do  req0 <- parseRequest url
+      let req1 =
+            req0
+              { method = methodHead
+              , requestHeaders = addDefaultHeaders []
+              , redirectCount = 0
+              , checkResponse = \_ _ -> return ()
+              }
+      withResponse req1 manager $ \response ->
+        return $ fmap BS.unpack $ lookup hLocation (responseHeaders response)
+
+
+ignoreRedirectProbeFailure :: SomeException -> IO (Maybe String)
+ignoreRedirectProbeFailure _ =
+  return Nothing
 
 
 fetch :: Method -> Manager -> String -> [Header] -> (Error -> e) -> (BS.ByteString -> IO (Either e a)) -> IO (Either e a)

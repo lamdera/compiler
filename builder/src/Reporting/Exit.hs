@@ -16,6 +16,7 @@ module Reporting.Exit
   , Details(..)
   , DetailsBadDep(..)
   , PackageProblem(..)
+  , PackageMoved(..)
   , RegistryProblem(..)
   , BuildProblem(..)
   , BuildProjectProblem(..)
@@ -1473,9 +1474,20 @@ toBadDepRank badDep =
 data PackageProblem
   = PP_BadEndpointRequest Http.Error
   | PP_BadEndpointContent String
-  | PP_BadArchiveRequest Http.Error
+  | PP_BadArchiveRequest Http.Error (Maybe PackageMoved)
   | PP_BadArchiveContent String
-  | PP_BadArchiveHash String String String
+  | PP_BadArchiveHash String String String (Maybe PackageMoved)
+
+
+-- lamdera: where a renamed package actually lives now, resolved by following the
+-- GitHub redirect at the point the download failed. _moved_published says whether
+-- the project has been re-published to the Elm registry under the new name, which
+-- decides whether "just depend on the new name instead" is real advice or not.
+data PackageMoved =
+  PackageMoved
+    { _moved_name :: String
+    , _moved_published :: Bool
+    }
 
 
 -- lamdera: pull the URL out of a 404 so we can explain a deleted tag / renamed repo
@@ -1495,6 +1507,78 @@ archiveNotFound err =
 packagePage :: Pkg.Name -> String
 packagePage pkg =
   "https://package.elm-lang.org/packages/" ++ Pkg.toChars pkg ++ "/"
+
+
+-- lamdera: tell people exactly where the project went, rather than leaving them to
+-- work out that a rename happened at all.
+movedDocs :: Maybe PackageMoved -> [D.Doc]
+movedDocs maybeMoved =
+  case maybeMoved of
+    Nothing ->
+      []
+
+    Just (PackageMoved newName published) ->
+      [ D.reflow "I followed the old address, and the project now lives here:"
+      , D.indent 4 $ D.dullyellow $ D.fromChars $ "https://github.com/" ++ newName
+      ]
+      ++
+      if published then
+        [ D.reflow $
+            "It has also been re-published to the Elm package registry under that new name,\
+            \ so you can depend on it directly:"
+        , D.indent 4 $ D.dullyellow $ D.fromChars $
+            "https://package.elm-lang.org/packages/" ++ newName ++ "/"
+        ]
+      else
+        [ D.reflow $
+            "It has not been re-published to the Elm package registry under that new name\
+            \ though, so there is nothing you can depend on directly yet."
+        ]
+
+
+-- lamdera: when the project was renamed AND re-published, switching to the new name is
+-- the fix. Otherwise fall back to picking a version that still downloads.
+switchStep :: Pkg.Name -> Maybe PackageMoved -> [D.Doc]
+switchStep pkg maybeMoved =
+  case maybeMoved of
+    Just (PackageMoved newName True) ->
+      [ D.indent 4 $ D.reflow $
+          "1. Depend on " ++ newName ++ " instead. It is the same project, so the API is\
+          \ usually identical, but the version numbers may not line up - authors often\
+          \ start again at 1.0.0 when they re-publish."
+      ]
+
+    _ ->
+      [ D.indent 4 $ D.reflow $
+          "1. Switch to a version that is still published. You can see what is actually\
+          \ available here:"
+      , D.indent 7 $ D.dullyellow $ D.fromChars $ packagePage pkg
+      ]
+
+
+-- lamdera: same idea as switchStep, but the fallback wording suits a hash mismatch,
+-- where we could not confirm a rename and the user has to go looking themselves.
+switchStepHash :: Pkg.Name -> Maybe PackageMoved -> [D.Doc]
+switchStepHash pkg maybeMoved =
+  case maybeMoved of
+    Just (PackageMoved _ True) ->
+      switchStep pkg maybeMoved
+
+    -- a rename breaks the hash for EVERY published version at once, so unlike the 404
+    -- case there is no other version to fall back to.
+    Just (PackageMoved _ False) ->
+      [ D.indent 4 $ D.reflow $
+          "1. Every published version of this package is affected by this, not just the one\
+          \ you asked for, so switching versions will not help. Until it is re-published\
+          \ under the new name there is nothing I can download and verify."
+      ]
+
+    Nothing ->
+      [ D.indent 4 $ D.reflow $
+          "1. Check whether the package has moved. If this address now redirects somewhere\
+          \ else, a rename is your answer:"
+      , D.indent 7 $ D.dullyellow $ D.fromChars $ packagePage pkg
+      ]
 
 
 toPackageProblemReport :: Pkg.Name -> V.Version -> PackageProblem -> Help.Report
@@ -1523,7 +1607,7 @@ toPackageProblemReport pkg vsn problem =
     -- lamdera: a 404 here is almost never a transient network problem, so do not send
     -- people down the firewall/proxy path the generic HTTP report suggests. Published
     -- Elm versions are immutable, but the GitHub repos they point at are not.
-    PP_BadArchiveRequest httpError ->
+    PP_BadArchiveRequest httpError maybeMoved ->
       case archiveNotFound httpError of
         Nothing ->
           toHttpErrorReport "PROBLEM DOWNLOADING PACKAGE" httpError $
@@ -1535,6 +1619,7 @@ toPackageProblemReport pkg vsn problem =
               "I need the source code for " ++ thePackage ++ ", but it is gone from the\
               \ location the package registry has on file:"
             )
+            (
             [ D.indent 4 $ D.dullyellow $ D.fromChars url
             , D.reflow $
                 "That address came back as 404 Not Found. Published Elm packages are immutable,\
@@ -1545,20 +1630,21 @@ toPackageProblemReport pkg vsn problem =
                 , "- the author deleted or renamed the repository"
                 , "- the repository was made private"
                 ]
-            , D.reflow $
+            ]
+            ++ movedDocs maybeMoved ++
+            [ D.reflow $
                 "Nobody can download this exact version anymore, even though the registry still\
                 \ lists it. It is not something you did, and there is nothing to fix in your code.\
                 \ Here is what tends to work:"
-            , D.indent 4 $ D.reflow $
-                "1. Switch to a version that is still published. You can see what is actually\
-                \ available here:"
-            , D.indent 7 $ D.dullyellow $ D.fromChars $ packagePage pkg
-            , D.indent 4 $ D.reflow $
+            ]
+            ++ switchStep pkg maybeMoved ++
+            [ D.indent 4 $ D.reflow $
                 "2. If you (or your CI) have built this project before, this package is still in\
                 \ that machine's ELM_HOME cache. Copying it across will unblock you right now."
             , D.indent 4 $ D.reflow $
                 "3. Let the author know, so they can restore the tag for everyone else."
             ]
+            )
 
     PP_BadArchiveContent url ->
       Help.report "PROBLEM DOWNLOADING PACKAGE" Nothing
@@ -1573,11 +1659,12 @@ toPackageProblemReport pkg vsn problem =
             \ change its contents entirely. Could that be the problem?"
         ]
 
-    PP_BadArchiveHash url expectedHash actualHash ->
+    PP_BadArchiveHash url expectedHash actualHash maybeMoved ->
       Help.report "PACKAGE SOURCE HAS CHANGED" Nothing
         (
           "I downloaded the source code for " ++ thePackage ++ " from:"
         )
+        (
         [ D.indent 4 $ D.dullyellow $ D.fromChars url
         , D.reflow $
             "It downloaded fine, but it does not match what the package registry recorded\
@@ -1595,21 +1682,22 @@ toPackageProblemReport pkg vsn problem =
             \ archive GitHub builds has a top-level folder named after the current owner and\
             \ repository, so a rename changes the bytes of the archive - and therefore this\
             \ hash - even though the code inside is untouched. Moving a git tag does it too."
-        , D.reflow $
+        ]
+        ++ movedDocs maybeMoved ++
+        [ D.reflow $
             "I cannot tell that apart from the source having genuinely been altered, so I stop\
             \ here rather than build against something I cannot verify. Here is what tends to\
             \ work:"
-        , D.indent 4 $ D.reflow $
-            "1. Check whether the package has moved. If this address now redirects somewhere\
-            \ else, a rename is your answer:"
-        , D.indent 7 $ D.dullyellow $ D.fromChars $ packagePage pkg
-        , D.indent 4 $ D.reflow $
+        ]
+        ++ switchStepHash pkg maybeMoved ++
+        [ D.indent 4 $ D.reflow $
             "2. If you (or your CI) have built this project before, this package is still in\
             \ that machine's ELM_HOME cache, and copying it across will unblock you now."
         , D.indent 4 $ D.reflow $
             "3. Let the author know. Once a name changes, the only real fix is for them to\
             \ publish a new version under the new name."
         ]
+        )
 
 
 

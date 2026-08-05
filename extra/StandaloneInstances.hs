@@ -227,6 +227,7 @@ instance (Eq a) => Eq (Reporting.Annotation.Located a) where
 
 deriving instance Show Reporting.Exit.DetailsBadDep
 deriving instance Show Reporting.Exit.PackageProblem
+deriving instance Show Reporting.Exit.PackageMoved
 deriving instance Show Reporting.Exit.Outline
 deriving instance Show Reporting.Exit.OutlineProblem
 deriving instance Show Reporting.Exit.BuildProjectProblem

@@ -19,6 +19,7 @@ import Control.Concurrent.MVar (MVar, newEmptyMVar, newMVar, putMVar, readMVar, 
 import Control.Monad (liftM, liftM2, liftM3)
 import Data.Binary (Binary, get, put, getWord8, putWord8)
 import qualified Data.Either as Either
+import qualified Data.List as List
 import qualified Data.Map as Map
 import qualified Data.Map.Utils as Map
 import qualified Data.Map.Merge.Strict as Map
@@ -797,12 +798,94 @@ downloadPackage cache manager pkg vsn =
               return $ Left $ Exit.PP_BadEndpointContent url
 
             Right (endpoint, expectedHash) ->
-              Http.getArchive manager endpoint Exit.PP_BadArchiveRequest (Exit.PP_BadArchiveContent endpoint) $
-                \(sha, archive) ->
-                  if expectedHash == Http.shaToChars sha
-                    || pkgsPath /= Nothing -- @LAMDERA when we're debugging with a local packages path, skip hash checking
-                  then Right <$> File.writePackage (Stuff.package cache pkg vsn) archive
-                  else return $ Left $ Exit.PP_BadArchiveHash endpoint expectedHash (Http.shaToChars sha)
+              do  result <-
+                    Http.getArchive manager endpoint (\e -> Exit.PP_BadArchiveRequest e Nothing) (Exit.PP_BadArchiveContent endpoint) $
+                      \(sha, archive) ->
+                        if expectedHash == Http.shaToChars sha
+                          || pkgsPath /= Nothing -- @LAMDERA when we're debugging with a local packages path, skip hash checking
+                        then Right <$> File.writePackage (Stuff.package cache pkg vsn) archive
+                        else return $ Left $ Exit.PP_BadArchiveHash endpoint expectedHash (Http.shaToChars sha) Nothing
+
+                  -- @LAMDERA both of those failures are usually a GitHub rename, so go find
+                  -- out where the project actually went and say so in the error.
+                  case result of
+                    Right a -> return (Right a)
+                    Left problem -> Left <$> attachMoveInfo manager pkg problem
+
+
+-- @LAMDERA a published Elm version is immutable, but the GitHub repo serving it is not.
+-- When a download 404s or fails its hash check, follow the repo's redirect to see if the
+-- author renamed themselves, and check whether they re-published under the new name, so
+-- the error can name the new location instead of leaving the user to guess.
+--
+-- Only ever runs on an already-failing path, and degrades to the old, less specific
+-- message if any of these probes fail.
+attachMoveInfo :: Http.Manager -> Pkg.Name -> Exit.PackageProblem -> IO Exit.PackageProblem
+attachMoveInfo manager pkg problem =
+  let
+    withMoved rebuild =
+      do  maybeMoved <- detectMove manager pkg
+          return (rebuild maybeMoved)
+  in
+  case problem of
+    Exit.PP_BadArchiveRequest err Nothing ->
+      withMoved (Exit.PP_BadArchiveRequest err)
+
+    Exit.PP_BadArchiveHash url expected actual Nothing ->
+      withMoved (Exit.PP_BadArchiveHash url expected actual)
+
+    _ ->
+      return problem
+
+
+detectMove :: Http.Manager -> Pkg.Name -> IO (Maybe Exit.PackageMoved)
+detectMove manager pkg =
+  do  maybeTarget <- Http.getRedirectTarget manager ("https://github.com/" ++ Pkg.toChars pkg)
+      case maybeTarget >>= githubRepoName of
+        Nothing ->
+          return Nothing
+
+        Just newName ->
+          if newName == Pkg.toChars pkg
+            then return Nothing
+            else
+              do  published <- isPublished manager newName
+                  return $ Just $ Exit.PackageMoved newName published
+
+
+githubRepoName :: String -> Maybe String
+githubRepoName url =
+  let
+    stripped = List.stripPrefix "https://github.com/" url
+  in
+  case fmap (splitOn '/') stripped of
+    Just [author, project] | not (null author) && not (null project) ->
+      Just (author ++ "/" ++ dropSuffix ".git" project)
+
+    _ ->
+      Nothing
+
+
+splitOn :: Char -> String -> [String]
+splitOn c s =
+  case break (== c) s of
+    (before, []) -> [before]
+    (before, _:rest) -> before : splitOn c rest
+
+
+dropSuffix :: String -> String -> String
+dropSuffix suffix s =
+  if suffix `List.isSuffixOf` s
+    then take (length s - length suffix) s
+    else s
+
+
+isPublished :: Http.Manager -> String -> IO Bool
+isPublished manager name =
+  do  result <-
+        Http.get manager ("https://package.elm-lang.org/packages/" ++ name ++ "/releases.json") []
+          (\_ -> ()) (\_ -> return (Right ()))
+      return (result == Right ())
 
 
 endpointDecoder :: D.Decoder e (String, String)
