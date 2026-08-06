@@ -29,6 +29,7 @@ module Reporting.Exit
   -- @LAMDERA exposed
   , toDetailsReport
   , toHttpErrorReport
+  , toPackageProblemReport
   )
   where
 
@@ -1543,9 +1544,15 @@ switchStep pkg maybeMoved =
   case maybeMoved of
     Just (PackageMoved newName True) ->
       [ D.indent 4 $ D.reflow $
-          "1. Depend on " ++ newName ++ " instead. It is the same project, so the API is\
-          \ usually identical, but the version numbers may not line up - authors often\
-          \ start again at 1.0.0 when they re-publish."
+          "1. Depend on " ++ newName ++ " instead. It is the same project under a new name,\
+          \ so the API is usually identical:"
+      , D.indent 7 $ D.dullyellow $ D.vcat $ map D.fromChars $
+          [ "npx elm-json-lamdera uninstall " ++ Pkg.toChars pkg
+          , "npx elm-json-lamdera install " ++ newName
+          ]
+      , D.indent 4 $ D.reflow $
+          "The version numbers may not line up though - authors often start again at 1.0.0\
+          \ when they re-publish - so check the docs for whichever version you land on."
       ]
 
     _ ->
@@ -1553,6 +1560,9 @@ switchStep pkg maybeMoved =
           "1. Switch to a version that is still published. You can see what is actually\
           \ available here:"
       , D.indent 7 $ D.dullyellow $ D.fromChars $ packagePage pkg
+      , D.indent 4 $ D.reflow "Then move to one of those, for example:"
+      , D.indent 7 $ D.dullyellow $ D.fromChars $
+          "npx elm-json-lamdera install " ++ Pkg.toChars pkg ++ "@<version>"
       ]
 
 

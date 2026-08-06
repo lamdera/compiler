@@ -429,6 +429,7 @@ Executable lamdera
         Test.Caching
         Test.Check
         Test.Helpers
+        Test.PackageProblem
         Test.Lamdera
         Test.Snapshot
         Test.TypeHashes

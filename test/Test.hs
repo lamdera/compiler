@@ -17,6 +17,7 @@ import qualified Test.Lamdera
 import qualified Test.Caching
 import qualified Test.Check
 import qualified Test.Wire
+import qualified Test.PackageProblem
 import qualified Test.Ext.ElmPages.Check
 import qualified Test.Ext.Filewatch
 import qualified Test.TypeHashes
@@ -159,6 +160,7 @@ allTests =
     , scope "Test.Ext.Filewatch -> " $ Test.Ext.Filewatch.suite
     , scope "Test.TypeHashes -> " $ Test.TypeHashes.suite
     , scope "Test.Check -> " $ Test.Check.suite
+    , scope "Test.PackageProblem -> " $ Test.PackageProblem.suite
     -- , scope "Lamdera.Evergreen.TestMigrationHarness -> " $ Test.Lamdera.Evergreen.TestMigrationHarness.suite
     , scope "Lamdera.Evergreen.TestMigrationGenerator -> " $ Test.Lamdera.Evergreen.TestMigrationGenerator.suite
     , scope "Test.WebGL -> " $ Test.WebGL.suite
