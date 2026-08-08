@@ -1726,10 +1726,14 @@ mapDocument model msg { title, body } =
     { title = title
     , body =
         List.map (Html.map msg) body
-            ++ lamderaUI
-                model.devbar
-                model.resetModelNames
-                model.nodeType
+            ++ [ Html.node "lamdera-devbar"
+                    []
+                    (lamderaUI
+                        model.devbar
+                        model.resetModelNames
+                        model.nodeType
+                    )
+               ]
     }
 
 
