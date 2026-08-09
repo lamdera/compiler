@@ -34,10 +34,6 @@ expected_w3_decode_Config =
 
    Essence from datetimepicker-legacy/src/DateTimePicker/Config.elm
 
-    @TODO remove this now?:
-   Tests neutered as our generation types are more specific than old Source based ones,
-   but the actual test was for a generation failure so this ensures the gen at least type checks
-
 -}
 
 
