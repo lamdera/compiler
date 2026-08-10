@@ -340,7 +340,6 @@ Executable lamdera
         Lamdera.CLI.Login
         Lamdera.CLI.Check
         Lamdera.CLI.Deploy
-        Lamdera.CLI.Env
         Lamdera.CLI.Reset
         Lamdera.CLI.Update
         -- CLI Experimental
