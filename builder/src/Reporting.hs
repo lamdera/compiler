@@ -1,4 +1,4 @@
-{-# LANGUAGE BangPatterns, OverloadedStrings #-}
+{-# LANGUAGE BangPatterns, OverloadedStrings, ScopedTypeVariables #-}
 module Reporting
   ( Style
   , silent
@@ -34,7 +34,8 @@ import qualified Data.ByteString.Builder as B
 import qualified Data.NonEmptyList as NE
 import qualified System.Exit as Exit
 import qualified System.Info as Info
-import System.IO (hFlush, hPutStr, hPutStrLn, stderr, stdout)
+import GHC.IO.Handle (hIsTerminalDevice)
+import System.IO (hFlush, hPutStr, hPutStrLn, isEOF, stderr, stdin, stdout)
 
 import qualified Elm.ModuleName as ModuleName
 import qualified Elm.Package as Pkg
@@ -154,21 +155,46 @@ ignorer =
 ask :: D.Doc -> IO Bool
 ask doc =
   do  Help.toStdout doc
-      askHelp
+      interactive <- hIsTerminalDevice stdin
+      if interactive
+        then askHelp
+        else takeDefaultAnswer
+
+
+-- lamdera: there is nobody to answer when there is no terminal.
+--
+-- Every one of these prompts is [Y/n] — pressing Enter means yes. With no TTY the
+-- old code went straight to getLine and died on EOF, taking the whole command with
+-- it. That is how 18 of the 95 apps in the fleet rebuild "failed": the compiler
+-- asked whether to promote an indirect dependency to direct, nothing answered, and
+-- the build fell through to INCOMPATIBLE DEPENDENCIES. The apps were fine.
+--
+-- So do what Enter does, and say so, rather than pretending a question was asked.
+takeDefaultAnswer :: IO Bool
+takeDefaultAnswer =
+  do  putStrLn "y (no interactive terminal, taking the default)"
+      hFlush stdout
+      return True
 
 
 askHelp :: IO Bool
 askHelp =
   do  hFlush stdout
-      input <- getLine
-      case input of
-        ""  -> return True
-        "Y" -> return True
-        "y" -> return True
-        "n" -> return False
-        _   ->
-          do  putStr "Must type 'y' for yes or 'n' for no: "
-              askHelp
+      -- Even with a terminal, stdin can still hit EOF (closed pipe, Ctrl-D). Treat
+      -- that as the default rather than crashing out of an otherwise fine build.
+      eof <- isEOF `catch` \(_ :: SomeException) -> return True
+      if eof
+        then takeDefaultAnswer
+        else
+          do  input <- getLine
+              case input of
+                ""  -> return True
+                "Y" -> return True
+                "y" -> return True
+                "n" -> return False
+                _   ->
+                  do  putStr "Must type 'y' for yes or 'n' for no: "
+                      askHelp
 
 
 -- DETAILS
