@@ -1,0 +1,24 @@
+--- a/extra/Lamdera/Version.hs	2026-08-16 00:39:02
++++ b/extra/Lamdera/Version.hs	2026-08-16 00:39:08
+@@ -27,17 +27,13 @@
+ medium = "lamdera-" <> short <> "-" <> elm
+ 
+ 
++-- Nix builds strip the .git directory from the source tree, so GitHash's
++-- $$tGitInfoCwd cannot run. The commit hash of the flake source is substituted
++-- in by the nix build instead (see flake.nix).
+ full :: String
+ full =
+-  let
+-    gi = $$tGitInfoCwd
+-    dirty | giDirty gi = "-dirty"
+-          | otherwise  = ""
+-  in
+   concat
+-    [ medium, "-", Ext.Common.os, "-", Ext.Common.arch, "-", giHash gi, dirty
+-    , " (", giCommitDate gi, ")"
+-    , " (branch:", giBranch gi, ")"
++    [ medium, "-", Ext.Common.os, "-", Ext.Common.arch, "-", "@gitRev@"
+     ]
+ 
+ 

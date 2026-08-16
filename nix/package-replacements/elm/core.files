@@ -1,0 +1,5 @@
+javascript-interface.md
+src/Elm/Kernel/Debug.js
+src/Elm/Kernel/Platform.js
+src/Elm/Kernel/Scheduler.js
+src/Elm/Kernel/Utils.js

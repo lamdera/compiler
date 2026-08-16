@@ -1,0 +1,29 @@
+--- a/extra/Lamdera/PackageReplacementsTH.hs	2026-08-16 00:39:02
++++ b/extra/Lamdera/PackageReplacementsTH.hs	2026-08-16 00:39:17
+@@ -107,16 +107,22 @@
+   pure (List.filter (notElem '.') items) -- Skip items with a period – which likely are files.
+ 
+ 
++-- Nix builds cannot run the git commands below: the flake source has no .git
++-- directories (neither for the top-level repo nor for the submodules), and the
++-- build sandbox has no network. Instead, the nix build stages the answers into
++-- each submodule directory as plain files (generated from
++-- nix/package-replacements/, see flake.nix and
++-- nix/gen-package-replacements-lock.sh), and we read those here.
+ gitChangedFilesIn :: FilePath -> IO [FilePath]
+ gitChangedFilesIn dir = do
+-  stdout <- System.Process.readProcess "git" ["-C", dir, "diff", "origin/master...", "--name-only"] ""
+-  pure (lines stdout)
++  contents <- Prelude.readFile (dir </> ".nix-changed-files")
++  pure (lines contents)
+ 
+ 
+ gitCommitHashIn :: FilePath -> IO String
+ gitCommitHashIn dir = do
+-  stdout <- System.Process.readProcess "git" ["-C", dir, "rev-parse", "HEAD"] ""
+-  pure (init stdout) -- Drop trailing newline.
++  contents <- Prelude.readFile (dir </> ".nix-commit")
++  pure (takeWhile (/= '\n') contents) -- Drop trailing newline.
+ 
+ 
+ parseModuleName :: FilePath -> Maybe String
