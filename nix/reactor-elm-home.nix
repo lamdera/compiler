@@ -25,10 +25,28 @@
 let
   srcs = import ./elm-srcs.nix;
 
-  registryDat = fetchurl {
-    url = "https://raw.githubusercontent.com/NixOS/nixpkgs/01d14d1f0cf4747e41c772f7c526c44d5f5285c5/pkgs/development/compilers/elm/registry.dat";
-    sha256 = "18y9m922s1zrj4c7hblsslmq2b9rhcksmvyzr7mvfp1bd37z9b1a";
-  };
+  # Elm's "details" phase VERIFIES dependencies against this registry, not just
+  # against what is unpacked in ELM_HOME. If a package is absent from it, Elm
+  # tries to reach package.elm-lang.org, which a nix sandbox has no route to, and
+  # the build dies with:
+  #
+  #   I could not connect to https://package.elm-lang.org to get the latest list
+  #   of packages, and I was unable to verify your dependencies with the
+  #   information I have cached locally.
+  #
+  # Lamdera.Repl discards that message and reports only "details phase", so the
+  # cause is invisible from the build log.
+  #
+  # This used to fetch nixpkgs' registry.dat. That one predates several packages
+  # vendor/elm-repl-worker depends on (agu-z/elm-zip, miniBill/elm-unicode,
+  # folkertdev/elm-flate, ...), so it worked for the reactor and failed for the
+  # repl worker. We ship our own instead, as nixpkgs itself does.
+  #
+  # To regenerate (needs network): run any `lamdera make` against a project using
+  # these dependencies with ELM_HOME set to a scratch dir, then copy out
+  # $ELM_HOME/0.19.1/packages/registry.dat. It is a snapshot of the public
+  # package list, so refreshing it only ever adds packages.
+  registryDat = ./registry.dat;
 
   fetchPkg =
     name: info:
