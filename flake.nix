@@ -200,6 +200,17 @@
                 # executable it produces is `lamdera`).
                 elm = lib.pipe hprev.elm [
                   (hlib.overrideCabal (drv: {
+                    # Build from the FULL patched source, not stacklock2nix's
+                    # filtered copy.
+                    #
+                    # stacklock2nix runs local package sources through nixpkgs'
+                    # cleanSource filter, which drops any directory named `dist`.
+                    # That silently deletes extra/dist/ - which git tracks and the
+                    # build needs, because Lamdera.Live embeds extra/dist/live.js
+                    # with a Template Haskell splice. The failure surfaces at module
+                    # 218 of 229 as "requireFile:readByteString could not find a
+                    # relative path", a long way from the filter that caused it.
+                    src = src;
                     preBuild = setupElmHome;
                   }))
                   # The test suite needs a full dev environment (git, network,
