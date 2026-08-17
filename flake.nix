@@ -211,7 +211,23 @@
                     # 218 of 229 as "requireFile:readByteString could not find a
                     # relative path", a long way from the filter that caused it.
                     src = src;
-                    preBuild = setupElmHome;
+
+                    # nixpkgs' own elm derivation sets this, with the comment
+                    # "sadly with parallelism most of the time breaks compilation"
+                    # (pkgs/development/compilers/elm/packages/ghc9_6/default.nix).
+                    # Lamdera has strictly more reason to: TWO Template Haskell
+                    # splices invoke the Elm compiler during the Haskell build -
+                    # Develop.StaticFiles for the reactor, and Lamdera.Repl for
+                    # vendor/elm-repl-worker. Run concurrently they race on one
+                    # shared ELM_HOME, and the symptoms point nowhere near the
+                    # cause: "renameFile:renamePath:rename: does not exist", a
+                    # missing .dyn_o for an unrelated module, and Elm failing in
+                    # its "compiler details phase".
+                    enableParallelBuilding = false;
+
+                    # preConfigure, not preBuild, to match nixpkgs - ELM_HOME wants
+                    # to exist before anything in the build can reach for it.
+                    preConfigure = setupElmHome;
                   }))
                   # The test suite needs a full dev environment (git, network,
                   # local fixtures); do not build or run it here.
