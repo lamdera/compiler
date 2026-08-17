@@ -228,6 +228,14 @@
                     # preConfigure, not preBuild, to match nixpkgs - ELM_HOME wants
                     # to exist before anything in the build can reach for it.
                     preConfigure = setupElmHome;
+
+                    # esbuild is invoked BY the build, not just at runtime: the
+                    # Lamdera.Repl splice shells out to it while compiling the repl
+                    # worker, and Ext.Common aborts with
+                    # "please install the following required binary: esbuild".
+                    # The stack-based dev build gets it the same way - see the
+                    # nix-shell -p list in nixos/test/smoke.sh in the runtime repo.
+                    buildTools = (drv.buildTools or [ ]) ++ [ pkgs.esbuild ];
                   }))
                   # The test suite needs a full dev environment (git, network,
                   # local fixtures); do not build or run it here.
