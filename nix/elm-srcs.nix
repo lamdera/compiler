@@ -1,4 +1,11 @@
-# The exact Elm package set needed to compile reactor/src at build time
+# The exact Elm package set needed to compile Elm code at BUILD time.
+#
+# Two Template Haskell splices compile Elm during the Haskell build, so this must
+# cover the union of their dependencies:
+#   - reactor/elm.json      (Develop.StaticFiles, the reactor frontend)
+#   - vendor/elm-repl-worker/elm.json  (Lamdera.Repl, the repl worker)
+#
+# Originally reactor-only:
 # (Develop.StaticFiles compiles the reactor frontend via Template Haskell,
 # see terminal/src/Develop/StaticFiles/Build.hs). This must cover every
 # direct and indirect dependency in reactor/elm.json.
@@ -78,4 +85,23 @@
     sha256 = "0k1dnp4pk9i2q76nx2xvpyzhv92g30zjbiw7g2qbjy54nvk7irvp";
     lamderaZip = true;
   };
+
+  # --- additionally required by vendor/elm-repl-worker ---
+  # Lamdera.Repl compiles vendor/elm-repl-worker/src/Repl/Worker.elm with a
+  # Template Haskell splice, so its dependencies must be in the offline package
+  # set too. Missing them fails late and unhelpfully, as
+  # "Error in Lamdera.Repl.lamderaRepl during the compiler details phase".
+  "agu-z/elm-zip" = { version = "3.0.1"; sha256 = "1gd4bza80nx5w2bkk2nyfskclg0xvykmvg8akcb1gswbndq4y341"; };
+  "cmditch/elm-bigint" = { version = "2.0.1"; sha256 = "00wfcvl3kg8l85cyljvgal51qksnqfqkc4g4diljggz6dcl155w2"; };
+  "dasch/levenshtein" = { version = "1.0.3"; sha256 = "0hahn9cyjllz9n7ajgkkb55h6dllcvnzybn8d8kxaq4is2iwbkis"; };
+  "miniBill/elm-unicode" = { version = "1.1.1"; sha256 = "1z0ydq2ylh1fx8mk11z4wf8cidb414sb66dmjvzyd7y6nbn75bsv"; };
+  "rtfeldman/elm-hex" = { version = "1.0.0"; sha256 = "1y0aa16asvwdqmgbskh5iba6psp43lkcjjw9mgzj3gsrg33lp00d"; };
+  "the-sett/elm-pretty-printer" = { version = "3.1.0"; sha256 = "0jv0g78dd8j9rf1bspcllslcld75snhmg8hgwcr1c041jkhg0a2w"; };
+  "elm-community/basics-extra" = { version = "4.1.0"; sha256 = "0safacqk5dkcb0rdafdq1yhsch7dki26jjplbsgvfrm1j8klvjhn"; };
+  "elm-community/list-extra" = { version = "8.7.0"; sha256 = "02grd0p5hc2gvdy4n723d1s28pm1grn95jrzic6jcgb26qh16vcc"; };
+  "elm-community/maybe-extra" = { version = "5.3.0"; sha256 = "185jy9jxx3bqf0xl3rmdxfqqmxzcr084llf32glr6hgl5agshywk"; };
+  "elm/regex" = { version = "1.0.0"; sha256 = "0lijsp50w7n1n57mjg6clpn9phly8vvs07h0qh2rqcs0f1jqvsa2"; };
+  "folkertdev/elm-flate" = { version = "2.0.5"; sha256 = "1an9ps405l1rv8xyzkn1chbs1wx0ymlws5lhxad9rl8rr4am9wgm"; };
+  "justinmimbs/date" = { version = "4.1.0"; sha256 = "11ybasla0nrczpgw1anrmcgqmvl1r0jkrcb9k2v2psng35iwi5ij"; };
+  "justinmimbs/time-extra" = { version = "1.2.0"; sha256 = "1innw81fv3cfdx40rggzr4b6lvv6r28prar2b9i5a7isy00yagkw"; };
 }
