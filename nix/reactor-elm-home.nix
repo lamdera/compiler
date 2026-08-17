@@ -43,8 +43,15 @@ let
         inherit (info) sha256;
       };
 
+  # A package may need to be seeded at MORE THAN ONE version: the build-time Elm
+  # projects are applications, so their dependency versions are exact, and
+  # reactor/elm.json and vendor/elm-repl-worker/elm.json do not always agree.
+  # An entry is therefore either one {version; sha256;} or a list of them.
+  toList = v: if builtins.isList v then v else [ v ];
+
   unpackCmds = lib.concatStrings (
-    lib.mapAttrsToList (name: info: ''
+    lib.concatLists (
+      lib.mapAttrsToList (name: infos: map (info: ''
       dest="$packages/${name}/${info.version}"
       mkdir -p "$dest"
       tmp=$(mktemp -d)
@@ -57,7 +64,8 @@ let
       # Both archive styles wrap the package in a single root directory.
       cp -R "$tmp"/*/. "$dest"/
       rm -rf "$tmp"
-    '') srcs
+    '') (toList infos)) srcs
+    )
   );
 in
 stdenvNoCC.mkDerivation {

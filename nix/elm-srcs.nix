@@ -51,10 +51,21 @@
     version = "1.1.0";
     sha256 = "0a3cxrvbm7mwg9ykynhp7vjid58zsw03r63qxipxp3z09qks7512";
   };
-  "elm/project-metadata-utils" = {
-    version = "1.0.1";
-    sha256 = "13vj9341lx4brpislv37d60gbf60fw6qzrg4dwaprx7xm5wqnlmx";
-  };
+  # TWO versions, deliberately. Both build-time Elm projects are `application`
+  # elm.json files, so their dependency versions are EXACT, and they disagree:
+  # reactor/elm.json pins 1.0.1 and vendor/elm-repl-worker/elm.json pins 1.0.2.
+  # Seeding only one makes the other fail in Elm's "details" phase, and
+  # Lamdera.Repl discards the underlying error, so all you see is the phase name.
+  "elm/project-metadata-utils" = [
+    {
+      version = "1.0.1";
+      sha256 = "13vj9341lx4brpislv37d60gbf60fw6qzrg4dwaprx7xm5wqnlmx";
+    }
+    {
+      version = "1.0.2";
+      sha256 = "0r5dvbipcc0jhwlpaxv9iw1vrmsk1yxnycm0k4lvw1rbgikis7rv";
+    }
+  ];
   "elm/svg" = {
     version = "1.0.1";
     sha256 = "1cwcj73p61q45wqwgqvrvz3aypjyy3fw732xyxdyj6s256hwkn0k";
