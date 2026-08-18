@@ -198,6 +198,23 @@
                 # stacklock2nix cannot create them by itself.
                 avh4-lib = vendored "avh4-lib" "vendor/elm-format/avh4-lib";
                 elm-format-markdown = vendored "elm-format-markdown" "vendor/elm-format/elm-format-markdown";
+                # HsOpenSSL's FFI wrappers do not compile clean against
+                # OpenSSL 3 with a modern C compiler, and the warnings are
+                # escalated to errors. nixpkgs works around the same thing in
+                # configuration-common.nix ("Work around -Werror failures until
+                # a more permanent solution is released", HsOpenSSL issues
+                # 88/93/95) with -Wno-error=incompatible-pointer-types; on GHC
+                # 9.8.4 we also hit -Wdiscarded-qualifiers, from wrappers that
+                # return OBJ_nid2sn/OBJ_nid2ln as char* when OpenSSL 3 declares
+                # them const char*. Both are suppressed here.
+                #
+                # Applied to the snapshot's own derivation rather than swapping
+                # in nixpkgs' package, so the package set stays coherent.
+                HsOpenSSL = hlib.appendConfigureFlags [
+                  "--ghc-option=-optc=-Wno-error=incompatible-pointer-types"
+                  "--ghc-option=-optc=-Wno-error=discarded-qualifiers"
+                ] hprev.HsOpenSSL;
+
                 elm-format-lib = vendored "elm-format-lib" "vendor/elm-format/elm-format-lib";
                 # Only referenced by elm-format's (unbuilt) test suite, but
                 # the generated expression still wants the dependency to
