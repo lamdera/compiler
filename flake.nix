@@ -18,15 +18,15 @@
   #
   # How it works: stacklock2nix reads stack.yaml + stack.yaml.lock, so the nix
   # build follows exactly the package versions of the official stack build
-  # (resolver lts-20.26 = GHC 9.2.8, the extra-deps, and the language-glsl git
-  # dependency), building them with nixpkgs' ghc928. The vendored elm-format
+  # (resolver lts-23.28 = GHC 9.8.4, the extra-deps, and the language-glsl git
+  # dependency), building them with nixpkgs' ghc98. The vendored elm-format
   # packages (local extra-deps, not covered by the lock file) are added
   # explicitly below.
   #
   # (haskell.nix was tried first: current haskell.nix has dropped GHC < 9.6,
   # and the last revision supporting GHC 9.2.8 requires either the
   # cache.iog.io binary cache or bootstrap-building several GHCs from source.
-  # The nixpkgs ghc928 route has no such exotic requirements: GHC comes
+  # The nixpkgs ghc98 route has no such exotic requirements: GHC comes
   # straight from cache.nixos.org.)
   #
   # Three things the stack build takes from the surrounding environment have
@@ -48,9 +48,14 @@
   description = "Lamdera compiler, built from source";
 
   inputs = {
-    # nixos-24.11, the same pin as nix/devbox/flake.nix, so the ghc928 build
-    # is shared with the devbox environment.
-    nixpkgs.url = "github:nixos/nixpkgs/107d5ef05c0b1119749e381451389eded30fb0d5";
+    # nixos-25.11, the same pin as nix/devbox/flake.nix, so the ghc98 build is
+    # shared with the devbox environment.
+    #
+    # Must be a nixpkgs that has GHC 9.8.4 EXACTLY, because stack.yaml's
+    # lts-23.28 snapshot is built against it and stacklock2nix takes the package
+    # versions from that snapshot. 24.11 (the previous pin, for the 0.19.1 /
+    # GHC 9.2.8 era) only carries 9.8.2, so it cannot be used here.
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-25.11";
     stacklock2nix = {
       url = "github:cdepillabout/stacklock2nix/550797146fb57220319614a62f7f791e4fdc2631";
     };
@@ -87,15 +92,19 @@
 
           hlib = pkgs.haskell.lib.compose;
 
-          reactorElmHome = pkgs.callPackage ./nix/reactor-elm-home.nix { };
+          # Keep in step with elm.cabal's `version:`. See the note on the
+          # elmVersion argument in nix/reactor-elm-home.nix.
+          elmVersion = "0.19.2";
+
+          reactorElmHome = pkgs.callPackage ./nix/reactor-elm-home.nix { inherit elmVersion; };
 
           # Copy the prefilled package cache somewhere writable: package
           # builds triggered by the reactor compile write their build
           # artifacts (artifacts.*.dat) into the cache directories.
           setupElmHome = ''
             export ELM_HOME="$TMPDIR/elm-home"
-            mkdir -p "$ELM_HOME/0.19.1"
-            cp -R ${reactorElmHome}/0.19.1/packages "$ELM_HOME/0.19.1/packages"
+            mkdir -p "$ELM_HOME/${elmVersion}"
+            cp -R ${reactorElmHome}/${elmVersion}/packages "$ELM_HOME/${elmVersion}/packages"
             chmod -R u+w "$ELM_HOME"
           '';
 
@@ -155,8 +164,8 @@
           stacklock = pkgs.stacklock2nix {
             stackYaml = src + "/stack.yaml";
             stackYamlLock = src + "/stack.yaml.lock";
-            # Must match the GHC of the stack.yaml resolver (lts-20.26).
-            baseHaskellPkgSet = pkgs.haskell.packages.ghc928;
+            # Must match the GHC of the stack.yaml resolver (lts-23.28 = 9.8.4).
+            baseHaskellPkgSet = pkgs.haskell.packages.ghc98;
             cabal2nixArgsOverrides = args: args // {
               # macOS file-watching dependency of fsnotify; its cabal file
               # references the frameworks as plain dependencies.
