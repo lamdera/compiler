@@ -1,4 +1,4 @@
-{-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS_GHC -Wno-x-partial #-}
 {-# LANGUAGE OverloadedStrings #-}
 module Optimize.DecisionTree
   ( DecisionTree(..)
@@ -77,7 +77,7 @@ data Test
   | IsNil
   | IsTuple
   | IsInt Int
-  | IsChr ES.String
+  | IsChr Char
   | IsStr ES.String
   | IsBool Bool
   deriving (Eq, Ord)

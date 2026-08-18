@@ -1,8 +1,14 @@
 # Updates cabal freeze to latest then replaces dependencies pinning with stack's calculations
+#
+# @LAMDERA cabal defaults to whatever `ghc` is on PATH (often not the resolver's
+# GHC). Pin to 9.8.4 to match stack.yaml's lts-23.28, else the freeze is
+# generated against the wrong base and the splice below produces a mismatch.
+# Requires cabal.project to carry `allow-newer: all` / `allow-older: all`
+# (mirrors stack.yaml's global allow-newer) or this solve won't resolve.
 
 cd ..
 
-cabal freeze
+cabal freeze --with-compiler=ghc-9.8.4
 
 awk '
   BEGIN {
@@ -24,3 +30,13 @@ awk '
   # Otherwise, pass-through
   { print }
 ' cabal.project.freeze > cabal.project.freeze.new && mv cabal.project.freeze.new cabal.project.freeze
+
+# @LAMDERA tls 2.1.2 override for the cabal-only (musl/docker) build.
+# stackage lts-23.28 pins tls 2.1.1 - it works there because the snapshot pins
+# http-client-tls-0.3.6.4 at its r0 revision (bound `tls >= 1.2`). A fresh `cabal
+# update` instead sees http-client-tls r1+ (2025-03-26), whose bound `<2.1 || >=2.1.2`
+# excludes exactly tls 2.1.1, and allow-newer/older can't fill a mid-range hole.
+# tls 2.1.2 is the ecosystem-compatible sibling (all http-client-tls revisions accept
+# it) and is fine for our HTTPS usage. The stack build stays on 2.1.1; only this
+# cabal freeze diverges, by one patch version.
+perl -0pi -e 's/, tls ==2\.1\.1$/, tls ==2.1.2/m' cabal.project.freeze

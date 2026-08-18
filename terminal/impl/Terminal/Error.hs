@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -Wno-deprecations -Wno-x-partial #-}
 {-# LANGUAGE GADTs, OverloadedStrings #-}
 module Terminal.Error
   ( Error(..)

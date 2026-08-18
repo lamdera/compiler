@@ -175,10 +175,10 @@ aliasStubs aliases =
 
 
 a v =
-  A.at (A.Position 0 0) (A.Position 0 10) v
+  A.At A.zero v
 
 r =
-  A.Region (A.Position 0 0) (A.Position 0 10)
+  A.zero
 
 showValue (A.At region (Src.Value name pattern expr mtype)) = do
   -- data Value = Value (A.Located Name) [Pattern] Expr (Maybe Type)
@@ -190,6 +190,7 @@ showValue (A.At region (Src.Value name pattern expr mtype)) = do
 tShow x v =
   x ++ show v
 
+x :: String
 x =
   "❤️ 💔 ♥️ 💗 💓 💕 💖  💛 💙 💜 💚"
 

@@ -8,7 +8,8 @@ The Lamdera **compiler** is a free, open-source and open-contribution [un-fork o
 
 The Lamdera **platform** is a paid service with a free tier to try, and is how we keep our work funded and sustainable.
 
-New to Elm? Check out the [Home Page](http://elm-lang.org/), [Try Online](http://elm-lang.org/try), or [The Official Guide](http://guide.elm-lang.org/).
+New to Elm? Check out the [Home Page](https://elm-lang.org/), [Try Online](https://elm-lang.org/try), or [The Official Guide](https://guide.elm-lang.org/).
+
 
 
 <br>
@@ -72,7 +73,7 @@ Looking for build instructions or interested in contributing? See [extra/readme.
 
 ## Help
 
-If you are stuck with Elm, ask around on [the Elm slack channel](http://elmlang.herokuapp.com/). Folks are friendly and happy to help with questions!
+If you are stuck with Elm, ask around on [the Elm slack channel](https://elm-lang.org/community/slack). Folks are friendly and happy to help with questions!
 
 For Lamdera compiler/platform discussion, see the [Lamdera Discord](https://dashboard.lamdera.app/docs/discuss).
 

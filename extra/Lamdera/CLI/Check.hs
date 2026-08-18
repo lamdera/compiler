@@ -1,10 +1,12 @@
+{-# OPTIONS_GHC -Wno-x-partial #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Lamdera.CLI.Check where
 
-import Control.Monad.Except (catchError, throwError, forM_, when)
+import Control.Monad.Except (catchError, throwError)
+import Control.Monad (forM_, when)
 import Data.Maybe (fromMaybe)
 import NeatInterpolation
 import qualified Data.List as List

@@ -1,4 +1,3 @@
-{-# OPTIONS_GHC -Wall #-}
 {-# LANGUAGE OverloadedStrings #-}
 module AST.Canonical
   ( Expr, Expr_(..)
@@ -84,7 +83,7 @@ data Expr_
   | VarCtor CtorOpts ModuleName.Canonical Name Index.ZeroBased Annotation
   | VarDebug ModuleName.Canonical Name Annotation
   | VarOperator Name ModuleName.Canonical Name Annotation -- CACHE real name for optimization
-  | Chr ES.String
+  | Chr Char
   | Str ES.String
   | Int Int
   | Float EF.Float
@@ -152,7 +151,7 @@ data Pattern_
   | PList [Pattern]
   | PCons Pattern Pattern
   | PBool Union Bool
-  | PChr ES.String
+  | PChr Char
   | PStr ES.String
   | PInt Int
   | PCtor

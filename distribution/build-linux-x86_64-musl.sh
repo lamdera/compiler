@@ -83,16 +83,22 @@ build_binary_docker() {
     # Our options required for static linking
     CABALOPTS="-f-export-dynamic -fembed_data_files --enable-executable-static -j4"
     GHCOPTS="-j4 +RTS -A256m -RTS -split-sections -optc-Os -optl=-pthread"
+    # @LAMDERA The lamdera package itself must be GHC -j1. Its reactor-frontend and
+    # elm-repl-worker Template Haskell splices each run a full elm compile at build time,
+    # which downloads elm packages into ELM_HOME. Under GHC's parallel upsweep the two
+    # splices download the same packages concurrently and deadlock on the package file
+    # lock (0% CPU hang, never returns). Deps have no such TH, so they stay -j4.
+    GHCOPTS_LAMDERA="-j1 +RTS -A256m -RTS -split-sections -optc-Os -optl=-pthread"
 
     # GOAL: build non-elm/elm-format deps first to save time and cut out baseline issues
     # cabal build --dry-run | grep ' - ' | grep -v 'elm-' | grep -v 'avh4' | cut -d' ' -f3 | sed 's/-[^-]*$//' | xargs -I{} cabal build {} --only-dependencies $CABALOPTS --ghc-options="$GHCOPTS"
     cabal build --only-dependencies $CABALOPTS --ghc-options="$GHCOPTS"
 
     # GOAL: build the Lamdera binary statically
-    cabal build $CABALOPTS --ghc-options="$GHCOPTS" || true
+    cabal build $CABALOPTS --ghc-options="$GHCOPTS_LAMDERA" || true
 
     # GOAL: catch silly cache failures that work on a second build
-    GITHUB_ACTIONS=true cabal build $CABALOPTS --ghc-options="$GHCOPTS"
+    GITHUB_ACTIONS=true cabal build $CABALOPTS --ghc-options="$GHCOPTS_LAMDERA"
 
     cp "$(cabal list-bin exe:lamdera)" "$bin"
     strip "$bin"

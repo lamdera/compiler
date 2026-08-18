@@ -1,4 +1,3 @@
-{-# OPTIONS_GHC -Wall #-}
 {-# LANGUAGE BangPatterns, OverloadedStrings #-}
 module Elm.Details
   ( Details(..)
@@ -247,9 +246,22 @@ verifyPkg env time (Outline.PkgOutline pkg _ _ _ exposed direct testDirect elm) 
     Task.throw $ Exit.DetailsBadElmInPkg elm
 
 
+-- @LAMDERA A Lamdera compiler built on elm 0.19.2 still accepts apps whose elm.json
+-- declares an older 0.19.x (0.19.1) - and any 0.19.x up to the compiler's own version -
+-- so existing deployed apps build unmodified without a forced elm.json bump. 0.19.1 and
+-- 0.19.2 are language/compiler compatible; and caches can't go stale across the bump
+-- because every cache path is keyed by the elm version (elm-stuff/lamdera-<ver>-<elm>/,
+-- Stuff.stuff), so 0.19.2 writes fresh caches and never reads 0.19.1's Region-format data.
+isCompatibleAppElmVersion :: V.Version -> Bool
+isCompatibleAppElmVersion elmVersion =
+  case elmVersion of
+    V.Version 0 19 _ -> elmVersion <= V.compiler
+    _                -> False
+
+
 verifyApp :: Env -> File.Time -> Outline.AppOutline -> Task Details
 verifyApp env time outline@(Outline.AppOutline elmVersion srcDirs direct _ _ _) =
-  if elmVersion == V.compiler
+  if isCompatibleAppElmVersion elmVersion -- @LAMDERA was: elmVersion == V.compiler
   then
     do  stated <- checkAppDeps outline
         actual <- verifyConstraints env (Map.map Con.exactly stated)
@@ -626,7 +638,8 @@ crawlFile :: Map.Map ModuleName.Raw ForeignInterface -> MVar StatusDict -> Pkg.N
 crawlFile foreignDeps mvar pkg src docsStatus expectedName path =
   do  bytes <- File.readUtf8 path
                & Lamdera.alternativeImplementationPassthrough (Lamdera.PackageReplacements.getReplacement pkg expectedName)
-      case Parse.fromByteString (Parse.Package pkg) bytes of
+      result <- Parse.fromByteString (Parse.Package pkg) bytes
+      case result of
         Right modul@(Src.Module (Just (A.At _ actualName)) _ _ imports _ _ _ _ _) | expectedName == actualName ->
           do  deps <- crawlImports foreignDeps mvar pkg src imports
               return (Just (SLocal docsStatus deps modul))
@@ -654,7 +667,8 @@ crawlKernel foreignDeps mvar pkg src name =
         then
           do  bytes <- File.readUtf8 path
                        & Lamdera.alternativeImplementationPassthrough (Lamdera.PackageReplacements.getReplacement pkg name)
-              case Kernel.fromByteString pkg (Map.mapMaybe getDepHome foreignDeps) bytes of
+              result <- Kernel.fromByteString pkg (Map.mapMaybe getDepHome foreignDeps) bytes
+              case result of
                 Nothing ->
                   return Nothing
 
@@ -699,11 +713,9 @@ compile pkg mvar status =
                   return Nothing
 
                 Right (Compile.Artifacts canonical annotations objects) ->
-                  let
-                    ifaces = I.fromModule pkg canonical annotations
-                    docs = makeDocs docsStatus canonical
-                  in
-                  return (Just (RLocal ifaces objects docs))
+                  do  let ifaces = I.fromModule pkg canonical annotations
+                      docs <- makeDocs docsStatus canonical
+                      return $ Just $ RLocal ifaces objects docs
 
     SForeign iface ->
       return (Just (RForeign iface))
@@ -741,16 +753,17 @@ getDocsStatus cache pkg vsn =
         else return DocsNeeded
 
 
-makeDocs :: DocsStatus -> Can.Module -> Maybe Docs.Module
+makeDocs :: DocsStatus -> Can.Module -> IO (Maybe Docs.Module)
 makeDocs status modul =
   case status of
     DocsNeeded ->
-      case Docs.fromModule modul of
-        Right docs -> Just docs
-        Left _     -> Nothing
+      do  result <- Docs.fromModule modul
+          case result of
+            Right docs -> return $ Just docs
+            Left _     -> return $ Nothing
 
     DocsNotNeeded ->
-      Nothing
+      return Nothing
 
 
 writeDocs :: Stuff.PackageCache -> Pkg.Name -> V.Version -> DocsStatus -> Map.Map ModuleName.Raw Result -> IO ()
@@ -793,9 +806,10 @@ downloadPackage cache manager pkg vsn =
           return $ Left $ Exit.PP_BadEndpointRequest err
 
         Right byteString ->
-          case D.fromByteString endpointDecoder byteString of
-            Left _ ->
-              return $ Left $ Exit.PP_BadEndpointContent url
+          do  result <- D.fromByteString endpointDecoder byteString
+              case result of
+                Left _ ->
+                  return $ Left $ Exit.PP_BadEndpointContent url
 
             Right (endpoint, expectedHash) ->
               do  result <-

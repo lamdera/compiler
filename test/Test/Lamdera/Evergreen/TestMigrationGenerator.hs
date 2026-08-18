@@ -56,7 +56,8 @@ suite = tests
   ]
 
 
-testMigrationGeneration scenario oldVersion newVersion = do
+testMigrationGeneration :: String -> Int -> Int -> Test ()
+testMigrationGeneration _scenario oldVersion newVersion = do
 
   io $ atomicPutStrLn <$> Ext.Common.requireBinary "elm-format"
   projectRoot <- io $ Lamdera.Relative.requireDir "test/scenario-migration-generate"
@@ -137,7 +138,7 @@ testExamples = withTestEnv $ do
         moduleNameOld = N.fromChars $ scenarioName <> ".Old"
         moduleNameNew = N.fromChars $ scenarioName <> ".New"
         moduleNameActual = scenarioName <> ".Actual"
-        moduleNameExpected = scenarioName <> ".Expected"
+        -- moduleNameExpected = scenarioName <> ".Expected"
         moduleOld = ModuleName.Canonical (Pkg.Name "author" "project") moduleNameOld
         moduleNew = ModuleName.Canonical (Pkg.Name "author" "project") moduleNameNew
 
@@ -157,7 +158,7 @@ testExamples = withTestEnv $ do
             (Just typeDefOld, Just typeDefNew, Just expectation) -> do
                 let
                   migrationNested = MigrationGenerator.migrateTypeDef typeDefOld typeDefNew oldVersion newVersion interfaces [] [] Set.empty
-                  (Helpers.MigrationNested migration migrationImports migrationDefs) = migrationNested
+                  (Helpers.MigrationNested migration _migrationImports migrationDefs) = migrationNested
                   migrationDefM = migrationDefs & Map.lookup (moduleNew, typeName) & fmap Helpers.migrationDef
 
                 case migrationDefM of

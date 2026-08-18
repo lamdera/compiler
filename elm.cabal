@@ -1,54 +1,44 @@
-cabal-version: 2.2
+cabal-version: 3.6
+build-type: Simple
 
-Name: elm
-Version: 0.19.1
+name: elm
+version: 0.19.2
 
-Synopsis:
-    The `elm` command line interface.
-
-Description:
-    This includes commands like `elm make`, `elm repl`, and many others
-    for helping make Elm developers happy and productive.
-
-Homepage: https://elm-lang.org
-
-License: BSD-3-Clause
-License-file: LICENSE
-
-Author:     Evan Czaplicki
-Maintainer: info@elm-lang.org
-Copyright:  Copyright (c) 2011-present, Evan Czaplicki
-
-Category: Compiler, Language
-
-Build-type: Simple
-
-source-repository head
-    type:     git
-    location: git://github.com/elm/compiler.git
+homepage: https://elm-lang.org
+author: Evan Czaplicki
+maintainer: info@elm-lang.org
+copyright: Copyright (c) 2011-present, Evan Czaplicki
+license: BSD-3-Clause
+license-file: LICENSE
 
 
-Flag dev {
-  Description: Turn off optimization and make warnings errors
-  Default: False
-}
+Executable lamdera
+    -- Make everything an error, ignoring the ones that already sit in core
+    ghc-options: -O2 -rtsopts -threaded "-with-rtsopts=-N -qg -A128m"
+        -Wall
+        -Werror
+        -Wno-error=noncanonical-monad-instances
+        -Wno-error=unused-imports
+        -Wno-error=unused-matches
+        -Wno-error=unused-top-binds
+        -Wno-error=unused-do-bind
+        -Wno-error=name-shadowing
+        -- Happens a lot in Lamdera code
+        -Wno-error=missing-signatures
+        -- We never use this Haskell feature, so skipping Evan's usages of it
+        -Wno-error=incomplete-uni-patterns
 
+        -- add -eventlog for (elm make src/Main.elm +RTS -l; threadscope elm.eventlog)
+        -- https://www.oreilly.com/library/view/parallel-and-concurrent/9781449335939/
 
-common shared
-    Hs-Source-Dirs:
-        compiler/src
-        builder/src
-        terminal/impl
-        terminal/src
-        -- Lamdera
-        extra
-        test
-        -- Elmx
-        ext-common
-        ext-sentry
-        ext-elm-pages
+    -- if os(windows)
+    --     -- https://gitlab.haskell.org/ghc/ghc/-/issues/20878
+    --     -- https://gitlab.haskell.org/ghc/ghc/-/issues/20010#note_359766
+    -- extra-libraries: stdc++ supc++ gcc_s gcc_s_seh-1
+    -- extra-libraries: msys-stdc++-6
+    -- build-depends: system-cxx-std-lib
 
-    Build-depends:
+    build-depends:
         ansi-terminal,
         ansi-wl-pprint < 1,
         base,
@@ -57,7 +47,6 @@ common shared
         containers,
         directory,
         edit-distance,
-        file-embed,
         filelock,
         filepath,
         ghc-prim,
@@ -94,6 +83,7 @@ common shared
         text,
         -- Extra
         aeson,
+        file-embed,
         neat-interpolation,
         natural-sort,
         listsafe,
@@ -151,36 +141,21 @@ common shared
         elm-format-lib,
         elm-format
 
+    hs-source-dirs:
+        compiler/src
+        builder/src
+        src/utils
+        terminal/impl
+        terminal/src
+        -- Lamdera
+        extra
+        test
+        -- Elmx
+        ext-common
+        ext-sentry
+        ext-elm-pages
 
-Executable lamdera
-    import: shared
-
-    if flag(dev)
-        ghc-options: -O0 -Wall -Werror
-    else
-        -- Make everything an error, ignoring the ones that already sit in core
-        ghc-options: -O2 -rtsopts -threaded "-with-rtsopts=-N -qg -A128m"
-            -Werror
-            -Wno-error=noncanonical-monad-instances
-            -Wno-error=unused-imports
-            -Wno-error=unused-matches
-            -Wno-error=unused-top-binds
-            -Wno-error=unused-do-bind
-            -Wno-error=name-shadowing
-            -- We never use this Haskell feature, so skipping Evan's usages of it
-            -Wno-error=incomplete-uni-patterns
-
-        -- add -eventlog for (elm make src/Main.elm +RTS -l; threadscope elm.eventlog)
-        -- https://www.oreilly.com/library/view/parallel-and-concurrent/9781449335939/
-
-    -- if os(windows)
-    --     -- https://gitlab.haskell.org/ghc/ghc/-/issues/20878
-    --     -- https://gitlab.haskell.org/ghc/ghc/-/issues/20010#note_359766
-    -- extra-libraries: stdc++ supc++ gcc_s gcc_s_seh-1
-    -- extra-libraries: msys-stdc++-6
-    -- build-depends: system-cxx-std-lib
-
-    Main-Is:
+    main-is:
         Main.hs
 
     other-modules:
@@ -204,7 +179,7 @@ Executable lamdera
         Develop.Generate.Help
         Develop.Generate.Index
         Develop.StaticFiles
-        Develop.StaticFiles.Build
+        Develop.StaticFiles_TH
 
         -- from builder/
         Build
@@ -260,6 +235,7 @@ Executable lamdera
         AST.Canonical
         AST.Optimized
         AST.Source
+        AST.Prim.Variable
         AST.Utils.Binop
         AST.Utils.Shader
         AST.Utils.Type
@@ -291,6 +267,7 @@ Executable lamdera
         Parse.Declaration
         Parse.Expression
         Parse.Keyword
+        Parse.Keyword_TH
         Parse.Module
         Parse.Number
         Parse.Pattern
@@ -335,6 +312,7 @@ Executable lamdera
         -- Lamdera --
         Lamdera
 
+        Lamdera.CompileMeta
         Lamdera.CLI
         Lamdera.CLI.Live
         Lamdera.CLI.Login
@@ -350,7 +328,6 @@ Executable lamdera
 
         Lamdera.AppConfig
         Lamdera.Checks
-        Lamdera.CompileMeta
         Lamdera.Constrain
         Lamdera.Evergreen.MigrationDestructive
         Lamdera.Evergreen.MigrationGenerator
@@ -426,9 +403,11 @@ Executable lamdera
         EasyTest
         Test
         Test.Caching
+        Test.EasyTestSpinner
+        Test.Ext.Filewatch
+        Test.PackageProblem
         Test.Check
         Test.Helpers
-        Test.PackageProblem
         Test.Lamdera
         Test.Snapshot
         Test.TypeHashes
@@ -436,7 +415,6 @@ Executable lamdera
         Test.JsOutput
         Test.WebGL
         Test.BackwardsCompat
-        Test.EasyTestSpinner
         Test.Lamdera.Evergreen.TestMigrationHarness
         Test.Lamdera.Evergreen.TestMigrationGenerator
 
@@ -459,15 +437,11 @@ Executable lamdera
         -- ext-sentry
         Ext.Sentry
         Ext.Filewatch
-        Test.Ext.Filewatch
 
         -- ext-elm-pages
         Ext.ElmPages
         Test.Ext.ElmPages.Check
 
-
-Test-Suite lamdera-tests
-    import: shared
-    type: exitcode-stdio-1.0
-    main-is: TestMain.hs
-    ghc-options: -O0 -rtsopts -threaded "-with-rtsopts=-N"
+        -- utils
+        Bytes
+        Literals

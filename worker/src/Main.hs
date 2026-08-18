@@ -1,4 +1,3 @@
-{-# OPTIONS_GHC -Wall #-}
 {-# LANGUAGE OverloadedStrings #-}
 module Main
   ( main
@@ -8,17 +7,17 @@ module Main
 
 import Control.Monad (msum)
 import qualified Data.ByteString as BS
+import Network.HTTP.Client.TLS (newTlsManager)
 import Snap.Core
 import Snap.Http.Server
 import qualified System.Environment as Env
-import qualified System.Exit as Exit
-import qualified System.IO as IO
 
 import qualified Artifacts
 import qualified Cors
 import qualified Endpoint.Compile as Compile
-import qualified Endpoint.Donate as Donate
+import qualified Endpoint.Quotes as Quotes
 import qualified Endpoint.Repl as Repl
+import qualified Endpoint.Slack as Slack
 
 
 
@@ -27,26 +26,41 @@ import qualified Endpoint.Repl as Repl
 
 main :: IO ()
 main =
-  do  rArtifacts <- Artifacts.loadRepl
-      cArtifacts <- Artifacts.loadCompile
-      errorJS <- Compile.loadErrorJS
-      manager <- Donate.getManager =<< getSecret
+  withArgs $ \root ->
+  do  manager    <- newTlsManager
+      slackToken <- Env.getEnv "SLACK_TOKEN"
+      rArtifacts <- Artifacts.loadRepl root
+      cArtifacts <- Artifacts.loadCompile root
+      errorJS    <- Compile.loadErrorJS root
       let depsInfo = Artifacts.toDepsInfo cArtifacts
 
       httpServe config $ msum $
         [ ifTop $ status
         , path "repl" $ Repl.endpoint rArtifacts
-        , path "compile" $ Compile.endpoint cArtifacts
+        , path "compile" $ Compile.endpoint_V1 cArtifacts
+        , path "compile/v2" $ Compile.endpoint_V2 cArtifacts
         , path "compile/errors.js" $ serveJavaScript errorJS
         , path "compile/deps-info.json" $ serveDepsInfo depsInfo
-        , path "donate" $ Donate.endpoint manager
+        , path "quotes" $ Quotes.endpoint
+        , path "slack-invite" $ Slack.endpoint slackToken manager
         , notFound
         ]
 
 
 config :: Config Snap a
 config =
-  setPort 8000 $ setAccessLog ConfigNoLog $ setErrorLog ConfigNoLog $ defaultConfig
+  setPort 8000 $
+  setAccessLog ConfigNoLog $
+  setErrorLog ConfigNoLog $
+    defaultConfig
+
+
+withArgs :: (Artifacts.Root -> IO r) -> IO r
+withArgs cont =
+  do  args <- Env.getArgs
+      case args of
+        [rootPath] -> cont (Artifacts.Root rootPath)
+        _          -> error "expecting one argument, the path to the artifacts directory"
 
 
 status :: Snap ()
@@ -74,23 +88,3 @@ serveDepsInfo json =
     do  modifyResponse $ setContentType "application/json"
         writeBS json
 
-
-
--- GET SECRET
-
-
-getSecret :: IO String
-getSecret =
-  do  maybeValue <- Env.lookupEnv "STRIPE_SECRET"
-      case maybeValue of
-        Just secret ->
-          return secret
-
-        Nothing ->
-          do  IO.hPutStrLn IO.stderr
-                "Expecting environment variable STRIPE_SECRET to be defined:\n\
-                \\n\
-                \    STRIPE_SECRET=sk_test_abcdefghijklmnopqrstuvwxyz\n\
-                \\n\
-                \It is needed for handling donations with Stripe."
-              Exit.exitFailure

@@ -141,7 +141,8 @@ readVersion :: FilePath -> IO V.Version
 readVersion dir = do
   let elmJsonPath = dir </> "elm.json"
   bytes <- B.readFile elmJsonPath
-  case D.fromByteString (D.field "version" V.decoder) bytes of
+  result <- D.fromByteString (D.field "version" V.decoder) bytes
+  case result of
     Left _ ->
       throwIO (userError ("Failed to decode version from: " <> elmJsonPath))
 
