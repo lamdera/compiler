@@ -23,6 +23,7 @@ import qualified Generate
 import qualified Json.Encode as JE
 import qualified Json.String as JS
 import qualified Reporting
+import qualified Reporting.Exit as Exit
 import qualified Reporting.Task as Task
 import qualified Stuff
 
@@ -63,9 +64,14 @@ lamderaReplSrc = $(do
         root <- Dir.getCurrentDirectory
         Lamdera.withProjectRoot root $ do
           Task.run $ do
-            details    <- Task.eio (const "details") $ Details.load Reporting.silent scope root
-            artifacts  <- Task.eio (const "build") $ Build.fromPaths Reporting.silent root details mainPaths
-            javascript <- Task.mapError (const "generate") $ Generate.dev root details artifacts
+            -- Render the REAL error rather than discarding it. Inlined rather
+            -- than factored into a helper: a top-level binding of this module
+            -- cannot be used inside a Template Haskell splice (GHC stage
+            -- restriction - it would have to live in another module and be
+            -- imported), and that is not worth a new module.
+            details    <- Task.eio (\e -> "details phase:\n\n" ++ Exit.toString (Exit.makeToReport (Exit.MakeBadDetails e))) $ Details.load Reporting.silent scope root
+            artifacts  <- Task.eio (\e -> "build phase:\n\n" ++ Exit.toString (Exit.makeToReport (Exit.MakeCannotBuild e))) $ Build.fromPaths Reporting.silent root details mainPaths
+            javascript <- Task.mapError (\e -> "generate phase:\n\n" ++ Exit.toString (Exit.makeToReport (Exit.MakeBadGenerate e))) $ Generate.dev root details artifacts
             return $ LBS.toStrict (B.toLazyByteString javascript)
 
   compiledCode <-
@@ -75,7 +81,7 @@ lamderaReplSrc = $(do
         return compiledCode_
       Left err ->
         error $
-          "\nError in Lamdera.Repl.lamderaRepl during the compiler " ++ err ++ " phase.\
+          "\nError in Lamdera.Repl.lamderaRepl, compiler " ++ err ++ "\
           \\n  Try running `lamdera make src/Repl/Worker.elm` directly."
 
   minifiedCode <- TH.runIO $ do
