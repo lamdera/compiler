@@ -267,7 +267,35 @@
                   # local fixtures); do not build or run it here.
                   hlib.dontCheck
                 ];
-              };
+              }
+              //
+              # stack.yaml sets `allow-newer: true`, so the official build ignores
+              # declared version bounds entirely. stacklock2nix does not translate
+              # that, so every extra-dep whose upper bounds GHC 9.8.4's boot
+              # libraries exceed fails at configure with "Encountered missing or
+              # private dependencies" - readable, for instance, wants
+              # bytestring <0.12 and text <2.1 where 9.8.4 ships 0.12 and 2.1.
+              #
+              # Jailbreaking the pinned extra-deps as a set is what allow-newer
+              # actually means, and beats discovering them one failed build at a
+              # time. Only packages stack.yaml pins are touched; the rest of the
+              # snapshot keeps its bounds.
+              lib.genAttrs [
+                "ansi-terminal"
+                "ansi-wl-pprint"
+                "broadcast-chan"
+                "command"
+                "fold-debounce"
+                "fsnotify"
+                "optparse-applicative"
+                "paramtree"
+                "readable"
+                "regex-posix"
+                "snap-core"
+                "snap-server"
+                "timeout"
+                "websockets-snap"
+              ] (n: hlib.doJailbreak hprev.${n});
           };
 
           lamdera = lib.pipe stacklock.pkgSet.elm [
