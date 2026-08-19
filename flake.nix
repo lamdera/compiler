@@ -184,6 +184,25 @@
                   # following required binary: esbuild".
                   build-tools = [ pkgs.esbuild ];
 
+                  # Serialize GHC's upsweep for THIS package. Two Template
+                  # Haskell splices invoke the Elm compiler during the build
+                  # (Develop.StaticFiles for the reactor, Lamdera.Repl for the
+                  # repl worker). Run in parallel they race two ways: on the
+                  # shared ELM_HOME package lock, and on -dynamic-too output,
+                  # where a splice links against a .dyn_o that has not been
+                  # written yet:
+                  #
+                  #   cannot find object file '.../Develop/StaticFiles_TH.dyn_o'
+                  #   while linking an interpreted expression
+                  #
+                  # The 0.19.2 branch reaches the same conclusion for the stack
+                  # build ("Build the lamdera package at -j1; deps stay -j4"),
+                  # and nixpkgs' own elm derivation disables parallel building
+                  # with the note that "with parallelism most of the time breaks
+                  # compilation". Dependencies still build in parallel; this is
+                  # scoped to the one package whose TH does the racing.
+                  ghcOptions = [ "-j1" ];
+
                   # ELM_HOME must exist before anything in the build reaches for it.
                   preBuild = setupElmHome;
                 };
