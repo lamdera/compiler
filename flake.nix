@@ -160,6 +160,19 @@
             # allow-newer, so none of that is restated here.
             modules = [
               {
+                # Build from the FULL patched source. haskell.nix filters a
+                # package's source down to what its cabal file declares, which
+                # drops directories no hs-source-dir mentions - reactor/ and
+                # extra/dist/ among them. Both are read by Template Haskell at
+                # build time (the reactor frontend, and live.js), so without this
+                # the build fails late with "requireDir: could not find a relative
+                # path, seeking at: reactor" - which names the symptom, not the
+                # source filter that caused it.
+                #
+                # stacklock2nix needed the same thing for a different reason
+                # (nixpkgs' cleanSource strips any directory called `dist`).
+                packages.elm.src = src;
+
                 # The test suite needs a full dev environment (git, network, local
                 # fixtures); do not build or run it here.
                 packages.elm.doCheck = false;
