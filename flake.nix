@@ -1,77 +1,71 @@
 {
-  # Builds the Lamdera compiler from source with nix.
+  # Builds the Lamdera compiler from source with nix, via haskell.nix.
   #
   #   nix build '.?submodules=1#lamdera'
-  #   ./result/bin/lamdera --version
+  #   ./result/bin/lamdera --version-full
   #
-  # or, pinned from another flake (this is the intended use: downstream NixOS
-  # configs pin a compiler git SHA instead of fetching a mutable prebuilt
-  # binary):
+  # or, pinned from another flake (the intended use: downstream NixOS configs pin
+  # a compiler git SHA instead of fetching a mutable prebuilt binary):
   #
   #   inputs.lamdera-compiler.url = "git+ssh://git@github.com/lamdera/compiler-internal?ref=<branch>&submodules=1";
   #   ...
   #   inputs.lamdera-compiler.packages.${system}.lamdera
   #
-  # The '?submodules=1' is required: vendor/elm-format and the
-  # extra/package-replacements/* packages are git submodules and are part of
-  # the build.
+  # '?submodules=1' is REQUIRED: vendor/elm-format and the
+  # extra/package-replacements/* packages are git submodules and part of the build.
   #
-  # How it works: stacklock2nix reads stack.yaml + stack.yaml.lock, so the nix
-  # build follows exactly the package versions of the official stack build
-  # (resolver lts-23.28 = GHC 9.8.4, the extra-deps, and the language-glsl git
-  # dependency), building them with nixpkgs' ghc98. The vendored elm-format
-  # packages (local extra-deps, not covered by the lock file) are added
-  # explicitly below.
+  # WHY haskell.nix, having previously used stacklock2nix
+  # ---------------------------------------------------
+  # stack.yaml sets `allow-newer: true` and pins 16 extra-deps, four of them local
+  # (the vendored elm-format packages). haskell.nix consumes stack.yaml directly
+  # and honours all of that; stacklock2nix does not translate `allow-newer`, so
+  # every package whose declared upper bounds GHC 9.8.4's boot libraries exceed had
+  # to be jailbroken by hand, one multi-hour build per discovery. snap-core alone
+  # wants network <3.2 and network-uri <2.6 against 3.2.8.0 and 2.6.4.2.
   #
-  # (haskell.nix was tried first: current haskell.nix has dropped GHC < 9.6,
-  # and the last revision supporting GHC 9.2.8 requires either the
-  # cache.iog.io binary cache or bootstrap-building several GHCs from source.
-  # The nixpkgs ghc98 route has no such exotic requirements: GHC comes
-  # straight from cache.nixos.org.)
+  # haskell.nix was rejected the first time round for a reason that no longer
+  # applies: it had dropped GHC < 9.6, and 0.19.1 needed 9.2.8. On 0.19.2 the
+  # resolver is lts-23.28 (GHC 9.8.4), which it supports directly.
   #
-  # Three things the stack build takes from the surrounding environment have
-  # to be provided differently under nix (no .git, no network in the build
-  # sandbox):
+  # Requires IOG's binary cache, or it bootstrap-builds GHC from source:
+  #   --option extra-substituters https://cache.iog.io
+  #   --option extra-trusted-public-keys hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ=
+  # (also declared in nixConfig below, which interactive callers get prompted for).
+  #
+  # Three things the stack build takes from its environment must be supplied
+  # differently under nix, since the sandbox has no .git and no network. These are
+  # unchanged from the previous implementation - they are about the sandbox, not
+  # about dependency solving:
   #
   #   1. extra/Lamdera/Version.hs reads the git commit via Template Haskell.
-  #      Patched (nix/patches/version-no-githash.patch) to embed the flake
-  #      source rev instead.
-  #   2. extra/Lamdera/PackageReplacementsTH.hs asks git which files each
-  #      package-replacement submodule changes relative to upstream, and for
-  #      the submodule commits. Those answers are snapshotted in
+  #      Patched (nix/patches/version-no-githash.patch) to embed the flake rev.
+  #   2. extra/Lamdera/PackageReplacementsTH.hs asks git what each
+  #      package-replacement submodule changes. Snapshotted in
   #      nix/package-replacements/ (regenerate with
-  #      nix/gen-package-replacements-lock.sh; the build fails loudly if the
-  #      snapshot disagrees with extra/package-replacements/lock.txt).
-  #   3. terminal/src/Develop/StaticFiles.hs compiles the reactor frontend at
-  #      build time, which needs an Elm package cache; nix/reactor-elm-home.nix
-  #      provides it offline.
+  #      nix/gen-package-replacements-lock.sh).
+  #   3. The reactor and repl-worker are compiled by Template Haskell at build
+  #      time and need an offline Elm package cache: nix/reactor-elm-home.nix.
   description = "Lamdera compiler, built from source";
 
+  nixConfig = {
+    extra-substituters = [ "https://cache.iog.io" ];
+    extra-trusted-public-keys = [ "hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ=" ];
+  };
+
   inputs = {
-    # nixos-25.11, the same pin as nix/devbox/flake.nix, so the ghc98 build is
-    # shared with the devbox environment.
-    #
-    # Must be a nixpkgs that has GHC 9.8.4 EXACTLY, because stack.yaml's
-    # lts-23.28 snapshot is built against it and stacklock2nix takes the package
-    # versions from that snapshot. 24.11 (the previous pin, for the 0.19.1 /
-    # GHC 9.2.8 era) only carries 9.8.2, so it cannot be used here.
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-25.11";
-    stacklock2nix = {
-      url = "github:cdepillabout/stacklock2nix/550797146fb57220319614a62f7f791e4fdc2631";
-    };
+    haskellNix.url = "github:input-output-hk/haskell.nix";
+    nixpkgs.follows = "haskellNix/nixpkgs-unstable";
   };
 
   outputs =
     {
       self,
       nixpkgs,
-      stacklock2nix,
+      haskellNix,
     }:
     let
       lib = nixpkgs.lib;
 
-      # aarch64-darwin is the primary development platform; x86_64-linux is the
-      # deployment target.
       systems = [
         "aarch64-darwin"
         "x86_64-darwin"
@@ -87,10 +81,9 @@
         let
           pkgs = import nixpkgs {
             inherit system;
-            overlays = [ stacklock2nix.overlay ];
+            inherit (haskellNix) config;
+            overlays = [ haskellNix.overlay ];
           };
-
-          hlib = pkgs.haskell.lib.compose;
 
           # Keep in step with elm.cabal's `version:`. See the note on the
           # elmVersion argument in nix/reactor-elm-home.nix.
@@ -98,9 +91,8 @@
 
           reactorElmHome = pkgs.callPackage ./nix/reactor-elm-home.nix { inherit elmVersion; };
 
-          # Copy the prefilled package cache somewhere writable: package
-          # builds triggered by the reactor compile write their build
-          # artifacts (artifacts.*.dat) into the cache directories.
+          # Copy the prefilled package cache somewhere writable: the build-time Elm
+          # compiles write artifacts into the cache directories.
           setupElmHome = ''
             export ELM_HOME="$TMPDIR/elm-home"
             mkdir -p "$ELM_HOME/${elmVersion}"
@@ -161,174 +153,65 @@
             '';
           };
 
-          stacklock = pkgs.stacklock2nix {
-            stackYaml = src + "/stack.yaml";
-            stackYamlLock = src + "/stack.yaml.lock";
-            # Must match the GHC of the stack.yaml resolver (lts-23.28 = 9.8.4).
-            baseHaskellPkgSet = pkgs.haskell.packages.ghc98;
-            cabal2nixArgsOverrides = args: args // {
-              # macOS file-watching dependency of fsnotify; its cabal file
-              # references the frameworks as plain dependencies.
-              hfsevents = ver: {
-                inherit (pkgs.darwin.apple_sdk.frameworks) Cocoa CoreServices;
-              };
-            };
-            additionalHaskellPkgSetOverrides =
-              hfinal: hprev:
-              let
-                vendored =
-                  name: path:
-                  # jailbreak: the vendored elm-format packages declare bounds
-                  # (text >= 2.0, aeson >= 2.1) that stack overrides with
-                  # `allow-newer: true` (see the note in cabal.project); the
-                  # lts-20.26 versions are what the official build actually
-                  # uses, so drop the declared bounds the same way.
-                  hlib.doJailbreak (hlib.dontCheck (hfinal.callCabal2nix name (src + "/${path}") { }));
-              in
+          project = pkgs.haskell-nix.stackProject' {
+            inherit src;
+            # stack.yaml pins the resolver (lts-23.28 = GHC 9.8.4); haskell.nix
+            # reads it, along with extra-deps, the local vendored packages and
+            # allow-newer, so none of that is restated here.
+            modules = [
               {
-                # Disable every dependency's test suite: we only want the
-                # final executable, and evaluating test dependencies creates
-                # an infinite recursion through the mutual http-streams <->
-                # snap-server test-suite dependency (nixpkgs carries the same
-                # dontCheck fix for that pair).
-                mkDerivation = args: hprev.mkDerivation (args // { doCheck = false; });
+                # The test suite needs a full dev environment (git, network, local
+                # fixtures); do not build or run it here.
+                packages.elm.doCheck = false;
 
-                # The vendored elm-format packages are local extra-deps in
-                # stack.yaml; stack.yaml.lock does not cover local paths, so
-                # stacklock2nix cannot create them by itself.
-                avh4-lib = vendored "avh4-lib" "vendor/elm-format/avh4-lib";
-                elm-format-markdown = vendored "elm-format-markdown" "vendor/elm-format/elm-format-markdown";
-                # HsOpenSSL's FFI wrappers do not compile clean against
-                # OpenSSL 3 with a modern C compiler, and the warnings are
-                # escalated to errors. nixpkgs works around the same thing in
-                # configuration-common.nix ("Work around -Werror failures until
-                # a more permanent solution is released", HsOpenSSL issues
-                # 88/93/95) with -Wno-error=incompatible-pointer-types; on GHC
-                # 9.8.4 we also hit -Wdiscarded-qualifiers, from wrappers that
-                # return OBJ_nid2sn/OBJ_nid2ln as char* when OpenSSL 3 declares
-                # them const char*. Both are suppressed here.
-                #
-                # Applied to the snapshot's own derivation rather than swapping
-                # in nixpkgs' package, so the package set stays coherent.
-                HsOpenSSL = hlib.appendConfigureFlags [
-                  "--ghc-option=-optc=-Wno-error=incompatible-pointer-types"
-                  "--ghc-option=-optc=-Wno-error=discarded-qualifiers"
-                ] hprev.HsOpenSSL;
+                packages.elm.components.exes.lamdera = {
+                  # esbuild is invoked BY the build, not just at runtime: the
+                  # Lamdera.Repl splice shells out to it while compiling the repl
+                  # worker, and Ext.Common aborts with "please install the
+                  # following required binary: esbuild".
+                  build-tools = [ pkgs.esbuild ];
 
-                elm-format-lib = vendored "elm-format-lib" "vendor/elm-format/elm-format-lib";
-                # Only referenced by elm-format's (unbuilt) test suite, but
-                # the generated expression still wants the dependency to
-                # exist.
-                elm-format-test-lib = vendored "elm-format-test-lib" "vendor/elm-format/elm-format-test-lib";
-                elm-format = vendored "elm-format" "vendor/elm-format";
+                  # ELM_HOME must exist before anything in the build reaches for it.
+                  preBuild = setupElmHome;
+                };
 
-                # The compiler itself (the package is named `elm`, the
-                # executable it produces is `lamdera`).
-                elm = lib.pipe hprev.elm [
-                  (hlib.overrideCabal (drv: {
-                    # Build from the FULL patched source, not stacklock2nix's
-                    # filtered copy.
-                    #
-                    # stacklock2nix runs local package sources through nixpkgs'
-                    # cleanSource filter, which drops any directory named `dist`.
-                    # That silently deletes extra/dist/ - which git tracks and the
-                    # build needs, because Lamdera.Live embeds extra/dist/live.js
-                    # with a Template Haskell splice. The failure surfaces at module
-                    # 218 of 229 as "requireFile:readByteString could not find a
-                    # relative path", a long way from the filter that caused it.
-                    src = src;
-
-                    # nixpkgs' own elm derivation sets this, with the comment
-                    # "sadly with parallelism most of the time breaks compilation"
-                    # (pkgs/development/compilers/elm/packages/ghc9_6/default.nix).
-                    # Lamdera has strictly more reason to: TWO Template Haskell
-                    # splices invoke the Elm compiler during the Haskell build -
-                    # Develop.StaticFiles for the reactor, and Lamdera.Repl for
-                    # vendor/elm-repl-worker. Run concurrently they race on one
-                    # shared ELM_HOME, and the symptoms point nowhere near the
-                    # cause: "renameFile:renamePath:rename: does not exist", a
-                    # missing .dyn_o for an unrelated module, and Elm failing in
-                    # its "compiler details phase".
-                    enableParallelBuilding = false;
-
-                    # preConfigure, not preBuild, to match nixpkgs - ELM_HOME wants
-                    # to exist before anything in the build can reach for it.
-                    preConfigure = setupElmHome;
-
-                    # esbuild is invoked BY the build, not just at runtime: the
-                    # Lamdera.Repl splice shells out to it while compiling the repl
-                    # worker, and Ext.Common aborts with
-                    # "please install the following required binary: esbuild".
-                    # The stack-based dev build gets it the same way - see the
-                    # nix-shell -p list in nixos/test/smoke.sh in the runtime repo.
-                    buildTools = (drv.buildTools or [ ]) ++ [ pkgs.esbuild ];
-                  }))
-                  # The test suite needs a full dev environment (git, network,
-                  # local fixtures); do not build or run it here.
-                  hlib.dontCheck
+                # HsOpenSSL's FFI wrappers do not compile clean against OpenSSL 3
+                # with a modern C compiler, and the warnings are escalated to
+                # errors. nixpkgs works around the same thing in
+                # configuration-common.nix (HsOpenSSL issues 88/93/95) with
+                # -Wno-error=incompatible-pointer-types; on GHC 9.8.4 we also hit
+                # -Wdiscarded-qualifiers, from wrappers returning
+                # OBJ_nid2sn/OBJ_nid2ln as char* where OpenSSL 3 declares them
+                # const char*.
+                packages.HsOpenSSL.ghcOptions = [
+                  "-optc=-Wno-error=incompatible-pointer-types"
+                  "-optc=-Wno-error=discarded-qualifiers"
                 ];
               }
-              //
-              # stack.yaml sets `allow-newer: true`, so the official build ignores
-              # declared version bounds entirely. stacklock2nix does not translate
-              # that, so every extra-dep whose upper bounds GHC 9.8.4's boot
-              # libraries exceed fails at configure with "Encountered missing or
-              # private dependencies" - readable, for instance, wants
-              # bytestring <0.12 and text <2.1 where 9.8.4 ships 0.12 and 2.1.
-              #
-              # Jailbreaking the pinned extra-deps as a set is what allow-newer
-              # actually means, and beats discovering them one failed build at a
-              # time. Only packages stack.yaml pins are touched; the rest of the
-              # snapshot keeps its bounds.
-              lib.genAttrs [
-                "ansi-terminal"
-                "ansi-wl-pprint"
-                "broadcast-chan"
-                "command"
-                "fold-debounce"
-                "fsnotify"
-                "optparse-applicative"
-                "paramtree"
-                "readable"
-                "regex-posix"
-                "snap-core"
-                "snap-server"
-                "timeout"
-                "websockets-snap"
-              ] (n: hlib.doJailbreak hprev.${n});
+            ];
           };
 
-          lamdera = lib.pipe stacklock.pkgSet.elm [
-            pkgs.haskell.lib.compose.justStaticExecutables
-          ];
+          flake = project.flake { };
+
+          lamdera = flake.packages."elm:exe:lamdera";
         in
         {
-          inherit pkgs stacklock lamdera;
+          inherit pkgs project lamdera;
         };
 
       bySystem = forAllSystems lamderaFor;
     in
     {
       packages = forAllSystems (system: {
-        lamdera = bySystem.${system}.lamdera;
+        inherit (bySystem.${system}) lamdera;
         default = bySystem.${system}.lamdera;
       });
 
-      apps = forAllSystems (system: {
-        lamdera = {
-          type = "app";
-          program = "${bySystem.${system}.lamdera}/bin/lamdera";
+      devShells = forAllSystems (system: {
+        default = bySystem.${system}.project.shellFor {
+          tools = { cabal = "latest"; };
+          buildInputs = [ bySystem.${system}.pkgs.esbuild ];
         };
-        default = {
-          type = "app";
-          program = "${bySystem.${system}.lamdera}/bin/lamdera";
-        };
-      });
-
-      # For debugging in `nix repl`: the whole stacklock2nix result
-      # (pkgSet, devShell, ...).
-      legacyPackages = forAllSystems (system: {
-        lamderaStacklock = bySystem.${system}.stacklock;
       });
     };
 }
