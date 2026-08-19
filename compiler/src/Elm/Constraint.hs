@@ -144,9 +144,39 @@ intersect (Range lo lop hop hi) (Range lo_ lop_ hop_ hi_) =
 -- ELM CONSTRAINT
 
 
+-- @LAMDERA A package's elm.json carries its OWN `elm-version` bound, and this is
+-- where it is checked against the running compiler. Elm 0.19.2 is a minor release
+-- with no language or format changes, so a package published against 0.19.1 is fine
+-- on 0.19.2 and vice versa - but a package whose bound happens to EXCLUDE 0.19.2
+-- (bburdette/toop 1.2.0 declares "0.19.0 <= v < 0.19.2") is refused outright, and the
+-- app depending on it fails to solve with Exit.DetailsNoSolution, which prints the
+-- whole constraint set without naming which constraint was unsatisfiable.
+--
+-- Details.isCompatibleAppElmVersion already makes the APPLICATION side of elm.json
+-- flexible across 0.19.x; this is the package side of the same idea, without which
+-- that flexibility only half works.
+--
+-- Deliberately an EXPLICIT PAIR rather than "any 0.19.x". Interchangeability is a
+-- claim about two specific releases that have been tested against each other, not a
+-- property 0.19.x versions have in general. A future 0.19.3 will NOT be accepted here
+-- by default: including it has to be a deliberate choice someone makes after
+-- checking, which is exactly what an open range would take away.
+interchangeableElm :: [V.Version]
+interchangeableElm =
+  [ V.Version 0 19 1
+  , V.Version 0 19 2
+  ]
+
+
 goodElm :: Constraint -> Bool
 goodElm constraint =
   satisfies constraint V.compiler
+  ||
+  -- Only substitute while the compiler is ITSELF one of the interchangeable pair, so
+  -- this widens nothing for any other compiler version.
+  ( V.compiler `elem` interchangeableElm
+    && any (satisfies constraint) interchangeableElm
+  )
 
 
 defaultElm :: Constraint
