@@ -811,20 +811,20 @@ downloadPackage cache manager pkg vsn =
                 Left _ ->
                   return $ Left $ Exit.PP_BadEndpointContent url
 
-            Right (endpoint, expectedHash) ->
-              do  result <-
-                    Http.getArchive manager endpoint (\e -> Exit.PP_BadArchiveRequest e Nothing) (Exit.PP_BadArchiveContent endpoint) $
-                      \(sha, archive) ->
-                        if expectedHash == Http.shaToChars sha
-                          || pkgsPath /= Nothing -- @LAMDERA when we're debugging with a local packages path, skip hash checking
-                        then Right <$> File.writePackage (Stuff.package cache pkg vsn) archive
-                        else return $ Left $ Exit.PP_BadArchiveHash endpoint expectedHash (Http.shaToChars sha) Nothing
+                Right (endpoint, expectedHash) ->
+                  do  result <-
+                        Http.getArchive manager endpoint (\e -> Exit.PP_BadArchiveRequest e Nothing) (Exit.PP_BadArchiveContent endpoint) $
+                          \(sha, archive) ->
+                            if expectedHash == Http.shaToChars sha
+                              || pkgsPath /= Nothing -- @LAMDERA when we're debugging with a local packages path, skip hash checking
+                            then Right <$> File.writePackage (Stuff.package cache pkg vsn) archive
+                            else return $ Left $ Exit.PP_BadArchiveHash endpoint expectedHash (Http.shaToChars sha) Nothing
 
-                  -- @LAMDERA both of those failures are usually a GitHub rename, so go find
-                  -- out where the project actually went and say so in the error.
-                  case result of
-                    Right a -> return (Right a)
-                    Left problem -> Left <$> attachMoveInfo manager pkg problem
+                      -- @LAMDERA both of those failures are usually a GitHub rename, so go find
+                      -- out where the project actually went and say so in the error.
+                      case result of
+                        Right a -> return (Right a)
+                        Left problem -> Left <$> attachMoveInfo manager pkg problem
 
 
 -- @LAMDERA a published Elm version is immutable, but the GitHub repo serving it is not.
