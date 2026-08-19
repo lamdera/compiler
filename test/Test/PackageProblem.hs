@@ -87,6 +87,11 @@ httpStatusError code url =
         , HTTP.responseCookieJar = mempty
         , HTTP.responseClose' = HTTP.ResponseClose (return ())
         , HTTP.responseOriginalRequest = HTTP.parseRequest_ url
+        -- Added by http-client in the lts-23.28 (GHC 9.8.4) set. The record is
+        -- only a stub for exercising archiveNotFound's classification, so an
+        -- empty header list is the right value, but it has to be written: the
+        -- build uses -Werror=missing-fields.
+        , HTTP.responseEarlyHints = []
         }
       )
       (BS.pack "")
