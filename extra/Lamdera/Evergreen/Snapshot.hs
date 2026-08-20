@@ -47,7 +47,7 @@ type snapshots  -}
 run :: Int -> IO ()
 run version = do
   ifaces <- Interfaces.all [ "src/Types.elm" ]
-  snapshotCurrentTypes version ifaces (ifaces ! "Types")
+  snapshotCurrentTypes version ifaces (ifaces ! ModuleName.Canonical Pkg.dummyName "Types")
 
 
 snapshotCurrentTypes :: Int -> Interfaces -> Interface.Interface -> IO ()
@@ -665,7 +665,7 @@ canonicalToFt version scope interfaces recursionSet canonical tvarMap =
         (author, pkg, module_, tipe) ->
           -- Anything else must not be a core type, recurse to find it
 
-          case Map.lookup moduleNameRaw interfaces of
+          case Map.lookup moduleName interfaces of
             Just subInterface ->
 
               -- Try unions

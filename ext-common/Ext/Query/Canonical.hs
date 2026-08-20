@@ -51,10 +51,11 @@ loadSingleObjects path = do
 loadSingleArtifacts :: FilePath -> IO Compile.Artifacts
 loadSingleArtifacts path = do
   ifaces <- Ext.Query.Interfaces.all [path]
+  let ifacesRaw = Map.mapKeys Module._module ifaces
   source <- File.readUtf8 path
   case Parse.fromByteString Parse.Application source of
     Right modul ->
-      case Compile.compile Nothing Pkg.dummyName ifaces modul of
+      case Compile.compile Nothing Pkg.dummyName ifacesRaw modul of
         Right artifacts ->
           pure artifacts
 

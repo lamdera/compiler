@@ -11,7 +11,7 @@ import qualified Elm.ModuleName as ModuleName
 import Lamdera
 
 type Interfaces =
-  Map.Map ModuleName.Raw Interface.Interface
+  Map.Map ModuleName.Canonical Interface.Interface
 
 
 data DiffableType

@@ -65,7 +65,7 @@ data DiffableType
 
 checkPageDataType :: Interfaces -> Either Reporting.Exit.BuildProblem ()
 checkPageDataType interfaces =
-  case Map.lookup "Main" interfaces of
+  case Map.lookup (ModuleName.Canonical Pkg.dummyName "Main") interfaces of
     Just targetInterface ->
       if typeExists "PageData" targetInterface
         then do
@@ -125,11 +125,7 @@ wireError formattedErrors =
 
 {- Tracks types that have already been seen to ensure we can break cycles -}
 type RecursionSet =
-  Set.Set (ModuleName.Raw, N.Name, [Can.Type])
-
-
-nameRaw :: ModuleName.Canonical -> ModuleName.Raw
-nameRaw (ModuleName.Canonical (Pkg.Name author pkg) module_) = module_
+  Set.Set (ModuleName.Canonical, N.Name, [Can.Type])
 
 
 diffableTypeByName :: Interfaces -> N.Name -> ModuleName.Canonical -> Interface.Interface -> DiffableType
@@ -137,7 +133,7 @@ diffableTypeByName interfaces targetName modul interface = do
   let
     moduleName = ModuleName._module modul
     currentModule = modul
-    recursionSet = Set.singleton (moduleName, targetName, [])
+    recursionSet = Set.singleton (modul, targetName, [])
 
   case Map.lookup targetName $ Interface._aliases interface of
     Just alias -> do
@@ -228,7 +224,7 @@ canonicalToDiffableType targetName currentModule interfaces recursionSet canonic
       let
         currentModule_ = moduleName
 
-        recursionIdentifier = (nameRaw moduleName, name, tvarResolvedParams)
+        recursionIdentifier = (moduleName, name, tvarResolvedParams)
 
         newRecursionSet = Set.insert recursionIdentifier recursionSet
 
@@ -367,7 +363,7 @@ canonicalToDiffableType targetName currentModule interfaces recursionSet canonic
         (author, pkg, module_, tipe) ->
           -- Anything else must not be a core type, recurse to find it
 
-          case Map.lookup (nameRaw moduleName) interfaces of
+          case Map.lookup moduleName interfaces of
             Just subInterface ->
 
               -- Try unions
