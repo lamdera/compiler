@@ -123,6 +123,22 @@ suite = tests
         expectEqualTextTrimmed thash "4684f0e30ca7421c497e79b5dfc88cec77010699"
         expectEqualTextTrimmed ttext "R[LD[C[[][]],S]LS[C[[][]]]]"
 
+      scope "package type aliasing its internal Types module (miyamoen/select-list)" $ do
+        -- Regression test: miyamoen/select-list's SelectList.SelectList is a
+        -- type alias for its internal Types.SelectList. The Types module gets
+        -- confused with user's Types module. Tracking the package properly is
+        -- needed to distinguish the two.
+        project_ <- io $ Lamdera.Relative.requireDir "test/scenario-select-list"
+        let
+          modulePath = "src/Test/Wire_Package_Types_SelectList.elm"
+          moduleName = "Test.Wire_Package_Types_SelectList"
+          typeName = "PackageTypesSelectList"
+
+        (thash, ttext) <- ioSilenced $ withDebug $ Ext.Common.withProjectRoot project_ $ do
+          Lamdera.TypeHash.calculateHashPair modulePath moduleName typeName
+
+        expectEqualTextTrimmed ttext "C[[L[I]IL[I]]]"
+
 
   , scope "sha1 should not collide" $ do
 
