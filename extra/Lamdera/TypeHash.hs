@@ -80,13 +80,13 @@ buildCheckHashes artifacts = do
 
 {- Tracks types that have already been seen to ensure we can break cycles -}
 type RecursionSet =
-  Set.Set (ModuleName.Raw, N.Name, [Type])
+  Set.Set (ModuleName.Canonical, N.Name, [Type])
 
 
 calculateHashPair :: FilePath -> N.Name -> N.Name -> IO (Text, Text)
 calculateHashPair path modulename typename = do
   interfaces <- Interfaces.all [ path ]
-  case Map.lookup modulename interfaces of
+  case Map.lookup (ModuleName.Canonical Pkg.dummyName modulename) interfaces of
     Just interfaceModule -> do
       let dt = diffableTypeByName interfaces typename modulename interfaceModule
       pure $ (diffableTypeToHash dt, diffableTypeToText dt)
@@ -99,7 +99,7 @@ calculateLamderaHashes = do
   debug $ "#️⃣  typehash: full with interface load"
   interfaces <- Interfaces.all [ "src/Types.elm" ]
   inDebug <- Lamdera.isDebug
-  case Map.lookup "Types" interfaces of
+  case Map.lookup (ModuleName.Canonical Pkg.dummyName "Types") interfaces of
     Just iface_Types ->
       calculateLamderaHashes_ interfaces iface_Types inDebug
 
@@ -172,7 +172,7 @@ calculateLamderaHashes_ interfaces iface_Types inDebug = do
 diffableTypeByName :: Interfaces -> N.Name -> N.Name -> Interface.Interface -> DiffableType
 diffableTypeByName interfaces targetName moduleName interface = do
   let
-    recursionSet = Set.singleton (moduleName, targetName, [])
+    recursionSet = Set.singleton (ModuleName.Canonical Pkg.dummyName moduleName, targetName, [])
 
   case Map.lookup targetName $ Interface._aliases interface of
     Just alias -> do
@@ -240,8 +240,6 @@ aliasToDiffableType targetName interfaces recursionSet tvarMap aliasInterface pa
     Interface.PublicAlias a -> treat a
     Interface.PrivateAlias a -> treat a
 
-nameRaw (ModuleName.Canonical (Pkg.Name author pkg) module_) = module_
-
 -- = TLambda Type Type
 -- | TVar N.Name
 -- | TType ModuleName.Canonical N.Name [Type]
@@ -254,7 +252,7 @@ canonicalToDiffableType targetName interfaces recursionSet canonical tvarMap =
   case canonical of
     TType moduleName name params ->
       let
-        recursionIdentifier = (nameRaw moduleName, name, tvarResolvedParams)
+        recursionIdentifier = (moduleName, name, tvarResolvedParams)
 
         newRecursionSet = Set.insert recursionIdentifier recursionSet
 
@@ -420,7 +418,7 @@ canonicalToDiffableType targetName interfaces recursionSet canonical tvarMap =
         (author, pkg, module_, tipe) ->
           -- Anything else must not be a core type, recurse to find it
 
-          case Map.lookup (nameRaw moduleName) interfaces of
+          case Map.lookup moduleName interfaces of
             Just subInterface ->
 
               -- Try unions

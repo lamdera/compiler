@@ -6,7 +6,6 @@ module Ext.Query.Interfaces where
 
 import Control.Monad (liftM2)
 import qualified Data.Map as Map
-import qualified Data.OneOrMore as OneOrMore
 import Control.Concurrent.MVar
 
 import qualified Data.NonEmptyList as NE
@@ -15,6 +14,7 @@ import qualified AST.Optimized as Opt
 import qualified Elm.Details as Details
 import qualified Elm.Interface as I
 import qualified Elm.ModuleName as ModuleName
+import qualified Elm.Package as Pkg
 import qualified Reporting
 import qualified Reporting.Exit as Exit
 import qualified Reporting.Task as Task
@@ -26,7 +26,7 @@ import qualified Json.Encode as Encode
 import Ext.Common
 
 
-all :: [FilePath] -> IO (Map.Map ModuleName.Raw I.Interface)
+all :: [FilePath] -> IO (Map.Map ModuleName.Canonical I.Interface)
 all paths = do
   debug $ "Loading Interfaces.all on paths: " ++ show paths
   artifactsDeps <- allDepArtifacts
@@ -39,7 +39,7 @@ all paths = do
 
 
 -- Takes Build.Artifacts and extracts project interfaces, loads all package dep interfaces, and merges them
-artifactsToFullInterfaces :: Details.Details -> Build.Artifacts -> IO (Map.Map ModuleName.Raw I.Interface)
+artifactsToFullInterfaces :: Details.Details -> Build.Artifacts -> IO (Map.Map ModuleName.Canonical I.Interface)
 artifactsToFullInterfaces details artifacts = do
 
   ifaces <- extractInterfaces $ Build._modules artifacts
@@ -57,7 +57,7 @@ allGraph = do
 
 data Artifacts =
   Artifacts
-    { _ifaces :: Map.Map ModuleName.Raw I.Interface
+    { _ifaces :: Map.Map ModuleName.Canonical I.Interface
     , _graph :: Opt.GlobalGraph
     }
 
@@ -97,27 +97,26 @@ allDepArtifacts_ details = do
       return $ Artifacts (toInterfaces deps) objs
 
 
-toInterfaces :: Map.Map ModuleName.Canonical I.DependencyInterface -> Map.Map ModuleName.Raw I.Interface
+toInterfaces :: Map.Map ModuleName.Canonical I.DependencyInterface -> Map.Map ModuleName.Canonical I.Interface
 toInterfaces deps =
-  Map.mapMaybe toUnique $ Map.fromListWith OneOrMore.more $
-    Map.elems (Map.mapMaybeWithKey getPublic deps)
+  Map.map toInterface deps
 
 
-getPublic :: ModuleName.Canonical -> I.DependencyInterface -> Maybe (ModuleName.Raw, OneOrMore.OneOrMore I.Interface)
-getPublic (ModuleName.Canonical _ name) dep =
+toInterface :: I.DependencyInterface -> I.Interface
+toInterface dep =
   case dep of
-    I.Public  iface -> Just (name, OneOrMore.one iface)
-    I.Private _ _ _ -> Nothing
+    I.Public iface -> iface
+    I.Private pkg unions aliases ->
+      I.Interface
+        { I._home = pkg
+        , I._values = Map.empty
+        , I._unions = Map.map I.PrivateUnion unions
+        , I._aliases = Map.map I.PrivateAlias aliases
+        , I._binops = Map.empty
+        }
 
 
-toUnique :: OneOrMore.OneOrMore a -> Maybe a
-toUnique oneOrMore =
-  case oneOrMore of
-    OneOrMore.One value -> Just value
-    OneOrMore.More _ _  -> Nothing
-
-
-allProjectInterfaces :: NE.List FilePath -> IO (Map.Map ModuleName.Raw I.Interface)
+allProjectInterfaces :: NE.List FilePath -> IO (Map.Map ModuleName.Canonical I.Interface)
 allProjectInterfaces paths =
   BW.withScope $ \scope -> do
     root <- getProjectRoot "allProjectInterfaces"
@@ -146,7 +145,7 @@ runTaskUnsafe task = do
             \\n" ++ (exit & Exit.reactorToReport & Exit.toJson & Encode.encode & builderToString)
 
 
-extractInterfaces :: [Build.Module] -> IO (Map.Map ModuleName.Raw I.Interface)
+extractInterfaces :: [Build.Module] -> IO (Map.Map ModuleName.Canonical I.Interface)
 extractInterfaces modu = do
   k <- modu
     & mapM (\m ->
@@ -156,7 +155,7 @@ extractInterfaces modu = do
         Build.Cached name _ mCachedInterface ->
           cachedHelp name mCachedInterface
     )
-  pure $ Map.fromList $ justs k
+  pure $ Map.fromList $ fmap (\(nameRaw, iface) -> (ModuleName.Canonical Pkg.dummyName nameRaw, iface)) $ justs k
 
 
 {- Appropriated from Build.loadInterface -}

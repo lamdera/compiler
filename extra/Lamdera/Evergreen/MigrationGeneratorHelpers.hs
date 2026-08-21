@@ -601,7 +601,7 @@ findTypeDef tipe interfaces =
 
 findDef :: ModuleName.Canonical -> N.Name -> Interfaces -> Maybe TypeDef
 findDef moduleNameCan typeName interfaces =
-  case Map.lookup (dropCan moduleNameCan) interfaces of
+  case Map.lookup moduleNameCan interfaces of
     Just moduleInterface ->
       findDef_ moduleNameCan typeName moduleInterface
 

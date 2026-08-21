@@ -43,10 +43,10 @@ betweenVersions coreTypeDiffs oldVersion newVersion root = do
 
     res <- Ext.Common.withProjectRoot root $ do
       interfaces <- Ext.Query.Interfaces.all (NE.toList paths)
-      case Map.lookup (N.fromChars moduleNameString) interfaces of
+      case Map.lookup (ModuleName.Canonical Pkg.dummyName (N.fromChars moduleNameString)) interfaces of
         Just interface -> do
           debug $ "starting generatefor"
-          generateFor coreTypeDiffs oldVersion newVersion interfaces (interfaces Sanity.! (N.fromChars $ "Evergreen.V" <> show newVersion <> ".Types"))
+          generateFor coreTypeDiffs oldVersion newVersion interfaces (interfaces Sanity.! (ModuleName.Canonical Pkg.dummyName (N.fromChars $ "Evergreen.V" <> show newVersion <> ".Types")))
 
         Nothing ->
           error $ "Fatal: could not find the module `" <> moduleNameString <> "`, please report this issue in Discord with your project code."

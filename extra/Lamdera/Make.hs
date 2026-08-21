@@ -25,8 +25,8 @@ import qualified Ext.Query.Interfaces
 
 
 
--- compileToInterfaces :: FilePath -> FilePath -> IO (Map.Map ModuleName.Raw I.Interface)
-compileToInterfaces :: FilePath -> FilePath -> [FilePath] -> IO (Either Exit.Make (Map.Map ModuleName.Raw I.Interface))
+-- compileToInterfaces :: FilePath -> FilePath -> IO (Map.Map ModuleName.Canonical I.Interface)
+compileToInterfaces :: FilePath -> FilePath -> [FilePath] -> IO (Either Exit.Make (Map.Map ModuleName.Canonical I.Interface))
 compileToInterfaces root path additional = do
   Ext.Common.withProjectRoot root $ do
     let
