@@ -8,11 +8,26 @@ Expected to grow more fields over time.
 
 Current fields:
 
-  timers : Bool — whether the backend's subscriptions can reach Time.every,
-  answered by reachability over the optimized dependency graph starting from the
-  `subscriptions` field of a direct `Lamdera.backend { ... }` call, so a
-  Time.every behind helpers, if/case, Sub.batch or aliases is still found.
-  Defaults to false when no backend app record can be resolved.
+  timers : Bool — whether the app's Backend.subscriptions can ever produce a
+  self-driven subscription that must fire while there are no connected clients.
+  In practice that means Time.every: it ticks on a clock independent of any
+  client connection, so a slept (exited) app would silently drop those ticks.
+
+  Connection-gated subs (Lamdera.onConnect / onDisconnect) do NOT set this — a
+  sleeping app has no connections, and a new connection wakes it (~socket
+  activation) before onConnect fires; a disconnect can't be missed because sleep
+  requires zero connected clients in the first place. Everything else a backend
+  could reference is either browser/DOM-driven (never fires headless) or not
+  compilable in app code, so it can't matter here.
+
+  We answer by reachability over the optimized dependency graph, starting from
+  the `subscriptions` field of a direct `Lamdera.backend { ... }` call — so a
+  Time.every hidden behind helpers, if/case branches, Sub.batch, or aliases is
+  still found. If we can't locate a proper backend app record, we default to
+  timers:false (sleep-eligible): the deliberate choice is to never keep an app
+  awake for subscriptions that do nothing, and to treat any genuinely-new
+  self-driven subscription as a future edge case rather than penalise every app
+  that happens to reference an inert (e.g. browser) subscription.
 
 -}
 module Lamdera.CompileMeta where
@@ -67,7 +82,7 @@ backendSubsUseTimeEvery graph =
         _ -> False
 
 
-{-| The Time.every global. -}
+{-| The one subscription that must keep an app awake. -}
 timeEvery :: Global
 timeEvery = Global (Canonical (Pkg.Name "elm" "time") "Time") "every"
 
