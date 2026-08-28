@@ -1,4 +1,3 @@
-{-# OPTIONS_GHC -Wall #-}
 {-# LANGUAGE OverloadedStrings #-}
 module Elm.Compiler.Type
   ( Type(..)
@@ -120,9 +119,9 @@ decoder :: D.Decoder () Type
 decoder =
   let
     parser =
-      P.specialize (\_ _ _ -> ()) (fromRawType . fst <$> Type.expression)
+      P.specialize (\_ _ -> ()) (fromRawType . fst <$> Type.expression)
   in
-  D.customString parser (\_ _ -> ())
+  D.customString parser (\_ -> ())
 
 
 fromRawType :: Src.Type -> Type

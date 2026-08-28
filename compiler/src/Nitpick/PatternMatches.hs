@@ -1,4 +1,4 @@
-{-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS_GHC -Wno-x-partial #-}
 {-# LANGUAGE OverloadedStrings #-}
 module Nitpick.PatternMatches
   ( check
@@ -41,7 +41,7 @@ data Pattern
 
 
 data Literal
-  = Chr ES.String
+  = Chr Char
   | Str ES.String
   | Int Int
   deriving (Eq)

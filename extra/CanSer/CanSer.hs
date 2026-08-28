@@ -117,8 +117,8 @@ instance ToElm C.Expr_ where
         "Debug" <.> toElm name
       C.VarOperator op _ _ _ ->
         "(" <> toElm op <> ")"
-      C.Chr text ->
-        "'" <> Lit (fString text) <> "'"
+      C.Chr c ->
+        "'" <> Lit (fChar c) <> "'"
       C.Str text ->
         "\"" <> Lit (fString text) <> "\""
       C.Int i ->
@@ -189,7 +189,7 @@ instance ToElm C.Pattern_ where
       C.PList pats -> "[" <> (intercalate "," (toElm <$> pats)) <> "]"
       C.PCons p1 p2 -> toElm p1 <> " :: " <> toElm p2
       C.PBool _ bool -> if bool then "True" else "False"
-      C.PChr text -> "'" <> Lit (fString text) <> "'"
+      C.PChr c -> "'" <> Lit (fChar c) <> "'"
       C.PStr text -> "\"" <> Lit (fString text) <> "\""
       C.PInt i -> toElm i
       C.PCtor _home _type _union _name _index _args ->
@@ -205,8 +205,12 @@ instance ToElm C.Pattern_ where
 patternCtorArg (C.PatternCtorArg _ _ argPattern) = argPattern -- TODO: does index matter here? Is the list always sorted as we expect?
 
 
+fChar c =
+  T.singleton c
+
 fString s =
   T.pack $ Elm.String.toChars s
+
 
 -- DEFINITIONS
 

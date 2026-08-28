@@ -119,8 +119,9 @@ normalJsonVia :: (Show a) => Maybe FilePath -> String -> String -> D.Decoder () 
 normalJsonVia msocket debugIdentifier url decoder = do
   manager <- managerFor msocket
   debug $ "HTTP GET " <> url <> " (" <> debugIdentifier <> ")" <> maybe "" (\s -> " via socket " <> s) msocket
-  Http.get manager url jsonHeaders HttpError $ \body ->
-    case D.fromByteString decoder body of
+  Http.get manager url jsonHeaders HttpError $ \body -> do
+    result <- D.fromByteString decoder body
+    case result of
       Right content ->
         -- Helpful for debugging
         -- return $ Right $ debugNote "response" content
@@ -145,8 +146,9 @@ normalRpcJsonVia :: Maybe FilePath -> String -> E.Value -> String -> D.Decoder (
 normalRpcJsonVia msocket debugIdentifier body url decoder = do
   manager <- managerFor msocket
   debug $ "POSTING   " <> url <> " (" <> debugIdentifier <> ", " <> show body <> ")" <> maybe "" (\s -> " via socket " <> s) msocket
-  Http.postBody manager url jsonHeaders body HttpError $ \body ->
-    case D.fromByteString decoder body of
+  Http.postBody manager url jsonHeaders body HttpError $ \body -> do
+    result <- D.fromByteString decoder body
+    case result of
       Right content ->
         return $ Right content
 

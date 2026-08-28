@@ -9,7 +9,8 @@ module Generate.Html
 import qualified Data.ByteString.Builder as B
 import Data.Monoid ((<>))
 import qualified Data.Name as Name
-import Text.RawString.QQ (r)
+
+import Literals (b)
 
 import qualified Lamdera
 import qualified Lamdera.Live
@@ -22,11 +23,11 @@ sandwich :: FilePath -> Name.Name -> B.Builder -> B.Builder
 sandwich root moduleName javascript =
   Lamdera.alternativeImplementationWhen Lamdera.isLamdera_ (sandwich_ root moduleName javascript) $
   let name = Name.toBuilder moduleName in
-  [r|<!DOCTYPE HTML>
+  [b|<!DOCTYPE HTML>
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>|] <> name <> [r|</title>
+  <title>|] <> name <> [b|</title>
   <style>body { padding: 0; margin: 0; }</style>
 </head>
 
@@ -36,9 +37,9 @@ sandwich root moduleName javascript =
 
 <script>
 try {
-|] <> javascript <> [r|
+|] <> javascript <> [b|
 
-  var app = Elm.|] <> name <> [r|.init({ node: document.getElementById("elm") });
+  var app = Elm.|] <> name <> [b|.init({ node: document.getElementById("elm") });
 }
 catch (e)
 {
@@ -72,14 +73,14 @@ sandwich_ root moduleName javascript =
         else
           "<title>" <> name <> "</title>"
   in
-  [r|<!DOCTYPE HTML>
+  [b|<!DOCTYPE HTML>
 <html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, minimum-scale=1.0">
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <style>body { padding: 0; margin: 0; } body.boot-unhandled-js-error { padding: 10px } @media (prefers-color-scheme: dark) { body.boot-unhandled-js-error { background-color: #000; color: #fff; } } </style>
-  |] <> htmlHead <> [r|
+  |] <> htmlHead <> [b|
 </head>
 
 <body>
@@ -89,10 +90,10 @@ sandwich_ root moduleName javascript =
 <script>
 try {
 // lamdera-elm-js-start
-|] <> javascript <> [r|
+|] <> javascript <> [b|
 // lamdera-elm-js-end
-|] <> Lamdera.Live.lamderaLiveSrc <> Lamdera.UiSourceMap.src <> [r|
-  setupApp("|] <> name <> [r|", "elm")
+|] <> Lamdera.Live.lamderaLiveSrc <> Lamdera.UiSourceMap.src <> [b|
+  setupApp("|] <> name <> [b|", "elm")
 }
 catch (e)
 {

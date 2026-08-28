@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE QuasiQuotes #-}
-{-# OPTIONS_GHC -Wall -fno-warn-unused-do-bind #-}
+{-# OPTIONS_GHC -fno-warn-unused-do-bind #-}
 module Lamdera.UiSourceMap
     (updateDecls, src, openEditorSrc)
     where
@@ -95,8 +95,10 @@ propertyNameText =
 newProperty :: Bool -> FilePath -> Module.Canonical -> Name.Name -> Reporting.Annotation.Region -> Can.Expr
 newProperty isElmUi fileName (Module.Canonical _ moduleName) functionName location =
     let
-        (Reporting.Annotation.Region (Reporting.Annotation.Position row column) _) =
+        !(Reporting.Annotation.Region cursor _) =
             location
+
+        (row, column) = Reporting.Annotation.toRowCol cursor
 
         propertyValue =
             [ Name.toChars moduleName

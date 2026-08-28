@@ -20,6 +20,12 @@
   stdenvNoCC,
   fetchurl,
   unzip,
+  # The Elm version keying the package cache layout. MUST match elm.cabal's
+  # `version:` - Stuff.getCacheDir puts packages at $ELM_HOME/<compilerVersion>/,
+  # and compilerVersion is that cabal version. A mismatch means the compiler
+  # looks in a directory this derivation never created, and every build-time Elm
+  # compile fails as if the packages were missing.
+  elmVersion,
 }:
 
 let
@@ -91,7 +97,7 @@ stdenvNoCC.mkDerivation {
   nativeBuildInputs = [ unzip ];
   dontUnpack = true;
   buildCommand = ''
-    packages=$out/0.19.1/packages
+    packages=$out/${elmVersion}/packages
     mkdir -p "$packages"
     ${unpackCmds}
     cp ${registryDat} "$packages/registry.dat"

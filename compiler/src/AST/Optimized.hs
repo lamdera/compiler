@@ -1,4 +1,3 @@
-{-# OPTIONS_GHC -Wall #-}
 module AST.Optimized
   ( Def(..)
   , Expr(..)
@@ -46,7 +45,7 @@ import qualified Reporting.Annotation as A
 
 data Expr
   = Bool Bool
-  | Chr ES.String
+  | Chr Char
   | Str ES.String
   | Int Int
   | Float EF.Float

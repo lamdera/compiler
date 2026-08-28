@@ -22,6 +22,7 @@ import qualified Lamdera.Relative
 all = EasyTest.run suite
 
 
+generationFileCheck :: String -> String -> Text -> Test ()
 generationFileCheck originalFile generatedFile expectedOutput = do
   -- original <- io $ readUtf8Text originalFile
   generatedM <- io $ Lamdera.Relative.readFile generatedFile

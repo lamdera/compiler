@@ -471,7 +471,7 @@ namedTodo modul functionName =
 
 
 a v =
-  A.at (A.Position 0 0) (A.Position 0 10) v
+  A.At A.zero v
 
 -- Refer to Lamdera.Wire3.endianness
 endianness =
@@ -706,6 +706,7 @@ succeedDecode value =
         ]))
 
 
+failDecode :: String -> Expr
 failDecode identifier =
   -- debugDecoder (Utf8.fromChars $ "failDecode:" ++ identifier) $
   (a (VarForeign mLamdera_Wire "failDecode"

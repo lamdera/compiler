@@ -70,7 +70,7 @@ max =
 
 compiler : Version
 compiler =
-    Version 0 19 1
+    Version 0 19 2
 
 
 

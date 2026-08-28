@@ -1,5 +1,4 @@
-{-# OPTIONS_GHC -Wall #-}
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ExtendedLiterals, OverloadedStrings #-}
 module Elm.Constraint
   ( Constraint(..) -- @LAMDERA exposed
   , exactly
@@ -28,7 +27,8 @@ import qualified Elm.Version as V
 import qualified Json.Decode as D
 import qualified Json.Encode as E
 import qualified Parse.Primitives as P
-import Parse.Primitives (Row, Col)
+import Parse.Primitives (Cursor)
+import qualified Reporting.Annotation as A
 
 
 
@@ -144,9 +144,39 @@ intersect (Range lo lop hop hi) (Range lo_ lop_ hop_ hi_) =
 -- ELM CONSTRAINT
 
 
+-- @LAMDERA A package's elm.json carries its OWN `elm-version` bound, and this is
+-- where it is checked against the running compiler. Elm 0.19.2 is a minor release
+-- with no language or format changes, so a package published against 0.19.1 is fine
+-- on 0.19.2 and vice versa - but a package whose bound happens to EXCLUDE 0.19.2
+-- (bburdette/toop 1.2.0 declares "0.19.0 <= v < 0.19.2") is refused outright, and the
+-- app depending on it fails to solve with Exit.DetailsNoSolution, which prints the
+-- whole constraint set without naming which constraint was unsatisfiable.
+--
+-- Details.isCompatibleAppElmVersion already makes the APPLICATION side of elm.json
+-- flexible across 0.19.x; this is the package side of the same idea, without which
+-- that flexibility only half works.
+--
+-- Deliberately an EXPLICIT PAIR rather than "any 0.19.x". Interchangeability is a
+-- claim about two specific releases that have been tested against each other, not a
+-- property 0.19.x versions have in general. A future 0.19.3 will NOT be accepted here
+-- by default: including it has to be a deliberate choice someone makes after
+-- checking, which is exactly what an open range would take away.
+interchangeableElm :: [V.Version]
+interchangeableElm =
+  [ V.Version 0 19 1
+  , V.Version 0 19 2
+  ]
+
+
 goodElm :: Constraint -> Bool
 goodElm constraint =
   satisfies constraint V.compiler
+  ||
+  -- Only substitute while the compiler is ITSELF one of the interchangeable pair, so
+  -- this widens nothing for any other compiler version.
+  ( V.compiler `elem` interchangeableElm
+    && any (satisfies constraint) interchangeableElm
+  )
 
 
 defaultElm :: Constraint
@@ -224,37 +254,37 @@ instance Binary Op where
 
 
 data Error
-  = BadFormat Row Col
+  = BadFormat Cursor
   | InvalidRange V.Version V.Version
 
 
 parser :: P.Parser Error Constraint
 parser =
   do  lower <- parseVersion
-      P.word1 0x20 {- -} BadFormat
+      P.word1 0x20#Word8 {- -} BadFormat
       loOp <- parseOp
-      P.word1 0x20 {- -} BadFormat
-      P.word1 0x76 {-v-} BadFormat
-      P.word1 0x20 {- -} BadFormat
+      P.word1 0x20#Word8 {- -} BadFormat
+      P.word1 0x76#Word8 {-v-} BadFormat
+      P.word1 0x20#Word8 {- -} BadFormat
       hiOp <- parseOp
-      P.word1 0x20 {- -} BadFormat
+      P.word1 0x20#Word8 {- -} BadFormat
       higher <- parseVersion
-      P.Parser $ \state@(P.State _ _ _ _ row col) _ eok _ eerr ->
+      P.Parser $ \_ state@(P.State _ _ _ cur) _ eok _ eerr ->
         if lower < higher
         then eok (Range lower loOp hiOp higher) state
-        else eerr row col (\_ _ -> InvalidRange lower higher)
+        else eerr cur (\_ -> InvalidRange lower higher)
 
 
 parseVersion :: P.Parser Error V.Version
 parseVersion =
-  P.specialize (\(r,c) _ _ -> BadFormat r c) V.parser
+  P.specialize (\(A.Position c) _ -> BadFormat c) V.parser
 
 
 parseOp :: P.Parser Error Op
 parseOp =
-  do  P.word1 0x3C {-<-} BadFormat
+  do  P.word1 0x3C#Word8 {-<-} BadFormat
       P.oneOfWithFallback
-        [ do  P.word1 0x3D {-=-} BadFormat
+        [ do  P.word1 0x3D#Word8 {-=-} BadFormat
               return LessOrEqual
         ]
         Less

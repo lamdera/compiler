@@ -38,7 +38,7 @@ suite = tests $
       io $ Ext.Common.bash $ "cd " <> project <> " && git init"
       io $ Ext.Common.bash $ "cd " <> project <> " && git remote add lamdera git@apps.lamdera.com:always-v0.git"
 
-      let path = (project </> "src" </> "Frontend.elm")
+      -- let path = (project </> "src" </> "Frontend.elm")
 
       withFileModifications (project </> "src" </> "Frontend.elm")
         [ ("{- viewFunctionBodyPlaceholder -}",   "_ = Debug.log \"hello\" \"world\"")
@@ -266,6 +266,7 @@ checkWithParamsProduction projectPath appName = do
 
 
 {-| Run the `lamdera check` pipeline with specific params -}
+checkWithParamsNoDebug :: Int -> String -> String -> IO ()
 checkWithParamsNoDebug version projectPath appName = do
   project <- Lamdera.Relative.requireDir projectPath
   overrides <- Lamdera.Relative.requireDir "~/lamdera/overrides"

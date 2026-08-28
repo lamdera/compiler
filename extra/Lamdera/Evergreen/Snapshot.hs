@@ -58,9 +58,9 @@ snapshotCurrentTypes version interfaces iface_Types = do
         & fmap (\t -> (t, ftByName version interfaces t iface_Types))
         & foldl (\acc (t, ft) -> mergeFts acc ft) Map.empty
 
-    debugEfts =
-      efts
-        & eftToText version
+    -- debugEfts =
+    --   efts
+    --     & eftToText version
 
   inDebug <- Lamdera.isDebug
   root <- getProjectRoot "Lamdera.Evergreen.Snapshots.run"
@@ -231,7 +231,7 @@ ftByName version interfaces typeName interface = do
     Just alias -> do
       let
         diffableAlias = aliasToFt version scope identifier typeName interfaces recursionSet alias
-        (subt, imps, subft) = diffableAlias
+        (_subt, _imps, subft) = diffableAlias
 
       subft
 
@@ -241,7 +241,7 @@ ftByName version interfaces typeName interface = do
         Just union -> do
           let
             diffableUnion = unionToFt version scope identifier typeName interfaces recursionSet [] union []
-            (subt, imps, subft) = diffableUnion
+            (_subt, _imps, subft) = diffableUnion
 
           subft
 
@@ -338,9 +338,9 @@ unionToFt version scope identifier@(author, pkg, module_, tipe) typeName interfa
         moduleName =
           (ModuleName.Canonical (Pkg.Name author pkg) module_)
 
-        debug (t, imps, ft) =
-          -- debugHaskellWhen (typeName == "RoomId") ("dunion: " <> hindentFormatValue scope) (t, imps, ft)
-          debugNote ("\n✴️  inserting def for " <> t) (t, imps, ft)
+        -- debug (t, imps, ft) =
+        --   -- debugHaskellWhen (typeName == "RoomId") ("dunion: " <> hindentFormatValue scope) (t, imps, ft)
+        --   debugNote ("\n✴️  inserting def for " <> t) (t, imps, ft)
 
       in
       -- debug $
@@ -372,13 +372,13 @@ unionToFt version scope identifier@(author, pkg, module_, tipe) typeName interfa
 
 -- A top level Alias definition i.e. `type alias ...`
 aliasToFt :: Int -> ModuleName.Canonical -> TypeIdentifier -> N.Name -> Interfaces -> RecursionSet -> Interface.Alias -> SnapRes
-aliasToFt version scope identifier@(author, pkg, module_, tipe) typeName interfaces recursionSet aliasInterface =
+aliasToFt version scope identifier@(author, pkg, module_, _tipe) typeName interfaces recursionSet aliasInterface =
   let
     treat a =
-      let
-        debug (t, imps, ft) =
-          debugNote ("\n🔵  inserting def for " <> t) (t, imps, ft)
-      in
+      -- let
+      --   debug (t, imps, ft) =
+      --     debugNote ("\n🔵  inserting def for " <> t) (t, imps, ft)
+      -- in
       -- debug $
       case a of
         Can.Alias tvars tipe ->

@@ -154,7 +154,8 @@ import Data.Monoid ((<>), mconcat)
 import Data.Function ((&))
 import Control.Arrow (first, second)
 import qualified System.Environment as Env
-import Control.Monad.Except (liftIO, catchError)
+import Control.Monad.Except (catchError)
+import Control.Monad.IO.Class (liftIO)
 import System.IO.Unsafe (unsafePerformIO)
 import qualified Debug.Trace as DT
 

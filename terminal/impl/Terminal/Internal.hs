@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -Wno-deprecations #-}
 {-# LANGUAGE GADTs #-}
 module Terminal.Internal
   ( Command(..)

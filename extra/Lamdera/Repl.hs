@@ -28,6 +28,7 @@ import qualified Reporting.Task as Task
 import qualified Stuff
 
 import qualified Lamdera
+import qualified Lamdera.Relative
 import qualified Ext.Common
 import qualified Lamdera.Version
 
@@ -60,19 +61,22 @@ lamderaReplSrc = $(do
   compilerResult <- TH.runIO $ do
     putStr "-- Compiling `src/Repl/Worker.elm` in `vendor/elm-repl-worker`..."
     BW.withScope $ \scope -> do
-      Dir.withCurrentDirectory ("vendor" </> "elm-repl-worker") $ do
-        root <- Dir.getCurrentDirectory
-        Lamdera.withProjectRoot root $ do
-          Task.run $ do
-            -- Render the REAL error rather than discarding it. Inlined rather
-            -- than factored into a helper: a top-level binding of this module
-            -- cannot be used inside a Template Haskell splice (GHC stage
-            -- restriction - it would have to live in another module and be
-            -- imported), and that is not worth a new module.
-            details    <- Task.eio (\e -> "details phase:\n\n" ++ Exit.toString (Exit.makeToReport (Exit.MakeBadDetails e))) $ Details.load Reporting.silent scope root
-            artifacts  <- Task.eio (\e -> "build phase:\n\n" ++ Exit.toString (Exit.makeToReport (Exit.MakeCannotBuild e))) $ Build.fromPaths Reporting.silent root details mainPaths
-            javascript <- Task.mapError (\e -> "generate phase:\n\n" ++ Exit.toString (Exit.makeToReport (Exit.MakeBadGenerate e))) $ Generate.dev root details artifacts
-            return $ LBS.toStrict (B.toLazyByteString javascript)
+      -- @LAMDERA Resolve an absolute root via Lamdera.Relative rather than chdir'ing the
+      -- process-global CWD. This TH runs under GHC's parallel upsweep (-j), where a
+      -- withCurrentDirectory here races other TH splices (Develop.StaticFiles) and fails
+      -- intermittently ("changeWorkingDirectory: does not exist"). Passing absolute paths
+      -- keeps Build.getRootInfo's canonicalizePath CWD-independent.
+      root <- Lamdera.Relative.requireDir ("vendor" </> "elm-repl-worker")
+      Lamdera.withProjectRoot root $ do
+        Task.run $ do
+          -- Render the REAL error rather than discarding it. Inlined rather than
+          -- factored into a helper: a top-level binding of this module cannot be
+          -- used inside its own Template Haskell splice (GHC stage restriction),
+          -- so a helper would have to live in another module and be imported.
+          details    <- Task.eio (\e -> "details phase:\n\n" ++ Exit.toString (Exit.makeToReport (Exit.MakeBadDetails e))) $ Details.load Reporting.silent scope root
+          artifacts  <- Task.eio (\e -> "build phase:\n\n" ++ Exit.toString (Exit.makeToReport (Exit.MakeCannotBuild e))) $ Build.fromPaths Reporting.silent root details (fmap (root </>) mainPaths)
+          javascript <- Task.mapError (\e -> "generate phase:\n\n" ++ Exit.toString (Exit.makeToReport (Exit.MakeBadGenerate e))) $ Generate.dev root details artifacts
+          return $ LBS.toStrict (B.toLazyByteString javascript)
 
   compiledCode <-
     case compilerResult of
@@ -103,11 +107,11 @@ lamderaReplSrc = $(do
               \\n  Run `stack install` locally to build and commit to the repository."
       _ -> do
         putStr $ "-- Minifying `" <> tempFile <> "`..."
-        Ext.Common.requireBinary "esbuild"
+        _ <- Ext.Common.requireBinary "esbuild"
         BS.writeFile tempFile compiledCode
         Lamdera.replaceInFile "artifacts.x.dat" (T.pack Lamdera.Version.artifacts) tempFile
         let esbuildCommand = "esbuild " <> tempFile <> " --minify --target=chrome58,firefox57,safari11,edge16 > " <> distFile
-        Ext.Common.bash esbuildCommand
+        _ <- Ext.Common.bash esbuildCommand
         minifierResult <- Dir.doesFileExist distFile
         if minifierResult
           then do

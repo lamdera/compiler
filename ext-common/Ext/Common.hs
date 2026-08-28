@@ -288,7 +288,7 @@ track_ label value = do
     m <- getTime Monotonic
     p <- getTime ProcessCPUTime
     t <- getTime ThreadCPUTime
-    !x <- deepseq value (pure 1)
+    !x <- deepseq value (pure (1 :: Int))
     m_ <- getTime Monotonic
     p_ <- getTime ProcessCPUTime
     t_ <- getTime ThreadCPUTime

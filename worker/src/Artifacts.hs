@@ -1,6 +1,6 @@
-{-# OPTIONS_GHC -Wall #-}
 module Artifacts
   ( Artifacts(..)
+  , Root(..)
   , loadCompile
   , loadRepl
   , toDepsInfo
@@ -16,7 +16,6 @@ import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Map as Map
 import qualified Data.Name as N
 import qualified Data.OneOrMore as OneOrMore
-import qualified System.Directory as Dir
 import System.FilePath ((</>))
 
 import qualified AST.Canonical as Can
@@ -43,26 +42,30 @@ data Artifacts =
     }
 
 
-loadCompile :: IO Artifacts
-loadCompile =
-  load ("outlines" </> "compile")
+data Root =
+  Root FilePath
 
 
-loadRepl :: IO Artifacts
-loadRepl =
-  load ("outlines" </> "repl")
+loadCompile :: Root -> IO Artifacts
+loadCompile root =
+  load root ("outlines" </> "compile")
+
+
+loadRepl :: Root -> IO Artifacts
+loadRepl root =
+  load root ("outlines" </> "repl")
 
 
 
 -- LOAD
 
 
-load :: FilePath -> IO Artifacts
-load dir =
+load :: Root -> FilePath -> IO Artifacts
+load (Root rootPath) dir =
   BW.withScope $ \scope ->
-  do  putStrLn $ "Loading " ++ dir </> "elm.json"
+  do  putStrLn $ "Loading " ++ rootPath </> dir </> "elm.json"
       style <- Reporting.terminal
-      root <- fmap (</> dir) Dir.getCurrentDirectory
+      let root = rootPath </> dir
       result <- Details.load style scope root
       case result of
         Left _ ->

@@ -5,7 +5,6 @@ module Test where
 
 import Control.Monad.Except (catchError)
 import Control.Exception (catch, SomeException)
-import Prelude hiding (catch)
 
 import qualified System.Directory as Dir
 import System.FilePath ((</>))

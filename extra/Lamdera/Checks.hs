@@ -8,7 +8,6 @@ import Data.Text as T
 import Data.Text.IO as TIO
 import qualified System.Directory as Dir
 import Control.Monad (unless)
-import Control.Monad.Except (ExceptT, runExceptT, throwError, withExceptT, liftIO)
 import Data.Monoid ((<>))
 import System.FilePath ((</>))
 import qualified Debug.Trace as DT
@@ -55,7 +54,7 @@ runChecks root shouldCheckLamdera direct indirect default_ = do
 runChecks_ :: FilePath -> IO ()
 runChecks_ root = do
 
-  missingFiles <- liftIO $ checkMissingFiles root ["src/Frontend.elm", "src/Backend.elm", "src/Types.elm"]
+  missingFiles <- checkMissingFiles root ["src/Frontend.elm", "src/Backend.elm", "src/Types.elm"]
   unless (missingFiles == []) $ do
 
     let
@@ -75,7 +74,7 @@ runChecks_ root = do
 
       if initialiseLamderaFiles
         then do
-          liftIO $ Lamdera.Init.writeDefaultImplementations
+          Lamdera.Init.writeDefaultImplementations
           -- @TODO future
           -- It would be nice if when coming from an existing elm project, we installed the missing
           -- deps as well, but the UI impact is a little bit weird as it's not transparent to the user
@@ -108,10 +107,10 @@ runChecks_ root = do
 
   -- Ensure Env.elm is in place before we get going, otherwise
   -- our `mode` value injection will fail spectacularly
-  envExists <- liftIO $ doesFileExist "src/Env.elm"
+  envExists <- doesFileExist "src/Env.elm"
 
   onlyWhen (not envExists) $ do
-    liftIO $ writeUtf8 "src/Env.elm" Lamdera.Init.emptyEnv
+    writeUtf8 "src/Env.elm" Lamdera.Init.emptyEnv
     progressPointer "Created empty Env.elm"
 
 
