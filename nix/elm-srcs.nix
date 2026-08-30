@@ -88,7 +88,7 @@
   };
   "lamdera/core" = {
     version = "1.0.0";
-    sha256 = "0h0a6vnnrg8g5gx28qwvzc064y079cnq62r5rq23c7jqbw9cxy78";
+    sha256 = "1ny759bgnf6kb1vq94k6isi7sch8lv0gdq625n90xpykfhnlyc50";
     lamderaZip = true;
   };
   "lamdera/codecs" = {
