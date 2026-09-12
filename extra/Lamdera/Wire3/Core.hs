@@ -434,24 +434,123 @@ getRecordConstraints tvarName tipe =
 
     TAlias moduleName typeName tvars aType ->
       let
-        aliasedTvarName =
-          case List.find (\(t,ti) -> ti == TVar tvarName) tvars of
-            Just (tvarNameNew, tvarType) -> tvarNameNew
-            Nothing -> tvarName
+        -- Our tvar can also be buried INSIDE an argument rather than being one, as in
+        -- `BrowserStream (WithWindowSize a)`, where the constraint on `a` lives in the
+        -- argument rather than in BrowserStream's own body.
+        constraintsInArgs =
+          tvars & fmap (\(_, argType) -> getRecordConstraints tvarName argType) & Map.unions
+
+        constraintsInBody =
+          case aType of
+            Holey t ->
+              -- A Holey body is written in the alias's OWN parameter names, so the only
+              -- constraints in it that are ours are those on a parameter we are the row
+              -- tail of - `BrowserStream (WithWindowSize a)` extends OUR `a` with
+              -- BrowserStream's fields, because `a` is what WithWindowSize extends.
+              -- Reading the body under our own name instead (as this used to) only lines up
+              -- when the alias happens to have named its parameter the same thing we did.
+              tvars
+                & List.filter (\(paramName, argType) -> extendsTvar tvarName argType)
+                & fmap (\(paramName, argType) ->
+                    -- ...and the constraint comes out in the alias's names, so it has to be
+                    -- re-expressed in terms of the arguments actually applied here.
+                    -- Otherwise it mentions a tvar that is not free in the signature we are
+                    -- extracting it for, and type inference dies on a Map.! in
+                    -- Type.Instantiate, reaching users as "thread blocked indefinitely in an
+                    -- MVar operation".
+                    getRecordConstraints paramName t
+                      & fmap (substituteTvars (Map.fromList tvars))
+                  )
+                & Map.unions
+              -- extractors & fmap (\extractor -> extractor t) & Map.unions
+
+            Filled t ->
+              -- A Filled body has already had its arguments substituted into it, so the
+              -- names in it are ours as they stand.
+              getRecordConstraints tvarName t
+              -- extractors & fmap (\extractor -> extractor t) & Map.unions
       in
-
-      case aType of
-        Holey t ->
-          getRecordConstraints aliasedTvarName t
-          -- extractors & fmap (\extractor -> extractor t) & Map.unions
-
-        Filled t ->
-          getRecordConstraints aliasedTvarName t
-          -- extractors & fmap (\extractor -> extractor t) & Map.unions
+      Map.union constraintsInBody constraintsInArgs
 
     _ ->
       -- no constraint
       Map.empty
+
+
+{-| Is `tvarName` the row tail of this type - i.e. would extending this type with extra
+fields extend `tvarName` with them?
+
+This is the question getRecordConstraints has to answer about each argument applied to an
+alias, because that is exactly when the alias's own constraints on that parameter are also
+constraints on `tvarName`. In `BrowserStream (WithWindowSize a)`, `a` is the row tail of
+the argument, so BrowserStream's fields land on `a` too.
+
+-}
+extendsTvar :: Data.Name.Name -> Type -> Bool
+extendsTvar tvarName t =
+  case t of
+    TVar a -> a == tvarName
+    TRecord _ (Just extName) -> extName == tvarName
+    TAlias _ _ tvars (Holey body) ->
+      -- The body extends one of the alias's parameters; we are the row tail of the whole
+      -- thing when that parameter's argument has us as ITS row tail.
+      tvars & any (\(paramName, argType) -> extendsTvar tvarName argType && extendsTvar paramName body)
+    TAlias _ _ _ (Filled body) -> extendsTvar tvarName body
+    _ -> False
+
+
+{-| Plain simultaneous substitution of alias parameters by the types applied to them.
+
+Deliberately not resolveTvar: that one declines to substitute when the replacement is
+itself still generic, which is correct for the foreign-signature use it was written for,
+but wrong here. A constraint being lifted out of an alias body has to be re-expressed in
+the referencing type's terms whatever those terms are, or it mentions a name that does not
+exist there.
+
+A Holey body is left alone for the same reason extractFreeTvarsInType leaves it alone: the
+names in it belong to that alias, so they shadow ours. Only its applied arguments can
+mention names from here.
+
+-}
+substituteTvars :: Map.Map Data.Name.Name Type -> Type -> Type
+substituteTvars subs t =
+  case t of
+    TVar a ->
+      case Map.lookup a subs of
+        Just replacement -> replacement
+        Nothing -> t
+
+    TLambda t1 t2 -> TLambda (substituteTvars subs t1) (substituteTvars subs t2)
+
+    TType moduleName typeName params ->
+      TType moduleName typeName (fmap (substituteTvars subs) params)
+
+    TRecord fieldMap maybeExtensible ->
+      let
+        -- An extension name can only ever be another tvar name, so a substitution that
+        -- isn't a plain rename has nowhere to go here; leave it as it was.
+        newMaybeExtensible =
+          case maybeExtensible of
+            Just extName ->
+              case Map.lookup extName subs of
+                Just (TVar newName) -> Just newName
+                _ -> maybeExtensible
+            Nothing -> maybeExtensible
+      in
+      fieldMap
+        & fmap (\(FieldType index tipe) -> FieldType index (substituteTvars subs tipe))
+        & (\newFieldMap -> TRecord newFieldMap newMaybeExtensible)
+
+    TUnit -> t
+
+    TTuple a_ b Nothing  -> TTuple (substituteTvars subs a_) (substituteTvars subs b) Nothing
+    TTuple a_ b (Just c) -> TTuple (substituteTvars subs a_) (substituteTvars subs b) (Just $ substituteTvars subs c)
+
+    TAlias moduleName typeName tvars (Holey tipe) ->
+      TAlias moduleName typeName (tvars & fmap (\(n, v) -> (n, substituteTvars subs v))) (Holey tipe)
+
+    TAlias moduleName typeName tvars (Filled tipe) ->
+      TAlias moduleName typeName (tvars & fmap (\(n, v) -> (n, substituteTvars subs v))) (Filled $ substituteTvars subs tipe)
 
 
 renameTvars :: Data.Name.Name -> Data.Name.Name -> Type -> Type
