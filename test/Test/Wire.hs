@@ -20,6 +20,7 @@ import qualified Lamdera.Compile
 import qualified Lamdera.Relative
 
 -- tests
+import qualified Data.List as List
 import qualified Lamdera.Wire3.Core
 import AST.Canonical
 
@@ -131,6 +132,11 @@ wire = do
 
   failuresM <- io $ newMVar []
 
+  -- Codec mismatches are reported from inside the compiler (Wire3.Core.runTests), which
+  -- cannot fail a test directly, so it records them for us. Without this the suite only
+  -- ever failed on exceptions: mismatches printed a diff and passed.
+  io $ Lamdera.Wire3.Core.resetWireTestFailures
+
   ioSilenced $ do
     let project = "./test/scenario-alltypes"
 
@@ -152,11 +158,17 @@ wire = do
         )
 
   failures <- io $ readMVar failuresM
+  mismatches <- io $ Lamdera.Wire3.Core.readWireTestFailures
+
   if length failures > 0
     then
       crash failures
-    else
-      scope "scenario-alltypes no exceptions" $ ok
+    else if length mismatches > 0
+      then
+        crash $ "generated codecs do not match expectations:\n  "
+                  ++ List.intercalate "\n  " mismatches
+      else
+        scope "scenario-alltypes codecs match expectations" $ ok
 
 
 wireOptimized :: Test ()

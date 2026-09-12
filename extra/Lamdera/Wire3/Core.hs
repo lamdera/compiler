@@ -10,6 +10,7 @@ All the code that does the Wire encoder/decoder code gen and injection
 -}
 
 import System.IO.Unsafe (unsafePerformIO)
+import Data.IORef
 import qualified Data.Map as Map
 import qualified Data.List as List
 
@@ -41,6 +42,38 @@ import Lamdera.Wire3.Decoder
 import Lamdera.Wire3.Graph
 
 import qualified Ext.ElmFormat
+
+{-| Wire test failures recorded for the test harness to assert on.
+
+runTests runs INSIDE the compiler, during a compile the harness drives in-process,
+so it cannot fail a test directly - it printed a diff and returned (). EasyTest only
+fails on exceptions, so every mismatch was reported to stdout and then ignored: a
+green suite meant "nothing threw", not "the codecs match". Both the 233d29d6 era
+region-comparison breakage and a missing expectation could sit there indefinitely.
+
+Recording them here lets Test.Wire.wire assert on the result. Shared via a global
+IORef because the compile is in-process with the harness, which is also why
+runTests can use unsafePerformIO at all.
+-}
+{-# NOINLINE wireTestFailuresRef #-}
+wireTestFailuresRef :: IORef [String]
+wireTestFailuresRef = unsafePerformIO (newIORef [])
+
+
+recordWireTestFailure :: String -> IO ()
+recordWireTestFailure failure =
+  modifyIORef' wireTestFailuresRef (++ [failure])
+
+
+resetWireTestFailures :: IO ()
+resetWireTestFailures =
+  writeIORef wireTestFailuresRef []
+
+
+readWireTestFailures :: IO [String]
+readWireTestFailures =
+  readIORef wireTestFailuresRef
+
 
 runTests :: Bool -> String -> Pkg.Name -> Src.Module -> Decls -> Data.Name.Name -> Def -> canonicalValue -> wiregen -> ()
 runTests isTest_ debugName pkg modul decls generatedName generated canonicalValue wiregen =
@@ -111,11 +144,18 @@ runTests isTest_ debugName pkg modul decls generatedName generated canonicalValu
               --   icdiff (withDefault l) (withDefault r)
               atomicPutStrLn $ "❌❌❌ failed, attempting pretty-print diff1:\n" ++ diff
               atomicPutStrLn $ "❌❌❌ ASTs do not match, attempting pretty-print diff2:\n" ++ diff2
+              recordWireTestFailure $
+                Data.Name.toChars (Src.getName modul) ++ "." ++ Data.Name.toChars generatedName
+                  ++ " (" ++ debugName ++ ") does not match " ++ Data.Name.toChars testName
               -- error "exiting!"
               -- atomicPutStrLn $ "❌❌❌ " ++ Data.Name.toChars (Src.getName modul) ++ "." ++ Data.Name.toChars generatedName ++ " gen does not match test definition."
               pure ()
 
         Nothing -> do
+          -- No expectation written for this codec. That is the normal case, not an error:
+          -- a fixture asserts on the definitions it chooses to cover, and every other codec
+          -- the module generates lands here. (Treating this as a failure reports 52 of them
+          -- across the current suite.)
           -- atomicPutStrLn $ "⚠️  Warning: test not found " ++ show pkg ++ ":" ++ Data.Name.toChars (Src.getName modul) ++ "." ++ Data.Name.toChars testName -- ++ "\n" ++ show (declsToList decls & fmap defName)
           -- debugPassText ("🧡 expected implementation pretty-printed " <> fullTypeRef) (Source2.generateCodecs Map.empty wiregen) (pure ())
           -- error "exiting!"
