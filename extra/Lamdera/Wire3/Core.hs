@@ -58,6 +58,21 @@ runTests isTest_ debugName pkg modul decls generatedName generated canonicalValu
         -- fullTypeRef =
         --   (T.pack $ Pkg.toChars pkg) <> ":" <> (T.pack $ Data.Name.toChars $ Src.getName modul) <> "." <> (T.pack $ Data.Name.toChars generatedName)
 
+        -- Source regions are not part of what this test is checking: the expectation is
+        -- parsed from real source and carries real regions, while everything we generate is
+        -- built at A.zero. So a structural (==) reports every single definition as a
+        -- mismatch, and the printed diff then shows nothing but the name - which is what
+        -- makes it look like a puzzle rather than a bug.
+        --
+        -- StandaloneInstances used to override Eq for Located with a region-ignoring one
+        -- exactly for this. It was commented out on the grounds that Reporting.Annotation
+        -- defines it, and Annotation does now derive Eq - but the derived one INCLUDES the
+        -- region, so the override was not redundant. Show for Located deliberately prints
+        -- no region, so comparing the shown forms is precisely the comparison wanted here,
+        -- without changing an Eq the compiler proper relies on.
+        matchesExpectation def expectedDef =
+          show def == show expectedDef
+
       case decls & findDef testName of
         Just testDefinition -> do
 
@@ -66,7 +81,7 @@ runTests isTest_ debugName pkg modul decls generatedName generated canonicalValu
           -- diff <- icdiff (hindentFormatValue testDefinition) (hindentFormatValue generated)
           -- atomicPutStrLn $ "❌❌❌ failed, attempting pretty-print diff:\n" ++ diff
 
-          if generated == testDefinition `withName` generatedName
+          if matchesExpectation generated (testDefinition `withName` generatedName)
             then do
               -- atomicPutStrLn $ "✅ gen " <> debugName <> " matches " <> Data.Name.toChars (Src.getName modul) <> "." <> Data.Name.toChars testName
               -- debugPassText ("🧡 expected implementation pretty-printed " <> show_ (Src.getName modul)) (Source2.generateCodecs Map.empty wiregen) (pure ())
