@@ -34,8 +34,5 @@
         packages.ghc = pkgs.haskell.compiler.ghc98;
         packages.cc = pkgs.stdenv.cc;
         packages.hls = pkgs.haskell.packages.ghc98.haskell-language-server;
-        packages.apple_sdk_CoreServices = pkgs.darwin.apple_sdk.frameworks.CoreServices;
-        packages.apple_sdk_CoreFoundation = pkgs.darwin.apple_sdk.frameworks.CoreFoundation;
-        packages.apple_sdk_Cocoa = pkgs.darwin.apple_sdk.frameworks.Cocoa;
       });
 }

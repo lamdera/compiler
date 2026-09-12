@@ -14,16 +14,6 @@
     "path:./nix/devbox#stack": "",
     "path:./nix/devbox#ghc":   "",
     "path:./nix/devbox#cc":    "",
-
-    "path:./nix/devbox#apple_sdk_CoreServices": {
-      "platforms": ["x86_64-darwin", "aarch64-darwin"]
-    },
-    "path:./nix/devbox#apple_sdk_Cocoa": {
-      "platforms": ["x86_64-darwin", "aarch64-darwin"]
-    },
-    "path:./nix/devbox#apple_sdk_CoreFoundation": {
-      "platforms": ["x86_64-darwin", "aarch64-darwin"]
-    },
     "git": "latest"
   },
   "env": {
