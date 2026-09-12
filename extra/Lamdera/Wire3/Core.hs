@@ -180,7 +180,8 @@ addWireGenerations_ canonical pkg ifaces modul =
         & Map.toList
         & concatMap (\(name, union) ->
             [ (encoderUnion isTest_ ifaces pkg modul decls_ name union)
-            , (decoderUnion isTest_ ifaces pkg modul decls_ name union)
+            , (decoderUnion DecodeValidating isTest_ ifaces pkg modul decls_ name union)
+            , (decoderUnion DecodeUnsafe     isTest_ ifaces pkg modul decls_ name union)
             ]
         )
 
@@ -190,7 +191,8 @@ addWireGenerations_ canonical pkg ifaces modul =
         & filter (\(_, Alias _ tipe) -> not (isLambdaType tipe))
         & concatMap (\(name, alias) ->
             [ (encoderAlias isTest_ ifaces pkg modul decls_ name alias)
-            , (decoderAlias isTest_ ifaces pkg modul decls_ name alias)
+            , (decoderAlias DecodeValidating isTest_ ifaces pkg modul decls_ name alias)
+            , (decoderAlias DecodeUnsafe     isTest_ ifaces pkg modul decls_ name alias)
             ]
         )
 
@@ -201,10 +203,27 @@ addWireGenerations_ canonical pkg ifaces modul =
     existingDecls =
       foldl (\def decls -> removeDef decls def ) decls_ newDefs
 
+    cname = Module.Canonical pkg (Src.getName modul)
+
+    {- When a module defines any w3_validate_* functions, the generated wire
+    functions must be placed AFTER user definitions so that the generated
+    decoders can reference those user validators (a VarTopLevel reference only
+    resolves to definitions appearing earlier in the topologically-sorted
+    Decls). Otherwise we keep the original behaviour of prepending the generated
+    functions, which lets user code reference them. -}
+    moduleHasValidators =
+      not (null (allValidatorDefs decls_))
+
+    sortedGenerated =
+      Lamdera.Wire3.Graph.stronglyConnCompDefs newDefs
+
     extendedDecls =
-      newDefs
-        & Lamdera.Wire3.Graph.stronglyConnCompDefs
-        & Lamdera.Wire3.Graph.addGraphDefsToDecls existingDecls
+      if moduleHasValidators
+        then
+          spliceDeclsAtEnd existingDecls
+            (Lamdera.Wire3.Graph.addGraphDefsToDecls SaveTheEnvironment sortedGenerated)
+        else
+          Lamdera.Wire3.Graph.addGraphDefsToDecls existingDecls sortedGenerated
 
     {- This implementation sorted all decls, however sorting only by lvar is
     not a valid dependency sort for all functions, only for wire functions!
@@ -229,11 +248,200 @@ addWireGenerations_ canonical pkg ifaces modul =
               )
               exports
             & Export
+
+    {- When generated wire functions are appended after user code (the
+    moduleHasValidators path), the user's own top-level code must not also
+    reference a generated w3_encode_*/w3_decode_* function in this module: the
+    reference would resolve to a definition that now appears later, which the
+    type checker can't see (it would otherwise crash with an internal Map.!).
+    Detect that and report a clear error. When there are no validators we keep
+    the original prepend behaviour, where such references are fine. -}
+    wireRefCheck =
+      if moduleHasValidators
+        then checkNoUserWireRefs newDefs existingDecls
+        else Right ()
   in
-  Right $ canonical
-    { _decls = extendedDecls
-    , _exports = extendedExports
-    }
+  case checkValidators cname (Can._unions canonical) (Can._aliases canonical) decls_ of
+    Left err ->
+      Left err
+
+    Right () ->
+      case wireRefCheck of
+        Left err ->
+          Left err
+
+        Right () ->
+          Right $ canonical
+            { _decls = extendedDecls
+            , _exports = extendedExports
+            }
+
+
+{-
+
+WIRE VALIDATION CHECKS
+
+For every top-level `w3_validate_<TypeName>` function defined in the module,
+verify that <TypeName> is a custom type (not a type alias, and actually defined
+here) and that the function's signature is exactly:
+
+    w3_validate_<TypeName> : <TypeName> <tvars> -> Result String ()
+
+where <tvars> are the type's declared type variables, in order. Any violation
+produces a compile error.
+
+-}
+checkValidators :: Module.Canonical -> Map.Map Data.Name.Name Union -> Map.Map Data.Name.Name Alias -> Decls -> Either D.Doc ()
+checkValidators cname unions aliases decls =
+  allValidatorDefs decls
+    & mapM_ (\def ->
+        let typeName = validatorTypeName (defName def)
+        in
+        case Map.lookup typeName unions of
+          Just union ->
+            checkValidatorSignature cname typeName union def
+          Nothing ->
+            case Map.lookup typeName aliases of
+              Just _  -> Left (validatorAliasError typeName)
+              Nothing -> Left (validatorMissingTypeError typeName)
+      )
+
+
+checkValidatorSignature :: Module.Canonical -> Data.Name.Name -> Union -> Def -> Either D.Doc ()
+checkValidatorSignature cname typeName union def =
+  case def of
+    Def _ _ _ ->
+      Left (validatorMissingAnnotationError typeName union)
+
+    TypedDef _ _ args _ resultType ->
+      let
+        actualType = foldr (\(_, t) acc -> TLambda t acc) resultType args
+        expectedType = expectedValidatorType cname typeName union
+      in
+      if actualType == expectedType
+        then Right ()
+        else Left (validatorBadSignatureError typeName union)
+
+
+expectedValidatorType :: Module.Canonical -> Data.Name.Name -> Union -> Type
+expectedValidatorType cname typeName union =
+  TLambda
+    (TType cname typeName (fmap TVar (_u_vars union)))
+    (TType (Module.Canonical (Name "elm" "core") "Result") "Result"
+        [ TType (Module.Canonical (Name "elm" "core") "String") "String" []
+        , TUnit
+        ])
+
+
+validatorSignatureString :: Data.Name.Name -> Union -> String
+validatorSignatureString typeName union =
+  let
+    typeWithVars =
+      case _u_vars union of
+        [] -> Data.Name.toChars typeName
+        vars -> Data.Name.toChars typeName ++ " " ++ unwords (fmap Data.Name.toChars vars)
+  in
+  "w3_validate_" ++ Data.Name.toChars typeName ++ " : " ++ typeWithVars ++ " -> Result String ()"
+
+
+-- NOTE: The leading D.fromChars line in each error is a contiguous (un-wrapped)
+-- marker so tests can reliably match on it; D.reflow may insert line breaks.
+
+validatorMissingTypeError :: Data.Name.Name -> D.Doc
+validatorMissingTypeError typeName =
+  D.stack
+    [ D.fromChars $ "w3_validate_" ++ Data.Name.toChars typeName ++ ": no matching custom type"
+    , D.reflow $
+        "I found a wire validation function `w3_validate_" ++ Data.Name.toChars typeName
+        ++ "`, but there is no custom type named `" ++ Data.Name.toChars typeName
+        ++ "` defined in this module."
+    , D.reflow $
+        "Wire validation functions must be defined in the same module as the custom type they validate. "
+        ++ "Define `type " ++ Data.Name.toChars typeName ++ " = ...` here, or remove the validation function."
+    ]
+
+
+validatorAliasError :: Data.Name.Name -> D.Doc
+validatorAliasError typeName =
+  D.stack
+    [ D.fromChars $ "w3_validate_" ++ Data.Name.toChars typeName ++ ": expected a custom type, found a type alias"
+    , D.reflow $
+        "I found a wire validation function `w3_validate_" ++ Data.Name.toChars typeName
+        ++ "`, but `" ++ Data.Name.toChars typeName ++ "` is a type alias, not a custom type."
+    , D.reflow
+        "Wire validation functions (w3_validate_*) are only supported for custom types (defined with `type`), not for type aliases (`type alias`)."
+    ]
+
+
+validatorMissingAnnotationError :: Data.Name.Name -> Union -> D.Doc
+validatorMissingAnnotationError typeName union =
+  D.stack
+    [ D.fromChars $ "w3_validate_" ++ Data.Name.toChars typeName ++ ": missing type annotation"
+    , D.reflow $
+        "The wire validation function `w3_validate_" ++ Data.Name.toChars typeName
+        ++ "` must have a type annotation. It needs to be annotated exactly like this:"
+    , D.fromChars $ "    " ++ validatorSignatureString typeName union
+    ]
+
+
+validatorBadSignatureError :: Data.Name.Name -> Union -> D.Doc
+validatorBadSignatureError typeName union =
+  D.stack
+    [ D.fromChars $ "w3_validate_" ++ Data.Name.toChars typeName ++ ": wrong type signature"
+    , D.reflow $
+        "The wire validation function `w3_validate_" ++ Data.Name.toChars typeName
+        ++ "` has the wrong type signature. It must be exactly:"
+    , D.fromChars $ "    " ++ validatorSignatureString typeName union
+    ]
+
+
+{-
+
+When a module defines any w3_validate_* function, the generated wire functions
+are emitted *after* the user's definitions (so the generated decoders can call
+the validators). That ordering means the user's own top-level code cannot also
+reference a generated w3_encode_*/w3_decode_* function in the same module -- such
+a reference would point at a definition that now appears later in the Decls,
+which the type-inference solver can't resolve (it would crash with an internal
+Map.! lookup error). We catch that here and report it as a normal compile error.
+
+`generatedDefs` are the freshly generated wire defs (their names are what we
+forbid referencing); `userDecls` is the user's code with the wire stubs removed.
+
+-}
+checkNoUserWireRefs :: [Def] -> Decls -> Either D.Doc ()
+checkNoUserWireRefs generatedDefs userDecls =
+  let
+    generatedNames = fmap defName generatedDefs
+
+    conflicts =
+      [ (defName userDef, ref)
+      | userDef <- declsToList userDecls
+      , ref     <- defTopLevelRefs userDef
+      , ref `elem` generatedNames
+      ]
+  in
+  case conflicts of
+    [] ->
+      Right ()
+
+    ((userName, genName) : _) ->
+      Left (validatorWireRefError userName genName)
+
+
+validatorWireRefError :: Data.Name.Name -> Data.Name.Name -> D.Doc
+validatorWireRefError userName genName =
+  D.stack
+    [ D.fromChars $ Data.Name.toChars userName ++ ": cannot reference generated wire functions in a module that defines a validator"
+    , D.reflow $
+        "`" ++ Data.Name.toChars userName ++ "` references the generated wire function `"
+        ++ Data.Name.toChars genName ++ "`, but this module also defines one or more `w3_validate_*` functions."
+    , D.reflow
+        "When a module defines a wire validator, the generated wire functions (w3_encode_*/w3_decode_*) must be placed after your own definitions so the generated decoders can call your validators. As a result, your top-level code in this module can't also reference those generated functions."
+    , D.reflow $
+        "To fix this, move `" ++ Data.Name.toChars userName ++ "` (or just its reference to `"
+        ++ Data.Name.toChars genName ++ "`) into a different module, or remove the validator(s) from this module."
+    ]
 
 
 addExport :: Def -> Map.Map Data.Name.Name (A.Located Export) -> Map.Map Data.Name.Name (A.Located Export)
@@ -333,12 +541,12 @@ encoderUnion isTest_ ifaces pkg modul decls unionName union =
   finalGen
 
 
-decoderUnion :: Bool -> Map.Map Module.Raw I.Interface -> Pkg.Name -> Src.Module -> Decls -> Data.Name.Name -> Union -> Def
-decoderUnion isTest_ ifaces pkg modul decls unionName union =
+decoderUnion :: DecodeMode -> Bool -> Map.Map Module.Raw I.Interface -> Pkg.Name -> Src.Module -> Decls -> Data.Name.Name -> Union -> Def
+decoderUnion mode isTest_ ifaces pkg modul decls unionName union =
   let
     !x = runTests isTest_ "decoderUnion" pkg modul decls generatedName generated union (unionAsModule cname unionName union)
 
-    generatedName = Data.Name.fromChars $ "w3_decode_" ++ Data.Name.toChars unionName
+    generatedName = Data.Name.fromChars $ decodePrefix mode ++ Data.Name.toChars unionName
     cname = Module.Canonical pkg (Src.getName modul)
     tvars = _u_vars union
     tvarsTypesig = tvars & foldl (\acc name -> Map.insert name () acc ) Map.empty
@@ -361,12 +569,7 @@ decoderUnion isTest_ ifaces pkg modul decls unionName union =
       -- | numCtors <= 4294967295 = decodeUnsignedInt32
       | otherwise = error $ "Unhandled custom type variant size (" ++ show numCtors ++ "), please report this issue for the custom type " ++ Data.Name.toChars unionName
 
-    generated =
-      Def
-      -- TypedDef
-        (a (generatedName))
-        -- Map.empty
-        ptvars $
+    baseBody =
         -- debugDecoder (Data.Name.toElmString unionName)
         (variantIntDecoder |> andThenDecode1
               (lambda1 (pvar "w3v") $
@@ -376,12 +579,34 @@ decoderUnion isTest_ ifaces pkg modul decls unionName union =
                     & imap (\i (Ctor tagName tagIndex numParams paramTypes) ->
                         CaseBranch (pint i) $
                           ([(succeedDecode (vctor tagName tagIndex paramTypes))]
-                          ++ fmap (\paramType -> andMapDecode1 ((decoderForType ifaces cname paramType))) paramTypes)
+                          ++ fmap (\paramType -> andMapDecode1 ((decoderForType mode ifaces cname paramType))) paramTypes)
                             & foldlPairs (|>)
                     )
                     & (\l -> l ++ [CaseBranch pAny_ $ failDecode (Data.Name.toChars generatedName <> " unexpected union tag index")])
               )
             )
+
+    {- Only the validating chain (w3_decode_*) attaches the validator. If the
+    current module defines `w3_validate_<unionName>`, the validating decoder
+    calls it after producing a value (its existence and signature are verified by
+    checkValidators in addWireGenerations_ before this runs). The unsafe chain
+    (w3_unsafe_decode_*) never validates. -}
+    finalBody =
+      case mode of
+        DecodeValidating ->
+          case findValidatorDef decls unionName of
+            Just _  -> wrapWithValidator ifaces cname unionName baseBody
+            Nothing -> baseBody
+        DecodeUnsafe ->
+          baseBody
+
+    generated =
+      Def
+      -- TypedDef
+        (a (generatedName))
+        -- Map.empty
+        ptvars
+        finalBody
         -- (TAlias
         --   (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire3")
         --   "Decoder"
@@ -617,17 +842,17 @@ encoderAlias isTest_ ifaces pkg modul decls aliasName alias@(Alias tvars tipe) =
   finalGen
 
 
-decoderAlias :: Bool -> Map.Map Module.Raw I.Interface -> Pkg.Name -> Src.Module -> Decls -> Data.Name.Name -> Alias -> Def
-decoderAlias isTest_ ifaces pkg modul decls aliasName alias@(Alias tvars tipe) =
+decoderAlias :: DecodeMode -> Bool -> Map.Map Module.Raw I.Interface -> Pkg.Name -> Src.Module -> Decls -> Data.Name.Name -> Alias -> Def
+decoderAlias mode isTest_ ifaces pkg modul decls aliasName alias@(Alias tvars tipe) =
   let
     !x = runTests isTest_ "decoderAlias" pkg modul decls generatedName generated alias (aliasAsModule cname aliasName alias)
 
-    generatedName = Data.Name.fromChars $ "w3_decode_" ++ Data.Name.toChars aliasName
+    generatedName = Data.Name.fromChars $ decodePrefix mode ++ Data.Name.toChars aliasName
     cname = Module.Canonical pkg (Src.getName modul)
     ptvars = tvars & fmap (\tvar -> pvar $ Data.Name.fromChars $ "w3_x_c_" ++ Data.Name.toChars tvar )
 
     generated = Def (a (generatedName)) ptvars $
       -- debugDecoder (Data.Name.toElmString aliasName) $
-      decoderForType ifaces cname tipe
+      decoderForType mode ifaces cname tipe
   in
   generated

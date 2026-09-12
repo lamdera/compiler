@@ -153,6 +153,7 @@ unionStubs unions =
       in
       [ _Debug_todo_with_params nParams $ Data.Name.fromChars $ "w3_encode_" ++ Data.Name.toChars name
       , _Debug_todo_with_params nParams $ Data.Name.fromChars $ "w3_decode_" ++ Data.Name.toChars name
+      , _Debug_todo_with_params nParams $ Data.Name.fromChars $ "w3_unsafe_decode_" ++ Data.Name.toChars name
       ]
     )
 
@@ -170,6 +171,7 @@ aliasStubs aliases =
       in
       [ _Debug_todo_with_params nParams $ Data.Name.fromChars $ "w3_encode_" ++ Data.Name.toChars name
       , _Debug_todo_with_params nParams $ Data.Name.fromChars $ "w3_decode_" ++ Data.Name.toChars name
+      , _Debug_todo_with_params nParams $ Data.Name.fromChars $ "w3_unsafe_decode_" ++ Data.Name.toChars name
       ]
     )
 

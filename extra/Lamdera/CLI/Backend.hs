@@ -910,7 +910,7 @@ addBackendModelDecl base64 =
     \       >> nextChunk []\n\
     \   )\n\
     \ |>Lamdera.Wire3.intListToBytes\n\
-    \ |>Lamdera.Wire3.bytesDecode Types.w3_decode_BackendModel\n\
+    \ |>Lamdera.Wire3.bytesDecode Types.w3_unsafe_decode_BackendModel\n\
     \ |>(\\maybeModel ->\n\
     \    case maybeModel of\n\
     \     Just m -> m\n\

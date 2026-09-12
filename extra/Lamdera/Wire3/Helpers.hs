@@ -53,6 +53,32 @@ shouldHaveCodecsGenerated name =
     _ -> True
 
 
+{- Which decoder chain we are generating.
+
+Every custom type and alias gets TWO decoders:
+
+  * w3_decode_<T>        (DecodeValidating) -- applies w3_validate_<T> if present
+                          and recurses through the validating chain. Used by the
+                          Lamdera runtime for attacker-controlled, backend-inbound
+                          data.
+
+  * w3_unsafe_decode_<T> (DecodeUnsafe)     -- never validates and recurses
+                          through the unsafe chain. Behaves like w3_decode_<T> did
+                          before validation existed. Used for trusted data
+                          (persistence, evergreen migrations, etc).
+
+The two chains are otherwise identical; the only difference is the prefix used
+when referencing nested user-type decoders (and, for unions, whether the
+validator hook is attached). -}
+data DecodeMode = DecodeValidating | DecodeUnsafe
+  deriving (Eq, Show)
+
+
+decodePrefix :: DecodeMode -> String
+decodePrefix DecodeValidating = "w3_decode_"
+decodePrefix DecodeUnsafe     = "w3_unsafe_decode_"
+
+
 getForeignSig tipe moduleName generatedName ifaces =
   -- debugHaskell (T.pack $ "❎❎❎❎❎ ALIAS ENCODER foreignTypeSig for " ++ (Data.Name.toChars generatedName)) $
     case foreignTypeSig moduleName generatedName ifaces of
@@ -71,6 +97,7 @@ getForeignSig tipe moduleName generatedName ifaces =
                (TLambda (TVar "a") tLamdera_Wire_Encoder))
 
           else if T.isPrefixOf "w3_decode_" (T.pack $ Data.Name.toChars generatedName)
+                  || T.isPrefixOf "w3_unsafe_decode_" (T.pack $ Data.Name.toChars generatedName)
             then
               (Forall
                  (Map.fromList [("a", ())])
@@ -1094,3 +1121,139 @@ identity =
       )
       -- [v]
     -- )
+
+
+{-
+
+WIRE VALIDATION HELPERS
+
+User code can opt a custom type into post-decode validation by defining a
+function `w3_validate_<TypeName> : <TypeName> <tvars> -> Result String ()` in
+the same module as the type. The generated `w3_decode_<TypeName>` then calls
+it; see Lamdera.Wire3.Decoder.wrapWithValidator and Lamdera.Wire3.Core.
+
+-}
+
+w3ValidatePrefix :: String
+w3ValidatePrefix = "w3_validate_"
+
+
+isValidatorName :: Data.Name.Name -> Bool
+isValidatorName name =
+  List.isPrefixOf w3ValidatePrefix (Data.Name.toChars name)
+
+
+-- "w3_validate_MyType" -> "MyType"
+validatorTypeName :: Data.Name.Name -> Data.Name.Name
+validatorTypeName name =
+  Data.Name.fromChars $ drop (length w3ValidatePrefix) (Data.Name.toChars name)
+
+
+-- "MyType" -> "w3_validate_MyType"
+validatorNameFor :: Data.Name.Name -> Data.Name.Name
+validatorNameFor typeName =
+  Data.Name.fromChars $ w3ValidatePrefix ++ Data.Name.toChars typeName
+
+
+allValidatorDefs :: Decls -> [Def]
+allValidatorDefs decls =
+  declsToList decls & filter (isValidatorName . defName)
+
+
+findValidatorDef :: Decls -> Data.Name.Name -> Maybe Def
+findValidatorDef decls typeName =
+  findDef (validatorNameFor typeName) decls
+
+
+{- Append `tailDecls` after every definition in `decls`, replacing the terminal
+SaveTheEnvironment. Used to place generated wire functions *after* user
+definitions when a module contains w3_validate_* functions: the generated
+decoders reference those user functions via VarTopLevel, and a VarTopLevel only
+resolves to definitions appearing earlier in the topologically-sorted Decls. -}
+spliceDeclsAtEnd :: Decls -> Decls -> Decls
+spliceDeclsAtEnd decls tailDecls =
+  case decls of
+    Declare def rest ->
+      Declare def (spliceDeclsAtEnd rest tailDecls)
+    DeclareRec def defs rest ->
+      DeclareRec def defs (spliceDeclsAtEnd rest tailDecls)
+    SaveTheEnvironment ->
+      tailDecls
+
+
+{- Like addLetLog, but logs a dynamic Expr (e.g. an error string bound in a
+pattern) rather than a static identifier. Equivalent to writing:
+
+  let _ = Lamdera.Wire3.debug <logValue>
+  in <functionBody>
+-}
+addLetLogValue :: Expr -> Expr -> Expr
+addLetLogValue logValue functionBody =
+  (a (Let
+        (Def
+           (a ("_"))
+           []
+           (a (Call
+                 (a (VarForeign mLamdera_Wire "debug"
+                   (Forall
+                     (Map.fromList [("a", ())])
+                     (TLambda (TType (Module.Canonical (Name "elm" "core") "String") "String" []) (TVar "a")))
+                 ))
+                 [ logValue ]
+              )))
+         functionBody
+  ))
+
+
+{- A total collector of every VarTopLevel reference in an expression, recursing
+through let/case/record/etc.
+
+Unlike getLvars in Lamdera.Wire3.Graph -- which is specialised to generated wire
+expressions and intentionally `error`s on shapes that generated code never emits
+(e.g. a multi-branch `if`) and ignores `case` scrutinees -- this handles every
+Expr_ constructor, so it is safe to run over arbitrary user code. -}
+topLevelRefsInExpr :: Expr -> [Data.Name.Name]
+topLevelRefsInExpr (A.At _ expr) =
+  case expr of
+    VarLocal _              -> []
+    VarTopLevel _ name      -> [name]
+    VarKernel _ _           -> []
+    VarForeign _ _ _        -> []
+    VarCtor _ _ _ _ _       -> []
+    VarDebug _ _ _          -> []
+    VarOperator _ _ _ _     -> []
+    Chr _                   -> []
+    Str _                   -> []
+    Int _                   -> []
+    Float _                 -> []
+    List es                 -> concatMap topLevelRefsInExpr es
+    Negate e                -> topLevelRefsInExpr e
+    Binop _ _ _ _ e1 e2     -> topLevelRefsInExpr e1 ++ topLevelRefsInExpr e2
+    Lambda _ e              -> topLevelRefsInExpr e
+    Call e es               -> topLevelRefsInExpr e ++ concatMap topLevelRefsInExpr es
+    If branches finalElse   ->
+      concatMap (\(c, t) -> topLevelRefsInExpr c ++ topLevelRefsInExpr t) branches
+        ++ topLevelRefsInExpr finalElse
+    Let def e               -> defTopLevelRefs def ++ topLevelRefsInExpr e
+    LetRec defs e           -> concatMap defTopLevelRefs defs ++ topLevelRefsInExpr e
+    LetDestruct _ e1 e2     -> topLevelRefsInExpr e1 ++ topLevelRefsInExpr e2
+    Case scrutinee branches ->
+      topLevelRefsInExpr scrutinee
+        ++ concatMap (\(CaseBranch _ e) -> topLevelRefsInExpr e) branches
+    Accessor _              -> []
+    Access e _              -> topLevelRefsInExpr e
+    Update _ e fieldUpdates ->
+      topLevelRefsInExpr e
+        ++ concatMap (\(FieldUpdate _ ue) -> topLevelRefsInExpr ue) (Map.elems fieldUpdates)
+    Record fields           -> concatMap topLevelRefsInExpr (Map.elems fields)
+    Unit                    -> []
+    Tuple e1 e2 me3         ->
+      topLevelRefsInExpr e1 ++ topLevelRefsInExpr e2 ++ maybe [] topLevelRefsInExpr me3
+    Shader _ _              -> []
+
+
+defTopLevelRefs :: Def -> [Data.Name.Name]
+defTopLevelRefs def =
+  case def of
+    Def _ _ e          -> topLevelRefsInExpr e
+    TypedDef _ _ _ e _ -> topLevelRefsInExpr e
