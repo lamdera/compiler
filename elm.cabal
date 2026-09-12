@@ -445,3 +445,138 @@ Executable lamdera
         -- utils
         Bytes
         Literals
+
+
+-- @LAMDERA The Lamdera test suite. This stanza was lost when elm.cabal was
+-- reconciled against elm/compiler 0.19.2, whose cabal file has no such target -
+-- the test MODULES survived into the executable above, but the target to run them
+-- did not, so `stack test` and `stack ghci elm:test:lamdera-tests` both died with
+-- "Component test:lamdera-tests does not exist in package elm".
+--
+-- Deliberately self-contained rather than factored into a `common` stanza shared
+-- with the executable: the executable block tracks upstream and gets reconciled
+-- again, so keeping this appended and separate means the next merge touches
+-- upstream's block and leaves this alone. other-modules is omitted on purpose -
+-- GHC finds them via hs-source-dirs, and without -Werror here the resulting
+-- missing-home-modules notice stays a warning.
+Test-Suite lamdera-tests
+    type: exitcode-stdio-1.0
+    main-is: TestMain.hs
+    ghc-options: -O0 -rtsopts -threaded "-with-rtsopts=-N"
+    default-language: Haskell2010
+    hs-source-dirs:
+        compiler/src
+        builder/src
+        src/utils
+        terminal/impl
+        terminal/src
+        -- Lamdera
+        extra
+        test
+        -- Elmx
+        ext-common
+        ext-sentry
+        ext-elm-pages
+
+    build-depends:
+        ansi-terminal,
+        ansi-wl-pprint < 1,
+        base,
+        binary,
+        bytestring,
+        containers,
+        directory,
+        edit-distance,
+        filelock,
+        filepath,
+        ghc-prim,
+        haskeline,
+        HTTP,
+        http-client,
+        http-client-tls,
+        http-types,
+        language-glsl,
+        mtl,
+        network,
+          -- >= 2.4 && < 2.7,
+        parsec,
+        process,
+        raw-strings-qq,
+        scientific,
+        SHA,
+        snap-core,
+        snap-server,
+        template-haskell,
+        time,
+        unordered-containers,
+        utf8-string,
+        vector,
+        zip-archive,
+
+
+        -- @LAMDERA
+
+        -- Windows metapackage
+        --system-cxx-std-lib,
+
+        -- @TODO need to remove and use Utf8 module instead somehow? Or compat it.
+        text,
+        -- Extra
+        aeson,
+        file-embed,
+        neat-interpolation,
+        natural-sort,
+        listsafe,
+        safe,
+        filemanip,
+        unix-compat,
+        githash,
+        temporary,
+
+        -- Live
+        websockets,
+        websockets-snap,
+        stm,
+        uuid,
+        broadcast-chan,
+        timeout,
+        entropy,
+        -- Debug
+        unicode-show,
+        network-info,
+
+        -- Future
+        conduit-extra,
+        warp,
+        wai,
+        stringsearch,
+
+        -- Interpreter
+        deepseq,
+
+        -- Vendor http-reverse-proxy
+        wai-logger,
+        unliftio,
+        streaming-commons,
+        conduit,
+        word8,
+        case-insensitive,
+        blaze-builder,
+
+        -- Test
+        async,
+        random,
+        tree-diff,
+        main-tester,
+
+        -- elmx
+        clock,
+        fold-debounce,
+        formatting,
+        fsnotify,
+        command,
+        lifted-base,
+
+        -- elm-format local vendor package
+        elm-format-lib,
+        elm-format
