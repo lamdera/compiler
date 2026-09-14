@@ -696,6 +696,15 @@ canAliasToMigration oldVersion newVersion scope interfaces recursionSet (typeNew
             tvarsOld :: [Text]
             tvarsOld = tvarMapOldReplaced & fmap (N.toText . fst)
 
+            -- The top level definition we're about to generate is shared by every usage of this
+            -- alias, and its type signature is generic (`(a_old -> a_new) -> ...`), so its body
+            -- has to be generic too. Resolving the tvars to whatever this particular usage
+            -- applied them to would make tvar-typed fields look unchanged (`a` vs `a`) and emit
+            -- `old.field` where `old.field |> migrate_a` is required.
+            -- @NOTE the union equivalent does the same thing, see `constructorMigrations`.
+            genericTvarMap :: TvarMap -> TvarMap
+            genericTvarMap tvarMap_ = tvarMap_ & fmap (\(tvarName, _) -> (tvarName, Can.TVar tvarName))
+
             (MigrationNested migrationAliasedType imps subDefs) =
               let
                 cTypeOld =
@@ -703,7 +712,7 @@ canAliasToMigration oldVersion newVersion scope interfaces recursionSet (typeNew
                     Can.Holey cTypeOld_ -> cTypeOld_
                     Can.Filled cTypeOld_ ->cTypeOld_
               in
-              canToMigration oldVersion newVersion moduleNameNew interfaces recursionSet cType (Just cTypeOld) tvarMapOldReplaced tvarMapNew "old"
+              canToMigration oldVersion newVersion moduleNameNew interfaces recursionSet cType (Just cTypeOld) (genericTvarMap tvarMapOldReplaced) (genericTvarMap tvarMapNew) "old"
 
             typeScope = if moduleNameNew == scope then "" else T.concat [nameToText module_, "."]
 
@@ -991,15 +1000,19 @@ typeToMigration oldVersion newVersion scope interfaces recursionSet_ typeNew@(Ca
       (\m_p1      -> T.concat [ "Result.map (", m_p1, ")" ])
       (\m_p0 m_p1 -> T.concat [ "Result.mapError (", m_p0, ") >> Result.map (", m_p1, ")" ])
 
+    -- @NOTE these are generated with `>>` rather than `|>` so that the resulting migration is
+    -- a function, not a partial pipeline. Migrations get spliced both into pipelines
+    -- (`old.field |> <migration>`) and into function positions (`Maybe.map (<migration>)`,
+    -- `Tuple.mapBoth (<migration>) ...`), and only the composed form is valid in both.
     ("elm", "core", "Dict", "Dict")     -> migrate2ParamCollection
-      (\m_p0      -> T.concat [ "Dict.toList |> List.map (Tuple.mapFirst ", m_p0, ") |> Dict.fromList" ])
+      (\m_p0      -> T.concat [ "Dict.toList >> List.map (Tuple.mapFirst (", m_p0, ")) >> Dict.fromList" ])
       (\m_p1      -> T.concat [ "Dict.map (\\k -> ", m_p1, ")" ])
-      (\m_p0 m_p1 -> T.concat [ "Dict.toList |> List.map (Tuple.mapBoth (", m_p0, ") (", m_p1, ")) |> Dict.fromList" ])
+      (\m_p0 m_p1 -> T.concat [ "Dict.toList >> List.map (Tuple.mapBoth (", m_p0, ") (", m_p1, ")) >> Dict.fromList" ])
 
     ("lamdera", "containers", "SeqDict", "SeqDict")     -> migrate2ParamCollection
-      (\m_p0      -> T.concat [ "SeqDict.toList |> List.map (Tuple.mapFirst ", m_p0, ") |> SeqDict.fromList" ])
+      (\m_p0      -> T.concat [ "SeqDict.toList >> List.map (Tuple.mapFirst (", m_p0, ")) >> SeqDict.fromList" ])
       (\m_p1      -> T.concat [ "SeqDict.map (\\k -> ", m_p1, ")" ])
-      (\m_p0 m_p1 -> T.concat [ "SeqDict.toList |> List.map (Tuple.mapBoth (", m_p0, ") (", m_p1, ")) |> SeqDict.fromList" ])
+      (\m_p0 m_p1 -> T.concat [ "SeqDict.toList >> List.map (Tuple.mapBoth (", m_p0, ") (", m_p1, ")) >> SeqDict.fromList" ])
 
     (author, pkg, module_, typeName_) ->
       if (Set.member recursionIdentifier recursionSet_) then
