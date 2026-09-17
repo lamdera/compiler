@@ -1,11 +1,25 @@
 #!/bin/bash
 
-SEED=${SEED:-42}
+# Wire codec roundtrip fuzz tests.
+#
+# Generates random Elm type shapes (extensible record chains, alias chains,
+# cross-module refs, overlapping fields, many-variant unions...), has the Lamdera
+# compiler generate their Wire codecs, then asserts decode(encode(x)) == Just x
+# over fuzzed values of each type.
+#
+# This complements the golden-file codec expectations in Test.Wire: those pin the
+# exact generated codec for a hand-curated corpus, this checks the actual roundtrip
+# property over shapes nobody thought to write down.
+#
+# SEEDS may list several seeds; each is generated and run in turn, so one CI run
+# covers more of the shape space while staying fully deterministic.
+
+SEEDS=${SEEDS:-${SEED:-42}}
 COUNT=${COUNT:-5}
 COMPILER=${COMPILER:-lamdera}
 
 echo "Wire codec roundtrip fuzz tests"
-echo "  seed=$SEED  modules=$COUNT  compiler=$COMPILER"
+echo "  seeds=$SEEDS  modules=$COUNT  compiler=$COMPILER"
 echo ""
 
 # Ensure deps and codegen bindings are present
@@ -18,32 +32,50 @@ if [ ! -d codegen/Gen ]; then
     npx elm-codegen install
 fi
 
-echo "Phase 1: Generating types and tests..."
-rm -rf tests/Generated tests/WireRoundtripTests.elm
-if ! npm run generate -- --seed "$SEED" --count "$COUNT" 2>&1; then
+failed_seeds=""
+
+for seed in $SEEDS; do
+    echo "=============================================================="
+    echo "seed=$seed"
+    echo "=============================================================="
+
+    echo "Phase 1: Generating types and tests..."
+    rm -rf tests/Generated tests/WireRoundtripTests.elm
+    if ! npm run generate -- --seed "$seed" --count "$COUNT" 2>&1; then
+        echo ""
+        echo "GENERATION FAILED (seed=$seed)"
+        failed_seeds="$failed_seeds $seed"
+        continue
+    fi
+
+    type_count=$(grep -c "test_" tests/WireRoundtripTests.elm 2>/dev/null || echo 0)
+    echo "Generated $COUNT modules with $type_count tests"
     echo ""
-    echo "GENERATION FAILED"
-    echo "  seed=$SEED  modules=$COUNT"
+
+    echo "Phase 2: Running fuzz tests..."
+    if npx elm-test --compiler="$COMPILER" 2>&1; then
+        echo ""
+        echo "PASSED (seed=$seed)"
+    else
+        echo ""
+        echo "FAILED (seed=$seed)"
+        failed_seeds="$failed_seeds $seed"
+    fi
+    echo ""
+done
+
+if [ -n "$failed_seeds" ]; then
+    echo "=============================================================="
+    echo "FAILED seeds:$failed_seeds"
+    echo ""
+    echo "To reproduce a failure:"
+    for seed in $failed_seeds; do
+        echo "  cd $(pwd)"
+        echo "  SEED=$seed COUNT=$COUNT COMPILER=$COMPILER bash run-roundtrip-tests.sh"
+    done
+    echo ""
+    echo "Generated files for the last seed are in tests/ for inspection."
     exit 1
 fi
 
-type_count=$(grep -c "test_" tests/WireRoundtripTests.elm 2>/dev/null || echo 0)
-echo "Generated $COUNT modules with $type_count tests"
-echo ""
-
-echo "Phase 2: Running fuzz tests..."
-if npx elm-test --compiler="$COMPILER" 2>&1; then
-    echo ""
-    echo "ALL PASSED (seed=$SEED, modules=$COUNT)"
-else
-    exit_code=$?
-    echo ""
-    echo "FAILED (seed=$SEED, modules=$COUNT, compiler=$COMPILER)"
-    echo ""
-    echo "To reproduce:"
-    echo "  cd $(pwd)"
-    echo "  SEED=$SEED COUNT=$COUNT COMPILER=$COMPILER bash run-roundtrip-tests.sh"
-    echo ""
-    echo "Generated files are in tests/Generated/ for inspection."
-    exit $exit_code
-fi
+echo "ALL PASSED (seeds=$SEEDS, modules=$COUNT)"

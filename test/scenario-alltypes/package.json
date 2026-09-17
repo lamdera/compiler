@@ -6,8 +6,8 @@
     "test": "npx elm-test --compiler=lamdera"
   },
   "devDependencies": {
-    "elm-codegen": "^0.6.3",
-    "elm-pages": "^3.5.0",
-    "elm-test": "^0.19.1-revision12"
+    "elm-codegen": "0.6.3",
+    "elm-pages": "3.3.2",
+    "elm-test": "0.19.1-revision17"
   }
 }

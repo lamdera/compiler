@@ -233,12 +233,25 @@ scenarioGenerator moduleIndex modulePath priorModules typeIndex localDecls =
         localRefs =
             declsToRefs modulePath localDecls
 
+        {- `localDecls` arrives NEWEST FIRST: generateDeclsHelp accumulates with
+           `List.reverse newDecls ++ acc` and only restores declaration order at the
+           very end, in generateDeclsForModule. declsToExtensibleRefs resolves each
+           extension against the refs collected before it, so it must be fed
+           declaration order or a two-level base resolves against an empty set and
+           silently loses its inherited fields.
+        -}
+        localDeclsInOrder =
+            List.reverse localDecls
+
+        priorExtRefs =
+            priorExtensibleRefs priorModules
+
         ctx =
             { moduleIndex = moduleIndex
             , modulePath = modulePath
             , typeIndex = typeIndex
             , allRefs = priorModuleRefs priorModules ++ localRefs
-            , allExtensibleRefs = priorExtensibleRefs priorModules ++ declsToExtensibleRefs modulePath localDecls
+            , allExtensibleRefs = priorExtRefs ++ declsToExtensibleRefs priorExtRefs modulePath localDeclsInOrder
             , priorModules = priorModules
             }
 
@@ -509,7 +522,12 @@ crossModuleScenario moduleIndex modulePath priorModules typeIndex =
                                         [ UnionDecl
                                             { name = Names.typeName moduleIndex typeIndex
                                             , variants =
-                                                [ ( "Wrap" ++ ref.typeName, [ TRef ref ] )
+                                                -- typeIndex-suffixed: this scenario can run twice in one
+                                                -- module and pick the SAME ref both times, and an unsuffixed
+                                                -- "Wrap" ++ ref.typeName then declares that constructor twice
+                                                -- (NAME CLASH). The sibling variant below is already unique
+                                                -- for the same reason.
+                                                [ ( "Wrap" ++ ref.typeName ++ String.fromInt typeIndex, [ TRef ref ] )
                                                 , ( "Other" ++ Names.constructorName typeIndex, [ TInt ] )
                                                 ]
                                             }
@@ -876,8 +894,8 @@ Level1 compatible = { compatible | field1 : ... }
 Level2 compatible = Level1 { compatible | field2 : ... }
 Concrete = Level2 { field3 : ... }
 
-This is a KNOWN BUG pattern — the wire codec generator only resolves one level
-of TAlias chain, losing the outermost extension fields.
+Regression cover for TAlias chain resolution: the codec generator has to resolve
+both levels, not just the innermost, or the outermost extension fields are lost.
 -}
 twoLevelExtensibleScenario : Int -> List String -> Int -> Random.Generator (List TypeDecl)
 twoLevelExtensibleScenario moduleIndex modulePath typeIndex =
@@ -1217,22 +1235,50 @@ declsToRefs modulePath decls =
 
 
 {-| Collect extensible record bases from declarations.
+
+An `ExtensibleExtensionDecl` stores only the fields it *adds* (`ownFields`); the
+fields it inherits live in the base it extends. A ref has to carry the FULL field
+set, because downstream a concrete type built from this base gets its fuzzer built
+from `ref.fields`, so dropping the inherited level produces a fuzzer that is
+missing those fields and fails to compile (TYPE MISMATCH, "Looks like the <field>
+field is missing").
+
+So resolve each extension against the refs already known: prior modules first,
+then the decls earlier in this module, which are always generated before the decls
+that extend them. `knownRefs` carries the former.
 -}
-declsToExtensibleRefs : List String -> List TypeDecl -> List ExtensibleRef
-declsToExtensibleRefs modulePath decls =
-    List.filterMap
-        (\decl ->
+declsToExtensibleRefs : List ExtensibleRef -> List String -> List TypeDecl -> List ExtensibleRef
+declsToExtensibleRefs knownRefs modulePath decls =
+    List.foldl
+        (\decl acc ->
             case decl of
                 ExtensibleRecordDecl { name, fields } ->
-                    Just { modulePath = modulePath, typeName = name, fields = fields }
+                    acc ++ [ { modulePath = modulePath, typeName = name, fields = fields } ]
 
-                ExtensibleExtensionDecl { name, ownFields } ->
-                    Just { modulePath = modulePath, typeName = name, fields = ownFields }
+                ExtensibleExtensionDecl { name, baseRef, ownFields } ->
+                    acc
+                        ++ [ { modulePath = modulePath
+                             , typeName = name
+                             , fields = lookupExtensibleFields (knownRefs ++ acc) baseRef ++ ownFields
+                             }
+                           ]
 
                 _ ->
-                    Nothing
+                    acc
         )
+        []
         decls
+
+
+{-| Find the full field set of an extensible base already collected.
+-}
+lookupExtensibleFields : List ExtensibleRef -> TypeRef -> List ( String, ElmType )
+lookupExtensibleFields refs ref =
+    refs
+        |> List.filter (\r -> r.modulePath == ref.modulePath && r.typeName == ref.typeName)
+        |> List.head
+        |> Maybe.map .fields
+        |> Maybe.withDefault []
 
 
 priorModuleRefs : List GeneratedModule -> List TypeRef
@@ -1242,7 +1288,10 @@ priorModuleRefs modules =
 
 priorExtensibleRefs : List GeneratedModule -> List ExtensibleRef
 priorExtensibleRefs modules =
-    List.concatMap (\m -> declsToExtensibleRefs m.modulePath m.decls) modules
+    List.foldl
+        (\m acc -> acc ++ declsToExtensibleRefs acc m.modulePath m.decls)
+        []
+        modules
 
 
 
