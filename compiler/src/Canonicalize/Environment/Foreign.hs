@@ -135,7 +135,7 @@ addImport ifaces (State vs ts cs bs qvs qts qcs) (Src.Import (A.At _ name) maybe
 
 addExposed :: Env.Exposed a -> Env.Exposed a -> Env.Exposed a
 addExposed =
-  Map.unionWith Env.mergeInfo
+  Map.unionWithKey Env.mergeInfoFor
 
 
 addQualified :: Name.Name -> Env.Exposed a -> Env.Qualified a -> Env.Qualified a
@@ -220,7 +220,7 @@ addExposedValue home vars types binops (State vs ts cs bs qvs qts qcs) exposed =
     Src.Lower (A.At region name) ->
       case Map.lookup name vars of
         Just info ->
-          Result.ok (State (Map.insertWith Env.mergeInfo name info vs) ts cs bs qvs qts qcs)
+          Result.ok (State (Map.insertWithKey Env.mergeInfoFor name info vs) ts cs bs qvs qts qcs)
 
         Nothing ->
           Result.throw (Error.ImportExposingNotFound region home name (Map.keys vars))

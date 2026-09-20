@@ -5,6 +5,7 @@ module Canonicalize.Environment
   , Qualified
   , Info(..)
   , mergeInfo
+  , mergeInfoFor
   , Var(..)
   , Type(..)
   , Ctor(..)
@@ -31,6 +32,9 @@ import qualified Elm.ModuleName as ModuleName
 import qualified Reporting.Annotation as A
 import qualified Reporting.Error.Canonicalize as Error
 import qualified Reporting.Result as Result
+import qualified Elm.Package as Pkg
+import qualified System.Environment as SysEnv
+import System.IO.Unsafe (unsafePerformIO)
 
 
 
@@ -73,6 +77,48 @@ type Qualified a =
 data Info a
   = Specific ModuleName.Canonical a
   | Ambiguous ModuleName.Canonical (OneOrMore.OneOrMore ModuleName.Canonical)
+
+
+{-| lamdera/core 1.0.0 gained `log` in place, with no version bump, so apps that
+did `import Lamdera exposing (..)` alongside their own `log` stopped compiling
+with AMBIGUOUS NAME on code that had built fine for years. Elm package versions
+are meant to be immutable, so those apps cannot be rebuilt as they were.
+
+With PREFER_USER_LOG_SHADOW set, a clash on `log` where dropping Lamdera's
+candidate leaves exactly one other resolves to that one and the build continues.
+Only that exact shape is rescued: any other ambiguity, and any clash not on
+`log`, still fails as before. The flag is never set for a user's own deploy, so
+they still get the error and can qualify the import in their own time.
+-}
+{-# NOINLINE preferUserLogShadow #-}
+preferUserLogShadow :: Bool
+preferUserLogShadow =
+  unsafePerformIO $
+    do  flag <- SysEnv.lookupEnv "PREFER_USER_LOG_SHADOW"
+        pure (flag /= Nothing)
+
+
+lamderaCoreLamdera :: ModuleName.Canonical
+lamderaCoreLamdera =
+  ModuleName.Canonical Pkg.lamderaCore "Lamdera"
+
+
+{-| mergeInfo, but aware of the name being merged, so the `log` rescue above can
+apply. Everything else defers to mergeInfo unchanged.
+-}
+mergeInfoFor :: Name.Name -> Info a -> Info a -> Info a
+mergeInfoFor name info1 info2 =
+  if preferUserLogShadow && name == "log" then
+    case (info1, info2) of
+      (Specific h1 _, Specific h2 _)
+        | h1 == lamderaCoreLamdera && h2 /= lamderaCoreLamdera -> info2
+        | h2 == lamderaCoreLamdera && h1 /= lamderaCoreLamdera -> info1
+
+      _ ->
+        mergeInfo info1 info2
+
+  else
+    mergeInfo info1 info2
 
 
 mergeInfo :: Info a -> Info a -> Info a
