@@ -991,15 +991,18 @@ typeToMigration oldVersion newVersion scope interfaces recursionSet_ typeNew@(Ca
       (\m_p1      -> T.concat [ "Result.map (", m_p1, ")" ])
       (\m_p0 m_p1 -> T.concat [ "Result.mapError (", m_p0, ") >> Result.map (", m_p1, ")" ])
 
+    -- Each migration must be a function that stays valid when nested in another one
+    -- (e.g. `Dict.map (\_ -> <migration>)`): compose with `>>` rather than piping with `|>`,
+    -- and never bind a name, as a nested `\k` would shadow the outer one.
     ("elm", "core", "Dict", "Dict")     -> migrate2ParamCollection
-      (\m_p0      -> T.concat [ "Dict.toList |> List.map (Tuple.mapFirst ", m_p0, ") |> Dict.fromList" ])
-      (\m_p1      -> T.concat [ "Dict.map (\\k -> ", m_p1, ")" ])
-      (\m_p0 m_p1 -> T.concat [ "Dict.toList |> List.map (Tuple.mapBoth (", m_p0, ") (", m_p1, ")) |> Dict.fromList" ])
+      (\m_p0      -> T.concat [ "Dict.toList >> List.map (Tuple.mapFirst (", m_p0, ")) >> Dict.fromList" ])
+      (\m_p1      -> T.concat [ "Dict.map (\\_ -> ", m_p1, ")" ])
+      (\m_p0 m_p1 -> T.concat [ "Dict.toList >> List.map (Tuple.mapBoth (", m_p0, ") (", m_p1, ")) >> Dict.fromList" ])
 
     ("lamdera", "containers", "SeqDict", "SeqDict")     -> migrate2ParamCollection
-      (\m_p0      -> T.concat [ "SeqDict.toList |> List.map (Tuple.mapFirst ", m_p0, ") |> SeqDict.fromList" ])
-      (\m_p1      -> T.concat [ "SeqDict.map (\\k -> ", m_p1, ")" ])
-      (\m_p0 m_p1 -> T.concat [ "SeqDict.toList |> List.map (Tuple.mapBoth (", m_p0, ") (", m_p1, ")) |> SeqDict.fromList" ])
+      (\m_p0      -> T.concat [ "SeqDict.toList >> List.map (Tuple.mapFirst (", m_p0, ")) >> SeqDict.fromList" ])
+      (\m_p1      -> T.concat [ "SeqDict.map (\\_ -> ", m_p1, ")" ])
+      (\m_p0 m_p1 -> T.concat [ "SeqDict.toList >> List.map (Tuple.mapBoth (", m_p0, ") (", m_p1, ")) >> SeqDict.fromList" ])
 
     (author, pkg, module_, typeName_) ->
       if (Set.member recursionIdentifier recursionSet_) then
