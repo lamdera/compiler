@@ -341,6 +341,123 @@ decoderForType ifaces cname tipe =
               , decoderForType ifaces cname val
               ]))
 
+    TType (Module.Canonical (Name "lamdera" "containers") "BiSeqDict") "BiSeqDict" [key, val] ->
+        (a (Call
+              (a (VarForeign mLamdera_BiSeqDict "decodeBiSeqDict"
+                    (Forall
+                       (Map.fromList [("k", ()), ("value", ())])
+                       (TLambda
+                          (TAlias mLamdera_Wire "Decoder" [("a", TVar "k")]
+                             (Filled
+                                (TType
+                                   (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
+                                   "Decoder"
+                                   [TVar "k"])))
+                          (TLambda
+                             (TAlias mLamdera_Wire "Decoder" [("a", TVar "value")]
+                                (Filled
+                                   (TType
+                                      (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
+                                      "Decoder"
+                                      [TVar "value"])))
+                             (TAlias mLamdera_Wire "Decoder"
+                                [ ( "a"
+                                  , TType
+                                      mLamdera_BiSeqDict
+                                      "BiSeqDict"
+                                      [TVar "k", TVar "value"])
+                                ]
+                                (Filled
+                                   (TType
+                                      (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
+                                      "Decoder"
+                                      [ TType
+                                          mLamdera_BiSeqDict
+                                          "BiSeqDict"
+                                          [TVar "k", TVar "value"]
+                                      ]))))))))
+              [ decoderForType ifaces cname key
+              , decoderForType ifaces cname val
+              ]))
+
+    TType (Module.Canonical (Name "lamdera" "containers") "MultiSeqDict") "MultiSeqDict" [key, val] ->
+        (a (Call
+              (a (VarForeign mLamdera_MultiSeqDict "decodeMultiSeqDict"
+                    (Forall
+                       (Map.fromList [("k", ()), ("value", ())])
+                       (TLambda
+                          (TAlias mLamdera_Wire "Decoder" [("a", TVar "k")]
+                             (Filled
+                                (TType
+                                   (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
+                                   "Decoder"
+                                   [TVar "k"])))
+                          (TLambda
+                             (TAlias mLamdera_Wire "Decoder" [("a", TVar "value")]
+                                (Filled
+                                   (TType
+                                      (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
+                                      "Decoder"
+                                      [TVar "value"])))
+                             (TAlias mLamdera_Wire "Decoder"
+                                [ ( "a"
+                                  , TType
+                                      mLamdera_MultiSeqDict
+                                      "MultiSeqDict"
+                                      [TVar "k", TVar "value"])
+                                ]
+                                (Filled
+                                   (TType
+                                      (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
+                                      "Decoder"
+                                      [ TType
+                                          mLamdera_MultiSeqDict
+                                          "MultiSeqDict"
+                                          [TVar "k", TVar "value"]
+                                      ]))))))))
+              [ decoderForType ifaces cname key
+              , decoderForType ifaces cname val
+              ]))
+
+    TType (Module.Canonical (Name "lamdera" "containers") "MultiBiSeqDict") "MultiBiSeqDict" [key, val] ->
+        (a (Call
+              (a (VarForeign mLamdera_MultiBiSeqDict "decodeMultiBiSeqDict"
+                    (Forall
+                       (Map.fromList [("k", ()), ("value", ())])
+                       (TLambda
+                          (TAlias mLamdera_Wire "Decoder" [("a", TVar "k")]
+                             (Filled
+                                (TType
+                                   (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
+                                   "Decoder"
+                                   [TVar "k"])))
+                          (TLambda
+                             (TAlias mLamdera_Wire "Decoder" [("a", TVar "value")]
+                                (Filled
+                                   (TType
+                                      (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
+                                      "Decoder"
+                                      [TVar "value"])))
+                             (TAlias mLamdera_Wire "Decoder"
+                                [ ( "a"
+                                  , TType
+                                      mLamdera_MultiBiSeqDict
+                                      "MultiBiSeqDict"
+                                      [TVar "k", TVar "value"])
+                                ]
+                                (Filled
+                                   (TType
+                                      (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
+                                      "Decoder"
+                                      [ TType
+                                          mLamdera_MultiBiSeqDict
+                                          "MultiBiSeqDict"
+                                          [TVar "k", TVar "value"]
+                                      ]))))))))
+              [ decoderForType ifaces cname key
+              , decoderForType ifaces cname val
+              ]))
+
     TType (Module.Canonical (Name "elm" "bytes") "Bytes") "Bytes" _ ->
       callDecoder "decodeBytes" tipe
 

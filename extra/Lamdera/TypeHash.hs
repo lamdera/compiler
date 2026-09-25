@@ -356,6 +356,27 @@ canonicalToDiffableType targetName interfaces recursionSet canonical tvarMap =
             _ ->
               DError "❗️impossible !1 param SeqSet type"
 
+        ("lamdera", "containers", "BiSeqDict", "BiSeqDict") ->
+          case tvarResolvedParams of
+            key:value:_ ->
+              DLamderaBiSeqDict (canonicalToDiffableType targetName interfaces recursionSet key tvarMap) (canonicalToDiffableType targetName interfaces recursionSet value tvarMap)
+            _ ->
+              DError "❗️impossible !2 param BiSeqDict type"
+
+        ("lamdera", "containers", "MultiSeqDict", "MultiSeqDict") ->
+          case tvarResolvedParams of
+            key:value:_ ->
+              DLamderaMultiSeqDict (canonicalToDiffableType targetName interfaces recursionSet key tvarMap) (canonicalToDiffableType targetName interfaces recursionSet value tvarMap)
+            _ ->
+              DError "❗️impossible !2 param MultiSeqDict type"
+
+        ("lamdera", "containers", "MultiBiSeqDict", "MultiBiSeqDict") ->
+          case tvarResolvedParams of
+            key:value:_ ->
+              DLamderaMultiBiSeqDict (canonicalToDiffableType targetName interfaces recursionSet key tvarMap) (canonicalToDiffableType targetName interfaces recursionSet value tvarMap)
+            _ ->
+              DError "❗️impossible !2 param MultiBiSeqDict type"
+
 
         -- Values backed by JS Kernel types we cannot encode/decode
         ("elm", "virtual-dom", "VirtualDom", "Node")         -> kernelError
@@ -580,6 +601,9 @@ diffableTypeToText dtype =
     DExternalWarning _ tipe -> diffableTypeToText tipe
     DLamderaSeqDict key value -> "LD["<> diffableTypeToText key <>","<> diffableTypeToText value <>"]"
     DLamderaSeqSet tipe -> "LS["<> diffableTypeToText tipe <>"]"
+    DLamderaBiSeqDict key value -> "LBD["<> diffableTypeToText key <>","<> diffableTypeToText value <>"]"
+    DLamderaMultiSeqDict key value -> "LMD["<> diffableTypeToText key <>","<> diffableTypeToText value <>"]"
+    DLamderaMultiBiSeqDict key value -> "LMBD["<> diffableTypeToText key <>","<> diffableTypeToText value <>"]"
 
 
 diffableTypeErrors :: DiffableType -> [Text]
@@ -625,6 +649,9 @@ diffableTypeErrors dtype =
 
     DLamderaSeqDict key value -> diffableTypeErrors key ++ diffableTypeErrors value
     DLamderaSeqSet tipe -> diffableTypeErrors tipe
+    DLamderaBiSeqDict key value -> diffableTypeErrors key ++ diffableTypeErrors value
+    DLamderaMultiSeqDict key value -> diffableTypeErrors key ++ diffableTypeErrors value
+    DLamderaMultiBiSeqDict key value -> diffableTypeErrors key ++ diffableTypeErrors value
 
 
 diffableTypeExternalWarnings :: DiffableType -> [Text]
@@ -669,3 +696,6 @@ diffableTypeExternalWarnings dtype =
 
     DLamderaSeqDict key value -> diffableTypeExternalWarnings key ++ diffableTypeExternalWarnings value
     DLamderaSeqSet tipe -> diffableTypeExternalWarnings tipe
+    DLamderaBiSeqDict key value -> diffableTypeExternalWarnings key ++ diffableTypeExternalWarnings value
+    DLamderaMultiSeqDict key value -> diffableTypeExternalWarnings key ++ diffableTypeExternalWarnings value
+    DLamderaMultiBiSeqDict key value -> diffableTypeExternalWarnings key ++ diffableTypeExternalWarnings value
