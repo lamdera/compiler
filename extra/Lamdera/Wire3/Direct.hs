@@ -1208,13 +1208,37 @@ data DCtx =
     }
 
 
--- A hoisted helper function with the codec's parameters; returns the call expression.
-decHelper :: DCtx -> [String] -> R String
-decHelper dc body =
+-- A hoisted helper function that decodes `w`; returns the call expression. It takes only
+-- the decoder parameters `w` actually uses (its free type variables): helpers are
+-- module-level functions, and their call expressions can end up inside module-level
+-- hoisted closures (closed codec arguments), where the codec's own parameters are not in
+-- scope. A closed `w` gets a helper with no parameters at all.
+decHelper :: DCtx -> W -> [String] -> R String
+decHelper dc w body =
   do  name <- hoistName (_dctx dc) "w3dh_"
-      let ps = List.intercalate ", " (_dparams dc)
+      let used = freeTvars w
+          ps = List.intercalate ", " [ n | (tv, n) <- Map.toList (_denv dc), Set.member tv used ]
       hoist ("function " ++ name ++ "(" ++ ps ++ ") {\n" ++ unlines (indent body) ++ "}")
       return (name ++ "(" ++ ps ++ ")")
+
+
+freeTvars :: W -> Set.Set String
+freeTvars w =
+  case w of
+    WTVar a -> Set.singleton a
+    WList a -> freeTvars a
+    WMaybe a -> freeTvars a
+    WSet a -> freeTvars a
+    WArray a -> freeTvars a
+    WSeqSet a -> freeTvars a
+    WResult a b -> Set.union (freeTvars a) (freeTvars b)
+    WDict a b -> Set.union (freeTvars a) (freeTvars b)
+    WSeqDict a b -> Set.union (freeTvars a) (freeTvars b)
+    WPair a b -> Set.union (freeTvars a) (freeTvars b)
+    WTriple a b c -> Set.unions [freeTvars a, freeTvars b, freeTvars c]
+    WRecord fs -> Set.unions (fmap (freeTvars . snd) fs)
+    WRef _ _ args -> Set.unions (fmap freeTvars args)
+    _ -> Set.empty
 
 
 -- An expression that decodes one value.
@@ -1245,7 +1269,7 @@ decE dc w =
 
     WList e ->
       do  ee <- decE dc e
-          decHelper dc (listLoop ee)
+          decHelper dc w (listLoop ee)
 
     WArray e ->
       do  lst <- decE dc (WList e)
@@ -1271,7 +1295,7 @@ decE dc w =
               gNothing = elmGlobal ("elm", "core", "Maybe") "Nothing"
           dep gJust
           dep gNothing
-          decHelper dc
+          decHelper dc w
             [ "switch (_W3_ru8()) {"
             , "  case 0: return " ++ globalJs gNothing ++ ";"
             , "  case 1: return " ++ globalJs gJust ++ "(" ++ ee ++ ");"
@@ -1286,7 +1310,7 @@ decE dc w =
               gErr = elmGlobal ("elm", "core", "Result") "Err"
           dep gOk
           dep gErr
-          decHelper dc
+          decHelper dc w
             [ "switch (_W3_ru8()) {"
             , "  case 0: return " ++ globalJs gOk ++ "(" ++ oe ++ ");"
             , "  case 1: return " ++ globalJs gErr ++ "(" ++ ee ++ ");"
@@ -1297,13 +1321,13 @@ decE dc w =
     WDict k e ->
       do  ke <- decE dc k
           ve <- decE dc e
-          decHelper dc (pairsLoop ke ve ++ ["return _W3_dictFromPairs(ks, vs);"])
+          decHelper dc w (pairsLoop ke ve ++ ["return _W3_dictFromPairs(ks, vs);"])
 
     WSet e ->
       do  ke <- decE dc e
           let g = elmGlobal ("elm", "core", "Set") "Set_elm_builtin"
           dep g
-          decHelper dc (pairsLoop ke "_Utils_Tuple0" ++ ["return " ++ globalJs g ++ "(_W3_dictFromPairs(ks, vs));"])
+          decHelper dc w (pairsLoop ke "_Utils_Tuple0" ++ ["return " ++ globalJs g ++ "(_W3_dictFromPairs(ks, vs));"])
 
     WPair a b ->
       do  ae <- decE dc a

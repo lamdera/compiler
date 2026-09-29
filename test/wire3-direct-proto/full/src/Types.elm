@@ -146,6 +146,11 @@ type alias Model =
     , big : List Big
     , tupleKeys : Dict ( Int, String ) Float
     , anon : { inner : { deep : List Int }, flag : Bool }
+    , holder : List (Holder Bool)
+    , prec : PRec Char
+    , paged : Paged String
+    , deepBox : Box (Box (List (Box (Dict String (List Int)))))
+    , nestedParam : Pair2 (Box (List Int)) (Paged (Box (Maybe Int)))
     }
 
 
@@ -173,3 +178,28 @@ type Fat
 
 type alias SNaN =
     { d : Dict Int Float, k : Dict Float Int, s : Set Float }
+
+
+-- tvar-free containers passed to parameterised types (closed codec arguments), at
+-- several nesting levels (adversarial re-review: helpers referenced d0 out of scope)
+
+
+type Box a
+    = Box a
+
+
+type alias Wrap a =
+    { w : a }
+
+
+type Holder a
+    = Holder a (Box (List Int)) (Maybe (Box (Maybe a))) ( Wrap (List a), Dict Int (Maybe a) )
+    | HolderNone
+
+
+type alias PRec a =
+    { zeta : a, alpha : Box (Dict String Int), mid : List a, bB : Box ( a, Maybe Int ) }
+
+
+type alias Paged a =
+    { items : List a, pages : Box (List Int) }

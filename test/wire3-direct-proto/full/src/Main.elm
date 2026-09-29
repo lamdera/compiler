@@ -118,6 +118,11 @@ gen n =
     , big = range (n // 4) |> List.map Big.bigFrom
     , tupleKeys = range (n // 8) |> List.map (\i -> ( ( modBy 7 i, "k" ++ String.fromInt i ), toFloat i )) |> Dict.fromList
     , anon = { inner = { deep = range (modBy 9 n) }, flag = True }
+    , holder = range (modBy 7 n) |> List.map (\i -> if i == 0 then HolderNone else Holder (modBy 2 i == 0) (Box (range i)) (if i > 2 then Just (Box (Just True)) else Nothing) ( { w = List.map (\j -> modBy 3 j == 0) (range i) }, Dict.fromList [ ( i, Just False ), ( -i, Nothing ) ] ))
+    , prec = { zeta = 'z', alpha = Box (Dict.fromList [ ( "a", n ), ( "b", -n ) ]), mid = List.map (\i -> Char.fromCode (97 + modBy 26 i)) (range (modBy 11 n)), bB = Box ( 'q', if modBy 2 n == 0 then Just n else Nothing ) }
+    , paged = { items = List.map String.fromInt (range (modBy 13 n)), pages = Box (range (modBy 5 n)) }
+    , deepBox = Box (Box (List.map (\i -> Box (Dict.fromList [ ( String.fromInt i, range i ) ])) (range (modBy 6 n))))
+    , nestedParam = Pair2 (Box (range 3)) { items = [ Box (Just 1), Box Nothing ], pages = Box [ n ] } [ ( Box [], { items = [], pages = Box [ 1, 2 ] } ) ]
     }
 
 
