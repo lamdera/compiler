@@ -9,12 +9,14 @@ export ELM_HOME=${ELM_HOME:-${W3BENCH:-$(git rev-parse --show-toplevel)/../lamde
 mkdir -p build
 # The IR format is internal to this prototype: rebuild package artifacts when asked.
 [ -n "$WIPE_ARTIFACTS" ] && find "$ELM_HOME" -name "artifacts*.dat" -delete
-for mode in opt dev; do
-  flag=""; [ $mode = opt ] && flag="--optimize"
+# dev, --optimize, and --optimize-legible (what prod builds the backend with: --optimize
+# without field-name shortening)
+for mode in opt dev legible; do
+  flag=""; [ $mode = opt ] && flag="--optimize"; [ $mode = legible ] && flag="--optimize-legible"
   rm -rf elm-stuff; $L make src/Main.elm $flag --output=build/base-$mode.js >/dev/null
   rm -rf elm-stuff; LAMDERA_WIRE3_DIRECT=1 $L make src/Main.elm $flag --output=build/direct-$mode.js >/dev/null
 done
-for f in build/base-opt.js build/direct-opt.js build/base-dev.js build/direct-dev.js; do
+for f in build/base-opt.js build/direct-opt.js build/base-dev.js build/direct-dev.js build/base-legible.js build/direct-legible.js; do
   python3 - "$f" <<'PY'
 import sys
 p = sys.argv[1]

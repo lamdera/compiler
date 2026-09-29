@@ -44,6 +44,7 @@ import qualified Data.Maybe as Maybe
 import qualified Data.Set as Set
 import Data.FileEmbed (bsToExp)
 import Language.Haskell.TH (runIO)
+import Language.Haskell.TH.Syntax (addDependentFile)
 import System.IO.Unsafe (unsafePerformIO)
 import qualified System.Environment as Env
 
@@ -588,7 +589,10 @@ directEnabled =
 
 runtimeJs :: BS.ByteString
 runtimeJs =
-  $(bsToExp =<< runIO (Lamdera.Relative.readByteString "extra/Lamdera/Wire3/direct-runtime.js"))
+  -- addDependentFile: without it GHC doesn't rebuild this module when only the JS
+  -- changes, and silently keeps embedding the old runtime.
+  $(do  addDependentFile "extra/Lamdera/Wire3/direct-runtime.js"
+        bsToExp =<< runIO (Lamdera.Relative.readByteString "extra/Lamdera/Wire3/direct-runtime.js"))
 
 
 runtimeGlobal :: Opt.Global

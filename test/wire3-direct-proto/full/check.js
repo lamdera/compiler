@@ -1,6 +1,6 @@
 // Oracles: the same compiler with LAMDERA_WIRE3_DIRECT off (base) vs on (direct), per mode.
-// node --stack-size=60000 check.js [opt|dev ...]   (the comparison recurses down long lists)
-const modes = process.argv.slice(2).length ? process.argv.slice(2) : ['opt', 'dev'];
+// node --expose-gc --stack-size=60000 check.js [opt|dev ...]   (the comparison recurses down long lists)
+const modes = process.argv.slice(2).length ? process.argv.slice(2) : ['opt', 'dev', 'legible'];
 
 // Browser simulation: hide Node's Buffer (NO_BUFFER=1) and/or TextDecoder/TextEncoder
 // (NO_TEXTCODEC=1) while the bundles load, so the runtime takes its fallback paths.
@@ -41,6 +41,7 @@ function same(x, y) {
 }
 
 let failures = 0, checks = 0;
+const retention = [];
 function check(name, cond) { checks++; if (!cond) { failures++; console.log('FAIL', name); } }
 
 for (const mode of modes) {
@@ -100,7 +101,30 @@ for (const mode of modes) {
       stats.push(`${n}:${nothings}`);
     }
   }
+  // Nothing in the direct runtime may keep a decoded input (or an encode's output buffer)
+  // alive after the call: decode a big input, drop every reference, and check (at the end,
+  // in a later job, since WeakRef targets live until the current job ends) that a WeakRef
+  // to its ArrayBuffer dies. Needs --expose-gc.
+  retention.push((() => {
+    const m = B.gen(2000);
+    const src = B.encode(m);
+    const copy = new Uint8Array(src.byteLength); copy.set(new Uint8Array(src.buffer, src.byteOffset, src.byteLength));
+    const decoded = D.decode(new DataView(copy.buffer));
+    const out = D.encode(isJust(decoded) ? decoded.a : m);
+    return { mode, input: new WeakRef(copy.buffer), output: new WeakRef(out.buffer), keep: decoded };
+  })());
   console.log(`${mode}: corruptions the baseline rejected (direct agreed) per 1500:`, stats.join(' '));
 }
-console.log(failures === 0 ? `ALL ${checks} ORACLE CHECKS PASS` : `${failures} of ${checks} failed`);
-process.exit(failures ? 1 : 0);
+setTimeout(() => {
+  if (typeof global.gc !== 'function') check('run with --expose-gc for the retention checks', false);
+  else {
+    global.gc(); global.gc();
+    for (const r of retention) {
+      // the decoded value itself stays alive (r.keep): it must not pin its input
+      check(`${r.mode} decoded input is collectable while the decoded value lives`, r.input.deref() === undefined && r.keep !== null);
+      check(`${r.mode} encode output is collectable`, r.output.deref() === undefined);
+    }
+  }
+  console.log(failures === 0 ? `ALL ${checks} ORACLE CHECKS PASS` : `${failures} of ${checks} failed`);
+  process.exit(failures ? 1 : 0);
+}, 0);

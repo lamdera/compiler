@@ -207,6 +207,8 @@ function _W3_runEncode(f, v) {
     return new DataView(_W3_buf.slice(0, _W3_pos).buffer);
   } finally {
     if (sactive) { _W3_buf = sbuf; _W3_dv = sdv; }
+    // Never keep a big buffer between encodes (also when an encode threw halfway).
+    else if (_W3_buf.length > (1 << 20)) { _W3_buf = new Uint8Array(1 << 16); _W3_dv = new DataView(_W3_buf.buffer); }
     _W3_pos = spos;
     _W3_flush = sflush;
     _W3_active = sactive;
@@ -387,6 +389,11 @@ function _W3_decoderFn(d) {
       return _Utils_Tuple2(_W3_rpos, v);
     } finally {
       _W3_rdv = sdv; _W3_rpos = spos;
+      if (sdv === null) {
+        // The outermost decode is over: drop the cached view of its input, which would
+        // otherwise keep the whole input (a whole snapshot) alive until the next decode.
+        _W3_ru8a = null; _W3_ru8aFor = null;
+      }
     }
   });
   fn.w3d = d;
