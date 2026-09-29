@@ -1,5 +1,5 @@
 // Oracles: the same compiler with LAMDERA_WIRE3_DIRECT off (base) vs on (direct), per mode.
-// node check.js [opt|dev ...]
+// node --stack-size=60000 check.js [opt|dev ...]   (the comparison recurses down long lists)
 const modes = process.argv.slice(2).length ? process.argv.slice(2) : ['opt', 'dev'];
 
 // Browser simulation: hide Node's Buffer (NO_BUFFER=1) and/or TextDecoder/TextEncoder
@@ -57,7 +57,7 @@ for (const mode of modes) {
     const db = B.decodeHasFn(B.encodeHasFn(hf.a)), dd = D.decodeHasFn(B.encodeHasFn(hf.a));
     check(`${mode} HasFn decode ${i}`, isJust(db) === isJust(dd) && (!isJust(db) || same(db, dd)));
   }
-  for (const n of [0, 1, 2, 3, 7, 16, 50, 300, 2000, 'e0', 'e1', 'e5', 'e30', 'e31', 'e40']) {
+  for (const n of [0, 1, 2, 3, 7, 16, 50, 300, 2000, 20000, 'e0', 'e1', 'e5', 'e30', 'e31', 'e40']) {
     const m = typeof n === 'string' ? B.edge(+n.slice(1)) : B.gen(n);
     const base = bytesOf(B.encode(m));
     check(`${mode} encode n=${n}`, base.equals(bytesOf(D.encode(m))));

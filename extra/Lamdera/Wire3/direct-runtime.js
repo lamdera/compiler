@@ -196,9 +196,15 @@ function _W3_runEncode(f, v) {
   _W3_active = true;
   try {
     f(v);
-    var out = _W3_buf.slice(0, _W3_pos);
-    if (!sactive && _W3_buf.length > (1 << 20)) { _W3_buf = new Uint8Array(1 << 16); _W3_dv = new DataView(_W3_buf.buffer); }
-    return new DataView(out.buffer);
+    if (_W3_pos > (1 << 20)) {
+      // Big result: hand the grown buffer over as the result (a view of exactly the
+      // written bytes, as elm/bytes Bytes values may be) instead of copying it, and start
+      // the next encode from a small fresh buffer. At most half of it is unused.
+      var result = new DataView(_W3_buf.buffer, 0, _W3_pos);
+      _W3_buf = new Uint8Array(1 << 16); _W3_dv = new DataView(_W3_buf.buffer);
+      return result;
+    }
+    return new DataView(_W3_buf.slice(0, _W3_pos).buffer);
   } finally {
     if (sactive) { _W3_buf = sbuf; _W3_dv = sdv; }
     _W3_pos = spos;
