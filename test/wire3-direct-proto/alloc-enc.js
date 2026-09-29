@@ -1,0 +1,12 @@
+const mod = require('./build/opt-w3p.js');
+const W = mod.W3P, R = mod.RECS;
+const [n, which] = [+process.argv[2], process.argv[3]];
+const m = W.gen(n);
+const fn = () => R[which](m);
+fn(); fn(); global.gc(); global.gc();
+const h0 = process.memoryUsage().heapUsed / 1048576;
+console.log('@@START ' + h0.toFixed(1));
+let keep = fn();
+console.log('@@END ' + (process.memoryUsage().heapUsed / 1048576).toFixed(1));
+global.gc();
+console.log('@@RETAINED ' + (process.memoryUsage().heapUsed / 1048576 - h0).toFixed(1));

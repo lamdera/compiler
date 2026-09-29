@@ -4,6 +4,7 @@ module Generate.JavaScript.Expression
   ( generate
   , generateCtor
   , generateCtorImplementation -- @LAMDERA exposed
+  , ctorToInt -- @LAMDERA exposed for Lamdera.Wire3.Direct
   , generateField
   , generateFunctionImplementation -- @LAMDERA exposed
   , generateCurriedFunctionRef -- @LAMDERA exposed

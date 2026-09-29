@@ -29,6 +29,7 @@ import qualified Type.Solve as Type
 -- import System.IO.Unsafe (unsafePerformIO)
 
 import qualified Lamdera.Wire3.Core
+import qualified Lamdera.Wire3.Direct
 import qualified Lamdera.Wire3.Interfaces
 import Lamdera
 import qualified Lamdera.UiSourceMap
@@ -160,4 +161,6 @@ compile_ maybePath pkg ifaces modul = do
   -- ()          <- debugPassText "starting optimize" moduleName (pure ())
 
   objects     <- optimize modul_ annotations canonical3
+    -- @LAMDERA prototype: carry the Wire3 codec IR to JS generation (Lamdera.Wire3.Direct)
+    & fmap (Lamdera.Wire3.Direct.addDirectIR pkg canonical3)
   return (Artifacts canonical3 annotations objects)

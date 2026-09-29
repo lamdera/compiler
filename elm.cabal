@@ -362,6 +362,7 @@ Executable lamdera
         Lamdera.Version
         Lamdera.Wire3.Core
         Lamdera.Wire3.Decoder
+        Lamdera.Wire3.Direct
         Lamdera.Wire3.Encoder
         Lamdera.Wire3.Graph
         Lamdera.Wire3.Helpers

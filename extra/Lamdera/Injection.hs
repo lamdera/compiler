@@ -33,6 +33,7 @@ import qualified Elm.Kernel
 
 import Lamdera
 import qualified Lamdera.Relative
+import qualified Lamdera.Wire3.Direct
 import StandaloneInstances
 import qualified Ext.Common
 import qualified Lamdera.Version
@@ -60,7 +61,10 @@ versionsComment =
 
 
 graphModifications :: Mode.Mode -> Mains -> Map.Map Opt.Global Opt.Node -> Map.Map Opt.Global Opt.Node
-graphModifications mode mains graph = do
+graphModifications mode mains graph_ = do
+  let
+    -- @LAMDERA prototype: direct JS Wire3 codecs, gated on LAMDERA_WIRE3_DIRECT=1
+    graph = Lamdera.Wire3.Direct.replaceCodecs mode graph_
   if mains & mainsInclude ["Lamdera.Live"]
     then graph & Map.mapWithKey (modify $ isOptimizedMode mode)
            -- & inspect
@@ -202,6 +206,28 @@ injections outputType mode =
 
     var isLamderaRuntime = typeof isLamdera !== 'undefined';
 
+    // Streams the Wire3 encoding of a BackendModel (e.g. app.fns.getUserModel()) in chunks,
+    // so a snapshot never has to exist as one buffer. onChunk(u8) gets a Uint8Array view
+    // into a reused chunk: it is only valid during the call, so consume it synchronously
+    // (fs.writeSync) or copy it. Chunks are never empty, and concatenated they are exactly
+    // the bytes `Lamdera.Wire3.bytesEncode (w3_encode_BackendModel model)` produces.
+    // Returns the total byte count. Without the direct codecs (LAMDERA_WIRE3_DIRECT off,
+    // or a model type that fell back to its Elm codec) it still works: the Elm encoder
+    // produces one buffer, handed over as a single chunk.
+    function _Lamdera_w3StreamEncodeBackendModel(model, onChunk, chunkSize) {
+      if (typeof $$author$$project$$Types$$w3_encode_BackendModel === 'undefined') {
+        throw new Error('w3_encode_BackendModel is not in this build');
+      }
+      var enc = $$author$$project$$Types$$w3_encode_BackendModel;
+      if (enc.w3e && typeof _W3_streamEncode === 'function') {
+        return _W3_streamEncode(enc.w3e, model, chunkSize || 1048576, onChunk);
+      }
+      var bytes = _Bytes_encode(enc(model));
+      var u8 = new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+      if (u8.length > 0) { onChunk(u8); }
+      return u8.length;
+    }
+
     function _Lamdera_inject(app, callUpdate, getModel) {
       app.die = app.stop;
 
@@ -209,6 +235,8 @@ injections outputType mode =
         { decodeWirePayloadHeader: $$author$$project$$LamderaHelpers$$decodeWirePayloadHeader
         , decodeWireAnalytics: $$author$$project$$LamderaHelpers$$decodeWireAnalytics
         , getUserModel : function() { return getModel().userModel }
+        , w3StreamEncodeBackendModel : _Lamdera_w3StreamEncodeBackendModel
+        , w3DirectCodecs : typeof _W3_streamEncode === 'function'
         };
 
       var pos = 0;
