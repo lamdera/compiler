@@ -170,6 +170,51 @@ hasFns =
     [ HasFn { f = \x -> x, n = 3 }, NoFn 7 ]
 
 
+decodeFat3 : Bytes -> Maybe Fat3
+decodeFat3 b =
+    W.bytesDecode w3_decode_Fat3 b
+
+
+decodeFat : Bytes -> Maybe Fat
+decodeFat b =
+    W.bytesDecode w3_decode_Fat b
+
+
+decodeTree : Bytes -> Maybe Tree
+decodeTree b =
+    W.bytesDecode w3_decode_Tree b
+
+
+decodeBig : Bytes -> Maybe Big.Big
+decodeBig b =
+    W.bytesDecode Big.w3_decode_Big b
+
+
+decodeSNaN : Bytes -> Maybe SNaN
+decodeSNaN b =
+    W.bytesDecode w3_decode_SNaN b
+
+
+encodeSNaN : SNaN -> Bytes
+encodeSNaN v =
+    W.bytesEncode (w3_encode_SNaN v)
+
+
+isJust : Maybe a -> Bool
+isJust m =
+    case m of
+        Just _ ->
+            True
+
+        Nothing ->
+            False
+
+
+depthProbes : List ( String, Bytes -> Bool )
+depthProbes =
+    [ ( "Fat3", decodeFat3 >> isJust ), ( "Fat", decodeFat >> isJust ), ( "Tree", decodeTree >> isJust ), ( "Big", decodeBig >> isJust ) ]
+
+
 type alias Api =
     { gen : Int -> Model
     , edge : Int -> Model
@@ -178,13 +223,16 @@ type alias Api =
     , encodeHasFn : HasFn -> Bytes
     , decodeHasFn : Bytes -> Maybe HasFn
     , hasFns : List HasFn
+    , depth : List ( String, Bytes -> Bool )
+    , decodeSNaN : Bytes -> Maybe SNaN
+    , encodeSNaN : SNaN -> Bytes
     }
 
 
 main : Program () Api ()
 main =
     Platform.worker
-        { init = \_ -> ( { gen = gen, edge = edge, encode = encode, decode = decode, encodeHasFn = encodeHasFn, decodeHasFn = decodeHasFn, hasFns = hasFns }, out 0 )
+        { init = \_ -> ( { gen = gen, edge = edge, encode = encode, decode = decode, encodeHasFn = encodeHasFn, decodeHasFn = decodeHasFn, hasFns = hasFns, depth = depthProbes, decodeSNaN = decodeSNaN, encodeSNaN = encodeSNaN }, out 0 )
         , update = \_ m -> ( m, Cmd.none )
         , subscriptions = \_ -> Sub.none
         }

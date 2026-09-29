@@ -1,4 +1,5 @@
 // ---- Wire3 direct codec runtime (see Lamdera/Wire3/Direct.hs) ----
+// W3_RUNTIME_VERSION 2026-09-30.1 (checked against the compiler binary by test/wire3-direct-proto/full/build.sh)
 // Emitted once as a kernel node inside the Elm IIFE, after a small mode-specific
 // prelude Direct.hs generates (_W3_bytesNode, _W3_decoderValue, _W3_decoderFnOf,
 // _W3_T_RBNODE, _W3_T_SUBTREE). It references kernel and Elm globals only inside
@@ -304,6 +305,20 @@ function _W3_u8view() {
   return _W3_ru8a;
 }
 
+// Lamdera.Wire3.decodeBool / decodeOrder / failDecode, as expressions
+function _W3_rbool() {
+  switch (_W3_ru8()) { case 0: return false; case 1: return true; default: throw 0; }
+}
+function _W3_rorder() {
+  switch (_W3_ru8()) {
+    case 0: return $elm$core$Basics$LT;
+    case 1: return $elm$core$Basics$EQ;
+    case 2: return $elm$core$Basics$GT;
+    default: throw 0;
+  }
+}
+function _W3_fail() { throw 0; }
+
 // Lamdera.Wire3.decodeString = decodeInt64 |> andThen D.string
 //
 // Exactly equivalent to elm/bytes 1.0.8 (measured in a native spike outside this repo):
@@ -369,12 +384,23 @@ function _W3_validUtf8(u8, start, end) {
 // Lamdera.Wire3.decodeBytes: same bounds and failures as elm/bytes (the view is checked
 // against the whole underlying buffer, and a negative length throws), but the result is
 // COPIED out of the input. elm/bytes returns a view, which would keep the entire input
-// (a whole snapshot) alive for as long as any decoded Bytes value lives. Bytes are
-// immutable in Elm, so the copy is not observable; it costs one memcpy per Bytes value.
+// (a whole snapshot) alive for as long as any decoded Bytes value lives.
+//
+// THE ONE INTENTIONAL SEMANTIC DIFFERENCE. The copy holds exactly the value's bytes. An
+// elm/bytes view is bounds-checked against the whole input buffer instead, so Elm code
+// that reads PAST THE END of a decoded Bytes (Bytes.Decode.bytes n with n > width) gets
+// the input's following bytes with elm/bytes, and Nothing with the copy. Set
+// _W3_STRICT_BYTES = true for the strict variant: a view of the value over a copy of
+// [value start, end of the input buffer), which keeps that behaviour exactly but copies
+// (and retains) the whole rest of the input for every Bytes value.
+var _W3_STRICT_BYTES = false;
 function _W3_rbytes() {
   var len = _W3_rint();
   var view = new DataView(_W3_rdv.buffer, _W3_rdv.byteOffset + _W3_rpos, len);
   _W3_rpos += len;
+  if (_W3_STRICT_BYTES) {
+    return new DataView(_W3_rdv.buffer.slice(view.byteOffset), 0, len);
+  }
   return new DataView(_W3_rdv.buffer.slice(view.byteOffset, view.byteOffset + len));
 }
 

@@ -101,6 +101,22 @@ for (const mode of modes) {
       stats.push(`${n}:${nothings}`);
     }
   }
+  // Signalling NaNs keep their bits through Dict/Set decoding (a numbers-only JS array
+  // would quiet them). Record SNaN = { d : Dict Int Float, k : Dict Float Int, s : Set Float }.
+  {
+    const sNaN = [0x01, 0, 0, 0, 0, 0, 0xf0, 0x7f];
+    const sNaNneg = [0xed, 0xce, 0xca, 0x7f, 0x0c, 0x69, 0xf0, 0xff];
+    const input = [2, 0, ...sNaN, 2, ...sNaNneg, 0, 2, ...sNaN];
+    const dv = new DataView(new Uint8Array(input).buffer);
+    const b = B.decodeSNaN(dv), d = D.decodeSNaN(dv);
+    check(`${mode} sNaN decodes`, isJust(b) && isJust(d));
+    if (isJust(b) && isJust(d)) {
+      const ref = bytesOf(B.encodeSNaN(b.a));
+      check(`${mode} sNaN bits survive Dict/Set decoding (base re-encode)`, bytesOf(B.encodeSNaN(d.a)).equals(ref));
+      check(`${mode} sNaN bits survive Dict/Set decoding (direct re-encode)`, bytesOf(D.encodeSNaN(d.a)).equals(ref));
+      check(`${mode} sNaN round trip is the identity`, ref.equals(NodeBuffer.from(input)));
+    }
+  }
   // Nothing in the direct runtime may keep a decoded input (or an encode's output buffer)
   // alive after the call: decode a big input, drop every reference, and check (at the end,
   // in a later job, since WeakRef targets live until the current job ends) that a WeakRef
@@ -115,6 +131,16 @@ for (const mode of modes) {
   })());
   console.log(`${mode}: corruptions the baseline rejected (direct agreed) per 1500:`, stats.join(' '));
 }
+// Cold decode depth (fresh process per probe): direct >= Elm, per mode.
+if (!process.env.SKIP_DEPTH) {
+  const r = require('child_process').spawnSync(process.execPath, [require('path').join(__dirname, 'depth.js'), ...modes], { encoding: 'utf8' });
+  for (const line of r.stdout.trim().split('\n').filter(Boolean)) {
+    const x = JSON.parse(line);
+    check(`${x.mode} cold decode depth ${x.name}: direct ${x.direct} >= Elm ${x.elm}`, x.ok);
+  }
+  console.log('cold decode depth:', r.stdout.trim().split('\n').map((l) => { const x = JSON.parse(l); return `${x.mode}/${x.name} ${x.elm}->${x.direct}`; }).join(', '));
+}
+
 setTimeout(() => {
   if (typeof global.gc !== 'function') check('run with --expose-gc for the retention checks', false);
   else {

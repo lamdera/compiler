@@ -2,7 +2,8 @@ module Big exposing (..)
 
 
 type Big
-    = C052 Int
+    = BigRec String (Maybe Big)
+    | C052 Int
     | C229
     | C160
     | C283

@@ -742,6 +742,9 @@ runtimeDeps =
     , elmGlobal ("elm", "core", "Dict") "RBNode_elm_builtin"
     , elmGlobal ("elm", "core", "Dict") "Red"
     , elmGlobal ("elm", "core", "Dict") "Black"
+    , elmGlobal ("elm", "core", "Basics") "LT"
+    , elmGlobal ("elm", "core", "Basics") "EQ"
+    , elmGlobal ("elm", "core", "Basics") "GT"
     , elmGlobal bytesEncodeHome "getWidth"
     , elmGlobal bytesEncodeHome "write"
     ]
@@ -1143,6 +1146,14 @@ encUnion ctx env opts width alts v =
 
 
 -- DECODER RENDERING
+--
+-- Decoders are rendered as EXPRESSIONS, evaluated left to right (JS evaluates object
+-- literal values and call arguments in order, and wire order is Elm's literal key order).
+-- Anything that needs statements (a loop, a tag switch) goes into its own small hoisted
+-- helper function that takes the codec's decoder parameters. This keeps every JS frame
+-- small: a recursive decoder's frame no longer holds a register for every value any
+-- branch decodes, so the direct decoder never runs out of stack before the Elm one
+-- (see the cold-depth oracle in test/wire3-direct-proto/full/check.js).
 
 
 renderDecoderNode :: Ctx -> Codec -> (BS.ByteString, Set.Set Opt.Global)
@@ -1151,19 +1162,19 @@ renderDecoderNode ctx codec@(Codec params body) =
     key = _key ctx
     pnames = zipWith (\i _ -> "d" ++ show i) [(0 :: Int)..] params
     env = Map.fromList (zip params pnames)
+    dctx = DCtx ctx env pnames
     wrapper = globalJs (codecGlobal "w3_decode_" key)
-    ((stmts, result, wrapperJs), rs) =
+    ((stmts, wrapperJs), rs) =
       runR $
-        do  (ss, r) <- case body of
-                          BAlias w -> dec ctx env w
-                          BUnion _ width alts -> decUnion ctx env width alts
+        do  ss <- case body of
+                      BAlias w -> do { e <- decE dctx w; return ["return " ++ e ++ ";"] }
+                      BUnion _ width alts -> decUnion dctx width alts
             wj <- decWrapper ctx codec wrapper pnames
-            return (ss, r, wj)
+            return (ss, wj)
     js =
       unlines (_hoisted rs)
       ++ "function " ++ directDecName key ++ "(" ++ List.intercalate ", " pnames ++ ") {\n"
       ++ unlines (indent stmts)
-      ++ "  return " ++ result ++ ";\n"
       ++ "}\n"
       ++ wrapperJs
   in
@@ -1189,225 +1200,182 @@ decWrapper ctx (Codec params _) wrapper pnames =
     return ("var " ++ wrapper ++ " = " ++ opens ++ inner ++ closes ++ ";\n")
 
 
--- Statements that decode one value into a fresh variable, in wire order, and its name.
-dec :: Ctx -> Env -> W -> R ([String], String)
-dec ctx env w =
+data DCtx =
+  DCtx
+    { _dctx :: Ctx
+    , _denv :: Env
+    , _dparams :: [String] -- the codec's decoder parameters, passed on to every helper
+    }
+
+
+-- A hoisted helper function with the codec's parameters; returns the call expression.
+decHelper :: DCtx -> [String] -> R String
+decHelper dc body =
+  do  name <- hoistName (_dctx dc) "w3dh_"
+      let ps = List.intercalate ", " (_dparams dc)
+      hoist ("function " ++ name ++ "(" ++ ps ++ ") {\n" ++ unlines (indent body) ++ "}")
+      return (name ++ "(" ++ ps ++ ")")
+
+
+-- An expression that decodes one value.
+decE :: DCtx -> W -> R String
+decE dc w =
   let
-    mode = _mode ctx
-    bindTo expr =
-      do  i <- fresh
-          let r = "r" ++ show i
-          return (["var " ++ r ++ " = " ++ expr ++ ";"], r)
+    ctx = _dctx dc
+    env = _denv dc
   in
   case w of
-    WInt -> bindTo "_W3_rint()"
-    WFloat -> bindTo "_W3_rf64()"
-    WString -> bindTo "_W3_rstr()"
-    WChar -> bindTo "_Char_fromCode(_W3_rint())"
-    WUnit -> bindTo "_Utils_Tuple0"
-    WBytes -> bindTo "_W3_rbytes()"
-    WFail -> return (["throw 0;"], "undefined")
+    WInt -> return "_W3_rint()"
+    WFloat -> return "_W3_rf64()"
+    WString -> return "_W3_rstr()"
+    WChar -> return "_Char_fromCode(_W3_rint())"
+    WUnit -> return "_Utils_Tuple0"
+    WBytes -> return "_W3_rbytes()"
+    WBool -> return "_W3_rbool()"
+    WOrder -> return "_W3_rorder()"
+    WFail -> return "_W3_fail()"
     WTime ->
       do  let g = elmGlobal timeHome "millisToPosix"
           dep g
-          bindTo (globalJs g ++ "(_W3_rint())")
+          return (globalJs g ++ "(_W3_rint())")
     WElm _ dn ->
       do  let g = elmGlobal wireHome dn
           dep g
-          bindTo ("_W3_elmDec(" ++ globalJs g ++ ")")
-    WBool ->
-      do  i <- fresh
-          let r = "r" ++ show i
-          return (["var " ++ r ++ "; switch (_W3_ru8()) { case 0: " ++ r ++ " = false; break; case 1: " ++ r ++ " = true; break; default: throw 0; }"], r)
-    WOrder ->
-      do  let gs = fmap (elmGlobal ("elm", "core", "Basics")) ["LT", "EQ", "GT"]
-          mapM_ dep gs
-          i <- fresh
-          let r = "r" ++ show i
-          return
-            ( [ "var " ++ r ++ "; switch (_W3_ru8()) { case 0: " ++ r ++ " = " ++ globalJs (gs !! 0) ++ "; break; case 1: " ++ r ++ " = "
-                ++ globalJs (gs !! 1) ++ "; break; case 2: " ++ r ++ " = " ++ globalJs (gs !! 2) ++ "; break; default: throw 0; }" ]
-            , r
-            )
+          return ("_W3_elmDec(" ++ globalJs g ++ ")")
 
-    WList e -> decList ctx env e
-
-    WSeqSet e ->
-      do  (ss, lst) <- decList ctx env e
-          let g = elmGlobal seqSetHome "fromList"
-          dep g
-          (bs, r) <- bindTo (globalJs g ++ "(" ++ lst ++ ")")
-          return (ss ++ bs, r)
-
-    WSeqDict k e ->
-      do  (ss, lst) <- decList ctx env (WPair k e)
-          let g = elmGlobal seqDictHome "fromList"
-          dep g
-          (bs, r) <- bindTo (globalJs g ++ "(" ++ lst ++ ")")
-          return (ss ++ bs, r)
+    WList e ->
+      do  ee <- decE dc e
+          decHelper dc (listLoop ee)
 
     WArray e ->
-      do  (ss, lst) <- decList ctx env e
+      do  lst <- decE dc (WList e)
           let g = elmGlobal ("elm", "core", "Array") "fromList"
           dep g
-          (bs, r) <- bindTo (globalJs g ++ "(" ++ lst ++ ")")
-          return (ss ++ bs, r)
+          return (globalJs g ++ "(" ++ lst ++ ")")
+
+    WSeqSet e ->
+      do  lst <- decE dc (WList e)
+          let g = elmGlobal seqSetHome "fromList"
+          dep g
+          return (globalJs g ++ "(" ++ lst ++ ")")
+
+    WSeqDict k e ->
+      do  lst <- decE dc (WList (WPair k e))
+          let g = elmGlobal seqDictHome "fromList"
+          dep g
+          return (globalJs g ++ "(" ++ lst ++ ")")
 
     WMaybe e ->
-      do  i <- fresh
-          let r = "r" ++ show i
-          (es, ev) <- dec ctx env e
+      do  ee <- decE dc e
           let gJust = elmGlobal ("elm", "core", "Maybe") "Just"
               gNothing = elmGlobal ("elm", "core", "Maybe") "Nothing"
           dep gJust
           dep gNothing
-          return
-            ( [ "var " ++ r ++ ";"
-              , "switch (_W3_ru8()) {"
-              , "  case 0: " ++ r ++ " = " ++ globalJs gNothing ++ "; break;"
-              , "  case 1: {"
-              ] ++ indent (indent es) ++
-              [ "    " ++ r ++ " = " ++ globalJs gJust ++ "(" ++ ev ++ "); break;"
-              , "  }"
-              , "  default: throw 0;"
-              , "}"
-              ]
-            , r
-            )
+          decHelper dc
+            [ "switch (_W3_ru8()) {"
+            , "  case 0: return " ++ globalJs gNothing ++ ";"
+            , "  case 1: return " ++ globalJs gJust ++ "(" ++ ee ++ ");"
+            , "  default: throw 0;"
+            , "}"
+            ]
 
     WResult errW okW ->
-      do  i <- fresh
-          let r = "r" ++ show i
-          (os, ov) <- dec ctx env okW
-          (es, ev) <- dec ctx env errW
+      do  oe <- decE dc okW
+          ee <- decE dc errW
           let gOk = elmGlobal ("elm", "core", "Result") "Ok"
               gErr = elmGlobal ("elm", "core", "Result") "Err"
           dep gOk
           dep gErr
-          return
-            ( [ "var " ++ r ++ ";"
-              , "switch (_W3_ru8()) {"
-              , "  case 0: {"
-              ] ++ indent (indent os) ++
-              [ "    " ++ r ++ " = " ++ globalJs gOk ++ "(" ++ ov ++ "); break;"
-              , "  }"
-              , "  case 1: {"
-              ] ++ indent (indent es) ++
-              [ "    " ++ r ++ " = " ++ globalJs gErr ++ "(" ++ ev ++ "); break;"
-              , "  }"
-              , "  default: throw 0;"
-              , "}"
-              ]
-            , r
-            )
+          decHelper dc
+            [ "switch (_W3_ru8()) {"
+            , "  case 0: return " ++ globalJs gOk ++ "(" ++ oe ++ ");"
+            , "  case 1: return " ++ globalJs gErr ++ "(" ++ ee ++ ");"
+            , "  default: throw 0;"
+            , "}"
+            ]
 
     WDict k e ->
-      do  i <- fresh
-          let ks = "ks" ++ show i
-              vs = "vs" ++ show i
-              n = "n" ++ show i
-              r = "r" ++ show i
-          (kstmts, kv) <- dec ctx env k
-          (vstmts, vv) <- dec ctx env e
-          return
-            ( [ "var " ++ ks ++ " = [], " ++ vs ++ " = [];"
-              , "for (var " ++ n ++ " = _W3_rint(); " ++ n ++ " > 0; " ++ n ++ "--) {"
-              ] ++ indent kstmts ++ [ "  " ++ ks ++ ".push(" ++ kv ++ ");" ] ++ indent vstmts ++
-              [ "  " ++ vs ++ ".push(" ++ vv ++ ");"
-              , "}"
-              , "var " ++ r ++ " = _W3_dictFromPairs(" ++ ks ++ ", " ++ vs ++ ");"
-              ]
-            , r
-            )
+      do  ke <- decE dc k
+          ve <- decE dc e
+          decHelper dc (pairsLoop ke ve ++ ["return _W3_dictFromPairs(ks, vs);"])
 
     WSet e ->
-      do  i <- fresh
-          let ks = "ks" ++ show i
-              vs = "vs" ++ show i
-              n = "n" ++ show i
-              r = "r" ++ show i
-              g = elmGlobal ("elm", "core", "Set") "Set_elm_builtin"
+      do  ke <- decE dc e
+          let g = elmGlobal ("elm", "core", "Set") "Set_elm_builtin"
           dep g
-          (kstmts, kv) <- dec ctx env e
-          return
-            ( [ "var " ++ ks ++ " = [], " ++ vs ++ " = [];"
-              , "for (var " ++ n ++ " = _W3_rint(); " ++ n ++ " > 0; " ++ n ++ "--) {"
-              ] ++ indent kstmts ++
-              [ "  " ++ ks ++ ".push(" ++ kv ++ "); " ++ vs ++ ".push(_Utils_Tuple0);"
-              , "}"
-              , "var " ++ r ++ " = " ++ globalJs g ++ "(_W3_dictFromPairs(" ++ ks ++ ", " ++ vs ++ "));"
-              ]
-            , r
-            )
+          decHelper dc (pairsLoop ke "_Utils_Tuple0" ++ ["return " ++ globalJs g ++ "(_W3_dictFromPairs(ks, vs));"])
 
     WPair a b ->
-      do  (as_, av) <- dec ctx env a
-          (bs, bv) <- dec ctx env b
-          (ts, r) <- bindTo ("_Utils_Tuple2(" ++ av ++ ", " ++ bv ++ ")")
-          return (as_ ++ bs ++ ts, r)
+      do  ae <- decE dc a
+          be <- decE dc b
+          return ("_Utils_Tuple2(" ++ ae ++ ", " ++ be ++ ")")
 
     WTriple a b c ->
-      do  (as_, av) <- dec ctx env a
-          (bs, bv) <- dec ctx env b
-          (cs, cv) <- dec ctx env c
-          (ts, r) <- bindTo ("_Utils_Tuple3(" ++ av ++ ", " ++ bv ++ ", " ++ cv ++ ")")
-          return (as_ ++ bs ++ cs ++ ts, r)
+      do  ae <- decE dc a
+          be <- decE dc b
+          ce <- decE dc c
+          return ("_Utils_Tuple3(" ++ ae ++ ", " ++ be ++ ", " ++ ce ++ ")")
 
     WRecord fields ->
-      do  parts <- traverse (\(f, fw) -> do { (s, v) <- dec ctx env fw; return (s, (f, v)) }) fields
-          let lit = "{ " ++ List.intercalate ", " (fmap (\(f, v) -> fieldJs mode f ++ ": " ++ v) (fmap snd parts)) ++ " }"
-          (ts, r) <- bindTo lit
-          return (concatMap fst parts ++ ts, r)
+      do  parts <- traverse (\(f, fw) -> do { e <- decE dc fw; return (fieldJs (_mode ctx) f ++ ": " ++ e) }) fields
+          return ("{ " ++ List.intercalate ", " parts ++ " }")
 
-    WTVar a -> bindTo (lookupEnv env a ++ "()")
+    WTVar a -> return (lookupEnv env a ++ "()")
 
     WRef home t args ->
       let key = (home, t) in
       if directArity ctx key == Just (length args)
         then
-          do  fns <- traverse (decFnExpr ctx env) args
+          do  fns <- traverse (decFnExpr dc) args
               dep (codecGlobal "w3_decode_" key)
-              bindTo (directDecName key ++ "(" ++ List.intercalate ", " fns ++ ")")
+              return (directDecName key ++ "(" ++ List.intercalate ", " fns ++ ")")
         else
-          do  elmArgs <- traverse (elmDecExpr ctx env) args
+          do  elmArgs <- traverse (elmDecExpr dc) args
               let g = codecGlobal "w3_decode_" key
               dep g
-              bindTo ("_W3_elmDec(" ++ aCall (globalJs g) elmArgs ++ ")")
+              return ("_W3_elmDec(" ++ aCall (globalJs g) elmArgs ++ ")")
 
 
 -- A List, built front to back (no reverse, no intermediate array).
-decList :: Ctx -> Env -> W -> R ([String], String)
-decList ctx env e =
-  do  i <- fresh
-      let r = "r" ++ show i
-          t = "t" ++ show i
-          c = "c" ++ show i
-          n = "n" ++ show i
-      (es, ev) <- dec ctx env e
-      return
-        ( [ "var " ++ r ++ " = _List_Nil, " ++ t ++ " = null;"
-          , "for (var " ++ n ++ " = _W3_rint(); " ++ n ++ " > 0; " ++ n ++ "--) {"
-          ] ++ indent es ++
-          [ "  var " ++ c ++ " = _List_Cons(" ++ ev ++ ", _List_Nil);"
-          , "  if (" ++ t ++ " === null) " ++ r ++ " = " ++ c ++ "; else " ++ t ++ ".b = " ++ c ++ ";"
-          , "  " ++ t ++ " = " ++ c ++ ";"
-          , "}"
-          ]
-        , r
-        )
+listLoop :: String -> [String]
+listLoop elemExpr =
+  [ "var r = _List_Nil, t = null;"
+  , "for (var n = _W3_rint(); n > 0; n--) {"
+  , "  var c = _List_Cons(" ++ elemExpr ++ ", _List_Nil);"
+  , "  if (t === null) r = c; else t.b = c;"
+  , "  t = c;"
+  , "}"
+  , "return r;"
+  ]
+
+
+-- Keys and values of a Dict/Set, in wire order (key before value). The arrays start as
+-- generic-element arrays ([null], then emptied): an array that only ever held numbers
+-- gets an unboxed double backing store, which quiets signalling NaNs, and the bits of a
+-- decoded Float must survive to be re-encoded identically.
+pairsLoop :: String -> String -> [String]
+pairsLoop keyExpr valExpr =
+  [ "var ks = [null], vs = [null];"
+  , "ks.length = 0; vs.length = 0;"
+  , "for (var n = _W3_rint(); n > 0; n--) {"
+  , "  ks.push(" ++ keyExpr ++ ");"
+  , "  vs.push(" ++ valExpr ++ ");"
+  , "}"
+  ]
 
 
 -- A direct decoder function value `() -> value` for a codec argument.
-decFnExpr :: Ctx -> Env -> W -> R String
-decFnExpr ctx env w =
+decFnExpr :: DCtx -> W -> R String
+decFnExpr dc w =
+  let ctx = _dctx dc in
   case w of
-    WTVar a -> return (lookupEnv env a)
+    WTVar a -> return (lookupEnv (_denv dc) a)
     WRef home t [] | directArity ctx (home, t) == Just 0 ->
       do  dep (codecGlobal "w3_decode_" (home, t))
           return (directDecName (home, t))
     _ ->
-      do  (ss, r) <- dec ctx env w
-          let fn = "function () {\n" ++ unlines (indent ss) ++ "  return " ++ r ++ ";\n}"
+      do  e <- decE dc w
+          let fn = "function () { return " ++ e ++ "; }"
           if isClosed w
             then
               do  name <- hoistName ctx "w3da_"
@@ -1416,46 +1384,36 @@ decFnExpr ctx env w =
             else return fn
 
 
-elmDecExpr :: Ctx -> Env -> W -> R String
-elmDecExpr ctx env w =
+elmDecExpr :: DCtx -> W -> R String
+elmDecExpr dc w =
   case w of
     WRef home t [] ->
       do  let g = codecGlobal "w3_decode_" (home, t)
           dep g
           return (globalJs g)
     _ ->
-      do  fn <- decFnExpr ctx env w
+      do  fn <- decFnExpr dc w
           return ("_W3_decWrap(" ++ fn ++ ")")
 
 
-decUnion :: Ctx -> Env -> Int -> [Alt] -> R ([String], String)
-decUnion ctx env width alts =
+decUnion :: DCtx -> Int -> [Alt] -> R [String]
+decUnion dc width alts =
   let
-    (home, _) = _key ctx
+    (home, _) = _key (_dctx dc)
     readTag = if width == 1 then "_W3_ru8()" else "_W3_ru16()"
   in
-  do  i <- fresh
-      let r = "r" ++ show i
-      branches <-
+  do  branches <-
         traverse
           (\(tag, Alt name _ params) ->
-              do  parts <- traverse (dec ctx env) params
+              do  args <- traverse (decE dc) params
                   let g = elmGlobal home name
-                      vars = fmap snd parts
                       ctorExpr =
-                        case vars of
+                        case args of
                           [] -> globalJs g
                           [x] -> globalJs g ++ "(" ++ x ++ ")"
-                          _ -> directGlobalJs g ++ "(" ++ List.intercalate ", " vars ++ ")"
+                          _ -> directGlobalJs g ++ "(" ++ List.intercalate ", " args ++ ")"
                   dep g
-                  return
-                    ( ["  case " ++ show tag ++ ": {"]
-                      ++ indent (indent (concatMap fst parts))
-                      ++ ["    " ++ r ++ " = " ++ ctorExpr ++ "; break;", "  }"]
-                    )
+                  return ("  case " ++ show tag ++ ": return " ++ ctorExpr ++ ";")
           )
           (zip [(0 :: Int)..] alts)
-      return
-        ( ["var " ++ r ++ ";", "switch (" ++ readTag ++ ") {"] ++ concat branches ++ ["  default: throw 0;", "}"]
-        , r
-        )
+      return (["switch (" ++ readTag ++ ") {"] ++ branches ++ ["  default: throw 0;", "}"])
