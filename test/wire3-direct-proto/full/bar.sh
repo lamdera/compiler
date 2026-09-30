@@ -24,6 +24,11 @@ step full oracles; run $N --expose-gc --stack-size=60000 check.js
 step review suite build
 rm -rf "$R"; mkdir -p "$R"
 (cd ../review && tar --exclude='./build' --exclude='./build-bridge' --exclude='./app/elm-stuff' -cf - .) | (cd "$R" && tar xf -)
+# The review suite's build.sh predates the default flip: its base build must now opt out
+# (LAMDERA_WIRE3_DIRECT=0), and its direct build uses the default (no env var). Patched in
+# the scratch copy only.
+sed -i '' 's|rm -rf elm-stuff; \$L make|rm -rf elm-stuff; LAMDERA_WIRE3_DIRECT=0 $L make|; s|LAMDERA_WIRE3_DIRECT=1 LAMDERA_WIRE3_DIRECT_DEBUG=1 \$L make|env -u LAMDERA_WIRE3_DIRECT LAMDERA_WIRE3_DIRECT_DEBUG=1 $L make|' "$R/build.sh"
+grep -q 'LAMDERA_WIRE3_DIRECT=0 $L make' "$R/build.sh" || { echo "could not patch the review build.sh"; exit 1; }
 [ -d "${W3BENCH:-$(git rev-parse --show-toplevel)/../lamdera-wire3-bench}/elm-home-review" ] || cp -R "${W3BENCH:-$(git rev-parse --show-toplevel)/../lamdera-wire3-bench}/elm-home-direct" "${W3BENCH:-$(git rev-parse --show-toplevel)/../lamdera-wire3-bench}/elm-home-review"
 (cd "$R" && LAMDERA=$L ELM_HOME=${W3BENCH:-$(git rev-parse --show-toplevel)/../lamdera-wire3-bench}/elm-home-review sh build.sh 2>&1 | grep -v '^\[wire3-direct\]' | tail -1)
 cd "$R"

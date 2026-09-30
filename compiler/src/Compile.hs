@@ -161,6 +161,7 @@ compile_ maybePath pkg ifaces modul = do
   -- ()          <- debugPassText "starting optimize" moduleName (pure ())
 
   objects     <- optimize modul_ annotations canonical3
-    -- @LAMDERA prototype: carry the Wire3 codec IR to JS generation (Lamdera.Wire3.Direct)
+    -- @LAMDERA carry the Wire3 codec IR to JS generation (Lamdera.Wire3.Direct). Always,
+    -- whatever LAMDERA_WIRE3_DIRECT says, so caches are the same with and without it.
     & fmap (Lamdera.Wire3.Direct.addDirectIR pkg canonical3)
   return (Artifacts canonical3 annotations objects)

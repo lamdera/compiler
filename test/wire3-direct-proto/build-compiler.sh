@@ -1,5 +1,5 @@
 #!/bin/sh
-# Build the test app with this worktree's compiler, flag off (baseline) and on (direct),
+# Build the test app with this worktree's compiler, LAMDERA_WIRE3_DIRECT=0 (baseline) and default (direct),
 # in --optimize and dev mode, and expose gen/encode/decode for check-compiler.js.
 set -e
 cd "$(dirname "$0")"
@@ -7,8 +7,8 @@ L=${LAMDERA:-$(ls -t ../../.stack-work/install/*/*/*/bin/lamdera | head -1)}
 mkdir -p build
 for mode in opt dev; do
   flag=""; [ $mode = opt ] && flag="--optimize"
-  rm -rf elm-stuff; $L make src/Main.elm $flag --output=build/c-base-$mode.js
-  rm -rf elm-stuff; LAMDERA_WIRE3_DIRECT=1 $L make src/Main.elm $flag --output=build/c-direct-$mode.js
+  rm -rf elm-stuff; LAMDERA_WIRE3_DIRECT=0 $L make src/Main.elm $flag --output=build/c-base-$mode.js
+  rm -rf elm-stuff; env -u LAMDERA_WIRE3_DIRECT $L make src/Main.elm $flag --output=build/c-direct-$mode.js
 done
 for f in build/c-base-opt.js build/c-direct-opt.js build/c-base-dev.js build/c-direct-dev.js; do
   python3 - "$f" <<'PY'

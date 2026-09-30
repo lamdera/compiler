@@ -1,5 +1,5 @@
-// Real-snapshot oracles for the direct codecs (flag on) vs the same compiler's Elm codecs
-// (flag off). App data stays where it is; nothing is written anywhere.
+// Real-snapshot oracles for the direct codecs (the default) vs the same compiler's Elm codecs
+// (built with LAMDERA_WIRE3_DIRECT=0). App data stays where it is; nothing is written anywhere.
 //
 //   node realcheck.js <app> [<buildsDir>]
 //

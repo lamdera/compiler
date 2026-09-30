@@ -1,5 +1,7 @@
 #!/bin/sh
-# Build with this worktree's compiler, flag off (base) and on (direct), --optimize and dev.
+# Build with this worktree's compiler: base = the Elm codecs (LAMDERA_WIRE3_DIRECT=0, the
+# escape hatch) and direct = the default (no env var), in dev, --optimize and
+# --optimize-legible.
 # Uses an isolated ELM_HOME so package artifacts are built by this compiler (with IR),
 # never touching the shared ~/.elm cache.
 set -e
@@ -16,8 +18,8 @@ mkdir -p build
 # without field-name shortening)
 for mode in opt dev legible; do
   flag=""; [ $mode = opt ] && flag="--optimize"; [ $mode = legible ] && flag="--optimize-legible"
-  rm -rf elm-stuff; $L make src/Main.elm $flag --output=build/base-$mode.js >/dev/null
-  rm -rf elm-stuff; LAMDERA_WIRE3_DIRECT=1 $L make src/Main.elm $flag --output=build/direct-$mode.js >/dev/null
+  rm -rf elm-stuff; LAMDERA_WIRE3_DIRECT=0 $L make src/Main.elm $flag --output=build/base-$mode.js >/dev/null
+  rm -rf elm-stuff; env -u LAMDERA_WIRE3_DIRECT $L make src/Main.elm $flag --output=build/direct-$mode.js >/dev/null
 done
 for f in build/base-opt.js build/direct-opt.js build/base-dev.js build/direct-dev.js build/base-legible.js build/direct-legible.js; do
   python3 - "$f" <<'PY'

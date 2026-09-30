@@ -1,4 +1,4 @@
-// Oracles: the same compiler with LAMDERA_WIRE3_DIRECT off (base) vs on (direct), per mode.
+// Oracles: the same compiler with LAMDERA_WIRE3_DIRECT=0 (base, the Elm codecs) vs the default (direct), per mode.
 // node --expose-gc --stack-size=60000 check.js [opt|dev ...]   (the comparison recurses down long lists)
 const modes = process.argv.slice(2).length ? process.argv.slice(2) : ['opt', 'dev', 'legible'];
 

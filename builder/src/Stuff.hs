@@ -43,7 +43,8 @@ import qualified Lamdera.Version
 stuff :: FilePath -> FilePath
 stuff root =
   root </> "elm-stuff" </> compilerVersion
-  & Lamdera.alternativeImplementation (root </> "elm-stuff" </> Lamdera.Version.medium)
+  -- @LAMDERA keyed by the cache key (version + Wire3 IR format), see Lamdera.Version.cacheKey
+  & Lamdera.alternativeImplementation (root </> "elm-stuff" </> Lamdera.Version.cacheKey)
 
 
 details :: FilePath -> FilePath

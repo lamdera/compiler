@@ -1,5 +1,5 @@
-// Oracles for the compiler-generated direct codecs (LAMDERA_WIRE3_DIRECT=1) against the
-// same compiler's Elm codecs (flag off), in both --optimize and dev mode.
+// Oracles for the compiler-generated direct codecs (the default) against the
+// same compiler's Elm codecs (LAMDERA_WIRE3_DIRECT=0), in both --optimize and dev mode.
 const modes = process.argv.slice(2).length ? process.argv.slice(2) : ['opt', 'dev'];
 
 function bytesOf(dv) { return Buffer.from(dv.buffer, dv.byteOffset, dv.byteLength); }

@@ -63,7 +63,7 @@ versionsComment =
 graphModifications :: Mode.Mode -> Mains -> Map.Map Opt.Global Opt.Node -> Map.Map Opt.Global Opt.Node
 graphModifications mode mains graph_ = do
   let
-    -- @LAMDERA prototype: direct JS Wire3 codecs, gated on LAMDERA_WIRE3_DIRECT=1
+    -- @LAMDERA direct JS Wire3 codecs (on by default; LAMDERA_WIRE3_DIRECT=0 turns them off)
     graph = Lamdera.Wire3.Direct.replaceCodecs mode graph_
   if mains & mainsInclude ["Lamdera.Live"]
     then graph & Map.mapWithKey (modify $ isOptimizedMode mode)
@@ -211,8 +211,9 @@ injections outputType mode =
     // into a reused chunk: it is only valid during the call, so consume it synchronously
     // (fs.writeSync) or copy it. Chunks are never empty, and concatenated they are exactly
     // the bytes `Lamdera.Wire3.bytesEncode (w3_encode_BackendModel model)` produces.
-    // Returns the total byte count. Without the direct codecs (LAMDERA_WIRE3_DIRECT off,
-    // or a model type that fell back to its Elm codec) it still works: the Elm encoder
+    // Returns the total byte count. Without the direct codecs (built with the
+    // LAMDERA_WIRE3_DIRECT=0 escape hatch, or a model type that fell back to its Elm
+    // codec) it still works: the Elm encoder
     // produces one buffer, handed over as a single chunk.
     function _Lamdera_w3StreamEncodeBackendModel(model, onChunk, chunkSize) {
       if (typeof $$author$$project$$Types$$w3_encode_BackendModel === 'undefined') {

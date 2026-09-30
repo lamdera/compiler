@@ -30,7 +30,13 @@ Two halves:
    existing caller keeps working. Types without IR are called through their Elm codecs
    ("bridged"), in both directions.
 
-Gated behind LAMDERA_WIRE3_DIRECT=1. With it off, nothing in the output changes.
+On by default. LAMDERA_WIRE3_DIRECT=0 is the emergency escape hatch: it turns the
+rendering off (the output is then exactly the Elm codecs, as before this module existed).
+The IR is always lowered and stored regardless, so caches built with and without the
+escape hatch are interchangeable. Caches from compilers that store no IR are never read:
+cache paths are keyed by Lamdera.Version.cacheKey, whose wire3IrTag must be bumped when
+the IR format below changes.
+LAMDERA_WIRE3_DIRECT_DEBUG=1 reports every codec the lowering gives up on.
 -}
 
 import Control.Monad.State.Strict (State, runState, get, put, modify')
@@ -63,6 +69,8 @@ import qualified Reporting.Annotation as A
 
 import qualified Lamdera.Relative
 import qualified Lamdera.Wire3.Helpers as Helpers
+import qualified CanSer.CanSer as ToSource
+import qualified Data.Text as T
 
 
 -- IR
@@ -140,7 +148,7 @@ addDirectIR pkg canonical graph@(Opt.LocalGraph main nodes fields) =
               case List.stripPrefix "w3_encode_" name of
                 Just typeName ->
                   do  decDef <- Map.lookup ("w3_decode_" ++ typeName) byName
-                      let ir = debugLowering (Name.toChars (ModuleName._module home)) typeName (lowerCodec encDef decDef)
+                      let ir = debugLowering (Name.toChars (ModuleName._module home)) typeName encDef decDef (lowerCodec encDef decDef)
                       case ir of
                         IR Nothing Nothing -> Nothing
                         _ -> Just (typeName, ir)
@@ -164,17 +172,20 @@ addDirectIR pkg canonical graph@(Opt.LocalGraph main nodes fields) =
 {-# NOINLINE debugEnabled #-}
 debugEnabled :: Bool
 debugEnabled =
-  unsafePerformIO $ fmap (== Just "1") (Env.lookupEnv "LAMDERA_WIRE3_DIRECT_DEBUG")
+  unsafePerformIO $ fmap (`elem` [Just "1", Just "2"]) (Env.lookupEnv "LAMDERA_WIRE3_DIRECT_DEBUG")
 
 
--- LAMDERA_WIRE3_DIRECT_DEBUG=1 reports every codec the lowering gives up on.
-debugLowering :: String -> String -> IR -> IR
-debugLowering modul typeName ir@(IR enc dec) =
+-- LAMDERA_WIRE3_DIRECT_DEBUG=1 reports every codec the lowering gives up on, with the
+-- generated Elm it could not lower (LAMDERA_WIRE3_DIRECT_DEBUG=2 for the full source).
+debugLowering :: String -> String -> Can.Def -> Can.Def -> IR -> IR
+debugLowering modul typeName encDef decDef ir@(IR enc dec) =
   if debugEnabled && (enc == Nothing || dec == Nothing) then
     unsafePerformIO $ do
+      verbose <- fmap (== Just "2") (Env.lookupEnv "LAMDERA_WIRE3_DIRECT_DEBUG")
+      let src d = if verbose then "\n" ++ T.unpack (ToSource.convert d) else ""
       putStrLn ("[wire3-direct] " ++ modul ++ "." ++ typeName
-        ++ ": encoder " ++ maybe "NOT LOWERED" (const "ok") enc
-        ++ ", decoder " ++ maybe "NOT LOWERED" (const "ok") dec)
+        ++ ": encoder " ++ maybe ("NOT LOWERED" ++ src encDef) (const "ok") enc
+        ++ ", decoder " ++ maybe ("NOT LOWERED" ++ src decDef) (const "ok") dec)
       return ir
   else
     ir
@@ -284,6 +295,11 @@ lowerFn (A.At _ f) args =
             ("encodeNever", [])      -> Just WFail
             ("failEncode", [])       -> Just WFail
             ("encodeRef", [])        -> Just (WElm "encodeRef" "decodeRef")
+            -- A field of type `Lamdera.Wire3.Bytes` (the codecs' alias of Bytes) makes the
+            -- generator reference `Lamdera.Wire3.w3_encode_Bytes`, which doesn't exist. Such
+            -- a codec can never be reached in compiled output (it would fail to generate),
+            -- so treating it as the Bytes codec it stands for changes nothing observable.
+            ("w3_encode_Bytes", [])  -> Just WBytes
             ("encodeList", [a])      -> WList <$> lowerEnc a
             ("encodeMaybe", [a])     -> WMaybe <$> lowerEnc a
             ("encodeSet", [a])       -> WSet <$> lowerEnc a
@@ -443,12 +459,16 @@ lowerDec expr@(A.At _ e) =
             "decodeNever"  -> Just WFail
             "failDecode"   -> Just WFail
             "decodeRef"    -> Just (WElm "encodeRef" "decodeRef")
+            "w3_decode_Bytes" -> Just WBytes -- see "w3_encode_Bytes" in lowerFn
             _ -> Nothing
       | otherwise -> ref "w3_decode_" home name [] lowerDec
 
     Can.VarTopLevel home name -> ref "w3_decode_" home name [] lowerDec
 
     Can.VarLocal name -> WTVar <$> tvarParam (Name.toChars name)
+
+    -- A record with no fields decodes as `succeedDecode (\ -> {})`, with no andMaps.
+    Can.Call _ _ | Just w <- lowerRecordDec expr -> Just w
 
     Can.Call (A.At _ f) args ->
       case f of
@@ -581,10 +601,11 @@ lowerUnionDec expr =
 -- RENDERING (JS generation time)
 
 
+-- On unless LAMDERA_WIRE3_DIRECT=0 (the escape hatch).
 {-# NOINLINE directEnabled #-}
 directEnabled :: Bool
 directEnabled =
-  unsafePerformIO $ fmap (== Just "1") (Env.lookupEnv "LAMDERA_WIRE3_DIRECT")
+  unsafePerformIO $ fmap (/= Just "0") (Env.lookupEnv "LAMDERA_WIRE3_DIRECT")
 
 
 runtimeJs :: BS.ByteString
@@ -662,9 +683,31 @@ replaceCodecs mode graph =
             (Opt.Kernel [K.JS (BS8.pack ("var " ++ globalJs bytesEncodeGlobal ++ " = _W3_bytesEncode;\n"))] (Set.singleton runtimeGlobal))
             withDecoders
         _ -> withDecoders
+    -- LAMDERA_WIRE3_DIRECT_DEBUG=1: every w3_encode_/w3_decode_ definition in the graph
+    -- that is NOT rendered direct (no IR, or not replaceable), i.e. every fallback to an
+    -- Elm codec. (The graph holds every module's codecs, reachable or not.)
+    fallbacks =
+      [ Name.toChars m ++ "." ++ n
+      | (Opt.Global home@(ModuleName.Canonical _ m) name, _) <- Map.toList graph
+      , let n = Name.toChars name
+      , (isEnc, t) <-
+          case (List.stripPrefix "w3_encode_" n, List.stripPrefix "w3_decode_" n) of
+            (Just t, _) -> [(True, t)]
+            (_, Just t) -> [(False, t)]
+            _ -> []
+      , not (Map.member (homeOf home, t) (if isEnc then encoders else decoders))
+      ]
+    report =
+      if debugEnabled
+        then unsafePerformIO $ do
+          putStrLn ("[wire3-direct] rendered " ++ show (Map.size encoders) ++ " encoders and "
+            ++ show (Map.size decoders) ++ " decoders direct; " ++ show (length fallbacks)
+            ++ " codecs fall back to Elm" ++ (if null fallbacks then "" else ": " ++ List.intercalate ", " (take 50 fallbacks)))
+          return ()
+        else ()
   in
   if Map.null encoders && Map.null decoders then graph else
-  Map.insert runtimeGlobal (Opt.Kernel [K.JS (BS.append (BS8.pack (prelude mode)) runtimeJs)] runtimeDeps) withBytesEncode
+  report `seq` Map.insert runtimeGlobal (Opt.Kernel [K.JS (BS.append (BS8.pack (prelude mode)) runtimeJs)] runtimeDeps) withBytesEncode
 
 
 {-| Which codecs (of one direction, named `prefix<Type>`) can be replaced. The node must
