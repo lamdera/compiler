@@ -25,7 +25,7 @@ import sys
 p = sys.argv[1]
 s = open(p).read()
 i = s.rindex('}(this));')
-api = "{ depth: $author$project$Main$depthProbes, decodeSNaN: $author$project$Main$decodeSNaN, encodeSNaN: $author$project$Main$encodeSNaN, gen: $author$project$Main$gen, edge: $author$project$Main$edge, encode: $author$project$Main$encode, decode: $author$project$Main$decode, encodeHasFn: $author$project$Main$encodeHasFn, decodeHasFn: $author$project$Main$decodeHasFn, hasFns: $author$project$Main$hasFns, streamModel: (typeof _W3_streamEncode === 'function' && $author$project$Types$w3_encode_Model.w3e) ? function (m, size, onChunk) { return _W3_streamEncode($author$project$Types$w3_encode_Model.w3e, m, size, onChunk); } : null }"
+api = "{ depth: $author$project$Main$depthProbes, decodeSNaN: $author$project$Main$decodeSNaN, encodeSNaN: $author$project$Main$encodeSNaN, gen: $author$project$Main$gen, edge: $author$project$Main$edge, encode: $author$project$Main$encode, decode: $author$project$Main$decode, encodeHasFn: $author$project$Main$encodeHasFn, decodeHasFn: $author$project$Main$decodeHasFn, hasFns: $author$project$Main$hasFns, modelEncoder: $author$project$Types$w3_encode_Model, wireBytesEncode: $lamdera$codecs$Lamdera$Wire3$bytesEncode, streamModel: (typeof _W3_streamEncode === 'function' && $author$project$Types$w3_encode_Model.w3e) ? function (m, size, onChunk) { return _W3_streamEncode($author$project$Types$w3_encode_Model.w3e, m, size, onChunk); } : null }"
 s = s[:i] + "\nscope.W3X = " + api + ";\n" + s[i:]
 open(p.replace('.js', '-x.js'), 'w').write(s)
 PY

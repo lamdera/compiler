@@ -62,6 +62,19 @@ for (const mode of modes) {
     const m = typeof n === 'string' ? B.edge(+n.slice(1)) : B.gen(n);
     const base = bytesOf(B.encode(m));
     check(`${mode} encode n=${n}`, base.equals(bytesOf(D.encode(m))));
+    // Wire3.bytesEncode hands a direct encoder's fresh result over without a copy (once):
+    // every result still owns exactly its bytes, and encoding the same Encoder value
+    // again gives a separate copy with the same bytes.
+    {
+      const exact = (dv) => dv.byteOffset === 0 && dv.byteLength === dv.buffer.byteLength;
+      for (const [who, X] of [['base', B], ['direct', D]]) {
+        const node = X.modelEncoder(m);
+        const r1 = X.wireBytesEncode(node), r2 = X.wireBytesEncode(node), r3 = X.encode(m);
+        check(`${mode} ${who} bytesEncode results own exactly their bytes n=${n}`, exact(r1) && exact(r2) && exact(r3));
+        check(`${mode} ${who} bytesEncode of one Encoder twice: equal bytes, separate buffers n=${n}`,
+          r1.buffer !== r2.buffer && r1.buffer !== r3.buffer && bytesOf(r1).equals(base) && bytesOf(r2).equals(base) && bytesOf(r3).equals(base));
+      }
+    }
     if (D.streamModel) {
       for (const size of [1, 7, 64, 4096]) {
         const chunks = [];

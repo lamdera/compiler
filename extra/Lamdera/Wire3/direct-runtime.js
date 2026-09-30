@@ -1,5 +1,5 @@
 // ---- Wire3 direct codec runtime (see Lamdera/Wire3/Direct.hs) ----
-// W3_RUNTIME_VERSION 2026-09-30.1 (checked against the compiler binary by test/wire3-direct-proto/full/build.sh)
+// W3_RUNTIME_VERSION 2026-09-30.2 (checked against the compiler binary by test/wire3-direct-proto/full/build.sh)
 // Emitted once as a kernel node inside the Elm IIFE, after a small mode-specific
 // prelude Direct.hs generates (_W3_bytesNode, _W3_decoderValue, _W3_decoderFnOf,
 // _W3_T_RBNODE, _W3_T_SUBTREE). It references kernel and Elm globals only inside
@@ -125,9 +125,53 @@ function _W3_int(i) {
 // or TextEncoder, and Buffer.byteLength equals the kernel's width for it. Anything else
 // (lone surrogates, which elm/bytes writes as WTF-8 or as a 4-byte sequence swallowing
 // the next char) goes through the exact kernel loop.
+//
+// Two shortcuts in front (see "Sia techniques" in wire3-codegen-research.md):
+// - short strings (up to _W3_ASCII_MAX chars) are written optimistically as ASCII: the
+//   prefix for width == length, then the char codes straight into the buffer. Nothing
+//   is committed (_W3_pos is only moved at the end) unless every char was below 0x80,
+//   in which case the bytes are exactly the kernel's; otherwise the normal path runs.
+// - with Buffer, utf8Write goes first and the width comes from its return value, so
+//   there is no separate Buffer.byteLength pass: the prefix is written for width ==
+//   length and moved up if the real width needs a longer prefix. That needs room for
+//   the worst case (3 bytes per UTF-16 unit) up front; when growing mode would have to
+//   grow the buffer for that, the exact byteLength path runs instead.
+var _W3_ASCII_MAX = _W3_hasBuffer ? 12 : 4715; // 4715: the prefix of the width stays at most 2 bytes
+
+// Bytes _W3_int(n) writes for an integer width 0 <= n < 2^31 (n is encoded as 2n).
+function _W3_intWidth(n) {
+  return n <= 107 ? 1 : n <= 4715 ? 2 : n < 32768 ? 3 : n < 8388608 ? 4 : 5;
+}
+
 function _W3_str(s) {
   var len = s.length;
+  if (len <= _W3_ASCII_MAX) {
+    if (_W3_pos + len + 2 > _W3_buf.length) _W3_grow(len + 2);
+    var b = _W3_buf, p = _W3_pos, n = len * 2, q, i = 0;
+    if (n <= 215) { b[p] = n; q = p + 1; }
+    else { b[p] = 216 + ((n - 216) >>> 8); b[p + 1] = (n - 216) & 255; q = p + 2; }
+    for (; i < len; i++) {
+      var c = s.charCodeAt(i);
+      if (c >= 128) break;
+      b[q + i] = c;
+    }
+    if (i === len) { _W3_pos = q + len; return; }
+  }
   if (len > 4 && _W3_utf8Write !== null && _W3_hasWellFormed && s.isWellFormed()) {
+    var cap = len * 3 + 5;
+    // Streaming mode flushes to make room (and gives one item bigger than the chunk a
+    // bigger buffer, as for any other item); growing mode only takes this path when the
+    // worst case already fits.
+    if (_W3_pos + cap <= _W3_buf.length || (_W3_flush !== null && cap <= 67108864)) {
+      if (_W3_pos + cap > _W3_buf.length) _W3_grow(cap);
+      var p = _W3_pos, pw = _W3_intWidth(len);
+      var w = _W3_utf8Write.call(_W3_buf, s, p + pw, cap - pw);
+      var pw2 = w === len ? pw : _W3_intWidth(w);
+      if (pw2 !== pw) _W3_buf.copyWithin(p + pw2, p + pw, p + pw + w);
+      _W3_int(w); // writes exactly pw2 bytes at p, and has room for them
+      _W3_pos = p + pw2 + w;
+      return;
+    }
     var w = _W3_byteLength(s, 'utf8');
     _W3_int(w);
     _W3_grow(w);
@@ -187,6 +231,23 @@ function _W3_bytes(bs) {
   _W3_pos += len;
 }
 
+// The last small result of _W3_runEncode that nothing but its Bytes encoder node has
+// seen yet (see _W3_bytesEncode).
+var _W3_fresh = null;
+
+// Lamdera.Wire3.bytesEncode (= Bytes.Encode.encode) when the build has direct codecs.
+// Encoding a direct encoder's node would copy the exactly-sized DataView that
+// _W3_runEncode just made into another fresh, exactly-sized one: two ArrayBuffer
+// allocations per wire message where one does. So the first time that node is encoded,
+// its own DataView is the result. It has the same bytes and the same bounds (its buffer
+// holds exactly those bytes, like _Bytes_encode's), and no other value shares it: it
+// was only reachable through the node, and later encodes of the same node copy again.
+// Every other encoder takes _Bytes_encode, as before.
+function _W3_bytesEncode(e) {
+  if (_W3_fresh !== null && e.a === _W3_fresh) { _W3_fresh = null; return e.a; }
+  return _Bytes_encode(e);
+}
+
 // Run a direct encoder to one fresh, exactly-sized DataView. Re-entrant: a nested run
 // (an Elm-level encoder called back from a bridge) gets its own buffer.
 function _W3_runEncode(f, v) {
@@ -205,7 +266,7 @@ function _W3_runEncode(f, v) {
       _W3_buf = new Uint8Array(1 << 16); _W3_dv = new DataView(_W3_buf.buffer);
       return result;
     }
-    return new DataView(_W3_buf.slice(0, _W3_pos).buffer);
+    return (_W3_fresh = new DataView(_W3_buf.slice(0, _W3_pos).buffer));
   } finally {
     if (sactive) { _W3_buf = sbuf; _W3_dv = sdv; }
     // Never keep a big buffer between encodes (also when an encode threw halfway).
@@ -322,8 +383,10 @@ function _W3_fail() { throw 0; }
 // Lamdera.Wire3.decodeString = decodeInt64 |> andThen D.string
 //
 // Exactly equivalent to elm/bytes 1.0.8 (measured in a native spike outside this repo):
-// - up to 8 bytes of ASCII: a char loop (fastest there, and V8 keeps results under 13
-//   chars flat rather than as cons strings);
+// - up to 20 bytes of ASCII: one String.fromCharCode call with a fixed number of
+//   arguments (_W3_ascii), which makes one flat one-byte string, 2-3x faster than the
+//   char loop or utf8Slice at these lengths. The bytes are read through the DataView
+//   so a short message needs no Uint8Array view;
 // - otherwise Buffer#utf8Slice (or a non-fatal TextDecoder in browsers). Both replace
 //   every ill-formed sequence with U+FFFD, so an output without U+FFFD proves the input
 //   was well-formed, and then the kernel would produce the same string and offset. If
@@ -337,15 +400,12 @@ function _W3_rstr() {
   var dv = _W3_rdv, offset = _W3_rpos, end = offset + len;
   if (len <= 0) return ''; // elm/bytes: the loop never runs, offset unchanged
   if (end <= dv.byteLength) {
-    if (len <= 8) {
-      var s = '', i = offset;
-      for (; i < end; i++) {
-        var c = dv.getUint8(i);
-        if (c >= 128) break;
-        s += String.fromCharCode(c);
-      }
-      if (i === end) { _W3_rpos = end; return s; }
-    } else {
+    if (len <= 20) {
+      var acc = 0;
+      for (var i = offset; i < end; i++) acc |= dv.getUint8(i);
+      if (acc < 128) { _W3_rpos = end; return _W3_ascii(dv, offset, len); }
+    }
+    if (len > 8) {
       var u8 = _W3_u8view();
       var t = _W3_utf8Slice !== null ? _W3_utf8Slice.call(u8, offset, end)
         : _W3_tdLoose !== null ? _W3_tdLoose.decode(u8.subarray(offset, end))
@@ -374,6 +434,33 @@ function _W3_rstr() {
   }
   _W3_rpos = offset;
   return string;
+}
+
+// ASCII bytes [o, o + n) as a string, 1 <= n <= 20. Written out per length because a
+// fixed-arity String.fromCharCode is what makes this fast; no eval/new Function (CSP).
+function _W3_ascii(dv, o, n) {
+  switch (n) {
+    case 1: return String.fromCharCode(dv.getUint8(o));
+    case 2: return String.fromCharCode(dv.getUint8(o), dv.getUint8(o + 1));
+    case 3: return String.fromCharCode(dv.getUint8(o), dv.getUint8(o + 1), dv.getUint8(o + 2));
+    case 4: return String.fromCharCode(dv.getUint8(o), dv.getUint8(o + 1), dv.getUint8(o + 2), dv.getUint8(o + 3));
+    case 5: return String.fromCharCode(dv.getUint8(o), dv.getUint8(o + 1), dv.getUint8(o + 2), dv.getUint8(o + 3), dv.getUint8(o + 4));
+    case 6: return String.fromCharCode(dv.getUint8(o), dv.getUint8(o + 1), dv.getUint8(o + 2), dv.getUint8(o + 3), dv.getUint8(o + 4), dv.getUint8(o + 5));
+    case 7: return String.fromCharCode(dv.getUint8(o), dv.getUint8(o + 1), dv.getUint8(o + 2), dv.getUint8(o + 3), dv.getUint8(o + 4), dv.getUint8(o + 5), dv.getUint8(o + 6));
+    case 8: return String.fromCharCode(dv.getUint8(o), dv.getUint8(o + 1), dv.getUint8(o + 2), dv.getUint8(o + 3), dv.getUint8(o + 4), dv.getUint8(o + 5), dv.getUint8(o + 6), dv.getUint8(o + 7));
+    case 9: return String.fromCharCode(dv.getUint8(o), dv.getUint8(o + 1), dv.getUint8(o + 2), dv.getUint8(o + 3), dv.getUint8(o + 4), dv.getUint8(o + 5), dv.getUint8(o + 6), dv.getUint8(o + 7), dv.getUint8(o + 8));
+    case 10: return String.fromCharCode(dv.getUint8(o), dv.getUint8(o + 1), dv.getUint8(o + 2), dv.getUint8(o + 3), dv.getUint8(o + 4), dv.getUint8(o + 5), dv.getUint8(o + 6), dv.getUint8(o + 7), dv.getUint8(o + 8), dv.getUint8(o + 9));
+    case 11: return String.fromCharCode(dv.getUint8(o), dv.getUint8(o + 1), dv.getUint8(o + 2), dv.getUint8(o + 3), dv.getUint8(o + 4), dv.getUint8(o + 5), dv.getUint8(o + 6), dv.getUint8(o + 7), dv.getUint8(o + 8), dv.getUint8(o + 9), dv.getUint8(o + 10));
+    case 12: return String.fromCharCode(dv.getUint8(o), dv.getUint8(o + 1), dv.getUint8(o + 2), dv.getUint8(o + 3), dv.getUint8(o + 4), dv.getUint8(o + 5), dv.getUint8(o + 6), dv.getUint8(o + 7), dv.getUint8(o + 8), dv.getUint8(o + 9), dv.getUint8(o + 10), dv.getUint8(o + 11));
+    case 13: return String.fromCharCode(dv.getUint8(o), dv.getUint8(o + 1), dv.getUint8(o + 2), dv.getUint8(o + 3), dv.getUint8(o + 4), dv.getUint8(o + 5), dv.getUint8(o + 6), dv.getUint8(o + 7), dv.getUint8(o + 8), dv.getUint8(o + 9), dv.getUint8(o + 10), dv.getUint8(o + 11), dv.getUint8(o + 12));
+    case 14: return String.fromCharCode(dv.getUint8(o), dv.getUint8(o + 1), dv.getUint8(o + 2), dv.getUint8(o + 3), dv.getUint8(o + 4), dv.getUint8(o + 5), dv.getUint8(o + 6), dv.getUint8(o + 7), dv.getUint8(o + 8), dv.getUint8(o + 9), dv.getUint8(o + 10), dv.getUint8(o + 11), dv.getUint8(o + 12), dv.getUint8(o + 13));
+    case 15: return String.fromCharCode(dv.getUint8(o), dv.getUint8(o + 1), dv.getUint8(o + 2), dv.getUint8(o + 3), dv.getUint8(o + 4), dv.getUint8(o + 5), dv.getUint8(o + 6), dv.getUint8(o + 7), dv.getUint8(o + 8), dv.getUint8(o + 9), dv.getUint8(o + 10), dv.getUint8(o + 11), dv.getUint8(o + 12), dv.getUint8(o + 13), dv.getUint8(o + 14));
+    case 16: return String.fromCharCode(dv.getUint8(o), dv.getUint8(o + 1), dv.getUint8(o + 2), dv.getUint8(o + 3), dv.getUint8(o + 4), dv.getUint8(o + 5), dv.getUint8(o + 6), dv.getUint8(o + 7), dv.getUint8(o + 8), dv.getUint8(o + 9), dv.getUint8(o + 10), dv.getUint8(o + 11), dv.getUint8(o + 12), dv.getUint8(o + 13), dv.getUint8(o + 14), dv.getUint8(o + 15));
+    case 17: return String.fromCharCode(dv.getUint8(o), dv.getUint8(o + 1), dv.getUint8(o + 2), dv.getUint8(o + 3), dv.getUint8(o + 4), dv.getUint8(o + 5), dv.getUint8(o + 6), dv.getUint8(o + 7), dv.getUint8(o + 8), dv.getUint8(o + 9), dv.getUint8(o + 10), dv.getUint8(o + 11), dv.getUint8(o + 12), dv.getUint8(o + 13), dv.getUint8(o + 14), dv.getUint8(o + 15), dv.getUint8(o + 16));
+    case 18: return String.fromCharCode(dv.getUint8(o), dv.getUint8(o + 1), dv.getUint8(o + 2), dv.getUint8(o + 3), dv.getUint8(o + 4), dv.getUint8(o + 5), dv.getUint8(o + 6), dv.getUint8(o + 7), dv.getUint8(o + 8), dv.getUint8(o + 9), dv.getUint8(o + 10), dv.getUint8(o + 11), dv.getUint8(o + 12), dv.getUint8(o + 13), dv.getUint8(o + 14), dv.getUint8(o + 15), dv.getUint8(o + 16), dv.getUint8(o + 17));
+    case 19: return String.fromCharCode(dv.getUint8(o), dv.getUint8(o + 1), dv.getUint8(o + 2), dv.getUint8(o + 3), dv.getUint8(o + 4), dv.getUint8(o + 5), dv.getUint8(o + 6), dv.getUint8(o + 7), dv.getUint8(o + 8), dv.getUint8(o + 9), dv.getUint8(o + 10), dv.getUint8(o + 11), dv.getUint8(o + 12), dv.getUint8(o + 13), dv.getUint8(o + 14), dv.getUint8(o + 15), dv.getUint8(o + 16), dv.getUint8(o + 17), dv.getUint8(o + 18));
+    case 20: return String.fromCharCode(dv.getUint8(o), dv.getUint8(o + 1), dv.getUint8(o + 2), dv.getUint8(o + 3), dv.getUint8(o + 4), dv.getUint8(o + 5), dv.getUint8(o + 6), dv.getUint8(o + 7), dv.getUint8(o + 8), dv.getUint8(o + 9), dv.getUint8(o + 10), dv.getUint8(o + 11), dv.getUint8(o + 12), dv.getUint8(o + 13), dv.getUint8(o + 14), dv.getUint8(o + 15), dv.getUint8(o + 16), dv.getUint8(o + 17), dv.getUint8(o + 18), dv.getUint8(o + 19));
+  }
 }
 
 function _W3_validUtf8(u8, start, end) {

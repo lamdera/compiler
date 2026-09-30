@@ -649,9 +649,22 @@ replaceCodecs mode graph =
         )
         withEncoders
         decoders
+
+    -- Lamdera.Wire3.bytesEncode (an alias of Bytes.Encode.encode) becomes the runtime's
+    -- _W3_bytesEncode, which hands a direct encoder's fresh result over without copying
+    -- it again (see direct-runtime.js). Only when the alias is the plain definition.
+    bytesEncodeGlobal = elmGlobal wireHome "bytesEncode"
+
+    withBytesEncode =
+      case Map.lookup bytesEncodeGlobal graph of
+        Just (Opt.Define _ _) | not (Map.null encoders) ->
+          Map.insert bytesEncodeGlobal
+            (Opt.Kernel [K.JS (BS8.pack ("var " ++ globalJs bytesEncodeGlobal ++ " = _W3_bytesEncode;\n"))] (Set.singleton runtimeGlobal))
+            withDecoders
+        _ -> withDecoders
   in
   if Map.null encoders && Map.null decoders then graph else
-  Map.insert runtimeGlobal (Opt.Kernel [K.JS (BS.append (BS8.pack (prelude mode)) runtimeJs)] runtimeDeps) withDecoders
+  Map.insert runtimeGlobal (Opt.Kernel [K.JS (BS.append (BS8.pack (prelude mode)) runtimeJs)] runtimeDeps) withBytesEncode
 
 
 {-| Which codecs (of one direction, named `prefix<Type>`) can be replaced. The node must
@@ -747,6 +760,7 @@ runtimeDeps =
     , elmGlobal ("elm", "core", "Basics") "GT"
     , elmGlobal bytesEncodeHome "getWidth"
     , elmGlobal bytesEncodeHome "write"
+    , elmGlobal bytesEncodeHome "encode" -- _Bytes_encode, for _W3_bytesEncode
     ]
 
 
