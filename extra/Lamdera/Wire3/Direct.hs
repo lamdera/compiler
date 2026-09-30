@@ -33,9 +33,10 @@ Two halves:
 On by default. LAMDERA_WIRE3_DIRECT=0 is the emergency escape hatch: it turns the
 rendering off (the output is then exactly the Elm codecs, as before this module existed).
 The IR is always lowered and stored regardless, so caches built with and without the
-escape hatch are interchangeable. Caches from compilers that store no IR are never read:
-cache paths are keyed by Lamdera.Version.cacheKey, whose wire3IrTag must be bumped when
-the IR format below changes.
+escape hatch are interchangeable. Caches are keyed by the version string alone (see
+Lamdera.Version.artifacts), so a change to the IR format below needs a new version, or
+caches written by the previous binary must be cleared: otherwise their types silently
+fall back to the Elm codecs.
 LAMDERA_WIRE3_DIRECT_DEBUG=1 reports every codec the lowering gives up on.
 -}
 
