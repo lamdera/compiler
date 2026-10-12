@@ -19,7 +19,9 @@ expected_w3_encode_Config w3_x_c_data w3_x_c_msg =
 
 
 expected_w3_decode_Config w3_x_c_data w3_x_c_msg =
-    Lamdera.Wire3.succeedDecode (\junk0 -> { junk = junk0 }) |> Lamdera.Wire3.andMapDecode (Test.Wire_Alias_4_TvarRename2.w3_decode_Config w3_x_c_data w3_x_c_msg)
+    Bytes.Decode.map
+        (\w3_v1 -> { junk = w3_v1 })
+        (Test.Wire_Alias_4_TvarRename2.w3_decode_Config w3_x_c_data w3_x_c_msg)
 
 
 {-| From NoRedInk/style-elements
@@ -54,7 +56,9 @@ expected_w3_decode_Also w3_x_c_msg =
             (\w3v ->
                 case w3v of
                     0 ->
-                        Lamdera.Wire3.succeedDecode Tag |> Lamdera.Wire3.andMapDecode (Test.Wire_Alias_4_TvarRename2.w3_decode_OnGrid (Lamdera.Wire3.decodeMaybe w3_x_c_msg))
+                        Bytes.Decode.map
+                            (\w3_v1 -> Tag w3_v1)
+                            (Test.Wire_Alias_4_TvarRename2.w3_decode_OnGrid (Lamdera.Wire3.decodeMaybe w3_x_c_msg))
 
                     _ ->
                         Lamdera.Wire3.failDecode

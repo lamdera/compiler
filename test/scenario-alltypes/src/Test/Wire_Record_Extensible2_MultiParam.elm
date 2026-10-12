@@ -47,10 +47,10 @@ expected_w3_encode_ExtensibleRecordTypeUsage =
 
 
 expected_w3_decode_ExtensibleRecordTypeUsage =
-    Lamdera.Wire3.succeedDecode
-        (\atLeastOneField0 id0 -> { atLeastOneField = atLeastOneField0, id = id0 })
-        |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeString
-        |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeInt
+    Bytes.Decode.map2
+        (\w3_v1 w3_v2 -> { atLeastOneField = w3_v1, id = w3_v2 })
+        Lamdera.Wire3.decodeString
+        Lamdera.Wire3.decodeInt
 
 
 
@@ -71,10 +71,10 @@ expected_w3_encode_ExtensibleRecordTypeUsage_ =
 
 
 expected_w3_decode_ExtensibleRecordTypeUsage_ =
-    Lamdera.Wire3.succeedDecode
-        (\id0 name0 -> { id = id0, name = name0 })
-        |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeInt
-        |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeString
+    Bytes.Decode.map2
+        (\w3_v1 w3_v2 -> { id = w3_v1, name = w3_v2 })
+        Lamdera.Wire3.decodeInt
+        Lamdera.Wire3.decodeString
 
 
 
@@ -101,7 +101,13 @@ expected_w3_decode_C_ =
             (\w3v ->
                 case w3v of
                     0 ->
-                        Lamdera.Wire3.succeedDecode NodeClicked_ |> Lamdera.Wire3.andMapDecode w3_decode_ExtensibleRecordTypeUsage_
+                        Bytes.Decode.map
+                            (\w3_v1 -> NodeClicked_ w3_v1)
+                            (Bytes.Decode.map2
+                                (\w3_v1 w3_v2 -> { id = w3_v1, name = w3_v2 })
+                                Lamdera.Wire3.decodeInt
+                                Lamdera.Wire3.decodeString
+                            )
 
                     _ ->
                         Lamdera.Wire3.failDecode

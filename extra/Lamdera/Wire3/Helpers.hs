@@ -622,42 +622,6 @@ andThenDecode1 lambda =
         ]))
 
 
-andMapDecode1 value =
-  (a (Call
-        (a (VarForeign
-              mLamdera_Wire
-              "andMapDecode"
-              (Forall
-                 (Map.fromList [("a", ()), ("b", ())])
-                 (TLambda
-                    (TAlias
-                       mLamdera_Wire
-                       "Decoder"
-                       [("a", TVar "a")]
-                       (Filled
-                          (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [TVar "a"])))
-                    (TLambda
-                       (TAlias
-                          mLamdera_Wire
-                          "Decoder"
-                          [("a", TLambda (TVar "a") (TVar "b"))]
-                          (Filled
-                             (TType
-                                (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
-                                "Decoder"
-                                [TLambda (TVar "a") (TVar "b")])))
-                       (TAlias
-                          mLamdera_Wire
-                          "Decoder"
-                          [("a", TVar "b")]
-                          (Filled
-                             (TType
-                                (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
-                                "Decoder"
-                                [TVar "b"]))))))))
-        [ value
-        ]))
-
 succeedDecode value =
   (a (Call (a (VarForeign mLamdera_Wire "succeedDecode"
               (Forall
@@ -671,6 +635,70 @@ succeedDecode value =
                        (Filled (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [TVar "a"])))))))
         [ value
         ]))
+
+
+-- | Decodes `decoders` in order and passes their values to `build`, which makes
+-- the final value, e.g. a record or a custom type constructor call.
+--
+-- Up to 5 values use a single `Bytes.Decode.mapN`. More values are first decoded
+-- in groups of up to 5 into anonymous records `{ w3_1, ..., w3_5 }`, recursively,
+-- so that `build` still receives every value at once: no constructor is ever
+-- partially applied, and no decoder is allocated per field, unlike a chain of
+-- `andMapDecode`.
+decodeAll :: ([Expr] -> Expr) -> [Expr] -> Expr
+decodeAll build decoders =
+  case decoders of
+    [] ->
+      succeedDecode (build [])
+
+    _ | length decoders <= 5 ->
+      decodeMapN build decoders
+
+    _ ->
+      let
+        groups = chunksOf 5 decoders
+
+        groupDecoder group =
+          case group of
+            [decoder] -> decoder
+            _ -> decodeMapN (\values -> a (Record (Map.fromList (zip decodeAllGroupFields values)))) group
+
+        unpack group groupValue =
+          case group of
+            [_] -> [groupValue]
+            _ -> fmap (\field -> a (Access groupValue (a field))) (take (length group) decodeAllGroupFields)
+      in
+      decodeAll
+        (\groupValues -> build (concat (zipWith unpack groups groupValues)))
+        (fmap groupDecoder groups)
+
+
+decodeAllGroupFields :: [Data.Name.Name]
+decodeAllGroupFields =
+  ["w3_1", "w3_2", "w3_3", "w3_4", "w3_5"]
+
+
+-- | `Bytes.Decode.map` to `map5`: decodes 1 to 5 values in order and passes them to `build`.
+decodeMapN :: ([Expr] -> Expr) -> [Expr] -> Expr
+decodeMapN build decoders =
+  let
+    n = length decoders
+    names = take n ["w3_v1", "w3_v2", "w3_v3", "w3_v4", "w3_v5"]
+    tvars = take n ["a", "b", "c", "d", "e"]
+    result = if n == 1 then "b" else "result"
+    fnType = foldr (\tvar t -> TLambda (TVar tvar) t) (TVar result) tvars
+    mapType = TLambda fnType (foldr (\tvar t -> TLambda (tElm_Bytes_Decoder (TVar tvar)) t) (tElm_Bytes_Decoder (TVar result)) tvars)
+    mapName = if n == 1 then "map" else Data.Name.fromChars ("map" ++ show n)
+    mapFn = a (VarForeign mBytes_Decode mapName (Forall (Map.fromList (fmap (\v -> (v, ())) (result : tvars))) mapType))
+  in
+  call mapFn (a (Lambda (fmap pvar names) (build (fmap lvar names))) : decoders)
+
+
+chunksOf :: Int -> [x] -> [[x]]
+chunksOf size list =
+  case list of
+    [] -> []
+    _ -> take size list : chunksOf size (drop size list)
 
 
 failDecode identifier =
@@ -768,13 +796,6 @@ mLamdera_SeqSet = (Module.Canonical (Name "lamdera" "containers") "SeqSet")
 mBytes_Encode = (Module.Canonical (Name "elm" "bytes") "Bytes.Encode")
 mBytes_Decode = (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
 
-
-foldlPairs fn list =
-  case list of
-    [] -> error "⚠️  Error: foldlPairs called with no items! Please report this with your code."
-    x:[] -> x
-    x:xs ->
-      foldl (\acc item -> fn acc item ) x xs
 
 foldrPairs fn list =
   case list of

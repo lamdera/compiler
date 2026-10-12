@@ -446,24 +446,11 @@ decoderForType ifaces cname tipe =
 
 decodeRecord :: Map.Map Module.Raw I.Interface -> Module.Canonical -> [(Data.Name.Name, Type)] -> Expr
 decodeRecord ifaces cname fields =
-  let
-    pvars :: [Pattern]
-    pvars =
-      (imap (\i (name, field) -> a (PVar $ Data.Name.fromChars $ Data.Name.toChars name ++ "0")) fields)
+  case fields of
+    [] ->
+      succeedDecode (a (Lambda [] (a (Record Map.empty))))
 
-    newRecFields :: Map.Map Data.Name.Name Expr
-    newRecFields =
-      fields
-        & fmap (\(name, field) ->
-            (name, a (VarLocal $ Data.Name.fromChars $ Data.Name.toChars name ++ "0"))
-          )
-        & Map.fromList
-  in
-  [succeedDecode (a (Lambda pvars (a (Record newRecFields ))))]
-  ++ fmap (\(name, field) ->
-                andMapDecode1 (
-                  -- debugDecoder (Utf8.fromChars $ "." <> Data.Name.toChars name) $
-                    decoderForType ifaces cname field
-                )
-          ) fields
-    & foldlPairs (|>)
+    _ ->
+      decodeAll
+        (\values -> a (Record (Map.fromList (zip (fmap fst fields) values))))
+        (fmap (\(name, field) -> decoderForType ifaces cname field) fields)

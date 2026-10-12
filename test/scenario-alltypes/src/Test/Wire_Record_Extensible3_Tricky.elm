@@ -25,8 +25,16 @@ expected_w3_encode_Config =
 
 
 expected_w3_decode_Config =
-    Lamdera.Wire3.succeedDecode (\overlayColor0 -> { overlayColor = overlayColor0 })
-        |> Lamdera.Wire3.andMapDecode Test.Wire_Record_Extensible1_Basic.w3_decode_Color
+    Bytes.Decode.map
+        (\w3_v1 -> { overlayColor = w3_v1 })
+        (Bytes.Decode.map5
+            (\w3_v1 w3_v2 w3_v3 w3_v4 w3_v5 -> { alpha = w3_v1, blue = w3_v2, green = w3_v3, red = w3_v4, value = w3_v5 })
+            Lamdera.Wire3.decodeFloat
+            Lamdera.Wire3.decodeInt
+            Lamdera.Wire3.decodeInt
+            Lamdera.Wire3.decodeInt
+            Lamdera.Wire3.decodeString
+        )
 
 
 
@@ -67,13 +75,13 @@ expected_w3_decode_Type w3_x_c_msg =
             (\w3v ->
                 case w3v of
                     0 ->
-                        Lamdera.Wire3.succeedDecode DateType
-                            |> Lamdera.Wire3.andMapDecode
-                                (Lamdera.Wire3.succeedDecode
-                                    (\attributes0 name0 -> { attributes = attributes0, name = name0 })
-                                    |> Lamdera.Wire3.andMapDecode (Lamdera.Wire3.decodeList w3_x_c_msg)
-                                    |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeString
-                                )
+                        Bytes.Decode.map
+                            (\w3_v1 -> DateType w3_v1)
+                            (Bytes.Decode.map2
+                                (\w3_v1 w3_v2 -> { attributes = w3_v1, name = w3_v2 })
+                                (Lamdera.Wire3.decodeList w3_x_c_msg)
+                                Lamdera.Wire3.decodeString
+                            )
 
                     _ ->
                         Lamdera.Wire3.failDecode
@@ -130,14 +138,13 @@ expected_w3_encode_DoubleParamed =
 
 
 expected_w3_decode_DoubleParamed =
-    Lamdera.Wire3.succeedDecode
-        (\b0 field0 -> { b = b0, field = field0 })
-        |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeString
-        |> Lamdera.Wire3.andMapDecode
-            (Lamdera.Wire3.succeedDecode
-                (\b0 -> { b = b0 })
-                |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeString
-            )
+    Bytes.Decode.map2
+        (\w3_v1 w3_v2 -> { b = w3_v1, field = w3_v2 })
+        Lamdera.Wire3.decodeString
+        (Bytes.Decode.map
+            (\w3_v1 -> { b = w3_v1 })
+            Lamdera.Wire3.decodeString
+        )
 
 
 
@@ -218,32 +225,32 @@ expected_w3_decode_DatePickerType =
             (\w3v ->
                 case w3v of
                     0 ->
-                        Lamdera.Wire3.succeedDecode DateTimeType_
-                            |> Lamdera.Wire3.andMapDecode
-                                (Lamdera.Wire3.succeedDecode
-                                    (\allowYearNavigation0 attributes0 timePickerType0 -> { allowYearNavigation = allowYearNavigation0, attributes = attributes0, timePickerType = timePickerType0 })
-                                    |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeBool
-                                    |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeString
-                                    |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeInt
-                                )
+                        Bytes.Decode.map
+                            (\w3_v1 -> DateTimeType_ w3_v1)
+                            (Bytes.Decode.map3
+                                (\w3_v1 w3_v2 w3_v3 -> { allowYearNavigation = w3_v1, attributes = w3_v2, timePickerType = w3_v3 })
+                                Lamdera.Wire3.decodeBool
+                                Lamdera.Wire3.decodeString
+                                Lamdera.Wire3.decodeInt
+                            )
 
                     1 ->
-                        Lamdera.Wire3.succeedDecode DateType_
-                            |> Lamdera.Wire3.andMapDecode
-                                (Lamdera.Wire3.succeedDecode
-                                    (\allowYearNavigation0 attributes0 -> { allowYearNavigation = allowYearNavigation0, attributes = attributes0 })
-                                    |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeBool
-                                    |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeString
-                                )
+                        Bytes.Decode.map
+                            (\w3_v1 -> DateType_ w3_v1)
+                            (Bytes.Decode.map2
+                                (\w3_v1 w3_v2 -> { allowYearNavigation = w3_v1, attributes = w3_v2 })
+                                Lamdera.Wire3.decodeBool
+                                Lamdera.Wire3.decodeString
+                            )
 
                     2 ->
-                        Lamdera.Wire3.succeedDecode TimeType_
-                            |> Lamdera.Wire3.andMapDecode
-                                (Lamdera.Wire3.succeedDecode
-                                    (\attributes0 timePickerType0 -> { attributes = attributes0, timePickerType = timePickerType0 })
-                                    |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeString
-                                    |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeInt
-                                )
+                        Bytes.Decode.map
+                            (\w3_v1 -> TimeType_ w3_v1)
+                            (Bytes.Decode.map2
+                                (\w3_v1 w3_v2 -> { attributes = w3_v1, timePickerType = w3_v2 })
+                                Lamdera.Wire3.decodeString
+                                Lamdera.Wire3.decodeInt
+                            )
 
                     _ ->
                         Lamdera.Wire3.failDecode
@@ -274,7 +281,9 @@ expected_w3_encode_TimePickerConfig =
 
 
 expected_w3_decode_TimePickerConfig =
-    Lamdera.Wire3.succeedDecode (\timePickerType0 -> { timePickerType = timePickerType0 }) |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeInt
+    Bytes.Decode.map
+        (\w3_v1 -> { timePickerType = w3_v1 })
+        Lamdera.Wire3.decodeInt
 
 
 
@@ -350,7 +359,10 @@ expected_w3_decode_TimePickerConfig =
                (\w3v ->
                    case w3v of
                        0 ->
-                           Lamdera.Wire3.succeedDecode Variation |> Lamdera.Wire3.andMapDecode w3_x_c_variation |> Lamdera.Wire3.andMapDecode (Lamdera.Wire3.decodeList (w3_decode_Property w3_x_c_class Lamdera.Wire3.decodeNever))
+                           Bytes.Decode.map2
+                                                                                (\w3_v1 w3_v2 -> Variation w3_v1 w3_v2)
+                                                                                w3_x_c_variation
+                                                                                (Lamdera.Wire3.decodeList (w3_decode_Property w3_x_c_class Lamdera.Wire3.decodeNever))
 
                        _ ->
                            Lamdera.Wire3.failDecode

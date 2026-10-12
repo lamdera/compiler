@@ -93,58 +93,97 @@ expected_w3_decode_UnionParams =
             (\w3v ->
                 case w3v of
                     0 ->
-                        Lamdera.Wire3.succeedDecode ValueArrayString |> Lamdera.Wire3.andMapDecode (Lamdera.Wire3.decodeArray Lamdera.Wire3.decodeString)
+                        Bytes.Decode.map
+                            (\w3_v1 -> ValueArrayString w3_v1)
+                            (Lamdera.Wire3.decodeArray Lamdera.Wire3.decodeString)
 
                     1 ->
-                        Lamdera.Wire3.succeedDecode ValueBool |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeBool
+                        Bytes.Decode.map
+                            (\w3_v1 -> ValueBool w3_v1)
+                            Lamdera.Wire3.decodeBool
 
                     2 ->
-                        Lamdera.Wire3.succeedDecode ValueChar |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeChar
+                        Bytes.Decode.map
+                            (\w3_v1 -> ValueChar w3_v1)
+                            Lamdera.Wire3.decodeChar
 
                     3 ->
-                        Lamdera.Wire3.succeedDecode ValueDict |> Lamdera.Wire3.andMapDecode (Lamdera.Wire3.decodeDict Lamdera.Wire3.decodeString (Lamdera.Wire3.decodeList Lamdera.Wire3.decodeInt))
+                        Bytes.Decode.map
+                            (\w3_v1 -> ValueDict w3_v1)
+                            (Lamdera.Wire3.decodeDict Lamdera.Wire3.decodeString (Lamdera.Wire3.decodeList Lamdera.Wire3.decodeInt))
 
                     4 ->
-                        Lamdera.Wire3.succeedDecode ValueFloat |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeFloat
+                        Bytes.Decode.map
+                            (\w3_v1 -> ValueFloat w3_v1)
+                            Lamdera.Wire3.decodeFloat
 
                     5 ->
-                        Lamdera.Wire3.succeedDecode ValueInt |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeInt
+                        Bytes.Decode.map
+                            (\w3_v1 -> ValueInt w3_v1)
+                            Lamdera.Wire3.decodeInt
 
                     6 ->
-                        Lamdera.Wire3.succeedDecode ValueListBool |> Lamdera.Wire3.andMapDecode (Lamdera.Wire3.decodeList Lamdera.Wire3.decodeBool)
+                        Bytes.Decode.map
+                            (\w3_v1 -> ValueListBool w3_v1)
+                            (Lamdera.Wire3.decodeList Lamdera.Wire3.decodeBool)
 
                     7 ->
-                        Lamdera.Wire3.succeedDecode ValueMaybe |> Lamdera.Wire3.andMapDecode (Lamdera.Wire3.decodeMaybe Lamdera.Wire3.decodeString)
+                        Bytes.Decode.map
+                            (\w3_v1 -> ValueMaybe w3_v1)
+                            (Lamdera.Wire3.decodeMaybe Lamdera.Wire3.decodeString)
 
                     8 ->
-                        Lamdera.Wire3.succeedDecode ValueOrder |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeOrder
+                        Bytes.Decode.map
+                            (\w3_v1 -> ValueOrder w3_v1)
+                            Lamdera.Wire3.decodeOrder
 
                     9 ->
-                        Lamdera.Wire3.succeedDecode ValueRecord |> Lamdera.Wire3.andMapDecode (Lamdera.Wire3.succeedDecode (\field10 field20 -> { field1 = field10, field2 = field20 }) |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeInt |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeString)
+                        Bytes.Decode.map
+                            (\w3_v1 -> ValueRecord w3_v1)
+                            (Bytes.Decode.map2
+                                (\w3_v1 w3_v2 -> { field1 = w3_v1, field2 = w3_v2 })
+                                Lamdera.Wire3.decodeInt
+                                Lamdera.Wire3.decodeString
+                            )
 
                     10 ->
-                        Lamdera.Wire3.succeedDecode ValueResult |> Lamdera.Wire3.andMapDecode (Lamdera.Wire3.decodeResult Lamdera.Wire3.decodeString Lamdera.Wire3.decodeInt)
+                        Bytes.Decode.map
+                            (\w3_v1 -> ValueResult w3_v1)
+                            (Lamdera.Wire3.decodeResult Lamdera.Wire3.decodeString Lamdera.Wire3.decodeInt)
 
                     11 ->
-                        Lamdera.Wire3.succeedDecode ValueSetFloat |> Lamdera.Wire3.andMapDecode (Lamdera.Wire3.decodeSet Lamdera.Wire3.decodeFloat)
+                        Bytes.Decode.map
+                            (\w3_v1 -> ValueSetFloat w3_v1)
+                            (Lamdera.Wire3.decodeSet Lamdera.Wire3.decodeFloat)
 
                     12 ->
                         Lamdera.Wire3.succeedDecode ValueStandalone
 
                     13 ->
-                        Lamdera.Wire3.succeedDecode ValueString |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeString
+                        Bytes.Decode.map
+                            (\w3_v1 -> ValueString w3_v1)
+                            Lamdera.Wire3.decodeString
 
                     14 ->
-                        Lamdera.Wire3.succeedDecode ValueTriple |> Lamdera.Wire3.andMapDecode (Lamdera.Wire3.decodeTriple Lamdera.Wire3.decodeInt Lamdera.Wire3.decodeString Lamdera.Wire3.decodeBool)
+                        Bytes.Decode.map
+                            (\w3_v1 -> ValueTriple w3_v1)
+                            (Lamdera.Wire3.decodeTriple Lamdera.Wire3.decodeInt Lamdera.Wire3.decodeString Lamdera.Wire3.decodeBool)
 
                     15 ->
-                        Lamdera.Wire3.succeedDecode ValueTuple |> Lamdera.Wire3.andMapDecode (Lamdera.Wire3.decodePair Lamdera.Wire3.decodeInt Lamdera.Wire3.decodeString)
+                        Bytes.Decode.map
+                            (\w3_v1 -> ValueTuple w3_v1)
+                            (Lamdera.Wire3.decodePair Lamdera.Wire3.decodeInt Lamdera.Wire3.decodeString)
 
                     16 ->
-                        Lamdera.Wire3.succeedDecode ValueTwoParams |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeBool |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeChar
+                        Bytes.Decode.map2
+                            (\w3_v1 w3_v2 -> ValueTwoParams w3_v1 w3_v2)
+                            Lamdera.Wire3.decodeBool
+                            Lamdera.Wire3.decodeChar
 
                     17 ->
-                        Lamdera.Wire3.succeedDecode ValueUnit |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeUnit
+                        Bytes.Decode.map
+                            (\w3_v1 -> ValueUnit w3_v1)
+                            Lamdera.Wire3.decodeUnit
 
                     _ ->
                         Lamdera.Wire3.failDecode

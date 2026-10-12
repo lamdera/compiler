@@ -55,21 +55,19 @@ expected_w3_decode_PackageTypes =
             (\w3v ->
                 case w3v of
                     0 ->
-                        Lamdera.Wire3.succeedDecode
-                            SDict
-                            |> Lamdera.Wire3.andMapDecode
-                                (SeqDict.decodeDict
-                                    w3_decode_Tag
-                                    Lamdera.Wire3.decodeString
-                                )
+                        Bytes.Decode.map
+                            (\w3_v1 -> SDict w3_v1)
+                            (SeqDict.decodeDict
+                                w3_decode_Tag
+                                Lamdera.Wire3.decodeString
+                            )
 
                     1 ->
-                        Lamdera.Wire3.succeedDecode
-                            SSet
-                            |> Lamdera.Wire3.andMapDecode
-                                (SeqSet.decodeSet
-                                    w3_decode_Tag
-                                )
+                        Bytes.Decode.map
+                            (\w3_v1 -> SSet w3_v1)
+                            (SeqSet.decodeSet
+                                w3_decode_Tag
+                            )
 
                     _ ->
                         Lamdera.Wire3.failDecode
@@ -91,14 +89,12 @@ expected_w3_encode_PackageTypesRecord =
 
 
 expected_w3_decode_PackageTypesRecord =
-    Lamdera.Wire3.succeedDecode
-        (\sDict0 sSet0 -> { sDict = sDict0, sSet = sSet0 })
-        |> Lamdera.Wire3.andMapDecode
-            (SeqDict.decodeDict
-                w3_decode_Tag
-                Lamdera.Wire3.decodeString
-            )
-        |> Lamdera.Wire3.andMapDecode
-            (SeqSet.decodeSet
-                w3_decode_Tag
-            )
+    Bytes.Decode.map2
+        (\w3_v1 w3_v2 -> { sDict = w3_v1, sSet = w3_v2 })
+        (SeqDict.decodeDict
+            w3_decode_Tag
+            Lamdera.Wire3.decodeString
+        )
+        (SeqSet.decodeSet
+            w3_decode_Tag
+        )

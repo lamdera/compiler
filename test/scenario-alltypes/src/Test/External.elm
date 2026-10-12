@@ -44,7 +44,9 @@ expected_w3_encode_ExternalRecordBasic =
 
 
 expected_w3_decode_ExternalRecordBasic =
-    Lamdera.Wire3.succeedDecode (\int0 -> { int = int0 }) |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeInt
+    Bytes.Decode.map
+        (\w3_v1 -> { int = w3_v1 })
+        Lamdera.Wire3.decodeInt
 
 
 expected_w3_encode_ExternalCustomBasic : ExternalCustomBasic -> Lamdera.Wire3.Encoder
@@ -88,7 +90,10 @@ expected_w3_encode_SubSubRecordAlias w3_x_c_threadedTvar =
 
 
 expected_w3_decode_SubSubRecordAlias w3_x_c_threadedTvar =
-    Lamdera.Wire3.succeedDecode (\subType0 tvar0 -> { subType = subType0, tvar = tvar0 }) |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeInt |> Lamdera.Wire3.andMapDecode w3_x_c_threadedTvar
+    Bytes.Decode.map2
+        (\w3_v1 w3_v2 -> { subType = w3_v1, tvar = w3_v2 })
+        Lamdera.Wire3.decodeInt
+        w3_x_c_threadedTvar
 
 
 expected_w3_encode_ExternalCustomThreaded : (threadedTvar -> Lamdera.Wire3.Encoder) -> (threadedTvar2 -> Lamdera.Wire3.Encoder) -> ExternalCustomThreaded threadedTvar threadedTvar2 -> Lamdera.Wire3.Encoder
@@ -110,10 +115,14 @@ expected_w3_decode_ExternalCustomThreaded w3_x_c_threadedTvar w3_x_c_threadedTva
             (\w3v ->
                 case w3v of
                     0 ->
-                        Lamdera.Wire3.succeedDecode AlphabeticallyFirst |> Lamdera.Wire3.andMapDecode w3_x_c_threadedTvar2
+                        Bytes.Decode.map
+                            (\w3_v1 -> AlphabeticallyFirst w3_v1)
+                            w3_x_c_threadedTvar2
 
                     1 ->
-                        Lamdera.Wire3.succeedDecode AlphabeticallyKMiddleThreaded |> Lamdera.Wire3.andMapDecode w3_x_c_threadedTvar
+                        Bytes.Decode.map
+                            (\w3_v1 -> AlphabeticallyKMiddleThreaded w3_v1)
+                            w3_x_c_threadedTvar
 
                     2 ->
                         Lamdera.Wire3.succeedDecode AlphabeticallyLast
@@ -143,8 +152,8 @@ expected_w3_encode_ExternalRecordViaExtensible =
 
 
 expected_w3_decode_ExternalRecordViaExtensible =
-    Lamdera.Wire3.succeedDecode
-        (\base0 green0 red0 -> { base = base0, green = green0, red = red0 })
-        |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeString
-        |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeInt
-        |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeInt
+    Bytes.Decode.map3
+        (\w3_v1 w3_v2 w3_v3 -> { base = w3_v1, green = w3_v2, red = w3_v3 })
+        Lamdera.Wire3.decodeString
+        Lamdera.Wire3.decodeInt
+        Lamdera.Wire3.decodeInt

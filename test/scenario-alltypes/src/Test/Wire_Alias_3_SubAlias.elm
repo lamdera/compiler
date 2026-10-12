@@ -48,7 +48,9 @@ expected_w3_encode_SubRecordAlias w3_x_c_threadedTvar =
 
 
 expected_w3_decode_SubRecordAlias w3_x_c_threadedTvar =
-    Lamdera.Wire3.succeedDecode (\tvar0 -> { tvar = tvar0 }) |> Lamdera.Wire3.andMapDecode w3_x_c_threadedTvar
+    Bytes.Decode.map
+        (\w3_v1 -> { tvar = w3_v1 })
+        w3_x_c_threadedTvar
 
 
 expected_w3_encode_RecordThreadedWrap : (threadedTvar -> Lamdera.Wire3.Encoder) -> RecordThreadedWrap threadedTvar -> Lamdera.Wire3.Encoder
@@ -60,8 +62,9 @@ expected_w3_encode_RecordThreadedWrap w3_x_c_threadedTvar =
 
 
 expected_w3_decode_RecordThreadedWrap w3_x_c_threadedTvar =
-    Lamdera.Wire3.succeedDecode (\tvar0 -> { tvar = tvar0 })
-        |> Lamdera.Wire3.andMapDecode (w3_decode_BannedTypeDeepAlias w3_x_c_threadedTvar)
+    Bytes.Decode.map
+        (\w3_v1 -> { tvar = w3_v1 })
+        (w3_decode_BannedTypeDeepAlias w3_x_c_threadedTvar)
 
 
 expected_w3_encode_BannedTypeDeepAlias : (msg -> Lamdera.Wire3.Encoder) -> BannedTypeDeepAlias msg -> Lamdera.Wire3.Encoder
@@ -79,7 +82,9 @@ expected_w3_encode_RecordParams w3_x_c_msg =
 
 
 expected_w3_decode_RecordParams w3_x_c_msg =
-    Lamdera.Wire3.succeedDecode (\subCustom0 -> { subCustom = subCustom0 }) |> Lamdera.Wire3.andMapDecode (Lamdera.Wire3.decodeList (w3_decode_SubCustom w3_x_c_msg))
+    Bytes.Decode.map
+        (\w3_v1 -> { subCustom = w3_v1 })
+        (Lamdera.Wire3.decodeList (w3_decode_SubCustom w3_x_c_msg))
 
 
 expected_w3_encode_SubCustom : (value -> Lamdera.Wire3.Encoder) -> SubCustom value -> Lamdera.Wire3.Encoder
@@ -95,7 +100,9 @@ expected_w3_decode_SubCustom w3_x_c_value =
             (\w3v ->
                 case w3v of
                     0 ->
-                        Lamdera.Wire3.succeedDecode SubCustomValue |> Lamdera.Wire3.andMapDecode w3_x_c_value
+                        Bytes.Decode.map
+                            (\w3_v1 -> SubCustomValue w3_v1)
+                            w3_x_c_value
 
                     _ ->
                         Lamdera.Wire3.failDecode

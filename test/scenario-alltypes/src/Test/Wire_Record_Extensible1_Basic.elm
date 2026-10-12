@@ -1,5 +1,6 @@
 module Test.Wire_Record_Extensible1_Basic exposing (..)
 
+import Bytes.Decode
 import Lamdera.Wire3
 
 
@@ -40,13 +41,13 @@ expected_w3_encode_Color =
 
 
 expected_w3_decode_Color =
-    Lamdera.Wire3.succeedDecode
-        (\alpha0 blue0 green0 red0 value0 -> { alpha = alpha0, blue = blue0, green = green0, red = red0, value = value0 })
-        |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeFloat
-        |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeInt
-        |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeInt
-        |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeInt
-        |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeString
+    Bytes.Decode.map5
+        (\w3_v1 w3_v2 w3_v3 w3_v4 w3_v5 -> { alpha = w3_v1, blue = w3_v2, green = w3_v3, red = w3_v4, value = w3_v5 })
+        Lamdera.Wire3.decodeFloat
+        Lamdera.Wire3.decodeInt
+        Lamdera.Wire3.decodeInt
+        Lamdera.Wire3.decodeInt
+        Lamdera.Wire3.decodeString
 
 
 
@@ -70,10 +71,10 @@ expected_w3_encode_ColorOverlap =
 
 
 expected_w3_decode_ColorOverlap =
-    Lamdera.Wire3.succeedDecode
-        (\alpha0 blue0 green0 red0 value0 -> { alpha = alpha0, blue = blue0, green = green0, red = red0, value = value0 })
-        |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeFloat
-        |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeInt
-        |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeInt
-        |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeInt
-        |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeString
+    Bytes.Decode.map5
+        (\w3_v1 w3_v2 w3_v3 w3_v4 w3_v5 -> { alpha = w3_v1, blue = w3_v2, green = w3_v3, red = w3_v4, value = w3_v5 })
+        Lamdera.Wire3.decodeFloat
+        Lamdera.Wire3.decodeInt
+        Lamdera.Wire3.decodeInt
+        Lamdera.Wire3.decodeInt
+        Lamdera.Wire3.decodeString
