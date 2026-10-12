@@ -25,8 +25,9 @@ expected_w3_decode_Unconstructable =
             (\w3v ->
                 case w3v of
                     0 ->
-                        Lamdera.Wire3.succeedDecode Unconstructable
-                            |> Lamdera.Wire3.andMapDecode w3_decode_Unconstructable
+                        Bytes.Decode.map
+                            (\w3_v1 -> Unconstructable w3_v1)
+                            w3_decode_Unconstructable
 
                     _ ->
                         Lamdera.Wire3.failDecode

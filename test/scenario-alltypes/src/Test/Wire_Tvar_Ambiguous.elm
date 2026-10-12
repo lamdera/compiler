@@ -43,10 +43,14 @@ expected_w3_decode_Definition w3_x_c_a =
             (\w3v ->
                 case w3v of
                     0 ->
-                        Lamdera.Wire3.succeedDecode CustomTypeDefinition |> Lamdera.Wire3.andMapDecode (Test.Wire_Tvar_Ambiguous2.w3_decode_AccessControlled (Lamdera.Wire3.decodeMaybe w3_x_c_a))
+                        Bytes.Decode.map
+                            (\w3_v1 -> CustomTypeDefinition w3_v1)
+                            (Test.Wire_Tvar_Ambiguous2.w3_decode_AccessControlled (Lamdera.Wire3.decodeMaybe w3_x_c_a))
 
                     1 ->
-                        Lamdera.Wire3.succeedDecode TypeAliasDefinition |> Lamdera.Wire3.andMapDecode (Lamdera.Wire3.decodeMaybe w3_x_c_a)
+                        Bytes.Decode.map
+                            (\w3_v1 -> TypeAliasDefinition w3_v1)
+                            (Lamdera.Wire3.decodeMaybe w3_x_c_a)
 
                     _ ->
                         Lamdera.Wire3.failDecode

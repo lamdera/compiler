@@ -22,7 +22,9 @@ expected_w3_decode_Recursive w3_x_c_a =
             (\w3v ->
                 case w3v of
                     0 ->
-                        Lamdera.Wire3.succeedDecode Recurse |> Lamdera.Wire3.andMapDecode (w3_decode_Recursive w3_x_c_a)
+                        Bytes.Decode.map
+                            (\w3_v1 -> Recurse w3_v1)
+                            (w3_decode_Recursive w3_x_c_a)
 
                     _ ->
                         Lamdera.Wire3.failDecode
@@ -65,10 +67,14 @@ expected_w3_decode_Lazy w3_x_c_a =
             (\w3v ->
                 case w3v of
                     0 ->
-                        Lamdera.Wire3.succeedDecode Evaluated |> Lamdera.Wire3.andMapDecode w3_x_c_a
+                        Bytes.Decode.map
+                            (\w3_v1 -> Evaluated w3_v1)
+                            w3_x_c_a
 
                     1 ->
-                        Lamdera.Wire3.succeedDecode Lazy |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.failDecode
+                        Bytes.Decode.map
+                            (\w3_v1 -> Lazy w3_v1)
+                            Lamdera.Wire3.failDecode
 
                     _ ->
                         Lamdera.Wire3.failDecode
@@ -91,7 +97,10 @@ expected_w3_decode_LazyListView w3_x_c_a =
             (\w3v ->
                 case w3v of
                     0 ->
-                        Lamdera.Wire3.succeedDecode Cons |> Lamdera.Wire3.andMapDecode w3_x_c_a |> Lamdera.Wire3.andMapDecode (w3_decode_LazyList w3_x_c_a)
+                        Bytes.Decode.map2
+                            (\w3_v1 w3_v2 -> Cons w3_v1 w3_v2)
+                            w3_x_c_a
+                            (w3_decode_LazyList w3_x_c_a)
 
                     1 ->
                         Lamdera.Wire3.succeedDecode Nil

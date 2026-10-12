@@ -375,9 +375,12 @@ decoderUnion isTest_ ifaces pkg modul decls unionName union =
                     & List.sortOn (\(Ctor name index_ numParams paramTypes) -> name)
                     & imap (\i (Ctor tagName tagIndex numParams paramTypes) ->
                         CaseBranch (pint i) $
-                          ([(succeedDecode (vctor tagName tagIndex paramTypes))]
-                          ++ fmap (\paramType -> andMapDecode1 ((decoderForType ifaces cname paramType))) paramTypes)
-                            & foldlPairs (|>)
+                          decodeAll
+                            (\values -> case values of
+                                [] -> vctor tagName tagIndex paramTypes
+                                _ -> call (vctor tagName tagIndex paramTypes) values
+                            )
+                            (fmap (decoderForType ifaces cname) paramTypes)
                     )
                     & (\l -> l ++ [CaseBranch pAny_ $ failDecode (Data.Name.toChars generatedName <> " unexpected union tag index")])
               )

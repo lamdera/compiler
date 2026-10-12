@@ -37,13 +37,19 @@ expected_w3_decode_CoreTypes =
             (\w3v ->
                 case w3v of
                     0 ->
-                        Lamdera.Wire3.succeedDecode ValueBytes |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeBytes
+                        Bytes.Decode.map
+                            (\w3_v1 -> ValueBytes w3_v1)
+                            Lamdera.Wire3.decodeBytes
 
                     1 ->
-                        Lamdera.Wire3.succeedDecode ValueTime |> Lamdera.Wire3.andMapDecode (Lamdera.Wire3.decodeInt |> Lamdera.Wire3.andThenDecode (\t -> Lamdera.Wire3.succeedDecode (Time.millisToPosix t)))
+                        Bytes.Decode.map
+                            (\w3_v1 -> ValueTime w3_v1)
+                            (Lamdera.Wire3.decodeInt |> Lamdera.Wire3.andThenDecode (\t -> Lamdera.Wire3.succeedDecode (Time.millisToPosix t)))
 
                     2 ->
-                        Lamdera.Wire3.succeedDecode ValueUrl |> Lamdera.Wire3.andMapDecode Url.w3_decode_Url
+                        Bytes.Decode.map
+                            (\w3_v1 -> ValueUrl w3_v1)
+                            Url.w3_decode_Url
 
                     _ ->
                         Lamdera.Wire3.failDecode

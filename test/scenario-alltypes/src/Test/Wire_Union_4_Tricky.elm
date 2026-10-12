@@ -66,13 +66,19 @@ expected_w3_decode_UnionTricky =
             (\w3v ->
                 case w3v of
                     0 ->
-                        Lamdera.Wire3.succeedDecode ValueAliased |> Lamdera.Wire3.andMapDecode w3_decode_AliasInt
+                        Bytes.Decode.map
+                            (\w3_v1 -> ValueAliased w3_v1)
+                            w3_decode_AliasInt
 
                     1 ->
-                        Lamdera.Wire3.succeedDecode ValueCustom |> Lamdera.Wire3.andMapDecode (Test.External.w3_decode_ExternalCustomThreaded Lamdera.Wire3.decodeInt Lamdera.Wire3.decodeString)
+                        Bytes.Decode.map
+                            (\w3_v1 -> ValueCustom w3_v1)
+                            (Test.External.w3_decode_ExternalCustomThreaded Lamdera.Wire3.decodeInt Lamdera.Wire3.decodeString)
 
                     2 ->
-                        Lamdera.Wire3.succeedDecode ValueRecursive |> Lamdera.Wire3.andMapDecode w3_decode_UnionTricky
+                        Bytes.Decode.map
+                            (\w3_v1 -> ValueRecursive w3_v1)
+                            w3_decode_UnionTricky
 
                     _ ->
                         Lamdera.Wire3.failDecode

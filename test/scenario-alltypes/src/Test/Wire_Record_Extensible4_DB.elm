@@ -31,15 +31,13 @@ expected_w3_encode_DB w3_x_c_a =
 
 
 expected_w3_decode_DB w3_x_c_a =
-    Lamdera.Wire3.succeedDecode
-        (\db0 seed0 -> { db = db0, seed = seed0 })
-        |> Lamdera.Wire3.andMapDecode
-            (Lamdera.Wire3.decodeDict
-                w3_decode_UUID
-                w3_x_c_a
-            )
-        |> Lamdera.Wire3.andMapDecode
-            Random.w3_decode_Seed
+    Bytes.Decode.map2
+        (\w3_v1 w3_v2 -> { db = w3_v1, seed = w3_v2 })
+        (Lamdera.Wire3.decodeDict
+            w3_decode_UUID
+            w3_x_c_a
+        )
+        Random.w3_decode_Seed
 
 
 

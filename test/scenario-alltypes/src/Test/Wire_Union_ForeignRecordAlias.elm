@@ -34,7 +34,9 @@ expected_w3_decode_WrapsBasicRecord =
             (\w3v ->
                 case w3v of
                     0 ->
-                        Lamdera.Wire3.succeedDecode WrapsBasicRecord |> Lamdera.Wire3.andMapDecode Test.External.w3_decode_ExternalRecordBasic
+                        Bytes.Decode.map
+                            (\w3_v1 -> WrapsBasicRecord w3_v1)
+                            Test.External.w3_decode_ExternalRecordBasic
 
                     _ ->
                         Lamdera.Wire3.failDecode
@@ -54,7 +56,14 @@ expected_w3_decode_WrapsExtensibleRecord =
             (\w3v ->
                 case w3v of
                     0 ->
-                        Lamdera.Wire3.succeedDecode WrapsExtensibleRecord |> Lamdera.Wire3.andMapDecode Test.External.w3_decode_ExternalRecordViaExtensible
+                        Bytes.Decode.map
+                            (\w3_v1 -> WrapsExtensibleRecord w3_v1)
+                            (Bytes.Decode.map3
+                                (\w3_v1 w3_v2 w3_v3 -> { base = w3_v1, green = w3_v2, red = w3_v3 })
+                                Lamdera.Wire3.decodeString
+                                Lamdera.Wire3.decodeInt
+                                Lamdera.Wire3.decodeInt
+                            )
 
                     _ ->
                         Lamdera.Wire3.failDecode
@@ -74,11 +83,17 @@ expected_w3_decode_WrapsInRecord =
             (\w3v ->
                 case w3v of
                     0 ->
-                        Lamdera.Wire3.succeedDecode WrapsInRecord
-                            |> Lamdera.Wire3.andMapDecode
-                                (Lamdera.Wire3.succeedDecode (\field0 -> { field = field0 })
-                                    |> Lamdera.Wire3.andMapDecode Test.External.w3_decode_ExternalRecordViaExtensible
+                        Bytes.Decode.map
+                            (\w3_v1 -> WrapsInRecord w3_v1)
+                            (Bytes.Decode.map
+                                (\w3_v1 -> { field = w3_v1 })
+                                (Bytes.Decode.map3
+                                    (\w3_v1 w3_v2 w3_v3 -> { base = w3_v1, green = w3_v2, red = w3_v3 })
+                                    Lamdera.Wire3.decodeString
+                                    Lamdera.Wire3.decodeInt
+                                    Lamdera.Wire3.decodeInt
                                 )
+                            )
 
                     _ ->
                         Lamdera.Wire3.failDecode

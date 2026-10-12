@@ -1,6 +1,7 @@
 module Test.Wire_Alias_2_Record exposing (..)
 
 import Array exposing (Array)
+import Bytes.Decode
 import Dict exposing (Dict)
 import Lamdera.Wire3
 import SeqDict exposing (SeqDict)
@@ -53,17 +54,28 @@ expected_w3_encode_AllTypes =
 
 
 expected_w3_decode_AllTypes =
-    Lamdera.Wire3.succeedDecode
-        (\arrayString0 bool0 char0 dict0 float0 int0 listInt0 order0 setFloat0 string0 time0 unit0 -> { arrayString = arrayString0, bool = bool0, char = char0, dict = dict0, float = float0, int = int0, listInt = listInt0, order = order0, setFloat = setFloat0, string = string0, time = time0, unit = unit0 })
-        |> Lamdera.Wire3.andMapDecode (Lamdera.Wire3.decodeArray Lamdera.Wire3.decodeString)
-        |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeBool
-        |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeChar
-        |> Lamdera.Wire3.andMapDecode (Lamdera.Wire3.decodeDict Lamdera.Wire3.decodeString (Lamdera.Wire3.decodeList Lamdera.Wire3.decodeInt))
-        |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeFloat
-        |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeInt
-        |> Lamdera.Wire3.andMapDecode (Lamdera.Wire3.decodeList Lamdera.Wire3.decodeInt)
-        |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeOrder
-        |> Lamdera.Wire3.andMapDecode (Lamdera.Wire3.decodeSet Lamdera.Wire3.decodeFloat)
-        |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeString
-        |> Lamdera.Wire3.andMapDecode (Lamdera.Wire3.decodeInt |> Lamdera.Wire3.andThenDecode (\t -> Lamdera.Wire3.succeedDecode (Time.millisToPosix t)))
-        |> Lamdera.Wire3.andMapDecode Lamdera.Wire3.decodeUnit
+    Bytes.Decode.map3
+        (\w3_v1 w3_v2 w3_v3 -> { arrayString = w3_v1.w3_1, bool = w3_v1.w3_2, char = w3_v1.w3_3, dict = w3_v1.w3_4, float = w3_v1.w3_5, int = w3_v2.w3_1, listInt = w3_v2.w3_2, order = w3_v2.w3_3, seqDict = w3_v2.w3_4, seqSet = w3_v2.w3_5, setFloat = w3_v3.w3_1, string = w3_v3.w3_2, time = w3_v3.w3_3, unit = w3_v3.w3_4 })
+        (Bytes.Decode.map5
+            (\w3_v1 w3_v2 w3_v3 w3_v4 w3_v5 -> { w3_1 = w3_v1, w3_2 = w3_v2, w3_3 = w3_v3, w3_4 = w3_v4, w3_5 = w3_v5 })
+            (Lamdera.Wire3.decodeArray Lamdera.Wire3.decodeString)
+            Lamdera.Wire3.decodeBool
+            Lamdera.Wire3.decodeChar
+            (Lamdera.Wire3.decodeDict Lamdera.Wire3.decodeString (Lamdera.Wire3.decodeList Lamdera.Wire3.decodeInt))
+            Lamdera.Wire3.decodeFloat
+        )
+        (Bytes.Decode.map5
+            (\w3_v1 w3_v2 w3_v3 w3_v4 w3_v5 -> { w3_1 = w3_v1, w3_2 = w3_v2, w3_3 = w3_v3, w3_4 = w3_v4, w3_5 = w3_v5 })
+            Lamdera.Wire3.decodeInt
+            (Lamdera.Wire3.decodeList Lamdera.Wire3.decodeInt)
+            Lamdera.Wire3.decodeOrder
+            (SeqDict.decodeDict Lamdera.Wire3.decodeString Lamdera.Wire3.decodeInt)
+            (SeqSet.decodeSet Lamdera.Wire3.decodeInt)
+        )
+        (Bytes.Decode.map4
+            (\w3_v1 w3_v2 w3_v3 w3_v4 -> { w3_1 = w3_v1, w3_2 = w3_v2, w3_3 = w3_v3, w3_4 = w3_v4 })
+            (Lamdera.Wire3.decodeSet Lamdera.Wire3.decodeFloat)
+            Lamdera.Wire3.decodeString
+            (Lamdera.Wire3.decodeInt |> Lamdera.Wire3.andThenDecode (\t -> Lamdera.Wire3.succeedDecode (Time.millisToPosix t)))
+            Lamdera.Wire3.decodeUnit
+        )
