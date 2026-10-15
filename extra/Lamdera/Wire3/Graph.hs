@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Lamdera.Wire3.Graph where
 
+import qualified Lamdera.Lexical as Lexical
 import qualified Data.Map as Map
 import qualified Data.Graph as Graph
 
@@ -72,9 +73,9 @@ getLvars (A.At _ expr) =
     Accessor name -> []
     Access expr aName -> getLvars expr
     Update name expr fieldUpdates -> getLvars expr ++
-      (fieldUpdates & Map.toList & concatMap (\(n, (FieldUpdate region expr)) -> getLvars expr))
+      (fieldUpdates & Lexical.toList & concatMap (\(n, (FieldUpdate region expr)) -> getLvars expr))
     Record fields ->
-      fields & Map.toList & concatMap (\(n, expr) -> getLvars expr)
+      fields & Lexical.toList & concatMap (\(n, expr) -> getLvars expr)
     Unit -> []
     Pair e1 e2 -> [e1, e2] & concatMap getLvars
     Triple e1 e2 e3 -> [e1, e2, e3] & concatMap getLvars

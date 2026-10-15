@@ -29,8 +29,11 @@ rm -rf "$R"; mkdir -p "$R"
 # the scratch copy only.
 sed -i '' 's|rm -rf elm-stuff; \$L make|rm -rf elm-stuff; LAMDERA_WIRE3_DIRECT=0 $L make|; s|LAMDERA_WIRE3_DIRECT=1 LAMDERA_WIRE3_DIRECT_DEBUG=1 \$L make|env -u LAMDERA_WIRE3_DIRECT LAMDERA_WIRE3_DIRECT_DEBUG=1 $L make|' "$R/build.sh"
 grep -q 'LAMDERA_WIRE3_DIRECT=0 $L make' "$R/build.sh" || { echo "could not patch the review build.sh"; exit 1; }
-[ -d "${W3BENCH:-$(git rev-parse --show-toplevel)/../lamdera-wire3-bench}/elm-home-review" ] || cp -R "${W3BENCH:-$(git rev-parse --show-toplevel)/../lamdera-wire3-bench}/elm-home-direct" "${W3BENCH:-$(git rev-parse --show-toplevel)/../lamdera-wire3-bench}/elm-home-review"
-(cd "$R" && LAMDERA=$L ELM_HOME=${W3BENCH:-$(git rev-parse --show-toplevel)/../lamdera-wire3-bench}/elm-home-review sh build.sh 2>&1 | grep -v '^\[wire3-direct\]' | tail -1)
+# ELM_HOME_REVIEW: the review suite's ELM_HOME (default elm-home-review, seeded from
+# elm-home-direct); pass a fresh one per compiler so package caches are never shared.
+EHR=${ELM_HOME_REVIEW:-${W3BENCH:-$(git rev-parse --show-toplevel)/../lamdera-wire3-bench}/elm-home-review}
+[ -d "$EHR" ] || cp -R "${W3BENCH:-$(git rev-parse --show-toplevel)/../lamdera-wire3-bench}/elm-home-direct" "$EHR"
+(cd "$R" && LAMDERA=$L ELM_HOME=$EHR sh build.sh 2>&1 | grep -v '^\[wire3-direct\]' | tail -1)
 cd "$R"
 log="$R/bar.log"; : > "$log"
 # The review scripts report problems in their output (and not always in the exit code),

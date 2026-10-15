@@ -1385,7 +1385,7 @@ toDetailsReport details =
             , "right", "now."
             ]
         -- @LAMDERA addition
-        , D.reflow $ "Lamdera hint: modify your elm.json to \"elm-version\": \"0.19.1\"."
+        , D.reflow $ "Lamdera hint: modify your elm.json to \"elm-version\": \"0.19.1\", \"0.19.2\" or \"0.19.3\" (Lamdera accepts any of them)."
         ]
 
     DetailsHandEditedDependencies reason ->

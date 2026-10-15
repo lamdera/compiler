@@ -2,6 +2,7 @@
 
 module Lamdera.Nitpick.DebugLog (hasDebug, hasUselessDebugLogs) where
 
+import qualified Lamdera.Lexical as Lexical
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 import qualified AST.Prim.Name as Name
@@ -152,10 +153,10 @@ checkExpr functionName (Reporting.Annotation.At _ expr) =
 
         Can.Update name expr fieldUpdates ->
             checkExpr functionName expr
-                ++ concatMap (\(Can.FieldUpdate _ expr) -> checkExpr functionName expr) (Map.elems fieldUpdates)
+                ++ concatMap (\(Can.FieldUpdate _ expr) -> checkExpr functionName expr) (Lexical.elems fieldUpdates)
 
         Can.Record fields ->
-            concatMap (\field -> checkExpr functionName field) (Map.elems fields)
+            concatMap (\field -> checkExpr functionName field) (Lexical.elems fields)
 
         Can.Unit ->
             []
