@@ -75,7 +75,7 @@ constraints:
   , dlist ==1.0
   , easy-file ==0.2.5
   , edit-distance ==0.2.2.1
-  , elm ==0.19.2
+  , elm ==0.19.3
   , elm-format ==0.8.7
   , elm-format-lib ==0.0.0.1
   , elm-format-markdown ==0.0.0.1
