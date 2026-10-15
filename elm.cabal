@@ -413,6 +413,7 @@ Executable lamdera
         Test.Snapshot
         Test.TypeHashes
         Test.Wire
+        Test.WireGolden
         Test.JsOutput
         Test.WebGL
         Test.BackwardsCompat

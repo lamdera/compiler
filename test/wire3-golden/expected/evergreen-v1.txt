@@ -1,0 +1,222 @@
+-- FILE Other.elm
+module Evergreen.V1.Other exposing (..)
+
+import Dict
+
+
+type alias Named r = ERROR TRecord, please report this!
+
+
+type alias Person = (Named 
+    { longest : String
+    , age : Int
+    , b : Bool
+    })
+
+
+type alias Ext r = ERROR TRecord, please report this!
+
+
+type OtherCtor
+    = Zulu
+    | Al Int
+    | MiddleOne String Bool
+    | B
+    | Bb (List OtherCtor)
+
+
+type alias OtherRec2 = 
+    { yy : Int
+    , x : String
+    }
+
+
+type alias OtherRec = 
+    { zebra : OtherCtor
+    , ab : (Dict.Dict String Int)
+    , abc : (Int, Float)
+    , a : (Maybe OtherRec2)
+    }
+
+
+type Opaque
+    = Opaque 
+    { inner : Int
+    , a : String
+    }
+-- FILE Types.elm
+module Evergreen.V1.Types exposing (..)
+
+import Array
+import Bytes
+import Dict
+import Evergreen.V1.Other
+import SeqDict
+import SeqSet
+import Set
+import Time
+
+
+type alias Rec =
+    { zeta : Int
+    , a : String
+    , mid : Float
+    , longerName : Bool
+    , b2 : Char
+    , ab : List Int
+    , zz : Maybe Int
+    , aaa : ()
+    , bA : Order
+    , b_ : Int
+    , b1 : String
+    }
+
+
+type Ctors
+    = Zz
+    | A
+    | Mid
+    | LongerName
+    | B2 Int
+    | Ab String Float
+    | Aaa
+    | AB
+    | A_b
+    | Ba (Maybe Ctors)
+
+
+type alias Nested =
+    { outer :
+        { zInner : Int
+        , aInner :
+            { yy : String
+            , x : Int
+            , xLonger : Float
+            }
+        }
+    , rec : Rec
+    , list :
+        List
+            { q : Int
+            , pp : String
+            , r : Bool
+            }
+    }
+
+
+type alias FrontendModel =
+    { zeta : Rec
+    , key : Int
+    , a : Ctors
+    , nested : Nested
+    }
+
+
+type alias Containers =
+    { zTuple : ( Int, String )
+    , triple : ( Bool, Float, Ctors )
+    , maybe : Maybe Rec
+    , result : Result String Ctors
+    , resultOk : Result Int (List Ctors)
+    , list : List Rec
+    , array : Array.Array Ctors
+    , dict : Dict.Dict String Rec
+    , dictTuple : Dict.Dict ( Int, String ) Float
+    , set : Set.Set String
+    , seqDict : SeqDict.SeqDict Rec Int
+    , seqDictCtor : SeqDict.SeqDict Ctors (List Ctors)
+    , seqSet : SeqSet.SeqSet Ctors
+    , seqSetRec : SeqSet.SeqSet Rec
+    , bytes : Bytes.Bytes
+    , time : Time.Posix
+    , unit : ()
+    , order : Order
+    }
+
+
+type alias UsesExt =
+    { p : Evergreen.V1.Other.Person
+    , q :
+        Evergreen.V1.Other.Named
+            { extra : String
+            , ex : Int
+            }
+    , e :
+        Evergreen.V1.Other.Ext
+            { k : Int
+            , kk : Bool
+            }
+    }
+
+
+type Choice a b
+    = Zed a
+    | Al b
+    | Middle a b
+    | None_
+
+
+type alias Wrapped a =
+    { value : a
+    , zcount : Int
+    , at : List a
+    }
+
+
+type Tree a
+    = Leaf
+    | Node (Tree a) a (Tree a)
+
+
+type alias Cross =
+    { other : Evergreen.V1.Other.OtherRec
+    , ctor : Evergreen.V1.Other.OtherCtor
+    , opaque : Evergreen.V1.Other.Opaque
+    , wrapped : Wrapped (Choice Rec Ctors)
+    , tree : Tree (Choice Int String)
+    }
+
+
+type Forest
+    = Forest
+        { kids : List Forest
+        , nm : String
+        , z : Int
+        }
+
+
+type alias BackendModel =
+    { containers : Containers
+    , usesExt : UsesExt
+    , cross : Cross
+    , forest : Forest
+    , trees : List (Tree Ctors)
+    , choice : Choice Int String
+    }
+
+
+type FrontendMsg
+    = FNoop
+    | FzMsg Rec
+    | FaMsg
+    | F (Choice Ctors Nested)
+
+
+type ToBackend
+    = ToBackendZ Ctors
+    | ToBackendA (Choice String Int)
+    | Tb
+    | Tb2 UsesExt
+
+
+type BackendMsg
+    = BNoop
+    | Bz Int
+    | Bb_ Cross
+
+
+type ToFrontend
+    = TfLonger Nested
+    | Tf
+    | T Containers
+
