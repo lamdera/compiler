@@ -1,32 +1,34 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ExtendedLiterals, MagicHash, OverloadedStrings #-}
 module AST.Canonical
   ( Expr, Expr_(..)
   , CaseBranch(..)
   , FieldUpdate(..)
   , CtorOpts(..)
-  -- definitions
+  --
   , Def(..)
   , Decls(..)
-  -- patterns
+  --
   , Pattern, Pattern_(..)
   , PatternCtorArg(..)
-  -- types
+  --
   , Annotation(..)
   , Type(..)
   , AliasType(..)
   , FieldType(..)
   , fieldsToList
-  -- modules
+  --
   , Module(..)
   , Alias(..)
   , Binop(..)
   , Union(..)
   , Ctor(..)
   , Exports(..)
-  , Export(..)
+  , ExportType(..)
   , Effects(..)
   , Port(..)
   , Manager(..)
+  --
+  , eCtorOpts, dCtorOpts
   )
   where
 
@@ -50,14 +52,19 @@ So it is clear why the data is kept around.
 -}
 
 
-import Control.Monad (liftM, liftM2, liftM3, liftM4, replicateM)
-import Data.Binary
 import qualified Data.List as List
 import qualified Data.Map as Map
-import Data.Name (Name)
+import GHC.Word (Word16)
+
+import qualified Bytes.Decode as D
+import qualified Bytes.Encode as E
 
 import qualified AST.Source as Src
-import qualified AST.Utils.Binop as Binop
+import qualified AST.Prim.Module as Module
+import qualified AST.Prim.Name as N
+import qualified AST.Prim.Operator as Op
+import qualified AST.Prim.TypeName as T
+import qualified AST.Prim.TypeVar as T
 import qualified AST.Utils.Shader as Shader
 import qualified Data.Index as Index
 import qualified Elm.Float as EF
@@ -76,20 +83,20 @@ type Expr =
 
 -- CACHE Annotations for type inference
 data Expr_
-  = VarLocal Name
-  | VarTopLevel ModuleName.Canonical Name
-  | VarKernel Name Name
-  | VarForeign ModuleName.Canonical Name Annotation
-  | VarCtor CtorOpts ModuleName.Canonical Name Index.ZeroBased Annotation
-  | VarDebug ModuleName.Canonical Name Annotation
-  | VarOperator Name ModuleName.Canonical Name Annotation -- CACHE real name for optimization
+  = VarLocal N.Name
+  | VarTopLevel ModuleName.Canonical N.Name
+  | VarKernel Module.Kernel N.Name
+  | VarForeign ModuleName.Canonical N.Name Annotation
+  | VarCtor CtorOpts ModuleName.Canonical N.Name Index.ZeroBased Annotation
+  | VarDebug ModuleName.Canonical N.Name Annotation
+  | VarOperator Op.Name ModuleName.Canonical N.Name Annotation -- CACHE real name for optimization
   | Chr Char
   | Str ES.String
   | Int Int
   | Float EF.Float
   | List [Expr]
   | Negate Expr
-  | Binop Name ModuleName.Canonical Name Annotation Expr Expr -- CACHE real name for optimization
+  | Binop Op.Name ModuleName.Canonical N.Name Annotation Expr Expr -- CACHE real name for optimization
   | Lambda [Pattern] Expr
   | Call Expr [Expr]
   | If [(Expr, Expr)] Expr
@@ -97,12 +104,13 @@ data Expr_
   | LetRec [Def] Expr
   | LetDestruct Pattern Expr Expr
   | Case Expr [CaseBranch]
-  | Accessor Name
-  | Access Expr (A.Located Name)
-  | Update Name Expr (Map.Map Name FieldUpdate)
-  | Record (Map.Map Name Expr)
+  | Accessor N.Name
+  | Access Expr (A.Located N.Name)
+  | Update N.Name Expr (Map.Map N.Name FieldUpdate)
+  | Record (Map.Map N.Name Expr)
   | Unit
-  | Tuple Expr Expr (Maybe Expr)
+  | Pair Expr Expr
+  | Triple Expr Expr Expr
   | Shader Shader.Source Shader.Types
 
 
@@ -119,8 +127,8 @@ data FieldUpdate =
 
 
 data Def
-  = Def (A.Located Name) [Pattern] Expr
-  | TypedDef (A.Located Name) FreeVars [(Pattern, Type)] Expr Type
+  = Def (A.Located N.Name) [Pattern] Expr
+  | TypedDef (A.Located N.Name) FreeVars [(Pattern, Type)] Expr Type
 
 
 
@@ -143,11 +151,12 @@ type Pattern =
 
 data Pattern_
   = PAnything
-  | PVar Name
-  | PRecord [Name]
-  | PAlias Pattern Name
+  | PVar N.Name
+  | PRecord [N.Name]
+  | PAlias Pattern N.Name
   | PUnit
-  | PTuple Pattern Pattern (Maybe Pattern)
+  | PPair Pattern Pattern
+  | PTriple Pattern Pattern Pattern
   | PList [Pattern]
   | PCons Pattern Pattern
   | PBool Union Bool
@@ -156,9 +165,9 @@ data Pattern_
   | PInt Int
   | PCtor
       { _p_home :: ModuleName.Canonical
-      , _p_type :: Name
+      , _p_type :: T.Name
       , _p_union :: Union
-      , _p_name :: Name
+      , _p_name :: N.Name
       , _p_index :: Index.ZeroBased
       , _p_args :: [PatternCtorArg]
       }
@@ -184,18 +193,19 @@ data Annotation = Forall FreeVars Type
   deriving (Eq)
 
 
-type FreeVars = Map.Map Name ()
+type FreeVars = Map.Map T.Var ()
 
 
 data Type
   = TLambda Type Type
-  | TVar Name
-  | TType ModuleName.Canonical Name [Type]
-  | TRecord (Map.Map Name FieldType) (Maybe Name)
+  | TVar T.Var
+  | TType ModuleName.Canonical T.Name [Type]
+  | TRecord (Map.Map N.Name FieldType) (Maybe T.Var)
   | TUnit
-  | TTuple Type Type (Maybe Type)
-  | TAlias ModuleName.Canonical Name [(Name, Type)] AliasType
-  deriving (Eq, Ord)
+  | TPair Type Type
+  | TTriple Type Type Type
+  | TAlias ModuleName.Canonical T.Name [(T.Var, Type)] AliasType
+  deriving (Eq, Ord) -- @LAMDERA Ord
 
 
 data AliasType
@@ -212,7 +222,7 @@ data FieldType = FieldType {-# UNPACK #-} !Word16 Type
 -- for every canonical type. For example, if the canonical type is inferred
 -- the orders will all be zeros.
 --
-fieldsToList :: Map.Map Name FieldType -> [(Name, Type)]
+fieldsToList :: Map.Map N.Name FieldType -> [(N.Name, Type)]
 fieldsToList fields =
   let
     getIndex (_, FieldType index _) =
@@ -234,24 +244,24 @@ data Module =
     , _exports :: Exports
     , _docs    :: Src.Docs
     , _decls   :: Decls
-    , _unions  :: Map.Map Name Union
-    , _aliases :: Map.Map Name Alias
-    , _binops  :: Map.Map Name Binop
+    , _unions  :: Map.Map T.Name Union
+    , _aliases :: Map.Map T.Name Alias
+    , _binops  :: Map.Map Op.Name Binop
     , _effects :: Effects
     }
 
 
-data Alias = Alias [Name] Type
+data Alias = Alias [T.Var] Type
   deriving (Eq)
 
 
-data Binop = Binop_ Binop.Associativity Binop.Precedence Name
+data Binop = Binop_ Op.Associativity Op.Precedence N.Name
   deriving (Eq)
 
 
 data Union =
   Union
-    { _u_vars :: [Name]
+    { _u_vars :: [T.Var]
     , _u_alts :: [Ctor]
     , _u_numAlts :: Int -- CACHE numAlts for exhaustiveness checking
     , _u_opts :: CtorOpts -- CACHE which optimizations are available
@@ -266,7 +276,7 @@ data CtorOpts
   deriving (Eq, Ord)
 
 
-data Ctor = Ctor Name Index.ZeroBased Int [Type] -- CACHE length args
+data Ctor = Ctor N.Name Index.ZeroBased Int [Type] -- CACHE length args
   deriving (Eq)
 
 
@@ -276,16 +286,17 @@ data Ctor = Ctor Name Index.ZeroBased Int [Type] -- CACHE length args
 
 data Exports
   = ExportEverything A.Region
-  | Export (Map.Map Name (A.Located Export))
+  | Export
+      { _e_types  :: Map.Map  T.Name (A.Region, ExportType)
+      , _e_values :: Map.Map  N.Name  A.Region
+      , _e_binops :: Map.Map Op.Name  A.Region
+      }
 
 
-data Export
-  = ExportValue
-  | ExportBinop
-  | ExportAlias
-  | ExportUnionOpen
+data ExportType
+  = ExportUnionOpen
   | ExportUnionClosed
-  | ExportPort
+  | ExportAlias
 
 
 
@@ -294,7 +305,7 @@ data Export
 
 data Effects
   = NoEffects
-  | Ports (Map.Map Name Port)
+  | Ports (Map.Map N.Name Port)
   | Manager A.Region A.Region A.Region Manager
 
 
@@ -304,97 +315,30 @@ data Port
 
 
 data Manager
-  = Cmd Name
-  | Sub Name
-  | Fx Name Name
+  = Cmd T.Name
+  | Sub T.Name
+  | Fx T.Name T.Name
 
 
 
 -- BINARY
 
 
-instance Binary Alias where
-  get = liftM2 Alias get get
-  put (Alias a b) = put a >> put b
+eCtorOpts :: CtorOpts -> E.Builder
+eCtorOpts opts =
+  case opts of
+    Normal -> E.u8# 0#Word8
+    Enum   -> E.u8# 1#Word8
+    Unbox  -> E.u8# 2#Word8
 
 
-instance Binary Union where
-  put (Union a b c d) = put a >> put b >> put c >> put d
-  get = liftM4 Union get get get get
+dCtorOpts :: D.Decoder CtorOpts
+dCtorOpts =
+  do  n <- D.u8
+      case n of
+        0 -> pure Normal
+        1 -> pure Enum
+        2 -> pure Unbox
+        _ -> D.expecting "CtorOpts"
 
 
-instance Binary Ctor where
-  get = liftM4 Ctor get get get get
-  put (Ctor a b c d) = put a >> put b >> put c >> put d
-
-
-instance Binary CtorOpts where
-  put opts =
-    case opts of
-      Normal -> putWord8 0
-      Enum   -> putWord8 1
-      Unbox  -> putWord8 2
-
-  get =
-    do  n <- getWord8
-        case n of
-          0 -> return Normal
-          1 -> return Enum
-          2 -> return Unbox
-          _ -> fail "binary encoding of CtorOpts was corrupted"
-
-
-instance Binary Annotation where
-  get = liftM2 Forall get get
-  put (Forall a b) = put a >> put b
-
-
-instance Binary Type where
-  put tipe =
-    case tipe of
-      TLambda a b        -> putWord8 0 >> put a >> put b
-      TVar a             -> putWord8 1 >> put a
-      TRecord a b        -> putWord8 2 >> put a >> put b
-      TUnit              -> putWord8 3
-      TTuple a b c       -> putWord8 4 >> put a >> put b >> put c
-      TAlias a b c d     -> putWord8 5 >> put a >> put b >> put c >> put d
-      TType home name ts ->
-        let potentialWord = length ts + 7 in
-        if potentialWord <= fromIntegral (maxBound :: Word8) then
-          do  putWord8 (fromIntegral potentialWord)
-              put home
-              put name
-              mapM_ put ts
-        else
-          putWord8 6 >> put home >> put name >> put ts
-
-  get =
-    do  word <- getWord8
-        case word of
-          0 -> liftM2 TLambda get get
-          1 -> liftM  TVar get
-          2 -> liftM2 TRecord get get
-          3 -> return TUnit
-          4 -> liftM3 TTuple get get get
-          5 -> liftM4 TAlias get get get get
-          6 -> liftM3 TType get get get
-          n -> liftM3 TType get get (replicateM (fromIntegral (n - 7)) get)
-
-
-instance Binary AliasType where
-  put aliasType =
-    case aliasType of
-      Holey tipe  -> putWord8 0 >> put tipe
-      Filled tipe -> putWord8 1 >> put tipe
-
-  get =
-    do  n <- getWord8
-        case n of
-          0 -> liftM Holey get
-          1 -> liftM Filled get
-          _ -> fail "binary encoding of AliasType was corrupted"
-
-
-instance Binary FieldType where
-  get = liftM2 FieldType get get
-  put (FieldType a b) = put a >> put b

@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings, QuasiQuotes #-}
 module Develop.Generate.Index
   ( generate
   )
@@ -12,7 +12,9 @@ import qualified Data.Map as Map
 import qualified System.Directory as Dir
 import System.FilePath ((</>), splitDirectories, takeExtension)
 
-import qualified BackgroundWriter as BW
+import qualified String as S
+
+import qualified AST.Prim.Module as Module
 import qualified Develop.Generate.Help as Help
 import qualified Elm.Details as Details
 import qualified Elm.Outline as Outline
@@ -21,7 +23,7 @@ import qualified Elm.Version as V
 import qualified Json.Encode as E
 import Json.Encode ((==>))
 import qualified Reporting
-import qualified Stuff
+import qualified Root as R
 
 
 
@@ -31,7 +33,7 @@ import qualified Stuff
 generate :: FilePath -> IO B.Builder
 generate pwd =
   do  flags <- getFlags pwd
-      return $ Help.makePageHtml "Index" (Just (encode flags))
+      return $ Help.makePageHtml (Module.fromString [S.ascii|Index|]) (Just (encode flags))
 
 
 
@@ -130,7 +132,7 @@ toFile pwd path =
 
 getOutline :: IO (Maybe Outline.Outline)
 getOutline =
-  do  maybeRoot <- Stuff.findRoot
+  do  maybeRoot <- R.findRoot
       case maybeRoot of
         Nothing ->
           return Nothing
@@ -161,14 +163,14 @@ getExactDeps maybeOutline =
           return Map.empty
 
         Outline.Pkg _ ->
-          do  maybeRoot <- Stuff.findRoot
+          do  maybeRoot <- R.findRoot
               case maybeRoot of
                 Nothing ->
                   return Map.empty
 
                 Just root ->
-                  BW.withScope $ \scope ->
-                  do  result <- Details.load Reporting.silent scope root
+                  R.withRootLock root $ \writer stuff ->
+                  do  result <- Details.load writer Reporting.silent root stuff
                       case result of
                         Left _ ->
                           return Map.empty

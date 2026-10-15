@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings, TemplateHaskell #-}
 module Type.Solve
   ( run
   )
@@ -7,13 +7,16 @@ module Type.Solve
 
 import Control.Monad
 import qualified Data.Map.Strict as Map
-import Data.Map.Strict ((!))
-import qualified Data.Name as Name
+import qualified Data.Map.Utils as Map
 import qualified Data.NonEmptyList as NE
 import qualified Data.Vector as Vector
 import qualified Data.Vector.Mutable as MVector
 
+import qualified Crash
+
 import qualified AST.Canonical as Can
+import qualified AST.Prim.Name as N
+import qualified AST.Prim.TypeVar as T
 import qualified Reporting.Annotation as A
 import qualified Reporting.Error.Type as Error
 import qualified Reporting.Render.Type as RT
@@ -29,7 +32,7 @@ import qualified Type.UnionFind as UF
 -- RUN SOLVER
 
 
-run :: Constraint -> IO (Either (NE.List Error.Error) (Map.Map Name.Name Can.Annotation))
+run :: Constraint -> IO (Either (NE.List Error.Error) (Map.Map N.Name Can.Annotation))
 run constraint =
   do  pools <- MVector.replicate 8 []
 
@@ -56,7 +59,7 @@ emptyState =
 
 
 type Env =
-  Map.Map Name.Name Variable
+  Map.Map N.Name Variable
 
 
 type Pools =
@@ -96,7 +99,7 @@ solve env rank pools state constraint =
                       Error.typeReplace expectation expectedType
 
     CLocal region name expectation ->
-      do  actual <- makeCopy rank pools (env ! name)
+      do  actual <- makeCopy rank pools $ $(Map.require 'solve) name env N.toChars
           expected <- expectedToVariable rank pools expectation
           answer <- Unify.unify actual expected
           case answer of
@@ -123,6 +126,21 @@ solve env rank pools state constraint =
               do  introduce rank pools vars
                   return $ addError state $
                     Error.BadExpr region (Error.Foreign name) actualType $
+                      Error.typeReplace expectation expectedType
+
+    COperator region op (Can.Forall freeVars srcType) expectation ->
+      do  actual <- srcTypeToVariable rank pools freeVars srcType
+          expected <- expectedToVariable rank pools expectation
+          answer <- Unify.unify actual expected
+          case answer of
+            Unify.Ok vars ->
+              do  introduce rank pools vars
+                  return state
+
+            Unify.Err vars actualType expectedType ->
+              do  introduce rank pools vars
+                  return $ addError state $
+                    Error.BadExpr region (Error.Operator op) actualType $
                       Error.typeReplace expectation expectedType
 
     CPattern region category tipe expectation ->
@@ -202,7 +220,7 @@ isGeneric var =
         then return ()
         else
           do  tipe <- Type.toErrorType var
-              error $
+              $(Crash.crashIO 'isGeneric) $
                 "You ran into a compiler bug. Here are some details for the developers:\n\n"
                 ++ "    " ++ show (ET.toDoc L.empty RT.None tipe) ++ " [rank = " ++ show rank ++ "]\n\n"
                 ++
@@ -252,7 +270,7 @@ addError (State savedEnv rank errors) err =
 -- OCCURS CHECK
 
 
-occurs :: State -> (Name.Name, A.Located Variable) -> IO State
+occurs :: State -> (N.Name, A.Located Variable) -> IO State
 occurs state (name, A.At region variable) =
   do  hasOccurred <- Occurs.occurs variable
       if hasOccurred
@@ -387,15 +405,16 @@ adjustRankContent youngMark visitMark groupRank content =
               -- THEORY: a unit never needs to get generalized
               return outermostRank
 
-          Tuple1 a b maybeC ->
+          Pair1 a b ->
               do  ma <- go a
                   mb <- go b
-                  case maybeC of
-                    Nothing ->
-                      return (max ma mb)
+                  return $ max ma mb
 
-                    Just c ->
-                      max (max ma mb) <$> go c
+          Triple1 a b c ->
+              do  ma <- go a
+                  mb <- go b
+                  mc <- go c
+                  return $ max (max ma mb) mc
 
       Alias _ _ args _ ->
           -- THEORY: anything in the realVar would be outermostRank
@@ -433,7 +452,7 @@ typeToVariable rank pools tipe =
 -- are recommended in cases like this anyway, so there is at least a safety
 -- valve for now.
 --
-typeToVar :: Int -> Pools -> Map.Map Name.Name Variable -> Type -> IO Variable
+typeToVar :: Int -> Pools -> Map.Map T.Var Variable -> Type -> IO Variable
 typeToVar rank pools aliasDict tipe =
   let go = typeToVar rank pools aliasDict in
   case tipe of
@@ -455,7 +474,7 @@ typeToVar rank pools aliasDict tipe =
           register rank pools (Alias home name argVars aliasVar)
 
     PlaceHolder name ->
-      return (aliasDict ! name)
+      return $ $(Map.require 'typeToVar) name aliasDict T.varToChars
 
     RecordN fields ext ->
       do  fieldVars <- traverse go fields
@@ -468,11 +487,16 @@ typeToVar rank pools aliasDict tipe =
     UnitN ->
       register rank pools unit1
 
-    TupleN a b c ->
+    PairN a b ->
       do  aVar <- go a
           bVar <- go b
-          cVar <- traverse go c
-          register rank pools (Structure (Tuple1 aVar bVar cVar))
+          register rank pools (Structure (Pair1 aVar bVar))
+
+    TripleN a b c ->
+      do  aVar <- go a
+          bVar <- go b
+          cVar <- go c
+          register rank pools (Structure (Triple1 aVar bVar cVar))
 
 
 register :: Int -> Pools -> Content -> IO Variable
@@ -498,15 +522,16 @@ unit1 =
 -- SOURCE TYPE TO VARIABLE
 
 
-srcTypeToVariable :: Int -> Pools -> Map.Map Name.Name () -> Can.Type -> IO Variable
+srcTypeToVariable :: Int -> Pools -> Map.Map T.Var () -> Can.Type -> IO Variable
 srcTypeToVariable rank pools freeVars srcType =
   let
-    nameToContent name
-      | Name.isNumberType     name = FlexSuper Number (Just name)
-      | Name.isComparableType name = FlexSuper Comparable (Just name)
-      | Name.isAppendableType name = FlexSuper Appendable (Just name)
-      | Name.isCompappendType name = FlexSuper CompAppend (Just name)
-      | otherwise                  = FlexVar (Just name)
+    nameToContent name@(T.Var _ con) =
+      case con of
+        T.Number     -> FlexSuper Number (Just name)
+        T.Comparable -> FlexSuper Comparable (Just name)
+        T.Appendable -> FlexSuper Appendable (Just name)
+        T.CompAppend -> FlexSuper CompAppend (Just name)
+        T.Any        -> FlexVar (Just name)
 
     makeVar name _ =
       UF.fresh (Descriptor (nameToContent name) rank noMark Nothing)
@@ -516,7 +541,7 @@ srcTypeToVariable rank pools freeVars srcType =
       srcTypeToVar rank pools flexVars srcType
 
 
-srcTypeToVar :: Int -> Pools -> Map.Map Name.Name Variable -> Can.Type -> IO Variable
+srcTypeToVar :: Int -> Pools -> Map.Map T.Var Variable -> Can.Type -> IO Variable
 srcTypeToVar rank pools flexVars srcType =
   let go = srcTypeToVar rank pools flexVars in
   case srcType of
@@ -526,7 +551,7 @@ srcTypeToVar rank pools flexVars srcType =
           register rank pools (Structure (Fun1 argVar resultVar))
 
     Can.TVar name ->
-      return (flexVars ! name)
+      return $ $(Map.require 'srcTypeToVar) name flexVars T.varToChars
 
     Can.TType home name args ->
       do  argVars <- traverse go args
@@ -537,17 +562,22 @@ srcTypeToVar rank pools flexVars srcType =
           extVar <-
             case maybeExt of
               Nothing -> register rank pools emptyRecord1
-              Just ext -> return (flexVars ! ext)
+              Just ext -> return $ $(Map.require 'srcTypeToVar) ext flexVars T.varToChars
           register rank pools (Structure (Record1 fieldVars extVar))
 
     Can.TUnit ->
       register rank pools unit1
 
-    Can.TTuple a b c ->
+    Can.TPair a b ->
       do  aVar <- go a
           bVar <- go b
-          cVar <- traverse go c
-          register rank pools (Structure (Tuple1 aVar bVar cVar))
+          register rank pools (Structure (Pair1 aVar bVar))
+
+    Can.TTriple a b c ->
+      do  aVar <- go a
+          bVar <- go b
+          cVar <- go c
+          register rank pools (Structure (Triple1 aVar bVar cVar))
 
     Can.TAlias home name args aliasType ->
       do  argVars <- traverse (traverse go) args
@@ -562,7 +592,7 @@ srcTypeToVar rank pools flexVars srcType =
           register rank pools (Alias home name argVars aliasVar)
 
 
-srcFieldTypeToVar :: Int -> Pools -> Map.Map Name.Name Variable -> Can.FieldType -> IO Variable
+srcFieldTypeToVar :: Int -> Pools -> Map.Map T.Var Variable -> Can.FieldType -> IO Variable
 srcFieldTypeToVar rank pools flexVars (Can.FieldType _ srcTipe) =
   srcTypeToVar rank pools flexVars srcTipe
 
@@ -685,12 +715,14 @@ restoreContent content =
         Unit1 ->
           return ()
 
-        Tuple1 a b maybeC ->
+        Pair1 a b ->
           do  restore a
               restore b
-              case maybeC of
-                Nothing -> return ()
-                Just c  -> restore c
+
+        Triple1 a b c ->
+          do  restore a
+              restore b
+              restore c
 
     Alias _ _ args var ->
       do  mapM_ (traverse restore) args
@@ -722,5 +754,8 @@ traverseFlatType f flatType =
     Unit1 ->
         pure Unit1
 
-    Tuple1 a b cs ->
-        liftM3 Tuple1 (f a) (f b) (traverse f cs)
+    Pair1 a b ->
+        liftM2 Pair1 (f a) (f b)
+
+    Triple1 a b c ->
+        liftM3 Triple1 (f a) (f b) (f c)

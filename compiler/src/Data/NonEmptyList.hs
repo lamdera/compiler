@@ -3,13 +3,16 @@ module Data.NonEmptyList
   , singleton
   , toList
   , sortBy
+  --
+  , eList32, dList32
   )
   where
 
 
-import Control.Monad (liftM2)
-import Data.Binary (Binary, get, put)
 import qualified Data.List as List
+
+import qualified Bytes.Decode as D
+import qualified Bytes.Encode as E
 
 
 
@@ -73,6 +76,15 @@ sortBy toRank (List x xs) =
 -- BINARY
 
 
-instance (Binary a) => Binary (List a) where
-  put (List x xs) = put x >> put xs
-  get = liftM2 List get get
+eList32 :: (a -> E.Builder) -> List a -> E.Builder
+eList32 enc (List x xs) =
+  enc x <> E.list32 enc xs
+
+
+dList32 :: D.Decoder a -> D.Decoder (List a)
+dList32 dec =
+  do  x  <- dec
+      xs <- D.list32 dec
+      return $ List x xs
+
+

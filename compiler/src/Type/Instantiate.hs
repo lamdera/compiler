@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings, TemplateHaskell #-}
 module Type.Instantiate
   ( FreeVars
   , fromSrcType
@@ -7,10 +7,10 @@ module Type.Instantiate
 
 
 import qualified Data.Map.Strict as Map
-import Data.Map.Strict ((!))
-import qualified Data.Name as Name
+import qualified Data.Map.Utils as Map
 
 import qualified AST.Canonical as Can
+import qualified AST.Prim.TypeVar as T
 import Type.Type
 
 
@@ -19,14 +19,14 @@ import Type.Type
 
 
 type FreeVars =
-  Map.Map Name.Name Type
+  Map.Map T.Var Type
 
 
 
 -- FROM SOURCE TYPE
 
 
-fromSrcType :: Map.Map Name.Name Type -> Can.Type -> IO Type
+fromSrcType :: Map.Map T.Var Type -> Can.Type -> IO Type
 fromSrcType freeVars sourceType =
   case sourceType of
     Can.TLambda arg result ->
@@ -35,7 +35,7 @@ fromSrcType freeVars sourceType =
         <*> fromSrcType freeVars result
 
     Can.TVar name ->
-      return (freeVars ! name)
+      return $ $(Map.require 'fromSrcType) name freeVars T.varToChars
 
     Can.TType home name args ->
       AppN home name <$> traverse (fromSrcType freeVars) args
@@ -50,11 +50,16 @@ fromSrcType freeVars sourceType =
               Can.Holey realType ->
                 fromSrcType (Map.fromList targs) realType
 
-    Can.TTuple a b maybeC ->
-      TupleN
+    Can.TPair a b ->
+      PairN
         <$> fromSrcType freeVars a
         <*> fromSrcType freeVars b
-        <*> traverse (fromSrcType freeVars) maybeC
+
+    Can.TTriple a b c ->
+      TripleN
+        <$> fromSrcType freeVars a
+        <*> fromSrcType freeVars b
+        <*> fromSrcType freeVars c
 
     Can.TUnit ->
       return UnitN
@@ -64,13 +69,10 @@ fromSrcType freeVars sourceType =
         <$> traverse (fromSrcFieldType freeVars) fields
         <*>
           case maybeExt of
-            Nothing ->
-              return EmptyRecordN
-
-            Just ext ->
-              return (freeVars ! ext)
+            Nothing  -> return EmptyRecordN
+            Just ext -> return $ $(Map.require 'fromSrcType) ext freeVars T.varToChars
 
 
-fromSrcFieldType :: Map.Map Name.Name Type -> Can.FieldType -> IO Type
+fromSrcFieldType :: Map.Map T.Var Type -> Can.FieldType -> IO Type
 fromSrcFieldType freeVars (Can.FieldType _ tipe) =
   fromSrcType freeVars tipe

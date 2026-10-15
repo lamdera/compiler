@@ -1,23 +1,23 @@
-{-# LANGUAGE MagicHash, MultiWayIf, OverloadedStrings #-}
+{-# LANGUAGE ExtendedLiterals, MagicHash, MultiWayIf, OverloadedStrings, QuasiQuotes #-}
 module Elm.Outline
   ( Outline(..)
   , AppOutline(..)
   , PkgOutline(..)
   , Exposed(..)
-  , SrcDir(..)
   , read
   , write
   , encode
   , decoder
   , defaultSummary
   , flattenExposed
+  --
+  , ePath, dPath
   )
   where
 
 
 import Prelude hiding (read)
-import Control.Monad (filterM, liftM)
-import Data.Binary (Binary, get, put, getWord8, putWord8)
+import Control.Monad (filterM)
 import qualified Data.Map as Map
 import qualified Data.NonEmptyList as NE
 import qualified Data.OneOrMore as OneOrMore
@@ -25,20 +25,24 @@ import GHC.Exts (isTrue#)
 import GHC.Prim
 import qualified System.Directory as Dir
 import qualified System.FilePath as FP
-import System.FilePath ((</>))
 
+import qualified Bytes.Decode as D
+import qualified Bytes.Encode as E
+import qualified String as S
+
+import qualified AST.Prim.Module as Module
 import qualified Elm.Constraint as Con
 import qualified Elm.Licenses as Licenses
-import qualified Elm.ModuleName as ModuleName
 import qualified Elm.Package as Pkg
 import qualified Elm.Version as V
 import qualified File
-import qualified Json.Decode as D
-import qualified Json.Encode as E
+import qualified Json.Decode as JD
+import qualified Json.Encode as JE
 import Json.Encode ((==>))
 import qualified Json.String as Json
 import qualified Parse.Primitives as P
 import qualified Reporting.Exit as Exit
+import qualified Root as R
 
 
 import Lamdera
@@ -55,7 +59,7 @@ data Outline
 data AppOutline =
   AppOutline
     { _app_elm_version :: V.Version
-    , _app_source_dirs :: NE.List SrcDir
+    , _app_source_dirs :: NE.List R.Path
     , _app_deps_direct :: Map.Map Pkg.Name V.Version
     , _app_deps_indirect :: Map.Map Pkg.Name V.Version
     , _app_test_direct :: Map.Map Pkg.Name V.Version
@@ -77,13 +81,8 @@ data PkgOutline =
 
 
 data Exposed
-  = ExposedList [ModuleName.Raw]
-  | ExposedDict [(Json.String, [ModuleName.Raw])]
-
-
-data SrcDir
-  = AbsoluteSrcDir FilePath
-  | RelativeSrcDir FilePath
+  = ExposedList [Module.Name]
+  | ExposedDict [(Json.String, [Module.Name])]
 
 
 
@@ -99,7 +98,7 @@ defaultSummary =
 -- HELPERS
 
 
-flattenExposed :: Exposed -> [ModuleName.Raw]
+flattenExposed :: Exposed -> [Module.Name]
 flattenExposed exposed =
   case exposed of
     ExposedList names ->
@@ -113,40 +112,40 @@ flattenExposed exposed =
 -- WRITE
 
 
-write :: FilePath -> Outline -> IO ()
-write root outline =
-  E.write (root </> "elm.json") (encode outline)
+write :: File.Writer t -> R.Root -> Outline -> IO ()
+write writer root outline =
+  JE.write writer (R.elm_json root) (encode outline)
 
 
 
 -- JSON ENCODE
 
 
-encode :: Outline -> E.Value
+encode :: Outline -> JE.Value
 encode outline =
   case outline of
     App (AppOutline elm srcDirs depsDirect depsTrans testDirect testTrans) ->
-      E.object
-        [ "type" ==> E.chars "application"
-        , "source-directories" ==> E.list encodeSrcDir (NE.toList srcDirs)
+      JE.object
+        [ "type" ==> JE.chars "application"
+        , "source-directories" ==> JE.list encodePath (NE.toList srcDirs)
         , "elm-version" ==> V.encode elm
         , "dependencies" ==>
-            E.object
+            JE.object
               [ "direct" ==> encodeDeps V.encode depsDirect
               , "indirect" ==> encodeDeps V.encode depsTrans
               ]
         , "test-dependencies" ==>
-            E.object
+            JE.object
               [ "direct" ==> encodeDeps V.encode testDirect
               , "indirect" ==> encodeDeps V.encode testTrans
               ]
         ]
 
     Pkg (PkgOutline name summary license version exposed deps tests elm) ->
-      E.object
-        [ "type" ==> E.string (Json.fromChars "package")
+      JE.object
+        [ "type" ==> JE.string [S.ascii|package|]
         , "name" ==> Pkg.encode name
-        , "summary" ==> E.string summary
+        , "summary" ==> JE.jsonString summary
         , "license" ==> Licenses.encode license
         , "version" ==> V.encode version
         , "exposed-modules" ==> encodeExposed exposed
@@ -156,41 +155,36 @@ encode outline =
         ]
 
 
-encodeExposed :: Exposed -> E.Value
+encodeExposed :: Exposed -> JE.Value
 encodeExposed exposed =
   case exposed of
     ExposedList modules ->
-      E.list encodeModule modules
+      JE.list Module.jsonEncodeName modules
 
     ExposedDict chunks ->
-      E.object (map (fmap (E.list encodeModule)) chunks)
+      JE.object (map (fmap (JE.list Module.jsonEncodeName)) chunks)
 
 
-encodeModule :: ModuleName.Raw -> E.Value
-encodeModule name =
-  E.name name
-
-
-encodeDeps :: (a -> E.Value) -> Map.Map Pkg.Name a -> E.Value
+encodeDeps :: (a -> JE.Value) -> Map.Map Pkg.Name a -> JE.Value
 encodeDeps encodeValue deps =
-  E.dict Pkg.toJsonString encodeValue deps
+  JE.dict Pkg.toJsonString encodeValue deps
 
 
-encodeSrcDir :: SrcDir -> E.Value
-encodeSrcDir srcDir =
-  case srcDir of
-    AbsoluteSrcDir dir -> E.chars dir
-    RelativeSrcDir dir -> E.chars dir
+encodePath :: R.Path -> JE.Value
+encodePath path =
+  case path of
+    R.Absolute dir -> JE.chars dir
+    R.Relative dir -> JE.chars dir
 
 
 
 -- PARSE AND VERIFY
 
 
-read :: FilePath -> Bool -> IO (Either Exit.Outline Outline)
+read :: R.Root -> Bool -> IO (Either Exit.Outline Outline)
 read root shouldCheckLamdera =
-  do  bytes <- File.readUtf8 (root </> "elm.json")
-      result <- D.fromByteString decoder bytes
+  do  bytes <- File.readUtf8 (R.elm_json root)
+      result <- JD.fromByteString decoder bytes
       case result of
         Left x ->
           return $ Left $ Exit.OutlineHasBadStructure x
@@ -212,7 +206,7 @@ read root shouldCheckLamdera =
 
               | otherwise ->
                   do  badDirs <- filterM (isSrcDirMissing root) (NE.toList srcDirs)
-                      case map toGiven badDirs of
+                      case map R.toOriginalPath badDirs of
                         d:ds ->
                           return $ Left (Exit.OutlineHasMissingSrcDirs d ds)
 
@@ -220,43 +214,29 @@ read root shouldCheckLamdera =
                           do  maybeDups <- detectDuplicates root (NE.toList srcDirs)
                               case maybeDups of
                                 Nothing ->
-                                  Lamdera.alternativeImplementationPassthrough (Lamdera.Checks.runChecks root shouldCheckLamdera direct indirect) $
+                                  Lamdera.alternativeImplementationPassthrough (Lamdera.Checks.runChecks (R.toFilePath root) shouldCheckLamdera direct indirect) $
                                   return $ Right outline
 
                                 Just (canonicalDir, (dir1,dir2)) ->
                                   return $ Left (Exit.OutlineHasDuplicateSrcDirs canonicalDir dir1 dir2)
 
 
-isSrcDirMissing :: FilePath -> SrcDir -> IO Bool
+isSrcDirMissing :: R.Root -> R.Path -> IO Bool
 isSrcDirMissing root srcDir =
-  not <$> Dir.doesDirectoryExist (toAbsolute root srcDir)
+  not <$> Dir.doesDirectoryExist (R.toAbsolutePath root srcDir)
 
 
-toGiven :: SrcDir -> FilePath
-toGiven srcDir =
-  case srcDir of
-    AbsoluteSrcDir dir -> dir
-    RelativeSrcDir dir -> dir
-
-
-toAbsolute :: FilePath -> SrcDir -> FilePath
-toAbsolute root srcDir =
-  case srcDir of
-    AbsoluteSrcDir dir -> dir
-    RelativeSrcDir dir -> root </> dir
-
-
-detectDuplicates :: FilePath -> [SrcDir] -> IO (Maybe (FilePath, (FilePath, FilePath)))
+detectDuplicates :: R.Root -> [R.Path] -> IO (Maybe (FilePath, (FilePath, FilePath)))
 detectDuplicates root srcDirs =
   do  pairs <- traverse (toPair root) srcDirs
       return $ Map.lookupMin $ Map.mapMaybe isDup $
         Map.fromListWith OneOrMore.more pairs
 
 
-toPair :: FilePath -> SrcDir -> IO (FilePath, OneOrMore.OneOrMore FilePath)
+toPair :: R.Root -> R.Path -> IO (FilePath, OneOrMore.OneOrMore FilePath)
 toPair root srcDir =
-  do  key <- Dir.canonicalizePath (toAbsolute root srcDir)
-      return (key, OneOrMore.one (toGiven srcDir))
+  do  key <- Dir.canonicalizePath (R.toAbsolutePath root srcDir)
+      return (key, OneOrMore.one (R.toOriginalPath srcDir))
 
 
 isDup :: OneOrMore.OneOrMore FilePath -> Maybe (FilePath, FilePath)
@@ -271,7 +251,7 @@ isDup paths =
 
 
 type Decoder a =
-  D.Decoder Exit.OutlineProblem a
+  JD.Decoder Exit.OutlineProblem a
 
 
 decoder :: Decoder Outline
@@ -280,34 +260,34 @@ decoder =
     application = Json.fromChars "application"
     package     = Json.fromChars "package"
   in
-  do  tipe <- D.field "type" D.string
+  do  tipe <- JD.field "type" JD.jsonString
       if  | tipe == application -> App <$> appDecoder
           | tipe == package     -> Pkg <$> pkgDecoder
-          | otherwise           -> D.failure Exit.OP_BadType
+          | otherwise           -> JD.failure Exit.OP_BadType
 
 
 appDecoder :: Decoder AppOutline
 appDecoder =
   AppOutline
-    <$> D.field "elm-version" versionDecoder
-    <*> D.field "source-directories" dirsDecoder
-    <*> D.field "dependencies" (D.field "direct" (depsDecoder versionDecoder))
-    <*> D.field "dependencies" (D.field "indirect" (depsDecoder versionDecoder))
-    <*> D.field "test-dependencies" (D.field "direct" (depsDecoder versionDecoder))
-    <*> D.field "test-dependencies" (D.field "indirect" (depsDecoder versionDecoder))
+    <$> JD.field "elm-version" versionDecoder
+    <*> JD.field "source-directories" dirsDecoder
+    <*> JD.field "dependencies" (JD.field "direct" (depsDecoder versionDecoder))
+    <*> JD.field "dependencies" (JD.field "indirect" (depsDecoder versionDecoder))
+    <*> JD.field "test-dependencies" (JD.field "direct" (depsDecoder versionDecoder))
+    <*> JD.field "test-dependencies" (JD.field "indirect" (depsDecoder versionDecoder))
 
 
 pkgDecoder :: Decoder PkgOutline
 pkgDecoder =
   PkgOutline
-    <$> D.field "name" nameDecoder
-    <*> D.field "summary" summaryDecoder
-    <*> D.field "license" (Licenses.decoder Exit.OP_BadLicense)
-    <*> D.field "version" versionDecoder
-    <*> D.field "exposed-modules" exposedDecoder
-    <*> D.field "dependencies" (depsDecoder constraintDecoder)
-    <*> D.field "test-dependencies" (depsDecoder constraintDecoder)
-    <*> D.field "elm-version" constraintDecoder
+    <$> JD.field "name" nameDecoder
+    <*> JD.field "summary" summaryDecoder
+    <*> JD.field "license" (Licenses.decoder Exit.OP_BadLicense)
+    <*> JD.field "version" versionDecoder
+    <*> JD.field "exposed-modules" exposedDecoder
+    <*> JD.field "dependencies" (depsDecoder constraintDecoder)
+    <*> JD.field "test-dependencies" (depsDecoder constraintDecoder)
+    <*> JD.field "elm-version" constraintDecoder
 
 
 
@@ -316,41 +296,41 @@ pkgDecoder =
 
 nameDecoder :: Decoder Pkg.Name
 nameDecoder =
-  D.mapError Exit.OP_BadPkgName Pkg.decoder
+  JD.mapError Exit.OP_BadPkgName Pkg.decoder
 
 
 summaryDecoder :: Decoder Json.String
 summaryDecoder =
-  D.customString
+  JD.customString
     (boundParser 80# Exit.OP_BadSummaryTooLong)
     (\_ -> Exit.OP_BadSummaryTooLong)
 
 
 versionDecoder :: Decoder V.Version
 versionDecoder =
-  D.mapError Exit.OP_BadVersion V.decoder
+  JD.mapError Exit.OP_BadVersion V.decoder
 
 
 constraintDecoder :: Decoder Con.Constraint
 constraintDecoder =
-  D.mapError Exit.OP_BadConstraint Con.decoder
+  JD.mapError Exit.OP_BadConstraint Con.decoder
 
 
 depsDecoder :: Decoder a -> Decoder (Map.Map Pkg.Name a)
 depsDecoder valueDecoder =
-  D.dict (Pkg.keyDecoder Exit.OP_BadDependencyName) valueDecoder
+  JD.dict (Pkg.keyDecoder Exit.OP_BadDependencyName) valueDecoder
 
 
-dirsDecoder :: Decoder (NE.List SrcDir)
+dirsDecoder :: Decoder (NE.List R.Path)
 dirsDecoder =
-  fmap (toSrcDir . Json.toChars) <$> D.nonEmptyList D.string Exit.OP_NoSrcDirs
+  fmap (toSrcDir . Json.toChars) <$> JD.nonEmptyList JD.jsonString Exit.OP_NoSrcDirs
 
 
-toSrcDir :: FilePath -> SrcDir
+toSrcDir :: FilePath -> R.Path
 toSrcDir path =
   if FP.isRelative path
-  then RelativeSrcDir path
-  else AbsoluteSrcDir path
+  then R.Relative path
+  else R.Absolute path
 
 
 
@@ -359,20 +339,20 @@ toSrcDir path =
 
 exposedDecoder :: Decoder Exposed
 exposedDecoder =
-  D.oneOf
-    [ ExposedList <$> D.list moduleDecoder
-    , ExposedDict <$> D.pairs headerKeyDecoder (D.list moduleDecoder)
+  JD.oneOf
+    [ ExposedList <$> JD.list moduleDecoder
+    , ExposedDict <$> JD.pairs headerKeyDecoder (JD.list moduleDecoder)
     ]
 
 
-moduleDecoder :: Decoder ModuleName.Raw
+moduleDecoder :: Decoder Module.Name
 moduleDecoder =
-  D.mapError Exit.OP_BadModuleName ModuleName.decoder
+  Module.jsonDecodeName Exit.OP_BadModuleName
 
 
-headerKeyDecoder :: D.KeyDecoder Exit.OutlineProblem Json.String
+headerKeyDecoder :: JD.KeyDecoder Exit.OutlineProblem Json.String
 headerKeyDecoder =
-  D.KeyDecoder
+  JD.KeyDecoder
     (boundParser 20# Exit.OP_BadModuleHeaderTooLong)
     (\_ -> Exit.OP_BadModuleHeaderTooLong)
 
@@ -400,15 +380,17 @@ boundParser bound tooLong =
 -- BINARY
 
 
-instance Binary SrcDir where
-  put outline =
-    case outline of
-      AbsoluteSrcDir a -> putWord8 0 >> put a
-      RelativeSrcDir a -> putWord8 1 >> put a
+ePath :: R.Path -> E.Builder
+ePath srcDir =
+  case srcDir of
+    R.Absolute d -> E.u8# 0#Word8 <> E.chars64 d
+    R.Relative d -> E.u8# 1#Word8 <> E.chars64 d
 
-  get =
-    do  n <- getWord8
-        case n of
-          0 -> liftM AbsoluteSrcDir get
-          1 -> liftM RelativeSrcDir get
-          _ -> fail "binary encoding of SrcDir was corrupted"
+
+dPath :: D.Decoder R.Path
+dPath =
+  do  tag <- D.u8
+      case tag of
+        0 -> R.Absolute <$> D.chars64
+        1 -> R.Relative <$> D.chars64
+        _ -> D.expecting "R.Path"

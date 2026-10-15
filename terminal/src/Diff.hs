@@ -9,10 +9,14 @@ module Diff
 import qualified Data.List as List
 import qualified Data.Map as Map
 import qualified Data.Maybe as Maybe
-import qualified Data.Name as Name
 import qualified Data.NonEmptyList as NE
 
-import qualified BackgroundWriter as BW
+import qualified File
+
+import qualified AST.Prim.Module as Module
+import qualified AST.Prim.Name as N
+import qualified AST.Prim.Operator as Op
+import qualified AST.Prim.TypeName as T
 import qualified Build
 import Deps.Diff (PackageChanges(..), ModuleChanges(..), Changes(..))
 import qualified Deps.Diff as DD
@@ -32,7 +36,7 @@ import qualified Reporting.Exit as Exit
 import qualified Reporting.Exit.Help as Help
 import qualified Reporting.Render.Type.Localizer as L
 import qualified Reporting.Task as Task
-import qualified Stuff
+import qualified Root as R
 
 
 
@@ -49,9 +53,8 @@ data Args
 run :: Args -> () -> IO ()
 run args () =
   Reporting.attempt Exit.diffToReport $
-    Task.run $
-      do  env <- getEnv
-          diff env args
+    withEnv $ \env ->
+      diff env args
 
 
 
@@ -60,20 +63,24 @@ run args () =
 
 data Env =
   Env
-    { _maybeRoot :: Maybe FilePath
-    , _cache :: Stuff.PackageCache
-    , _manager :: Http.Manager
-    , _registry :: Registry.Registry
+    { _maybeRoot :: Maybe R.Root
+    , _cache     :: R.PackageCache
+    , _writer    :: File.Writer R.PACKAGES
+    , _manager   :: Http.Manager
+    , _registry  :: Registry.Registry
     }
 
 
-getEnv :: Task Env
-getEnv =
-  do  maybeRoot <- Task.io $ Stuff.findRoot
-      cache     <- Task.io $ Stuff.getPackageCache
-      manager   <- Task.io $ Http.getManager
-      registry  <- Task.eio Exit.DiffMustHaveLatestRegistry $ Registry.latest manager cache
-      return (Env maybeRoot cache manager registry)
+withEnv :: (Env -> Task a) -> IO (Either Exit.Diff a)
+withEnv toTask =
+  do  maybeRoot <- R.findRoot
+      cache     <- R.getPackageCache
+      manager   <- Http.getManager
+      R.withRegistryLock cache $ \writer ->
+        do  result <- Registry.latest writer manager cache
+            case result of
+              Right registry -> Task.run $ toTask $ Env maybeRoot cache writer manager registry
+              Left x         -> return $ Left $ Exit.DiffMustHaveLatestRegistry x
 
 
 
@@ -85,7 +92,7 @@ type Task a =
 
 
 diff :: Env -> Args -> Task ()
-diff env@(Env _ _ _ registry) args =
+diff env@(Env _ _ _ _ registry) args =
   case args of
     GlobalInquiry name v1 v2 ->
       case Registry.getVersions' name registry of
@@ -121,15 +128,15 @@ diff env@(Env _ _ _ registry) args =
 
 
 getDocs :: Env -> Pkg.Name -> Registry.KnownVersions -> V.Version -> Task Docs.Documentation
-getDocs (Env _ cache manager _) name (Registry.KnownVersions latest previous) version =
+getDocs (Env _ cache writer manager _) name (Registry.KnownVersions latest previous) version =
   if latest == version || elem version previous
-  then Task.eio (Exit.DiffDocsProblem version) $ DD.getDocs cache manager name version
+  then Task.eio (Exit.DiffDocsProblem version) $ DD.getDocs writer cache manager name version
   else Task.throw $ Exit.DiffUnknownVersion name version (latest:previous)
 
 
 getLatestDocs :: Env -> Pkg.Name -> Registry.KnownVersions -> Task Docs.Documentation
-getLatestDocs (Env _ cache manager _) name (Registry.KnownVersions latest _) =
-  Task.eio (Exit.DiffDocsProblem latest) $ DD.getDocs cache manager name latest
+getLatestDocs (Env _ cache writer manager _) name (Registry.KnownVersions latest _) =
+  Task.eio (Exit.DiffDocsProblem latest) $ DD.getDocs writer cache manager name latest
 
 
 
@@ -137,7 +144,7 @@ getLatestDocs (Env _ cache manager _) name (Registry.KnownVersions latest _) =
 
 
 readOutline :: Env -> Task (Pkg.Name, Registry.KnownVersions)
-readOutline (Env maybeRoot _ _ registry) =
+readOutline (Env maybeRoot _ _ _ registry) =
   case maybeRoot of
     Nothing ->
       Task.throw $ Exit.DiffNoOutline
@@ -164,16 +171,15 @@ readOutline (Env maybeRoot _ _ registry) =
 
 
 generateDocs :: Env -> Task Docs.Documentation
-generateDocs (Env maybeRoot _ _ _) =
+generateDocs (Env maybeRoot _ _ _ _) =
   case maybeRoot of
     Nothing ->
       Task.throw $ Exit.DiffNoOutline
 
     Just root ->
-      do  details <-
-            Task.eio Exit.DiffBadDetails $ BW.withScope $ \scope ->
-              Details.load Reporting.silent scope root
-
+      Task.eio id $ R.withRootLock root $ \writer stuff ->
+      Task.run $
+      do  details <- Task.eio Exit.DiffBadDetails $ Details.load writer Reporting.silent root stuff
           case Details._outline details of
             Details.ValidApp _ ->
               Task.throw $ Exit.DiffApplication
@@ -185,7 +191,7 @@ generateDocs (Env maybeRoot _ _ _) =
 
                 e:es ->
                   Task.eio Exit.DiffBadBuild $
-                    Build.fromExposed Reporting.silent root details Build.KeepDocs (NE.List e es)
+                    Build.fromExposed writer Reporting.silent root stuff details Build.KeepDocs (NE.List e es)
 
 
 
@@ -220,13 +226,13 @@ toDoc localizer changes@(PackageChanges added changed removed) =
       addedChunk =
         if null added then [] else
           [ Chunk "ADDED MODULES" M.MINOR $
-              D.vcat $ map D.fromName added
+              D.vcat $ map D.fromModule added
           ]
 
       removedChunk =
         if null removed then [] else
           [ Chunk "REMOVED MODULES" M.MAJOR $
-              D.vcat $ map D.fromName removed
+              D.vcat $ map D.fromModule removed
           ]
 
       chunks =
@@ -258,7 +264,7 @@ chunkToDoc (Chunk title magnitude details) =
       ]
 
 
-changesToChunk :: L.Localizer -> (Name.Name, ModuleChanges) -> Chunk
+changesToChunk :: L.Localizer -> (Module.Name, ModuleChanges) -> Chunk
 changesToChunk localizer (name, changes@(ModuleChanges unions aliases values binops)) =
   let
     magnitude =
@@ -276,7 +282,7 @@ changesToChunk localizer (name, changes@(ModuleChanges unions aliases values bin
     (binopAdd, binopChange, binopRemove) =
       changesToDocTriple (binopToDoc localizer) binops
   in
-    Chunk (Name.toChars name) magnitude $
+    Chunk (Module.toChars name) magnitude $
       D.vcat $ List.intersperse "" $ Maybe.catMaybes $
         [ changesToDoc "Added" unionAdd aliasAdd valueAdd binopAdd
         , changesToDoc "Removed" unionRemove aliasRemove valueRemove binopRemove
@@ -313,38 +319,38 @@ changesToDoc categoryName unions aliases values binops =
       D.fromChars categoryName <> ":" : unions ++ aliases ++ binops ++ values
 
 
-unionToDoc :: L.Localizer -> Name.Name -> Docs.Union -> D.Doc
+unionToDoc :: L.Localizer -> T.Name -> Docs.Union -> D.Doc
 unionToDoc localizer name (Docs.Union _ tvars ctors) =
   let
     setup =
-      "type" <+> D.fromName name <+> D.hsep (map D.fromName tvars)
+      "type" <+> D.fromType name <+> D.hsep (map D.fromVar tvars)
 
     ctorDoc (ctor, tipes) =
-      typeDoc localizer (Type.Type ctor tipes)
+      typeDoc localizer (Type.Type (T.nameFromString (N.toString ctor)) tipes)
   in
     D.hang 4 (D.sep (setup : zipWith (<+>) ("=" : repeat "|") (map ctorDoc ctors)))
 
 
-aliasToDoc :: L.Localizer -> Name.Name -> Docs.Alias -> D.Doc
+aliasToDoc :: L.Localizer -> T.Name -> Docs.Alias -> D.Doc
 aliasToDoc localizer name (Docs.Alias _ tvars tipe) =
   let
     declaration =
-      "type" <+> "alias" <+> D.hsep (map D.fromName (name:tvars)) <+> "="
+      "type" <+> "alias" <+> D.hsep (D.fromType name : map D.fromVar tvars) <+> "="
   in
     D.hang 4 (D.sep [ declaration, typeDoc localizer tipe ])
 
 
-valueToDoc :: L.Localizer -> Name.Name -> Docs.Value -> D.Doc
+valueToDoc :: L.Localizer -> N.Name -> Docs.Value -> D.Doc
 valueToDoc localizer name (Docs.Value _ tipe) =
   D.hang 4 $ D.sep [ D.fromName name <+> ":", typeDoc localizer tipe ]
 
 
-binopToDoc :: L.Localizer -> Name.Name -> Docs.Binop -> D.Doc
-binopToDoc localizer name (Docs.Binop _ tipe associativity (Docs.Precedence n)) =
-    "(" <> D.fromName name <> ")" <+> ":" <+> typeDoc localizer tipe <> D.black details
+binopToDoc :: L.Localizer -> Op.Name -> Docs.Binop -> D.Doc
+binopToDoc localizer op (Docs.Binop _ tipe associativity (Docs.Precedence n)) =
+    "(" <> D.fromOp op <> ")" <+> ":" <+> typeDoc localizer tipe <> D.black details
   where
     details =
-      "    (" <> D.fromName assoc <> "/" <> D.fromInt n <> ")"
+      "    (" <> assoc <> "/" <> D.fromInt (fromIntegral n) <> ")"
 
     assoc =
       case associativity of

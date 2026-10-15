@@ -1,3 +1,4 @@
+{-# LANGUAGE ExtendedLiterals, MagicHash #-}
 module AST.Optimized
   ( Def(..)
   , Expr(..)
@@ -16,21 +17,27 @@ module AST.Optimized
   , addLocalGraph
   , addKernel
   , toKernelGlobal
+  --
+  , eGlobalGraph, dGlobalGraph
+  , eLocalGraph, dLocalGraph
   )
   where
 
 
 import Control.Monad (liftM, liftM2, liftM3, liftM4)
-import Data.Binary (Binary, get, put, getWord8, putWord8)
 import qualified Data.Map as Map
-import qualified Data.Name as Name
-import Data.Name (Name)
 import qualified Data.Set as Set
 
+import qualified Bytes.Decode as D
+import qualified Bytes.Encode as E
+
 import qualified AST.Canonical as Can
+import qualified AST.Prim.Module as Module
+import qualified AST.Prim.Name as N
 import qualified AST.Utils.Shader as Shader
 import qualified Data.Index as Index
 import qualified Elm.Float as EF
+import qualified Elm.Interface as I
 import qualified Elm.Kernel as K
 import qualified Elm.ModuleName as ModuleName
 import qualified Elm.Package as Pkg
@@ -49,31 +56,32 @@ data Expr
   | Str ES.String
   | Int Int
   | Float EF.Float
-  | VarLocal Name
+  | VarLocal N.Name
   | VarGlobal Global
   | VarEnum Global Index.ZeroBased
   | VarBox Global
-  | VarCycle ModuleName.Canonical Name
-  | VarDebug Name ModuleName.Canonical A.Region (Maybe Name)
-  | VarKernel Name Name
+  | VarCycle ModuleName.Canonical N.Name
+  | VarDebug N.Name ModuleName.Canonical A.Region (Maybe N.Name)
+  | VarKernel Module.Kernel N.Name
   | List [Expr]
-  | Function [Name] Expr
+  | Function [N.Name] Expr
   | Call Expr [Expr]
-  | TailCall Name [(Name, Expr)]
+  | TailCall N.Name [(N.Name, Expr)]
   | If [(Expr, Expr)] Expr
   | Let Def Expr
   | Destruct Destructor Expr
-  | Case Name Name (Decider Choice) [(Int, Expr)]
-  | Accessor Name
-  | Access Expr Name
-  | Update Expr (Map.Map Name Expr)
-  | Record (Map.Map Name Expr)
+  | Case N.Name N.Name (Decider Choice) [(Int, Expr)]
+  | Accessor N.Name
+  | Access Expr N.Name
+  | Update Expr (Map.Map N.Name Expr)
+  | Record (Map.Map N.Name Expr)
   | Unit
-  | Tuple Expr Expr (Maybe Expr)
-  | Shader Shader.Source (Set.Set Name) (Set.Set Name)
+  | Pair Expr Expr
+  | Triple Expr Expr Expr
+  | Shader Shader.Source (Set.Set N.Name) (Set.Set N.Name)
 
 
-data Global = Global ModuleName.Canonical Name
+data Global = Global ModuleName.Canonical N.Name
 
 
 
@@ -81,19 +89,19 @@ data Global = Global ModuleName.Canonical Name
 
 
 data Def
-  = Def Name Expr
-  | TailDef Name [Name] Expr
+  = Def N.Name Expr
+  | TailDef N.Name [N.Name] Expr
 
 
 data Destructor =
-  Destructor Name Path
+  Destructor N.Name Path
 
 
 data Path
   = Index Index.ZeroBased Path
-  | Field Name Path
+  | Field N.Name Path
   | Unbox Path
-  | Root Name
+  | Root N.Name
 
 
 
@@ -127,7 +135,7 @@ data Choice
 data GlobalGraph =
   GlobalGraph
     { _g_nodes :: Map.Map Global Node
-    , _g_fields :: Map.Map Name Int
+    , _g_fields :: Map.Map N.Name Int
     }
 
 
@@ -135,7 +143,7 @@ data LocalGraph =
   LocalGraph
     { _l_main :: Maybe Main
     , _l_nodes :: Map.Map Global Node  -- PERF profile switching Global to Name
-    , _l_fields :: Map.Map Name Int
+    , _l_fields :: Map.Map N.Name Int
     }
 
 
@@ -149,12 +157,12 @@ data Main
 
 data Node
   = Define Expr (Set.Set Global)
-  | DefineTailFunc [Name] Expr (Set.Set Global)
+  | DefineTailFunc [N.Name] Expr (Set.Set Global)
   | Ctor Index.ZeroBased Int
   | Enum Index.ZeroBased
   | Box
   | Link Global
-  | Cycle [Name] [(Name, Expr)] [Def] (Set.Set Global)
+  | Cycle [N.Name] [(N.Name, Expr)] [Def] (Set.Set Global)
   | Manager EffectsType
   | Kernel [K.Chunk] (Set.Set Global)
   | PortIncoming Expr (Set.Set Global)
@@ -190,10 +198,10 @@ addLocalGraph (LocalGraph _ nodes1 fields1) (GlobalGraph nodes2 fields2) =
     }
 
 
-addKernel :: Name.Name -> [K.Chunk] -> GlobalGraph -> GlobalGraph
-addKernel shortName chunks (GlobalGraph nodes fields) =
+addKernel :: Module.Kernel -> [K.Chunk] -> GlobalGraph -> GlobalGraph
+addKernel kname chunks (GlobalGraph nodes fields) =
   let
-    global = toKernelGlobal shortName
+    global = toKernelGlobal kname
     node = Kernel chunks (foldr addKernelDep Set.empty chunks)
   in
   GlobalGraph
@@ -205,19 +213,21 @@ addKernel shortName chunks (GlobalGraph nodes fields) =
 addKernelDep :: K.Chunk -> Set.Set Global -> Set.Set Global
 addKernelDep chunk deps =
   case chunk of
-    K.JS _              -> deps
-    K.ElmVar home name  -> Set.insert (Global home name) deps
-    K.JsVar shortName _ -> Set.insert (toKernelGlobal shortName) deps
-    K.ElmField _        -> deps
-    K.JsField _         -> deps
-    K.JsEnum _          -> deps
-    K.Debug             -> deps
-    K.Prod              -> deps
+    K.JS _       -> deps
+    K.ElmVar h n -> Set.insert (Global h n) deps
+    K.JsVar  k _ -> Set.insert (toKernelGlobal k) deps
+    K.ElmField _ -> deps
+    K.JsField _  -> deps
+    K.JsEnum _   -> deps
+    K.Debug      -> deps
+    K.Prod       -> deps
 
 
-toKernelGlobal :: Name.Name -> Global
-toKernelGlobal shortName =
-  Global (ModuleName.Canonical Pkg.kernel shortName) Name.dollar
+toKernelGlobal :: Module.Kernel -> Global
+toKernelGlobal kname =
+    Global (ModuleName.Canonical Pkg.kernel name) N.unit
+  where
+    name = Module.fromString (Module.kernelToString kname)
 
 
 
@@ -241,210 +251,258 @@ instance Ord Global where
 -- BINARY
 
 
-instance Binary Global where
-  get = liftM2 Global get get
-  put (Global a b) = put a >> put b
+eGlobal :: Global -> E.Builder
+eGlobal (Global h n) =
+  ModuleName.eCanonical h <> N.encode n
 
 
-instance Binary Expr where
-  put expr =
-    case expr of
-      Bool a           -> putWord8  0 >> put a
-      Chr a            -> putWord8  1 >> put a
-      Str a            -> putWord8  2 >> put a
-      Int a            -> putWord8  3 >> put a
-      Float a          -> putWord8  4 >> put a
-      VarLocal a       -> putWord8  5 >> put a
-      VarGlobal a      -> putWord8  6 >> put a
-      VarEnum a b      -> putWord8  7 >> put a >> put b
-      VarBox a         -> putWord8  8 >> put a
-      VarCycle a b     -> putWord8  9 >> put a >> put b
-      VarDebug a b c d -> putWord8 10 >> put a >> put b >> put c >> put d
-      VarKernel a b    -> putWord8 11 >> put a >> put b
-      List a           -> putWord8 12 >> put a
-      Function a b     -> putWord8 13 >> put a >> put b
-      Call a b         -> putWord8 14 >> put a >> put b
-      TailCall a b     -> putWord8 15 >> put a >> put b
-      If a b           -> putWord8 16 >> put a >> put b
-      Let a b          -> putWord8 17 >> put a >> put b
-      Destruct a b     -> putWord8 18 >> put a >> put b
-      Case a b c d     -> putWord8 19 >> put a >> put b >> put c >> put d
-      Accessor a       -> putWord8 20 >> put a
-      Access a b       -> putWord8 21 >> put a >> put b
-      Update a b       -> putWord8 22 >> put a >> put b
-      Record a         -> putWord8 23 >> put a
-      Unit             -> putWord8 24
-      Tuple a b c      -> putWord8 25 >> put a >> put b >> put c
-      Shader a b c     -> putWord8 26 >> put a >> put b >> put c
-
-  get =
-    do  word <- getWord8
-        case word of
-          0  -> liftM  Bool get
-          1  -> liftM  Chr get
-          2  -> liftM  Str get
-          3  -> liftM  Int get
-          4  -> liftM  Float get
-          5  -> liftM  VarLocal get
-          6  -> liftM  VarGlobal get
-          7  -> liftM2 VarEnum get get
-          8  -> liftM  VarBox get
-          9  -> liftM2 VarCycle get get
-          10 -> liftM4 VarDebug get get get get
-          11 -> liftM2 VarKernel get get
-          12 -> liftM  List get
-          13 -> liftM2 Function get get
-          14 -> liftM2 Call get get
-          15 -> liftM2 TailCall get get
-          16 -> liftM2 If get get
-          17 -> liftM2 Let get get
-          18 -> liftM2 Destruct get get
-          19 -> liftM4 Case get get get get
-          20 -> liftM  Accessor get
-          21 -> liftM2 Access get get
-          22 -> liftM2 Update get get
-          23 -> liftM  Record get
-          24 -> pure   Unit
-          25 -> liftM3 Tuple get get get
-          26 -> liftM3 Shader get get get
-          _  -> fail "problem getting Opt.Expr binary"
+dGlobal :: D.Decoder Global
+dGlobal =
+  liftM2 Global ModuleName.dCanonical N.decode
 
 
-instance Binary Def where
-  put def =
-    case def of
-      Def a b       -> putWord8 0 >> put a >> put b
-      TailDef a b c -> putWord8 1 >> put a >> put b >> put c
-
-  get =
-    do  word <- getWord8
-        case word of
-          0 -> liftM2 Def get get
-          1 -> liftM3 TailDef get get get
-          _ -> fail "problem getting Opt.Def binary"
-
-
-instance Binary Destructor where
-  get = liftM2 Destructor get get
-  put (Destructor a b) = put a >> put b
-
-
-instance Binary Path where
-  put destructor =
-    case destructor of
-      Index a b -> putWord8 0 >> put a >> put b
-      Field a b -> putWord8 1 >> put a >> put b
-      Unbox a   -> putWord8 2 >> put a
-      Root a    -> putWord8 3 >> put a
-
-  get =
-    do  word <- getWord8
-        case word of
-          0 -> liftM2 Index get get
-          1 -> liftM2 Field get get
-          2 -> liftM  Unbox get
-          3 -> liftM  Root get
-          _ -> fail "problem getting Opt.Path binary"
+eExpr :: Expr -> E.Builder
+eExpr expr =
+  case expr of
+    Bool b           -> E.u8#  0#Word8 <> E.bool b
+    Chr c            -> E.u8#  1#Word8 <> E.char c
+    Str s            -> E.u8#  2#Word8 <> ES.encode s
+    Int i            -> E.u8#  3#Word8 <> E.int i
+    Float f          -> E.u8#  4#Word8 <> EF.encode f
+    VarLocal x       -> E.u8#  5#Word8 <> N.encode x
+    VarGlobal g      -> E.u8#  6#Word8 <> eGlobal g
+    VarEnum g i      -> E.u8#  7#Word8 <> eGlobal g <> Index.eZeroBased i
+    VarBox g         -> E.u8#  8#Word8 <> eGlobal g
+    VarCycle h n     -> E.u8#  9#Word8 <> ModuleName.eCanonical h <> N.encode n
+    VarDebug n h r m -> E.u8# 10#Word8 <> N.encode n <> ModuleName.eCanonical h <> A.eRegion r <> E.maybe N.encode m
+    VarKernel h n    -> E.u8# 11#Word8 <> Module.eKernel h <> N.encode n
+    List es          -> E.u8# 12#Word8 <> E.list32 eExpr es
+    Function xs b    -> E.u8# 13#Word8 <> E.list32 N.encode xs <> eExpr b
+    Call f xs        -> E.u8# 14#Word8 <> eExpr f <> E.list32 eExpr xs
+    TailCall f xs    -> E.u8# 15#Word8 <> N.encode f <> E.list32 (\(x,e) -> N.encode x <> eExpr e) xs
+    If bs f          -> E.u8# 16#Word8 <> E.list32 (\(c,b) -> eExpr c <> eExpr b) bs <> eExpr f
+    Let d e          -> E.u8# 17#Word8 <> eDef d <> eExpr e
+    Destruct d e     -> E.u8# 18#Word8 <> eDestructor d <> eExpr e
+    Case a b c d     -> E.u8# 19#Word8 <> N.encode a <> N.encode b <> eDecider eChoice c <> E.list32 (\(i,e) -> E.int i <> eExpr e) d
+    Accessor f       -> E.u8# 20#Word8 <> N.encode f
+    Access e f       -> E.u8# 21#Word8 <> eExpr e <> N.encode f
+    Update e fs      -> E.u8# 22#Word8 <> eExpr e <> E.dict32 N.encode eExpr fs
+    Record fs        -> E.u8# 23#Word8 <> E.dict32 N.encode eExpr fs
+    Unit             -> E.u8# 24#Word8
+    Pair   a b       -> E.u8# 25#Word8 <> eExpr a <> eExpr b
+    Triple a b c     -> E.u8# 26#Word8 <> eExpr a <> eExpr b <> eExpr c
+    Shader s a u     -> E.u8# 27#Word8 <> Shader.eSource s <> E.set32 N.encode a <> E.set32 N.encode u
 
 
-instance (Binary a) => Binary (Decider a) where
-  put decider =
-    case decider of
-      Leaf a       -> putWord8 0 >> put a
-      Chain a b c  -> putWord8 1 >> put a >> put b >> put c
-      FanOut a b c -> putWord8 2 >> put a >> put b >> put c
+dExpr :: D.Decoder Expr
+dExpr =
+  do  tag <- D.u8
+      case tag of
+        0  -> liftM  Bool D.bool
+        1  -> liftM  Chr D.char
+        2  -> liftM  Str ES.decode
+        3  -> liftM  Int D.int
+        4  -> liftM  Float EF.decode
+        5  -> liftM  VarLocal N.decode
+        6  -> liftM  VarGlobal dGlobal
+        7  -> liftM2 VarEnum dGlobal Index.dZeroBased
+        8  -> liftM  VarBox dGlobal
+        9  -> liftM2 VarCycle ModuleName.dCanonical N.decode
+        10 -> liftM4 VarDebug N.decode ModuleName.dCanonical A.dRegion (D.maybe N.decode)
+        11 -> liftM2 VarKernel Module.dKernel N.decode
+        12 -> liftM  List (D.list32 dExpr)
+        13 -> liftM2 Function (D.list32 N.decode) dExpr
+        14 -> liftM2 Call dExpr (D.list32 dExpr)
+        15 -> liftM2 TailCall N.decode (D.list32 (liftM2 (,) N.decode dExpr))
+        16 -> liftM2 If (D.list32 (liftM2 (,) dExpr dExpr)) dExpr
+        17 -> liftM2 Let dDef dExpr
+        18 -> liftM2 Destruct dDestructor dExpr
+        19 -> liftM4 Case N.decode N.decode (dDecider dChoice) (D.list32 (liftM2 (,) D.int dExpr))
+        20 -> liftM  Accessor N.decode
+        21 -> liftM2 Access dExpr N.decode
+        22 -> liftM2 Update dExpr (D.dict32 N.decode dExpr)
+        23 -> liftM  Record (D.dict32 N.decode dExpr)
+        24 -> pure   Unit
+        25 -> liftM2 Pair dExpr dExpr
+        26 -> liftM3 Triple dExpr dExpr dExpr
+        27 -> liftM3 Shader Shader.dSource (D.set32 N.decode) (D.set32 N.decode)
+        _  -> D.expecting "Expr"
 
-  get =
-    do  word <- getWord8
-        case word of
-          0 -> liftM  Leaf get
-          1 -> liftM3 Chain get get get
-          2 -> liftM3 FanOut get get get
-          _ -> fail "problem getting Opt.Decider binary"
+
+eDef :: Def -> E.Builder
+eDef def =
+  case def of
+    Def     n    e -> E.u8# 0#Word8 <> N.encode n <> eExpr e
+    TailDef n xs e -> E.u8# 1#Word8 <> N.encode n <> E.list32 N.encode xs <> eExpr e
 
 
-instance Binary Choice where
-  put choice =
-    case choice of
-      Inline expr -> putWord8 0 >> put expr
-      Jump index  -> putWord8 1 >> put index
-
-  get =
-    do  word <- getWord8
-        case word of
-          0 -> liftM Inline get
-          1 -> liftM Jump get
-          _ -> fail "problem getting Opt.Choice binary"
+dDef :: D.Decoder Def
+dDef =
+  do  tag <- D.u8
+      case tag of
+        0 -> liftM2 Def N.decode dExpr
+        1 -> liftM3 TailDef N.decode (D.list32 N.decode) dExpr
+        _ -> D.expecting "Def"
 
 
 
-instance Binary GlobalGraph where
-  get = liftM2 GlobalGraph get get
-  put (GlobalGraph a b) = put a >> put b
+eDestructor :: Destructor -> E.Builder
+eDestructor (Destructor n p) =
+  N.encode n <> ePath p
 
 
-instance Binary LocalGraph where
-  get = liftM3 LocalGraph get get get
-  put (LocalGraph a b c) = put a >> put b >> put c
+dDestructor :: D.Decoder Destructor
+dDestructor =
+  liftM2 Destructor N.decode dPath
 
 
-instance Binary Main where
-  put main =
-    case main of
-      Static      -> putWord8 0
-      Dynamic a b -> putWord8 1 >> put a >> put b
+ePath :: Path -> E.Builder
+ePath path =
+  case path of
+    Index i p -> E.u8# 0#Word8 <> Index.eZeroBased i <> ePath p
+    Field f p -> E.u8# 1#Word8 <> N.encode f <> ePath p
+    Unbox p   -> E.u8# 2#Word8 <> ePath p
+    Root n    -> E.u8# 3#Word8 <> N.encode n
 
-  get =
-    do  word <- getWord8
-        case word of
+
+dPath :: D.Decoder Path
+dPath =
+  do  tag <- D.u8
+      case tag of
+        0 -> liftM2 Index Index.dZeroBased dPath
+        1 -> liftM2 Field N.decode dPath
+        2 -> liftM  Unbox dPath
+        3 -> liftM  Root N.decode
+        _ -> D.expecting "Path"
+
+
+eDecider :: (a -> E.Builder) -> Decider a -> E.Builder
+eDecider enc =
+    go
+  where
+    go decider =
+      case decider of
+        Leaf   a     -> E.u8# 0#Word8 <> enc a
+        Chain  c s f -> E.u8# 1#Word8 <> E.list32 (\(p,t) -> DT.ePath p <> DT.eTest t) c <> go s <> go f
+        FanOut p b f -> E.u8# 2#Word8 <> DT.ePath p <> E.list32 (\(t,d) -> DT.eTest t <> go d) b <> go f
+
+
+dDecider :: D.Decoder a -> D.Decoder (Decider a)
+dDecider dec =
+    go
+  where
+    go =
+      do  tag <- D.u8
+          case tag of
+            0 -> liftM  Leaf dec
+            1 -> liftM3 Chain (D.list32 (liftM2 (,) DT.dPath DT.dTest)) go go
+            2 -> liftM3 FanOut DT.dPath (D.list32 (liftM2 (,) DT.dTest go)) go
+            _ -> D.expecting "Decider"
+
+
+eChoice :: Choice -> E.Builder
+eChoice choice =
+  case choice of
+    Inline e -> E.u8# 0#Word8 <> eExpr e
+    Jump   i -> E.u8# 1#Word8 <> E.int i
+
+
+dChoice :: D.Decoder Choice
+dChoice =
+  do  tag <- D.u8
+      case tag of
+        0 -> liftM Inline dExpr
+        1 -> liftM Jump D.int
+        _ -> D.expecting "Choice"
+
+
+
+-- OBJECT GRAPH
+
+
+eGlobalGraph :: GlobalGraph -> E.Builder
+eGlobalGraph (GlobalGraph n f) =
+  E.dict32 eGlobal eNode n <> E.dict32 N.encode E.int f
+
+
+dGlobalGraph :: D.Decoder GlobalGraph
+dGlobalGraph =
+  liftM2 GlobalGraph (D.dict32 dGlobal dNode) (D.dict32 N.decode D.int)
+
+
+eLocalGraph :: LocalGraph -> E.Builder
+eLocalGraph (LocalGraph m n f) =
+  E.maybe eMain m <> E.dict32 eGlobal eNode n <> E.dict32 N.encode E.int f
+
+
+dLocalGraph :: D.Decoder LocalGraph
+dLocalGraph =
+  liftM3 LocalGraph (D.maybe dMain) (D.dict32 dGlobal dNode) (D.dict32 N.decode D.int)
+
+
+eMain :: Main -> E.Builder
+eMain main =
+  case main of
+    Static      -> E.u8# 0#Word8
+    Dynamic t e -> E.u8# 1#Word8 <> I.eType t <> eExpr e
+
+
+dMain :: D.Decoder Main
+dMain =
+    do  tag <- D.u8
+        case tag of
           0 -> return Static
-          1 -> liftM2 Dynamic get get
-          _ -> fail "problem getting Opt.Main binary"
+          1 -> liftM2 Dynamic I.dType dExpr
+          _ -> D.expecting "Main"
 
 
-instance Binary Node where
-  put node =
+eNode :: Node -> E.Builder
+eNode node =
     case node of
-      Define a b           -> putWord8  0 >> put a >> put b
-      DefineTailFunc a b c -> putWord8  1 >> put a >> put b >> put c
-      Ctor a b             -> putWord8  2 >> put a >> put b
-      Enum a               -> putWord8  3 >> put a
-      Box                  -> putWord8  4
-      Link a               -> putWord8  5 >> put a
-      Cycle a b c d        -> putWord8  6 >> put a >> put b >> put c >> put d
-      Manager a            -> putWord8  7 >> put a
-      Kernel a b           -> putWord8  8 >> put a >> put b
-      PortIncoming a b     -> putWord8  9 >> put a >> put b
-      PortOutgoing a b     -> putWord8 10 >> put a >> put b
-
-  get =
-    do  word <- getWord8
-        case word of
-          0  -> liftM2 Define get get
-          1  -> liftM3 DefineTailFunc get get get
-          2  -> liftM2 Ctor get get
-          3  -> liftM  Enum get
-          4  -> return Box
-          5  -> liftM  Link get
-          6  -> liftM4 Cycle get get get get
-          7  -> liftM  Manager get
-          8  -> liftM2 Kernel get get
-          9  -> liftM2 PortIncoming get get
-          10 -> liftM2 PortOutgoing get get
-          _  -> fail "problem getting Opt.Node binary"
+      Define e d            -> E.u8#  0#Word8 <> eExpr e <> E.set32 eGlobal d
+      DefineTailFunc xs e d -> E.u8#  1#Word8 <> E.list32 N.encode xs <> eExpr e <> E.set32 eGlobal d
+      Ctor i a              -> E.u8#  2#Word8 <> Index.eZeroBased i <> E.int a
+      Enum i                -> E.u8#  3#Word8 <> Index.eZeroBased i
+      Box                   -> E.u8#  4#Word8
+      Link g                -> E.u8#  5#Word8 <> eGlobal g
+      Cycle n v f d         -> E.u8#  6#Word8 <> E.list32 N.encode n <> E.list32 (\(x,e) -> N.encode x <> eExpr e) v <> E.list32 eDef f <> E.set32 eGlobal d
+      Manager t             -> E.u8#  7#Word8 <> eEffectsType t
+      Kernel cs d           -> E.u8#  8#Word8 <> E.list32 K.eChunk cs <> E.set32 eGlobal d
+      PortIncoming e d      -> E.u8#  9#Word8 <> eExpr e <> E.set32 eGlobal d
+      PortOutgoing e d      -> E.u8# 10#Word8 <> eExpr e <> E.set32 eGlobal d
 
 
-instance Binary EffectsType where
-  put effectsType =
-    case effectsType of
-      Cmd -> putWord8 0
-      Sub -> putWord8 1
-      Fx  -> putWord8 2
+dNode :: D.Decoder Node
+dNode =
+  do  tag <- D.u8
+      case tag of
+        0  -> liftM2 Define dExpr (D.set32 dGlobal)
+        1  -> liftM3 DefineTailFunc (D.list32 N.decode) dExpr (D.set32 dGlobal)
+        2  -> liftM2 Ctor Index.dZeroBased D.int
+        3  -> liftM  Enum Index.dZeroBased
+        4  -> return Box
+        5  -> liftM  Link dGlobal
+        6  -> liftM4 Cycle (D.list32 N.decode) (D.list32 (liftM2 (,) N.decode dExpr)) (D.list32 dDef) (D.set32 dGlobal)
+        7  -> liftM  Manager dEffectsType
+        8  -> liftM2 Kernel (D.list32 K.dChunk) (D.set32 dGlobal)
+        9  -> liftM2 PortIncoming dExpr (D.set32 dGlobal)
+        10 -> liftM2 PortOutgoing dExpr (D.set32 dGlobal)
+        _  -> D.expecting "Node"
 
-  get =
-    do  word <- getWord8
-        case word of
-          0 -> return Cmd
-          1 -> return Sub
-          2 -> return Fx
-          _ -> fail "problem getting Opt.EffectsType binary"
+
+eEffectsType :: EffectsType -> E.Builder
+eEffectsType effectsType =
+  case effectsType of
+    Cmd -> E.u8# 0#Word8
+    Sub -> E.u8# 1#Word8
+    Fx  -> E.u8# 2#Word8
+
+
+dEffectsType :: D.Decoder EffectsType
+dEffectsType =
+  do  tag <- D.u8
+      case tag of
+        0 -> return Cmd
+        1 -> return Sub
+        2 -> return Fx
+        _ -> D.expecting "EffectsType"

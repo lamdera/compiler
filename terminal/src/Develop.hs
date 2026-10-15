@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings, QuasiQuotes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Develop
@@ -25,7 +25,9 @@ import Snap.Core hiding (path)
 import Snap.Http.Server
 import Snap.Util.FileServe
 
-import qualified BackgroundWriter as BW
+import qualified String as S
+
+import qualified AST.Prim.Module as Module
 import qualified Build
 import qualified Elm.Details as Details
 import qualified Develop.Generate.Help as Help
@@ -36,7 +38,7 @@ import qualified Generate
 import qualified Reporting
 import qualified Reporting.Exit as Exit
 import qualified Reporting.Task as Task
-import qualified Stuff
+import qualified Root as R
 
 
 import Lamdera
@@ -194,7 +196,7 @@ error404 :: Snap ()
 error404 =
   do  modifyResponse $ setResponseStatus 404 "Not Found"
       modifyResponse $ setContentType "text/html;charset=utf-8"
-      writeBuilder $ Help.makePageHtml "NotFound" Nothing
+      writeBuilder $ Help.makePageHtml (Module.fromString [S.ascii|NotFound|]) Nothing
 
 
 
@@ -315,26 +317,27 @@ serveElm_ root path =
           -- We print out a less-processed version here in debug mode to aid with
           -- debugging in these scenarios, as the browser will just get zero bytes
           debugPass "serveElm error" (Exit.reactorToReport exit) (pure ())
-          writeBuilder $ Help.makePageHtml "Errors" $ Just $
+          writeBuilder $ Help.makePageHtml (Module.fromString [S.ascii|Errors|]) $ Just $
             Exit.toJson $ Exit.reactorToReport exit
 
 
 compile :: FilePath -> IO (Either Exit.Reactor B.Builder)
 compile path =
-  do  maybeRoot <- Stuff.findRootHelp $ FP.splitDirectories $ FP.takeDirectory path
+  do  maybeRoot <- R.findRootHelp $ FP.splitDirectories $ FP.takeDirectory path
       case maybeRoot of
         Nothing ->
           return $ Left $ Exit.ReactorNoOutline
 
         Just root ->
-          Stuff.withRootLock root $ Task.run $
-            do  details <- Task.eio Exit.ReactorBadDetails $ BW.withScope $ \scope -> Details.load Reporting.silent scope root
-                artifacts <- Task.eio Exit.ReactorBadBuild $ Build.fromPaths Reporting.silent root details (NE.List path [])
+          R.withRootLock root $ \writer stuff ->
+          Task.run $
+            do  details <- Task.eio Exit.ReactorBadDetails $ Details.load writer Reporting.silent root stuff
+                artifacts <- Task.eio Exit.ReactorBadBuild $ Build.fromPaths writer Reporting.silent root stuff details (NE.List path [])
 
                 Lamdera.PostCompile.check details artifacts Exit.ReactorBadBuild
                 Lamdera.TypeHash.buildCheckHashes artifacts
 
-                javascript <- Task.mapError Exit.ReactorBadGenerate $ Generate.dev root details artifacts
+                javascript <- Task.mapError Exit.ReactorBadGenerate $ Generate.dev stuff details artifacts
                 let (NE.List name _) = Build.getRootNames artifacts
                 return $ Html.sandwich root name javascript
 

@@ -9,20 +9,25 @@ module Reporting.Annotation
   , merge
   , at
   , toRowCol
+  , toEditorRowCol
   , toRow
   , toCol
   , toRegion
   , mergeRegions
   , zero
+  --
+  , eRegion, dRegion
   )
   where
 
 
 import Prelude hiding (traverse)
-import Data.Binary (Binary, get, put)
 import GHC.Exts (isTrue#)
 import GHC.Prim
 import GHC.Word (Word(..), Word64(..))
+
+import qualified Bytes.Decode as D
+import qualified Bytes.Encode as E
 
 
 
@@ -78,6 +83,17 @@ toRowCol :: Word64# -> (Int, Int)
 toRowCol pos =
   ( fromIntegral (toRow pos)
   , fromIntegral (toCol pos)
+  )
+
+
+-- Editor coordinates start at (1,1); the packed representation starts at (0,0).
+-- Anything that leaves the compiler for a human or a tool must go through this,
+-- not through toRowCol.
+{-# INLINE toEditorRowCol #-}
+toEditorRowCol :: Word64# -> (Int, Int)
+toEditorRowCol pos =
+  ( fromIntegral (toRow pos) + 1
+  , fromIntegral (toCol pos) + 1
   )
 
 
@@ -148,11 +164,14 @@ instance Ord Region where
     | otherwise                = EQ
 
 
-instance Binary Region where
-  get =
-    do  (W64# s) <- get
-        (W64# e) <- get
-        pure $ Region s e
+dRegion :: D.Decoder Region
+dRegion =
+  do  (W64# s) <- D.u64
+      (W64# e) <- D.u64
+      pure $ Region s e
 
-  put (Region s e) =
-    put (W64# s) >> put (W64# e)
+
+eRegion :: Region -> E.Builder
+eRegion (Region s e) =
+  E.u64# s <> E.u64# e
+

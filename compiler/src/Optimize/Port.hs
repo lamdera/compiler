@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE QuasiQuotes, TemplateHaskell #-}
 module Optimize.Port
   ( toEncoder
   , toFlagsDecoder
@@ -10,13 +10,17 @@ module Optimize.Port
 import Prelude hiding (maybe, null)
 import Control.Monad (foldM)
 import qualified Data.Map as Map
-import qualified Data.Name as Name
+
+import qualified Crash
 
 import qualified AST.Canonical as Can
 import qualified AST.Optimized as Opt
+import qualified AST.Prim.Name as N
+import qualified AST.Prim.TypeName as T
 import qualified AST.Utils.Type as Type
 import qualified Data.Index as Index
 import qualified Elm.ModuleName as ModuleName
+import qualified Elm.String as ES
 import qualified Optimize.Names as Names
 
 
@@ -31,49 +35,52 @@ toEncoder tipe =
       toEncoder (Type.dealias args alias)
 
     Can.TLambda _ _ ->
-      error "toEncoder: function"
+      $(Crash.crash 'toEncoder) "function"
 
     Can.TVar _ ->
-      error "toEncoder: type variable"
+      $(Crash.crash 'toEncoder) "type variable"
 
     Can.TUnit ->
-      Opt.Function [Name.dollar] <$> encode "null"
+      Opt.Function [dollar] <$> encode [N.ascii|null|]
 
-    Can.TTuple a b c ->
-      encodeTuple a b c
+    Can.TPair a b ->
+      encodePair a b
+
+    Can.TTriple a b c ->
+      encodeTriple a b c
 
     Can.TType _ name args ->
       case args of
         []
-          | name == Name.float  -> encode "float"
-          | name == Name.int    -> encode "int"
-          | name == Name.bool   -> encode "bool"
-          | name == Name.string -> encode "string"
-          | name == Name.value  -> Names.registerGlobal ModuleName.basics Name.identity
-          | name == Name.bytes  -> Names.registerGlobal ModuleName.lamderaWire3 "encodeBytes_"
+          | name == T.float  -> encode [N.ascii|float|]
+          | name == T.int    -> encode [N.ascii|int|]
+          | name == T.bool   -> encode [N.ascii|bool|]
+          | name == T.string -> encode [N.ascii|string|]
+          | name == T.value  -> Names.registerGlobal ModuleName.basics N.identity
+          | name == T.bytes  -> Names.registerGlobal ModuleName.lamderaWire3 [N.ascii|encodeBytes_|] -- @LAMDERA
 
         [arg]
-          | name == Name.maybe -> encodeMaybe arg
-          | name == Name.list  -> encodeList arg
-          | name == Name.array -> encodeArray arg
+          | name == T.maybe -> encodeMaybe arg
+          | name == T.list  -> encodeList arg
+          | name == T.array -> encodeArray arg
 
         _ ->
-          error "toEncoder: bad custom type"
+          $(Crash.crash 'toEncoder) "bad custom type"
 
     Can.TRecord _ (Just _) ->
-      error "toEncoder: bad record"
+      $(Crash.crash 'toEncoder) "bad record"
 
     Can.TRecord fields Nothing ->
       let
         encodeField (name, Can.FieldType _ fieldType) =
           do  encoder <- toEncoder fieldType
-              let value = Opt.Call encoder [Opt.Access (Opt.VarLocal Name.dollar) name]
-              return $ Opt.Tuple (Opt.Str (Name.toElmString name)) value Nothing
+              let value = Opt.Call encoder [Opt.Access (Opt.VarLocal dollar) name]
+              return $ Opt.Pair (Opt.Str (ES.fromName name)) value
       in
-      do  object <- encode "object"
+      do  object <- encode [N.ascii|object|]
           keyValuePairs <- traverse encodeField (Map.toList fields)
           Names.registerFieldDict fields $
-            Opt.Function [Name.dollar] (Opt.Call object [Opt.List keyValuePairs])
+            Opt.Function [dollar] (Opt.Call object [Opt.List keyValuePairs])
 
 
 
@@ -82,56 +89,71 @@ toEncoder tipe =
 
 encodeMaybe :: Can.Type -> Names.Tracker Opt.Expr
 encodeMaybe tipe =
-  do  null <- encode "null"
+  do  null <- encode [N.ascii|null|]
       encoder <- toEncoder tipe
-      destruct <- Names.registerGlobal ModuleName.maybe "destruct"
-      return $ Opt.Function [Name.dollar] $
-        Opt.Call destruct [ null, encoder, Opt.VarLocal Name.dollar ]
+      destruct <- Names.registerGlobal ModuleName.maybe [N.ascii|destruct|]
+      return $ Opt.Function [dollar] $
+        Opt.Call destruct [ null, encoder, Opt.VarLocal dollar ]
 
 
 encodeList :: Can.Type -> Names.Tracker Opt.Expr
 encodeList tipe =
-  do  list <- encode "list"
+  do  list <- encode [N.ascii|list|]
       encoder <- toEncoder tipe
       return $ Opt.Call list [ encoder ]
 
 
 encodeArray :: Can.Type -> Names.Tracker Opt.Expr
 encodeArray tipe =
-  do  array <- encode "array"
+  do  array <- encode [N.ascii|array|]
       encoder <- toEncoder tipe
       return $ Opt.Call array [ encoder ]
 
 
-encodeTuple :: Can.Type -> Can.Type -> Maybe Can.Type -> Names.Tracker Opt.Expr
-encodeTuple a b maybeC =
+encodePair :: Can.Type -> Can.Type -> Names.Tracker Opt.Expr
+encodePair a b =
   let
     let_ arg index body =
-      Opt.Destruct (Opt.Destructor arg (Opt.Index index (Opt.Root Name.dollar))) body
+      Opt.Destruct (Opt.Destructor arg (Opt.Index index (Opt.Root dollar))) body
 
     encodeArg arg tipe =
       do  encoder <- toEncoder tipe
           return $ Opt.Call encoder [ Opt.VarLocal arg ]
   in
-  do  list <- encode "list"
-      identity <- Names.registerGlobal ModuleName.basics Name.identity
-      arg1 <- encodeArg "a" a
-      arg2 <- encodeArg "b" b
+  do  list <- encode [N.ascii|list|]
+      identity <- Names.registerGlobal ModuleName.basics N.identity
+      arg1 <- encodeArg N.a a
+      arg2 <- encodeArg N.b b
+      return $ Opt.Function [dollar] $
+        let_ N.a Index.first $
+        let_ N.b Index.second $
+          Opt.Call list [ identity, Opt.List [ arg1, arg2 ] ]
 
-      case maybeC of
-        Nothing ->
-          return $ Opt.Function [Name.dollar] $
-            let_ "a" Index.first $
-            let_ "b" Index.second $
-              Opt.Call list [ identity, Opt.List [ arg1, arg2 ] ]
 
-        Just c ->
-          do  arg3 <- encodeArg "c" c
-              return $ Opt.Function [Name.dollar] $
-                let_ "a" Index.first $
-                let_ "b" Index.second $
-                let_ "c" Index.third $
-                  Opt.Call list [ identity, Opt.List [ arg1, arg2, arg3 ] ]
+encodeTriple :: Can.Type -> Can.Type -> Can.Type -> Names.Tracker Opt.Expr
+encodeTriple a b c =
+  let
+    let_ arg index body =
+      Opt.Destruct (Opt.Destructor arg (Opt.Index index (Opt.Root dollar))) body
+
+    encodeArg arg tipe =
+      do  encoder <- toEncoder tipe
+          return $ Opt.Call encoder [ Opt.VarLocal arg ]
+  in
+  do  list <- encode [N.ascii|list|]
+      identity <- Names.registerGlobal ModuleName.basics N.identity
+      arg1 <- encodeArg N.a a
+      arg2 <- encodeArg N.b b
+      arg3 <- encodeArg N.c c
+      return $ Opt.Function [dollar] $
+        let_ N.a Index.first $
+        let_ N.b Index.second $
+        let_ N.c Index.third $
+          Opt.Call list [ identity, Opt.List [ arg1, arg2, arg3 ] ]
+
+
+dollar :: N.Name
+dollar = [N.ascii|$|]
 
 
 
@@ -142,7 +164,7 @@ toFlagsDecoder :: Can.Type -> Names.Tracker Opt.Expr
 toFlagsDecoder tipe =
   case tipe of
     Can.TUnit ->
-      do  succeed <- decode "succeed"
+      do  succeed <- decode [N.ascii|succeed|]
           return $ Opt.Call succeed [ Opt.Unit ]
 
     _ ->
@@ -157,40 +179,43 @@ toDecoder :: Can.Type -> Names.Tracker Opt.Expr
 toDecoder tipe =
   case tipe of
     Can.TLambda _ _ ->
-      error "functions should not be allowed through input ports"
+      $(Crash.crash 'toDecoder) "functions should not be allowed through input ports"
 
     Can.TVar _ ->
-      error "type variables should not be allowed through input ports"
+      $(Crash.crash 'toDecoder) "type variables should not be allowed through input ports"
 
     Can.TAlias _ _ args alias ->
       toDecoder (Type.dealias args alias)
 
     Can.TUnit ->
-      decodeTuple0
+      decodeUnit
 
-    Can.TTuple a b c ->
-      decodeTuple a b c
+    Can.TPair a b ->
+      decodePair a b
+
+    Can.TTriple a b c ->
+      decodeTriple a b c
 
     Can.TType _ name args ->
       case args of
         []
-          | name == Name.float  -> decode "float"
-          | name == Name.int    -> decode "int"
-          | name == Name.bool   -> decode "bool"
-          | name == Name.string -> decode "string"
-          | name == Name.value  -> decode "value"
-          | name == Name.bytes  -> Names.registerGlobal ModuleName.lamderaWire3 "decodeBytes_"
+          | name == T.float  -> decode [N.ascii|float|]
+          | name == T.int    -> decode [N.ascii|int|]
+          | name == T.bool   -> decode [N.ascii|bool|]
+          | name == T.string -> decode [N.ascii|string|]
+          | name == T.value  -> decode [N.ascii|value|]
+          | name == T.bytes  -> Names.registerGlobal ModuleName.lamderaWire3 [N.ascii|decodeBytes_|] -- @LAMDERA
 
         [arg]
-          | name == Name.maybe -> decodeMaybe arg
-          | name == Name.list  -> decodeList arg
-          | name == Name.array -> decodeArray arg
+          | name == T.maybe -> decodeMaybe arg
+          | name == T.list  -> decodeList arg
+          | name == T.array -> decodeArray arg
 
         _ ->
-          error "toDecoder: bad type"
+          $(Crash.crash 'toDecoder) "bad type"
 
     Can.TRecord _ (Just _) ->
-      error "toDecoder: bad record"
+      $(Crash.crash 'toDecoder) "bad record"
 
     Can.TRecord fields Nothing ->
       decodeRecord fields
@@ -202,12 +227,12 @@ toDecoder tipe =
 
 decodeMaybe :: Can.Type -> Names.Tracker Opt.Expr
 decodeMaybe tipe =
-  do  nothing <- Names.registerGlobal ModuleName.maybe "Nothing"
-      just    <- Names.registerGlobal ModuleName.maybe "Just"
+  do  nothing <- Names.registerGlobal ModuleName.maybe [N.ascii|Nothing|]
+      just    <- Names.registerGlobal ModuleName.maybe [N.ascii|Just|]
 
-      oneOf <- decode "oneOf"
-      null  <- decode "null"
-      map_  <- decode "map"
+      oneOf <- decode [N.ascii|oneOf|]
+      null  <- decode [N.ascii|null|]
+      map_  <- decode [N.ascii|map|]
 
       subDecoder <- toDecoder tipe
 
@@ -225,7 +250,7 @@ decodeMaybe tipe =
 
 decodeList :: Can.Type -> Names.Tracker Opt.Expr
 decodeList tipe =
-  do  list <- decode "list"
+  do  list <- decode [N.ascii|list|]
       decoder <- toDecoder tipe
       return $ Opt.Call list [ decoder ]
 
@@ -236,7 +261,7 @@ decodeList tipe =
 
 decodeArray :: Can.Type -> Names.Tracker Opt.Expr
 decodeArray tipe =
-  do  array <- decode "array"
+  do  array <- decode [N.ascii|array|]
       decoder <- toDecoder tipe
       return $ Opt.Call array [ decoder ]
 
@@ -245,41 +270,40 @@ decodeArray tipe =
 -- DECODE TUPLES
 
 
-decodeTuple0 :: Names.Tracker Opt.Expr
-decodeTuple0 =
-  do  null <- decode "null"
+decodeUnit :: Names.Tracker Opt.Expr
+decodeUnit =
+  do  null <- decode [N.ascii|null|]
       return (Opt.Call null [ Opt.Unit ])
 
 
-decodeTuple :: Can.Type -> Can.Type -> Maybe Can.Type -> Names.Tracker Opt.Expr
-decodeTuple a b maybeC =
-  do  succeed <- decode "succeed"
-      case maybeC of
-        Nothing ->
-          let tuple = Opt.Tuple (toLocal 0) (toLocal 1) Nothing in
-          indexAndThen 0 a =<<
-            indexAndThen 1 b (Opt.Call succeed [tuple])
+decodePair :: Can.Type -> Can.Type -> Names.Tracker Opt.Expr
+decodePair a b =
+  do  succeed <- decode [N.ascii|succeed|]
+      indexAndThen 0 a =<<
+        indexAndThen 1 b (Opt.Call succeed [Opt.Pair (toLocal 0) (toLocal 1)])
 
-        Just c ->
-          let tuple = Opt.Tuple (toLocal 0) (toLocal 1) (Just (toLocal 2)) in
-          indexAndThen 0 a =<<
-            indexAndThen 1 b =<<
-              indexAndThen 2 c (Opt.Call succeed [tuple])
+
+decodeTriple :: Can.Type -> Can.Type -> Can.Type -> Names.Tracker Opt.Expr
+decodeTriple a b c =
+  do  succeed <- decode [N.ascii|succeed|]
+      indexAndThen 0 a =<<
+        indexAndThen 1 b =<<
+          indexAndThen 2 c (Opt.Call succeed [Opt.Triple (toLocal 0) (toLocal 1) (toLocal 2)])
 
 
 toLocal :: Int -> Opt.Expr
 toLocal index =
-  Opt.VarLocal (Name.fromVarIndex index)
+  Opt.VarLocal (Names.fromVarIndex index)
 
 
 indexAndThen :: Int -> Can.Type -> Opt.Expr -> Names.Tracker Opt.Expr
 indexAndThen i tipe decoder =
-  do  andThen <- decode "andThen"
-      index <- decode "index"
+  do  andThen <- decode [N.ascii|andThen|]
+      index <- decode [N.ascii|index|]
       typeDecoder <- toDecoder tipe
       return $
         Opt.Call andThen
-          [ Opt.Function [Name.fromVarIndex i] decoder
+          [ Opt.Function [Names.fromVarIndex i] decoder
           , Opt.Call index [ Opt.Int i, typeDecoder ]
           ]
 
@@ -288,7 +312,7 @@ indexAndThen i tipe decoder =
 -- DECODE RECORDS
 
 
-decodeRecord :: Map.Map Name.Name Can.FieldType -> Names.Tracker Opt.Expr
+decodeRecord :: Map.Map N.Name Can.FieldType -> Names.Tracker Opt.Expr
 decodeRecord fields =
   let
     toFieldExpr name _ =
@@ -297,20 +321,20 @@ decodeRecord fields =
     record =
       Opt.Record (Map.mapWithKey toFieldExpr fields)
   in
-    do  succeed <- decode "succeed"
+    do  succeed <- decode [N.ascii|succeed|]
         foldM fieldAndThen (Opt.Call succeed [record]) =<<
           Names.registerFieldDict fields (Map.toList fields)
 
 
-fieldAndThen :: Opt.Expr -> (Name.Name, Can.FieldType) -> Names.Tracker Opt.Expr
+fieldAndThen :: Opt.Expr -> (N.Name, Can.FieldType) -> Names.Tracker Opt.Expr
 fieldAndThen decoder (key, Can.FieldType _ tipe) =
-  do  andThen <- decode "andThen"
-      field <- decode "field"
+  do  andThen <- decode [N.ascii|andThen|]
+      field <- decode [N.ascii|field|]
       typeDecoder <- toDecoder tipe
       return $
         Opt.Call andThen
           [ Opt.Function [key] decoder
-          , Opt.Call field [ Opt.Str (Name.toElmString key), typeDecoder ]
+          , Opt.Call field [ Opt.Str (ES.fromName key), typeDecoder ]
           ]
 
 
@@ -318,11 +342,11 @@ fieldAndThen decoder (key, Can.FieldType _ tipe) =
 -- GLOBALS HELPERS
 
 
-encode :: Name.Name -> Names.Tracker Opt.Expr
+encode :: N.Name -> Names.Tracker Opt.Expr
 encode name =
   Names.registerGlobal ModuleName.jsonEncode name
 
 
-decode :: Name.Name -> Names.Tracker Opt.Expr
+decode :: N.Name -> Names.Tracker Opt.Expr
 decode name =
   Names.registerGlobal ModuleName.jsonDecode name

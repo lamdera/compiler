@@ -8,9 +8,11 @@ module Generate.Html
 
 import qualified Data.ByteString.Builder as B
 import Data.Monoid ((<>))
-import qualified Data.Name as Name
 
 import Literals (b)
+
+import qualified AST.Prim.Module as Module
+
 
 import qualified Lamdera
 import qualified Lamdera.Live
@@ -19,10 +21,10 @@ import qualified Lamdera.UiSourceMap
 -- SANDWICH
 
 -- @LAMDERA root :: FilePath parameter added.
-sandwich :: FilePath -> Name.Name -> B.Builder -> B.Builder
+sandwich :: FilePath -> Module.Name -> B.Builder -> B.Builder
 sandwich root moduleName javascript =
   Lamdera.alternativeImplementationWhen Lamdera.isLamdera_ (sandwich_ root moduleName javascript) $
-  let name = Name.toBuilder moduleName in
+  let name = Module.toBuilder moduleName in
   [b|<!DOCTYPE HTML>
 <html>
 <head>
@@ -60,10 +62,10 @@ catch (e)
 
 -- @LAMDERA
 
-sandwich_ :: FilePath -> Name.Name -> B.Builder -> B.Builder
+sandwich_ :: FilePath -> Module.Name -> B.Builder -> B.Builder
 sandwich_ root moduleName javascript =
   let
-    name = Name.toBuilder moduleName
+    name = Module.toBuilder moduleName
 
     (hasCustom, customHead) = Lamdera.unsafe $ Lamdera.Live.lamderaLiveHead root
     htmlHead =

@@ -9,10 +9,11 @@ module Canonicalize.Pattern
 
 import qualified Data.List as List
 import qualified Data.Map.Strict as Map
-import qualified Data.Name as Name
 
 import qualified AST.Canonical as Can
 import qualified AST.Source as Src
+import qualified AST.Prim.Name as N
+import qualified AST.Prim.TypeName as T
 import qualified Canonicalize.Environment as Env
 import qualified Canonicalize.Environment.Dups as Dups
 import qualified Data.Index as Index
@@ -31,7 +32,7 @@ type Result i w a =
 
 
 type Bindings =
-  Map.Map Name.Name A.Region
+  Map.Map N.Name A.Region
 
 
 
@@ -59,7 +60,7 @@ verify context (Result.Result k) =
 
 
 type DupsDict =
-  Dups.Dict A.Region
+  Dups.Dict N.Name A.Region
 
 
 canonicalize :: Env.Env -> Src.Pattern -> Result DupsDict w Can.Pattern
@@ -79,10 +80,10 @@ canonicalize env (A.At region pattern) =
       Result.ok Can.PUnit
 
     Src.PTuple a b cs ->
-      Can.PTuple
-        <$> canonicalize env a
-        <*> canonicalize env b
-        <*> canonicalizeTuple region env cs
+      case cs of
+        []  -> Can.PPair   <$> canonicalize env a <*> canonicalize env b
+        [c] -> Can.PTriple <$> canonicalize env a <*> canonicalize env b <*> canonicalize env c
+        _   -> Result.throw $ Error.TupleLargerThanThree region
 
     Src.PCtor nameRegion name patterns ->
       canonicalizeCtor env region name patterns =<< Env.findCtor nameRegion env name
@@ -112,7 +113,7 @@ canonicalize env (A.At region pattern) =
       Result.ok (Can.PInt (fromIntegral int)) -- TODO make overflow an error
 
 
-canonicalizeCtor :: Env.Env -> A.Region -> Name.Name -> [Src.Pattern] -> Env.Ctor -> Result DupsDict w Can.Pattern_
+canonicalizeCtor :: Env.Env -> A.Region -> N.Name -> [Src.Pattern] -> Env.Ctor -> Result DupsDict w Can.Pattern_
 canonicalizeCtor env region name patterns ctor =
   case ctor of
     Env.Ctor home tipe union index args ->
@@ -123,29 +124,16 @@ canonicalizeCtor env region name patterns ctor =
       do  verifiedList <- Index.indexedZipWithA toCanonicalArg patterns args
           case verifiedList of
             Index.LengthMatch cargs ->
-              if tipe == Name.bool && home == ModuleName.basics then
-                Result.ok (Can.PBool union (name == Name.true))
+              if tipe == T.bool && home == ModuleName.basics then
+                Result.ok (Can.PBool union (name == N.true))
               else
                 Result.ok (Can.PCtor home tipe union name index cargs)
 
             Index.LengthMismatch actualLength expectedLength ->
-              Result.throw (Error.BadArity region Error.PatternArity name expectedLength actualLength)
+              Result.throw (Error.BadArity_Pattern region name expectedLength actualLength)
 
     Env.RecordCtor _ _ _ ->
       Result.throw (Error.PatternHasRecordCtor region name)
-
-
-canonicalizeTuple :: A.Region -> Env.Env -> [Src.Pattern] -> Result DupsDict w (Maybe Can.Pattern)
-canonicalizeTuple tupleRegion env extras =
-  case extras of
-    [] ->
-      Result.ok Nothing
-
-    [three] ->
-      Just <$> canonicalize env three
-
-    _ ->
-      Result.throw $ Error.TupleLargerThanThree tupleRegion
 
 
 canonicalizeList :: Env.Env -> [Src.Pattern] -> Result DupsDict w [Can.Pattern]
@@ -164,13 +152,13 @@ canonicalizeList env list =
 -- LOG BINDINGS
 
 
-logVar :: Name.Name -> A.Region -> a -> Result DupsDict w a
+logVar :: N.Name -> A.Region -> a -> Result DupsDict w a
 logVar name region value =
   Result.Result $ \bindings warnings _ ok ->
     ok (Dups.insert name region region bindings) warnings value
 
 
-logFields :: [A.Located Name.Name] -> a -> Result DupsDict w a
+logFields :: [A.Located N.Name] -> a -> Result DupsDict w a
 logFields fields value =
   let
     addField dict (A.At region name) =

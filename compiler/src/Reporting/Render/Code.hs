@@ -18,7 +18,6 @@ import qualified Data.ByteString.UTF8 as UTF8_BS
 import qualified Data.Char as Char
 import qualified Data.IntSet as IntSet
 import qualified Data.List as List
-import qualified Data.Name as Name
 import qualified Data.Set as Set
 import GHC.Exts (Int(..))
 import GHC.Prim
@@ -26,7 +25,7 @@ import GHC.Word (Word32)
 
 import Parse.Primitives (Cursor, newline)
 import Parse.Symbol (binopCharSet)
-import Parse.Variable (reservedWords)
+import Parse.Variable (keywordSet)
 import qualified Reporting.Annotation as A
 import qualified Reporting.Doc as D
 import Reporting.Doc (Doc)
@@ -264,7 +263,7 @@ detectKeywords c rest =
     cs = takeWhile isInner rest
     name = c : cs
   in
-  if Set.member (Name.fromChars name) reservedWords
+  if Set.member name keywordSet
   then Keyword name
   else Lower c name
 

@@ -9,10 +9,12 @@ module Develop.Generate.Help
 
 import qualified Data.ByteString.Builder as B
 import Data.Monoid ((<>))
-import qualified Data.Name as Name
 
 import qualified Json.Encode as Encode
 import Literals (b)
+
+import qualified AST.Prim.Module as Module
+
 
 import qualified Lamdera.Live
 import qualified Lamdera.UiSourceMap
@@ -21,7 +23,7 @@ import qualified Data.Text.Encoding as T
 -- PAGES
 
 
-makePageHtml :: Name.Name -> Maybe Encode.Value -> B.Builder
+makePageHtml :: Module.Name -> Maybe Encode.Value -> B.Builder
 makePageHtml moduleName maybeFlags =
   [b|<!DOCTYPE HTML>
 <html>
@@ -34,7 +36,7 @@ makePageHtml moduleName maybeFlags =
 <body>
 <script>
 var app = // @LAMDERA
-Elm.|] <> Name.toBuilder moduleName <> [b|.init({ flags: |] <> maybe "undefined" Encode.encode maybeFlags <> [b| });
+Elm.|] <> Module.toBuilder moduleName <> [b|.init({ flags: |] <> maybe "undefined" Encode.encode maybeFlags <> [b| });
 if (app.ports && app.ports.jumpTo) app.ports.jumpTo.subscribe(node => { |] <> T.encodeUtf8Builder Lamdera.UiSourceMap.openEditorSrc <> [b| }); // @LAMDERA
 |] <> Lamdera.Live.lamderaLiveSrc <> Lamdera.UiSourceMap.src <> [b|
 </script>

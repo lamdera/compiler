@@ -7,8 +7,10 @@ module Type.Unify
 
 
 import qualified Data.Map.Strict as Map
-import qualified Data.Name as Name
 
+import qualified AST.Prim.Name as N
+import qualified AST.Prim.TypeName as T
+import qualified AST.Prim.TypeVar as T
 import qualified Elm.ModuleName as ModuleName
 import qualified Type.Error as Error
 import qualified Type.Occurs as Occurs
@@ -346,7 +348,7 @@ combineRigidSupers rigid flex =
   || (rigid == CompAppend && (flex == Comparable || flex == Appendable))
 
 
-atomMatchesSuper :: SuperType -> ModuleName.Canonical -> Name.Name -> Bool
+atomMatchesSuper :: SuperType -> ModuleName.Canonical -> T.Name -> Bool
 atomMatchesSuper super home name =
   case super of
     Number ->
@@ -364,11 +366,11 @@ atomMatchesSuper super home name =
       Error.isString home name
 
 
-isNumber :: ModuleName.Canonical -> Name.Name -> Bool
+isNumber :: ModuleName.Canonical -> T.Name -> Bool
 isNumber home name =
   home == ModuleName.basics
   &&
-  (name == Name.int || name == Name.float)
+  (name == T.int || name == T.float)
 
 
 unifyFlexSuperStructure :: Context -> SuperType -> FlatType -> Unify ()
@@ -380,7 +382,7 @@ unifyFlexSuperStructure context super flatType =
       else
         mismatch
 
-    App1 home name [variable] | home == ModuleName.list && name == Name.list ->
+    App1 home name [variable] | home == ModuleName.list && name == T.list ->
       case super of
         Number ->
             mismatch
@@ -398,25 +400,28 @@ unifyFlexSuperStructure context super flatType =
                 unifyComparableRecursive variable
                 merge context (Structure flatType)
 
-    Tuple1 a b maybeC ->
+    Pair1 a b ->
       case super of
-        Number ->
-            mismatch
-
-        Appendable ->
-            mismatch
-
+        Number     -> mismatch
+        Appendable -> mismatch
+        CompAppend -> mismatch
         Comparable ->
             do  comparableOccursCheck context
                 unifyComparableRecursive a
                 unifyComparableRecursive b
-                case maybeC of
-                  Nothing -> return ()
-                  Just c  -> unifyComparableRecursive c
                 merge context (Structure flatType)
 
-        CompAppend ->
-            mismatch
+    Triple1 a b c ->
+      case super of
+        Number     -> mismatch
+        Appendable -> mismatch
+        CompAppend -> mismatch
+        Comparable ->
+            do  comparableOccursCheck context
+                unifyComparableRecursive a
+                unifyComparableRecursive b
+                unifyComparableRecursive c
+                merge context (Structure flatType)
 
     _ ->
       mismatch
@@ -445,7 +450,7 @@ unifyComparableRecursive var =
 -- UNIFY ALIASES
 
 
-unifyAlias :: Context -> ModuleName.Canonical -> Name.Name -> [(Name.Name, Variable)] -> Variable -> Content -> Unify ()
+unifyAlias :: Context -> ModuleName.Canonical -> T.Name -> [(T.Var, Variable)] -> Variable -> Content -> Unify ()
 unifyAlias context home name args realVar otherContent =
   case otherContent of
     FlexVar _ ->
@@ -481,7 +486,7 @@ unifyAlias context home name args realVar otherContent =
       merge context Error
 
 
-unifyAliasArgs :: [Variable] -> Context -> [(Name.Name,Variable)] -> [(Name.Name,Variable)] -> ([Variable] -> () -> IO r) -> ([Variable] -> () -> IO r) -> IO r
+unifyAliasArgs :: [Variable] -> Context -> [(T.Var,Variable)] -> [(T.Var,Variable)] -> ([Variable] -> () -> IO r) -> ([Variable] -> () -> IO r) -> IO r
 unifyAliasArgs vars context args1 args2 ok err =
   case args1 of
     (_,arg1):others1 ->
@@ -561,12 +566,12 @@ unifyStructure context flatType content otherContent =
                       Unify k ->
                         k vars ok err
 
-          (Tuple1 a b Nothing, Tuple1 x y Nothing) ->
+          (Pair1 a b, Pair1 x y) ->
               do  subUnify a x
                   subUnify b y
                   merge context otherContent
 
-          (Tuple1 a b (Just c), Tuple1 x y (Just z)) ->
+          (Triple1 a b c, Triple1 x y z) ->
               do  subUnify a x
                   subUnify b y
                   subUnify c z
@@ -649,7 +654,7 @@ unifyRecord context (RecordStructure fields1 ext1) (RecordStructure fields2 ext2
           unifySharedFields context sharedFields otherFields ext
 
 
-unifySharedFields :: Context -> Map.Map Name.Name (Variable, Variable) -> Map.Map Name.Name Variable -> Variable -> Unify ()
+unifySharedFields :: Context -> Map.Map N.Name (Variable, Variable) -> Map.Map N.Name Variable -> Variable -> Unify ()
 unifySharedFields context sharedFields otherFields ext =
   do  matchingFields <- Map.traverseMaybeWithKey unifyField sharedFields
       if Map.size sharedFields == Map.size matchingFields
@@ -657,7 +662,7 @@ unifySharedFields context sharedFields otherFields ext =
         else mismatch
 
 
-unifyField :: Name.Name -> (Variable, Variable) -> Unify (Maybe Variable)
+unifyField :: N.Name -> (Variable, Variable) -> Unify (Maybe Variable)
 unifyField _ (actual, expected) =
   Unify $ \vars ok _ ->
     case subUnify actual expected of
@@ -673,12 +678,12 @@ unifyField _ (actual, expected) =
 
 data RecordStructure =
   RecordStructure
-    { _fields :: Map.Map Name.Name Variable
+    { _fields :: Map.Map N.Name Variable
     , _extension :: Variable
     }
 
 
-gatherFields :: Map.Map Name.Name Variable -> Variable -> IO RecordStructure
+gatherFields :: Map.Map N.Name Variable -> Variable -> IO RecordStructure
 gatherFields fields variable =
   do  (Descriptor content _ _ _) <- UF.get variable
       case content of

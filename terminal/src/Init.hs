@@ -11,6 +11,8 @@ import qualified Data.Map as Map
 import qualified Data.NonEmptyList as NE
 import qualified System.Directory as Dir
 
+import qualified File
+
 import qualified Deps.Solver as Solver
 import qualified Elm.Constraint as Con
 import qualified Elm.Outline as Outline
@@ -19,6 +21,7 @@ import qualified Elm.Version as V
 import qualified Reporting
 import qualified Reporting.Doc as D
 import qualified Reporting.Exit as Exit
+import qualified Root as R
 
 
 import qualified Lamdera
@@ -103,9 +106,11 @@ init =
                     indirects = Map.difference solution defaults
                                 Lamdera.& Lamdera.alternativeImplementation (Map.difference solution directs)
                   in
-                  do  Dir.createDirectoryIfMissing True "src"
-                      Outline.write "." $ Outline.App $
-                        Outline.AppOutline V.compiler (NE.List (Outline.RelativeSrcDir "src") []) directs indirects Map.empty Map.empty
+                  do  File.withWriter $ \writer ->
+                        do  root <- R.pwd
+                            Dir.createDirectoryIfMissing True (R.src root)
+                            Outline.write writer root $ Outline.App $
+                              Outline.AppOutline V.compiler (NE.List (R.Relative "src") []) directs indirects Map.empty Map.empty
                       Lamdera.Init.writeDefaultImplementations
                       putStrLn "Okay, I created it. Now read that link!"
                         Lamdera.& Lamdera.alternativeImplementation (putStrLn "Okay, I created it! Now read those links, or get going with `lamdera live`.")
@@ -121,6 +126,6 @@ defaults =
     -- @LAMDERA
     , (Pkg.url, Con.anything)
     , (Pkg.bytes, Con.anything)
-    , (Pkg.lamderaCore, Con.exactly (V.Version 1 0 0))
-    , (Pkg.lamderaCodecs, Con.exactly (V.Version 1 0 0))
+    , (Pkg.lamderaCore, Con.exactly (V.toVersion 1 0 0))
+    , (Pkg.lamderaCodecs, Con.exactly (V.toVersion 1 0 0))
     ]

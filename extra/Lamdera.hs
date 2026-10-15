@@ -11,7 +11,7 @@ module Lamdera
   , alternativeImplementationWhen
   , alternativeImplementationPassthrough
   , Ext.Common.atomicPutStrLn
-  , Ext.File.writeBinaryValueStrict
+  , Ext.File.writeBuilderStrict
   , debug_
   , debug_note
   , debug

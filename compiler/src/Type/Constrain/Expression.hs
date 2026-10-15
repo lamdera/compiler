@@ -7,9 +7,12 @@ module Type.Constrain.Expression
 
 
 import qualified Data.Map.Strict as Map
-import qualified Data.Name as Name
 
 import qualified AST.Canonical as Can
+import qualified AST.Prim.Name as N
+import qualified AST.Prim.Operator as Op
+import qualified AST.Prim.TypeName as T
+import qualified AST.Prim.TypeVar as T
 import qualified AST.Utils.Shader as Shader
 import qualified Data.Index as Index
 import qualified Elm.ModuleName as ModuleName
@@ -34,7 +37,7 @@ import qualified Lamdera.Constrain
 -- dictionary will hold variables for `a` and `b`
 --
 type RTV =
-  Map.Map Name.Name Type
+  Map.Map T.Var Type
 
 
 constrain :: RTV -> Can.Expr -> Expected Type -> IO Constraint
@@ -59,7 +62,7 @@ constrain rtv (A.At region expression) expected =
       return $ CForeign region name annotation expected
 
     Can.VarOperator op _ _ annotation ->
-      return $ CForeign region op annotation expected
+      return $ COperator region op annotation expected
 
     Can.Str _ ->
       return $ CEqual region String Type.string expected
@@ -145,8 +148,11 @@ constrain rtv (A.At region expression) expected =
     Can.Unit ->
       return $ CEqual region Unit UnitN expected
 
-    Can.Tuple a b maybeC ->
-      constrainTuple rtv region a b maybeC expected
+    Can.Pair a b ->
+      constrainPair rtv region a b expected
+
+    Can.Triple a b c ->
+      constrainTriple rtv region a b c expected
 
     Can.Shader _src types ->
       constrainShader region types expected
@@ -227,7 +233,7 @@ getName (A.At _ expr) =
     _                        -> NoName
 
 
-getAccessName :: Can.Expr -> Maybe Name.Name
+getAccessName :: Can.Expr -> Maybe N.Name
 getAccessName (A.At _ expr) =
   case expr of
     Can.VarLocal name       -> Just name
@@ -240,7 +246,7 @@ getAccessName (A.At _ expr) =
 -- CONSTRAIN BINOP
 
 
-constrainBinop :: RTV -> A.Region -> Name.Name -> Can.Annotation -> Can.Expr -> Can.Expr -> Expected Type -> IO Constraint
+constrainBinop :: RTV -> A.Region -> Op.Name -> Can.Annotation -> Can.Expr -> Can.Expr -> Expected Type -> IO Constraint
 constrainBinop rtv region op annotation leftExpr rightExpr expected =
   do  leftVar <- mkFlexVar
       rightVar <- mkFlexVar
@@ -250,7 +256,7 @@ constrainBinop rtv region op annotation leftExpr rightExpr expected =
       let answerType = VarN answerVar
       let binopType = leftType ==> rightType ==> answerType
 
-      let opCon = CForeign region op annotation (NoExpectation binopType)
+      let opCon = COperator region op annotation (NoExpectation binopType)
 
       leftCon <- constrain rtv leftExpr (FromContext region (OpLeft op) leftType)
       rightCon <- constrain rtv rightExpr (FromContext region (OpRight op) rightType)
@@ -272,7 +278,7 @@ constrainList :: RTV -> A.Region -> [Can.Expr] -> Expected Type -> IO Constraint
 constrainList rtv region entries expected =
   do  entryVar <- mkFlexVar
       let entryType = VarN entryVar
-      let listType = AppN ModuleName.list Name.list [entryType]
+      let listType = AppN ModuleName.list T.list [entryType]
 
       entryCons <-
         Index.indexedTraverse (constrainListEntry rtv region entryType) entries
@@ -375,7 +381,7 @@ constrainCaseBranch rtv (Can.CaseBranch pattern expr) pExpect bExpect =
 -- CONSTRAIN RECORD
 
 
-constrainRecord :: RTV -> A.Region -> Map.Map Name.Name Can.Expr -> Expected Type -> IO Constraint
+constrainRecord :: RTV -> A.Region -> Map.Map N.Name Can.Expr -> Expected Type -> IO Constraint
 constrainRecord rtv region fields expected =
   do  dict <- traverse (constrainField rtv) fields
 
@@ -401,7 +407,7 @@ constrainField rtv expr =
 -- CONSTRAIN RECORD UPDATE
 
 
-constrainUpdate :: RTV -> A.Region -> Name.Name -> Can.Expr -> Map.Map Name.Name Can.FieldUpdate -> Expected Type -> IO Constraint
+constrainUpdate :: RTV -> A.Region -> N.Name -> Can.Expr -> Map.Map N.Name Can.FieldUpdate -> Expected Type -> IO Constraint
 constrainUpdate rtv region name expr fields expected =
   do  extVar <- mkFlexVar
       fieldDict <- Map.traverseWithKey (constrainUpdateField rtv region) fields
@@ -422,7 +428,7 @@ constrainUpdate rtv region name expr fields expected =
       return $ exists vars $ CAnd (fieldsCon:con:cons)
 
 
-constrainUpdateField :: RTV -> A.Region -> Name.Name -> Can.FieldUpdate -> IO (Variable, Type, Constraint)
+constrainUpdateField :: RTV -> A.Region -> N.Name -> Can.FieldUpdate -> IO (Variable, Type, Constraint)
 constrainUpdateField rtv region field (Can.FieldUpdate _ expr) =
   do  var <- mkFlexVar
       let tipe = VarN var
@@ -434,8 +440,8 @@ constrainUpdateField rtv region field (Can.FieldUpdate _ expr) =
 -- CONSTRAIN TUPLE
 
 
-constrainTuple :: RTV -> A.Region -> Can.Expr -> Can.Expr -> Maybe Can.Expr -> Expected Type -> IO Constraint
-constrainTuple rtv region a b maybeC expected =
+constrainPair :: RTV -> A.Region -> Can.Expr -> Can.Expr -> Expected Type -> IO Constraint
+constrainPair rtv region a b expected =
   do  aVar <- mkFlexVar
       bVar <- mkFlexVar
       let aType = VarN aVar
@@ -444,22 +450,29 @@ constrainTuple rtv region a b maybeC expected =
       aCon <- constrain rtv a (NoExpectation aType)
       bCon <- constrain rtv b (NoExpectation bType)
 
-      case maybeC of
-        Nothing ->
-          do  let tupleType = TupleN aType bType Nothing
-              let tupleCon = CEqual region Tuple tupleType expected
-              return $ exists [ aVar, bVar ] $ CAnd [ aCon, bCon, tupleCon ]
+      let tupleType = PairN aType bType
+      let tupleCon = CEqual region Tuple tupleType expected
 
-        Just c ->
-          do  cVar <- mkFlexVar
-              let cType = VarN cVar
+      return $ exists [ aVar, bVar ] $ CAnd [ aCon, bCon, tupleCon ]
 
-              cCon <- constrain rtv c (NoExpectation cType)
 
-              let tupleType = TupleN aType bType (Just cType)
-              let tupleCon = CEqual region Tuple tupleType expected
+constrainTriple :: RTV -> A.Region -> Can.Expr -> Can.Expr -> Can.Expr -> Expected Type -> IO Constraint
+constrainTriple rtv region a b c expected =
+  do  aVar <- mkFlexVar
+      bVar <- mkFlexVar
+      cVar <- mkFlexVar
+      let aType = VarN aVar
+      let bType = VarN bVar
+      let cType = VarN cVar
 
-              return $ exists [ aVar, bVar, cVar ] $ CAnd [ aCon, bCon, cCon, tupleCon ]
+      aCon <- constrain rtv a (NoExpectation aType)
+      bCon <- constrain rtv b (NoExpectation bType)
+      cCon <- constrain rtv c (NoExpectation cType)
+
+      let tupleType = TripleN aType bType cType
+      let tupleCon = CEqual region Tuple tupleType expected
+
+      return $ exists [ aVar, bVar, cVar ] $ CAnd [ aCon, bCon, cCon, tupleCon ]
 
 
 
@@ -474,7 +487,7 @@ constrainShader region (Shader.Types attributes uniforms varyings) expected =
       let unifType = VarN unifVar
 
       let shaderType =
-            AppN ModuleName.webgl Name.shader
+            AppN ModuleName.webgl T.shader
               [ toShaderRecord attributes attrType
               , toShaderRecord uniforms unifType
               , toShaderRecord varyings EmptyRecordN
@@ -484,7 +497,7 @@ constrainShader region (Shader.Types attributes uniforms varyings) expected =
         CEqual region Shader shaderType expected
 
 
-toShaderRecord :: Map.Map Name.Name Shader.Type -> Type -> Type
+toShaderRecord :: Map.Map N.Name Shader.Type -> Type -> Type
 toShaderRecord types baseRecType =
   if Map.null types then
     baseRecType
@@ -590,7 +603,7 @@ data Info =
   Info
     { _vars :: [Variable]
     , _cons :: [Constraint]
-    , _headers :: Map.Map Name.Name (A.Located Type)
+    , _headers :: Map.Map N.Name (A.Located Type)
     }
 
 
@@ -724,12 +737,12 @@ data TypedArgs =
     }
 
 
-constrainTypedArgs :: Map.Map Name.Name Type -> Name.Name -> [(Can.Pattern, Can.Type)] -> Can.Type -> IO TypedArgs
+constrainTypedArgs :: Map.Map T.Var Type -> N.Name -> [(Can.Pattern, Can.Type)] -> Can.Type -> IO TypedArgs
 constrainTypedArgs rtv name args srcResultType =
   typedArgsHelp rtv name Index.first args srcResultType Pattern.emptyState
 
 
-typedArgsHelp :: Map.Map Name.Name Type -> Name.Name -> Index.ZeroBased -> [(Can.Pattern, Can.Type)] -> Can.Type -> Pattern.State -> IO TypedArgs
+typedArgsHelp :: Map.Map T.Var Type -> N.Name -> Index.ZeroBased -> [(Can.Pattern, Can.Type)] -> Can.Type -> Pattern.State -> IO TypedArgs
 typedArgsHelp rtv name index args srcResultType state =
   case args of
     [] ->

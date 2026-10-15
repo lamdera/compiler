@@ -19,17 +19,16 @@ import qualified System.Directory as Dir
 import qualified System.FilePath as FP
 
 import qualified AST.Optimized as Opt
-import qualified BackgroundWriter as BW
+import qualified AST.Prim.Module as Module
 import qualified Build
 import qualified Elm.Details as Details
-import qualified Elm.ModuleName as ModuleName
 import qualified File
 import qualified Generate
 import qualified Generate.Html as Html
 import qualified Reporting
 import qualified Reporting.Exit as Exit
 import qualified Reporting.Task as Task
-import qualified Stuff
+import qualified Root as R
 import Terminal (Parser(..))
 
 
@@ -72,7 +71,7 @@ type Task a = Task.Task Exit.Make a
 run :: [FilePath] -> Flags -> IO ()
 run paths flags@(Flags _ _ _ report _ noWire optimizeLegible esm) =
   do  style <- getStyle report
-      maybeRoot <- Stuff.findRoot
+      maybeRoot <- R.findRoot
       Lamdera.onlyWhen noWire Lamdera.disableWire
       Lamdera.onlyWhen optimizeLegible Lamdera.enableLongNames
       Lamdera.onlyWhen esm Lamdera.enableEsm
@@ -82,19 +81,19 @@ run paths flags@(Flags _ _ _ report _ noWire optimizeLegible esm) =
           Nothing   -> return $ Left $ Exit.MakeNoOutline
 
 
-runHelp :: FilePath -> [FilePath] -> Reporting.Style -> Flags -> IO (Either Exit.Make ())
+runHelp :: R.Root -> [FilePath] -> Reporting.Style -> Flags -> IO (Either Exit.Make ())
 runHelp root paths style (Flags debug optimize maybeOutput _ maybeDocs _ optimizeLegible _) =
-  BW.withScope $ \scope ->
-  Stuff.withRootLock root $ Task.run $
+  R.withRootLock root $ \writer stuff ->
+  Task.run $
   do  desiredMode <- getMode debug (optimize || optimizeLegible)
-      details <- Task.eio Exit.MakeBadDetails (Details.load style scope root)
+      details <- Task.eio Exit.MakeBadDetails (Details.load writer style root stuff)
       case paths of
         [] ->
           do  exposed <- getExposed details
-              buildExposed style root details maybeDocs exposed
+              buildExposed writer style root stuff details maybeDocs exposed
 
         p:ps ->
-          do  artifacts <- buildPaths style root details (NE.List p ps)
+          do  artifacts <- buildPaths writer style root stuff details (NE.List p ps)
               res <- case maybeOutput of
                 Nothing ->
                   case getMains artifacts of
@@ -102,12 +101,12 @@ runHelp root paths style (Flags debug optimize maybeOutput _ maybeDocs _ optimiz
                       return ()
 
                     [name] ->
-                      do  builder <- toBuilder root details desiredMode artifacts
-                          generate style "index.html" (Html.sandwich root name builder) (NE.List name [])
+                      do  builder <- toBuilder stuff details desiredMode artifacts
+                          generate writer style "index.html" (Html.sandwich (R.toFilePath root) name builder) (NE.List name [])
 
                     name:names ->
-                      do  builder <- toBuilder root details desiredMode artifacts
-                          generate style "elm.js" builder (NE.List name names)
+                      do  builder <- toBuilder stuff details desiredMode artifacts
+                          generate writer style "elm.js" builder (NE.List name names)
 
                 Just DevNull ->
                   return ()
@@ -115,16 +114,16 @@ runHelp root paths style (Flags debug optimize maybeOutput _ maybeDocs _ optimiz
                 Just (JS target) ->
                   case getNoMains artifacts of
                     [] ->
-                      do  builder <- toBuilder root details desiredMode artifacts
-                          generate style target builder (Build.getRootNames artifacts)
+                      do  builder <- toBuilder stuff details desiredMode artifacts
+                          generate writer style target builder (Build.getRootNames artifacts)
 
                     name:names ->
                       Task.throw (Exit.MakeNonMainFilesIntoJavaScript name names)
 
                 Just (Html target) ->
                   do  name <- hasOneMain artifacts
-                      builder <- toBuilder root details desiredMode artifacts
-                      generate style target (Html.sandwich root name builder) (NE.List name [])
+                      builder <- toBuilder stuff details desiredMode artifacts
+                      generate writer style target (Html.sandwich (R.toFilePath root) name builder) (NE.List name [])
 
               Lamdera.PostCompile.check details artifacts Exit.MakeCannotBuild
               pure res
@@ -149,7 +148,7 @@ getMode debug optimize =
     (False, True ) -> return Prod
 
 
-getExposed :: Details.Details -> Task (NE.List ModuleName.Raw)
+getExposed :: Details.Details -> Task (NE.List Module.Name)
 getExposed (Details.Details _ validOutline _ _ _ _) =
   case validOutline of
     Details.ValidApp _ ->
@@ -165,31 +164,31 @@ getExposed (Details.Details _ validOutline _ _ _ _) =
 -- BUILD PROJECTS
 
 
-buildExposed :: Reporting.Style -> FilePath -> Details.Details -> Maybe FilePath -> NE.List ModuleName.Raw -> Task ()
-buildExposed style root details maybeDocs exposed =
+buildExposed :: File.Writer R.PROJECT -> Reporting.Style -> R.Root -> R.Stuff -> Details.Details -> Maybe FilePath -> NE.List Module.Name -> Task ()
+buildExposed writer style root stuff details maybeDocs exposed =
   let
     docsGoal = maybe Build.IgnoreDocs Build.WriteDocs maybeDocs
   in
   Task.eio Exit.MakeCannotBuild $
-    Build.fromExposed style root details docsGoal exposed
+    Build.fromExposed writer style root stuff details docsGoal exposed
 
 
-buildPaths :: Reporting.Style -> FilePath -> Details.Details -> NE.List FilePath -> Task Build.Artifacts
-buildPaths style root details paths =
+buildPaths :: File.Writer R.PROJECT -> Reporting.Style -> R.Root -> R.Stuff -> Details.Details -> NE.List FilePath -> Task Build.Artifacts
+buildPaths writer style root stuff details paths =
   Task.eio Exit.MakeCannotBuild $
-    Build.fromPaths style root details paths
+    Build.fromPaths writer style root stuff details paths
 
 
 
 -- GET MAINS
 
 
-getMains :: Build.Artifacts -> [ModuleName.Raw]
+getMains :: Build.Artifacts -> [Module.Name]
 getMains (Build.Artifacts _ _ roots modules) =
   Maybe.mapMaybe (getMain modules) (NE.toList roots)
 
 
-getMain :: [Build.Module] -> Build.Root -> Maybe ModuleName.Raw
+getMain :: [Build.Module] -> Build.Root -> Maybe Module.Name
 getMain modules root =
   case root of
     Build.Inside name ->
@@ -203,7 +202,7 @@ getMain modules root =
         Nothing -> Nothing
 
 
-isMain :: ModuleName.Raw -> Build.Module -> Bool
+isMain :: Module.Name -> Build.Module -> Bool
 isMain targetName modul =
   case modul of
     Build.Fresh name _ (Opt.LocalGraph maybeMain _ _) ->
@@ -217,7 +216,7 @@ isMain targetName modul =
 -- HAS ONE MAIN
 
 
-hasOneMain :: Build.Artifacts -> Task ModuleName.Raw
+hasOneMain :: Build.Artifacts -> Task Module.Name
 hasOneMain (Build.Artifacts _ _ roots modules) =
   case roots of
     NE.List root [] -> Task.mio Exit.MakeNoMain (return $ getMain modules root)
@@ -228,12 +227,12 @@ hasOneMain (Build.Artifacts _ _ roots modules) =
 -- GET MAINLESS
 
 
-getNoMains :: Build.Artifacts -> [ModuleName.Raw]
+getNoMains :: Build.Artifacts -> [Module.Name]
 getNoMains (Build.Artifacts _ _ roots modules) =
   Maybe.mapMaybe (getNoMain modules) (NE.toList roots)
 
 
-getNoMain :: [Build.Module] -> Build.Root -> Maybe ModuleName.Raw
+getNoMain :: [Build.Module] -> Build.Root -> Maybe Module.Name
 getNoMain modules root =
   case root of
     Build.Inside name ->
@@ -251,11 +250,11 @@ getNoMain modules root =
 -- GENERATE
 
 
-generate :: Reporting.Style -> FilePath -> B.Builder -> NE.List ModuleName.Raw -> Task ()
-generate style target builder names =
+generate :: File.Writer R.PROJECT -> Reporting.Style -> FilePath -> B.Builder -> NE.List Module.Name -> Task ()
+generate writer style target builder names =
   Task.io $
     do  Dir.createDirectoryIfMissing True (FP.takeDirectory target)
-        File.writeBuilder target builder
+        File.writeBuilder writer target builder
         Reporting.reportGenerate style names target
 
 
@@ -266,13 +265,13 @@ generate style target builder names =
 data DesiredMode = Debug | Dev | Prod
 
 
-toBuilder :: FilePath -> Details.Details -> DesiredMode -> Build.Artifacts -> Task B.Builder
-toBuilder root details desiredMode artifacts =
+toBuilder :: R.Stuff -> Details.Details -> DesiredMode -> Build.Artifacts -> Task B.Builder
+toBuilder stuff details desiredMode artifacts =
   Task.mapError Exit.MakeBadGenerate $
     case desiredMode of
-      Debug -> Generate.debug root details artifacts
-      Dev   -> Generate.dev   root details artifacts
-      Prod  -> Generate.prod  root details artifacts
+      Debug -> Generate.debug stuff details artifacts
+      Dev   -> Generate.dev   stuff details artifacts
+      Prod  -> Generate.prod  stuff details artifacts
 
 
 
@@ -339,7 +338,7 @@ isDevNull name =
 run_cleanup :: IO () -> [FilePath] -> Flags -> IO ()
 run_cleanup cleanup paths flags@(Flags _ _ _ report _ noWire optimizeLegible esm) =
   do  style <- getStyle report
-      maybeRoot <- Stuff.findRoot
+      maybeRoot <- R.findRoot
       Lamdera.onlyWhen noWire Lamdera.disableWire
       Lamdera.onlyWhen optimizeLegible Lamdera.enableLongNames
       Lamdera.onlyWhen esm Lamdera.enableEsm

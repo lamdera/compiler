@@ -11,9 +11,8 @@ module Reporting.Error
 import qualified Data.ByteString as B
 import qualified Data.NonEmptyList as NE
 import qualified Data.OneOrMore as OneOrMore
-import qualified System.FilePath as FP
 
-import qualified Elm.ModuleName as ModuleName
+import qualified AST.Prim.Module as Module
 import qualified File
 import qualified Json.Encode as E
 import Json.Encode ((==>))
@@ -29,6 +28,7 @@ import qualified Reporting.Error.Type as Type
 import qualified Reporting.Render.Code as Code
 import qualified Reporting.Render.Type.Localizer as L
 import qualified Reporting.Report as Report
+import qualified Root as R
 
 
 import Lamdera
@@ -39,7 +39,7 @@ import qualified Lamdera.Error
 
 data Module =
   Module
-    { _name :: ModuleName.Raw
+    { _name :: Module.Name
     , _absolutePath :: FilePath
     , _modificationTime :: File.Time
     , _source :: B.ByteString
@@ -123,7 +123,7 @@ toReports source err =
 -- TO DOC
 
 
-toDoc :: FilePath -> Module -> [Module] -> D.Doc
+toDoc :: R.Root -> Module -> [Module] -> D.Doc
 toDoc root err errs =
   let
     (NE.List m ms) = NE.sortBy _modificationTime (NE.List err errs)
@@ -131,7 +131,7 @@ toDoc root err errs =
   D.vcat (toDocHelp root m ms)
 
 
-toDocHelp :: FilePath -> Module -> [Module] -> [D.Doc]
+toDocHelp :: R.Root -> Module -> [Module] -> [D.Doc]
 toDocHelp root module1 modules =
   case modules of
     [] ->
@@ -148,8 +148,8 @@ toDocHelp root module1 modules =
 toSeparator :: Module -> Module -> D.Doc
 toSeparator beforeModule afterModule =
   let
-    before = ModuleName.toChars (_name beforeModule) ++ "  ↑    "
-    after  = "    ↓  " ++  ModuleName.toChars (_name afterModule)
+    before = Module.toChars (_name beforeModule) ++ "  ↑    "
+    after  = "    ↓  " ++  Module.toChars (_name afterModule)
   in
     D.dullred $ D.vcat $
       [ D.indent (80 - length before) (D.fromChars before)
@@ -164,14 +164,14 @@ toSeparator beforeModule afterModule =
 -- MODULE TO DOC
 
 
-moduleToDoc :: FilePath -> Module -> D.Doc
+moduleToDoc :: R.Root -> Module -> D.Doc
 moduleToDoc root (Module _ absolutePath _ source err) =
   let
     reports =
       toReports (Code.toSource source) err
 
     relativePath =
-      FP.makeRelative root absolutePath
+      R.toRelativePath root absolutePath
   in
   D.vcat $ map (reportToDoc relativePath) (NE.toList reports)
 
@@ -211,7 +211,7 @@ toJson (Module name path _ source err) =
   in
   E.object
     [ "path" ==> E.chars path
-    , "name" ==> E.name name
+    , "name" ==> E.string (Module.toString name)
     , "problems" ==> E.array (map reportToJson (NE.toList reports))
     ]
 
@@ -232,6 +232,6 @@ encodeRegion (A.Region start end) =
     , "end"   ==> E.object [ "line" ==> E.int er, "column" ==> E.int ec ]
     ]
   where
-    (sr,sc) = A.toRowCol start
-    (er,ec) = A.toRowCol end
+    (sr,sc) = A.toEditorRowCol start
+    (er,ec) = A.toEditorRowCol end
 

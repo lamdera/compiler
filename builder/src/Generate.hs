@@ -1,4 +1,4 @@
-{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE BangPatterns, TemplateHaskell #-}
 module Generate
   ( debug
   , dev
@@ -9,16 +9,19 @@ module Generate
 
 
 import Prelude hiding (cycle, print)
-import Control.Concurrent (MVar, forkIO, newEmptyMVar, newMVar, putMVar, readMVar)
+import Control.Concurrent (readMVar)
 import Control.Monad (liftM2)
 import qualified Data.ByteString.Builder as B
-import Data.Map ((!))
 import qualified Data.Map as Map
+import qualified Data.Map.Utils as Map
 import qualified Data.Maybe as Maybe
-import qualified Data.Name as N
 import qualified Data.NonEmptyList as NE
 
+import qualified ThreadSafe.Fork as Fork
+
 import qualified AST.Optimized as Opt
+import qualified AST.Prim.Module as Module
+import qualified AST.Prim.Name as N
 import qualified Build
 import qualified Elm.Compiler.Type.Extract as Extract
 import qualified Elm.Details as Details
@@ -31,7 +34,7 @@ import qualified Generate.Mode as Mode
 import qualified Nitpick.Debug as Nitpick
 import qualified Reporting.Exit as Exit
 import qualified Reporting.Task as Task
-import qualified Stuff
+import qualified Root as R
 
 
 import Lamdera ((&))
@@ -51,10 +54,10 @@ type Task a =
   Task.Task Exit.Generate a
 
 
-debug :: FilePath -> Details.Details -> Build.Artifacts -> Task B.Builder
-debug root details (Build.Artifacts pkg ifaces roots modules) =
-  do  loading <- loadObjects root details modules
-      types   <- loadTypes root ifaces modules
+debug :: R.Stuff -> Details.Details -> Build.Artifacts -> Task B.Builder
+debug stuff details (Build.Artifacts pkg ifaces roots modules) =
+  do  loading <- loadObjects stuff details modules
+      types   <- loadTypes stuff ifaces modules
       objects <- finalizeObjects loading
       let mode = Mode.Dev (Just types)
       let graph_ = objectsToGlobalGraph objects
@@ -66,9 +69,9 @@ debug root details (Build.Artifacts pkg ifaces roots modules) =
             (JS.generateEsm mode graph mains)
 
 
-dev :: FilePath -> Details.Details -> Build.Artifacts -> Task B.Builder
-dev root details (Build.Artifacts pkg _ roots modules) =
-  do  objects <- finalizeObjects =<< loadObjects root details modules
+dev :: R.Stuff -> Details.Details -> Build.Artifacts -> Task B.Builder
+dev stuff details (Build.Artifacts pkg _ roots modules) =
+  do  objects <- finalizeObjects =<< loadObjects stuff details modules
       let mode = Mode.Dev Nothing
       let graph_ = objectsToGlobalGraph objects
       graph <- Task.io $ Lamdera.AppConfig.injectConfig graph_
@@ -79,9 +82,9 @@ dev root details (Build.Artifacts pkg _ roots modules) =
             (JS.generateEsm mode graph mains)
 
 
-prod :: FilePath -> Details.Details -> Build.Artifacts -> Task B.Builder
-prod root details (Build.Artifacts pkg _ roots modules) =
-  do  objects <- finalizeObjects =<< loadObjects root details modules
+prod :: R.Stuff -> Details.Details -> Build.Artifacts -> Task B.Builder
+prod stuff details (Build.Artifacts pkg _ roots modules) =
+  do  objects <- finalizeObjects =<< loadObjects stuff details modules
       checkForDebugUses objects
       let graph_ = objectsToGlobalGraph objects
       graph <- Task.io $ Lamdera.AppConfig.injectConfig graph_
@@ -96,12 +99,13 @@ prod root details (Build.Artifacts pkg _ roots modules) =
             (JS.generateEsm mode graph mains)
 
 
-repl :: FilePath -> Details.Details -> Bool -> Build.ReplArtifacts -> N.Name -> Task B.Builder
-repl root details ansi (Build.ReplArtifacts home modules localizer annotations) name =
-  do  objects <- finalizeObjects =<< loadObjects root details modules
+repl :: R.Stuff -> Details.Details -> Bool -> Build.ReplArtifacts -> N.Name -> Task B.Builder
+repl stuff details ansi (Build.ReplArtifacts home modules localizer annotations) name =
+  do  objects <- finalizeObjects =<< loadObjects stuff details modules
       let graph_ = objectsToGlobalGraph objects
       graph <- Task.io $ Lamdera.AppConfig.injectConfig graph_
-      return $ JS.generateForRepl ansi localizer graph home name (annotations ! name)
+      return $ JS.generateForRepl ansi localizer graph home name $
+        $(Map.require 'repl) name annotations N.toChars
 
 
 
@@ -124,7 +128,7 @@ gatherMains pkg (Objects _ locals) roots =
   Map.fromList $ Maybe.mapMaybe (lookupMain pkg locals) (NE.toList roots)
 
 
-lookupMain :: Pkg.Name -> Map.Map ModuleName.Raw Opt.LocalGraph -> Build.Root -> Maybe (ModuleName.Canonical, Opt.Main)
+lookupMain :: Pkg.Name -> Map.Map Module.Name Opt.LocalGraph -> Build.Root -> Maybe (ModuleName.Canonical, Opt.Main)
 lookupMain pkg locals root =
   let
     toPair name (Opt.LocalGraph maybeMain _ _) =
@@ -141,30 +145,24 @@ lookupMain pkg locals root =
 
 data LoadingObjects =
   LoadingObjects
-    { _foreign_mvar :: MVar (Maybe Opt.GlobalGraph)
-    , _local_mvars :: Map.Map ModuleName.Raw (MVar (Maybe Opt.LocalGraph))
+    { _foreign_mvar :: Fork.SafeMVar (Maybe Opt.GlobalGraph)
+    , _local_mvars :: Map.Map Module.Name (Fork.SafeMVar (Maybe Opt.LocalGraph))
     }
 
 
-loadObjects :: FilePath -> Details.Details -> [Build.Module] -> Task LoadingObjects
-loadObjects root details modules =
+loadObjects :: R.Stuff -> Details.Details -> [Build.Module] -> Task LoadingObjects
+loadObjects stuff details modules =
   Task.io $
-  do  mvar <- Details.loadObjects root details
-      mvars <- traverse (loadObject root) modules
+  do  mvar <- Details.loadObjects stuff details
+      mvars <- traverse (loadObject stuff) modules
       return $ LoadingObjects mvar (Map.fromList mvars)
 
 
-loadObject :: FilePath -> Build.Module -> IO (ModuleName.Raw, MVar (Maybe Opt.LocalGraph))
-loadObject root modul =
+loadObject :: R.Stuff -> Build.Module -> IO (Module.Name, Fork.SafeMVar (Maybe Opt.LocalGraph))
+loadObject stuff modul =
   case modul of
-    Build.Fresh name _ graph ->
-      do  mvar <- newMVar (Just graph)
-          return (name, mvar)
-
-    Build.Cached name _ _ ->
-      do  mvar <- newEmptyMVar
-          _ <- forkIO $ putMVar mvar =<< File.readBinary (Stuff.elmo root name)
-          return (name, mvar)
+    Build.Fresh  name _ graph -> (,) name <$> Fork.cached (Just graph)
+    Build.Cached name _ _     -> (,) name <$> Fork.fork name (File.readBytes Opt.dLocalGraph (R.elmo stuff name))
 
 
 
@@ -174,15 +172,15 @@ loadObject root modul =
 data Objects =
   Objects
     { _foreign :: Opt.GlobalGraph
-    , _locals :: Map.Map ModuleName.Raw Opt.LocalGraph
+    , _locals :: Map.Map Module.Name Opt.LocalGraph
     }
 
 
 finalizeObjects :: LoadingObjects -> Task Objects
 finalizeObjects (LoadingObjects mvar mvars) =
   Task.eio id $
-  do  result  <- readMVar mvar
-      results <- traverse readMVar mvars
+  do  result  <- Fork.await mvar
+      results <- traverse Fork.await mvars
       case liftM2 Objects result (sequence results) of
         Just loaded -> return (Right loaded)
         Nothing     -> return (Left Exit.GenerateCannotLoadArtifacts)
@@ -197,35 +195,33 @@ objectsToGlobalGraph (Objects globals locals) =
 -- LOAD TYPES
 
 
-loadTypes :: FilePath -> Map.Map ModuleName.Canonical I.DependencyInterface -> [Build.Module] -> Task Extract.Types
-loadTypes root ifaces modules =
+loadTypes :: R.Stuff -> Map.Map ModuleName.Canonical I.DependencyInterface -> [Build.Module] -> Task Extract.Types
+loadTypes stuff ifaces modules =
   Task.eio id $
-  do  mvars <- traverse (loadTypesHelp root) modules
+  do  mvars <- traverse (loadTypesHelp stuff) modules
       let !foreigns = Extract.mergeMany (Map.elems (Map.mapWithKey Extract.fromDependencyInterface ifaces))
-      results <- traverse readMVar mvars
+      results <- traverse Fork.await mvars
       case sequence results of
         Just ts -> return (Right (Extract.merge foreigns (Extract.mergeMany ts)))
         Nothing -> return (Left Exit.GenerateCannotLoadArtifacts)
 
 
-loadTypesHelp :: FilePath -> Build.Module -> IO (MVar (Maybe Extract.Types))
-loadTypesHelp root modul =
+loadTypesHelp :: R.Stuff -> Build.Module -> IO (Fork.SafeMVar (Maybe Extract.Types))
+loadTypesHelp stuff modul =
   case modul of
     Build.Fresh name iface _ ->
-      newMVar (Just (Extract.fromInterface name iface))
+      Fork.cached $ Just $ Extract.fromInterface name iface
 
     Build.Cached name _ ciMVar ->
       do  cachedInterface <- readMVar ciMVar
           case cachedInterface of
             Build.Unneeded ->
-              do  mvar <- newEmptyMVar
-                  _ <- forkIO $
-                    do  maybeIface <- File.readBinary (Stuff.elmi root name)
-                        putMVar mvar (Extract.fromInterface name <$> maybeIface)
-                  return mvar
+              Fork.fork name $
+                do  maybeIface <- File.readBytes I.dInterface (R.elmi stuff name)
+                    return $ Extract.fromInterface name <$> maybeIface
 
             Build.Loaded iface ->
-              newMVar (Just (Extract.fromInterface name iface))
+              Fork.cached $ Just (Extract.fromInterface name iface)
 
             Build.Corrupted ->
-              newMVar Nothing
+              Fork.cached Nothing

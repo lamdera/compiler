@@ -14,7 +14,6 @@ import GHC.ForeignPtr (ForeignPtr(..), ForeignPtrContents(..))
 import Language.Haskell.TH.Syntax (Q, Exp(..), Lit(..), Bytes(Bytes), runIO)
 import System.FilePath ((</>))
 
-import qualified BackgroundWriter as BW
 import qualified Build
 import qualified Elm.Details as Details
 import qualified Generate
@@ -22,6 +21,7 @@ import qualified Lamdera.Relative
 import qualified Reporting
 import qualified Reporting.Exit as Exit
 import qualified Reporting.Task as Task
+import qualified Root as R
 
 
 
@@ -31,17 +31,17 @@ import qualified Reporting.Task as Task
 buildReactorFrontEnd :: Q Exp -- BS.ByteString
 buildReactorFrontEnd =
   fmap bsToExp $ runIO $
-  BW.withScope $ \scope ->
   -- @LAMDERA Resolve an absolute root via Lamdera.Relative rather than chdir'ing the
   -- process-global CWD. This TH runs under GHC's parallel upsweep (-j), where a
   -- withCurrentDirectory here races other TH splices (Lamdera.Repl) and fails
   -- intermittently ("changeWorkingDirectory: does not exist"). Passing absolute paths
   -- keeps Build.getRootInfo's canonicalizePath CWD-independent.
-  do  root <- Lamdera.Relative.requireDir "reactor"
-      runTaskUnsafe $
-        do  details    <- Task.eio Exit.ReactorBadDetails $ Details.load Reporting.silent scope root
-            artifacts  <- Task.eio Exit.ReactorBadBuild $ Build.fromPaths Reporting.silent root details (fmap (root </>) paths)
-            javascript <- Task.mapError Exit.ReactorBadGenerate $ Generate.prod root details artifacts
+  do  root <- R.fromFilePath <$> Lamdera.Relative.requireDir "reactor"
+      R.withRootLock root $ \writer stuff ->
+        runTaskUnsafe $
+        do  details    <- Task.eio Exit.ReactorBadDetails $ Details.load writer Reporting.silent root stuff
+            artifacts  <- Task.eio Exit.ReactorBadBuild $ Build.fromPaths writer Reporting.silent root stuff details (fmap (R.toFilePath root </>) paths)
+            javascript <- Task.mapError Exit.ReactorBadGenerate $ Generate.prod stuff details artifacts
             return (LBS.toStrict (B.toLazyByteString javascript))
 
 

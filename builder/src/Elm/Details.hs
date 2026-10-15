@@ -1,7 +1,9 @@
-{-# LANGUAGE BangPatterns, OverloadedStrings #-}
+{-# LANGUAGE BangPatterns, ExtendedLiterals, MagicHash, OverloadedStrings,
+TemplateHaskell
+#-}
 module Elm.Details
   ( Details(..)
-  , BuildID
+  , BuildID, zero
   , ValidOutline(..)
   , Local(..)
   , Foreign(..)
@@ -9,21 +11,21 @@ module Elm.Details
   , loadObjects
   , loadInterfaces
   , verifyInstall
+  --
+  , eDetails, dDetails
   )
   where
 
 
-import Control.Concurrent (forkIO)
-import Control.Concurrent.MVar (MVar, newEmptyMVar, newMVar, putMVar, readMVar, takeMVar)
+import Control.Concurrent.MVar (MVar, newEmptyMVar, putMVar, readMVar, takeMVar)
 import Control.Monad (liftM, liftM2, liftM3)
-import Data.Binary (Binary, get, put, getWord8, putWord8)
+import Data.Coerce (coerce)
 import qualified Data.Either as Either
 import qualified Data.List as List
 import qualified Data.Map as Map
 import qualified Data.Map.Utils as Map
 import qualified Data.Map.Merge.Strict as Map
 import qualified Data.Maybe as Maybe
-import qualified Data.Name as Name
 import qualified Data.NonEmptyList as NE
 import qualified Data.OneOrMore as OneOrMore
 import qualified Data.Set as Set
@@ -32,10 +34,15 @@ import Data.Word (Word64)
 import qualified System.Directory as Dir
 import System.FilePath ((</>), (<.>))
 
+import qualified Bytes.Decode as D
+import qualified Bytes.Encode as E
+import qualified Crash
+import qualified ThreadSafe.Fork as Fork
+
 import qualified AST.Canonical as Can
 import qualified AST.Source as Src
 import qualified AST.Optimized as Opt
-import qualified BackgroundWriter as BW
+import qualified AST.Prim.Module as Module
 import qualified Compile
 import qualified Deps.Registry as Registry
 import qualified Deps.Solver as Solver
@@ -50,14 +57,14 @@ import qualified Elm.Package as Pkg
 import qualified Elm.Version as V
 import qualified File
 import qualified Http
-import qualified Json.Decode as D
-import qualified Json.Encode as E
+import qualified Json.Decode as JD
+import qualified Json.Encode as JE
 import qualified Parse.Module as Parse
 import qualified Reporting
 import qualified Reporting.Annotation as A
 import qualified Reporting.Exit as Exit
 import qualified Reporting.Task as Task
-import qualified Stuff
+import qualified Root as R
 
 
 import qualified Lamdera
@@ -74,18 +81,24 @@ data Details =
     { _outlineTime :: File.Time
     , _outline :: ValidOutline
     , _buildID :: BuildID
-    , _locals :: Map.Map ModuleName.Raw Local
-    , _foreigns :: Map.Map ModuleName.Raw Foreign
+    , _locals :: Map.Map Module.Name Local
+    , _foreigns :: Map.Map Module.Name Foreign
     , _extras :: Extras
     }
 
 
-type BuildID = Word64
+newtype BuildID = BuildID Word64
+  deriving (Eq, Ord)
+
+
+zero :: BuildID
+zero =
+  BuildID 0
 
 
 data ValidOutline
-  = ValidApp (NE.List Outline.SrcDir)
-  | ValidPkg Pkg.Name [ModuleName.Raw] (Map.Map Pkg.Name V.Version {- for docs in reactor -})
+  = ValidApp (NE.List R.Path)
+  | ValidPkg Pkg.Name [Module.Name] (Map.Map Pkg.Name V.Version {- for docs in reactor -})
 
 
 -- NOTE: we need two ways to detect if a file must be recompiled:
@@ -105,7 +118,7 @@ data Local =
   Local
     { _path :: FilePath
     , _time :: File.Time
-    , _deps :: [ModuleName.Raw]
+    , _deps :: [Module.Name]
     , _main :: Bool
     , _lastChange :: BuildID
     , _lastCompile :: BuildID
@@ -129,68 +142,68 @@ type Interfaces =
 -- LOAD ARTIFACTS
 
 
-loadObjects :: FilePath -> Details -> IO (MVar (Maybe Opt.GlobalGraph))
-loadObjects root (Details _ _ _ _ _ extras) =
+loadObjects :: R.Stuff -> Details -> IO (Fork.SafeMVar (Maybe Opt.GlobalGraph))
+loadObjects stuff (Details _ _ _ _ _ extras) =
   case extras of
-    ArtifactsFresh _ o -> newMVar (Just o)
-    ArtifactsCached    -> fork (File.readBinary (Stuff.objects root))
+    ArtifactsFresh _ o -> Fork.cached $ Just o
+    ArtifactsCached    -> Fork.fork_  $ File.readBytes Opt.dGlobalGraph (R.objects stuff)
 
 
-loadInterfaces :: FilePath -> Details -> IO (MVar (Maybe Interfaces))
-loadInterfaces root (Details _ _ _ _ _ extras) =
+loadInterfaces :: R.Stuff -> Details -> IO (Fork.SafeMVar (Maybe Interfaces))
+loadInterfaces stuff (Details _ _ _ _ _ extras) =
   case extras of
-    ArtifactsFresh i _ -> newMVar (Just i)
-    ArtifactsCached    -> fork (File.readBinary (Stuff.interfaces root))
+    ArtifactsFresh i _ -> Fork.cached $ Just i
+    ArtifactsCached    -> Fork.fork_  $ File.readBytes (D.dict32 ModuleName.dCanonical I.dDependencyInterface) (R.interfaces stuff)
 
 
 
 -- VERIFY INSTALL -- used by Install
 
 
-verifyInstall :: BW.Scope -> FilePath -> Solver.Env -> Outline.Outline -> IO (Either Exit.Details ())
-verifyInstall scope root (Solver.Env cache manager connection registry) outline =
-  do  time <- File.getTime (root </> "elm.json")
+verifyInstall :: File.Writer R.PROJECT -> R.Root -> R.Stuff -> Solver.Env -> Outline.Outline -> IO (Either Exit.Details ())
+verifyInstall writer root stuff (Solver.Env cache manager connection registry) outline =
+  do  time <- File.getTime (R.elm_json root)
       let key = Reporting.ignorer
-      let env = Env key scope root cache manager connection registry
+      let env = Env key stuff cache manager connection registry
       case outline of
-        Outline.Pkg pkg -> Task.run (verifyPkg env time pkg >> return ())
-        Outline.App app -> Task.run (verifyApp env time app >> return ())
+        Outline.Pkg pkg -> Task.run (verifyPkg writer env time pkg >> return ())
+        Outline.App app -> Task.run (verifyApp writer env time app >> return ())
 
 
 
 -- LOAD -- used by Make, Repl, Reactor
 
 
-load :: Reporting.Style -> BW.Scope -> FilePath -> IO (Either Exit.Details Details)
-load style scope root =
-  do  newTime <- File.getTime (root </> "elm.json")
-      maybeDetails <- File.readBinary (Stuff.details root)
+load :: File.Writer R.PROJECT -> Reporting.Style -> R.Root -> R.Stuff -> IO (Either Exit.Details Details)
+load writer style root stuff =
+  do  newTime <- File.getTime (R.elm_json root)
+      maybeDetails <- File.readBytes dDetails (R.details stuff)
       case maybeDetails of
         Nothing ->
-          generate style scope root newTime
+          generate writer style root stuff newTime
 
-        Just details@(Details oldTime _ buildID _ _ _) ->
+        Just details@(Details oldTime _ (BuildID n) _ _ _) ->
           if oldTime == newTime
-          then return (Right details { _buildID = buildID + 1 })
-          else generate style scope root newTime
+          then return (Right details { _buildID = BuildID (n + 1) })
+          else generate writer style root stuff newTime
 
 
 
 -- GENERATE
 
 
-generate :: Reporting.Style -> BW.Scope -> FilePath -> File.Time -> IO (Either Exit.Details Details)
-generate style scope root time =
+generate :: File.Writer R.PROJECT -> Reporting.Style -> R.Root -> R.Stuff -> File.Time -> IO (Either Exit.Details Details)
+generate writer style root stuff time =
   Reporting.trackDetails style $ \key ->
-    do  result <- initEnv key scope root
+    do  result <- initEnv key root stuff
         case result of
           Left exit ->
             return (Left exit)
 
           Right (env, outline) ->
             case outline of
-              Outline.Pkg pkg -> Task.run (verifyPkg env time pkg)
-              Outline.App app -> Task.run (verifyApp env time app)
+              Outline.Pkg pkg -> Task.run (verifyPkg writer env time pkg)
+              Outline.App app -> Task.run (verifyApp writer env time app)
 
 
 
@@ -200,31 +213,30 @@ generate style scope root time =
 data Env =
   Env
     { _key :: Reporting.DKey
-    , _scope :: BW.Scope
-    , _root :: FilePath
-    , _cache :: Stuff.PackageCache
+    , _stuff :: R.Stuff
+    , _cache :: R.PackageCache
     , _manager :: Http.Manager
     , _connection :: Solver.Connection
     , _registry :: Registry.Registry
     }
 
 
-initEnv :: Reporting.DKey -> BW.Scope -> FilePath -> IO (Either Exit.Details (Env, Outline.Outline))
-initEnv key scope root =
-  do  mvar <- fork Solver.initEnv
+initEnv :: Reporting.DKey -> R.Root -> R.Stuff -> IO (Either Exit.Details (Env, Outline.Outline))
+initEnv key root stuff =
+  do  mvar <- Fork.fork_ Solver.initEnv
       eitherOutline <- Outline.read root False
       case eitherOutline of
         Left problem ->
           return $ Left $ Exit.DetailsBadOutline problem
 
         Right outline ->
-          do  maybeEnv <- readMVar mvar
+          do  maybeEnv <- Fork.await mvar
               case maybeEnv of
                 Left problem ->
                   return $ Left $ Exit.DetailsCannotGetRegistry problem
 
                 Right (Solver.Env cache manager connection registry) ->
-                  return $ Right (Env key scope root cache manager connection registry, outline)
+                  return $ Right (Env key stuff cache manager connection registry, outline)
 
 
 
@@ -234,14 +246,14 @@ initEnv key scope root =
 type Task a = Task.Task Exit.Details a
 
 
-verifyPkg :: Env -> File.Time -> Outline.PkgOutline -> Task Details
-verifyPkg env time (Outline.PkgOutline pkg _ _ _ exposed direct testDirect elm) =
+verifyPkg :: File.Writer R.PROJECT -> Env -> File.Time -> Outline.PkgOutline -> Task Details
+verifyPkg writer env time (Outline.PkgOutline pkg _ _ _ exposed direct testDirect elm) =
   if Con.goodElm elm
   then
     do  solution <- verifyConstraints env =<< union noDups direct testDirect
         let exposedList = Outline.flattenExposed exposed
         let exactDeps = Map.map (\(Solver.Details v _) -> v) solution -- for pkg docs in reactor
-        verifyDependencies env time (ValidPkg pkg exposedList exactDeps) solution direct
+        verifyDependencies writer env time (ValidPkg pkg exposedList exactDeps) solution direct
   else
     Task.throw $ Exit.DetailsBadElmInPkg elm
 
@@ -252,21 +264,23 @@ verifyPkg env time (Outline.PkgOutline pkg _ _ _ exposed direct testDirect elm) 
 -- 0.19.2 are language/compiler compatible; and caches can't go stale across the bump
 -- because every cache path is keyed by the elm version (elm-stuff/lamdera-<ver>-<elm>/,
 -- Stuff.stuff), so 0.19.2 writes fresh caches and never reads 0.19.1's Region-format data.
+--
+-- On elm 0.19.3 the same holds: apps declaring 0.19.1, 0.19.2 or 0.19.3 all build, and the
+-- caches are keyed by 0.19.3 (elm-stuff/lamdera-<ver>-0.19.3/, Root.getStuff).
 isCompatibleAppElmVersion :: V.Version -> Bool
 isCompatibleAppElmVersion elmVersion =
-  case elmVersion of
-    V.Version 0 19 _ -> elmVersion <= V.compiler
-    _                -> False
+  V.fromVersion elmVersion $ \major minor _ ->
+    major == 0 && minor == 19 && elmVersion <= V.compiler
 
 
-verifyApp :: Env -> File.Time -> Outline.AppOutline -> Task Details
-verifyApp env time outline@(Outline.AppOutline elmVersion srcDirs direct _ _ _) =
+verifyApp :: File.Writer R.PROJECT -> Env -> File.Time -> Outline.AppOutline -> Task Details
+verifyApp writer env time outline@(Outline.AppOutline elmVersion srcDirs direct _ _ _) =
   if isCompatibleAppElmVersion elmVersion -- @LAMDERA was: elmVersion == V.compiler
   then
     do  stated <- checkAppDeps outline
         actual <- verifyConstraints env (Map.map Con.exactly stated)
         if Map.size stated == Map.size actual
-          then verifyDependencies env time (ValidApp srcDirs) actual direct
+          then verifyDependencies writer env time (ValidApp srcDirs) actual direct
           else Task.throw $ Exit.DetailsHandEditedDependencies
             $ let
               stateds = stated & fmap (\k _ -> k)
@@ -296,7 +310,7 @@ checkAppDeps (Outline.AppOutline _ _ direct indirect testDirect testIndirect) =
 
 
 verifyConstraints :: Env -> Map.Map Pkg.Name Con.Constraint -> Task (Map.Map Pkg.Name Solver.Details)
-verifyConstraints (Env _ _ _ cache _ connection registry) constraints =
+verifyConstraints (Env _ _ cache _ connection registry) constraints =
   do  result <- Task.io $ Solver.verify cache connection registry constraints
       case result of
         Solver.Ok details        -> return details
@@ -330,32 +344,21 @@ allowEqualDups _ v1 v2 =
 
 
 
--- FORK
-
-
-fork :: IO a -> IO (MVar a)
-fork work =
-  do  mvar <- newEmptyMVar
-      _ <- forkIO $ putMVar mvar =<< work
-      return mvar
-
-
-
 -- VERIFY DEPENDENCIES
 
 
-verifyDependencies :: Env -> File.Time -> ValidOutline -> Map.Map Pkg.Name Solver.Details -> Map.Map Pkg.Name a -> Task Details
-verifyDependencies env@(Env key scope root cache _ _ _) time outline solution directDeps =
+verifyDependencies :: File.Writer R.PROJECT -> Env -> File.Time -> ValidOutline -> Map.Map Pkg.Name Solver.Details -> Map.Map Pkg.Name a -> Task Details
+verifyDependencies writer env@(Env key stuff cache _ _ _) time outline solution directDeps =
   Task.eio id $
   do  Reporting.report key (Reporting.DStart (Map.size solution))
       mvar <- newEmptyMVar
-      mvars <- Stuff.withRegistryLock cache $
-        Map.traverseWithKey (\k v -> fork (verifyDep env mvar solution k v)) solution
+      mvars <- R.withRegistryLock cache $ \pkg_writer ->
+        Fork.forkWithKey (verifyDep pkg_writer env mvar solution) solution
       putMVar mvar mvars
-      deps <- traverse readMVar mvars
+      deps <- traverse Fork.await mvars
       case sequence deps of
         Left _ ->
-          do  home <- Stuff.getElmHome
+          do  home <- R.getElmHome
               return $ Left $ Exit.DetailsBadDeps home $
                 Maybe.catMaybes $ Either.lefts $ Map.elems deps
 
@@ -364,11 +367,11 @@ verifyDependencies env@(Env key scope root cache _ _ _) time outline solution di
             objs = Map.foldr addObjects Opt.empty artifacts
             ifaces = Map.foldrWithKey (addInterfaces directDeps) Map.empty artifacts
             foreigns = Map.map (OneOrMore.destruct Foreign) $ Map.foldrWithKey gatherForeigns Map.empty $ Map.intersection artifacts directDeps
-            details = Details time outline 0 Map.empty foreigns (ArtifactsFresh ifaces objs)
+            details = Details time outline zero Map.empty foreigns (ArtifactsFresh ifaces objs)
           in
-          do  BW.writeBinary scope (Stuff.objects    root) objs
-              BW.writeBinary scope (Stuff.interfaces root) ifaces
-              BW.writeBinary scope (Stuff.details    root) details
+          do  File.writeBytes_ writer (R.objects    stuff) Opt.eGlobalGraph objs
+              File.writeBytes_ writer (R.interfaces stuff) (E.dict32 ModuleName.eCanonical I.eDependencyInterface) ifaces
+              File.writeBytes_ writer (R.details    stuff) eDetails details
               return (Right details)
 
 
@@ -385,7 +388,7 @@ addInterfaces directDeps pkg (Artifacts ifaces _) dependencyInterfaces =
       else Map.map I.privatize ifaces
 
 
-gatherForeigns :: Pkg.Name -> Artifacts -> Map.Map ModuleName.Raw (OneOrMore.OneOrMore Pkg.Name) -> Map.Map ModuleName.Raw (OneOrMore.OneOrMore Pkg.Name)
+gatherForeigns :: Pkg.Name -> Artifacts -> Map.Map Module.Name (OneOrMore.OneOrMore Pkg.Name) -> Map.Map Module.Name (OneOrMore.OneOrMore Pkg.Name)
 gatherForeigns pkg (Artifacts ifaces _) foreigns =
   let
     isPublic di =
@@ -402,7 +405,7 @@ gatherForeigns pkg (Artifacts ifaces _) foreigns =
 
 data Artifacts =
   Artifacts
-    { _ifaces :: Map.Map ModuleName.Raw I.DependencyInterface
+    { _ifaces :: Map.Map Module.Name I.DependencyInterface
     , _objects :: Opt.GlobalGraph
     }
   deriving (Show)
@@ -412,23 +415,23 @@ type Dep =
   Either (Maybe Exit.DetailsBadDep) Artifacts
 
 
-verifyDep :: Env -> MVar (Map.Map Pkg.Name (MVar Dep)) -> Map.Map Pkg.Name Solver.Details -> Pkg.Name -> Solver.Details -> IO Dep
-verifyDep (Env key _ _ cache manager _ _) depsMVar solution pkg details@(Solver.Details vsn directDeps) =
+verifyDep :: File.Writer R.PACKAGES -> Env -> MVar (Map.Map Pkg.Name (Fork.SafeMVar Dep)) -> Map.Map Pkg.Name Solver.Details -> Pkg.Name -> Solver.Details -> IO Dep
+verifyDep writer (Env key _ cache manager _ _) depsMVar solution pkg details@(Solver.Details vsn directDeps) =
   do  let fingerprint = Map.intersectionWith (\(Solver.Details v _) _ -> v) solution directDeps
-      exists <- Dir.doesDirectoryExist (Stuff.package cache pkg vsn </> "src")
+      exists <- Dir.doesDirectoryExist (R.package cache pkg vsn </> "src")
       if exists
         then
           do  Reporting.report key Reporting.DCached
-              maybeCache <- File.readBinary (Stuff.package cache pkg vsn </> "artifacts.dat")
-                              & Lamdera.alternativeImplementation (File.readBinary (Stuff.package cache pkg vsn </> Lamdera.Version.artifacts))
+              maybeCache <- File.readBytes dArtifactCache (R.package cache pkg vsn </> "artifacts.dat")
+                              & Lamdera.alternativeImplementation (File.readBytes dArtifactCache (R.package cache pkg vsn </> Lamdera.Version.artifacts))
               case maybeCache of
                 Nothing ->
-                  build key cache depsMVar pkg details fingerprint Set.empty
+                  build writer key cache depsMVar pkg details fingerprint Set.empty
 
                 Just (ArtifactCache fingerprints artifacts) ->
                   if Set.member fingerprint fingerprints
                     then Reporting.report key Reporting.DBuilt >> return (Right artifacts)
-                    else build key cache depsMVar pkg details fingerprint fingerprints
+                    else build writer key cache depsMVar pkg details fingerprint fingerprints
         else
           do  Reporting.report key Reporting.DRequested
               result <- downloadPackage cache manager pkg vsn
@@ -439,7 +442,7 @@ verifyDep (Env key _ _ cache manager _ _) depsMVar solution pkg details@(Solver.
 
                 Right () ->
                   do  Reporting.report key (Reporting.DReceived pkg vsn)
-                      build key cache depsMVar pkg details fingerprint Set.empty
+                      build writer key cache depsMVar pkg details fingerprint Set.empty
 
 
 
@@ -461,9 +464,9 @@ type Fingerprint =
 -- BUILD
 
 
-build :: Reporting.DKey -> Stuff.PackageCache -> MVar (Map.Map Pkg.Name (MVar Dep)) -> Pkg.Name -> Solver.Details -> Fingerprint -> Set.Set Fingerprint -> IO Dep
-build key cache depsMVar pkg (Solver.Details vsn _) f fs =
-  do  eitherOutline <- Outline.read (Stuff.package cache pkg vsn) True
+build :: File.Writer R.PACKAGES -> Reporting.DKey -> R.PackageCache -> MVar (Map.Map Pkg.Name (Fork.SafeMVar Dep)) -> Pkg.Name -> Solver.Details -> Fingerprint -> Set.Set Fingerprint -> IO Dep
+build writer key cache depsMVar pkg (Solver.Details vsn _) f fs =
+  do  eitherOutline <- Outline.read (R.packageRoot cache pkg vsn) True
       case eitherOutline of
         Left _ ->
           do  Reporting.report key Reporting.DBroken
@@ -475,22 +478,22 @@ build key cache depsMVar pkg (Solver.Details vsn _) f fs =
 
         Right (Outline.Pkg (Outline.PkgOutline _ _ _ _ exposed deps _ _)) ->
           do  allDeps <- readMVar depsMVar
-              directDeps <- traverse readMVar (Map.intersection allDeps deps)
+              directDeps <- traverse Fork.await (Map.intersection allDeps deps)
               case sequence directDeps of
                 Left _ ->
                   do  Reporting.report key Reporting.DBroken
                       return $ Left $ Nothing
 
                 Right directArtifacts ->
-                  do  let src = Stuff.package cache pkg vsn </> "src"
+                  do  let src = R.package cache pkg vsn </> "src"
                       let foreignDeps = gatherForeignInterfaces directArtifacts
                       let exposedDict = Map.fromKeys (\_ -> ()) (Outline.flattenExposed exposed)
                       docsStatus <- getDocsStatus cache pkg vsn
                       mvar <- newEmptyMVar
-                      mvars <- Map.traverseWithKey (const . fork . crawlModule foreignDeps mvar pkg src docsStatus) exposedDict
+                      mvars <- Fork.forkWithKey (crawlModule foreignDeps mvar pkg src docsStatus) exposedDict
                       putMVar mvar mvars
-                      mapM_ readMVar mvars
-                      maybeStatuses <- traverse readMVar =<< readMVar mvar
+                      mapM_ Fork.await mvars
+                      maybeStatuses <- traverse Fork.await =<< readMVar mvar
                       case sequence maybeStatuses of
                         Nothing ->
                           do  Reporting.report key Reporting.DBroken
@@ -498,10 +501,10 @@ build key cache depsMVar pkg (Solver.Details vsn _) f fs =
 
                         Just statuses ->
                           do  rmvar <- newEmptyMVar
-                              rmvars <- traverse (fork . compile pkg rmvar) statuses
+                              rmvars <- Fork.forkWithKey (compile pkg rmvar) statuses
 
                               putMVar rmvar rmvars
-                              maybeResults <- traverse readMVar rmvars
+                              maybeResults <- traverse Fork.await rmvars
                               case sequence maybeResults of
                                 Nothing ->
                                   do  Reporting.report key Reporting.DBroken
@@ -514,15 +517,15 @@ build key cache depsMVar pkg (Solver.Details vsn _) f fs =
 
                                 Just results ->
                                   let
-                                    path = Stuff.package cache pkg vsn </> "artifacts.dat"
-                                             & Lamdera.alternativeImplementation (Stuff.package cache pkg vsn </> Lamdera.Version.artifacts)
+                                    path = R.package cache pkg vsn </> "artifacts.dat"
+                                             & Lamdera.alternativeImplementation (R.package cache pkg vsn </> Lamdera.Version.artifacts)
                                     ifaces = gatherInterfaces exposedDict results
                                     objects = gatherObjects results
                                     artifacts = Artifacts ifaces objects
                                     fingerprints = Set.insert f fs
                                   in
-                                  do  writeDocs cache pkg vsn docsStatus results
-                                      File.writeBinary path (ArtifactCache fingerprints artifacts)
+                                  do  writeDocs writer cache pkg vsn docsStatus results
+                                      File.writeBytes writer path eArtifactCache (ArtifactCache fingerprints artifacts)
                                       Reporting.report key Reporting.DBuilt
                                       return (Right artifacts)
 
@@ -531,24 +534,24 @@ build key cache depsMVar pkg (Solver.Details vsn _) f fs =
 -- GATHER
 
 
-gatherObjects :: Map.Map ModuleName.Raw Result -> Opt.GlobalGraph
+gatherObjects :: Map.Map Module.Name Result -> Opt.GlobalGraph
 gatherObjects results =
   Map.foldrWithKey addLocalGraph Opt.empty results
 
 
-addLocalGraph :: ModuleName.Raw -> Result -> Opt.GlobalGraph -> Opt.GlobalGraph
+addLocalGraph :: Module.Name -> Result -> Opt.GlobalGraph -> Opt.GlobalGraph
 addLocalGraph name status graph =
   case status of
     RLocal _ objs _ -> Opt.addLocalGraph objs graph
     RForeign _      -> graph
-    RKernelLocal cs -> Opt.addKernel (Name.getKernel name) cs graph
+    RKernelLocal cs -> Opt.addKernel (Module.getKernel name) cs graph
     RKernelForeign  -> graph
 
 
-gatherInterfaces :: Map.Map ModuleName.Raw () -> Map.Map ModuleName.Raw Result -> Map.Map ModuleName.Raw I.DependencyInterface
+gatherInterfaces :: Map.Map Module.Name () -> Map.Map Module.Name Result -> Map.Map Module.Name I.DependencyInterface
 gatherInterfaces exposed artifacts =
   let
-    onLeft  = Map.mapMissing (error "compiler bug manifesting in Elm.Details.gatherInterfaces")
+    onLeft  = Map.mapMissing (\_ -> $(Crash.crash 'gatherInterfaces) "compiler bug")
     onRight = Map.mapMaybeMissing     (\_    iface -> toLocalInterface I.private iface)
     onBoth  = Map.zipWithMaybeMatched (\_ () iface -> toLocalInterface I.public  iface)
   in
@@ -573,7 +576,7 @@ data ForeignInterface
   | ForeignSpecific I.Interface
 
 
-gatherForeignInterfaces :: Map.Map Pkg.Name Artifacts -> Map.Map ModuleName.Raw ForeignInterface
+gatherForeignInterfaces :: Map.Map Pkg.Name Artifacts -> Map.Map Module.Name ForeignInterface
 gatherForeignInterfaces directArtifacts =
     Map.map (OneOrMore.destruct finalize) $
       Map.foldrWithKey gather Map.empty directArtifacts
@@ -584,7 +587,7 @@ gatherForeignInterfaces directArtifacts =
         [] -> ForeignSpecific i
         _:_ -> ForeignAmbiguous
 
-    gather :: Pkg.Name -> Artifacts -> Map.Map ModuleName.Raw (OneOrMore.OneOrMore I.Interface) -> Map.Map ModuleName.Raw (OneOrMore.OneOrMore I.Interface)
+    gather :: Pkg.Name -> Artifacts -> Map.Map Module.Name (OneOrMore.OneOrMore I.Interface) -> Map.Map Module.Name (OneOrMore.OneOrMore I.Interface)
     gather _ (Artifacts ifaces _) buckets =
       Map.unionWith OneOrMore.more buckets (Map.mapMaybe isPublic ifaces)
 
@@ -600,19 +603,19 @@ gatherForeignInterfaces directArtifacts =
 
 
 type StatusDict =
-  Map.Map ModuleName.Raw (MVar (Maybe Status))
+  Map.Map Module.Name (Fork.SafeMVar (Maybe Status))
 
 
 data Status
-  = SLocal DocsStatus (Map.Map ModuleName.Raw ()) Src.Module
+  = SLocal DocsStatus (Map.Map Module.Name ()) Src.Module
   | SForeign I.Interface
   | SKernelLocal [Kernel.Chunk]
   | SKernelForeign
 
 
-crawlModule :: Map.Map ModuleName.Raw ForeignInterface -> MVar StatusDict -> Pkg.Name -> FilePath -> DocsStatus -> ModuleName.Raw -> IO (Maybe Status)
-crawlModule foreignDeps mvar pkg src docsStatus name =
-  do  let path = src </> ModuleName.toFilePath name <.> "elm"
+crawlModule :: Map.Map Module.Name ForeignInterface -> MVar StatusDict -> Pkg.Name -> FilePath -> DocsStatus -> Module.Name -> () -> IO (Maybe Status)
+crawlModule foreignDeps mvar pkg src docsStatus name () =
+  do  let path = src </> Module.toFilePath name <.> "elm"
       exists <- File.exists path
       case Map.lookup name foreignDeps of
         Just ForeignAmbiguous ->
@@ -627,14 +630,14 @@ crawlModule foreignDeps mvar pkg src docsStatus name =
           if exists then
             crawlFile foreignDeps mvar pkg src docsStatus name path
 
-          else if Pkg.isKernel pkg && Name.isKernel name then
+          else if Pkg.isKernel pkg && Module.isKernel name then
             crawlKernel foreignDeps mvar pkg src name
 
           else
             return Nothing
 
 
-crawlFile :: Map.Map ModuleName.Raw ForeignInterface -> MVar StatusDict -> Pkg.Name -> FilePath -> DocsStatus -> ModuleName.Raw -> FilePath -> IO (Maybe Status)
+crawlFile :: Map.Map Module.Name ForeignInterface -> MVar StatusDict -> Pkg.Name -> FilePath -> DocsStatus -> Module.Name -> FilePath -> IO (Maybe Status)
 crawlFile foreignDeps mvar pkg src docsStatus expectedName path =
   do  bytes <- File.readUtf8 path
                & Lamdera.alternativeImplementationPassthrough (Lamdera.PackageReplacements.getReplacement pkg expectedName)
@@ -648,20 +651,20 @@ crawlFile foreignDeps mvar pkg src docsStatus expectedName path =
           return Nothing
 
 
-crawlImports :: Map.Map ModuleName.Raw ForeignInterface -> MVar StatusDict -> Pkg.Name -> FilePath -> [Src.Import] -> IO (Map.Map ModuleName.Raw ())
+crawlImports :: Map.Map Module.Name ForeignInterface -> MVar StatusDict -> Pkg.Name -> FilePath -> [Src.Import] -> IO (Map.Map Module.Name ())
 crawlImports foreignDeps mvar pkg src imports =
   do  statusDict <- takeMVar mvar
       let deps = Map.fromList (map (\i -> (Src.getImportName i, ())) imports)
       let news = Map.difference deps statusDict
-      mvars <- Map.traverseWithKey (const . fork . crawlModule foreignDeps mvar pkg src DocsNotNeeded) news
+      mvars <- Fork.forkWithKey (crawlModule foreignDeps mvar pkg src DocsNotNeeded) news
       putMVar mvar (Map.union mvars statusDict)
-      mapM_ readMVar mvars
+      mapM_ Fork.await mvars
       return deps
 
 
-crawlKernel :: Map.Map ModuleName.Raw ForeignInterface -> MVar StatusDict -> Pkg.Name -> FilePath -> ModuleName.Raw -> IO (Maybe Status)
+crawlKernel :: Map.Map Module.Name ForeignInterface -> MVar StatusDict -> Pkg.Name -> FilePath -> Module.Name -> IO (Maybe Status)
 crawlKernel foreignDeps mvar pkg src name =
-  do  let path = src </> ModuleName.toFilePath name <.> "js"
+  do  let path = src </> Module.toFilePath name <.> "js"
       exists <- File.exists path
       if exists
         then
@@ -697,12 +700,12 @@ data Result
   | RKernelForeign
 
 
-compile :: Pkg.Name -> MVar (Map.Map ModuleName.Raw (MVar (Maybe Result))) -> Status -> IO (Maybe Result)
-compile pkg mvar status =
+compile :: Pkg.Name -> MVar (Map.Map Module.Name (Fork.SafeMVar (Maybe Result))) -> Module.Name -> Status -> IO (Maybe Result)
+compile pkg mvar _ status =
   case status of
     SLocal docsStatus deps modul ->
       do  resultsDict <- readMVar mvar
-          maybeResults <- traverse readMVar (Map.intersection resultsDict deps)
+          maybeResults <- traverse Fork.await (Map.intersection resultsDict deps)
           case sequence maybeResults of
             Nothing ->
               return Nothing
@@ -745,9 +748,9 @@ data DocsStatus
   | DocsNotNeeded
 
 
-getDocsStatus :: Stuff.PackageCache -> Pkg.Name -> V.Version -> IO DocsStatus
+getDocsStatus :: R.PackageCache -> Pkg.Name -> V.Version -> IO DocsStatus
 getDocsStatus cache pkg vsn =
-  do  exists <- File.exists (Stuff.package cache pkg vsn </> "docs.json")
+  do  exists <- File.exists (R.package cache pkg vsn </> "docs.json")
       if exists
         then return DocsNotNeeded
         else return DocsNeeded
@@ -766,11 +769,11 @@ makeDocs status modul =
       return Nothing
 
 
-writeDocs :: Stuff.PackageCache -> Pkg.Name -> V.Version -> DocsStatus -> Map.Map ModuleName.Raw Result -> IO ()
-writeDocs cache pkg vsn status results =
+writeDocs :: File.Writer R.PACKAGES -> R.PackageCache -> Pkg.Name -> V.Version -> DocsStatus -> Map.Map Module.Name Result -> IO ()
+writeDocs writer cache pkg vsn status results =
   case status of
     DocsNeeded ->
-      E.writeUgly (Stuff.package cache pkg vsn </> "docs.json") $
+      JE.writeUgly writer (R.package cache pkg vsn </> "docs.json") $
         Docs.encode $ Map.mapMaybe toDocs results
 
     DocsNotNeeded ->
@@ -790,7 +793,7 @@ toDocs result =
 -- DOWNLOAD PACKAGE
 
 
-downloadPackage :: Stuff.PackageCache -> Http.Manager -> Pkg.Name -> V.Version -> IO (Either Exit.PackageProblem ())
+downloadPackage :: R.PackageCache -> Http.Manager -> Pkg.Name -> V.Version -> IO (Either Exit.PackageProblem ())
 downloadPackage cache manager pkg vsn =
   let
     url = Website.metadata pkg vsn "endpoint.json"
@@ -806,7 +809,7 @@ downloadPackage cache manager pkg vsn =
           return $ Left $ Exit.PP_BadEndpointRequest err
 
         Right byteString ->
-          do  result <- D.fromByteString endpointDecoder byteString
+          do  result <- JD.fromByteString endpointDecoder byteString
               case result of
                 Left _ ->
                   return $ Left $ Exit.PP_BadEndpointContent url
@@ -817,7 +820,7 @@ downloadPackage cache manager pkg vsn =
                           \(sha, archive) ->
                             if expectedHash == Http.shaToChars sha
                               || pkgsPath /= Nothing -- @LAMDERA when we're debugging with a local packages path, skip hash checking
-                            then Right <$> File.writePackage (Stuff.package cache pkg vsn) archive
+                            then Right <$> Http.writePackage (R.package cache pkg vsn) archive
                             else return $ Left $ Exit.PP_BadArchiveHash endpoint expectedHash (Http.shaToChars sha) Nothing
 
                       -- @LAMDERA both of those failures are usually a GitHub rename, so go find
@@ -902,10 +905,10 @@ isPublished manager name =
       return (result == Right ())
 
 
-endpointDecoder :: D.Decoder e (String, String)
+endpointDecoder :: JD.Decoder e (String, String)
 endpointDecoder =
-  do  url <- D.field "url" D.string
-      hash <- D.field "hash" D.string
+  do  url <- JD.field "url" JD.jsonString
+      hash <- JD.field "hash" JD.jsonString
       return (Utf8.toChars url, Utf8.toChars hash)
 
 
@@ -913,53 +916,94 @@ endpointDecoder =
 -- BINARY
 
 
-instance Binary Details where
-  put (Details a b c d e _) = put a >> put b >> put c >> put d >> put e
-  get =
-    do  a <- get
-        b <- get
-        c <- get
-        d <- get
-        e <- get
-        return (Details a b c d e ArtifactsCached)
+eDetails :: Details -> E.Builder
+eDetails (Details t o i l f _) =
+  File.eTime t
+  <> eValidOutline o
+  <> eBuildID i
+  <> E.dict32 Module.eName eLocal l
+  <> E.dict32 Module.eName eForeign f
 
 
-instance Binary ValidOutline where
-  put outline =
-    case outline of
-      ValidApp a     -> putWord8 0 >> put a
-      ValidPkg a b c -> putWord8 1 >> put a >> put b >> put c
-
-  get =
-    do  n <- getWord8
-        case n of
-          0 -> liftM  ValidApp get
-          1 -> liftM3 ValidPkg get get get
-          _ -> fail "binary encoding of ValidOutline was corrupted"
+dDetails :: D.Decoder Details
+dDetails =
+  do  t <- File.dTime
+      o <- dValidOutline
+      i <- dBuildID
+      l <- D.dict32 Module.dName dLocal
+      f <- D.dict32 Module.dName dForeign
+      return (Details t o i l f ArtifactsCached)
 
 
-instance Binary Local where
-  put (Local a b c d e f) = put a >> put b >> put c >> put d >> put e >> put f
-  get =
-    do  a <- get
-        b <- get
-        c <- get
-        d <- get
-        e <- get
-        f <- get
-        return (Local a b c d e f)
+eValidOutline :: ValidOutline -> E.Builder
+eValidOutline outline =
+  case outline of
+    ValidApp s     -> E.u8# 0#Word8 <> NE.eList32 Outline.ePath s
+    ValidPkg p m d -> E.u8# 1#Word8 <> Pkg.eName p <> E.list32 Module.eName m <> E.dict32 Pkg.eName V.eVersion d
 
 
-instance Binary Foreign where
-  get = liftM2 Foreign get get
-  put (Foreign a b) = put a >> put b
+dValidOutline :: D.Decoder ValidOutline
+dValidOutline =
+  do  tag <- D.u8
+      case tag of
+        0 -> liftM  ValidApp (NE.dList32 Outline.dPath)
+        1 -> liftM3 ValidPkg Pkg.dName (D.list32 Module.dName) (D.dict32 Pkg.dName V.dVersion)
+        _ -> D.expecting "ValidOutline"
 
 
-instance Binary Artifacts where
-  get = liftM2 Artifacts get get
-  put (Artifacts a b) = put a >> put b
+eBuildID :: BuildID -> E.Builder
+eBuildID (BuildID n) =
+  E.u64 n
 
 
-instance Binary ArtifactCache where
-  get = liftM2 ArtifactCache get get
-  put (ArtifactCache a b) = put a >> put b
+dBuildID :: D.Decoder BuildID
+dBuildID =
+  coerce D.u64
+
+
+eLocal :: Local -> E.Builder
+eLocal (Local p t d m i j) =
+  E.chars64 p <> File.eTime t <> E.list32 Module.eName d <> E.bool m <> eBuildID i <> eBuildID j
+
+
+dLocal :: D.Decoder Local
+dLocal =
+  do  p <- D.chars64
+      t <- File.dTime
+      d <- D.list32 Module.dName
+      m <- D.bool
+      i <- dBuildID
+      j <- dBuildID
+      return (Local p t d m i j)
+
+
+eForeign :: Foreign -> E.Builder
+eForeign (Foreign p ps) =
+  Pkg.eName p <> E.list32 Pkg.eName ps
+
+
+dForeign :: D.Decoder Foreign
+dForeign =
+  liftM2 Foreign Pkg.dName (D.list32 Pkg.dName)
+
+
+eArtifacts :: Artifacts -> E.Builder
+eArtifacts (Artifacts i o) =
+  E.dict32 Module.eName I.eDependencyInterface i <> Opt.eGlobalGraph o
+
+
+dArtifacts :: D.Decoder Artifacts
+dArtifacts =
+  liftM2 Artifacts (D.dict32 Module.dName I.dDependencyInterface) Opt.dGlobalGraph
+
+
+eArtifactCache :: ArtifactCache -> E.Builder
+eArtifactCache (ArtifactCache f a) =
+  E.set32 (E.dict32 Pkg.eName V.eVersion) f <> eArtifacts a
+
+
+dArtifactCache :: D.Decoder ArtifactCache
+dArtifactCache =
+  liftM2 ArtifactCache (D.set32 (D.dict32 Pkg.dName V.dVersion)) dArtifacts
+
+

@@ -1,5 +1,5 @@
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
-{-# LANGUAGE BangPatterns, ExtendedLiterals, OverloadedStrings #-}
+{-# LANGUAGE BangPatterns, ExtendedLiterals, OverloadedStrings, QuasiQuotes #-}
 module Repl
   ( Flags(..)
   , run
@@ -30,7 +30,6 @@ import qualified Data.Char as Char
 import qualified Data.List as List
 import qualified Data.Map as Map
 import Data.Monoid ((<>))
-import qualified Data.Name as N
 import qualified System.Console.Haskeline as Repl
 import qualified System.Directory as Dir
 import qualified System.Exit as Exit
@@ -38,13 +37,17 @@ import System.FilePath ((</>))
 import qualified System.IO as IO
 import qualified System.Process as Proc
 
+import qualified File
+import qualified String as S
+
 import qualified AST.Source as Src
-import qualified BackgroundWriter as BW
+import qualified AST.Prim.Module as Module
+import qualified AST.Prim.Name as N
+import qualified AST.Prim.TypeName as T
 import qualified Build
 import qualified Elm.Constraint as C
 import qualified Elm.Details as Details
 import qualified Elm.Licenses as Licenses
-import qualified Elm.ModuleName as ModuleName
 import qualified Elm.Outline as Outline
 import qualified Elm.Package as Pkg
 import qualified Elm.Version as V
@@ -66,7 +69,7 @@ import qualified Reporting.Exit as Exit
 import qualified Reporting.Render.Code as Code
 import qualified Reporting.Report as Report
 import qualified Reporting.Task as Task
-import qualified Stuff
+import qualified Root as R
 
 import qualified Sanity
 
@@ -116,7 +119,7 @@ printWelcomeMessage =
 
 data Env =
   Env
-    { _root :: FilePath
+    { _root :: R.Root
     , _interpreter :: FilePath
     , _ansi :: Bool
     }
@@ -160,8 +163,8 @@ loop env state =
 
 
 data Input
-  = Import ModuleName.Raw BS.ByteString
-  | Type N.Name BS.ByteString
+  = Import Module.Name BS.ByteString
+  | Type T.Name BS.ByteString
   | Port
   | Decl N.Name BS.ByteString
   | Expr BS.ByteString
@@ -304,7 +307,7 @@ attemptImport lines =
   do  result <- P.fromByteString parser (\_ -> ()) src
       case result of
         Right (Src.Import (A.At _ name) _ _) -> return $ Done (Import name src)
-        Left ()                              -> ifFail lines (Import "ERR" src)
+        Left ()                              -> ifFail lines (Import (Module.fromString [S.ascii|ERR|]) src)
 
 
 ifFail :: Lines -> Input -> IO CategorizedInput
@@ -340,7 +343,7 @@ attemptDeclOrExpr lines =
             PD.Port  _ _                                        -> pure $ Done Port
 
         Left declPosition
-          | startsWithKeyword "type" lines -> ifFail lines (Type "ERR" src)
+          | startsWithKeyword "type" lines -> ifFail lines (Type (T.nameFromString [S.ascii|ERR|]) src)
           | startsWithKeyword "port" lines -> pure $ Done Port
           | otherwise ->
               do  eResult <- P.fromByteString exprParser A.Position src
@@ -355,7 +358,7 @@ attemptDeclOrExpr lines =
                         do  tResult <- P.fromByteString annotation (\_ -> ()) src
                             case tResult of
                               Right name -> pure $ Continue (DefStart name)
-                              Left ()    -> ifFail lines (Decl "ERR" src)
+                              Left ()    -> ifFail lines (Decl [N.ascii|ERR|] src)
 
 
 startsWithColon :: Lines -> Bool
@@ -407,7 +410,7 @@ toDeclPosition src decl c =
 
 annotation :: P.Parser () N.Name
 annotation =
-  do  name <- PV.lower err
+  do  name <- PV.lower N.fromAddr err
       PS.chompAndCheckIndent err_ err
       P.word1 0x3A#Word8 {-:-} err
       PS.chompAndCheckIndent err_ err
@@ -428,8 +431,8 @@ annotation =
 
 data State =
   State
-    { _imports :: Map.Map N.Name B.Builder
-    , _types :: Map.Map N.Name B.Builder
+    { _imports :: Map.Map Module.Name B.Builder
+    , _types :: Map.Map T.Name B.Builder
     , _decls :: Map.Map N.Name B.Builder
     }
 
@@ -494,17 +497,17 @@ data Output
 attemptEval :: Env -> State -> State -> Output -> IO State
 attemptEval (Env root interpreter ansi) oldState newState output =
   do  result <-
-        BW.withScope $ \scope ->
-        Stuff.withRootLock root $ Task.run $
+        R.withRootLock root $ \writer stuff ->
+        Task.run $
         do  details <-
               Task.eio Exit.ReplBadDetails $
-                Details.load Reporting.silent scope root
+                Details.load writer Reporting.silent root stuff
 
             artifacts <-
               Task.eio id $
-                Build.fromRepl root details (toByteString newState output)
+                Build.fromRepl writer root stuff details (toByteString newState output)
 
-            traverse (Task.mapError Exit.ReplBadGenerate . Generate.repl root details ansi artifacts) (toPrintName output)
+            traverse (Task.mapError Exit.ReplBadGenerate . Generate.repl stuff details ansi artifacts) (toPrintName output)
 
       case result of
         Left exit ->
@@ -540,7 +543,7 @@ toByteString :: State -> Output -> BS.ByteString
 toByteString (State imports types decls) output =
   LBS.toStrict $ B.toLazyByteString $
     mconcat
-      [ "module ", N.toBuilder N.replModule, " exposing (..)\n"
+      [ "module ", Module.toBuilder Module.repl, " exposing (..)\n"
       , Map.foldr mappend mempty imports
       , Map.foldr mappend mempty types
       , Map.foldr mappend mempty decls
@@ -603,27 +606,27 @@ genericHelpMessage =
 -- GET ROOT
 
 
-getRoot :: IO FilePath
+getRoot :: IO R.Root
 getRoot =
-  do  maybeRoot <- Stuff.findRoot
+  do  maybeRoot <- R.findRoot
       case maybeRoot of
         Just root ->
           return root
 
         Nothing ->
-          do  cache <- Stuff.getReplCache
-              let root = cache </> "tmp"
-              Dir.createDirectoryIfMissing True (root </> "src")
-              Outline.write root $ Outline.Pkg $
-                Outline.PkgOutline
-                  Pkg.dummyName
-                  Outline.defaultSummary
-                  Licenses.bsd3
-                  V.one
-                  (Outline.ExposedList [])
-                  defaultDeps
-                  Map.empty
-                  C.defaultElm
+          do  root <- R.getReplTmpRoot
+              Dir.createDirectoryIfMissing True (R.src root)
+              File.withWriter $ \writer ->
+                Outline.write writer root $ Outline.Pkg $
+                  Outline.PkgOutline
+                    Pkg.dummyName
+                    Outline.defaultSummary
+                    Licenses.bsd3
+                    V.one
+                    (Outline.ExposedList [])
+                    defaultDeps
+                    Map.empty
+                    C.defaultElm
 
               return root
 
@@ -680,7 +683,7 @@ exeNotFound name =
 
 initSettings :: IO (Repl.Settings M)
 initSettings =
-  do  cache <- Stuff.getReplCache
+  do  cache <- R.getReplCache
       return $
         Repl.Settings
           { Repl.historyFile = Just (cache </> "history")
@@ -693,31 +696,31 @@ lookupCompletions :: String -> M [Repl.Completion]
 lookupCompletions string =
   do  (State imports types decls) <- State.get
       return $
-        addMatches string False decls $
-        addMatches string False types $
-        addMatches string True imports $
-        addMatches string False commands []
+        addMatches string False decls N.toString $
+        addMatches string False types T.nameToString $
+        addMatches string True imports Module.toString $
+        addMatches string False commands id []
 
 
-commands :: Map.Map N.Name ()
+commands :: Map.Map S.String ()
 commands =
   Map.fromList
-    [ (":exit", ())
-    , (":quit", ())
-    , (":reset", ())
-    , (":help", ())
+    [ ([S.ascii|:exit|], ())
+    , ([S.ascii|:quit|], ())
+    , ([S.ascii|:reset|], ())
+    , ([S.ascii|:help|], ())
     ]
 
 
-addMatches :: String -> Bool -> Map.Map N.Name v -> [Repl.Completion] -> [Repl.Completion]
-addMatches string isFinished dict completions =
-  Map.foldrWithKey (addMatch string isFinished) completions dict
+addMatches :: String -> Bool -> Map.Map k v -> (k -> S.String) -> [Repl.Completion] -> [Repl.Completion]
+addMatches string isFinished dict toStr completions =
+  Map.foldrWithKey (addMatch string isFinished toStr) completions dict
 
 
-addMatch :: String -> Bool -> N.Name -> v -> [Repl.Completion] -> [Repl.Completion]
-addMatch string isFinished name _ completions =
+addMatch :: String -> Bool -> (k -> S.String) -> k -> v -> [Repl.Completion] -> [Repl.Completion]
+addMatch string isFinished toStr name _ completions =
   let
-    suggestion = N.toChars name
+    suggestion = S.toChars (toStr name)
   in
   if List.isPrefixOf string suggestion then
     Repl.Completion suggestion suggestion isFinished : completions

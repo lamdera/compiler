@@ -2,7 +2,7 @@ cabal-version: 3.6
 build-type: Simple
 
 name: elm
-version: 0.19.2
+version: 0.19.3
 
 homepage: https://elm-lang.org
 author: Evan Czaplicki
@@ -41,10 +41,12 @@ Executable lamdera
     build-depends:
         ansi-terminal,
         ansi-wl-pprint < 1,
+        array,
         base,
         binary,
         bytestring,
         containers,
+        crypton < 2.0,
         directory,
         edit-distance,
         filelock,
@@ -183,7 +185,6 @@ Executable lamdera
 
         -- from builder/
         Build
-        BackgroundWriter
         Deps.Bump
         Deps.Diff
         Deps.Registry
@@ -196,7 +197,7 @@ Executable lamdera
         Reporting.Exit
         Reporting.Exit.Help
         Reporting.Task
-        Stuff
+        Root
 
         -- Elm things
         Elm.Outline
@@ -219,10 +220,10 @@ Executable lamdera
 
         -- data structures
         Data.Bag
+        Data.Dups
         Data.Index
-        Data.Map.Utils
-        Data.Name
         Data.NonEmptyList
+        Data.NonEmptyMap
         Data.OneOrMore
         Data.Utf8
 
@@ -235,8 +236,12 @@ Executable lamdera
         AST.Canonical
         AST.Optimized
         AST.Source
+        AST.Prim.Module
+        AST.Prim.Name
+        AST.Prim.Operator
+        AST.Prim.TypeName
+        AST.Prim.TypeVar
         AST.Prim.Variable
-        AST.Utils.Binop
         AST.Utils.Shader
         AST.Utils.Type
         Canonicalize.Effects
@@ -445,8 +450,20 @@ Executable lamdera
         Test.Ext.ElmPages.Check
 
         -- utils
+        Array
+        Buffer
         Bytes
+        Bytes.Decode
+        Bytes.Encode
+        Crash
+        Graph
         Literals
+        String
+        ThreadSafe.Fork
+
+        -- helpers
+        Data.List.Utils
+        Data.Map.Utils
 
 
 -- @LAMDERA The Lamdera test suite. This stanza was lost when elm.cabal was
@@ -483,10 +500,12 @@ Test-Suite lamdera-tests
     build-depends:
         ansi-terminal,
         ansi-wl-pprint < 1,
+        array,
         base,
         binary,
         bytestring,
         containers,
+        crypton < 2.0,
         directory,
         edit-distance,
         filelock,

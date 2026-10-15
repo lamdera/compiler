@@ -8,7 +8,7 @@ module Json.Encode
   , array
   , object
   , string
-  , name
+  , jsonString
   , chars
   , bool
   , int
@@ -30,11 +30,11 @@ import qualified Data.ByteString.Builder as B
 import qualified Data.Map as Map
 import qualified Data.Scientific as Sci
 import Data.Monoid ((<>))
-import qualified Data.Name as Name
 import qualified Data.Utf8 as Utf8
 
 import qualified File
 import qualified Json.String as Json
+import qualified String as S
 
 
 import Lamdera
@@ -63,14 +63,14 @@ object =
   Object
 
 
-string :: Json.String -> Value
+string :: S.String -> Value
 string str =
+  String (B.char7 '"' <> S.toBuilder str <> B.char7 '"')
+
+
+jsonString :: Json.String -> Value
+jsonString str =
   String (B.char7 '"' <> Json.toBuilder str <> B.char7 '"')
-
-
-name :: Name.Name -> Value
-name nm =
-  String (B.char7 '"' <> Name.toBuilder nm <> B.char7 '"')
 
 
 bool :: Bool -> Value
@@ -139,16 +139,16 @@ escape chrs =
 -- WRITE TO FILE
 
 
-write :: FilePath -> Value -> IO ()
-write path value =
-  File.writeBuilder path (encode value <> "\n")
+write :: File.Writer t -> FilePath -> Value -> IO ()
+write writer path value =
+  File.writeBuilder writer path (encode value <> "\n")
 
 
-writeUgly :: FilePath -> Value -> IO ()
-writeUgly path value = do
+writeUgly :: File.Writer t -> FilePath -> Value -> IO ()
+writeUgly writer path value = do
   -- debug_ $ "✍️  writeUgly: " <> path
   -- debug_ $ "    -> " <> (encodeUgly value)
-  File.writeBuilder path (encodeUgly value)
+  File.writeBuilder writer path (encodeUgly value)
 
 
 
@@ -319,7 +319,7 @@ newline =
 
 text :: Text -> Value
 text =
-  string . Utf8.fromChars . T.unpack
+  string . S.fromChars . T.unpack
   -- String (B.char7 '"' <> Json.toBuilder str <> B.char7 '"')
 
 

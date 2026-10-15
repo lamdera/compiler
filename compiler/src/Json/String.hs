@@ -1,11 +1,13 @@
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
-{-# LANGUAGE BangPatterns, EmptyDataDecls, ExtendedLiterals, MagicHash, UnboxedTuples #-}
+{-# LANGUAGE BangPatterns, EmptyDataDecls, ExtendedLiterals, MagicHash,
+TemplateHaskell, UnboxedTuples
+#-}
 module Json.String
   ( String
   , isEmpty
   --
   , fromAddr
-  , fromName
+  , fromStringUnsafe
   , fromChars
   , fromSnippet
   , fromComment
@@ -18,8 +20,6 @@ module Json.String
 
 import Prelude hiding (String)
 import qualified Data.ByteString.Builder as B
-import qualified Data.Coerce as Coerce
-import qualified Data.Name as Name
 import qualified Data.Utf8 as Utf8
 import GHC.Exts (isTrue#)
 import GHC.ForeignPtr (ForeignPtrContents)
@@ -27,6 +27,9 @@ import GHC.Prim
 import GHC.Int (Int(..))
 import GHC.IO (IO(IO))
 import System.IO.Unsafe (unsafePerformIO)
+
+import qualified Crash
+import qualified String as S
 
 import qualified Parse.Primitives as P
 
@@ -69,9 +72,9 @@ fromSnippet =
   Utf8.fromSnippet
 
 
-fromName :: Name.Name -> String
-fromName =
-  Coerce.coerce
+fromStringUnsafe :: S.String -> String
+fromStringUnsafe (S.String ba) =
+  Utf8.Utf8 ba
 
 
 
@@ -140,11 +143,11 @@ addSlice start end revChunks =
 getCharWidth :: Word8# -> Int#
 getCharWidth word
   | isTrue# (ltWord8# word 0x80#Word8) = 1#
-  | isTrue# (ltWord8# word 0xc0#Word8) = error "Need UTF-8 encoded input. Ran into unrecognized bits."
+  | isTrue# (ltWord8# word 0xc0#Word8) = $(Crash.crash 'getCharWidth) "Need UTF-8 encoded input. Ran into unrecognized bits."
   | isTrue# (ltWord8# word 0xe0#Word8) = 2#
   | isTrue# (ltWord8# word 0xf0#Word8) = 3#
   | isTrue# (ltWord8# word 0xf8#Word8) = 4#
-  | True                               = error "Need UTF-8 encoded input. Ran into unrecognized bits."
+  | True                               = $(Crash.crash 'getCharWidth) "Need UTF-8 encoded input. Ran into unrecognized bits."
 
 
 

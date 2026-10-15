@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings, TemplateHaskell #-}
 module Install
   ( Args(..)
   , run
@@ -15,11 +15,10 @@ module Install
   where
 
 
-import Data.Map ((!))
 import qualified Data.Map as Map
 import qualified Data.Map.Merge.Strict as Map
+import qualified Data.Map.Utils as Map
 
-import qualified BackgroundWriter as BW
 import qualified Deps.Solver as Solver
 import qualified Deps.Registry as Registry
 import qualified Elm.Constraint as C
@@ -32,7 +31,7 @@ import Reporting.Doc ((<>), (<+>))
 import qualified Reporting.Doc as D
 import qualified Reporting.Exit as Exit
 import qualified Reporting.Task as Task
-import qualified Stuff
+import qualified Root as R
 
 
 
@@ -47,7 +46,7 @@ data Args
 run :: Args -> () -> IO ()
 run args () =
   Reporting.attempt Exit.installToReport $
-    do  maybeRoot <- Stuff.findRoot
+    do  maybeRoot <- R.findRoot
         case maybeRoot of
           Nothing ->
             return (Left Exit.InstallNoOutline)
@@ -55,7 +54,7 @@ run args () =
           Just root ->
             case args of
               NoArgs ->
-                do  elmHome <- Stuff.getElmHome
+                do  elmHome <- R.getElmHome
                     return (Left (Exit.InstallNoArgs elmHome))
 
               Install pkg ->
@@ -86,7 +85,7 @@ data Changes vsn
 type Task = Task.Task Exit.Install
 
 
-attemptChanges :: FilePath -> Solver.Env -> Outline.Outline -> (a -> String) -> Changes a -> Task ()
+attemptChanges :: R.Root -> Solver.Env -> Outline.Outline -> (a -> String) -> Changes a -> Task ()
 attemptChanges root env oldOutline toChars changes =
   case changes of
     AlreadyInstalled ->
@@ -131,18 +130,18 @@ attemptChanges root env oldOutline toChars changes =
         ]
 
 
-attemptChangesHelp :: FilePath -> Solver.Env -> Outline.Outline -> Outline.Outline -> D.Doc -> Task ()
+attemptChangesHelp :: R.Root -> Solver.Env -> Outline.Outline -> Outline.Outline -> D.Doc -> Task ()
 attemptChangesHelp root env oldOutline newOutline question =
   Task.eio Exit.InstallBadDetails $
-  BW.withScope $ \scope ->
+  R.withRootLock root $ \writer stuff ->
   do  approved <- Reporting.ask question
       if approved
         then
-          do  Outline.write root newOutline
-              result <- Details.verifyInstall scope root env newOutline
+          do  Outline.write writer root newOutline
+              result <- Details.verifyInstall writer root stuff env newOutline
               case result of
                 Left exit ->
-                  do  Outline.write root oldOutline
+                  do  Outline.write writer root oldOutline
                       return (Left exit)
 
                 Right () ->
@@ -249,7 +248,7 @@ makePkgPlan (Solver.Env cache _ connection registry) pkg outline@(Outline.PkgOut
                 case result of
                   Solver.Ok solution ->
                     let
-                      (Solver.Details vsn _) = solution ! pkg
+                      (Solver.Details vsn _) = $(Map.require 'makePkgPlan) pkg solution Pkg.toChars
 
                       con = C.untilNextMajor vsn
                       new = Map.insert pkg con old

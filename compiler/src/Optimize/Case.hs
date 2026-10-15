@@ -1,3 +1,4 @@
+{-# LANGUAGE TemplateHaskell #-}
 module Optimize.Case
   ( optimize
   )
@@ -6,12 +7,14 @@ module Optimize.Case
 
 import Control.Arrow (second)
 import qualified Data.Map as Map
-import Data.Map ((!))
+import qualified Data.Map.Utils as Map
 import qualified Data.Maybe as Maybe
-import qualified Data.Name as Name
+
+import qualified Crash
 
 import qualified AST.Canonical as Can
 import qualified AST.Optimized as Opt
+import qualified AST.Prim.Name as N
 import qualified Optimize.DecisionTree as DT
 
 import qualified Sanity
@@ -19,7 +22,7 @@ import qualified Sanity
 -- OPTIMIZE A CASE EXPRESSION
 
 
-optimize :: Name.Name -> Name.Name -> [(Can.Pattern, Opt.Expr)] -> Opt.Expr
+optimize :: N.Name -> N.Name -> [(Can.Pattern, Opt.Expr)] -> Opt.Expr
 optimize temp root optBranches =
   let
     (patterns, indexedBranches) =
@@ -58,7 +61,7 @@ treeToDecider tree =
 
     -- zero options
     DT.Decision _ [] Nothing ->
-        error "compiler bug, somehow created an empty decision tree"
+        $(Crash.crash 'treeToDecider) "compiler bug, somehow created an empty decision tree"
 
     -- one option
     DT.Decision _ [(_, subTree)] Nothing ->
@@ -123,12 +126,9 @@ countTargets decisionTree =
         Map.unionsWith (+) (map countTargets (fallback : map snd tests))
 
 
-createChoices
-    :: Map.Map Int Int
-    -> (Int, Opt.Expr)
-    -> ( (Int, Opt.Choice), Maybe (Int, Opt.Expr) )
+createChoices :: Map.Map Int Int -> (Int, Opt.Expr) -> ( (Int, Opt.Choice), Maybe (Int, Opt.Expr) )
 createChoices targetCounts (target, branch) =
-    if targetCounts ! target == 1 then
+    if $(Map.require 'createChoices) target targetCounts show == 1 then
         ( (target, Opt.Inline branch)
         , Nothing
         )
@@ -139,10 +139,7 @@ createChoices targetCounts (target, branch) =
         )
 
 
-insertChoices
-    :: Map.Map Int Opt.Choice
-    -> Opt.Decider Int
-    -> Opt.Decider Opt.Choice
+insertChoices :: Map.Map Int Opt.Choice -> Opt.Decider Int -> Opt.Decider Opt.Choice
 insertChoices choiceDict decider =
   let
     go =
@@ -150,7 +147,7 @@ insertChoices choiceDict decider =
   in
     case decider of
       Opt.Leaf target ->
-          Opt.Leaf (choiceDict ! target)
+          Opt.Leaf $ $(Map.require 'insertChoices) target choiceDict show
 
       Opt.Chain testChain success failure ->
           Opt.Chain testChain (go success) (go failure)
