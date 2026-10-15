@@ -4,10 +4,10 @@
 # reactor/src at build time (Develop.StaticFiles). That build normally
 # downloads its Elm dependencies; the nix sandbox has no network, so this
 # derivation provides the complete package cache up front, in the layout
-# builder/src/Stuff.hs expects:
+# builder/src/Root.hs (builder/src/Stuff.hs before Elm 0.19.3) expects:
 #
-#   <ELM_HOME>/0.19.1/packages/<author>/<pkg>/<version>/...
-#   <ELM_HOME>/0.19.1/packages/registry.dat
+#   <ELM_HOME>/<elmVersion>/packages/<author>/<pkg>/<version>/...
+#   <ELM_HOME>/<elmVersion>/packages/registry.dat
 #
 # registry.dat is a package.elm-lang.org registry snapshot (borrowed from
 # nixpkgs' elm packaging, pinned by commit). It only has to parse and to list
@@ -21,7 +21,7 @@
   fetchurl,
   unzip,
   # The Elm version keying the package cache layout. MUST match elm.cabal's
-  # `version:` - Stuff.getCacheDir puts packages at $ELM_HOME/<compilerVersion>/,
+  # `version:` - Root.getCacheDir (Stuff.getCacheDir before 0.19.3) puts packages at $ELM_HOME/<compilerVersion>/,
   # and compilerVersion is that cabal version. A mismatch means the compiler
   # looks in a directory this derivation never created, and every build-time Elm
   # compile fails as if the packages were missing.
@@ -52,6 +52,13 @@ let
   # these dependencies with ELM_HOME set to a scratch dir, then copy out
   # $ELM_HOME/0.19.1/packages/registry.dat. It is a snapshot of the public
   # package list, so refreshing it only ever adds packages.
+  #
+  # (Since Elm 0.19.3 the directory is $ELM_HOME/0.19.3/, and registry.dat has
+  # a new binary encoding: little-endian with 32-bit lengths, where 0.19.2 and
+  # earlier wrote Data.Binary's big-endian 64-bit ones. The 0.19.3 compiler
+  # reports an old-format file as "Corrupt File" and refetches it, which the
+  # sandbox cannot do. The file here was converted from the 0.19.2 one entry for
+  # entry, so it lists exactly the packages it did before.)
   registryDat = ./registry.dat;
 
   fetchPkg =

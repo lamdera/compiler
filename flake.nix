@@ -87,7 +87,7 @@
 
           # Keep in step with elm.cabal's `version:`. See the note on the
           # elmVersion argument in nix/reactor-elm-home.nix.
-          elmVersion = "0.19.2";
+          elmVersion = "0.19.3";
 
           reactorElmHome = pkgs.callPackage ./nix/reactor-elm-home.nix { inherit elmVersion; };
 
