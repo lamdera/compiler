@@ -420,6 +420,7 @@ Executable lamdera
         Test.TypeHashes
         Test.Wire
         Test.WireGolden
+        Test.MultiVersion
         Test.JsOutput
         Test.WebGL
         Test.BackwardsCompat

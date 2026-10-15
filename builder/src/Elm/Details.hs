@@ -13,6 +13,8 @@ module Elm.Details
   , verifyInstall
   --
   , eDetails, dDetails
+  --
+  , isCompatibleAppElmVersion -- @LAMDERA exposed for Test.MultiVersion
   )
   where
 
