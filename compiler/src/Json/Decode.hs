@@ -850,7 +850,7 @@ toEncodeValue (A.At region ast) =
       keyVals
 
     String snippet ->
-      E.string <$> Json.fromSnippet snippet
+      E.jsonString <$> Json.fromSnippet snippet
 
     Int int ->
       return $ E.Integer int
@@ -896,7 +896,7 @@ succeed a =
 
 
 text :: Decoder e T.Text
-text = fmap (T.pack . Json.toChars) string
+text = fmap (T.pack . Json.toChars) jsonString
 
 
 map2 :: (a -> b -> value) -> Decoder e a -> Decoder e b -> Decoder e value

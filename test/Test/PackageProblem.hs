@@ -49,17 +49,17 @@ all = EasyTest.run suite
 
 ziplist :: Pkg.Name
 ziplist =
-  Pkg.toName (Utf8.fromChars "STTR13") "ziplist"
+  Pkg.Name "STTR13" "ziplist"
 
 
 dateFormat :: Pkg.Name
 dateFormat =
-  Pkg.toName (Utf8.fromChars "ryannhg") "date-format"
+  Pkg.Name "ryannhg" "date-format"
 
 
 orderedContainers :: Pkg.Name
 orderedContainers =
-  Pkg.toName (Utf8.fromChars "y0hy0h") "ordered-containers"
+  Pkg.Name "y0hy0h" "ordered-containers"
 
 
 movedAndPublished :: String -> Maybe Exit.PackageMoved
@@ -138,7 +138,7 @@ squish =
 suite :: Test ()
 suite = tests
   [ scope "404 + renamed + re-published -> name it, link it, give exact commands" $ do
-      let report = render ziplist (V.Version 1 3 0) $
+      let report = render ziplist (V.toVersion 1 3 0) $
             Exit.PP_BadArchiveRequest
               (httpStatusError 404 "https://github.com/STTR13/ziplist/zipball/1.3.0/")
               (movedAndPublished "staeter/ziplist")
@@ -157,7 +157,7 @@ suite = tests
       omits "firewall" report
 
   , scope "404 + renamed + NOT re-published -> say so, do not suggest installing it" $ do
-      let report = render orderedContainers (V.Version 2 0 0) $
+      let report = render orderedContainers (V.toVersion 2 0 0) $
             Exit.PP_BadArchiveRequest
               (httpStatusError 404 "https://github.com/y0hy0h/ordered-containers/zipball/2.0.0/")
               (movedNotPublished "j-maas/ordered-containers")
@@ -168,7 +168,7 @@ suite = tests
       omits "npx elm-json-lamdera install j-maas/ordered-containers" report
 
   , scope "404 + no rename found -> fall back to picking a published version" $ do
-      let report = render ziplist (V.Version 1 3 0) $
+      let report = render ziplist (V.toVersion 1 3 0) $
             Exit.PP_BadArchiveRequest
               (httpStatusError 404 "https://github.com/STTR13/ziplist/zipball/1.3.0/")
               Nothing
@@ -180,7 +180,7 @@ suite = tests
       omits "the project now lives here" report
 
   , scope "non-404 archive failure still gets the generic HTTP report" $ do
-      let report = render ziplist (V.Version 1 3 0) $
+      let report = render ziplist (V.toVersion 1 3 0) $
             Exit.PP_BadArchiveRequest
               (httpStatusError 500 "https://github.com/STTR13/ziplist/zipball/1.3.0/")
               Nothing
@@ -189,7 +189,7 @@ suite = tests
       omits "PACKAGE SOURCE UNAVAILABLE" report
 
   , scope "hash mismatch + renamed + re-published -> explain the rename, give commands" $ do
-      let report = render dateFormat (V.Version 2 3 0) $
+      let report = render dateFormat (V.toVersion 2 3 0) $
             Exit.PP_BadArchiveHash
               "https://github.com/ryannhg/date-format/zipball/2.3.0/"
               "70c67866fed499bec685f43f23fea279556757f2"
@@ -208,7 +208,7 @@ suite = tests
       omits "CORRUPT PACKAGE DATA" report
 
   , scope "hash mismatch + renamed + NOT re-published -> no version can help" $ do
-      let report = render orderedContainers (V.Version 2 0 0) $
+      let report = render orderedContainers (V.toVersion 2 0 0) $
             Exit.PP_BadArchiveHash
               "https://github.com/y0hy0h/ordered-containers/zipball/2.0.0/"
               "3de944919fd7d0204de1eb6462ecfede583844a8"
@@ -224,7 +224,7 @@ suite = tests
       omits "Switch to a version that is still published" report
 
   , scope "hash mismatch + no rename found -> tell them how to check for one" $ do
-      let report = render dateFormat (V.Version 2 3 0) $
+      let report = render dateFormat (V.toVersion 2 3 0) $
             Exit.PP_BadArchiveHash
               "https://github.com/ryannhg/date-format/zipball/2.3.0/"
               "70c67866fed499bec685f43f23fea279556757f2"
@@ -238,17 +238,17 @@ suite = tests
 
   , scope "every variant offers the ELM_HOME cache as an escape hatch" $ do
       let reports =
-            [ render ziplist (V.Version 1 3 0) $
+            [ render ziplist (V.toVersion 1 3 0) $
                 Exit.PP_BadArchiveRequest
                   (httpStatusError 404 "https://github.com/STTR13/ziplist/zipball/1.3.0/")
                   (movedAndPublished "staeter/ziplist")
-            , render ziplist (V.Version 1 3 0) $
+            , render ziplist (V.toVersion 1 3 0) $
                 Exit.PP_BadArchiveRequest
                   (httpStatusError 404 "https://github.com/STTR13/ziplist/zipball/1.3.0/")
                   Nothing
-            , render dateFormat (V.Version 2 3 0) $
+            , render dateFormat (V.toVersion 2 3 0) $
                 Exit.PP_BadArchiveHash "url" "aaa" "bbb" (movedAndPublished "ryan-haskell/date-format")
-            , render dateFormat (V.Version 2 3 0) $
+            , render dateFormat (V.toVersion 2 3 0) $
                 Exit.PP_BadArchiveHash "url" "aaa" "bbb" Nothing
             ]
 

@@ -6,12 +6,12 @@ import qualified Data.Text as T
 import qualified Data.List as List
 import qualified Data.Map as Map
 
-import qualified Stuff as PerUserCache
+import qualified Root
 import qualified Reporting
 import qualified Reporting.Doc as D
 import Terminal (Parser(..))
 
-import qualified Data.Name as Name
+import qualified AST.Prim.Name as Name
 import qualified AST.Canonical as Can
 import AST.Canonical (Type(..))
 import qualified Compile
@@ -37,7 +37,7 @@ run :: Args -> () -> IO ()
 run (Args file expressionName) () = do
   debug_ "Starting annotation..."
 
-  elmHome <- PerUserCache.getElmHome
+  elmHome <- Root.getElmHomePath
   root <- getProjectRoot "Lamdera.CLI.Annotate.run"
   printAnnotations root file expressionName
 
@@ -138,7 +138,10 @@ canonicalTypeToString (Can.Forall freeVars tipe) =
     TUnit ->
       "TODO"
 
-    TTuple t1 t2 mt3 ->
+    TPair t1 t2 ->
+      "TODO"
+
+    TTriple t1 t2 t3 ->
       "TODO"
 
     TAlias moduleName name namedParamTypes alias ->

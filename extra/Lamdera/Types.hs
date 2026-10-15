@@ -4,14 +4,16 @@ module Lamdera.Types where
 
 import qualified Data.Map as Map
 
-import qualified Data.Name as N
+import qualified AST.Prim.Module as Module
+import qualified AST.Prim.Name as N
+import qualified AST.Prim.TypeName as TN
 import qualified Elm.Interface as Interface
 import qualified Elm.ModuleName as ModuleName
 
 import Lamdera
 
 type Interfaces =
-  Map.Map ModuleName.Raw Interface.Interface
+  Map.Map Module.Name Interface.Interface
 
 
 data DiffableType
@@ -44,7 +46,7 @@ data DiffableType
   deriving (Show)
 
 
-core :: [ModuleName.Raw]
+core :: [TN.Name]
 core =
   [ "FrontendModel"
   , "BackendModel"
@@ -55,4 +57,4 @@ core =
   ]
 
 
-type CoreTypeDiffs = [(N.Name, String, String)]
+type CoreTypeDiffs = [(TN.Name, String, String)]

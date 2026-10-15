@@ -18,7 +18,8 @@ import System.Exit (exitFailure)
 
 import AST.Optimized
 import Elm.ModuleName (Canonical(..))
-import qualified Data.Name
+import qualified AST.Prim.Module as PrimModule
+import qualified AST.Prim.Name as N
 import qualified Data.Utf8 as Utf8
 import qualified Elm.Package as Pkg
 import qualified Json.Decode as D
@@ -45,9 +46,9 @@ writeUsage = do
         & Set.toList
         & fmap (\(module_, expression, secrets) ->
             E.list id
-              [ E.string $ Utf8.fromChars $ T.unpack module_
-              , E.string $ Utf8.fromChars $ T.unpack expression
-              , secrets & fmap (E.string . Utf8.fromChars . T.unpack) & E.list id
+              [ E.jsonString $ Utf8.fromChars $ T.unpack module_
+              , E.jsonString $ Utf8.fromChars $ T.unpack expression
+              , secrets & fmap (E.jsonString . Utf8.fromChars . T.unpack) & E.list id
               ]
           )
         & E.list id
@@ -86,7 +87,7 @@ loadLamderaAppGraph = do
       pure graph
 
 
-findSecretUses :: GlobalGraph -> Data.Name.Name -> Data.Name.Name -> Set.Set (Text, Text, [Text])
+findSecretUses :: GlobalGraph -> PrimModule.Name -> N.Name -> Set.Set (Text, Text, [Text])
 findSecretUses graph module_ exprName = do
   let
     entryNode =
@@ -312,8 +313,8 @@ fetchAppConfigItems appName token = do
 
     body =
       E.object
-        [ ("key", E.string $ Utf8.fromChars $ T.unpack token)
-        , ("appId", E.string $ Utf8.fromChars $ T.unpack appName)
+        [ ("key", E.jsonString $ Utf8.fromChars $ T.unpack token)
+        , ("appId", E.jsonString $ Utf8.fromChars $ T.unpack appName)
         ]
 
     decoder :: D.Decoder err (WithErrorField [(Text, Text, Bool, Bool)])

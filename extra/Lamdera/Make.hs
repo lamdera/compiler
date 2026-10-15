@@ -5,7 +5,7 @@ import Control.Monad (liftM2)
 import qualified Data.Map as Map
 
 import qualified AST.Optimized as Opt
-import qualified BackgroundWriter as BW
+import qualified AST.Prim.Module as Module
 import qualified Build
 import qualified Data.NonEmptyList as NE
 import qualified Elm.Details as Details
@@ -15,7 +15,7 @@ import qualified File
 import qualified Reporting
 import qualified Reporting.Exit as Exit
 import qualified Reporting.Task as Task
-import qualified Stuff
+import qualified Root as R
 
 
 import Lamdera
@@ -25,8 +25,8 @@ import qualified Ext.Query.Interfaces
 
 
 
--- compileToInterfaces :: FilePath -> FilePath -> IO (Map.Map ModuleName.Raw I.Interface)
-compileToInterfaces :: FilePath -> FilePath -> [FilePath] -> IO (Either Exit.Make (Map.Map ModuleName.Raw I.Interface))
+-- compileToInterfaces :: FilePath -> FilePath -> IO (Map.Map Module.Name I.Interface)
+compileToInterfaces :: FilePath -> FilePath -> [FilePath] -> IO (Either Exit.Make (Map.Map Module.Name I.Interface))
 compileToInterfaces root path additional = do
   Ext.Common.withProjectRoot root $ do
     let
@@ -36,11 +36,10 @@ compileToInterfaces root path additional = do
 
     style <- Reporting.terminal
 
-    BW.withScope $ \scope ->
-      Stuff.withRootLock root $ Task.run $ do
+    R.withRootLock (R.fromFilePath root) $ \writer stuff -> Task.run $ do
           desiredMode <- getMode debug_ optimize
-          details <- Task.eio Exit.MakeBadDetails (Details.load style scope root)
-          artifacts <- buildPaths style root details (NE.List path additional)
+          details <- Task.eio Exit.MakeBadDetails (Details.load writer style (R.fromFilePath root) stuff)
+          artifacts <- buildPaths writer style (R.fromFilePath root) stuff details (NE.List path additional)
 
           interfaces <- Task.io $ Ext.Query.Interfaces.artifactsToFullInterfaces details artifacts
 
@@ -49,10 +48,10 @@ compileToInterfaces root path additional = do
 
 -- Cloned from Make.hs
 
-buildPaths :: Reporting.Style -> FilePath -> Details.Details -> NE.List FilePath -> Task.Task Exit.Make Build.Artifacts
-buildPaths style root details paths =
+buildPaths :: File.Writer R.PROJECT -> Reporting.Style -> R.Root -> R.Stuff -> Details.Details -> NE.List FilePath -> Task.Task Exit.Make Build.Artifacts
+buildPaths writer style root stuff details paths =
   Task.eio Exit.MakeCannotBuild $
-    Build.fromPaths style root details paths
+    Build.fromPaths writer style root stuff details paths
 
 data DesiredMode = Debug | Dev | Prod
 

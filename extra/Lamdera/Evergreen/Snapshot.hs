@@ -29,7 +29,11 @@ import qualified Data.Map as Map
 import qualified Data.Set as Set
 import qualified Data.List as List
 import qualified Data.Text as T
-import qualified Data.Name as N
+import qualified AST.Prim.Module as PrimModule
+import qualified AST.Prim.Name as N
+import qualified AST.Prim.TypeName as TN
+import qualified AST.Prim.TypeVar as TV
+import qualified Lamdera.Lexical as Lexical
 import Data.Map.Strict (unionWithKey)
 
 import qualified Data.Utf8 as Utf8
@@ -87,10 +91,10 @@ snapshotCurrentTypes version interfaces iface_Types = do
 
 type RecursionSet =
   -- [(ModuleName.Raw, N.Name)]
-  Set.Set (ModuleName.Canonical, N.Name)
+  Set.Set (ModuleName.Canonical, TN.Name)
 
 -- type TypeIdentifier = (Text, Text, Text, Text)
-type TypeIdentifier = (Pkg.Author, Pkg.Project, N.Name, N.Name)
+type TypeIdentifier = (Pkg.Author, Pkg.Project, PrimModule.Name, TN.Name)
 
 type SnapRes = (Text, ElmImports, ElmFilesText)
 
@@ -111,7 +115,7 @@ selNames (a,b,c) = a
 selImports (a,b,c) = b
 selFts (a,b,c) = c
 
-lamderaTypes :: [N.Name]
+lamderaTypes :: [TN.Name]
 lamderaTypes =
   [ "FrontendModel"
   , "BackendModel"
@@ -211,7 +215,7 @@ efToText version ft =
       & T.concat
 
 
-ftByName :: Int -> Interfaces -> N.Name -> Interface.Interface -> ElmFilesText
+ftByName :: Int -> Interfaces -> TN.Name -> Interface.Interface -> ElmFilesText
 ftByName version interfaces typeName interface = do
   let
     scope =
@@ -246,12 +250,12 @@ ftByName version interfaces typeName interface = do
           subft
 
         Nothing ->
-          -- DError $ "Found no type named " <> nameToText typeName <> " in " <> N.toText name
+          -- DError $ "Found no type named " <> nameToText typeName <> " in " <> nameToText name
           Map.empty
 
 
 -- A top level Custom Type definition i.e. `type Herp = Derp ...`
-unionToFt :: Int -> ModuleName.Canonical -> TypeIdentifier -> N.Name -> Interfaces -> RecursionSet -> [(N.Name, Can.Type)] -> Interface.Union -> [Can.Type] -> SnapRes
+unionToFt :: Int -> ModuleName.Canonical -> TypeIdentifier -> TN.Name -> Interfaces -> RecursionSet -> [(TV.Var, Can.Type)] -> Interface.Union -> [Can.Type] -> SnapRes
 unionToFt version scope identifier@(author, pkg, module_, tipe) typeName interfaces recursionSet tvarMap unionInterface params =
   let
     treat union =
@@ -261,7 +265,7 @@ unionToFt version scope identifier@(author, pkg, module_, tipe) typeName interfa
 
         tvars_ =
           tvarMap
-            & fmap (N.toText . fst)
+            & fmap (nameToText . fst)
             & T.intercalate " "
 
         tvarResolvedParams =
@@ -306,9 +310,9 @@ unionToFt version scope identifier@(author, pkg, module_, tipe) typeName interfa
                   fmap (\param -> canonicalToFt version localScope interfaces recursionSet param tvarMap) params_
               in
               ( if List.length cparams > 0 then
-                  N.toText name <> " " <> (fmap (\(t,imps,ft) -> t) cparams & T.intercalate " ")
+                  nameToText name <> " " <> (fmap (\(t,imps,ft) -> t) cparams & T.intercalate " ")
                 else
-                  N.toText name
+                  nameToText name
               , foldl (\acc (st, imps, ft) -> mergeImports acc imps) Set.empty cparams
               , foldl (\acc (st, imps, ft) -> mergeFts acc ft) Map.empty cparams
               )
@@ -371,7 +375,7 @@ unionToFt version scope identifier@(author, pkg, module_, tipe) typeName interfa
 
 
 -- A top level Alias definition i.e. `type alias ...`
-aliasToFt :: Int -> ModuleName.Canonical -> TypeIdentifier -> N.Name -> Interfaces -> RecursionSet -> Interface.Alias -> SnapRes
+aliasToFt :: Int -> ModuleName.Canonical -> TypeIdentifier -> TN.Name -> Interfaces -> RecursionSet -> Interface.Alias -> SnapRes
 aliasToFt version scope identifier@(author, pkg, module_, _tipe) typeName interfaces recursionSet aliasInterface =
   let
     treat a =
@@ -387,7 +391,7 @@ aliasToFt version scope identifier@(author, pkg, module_, _tipe) typeName interf
 
             tvars_ =
               tvars
-                & fmap N.toText
+                & fmap nameToText
                 & T.intercalate " "
 
             typeScope =
@@ -426,12 +430,12 @@ aliasToFt version scope identifier@(author, pkg, module_, _tipe) typeName interf
 
 moduleKey :: TypeIdentifier -> Text
 moduleKey identifier@(author, pkg, module_, tipe) =
-  if utf8ToText author == "author" then
+  if nameToText author == "author" then
     -- Internal package, keep as is
     nameToText module_
   else
     -- External package
-    utf8ToText author <> "/" <> utf8ToText pkg <> ":" <> nameToText module_
+    nameToText author <> "/" <> nameToText pkg <> ":" <> nameToText module_
 
 
 moduleNameKey :: ModuleName.Canonical -> Text
@@ -443,7 +447,7 @@ moduleNameKey moduleName =
         nameToText module_
       else
         -- External package
-        utf8ToText author <> "/" <> utf8ToText pkg <> ":" <> nameToText module_
+        nameToText author <> "/" <> nameToText pkg <> ":" <> nameToText module_
 
 
 getModuleNameUnkeyed :: ModuleName.Canonical -> Text
@@ -453,7 +457,7 @@ getModuleNameUnkeyed moduleName =
         nameToText module_
 
 
-canonicalToFt :: Int -> ModuleName.Canonical -> Interfaces -> RecursionSet -> Can.Type -> [(N.Name, Can.Type)] -> SnapRes
+canonicalToFt :: Int -> ModuleName.Canonical -> Interfaces -> RecursionSet -> Can.Type -> [(TV.Var, Can.Type)] -> SnapRes
 canonicalToFt version scope interfaces recursionSet canonical tvarMap =
   let
     scopeModule =
@@ -523,7 +527,7 @@ canonicalToFt version scope interfaces recursionSet canonical tvarMap =
               nameToText module_ <> "."
 
           typeName =
-            N.toText name
+            nameToText name
 
           module_ =
             case moduleName of
@@ -750,7 +754,7 @@ canonicalToFt version scope interfaces recursionSet canonical tvarMap =
 
             tvars =
               tvarMap_
-                & fmap (N.toText . fst)
+                & fmap (nameToText . fst)
                 & T.intercalate " "
 
             (subt, imps, subft) = canonicalToFt version moduleName interfaces recursionSet cType tvarMap_
@@ -773,9 +777,9 @@ canonicalToFt version scope interfaces recursionSet canonical tvarMap =
 
             typeDef =
               if length tvarMap_ > 0 then
-                ["type alias " <> N.toText name <> " " <> tvars <> " = " <> subt]
+                ["type alias " <> nameToText name <> " " <> tvars <> " = " <> subt]
               else
-                ["type alias " <> N.toText name <> " = " <> subt]
+                ["type alias " <> nameToText name <> " = " <> subt]
 
             -- !_ = formatHaskellValue "Can.TAlias.Holey:" (name, cType, tvarMap_, moduleName, scope) :: IO ()
           in
@@ -783,9 +787,9 @@ canonicalToFt version scope interfaces recursionSet canonical tvarMap =
           (
             debugIden <>
             if length tvarMap_ > 0 then
-              "(" <> typeScope <> N.toText name <> " " <> usageParamNames <> ")"
+              "(" <> typeScope <> nameToText name <> " " <> usageParamNames <> ")"
             else
-              typeScope <> N.toText name
+              typeScope <> nameToText name
           , scopeImports
           , (Map.singleton (moduleNameKey moduleName) $
               ElmFileText
@@ -808,16 +812,16 @@ canonicalToFt version scope interfaces recursionSet canonical tvarMap =
           (
             debugIden <>
             if module_ == scopeModule then
-              N.toText name
+              nameToText name
             else if isUserType identifier then
               "Evergreen.V" <> show_ version <> "." <> nameToText module_ <> "."
             else
-              nameToText module_ <> "." <> N.toText name
+              nameToText module_ <> "." <> nameToText name
           , imps
           , (Map.singleton (moduleNameKey moduleName) $
               ElmFileText
                 { imports = imps
-                , types = ["type alias " <> N.toText name <> " = " <> subt]
+                , types = ["type alias " <> nameToText name <> " = " <> subt]
                 })
               & mergeFts subft
           )
@@ -833,11 +837,12 @@ canonicalToFt version scope interfaces recursionSet canonical tvarMap =
           let
             fields =
               fieldMap
-                & Map.toList
+                -- (ties in Lamdera's pre Elm 0.19.3 name order, see Lamdera.Lexical)
+                & Lexical.toList
                 -- Restore user's field code-ordering to keep types looking familiar
                 & List.sortOn (\(name, (Can.FieldType index tipe)) -> index)
                 & fmap (\(name, (Can.FieldType index tipe)) ->
-                  (N.toText name, canonicalToFt version scope interfaces recursionSet tipe tvarMap)
+                  (nameToText name, canonicalToFt version scope interfaces recursionSet tipe tvarMap)
                 )
 
             fieldsFormatted =
@@ -862,27 +867,27 @@ canonicalToFt version scope interfaces recursionSet canonical tvarMap =
           in
           result
 
-    Can.TTuple t1 t2 mt3 ->
+    Can.TTriple t1 t2 t3 ->
+      let
+        (subt, imps, subft) = (canonicalToFt version scope interfaces recursionSet t1 tvarMap)
+        (subt2, imps2, subft2) = (canonicalToFt version scope interfaces recursionSet t2 tvarMap)
+        (subt3, imps3, subft3) = (canonicalToFt version scope interfaces recursionSet t3 tvarMap)
+      in
+      ("(" <> subt <> ", " <> subt2 <> ", " <> subt3 <> ")", mergeAllImports [imps,imps2,imps3], mergeAllFts [subft,subft2,subft3])
+
+    Can.TPair t1 t2 ->
       let
         (subt, imps, subft) = (canonicalToFt version scope interfaces recursionSet t1 tvarMap)
         (subt2, imps2, subft2) = (canonicalToFt version scope interfaces recursionSet t2 tvarMap)
       in
-      case mt3 of
-        Just t3 ->
-          let
-            (subt3, imps3, subft3) = (canonicalToFt version scope interfaces recursionSet t3 tvarMap)
-          in
-          ("(" <> subt <> ", " <> subt2 <> ", " <> subt3 <> ")", mergeAllImports [imps,imps2,imps3], mergeAllFts [subft,subft2,subft3])
-
-        Nothing ->
-          ("(" <> subt <> ", " <> subt2 <> ")", mergeImports imps imps2, mergeFts subft subft2)
+      ("(" <> subt <> ", " <> subt2 <> ")", mergeImports imps imps2, mergeFts subft subft2)
       -- DTuple (canonicalToFt version scope interfaces recursionSet t1 tvarMap) (canonicalToFt version scope interfaces recursionSet t2 tvarMap)
 
     Can.TUnit ->
       ("()", Set.empty, Map.empty)
 
     Can.TVar name ->
-      (N.toText name, Set.empty, Map.empty)
+      (nameToText name, Set.empty, Map.empty)
 
     Can.TLambda _ _ ->
       error "Fatal: impossible function type! Please report this."

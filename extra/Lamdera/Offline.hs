@@ -7,8 +7,9 @@ module Lamdera.Offline where
 import qualified Data.Map as Map
 import qualified Data.Text as Text
 
-import qualified BackgroundWriter as BW
+import qualified File
 import qualified Data.Utf8 as Utf8
+import Data.String (fromString)
 import qualified Deps.Solver as Solver
 import qualified Elm.Constraint as C
 import qualified Elm.Details as Details
@@ -20,7 +21,7 @@ import qualified Install
 import qualified Reporting.Doc as D
 import qualified Reporting.Exit as Exit
 import qualified Reporting.Task as Task
-import qualified Stuff
+import qualified Root as R
 import qualified System.Exit as Exit
 
 import Lamdera
@@ -246,7 +247,7 @@ stringToPackageName :: Text -> Maybe Pkg.Name
 stringToPackageName text =
   case Text.splitOn "/" text of
     author:package:[] ->
-      Just $ Pkg.Name (Utf8.fromChars $ Text.unpack author) (Utf8.fromChars $ Text.unpack package)
+      Just $ Pkg.Name (fromString $ Text.unpack author) (fromString $ Text.unpack package)
     _ ->
       Nothing
 
@@ -271,7 +272,7 @@ searchAllCurrentElmPackages = do
 -- runInstall :: Install.Args -> () -> IO ()
 runInstall args () =
   -- Reporting.attempt Exit.installToReport $
-    do  maybeRoot <- Stuff.findRoot
+    do  maybeRoot <- R.findRoot
         case maybeRoot of
           Nothing ->
             return (Left Exit.InstallNoOutline)
@@ -279,7 +280,7 @@ runInstall args () =
           Just root ->
             case args of
               Install.NoArgs ->
-                do  elmHome <- Stuff.getElmHome
+                do  elmHome <- R.getElmHome
                     return (Left (Exit.InstallNoArgs elmHome))
 
               Install.Install pkg ->
@@ -298,7 +299,7 @@ runInstall args () =
 
 type Task = Task.Task Exit.Install
 
-attemptChanges :: FilePath -> Solver.Env -> Outline.Outline -> (a -> String) -> Install.Changes a -> Task ()
+attemptChanges :: R.Root -> Solver.Env -> Outline.Outline -> (a -> String) -> Install.Changes a -> Task ()
 attemptChanges root env oldOutline toChars changes =
   case changes of
     Install.AlreadyInstalled ->
@@ -346,12 +347,12 @@ attemptChanges root env oldOutline toChars changes =
 -- attemptChangesHelp :: FilePath -> Solver.Env -> Outline.Outline -> Outline.Outline -> D.Doc -> Task ()
 attemptChangesHelp root env oldOutline newOutline question =
   Task.eio Exit.InstallBadDetails $
-  BW.withScope $ \scope ->
-  do  Outline.write root newOutline
-      result <- Details.verifyInstall scope root env newOutline
+  R.withRootLock root $ \writer stuff ->
+  do  Outline.write writer root newOutline
+      result <- Details.verifyInstall writer root stuff env newOutline
       case result of
         Left exit ->
-          do  Outline.write root oldOutline
+          do  Outline.write writer root oldOutline
               return (Left exit)
 
         Right () ->

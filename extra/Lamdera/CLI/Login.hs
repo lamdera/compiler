@@ -13,7 +13,7 @@ import qualified Json.Decode as D
 import qualified Json.Encode as E
 import qualified Json.String
 
-import qualified Stuff as PerUserCache
+import qualified Root
 import qualified Reporting.Doc as D
 
 import Lamdera
@@ -30,7 +30,7 @@ run () () = do
   appName <- Lamdera.Project.appNameOrThrow
 
   token <- do
-    elmHome <- PerUserCache.getElmHome
+    elmHome <- Root.getElmHomePath
     existingToken <- getToken
     newToken <- UUID.toText <$> UUID.nextRandom
     case existingToken of
@@ -95,7 +95,7 @@ checkApiLoop inProduction appName token =
             pure True
 
           "success" -> do
-            elmHome <- PerUserCache.getElmHome
+            elmHome <- Root.getElmHomePath
             writeToken token
             Progress.report $ D.fillSep ["───>", D.dullgreen "Logged in!"]
             pure True
@@ -116,27 +116,27 @@ tokenFile = ".lamdera-cli"
 
 getToken :: IO (Maybe Text)
 getToken = do
-  elmHome <- PerUserCache.getElmHome
+  elmHome <- Root.getElmHomePath
   tokenM <- readUtf8Text (elmHome </> tokenFile)
   pure $ fmap T.strip tokenM
 
 
 writeToken :: Text -> IO ()
 writeToken token = do
-  elmHome <- PerUserCache.getElmHome
+  elmHome <- Root.getElmHomePath
   writeUtf8 (elmHome </> tokenFile) token
 
 
 removeToken :: IO ()
 removeToken = do
-  elmHome <- PerUserCache.getElmHome
+  elmHome <- Root.getElmHomePath
   remove (elmHome </> tokenFile)
 
 
 validateCliToken :: IO Text
 validateCliToken = do
   appName <- Lamdera.Project.appNameOrThrow
-  elmHome <- PerUserCache.getElmHome
+  elmHome <- Root.getElmHomePath
   existingToken <- getToken
 
   case existingToken of
@@ -182,10 +182,10 @@ fetchApiSession appName token =
           "https://dashboard.lamdera.app/_r/apiSessionJson"
 
     body =
-      E.object [ ("token", E.string $ Json.String.fromChars $ T.unpack token) ]
+      E.object [ ("token", E.jsonString $ Json.String.fromChars $ T.unpack token) ]
 
     decoder =
-      D.string
+      D.jsonString
 
   in
   (fmap $ T.pack . Json.String.toChars) <$> Lamdera.Http.normalRpcJson "fetchApiSession" body endpoint decoder

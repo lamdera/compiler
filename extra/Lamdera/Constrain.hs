@@ -5,7 +5,9 @@ module Lamdera.Constrain where
 import qualified AST.Canonical as Can
 import qualified Elm.ModuleName as ModuleName
 import qualified Elm.Package as Pkg
-import qualified Data.Name as N
+import qualified AST.Prim.Module as Module
+import qualified AST.Prim.Name as N
+import qualified AST.Prim.TypeVar as TV
 import Type.Type as Type hiding (Descriptor(..))
 
 import qualified Data.Text as T
@@ -52,7 +54,7 @@ constrain pkg modu name annotation@(Can.Forall freevars t) region expected =
     pure $ CForeign region name annotation expected
 
 
-determineTypesLocation :: Text -> IO N.Name
+determineTypesLocation :: Text -> IO Module.Name
 determineTypesLocation tipe = do
 
   knownSource <- typeLocation tipe
@@ -84,28 +86,28 @@ determineTypesLocation tipe = do
 
 
 {-# NOINLINE typeLocations #-}
-typeLocations :: IORef (Map.Map Text N.Name)
+typeLocations :: IORef (Map.Map Text Module.Name)
 typeLocations = unsafePerformIO $ newIORef Map.empty
 
 resetTypeLocations :: IO ()
 resetTypeLocations = atomicModifyIORef typeLocations (\m -> (Map.empty, ()))
 
-rememberTypeLocation :: Text -> N.Name -> IO ()
+rememberTypeLocation :: Text -> Module.Name -> IO ()
 rememberTypeLocation str d = atomicModifyIORef typeLocations (\m -> (Map.insert str d m, ()))
 
 
-typeLocation :: Text -> IO (Maybe N.Name)
+typeLocation :: Text -> IO (Maybe Module.Name)
 typeLocation tipe = do
   fs <- readIORef typeLocations
   pure $ Map.lookup tipe fs
 
 
-getFreevars :: Can.Type -> Map.Map N.Name ()
+getFreevars :: Can.Type -> Map.Map TV.Var ()
 getFreevars t =
   Map.fromList $ fmap (\k -> (k, ())) (actualFreeVars t)
 
 
-actualFreeVars :: Can.Type -> [N.Name]
+actualFreeVars :: Can.Type -> [TV.Var]
 actualFreeVars t =
   case t of
     Can.TLambda t1 t2 ->
@@ -123,12 +125,11 @@ actualFreeVars t =
     Can.TUnit ->
       []
 
-    Can.TTuple t1 t2 mt3 ->
-      case mt3 of
-        Just t3 ->
-          actualFreeVars t1 <> actualFreeVars t2 <> actualFreeVars t3
-        Nothing ->
-          actualFreeVars t1 <> actualFreeVars t2
+    Can.TTriple t1 t2 t3 ->
+      actualFreeVars t1 <> actualFreeVars t2 <> actualFreeVars t3
+
+    Can.TPair t1 t2 ->
+      actualFreeVars t1 <> actualFreeVars t2
 
     Can.TAlias moduleName name keyVals alias ->
       case alias of
@@ -157,12 +158,11 @@ mapTvars fn t =
     Can.TUnit ->
       t
 
-    Can.TTuple t1 t2 mt3 ->
-      case mt3 of
-        Just t3 ->
-          Can.TTuple (mapTvars fn t1) (mapTvars fn t2) (Just $ mapTvars fn t3)
-        Nothing ->
-          Can.TTuple (mapTvars fn t1) (mapTvars fn t2) mt3
+    Can.TTriple t1 t2 t3 ->
+      Can.TTriple (mapTvars fn t1) (mapTvars fn t2) (mapTvars fn t3)
+
+    Can.TPair t1 t2 ->
+      Can.TPair (mapTvars fn t1) (mapTvars fn t2)
 
     Can.TAlias moduleName name keyVals alias ->
       case alias of

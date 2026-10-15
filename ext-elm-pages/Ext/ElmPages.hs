@@ -9,7 +9,11 @@ import qualified Data.Text as T
 import qualified Data.Set as Set
 import System.FilePath ((</>))
 
-import qualified Data.Name as N
+import qualified AST.Prim.Module as PrimModule
+import qualified AST.Prim.Name as N
+import qualified AST.Prim.TypeName as TN
+import qualified AST.Prim.TypeVar as TV
+import qualified Lamdera.Lexical as Lexical
 import qualified AST.Canonical as Can
 import qualified Elm.ModuleName as ModuleName
 import qualified Elm.Package as Pkg
@@ -75,7 +79,7 @@ checkPageDataType interfaces =
 
             typediffs :: [(Text, DiffableType)]
             typediffs =
-              let typediff = diffableTypeByName interfaces (toName "PageData") targetModule targetInterface
+              let typediff = diffableTypeByName interfaces "PageData" targetModule targetInterface
               in
               case typediff of
                 DCustom name variants ->
@@ -125,14 +129,14 @@ wireError formattedErrors =
 
 {- Tracks types that have already been seen to ensure we can break cycles -}
 type RecursionSet =
-  Set.Set (ModuleName.Raw, N.Name, [Can.Type])
+  Set.Set (PrimModule.Name, TN.Name, [Can.Type])
 
 
-nameRaw :: ModuleName.Canonical -> ModuleName.Raw
+nameRaw :: ModuleName.Canonical -> PrimModule.Name
 nameRaw (ModuleName.Canonical (Pkg.Name author pkg) module_) = module_
 
 
-diffableTypeByName :: Interfaces -> N.Name -> ModuleName.Canonical -> Interface.Interface -> DiffableType
+diffableTypeByName :: Interfaces -> TN.Name -> ModuleName.Canonical -> Interface.Interface -> DiffableType
 diffableTypeByName interfaces targetName modul interface = do
   let
     moduleName = ModuleName._module modul
@@ -153,7 +157,7 @@ diffableTypeByName interfaces targetName modul interface = do
           DError $ T.concat ["Found no type named ", nameToText targetName, " in ", nameToText moduleName]
 
 
-typeExists :: N.Name -> Interface.Interface -> Bool
+typeExists :: TN.Name -> Interface.Interface -> Bool
 typeExists targetName interface = do
   case Map.lookup targetName $ Interface._aliases interface of
     Just alias -> True
@@ -164,7 +168,7 @@ typeExists targetName interface = do
 
 
 -- A top level Custom Type definition i.e. `type Herp = Derp ...`
-unionToDiffableType :: N.Name -> ModuleName.Canonical -> Text -> Interfaces -> RecursionSet -> [(N.Name, Can.Type)] -> Interface.Union -> [Can.Type] -> DiffableType
+unionToDiffableType :: TN.Name -> ModuleName.Canonical -> Text -> Interfaces -> RecursionSet -> [(TV.Var, Can.Type)] -> Interface.Union -> [Can.Type] -> DiffableType
 unionToDiffableType targetName currentModule typeName interfaces recursionSet tvarMap unionInterface params =
   let
     treat union = unionConstructorsToDiffableTypes union targetName currentModule typeName interfaces recursionSet tvarMap unionInterface params
@@ -175,19 +179,20 @@ unionToDiffableType targetName currentModule typeName interfaces recursionSet tv
     Interface.PrivateUnion u -> DCustom typeName $ treat u
 
 
-unionConstructorsToDiffableTypes :: Can.Union -> N.Name -> ModuleName.Canonical -> Text -> Interfaces -> RecursionSet -> [(N.Name, Can.Type)] -> Interface.Union -> [Can.Type] -> [(Text, [DiffableType])]
+unionConstructorsToDiffableTypes :: Can.Union -> TN.Name -> ModuleName.Canonical -> Text -> Interfaces -> RecursionSet -> [(TV.Var, Can.Type)] -> Interface.Union -> [Can.Type] -> [(Text, [DiffableType])]
 unionConstructorsToDiffableTypes union targetName currentModule typeName interfaces recursionSet tvarMap unionInterface params =
   let
     newTvarMap = tvarMap <> zip (Can._u_vars union) params
   in
   Can._u_alts union
     -- Sort constructors by name, this allows our diff to be stable to ordering changes
-    & List.sortOn
+    -- (in Lamdera's pre Elm 0.19.3 name order, see Lamdera.Lexical)
+    & Lexical.sortOn
       -- Ctor N.Name Index.ZeroBased Int [Type]
       (\(Can.Ctor name _ _ _) -> name)
     -- For each constructor
     & fmap (\(Can.Ctor name index arity params_) ->
-      ( N.toText name
+      ( nameToText name
       , -- For each constructor type param
         params_
           -- Swap any `TVar (Name {_name = "a"})` for the actual injected params
@@ -198,7 +203,7 @@ unionConstructorsToDiffableTypes union targetName currentModule typeName interfa
 
 
 -- A top level Alias definition i.e. `type alias ...`
-aliasToDiffableType :: N.Name -> ModuleName.Canonical -> Interfaces -> RecursionSet -> [(N.Name, Can.Type)] -> Interface.Alias -> [Can.Type] -> DiffableType
+aliasToDiffableType :: TN.Name -> ModuleName.Canonical -> Interfaces -> RecursionSet -> [(TV.Var, Can.Type)] -> Interface.Alias -> [Can.Type] -> DiffableType
 aliasToDiffableType targetName currentModule interfaces recursionSet tvarMap aliasInterface params =
   let
     treat alias =
@@ -221,7 +226,7 @@ aliasToDiffableType targetName currentModule interfaces recursionSet tvarMap ali
 -- | TUnit
 -- | TTuple Type Type (Maybe Type)
 -- | TAlias ModuleName.Canonical N.Name [(N.Name, Type)] AliasType
-canonicalToDiffableType :: N.Name -> ModuleName.Canonical -> Interfaces -> RecursionSet -> Can.Type -> [(N.Name, Can.Type)] -> DiffableType
+canonicalToDiffableType :: TN.Name -> ModuleName.Canonical -> Interfaces -> RecursionSet -> Can.Type -> [(TV.Var, Can.Type)] -> DiffableType
 canonicalToDiffableType targetName currentModule interfaces recursionSet canonical tvarMap =
   case canonical of
     Can.TType moduleName name params ->
@@ -239,7 +244,7 @@ canonicalToDiffableType targetName currentModule interfaces recursionSet canonic
         identifier =
           case (moduleName, name) of
             ((ModuleName.Canonical (Pkg.Name author pkg) module_), tipe) ->
-              (utf8ToText author, utf8ToText pkg, nameToText module_, nameToText tipe)
+              (nameToText author, nameToText pkg, nameToText module_, nameToText tipe)
 
         kernelError =
           case identifier of
@@ -251,7 +256,7 @@ canonicalToDiffableType targetName currentModule interfaces recursionSet canonic
       if (Set.member recursionIdentifier recursionSet) then
         DRecursion $ case (moduleName, name) of
           ((ModuleName.Canonical (Pkg.Name pkg1 pkg2) module_), typename) ->
-            T.concat [utf8ToText pkg1, "/", utf8ToText pkg2, ":", nameToText module_, ".", nameToText typename]
+            T.concat [nameToText pkg1, "/", nameToText pkg2, ":", nameToText module_, ".", nameToText typename]
 
       else
       case identifier of
@@ -373,7 +378,7 @@ canonicalToDiffableType targetName currentModule interfaces recursionSet canonic
               -- Try unions
               case Map.lookup name $ Interface._unions subInterface of
                 Just union -> do
-                  unionToDiffableType targetName currentModule_ (N.toText name) interfaces newRecursionSet tvarMap union tvarResolvedParams
+                  unionToDiffableType targetName currentModule_ (nameToText name) interfaces newRecursionSet tvarMap union tvarResolvedParams
 
                 Nothing ->
                   -- Try aliases
@@ -429,19 +434,20 @@ canonicalToDiffableType targetName currentModule interfaces recursionSet canonic
             -- !_ = formatHaskellValue "Can.TRecord" (fieldMap, tvarMap) :: IO ()
           in
           fieldMap
-            & Map.toList
+            -- Lamdera's (pre Elm 0.19.3) field name order, see Lamdera.Lexical
+            & Lexical.toList
             & fmap (\(name,(Can.FieldType index tipe)) ->
-              (N.toText name, canonicalToDiffableType targetName currentModule interfaces recursionSet tipe tvarMap)
+              (nameToText name, canonicalToDiffableType targetName currentModule interfaces recursionSet tipe tvarMap)
             )
             & DRecord currentModule "unknown"
 
-    Can.TTuple t1 t2 (Just t3) ->
+    Can.TTriple t1 t2 t3 ->
       DTriple
         (canonicalToDiffableType targetName currentModule interfaces recursionSet t1 tvarMap)
         (canonicalToDiffableType targetName currentModule interfaces recursionSet t2 tvarMap)
         (canonicalToDiffableType targetName currentModule interfaces recursionSet t3 tvarMap)
 
-    Can.TTuple t1 t2 _ ->
+    Can.TPair t1 t2 ->
       DTuple
         (canonicalToDiffableType targetName currentModule interfaces recursionSet t1 tvarMap)
         (canonicalToDiffableType targetName currentModule interfaces recursionSet t2 tvarMap)
@@ -461,7 +467,7 @@ canonicalToDiffableType targetName currentModule interfaces recursionSet canonic
           in
           DError $ T.concat
             [ "Error: tvar lookup failed, please report this issue: cannot find "
-            , N.toText name
+            , nameToText name
             , " in tvarMap "
             ,  (T.pack $ show tvarMap)
             ]

@@ -24,7 +24,7 @@ import qualified Data.Map as Map
 import Data.Maybe (catMaybes)
 import NeatInterpolation
 
-import qualified Data.Name as Name
+import qualified AST.Prim.Name as Name
 import qualified Generate.Mode as Mode
 import qualified Elm.Package as Pkg
 import qualified Elm.ModuleName as ModuleName
@@ -40,6 +40,7 @@ import qualified Lamdera.Version
 import qualified Lamdera.PackageReplacements as PackageReplacements
 import qualified Elm.Version as V
 import qualified Data.Utf8 as Utf8
+import qualified AST.Prim.Module as PrimModule
 
 type Mains = Map.Map ModuleName.Canonical Opt.Main
 
@@ -54,7 +55,7 @@ versionsComment =
     & foldMap (\( name@(Pkg.Name _ project), ( version, commit ) ) ->
       "// "
       <> B.stringUtf8 (Pkg.toChars name)
-      <> ": https://github.com/lamdera/elm-" <> Utf8.toBuilder project <> "/commit/" <> B.stringUtf8 commit
+      <> ": https://github.com/lamdera/elm-" <> B.stringUtf8 (Pkg.projectToChars project) <> "/commit/" <> B.stringUtf8 commit
       <> " (based on v" <> B.stringUtf8 (V.toChars version) <> ")\n"
     )
   )
@@ -491,7 +492,7 @@ isOptimizedMode mode =
       Mode.Prod _ -> True
 
 
-mainsInclude :: [Name.Name] -> Mains -> Bool
+mainsInclude :: [PrimModule.Name] -> Mains -> Bool
 mainsInclude list mains =
   case mains & Map.toList of
     ((ModuleName.Canonical (Pkg.Name author pkg) modul),_):[] ->

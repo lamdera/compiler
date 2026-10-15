@@ -123,7 +123,7 @@ addImport ifaces (State vs ts cs bs qvs qts qcs) (Src.Import (A.At _ name) maybe
   case exposing of
     Src.Open ->
       let
-        !vs2 = addExposed vs vars
+        !vs2 = addExposedValues vs vars
         !ts2 = addExposed ts types
         !cs2 = addExposed cs ctors
         !bs2 = addExposed bs (Map.mapWithKey (binopToBinop home) binops)
@@ -139,6 +139,13 @@ addImport ifaces (State vs ts cs bs qvs qts qcs) (Src.Import (A.At _ name) maybe
 
 addExposed :: (Ord k) => Env.Exposed k a -> Env.Exposed k a -> Env.Exposed k a
 addExposed =
+  Map.unionWith Env.mergeInfo
+
+
+-- @LAMDERA addExposed for values, aware of the name so Env.mergeInfoFor can rescue
+-- the lamdera/core `log` clash (only a value can be named `log`).
+addExposedValues :: Env.Exposed N.Name a -> Env.Exposed N.Name a -> Env.Exposed N.Name a
+addExposedValues =
   Map.unionWithKey Env.mergeInfoFor
 
 

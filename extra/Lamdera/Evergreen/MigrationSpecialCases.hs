@@ -15,7 +15,7 @@ import NeatInterpolation
 
 import qualified Elm.ModuleName as ModuleName
 import qualified Elm.Package as Pkg
-import qualified Data.Name as N
+import qualified AST.Prim.Name as N
 
 import Lamdera.Evergreen.MigrationGeneratorHelpers
 import Lamdera

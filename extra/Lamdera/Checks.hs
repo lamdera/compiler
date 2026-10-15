@@ -156,12 +156,14 @@ checkPackageReplacementsVersions allDeps =
   traverse_ (checkPackageReplacementVersion allDeps) (Map.toList PackageReplacements.versions)
 
 checkPackageReplacementVersion :: Map.Map Pkg.Name V.Version -> ( Pkg.Name, ( V.Version, String ) ) -> Either Exit.Outline ()
-checkPackageReplacementVersion allDeps ( name, ( replacedVersion@(V.Version replacedMajor replacedMinor replacedPatch), _ ) ) =
+checkPackageReplacementVersion allDeps ( name, ( replacedVersion, _ ) ) =
+  V.fromVersion replacedVersion $ \replacedMajor replacedMinor replacedPatch ->
   case Map.lookup name allDeps of
     Nothing ->
       Right ()
 
-    Just elmJsonVersion@(V.Version elmJsonMajor elmJsonMinor elmJsonPatch) ->
+    Just elmJsonVersion ->
+      V.fromVersion elmJsonVersion $ \elmJsonMajor elmJsonMinor elmJsonPatch ->
       -- 🤷 This can’t happen. Only 1.x versions exists of all elm/* packages we replace. But we code it to be a hard error.
       if elmJsonMajor < replacedMajor then
         Left (Exit.OutlineLamderaReplacementPackageVersionTooLow name replacedVersion elmJsonVersion)

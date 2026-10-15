@@ -21,7 +21,8 @@ import qualified Elm.ModuleName as Module
 import Elm.Package (Name(..))
 import qualified Elm.Package as Pkg
 import qualified Elm.ModuleName as ModuleName
-import qualified Data.Name as N
+import qualified AST.Prim.Name as N
+import qualified AST.Prim.Module as PrimModule
 import qualified Reporting.Exit
 
 import Test.Helpers
@@ -135,8 +136,8 @@ testExamples = withTestEnv $ do
         filenameActual = folder </> "Actual.elm"
         typeName = "Target"
         scenarioName = FP.takeBaseName folder
-        moduleNameOld = N.fromChars $ scenarioName <> ".Old"
-        moduleNameNew = N.fromChars $ scenarioName <> ".New"
+        moduleNameOld = PrimModule.fromChars $ scenarioName <> ".Old"
+        moduleNameNew = PrimModule.fromChars $ scenarioName <> ".New"
         moduleNameActual = scenarioName <> ".Actual"
         -- moduleNameExpected = scenarioName <> ".Expected"
         moduleOld = ModuleName.Canonical (Pkg.Name "author" "project") moduleNameOld
@@ -173,9 +174,9 @@ testExamples = withTestEnv $ do
                   Nothing ->
                     pure migrationNested
             (_, _, Nothing) ->                  error $ "Could not find expectation file: " <> filenameExpected
-            (Nothing, Just typeNew, _) ->       error $ "Could not find type `Target` in test: " <> N.toChars moduleNameNew
-            (Just typeOld, Nothing, _) -> error $ "Could not find type `Target` in test: " <> N.toChars moduleNameOld
-            (Nothing, Nothing, _) ->      error $ "Could not find type `Target` in test: " <> N.toChars moduleNameNew
+            (Nothing, Just typeNew, _) ->       error $ "Could not find type `Target` in test: " <> PrimModule.toChars moduleNameNew
+            (Just typeOld, Nothing, _) -> error $ "Could not find type `Target` in test: " <> PrimModule.toChars moduleNameOld
+            (Nothing, Nothing, _) ->      error $ "Could not find type `Target` in test: " <> PrimModule.toChars moduleNameNew
     )
 
   failures <- io $ readMVar failuresM

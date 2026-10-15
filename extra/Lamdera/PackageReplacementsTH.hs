@@ -11,8 +11,8 @@ import qualified Data.FileEmbed
 import qualified Data.List as List
 import qualified Data.Map as Map
 import qualified Data.Maybe as Maybe
-import qualified Data.Name as Name
-import qualified Data.Utf8 as Utf8
+import qualified AST.Prim.Module as Module
+import qualified Data.String
 import qualified Elm.ModuleName as ModuleName
 import qualified Elm.Package as Pkg
 import qualified Elm.Version as V
@@ -62,8 +62,8 @@ submodulesToReplacementsListItems submodules =
         bytes <- TH.runIO (B.readFile (dir </> filePath))
 
         [|
-          ( ( Pkg.toName (Utf8.fromChars author) project
-            , Name.fromChars moduleName
+          ( ( Pkg.Name (Data.String.fromString author) (Data.String.fromString project)
+            , Module.fromChars moduleName
             )
           , $(Data.FileEmbed.bsToExp bytes)
           )
@@ -73,11 +73,11 @@ submodulesToReplacementsListItems submodules =
 submodulesToVersionsListItems :: [Submodule] -> TH.Q [TH.Exp]
 submodulesToVersionsListItems submodules =
   forM submodules $ \(author, project, dir) -> do
-    V.Version major minor patch <- TH.runIO (readVersion dir)
+    (major, minor, patch) <- TH.runIO (fmap (\version -> V.fromVersion version (,,)) (readVersion dir))
     commit <- TH.runIO (gitCommitHashIn dir)
     [|
-      ( Pkg.toName (Utf8.fromChars author) project
-      , ( V.Version major minor patch
+      ( Pkg.Name (Data.String.fromString author) (Data.String.fromString project)
+      , ( V.toVersion major minor patch
         , commit
         )
       )

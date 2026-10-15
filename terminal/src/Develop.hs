@@ -286,7 +286,7 @@ relativeErrorFilePaths :: Help.Report -> Help.Report
 relativeErrorFilePaths report =
   case report of
     Help.CompilerReport root e es ->
-      Help.CompilerReport root (relativeErrorFilePath root e) (fmap (relativeErrorFilePath root) es)
+      Help.CompilerReport root (relativeErrorFilePath (R.toFilePath root) e) (fmap (relativeErrorFilePath (R.toFilePath root)) es)
 
     Help.Report {} ->
       report
@@ -339,7 +339,7 @@ compile path =
 
                 javascript <- Task.mapError Exit.ReactorBadGenerate $ Generate.dev stuff details artifacts
                 let (NE.List name _) = Build.getRootNames artifacts
-                return $ Html.sandwich root name javascript
+                return $ Html.sandwich (R.toFilePath root) name javascript
 
 
 

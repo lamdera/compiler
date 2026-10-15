@@ -14,7 +14,7 @@ import Control.Monad.ST
 
 import AST.Optimized
 import qualified Elm.ModuleName as Module
-import qualified Data.Name
+import qualified AST.Prim.Name as N
 import qualified Data.Utf8 as Utf8
 
 import Elm.Package
@@ -33,7 +33,7 @@ import Ext.Common hiding ((&), atomicPutStrLn)
 import qualified Elm.ModuleName as Module
 
 import qualified Elm.Package as Pkg
-import qualified Data.Name
+import qualified AST.Prim.Name as N
 import qualified Data.Text as T
 import qualified AST.Optimized as Opt
 
@@ -72,7 +72,7 @@ run def args nodes =
     _ -> error $ "run: unexpected arg: " <> show def
 
 
-type Locals = Map.Map Data.Name.Name Expr
+type Locals = Map.Map N.Name Expr
 type Globals = Map.Map Global Node
 
 -- call def args =

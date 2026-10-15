@@ -32,6 +32,8 @@ import qualified Make
 
 import qualified Elm.Outline
 import qualified Elm.ModuleName
+import qualified Root
+import qualified AST.Prim.TypeName
 
 import Lamdera
 import qualified Lamdera.Version
@@ -669,7 +671,7 @@ checkUserProjectCompiles :: FilePath -> Bool -> IO ()
 checkUserProjectCompiles root optimized = do
 
   -- Make sure we catch project outline issues first
-  eitherOutline <- Elm.Outline.read root True
+  eitherOutline <- Elm.Outline.read (Root.fromFilePath root) True
   case eitherOutline of
     Left problem ->
       Progress.throw
@@ -689,7 +691,7 @@ checkUserProjectCompiles root optimized = do
       Lamdera.Compile.makeDev root ["src" </> "Backend.elm"]
 
 
-migrationCheck :: FilePath -> VersionInfo -> [(Elm.ModuleName.Raw, String, String)] -> IO ()
+migrationCheck :: FilePath -> VersionInfo -> [(AST.Prim.TypeName.Name, String, String)] -> IO ()
 migrationCheck root nextVersion changedTypes = do
   let
     version = vinfoVersion nextVersion
@@ -756,11 +758,11 @@ migrationCheck root nextVersion changedTypes = do
     copyFile migrationPathBk migrationPath
     remove migrationPathBk
 
-ensureNoFalseClaims :: FilePath -> Text -> [(Elm.ModuleName.Raw, String, String)] -> IO ()
+ensureNoFalseClaims :: FilePath -> Text -> [(AST.Prim.TypeName.Name, String, String)] -> IO ()
 ensureNoFalseClaims migrationPath migration changedTypes = do
   Progress.throwMultiple $ ensureNoFalseClaims_ migrationPath migration changedTypes
 
-ensureNoFalseClaims_ :: FilePath -> Text -> [(Elm.ModuleName.Raw, String, String)] -> [Help.Report]
+ensureNoFalseClaims_ :: FilePath -> Text -> [(AST.Prim.TypeName.Name, String, String)] -> [Help.Report]
 ensureNoFalseClaims_ migrationPath migration changedTypes =
   let
     topLevels = extractTopLevelExpressions migration
@@ -768,7 +770,7 @@ ensureNoFalseClaims_ migrationPath migration changedTypes =
   -- Ensure that no changed types claim to be ModelUnchanged or MsgUnchanged in the corresponding topLevel migration
   changedTypes & filterMap (\(changedType_, _, _) ->
     let
-      changedType = Elm.ModuleName.toChars changedType_
+      changedType = AST.Prim.TypeName.nameToChars changedType_
       name = lowerFirstLetter changedType
       relevantTopLevels = topLevels & filter (T.isPrefixOf (name))
       falseClaims = relevantTopLevels & filter (\topLevel -> "ModelUnchanged" `T.isInfixOf` topLevel || "MsgUnchanged" `T.isInfixOf` topLevel)

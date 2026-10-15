@@ -4,7 +4,7 @@ module Lamdera.Nitpick.DebugLog (hasDebug, hasUselessDebugLogs) where
 
 import qualified Data.Map as Map
 import qualified Data.Set as Set
-import qualified Data.Name as Name
+import qualified AST.Prim.Name as Name
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import NeatInterpolation
@@ -160,10 +160,14 @@ checkExpr functionName (Reporting.Annotation.At _ expr) =
         Can.Unit ->
             []
 
-        Can.Tuple expr expr2 maybeExpr ->
+        Can.Pair expr expr2 ->
             checkExpr functionName expr
                 ++ checkExpr functionName expr2
-                ++ concatMap (checkExpr functionName) maybeExpr
+
+        Can.Triple expr expr2 expr3 ->
+            checkExpr functionName expr
+                ++ checkExpr functionName expr2
+                ++ checkExpr functionName expr3
 
 
         Can.Shader shaderSource shaderTypes ->

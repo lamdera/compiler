@@ -61,5 +61,6 @@ artifacts =
 
 
 resetPatch :: V.Version -> V.Version
-resetPatch (V.Version major minor _patch) =
-  V.Version major minor 0
+resetPatch version =
+  V.fromVersion version $ \major minor _patch ->
+    V.toVersion major minor 0

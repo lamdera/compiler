@@ -10,7 +10,10 @@ import qualified Data.Map as Map
 import qualified Data.Set as Set
 import qualified Data.List as List
 import qualified Data.Text as T
-import qualified Data.Name as N
+import qualified AST.Prim.Module as PrimModule
+import qualified AST.Prim.Name as N
+import qualified AST.Prim.TypeName as TN
+import qualified AST.Prim.TypeVar as TV
 import Data.Map.Strict (unionWithKey)
 
 import qualified AST.Canonical as Can
@@ -23,11 +26,11 @@ import Lamdera.Types
 import Lamdera.Wire3.Helpers (resolveTvar)
 import StandaloneInstances
 
-type TypeName = N.Name
+type TypeName = TN.Name
 type TypeRef = (ModuleName.Canonical, TypeName)
-type RecursionSet = Set.Set (ModuleName.Canonical, N.Name)
-type TypeIdentifier = (Pkg.Author, Pkg.Project, N.Name, N.Name)
-type TvarMap = [(N.Name, Can.Type)] -- @TODO make it an actual map
+type RecursionSet = Set.Set (ModuleName.Canonical, TN.Name)
+type TypeIdentifier = (Pkg.Author, Pkg.Project, PrimModule.Name, TN.Name)
+type TvarMap = [(TV.Var, Can.Type)] -- @TODO make it an actual map
 
 data TypeDef
   = Alias ModuleName.Canonical TypeName Can.Alias
@@ -125,10 +128,10 @@ allImports migrations = migrations
 mergeAllSubDefs :: [MigrationDefinitions] -> MigrationDefinitions
 mergeAllSubDefs ftss = ftss & foldl (\acc fts -> Map.union acc fts) Map.empty
 
-migrationNameUnderscored :: N.Name -> Int -> Int -> N.Name -> Text
+migrationNameUnderscored :: PrimModule.Name -> Int -> Int -> TN.Name -> Text
 migrationNameUnderscored newModule oldVersion newVersion newTypeName =
   newModule
-    & N.toText
+    & nameToText
     & T.replace ("Evergreen.V" <> show_ newVersion <> ".") ""
     & T.replace ("Evergreen.V" <> show_ oldVersion <> ".") ""
     & T.replace "." "_"
@@ -142,20 +145,20 @@ unimplemented debugIdentifier message =
   xMigrationNested (T.concat ["(Unimplemented {- ", debugIdentifier_, message, " -})"], Set.empty, Map.empty)
 
 
-dropCan :: ModuleName.Canonical -> N.Name
+dropCan :: ModuleName.Canonical -> PrimModule.Name
 dropCan (ModuleName.Canonical (Pkg.Name author pkg) module_) = module_
 
 moduleKey :: TypeIdentifier -> Text
 moduleKey identifier@(author, pkg, module_, tipe) =
-  if utf8ToText author == "author" then
+  if nameToText author == "author" then
     -- Internal package, keep as is
     nameToText module_
   else
     -- External package
-    utf8ToText author <> "/" <> utf8ToText pkg <> ":" <> nameToText module_
+    nameToText author <> "/" <> nameToText pkg <> ":" <> nameToText module_
 
 idTypeName :: TypeIdentifier -> Text
-idTypeName identifier@(author, pkg, module_, tipe) = N.toText tipe
+idTypeName identifier@(author, pkg, module_, tipe) = nameToText tipe
 
 moduleNameKey :: ModuleName.Canonical -> Text
 moduleNameKey moduleName =
@@ -166,7 +169,7 @@ moduleNameKey moduleName =
         nameToText module_
       else
         -- External package
-        utf8ToText author <> "/" <> utf8ToText pkg <> ":" <> nameToText module_
+        nameToText author <> "/" <> nameToText pkg <> ":" <> nameToText module_
 
 
 getModuleNameUnkeyed :: ModuleName.Canonical -> Text
@@ -195,8 +198,8 @@ asIdentifier tipe =
     Can.TVar a              -> ("elm", "core", "Basics", "a")
     Can.TRecord a b         -> ("elm", "core", "Basics", "{}")
     Can.TUnit               -> ("elm", "core", "Basics", "()")
-    Can.TTuple a b (Just c) -> ("elm", "core", "Basics", "Triple")
-    Can.TTuple a b _        -> ("elm", "core", "Basics", "Tuple")
+    Can.TTriple a b c       -> ("elm", "core", "Basics", "Triple")
+    Can.TPair a b           -> ("elm", "core", "Basics", "Tuple")
 
 
 typeModuleNameCan :: Can.Type -> ModuleName.Canonical
@@ -208,11 +211,11 @@ typeModuleNameCan tipe =
     Can.TVar a              -> error $ "used typeModuleName on :" <> show ("elm", "core", "Basics", "a")
     Can.TRecord a b         -> error $ "used typeModuleName on :" <> show ("elm", "core", "Basics", "{}")
     Can.TUnit               -> error $ "used typeModuleName on :" <> show ("elm", "core", "Basics", "()")
-    Can.TTuple a b (Just c) -> error $ "used typeModuleName on :" <> show ("elm", "core", "Basics", "Triple")
-    Can.TTuple a b _        -> error $ "used typeModuleName on :" <> show ("elm", "core", "Basics", "Tuple")
+    Can.TTriple a b c       -> error $ "used typeModuleName on :" <> show ("elm", "core", "Basics", "Triple")
+    Can.TPair a b           -> error $ "used typeModuleName on :" <> show ("elm", "core", "Basics", "Tuple")
 
 
-asIdentifier_ :: (ModuleName.Canonical, N.Name) -> TypeIdentifier
+asIdentifier_ :: (ModuleName.Canonical, TN.Name) -> TypeIdentifier
 asIdentifier_ pair =
   case pair of
     ((ModuleName.Canonical (Pkg.Name author pkg) module_), typeName) ->
@@ -241,16 +244,14 @@ qualifiedTypeName tipe =
     Can.TType moduleName name params ->         typeNameToStringQualified moduleName name params
     Can.TAlias moduleName name namedParams _ -> typeNameToStringQualified moduleName name (fmap snd namedParams)
     Can.TLambda a b        -> "<function>"
-    Can.TVar a             -> N.toText a
+    Can.TVar a             -> nameToText a
     Can.TRecord a b        -> "{}"
     Can.TUnit              -> "()"
-    Can.TTuple a b mc      ->
-      case mc of
-        Just c -> T.concat ["(", qualifiedTypeName a, ", ", qualifiedTypeName b, ", ", qualifiedTypeName c, ")"]
-        Nothing -> T.concat ["(", qualifiedTypeName a, ", ", qualifiedTypeName b, ")"]
+    Can.TTriple a b c      -> T.concat ["(", qualifiedTypeName a, ", ", qualifiedTypeName b, ", ", qualifiedTypeName c, ")"]
+    Can.TPair a b          -> T.concat ["(", qualifiedTypeName a, ", ", qualifiedTypeName b, ")"]
 
 
-typeNameToStringQualified :: ModuleName.Canonical -> N.Name -> [Can.Type] -> Text
+typeNameToStringQualified :: ModuleName.Canonical -> TN.Name -> [Can.Type] -> Text
 typeNameToStringQualified moduleName tipeName params = do
   let coreType = nameToText tipeName
   case moduleName of
@@ -277,15 +278,15 @@ qualifiedType tipe =
     Can.TType moduleName name params ->         T.concat [ typeNameToStringQualifiedParams moduleName name params ]
     Can.TAlias moduleName name namedParams _ -> T.concat [ typeNameToStringQualifiedParams moduleName name (fmap snd namedParams) ]
     Can.TLambda a b         -> "<function>"
-    Can.TVar a              -> N.toText a
+    Can.TVar a              -> nameToText a
     Can.TRecord a b         -> "{}"
     Can.TUnit               -> "()"
-    Can.TTuple a b (Just c) -> T.concat ["(", qualifiedTypeName a, ", ", qualifiedTypeName b, ", ", qualifiedTypeName c, ")"]
-    Can.TTuple a b _        -> T.concat ["(", qualifiedTypeName a, ", ", qualifiedTypeName b, ")"]
+    Can.TTriple a b c       -> T.concat ["(", qualifiedTypeName a, ", ", qualifiedTypeName b, ", ", qualifiedTypeName c, ")"]
+    Can.TPair a b           -> T.concat ["(", qualifiedTypeName a, ", ", qualifiedTypeName b, ")"]
 
 
 
-typeNameToStringQualifiedParams :: ModuleName.Canonical -> N.Name -> [Can.Type] -> Text
+typeNameToStringQualifiedParams :: ModuleName.Canonical -> TN.Name -> [Can.Type] -> Text
 typeNameToStringQualifiedParams moduleName tipeName params = do
   let coreType = [nameToText tipeName] ++ parenthesize (fmap qualifiedTypeName params) & T.intercalate " "
   case moduleName of
@@ -338,10 +339,10 @@ isUserDefinedType_ cType =
     Can.TVar _ -> True
     Can.TRecord _ _ -> True
     Can.TUnit -> False
-    Can.TTuple a b mc ->
-      isUserDefinedType_ a || isUserDefinedType_ b || case mc of
-        Just c -> isUserDefinedType_ c
-        Nothing -> False
+    Can.TTriple a b c ->
+      isUserDefinedType_ a || isUserDefinedType_ b || isUserDefinedType_ c
+    Can.TPair a b ->
+      isUserDefinedType_ a || isUserDefinedType_ b
     Can.TAlias moduleName _ _ aType ->
       case aType of
         Can.Holey t -> isUserModule moduleName && isUserDefinedType_ t
@@ -372,10 +373,10 @@ containsUserTypes tvarMap tipe =
     Can.TRecord fields isPartial ->
       fields & Can.fieldsToList & fmap snd & any (containsUserTypes tvarMap)
 
-    Can.TTuple a b mc ->
-      containsUserTypes tvarMap a || containsUserTypes tvarMap b || case mc of
-        Just c -> containsUserTypes tvarMap c
-        Nothing -> False
+    Can.TTriple a b c ->
+      containsUserTypes tvarMap a || containsUserTypes tvarMap b || containsUserTypes tvarMap c
+    Can.TPair a b ->
+      containsUserTypes tvarMap a || containsUserTypes tvarMap b
 
     Can.TVar a ->
       -- We've already tried to resolve tvars, so this is an unfilled type, this should be impossible
@@ -415,7 +416,11 @@ coreTypesMatch t1 t2 = do
         (Can.Filled c1, Can.Filled c2) -> True
         _ -> False
     (Can.TRecord fields isPartial, Can.TRecord fields2 isPartial2) -> True
-    (Can.TTuple a1 a2 a3m, Can.TTuple b1 b2 b3m) -> True
+    -- Any two tuples matched before Elm 0.19.3 split TTuple into TPair and TTriple
+    (Can.TPair _ _, Can.TPair _ _) -> True
+    (Can.TPair _ _, Can.TTriple _ _ _) -> True
+    (Can.TTriple _ _ _, Can.TPair _ _) -> True
+    (Can.TTriple _ _ _, Can.TTriple _ _ _) -> True
     (Can.TUnit, Can.TUnit) -> True
     (Can.TVar name, Can.TVar name2) -> True
     (Can.TLambda _ _, Can.TLambda _ _) -> True
@@ -425,7 +430,7 @@ coreTypesMatch t1 t2 = do
 -- Like == but ignores differences in alias module locations when they are pointing to equivalent types
 -- Will NOT find custom types to be equivalent
 -- Will NOT resolve tvars
-isEquivalentElmType :: N.Name -> Can.Type -> Can.Type -> Bool
+isEquivalentElmType :: TN.Name -> Can.Type -> Can.Type -> Bool
 isEquivalentElmType debugLabel t1 t2 = do
   case (t1,t2) of
     (Can.TType moduleName name params, Can.TType moduleName2 name2 params2) ->
@@ -446,13 +451,13 @@ isEquivalentElmType debugLabel t1 t2 = do
       (length fieldTypes1 == length fieldTypes2)
         && (zipWith (isEquivalentElmType debugLabel) fieldTypes1 fieldTypes2 & all id)
 
-    (Can.TTuple a1 a2 a3m, Can.TTuple b1 b2 b3m) ->
+    (Can.TPair a1 a2, Can.TPair b1 b2) ->
+      isEquivalentElmType debugLabel a1 b1 &&
+      isEquivalentElmType debugLabel a2 b2
+    (Can.TTriple a1 a2 a3, Can.TTriple b1 b2 b3) ->
       isEquivalentElmType debugLabel a1 b1 &&
       isEquivalentElmType debugLabel a2 b2 &&
-      case (a3m, b3m) of
-        (Just a3, Just b3) -> isEquivalentElmType debugLabel a3 b3
-        (Nothing, Nothing)  -> True
-        _ -> False
+      isEquivalentElmType debugLabel a3 b3
     (Can.TUnit, Can.TUnit) ->
       t1 == t2
     (Can.TVar name, Can.TVar name2) ->
@@ -467,7 +472,7 @@ isEquivalentElmType debugLabel t1 t2 = do
 -- Will NOT find identically defined custom types to be equivalent
 -- Will NOT resolve tvars
 -- WILL consider applied parameter types
-isEquivalentAppliedType :: N.Name -> Can.Type -> Can.Type -> Bool
+isEquivalentAppliedType :: TN.Name -> Can.Type -> Can.Type -> Bool
 isEquivalentAppliedType debugLabel t1 t2 = do
   -- debugHaskellPassWhen (N.toText debugLabel == "canToMigration:2") ("isEquivalentAppliedType:" <> N.toText debugLabel) (t1, t2) $
    case (t1,t2) of
@@ -495,14 +500,14 @@ isEquivalentAppliedType debugLabel t1 t2 = do
       (length fieldsTypes1 == length fieldTypes2)
         && areEquivalentAppliedElmTypes debugLabel fieldsTypes1 fieldTypes2
 
-    (Can.TTuple a1 a2 a3m, Can.TTuple b1 b2 b3m) ->
+    (Can.TPair a1 a2, Can.TPair b1 b2) ->
       -- debugHaskellPassWhen (debugLabel == "canToMigration") "tuple comparison" (t1, t2) $
       isEquivalentAppliedType debugLabel a1 b1 &&
+      isEquivalentAppliedType debugLabel a2 b2
+    (Can.TTriple a1 a2 a3, Can.TTriple b1 b2 b3) ->
+      isEquivalentAppliedType debugLabel a1 b1 &&
       isEquivalentAppliedType debugLabel a2 b2 &&
-      case (a3m, b3m) of
-        (Just a3, Just b3) -> isEquivalentAppliedType debugLabel a3 b3
-        (Nothing, Nothing)  -> True
-        _ -> False
+      isEquivalentAppliedType debugLabel a3 b3
     (Can.TUnit, Can.TUnit) ->
       -- debugHaskell "TUnit" $
       t1 == t2
@@ -516,13 +521,13 @@ isEquivalentAppliedType debugLabel t1 t2 = do
       -- debugHaskell "unequal types" $
       False
 
-areEquivalentAppliedElmTypes :: N.Name -> [Can.Type] -> [Can.Type] -> Bool
+areEquivalentAppliedElmTypes :: TN.Name -> [Can.Type] -> [Can.Type] -> Bool
 areEquivalentAppliedElmTypes debugLabel types1 types2 =
   (length types1 == length types2)
     &&
   (zipWith (isEquivalentAppliedType debugLabel) types1 types2 & all id)
 
-areEquivalentAppliedTvarMaps :: N.Name -> [(N.Name, Can.Type)] -> [(N.Name, Can.Type)] -> Bool
+areEquivalentAppliedTvarMaps :: TN.Name -> [(TV.Var, Can.Type)] -> [(TV.Var, Can.Type)] -> Bool
 areEquivalentAppliedTvarMaps debugLabel tvars1 tvars2 =
   -- debugHaskellPassWhen (N.toText debugLabel == "canToMigration:2:tvars") ("areEquivalentAppliedTvarMaps:" <> N.toText debugLabel) (tvars1, tvars2) $
   (length tvars1 == length tvars2)
@@ -536,9 +541,9 @@ isUserModule moduleName =
         (ModuleName.Canonical (Pkg.Name author pkg) module_) ->
             author == "author" && pkg == "project"
 
-migrationWrapperForType :: N.Name -> Text
+migrationWrapperForType :: TN.Name -> Text
 migrationWrapperForType t =
-  case N.toChars t of
+  case TN.nameToChars t of
     "BackendModel"  -> "ModelMigrated"
     "FrontendModel" -> "ModelMigrated"
     "FrontendMsg"   -> "MsgMigrated"
@@ -547,9 +552,9 @@ migrationWrapperForType t =
     "ToFrontend"    -> "MsgMigrated"
     _               -> error $ "migrationWrapperForType: impossible type: " <> show t
 
-migrationTypeForType :: N.Name -> Text
+migrationTypeForType :: TN.Name -> Text
 migrationTypeForType t =
-  case N.toChars t of
+  case TN.nameToChars t of
     "BackendModel"  -> "ModelMigration"
     "FrontendModel" -> "ModelMigration"
     "FrontendMsg"   -> "MsgMigration"
@@ -558,9 +563,9 @@ migrationTypeForType t =
     "ToFrontend"    -> "MsgMigration"
     _               -> error $ "migrationTypeForType: impossible type: " <> show t
 
-msgForType :: N.Name -> Text
+msgForType :: TN.Name -> Text
 msgForType t =
-  case N.toChars t of
+  case TN.nameToChars t of
     "BackendModel"  -> "BackendMsg"
     "FrontendModel" -> "FrontendMsg"
     "FrontendMsg"   -> "FrontendMsg"
@@ -569,9 +574,9 @@ msgForType t =
     "ToFrontend"    -> "FrontendMsg"
     _               -> error $ "msgForType: impossible type: " <> show t
 
-unchangedForType :: N.Name -> Text
+unchangedForType :: TN.Name -> Text
 unchangedForType t =
-  case N.toChars t of
+  case TN.nameToChars t of
     "BackendModel"  -> "ModelUnchanged"
     "FrontendModel" -> "ModelUnchanged"
     "FrontendMsg"   -> "MsgUnchanged"
@@ -580,9 +585,9 @@ unchangedForType t =
     "ToFrontend"    -> "MsgUnchanged"
     _               -> error $ "unchangedForType: impossible type: " <> show t
 
-destructiveForType :: N.Name -> Text
+destructiveForType :: TN.Name -> Text
 destructiveForType t =
-  case N.toChars t of
+  case TN.nameToChars t of
     "BackendModel"  -> "ModelReset"
     "FrontendModel" -> "ModelReset"
     "FrontendMsg"   -> "MsgOldValueIgnored"
@@ -600,7 +605,7 @@ findTypeDef tipe interfaces =
     _ -> error $ "findTypeDef used on non-concrete type: " <> show tipe
 
 
-findDef :: ModuleName.Canonical -> N.Name -> Interfaces -> Maybe TypeDef
+findDef :: ModuleName.Canonical -> TN.Name -> Interfaces -> Maybe TypeDef
 findDef moduleNameCan typeName interfaces =
   case Map.lookup (dropCan moduleNameCan) interfaces of
     Just moduleInterface ->
@@ -611,7 +616,7 @@ findDef moduleNameCan typeName interfaces =
       -- error $ "could not find old module at all: " <> show (module_, tipe)
       -- error $ "could not find '" <> N.toChars oldModuleName <> "' old module at all: " <> show (Map.keys interfaces)
 
-findDef_ :: ModuleName.Canonical -> N.Name -> Interface.Interface -> Maybe TypeDef
+findDef_ :: ModuleName.Canonical -> TN.Name -> Interface.Interface -> Maybe TypeDef
 findDef_ moduleNameCan typeName moduleInterface =
   -- let
   --   moduleName :: ModuleName.Canonical
@@ -636,24 +641,25 @@ findDef_ moduleNameCan typeName moduleInterface =
           Nothing
 
 
-asOldModuleName :: N.Name -> Int -> Int -> N.Name
+asOldModuleName :: PrimModule.Name -> Int -> Int -> PrimModule.Name
 asOldModuleName newModule newVersion oldVersion =
   newModule
-    & N.toText
+    & nameToText
     & T.replace ("Evergreen.V" <> show_ newVersion <> ".") ("Evergreen.V" <> show_ oldVersion <> ".")
-    & N.fromText
+    & T.unpack
+    & PrimModule.fromChars
 
 
-asOldModule :: N.Name -> Int -> Int -> ModuleName.Canonical
+asOldModule :: PrimModule.Name -> Int -> Int -> ModuleName.Canonical
 asOldModule newModule newVersion oldVersion =
   ModuleName.Canonical (Pkg.Name "author" "project") (asOldModuleName newModule newVersion oldVersion)
 
 
-loadTvars :: [N.Name] -> [(N.Name, Can.Type)] -> [Can.Type]
+loadTvars :: [TV.Var] -> [(TV.Var, Can.Type)] -> [Can.Type]
 loadTvars tvars tvarMap =
   tvars & fmap (loadTvar tvarMap)
 
-loadTvar :: [(N.Name, Can.Type)] -> N.Name -> Can.Type
+loadTvar :: [(TV.Var, Can.Type)] -> TV.Var -> Can.Type
 loadTvar tvarMap name =
   case List.find (\(t,ti) -> t == name) tvarMap of
     Just (_,ti) -> ti
@@ -661,7 +667,7 @@ loadTvar tvarMap name =
       -- This would be the alternative:
       -- Can.Tvar name
 
-isTVarInUse :: N.Name -> Can.Type -> Bool
+isTVarInUse :: TV.Var -> Can.Type -> Bool
 isTVarInUse tVar typeValue =
     case typeValue of
         Can.TLambda a b -> isTVarInUse tVar a || isTVarInUse tVar b
@@ -678,12 +684,14 @@ isTVarInUse tVar typeValue =
 
         Can.TUnit -> False
 
-        Can.TTuple t0 t1 maybeT2 ->
+        Can.TPair t0 t1 ->
           isTVarInUse tVar t0
               || isTVarInUse tVar t1
-              || case maybeT2 of
-                  Just t2 -> isTVarInUse tVar t2
-                  Nothing -> False
+
+        Can.TTriple t0 t1 t2 ->
+          isTVarInUse tVar t0
+              || isTVarInUse tVar t1
+              || isTVarInUse tVar t2
 
         Can.TAlias moduleNameCanonical name fields aliasType ->
             any (\(_, fieldType) -> isTVarInUse tVar fieldType) fields
@@ -691,11 +699,11 @@ isTVarInUse tVar typeValue =
                 Can.Holey a -> isTVarInUse tVar a
                 Can.Filled a -> isTVarInUse tVar a
 
-tvarResolveParams :: [Can.Type] -> [(N.Name, Can.Type)] -> [Can.Type]
+tvarResolveParams :: [Can.Type] -> [(TV.Var, Can.Type)] -> [Can.Type]
 tvarResolveParams params tvarMap =
   params & fmap (tvarResolveParam tvarMap)
 
-tvarResolveParam :: [(N.Name, Can.Type)] -> Can.Type -> Can.Type
+tvarResolveParam :: [(TV.Var, Can.Type)] -> Can.Type -> Can.Type
 tvarResolveParam tvarMap param =
   case param of
     Can.TVar a ->

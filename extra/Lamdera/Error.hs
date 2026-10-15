@@ -6,7 +6,7 @@ import qualified Reporting.Annotation as R
 import qualified Reporting.Render.Code as Code
 import qualified Reporting.Render.Type.Localizer as L
 import qualified Reporting.Report as Report
-import qualified Stuff
+import qualified Root
 import System.IO.Unsafe (unsafePerformIO)
 
 
@@ -29,7 +29,7 @@ reportFull title doc =
 corruptCaches :: ([Char] -> Maybe FilePath -> D.Doc -> [D.Doc] -> report) -> report
 corruptCaches reportFn =
   let
-    elmHome = unsafePerformIO Stuff.getElmHome
+    elmHome = unsafePerformIO Root.getElmHomePath
   in
   reportFn "CORRUPT CACHE" Nothing
     "It looks like some of the information in caches has been corrupted."
@@ -45,7 +45,7 @@ corruptCaches reportFn =
 corruptCachesOffline :: ([Char] -> Maybe FilePath -> D.Doc -> [D.Doc] -> report) -> report
 corruptCachesOffline reportFn =
   let
-    elmHome = unsafePerformIO Stuff.getElmHome
+    elmHome = unsafePerformIO Root.getElmHomePath
   in
   reportFn "CORRUPT CACHE" Nothing
     "It looks like some of the information in caches has been corrupted."

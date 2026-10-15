@@ -8,7 +8,8 @@ module Lamdera.UiSourceMap
 
 import qualified Data.Map as Map
 import qualified Data.Set as Set
-import qualified Data.Name as Name
+import qualified AST.Prim.Name as Name
+import qualified AST.Prim.Module as ModuleName_
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import NeatInterpolation
@@ -98,10 +99,12 @@ newProperty isElmUi fileName (Module.Canonical _ moduleName) functionName locati
         !(Reporting.Annotation.Region cursor _) =
             location
 
-        (row, column) = Reporting.Annotation.toRowCol cursor
+        -- Editor coordinates (1-based), as Elm 0.19.1 gave and the editor link expects.
+        -- Since 0.19.2 toRowCol is 0-based (see Reporting.Annotation.toEditorRowCol).
+        (row, column) = Reporting.Annotation.toEditorRowCol cursor
 
         propertyValue =
-            [ Name.toChars moduleName
+            [ ModuleName_.toChars moduleName
             , Name.toChars functionName
             , show row
             , show column
@@ -478,11 +481,16 @@ updateExpr fileName moduleName functionName (Reporting.Annotation.At location_ e
         Can.Unit ->
             Can.Unit
 
-        Can.Tuple expr expr2 maybeExpr ->
-            Can.Tuple
+        Can.Pair expr expr2 ->
+            Can.Pair
                 (updateExpr fileName moduleName functionName expr)
                 (updateExpr fileName moduleName functionName expr2)
-                (fmap (updateExpr fileName moduleName functionName) maybeExpr)
+
+        Can.Triple expr expr2 expr3 ->
+            Can.Triple
+                (updateExpr fileName moduleName functionName expr)
+                (updateExpr fileName moduleName functionName expr2)
+                (updateExpr fileName moduleName functionName expr3)
 
         Can.Shader shaderSource shaderTypes ->
             Can.Shader shaderSource shaderTypes

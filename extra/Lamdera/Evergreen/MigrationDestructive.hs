@@ -7,24 +7,25 @@ import NeatInterpolation
 import Data.Text (Text)
 import qualified Data.Text as T
 
-import qualified Data.Name as N
+import qualified AST.Prim.Name as N
+import qualified AST.Prim.TypeName as TN
 
 import qualified Ext.ElmFormat
 import Lamdera
 import Lamdera.Evergreen.MigrationGeneratorHelpers
 
 
-generate :: Int -> Int -> [(N.Name, String, String)] -> IO Text
+generate :: Int -> Int -> [(TN.Name, String, String)] -> IO Text
 generate oldVersion newVersion typeCompares = do
   let old = show_ oldVersion
       new = show_ newVersion
 
-      typeCompareMigration :: (N.Name, String, String) -> Text
+      typeCompareMigration :: (TN.Name, String, String) -> Text
       typeCompareMigration (typename, oldhash, newhash) = do
         let implementation = destructiveForType typename
             msgType = msgForType typename
-            typenameCamel = lowerFirstLetter $ N.toChars typename
-            typenameT = N.toText typename
+            typenameCamel = lowerFirstLetter $ TN.nameToChars typename
+            typenameT = nameToText typename
             migrationType = migrationTypeForType typename
 
         [text|

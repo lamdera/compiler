@@ -21,7 +21,7 @@ import qualified Data.Map as Map
 import qualified Data.Set as Set
 import qualified Data.List as List
 import qualified Data.Text as T
-import qualified Data.Name as N
+import qualified AST.Prim.Name as N
 import Data.Map.Strict (unionWithKey)
 
 import qualified Data.Utf8 as Utf8

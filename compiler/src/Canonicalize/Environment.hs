@@ -109,7 +109,7 @@ lamderaCoreLamdera =
 {-| mergeInfo, but aware of the name being merged, so the `log` rescue above can
 apply. Everything else defers to mergeInfo unchanged.
 -}
-mergeInfoFor :: Name.Name -> Info a -> Info a -> Info a
+mergeInfoFor :: N.Name -> Info a -> Info a -> Info a
 mergeInfoFor name info1 info2 =
   if preferUserLogShadow && name == "log" then
     case (info1, info2) of

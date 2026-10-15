@@ -165,10 +165,16 @@ intersect (Range lo lop hop hi) (Range lo_ lop_ hop_ hi_) =
 -- property 0.19.x versions have in general. A future 0.19.3 will NOT be accepted here
 -- by default: including it has to be a deliberate choice someone makes after
 -- checking, which is exactly what an open range would take away.
+--
+-- 0.19.3 was added deliberately when Lamdera moved onto it: its changes are internal
+-- to the compiler (precise name types, a new binary cache format) and leave the
+-- language, elm.json and package formats alone. Packages bounded at 0.19.0, 0.19.1,
+-- 0.19.2 and 0.19.3 resolve interchangeably (see test/multi-version).
 interchangeableElm :: [V.Version]
 interchangeableElm =
-  [ V.Version 0 19 1
-  , V.Version 0 19 2
+  [ V.toVersion 0 19 1
+  , V.toVersion 0 19 2
+  , V.toVersion 0 19 3
   ]
 
 

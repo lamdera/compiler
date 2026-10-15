@@ -23,7 +23,7 @@ fetchCurrentVersion = do
       "https://static.lamdera.com/bin/latest-version.json"
 
     decoder =
-      D.string
+      D.jsonString
 
   fmap (T.pack . Json.String.toChars) <$> Lamdera.Http.normalJson "fetchCurrentVersion" endpoint decoder
 

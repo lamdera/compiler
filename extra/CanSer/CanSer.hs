@@ -4,11 +4,15 @@ module CanSer.CanSer where
 import qualified Data.Text as T
 import Data.Text (Text)
 import qualified AST.Canonical as C
-import qualified Data.Name as N
+import qualified AST.Prim.Module as Module
+import qualified AST.Prim.Name as N
+import qualified AST.Prim.TypeName as TN
+import qualified AST.Prim.TypeVar as TV
+import qualified String
 import qualified Data.Map as Map
 import qualified Reporting.Annotation as A
 import qualified Elm.ModuleName as ModuleName
-import qualified AST.Utils.Binop as Binop
+import qualified AST.Prim.Operator as Binop
 import qualified AST.Source
 import Data.String (IsString)
 import GHC.Exts(IsString(..))
@@ -83,6 +87,24 @@ instance ToElm (Utf8.Utf8 a) where
   toElm x = Lit $ T.pack $ Utf8.toChars x
 -- instance ToElm N.Name where
 --   toElm x = Lit $ N.toText x
+
+instance ToElm N.Name where
+  toElm x = Lit $ T.pack $ N.toChars x
+
+instance ToElm TN.Name where
+  toElm x = Lit $ T.pack $ TN.nameToChars x
+
+instance ToElm TV.Var where
+  toElm x = Lit $ T.pack $ TV.varToChars x
+
+instance ToElm Module.Name where
+  toElm x = Lit $ T.pack $ Module.toChars x
+
+instance ToElm Module.Kernel where
+  toElm x = Lit $ T.pack $ String.toChars $ Module.kernelToString x
+
+instance ToElm Binop.Name where
+  toElm x = Lit $ T.pack $ Binop.toChars x
 
 instance ToElm Double where
   toElm x = Lit $ T.pack $ show x
@@ -164,8 +186,8 @@ instance ToElm C.Expr_ where
         "{ " <> intercalate ", " ((\(name, value) -> toElm name <> " = " <> toElm value) <$> Map.toList nameExprMap) <> " }"
       C.Unit ->
         "()"
-      C.Tuple e1 e2 Nothing -> p (intercalate ", " (toElm <$> [e1, e2]))
-      C.Tuple e1 e2 (Just e3) -> p (intercalate ", " (toElm <$> [e1, e2, e3]))
+      C.Pair e1 e2 -> p (intercalate ", " (toElm <$> [e1, e2]))
+      C.Triple e1 e2 e3 -> p (intercalate ", " (toElm <$> [e1, e2, e3]))
       C.Shader uid src ->
         "<Shader TODO>"-- <> Lit uid <> " " <> Lit src <> " ??? "
 
@@ -183,8 +205,8 @@ instance ToElm C.Pattern_ where
       C.PRecord names -> "{ " <> intercalate ", " (toElm <$> names) <> " }"
       C.PAlias pat name -> p (toElm pat <> " as " <> toElm name)
       C.PUnit -> "()"
-      C.PTuple p1 p2 Nothing -> p (intercalate ", " (toElm <$> [p1, p2]))
-      C.PTuple p1 p2 (Just p3) -> p (intercalate ", " (toElm <$> [p1, p2, p3]))
+      C.PPair p1 p2 -> p (intercalate ", " (toElm <$> [p1, p2]))
+      C.PTriple p1 p2 p3 -> p (intercalate ", " (toElm <$> [p1, p2, p3]))
       C.PList [] -> "[]"
       C.PList pats -> "[" <> (intercalate "," (toElm <$> pats)) <> "]"
       C.PCons p1 p2 -> toElm p1 <> " :: " <> toElm p2
@@ -236,8 +258,8 @@ instance ToElm C.Type where
       C.TRecord nameFieldTypeMap Nothing -> "{ " <> intercalate ", " (ftMap nameFieldTypeMap) <> " }"
       C.TRecord nameFieldTypeMap (Just name) -> "{ " <> toElm name <> " | " <> intercalate ", " (ftMap nameFieldTypeMap) <> " }"
       C.TUnit -> "()"
-      C.TTuple t1 t2 Nothing -> p (intercalate ", " (toElm <$> [t1, t2]))
-      C.TTuple t1 t2 (Just t3) -> p (intercalate ", " (toElm <$> [t1, t2, t3]))
+      C.TPair t1 t2 -> p (intercalate ", " (toElm <$> [t1, t2]))
+      C.TTriple t1 t2 t3 -> p (intercalate ", " (toElm <$> [t1, t2, t3]))
       C.TAlias moduName name [] _ -> toElm moduName <.> toElm name
       C.TAlias moduName name nameTypes _ -> p (toElm moduName <.> toElm name <> leftPad " " (toElm . snd <$> nameTypes))
 
@@ -289,13 +311,17 @@ instance ToElm C.Decls where
 instance ToElm C.Exports where
   toElm exports =
     let
-      f (name, C.ExportBinop) = p (toElm name)
-      f (name, C.ExportUnionOpen) = p (toElm name) <> "(..)"
-      f (name, _) = toElm name
+      fType (name, (_, C.ExportUnionOpen)) = toElm name <> "(..)"
+      fType (name, _) = toElm name
     in
     case exports of
       C.ExportEverything _ -> "(..)"
-      C.Export nameToExportMap -> "(" <> intercalate ", " (f <$> Map.toList ((\(A.At _ a) -> a) <$> nameToExportMap)) <> ")"
+      C.Export types values binops ->
+        "(" <> intercalate ", "
+          ( (fType <$> Map.toList types)
+            <> (toElm . fst <$> Map.toList values)
+            <> (p . toElm . fst <$> Map.toList binops)
+          ) <> ")"
 
 -- UNION
 
@@ -327,7 +353,7 @@ instance ToElm Binop.Associativity where
 instance ToElm Binop.Precedence where
   toElm prec =
     case prec of
-      Binop.Precedence i -> toElm i
+      Binop.Precedence i -> toElm (fromIntegral i :: Int)
 
 -- ALIASES
 

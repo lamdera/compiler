@@ -16,7 +16,10 @@ import qualified Elm.ModuleName as Module
 import qualified Elm.Package as Pkg
 import qualified AST.Canonical as Can
 import AST.Canonical
-import qualified Data.Name
+import qualified AST.Prim.Module as PrimModule
+import qualified AST.Prim.Name as N
+import qualified AST.Prim.TypeName as TN
+import qualified AST.Prim.TypeVar as TV
 import qualified Data.Utf8 as Utf8
 import qualified Reporting.Annotation as A
 import qualified Reporting.Error as E
@@ -30,14 +33,15 @@ import StandaloneInstances
 import qualified CanSer.CanSer as ToSource
 
 import Lamdera.Wire3.Helpers
+import qualified Lamdera.Lexical as Lexical
 
 
-callDecoder :: Data.Name.Name -> Type -> Expr
+callDecoder :: N.Name -> Type -> Expr
 callDecoder name tipe =
   (a (VarForeign mLamdera_Wire name (Forall Map.empty (TAlias mLamdera_Wire "Decoder" [("a", tipe)] (Filled (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [tipe]))))))
 
 
-decoderForType :: Map.Map Module.Raw I.Interface -> Module.Canonical -> Type -> Expr
+decoderForType :: Map.Map PrimModule.Name I.Interface -> Module.Canonical -> Type -> Expr
 decoderForType ifaces cname tipe =
    if containsUnsupportedTypes tipe then
     failDecode "contains unsupported types"
@@ -53,7 +57,7 @@ decoderForType ifaces cname tipe =
 
     TUnit -> callDecoder "decodeUnit" tipe
 
-    TTuple a_ b Nothing ->
+    TPair a_ b ->
         (a (Call
               (a (VarForeign
                     mLamdera_Wire
@@ -83,17 +87,17 @@ decoderForType ifaces cname tipe =
                              (TAlias
                                 mLamdera_Wire
                                 "Decoder"
-                                [("a", TTuple (TVar "a") (TVar "b") Nothing)]
+                                [("a", TPair (TVar "a") (TVar "b"))]
                                 (Filled
                                    (TType
                                       (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
                                       "Decoder"
-                                      [TTuple (TVar "a") (TVar "b") Nothing]))))))))
+                                      [TPair (TVar "a") (TVar "b")]))))))))
               [ decoderForType ifaces cname a_
               , decoderForType ifaces cname b
               ]))
 
-    TTuple a_ b (Just c) ->
+    TTriple a_ b c ->
       (a (Call
              (a (VarForeign
                    mLamdera_Wire
@@ -122,10 +126,10 @@ decoderForType ifaces cname tipe =
                                         "Decoder"
                                         [TVar "c"])))
                                (TAlias mLamdera_Wire "Decoder"
-                                  [("a", TTuple (TVar "a") (TVar "b") (Just (TVar "c")))]
+                                  [("a", TTriple (TVar "a") (TVar "b") (TVar "c"))]
                                   (Filled
                                      (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder"
-                                        [TTuple (TVar "a") (TVar "b") (Just (TVar "c"))])))))))))
+                                        [TTriple (TVar "a") (TVar "b") (TVar "c")])))))))))
              [ decoderForType ifaces cname a_
              , decoderForType ifaces cname b
              , decoderForType ifaces cname c
@@ -355,7 +359,7 @@ decoderForType ifaces cname tipe =
 
     TType moduleName typeName params ->
       let
-        generatedName = Data.Name.fromChars $ "w3_decode_" ++ Data.Name.toChars typeName
+        generatedName = N.fromChars $ "w3_decode_" ++ TN.nameToChars typeName
 
         decoder =
           if cname == moduleName
@@ -364,7 +368,7 @@ decoderForType ifaces cname tipe =
             else (a (VarForeign moduleName generatedName (getForeignSig tipe moduleName generatedName ifaces)))
       in
       if isUnsupportedKernelType tipe
-        then failDecode (Data.Name.toChars generatedName <> " isUnsupportedKernelType")
+        then failDecode (N.toChars generatedName <> " isUnsupportedKernelType")
         else
           case params of
             [] -> decoder
@@ -374,16 +378,16 @@ decoderForType ifaces cname tipe =
       -- | TRecord (Map.Map Name FieldType) (Maybe Name)
       case maybeExtensible of
         Just extensibleName ->
-          lvar $ Data.Name.fromChars $ "w3_x_c_" ++ Data.Name.toChars extensibleName
+          lvar $ N.fromChars $ "w3_x_c_" ++ TV.varToChars extensibleName
 
         Nothing ->
-          let fields = fieldMap & fieldsToList & List.sortOn (\(name, field) -> name)
+          let fields = fieldMap & fieldsToList & Lexical.sortOn (\(name, field) -> name)
           in
           decodeRecord ifaces cname fields
 
     TAlias moduleName typeName tvars_ aType ->
       let
-        generatedName = Data.Name.fromChars $ "w3_decode_" ++ Data.Name.toChars typeName
+        generatedName = N.fromChars $ "w3_decode_" ++ TN.nameToChars typeName
         innerType = case aType of { Holey t -> t; Filled t -> t }
 
         decoder =
@@ -400,13 +404,13 @@ decoderForType ifaces cname tipe =
                call decoder $ fmap (\(tvarName, tvarType) ->
                   case tvarType of
                      TVar name ->
-                        lvar $ Data.Name.fromChars $ "w3_x_c_" ++ Data.Name.toChars name
+                        lvar $ N.fromChars $ "w3_x_c_" ++ TV.varToChars name
                      _ ->
                         decoderForType ifaces cname tvarType
                ) tvars_
       in
       if isUnsupportedKernelType tipe
-      then failDecode (Data.Name.toChars generatedName <> " isUnsupportedKernelType")
+      then failDecode (N.toChars generatedName <> " isUnsupportedKernelType")
       else if isLambdaType innerType
       then failDecode "lambda"
       else
@@ -431,7 +435,7 @@ decoderForType ifaces cname tipe =
                     then
                       case resolveTvar tvars_ tipe of
                         TAlias _ _ _ (Filled (TRecord fieldMap Nothing)) ->
-                          let fields = fieldMap & fieldsToList & List.sortOn (\(name, field) -> name)
+                          let fields = fieldMap & fieldsToList & Lexical.sortOn (\(name, field) -> name)
                           in decodeRecord ifaces cname fields
                         _ -> normalDecoder
                     else normalDecoder
@@ -446,24 +450,25 @@ decoderForType ifaces cname tipe =
                 otherTypes -> normalDecoder
 
     TVar name ->
-      lvar $ Data.Name.fromChars $ "w3_x_c_" ++ Data.Name.toChars name
+      lvar $ N.fromChars $ "w3_x_c_" ++ TV.varToChars name
 
     TLambda t1 t2 ->
       failDecode "lambda"
 
 
-decodeRecord :: Map.Map Module.Raw I.Interface -> Module.Canonical -> [(Data.Name.Name, Type)] -> Expr
+decodeRecord :: Map.Map PrimModule.Name I.Interface -> Module.Canonical -> [(N.Name, Type)] -> Expr
 decodeRecord ifaces cname fields =
+  -- `fields` are in wire order (Lamdera's pre Elm 0.19.3 name order, see Lamdera.Lexical)
   let
     pvars :: [Pattern]
     pvars =
-      (imap (\i (name, field) -> a (PVar $ Data.Name.fromChars $ Data.Name.toChars name ++ "0")) fields)
+      (imap (\i (name, field) -> a (PVar $ N.fromChars $ N.toChars name ++ "0")) fields)
 
-    newRecFields :: Map.Map Data.Name.Name Expr
+    newRecFields :: Map.Map N.Name Expr
     newRecFields =
       fields
         & fmap (\(name, field) ->
-            (name, a (VarLocal $ Data.Name.fromChars $ Data.Name.toChars name ++ "0"))
+            (name, a (VarLocal $ N.fromChars $ N.toChars name ++ "0"))
           )
         & Map.fromList
   in

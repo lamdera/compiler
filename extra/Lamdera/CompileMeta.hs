@@ -142,7 +142,8 @@ globalsInExpr expr =
     Access e _ -> globalsInExpr e
     Update e m -> globalsInExpr e ++ concatMap globalsInExpr (Map.elems m)
     Record m -> concatMap globalsInExpr (Map.elems m)
-    Tuple a b mc -> globalsInExpr a ++ globalsInExpr b ++ maybe [] globalsInExpr mc
+    Pair a b -> globalsInExpr a ++ globalsInExpr b
+    Triple a b c -> globalsInExpr a ++ globalsInExpr b ++ globalsInExpr c
     _ -> []
 
 

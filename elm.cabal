@@ -347,6 +347,7 @@ Executable lamdera
         Lamdera.Hints
         Lamdera.Init
         Lamdera.Injection
+        Lamdera.Lexical
         Lamdera.Live
         Lamdera.Make
         Lamdera.Nitpick.DebugLog

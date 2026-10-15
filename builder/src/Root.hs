@@ -7,6 +7,7 @@ module Root
   , toFilePath -- @LAMDERA
   , fromFilePath -- @LAMDERA
   , stuffToFilePath -- @LAMDERA
+  , getElmHomePath -- @LAMDERA
   --
   , Stuff
   , getStuff
@@ -307,3 +308,8 @@ stuffToFilePath :: Stuff -> FilePath
 stuffToFilePath (Stuff dir) =
   dir
 
+
+getElmHomePath :: IO FilePath
+getElmHomePath =
+  do  (ElmHome home) <- getElmHome
+      return home

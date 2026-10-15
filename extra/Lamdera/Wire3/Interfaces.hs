@@ -3,7 +3,9 @@ module Lamdera.Wire3.Interfaces where
 
 import qualified AST.Source as Src
 import AST.Source
-import qualified Data.Name
+import qualified AST.Prim.Module as PrimModule
+import qualified AST.Prim.Name as N
+import qualified AST.Prim.TypeName as TN
 import qualified Reporting.Annotation as A
 import Reporting.Annotation
 import qualified Data.Utf8 as Utf8
@@ -45,7 +47,7 @@ import StandaloneInstances
 --       }
 --     deriving (Eq)
 
-modifyModul :: Name -> Map.Map ModuleName.Raw I.Interface -> Module -> Module
+modifyModul :: Name -> Map.Map PrimModule.Name I.Interface -> Module -> Module
 modifyModul pkg ifaces modul =
   unsafePerformIO $ do
     if (Lamdera.Wire3.Helpers.shouldHaveCodecsGenerated pkg)
@@ -100,7 +102,7 @@ modifyModul pkg ifaces modul =
                     Src._values newModul
                       & listUpsert
                           isModeValue
-                          (a (Value (a ("mode")) [] (a (Var CapVar (Data.Name.fromChars $ show envMode))) Nothing))
+                          (a (Value (a ("mode")) [] (a (Var CapVar (N.fromChars $ show envMode))) Nothing))
                 , Src._exports =
                     case Src._exports newModul of
                       A.At _ Src.Open -> Src._exports newModul
@@ -151,8 +153,8 @@ unionStubs unions =
     & concatMap (\(A.At _ (Src.Union (A.At _ name) tvars _)) ->
       let nParams = length tvars
       in
-      [ _Debug_todo_with_params nParams $ Data.Name.fromChars $ "w3_encode_" ++ Data.Name.toChars name
-      , _Debug_todo_with_params nParams $ Data.Name.fromChars $ "w3_decode_" ++ Data.Name.toChars name
+      [ _Debug_todo_with_params nParams $ N.fromChars $ "w3_encode_" ++ TN.nameToChars name
+      , _Debug_todo_with_params nParams $ N.fromChars $ "w3_decode_" ++ TN.nameToChars name
       ]
     )
 
@@ -168,8 +170,8 @@ aliasStubs aliases =
     & concatMap (\(A.At _ (Src.Alias (A.At _ name) tvars _)) ->
       let nParams = length tvars
       in
-      [ _Debug_todo_with_params nParams $ Data.Name.fromChars $ "w3_encode_" ++ Data.Name.toChars name
-      , _Debug_todo_with_params nParams $ Data.Name.fromChars $ "w3_decode_" ++ Data.Name.toChars name
+      [ _Debug_todo_with_params nParams $ N.fromChars $ "w3_encode_" ++ TN.nameToChars name
+      , _Debug_todo_with_params nParams $ N.fromChars $ "w3_decode_" ++ TN.nameToChars name
       ]
     )
 
@@ -194,13 +196,13 @@ x :: String
 x =
   "❤️ 💔 ♥️ 💗 💓 💕 💖  💛 💙 💜 💚"
 
-_Debug_todo :: Data.Name.Name -> A.Located Src.Value
+_Debug_todo :: N.Name -> A.Located Src.Value
 _Debug_todo functionName = _Debug_todo_with_params 0 functionName
 
-_Debug_todo_with_params :: Int -> Data.Name.Name -> A.Located Src.Value
+_Debug_todo_with_params :: Int -> N.Name -> A.Located Src.Value
 _Debug_todo_with_params nParams functionName =
-  let functionName_ = Utf8.fromChars . Data.Name.toChars $ functionName
-      params = [ a (Src.PVar (Data.Name.fromChars $ "_w3_p" ++ show i)) | i <- [0..nParams-1] ]
+  let functionName_ = Utf8.fromChars . N.toChars $ functionName
+      params = [ a (Src.PVar (N.fromChars $ "_w3_p" ++ show i)) | i <- [0..nParams-1] ]
   in
   a $ Src.Value
         (a functionName)

@@ -4,7 +4,7 @@ module Ext.Query.Optimized where
 import qualified Data.Map as Map
 import Data.Text (Text)
 
-import Data.Name (Name)
+import AST.Prim.Name (Name)
 import qualified AST.Optimized as Opt
 
 import Lamdera

@@ -4,7 +4,7 @@ module Lamdera.Wire3.Graph where
 import qualified Data.Map as Map
 import qualified Data.Graph as Graph
 
-import qualified Data.Name
+import qualified AST.Prim.Name as N
 import AST.Canonical
 import qualified Reporting.Annotation as A
 
@@ -31,12 +31,12 @@ addGraphDefsToDecls decls defsGraph =
       ) decls
 
 
-defToNode :: Def -> (Def, Data.Name.Name, [Data.Name.Name])
+defToNode :: Def -> (Def, N.Name, [N.Name])
 defToNode def =
   ( def, defName def, defGetEdges def )
 
 
-defGetEdges :: Def -> [Data.Name.Name]
+defGetEdges :: Def -> [N.Name]
 defGetEdges def =
   case def of
     Def (A.At region name_) pvars expr ->
@@ -45,7 +45,7 @@ defGetEdges def =
       getLvars expr
 
 
-getLvars :: Expr -> [Data.Name.Name]
+getLvars :: Expr -> [N.Name]
 getLvars (A.At _ expr) =
   case expr of
     VarLocal name -> []
@@ -76,9 +76,7 @@ getLvars (A.At _ expr) =
     Record fields ->
       fields & Map.toList & concatMap (\(n, expr) -> getLvars expr)
     Unit -> []
-    Tuple e1 e2 me3 ->
-      case me3 of
-        Just e3 -> [e1, e2, e3] & concatMap getLvars
-        Nothing -> [e1, e2] & concatMap getLvars
+    Pair e1 e2 -> [e1, e2] & concatMap getLvars
+    Triple e1 e2 e3 -> [e1, e2, e3] & concatMap getLvars
     Shader source types -> []
     _ -> error $ "getLvars: impossible expr: " ++ show expr

@@ -12,7 +12,7 @@ import Data.Word (Word32)
 import qualified System.Directory as Dir
 
 -- elm/compiler
-import qualified Data.Name
+import qualified AST.Prim.Name as N
 import qualified AST.Source as Src
 import qualified AST.Canonical as Can
 import qualified AST.Optimized as Opt
@@ -80,7 +80,7 @@ loadFileSource path = do
         error "bad syntax"
 
 
-loadFileSourceValue :: FilePath -> Data.Name.Name -> IO ()
+loadFileSourceValue :: FilePath -> N.Name -> IO ()
 loadFileSourceValue path name = do
   (source, modul) <- loadFileSource path
 
@@ -155,7 +155,7 @@ render (Code.Source sourceLines) region@(Region startCur endCur) maybeSubRegion 
 
 
 
-showDefOptimized :: FilePath -> FilePath -> Data.Name.Name -> IO (Map.Map Opt.Global Opt.Node)
+showDefOptimized :: FilePath -> FilePath -> N.Name -> IO (Map.Map Opt.Global Opt.Node)
 showDefOptimized project file name = do
   Ext.Common.withProjectRoot project $ do
     -- canonical <- loadSingleCanonical file
@@ -175,7 +175,7 @@ showDefOptimized project file name = do
     pure def
 
 
-showDefCanonical :: FilePath -> FilePath -> Data.Name.Name -> IO ()
+showDefCanonical :: FilePath -> FilePath -> N.Name -> IO ()
 showDefCanonical project file name = do
   Ext.Common.withProjectRoot project $ do
     canonical <- loadSingleCanonical file
@@ -206,7 +206,7 @@ showDefCanonical project file name = do
     pure ()
 
 
-findDef :: Data.Name.Name -> Can.Decls -> Maybe Can.Def
+findDef :: N.Name -> Can.Decls -> Maybe Can.Def
 findDef name decls =
   decls
     & declsToList
@@ -226,12 +226,12 @@ declsToList d =
       []
 
 
-defNameIs :: Data.Name.Name -> Can.Def -> Bool
+defNameIs :: N.Name -> Can.Def -> Bool
 defNameIs name def =
   name == defName def
 
 
-defName :: Can.Def -> Data.Name.Name
+defName :: Can.Def -> N.Name
 defName def =
   case def of
     Can.Def (A.At region name_) _ _ ->
@@ -240,7 +240,7 @@ defName def =
       name_
 
 
-showDefAnnotation :: FilePath -> FilePath -> Data.Name.Name -> IO ()
+showDefAnnotation :: FilePath -> FilePath -> N.Name -> IO ()
 showDefAnnotation project file name = do
   Ext.Common.withProjectRoot project $ do
     (Compile.Artifacts canonical annotations objects) <- loadSingleArtifacts file

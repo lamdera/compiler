@@ -8,7 +8,7 @@ import qualified System.Directory as Dir
 import qualified Reporting
 import qualified Reporting.Doc as D
 import qualified Reporting.Exit.Help as Help
-import qualified Stuff
+import qualified Root
 
 import Lamdera
 import qualified Lamdera.Progress as Progress
@@ -17,7 +17,7 @@ import qualified Lamdera.Progress as Progress
 -- Applies to < v1.3.0
 temporaryCheckCodecsNeedsUpgrading :: Bool -> FilePath -> IO ()
 temporaryCheckCodecsNeedsUpgrading inProduction root = do
-  elmHome <- Stuff.getElmHome
+  elmHome <- Root.getElmHomePath
   let
     elmStuff = root </> "elm-stuff"
     lamderaCodecs = elmHome </> "0.19.1/packages/lamdera/codecs/1.0.0"

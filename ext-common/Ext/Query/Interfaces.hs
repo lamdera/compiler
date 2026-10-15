@@ -9,8 +9,8 @@ import qualified Data.OneOrMore as OneOrMore
 import Control.Concurrent.MVar
 
 import qualified Data.NonEmptyList as NE
-import qualified BackgroundWriter as BW
 import qualified AST.Optimized as Opt
+import qualified AST.Prim.Module as Module
 import qualified Elm.Details as Details
 import qualified Elm.Interface as I
 import qualified Elm.ModuleName as ModuleName
@@ -19,13 +19,14 @@ import qualified Reporting.Exit as Exit
 import qualified Reporting.Task as Task
 import qualified Build
 import qualified File
-import qualified Stuff
+import qualified Root as R
+import qualified ThreadSafe.Fork as Fork
 import qualified Json.Encode as Encode
 
 import Ext.Common
 
 
-all :: [FilePath] -> IO (Map.Map ModuleName.Raw I.Interface)
+all :: [FilePath] -> IO (Map.Map Module.Name I.Interface)
 all paths = do
   debug $ "Loading Interfaces.all on paths: " ++ show paths
   artifactsDeps <- allDepArtifacts
@@ -38,7 +39,7 @@ all paths = do
 
 
 -- Takes Build.Artifacts and extracts project interfaces, loads all package dep interfaces, and merges them
-artifactsToFullInterfaces :: Details.Details -> Build.Artifacts -> IO (Map.Map ModuleName.Raw I.Interface)
+artifactsToFullInterfaces :: Details.Details -> Build.Artifacts -> IO (Map.Map Module.Name I.Interface)
 artifactsToFullInterfaces details artifacts = do
 
   ifaces <- extractInterfaces $ Build._modules artifacts
@@ -56,7 +57,7 @@ allGraph = do
 
 data Artifacts =
   Artifacts
-    { _ifaces :: Map.Map ModuleName.Raw I.Interface
+    { _ifaces :: Map.Map Module.Name I.Interface
     , _graph :: Opt.GlobalGraph
     }
 
@@ -66,11 +67,12 @@ data Artifacts =
 -}
 allDepArtifacts :: IO Artifacts
 allDepArtifacts =
-  BW.withScope $ \scope ->
+  File.withWriter $ \writer ->
   do  debug "Loading allDepArtifacts"
       style <- Reporting.terminal
       root <- getProjectRoot "allDepArtifacts"
-      result <- Details.load style scope root
+      stuff <- R.getStuff (R.fromFilePath root)
+      result <- Details.load writer style (R.fromFilePath root) stuff
       case result of
         Left _ ->
           error $ "Ran into some problem loading elm.json\nTry running `lamdera make` in: " ++ root
@@ -84,10 +86,11 @@ allDepArtifacts_ :: Details.Details -> IO Artifacts
 allDepArtifacts_ details = do
   debug "Loading allDepArtifacts_"
   root <- getProjectRoot "allDepArtifacts_"
-  omvar <- Details.loadObjects root details
-  imvar <- Details.loadInterfaces root details
-  mdeps <- readMVar imvar
-  mobjs <- readMVar omvar
+  stuff <- R.getStuff (R.fromFilePath root)
+  omvar <- Details.loadObjects stuff details
+  imvar <- Details.loadInterfaces stuff details
+  mdeps <- Fork.await imvar
+  mobjs <- Fork.await omvar
   case liftM2 (,) mdeps mobjs of
     Nothing ->
       error $ "Ran into some weird problem loading elm.json\nTry running `lamdera make` in: " ++ root
@@ -96,13 +99,13 @@ allDepArtifacts_ details = do
       return $ Artifacts (toInterfaces deps) objs
 
 
-toInterfaces :: Map.Map ModuleName.Canonical I.DependencyInterface -> Map.Map ModuleName.Raw I.Interface
+toInterfaces :: Map.Map ModuleName.Canonical I.DependencyInterface -> Map.Map Module.Name I.Interface
 toInterfaces deps =
   Map.mapMaybe toUnique $ Map.fromListWith OneOrMore.more $
     Map.elems (Map.mapMaybeWithKey getPublic deps)
 
 
-getPublic :: ModuleName.Canonical -> I.DependencyInterface -> Maybe (ModuleName.Raw, OneOrMore.OneOrMore I.Interface)
+getPublic :: ModuleName.Canonical -> I.DependencyInterface -> Maybe (Module.Name, OneOrMore.OneOrMore I.Interface)
 getPublic (ModuleName.Canonical _ name) dep =
   case dep of
     I.Public  iface -> Just (name, OneOrMore.one iface)
@@ -116,14 +119,15 @@ toUnique oneOrMore =
     OneOrMore.More _ _  -> Nothing
 
 
-allProjectInterfaces :: NE.List FilePath -> IO (Map.Map ModuleName.Raw I.Interface)
+allProjectInterfaces :: NE.List FilePath -> IO (Map.Map Module.Name I.Interface)
 allProjectInterfaces paths =
-  BW.withScope $ \scope -> do
+  File.withWriter $ \writer -> do
     root <- getProjectRoot "allProjectInterfaces"
     let paths_ = paths & fmap (\p -> root <> "/" <> p)
+    stuff <- R.getStuff (R.fromFilePath root)
     runTaskUnsafe $
-      do  details    <- Task.eio Exit.ReactorBadDetails $ Details.load Reporting.silent scope root
-          artifacts  <- Task.eio Exit.ReactorBadBuild $ Build.fromPaths Reporting.silent root details paths_
+      do  details    <- Task.eio Exit.ReactorBadDetails $ Details.load writer Reporting.silent (R.fromFilePath root) stuff
+          artifacts  <- Task.eio Exit.ReactorBadBuild $ Build.fromPaths writer Reporting.silent (R.fromFilePath root) stuff details paths_
 
           -- Task.io $ putStrLn $ show $ fmap (moduleName) (Build._modules artifacts)
           Task.io $ extractInterfaces $ Build._modules artifacts
@@ -145,7 +149,7 @@ runTaskUnsafe task = do
             \\n" ++ (exit & Exit.reactorToReport & Exit.toJson & Encode.encode & builderToString)
 
 
-extractInterfaces :: [Build.Module] -> IO (Map.Map ModuleName.Raw I.Interface)
+extractInterfaces :: [Build.Module] -> IO (Map.Map Module.Name I.Interface)
 extractInterfaces modu = do
   k <- modu
     & mapM (\m ->
@@ -159,7 +163,7 @@ extractInterfaces modu = do
 
 
 {- Appropriated from Build.loadInterface -}
-cachedHelp :: ModuleName.Raw -> MVar Build.CachedInterface -> IO (Maybe (ModuleName.Raw, I.Interface))
+cachedHelp :: Module.Name -> MVar Build.CachedInterface -> IO (Maybe (Module.Name, I.Interface))
 cachedHelp name ciMvar = do
   cachedInterface <- takeMVar ciMvar
   case cachedInterface of
@@ -173,7 +177,8 @@ cachedHelp name ciMvar = do
 
     Build.Unneeded ->
       do  root <- getProjectRoot "cachedHelp"
-          maybeIface <- File.readBinary (Stuff.elmi root name)
+          stuff <- R.getStuff (R.fromFilePath root)
+          maybeIface <- File.readBytes I.dInterface (R.elmi stuff name)
           case maybeIface of
             Nothing ->
               do  putMVar ciMvar Build.Corrupted

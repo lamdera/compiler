@@ -58,7 +58,10 @@ import qualified System.Environment as Env
 import qualified AST.Canonical as Can
 import qualified AST.Optimized as Opt
 import qualified Data.Index as Index
-import qualified Data.Name as Name
+import qualified AST.Prim.Module as PrimModule
+import qualified AST.Prim.Name as Name
+import qualified AST.Prim.Operator as Op
+import qualified Data.String
 import qualified Elm.Kernel as K
 import qualified Elm.ModuleName as ModuleName
 import qualified Elm.Package as Pkg
@@ -149,7 +152,7 @@ addDirectIR pkg canonical graph@(Opt.LocalGraph main nodes fields) =
               case List.stripPrefix "w3_encode_" name of
                 Just typeName ->
                   do  decDef <- Map.lookup ("w3_decode_" ++ typeName) byName
-                      let ir = debugLowering (Name.toChars (ModuleName._module home)) typeName encDef decDef (lowerCodec encDef decDef)
+                      let ir = debugLowering (PrimModule.toChars (ModuleName._module home)) typeName encDef decDef (lowerCodec encDef decDef)
                       case ir of
                         IR Nothing Nothing -> Nothing
                         _ -> Just (typeName, ir)
@@ -251,7 +254,7 @@ lowerDecoderDef def =
 
 homeOf :: ModuleName.Canonical -> Home
 homeOf (ModuleName.Canonical (Pkg.Name author project) modul) =
-  (Utf8.toChars author, Utf8.toChars project, Name.toChars modul)
+  (Pkg.authorToChars author, Pkg.projectToChars project, PrimModule.toChars modul)
 
 
 isHome :: Home -> ModuleName.Canonical -> Bool
@@ -509,7 +512,7 @@ lowerDec expr@(A.At _ e) =
 pipeline :: Can.Expr -> (Can.Expr, [Can.Expr])
 pipeline expr@(A.At _ e) =
   case e of
-    Can.Binop op _ _ _ l r | Name.toChars op == "|>" ->
+    Can.Binop op _ _ _ l r | Op.toChars op == "|>" ->
       let (base, steps) = pipeline l in (base, steps ++ [r])
     _ -> (expr, [])
 
@@ -688,7 +691,7 @@ replaceCodecs mode graph =
     -- that is NOT rendered direct (no IR, or not replaceable), i.e. every fallback to an
     -- Elm codec. (The graph holds every module's codecs, reachable or not.)
     fallbacks =
-      [ Name.toChars m ++ "." ++ n
+      [ PrimModule.toChars m ++ "." ++ n
       | (Opt.Global home@(ModuleName.Canonical _ m) name, _) <- Map.toList graph
       , let n = Name.toChars name
       , (isEnc, t) <-
@@ -759,7 +762,7 @@ fixReplaceable graph prefix candidates =
 
 keyHome :: Home -> ModuleName.Canonical
 keyHome (author, project, modul) =
-  ModuleName.Canonical (Pkg.Name (Utf8.fromChars author) (Utf8.fromChars project)) (Name.fromChars modul)
+  ModuleName.Canonical (Pkg.Name (Data.String.fromString author) (Data.String.fromString project)) (PrimModule.fromChars modul)
 
 
 codecGlobal :: String -> Key -> Opt.Global
@@ -791,9 +794,9 @@ jsNameChars n =
 runtimeDeps :: Set.Set Opt.Global
 runtimeDeps =
   Set.fromList
-    [ Opt.toKernelGlobal (Name.fromChars "List")
-    , Opt.toKernelGlobal (Name.fromChars "Utils")
-    , Opt.toKernelGlobal (Name.fromChars "Char")
+    [ Opt.toKernelGlobal (PrimModule.getKernel (PrimModule.fromChars "Elm.Kernel.List"))
+    , Opt.toKernelGlobal (PrimModule.getKernel (PrimModule.fromChars "Elm.Kernel.Utils"))
+    , Opt.toKernelGlobal (PrimModule.getKernel (PrimModule.fromChars "Elm.Kernel.Char"))
     , elmGlobal ("elm", "core", "Dict") "empty"
     , elmGlobal ("elm", "core", "Dict") "insert"
     , elmGlobal ("elm", "core", "Dict") "RBNode_elm_builtin"
@@ -1207,6 +1210,10 @@ encUnion ctx env opts width alts v =
 --
 -- Decoders are rendered as EXPRESSIONS, evaluated left to right (JS evaluates object
 -- literal values and call arguments in order, and wire order is Elm's literal key order).
+-- Since Elm 0.19.3 the wire order (Lamdera's byte order of the field names, see
+-- Lamdera.Lexical) and Elm's literal key order (Ord on names: shortest first) can differ;
+-- a record whose two orders differ decodes its fields into locals in wire order, in a
+-- hoisted helper, and then builds the object in Elm's key order (see decE WRecord).
 -- Anything that needs statements (a loop, a tag switch) goes into its own small hoisted
 -- helper function that takes the codec's decoder parameters. This keeps every JS frame
 -- small: a recursive decoder's frame no longer holds a register for every value any
@@ -1399,8 +1406,26 @@ decE dc w =
           return ("_Utils_Tuple3(" ++ ae ++ ", " ++ be ++ ", " ++ ce ++ ")")
 
     WRecord fields ->
-      do  parts <- traverse (\(f, fw) -> do { e <- decE dc fw; return (fieldJs (_mode ctx) f ++ ": " ++ e) }) fields
-          return ("{ " ++ List.intercalate ", " parts ++ " }")
+      do  parts <- traverse (\(f, fw) -> do { e <- decE dc fw; return (f, e) }) fields
+          let
+            mode = _mode ctx
+            -- Elm's record literal key order (Generate.JavaScript.Expression.generateRecord
+            -- emits Map.toList over the field names), so a decoded record has the same
+            -- shape (V8 hidden class, key order) as one the program builds itself.
+            literalOrder = List.sortOn (\(f, _) -> Name.fromChars f) parts
+          if fmap fst literalOrder == fmap fst parts
+            then
+              return ("{ " ++ List.intercalate ", " (fmap (\(f, e) -> fieldJs mode f ++ ": " ++ e) parts) ++ " }")
+            else
+              -- Read the fields in wire order into locals, then build the literal.
+              let
+                locals = zip [(0 :: Int)..] parts
+                localOf f = maybe (error ("Wire3.Direct: no local for field " ++ f)) (\(i, _) -> "f" ++ show i) (List.find (\(_, (g, _)) -> g == f) locals)
+              in
+              decHelper dc w
+                ( fmap (\(i, (_, e)) -> "var f" ++ show i ++ " = " ++ e ++ ";") locals
+                  ++ [ "return { " ++ List.intercalate ", " (fmap (\(f, _) -> fieldJs mode f ++ ": " ++ localOf f) literalOrder) ++ " };" ]
+                )
 
     WTVar a -> return (lookupEnv env a ++ "()")
 

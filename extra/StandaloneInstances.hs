@@ -23,16 +23,24 @@ import qualified GHC.IORef
 import GHC.Generics (Generic)
 import Control.DeepSeq (NFData(..))
 
+import Lamdera (NameToText(..))
+
 -- Elm modules
 
 import qualified AST.Canonical
 import qualified AST.Optimized
 import qualified Optimize.DecisionTree
 import qualified AST.Source
-import qualified AST.Utils.Binop
+import qualified AST.Prim.Operator as AST.Utils.Binop
 import qualified AST.Utils.Shader
 import qualified Data.Index
-import qualified Data.Name
+import qualified AST.Prim.Name as N
+import qualified AST.Prim.Module
+import qualified AST.Prim.TypeName
+import qualified AST.Prim.TypeVar
+import qualified String
+import qualified Root
+import qualified Graph
 import qualified Data.NonEmptyList
 import qualified Data.OneOrMore
 import qualified Data.Utf8 as Utf8
@@ -120,7 +128,7 @@ instance Show AST.Canonical.Annotation where
 
 deriving instance Show AST.Canonical.Module
 deriving instance Show AST.Canonical.Exports
-deriving instance Show AST.Canonical.Export
+deriving instance Show AST.Canonical.ExportType
 deriving instance Show AST.Canonical.Decls
 deriving instance Show AST.Canonical.Alias
 deriving instance Show AST.Canonical.Binop
@@ -310,8 +318,55 @@ instance Show File.Time where
 deriving instance Show Http.Error
 
 
-instance Show Data.Name.Name where
-  show = quoted . Data.Name.toChars
+instance Show N.Name where
+  show = quoted . N.toChars
+
+instance NameToText AST.Prim.TypeName.Name where
+  nameToText = T.pack . AST.Prim.TypeName.nameToChars
+
+instance NameToText AST.Prim.TypeVar.Var where
+  nameToText = T.pack . AST.Prim.TypeVar.varToChars
+
+instance NameToText AST.Prim.Module.Name where
+  nameToText = T.pack . AST.Prim.Module.toChars
+
+instance NameToText Elm.Package.Author where
+  nameToText = T.pack . Elm.Package.authorToChars
+
+instance NameToText Elm.Package.Project where
+  nameToText = T.pack . Elm.Package.projectToChars
+
+instance Show AST.Prim.TypeName.Name where
+  show = quoted . AST.Prim.TypeName.nameToChars
+
+instance Show AST.Prim.TypeVar.Var where
+  show = quoted . AST.Prim.TypeVar.varToChars
+
+instance Show AST.Prim.Module.Name where
+  show = quoted . AST.Prim.Module.toChars
+
+instance Show AST.Prim.Module.Kernel where
+  show = quoted . String.toChars . AST.Prim.Module.kernelToString
+
+instance Show AST.Prim.Module.Prefix where
+  show = quoted . AST.Prim.Module.prefixToChars
+
+instance Show Root.Root where
+  show = quoted . Root.toFilePath
+
+deriving instance Show Root.Path
+
+instance Show Root.ElmHome where
+  show (Root.ElmHome home) = quoted home
+
+instance (Show a) => Show (Graph.MinimalCycle a) where
+  show _ = "\"<Graph.MinimalCycle>\""
+
+instance Show AST.Utils.Binop.Name where
+  show = quoted . AST.Utils.Binop.toChars
+
+instance Show String.String where
+  show = quoted . String.toChars
 
 deriving instance Show Elm.Interface.Interface
 
@@ -342,7 +397,6 @@ deriving instance Show Elm.Interface.Alias
 deriving instance Show Elm.Constraint.Error
 deriving instance Show Elm.Outline.Outline
 deriving instance Show Elm.Outline.AppOutline
-deriving instance Show Elm.Outline.SrcDir
 deriving instance Show Elm.Outline.PkgOutline
 deriving instance Show Elm.Outline.Exposed
 
@@ -401,19 +455,13 @@ deriving instance Show Json.Encode.Value
 
 
 instance Show Elm.Package.Project where
-  show = Utf8.toChars
+  show = Elm.Package.projectToChars
 
 instance Show Elm.Package.Author where
-  show = Utf8.toChars
+  show = Elm.Package.authorToChars
 
 
 -- IsString
-
-instance IsString Elm.Package.Project where
-  fromString = Utf8.fromChars
-
-instance IsString Elm.Package.Author where
-  fromString = Utf8.fromChars
 
 instance Show Json.String.String where
   show x = "\"" <> Utf8.toChars x <> "\""
@@ -430,6 +478,21 @@ instance IsString Elm.String.String where
 
 instance NFData (Utf8.Utf8 a) where
   rnf _ = ()
+
+instance NFData N.Name where
+  rnf x = x `seq` ()
+
+instance NFData AST.Prim.Module.Name where
+  rnf x = x `seq` ()
+
+instance NFData AST.Prim.Module.Kernel where
+  rnf x = x `seq` ()
+
+instance NFData Elm.Package.Author where
+  rnf x = x `seq` ()
+
+instance NFData Elm.Package.Project where
+  rnf x = x `seq` ()
 
 
 deriving instance Generic AST.Optimized.Expr

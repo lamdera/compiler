@@ -1,11 +1,10 @@
 module Lamdera.Graph where
 
-import Control.Concurrent (MVar, forkIO, newEmptyMVar, newMVar, putMVar, readMVar)
 import Control.Monad (liftM2)
 import qualified Data.Map as Map
 
 import qualified AST.Optimized as Opt
-import qualified BackgroundWriter as BW
+import qualified AST.Prim.Module as Module
 import qualified Build
 import qualified Data.NonEmptyList as NE
 import qualified Elm.Details as Details
@@ -14,7 +13,8 @@ import qualified File
 import qualified Reporting
 import qualified Reporting.Exit as Exit
 import qualified Reporting.Task as Task
-import qualified Stuff
+import qualified Root as R
+import qualified ThreadSafe.Fork as Fork
 
 import Lamdera
 import qualified Ext.Common
@@ -31,10 +31,9 @@ fullGraph paths = do
 
     style <- Reporting.terminal
 
-    BW.withScope $ \scope ->
-      Stuff.withRootLock root $ Task.run $ do
+    R.withRootLock (R.fromFilePath root) $ \writer stuff -> Task.run $ do
           desiredMode <- getMode debug_ optimize
-          details <- Task.eio Exit.MakeBadDetails (Details.load style scope root)
+          details <- Task.eio Exit.MakeBadDetails (Details.load writer style (R.fromFilePath root) stuff)
           case paths of
             [] ->
               Task.throw Exit.MakeAppNeedsFileNames
@@ -45,7 +44,7 @@ fullGraph paths = do
               --   do  exposed <- getExposed details
               --       buildExposed style root details maybeDocs exposed
             p:ps -> do
-              artifacts <- buildPaths style root details (NE.List p ps)
+              artifacts <- buildPaths writer style (R.fromFilePath root) stuff details (NE.List p ps)
 
               case artifacts of
                 (Build.Artifacts pkg _ roots modules) -> do
@@ -54,26 +53,25 @@ fullGraph paths = do
                   -- @TODO this is garbaging the error with right type wrong error
                   -- need to either add an error case or remove the error Task.eio wrapping deeper in
                   Task.mapError (\err -> Exit.MakeNoOutline) $
-                    getFullGraph details modules
+                    getFullGraph stuff details modules
 
 
 
 -- Appropriated from Generate.hs
 
-getFullGraph :: Details.Details -> [Build.Module] -> Task.Task Exit.Generate Opt.GlobalGraph
-getFullGraph details modules =
+getFullGraph :: R.Stuff -> Details.Details -> [Build.Module] -> Task.Task Exit.Generate Opt.GlobalGraph
+getFullGraph stuff details modules =
   do
-      root <- Task.io $ Lamdera.getProjectRoot "getFullGraph"
-      objects <- finalizeObjects =<< loadObjects root details modules
+      objects <- finalizeObjects =<< loadObjects stuff details modules
       Task.io $ pure $ objectsToGlobalGraph objects
 
 
 -- Cloned from Make.hs
 
-buildPaths :: Reporting.Style -> FilePath -> Details.Details -> NE.List FilePath -> Task.Task Exit.Make Build.Artifacts
-buildPaths style root details paths =
+buildPaths :: File.Writer R.PROJECT -> Reporting.Style -> R.Root -> R.Stuff -> Details.Details -> NE.List FilePath -> Task.Task Exit.Make Build.Artifacts
+buildPaths writer style root stuff details paths =
   Task.eio Exit.MakeCannotBuild $
-    Build.fromPaths style root details paths
+    Build.fromPaths writer style root stuff details paths
 
 data DesiredMode = Debug | Dev | Prod
 
@@ -91,15 +89,15 @@ getMode debug optimize =
 data Objects =
   Objects
     { _foreign :: Opt.GlobalGraph
-    , _locals :: Map.Map ModuleName.Raw Opt.LocalGraph
+    , _locals :: Map.Map Module.Name Opt.LocalGraph
     }
 
 
 finalizeObjects :: LoadingObjects -> Task.Task Exit.Generate Objects
 finalizeObjects (LoadingObjects mvar mvars) =
   Task.eio id $
-  do  result  <- readMVar mvar
-      results <- traverse readMVar mvars
+  do  result  <- Fork.await mvar
+      results <- traverse Fork.await mvars
       case liftM2 Objects result (sequence results) of
         Just loaded -> return (Right loaded)
         Nothing     -> return (Left Exit.GenerateCannotLoadArtifacts)
@@ -112,27 +110,21 @@ objectsToGlobalGraph (Objects globals locals) =
 
 data LoadingObjects =
   LoadingObjects
-    { _foreign_mvar :: MVar (Maybe Opt.GlobalGraph)
-    , _local_mvars :: Map.Map ModuleName.Raw (MVar (Maybe Opt.LocalGraph))
+    { _foreign_mvar :: Fork.SafeMVar (Maybe Opt.GlobalGraph)
+    , _local_mvars :: Map.Map Module.Name (Fork.SafeMVar (Maybe Opt.LocalGraph))
     }
 
 
-loadObjects :: FilePath -> Details.Details -> [Build.Module] -> Task.Task Exit.Generate LoadingObjects
-loadObjects root details modules =
+loadObjects :: R.Stuff -> Details.Details -> [Build.Module] -> Task.Task Exit.Generate LoadingObjects
+loadObjects stuff details modules =
   Task.io $
-  do  mvar <- Details.loadObjects root details
-      mvars <- traverse (loadObject root) modules
+  do  mvar <- Details.loadObjects stuff details
+      mvars <- traverse (loadObject stuff) modules
       return $ LoadingObjects mvar (Map.fromList mvars)
 
 
-loadObject :: FilePath -> Build.Module -> IO (ModuleName.Raw, MVar (Maybe Opt.LocalGraph))
-loadObject root modul =
+loadObject :: R.Stuff -> Build.Module -> IO (Module.Name, Fork.SafeMVar (Maybe Opt.LocalGraph))
+loadObject stuff modul =
   case modul of
-    Build.Fresh name _ graph ->
-      do  mvar <- newMVar (Just graph)
-          return (name, mvar)
-
-    Build.Cached name _ _ ->
-      do  mvar <- newEmptyMVar
-          _ <- forkIO $ putMVar mvar =<< File.readBinary (Stuff.elmo root name)
-          return (name, mvar)
+    Build.Fresh  name _ graph -> (,) name <$> Fork.cached (Just graph)
+    Build.Cached name _ _     -> (,) name <$> Fork.fork name (File.readBytes Opt.dLocalGraph (R.elmo stuff name))

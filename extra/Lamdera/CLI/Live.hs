@@ -424,7 +424,7 @@ serveExperimentalList root path = do
     then do
       files <- liftIO $ Dir.getDirectoryContents fullpath
       files
-        & E.list (E.string . Utf8.fromChars)
+        & E.list (E.jsonString . Utf8.fromChars)
         & E.encode
         & jsonResponse
 
@@ -561,7 +561,7 @@ generateRpcRequestPayload contentType rbody endpoint sid reqId requestHeadersJso
 
     rpcPayload value =
       E.object
-          [ ("t", E.string "q")
+          [ ("t", E.chars "q")
           , ("s", E.text sid)
           , ("e", E.text $ TE.decodeUtf8 endpoint)
           , ("r", E.text reqId)
@@ -695,7 +695,7 @@ serveRpc (mClients, mLeader, mChan, beState) port = do
                 (D.oneOf
                     [ D.field "i" (D.value & fmap (\v -> ("i", E.encode v))) -- Bytes
                     , D.field "v" (D.value & fmap (\v -> ("v", E.encode v))) -- Json.Value
-                    , D.field "vs" (D.string & fmap (\v -> ("vs", Json.String.toBuilder v))) -- String
+                    , D.field "vs" (D.jsonString & fmap (\v -> ("vs", Json.String.toBuilder v))) -- String
                     ])
 
           decodeResult <- liftIO $ D.fromByteString decoder (TE.encodeUtf8 chanText)

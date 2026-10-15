@@ -7,7 +7,7 @@ import qualified Data.List as List
 import System.FilePath ((</>))
 import qualified System.Directory as Dir
 
-import qualified Stuff as PerUserCache
+import qualified Root
 import qualified Reporting
 import qualified Reporting.Doc as D
 
@@ -21,7 +21,7 @@ run :: () -> () -> IO ()
 run () () = do
   debug_ "Starting reset..."
 
-  elmHome <- PerUserCache.getElmHome
+  elmHome <- Root.getElmHomePath
   legacyElmHome <- Dir.getAppUserDataDirectory "lamdera"
   root <- getProjectRootMaybe
   let

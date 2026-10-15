@@ -5,7 +5,7 @@ module Lamdera.Evergreen.ModifyAST (update) where
 
 import qualified Data.Map as Map
 import qualified Data.Set as Set
-import qualified Data.Name as Name
+import qualified AST.Prim.Name as Name
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import NeatInterpolation
@@ -163,11 +163,15 @@ updateExpr fileName functionName (Reporting.Annotation.At location_ expr_) =
           )
       Can.Record fields -> Can.Record (fmap (\field -> updateExpr fileName functionName field) fields)
       Can.Unit -> Can.Unit
-      Can.Tuple expr expr2 maybeExpr ->
-        Can.Tuple
+      Can.Pair expr expr2 ->
+        Can.Pair
           ((updateExpr fileName functionName) expr)
           ((updateExpr fileName functionName) expr2)
-          (fmap (updateExpr fileName functionName) maybeExpr)
+      Can.Triple expr expr2 expr3 ->
+        Can.Triple
+          ((updateExpr fileName functionName) expr)
+          ((updateExpr fileName functionName) expr2)
+          ((updateExpr fileName functionName) expr3)
       Can.Shader shaderSource shaderTypes -> Can.Shader shaderSource shaderTypes
   )
   & Reporting.Annotation.At location_

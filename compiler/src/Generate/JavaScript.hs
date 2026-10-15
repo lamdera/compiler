@@ -627,9 +627,6 @@ checkedMerge a b =
     (main, Nothing)  -> main
     (Just _, Just _) -> $(Crash.crash 'checkedMerge) "cannot have two modules with the same name"
 
-    (Just _, Just _) ->
-      error "cannot have two modules with the same name"
-
 
 
 -- @LAMDERA

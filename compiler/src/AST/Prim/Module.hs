@@ -24,6 +24,7 @@ module AST.Prim.Module
   , prefixToChars
   , prefixToString
   , prefixFromAddr
+  , prefixFromChars -- @LAMDERA
   --
   , Kernel
   , kernelToString
@@ -234,6 +235,17 @@ instance Ord Prefix where
     S.compareFast s1 s2
 
 
+-- @LAMDERA
+instance Data.String.IsString Prefix where
+  fromString = prefixFromChars
+
+
+-- @LAMDERA
+prefixFromChars :: [Char] -> Prefix
+prefixFromChars chars =
+  Prefix (S.fromChars chars)
+
+
 
 -- KERNEL
 
@@ -250,6 +262,16 @@ kernelToString =
 kernelToBuilder :: Kernel -> B.Builder
 kernelToBuilder k =
   S.toBuilder (coerce k)
+
+
+-- @LAMDERA
+instance Eq Kernel where
+  (==) (Kernel s1) (Kernel s2) =
+    S.equal s1 s2
+
+-- @LAMDERA
+instance Data.String.IsString Kernel where
+  fromString chars = Kernel (S.fromChars chars)
 
 
 

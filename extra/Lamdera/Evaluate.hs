@@ -22,7 +22,7 @@ import qualified Data.Map as Map
 import qualified Elm.ModuleName as Module
 
 import qualified Elm.Package as Pkg
-import qualified Data.Name
+import qualified AST.Prim.Name as N
 import qualified Data.Text as T
 import qualified AST.Optimized as Opt
 

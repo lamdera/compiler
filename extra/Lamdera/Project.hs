@@ -105,37 +105,37 @@ lamderaUnknownApp =
 {-# NOINLINE lamderaCore #-}
 lamderaCore :: Elm.Package.Name
 lamderaCore =
-  Elm.Package.Name (Utf8.fromChars "lamdera") (Utf8.fromChars "core")
+  Elm.Package.Name "lamdera" "core"
 
 
 {-# NOINLINE lamderaCodecs #-}
 lamderaCodecs :: Elm.Package.Name
 lamderaCodecs =
-  Elm.Package.Name (Utf8.fromChars "lamdera") (Utf8.fromChars "codecs")
+  Elm.Package.Name "lamdera" "codecs"
 
 
 {-# NOINLINE lamderaContainers #-}
 lamderaContainers :: Elm.Package.Name
 lamderaContainers =
-  Elm.Package.Name (Utf8.fromChars "lamdera") (Utf8.fromChars "containers")
+  Elm.Package.Name "lamdera" "containers"
 
 
 {-# NOINLINE lamderaProgramTest #-}
 lamderaProgramTest :: Elm.Package.Name
 lamderaProgramTest =
-  Elm.Package.Name (Utf8.fromChars "lamdera") (Utf8.fromChars "program-test")
+  Elm.Package.Name "lamdera" "program-test"
 
 
 {-# NOINLINE lamderaFusion #-}
 lamderaFusion :: Elm.Package.Name
 lamderaFusion =
-  Elm.Package.Name (Utf8.fromChars "lamdera") (Utf8.fromChars "fusion")
+  Elm.Package.Name "lamdera" "fusion"
 
 
 {-# NOINLINE lamderaWebsocket #-}
 lamderaWebsocket :: Elm.Package.Name
 lamderaWebsocket =
-  Elm.Package.Name (Utf8.fromChars "lamdera") (Utf8.fromChars "websocket")
+  Elm.Package.Name "lamdera" "websocket"
 
 
 findOverridePackages :: IO [(Elm.Package.Name, Word16, Word16, Word16)]
@@ -143,5 +143,5 @@ findOverridePackages =
   -- @STUB todo: make this actually find override packages dynamically and draw in their deps
   -- this would allow us to have private unpublished local packages in LOVR that are auto added
   -- in addition to the existing package override behaviour
-  -- pure [(Elm.Package.Name (Utf8.fromChars "lamdera") (Utf8.fromChars "websocket"), 1,0,0)]
+  -- pure [(Elm.Package.Name "lamdera" "websocket", 1,0,0)]
   pure []

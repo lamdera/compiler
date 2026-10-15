@@ -18,7 +18,10 @@ import qualified AST.Canonical as Can
 import qualified Elm.Interface as Interface
 import qualified Elm.ModuleName as ModuleName
 import AST.Canonical
-import qualified Data.Name
+import qualified AST.Prim.Module as PrimModule
+import qualified AST.Prim.Name as N
+import qualified AST.Prim.TypeName as TN
+import qualified AST.Prim.TypeVar as TV
 import qualified Data.Utf8 as Utf8
 import qualified Reporting.Annotation as A
 import qualified Reporting.Error as E
@@ -32,9 +35,10 @@ import StandaloneInstances
 import qualified CanSer.CanSer as ToSource
 
 import Lamdera.Wire3.Helpers
+import qualified Lamdera.Lexical as Lexical
 
 type Interfaces =
-  Map.Map ModuleName.Raw Interface.Interface
+  Map.Map PrimModule.Name Interface.Interface
 
 
 encoderForType :: Int -> Interfaces -> ModuleName.Canonical -> Type -> A.Located Expr_
@@ -69,7 +73,7 @@ encoderForType depth ifaces cname tipe =
     TUnit ->
       (a (VarForeign mLamdera_Wire "encodeUnit" (Forall Map.empty (TLambda TUnit tLamdera_Wire_Encoder))))
 
-    TTuple a_ b Nothing ->
+    TPair a_ b ->
       (a (VarForeign mLamdera_Wire "encodePair"
             (Forall
                (Map.fromList [("a", ()), ("b", ())])
@@ -78,10 +82,10 @@ encoderForType depth ifaces cname tipe =
                   (TLambda
                      (TLambda (TVar "b") tLamdera_Wire_Encoder)
                      (TLambda
-                        (TTuple (TVar "a") (TVar "b") Nothing)
+                        (TPair (TVar "a") (TVar "b"))
                         tLamdera_Wire_Encoder))))))
 
-    TTuple a_ b (Just c) ->
+    TTriple a_ b c ->
       (a (VarForeign mLamdera_Wire "encodeTriple"
             (Forall
                (Map.fromList [("a", ()), ("b", ()), ("c", ())])
@@ -92,7 +96,7 @@ encoderForType depth ifaces cname tipe =
                      (TLambda
                         (TLambda (TVar "c") tLamdera_Wire_Encoder)
                         (TLambda
-                           (TTuple (TVar "a") (TVar "b") (Just (TVar "c")))
+                           (TTriple (TVar "a") (TVar "b") (TVar "c"))
                            tLamdera_Wire_Encoder)))))))
 
     TType (Module.Canonical (Name "elm" "core") "Maybe") "Maybe" [ptype] ->
@@ -220,7 +224,7 @@ encoderForType depth ifaces cname tipe =
 
     TType moduleName typeName params ->
       let
-        generatedName = Data.Name.fromChars $ "w3_encode_" ++ Data.Name.toChars typeName
+        generatedName = N.fromChars $ "w3_encode_" ++ TN.nameToChars typeName
 
         decoder =
           if cname == moduleName
@@ -237,26 +241,27 @@ encoderForType depth ifaces cname tipe =
     TRecord fieldMap maybeExtensible ->
       case maybeExtensible of
         Just extensibleName ->
-          (lvar $ Data.Name.fromChars $ "w3_x_c_" ++ Data.Name.toChars extensibleName)
+          (lvar $ N.fromChars $ "w3_x_c_" ++ TV.varToChars extensibleName)
 
         Nothing ->
           let
-            fields = fieldMap & fieldsToList & List.sortOn (\(name, field) -> name)
+            -- Wire order: field names in Lamdera's (pre Elm 0.19.3) byte order, see Lamdera.Lexical
+            fields = fieldMap & fieldsToList & Lexical.sortOn (\(name, field) -> name)
             fieldEncoders =
               fields
                 & fmap (\(name, field) ->
                     -- debugEncoder_ (Utf8.fromChars $ "." <> Data.Name.toChars name) $
-                      encodeTypeValue (depth + 1) ifaces cname field (a (Access (a (VarLocal $ Utf8.fromChars $ "w3_rec_var" ++ show depth)) (a (name))))
+                      encodeTypeValue (depth + 1) ifaces cname field (a (Access (a (VarLocal $ N.fromChars $ "w3_rec_var" ++ show depth)) (a (name))))
                   )
           in
-          (a (Lambda [(a (PVar $ Utf8.fromChars $ "w3_rec_var" ++ show depth))]
+          (a (Lambda [(a (PVar $ N.fromChars $ "w3_rec_var" ++ show depth))]
             (encodeSequenceWithoutLength $ list fieldEncoders)
           ))
 
 
     TAlias moduleName typeName tvars_ aType ->
       let
-        generatedName = Data.Name.fromChars $ "w3_encode_" ++ Data.Name.toChars typeName
+        generatedName = N.fromChars $ "w3_encode_" ++ TN.nameToChars typeName
 
         encoder =
           if cname == moduleName
@@ -272,7 +277,7 @@ encoderForType depth ifaces cname tipe =
 
     TVar name ->
       -- Tvars should always have a local encoder in scope
-      lvar $ Data.Name.fromChars $ "w3_x_c_" ++ Data.Name.toChars name
+      lvar $ N.fromChars $ "w3_x_c_" ++ TV.varToChars name
 
     TLambda t1 t2 ->
       failEncode
@@ -290,8 +295,8 @@ deepEncoderForType depth ifaces cname tipe =
     TType (Module.Canonical (Name "elm" "core") "String") "String" [] -> encoderForType depth ifaces cname tipe
     TUnit                                                             -> encoderForType depth ifaces cname tipe
 
-    TTuple a b Nothing  -> call (encoderForType depth ifaces cname tipe) [ deepEncoderForType depth ifaces cname a, deepEncoderForType depth ifaces cname b ]
-    TTuple a b (Just c) -> call (encoderForType depth ifaces cname tipe) [ deepEncoderForType depth ifaces cname a, deepEncoderForType depth ifaces cname b, deepEncoderForType depth ifaces cname c ]
+    TPair a b -> call (encoderForType depth ifaces cname tipe) [ deepEncoderForType depth ifaces cname a, deepEncoderForType depth ifaces cname b ]
+    TTriple a b c -> call (encoderForType depth ifaces cname tipe) [ deepEncoderForType depth ifaces cname a, deepEncoderForType depth ifaces cname b, deepEncoderForType depth ifaces cname c ]
 
     TType (Module.Canonical (Name "elm" "core") "Maybe") "Maybe" [a] -> call (encoderForType depth ifaces cname tipe) [ deepEncoderForType depth ifaces cname a ]
     TType (Module.Canonical (Name "elm" "core") "List") "List" [a]   -> call (encoderForType depth ifaces cname tipe) [ deepEncoderForType depth ifaces cname a ]
@@ -323,7 +328,7 @@ deepEncoderForType depth ifaces cname tipe =
               call (encoderForType depth ifaces cname tipe) $ fmap (\tvarType ->
                 case tvarType of
                   TVar name ->
-                    lvar $ Data.Name.fromChars $ "w3_x_c_" ++ Data.Name.toChars name
+                    lvar $ N.fromChars $ "w3_x_c_" ++ TV.varToChars name
                   _ ->
                     deepEncoderForType depth ifaces cname tvarType
               ) params
@@ -351,7 +356,7 @@ inlineIfRecordOrCall depth ifaces cname tipe tvars aType =
           call (encoderForType depth ifaces cname tipe) $ fmap (\(tvarName, tvarType) ->
             case tvarType of
               TVar name ->
-                lvar $ Data.Name.fromChars $ "w3_x_c_" ++ Data.Name.toChars name
+                lvar $ N.fromChars $ "w3_x_c_" ++ TV.varToChars name
               _ ->
                 deepEncoderForType depth ifaces cname tvarType
           ) tvars
@@ -400,8 +405,8 @@ encodeTypeValue depth ifaces cname tipe value =
     (TType (Module.Canonical (Name "elm" "core") "String") "String" []) -> call (encoderForType depth ifaces cname tipe) [ value ]
     TUnit                                                               -> call (encoderForType depth ifaces cname tipe) [ value ]
 
-    TTuple a b Nothing  -> call (encoderForType depth ifaces cname tipe) [ deepEncoderForType depth ifaces cname a, deepEncoderForType depth ifaces cname b, value ]
-    TTuple a b (Just c) -> call (encoderForType depth ifaces cname tipe) [ deepEncoderForType depth ifaces cname a, deepEncoderForType depth ifaces cname b, deepEncoderForType depth ifaces cname c, value ]
+    TPair a b -> call (encoderForType depth ifaces cname tipe) [ deepEncoderForType depth ifaces cname a, deepEncoderForType depth ifaces cname b, value ]
+    TTriple a b c -> call (encoderForType depth ifaces cname tipe) [ deepEncoderForType depth ifaces cname a, deepEncoderForType depth ifaces cname b, deepEncoderForType depth ifaces cname c, value ]
 
     TType (Module.Canonical (Name "elm" "core") "Maybe") "Maybe" [a] -> call (encoderForType depth ifaces cname tipe) [ deepEncoderForType depth ifaces cname a, value ]
     TType (Module.Canonical (Name "elm" "core") "List") "List" [a]   -> call (encoderForType depth ifaces cname tipe) [ deepEncoderForType depth ifaces cname a, value ]
@@ -431,7 +436,7 @@ encodeTypeValue depth ifaces cname tipe value =
     TRecord fieldMap maybeExtensible ->
       case maybeExtensible of
         Just extensibleName ->
-          (lvar $ Data.Name.fromChars $ "w3_x_c_" ++ Data.Name.toChars extensibleName)
+          (lvar $ N.fromChars $ "w3_x_c_" ++ TV.varToChars extensibleName)
 
         Nothing ->
           call (encoderForType depth ifaces cname tipe) [ value ]
@@ -464,7 +469,7 @@ encodeTypeValue depth ifaces cname tipe value =
 
     TVar name ->
       -- Tvars should always have a local encoder in scope
-      call (lvar $ Data.Name.fromChars $ "w3_x_c_" ++ Data.Name.toChars name) [value]
+      call (lvar $ N.fromChars $ "w3_x_c_" ++ TV.varToChars name) [value]
 
     TLambda t1 t2 ->
       call failEncode [ a Unit ]

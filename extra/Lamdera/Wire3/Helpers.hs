@@ -16,7 +16,10 @@ import qualified Elm.ModuleName as Module
 import qualified Elm.Package as Pkg
 import qualified AST.Canonical as Can
 import AST.Canonical
-import qualified Data.Name
+import qualified AST.Prim.Module as PrimModule
+import qualified AST.Prim.Name as N
+import qualified AST.Prim.TypeName as TN
+import qualified AST.Prim.TypeVar as TV
 import qualified Data.Utf8 as Utf8
 import qualified Reporting.Annotation as A
 import qualified Reporting.Error as E
@@ -64,13 +67,13 @@ getForeignSig tipe moduleName generatedName ifaces =
       Nothing ->
         -- If a foreign type gen function cannot be find, it must be banned!
         -- So add type-sig for failure encoder or decoder as appropriate.
-        if T.isPrefixOf "w3_encode_" (T.pack $ Data.Name.toChars generatedName)
+        if T.isPrefixOf "w3_encode_" (T.pack $ N.toChars generatedName)
           then
             (Forall
                (Map.fromList [("a", ())])
                (TLambda (TVar "a") tLamdera_Wire_Encoder))
 
-          else if T.isPrefixOf "w3_decode_" (T.pack $ Data.Name.toChars generatedName)
+          else if T.isPrefixOf "w3_decode_" (T.pack $ N.toChars generatedName)
             then
               (Forall
                  (Map.fromList [("a", ())])
@@ -80,7 +83,7 @@ getForeignSig tipe moduleName generatedName ifaces =
                     [("a", TVar "a")]
                     (Filled (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [TVar "a"]))))
             else
-              error $ "impossible getForeignSig on non-wire function: " ++ Data.Name.toChars generatedName
+              error $ "impossible getForeignSig on non-wire function: " ++ N.toChars generatedName
 
 
 
@@ -190,14 +193,14 @@ containsUnsupportedTypes tipe =
     _ -> isUnsupportedKernelType tipe
 
 
-resolvedRecordFieldMap :: (Map.Map Data.Name.Name FieldType) -> (Maybe Data.Name.Name) -> [(Data.Name.Name, Type)] -> (Map.Map Data.Name.Name FieldType)
+resolvedRecordFieldMap :: (Map.Map N.Name FieldType) -> (Maybe TV.Var) -> [(TV.Var, Type)] -> (Map.Map N.Name FieldType)
 resolvedRecordFieldMap fieldMap extensibleName tvarMap =
   case resolvedRecordFieldMapM fieldMap extensibleName tvarMap of
     Just extendedFieldMap -> extendedFieldMap
     Nothing -> fieldMap
 
 
-resolvedRecordFieldMapM :: (Map.Map Data.Name.Name FieldType) -> (Maybe Data.Name.Name) -> [(Data.Name.Name, Type)] -> Maybe (Map.Map Data.Name.Name FieldType)
+resolvedRecordFieldMapM :: (Map.Map N.Name FieldType) -> (Maybe TV.Var) -> [(TV.Var, Type)] -> Maybe (Map.Map N.Name FieldType)
 resolvedRecordFieldMapM fieldMap extensibleName tvarMap =
   case extensibleName of
     Just extensibleName ->
@@ -312,7 +315,7 @@ declsToList d =
 
 
 {- For debugging -}
-declsToSummary :: Decls -> [(String, Data.Name.Name)]
+declsToSummary :: Decls -> [(String, N.Name)]
 declsToSummary d =
   case d of
     Declare def decls ->
@@ -373,7 +376,7 @@ removeDef def_ decls_ =
       SaveTheEnvironment
 
 
-removeDefByName :: Data.Name.Name -> Decls -> Decls
+removeDefByName :: N.Name -> Decls -> Decls
 removeDefByName name decls_ =
   case decls_ of
     Declare def decls ->
@@ -396,17 +399,17 @@ sameName :: Def -> Def -> Bool
 sameName d1 d2 =
   defName d1 == defName d2
 
-findDef :: Data.Name.Name -> Decls -> Maybe Def
+findDef :: N.Name -> Decls -> Maybe Def
 findDef name decls =
   decls
     & declsToList
     & List.find (defNameIs name)
 
-defNameIs :: Data.Name.Name -> Def -> Bool
+defNameIs :: N.Name -> Def -> Bool
 defNameIs name def =
   name == defName def
 
-defName :: Def -> Data.Name.Name
+defName :: Def -> N.Name
 defName def =
   case def of
     Def (A.At region name_) _ _ ->
@@ -415,7 +418,7 @@ defName def =
       name_
 
 
-foreignTypeTvars :: Module.Raw -> Data.Name.Name -> Map.Map Module.Raw I.Interface -> [Data.Name.Name]
+foreignTypeTvars :: PrimModule.Name -> TN.Name -> Map.Map PrimModule.Name I.Interface -> [TV.Var]
 foreignTypeTvars module_ typeName ifaces =
   case ifaces & Map.lookup module_ of
     Just iface ->
@@ -430,7 +433,7 @@ foreignTypeTvars module_ typeName ifaces =
       []
 
 
-foreignTypeSig :: Module.Canonical -> Data.Name.Name -> Map.Map Module.Raw I.Interface -> Maybe Can.Annotation
+foreignTypeSig :: Module.Canonical -> N.Name -> Map.Map PrimModule.Name I.Interface -> Maybe Can.Annotation
 foreignTypeSig (Module.Canonical pkg (moduleRaw)) defName ifaces =
   case ifaces & Map.lookup moduleRaw of
     Just iface ->
@@ -454,9 +457,9 @@ aliasTvars alias =
 
 
 {- Equivalent of writing `functionName = Debug.todo "functionName"` in Elm -}
-namedTodo :: Src.Module -> Data.Name.Name -> Def
+namedTodo :: Src.Module -> N.Name -> Def
 namedTodo modul functionName =
-  let functionName_ = Utf8.fromChars . Data.Name.toChars $ functionName
+  let functionName_ = Utf8.fromChars . N.toChars $ functionName
       moduleName = Src.getName modul
   in
    Def
@@ -853,14 +856,14 @@ unwrapAliasesDeep t =
 
     TUnit -> t
 
-    TTuple a b Nothing  -> TTuple (unwrapAliasesDeep a) (unwrapAliasesDeep b) Nothing
-    TTuple a b (Just c) -> TTuple (unwrapAliasesDeep a) (unwrapAliasesDeep b) (Just $ unwrapAliasesDeep c)
+    TPair a b -> TPair (unwrapAliasesDeep a) (unwrapAliasesDeep b)
+    TTriple a b c -> TTriple (unwrapAliasesDeep a) (unwrapAliasesDeep b) (unwrapAliasesDeep c)
 
     TAlias moduleName typeName tvars (Holey tipe) -> unwrapAliasesDeep tipe
     TAlias moduleName typeName tvars (Filled tipe) -> unwrapAliasesDeep tipe
 
 
-resolveTvar :: [(Data.Name.Name, Type)] -> Type -> Type
+resolveTvar :: [(TV.Var, Type)] -> Type -> Type
 resolveTvar tvarMap t =
   case t of
     TLambda t1 t2 -> TLambda (resolveTvar tvarMap t1) (resolveTvar tvarMap t2)
@@ -959,8 +962,8 @@ resolveTvar tvarMap t =
 
     TUnit -> t
 
-    TTuple a b Nothing  -> TTuple (resolveTvar tvarMap a) (resolveTvar tvarMap b) Nothing
-    TTuple a b (Just c) -> TTuple (resolveTvar tvarMap a) (resolveTvar tvarMap b) (Just $ resolveTvar tvarMap c)
+    TPair a b -> TPair (resolveTvar tvarMap a) (resolveTvar tvarMap b)
+    TTriple a b c -> TTriple (resolveTvar tvarMap a) (resolveTvar tvarMap b) (resolveTvar tvarMap c)
 
     TAlias moduleName typeName tvars (Holey tipe) ->
       let newResolvedTvars = tvars & fmap (\(n, t) -> (n, resolveTvar tvarMap t))
@@ -991,8 +994,8 @@ extractTvarsInType t =
 
     TUnit -> []
 
-    TTuple a b Nothing  -> [a,b] & concatMap extractTvarsInType
-    TTuple a b (Just c) -> [a,b,c] & concatMap extractTvarsInType
+    TPair a b -> [a,b] & concatMap extractTvarsInType
+    TTriple a b c -> [a,b,c] & concatMap extractTvarsInType
 
     TAlias moduleName typeName tvars (Holey tipe) -> extractTvarsInType tipe ++ extractTvarsInTvars tvars
     TAlias moduleName typeName tvars (Filled tipe) -> extractTvarsInType tipe ++ extractTvarsInTvars tvars
@@ -1022,7 +1025,7 @@ indefinitely in an MVar operation"; in an encoder it surfaces as TOO MANY ARGS. 
 `input` tvar.
 
 -}
-extractFreeTvarsInType :: Type -> [Data.Name.Name]
+extractFreeTvarsInType :: Type -> [TV.Var]
 extractFreeTvarsInType t =
   case t of
     TLambda t1 t2 -> [t1,t2] & concatMap extractFreeTvarsInType
@@ -1037,8 +1040,8 @@ extractFreeTvarsInType t =
 
     TUnit -> []
 
-    TTuple a b Nothing  -> [a,b] & concatMap extractFreeTvarsInType
-    TTuple a b (Just c) -> [a,b,c] & concatMap extractFreeTvarsInType
+    TPair a b -> [a,b] & concatMap extractFreeTvarsInType
+    TTriple a b c -> [a,b,c] & concatMap extractFreeTvarsInType
 
     -- Holey: body tvars are the alias's own parameters, i.e. bound — only the applied
     -- arguments can be free. Filled: already substituted, so the body is fair game.

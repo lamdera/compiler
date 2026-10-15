@@ -19,7 +19,7 @@ These names seem close though:
 -}
 
 import qualified Data.List as List
-import qualified Data.Name as Name
+import qualified AST.Prim.Name as Name
 import qualified Data.Map as Map
 
 import qualified Reporting.Annotation as A

@@ -3,7 +3,6 @@
 
 module Lamdera.Repl (serve) where
 
-import qualified BackgroundWriter as BW
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Builder as B
 import qualified Data.ByteString.Lazy as LBS
@@ -25,7 +24,8 @@ import qualified Json.String as JS
 import qualified Reporting
 import qualified Reporting.Exit as Exit
 import qualified Reporting.Task as Task
-import qualified Stuff
+import qualified File
+import qualified Root as R
 
 import qualified Lamdera
 import qualified Lamdera.Relative
@@ -60,7 +60,7 @@ lamderaReplSrc = $(do
 
   compilerResult <- TH.runIO $ do
     putStr "-- Compiling `src/Repl/Worker.elm` in `vendor/elm-repl-worker`..."
-    BW.withScope $ \scope -> do
+    File.withWriter $ \writer -> do
       -- @LAMDERA Resolve an absolute root via Lamdera.Relative rather than chdir'ing the
       -- process-global CWD. This TH runs under GHC's parallel upsweep (-j), where a
       -- withCurrentDirectory here races other TH splices (Develop.StaticFiles) and fails
@@ -68,14 +68,15 @@ lamderaReplSrc = $(do
       -- keeps Build.getRootInfo's canonicalizePath CWD-independent.
       root <- Lamdera.Relative.requireDir ("vendor" </> "elm-repl-worker")
       Lamdera.withProjectRoot root $ do
+        stuff <- R.getStuff (R.fromFilePath root)
         Task.run $ do
           -- Render the REAL error rather than discarding it. Inlined rather than
           -- factored into a helper: a top-level binding of this module cannot be
           -- used inside its own Template Haskell splice (GHC stage restriction),
           -- so a helper would have to live in another module and be imported.
-          details    <- Task.eio (\e -> "details phase:\n\n" ++ Exit.toString (Exit.makeToReport (Exit.MakeBadDetails e))) $ Details.load Reporting.silent scope root
-          artifacts  <- Task.eio (\e -> "build phase:\n\n" ++ Exit.toString (Exit.makeToReport (Exit.MakeCannotBuild e))) $ Build.fromPaths Reporting.silent root details (fmap (root </>) mainPaths)
-          javascript <- Task.mapError (\e -> "generate phase:\n\n" ++ Exit.toString (Exit.makeToReport (Exit.MakeBadGenerate e))) $ Generate.dev root details artifacts
+          details    <- Task.eio (\e -> "details phase:\n\n" ++ Exit.toString (Exit.makeToReport (Exit.MakeBadDetails e))) $ Details.load writer Reporting.silent (R.fromFilePath root) stuff
+          artifacts  <- Task.eio (\e -> "build phase:\n\n" ++ Exit.toString (Exit.makeToReport (Exit.MakeCannotBuild e))) $ Build.fromPaths writer Reporting.silent (R.fromFilePath root) stuff details (fmap (root </>) mainPaths)
+          javascript <- Task.mapError (\e -> "generate phase:\n\n" ++ Exit.toString (Exit.makeToReport (Exit.MakeBadGenerate e))) $ Generate.dev stuff details artifacts
           return $ LBS.toStrict (B.toLazyByteString javascript)
 
   compiledCode <-
@@ -133,7 +134,7 @@ lamderaReplSrc = $(do
 
 serveFiles :: FilePath -> (B.Builder -> S.Snap ()) -> (B.Builder -> S.Snap ()) -> T.Text -> S.Snap ()
 serveFiles root jsonResponse error404 path = do
-  elmHome <- Lamdera.liftIO $ Stuff.getElmHome
+  elmHome <- Lamdera.liftIO $ R.getElmHomePath
   let
     fullpath :: FilePath
     fullpath

@@ -119,7 +119,7 @@ module Lamdera
   , textSha1
   , (!!!)
   , toName
-  , nameToText
+  , NameToText(..)
   , utf8ToText
   , imap
   , imapM
@@ -195,7 +195,7 @@ import Text.Show.Unicode
 
 import qualified System.Process
 import qualified Data.Digest.Pure.SHA as SHA
-import qualified Data.Name as N
+import qualified AST.Prim.Name as N
 import qualified Data.Utf8 as Utf8
 
 import qualified Ext.Common
@@ -989,9 +989,15 @@ toName =
   N.fromChars . T.unpack
 
 
-nameToText :: N.Name -> Text
-nameToText =
-  T.pack . N.toChars
+-- @LAMDERA Elm 0.19.3 split names into separate types (values, types, type variables,
+-- modules, package authors and projects). The instances for the types that cannot be
+-- imported here (import cycles) live in StandaloneInstances.
+class NameToText a where
+  nameToText :: a -> Text
+
+instance NameToText N.Name where
+  nameToText =
+    T.pack . N.toChars
 
 
 utf8ToText =

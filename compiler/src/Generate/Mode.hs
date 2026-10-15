@@ -74,7 +74,7 @@ legibleFieldNames (Opt.GlobalGraph _ frequencies) =
   Map.foldr addToNamesLegible Map.empty $
     Map.foldrWithKey addToBuckets Map.empty frequencies
 
-addToNamesLegible :: [Name.Name] -> ShortFieldNames -> ShortFieldNames
+addToNamesLegible :: [N.Name] -> ShortFieldNames -> ShortFieldNames
 addToNamesLegible fields shortNames =
   -- Does not shorten field names, but adds them to the short names map
   List.foldl' (\shortNames field ->

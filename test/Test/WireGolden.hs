@@ -37,7 +37,8 @@ import qualified Lamdera.TypeHash
 import qualified Lamdera.Types
 import qualified Ext.Common
 import Test.Helpers
-import qualified Data.Name
+import qualified AST.Prim.Module as PrimModule
+import qualified AST.Prim.TypeName as TN
 
 
 all = EasyTest.run suite
@@ -84,11 +85,11 @@ captureTypeHashes project types =
     let coreLines =
           case core of
             Right (hashes, _) ->
-              zipWith (\n h -> "core " <> T.pack (nameString n) <> " " <> h) Lamdera.Types.core hashes
+              zipWith (\n h -> "core " <> T.pack (TN.nameToChars n) <> " " <> h) Lamdera.Types.core hashes
             Left _ ->
               [ "core: calculateLamderaHashes failed" ]
     typeLines <- forM types $ \(path, moduleName, typeName) -> do
-      (thash, ttext) <- Lamdera.TypeHash.calculateHashPair path (nameFromString moduleName) (nameFromString typeName)
+      (thash, ttext) <- Lamdera.TypeHash.calculateHashPair path (PrimModule.fromChars moduleName) (TN.nameFromChars typeName)
       pure $ T.pack (moduleName <> "." <> typeName) <> " " <> thash <> " " <> ttext
     pure $ T.unlines (coreLines ++ typeLines)
 
@@ -129,16 +130,6 @@ expectGolden file actual = do
     else do
       expected <- io $ readUtf8Text path
       expectEqualTextTrimmed (withDefault "<missing golden file>" expected) actual
-
-
-nameString :: Data.Name.Name -> String
-nameString =
-  Data.Name.toChars
-
-
-nameFromString :: String -> Data.Name.Name
-nameFromString =
-  Data.Name.fromChars
 
 
 {-| GOLDEN_PROJECT / GOLDEN_OUT: capture a real app's core type hashes and snapshot. -}
