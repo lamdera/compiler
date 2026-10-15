@@ -38,6 +38,17 @@ Lamdera.Version.artifacts), so a change to the IR format below needs a new versi
 caches written by the previous binary must be cleared: otherwise their types silently
 fall back to the Elm codecs.
 LAMDERA_WIRE3_DIRECT_DEBUG=1 reports every codec the lowering gives up on.
+
+Validators and the two decoder chains (Wire3.Core, Wire3.Decoder): every type has a
+validating decoder `w3_decode_<T>`, which for a custom type with a user-defined
+`w3_validate_<T>` decodes the value and then runs the validator on it (an `Err` logs
+its message through `Lamdera.Wire3.debug` and fails the decode), and a non-validating
+`w3_unsafe_decode_<T>`. Each chain only references its own chain. Both are lowered and
+rendered as separate decoder families (see `Fam`): the validating chain's IR is the
+decoder half of `w3_ir_<T>`, the unsafe chain's is stored on its own as `w3_iru_<T>`.
+A validated decoder is lowered to `BValidate`, rendered as the plain union decode
+followed by the validator call, in the same order and with the same failure as the
+Elm decoder's `andThenDecode`.
 -}
 
 import Control.Monad.State.Strict (State, runState, get, put, modify')
@@ -111,6 +122,9 @@ data W
 data Body
   = BAlias W
   | BUnion String Int [Alt]     -- ctor opts, tag width in bytes, alts in wire order
+  | BValidate String Body       -- decode Body, then run the type's own validator (its
+                                -- top-level name, in the codec's module) on the value;
+                                -- validating decoders only, never encoders
   deriving (Show, Read, Eq)
 
 
@@ -131,6 +145,29 @@ data IR = IR (Maybe Codec) (Maybe Codec)
   deriving (Show, Read, Eq)
 
 
+-- DECODER FAMILIES
+--
+-- The validating chain (`w3_decode_<T>`, which runs `w3_validate_<T>` where one is
+-- defined) and the non-validating chain (`w3_unsafe_decode_<T>`, for trusted data:
+-- snapshot restore and Evergreen migrations) are lowered and rendered separately. Each
+-- chain only ever references its own chain, so each family's direct functions, helpers
+-- and hoisted closures get their own names.
+
+
+data Fam =
+  Fam
+    { _famElm :: String     -- the Elm codec's prefix
+    , _famDirect :: String  -- the direct decoder function's prefix
+    , _famHelper :: String  -- hoisted statement helpers
+    , _famArg :: String     -- hoisted closed codec arguments
+    }
+
+
+validatingFam, unsafeFam :: Fam
+validatingFam = Fam "w3_decode_" "w3d_" "w3dh_" "w3da_"
+unsafeFam = Fam "w3_unsafe_decode_" "w3du_" "w3duh_" "w3dua_"
+
+
 -- LOWERING (compile time)
 
 
@@ -141,6 +178,7 @@ addDirectIR pkg canonical graph@(Opt.LocalGraph main nodes fields) =
   else
     let
       home = Can._name canonical
+      modul = Name.toChars (ModuleName._module home)
       defs = Helpers.declsToList (Can._decls canonical)
       byName = Map.fromList [ (Name.toChars (defNameOf d), d) | d <- defs ]
       codecs =
@@ -149,14 +187,26 @@ addDirectIR pkg canonical graph@(Opt.LocalGraph main nodes fields) =
               case List.stripPrefix "w3_encode_" name of
                 Just typeName ->
                   do  decDef <- Map.lookup ("w3_decode_" ++ typeName) byName
-                      let ir = debugLowering (Name.toChars (ModuleName._module home)) typeName encDef decDef (lowerCodec encDef decDef)
+                      let ir = debugLowering modul typeName encDef decDef (lowerCodec encDef decDef)
                       case ir of
                         IR Nothing Nothing -> Nothing
                         _ -> Just (typeName, ir)
                 Nothing -> Nothing
           )
           (Map.toList byName)
-      newNodes =
+      -- The non-validating chain, stored on its own so the IR format of `w3_ir_` is
+      -- unchanged.
+      unsafeCodecs =
+        Maybe.mapMaybe
+          (\(name, decDef) ->
+              case List.stripPrefix (_famElm unsafeFam) name of
+                Just typeName ->
+                  do  codec <- debugLoweringUnsafe modul typeName decDef (lowerDecoderDef unsafeFam decDef)
+                      Just (typeName, codec)
+                Nothing -> Nothing
+          )
+          (Map.toList byName)
+      withIR =
         foldr
           (\(typeName, codec) acc ->
               Map.insert
@@ -166,6 +216,16 @@ addDirectIR pkg canonical graph@(Opt.LocalGraph main nodes fields) =
           )
           nodes
           codecs
+      newNodes =
+        foldr
+          (\(typeName, codec) acc ->
+              Map.insert
+                (Opt.Global home (Name.fromChars ("w3_iru_" ++ typeName)))
+                (Opt.Kernel [K.JS (BS8.pack (show codec))] Set.empty)
+                acc
+          )
+          withIR
+          unsafeCodecs
     in
     Opt.LocalGraph main newNodes fields
 
@@ -190,6 +250,18 @@ debugLowering modul typeName encDef decDef ir@(IR enc dec) =
       return ir
   else
     ir
+
+
+debugLoweringUnsafe :: String -> String -> Can.Def -> Maybe Codec -> Maybe Codec
+debugLoweringUnsafe modul typeName decDef codec =
+  if debugEnabled && codec == Nothing then
+    unsafePerformIO $ do
+      verbose <- fmap (== Just "2") (Env.lookupEnv "LAMDERA_WIRE3_DIRECT_DEBUG")
+      putStrLn ("[wire3-direct] " ++ modul ++ "." ++ typeName
+        ++ ": unsafe decoder NOT LOWERED" ++ (if verbose then "\n" ++ T.unpack (ToSource.convert decDef) else ""))
+      return codec
+  else
+    codec
 
 
 (&) :: a -> (a -> b) -> b
@@ -223,7 +295,7 @@ tvarParam = List.stripPrefix "w3_x_c_"
 
 lowerCodec :: Can.Def -> Can.Def -> IR
 lowerCodec encDef decDef =
-  IR (lowerEncoderDef encDef) (lowerDecoderDef decDef)
+  IR (lowerEncoderDef encDef) (lowerDecoderDef validatingFam decDef)
 
 
 lowerEncoderDef :: Can.Def -> Maybe Codec
@@ -239,14 +311,19 @@ lowerEncoderDef def =
               Codec ps . BAlias <$> lowerEnc body
 
 
-lowerDecoderDef :: Can.Def -> Maybe Codec
-lowerDecoderDef def =
+lowerDecoderDef :: Fam -> Can.Def -> Maybe Codec
+lowerDecoderDef fam def =
   do  let (pats, body) = defParts def
+          pfx = _famElm fam
       names <- traverse patVar pats
       ps <- traverse tvarParam names
-      case lowerUnionDec body of
+      case lowerUnionDec pfx body of
         Just b -> Just (Codec ps b)
-        Nothing -> Codec ps . BAlias <$> lowerDec body
+        Nothing ->
+          -- Only the validating chain ever attaches a validator (Wire3.Core.decoderUnion).
+          case (if pfx == _famElm validatingFam then lowerValidatedDec pfx body else Nothing) of
+            Just b -> Just (Codec ps b)
+            Nothing -> Codec ps . BAlias <$> lowerDec pfx body
 
 
 homeOf :: ModuleName.Canonical -> Home
@@ -443,8 +520,10 @@ optsName o =
 -- DECODER LOWERING
 
 
-lowerDec :: Can.Expr -> Maybe W
-lowerDec expr@(A.At _ e) =
+-- `pfx` is the decoder family's prefix (`w3_decode_` or `w3_unsafe_decode_`): a reference
+-- to another type's decoder must be to the same family, anything else is not lowered.
+lowerDec :: String -> Can.Expr -> Maybe W
+lowerDec pfx expr@(A.At _ e) =
   case e of
     Can.VarForeign home name _
       | isHome wireHome home ->
@@ -460,47 +539,47 @@ lowerDec expr@(A.At _ e) =
             "decodeNever"  -> Just WFail
             "failDecode"   -> Just WFail
             "decodeRef"    -> Just (WElm "encodeRef" "decodeRef")
-            "w3_decode_Bytes" -> Just WBytes -- see "w3_encode_Bytes" in lowerFn
+            n | n == pfx ++ "Bytes" -> Just WBytes -- see "w3_encode_Bytes" in lowerFn
             _ -> Nothing
-      | otherwise -> ref "w3_decode_" home name [] lowerDec
+      | otherwise -> ref pfx home name [] (lowerDec pfx)
 
-    Can.VarTopLevel home name -> ref "w3_decode_" home name [] lowerDec
+    Can.VarTopLevel home name -> ref pfx home name [] (lowerDec pfx)
 
     Can.VarLocal name -> WTVar <$> tvarParam (Name.toChars name)
 
     -- A record with no fields decodes as `succeedDecode (\ -> {})`, with no andMaps.
-    Can.Call _ _ | Just w <- lowerRecordDec expr -> Just w
+    Can.Call _ _ | Just w <- lowerRecordDec pfx expr -> Just w
 
     Can.Call (A.At _ f) args ->
       case f of
         Can.VarForeign home name _
           | isHome wireHome home ->
               case (Name.toChars name, args) of
-                ("decodeList", [a])      -> WList <$> lowerDec a
-                ("decodeMaybe", [a])     -> WMaybe <$> lowerDec a
-                ("decodeSet", [a])       -> WSet <$> lowerDec a
-                ("decodeArray", [a])     -> WArray <$> lowerDec a
-                ("decodeResult", [x, y]) -> WResult <$> lowerDec x <*> lowerDec y
-                ("decodeDict", [k, v])   -> WDict <$> lowerDec k <*> lowerDec v
-                ("decodePair", [x, y])   -> WPair <$> lowerDec x <*> lowerDec y
-                ("decodeTriple", [x, y, z]) -> WTriple <$> lowerDec x <*> lowerDec y <*> lowerDec z
+                ("decodeList", [a])      -> WList <$> lowerDec pfx a
+                ("decodeMaybe", [a])     -> WMaybe <$> lowerDec pfx a
+                ("decodeSet", [a])       -> WSet <$> lowerDec pfx a
+                ("decodeArray", [a])     -> WArray <$> lowerDec pfx a
+                ("decodeResult", [x, y]) -> WResult <$> lowerDec pfx x <*> lowerDec pfx y
+                ("decodeDict", [k, v])   -> WDict <$> lowerDec pfx k <*> lowerDec pfx v
+                ("decodePair", [x, y])   -> WPair <$> lowerDec pfx x <*> lowerDec pfx y
+                ("decodeTriple", [x, y, z]) -> WTriple <$> lowerDec pfx x <*> lowerDec pfx y <*> lowerDec pfx z
                 _ -> Nothing
           | isHome seqDictHome home && Name.toChars name == "decodeDict" ->
               case args of
-                [k, v] -> WSeqDict <$> lowerDec k <*> lowerDec v
+                [k, v] -> WSeqDict <$> lowerDec pfx k <*> lowerDec pfx v
                 _ -> Nothing
           | isHome seqSetHome home && Name.toChars name == "decodeSet" ->
               case args of
-                [a] -> WSeqSet <$> lowerDec a
+                [a] -> WSeqSet <$> lowerDec pfx a
                 _ -> Nothing
-          | otherwise -> ref "w3_decode_" home name args lowerDec
-        Can.VarTopLevel home name -> ref "w3_decode_" home name args lowerDec
+          | otherwise -> ref pfx home name args (lowerDec pfx)
+        Can.VarTopLevel home name -> ref pfx home name args (lowerDec pfx)
         _ -> Nothing
 
     Can.Binop _ _ _ _ _ _ ->
       case lowerPosixDec expr of
         Just w -> Just w
-        Nothing -> lowerRecordDec expr
+        Nothing -> lowerRecordDec pfx expr
 
     _ -> Nothing
 
@@ -546,8 +625,8 @@ lowerPosixDec expr =
 
 
 -- `succeedDecode (\a0 b0 -> { a = a0, b = b0 }) |> andMapDecode da |> andMapDecode db`
-lowerRecordDec :: Can.Expr -> Maybe W
-lowerRecordDec expr =
+lowerRecordDec :: String -> Can.Expr -> Maybe W
+lowerRecordDec pfx expr =
   let (base, steps) = pipeline expr in
   do  A.At _ (Can.Lambda pats (A.At _ (Can.Record fieldMap))) <- succeedArg base
       vars <- traverse patVar pats
@@ -555,20 +634,20 @@ lowerRecordDec expr =
       if length decs /= length vars || Map.size fieldMap /= length vars then Nothing else Just ()
       let byVar = Map.fromList [ (Name.toChars v, Name.toChars f) | (f, A.At _ (Can.VarLocal v)) <- Map.toList fieldMap ]
       names <- traverse (\v -> Map.lookup v byVar) vars
-      ws <- traverse lowerDec decs
+      ws <- traverse (lowerDec pfx) decs
       Just (WRecord (zip names ws))
 
 
 -- `tagDecoder |> andThenDecode (\w3v -> case w3v of 0 -> succeedDecode Ctor |> andMapDecode d ...; _ -> failDecode)`
-lowerUnionDec :: Can.Expr -> Maybe Body
-lowerUnionDec expr =
+lowerUnionDec :: String -> Can.Expr -> Maybe Body
+lowerUnionDec pfx expr =
   case pipeline expr of
     (tagDec, [A.At _ (Can.Call (A.At _ (Can.VarForeign h1 n1 _)) [A.At _ (Can.Lambda [A.At _ (Can.PVar w3v)] (A.At _ (Can.Case (A.At _ (Can.VarLocal w3v2)) branches)))])])
       | isHome wireHome h1 && Name.toChars n1 == "andThenDecode" && w3v == w3v2 ->
           do  width <- tagWidth tagDec
               (ctorBranches, lastBranch) <- unsnoc branches
               case lastBranch of
-                Can.CaseBranch (A.At _ Can.PAnything) d | lowerDec d == Just WFail -> Just ()
+                Can.CaseBranch (A.At _ Can.PAnything) d | lowerDec pfx d == Just WFail -> Just ()
                 _ -> Nothing
               alts <- traverse lowerAlt (zip [0..] ctorBranches)
               let (opts, alts_) = unzip alts
@@ -592,11 +671,69 @@ lowerUnionDec expr =
           let (base, steps) = pipeline chain in
           do  A.At _ (Can.VarCtor opts _ ctorName index _) <- succeedArg base
               decs <- traverse andMapArg steps
-              ws <- traverse lowerDec decs
+              ws <- traverse (lowerDec pfx) decs
               Just (optsName opts, Alt (Name.toChars ctorName) (Index.toMachine index) ws)
         _ -> Nothing
 
     unsnoc xs = if null xs then Nothing else Just (init xs, last xs)
+
+
+-- A validated union decoder (Wire3.Decoder.wrapWithValidator), exactly:
+--
+--   <union decoder>
+--     |> andThenDecode
+--          (\w3_validate_value ->
+--              case w3_validate_<T> w3_validate_value of
+--                  Ok _ -> succeedDecode w3_validate_value
+--                  Err w3_validate_err ->
+--                      let _ = Lamdera.Wire3.debug w3_validate_err in failDecode
+--          )
+--
+-- Anything that differs in any detail is not lowered (and keeps its Elm codec).
+lowerValidatedDec :: String -> Can.Expr -> Maybe Body
+lowerValidatedDec pfx (A.At _ e) =
+  case e of
+    Can.Binop op _ _ _ inner (A.At _ (Can.Call (A.At _ (Can.VarForeign h1 n1 _)) [A.At _ (Can.Lambda [A.At _ (Can.PVar x)] handler)]))
+      | Name.toChars op == "|>" && isHome wireHome h1 && Name.toChars n1 == "andThenDecode" ->
+          do  validator <- validation x handler
+              body <- lowerUnionDec pfx inner
+              Just (BValidate validator body)
+    _ -> Nothing
+  where
+    resultHome = ("elm", "core", "Result")
+
+    validation x (A.At _ handler) =
+      case handler of
+        Can.Case (A.At _ (Can.Call (A.At _ (Can.VarTopLevel _ vname)) [A.At _ (Can.VarLocal x1)])) [okBranch, errBranch]
+          | x1 == x && List.isPrefixOf Helpers.w3ValidatePrefix (Name.toChars vname) ->
+              do  okBody <- ctorBranch "Ok" okBranch (\p -> case p of { Can.PAnything -> Just (); _ -> Nothing })
+                  case succeedArg okBody of
+                    Just (A.At _ (Can.VarLocal x2)) | x2 == x -> Just ()
+                    _ -> Nothing
+                  errBody <- ctorBranch "Err" errBranch (\p -> case p of { Can.PVar n -> Just n; _ -> Nothing })
+                  errVar <- ctorBranchVar errBranch
+                  case errBody of
+                    A.At _ (Can.Let (Can.Def (A.At _ under) [] (A.At _ (Can.Call (A.At _ (Can.VarForeign h2 n2 _)) [A.At _ (Can.VarLocal e1)]))) (A.At _ (Can.VarForeign h3 n3 _)))
+                      | Name.toChars under == "_" && e1 == errVar
+                          && isHome wireHome h2 && Name.toChars n2 == "debug"
+                          && isHome wireHome h3 && Name.toChars n3 == "failDecode" ->
+                          Just (Name.toChars vname)
+                    _ -> Nothing
+        _ -> Nothing
+
+    -- `Ctor <arg>` of elm/core's Result, with the argument pattern accepted by `argOk`.
+    ctorBranch ctor (Can.CaseBranch (A.At _ pat) body) argOk =
+      case pat of
+        Can.PCtor { Can._p_home = home, Can._p_name = name, Can._p_args = [Can.PatternCtorArg _ _ (A.At _ p)] }
+          | isHome resultHome home && Name.toChars name == ctor ->
+              do  _ <- argOk p
+                  Just body
+        _ -> Nothing
+
+    ctorBranchVar (Can.CaseBranch (A.At _ pat) _) =
+      case pat of
+        Can.PCtor { Can._p_args = [Can.PatternCtorArg _ _ (A.At _ (Can.PVar n))] } -> Just n
+        _ -> Nothing
 
 
 -- RENDERING (JS generation time)
@@ -630,6 +767,7 @@ data Ctx =
     { _mode :: Mode.Mode
     , _direct :: Map.Map Key Codec  -- the types being replaced
     , _key :: Key                   -- the type being rendered
+    , _fam :: Fam                   -- the decoder family being rendered (decoders only)
     }
 
 
@@ -651,26 +789,45 @@ replaceCodecs mode graph =
         Map.empty
         graph
 
+    -- The non-validating decoder chain (w3_unsafe_decode_<T>), stored on its own.
+    unsafeIrs :: Map.Map Key Codec
+    unsafeIrs =
+      Map.foldrWithKey
+        (\(Opt.Global home name) node acc ->
+            case (List.stripPrefix "w3_iru_" (Name.toChars name), node) of
+              (Just typeName, Opt.Kernel [K.JS bs] _) ->
+                case reads (BS8.unpack bs) of
+                  [(codec, "")] -> Map.insert (homeOf home, typeName) codec acc
+                  _ -> acc
+              _ -> acc
+        )
+        Map.empty
+        graph
+
     encoders = fixReplaceable graph "w3_encode_" (Map.mapMaybe (\(IR e _) -> e) irs)
-    decoders = fixReplaceable graph "w3_decode_" (Map.mapMaybe (\(IR _ d) -> d) irs)
+    decoders = fixReplaceable graph (_famElm validatingFam) (Map.mapMaybe (\(IR _ d) -> d) irs)
+    unsafeDecoders = fixReplaceable graph (_famElm unsafeFam) unsafeIrs
 
     withEncoders =
       Map.foldrWithKey
         (\key codec acc ->
-            let (js, deps) = renderEncoderNode (Ctx mode encoders key) codec in
+            let (js, deps) = renderEncoderNode (Ctx mode encoders key validatingFam) codec in
             Map.insert (codecGlobal "w3_encode_" key) (Opt.Kernel [K.JS js] (Set.insert runtimeGlobal deps)) acc
         )
         graph
         encoders
 
-    withDecoders =
+    renderDecoders fam direct acc0 =
       Map.foldrWithKey
         (\key codec acc ->
-            let (js, deps) = renderDecoderNode (Ctx mode decoders key) codec in
-            Map.insert (codecGlobal "w3_decode_" key) (Opt.Kernel [K.JS js] (Set.insert runtimeGlobal deps)) acc
+            let (js, deps) = renderDecoderNode (Ctx mode direct key fam) codec in
+            Map.insert (codecGlobal (_famElm fam) key) (Opt.Kernel [K.JS js] (Set.insert runtimeGlobal deps)) acc
         )
-        withEncoders
-        decoders
+        acc0
+        direct
+
+    withDecoders =
+      renderDecoders unsafeFam unsafeDecoders (renderDecoders validatingFam decoders withEncoders)
 
     -- Lamdera.Wire3.bytesEncode (an alias of Bytes.Encode.encode) becomes the runtime's
     -- _W3_bytesEncode, which hands a direct encoder's fresh result over without copying
@@ -691,23 +848,25 @@ replaceCodecs mode graph =
       [ Name.toChars m ++ "." ++ n
       | (Opt.Global home@(ModuleName.Canonical _ m) name, _) <- Map.toList graph
       , let n = Name.toChars name
-      , (isEnc, t) <-
-          case (List.stripPrefix "w3_encode_" n, List.stripPrefix "w3_decode_" n) of
-            (Just t, _) -> [(True, t)]
-            (_, Just t) -> [(False, t)]
+      , (direct, t) <-
+          case (List.stripPrefix "w3_encode_" n, List.stripPrefix (_famElm validatingFam) n, List.stripPrefix (_famElm unsafeFam) n) of
+            (Just t, _, _) -> [(Map.keysSet encoders, t)]
+            (_, Just t, _) -> [(Map.keysSet decoders, t)]
+            (_, _, Just t) -> [(Map.keysSet unsafeDecoders, t)]
             _ -> []
-      , not (Map.member (homeOf home, t) (if isEnc then encoders else decoders))
+      , not (Set.member (homeOf home, t) direct)
       ]
     report =
       if debugEnabled
         then unsafePerformIO $ do
-          putStrLn ("[wire3-direct] rendered " ++ show (Map.size encoders) ++ " encoders and "
-            ++ show (Map.size decoders) ++ " decoders direct; " ++ show (length fallbacks)
+          putStrLn ("[wire3-direct] rendered " ++ show (Map.size encoders) ++ " encoders, "
+            ++ show (Map.size decoders) ++ " decoders and " ++ show (Map.size unsafeDecoders)
+            ++ " unsafe decoders direct; " ++ show (length fallbacks)
             ++ " codecs fall back to Elm" ++ (if null fallbacks then "" else ": " ++ List.intercalate ", " (take 50 fallbacks)))
           return ()
         else ()
   in
-  if Map.null encoders && Map.null decoders then graph else
+  if Map.null encoders && Map.null decoders && Map.null unsafeDecoders then graph else
   report `seq` Map.insert runtimeGlobal (Opt.Kernel [K.JS (BS.append (BS8.pack (prelude mode)) runtimeJs)] runtimeDeps) withBytesEncode
 
 
@@ -914,9 +1073,12 @@ directArity ctx key =
   fmap (\(Codec ps _) -> length ps) (Map.lookup key (_direct ctx))
 
 
-directEncName, directDecName :: Key -> String
+directEncName :: Key -> String
 directEncName key = globalJs (codecGlobal "w3e_" key)
-directDecName key = globalJs (codecGlobal "w3d_" key)
+
+
+directDecName :: Fam -> Key -> String
+directDecName fam key = globalJs (codecGlobal (_famDirect fam) key)
 
 
 hoistName :: Ctx -> String -> R String
@@ -941,9 +1103,7 @@ renderEncoderNode ctx codec@(Codec params body) =
     wrapper = globalJs (codecGlobal "w3_encode_" key)
     ((stmts, wrapperJs), rs) =
       runR $
-        do  ss <- case body of
-                      BAlias w -> enc ctx env 0 w "v"
-                      BUnion opts width alts -> encUnion ctx env opts width alts "v"
+        do  ss <- encBody body
             wj <- encWrapper ctx codec wrapper pnames
             return (ss, wj)
     js =
@@ -952,6 +1112,13 @@ renderEncoderNode ctx codec@(Codec params body) =
       ++ unlines (indent stmts)
       ++ "}\n"
       ++ wrapperJs
+
+    -- Encoders never validate (the encoder IR never has BValidate).
+    encBody b =
+      case b of
+        BAlias w -> enc ctx env 0 w "v"
+        BUnion opts width alts -> encUnion ctx env opts width alts "v"
+        BValidate _ inner -> encBody inner
   in
   (BS8.pack js, _deps rs)
 
@@ -1221,17 +1388,15 @@ renderDecoderNode ctx codec@(Codec params body) =
     pnames = zipWith (\i _ -> "d" ++ show i) [(0 :: Int)..] params
     env = Map.fromList (zip params pnames)
     dctx = DCtx ctx env pnames
-    wrapper = globalJs (codecGlobal "w3_decode_" key)
+    wrapper = globalJs (codecGlobal (_famElm (_fam ctx)) key)
     ((stmts, wrapperJs), rs) =
       runR $
-        do  ss <- case body of
-                      BAlias w -> do { e <- decE dctx w; return ["return " ++ e ++ ";"] }
-                      BUnion _ width alts -> decUnion dctx width alts
+        do  ss <- decBody dctx body (\e -> "return " ++ e ++ ";")
             wj <- decWrapper ctx codec wrapper pnames
             return (ss, wj)
     js =
       unlines (_hoisted rs)
-      ++ "function " ++ directDecName key ++ "(" ++ List.intercalate ", " pnames ++ ") {\n"
+      ++ "function " ++ directDecName (_fam ctx) key ++ "(" ++ List.intercalate ", " pnames ++ ") {\n"
       ++ unlines (indent stmts)
       ++ "}\n"
       ++ wrapperJs
@@ -1239,11 +1404,53 @@ renderDecoderNode ctx codec@(Codec params body) =
   (BS8.pack js, _deps rs)
 
 
+-- Statements that decode a codec body and hand the value to `k` (which makes the
+-- statement that uses it, e.g. a return).
+decBody :: DCtx -> Body -> (String -> String) -> R [String]
+decBody dc body k =
+  case body of
+    BAlias w ->
+      do  e <- decE dc w
+          return [k e]
+
+    BUnion _ width alts ->
+      decUnion dc width alts k
+
+    -- Wire3.Decoder.wrapWithValidator: the value is decoded completely first (inner
+    -- validated values have been validated by then, as they finished decoding), then
+    -- the validator runs on it. `Ok _` gives the value; `Err msg` logs msg through
+    -- Lamdera.Wire3.debug and fails the decode, like the Elm decoder's
+    -- `let _ = debug msg in failDecode` (a failed decode is a throw in both). Nothing is
+    -- read after the value, so the bytes consumed are the same as without validation.
+    BValidate validator inner ->
+      do  let mode = _mode (_dctx dc)
+              (home, _) = _key (_dctx dc)
+              g = elmGlobal home validator
+              gDebug = elmGlobal wireHome "debug"
+          dep g
+          dep gDebug
+          i <- fresh
+          let v = "w3v" ++ show i
+              r = "w3r" ++ show i
+          ss <-
+            case inner of
+              BUnion _ width alts -> decUnion dc width alts (\e -> v ++ " = " ++ e ++ "; break;")
+              _ -> decBody dc inner (\e -> v ++ " = " ++ e ++ ";")
+          return
+            ( ["var " ++ v ++ ";"]
+              ++ ss
+              ++ [ "var " ++ r ++ " = " ++ globalJs g ++ "(" ++ v ++ ");"
+                 , "if (" ++ r ++ ".$ !== " ++ okTag mode ++ ") { " ++ globalJs gDebug ++ "(" ++ r ++ ".a); throw 0; }"
+                 , k v
+                 ]
+            )
+
+
 decWrapper :: Ctx -> Codec -> String -> [String] -> R String
 decWrapper ctx (Codec params _) wrapper pnames =
   let key = _key ctx in
   if null params then
-    return ("var " ++ wrapper ++ " = _W3_decWrap(" ++ directDecName key ++ ");\n")
+    return ("var " ++ wrapper ++ " = _W3_decWrap(" ++ directDecName (_fam ctx) key ++ ");\n")
   else
     let
       argNames = fmap ("a" ++) (fmap (drop 1) pnames)
@@ -1253,7 +1460,7 @@ decWrapper ctx (Codec params _) wrapper pnames =
       conv = List.intercalate ", " (zipWith (\p a -> p ++ " = _W3_toDirectDec(" ++ a ++ ")") pnames argNames)
       inner =
         "function (" ++ lastArg ++ ") { var " ++ conv ++ "; return _W3_decWrap(function () { return "
-        ++ directDecName key ++ "(" ++ List.intercalate ", " pnames ++ "); }); }"
+        ++ directDecName (_fam ctx) key ++ "(" ++ List.intercalate ", " pnames ++ "); }); }"
     in
     return ("var " ++ wrapper ++ " = " ++ opens ++ inner ++ closes ++ ";\n")
 
@@ -1273,7 +1480,7 @@ data DCtx =
 -- scope. A closed `w` gets a helper with no parameters at all.
 decHelper :: DCtx -> W -> [String] -> R String
 decHelper dc w body =
-  do  name <- hoistName (_dctx dc) "w3dh_"
+  do  name <- hoistName (_dctx dc) (_famHelper (_fam (_dctx dc)))
       let used = freeTvars w
           ps = List.intercalate ", " [ n | (tv, n) <- Map.toList (_denv dc), Set.member tv used ]
       hoist ("function " ++ name ++ "(" ++ ps ++ ") {\n" ++ unlines (indent body) ++ "}")
@@ -1409,11 +1616,11 @@ decE dc w =
       if directArity ctx key == Just (length args)
         then
           do  fns <- traverse (decFnExpr dc) args
-              dep (codecGlobal "w3_decode_" key)
-              return (directDecName key ++ "(" ++ List.intercalate ", " fns ++ ")")
+              dep (codecGlobal (_famElm (_fam ctx)) key)
+              return (directDecName (_fam ctx) key ++ "(" ++ List.intercalate ", " fns ++ ")")
         else
           do  elmArgs <- traverse (elmDecExpr dc) args
-              let g = codecGlobal "w3_decode_" key
+              let g = codecGlobal (_famElm (_fam ctx)) key
               dep g
               return ("_W3_elmDec(" ++ aCall (globalJs g) elmArgs ++ ")")
 
@@ -1453,14 +1660,14 @@ decFnExpr dc w =
   case w of
     WTVar a -> return (lookupEnv (_denv dc) a)
     WRef home t [] | directArity ctx (home, t) == Just 0 ->
-      do  dep (codecGlobal "w3_decode_" (home, t))
-          return (directDecName (home, t))
+      do  dep (codecGlobal (_famElm (_fam ctx)) (home, t))
+          return (directDecName (_fam ctx) (home, t))
     _ ->
       do  e <- decE dc w
           let fn = "function () { return " ++ e ++ "; }"
           if isClosed w
             then
-              do  name <- hoistName ctx "w3da_"
+              do  name <- hoistName ctx (_famArg (_fam ctx))
                   hoist ("var " ++ name ++ " = " ++ fn ++ ";")
                   return name
             else return fn
@@ -1470,7 +1677,7 @@ elmDecExpr :: DCtx -> W -> R String
 elmDecExpr dc w =
   case w of
     WRef home t [] ->
-      do  let g = codecGlobal "w3_decode_" (home, t)
+      do  let g = codecGlobal (_famElm (_fam (_dctx dc))) (home, t)
           dep g
           return (globalJs g)
     _ ->
@@ -1478,8 +1685,10 @@ elmDecExpr dc w =
           return ("_W3_decWrap(" ++ fn ++ ")")
 
 
-decUnion :: DCtx -> Int -> [Alt] -> R [String]
-decUnion dc width alts =
+-- `k` makes the statement that uses a decoded value (a return, or an assignment and a
+-- break).
+decUnion :: DCtx -> Int -> [Alt] -> (String -> String) -> R [String]
+decUnion dc width alts k =
   let
     (home, _) = _key (_dctx dc)
     readTag = if width == 1 then "_W3_ru8()" else "_W3_ru16()"
@@ -1495,7 +1704,7 @@ decUnion dc width alts =
                           [x] -> globalJs g ++ "(" ++ x ++ ")"
                           _ -> directGlobalJs g ++ "(" ++ List.intercalate ", " args ++ ")"
                   dep g
-                  return ("  case " ++ show tag ++ ": return " ++ ctorExpr ++ ";")
+                  return ("  case " ++ show tag ++ ": " ++ k ctorExpr)
           )
           (zip [(0 :: Int)..] alts)
       return (["switch (" ++ readTag ++ ") {"] ++ branches ++ ["  default: throw 0;", "}"])

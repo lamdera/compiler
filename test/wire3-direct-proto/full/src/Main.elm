@@ -13,6 +13,7 @@ import SeqSet
 import Set
 import Time
 import Types exposing (..)
+import Validated exposing (..)
 
 
 port out : Int -> Cmd msg
@@ -150,6 +151,114 @@ edge k =
     }
 
 
+-- VALIDATED TYPES (Validated.elm). `vgen n` makes a VModel that passes every validator,
+-- except when n is a multiple of 4: then one or two of the thirteen rejection sources
+-- below (`bad k`) are switched on, at various nesting depths, so the oracles see both
+-- outcomes and every kind of rejection.
+
+
+vtree : (Int -> Bool) -> Int -> Int -> VTree
+vtree bad d i =
+    if d == 0 then
+        VLeaf (if bad 1 && modBy 3 i == 0 then -5 else modBy 1000 i)
+
+    else
+        VNode (vtree bad (d - 1) (i * 2)) (if bad 2 && d == 1 then 13 else if i == 13 then 14 else i) (vtree bad (d - 1) (i * 2 + 1))
+
+
+vtreeBigLeaf : Int -> VTree
+vtreeBigLeaf i =
+    VNode (VNode (VLeaf 5000) 2 (VLeaf 1)) i (VLeaf 0)
+
+
+vrose : (Int -> Bool) -> Int -> Int -> VRose Int
+vrose bad d i =
+    VRose i (if d == 0 then [] else List.map (vrose bad (d - 1)) (List.range i (i + modBy 4 (i + d) - 1 + (if bad 4 && d == 1 then 4 else 0))))
+
+
+vping : (Int -> Bool) -> Int -> Int -> VPing
+vping bad d i =
+    VPing (if i == 7 then 8 else i)
+        (if d == 0 then Nothing else Just (VPong (if bad 8 && d == 1 then "bad" else "p" ++ String.fromInt i) (List.map (vping bad (d - 1)) (List.range 0 (modBy 3 i - 1)))))
+
+
+vrec : (Int -> Bool) -> Int -> Int -> VRec
+vrec bad d i =
+    if d == 0 then
+        VRecNone
+
+    else
+        VRec { name = String.repeat (1 + modBy 8 i + (if bad 10 && d == 1 then 8 else 0)) "n", scores = Dict.fromList (List.map (\j -> ( String.fromInt j, Positive j )) (List.range 0 (modBy 4 i))), child = Just (vrec bad (d - 1) (i + 1)) }
+
+
+vgen : Int -> VModel
+vgen n =
+    let
+        range k = List.range 0 (k - 1)
+        m = modBy 97 n
+        pick = modBy 13 (n // 4)
+        bad k = modBy 4 n == 0 && (pick == k || (modBy 8 n == 0 && modBy 13 (pick + 5) == k))
+    in
+    { positives = range (modBy 9 n) |> List.map (\i -> Positive (if bad 0 && i == modBy 9 n - 1 then -1 else i * n))
+    , tree =
+        if bad 3 then
+            VNode (vtree bad 2 n) 1 (vtreeBigLeaf n)
+
+        else
+            vtree bad (min 6 (1 + modBy 6 n)) n
+    , roses = range (1 + modBy 4 n) |> List.map (\i -> ( "r" ++ String.fromInt i, vrose bad (1 + modBy 3 (n + i)) (i + n) )) |> Dict.fromList
+    , rosePair = VRose ( Positive m, "x" ) [ VRose ( Positive (m + 1), "y" ) [] ]
+    , pair = if modBy 2 n == 0 && not (bad 5) then Nothing else Just (VPair "a" (Positive m) (Just (VPair "b" (Positive (if bad 5 then -m - 1 else m)) (Just VPairEnd))))
+    , enums = range (1 + modBy 5 n) |> List.map (\i -> if bad 6 && i == modBy 5 n then VC else if modBy 2 i == 0 then VA else VB)
+    , box = VBox (range (modBy 5 n) |> List.map (\i -> Positive (if bad 7 then 400 else modBy 50 (i * m))))
+    , ping =
+        if bad 12 then
+            VPing 1 (Just (VPong "q" [ vping bad 1 n, VPing 7 Nothing ]))
+
+        else
+            vping bad (1 + modBy 3 n) n
+    , phantom = VPhantom (if bad 9 then 99 else if n == 99 then 100 else n)
+    , rec = vrec bad (1 + modBy 3 n) n
+    , unvalidated = Unvalidated (range (modBy 3 n) |> List.map (\i -> Positive (if bad 11 then i - 1 else i))) (Just (if modBy 2 n == 0 then VA else VB))
+    , keyed = range (modBy 4 n) |> List.map (\i -> ( i * 3 - 4, [ Nothing, Just (vtree bad (modBy 3 i) (n + i)) ] )) |> Dict.fromList
+    }
+
+
+vencode : VModel -> Bytes
+vencode m =
+    W.bytesEncode (w3_encode_VModel m)
+
+
+vdecode : Bytes -> Maybe VModel
+vdecode b =
+    W.bytesDecode w3_decode_VModel b
+
+
+vdecodeUnsafe : Bytes -> Maybe VModel
+vdecodeUnsafe b =
+    W.bytesDecode w3_unsafe_decode_VModel b
+
+
+vdecoder : W.Decoder VModel
+vdecoder =
+    w3_decode_VModel
+
+
+vdecoderUnsafe : W.Decoder VModel
+vdecoderUnsafe =
+    w3_unsafe_decode_VModel
+
+
+decodeVTree : Bytes -> Maybe VTree
+decodeVTree b =
+    W.bytesDecode w3_decode_VTree b
+
+
+decodeVTreeUnsafe : Bytes -> Maybe VTree
+decodeVTreeUnsafe b =
+    W.bytesDecode w3_unsafe_decode_VTree b
+
+
 encode : Model -> Bytes
 encode m =
     W.bytesEncode (w3_encode_Model m)
@@ -217,7 +326,7 @@ isJust m =
 
 depthProbes : List ( String, Bytes -> Bool )
 depthProbes =
-    [ ( "Fat3", decodeFat3 >> isJust ), ( "Fat", decodeFat >> isJust ), ( "Tree", decodeTree >> isJust ), ( "Big", decodeBig >> isJust ) ]
+    [ ( "Fat3", decodeFat3 >> isJust ), ( "Fat", decodeFat >> isJust ), ( "Tree", decodeTree >> isJust ), ( "Big", decodeBig >> isJust ), ( "VTree", decodeVTree >> isJust ), ( "VTreeUnsafe", decodeVTreeUnsafe >> isJust ) ]
 
 
 type alias Api =
@@ -231,13 +340,19 @@ type alias Api =
     , depth : List ( String, Bytes -> Bool )
     , decodeSNaN : Bytes -> Maybe SNaN
     , encodeSNaN : SNaN -> Bytes
+    , vgen : Int -> VModel
+    , vencode : VModel -> Bytes
+    , vdecode : Bytes -> Maybe VModel
+    , vdecodeUnsafe : Bytes -> Maybe VModel
+    , vdecoder : W.Decoder VModel
+    , vdecoderUnsafe : W.Decoder VModel
     }
 
 
 main : Program () Api ()
 main =
     Platform.worker
-        { init = \_ -> ( { gen = gen, edge = edge, encode = encode, decode = decode, encodeHasFn = encodeHasFn, decodeHasFn = decodeHasFn, hasFns = hasFns, depth = depthProbes, decodeSNaN = decodeSNaN, encodeSNaN = encodeSNaN }, out 0 )
+        { init = \_ -> ( { gen = gen, edge = edge, encode = encode, decode = decode, encodeHasFn = encodeHasFn, decodeHasFn = decodeHasFn, hasFns = hasFns, depth = depthProbes, decodeSNaN = decodeSNaN, encodeSNaN = encodeSNaN, vgen = vgen, vencode = vencode, vdecode = vdecode, vdecodeUnsafe = vdecodeUnsafe, vdecoder = vdecoder, vdecoderUnsafe = vdecoderUnsafe }, out 0 )
         , update = \_ m -> ( m, Cmd.none )
         , subscriptions = \_ -> Sub.none
         }
