@@ -30,6 +30,7 @@ import Dict exposing (Dict)
 import Other exposing (..)
 import Random
 import SeqDict exposing (SeqDict)
+import Validated exposing (..)
 import SeqSet exposing (SeqSet)
 import Set exposing (Set)
 import Time
@@ -252,6 +253,24 @@ type alias DB a = { db : Dict String a, seed : Int }
 type alias TDB = DB (List (Maybe Color))
 
 
+-- Validated types (app/src/Validated.elm, the same module as full/src/Validated.elm).
+type alias TVPositive = Positive
+type alias TVTree = VTree
+type alias TVRose = VRose Int
+type alias TVRosePos = VRose (Maybe Positive)
+type alias TVPair = VPair String Positive
+type alias TVEnum = VEnum
+type alias TVEnums = List VEnum
+type alias TVBox = VBox
+type alias TVPing = VPing
+type alias TVPong = VPong
+type alias TVPhantom = VPhantom String
+type alias TVRec = VRec
+type alias TVUnvalidated = Unvalidated
+type alias TVModel = VModel
+type alias TVDict = Dict String (List (Maybe VTree))
+
+
 ''' + big_union('Big', 300, True) + '\n\n' + big_union('Enum300', 300, False) + '\n\n' + big_union('Enum256', 256, False) + '\n\n' + big_union('Enum255', 255, False) + r'''
 
 type alias TAll =
@@ -274,6 +293,18 @@ prng = random.Random(int(os.environ.get('PSEED', '1')))
 NP = int(os.environ.get('NPARAMS', '14'))
 TV = ['a', 'b', 'c']
 ptypes = []   # (name, tvars)
+pctors = []   # (name, tvars, [(ctor, arity)])
+
+def ctor_arity(c):
+    # a generated ctor is `Name (arg) (arg) ...`: count the top-level parenthesised args
+    depth, n = 0, 0
+    for ch in c:
+        if ch == '(':
+            if depth == 0: n += 1
+            depth += 1
+        elif ch == ')':
+            depth -= 1
+    return n
 defs = []
 
 def closed_leaf():
@@ -335,6 +366,7 @@ while i < NP:
         if (selfr or mutual) and nctor == 1:
             ctors.append('%sEnd' % nm)
         defs.append('type %s%s\n    = %s\n' % (nm, ''.join(' ' + t for t in tvars), '\n    | '.join(ctors)))
+        pctors.append((nm, tvars, [(c.split(' ')[0], ctor_arity(c)) for c in ctors]))
     for nm in names_:
         ptypes.append((nm, tvars))
     i += len(names_)
@@ -345,6 +377,24 @@ for name, tv in ptypes:
         args = ' '.join('(%s)' % texpr([], prng.choice([0, 1, 2]), 99, False, None) for _ in tv)
         insts.append(('I%s_%d' % (name, j), '%s %s' % (name, args) if tv else name))
         if not tv: break
+# Validators (w3_validate_<P>) on about two thirds of the generated types: accept
+# everything, or reject one constructor (never the first, so the type still has valid
+# values). Their own RNG, so the generated types are the same with and without them.
+vrng = random.Random(int(os.environ.get('PSEED', '1')) * 7919 + 17)
+pvalidated = []
+for nm, tv, ctors_ in pctors:
+    r = vrng.random()
+    if r < 0.33:
+        continue
+    sig = '%s%s' % (nm, ''.join(' ' + t for t in tv))
+    if r < 0.6 or len(ctors_) < 2:
+        body = '    Ok ()\n'
+    else:
+        k = vrng.randrange(1, len(ctors_))
+        cname, nargs = ctors_[k]
+        body = '    case v of\n        %s%s ->\n            Err "%s rejected"\n\n        _ ->\n            Ok ()\n' % (cname, ' _' * nargs, cname)
+    defs.append('w3_validate_%s : %s -> Result String ()\nw3_validate_%s v =\n%s' % (nm, sig, nm, body))
+    pvalidated.append(nm)
 defs.append('\n'.join('type alias %s = %s' % (a, t) for a, t in insts) + '\n')
 # the same types at several args in one model
 defs.append('type alias PModel =\n    { ' + '\n    , '.join('m%d : %s' % (k, t) for k, (a, t) in enumerate(insts)) + '\n    }\n')
@@ -363,7 +413,7 @@ if excl:
     names = [n for n in names if n not in excl]
 open(os.path.join(src, 'Types.elm'), 'w').write(types)
 
-main = ['port module Main exposing (..)', '', 'import Lamdera.Wire3 as W', 'import Bytes exposing (Bytes)', 'import Bytes.Encode', 'import Bytes.Decode', 'import Array', 'import Dict', 'import Set', 'import SeqDict', 'import Other exposing (..)', 'import Types exposing (..)', 'import Params exposing (..)', '', '', 'port out : Int -> Cmd msg', '']
+main = ['port module Main exposing (..)', '', 'import Lamdera.Wire3 as W', 'import Bytes exposing (Bytes)', 'import Bytes.Encode', 'import Bytes.Decode', 'import Array', 'import Dict', 'import Set', 'import SeqDict', 'import Other exposing (..)', 'import Types exposing (..)', 'import Params exposing (..)', 'import Validated exposing (..)', '', '', 'port out : Int -> Cmd msg', '']
 main.append('''readBytesPast : Int -> Bytes -> Maybe Int
 readBytesPast n b =
     Bytes.Decode.decode (Bytes.Decode.bytes n) b |> Maybe.map Bytes.width
@@ -383,11 +433,30 @@ s_TAll =
 
 
 ''')
+main.append('''s_TVModel : TVModel
+s_TVModel =
+    { positives = [ Positive 1, Positive 0, Positive 300 ]
+    , tree = VNode (VNode (VLeaf 3) 12 (VLeaf 900)) 14 (VLeaf 0)
+    , roses = Dict.fromList [ ( "a", VRose 1 [ VRose 2 [], VRose 3 [ VRose 4 [] ] ] ), ( "b", VRose 5 [] ) ]
+    , rosePair = VRose ( Positive 2, "p" ) [ VRose ( Positive 3, "q" ) [] ]
+    , pair = Just (VPair "a" (Positive 4) (Just VPairEnd))
+    , enums = [ VA, VB, VA ]
+    , box = VBox [ Positive 10, Positive 20 ]
+    , ping = VPing 1 (Just (VPong "x" [ VPing 2 Nothing, VPing 3 (Just (VPong "y" [])) ]))
+    , phantom = VPhantom 5
+    , rec = VRec { name = "nm", scores = Dict.fromList [ ( "s", Positive 6 ) ], child = Just VRecNone }
+    , unvalidated = Unvalidated [ Positive 7 ] (Just VB)
+    , keyed = Dict.fromList [ ( -1, [ Nothing, Just (VLeaf 8) ] ), ( 2, [] ) ]
+    }
+
+
+''')
 for n in names:
     main.append('e_%s : %s -> Bytes\ne_%s v =\n    W.bytesEncode (w3_encode_%s v)\n\n' % (n, n, n, n))
     main.append('d_%s : W.Decoder %s\nd_%s =\n    w3_decode_%s\n\n' % (n, n, n, n))
-main.append('type alias Api =\n    { s_TAll : TAll\n    , readBytesPast : Int -> Bytes -> Maybe Int\n    , ' + '\n    , '.join('e_%s : %s -> Bytes, d_%s : W.Decoder %s' % (n, n, n, n) for n in names) + '\n    }\n\n\napi : Api\n')
-main.append('api =\n    { s_TAll = s_TAll\n    , readBytesPast = readBytesPast\n    , ' + '\n    , '.join('e_%s = e_%s, d_%s = d_%s' % (n, n, n, n) for n in names) + '\n    }\n\n')
+    main.append('u_%s : W.Decoder %s\nu_%s =\n    w3_unsafe_decode_%s\n\n' % (n, n, n, n))
+main.append('type alias Api =\n    { s_TAll : TAll\n    , s_TVModel : TVModel\n    , readBytesPast : Int -> Bytes -> Maybe Int\n    , ' + '\n    , '.join('e_%s : %s -> Bytes, d_%s : W.Decoder %s, u_%s : W.Decoder %s' % (n, n, n, n, n, n) for n in names) + '\n    }\n\n\napi : Api\n')
+main.append('api =\n    { s_TAll = s_TAll\n    , s_TVModel = s_TVModel\n    , readBytesPast = readBytesPast\n    , ' + '\n    , '.join('e_%s = e_%s, d_%s = d_%s, u_%s = u_%s' % (n, n, n, n, n, n) for n in names) + '\n    }\n\n')
 main.append('main : Program () Api ()\nmain =\n    Platform.worker\n        { init = \\_ -> ( api, out 0 )\n        , update = \\_ m -> ( m, Cmd.none )\n        , subscriptions = \\_ -> Sub.none\n        }\n')
 open(os.path.join(src, 'Main.elm'), 'w').write('\n'.join(main))
 open(os.path.join(here, 'names.json'), 'w').write(__import__('json').dumps(names))

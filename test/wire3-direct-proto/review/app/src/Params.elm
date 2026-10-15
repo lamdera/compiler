@@ -76,6 +76,76 @@ type P13 a
     | P13End
 
 
+w3_validate_P0 : P0 a -> Result String ()
+w3_validate_P0 v =
+    Ok ()
+
+
+w3_validate_P1 : P1 a b -> Result String ()
+w3_validate_P1 v =
+    Ok ()
+
+
+w3_validate_P2 : P2 a b -> Result String ()
+w3_validate_P2 v =
+    case v of
+        P2C1 _ _ _ ->
+            Err "P2C1 rejected"
+
+        _ ->
+            Ok ()
+
+
+w3_validate_P3 : P3 -> Result String ()
+w3_validate_P3 v =
+    Ok ()
+
+
+w3_validate_P4 : P4 a b -> Result String ()
+w3_validate_P4 v =
+    case v of
+        P4C1 _ _ _ ->
+            Err "P4C1 rejected"
+
+        _ ->
+            Ok ()
+
+
+w3_validate_P6 : P6 a b -> Result String ()
+w3_validate_P6 v =
+    Ok ()
+
+
+w3_validate_P8 : P8 a b -> Result String ()
+w3_validate_P8 v =
+    case v of
+        P8End ->
+            Err "P8End rejected"
+
+        _ ->
+            Ok ()
+
+
+w3_validate_P10 : P10 a -> Result String ()
+w3_validate_P10 v =
+    case v of
+        P10C1 _ ->
+            Err "P10C1 rejected"
+
+        _ ->
+            Ok ()
+
+
+w3_validate_P11 : P11 a b -> Result String ()
+w3_validate_P11 v =
+    Ok ()
+
+
+w3_validate_P12 : P12 a b -> Result String ()
+w3_validate_P12 v =
+    Ok ()
+
+
 type alias IP0_0 = P0 (List (Order))
 type alias IP0_1 = P0 (Order)
 type alias IP0_2 = P0 (Result (Float) (Two (Order) (Char)))

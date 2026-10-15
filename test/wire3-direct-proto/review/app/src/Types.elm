@@ -6,6 +6,7 @@ import Dict exposing (Dict)
 import Other exposing (..)
 import Random
 import SeqDict exposing (SeqDict)
+import Validated exposing (..)
 import SeqSet exposing (SeqSet)
 import Set exposing (Set)
 import Time
@@ -225,6 +226,24 @@ type alias Deep3 a = Maybe (Maybe (Maybe a))
 type alias TDeep3 = Box (Deep3 (Wrap Bool))
 type alias DB a = { db : Dict String a, seed : Int }
 type alias TDB = DB (List (Maybe Color))
+
+
+-- Validated types (app/src/Validated.elm, the same module as full/src/Validated.elm).
+type alias TVPositive = Positive
+type alias TVTree = VTree
+type alias TVRose = VRose Int
+type alias TVRosePos = VRose (Maybe Positive)
+type alias TVPair = VPair String Positive
+type alias TVEnum = VEnum
+type alias TVEnums = List VEnum
+type alias TVBox = VBox
+type alias TVPing = VPing
+type alias TVPong = VPong
+type alias TVPhantom = VPhantom String
+type alias TVRec = VRec
+type alias TVUnvalidated = Unvalidated
+type alias TVModel = VModel
+type alias TVDict = Dict String (List (Maybe VTree))
 
 
 type Big

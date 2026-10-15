@@ -194,11 +194,24 @@ function hasSNaN(v, seen = new Set()) {
 const hex = u => NodeBuffer.from(u).toString('hex');
 const show = r => r.ok ? `Just off=${r.off}` : `Nothing (${r.err && r.err.constructor ? r.err.constructor.name : r.err})`;
 
+// Run f with X's validator-call trace (build.sh wraps every w3_validate_*) and
+// console.log (a rejection logs its message through Lamdera.Wire3.debug) captured.
+const origLog = console.log;
+function traced(X, f) {
+  X.W3VT.length = 0;
+  const logs = [];
+  console.log = (...a) => logs.push(a.map(String).join(' '));
+  try { return { r: f(), trace: X.W3VT.slice(), logs }; } finally { console.log = origLog; }
+}
+let vcalls = 0, vrejects = 0;
+
 for (const mode of modes) {
   const dev = mode === 'dev';
+  vcalls = 0; vrejects = 0;
   const B = load(`${__dirname}/${process.env.BUILD || "build"}/base-${mode}-x.js`, false);
   const D = load(`${__dirname}/${process.env.BUILD || "build"}/direct-${mode}-x.js`, true);
   if (!D.W3R_direct) throw new Error('direct bundle has no direct runtime');
+  if (!(B.W3VN > 10 && D.W3VN === B.W3VN)) throw new Error(`validators not wrapped: ${B.W3VN} / ${D.W3VN}`);
   const rnd = mulberry32(SEED * 7919 + (dev ? 1 : 0));
   const stats = [];
   const pools = {};
@@ -215,7 +228,22 @@ for (const mode of modes) {
       let dv;
       if (rnd() < 0.2) { const big = new Uint8Array(u.length + 13); big.set(u, 5); for (let i = 0; i < 5; i++) big[i] = 0xAB; for (let i = u.length + 5; i < big.length; i++) big[i] = (i * 37) & 255; dv = new DataView(big.buffer, 5, u.length); }
       else dv = new DataView(new Uint8Array(u).buffer);
-      const rb = runDec(b.d, dev, dv), rd = runDec(d.d, dev, dv);
+      // the non-validating decoder (w3_unsafe_decode_): same outcome, offset and value,
+      // and it never runs a validator
+      {
+        const ub = traced(B, () => runDec(b.u, dev, dv)), ud = traced(D, () => runDec(d.u, dev, dv));
+        if (ub.r.ok !== ud.r.ok) return fail(`${mode} ${name} unsafe decode outcome`, `${origin} bytes=${hex(u)} elm=${show(ub.r)} direct=${show(ud.r)}`);
+        if (ub.r.ok && ub.r.off !== ud.r.off) return fail(`${mode} ${name} unsafe decode offset`, `${origin} bytes=${hex(u)} elm=${ub.r.off} direct=${ud.r.off}`);
+        if (ub.r.ok && !same(ub.r.v, ud.r.v)) return fail(`${mode} ${name} unsafe decode value`, `${origin} bytes=${hex(u)}`);
+        if (ub.trace.length || ud.trace.length || ub.logs.length || ud.logs.length) return fail(`${mode} ${name} unsafe decode ran validators`, `${origin} bytes=${hex(u)}`);
+      }
+      // the validating decoder (w3_decode_): also the same validator calls (validator,
+      // argument, result) in the same order, and the same messages logged on rejection
+      const tb = traced(B, () => runDec(b.d, dev, dv)), td = traced(D, () => runDec(d.d, dev, dv));
+      const rb = tb.r, rd = td.r;
+      vcalls += tb.trace.length;
+      if (tb.logs.length) vrejects++;
+      if (!same(tb.trace, td.trace) || !same(tb.logs, td.logs)) return fail(`${mode} ${name} validator calls`, `${origin} bytes=${hex(u)} elm=${JSON.stringify(tb.trace.map((t) => t[0]))} ${JSON.stringify(tb.logs)} direct=${JSON.stringify(td.trace.map((t) => t[0]))} ${JSON.stringify(td.logs)}`);
       if (rb.ok !== rd.ok) return fail(`${mode} ${name} decode outcome`, `${origin} bytes=${hex(u)} elm=${show(rb)} direct=${show(rd)}`);
       if (!rb.ok) return;
       justs++;
@@ -276,6 +304,7 @@ for (const mode of modes) {
     stats.push(`${name}:${justs}/${n}`);
   }
   console.log(`${mode}: Just/total per type:`, stats.join(' '));
+  console.log(`${mode}: validator calls ${vcalls}, validating decodes rejected by a validator ${vrejects}`);
 }
 console.log(failures === 0 ? `NO DIVERGENCES (${modes.join(',')}, iter=${ITER}, seed=${SEED})` : `${failures} divergences: ${JSON.stringify(failuresByKind)}`);
 process.exit(failures ? 1 : 0);
