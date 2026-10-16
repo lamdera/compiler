@@ -9,6 +9,11 @@ module Extra.Data.Binary.Get exposing
     , getWord16
     , getWord32
     , getWord8
+    , getWord16LE
+    , getWord32LE
+    , getInt64LE
+    , getWord64LE
+    , getUtf8Char
     , liftM2
     , liftM3
     , liftM4
@@ -18,6 +23,7 @@ module Extra.Data.Binary.Get exposing
     , runGetOrFail
     )
 
+import Bitwise
 import Bytes
 import Bytes.Decode
 import Extra.Class.Applicative as Applicative
@@ -83,6 +89,59 @@ getWord32 remaining =
 getString : Int -> Get String
 getString width remaining =
     checkedOffset "string" remaining width (Bytes.Decode.string width)
+
+
+
+-- @LAMDERA little-endian primitives, for the files the Lamdera compiler (Elm 0.19.3)
+-- writes: its Bytes.Encode format is little-endian, where Data.Binary was big-endian.
+
+
+getWord16LE : Get Int
+getWord16LE remaining =
+    checkedOffset "word16" remaining 2 <| Bytes.Decode.unsignedInt16 Bytes.LE
+
+
+getWord32LE : Get Int
+getWord32LE remaining =
+    checkedOffset "word32" remaining 4 <| Bytes.Decode.unsignedInt32 Bytes.LE
+
+
+{-| A two's complement Int64. Exact only within JavaScript's safe integer range,
+which every count, index and Int literal of a real program is in.
+-}
+getInt64LE : Get Int
+getInt64LE remaining =
+    checkedOffset "int64" remaining 8 <|
+        Bytes.Decode.map2 (\lo hi -> hi * 4294967296 + lo)
+            (Bytes.Decode.unsignedInt32 Bytes.LE)
+            (Bytes.Decode.signedInt32 Bytes.LE)
+
+
+getWord64LE : Get Int
+getWord64LE remaining =
+    checkedOffset "word64" remaining 8 <|
+        Bytes.Decode.map2 (\lo hi -> hi * 4294967296 + lo)
+            (Bytes.Decode.unsignedInt32 Bytes.LE)
+            (Bytes.Decode.unsignedInt32 Bytes.LE)
+
+
+{-| One Char encoded as UTF-8 (1 to 4 bytes), as Bytes.Encode.char writes it.
+-}
+getUtf8Char : Get Char
+getUtf8Char =
+    bind getWord8 <|
+        \w ->
+            if w < 0x80 then
+                return (Char.fromCode w)
+
+            else if w < 0xE0 then
+                fmap (\x -> Char.fromCode (Bitwise.or (Bitwise.shiftLeftBy 6 (w - 0xC0)) (x - 0x80))) getWord8
+
+            else if w < 0xF0 then
+                liftM2 (\x y -> Char.fromCode (Bitwise.or (Bitwise.shiftLeftBy 12 (w - 0xE0)) (Bitwise.or (Bitwise.shiftLeftBy 6 (x - 0x80)) (y - 0x80)))) getWord8 getWord8
+
+            else
+                liftM3 (\x y z -> Char.fromCode (Bitwise.or (Bitwise.shiftLeftBy 18 (w - 0xF0)) (Bitwise.or (Bitwise.shiftLeftBy 12 (x - 0x80)) (Bitwise.or (Bitwise.shiftLeftBy 6 (y - 0x80)) (z - 0x80))))) getWord8 getWord8 getWord8
 
 
 

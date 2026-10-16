@@ -21,6 +21,7 @@ module Builder.Elm.Details exposing
 import Builder.Deps.Registry as Registry
 import Builder.Deps.Solver as Solver
 import Builder.Deps.Website as Website
+import Builder.Elm.CompilerArtifacts as CompilerArtifacts
 import Builder.Elm.Outline as Outline
 import Builder.File as File
 import Builder.Http as Http
@@ -43,6 +44,8 @@ import Compiler.Json.Decode as D
 import Compiler.Parse.Module as Parse
 import Compiler.Reporting.Annotation as A
 import Extra.Data.Binary as B
+import Extra.Data.Binary.Get as BG
+import Extra.Data.Binary.Put as BP
 import Extra.System.Dir as Dir exposing (FilePath)
 import Extra.System.IO as IO
 import Extra.System.MVar as MVar exposing (MVar)
@@ -341,7 +344,7 @@ verifyPkg env time (Outline.PkgOutline pkg _ _ _ exposed direct testDirect elm) 
 
 verifyApp : Env -> File.Time -> Outline.AppOutline -> Task z d e f g h Details
 verifyApp env time ((Outline.AppOutline elmVersion srcDirs direct _ _ _) as outline) =
-  if elmVersion == V.compiler
+  if isCompatibleAppElmVersion elmVersion -- @LAMDERA was: elmVersion == V.compiler
   then
     Task.bind (checkAppDeps outline) <| \stated ->
     Task.bind (verifyConstraints env (Map.map Con.exactly stated)) <| \actual ->
@@ -350,6 +353,16 @@ verifyApp env time ((Outline.AppOutline elmVersion srcDirs direct _ _ _) as outl
       else Task.throw <| Exit.DetailsHandEditedDependencies
   else
     Task.throw <| Exit.DetailsBadElmInAppOutline elmVersion
+
+
+-- @LAMDERA as Elm.Details.isCompatibleAppElmVersion in the compiler: an application
+-- may declare any 0.19.x up to the compiler's own version, so the REPL accepts the
+-- same projects `lamdera make` does (apps still say 0.19.1 or 0.19.2).
+isCompatibleAppElmVersion : V.Version -> Bool
+isCompatibleAppElmVersion elmVersion =
+  case V.toComparable elmVersion of
+    (major, minor, _) ->
+      major == 0 && minor == 19 && V.toComparable elmVersion <= V.toComparable V.compiler
 
 
 checkAppDeps : Outline.AppOutline -> Task z d e f g h (Map.Map Pkg.Comparable V.Version)
@@ -479,15 +492,17 @@ verifyDep (Env _ cache manager _ _) depsMVar solution pkg ((Solver.Details vsn d
   IO.bind (Dir.doesDirectoryExist (Dir.addName (Stuff.package cache pkg vsn) "src")) <| \exists ->
   if exists
     then
-      IO.bind (File.readBinary bArtifactCache (Dir.addName (Stuff.package cache pkg vsn) "artifacts.x.dat")) <| \maybeCache ->
-      case maybeCache of
-        Nothing ->
-          build cache depsMVar pkg details fingerprint Set.empty
+      -- @LAMDERA reuse the artifacts the Lamdera compiler wrote (see compilerArtifactsName),
+      -- in its format, falling back to the ones this worker built itself.
+      IO.bind (File.readBinary bCompilerArtifactCache (Dir.addName (Stuff.package cache pkg vsn) compilerArtifactsName)) <| \maybeCompilerCache ->
+      case maybeCompilerCache of
+        Just (ArtifactCache compilerFingerprints compilerArtifacts) ->
+          if Set.member (toComparable fingerprint) compilerFingerprints
+            then IO.return (Right compilerArtifacts)
+            else verifyOwnDep cache depsMVar pkg details fingerprint
 
-        Just (ArtifactCache fingerprints artifacts) ->
-          if Set.member (toComparable fingerprint) fingerprints
-            then IO.return (Right artifacts)
-            else build cache depsMVar pkg details fingerprint fingerprints
+        Nothing ->
+          verifyOwnDep cache depsMVar pkg details fingerprint
     else
       IO.bind (downloadPackage cache manager pkg vsn) <| \result ->
       case result of
@@ -496,6 +511,53 @@ verifyDep (Env _ cache manager _ _) depsMVar solution pkg ((Solver.Details vsn d
 
         Right () ->
           build cache depsMVar pkg details fingerprint Set.empty
+
+
+
+-- @LAMDERA the worker's own artifacts, in this worker's format
+
+
+verifyOwnDep : Stuff.PackageCache -> MVar (Map.Map Pkg.Comparable (MVar Dep)) -> Pkg.Name -> Solver.Details -> Fingerprint -> IO d e f g h Dep
+verifyOwnDep cache depsMVar pkg ((Solver.Details vsn _) as details) fingerprint =
+  IO.bind (File.readBinary bArtifactCache (Dir.addName (Stuff.package cache pkg vsn) ownArtifactsName)) <| \maybeCache ->
+  case maybeCache of
+    Nothing ->
+      build cache depsMVar pkg details fingerprint Set.empty
+
+    Just (ArtifactCache fingerprints artifacts) ->
+      if Set.member (toComparable fingerprint) fingerprints
+        then IO.return (Right artifacts)
+        else build cache depsMVar pkg details fingerprint fingerprints
+
+
+{-| @LAMDERA The artifacts file the Lamdera compiler writes into each package directory.
+The literal is a placeholder: building the worker (extra/Lamdera/Repl.hs) replaces it
+in the generated JavaScript with Lamdera.Version.artifacts, e.g.
+artifacts.lamdera-1.5.0-0.19.3.dat. It is read with Builder.Elm.CompilerArtifacts,
+never written.
+-}
+compilerArtifactsName : String
+compilerArtifactsName =
+  "artifacts.x.dat"
+
+
+{-| @LAMDERA What this worker writes when it has to compile a package itself. Those
+writes only ever go to the worker's in-memory file system, never to ELM_HOME, and use
+this worker's own (0.19.2) format, so they must not take the compiler's file name.
+-}
+ownArtifactsName : String
+ownArtifactsName =
+  "artifacts.repl.dat"
+
+
+bCompilerArtifactCache : B.Binary ArtifactCache
+bCompilerArtifactCache =
+  { put = \_ -> BP.mempty -- never written, see compilerArtifactsName
+  , get =
+      BG.liftM2 ArtifactCache
+        CompilerArtifacts.getFingerprints
+        (BG.liftM2 Artifacts CompilerArtifacts.getInterfaces CompilerArtifacts.getGlobalGraph)
+  }
 
 
 
@@ -567,7 +629,7 @@ build cache depsMVar pkg (Solver.Details vsn _) f fs =
 
                 Just results ->
                   let
-                    path = Dir.addName (Stuff.package cache pkg vsn) "artifacts.x.dat"
+                    path = Dir.addName (Stuff.package cache pkg vsn) ownArtifactsName -- @LAMDERA was: "artifacts.x.dat"
                     ifaces = gatherInterfaces exposedDict results
                     objects = gatherObjects results
                     artifacts = Artifacts ifaces objects

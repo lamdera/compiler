@@ -1,0 +1,164 @@
+[
+  [
+    "1 + 1",
+    [
+      "2 : number"
+    ]
+  ],
+  [
+    "String.reverse \"abc\"",
+    [
+      "\"cba\" : String"
+    ]
+  ],
+  [
+    "toFloat 3 / 2",
+    [
+      "1.5 : Float"
+    ]
+  ],
+  [
+    "turns 0.5",
+    [
+      "3.141592653589793 : Float"
+    ]
+  ],
+  [
+    "List.sort [3, 1, 2]",
+    [
+      "[1,2,3] : List number"
+    ]
+  ],
+  [
+    "Char.toUpper 'x'",
+    [
+      "'X' : Char"
+    ]
+  ],
+  [
+    "String.toList \"a\\tb'\"",
+    [
+      "['a','\\t','b','\\''] : List Char"
+    ]
+  ],
+  [
+    "Tuple.mapFirst String.length (\"abc\", 1)",
+    [
+      "(3,1) : ( Int, number )"
+    ]
+  ],
+  [
+    "{ zeta = 1, a = 2 }",
+    [
+      "{ a = 2, zeta = 1 } : { a : number, zeta : number1 }"
+    ]
+  ],
+  [
+    "import Types exposing (..)",
+    []
+  ],
+  [
+    "NoOpToBackend",
+    [
+      "NoOpToBackend : ToBackend"
+    ]
+  ],
+  [
+    "import Lamdera",
+    []
+  ],
+  [
+    "Lamdera.sendToFrontend",
+    [
+      "<function> : Lamdera.ClientId -> toFrontend -> Cmd backendMsg"
+    ]
+  ],
+  [
+    "import ReplHelpers exposing (..)",
+    []
+  ],
+  [
+    "double 21",
+    [
+      "42 : Int"
+    ]
+  ],
+  [
+    "area (Rect 2 3)",
+    [
+      "6 : Float"
+    ]
+  ],
+  [
+    "origin",
+    [
+      "{ x = 0, y = 0 } : Point"
+    ]
+  ],
+  [
+    "classify '\\n'",
+    [
+      "\"newline\" : String"
+    ]
+  ],
+  [
+    "triple 'q'",
+    [
+      "('q','q','q') : ( Char, Char, Char )"
+    ]
+  ],
+  [
+    "import Dict",
+    []
+  ],
+  [
+    "Dict.fromList [ (2, \"b\"), (1, \"a\") ] |> Dict.toList",
+    [
+      "[(1,\"a\"),(2,\"b\")] : List ( number, String )"
+    ]
+  ],
+  [
+    "import Json.Decode as D",
+    []
+  ],
+  [
+    "D.decodeString (D.list D.int) \"[1,2,3]\"",
+    [
+      "Ok [1,2,3] : Result D.Error (List Int)"
+    ]
+  ],
+  [
+    "D.decodeString D.int \"x\" |> Result.mapError (always \"bad\")",
+    [
+      "Err \"bad\" : Result String Int"
+    ]
+  ],
+  [
+    "import Url",
+    []
+  ],
+  [
+    "Url.fromString \"https://example.com/x?y=1\"",
+    [
+      "Just { fragment = Nothing, host = \"example.com\", path = \"/x\", port_ = Nothing, protocol = Https, query = Just \"y=1\" }\n    : Maybe Url.Url"
+    ]
+  ],
+  [
+    "Maybe.map ((+) 1) (Just 1)",
+    [
+      "Just 2 : Maybe number"
+    ]
+  ],
+  [
+    "let f x = x * 3 in f 5",
+    [
+      "15 : number"
+    ]
+  ],
+  [
+    "nope + 1",
+    [
+      "-- NAMING ERROR ----------------------------------------------------------- REPL\n\nI cannot find a `nope` variable:\n\n9|   nope + 1\n     ^^^^\nThese names seem close though:\n\n    not\n    cos\n    never\n    xor\n\nHint: Read <https://elm-lang.org/0.19.3/imports> to see how `import`\ndeclarations work in Elm.\n\n"
+    ]
+  ]
+]

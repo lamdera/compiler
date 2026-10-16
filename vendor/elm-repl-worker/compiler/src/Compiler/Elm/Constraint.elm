@@ -21,7 +21,7 @@ import Compiler.Elm.Version as V
 import Compiler.Json.Decode as D
 import Compiler.Json.Encode as E
 import Compiler.Parse.Primitives as P exposing (Row, Col)
-import Extra.Type.List as MList
+import Extra.Type.List as MList exposing (TList)
 
 
 
@@ -121,9 +121,24 @@ intersect (Range lo lop hop hi) (Range lo_ lop_ hop_ hi_) =
 -- ELM CONSTRAINT
 
 
+-- @LAMDERA as Elm.Constraint.interchangeableElm in the compiler: package bounds written
+-- for 0.19.1, 0.19.2 or 0.19.3 are accepted interchangeably, but only while the
+-- compiler is itself one of them.
+interchangeableElm : TList V.Version
+interchangeableElm =
+  [ V.fromComparable (0, 19, 1)
+  , V.fromComparable (0, 19, 2)
+  , V.fromComparable (0, 19, 3)
+  ]
+
+
 goodElm : Constraint -> Bool
 goodElm constraint =
   satisfies constraint V.compiler
+  ||
+  ( MList.any (\v -> V.toComparable v == V.toComparable V.compiler) interchangeableElm
+    && MList.any (satisfies constraint) interchangeableElm
+  )
 
 
 defaultElm : Constraint

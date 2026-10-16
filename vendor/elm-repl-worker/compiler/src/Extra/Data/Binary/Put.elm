@@ -13,6 +13,9 @@ module Extra.Data.Binary.Put exposing
     , putWord16
     , putWord32
     , putWord8
+    , putWord16LE
+    , putWord32LE
+    , putInt64LE
     , runPut
     )
 
@@ -67,6 +70,32 @@ putWord32 word =
 putString : String -> Put
 putString =
     Bytes.Encode.string
+
+
+
+-- @LAMDERA little-endian primitives, see Extra.Data.Binary.Get
+
+
+putWord16LE : Int -> Put
+putWord16LE word =
+    Bytes.Encode.unsignedInt16 Bytes.LE word
+
+
+putWord32LE : Int -> Put
+putWord32LE word =
+    Bytes.Encode.unsignedInt32 Bytes.LE word
+
+
+putInt64LE : Int -> Put
+putInt64LE n =
+    let
+        hi =
+            floor (toFloat n / 4294967296)
+    in
+    join
+        [ Bytes.Encode.unsignedInt32 Bytes.LE (n - hi * 4294967296)
+        , Bytes.Encode.signedInt32 Bytes.LE hi
+        ]
 
 
 

@@ -7,6 +7,7 @@ module Compiler.Elm.Version exposing
     , bumpMinor
     , compiler
     , decoder
+    , fromComparable
     , encode
     , getMajor
     , max
@@ -68,9 +69,12 @@ max =
     Version (2 ^ 16 - 1) 0 0
 
 
+-- @LAMDERA must be the Elm version the Lamdera compiler itself is built on (its
+-- elm.cabal version): it names the ELM_HOME directory (~/.elm/<version>/packages) the
+-- worker reads the compiler's packages, registry.dat and artifacts from.
 compiler : Version
 compiler =
-    Version 0 19 2
+    Version 0 19 3
 
 
 

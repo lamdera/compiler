@@ -1,9 +1,9 @@
 module Compiler.Elm.Interface exposing
-    ( Alias
+    ( Alias(..) -- @LAMDERA constructors exposed for Builder.Elm.CompilerArtifacts
     , Binop(..)
     , DependencyInterface(..)
     , Interface(..)
-    , Union
+    , Union(..) -- @LAMDERA
     , bDependencyInterface
     , bInterface
     , extractAlias

@@ -20,6 +20,8 @@ import Compiler.Elm.Version as V
 import Compiler.Json.Decode as D
 import Compiler.Parse.Primitives as P
 import Extra.Data.Binary as B
+import Extra.Data.Binary.Get as BG
+import Extra.Data.Binary.Put as BP
 import Extra.System.Dir as Dir
 import Extra.System.IO as IO
 import Extra.Type.Either exposing (Either(..))
@@ -191,11 +193,61 @@ post manager path decoder callback =
 -- BINARY
 
 
+-- @LAMDERA registry.dat is read from (and written back to) the same ELM_HOME as the
+-- Lamdera compiler's, so it must use that compiler's format. Elm 0.19.3 replaced
+-- Data.Binary (big-endian, Int64 lengths) with its own little-endian encoding, see
+-- Deps.Registry.eRegistry: the count as an Int64, a u32-counted dict of package name
+-- (two u8-length strings) to known versions, each the newest version followed by a
+-- u32-counted list of the previous ones. A version is three u8, or 255 followed by
+-- three u16 when a part does not fit.
+
+
 bRegistry : B.Binary Registry
-bRegistry = B.bin2 Registry (\(Registry a b) -> B.T2 a b)
-  B.bWord64 (B.bMap Pkg.bComparable bKnownVersions)
+bRegistry =
+  { put = \(Registry count versions) ->
+      BP.join
+        [ BP.putInt64LE count
+        , BP.putWord32LE (Map.size versions)
+        , BP.join (MList.map (\(name, known) -> BP.mappend (Pkg.bComparable.put name) (putKnownVersions known)) (Map.toList versions))
+        ]
+  , get =
+      BG.liftM2 Registry
+        BG.getInt64LE
+        (BG.bind BG.getWord32LE <| \n ->
+          BG.fmap Map.fromList (BG.getSequence (BG.liftM2 Tuple.pair Pkg.bComparable.get getKnownVersions) n))
+  }
 
 
-bKnownVersions : B.Binary KnownVersions
-bKnownVersions = B.bin2 KnownVersions (\(KnownVersions a b) -> B.T2 a b)
-  V.bVersion (B.bTList V.bVersion)
+putKnownVersions : KnownVersions -> BP.Put
+putKnownVersions (KnownVersions newest previous) =
+  BP.join
+    [ putVersion newest
+    , BP.putWord32LE (MList.length previous)
+    , BP.join (MList.map putVersion previous)
+    ]
+
+
+getKnownVersions : BG.Get KnownVersions
+getKnownVersions =
+  BG.liftM2 KnownVersions
+    getVersion
+    (BG.bind BG.getWord32LE (BG.getSequence getVersion))
+
+
+putVersion : V.Version -> BP.Put
+putVersion version =
+  case V.toComparable version of
+    (major, minor, patch) ->
+      if major < 255 && minor < 256 && patch < 256 then
+        BP.join [ BP.putWord8 major, BP.putWord8 minor, BP.putWord8 patch ]
+      else
+        BP.join [ BP.putWord8 255, BP.putWord16LE major, BP.putWord16LE minor, BP.putWord16LE patch ]
+
+
+getVersion : BG.Get V.Version
+getVersion =
+  BG.bind BG.getWord8 <| \word ->
+  if word == 255 then
+    BG.liftM3 (\a b c -> V.fromComparable (a, b, c)) BG.getWord16LE BG.getWord16LE BG.getWord16LE
+  else
+    BG.liftM2 (\b c -> V.fromComparable (word, b, c)) BG.getWord8 BG.getWord8

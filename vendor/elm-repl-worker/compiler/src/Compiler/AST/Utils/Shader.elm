@@ -1,5 +1,5 @@
 module Compiler.AST.Utils.Shader exposing
-    ( Source
+    ( Source(..) -- @LAMDERA constructor exposed for Builder.Elm.CompilerArtifacts
     , Types(..)
     , bSource
     , fromChars

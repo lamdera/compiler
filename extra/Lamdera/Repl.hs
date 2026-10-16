@@ -110,6 +110,11 @@ lamderaReplSrc = $(do
         putStr $ "-- Minifying `" <> tempFile <> "`..."
         _ <- Ext.Common.requireBinary "esbuild"
         BS.writeFile tempFile compiledCode
+        -- The worker reads the package artifacts `lamdera` writes (Builder.Elm.Details in
+        -- vendor/elm-repl-worker names them "artifacts.x.dat" until this replacement),
+        -- decoding the compiler's own binary format with Builder.Elm.CompilerArtifacts.
+        -- A change to that format (AST.Optimized, Elm.Interface, ...) must be mirrored
+        -- there, or the worker falls back to compiling every package itself.
         Lamdera.replaceInFile "artifacts.x.dat" (T.pack Lamdera.Version.artifacts) tempFile
         let esbuildCommand = "esbuild " <> tempFile <> " --minify --target=chrome58,firefox57,safari11,edge16 > " <> distFile
         _ <- Ext.Common.bash esbuildCommand
