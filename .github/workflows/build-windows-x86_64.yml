@@ -105,7 +105,7 @@ jobs:
       # Haskell fail to load "stdc++" here. Drop it for this build only.
       - name: Drop -lstdc++ from stack.yaml
         shell: bash
-        run: sed -i 's/ -lstdc++//g' stack.yaml && grep -n -A2 'ghc-options' stack.yaml
+        run: sed -i 's/: -lstdc++$/: ""/; s/ -lstdc++//g' stack.yaml && grep -n -A2 'ghc-options' stack.yaml
 
       # Use a retry action because inexplicably sometimes stack install stalls
       # indefinitely after the `compiling Main` step, but then succeeds immediately
