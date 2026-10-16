@@ -9,7 +9,8 @@ name: Build MacOS arm64
 jobs:
   build:
     name: Build MacOS arm64
-    runs-on: macos-latest
+    # macos-latest is now macos-26, whose SDK (arm64e.x1 .tbd stubs) GHC 9.8.4's link step cannot read.
+    runs-on: macos-15
     steps:
       - name: Install SSH key
         uses: shimataro/ssh-key-action@v2
