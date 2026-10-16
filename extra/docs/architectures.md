@@ -119,9 +119,9 @@ Work underway to get official builds for `*-arm64` platforms:
   - [x] Working with GHC 9.0.2 via [stack](https://docs.haskellstack.org/en/stable/): [commit](https://github.com/supermario/elm-tooling-compiler/commit/4f93889a14f74c3491f719ae63bf400a204b9081)
     ```
     $ file `which elmx`
-    /Users/mario/.local/bin/elmx: Mach-O 64-bit executable arm64
+    ~/.local/bin/elmx: Mach-O 64-bit executable arm64
     $ ls -alh `which elm-dev`
-    -rwxr-xr-x  1 mario  staff    87M  5 Nov 11:05 /Users/mario/.local/bin/elmx
+    -rwxr-xr-x  1 me     staff    87M  5 Nov 11:05 ~/.local/bin/elmx
     ```
     - [ ] The same x86_64 build is 17M so definitely some build size issue to hunt down.
   - [ ] 🚧 Direct cabal based build for 9.0.2

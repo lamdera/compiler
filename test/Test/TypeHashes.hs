@@ -134,13 +134,13 @@ suite = tests
       -- After a couple of hours debugging and banging my head against the wall, I notied this∷
 
       -- DEBUG: Writing out hashes:["481e7534534066e769a8a38c6c7c3168f1e7e854","fbdea5a22e006302b28362a2d768a9c6e7485e70","41c557a264cf74a0443d7f6e21b9671283d7e12f","181616e561d53e4a2a6e1483e1dba2174895d428","ff98601e1e2d26dc80ec9f79200584a2ed5156dc","505b3928015cd8f0f2a1d2b7bf4e1d4afb2e407a"]
-      -- DEBUG: writeUtf8: "/Users/mario/dev/projects/lamdera-dashboard/lamdera-stuff/.lamdera-hashes"
-      -- DEBUG: writeUtf8: "/Users/mario/dev/projects/lamdera-dashboard/lamdera-stuff/.lamdera-external-warnings"
+      -- DEBUG: writeUtf8: "<project>/lamdera-stuff/.lamdera-hashes"
+      -- DEBUG: writeUtf8: "<project>/lamdera-stuff/.lamdera-external-warnings"
       -- Success! Compiled 22 modules.
       -- Success! Compiled 1 module.
       -- ───> Checking Evergreen migrations...
       -- DEBUG: app name:"dashboard"
-      -- DEBUG: Reading local types from /Users/mario/dev/projects/lamdera-dashboard/lamdera-stuff/.lamdera-hashes
+      -- DEBUG: Reading local types from <project>/lamdera-stuff/.lamdera-hashes
       -- DEBUG: local types:["6739f4abe527a2d2cab754d35b9b290c75b65298","a212b0d84bb10b592887775a331d9e9f80c1cf89","0bbc44da7904a09d5d3e9b148e021c08d50c2bda","784d73d97807ce1435f7df7612c44d30788e0126","077c6ce09c972a6caa121c88c8c8de7185ec8e08","ab5cdc0c2e5b19eea28bd77d3991df342c254c82"]
 
       -- Write the types, and then immediately read them back, and somehow they are changed!?

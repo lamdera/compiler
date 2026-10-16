@@ -141,7 +141,7 @@ Sometimes you might want to test some function directly with different inputs. I
 $ stack ghci
 λ: :set -XOverloadedStrings
 λ: import Lamdera.Canonical
-λ: showDefAnnotation "/Users/mario/dev/projects/lamdera-compiler/test/scenario-interpreter" "src/Test/Basic.elm" "gimmeTheAnnotationMan"
+λ: showDefAnnotation "test/scenario-interpreter" "src/Test/Basic.elm" "gimmeTheAnnotationMan"
 ```
 
 #### IDE Integration
@@ -175,8 +175,8 @@ Run the `./addSanity.sh` script if this happens and retry. You should now get th
 ```
 <interactive>: Sanity failed!
 CallStack (from HasCallStack):
-  error, called at /Users/mario/dev/projects/lamdera-compiler/extra/Sanity.hs:13:9 in main:Sanity
-  !, called at /Users/mario/dev/projects/lamdera-compiler/compiler/src/Type/Solve.hs:100:42 in main:Type.Solve
+  error, called at extra/Sanity.hs:13:9 in main:Sanity
+  !, called at compiler/src/Type/Solve.hs:100:42 in main:Type.Solve
 ```
 
 Now we have the actual usage point where it failed. If we want to debug it, `Sanity.debugFind` and `Sanity.debugFindCtx` help:
