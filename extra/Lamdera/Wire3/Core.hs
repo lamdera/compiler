@@ -353,7 +353,7 @@ where <tvars> are the type's declared type variables, in order. Any violation
 produces a compile error.
 
 -}
-checkValidators :: Module.Canonical -> Map.Map Data.Name.Name Union -> Map.Map Data.Name.Name Alias -> Decls -> Either D.Doc ()
+checkValidators :: Module.Canonical -> Map.Map TN.Name Union -> Map.Map TN.Name Alias -> Decls -> Either D.Doc ()
 checkValidators cname unions aliases decls =
   allValidatorDefs decls
     & mapM_ (\def ->
@@ -369,7 +369,7 @@ checkValidators cname unions aliases decls =
       )
 
 
-checkValidatorSignature :: Module.Canonical -> Data.Name.Name -> Union -> Def -> Either D.Doc ()
+checkValidatorSignature :: Module.Canonical -> TN.Name -> Union -> Def -> Either D.Doc ()
 checkValidatorSignature cname typeName union def =
   case def of
     Def _ _ _ ->
@@ -385,7 +385,7 @@ checkValidatorSignature cname typeName union def =
         else Left (validatorBadSignatureError typeName union)
 
 
-expectedValidatorType :: Module.Canonical -> Data.Name.Name -> Union -> Type
+expectedValidatorType :: Module.Canonical -> TN.Name -> Union -> Type
 expectedValidatorType cname typeName union =
   TLambda
     (TType cname typeName (fmap TVar (_u_vars union)))
@@ -395,63 +395,63 @@ expectedValidatorType cname typeName union =
         ])
 
 
-validatorSignatureString :: Data.Name.Name -> Union -> String
+validatorSignatureString :: TN.Name -> Union -> String
 validatorSignatureString typeName union =
   let
     typeWithVars =
       case _u_vars union of
-        [] -> Data.Name.toChars typeName
-        vars -> Data.Name.toChars typeName ++ " " ++ unwords (fmap Data.Name.toChars vars)
+        [] -> TN.nameToChars typeName
+        vars -> TN.nameToChars typeName ++ " " ++ unwords (fmap TV.varToChars vars)
   in
-  "w3_validate_" ++ Data.Name.toChars typeName ++ " : " ++ typeWithVars ++ " -> Result String ()"
+  "w3_validate_" ++ TN.nameToChars typeName ++ " : " ++ typeWithVars ++ " -> Result String ()"
 
 
 -- NOTE: The leading D.fromChars line in each error is a contiguous (un-wrapped)
 -- marker so tests can reliably match on it; D.reflow may insert line breaks.
 
-validatorMissingTypeError :: Data.Name.Name -> D.Doc
+validatorMissingTypeError :: TN.Name -> D.Doc
 validatorMissingTypeError typeName =
   D.stack
-    [ D.fromChars $ "w3_validate_" ++ Data.Name.toChars typeName ++ ": no matching custom type"
+    [ D.fromChars $ "w3_validate_" ++ TN.nameToChars typeName ++ ": no matching custom type"
     , D.reflow $
-        "I found a wire validation function `w3_validate_" ++ Data.Name.toChars typeName
-        ++ "`, but there is no custom type named `" ++ Data.Name.toChars typeName
+        "I found a wire validation function `w3_validate_" ++ TN.nameToChars typeName
+        ++ "`, but there is no custom type named `" ++ TN.nameToChars typeName
         ++ "` defined in this module."
     , D.reflow $
         "Wire validation functions must be defined in the same module as the custom type they validate. "
-        ++ "Define `type " ++ Data.Name.toChars typeName ++ " = ...` here, or remove the validation function."
+        ++ "Define `type " ++ TN.nameToChars typeName ++ " = ...` here, or remove the validation function."
     ]
 
 
-validatorAliasError :: Data.Name.Name -> D.Doc
+validatorAliasError :: TN.Name -> D.Doc
 validatorAliasError typeName =
   D.stack
-    [ D.fromChars $ "w3_validate_" ++ Data.Name.toChars typeName ++ ": expected a custom type, found a type alias"
+    [ D.fromChars $ "w3_validate_" ++ TN.nameToChars typeName ++ ": expected a custom type, found a type alias"
     , D.reflow $
-        "I found a wire validation function `w3_validate_" ++ Data.Name.toChars typeName
-        ++ "`, but `" ++ Data.Name.toChars typeName ++ "` is a type alias, not a custom type."
+        "I found a wire validation function `w3_validate_" ++ TN.nameToChars typeName
+        ++ "`, but `" ++ TN.nameToChars typeName ++ "` is a type alias, not a custom type."
     , D.reflow
         "Wire validation functions (w3_validate_*) are only supported for custom types (defined with `type`), not for type aliases (`type alias`)."
     ]
 
 
-validatorMissingAnnotationError :: Data.Name.Name -> Union -> D.Doc
+validatorMissingAnnotationError :: TN.Name -> Union -> D.Doc
 validatorMissingAnnotationError typeName union =
   D.stack
-    [ D.fromChars $ "w3_validate_" ++ Data.Name.toChars typeName ++ ": missing type annotation"
+    [ D.fromChars $ "w3_validate_" ++ TN.nameToChars typeName ++ ": missing type annotation"
     , D.reflow $
-        "The wire validation function `w3_validate_" ++ Data.Name.toChars typeName
+        "The wire validation function `w3_validate_" ++ TN.nameToChars typeName
         ++ "` must have a type annotation. It needs to be annotated exactly like this:"
     , D.fromChars $ "    " ++ validatorSignatureString typeName union
     ]
 
 
-validatorBadSignatureError :: Data.Name.Name -> Union -> D.Doc
+validatorBadSignatureError :: TN.Name -> Union -> D.Doc
 validatorBadSignatureError typeName union =
   D.stack
-    [ D.fromChars $ "w3_validate_" ++ Data.Name.toChars typeName ++ ": wrong type signature"
+    [ D.fromChars $ "w3_validate_" ++ TN.nameToChars typeName ++ ": wrong type signature"
     , D.reflow $
-        "The wire validation function `w3_validate_" ++ Data.Name.toChars typeName
+        "The wire validation function `w3_validate_" ++ TN.nameToChars typeName
         ++ "` has the wrong type signature. It must be exactly:"
     , D.fromChars $ "    " ++ validatorSignatureString typeName union
     ]
@@ -491,18 +491,18 @@ checkNoUserWireRefs generatedDefs userDecls =
       Left (validatorWireRefError userName genName)
 
 
-validatorWireRefError :: Data.Name.Name -> Data.Name.Name -> D.Doc
+validatorWireRefError :: N.Name -> N.Name -> D.Doc
 validatorWireRefError userName genName =
   D.stack
-    [ D.fromChars $ Data.Name.toChars userName ++ ": cannot reference generated wire functions in a module that defines a validator"
+    [ D.fromChars $ N.toChars userName ++ ": cannot reference generated wire functions in a module that defines a validator"
     , D.reflow $
-        "`" ++ Data.Name.toChars userName ++ "` references the generated wire function `"
-        ++ Data.Name.toChars genName ++ "`, but this module also defines one or more `w3_validate_*` functions."
+        "`" ++ N.toChars userName ++ "` references the generated wire function `"
+        ++ N.toChars genName ++ "`, but this module also defines one or more `w3_validate_*` functions."
     , D.reflow
         "When a module defines a wire validator, the generated wire functions (w3_encode_*/w3_decode_*) must be placed after your own definitions so the generated decoders can call your validators. As a result, your top-level code in this module can't also reference those generated functions."
     , D.reflow $
-        "To fix this, move `" ++ Data.Name.toChars userName ++ "` (or just its reference to `"
-        ++ Data.Name.toChars genName ++ "`) into a different module, or remove the validator(s) from this module."
+        "To fix this, move `" ++ N.toChars userName ++ "` (or just its reference to `"
+        ++ N.toChars genName ++ "`) into a different module, or remove the validator(s) from this module."
     ]
 
 

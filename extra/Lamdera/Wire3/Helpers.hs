@@ -1230,21 +1230,21 @@ w3ValidatePrefix :: String
 w3ValidatePrefix = "w3_validate_"
 
 
-isValidatorName :: Data.Name.Name -> Bool
+isValidatorName :: N.Name -> Bool
 isValidatorName name =
-  List.isPrefixOf w3ValidatePrefix (Data.Name.toChars name)
+  List.isPrefixOf w3ValidatePrefix (N.toChars name)
 
 
 -- "w3_validate_MyType" -> "MyType"
-validatorTypeName :: Data.Name.Name -> Data.Name.Name
+validatorTypeName :: N.Name -> TN.Name
 validatorTypeName name =
-  Data.Name.fromChars $ drop (length w3ValidatePrefix) (Data.Name.toChars name)
+  TN.nameFromChars $ drop (length w3ValidatePrefix) (N.toChars name)
 
 
 -- "MyType" -> "w3_validate_MyType"
-validatorNameFor :: Data.Name.Name -> Data.Name.Name
+validatorNameFor :: TN.Name -> N.Name
 validatorNameFor typeName =
-  Data.Name.fromChars $ w3ValidatePrefix ++ Data.Name.toChars typeName
+  N.fromChars $ w3ValidatePrefix ++ TN.nameToChars typeName
 
 
 allValidatorDefs :: Decls -> [Def]
@@ -1252,7 +1252,7 @@ allValidatorDefs decls =
   declsToList decls & filter (isValidatorName . defName)
 
 
-findValidatorDef :: Decls -> Data.Name.Name -> Maybe Def
+findValidatorDef :: Decls -> TN.Name -> Maybe Def
 findValidatorDef decls typeName =
   findDef (validatorNameFor typeName) decls
 
@@ -1304,7 +1304,7 @@ Unlike getLvars in Lamdera.Wire3.Graph -- which is specialised to generated wire
 expressions and intentionally `error`s on shapes that generated code never emits
 (e.g. a multi-branch `if`) and ignores `case` scrutinees -- this handles every
 Expr_ constructor, so it is safe to run over arbitrary user code. -}
-topLevelRefsInExpr :: Expr -> [Data.Name.Name]
+topLevelRefsInExpr :: Expr -> [N.Name]
 topLevelRefsInExpr (A.At _ expr) =
   case expr of
     VarLocal _              -> []
@@ -1339,12 +1339,13 @@ topLevelRefsInExpr (A.At _ expr) =
         ++ concatMap (\(FieldUpdate _ ue) -> topLevelRefsInExpr ue) (Map.elems fieldUpdates)
     Record fields           -> concatMap topLevelRefsInExpr (Map.elems fields)
     Unit                    -> []
-    Tuple e1 e2 me3         ->
-      topLevelRefsInExpr e1 ++ topLevelRefsInExpr e2 ++ maybe [] topLevelRefsInExpr me3
+    Pair e1 e2              -> topLevelRefsInExpr e1 ++ topLevelRefsInExpr e2
+    Triple e1 e2 e3         ->
+      topLevelRefsInExpr e1 ++ topLevelRefsInExpr e2 ++ topLevelRefsInExpr e3
     Shader _ _              -> []
 
 
-defTopLevelRefs :: Def -> [Data.Name.Name]
+defTopLevelRefs :: Def -> [N.Name]
 defTopLevelRefs def =
   case def of
     Def _ _ e          -> topLevelRefsInExpr e

@@ -181,7 +181,7 @@ addDirectIR pkg canonical graph@(Opt.LocalGraph main nodes fields) =
   else
     let
       home = Can._name canonical
-      modul = Name.toChars (ModuleName._module home)
+      modul = PrimModule.toChars (ModuleName._module home)
       defs = Helpers.declsToList (Can._decls canonical)
       byName = Map.fromList [ (Name.toChars (defNameOf d), d) | d <- defs ]
       codecs =
@@ -697,7 +697,7 @@ lowerValidatedDec :: String -> Can.Expr -> Maybe Body
 lowerValidatedDec pfx (A.At _ e) =
   case e of
     Can.Binop op _ _ _ inner (A.At _ (Can.Call (A.At _ (Can.VarForeign h1 n1 _)) [A.At _ (Can.Lambda [A.At _ (Can.PVar x)] handler)]))
-      | Name.toChars op == "|>" && isHome wireHome h1 && Name.toChars n1 == "andThenDecode" ->
+      | Op.toChars op == "|>" && isHome wireHome h1 && Name.toChars n1 == "andThenDecode" ->
           do  validator <- validation x handler
               body <- lowerUnionDec pfx inner
               Just (BValidate validator body)

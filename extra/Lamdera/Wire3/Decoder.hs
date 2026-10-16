@@ -501,7 +501,7 @@ This produces, in effect:
                         in Lamdera.Wire3.failDecode
             )
 -}
-wrapWithValidator :: Map.Map Module.Raw I.Interface -> Module.Canonical -> Data.Name.Name -> Expr -> Expr
+wrapWithValidator :: Map.Map PrimModule.Name I.Interface -> Module.Canonical -> TN.Name -> Expr -> Expr
 wrapWithValidator ifaces cname typeName decoderBody =
   let
     validateRef = a (VarTopLevel cname (validatorNameFor typeName))
@@ -517,7 +517,7 @@ wrapWithValidator ifaces cname typeName decoderBody =
         , CaseBranch
             (resultCtorPattern resultUnion "Err" (a (PVar errVar)))
             (addLetLogValue (lvar errVar)
-               (failDecode (Data.Name.toChars (validatorNameFor typeName) <> " returned an Err")))
+               (failDecode (N.toChars (validatorNameFor typeName) <> " returned an Err")))
         ]
   in
   decoderBody |> andThenDecode1 (lambda1 (pvar valueVar) validationCase)
@@ -526,7 +526,7 @@ wrapWithValidator ifaces cname typeName decoderBody =
 {- The canonical elm/core Result union, used to build `Ok`/`Err` patterns.
 Result is always a default import so it's expected to be present in ifaces; we
 fall back to a hand-written definition just in case. -}
-lookupResultUnion :: Map.Map Module.Raw I.Interface -> Union
+lookupResultUnion :: Map.Map PrimModule.Name I.Interface -> Union
 lookupResultUnion ifaces =
   case Map.lookup "Result" ifaces of
     Just iface ->
@@ -550,7 +550,7 @@ hardcodedResultUnion =
 
 
 -- Build a pattern like `Ok <argPattern>` / `Err <argPattern>` for the given Result union.
-resultCtorPattern :: Union -> Data.Name.Name -> Pattern -> Pattern
+resultCtorPattern :: Union -> N.Name -> Pattern -> Pattern
 resultCtorPattern union ctorName argPattern =
   case List.find (\(Ctor n _ _ _) -> n == ctorName) (_u_alts union) of
     Just (Ctor _ index _ paramTypes) ->
