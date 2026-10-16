@@ -56,7 +56,7 @@ jobs:
       # most part valuable to cache.
       - name: Install Dependencies
         if: steps.cache.outputs.cache-hit != 'true'
-        run: stack build --only-dependencies --ghc-options '-optl"-Wl,-Bstatic,-lstdc++,-lgcc_s,-lwinpthread,-Bdynamic"'
+        run: stack build --only-dependencies --ghc-options '-optl"-Wl,-Bstatic,-lwinpthread,-Bdynamic"'
 
   # The install step is split to a separate job, so that if the we were building
   # from scratch and just spent 30 minutes building all the libraries, but then
@@ -100,6 +100,13 @@ jobs:
             fi
           done
 
+      # GHC 9.4+ on Windows ships an LLVM toolchain with libc++, not GCC's libstdc++, so
+      # stack.yaml's -lstdc++ (needed for the Linux and macOS links) makes Template
+      # Haskell fail to load "stdc++" here. Drop it for this build only.
+      - name: Drop -lstdc++ from stack.yaml
+        shell: bash
+        run: sed -i 's/ -lstdc++//g' stack.yaml && grep -n -A2 'ghc-options' stack.yaml
+
       # Use a retry action because inexplicably sometimes stack install stalls
       # indefinitely after the `compiling Main` step, but then succeeds immediately
       # with a second stack install. 🤷🏻‍♂️
@@ -112,7 +119,7 @@ jobs:
           # https://gitlab.haskell.org/ghc/ghc/-/issues/20010#note_359766
           command: |
             export LANG=C.UTF-8
-            stack install --ghc-options '-optl"-Wl,-Bstatic,-lstdc++,-lgcc_s,-lwinpthread,-Bdynamic"'
+            stack install --ghc-options '-optl"-Wl,-Bstatic,-lwinpthread,-Bdynamic"'
 
       - name: Copy binary files, dlls & check
         run: |
@@ -120,6 +127,7 @@ jobs:
           cp ~/AppData/Roaming/local/bin/lamdera.exe lamdera/lamdera.exe
           cp distribution/dlls/* lamdera/
           ./lamdera/lamdera.exe --version-full
+          objdump -p lamdera/lamdera.exe | grep 'DLL Name' || true
 
       - name: Create distribution zip
         uses: vimtor/action-zip@v1
