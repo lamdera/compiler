@@ -16,8 +16,9 @@ if ! uname -a | grep "Darwin" && uname -a | grep "arm64"; then
   exit 1;
 fi
 
-stackVersion=2.11.1
-isolate=~/.ghcup/$os-$arch
+# 2.11.1 can no longer read Hackage's index: it rejects the current root.json signing keys.
+stackVersion=3.7.1
+isolate=~/.ghcup/$os-$arch-stack-$stackVersion
 mkdir -p $isolate
 stack="$isolate/stack"
 
