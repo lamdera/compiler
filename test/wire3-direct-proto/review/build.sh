@@ -24,8 +24,15 @@ p = sys.argv[1]
 s = open(p).read()
 names = json.load(open('names.json'))
 i = s.rindex('}(this));')
-api = '{ ' + ', '.join('%s: { e: $author$project$Main$e_%s, d: $author$project$Main$d_%s, w: typeof $author$project$Types$w3_encode_%s !== "undefined" ? $author$project$Types$w3_encode_%s : $author$project$Params$w3_encode_%s }' % (n, n, n, n, n, n) for n in names) + ' }'
-extra = "scope.W3R = " + api + ";\nscope.W3R.TAll.s = $author$project$Main$s_TAll;\nscope.W3readBytesPast = $author$project$Main$readBytesPast;\nscope.W3R_direct = typeof _W3_runEncode === 'function';\nscope.W3S = typeof _W3_streamEncode === 'function' ? _W3_streamEncode : null;\n"
+api = '{ ' + ', '.join('%s: { e: $author$project$Main$e_%s, d: $author$project$Main$d_%s, u: $author$project$Main$u_%s, w: typeof $author$project$Types$w3_encode_%s !== "undefined" ? $author$project$Types$w3_encode_%s : $author$project$Params$w3_encode_%s }' % (n, n, n, n, n, n, n) for n in names) + ' }'
+extra = "scope.W3R = " + api + ";\nscope.W3R.TAll.s = $author$project$Main$s_TAll;\nscope.W3R.TVModel.s = $author$project$Main$s_TVModel;\nscope.W3readBytesPast = $author$project$Main$readBytesPast;\nscope.W3R_direct = typeof _W3_runEncode === 'function';\nscope.W3S = typeof _W3_streamEncode === 'function' ? _W3_streamEncode : null;\n"
+# Every validator (Validated.elm, and the generated ones in Params.elm) is wrapped inside
+# the IIFE, where both the Elm and the direct codecs look it up by name at call time, so
+# fuzz.js can compare the sequence of validator calls (validator, argument, result).
+import re
+validators = sorted(set(re.findall(r'^var (\$author\$project\$(?:Validated|Params)\$w3_validate_\w+) = ', s, re.M)))
+extra += "scope.W3VT = [];\nscope.W3VN = %d;\n" % len(validators)
+extra += ''.join("%s = (function (f, name) { return function (v) { var r = f(v); scope.W3VT.push([name, v, r]); return r; }; })(%s, '%s');\n" % (g, g, g.split('$')[-1]) for g in validators)
 s = s[:i] + "\n" + extra + s[i:]
 open(p.replace('.js', '-x.js'), 'w').write(s)
 PY

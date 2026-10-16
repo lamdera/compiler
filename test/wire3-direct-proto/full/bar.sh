@@ -6,6 +6,11 @@
 #      dictsizes, depth) in all three modes, run from a scratch copy so its own build/
 #      directory is never touched.
 # Usage: bar.sh [scratchDir]   (default ../lamdera-wire3-bench/review-bar)
+# ELM_HOME is used by the full/ build; ELM_HOME_REVIEW (default
+# ../lamdera-wire3-bench/elm-home-review, made as a copy of ELM_HOME, or of elm-home-direct,
+# when missing) by the review build. Caches are keyed by the version string alone, so
+# never point either at an ELM_HOME written by a different 1.5.0 build (for example one
+# without the validator chains, whose package artifacts lack w3_unsafe_decode_*).
 set -u
 cd "$(dirname "$0")"
 here=$(pwd)
@@ -30,10 +35,15 @@ rm -rf "$R"; mkdir -p "$R"
 sed -i '' 's|rm -rf elm-stuff; \$L make|rm -rf elm-stuff; LAMDERA_WIRE3_DIRECT=0 $L make|; s|LAMDERA_WIRE3_DIRECT=1 LAMDERA_WIRE3_DIRECT_DEBUG=1 \$L make|env -u LAMDERA_WIRE3_DIRECT LAMDERA_WIRE3_DIRECT_DEBUG=1 $L make|' "$R/build.sh"
 grep -q 'LAMDERA_WIRE3_DIRECT=0 $L make' "$R/build.sh" || { echo "could not patch the review build.sh"; exit 1; }
 # ELM_HOME_REVIEW: the review suite's ELM_HOME (default elm-home-review, seeded from
-# elm-home-direct); pass a fresh one per compiler so package caches are never shared.
+# ELM_HOME, else elm-home-direct); pass a fresh one per compiler so package caches are
+# never shared.
 EHR=${ELM_HOME_REVIEW:-${W3BENCH:-$(git rev-parse --show-toplevel)/../lamdera-wire3-bench}/elm-home-review}
-[ -d "$EHR" ] || cp -R "${W3BENCH:-$(git rev-parse --show-toplevel)/../lamdera-wire3-bench}/elm-home-direct" "$EHR"
-(cd "$R" && LAMDERA=$L ELM_HOME=$EHR sh build.sh 2>&1 | grep -v '^\[wire3-direct\]' | tail -1)
+[ -d "$EHR" ] || cp -R "${ELM_HOME:-${W3BENCH:-$(git rev-parse --show-toplevel)/../lamdera-wire3-bench}/elm-home-direct}" "$EHR"
+(cd "$R" && LAMDERA=$L ELM_HOME=$EHR sh build.sh > "$R/build.log" 2>&1); grep -v '^\[wire3-direct\]' "$R/build.log" | tail -1
+# Every codec of the review app is direct in all three direct builds, validated decoders
+# and the non-validating chain included.
+n0=$(grep -c "; 0 codecs fall back to Elm" "$R/build.log")
+[ "$n0" = 3 ] || { grep "codecs fall back\|NOT LOWERED" "$R/build.log" | cut -c1-400; echo "review build: codecs fell back to Elm"; fail=1; }
 cd "$R"
 log="$R/bar.log"; : > "$log"
 # The review scripts report problems in their output (and not always in the exit code),

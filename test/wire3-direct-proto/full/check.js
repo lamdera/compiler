@@ -114,6 +114,72 @@ for (const mode of modes) {
       stats.push(`${n}:${nothings}`);
     }
   }
+  // Validated types (src/Validated.elm): the validating decoders (w3_decode_, which run
+  // w3_validate_<T>) and the non-validating ones (w3_unsafe_decode_) against the Elm
+  // codecs. Besides outcome, value and bytes consumed, the sequence of validator calls
+  // (validator, argument, result: build.sh wraps every validator) and everything logged
+  // (a rejection logs its message through Lamdera.Wire3.debug) must be identical, so the
+  // validators run at the same points, in the same order, on the same values.
+  {
+    check(`${mode} validators wrapped`, B.validators >= 10 && D.validators === B.validators);
+    const runRaw = (dec, dv) => {
+      const fn = mode === 'dev' ? dec.a : dec;
+      try { const t = fn.a === 2 ? fn.f(dv, 0) : fn(dv)(0); return { ok: true, off: t.a, v: t.b }; } catch (e) { return { ok: false }; }
+    };
+    const origLog = console.log;
+    // run f with X's validator trace and console.log captured
+    const traced = (X, f) => {
+      X.vtrace.length = 0;
+      const logs = [];
+      console.log = (...a) => logs.push(a.map(String).join(' '));
+      try { return { r: f(), trace: X.vtrace.slice(), logs }; } finally { console.log = origLog; }
+    };
+    const tally = { valid: 0, rejected: 0, unsafeOnly: 0, calls: 0, rejectedBy: new Set() };
+    const compareV = (label, dv, quiet) => {
+      let ok = true;
+      for (const [kind, raw, wrapped] of [['validating', 'vdecoder', 'vdecode'], ['unsafe', 'vdecoderUnsafe', 'vdecodeUnsafe']]) {
+        const b = traced(B, () => runRaw(B[raw], dv)), d = traced(D, () => runRaw(D[raw], dv));
+        const same1 = b.r.ok === d.r.ok && (!b.r.ok || (b.r.off === d.r.off && same(b.r.v, d.r.v)));
+        const sameTrace = same(b.trace, d.trace) && same(b.logs, d.logs);
+        if (!same1 || !sameTrace) {
+          ok = false;
+          check(`${mode} validated ${kind} ${label}: outcome/offset/value ${same1}, validator calls and logs ${sameTrace}` + (sameTrace ? '' : ` elm=${JSON.stringify(b.trace.map((t) => t[0]))} ${JSON.stringify(b.logs)} direct=${JSON.stringify(d.trace.map((t) => t[0]))} ${JSON.stringify(d.logs)}`), false);
+        }
+        if (kind === 'unsafe' && b.trace.length + d.trace.length + b.logs.length + d.logs.length !== 0) { ok = false; check(`${mode} unsafe decoder ${label} ran no validators`, false); }
+        if (kind === 'validating') { tally.calls += b.trace.length; if (!quiet) for (const l of b.logs) tally.rejectedBy.add(l.split(' ')[0] + (l.startsWith('VNode left') ? ' left' : '')); }
+        // the Elm-facing bytesDecode wrappers too
+        const bw = traced(B, () => B[wrapped](dv)), dw = traced(D, () => D[wrapped](dv));
+        if (!(isJust(bw.r) === isJust(dw.r) && (!isJust(bw.r) || same(bw.r, dw.r)) && same(bw.trace, dw.trace) && same(bw.logs, dw.logs))) { ok = false; check(`${mode} validated ${kind} bytesDecode ${label}`, false); }
+        if (!quiet && kind === 'validating') { if (b.r.ok) tally.valid++; else tally.rejected++; }
+        if (!quiet && kind === 'unsafe' && b.r.ok && !traced(B, () => runRaw(B.vdecoder, dv)).r.ok) tally.unsafeOnly++;
+      }
+      return ok;
+    };
+    for (let n = 0; n < 160; n++) {
+      const m = B.vgen(n);
+      const base = bytesOf(B.vencode(m));
+      check(`${mode} validated encode n=${n}`, base.equals(bytesOf(D.vencode(m))));
+      if (!compareV(`n=${n}`, new DataView(new Uint8Array(base).buffer))) continue;
+      // the same bytes at an offset inside a bigger buffer
+      const padded = new Uint8Array(base.length + 11); padded.set(base, 5);
+      compareV(`offset n=${n}`, new DataView(padded.buffer, 5, base.length), true);
+      if (n % 8 === 0) {
+        for (let cut = 0; cut < base.length; cut++) if (!compareV(`truncate n=${n} cut=${cut}`, new DataView(new Uint8Array(base.subarray(0, cut)).buffer), true)) break;
+        let seed = 991 + n;
+        const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+        for (let k = 0; k < 400; k++) {
+          const c = new Uint8Array(base);
+          const i = Math.floor(rnd() * c.length);
+          c[i] = rnd() < 0.5 ? Math.floor(rnd() * 256) : [0, 1, 2, 3, 5, 7, 13, 14, 26, 99, 198, 255][Math.floor(rnd() * 12)];
+          if (!compareV(`corrupt n=${n} i=${i} byte=${c[i]}`, new DataView(c.buffer), true)) break;
+        }
+      }
+    }
+    check(`${mode} validated: both outcomes seen (valid ${tally.valid}, rejected ${tally.rejected}, rejected but unsafe-decodable ${tally.unsafeOnly}, validator calls ${tally.calls})`, tally.valid > 20 && tally.rejected > 20 && tally.unsafeOnly > 20 && tally.calls > 1000);
+    const by = [...tally.rejectedBy].sort();
+    check(`${mode} validated: every validator rejected something (${by.join(', ')})`, ['Positive', 'VBox', 'VC', 'VLeaf', 'VNode', 'VNode left', 'VPhantom', 'VPing', 'VPong', 'VRec', 'VRose'].every((x) => tally.rejectedBy.has(x)));
+    console.log(`${mode}: validated n=0..159: valid ${tally.valid}, rejected ${tally.rejected} (unsafe decodes ${tally.unsafeOnly} of them), ${tally.calls} validator calls; rejections by ${by.join(', ')}`);
+  }
   // Signalling NaNs keep their bits through Dict/Set decoding (a numbers-only JS array
   // would quiet them). Record SNaN = { d : Dict Int Float, k : Dict Float Int, s : Set Float }.
   {

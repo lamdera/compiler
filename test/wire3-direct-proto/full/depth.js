@@ -9,6 +9,11 @@ const builders = {
   Fat: (n) => { const a = []; for (let i = 0; i < n; i++) a.push(0, ...zeros(60)); a.push(1); return a; },
   Tree: (n) => { const a = []; for (let i = 0; i < n; i++) a.push(1); a.push(0); for (let i = 0; i < n; i++) a.push(0, 0, 0); return a; },
   Big: (n) => { const a = []; for (let i = 0; i < n; i++) a.push(0, 0, 0, 1); a.push(0, 0, 0, 0); return a; }, // BigRec String (Maybe Big), u16 tag 0
+  // Validated.VTree = VLeaf Int | VNode VTree Int VTree, validated at every level (and its
+  // non-validating decoder): VNode^n, the innermost VLeaf 0, then each level's label 0 and
+  // right VLeaf 0.
+  VTree: (n) => { const a = []; for (let i = 0; i < n; i++) a.push(1); a.push(0, 0); for (let i = 0; i < n; i++) a.push(0, 0, 0); return a; },
+  VTreeUnsafe: (n) => { const a = []; for (let i = 0; i < n; i++) a.push(1); a.push(0, 0); for (let i = 0; i < n; i++) a.push(0, 0, 0); return a; },
 };
 
 if (process.argv[2] === '--probe') {

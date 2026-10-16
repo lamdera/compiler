@@ -21,7 +21,10 @@ const bin = fs.readdirSync(snapDir).filter((f) => f.endsWith('.bin')).sort().pop
 const file = path.join(snapDir, bin)
 
 // Exposes the backend's streaming API (the function behind app.fns.w3StreamEncodeBackendModel).
-const prelude = { name: 'expose-stream', prelude: "globalThis.__W3S = function () { return _Lamdera_w3StreamEncodeBackendModel.apply(null, arguments); };" }
+// Also exposes the non-validating decoder, w3_unsafe_decode_BackendModel (what snapshot
+// restore and Evergreen migrations decode with), when the bundle has it.
+const prelude = { name: 'expose-stream', prelude: "globalThis.__W3S = function () { return _Lamdera_w3StreamEncodeBackendModel.apply(null, arguments); };\n" +
+  "globalThis.__W3U = function (dv) { if (typeof $author$project$Types$w3_unsafe_decode_BackendModel === 'undefined') return null; try { var t = A2($author$project$Types$w3_unsafe_decode_BackendModel, dv, 0); return { ok: true, consumed: t.a, value: t.b }; } catch (e) { return { ok: false, error: String(e) }; } };" }
 
 const results = { app, snapshot: bin, bytes: fs.statSync(file).size, node: process.version }
 const ok = (k, v) => { results[k] = v; if (v === false) results.failed = (results.failed || []).concat(k) }
@@ -33,6 +36,7 @@ const dv = new DataView(fileBuf.buffer, fileBuf.byteOffset, fileBuf.byteLength)
 
 const on = loadBundle(path.join(builds, app, 'on', 'backend-app.js'), prelude)
 const onStream = globalThis.__W3S
+const onUnsafe = globalThis.__W3U
 
 // 1. direct decode
 const [dOn, msDecOn] = time(() => on.decodeRaw(dv))
@@ -57,7 +61,8 @@ results.msStreamEncode = Math.round(msStream); results.streamChunks = chunks
 ok('streamEqualsFile', streamSame && total === fileBuf.length && off0 === fileBuf.length)
 
 // 4. baseline (Elm codecs) decode, and structural equality with the direct decode
-const off = loadBundle(path.join(builds, app, 'off', 'backend-app.js'))
+const off = loadBundle(path.join(builds, app, 'off', 'backend-app.js'), prelude)
+const offUnsafe = globalThis.__W3U
 const [dOff, msDecOff] = time(() => off.decodeRaw(dv))
 results.msDecodeElm = Math.round(msDecOff)
 ok('elmDecodeOk', dOff.ok)
@@ -76,6 +81,20 @@ const [eOff, msEncOff] = time(() => off.encode(dOn.value))
 results.msEncodeElm = Math.round(msEncOff)
 ok('elmEncodeOfDirectDecodeEqualsFile', B(eOff).equals(fileBuf))
 ok('directEncodeOfElmDecodeEqualsFile', B(on.encode(dOff.value)).equals(fileBuf))
+
+// 6. the non-validating decoders (direct and Elm), when the bundles have them: the whole
+// file, to the same value as the validating decode (these apps have no validators)
+const uOn = onUnsafe(dv), uOff = offUnsafe(dv)
+results.unsafeDecoder = uOn !== null && uOff !== null
+if (uOn !== null && uOff !== null) {
+  ok('unsafeDirectDecodeOk', uOn.ok && uOn.consumed === dv.byteLength)
+  ok('unsafeElmDecodeOk', uOff.ok && uOff.consumed === dv.byteLength)
+  if (uOn.ok && uOff.ok) {
+    const uProblems = []
+    ok('unsafeDirectEqualsElm', structuralHash(uOn.value, { cmp, dictProblems: uProblems, seqDictToList: off.seqDictToList }).hash === hOff.hash && uProblems.length === 0)
+    ok('unsafeElmEqualsElm', structuralHash(uOff.value, { seqDictToList: off.seqDictToList }).hash === hOff.hash)
+  }
+}
 
 console.log(JSON.stringify(results))
 process.exit(results.failed ? 1 : 0)
