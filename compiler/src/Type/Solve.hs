@@ -361,6 +361,13 @@ adjustRank youngMark visitMark groupRank var =
         else if mark == visitMark then
           return rank
 
+        else if rank <= groupRank then
+          -- @LAMDERA an older variable whose rank stays as it is: upstream also marks it
+          -- visited, but the mark only saves a second visit here, and that visit would
+          -- give the same answer. Skipping the write saves a descriptor for each of the
+          -- tens of millions of these visits on a big app.
+          return rank
+
         else
           do  let minRank = min groupRank rank
               -- TODO how can minRank ever be groupRank?
