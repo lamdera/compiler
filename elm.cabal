@@ -13,8 +13,12 @@ license-file: LICENSE
 
 
 Executable lamdera
+    -- @LAMDERA upstream runs with -qg, which turns the parallel GC off. On a large app
+    -- that left one thread doing every collection while the other cores waited: on a
+    -- 920 module app, 54s of a 59s build was single threaded GC (+RTS -s), and with
+    -- the parallel GC back on the same build takes 13s. Small projects are unchanged.
     -- Make everything an error, ignoring the ones that already sit in core
-    ghc-options: -O2 -rtsopts -threaded "-with-rtsopts=-N -qg -A128m"
+    ghc-options: -O2 -rtsopts -threaded "-with-rtsopts=-N -A128m"
         -Wall
         -Werror
         -Wno-error=noncanonical-monad-instances
