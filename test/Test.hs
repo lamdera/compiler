@@ -15,6 +15,7 @@ import qualified Test.Snapshot
 import qualified Test.Lamdera
 import qualified Test.Caching
 import qualified Test.BinaryCounts
+import qualified Test.ElmiTypeTable
 import qualified Test.Check
 import qualified Test.Wire
 import qualified Test.WireGolden
@@ -171,5 +172,6 @@ allTests =
     , scope "Test.JsOutput -> " $ Test.JsOutput.suite
     , scope "Test.BackwardsCompat -> " $ Test.BackwardsCompat.suite
     , scope "Test.BinaryCounts -> " $ Test.BinaryCounts.suite
+    , scope "Test.ElmiTypeTable -> " $ Test.ElmiTypeTable.suite
     , scope "Test.EasyTestSpinner -> " $ Test.EasyTestSpinner.suite
     ]

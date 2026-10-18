@@ -22,7 +22,10 @@ module Elm.Interface
 
 
 import Control.Monad (liftM, liftM2, liftM3, liftM4, liftM5)
+import qualified Control.Monad.State.Strict as State -- @LAMDERA
 import Data.Coerce (coerce)
+import qualified Data.IntMap.Strict as IntMap -- @LAMDERA
+import Data.Word (Word16) -- @LAMDERA
 import qualified Data.Map.Strict as Map
 import qualified Data.Map.Merge.Strict as Map
 import qualified Data.Map.Utils as Map
@@ -216,69 +219,81 @@ privatize di =
 
 
 -- BINARY
+--
+-- @LAMDERA Every Can.Type in an interface is written once, in a type table at the
+-- start of the interface, and referred to by its index everywhere else. See TYPE
+-- TABLE below for why and how.
 
 
 eInterface :: Interface -> E.Builder
 eInterface (Interface h vs us as bs) =
-  Pkg.eName h
-  <> E.dict32 N.encode eAnnotation vs
-  <> E.dict32 T.encode eUnion us
-  <> E.dict32 T.encode eAlias as
-  <> E.dict32 Op.encode eBinop bs
+  withTypeTable $ \ref ->
+    do  vs_ <- traverse (eAnnotation ref) vs
+        us_ <- traverse (eUnion ref) us
+        as_ <- traverse (eAlias ref) as
+        bs_ <- traverse (eBinop ref) bs
+        return $
+          Pkg.eName h
+          <> E.dict32 N.encode id vs_
+          <> E.dict32 T.encode id us_
+          <> E.dict32 T.encode id as_
+          <> E.dict32 Op.encode id bs_
 
 
 dInterface :: D.Decoder Interface
 dInterface =
-  liftM5 Interface
-    Pkg.dName
-    (D.dict32 N.decode dAnnotation)
-    (D.dict32 T.decode dUnion)
-    (D.dict32 T.decode dAlias)
-    (D.dict32 Op.decode dBinop)
+  do  table <- dTypeTable
+      liftM5 Interface
+        Pkg.dName
+        (D.dict32 N.decode (dAnnotation table))
+        (D.dict32 T.decode (dUnion table))
+        (D.dict32 T.decode (dAlias table))
+        (D.dict32 Op.decode (dBinop table))
 
 
-eUnion :: Union -> E.Builder
-eUnion union =
+eUnion :: Ref -> Union -> Interning E.Builder
+eUnion ref union =
   case union of
-    OpenUnion    u -> E.u8# 0#Word8 <> eUnion_ u
-    ClosedUnion  u -> E.u8# 1#Word8 <> eUnion_ u
-    PrivateUnion u -> E.u8# 2#Word8 <> eUnion_ u
+    OpenUnion    u -> (E.u8# 0#Word8 <>) <$> eUnion_ ref u
+    ClosedUnion  u -> (E.u8# 1#Word8 <>) <$> eUnion_ ref u
+    PrivateUnion u -> (E.u8# 2#Word8 <>) <$> eUnion_ ref u
 
 
-dUnion :: D.Decoder Union
-dUnion =
+dUnion :: TypeTable -> D.Decoder Union
+dUnion table =
   do  n <- D.u8
       case n of
-        0 -> OpenUnion <$> dUnion_
-        1 -> ClosedUnion <$> dUnion_
-        2 -> PrivateUnion <$> dUnion_
+        0 -> OpenUnion <$> dUnion_ table
+        1 -> ClosedUnion <$> dUnion_ table
+        2 -> PrivateUnion <$> dUnion_ table
         _ -> D.expecting "Union"
 
 
-eAlias :: Alias -> E.Builder
-eAlias alias =
+eAlias :: Ref -> Alias -> Interning E.Builder
+eAlias ref alias =
   case alias of
-    PublicAlias  a -> E.u8# 0#Word8 <> eAlias_ a
-    PrivateAlias a -> E.u8# 1#Word8 <> eAlias_ a
+    PublicAlias  a -> (E.u8# 0#Word8 <>) <$> eAlias_ ref a
+    PrivateAlias a -> (E.u8# 1#Word8 <>) <$> eAlias_ ref a
 
 
-dAlias :: D.Decoder Alias
-dAlias =
+dAlias :: TypeTable -> D.Decoder Alias
+dAlias table =
   do  n <- D.u8
       case n of
-        0 -> PublicAlias  <$> dAlias_
-        1 -> PrivateAlias <$> dAlias_
+        0 -> PublicAlias  <$> dAlias_ table
+        1 -> PrivateAlias <$> dAlias_ table
         _ -> D.expecting "Alias"
 
 
-eBinop :: Binop -> E.Builder
-eBinop (Binop n t a p) =
-  N.encode n <> eAnnotation t <> eAssociativity a <> ePrecedence p
+eBinop :: Ref -> Binop -> Interning E.Builder
+eBinop ref (Binop n t a p) =
+  do  t_ <- eAnnotation ref t
+      return (N.encode n <> t_ <> eAssociativity a <> ePrecedence p)
 
 
-dBinop :: D.Decoder Binop
-dBinop =
-  liftM4 Binop N.decode dAnnotation dAssociativity dPrecedence
+dBinop :: TypeTable -> D.Decoder Binop
+dBinop table =
+  liftM4 Binop N.decode (dAnnotation table) dAssociativity dPrecedence
 
 
 dPrecedence :: D.Decoder Op.Precedence
@@ -313,7 +328,14 @@ eDependencyInterface :: DependencyInterface -> E.Builder
 eDependencyInterface iface =
   case iface of
     Public  i     -> E.u8# 0#Word8 <> eInterface i
-    Private n u a -> E.u8# 1#Word8 <> Pkg.eName n <> E.dict32 T.encode eUnion_ u <> E.dict32 T.encode eAlias_ a
+    -- @LAMDERA a Private interface has its own type table too, after the tag
+    Private n u a ->
+      E.u8# 1#Word8 <>
+        withTypeTable (\ref ->
+          do  u_ <- traverse (eUnion_ ref) u
+              a_ <- traverse (eAlias_ ref) a
+              return (Pkg.eName n <> E.dict32 T.encode id u_ <> E.dict32 T.encode id a_)
+        )
 
 
 dDependencyInterface :: D.Decoder DependencyInterface
@@ -321,7 +343,9 @@ dDependencyInterface =
   do  n <- D.u8
       case n of
         0 -> liftM  Public dInterface
-        1 -> liftM3 Private Pkg.dName (D.dict32 T.decode dUnion_) (D.dict32 T.decode dAlias_)
+        1 ->
+          do  table <- dTypeTable
+              liftM3 Private Pkg.dName (D.dict32 T.decode (dUnion_ table)) (D.dict32 T.decode (dAlias_ table))
         _ -> D.expecting "DependencyInterface"
 
 
@@ -329,45 +353,53 @@ dDependencyInterface =
 -- BINARY HELPERS
 
 
-eAlias_ :: Can.Alias -> E.Builder
-eAlias_ (Can.Alias vs t) =
-  E.list8 T.eVar vs <> eType t
+eAlias_ :: Ref -> Can.Alias -> Interning E.Builder
+eAlias_ ref (Can.Alias vs t) =
+  do  t_ <- eTypeRef ref t
+      return (E.list8 T.eVar vs <> t_)
 
 
-dAlias_ :: D.Decoder Can.Alias
-dAlias_ =
-  liftM2 Can.Alias (D.list8 T.dVar) dType
+dAlias_ :: TypeTable -> D.Decoder Can.Alias
+dAlias_ table =
+  liftM2 Can.Alias (D.list8 T.dVar) (dTypeRef table)
 
 
-eUnion_ :: Can.Union -> E.Builder
-eUnion_ (Can.Union vs cs n opts) =
-  E.list8 T.eVar vs <> E.list32 eCtor cs <> E.int n <> Can.eCtorOpts opts
+eUnion_ :: Ref -> Can.Union -> Interning E.Builder
+eUnion_ ref (Can.Union vs cs n opts) =
+  do  cs_ <- mapM (eCtor ref) cs
+      return (E.list8 T.eVar vs <> E.list32 id cs_ <> E.int n <> Can.eCtorOpts opts)
 
 
-dUnion_ :: D.Decoder Can.Union
-dUnion_ =
-  liftM4 Can.Union (D.list8 T.dVar) (D.list32 dCtor) D.int Can.dCtorOpts
+dUnion_ :: TypeTable -> D.Decoder Can.Union
+dUnion_ table =
+  liftM4 Can.Union (D.list8 T.dVar) (D.list32 (dCtor table)) D.int Can.dCtorOpts
 
 
-eCtor :: Can.Ctor -> E.Builder
-eCtor (Can.Ctor n i a t) =
-  N.encode n <> Index.eZeroBased i <> E.int a <> E.list8 eType t
+eCtor :: Ref -> Can.Ctor -> Interning E.Builder
+eCtor ref (Can.Ctor n i a t) =
+  do  t_ <- mapM (eTypeRef ref) t
+      return (N.encode n <> Index.eZeroBased i <> E.int a <> E.list8 id t_)
 
 
-dCtor :: D.Decoder Can.Ctor
-dCtor =
-  liftM4 Can.Ctor N.decode Index.dZeroBased D.int (D.list8 dType)
+dCtor :: TypeTable -> D.Decoder Can.Ctor
+dCtor table =
+  liftM4 Can.Ctor N.decode Index.dZeroBased D.int (D.list8 (dTypeRef table))
 
 
-eAnnotation :: Can.Annotation -> E.Builder
-eAnnotation (Can.Forall vs t) =
-  E.dict8 T.eVar (\() -> mempty) vs <> eType t
+eAnnotation :: Ref -> Can.Annotation -> Interning E.Builder
+eAnnotation ref (Can.Forall vs t) =
+  do  t_ <- eTypeRef ref t
+      return (E.dict8 T.eVar (\() -> mempty) vs <> t_)
 
 
-dAnnotation :: D.Decoder Can.Annotation
-dAnnotation =
-  liftM2 Can.Forall (D.dict8 T.dVar (pure ())) dType
+dAnnotation :: TypeTable -> D.Decoder Can.Annotation
+dAnnotation table =
+  liftM2 Can.Forall (D.dict8 T.dVar (pure ())) (dTypeRef table)
 
+
+-- @LAMDERA eType / dType write a whole type inline. Interfaces no longer use them
+-- (they use the type table below), but AST.Optimized still does for the message type
+-- of Main, so the .elmo format is unchanged.
 
 eType :: Can.Type -> E.Builder
 eType tipe =
@@ -422,3 +454,210 @@ dFieldType :: D.Decoder Can.FieldType
 dFieldType =
   liftM2 Can.FieldType D.u16 dType
 
+
+
+-- TYPE TABLE
+--
+-- @LAMDERA Type inference expands every alias in the annotations it stores
+-- (Type.Type.toCanType writes Can.TAlias with its Filled body), and eType wrote that
+-- whole body at every use. An app with a large Model or page-context record repeats
+-- the same expanded subtrees thousands of times per interface: in one customer app
+-- 99.9% of 740MB of .elmi was types, and writing each distinct subtree once brings
+-- it to 13%.
+--
+-- So an interface starts with a table of every distinct Can.Type node in it, each
+-- written like eType but with its child types as indexes of earlier entries, and the
+-- interface proper follows with an index in place of each type:
+--
+--   u32 count, then count entries; each type below is a ref
+--
+--   0 lambda   ref ref
+--   1 var      T.eVar
+--   2 record   dict32 (name, u16 field index, ref), maybe T.eVar
+--   3 unit
+--   4 pair     ref ref
+--   5 triple   ref ref ref
+--   6 alias    canonical, name, list8 (T.eVar, ref), u8 0 = Holey / 1 = Filled, ref
+--   7 type     canonical, name, list8 ref
+--
+-- A ref is a u16 when the table has at most 65536 entries and a u32 otherwise. The
+-- table is built bottom up (children before parents), so a ref always points at an
+-- earlier entry, and the decoder rebuilds each entry from the ones before it. The
+-- decoded types are == to what eType / dType gave, so type checking, generated JS,
+-- Wire3 and type hashes see exactly the same values; equal subtrees are now also
+-- shared in memory.
+--
+-- Nodes are keyed by their constructor and fields with each child replaced by its
+-- index, so finding a node in the table compares small keys, never whole types.
+
+
+type Ref = Int -> E.Builder
+
+
+type Interning = State.State TableBuilder
+
+
+data TableBuilder =
+  TableBuilder
+    { _tb_ids   :: !(Map.Map Key Int)
+    , _tb_size  :: !Int
+    , _tb_nodes :: [Key] -- newest first
+    }
+
+
+data Key
+  = KLambda !Int !Int
+  | KVar !T.Var
+  | KRecord !(Map.Map N.Name (Word16, Int)) !(Maybe T.Var)
+  | KUnit
+  | KPair !Int !Int
+  | KTriple !Int !Int !Int
+  | KAlias !ModuleName.Canonical !T.Name ![(T.Var, Int)] !Bool !Int -- True = Filled
+  | KType !ModuleName.Canonical !T.Name ![Int]
+  deriving (Eq, Ord)
+
+
+{-| Run an encoder that writes refs, and put the type table it collected in front.
+The ref encoder depends on the final size of the table, so the encoder gets it as an
+argument and must only use it inside the Builders it returns (never to decide what to
+intern); it is evaluated after the table is complete.
+-}
+withTypeTable :: (Ref -> Interning E.Builder) -> E.Builder
+withTypeTable encoder =
+  let
+    (body, TableBuilder _ size nodes) =
+      State.runState (encoder ref) (TableBuilder Map.empty 0 [])
+
+    ref =
+      if size <= 65536
+        then \i -> E.u16 (fromIntegral i)
+        else \i -> E.u32 (fromIntegral i)
+  in
+  E.u32 (fromIntegral size)
+  <> mconcat (map (eKey ref) (reverse nodes))
+  <> body
+
+
+eTypeRef :: Ref -> Can.Type -> Interning E.Builder
+eTypeRef ref tipe =
+  ref <$> intern tipe
+
+
+intern :: Can.Type -> Interning Int
+intern tipe =
+  case tipe of
+    Can.TLambda a b ->
+      do  ia <- intern a
+          ib <- intern b
+          node (KLambda ia ib)
+
+    Can.TVar x ->
+      node (KVar x)
+
+    Can.TRecord fs e ->
+      do  fs_ <- traverse (\(Can.FieldType i t) -> (,) i <$> intern t) fs
+          node (KRecord fs_ e)
+
+    Can.TUnit ->
+      node KUnit
+
+    Can.TPair a b ->
+      do  ia <- intern a
+          ib <- intern b
+          node (KPair ia ib)
+
+    Can.TTriple a b c ->
+      do  ia <- intern a
+          ib <- intern b
+          ic <- intern c
+          node (KTriple ia ib ic)
+
+    Can.TAlias h n xs aliasType ->
+      do  xs_ <- mapM (\(x,t) -> (,) x <$> intern t) xs
+          case aliasType of
+            Can.Holey  t -> node . KAlias h n xs_ False =<< intern t
+            Can.Filled t -> node . KAlias h n xs_ True  =<< intern t
+
+    Can.TType h n xs ->
+      do  xs_ <- mapM intern xs
+          node (KType h n xs_)
+
+
+node :: Key -> Interning Int
+node key =
+  do  TableBuilder ids size nodes <- State.get
+      case Map.lookup key ids of
+        Just i ->
+          return i
+
+        Nothing ->
+          do  State.put (TableBuilder (Map.insert key size ids) (size + 1) (key : nodes))
+              return size
+
+
+eKey :: Ref -> Key -> E.Builder
+eKey ref key =
+  case key of
+    KLambda a b         -> E.u8# 0#Word8 <> ref a <> ref b
+    KVar x              -> E.u8# 1#Word8 <> T.eVar x
+    KRecord fs e        -> E.u8# 2#Word8 <> E.dict32 N.encode (\(i,t) -> E.u16 i <> ref t) fs <> E.maybe T.eVar e
+    KUnit               -> E.u8# 3#Word8
+    KPair a b           -> E.u8# 4#Word8 <> ref a <> ref b
+    KTriple a b c       -> E.u8# 5#Word8 <> ref a <> ref b <> ref c
+    KAlias h n xs f t   -> E.u8# 6#Word8 <> ModuleName.eCanonical h <> T.encode n <> E.list8 (\(x,r) -> T.eVar x <> ref r) xs <> E.u8 (if f then 1 else 0) <> ref t
+    KType h n xs        -> E.u8# 7#Word8 <> ModuleName.eCanonical h <> T.encode n <> E.list8 ref xs
+
+
+data TypeTable =
+  TypeTable
+    { _tt_ref   :: D.Decoder Int
+    , _tt_types :: !(IntMap.IntMap Can.Type)
+    }
+
+
+dTypeTable :: D.Decoder TypeTable
+dTypeTable =
+  do  size <- D.u32
+      let dRef = if size <= 65536 then fromIntegral <$> D.u16 else fromIntegral <$> D.u32
+          go i types =
+            if i == fromIntegral size
+              then return (TypeTable dRef types)
+              else
+                do  t <- dNode (TypeTable dRef types)
+                    go (i + 1) (IntMap.insert i t types)
+      go 0 IntMap.empty
+
+
+-- Only entries before this one are in the table yet, so a ref forward (or to itself)
+-- is rejected as corrupt rather than followed.
+dNode :: TypeTable -> D.Decoder Can.Type
+dNode table =
+  do  word <- D.u8
+      let ref = dTypeRef table
+      case word of
+        0 -> liftM2 Can.TLambda ref ref
+        1 -> liftM  Can.TVar T.dVar
+        2 -> liftM2 Can.TRecord (D.dict32 N.decode (liftM2 Can.FieldType D.u16 ref)) (D.maybe T.dVar)
+        3 -> return Can.TUnit
+        4 -> liftM2 Can.TPair ref ref
+        5 -> liftM3 Can.TTriple ref ref ref
+        6 -> liftM4 Can.TAlias ModuleName.dCanonical T.decode (D.list8 (liftM2 (,) T.dVar ref)) (dAliasTypeRef ref)
+        7 -> liftM3 Can.TType ModuleName.dCanonical T.decode (D.list8 ref)
+        _ -> D.expecting "Type"
+
+
+dAliasTypeRef :: D.Decoder Can.Type -> D.Decoder Can.AliasType
+dAliasTypeRef ref =
+  do  n <- D.u8
+      case n of
+        0 -> liftM Can.Holey ref
+        1 -> liftM Can.Filled ref
+        _ -> D.expecting "AliasType"
+
+
+dTypeRef :: TypeTable -> D.Decoder Can.Type
+dTypeRef (TypeTable dRef types) =
+  do  i <- dRef
+      case IntMap.lookup i types of
+        Just t  -> return t
+        Nothing -> D.expecting "TypeRef"

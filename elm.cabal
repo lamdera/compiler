@@ -410,6 +410,7 @@ Executable lamdera
         EasyTest
         Test
         Test.BinaryCounts
+        Test.ElmiTypeTable
         Test.Caching
         Test.EasyTestSpinner
         Test.Ext.Filewatch
