@@ -1,10 +1,12 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE PatternGuards #-}
+{-# LANGUAGE MagicHash #-}
 module Lamdera.Wire3.Direct
   ( addDirectIR
   , replaceCodecs
   , directEnabled
+  , CodecCache, emptyCodecCache, replaceCodecsCached -- @LAMDERA lamdera live --memory
   ) where
 
 {- Direct JS Wire3 codecs (C2, docs/plans/wire3-codegen-research.md in the runtime repo).
@@ -58,12 +60,14 @@ import qualified Data.ByteString.Char8 as BS8
 import qualified Data.ByteString.Lazy as BSL
 import qualified Data.List as List
 import qualified Data.Map as Map
+import qualified Data.Map.Strict as MapS
 import qualified Data.Maybe as Maybe
 import qualified Data.Set as Set
 import Data.FileEmbed (bsToExp)
 import Language.Haskell.TH (runIO)
 import Language.Haskell.TH.Syntax (addDependentFile)
 import System.IO.Unsafe (unsafePerformIO)
+import GHC.Exts (isTrue#, reallyUnsafePtrEquality#)
 import qualified System.Environment as Env
 
 import qualified AST.Canonical as Can
@@ -1012,61 +1016,205 @@ data Ctx =
 
 replaceCodecs :: Mode.Mode -> Map.Map Opt.Global Opt.Node -> Map.Map Opt.Global Opt.Node
 replaceCodecs mode graph =
-  if not directEnabled then graph else
+  fst (replaceCodecsWith Nothing mode graph) -- @LAMDERA see replaceCodecsCached
+
+
+-- CACHED REPLACING
+--
+-- @LAMDERA `lamdera live --memory` runs replaceCodecs on every rebuild, over every module's
+-- codecs. Reading the stored IR of every type and rendering the JS of every reachable
+-- codec again was a few hundred ms of each rebuild of a 920 module app, for codecs that
+-- almost never change. replaceCodecsCached keeps both from the last build:
+--
+-- - the IR read from each w3_ir_/w3_iru_ node, reused while the node's bytes are the same
+-- - each rendered codec node, reused while its Codec is the same and the direct arity of
+--   every type it refers to (WRef, the only thing rendering looks up in `_direct`) is too.
+--   A codec rendered fresh is rendered with `_direct` cut down to those types, so the kept
+--   node (rendered lazily, maybe never) does not hold on to the whole map of that build.
+--
+-- The output is the same graph replaceCodecs gives. Use it with one Mode only.
+
+
+data CodecCache =
+  CodecCache
+    { _ccIrs :: !(Map.Map Opt.Global (BS.ByteString, Maybe IR))
+    , _ccUnsafe :: !(Map.Map Opt.Global (BS.ByteString, Maybe Codec))
+    , _ccRendered :: !(Map.Map (String, Key) Rendered) -- by node name prefix and type
+    }
+
+
+data Rendered =
+  Rendered !Codec ![Maybe Int] Opt.Node -- the codec, the direct arities of its WRefs, its node
+
+
+emptyCodecCache :: CodecCache
+emptyCodecCache =
+  CodecCache Map.empty Map.empty Map.empty
+
+
+replaceCodecsCached :: CodecCache -> Mode.Mode -> Map.Map Opt.Global Opt.Node -> (Map.Map Opt.Global Opt.Node, CodecCache)
+replaceCodecsCached cache mode graph =
+  case replaceCodecsWith (Just cache) mode graph of
+    (graph_, Just cache_) -> (graph_, cache_)
+    (graph_, Nothing) -> (graph_, emptyCodecCache)
+
+
+-- Every type a codec refers to, the only keys rendering looks up (directArity).
+codecRefs :: Codec -> [Key]
+codecRefs (Codec _ body) =
+  Set.toList (goBody body Set.empty)
+  where
+    goBody b acc =
+      case b of
+        BAlias w -> goW w acc
+        BUnion _ _ alts -> foldr (\(Alt _ _ ws) a -> foldr goW a ws) acc alts
+        BValidate _ inner -> goBody inner acc
+
+    goW w acc =
+      case w of
+        WList a -> goW a acc
+        WMaybe a -> goW a acc
+        WSet a -> goW a acc
+        WArray a -> goW a acc
+        WSeqSet a -> goW a acc
+        WResult a b -> goW a (goW b acc)
+        WDict a b -> goW a (goW b acc)
+        WSeqDict a b -> goW a (goW b acc)
+        WPair a b -> goW a (goW b acc)
+        WTriple a b c -> goW a (goW b (goW c acc))
+        WRecord fs -> foldr (goW . snd) acc fs
+        WRef home t args -> foldr goW (Set.insert (home, t) acc) args
+        _ -> acc
+
+
+strictArities :: Map.Map Key Codec -> [Key] -> [Maybe Int]
+strictArities direct refs =
   let
-    irs :: Map.Map Key IR
-    irs =
+    arity key =
+      case Map.lookup key direct of
+        Just (Codec ps _) -> let n = length ps in n `seq` Just n
+        Nothing -> Nothing
+    go ks =
+      case ks of
+        [] -> []
+        k : rest -> let a = arity k; as = go rest in a `seq` as `seq` (a : as)
+  in
+  go refs
+
+
+-- The original replaceCodecs, keeping and reusing a CodecCache when given one.
+replaceCodecsWith :: Maybe CodecCache -> Mode.Mode -> Map.Map Opt.Global Opt.Node -> (Map.Map Opt.Global Opt.Node, Maybe CodecCache)
+replaceCodecsWith maybeCache mode graph =
+  if not directEnabled then (graph, maybeCache) else
+  let
+    -- @LAMDERA the IR of a node whose bytes are the same as last build's is not read again
+    reuse :: Read a => (CodecCache -> Map.Map Opt.Global (BS.ByteString, Maybe a)) -> Parser a -> Opt.Global -> BS.ByteString -> Maybe a
+    reuse field parser global bs =
+      case maybeCache of
+        Just cache
+          | Just (oldBs, parsed) <- Map.lookup global (field cache)
+          , oldBs == bs ->
+              parsed
+        _ ->
+          readStored parser bs
+
+    storedOf :: Read a => String -> (CodecCache -> Map.Map Opt.Global (BS.ByteString, Maybe a)) -> Parser a -> Map.Map Opt.Global (BS.ByteString, Maybe a)
+    storedOf prefix field parser =
       Map.foldrWithKey
-        (\(Opt.Global home name) node acc ->
-            case (List.stripPrefix "w3_ir_" (Name.toChars name), node) of
-              (Just typeName, Opt.Kernel [K.JS bs] _) ->
-                case readStored pIR bs of
-                  Just ir -> Map.insert (homeOf home, typeName) ir acc
-                  Nothing -> acc
+        (\global@(Opt.Global _ name) node acc ->
+            case (List.isPrefixOf prefix (Name.toChars name), node) of
+              (True, Opt.Kernel [K.JS bs] _) ->
+                let parsed = reuse field parser global bs in
+                parsed `seq` MapS.insert global (bs, parsed) acc
               _ -> acc
         )
         Map.empty
         graph
 
-    -- The non-validating decoder chain (w3_unsafe_decode_<T>), stored on its own.
-    unsafeIrs :: Map.Map Key Codec
-    unsafeIrs =
+    storedIrs = storedOf "w3_ir_" _ccIrs pIR
+    storedUnsafe = storedOf "w3_iru_" _ccUnsafe pCodec
+
+    byKey :: String -> Map.Map Opt.Global (BS.ByteString, Maybe a) -> Map.Map Key a
+    byKey prefix =
       Map.foldrWithKey
-        (\(Opt.Global home name) node acc ->
-            case (List.stripPrefix "w3_iru_" (Name.toChars name), node) of
-              (Just typeName, Opt.Kernel [K.JS bs] _) ->
-                case readStored pCodec bs of
-                  Just codec -> Map.insert (homeOf home, typeName) codec acc
-                  Nothing -> acc
+        (\(Opt.Global home name) (_, parsed) acc ->
+            case (List.stripPrefix prefix (Name.toChars name), parsed) of
+              (Just typeName, Just value) -> Map.insert (homeOf home, typeName) value acc
               _ -> acc
         )
         Map.empty
-        graph
+
+    irs :: Map.Map Key IR
+    irs = byKey "w3_ir_" storedIrs
+
+    -- The non-validating decoder chain (w3_unsafe_decode_<T>), stored on its own.
+    unsafeIrs :: Map.Map Key Codec
+    unsafeIrs = byKey "w3_iru_" storedUnsafe
 
     encoders = fixReplaceable graph "w3_encode_" (Map.mapMaybe (\(IR e _) -> e) irs)
     decoders = fixReplaceable graph (_famElm validatingFam) (Map.mapMaybe (\(IR _ d) -> d) irs)
     unsafeDecoders = fixReplaceable graph (_famElm unsafeFam) unsafeIrs
 
-    withEncoders =
-      Map.foldrWithKey
-        (\key codec acc ->
-            let (js, deps) = renderEncoderNode (Ctx mode encoders key validatingFam) codec in
-            Map.insert (codecGlobal "w3_encode_" key) (Opt.Kernel [K.JS js] (Set.insert runtimeGlobal deps)) acc
-        )
-        graph
-        encoders
+    -- @LAMDERA each codec's node, rendered (lazily, as always) or kept from the last build
+    renderAll :: String -> (Ctx -> Codec -> (BS.ByteString, Set.Set Opt.Global)) -> Fam -> Map.Map Key Codec -> Map.Map Key Rendered
+    renderAll prefix render fam direct =
+      Map.mapWithKey
+        (\key codec ->
+            let
+              fresh ctx =
+                let (js, deps) = render ctx codec in
+                Opt.Kernel [K.JS js] (Set.insert runtimeGlobal deps)
+            in
+            case maybeCache of
+              Nothing ->
+                Rendered codec [] (fresh (Ctx mode direct key fam))
 
-    renderDecoders fam direct acc0 =
-      Map.foldrWithKey
-        (\key codec acc ->
-            let (js, deps) = renderDecoderNode (Ctx mode direct key fam) codec in
-            Map.insert (codecGlobal (_famElm fam) key) (Opt.Kernel [K.JS js] (Set.insert runtimeGlobal deps)) acc
+              Just cache ->
+                let
+                  refs = codecRefs codec
+                  arities = strictArities direct refs
+                in
+                case Map.lookup (prefix, key) (_ccRendered cache) of
+                  Just kept@(Rendered oldCodec oldArities _)
+                    | (isTrue# (reallyUnsafePtrEquality# oldCodec codec) || oldCodec == codec) && oldArities == arities ->
+                        kept
+
+                  _ ->
+                    let small = Map.restrictKeys direct (Set.fromList refs) in
+                    small `seq` Rendered codec arities (fresh (Ctx mode small key fam))
         )
-        acc0
         direct
 
+    renderedEncoders = renderAll "w3_encode_" renderEncoderNode validatingFam encoders
+    renderedDecoders = renderAll (_famElm validatingFam) renderDecoderNode validatingFam decoders
+    renderedUnsafe = renderAll (_famElm unsafeFam) renderDecoderNode unsafeFam unsafeDecoders
+
+    insertRendered prefix rendered acc0 =
+      Map.foldrWithKey
+        (\key (Rendered _ _ node) acc -> Map.insert (codecGlobal prefix key) node acc)
+        acc0
+        rendered
+
+    withEncoders =
+      insertRendered "w3_encode_" renderedEncoders graph
+
     withDecoders =
-      renderDecoders unsafeFam unsafeDecoders (renderDecoders validatingFam decoders withEncoders)
+      insertRendered (_famElm unsafeFam) renderedUnsafe (insertRendered (_famElm validatingFam) renderedDecoders withEncoders)
+
+    newCache =
+      fmap
+        (\_ ->
+            let
+              rendered =
+                Map.unions
+                  [ Map.mapKeysMonotonic ((,) "w3_encode_") renderedEncoders
+                  , Map.mapKeysMonotonic ((,) (_famElm validatingFam)) renderedDecoders
+                  , Map.mapKeysMonotonic ((,) (_famElm unsafeFam)) renderedUnsafe
+                  ]
+            in
+            Map.foldl' (\a (Rendered _ _ _) -> a) () rendered `seq` CodecCache storedIrs storedUnsafe rendered
+        )
+        maybeCache
 
     -- Lamdera.Wire3.bytesEncode (an alias of Bytes.Encode.encode) becomes the runtime's
     -- _W3_bytesEncode, which hands a direct encoder's fresh result over without copying
@@ -1105,6 +1253,7 @@ replaceCodecs mode graph =
           return ()
         else ()
   in
+  flip (,) newCache $
   if Map.null encoders && Map.null decoders && Map.null unsafeDecoders then graph else
   report `seq` Map.insert runtimeGlobal (Opt.Kernel [K.JS (BS.append (BS8.pack (prelude mode)) runtimeJs)] runtimeDeps) withBytesEncode
 

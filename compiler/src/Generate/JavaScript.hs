@@ -42,6 +42,7 @@ import qualified Reporting.Render.Type.Localizer as L
 
 
 import qualified Lamdera.Injection
+import qualified Lamdera.Wire3.Direct -- @LAMDERA JsCache
 
 -- GENERATE
 
@@ -59,8 +60,13 @@ generate mode globalGraph mains =
 -- @LAMDERA the original `generate`, from a given starting state
 generateFrom :: State -> Mode.Mode -> Opt.GlobalGraph -> Mains -> (B.Builder, State)
 generateFrom startState mode (Opt.GlobalGraph graph_ _) mains =
+  generateFromGraph startState mode (Lamdera.Injection.graphModifications mode mains graph_) mains
+
+
+-- @LAMDERA generateFrom, given the graph after Lamdera.Injection.graphModifications
+generateFromGraph :: State -> Mode.Mode -> Graph -> Mains -> (B.Builder, State)
+generateFromGraph startState mode graph mains =
   let
-    graph = Lamdera.Injection.graphModifications mode mains graph_
     state = Map.foldrWithKey (addMain mode graph) startState mains
   in
   flip (,) state $
@@ -747,14 +753,15 @@ toMainEsmExports mode mains =
 -- uses it for Mode.Dev Nothing).
 
 
--- (a newtype, so evaluating a JsCache to WHNF builds the whole Map)
-newtype JsCache =
-  JsCache (Map.Map Opt.Global CachedStmt)
+-- (strict fields, so evaluating a JsCache to WHNF builds the whole Map, and the kept
+-- Wire3 codecs, see Lamdera.Wire3.Direct.replaceCodecsCached)
+data JsCache =
+  JsCache !(Map.Map Opt.Global CachedStmt) !Lamdera.Wire3.Direct.CodecCache
 
 
 emptyJsCache :: JsCache
 emptyJsCache =
-  JsCache Map.empty
+  JsCache Map.empty Lamdera.Wire3.Direct.emptyCodecCache
 
 
 data CachedStmt =
@@ -770,14 +777,15 @@ data Caching
 returning the cache for the next one.
 -}
 generateCached :: JsCache -> Mode.Mode -> Opt.GlobalGraph -> Mains -> (B.Builder, JsCache)
-generateCached (JsCache old) mode globalGraph mains =
+generateCached (JsCache old codecs) mode (Opt.GlobalGraph graph_ _) mains =
   let
-    (builder, state) = generateFrom (emptyState { _caching = Caching old Map.empty }) mode globalGraph mains
+    (graph, codecs_) = Lamdera.Injection.graphModificationsCached codecs mode mains graph_
+    (builder, state) = generateFromGraph (emptyState { _caching = Caching old Map.empty }) mode graph mains
   in
   ( builder
   , case _caching state of
-      Caching _ new -> JsCache new
-      NoCaching     -> JsCache Map.empty
+      Caching _ new -> JsCache new codecs_
+      NoCaching     -> JsCache Map.empty codecs_
   )
 
 

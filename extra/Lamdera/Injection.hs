@@ -72,6 +72,20 @@ graphModifications mode mains graph_ = do
     else graph
 
 
+-- @LAMDERA graphModifications for `lamdera live --memory`, keeping the rendered Wire3 codecs
+-- between builds (see Lamdera.Wire3.Direct.replaceCodecsCached)
+graphModificationsCached :: Lamdera.Wire3.Direct.CodecCache -> Mode.Mode -> Mains -> Map.Map Opt.Global Opt.Node -> (Map.Map Opt.Global Opt.Node, Lamdera.Wire3.Direct.CodecCache)
+graphModificationsCached cache mode mains graph_ =
+  let
+    (graph, cache_) = Lamdera.Wire3.Direct.replaceCodecsCached cache mode graph_
+  in
+  ( if mains & mainsInclude ["Lamdera.Live"]
+      then graph & Map.mapWithKey (modify $ isOptimizedMode mode)
+      else graph
+  , cache_
+  )
+
+
 modify :: Bool -> Opt.Global -> Opt.Node -> Opt.Node
 modify isOptimized v n =
   case (v, n) of
