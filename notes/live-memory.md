@@ -122,14 +122,17 @@ Wire3 injection inside `Compile.compile`, and the Lamdera live harness compiled 
 outside root. None of elm-dev's vendored builder files apply as-is, and vendoring 2,500
 lines of builder again would double the merge surface we just reconciled for 0.19.3.
 
-### What was ported, and the license
+### Credit, and what came from where
 
-The idea (an in-memory elm-stuff behind the unchanged build algorithm, with the builder's
-own invalidation deciding what to recompile) and the shape of the live loop (Sentry +
-Filewatch, which Lamdera already had from elmx). No elm-dev code was copied: the store
-holds decoded values instead of bytes and the builder is hooked instead of vendored.
-elm-dev is BSD-3-Clause like this compiler, so either way it is compatible;
-`Ext.MemoryCache` credits it in its module comment.
+The in-memory compile mode in elm-dev (`Ext.FileCache`, `Ext.FileProxy`,
+`Ext.CompileMode`, `Ext.MemoryCached`, the Sentry/Filewatch live loop) is Mario's own work,
+so this branch revisits it rather than ports it: the idea (an in-memory elm-stuff and
+source tree behind the unchanged build algorithm, with the builder's own invalidation
+deciding what to recompile) is the same, the implementation is new (decoded values
+instead of bytes, the builder hooked instead of vendored). What is taken from Matt
+Griffith's later work in elm-dev is credited where it is used: the full-tree reconcile of
+the source table (his `updateVfsFromFs`, 2025-11) and the plan for the MCP/LSP daemon
+(below). elm-dev is BSD-3-Clause like this compiler.
 
 ### Improvements over the naive version
 

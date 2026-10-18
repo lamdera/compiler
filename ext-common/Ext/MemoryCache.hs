@@ -47,11 +47,11 @@ one IORef read and one lookup in an empty Map, then the original disk code.
 
 The Details are kept as a Dynamic because Elm.Details imports this module.
 
-This is a port of the idea behind elm-dev's in-memory mode (Ext.FileCache and
-Ext.MemoryCached, https://github.com/mdgriffith/elm-dev, BSD-3-Clause), which keeps the
-encoded bytes of elm-stuff in a hash table under vendored copies of the builder. Here
-the decoded values are kept, so a rebuild does no encoding or decoding either, and the
-builder is hooked rather than vendored.
+This revisits the in-memory compile mode Mario Rogic first wrote for elmx, now in
+elm-dev (Ext.FileCache, Ext.FileProxy, Ext.CompileMode, Ext.MemoryCached), which keeps
+the encoded bytes of elm-stuff in a hash table under vendored copies of the builder.
+Here the decoded values are kept, so a rebuild does no encoding or decoding either, and
+the builder is hooked rather than vendored.
 -}
 
 import Control.Exception (IOException, catch)
