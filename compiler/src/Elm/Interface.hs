@@ -26,6 +26,8 @@ import qualified Control.Monad.State.Strict as State -- @LAMDERA
 import Data.Coerce (coerce)
 import qualified Data.IntMap.Strict as IntMap -- @LAMDERA
 import Data.Word (Word16) -- @LAMDERA
+import System.IO.Unsafe (unsafePerformIO) -- @LAMDERA
+import System.Mem.StableName (StableName, makeStableName, hashStableName) -- @LAMDERA
 import qualified Data.Map.Strict as Map
 import qualified Data.Map.Merge.Strict as Map
 import qualified Data.Map.Utils as Map
@@ -502,6 +504,7 @@ data TableBuilder =
     { _tb_ids   :: !(Map.Map Key Int)
     , _tb_size  :: !Int
     , _tb_nodes :: [Key] -- newest first
+    , _tb_seen  :: !(IntMap.IntMap [(StableName Can.Type, Int)]) -- see internBody
     }
 
 
@@ -525,8 +528,8 @@ intern); it is evaluated after the table is complete.
 withTypeTable :: (Ref -> Interning E.Builder) -> E.Builder
 withTypeTable encoder =
   let
-    (body, TableBuilder _ size nodes) =
-      State.runState (encoder ref) (TableBuilder Map.empty 0 [])
+    (body, TableBuilder _ size nodes _) =
+      State.runState (encoder ref) (TableBuilder Map.empty 0 [] IntMap.empty)
 
     ref =
       if size <= 65536
@@ -575,23 +578,57 @@ intern tipe =
     Can.TAlias h n xs aliasType ->
       do  xs_ <- mapM (\(x,t) -> (,) x <$> intern t) xs
           case aliasType of
-            Can.Holey  t -> node . KAlias h n xs_ False =<< intern t
-            Can.Filled t -> node . KAlias h n xs_ True  =<< intern t
+            Can.Holey  t -> node . KAlias h n xs_ False =<< internBody t
+            Can.Filled t -> node . KAlias h n xs_ True  =<< internBody t
 
     Can.TType h n xs ->
       do  xs_ <- mapM intern xs
           node (KType h n xs_)
 
 
+{-| @LAMDERA An alias's real type, interned once per value in memory.
+
+The real types of aliases are where the size is: a Model record expanded in hundreds of
+annotations. Type.Type.toAnnotations shares each one it can between all of a module's
+annotations, and decoding an interface shares every repeated subtree, so the same
+Can.Type object turns up again and again. Interning walks every node of a type, so the
+work was the size of the types written out in full, not of what is in the table.
+Interning the same object again can only give the index it gave the first time (every
+node in it is in the table by then), so remember it by identity and skip the walk. The
+table and its order are exactly what walking would give.
+-}
+internBody :: Can.Type -> Interning Int
+internBody tipe =
+  do  let name = stableNameOf tipe
+          hash = hashStableName name
+      seen <- State.gets _tb_seen
+      case lookup name (IntMap.findWithDefault [] hash seen) of
+        Just i ->
+          return i
+
+        Nothing ->
+          do  i <- intern tipe
+              State.modify' $ \tb -> tb { _tb_seen = IntMap.insertWith (++) hash [(name, i)] (_tb_seen tb) }
+              return i
+
+
+-- @LAMDERA makeStableName of an evaluated value is the same every time it is asked for,
+-- so this is safe to use from pure code.
+{-# NOINLINE stableNameOf #-}
+stableNameOf :: Can.Type -> StableName Can.Type
+stableNameOf tipe =
+  tipe `seq` unsafePerformIO (makeStableName tipe)
+
+
 node :: Key -> Interning Int
 node key =
-  do  TableBuilder ids size nodes <- State.get
+  do  TableBuilder ids size nodes seen <- State.get
       case Map.lookup key ids of
         Just i ->
           return i
 
         Nothing ->
-          do  State.put (TableBuilder (Map.insert key size ids) (size + 1) (key : nodes))
+          do  State.put (TableBuilder (Map.insert key size ids) (size + 1) (key : nodes) seen)
               return size
 
 
