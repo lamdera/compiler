@@ -1,9 +1,10 @@
 # `lamdera live --memory`: an in-memory build for live
 
 Branch `live-memory` (worktree `~/dev/projects/lamdera-compiler-live-memory`), rebased onto
-the final `compile-perf` (1957416e), which includes `elmi-type-table` and the Wire3 typed
-decoders. Not pushed. (The pre-rebase tip is kept as branch `live-memory-pre-rebase`,
-14aace8d.)
+`compile-perf` f9b569c4, which includes `elmi-type-table` and the Wire3 typed decoders. Not
+pushed. The tips before each rebase are kept as branches: `live-memory-pre-rebase`
+(14aace8d, on elmi-type-table) and `live-memory-pre-rebase2` (4e7987f4, on compile-perf
+1957416e).
 
 
 ## Summary
@@ -18,28 +19,35 @@ decoders. Not pushed. (The pre-rebase tip is kept as branch `live-memory-pre-reb
   of evaluating the whole new bundle. Ctrl-C writes elm-stuff, so the next start, `lamdera
   make` or plain `lamdera live` is warm. Default `lamdera live` and every other command are
   unchanged.
-- **Numbers (the large app, 920 modules, final branch).**
+- **Numbers (the large app, 920 modules, final branch on compile-perf f9b569c4).**
 
   | | default `lamdera live` | `--memory` |
   | --- | --- | --- |
-  | first build, cold | 4.9s | 5.1s |
-  | first build, warm elm-stuff | 1.33s | 1.50s |
-  | Types.elm interface change (391 modules) | 2.76, 2.94; 2.81, 2.97s | 2.27, 2.31; 2.65, 2.25s |
-  | leaf body change (2 modules) | 1.20, 1.25; 1.25, 1.26s | 0.46, 0.46; 0.45, 0.46s |
-  | leaf body change, slow file system (300us per stat/open) | 2.11s | 0.52s |
-  | view edit to visible in the page (freeze mode) | 2.1s (full hot reload, 49MB) | 0.56-0.61s (hot patch, 1.9KB) |
-  | live heap | 53-83MB | 0.7-1.7GB |
+  | first build, cold | 3.95s | 3.73s |
+  | first build, warm elm-stuff | 1.30s | 1.48-1.51s |
+  | Types.elm interface change (391 modules) | 2.38-2.55s | 1.92-2.05s (2.34-2.38 the first time after a warm start) |
+  | leaf body change (2 modules) | 1.26-1.29s | 0.44-0.49s |
+  | leaf body change, slow file system (300us per stat/open; on 1957416e) | 2.11s | 0.52s |
+  | view edit to visible in the page (freeze mode) | 2.03, 2.05s (full hot reload, 49MB) | 0.56, 0.58, 0.61s (hot patch, 1.9KB) |
+  | live heap over 22 rebuilds | 50-134MB | levels off at 1.4-1.5GB |
 
   JS identical in both modes at every step (sha1, with the hot patch hook and build number
   taken out).
-- **Where the leaf edit's 0.46s goes** (memory): compiling 0.05s, type hash check 0 (skipped,
-  nothing it hashes changed), JS generation 0.38s (building the 58,000 entry global graph, walking
-  the 34,000 reachable definitions, the cache lookups, the listing), putting the page
-  together 0.01s. By default the same edit is 0.05s compiling, 0.2s for the type hash check's
-  second build of Types, and 0.95s generating the JS.
+- **Where the leaf edit's 0.46s goes** (memory): compiling 0.06s, type hash check 0 (skipped,
+  nothing it hashes changed), JS generation 0.37-0.41s (building the 58,000 entry global
+  graph, walking the 34,000 reachable definitions, the cache lookups, the listing), putting
+  the page together 0.01s. By default the same edit is 0.05s compiling, 0.2s for the type
+  hash check's second build of Types, and 1.0s generating the JS.
+- **The heap levels off** now: over 22 rebuilds (ten Types changes, ten leaf edits) the
+  memory mode stays at 1.4-1.5GB and the default at 50-134MB. Before two fixes made after
+  the second rebase it grew without end, 0.7GB to 3.3GB in memory mode and 57MB to 313MB by
+  default, ~85MB per Types change from compile-perf's type checker tables (never emptied in a
+  long-running process) and ~120MB per Types change from the hot patch history (trimmed
+  lazily, so never trimmed). Both are emptied or forced now; see Known limitations.
 - **The steps of this round**, each a commit:
-  1. Rebased onto compile-perf 1957416e (the old trial merge with cd2ce8cb, a buggy base,
-     and its numbers are gone; worktree and branch removed).
+  1. Rebased onto compile-perf 1957416e, then again onto f9b569c4 (see Relation to the
+     compile-perf work). The old trial merge with cd2ce8cb (a buggy base) and its numbers
+     are gone, worktree and branch removed.
   2. Sources in memory (Mario's `FileCache` idea, done on the source table): stats and reads
      from a table updated by watcher events, with full resets on directory/rename events
      and `elm.json`, a reconcile every 5s and on page load, and parsed modules kept. Worth
@@ -61,11 +69,10 @@ decoders. Not pushed. (The pre-rebase tip is kept as branch `live-memory-pre-reb
   plus the patches answers like the latest. Full `stack test`: 158 passed, 7 pending (the
   same 7 as compile-perf), no failures.
 - **Gaps.** JS generation (global graph and walk, 0.38s) is now the largest part of a
-  memory rebuild; the memory mode holds ~1-1.7GB; a Ctrl-C is still occasionally lost (seen
-  once in ~20 runs, after 6 rebuilds, idle); the large app's own FrontendModel does not decode
+  memory rebuild; the memory mode holds 1.4-1.5GB; a Ctrl-C is still occasionally lost
+  (the major GC window); the large app's own FrontendModel does not decode
   with its codecs, so its freeze mode reloads the page after every hot reload, patch or
-  full (pre-existing, both paths); compile-perf has moved on (2589084a) and its
-  interface-bytes change conflicts with the memory path. See Known limitations.
+  full (pre-existing, both paths). See Known limitations.
 
 
 ## elm-dev: what is there and how it got there
@@ -496,8 +503,8 @@ Playwright), freeze mode, a view function edit:
 
 | | counter example app | the large app login page (920 modules) |
 | --- | --- | --- |
-| `--memory`, hot patch | 41-169ms (patch 0.9-1.4KB gzipped, 4-6 statements) | 560ms, 605ms (patch 1.9KB, 5 statements, 8.6KB) |
-| default, full hot reload | | 2,085ms (49MB, 8.4MB gzipped) |
+| `--memory`, hot patch | 41-169ms (patch 0.9-1.4KB gzipped, 4-6 statements) | 557, 584, 614ms (patch 1.9KB, 5 statements, 8.6KB); 560, 605ms on 1957416e |
+| default, full hot reload | | 2,030, 2,046ms (49MB, 8.4MB gzipped); 2,085ms on 1957416e |
 | after a ToFrontend change (kernel codecs changed, full) | 166ms | |
 
 On the large app the 0.56-0.6s is the rebuild (0.43-0.46s), working out the patch on the server
@@ -526,18 +533,22 @@ same in both modes at every step. Load average 4-6.
 
 | | default `lamdera live` | `lamdera live --memory` |
 | --- | --- | --- |
-| first build, cold (921 modules) | 4.93s, peak in use 4.6GB | 5.05s, peak in use 4.4GB |
-| first build, warm elm-stuff | 1.33s | 1.50s |
-| Types.elm interface change, 391 modules (cold run; warm run) | 2.76, 2.94; 2.81, 2.97s | 2.27, 2.31; 2.65, 2.25s |
-| of which compiling (`build`) | 1.64-1.76s | 1.21-1.67s |
-| of which type hash check | 0.19-0.21s | 0.09-0.20s |
-| of which JS (`objects` + `rest`) | 0.92-1.0s | 0.86-0.90s |
-| leaf body change, 2 modules (cold run; warm run) | 1.20, 1.25; 1.25, 1.26s | 0.456, 0.459; 0.449, 0.460s |
-| of which compiling / type hash / JS | 0.05 / 0.19-0.21 / 0.97-1.0s | 0.05-0.06 / 0 / 0.39-0.40s |
-| the same, slow file system (300us per stat/open) | 2.11s (0.56 / 0.55 / 1.0s) | 0.52s (0.06 / 0 / 0.45s) |
-| live heap after GC, over the run | 53-83MB | 0.7-1.7GB |
-| RTS peak in use over the run | 4.5GB | 6.5-6.9GB |
-| exit | | flush 0.24s (warm), 2.2s after a cold start (920 + 920 files) |
+| first build, cold (921 modules) | 3.95s, peak in use 3.3GB | 3.73s, peak in use 3.7GB |
+| first build, warm elm-stuff | 1.30s | 1.48-1.51s |
+| Types.elm interface change, 391 modules (cold run; warm run) | 2.39, 2.50; 2.38, 2.55s | 1.93, 1.93; 2.38, 1.93s, then 1.92-2.05s over 20 more |
+| of which compiling (`build`) | 1.20-1.32s | 0.95-1.06s (1.37 the first time) |
+| of which type hash check | 0.19-0.21s | 0.09-0.10s |
+| of which JS (`objects` + `rest`) | 0.98-1.03s | 0.85-0.91s |
+| leaf body change, 2 modules (cold run; warm run) | 1.28, 1.92; 1.26, 1.29s | 0.44, 0.45; 0.67, 0.45s, then 0.45-0.49s over 20 more |
+| of which compiling / type hash / JS | 0.04-0.06 / 0.19-0.21 / 1.0-1.03s | 0.06 / 0 / 0.37-0.43s |
+| the same, slow file system (300us per stat/open; measured on 1957416e) | 2.11s (0.56 / 0.55 / 1.0s) | 0.52s (0.06 / 0 / 0.45s) |
+| live heap after GC, over 22 rebuilds (with the two heap fixes) | 50-134MB | 1.29-1.51GB |
+| RTS peak in use over 22 rebuilds | | 5.4GB |
+| exit | | flush 0.2s (warm), 1.75s after a cold start (920 + 920 files) |
+
+The 1.92s and 0.67s are one-off outliers (load 5-6). Against compile-perf 1957416e the same
+table was: cold 4.9 / 5.1s, Types change 2.8-3.0 / 2.25-2.65s, leaf edit 1.2-1.26 /
+0.45-0.46s.
 
 The numbers of the earlier trial merge with compile-perf at cd2ce8cb are discarded: that
 commit alone is buggy (fixed by 5952a85d).
@@ -591,14 +602,21 @@ binaries):
   still builds the global graph of 58,000 globals from the per-module graphs, runs
   `graphModificationsCached` over it, and walks all 34,000 reachable definitions (cache
   lookups and arity checks for each). See Next steps.
-- **Memory**: the live heap is 0.7GB after a warm start and grew to 1.7GB over six rebuilds
-  (25MB per leaf edit, ~100MB per Types change; the default grows ~10MB per build too). The
-  last 10 builds' listings are kept for hot patches (most bytes shared between them), so
-  the growth from those is bounded; not measured beyond six rebuilds.
-- **A Ctrl-C is sometimes lost.** Seen once in about 20 runs of this round, idle, 3s after the
-  sixth rebuild (the second one worked, and the flush ran); five idle trials after one build
-  were all handled. The forced GC that lost it reliably before is gone from memory mode, so
-  this is another window; not found.
+- **Memory**: the live heap is 0.7GB after a warm start, 1.3GB once the first Types change
+  has filled the store, and levels off at 1.4-1.5GB (measured over 22 rebuilds). Two leaks
+  were found on the way, with `+RTS -hT` heap profiles by closure type: compile-perf's type
+  checker keeps two process-wide tables keyed by the identity of type objects
+  (`sharedBodies`, and `canonicals` from 871997c5), which a long-running live never emptied
+  (~85MB per Types change, both modes); and the hot patch history was trimmed with a lazy
+  `take`, so every build held on to all earlier ones (and each kept Dynamic its whole JS
+  cache) until a page asked for a patch (~120MB per Types change). Live now empties the
+  tables before each rebuild (`Type.Type.resetSharedTables`; rebuild times unchanged) and the
+  history is forced when a build is recorded.
+- **A Ctrl-C is sometimes lost.** Seen once in about 20 normal runs of this round, idle, 3s
+  after the sixth rebuild (the second one worked, and the flush ran), and every time with
+  `+RTS -hT -i2` (which forces a major GC every 2 seconds); five idle trials after one build
+  were all handled. So it is still the major GC window: `LAMDERA_LIVE_TIMING`'s heap figure
+  forces one after every rebuild too.
 - **the large app's FrontendModel does not decode with its own codecs** (the copy the harness keeps
   in `localStorage`, decoded in the page through the hook, gives `Nothing` before any patch),
   so in freeze mode the harness reloads the page after every hot reload, patch or full.
@@ -617,11 +635,6 @@ binaries):
   then the stale but consistent state of the last disk build.
 - A build that throws drops the whole store; the next rebuild reloads from elm-stuff.
 - A concurrent `lamdera make` on the same project is safe but not seen by the memory mode.
-- **compile-perf has moved on** since 1957416e (8 commits, to 2589084a). One of them,
-  4396f9a7 "Build: compare a recompiled module's interface with the file by bytes", changes
-  the same lines of `Build.compile` as the memory mode's interface hooks: the memory path has
-  no file bytes and must keep comparing values against its kept interface (or keep the
-  bytes). Needs a careful merge; not done here, as 1957416e was the agreed base.
 
 
 ## Next steps
@@ -644,10 +657,22 @@ binaries):
 
 ### Relation to the compile-perf work
 
-This branch is rebased onto compile-perf 1957416e. compile-perf's `perf` labels wrap the
+This branch is rebased onto compile-perf f9b569c4. compile-perf's `perf` labels wrap the
 memory mode's `.elmo`/`.elmi` calls in `Build.compile`; its scheduler (`Lamdera.Schedule`)
 gets its module sizes from the source table in memory mode; its IR reader is what the codec
-cache builds on. See Known limitations for the commits it has gained since.
+cache builds on.
+
+The second rebase (from 1957416e, 8 commits: the registry skip 8402515d, `-maxN12`
+e5e27a68, the generalisation and unify fixes, the type table hash table 0bdc1936, and
+4396f9a7) had one conflict, in `Build.compile`. 4396f9a7 decides whether a recompiled
+module's interface changed by encoding it and comparing with the `.elmi` file's bytes. In
+memory mode there is no old file to compare with (the kept interface is a value, and the
+file on disk can be any number of builds old), so `Build.compile` now has two paths: with
+a registered store, the kept interface is compared as a value and kept when equal (as
+before), and the new one is hash-consed into the store when not; without one, compile-perf's
+byte comparison and write, unchanged. `Test.LiveMemory` builds the same edits both ways and
+checks that the same modules recompile after every step (an interface change whose
+importer's interface stays the same included).
 
 
 ## Plan: an MCP and LSP daemon on the memory store (from Matt Griffith's elm-dev work)
