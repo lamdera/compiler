@@ -62,6 +62,7 @@ import qualified Root as R
 
 
 import Lamdera
+import qualified Lamdera.Perf
 
 
 
@@ -301,7 +302,8 @@ crawlModule env@(Env _ root _ projectType srcDirs buildID locals foreigns) mvar 
 crawlFile :: Env -> MVar StatusDict -> DocsNeed -> Module.Name -> AbsoluteElm -> File.Time -> Details.BuildID -> IO Status
 crawlFile env@(Env _ _ _ projectType _ buildID _ _) mvar docsNeed expectedName (AbsoluteElm path) time lastChange =
   do  source <- File.readUtf8 path
-      result <- Parse.fromByteString projectType source
+      -- @LAMDERA opt-in timing, see Lamdera.Perf
+      result <- Lamdera.Perf.record (Module.toChars expectedName ++ "\tparse") $ Parse.fromByteString projectType source
       case result of
         Left err ->
           return $ SBadSyntax path time source err
@@ -357,11 +359,12 @@ checkModule writer env@(Env _ _ stuff projectType _ _ _ _) foreigns resultsMVar 
   case status of
     SCached local@(Details.Local path time deps hasMain lastChange lastCompile) ->
       do  results <- readMVar resultsMVar
-          depsStatus <- checkDeps stuff results deps lastCompile
+          -- @LAMDERA opt-in timing, see Lamdera.Perf
+          depsStatus <- Lamdera.Perf.record (Module.toChars name ++ "\tdeps_wait") $ checkDeps stuff results deps lastCompile
           case depsStatus of
             DepsChange ifaces ->
               do  source <- File.readUtf8 path
-                  result <- Parse.fromByteString projectType source
+                  result <- Lamdera.Perf.record (Module.toChars name ++ "\tparse") $ Parse.fromByteString projectType source
                   case result of
                     Right modul -> compile writer env (DocsNeed False) local source ifaces modul
                     Left err ->
@@ -388,7 +391,8 @@ checkModule writer env@(Env _ _ stuff projectType _ _ _ _) foreigns resultsMVar 
 
     SChanged local@(Details.Local path time deps _ _ lastCompile) source modul@(Src.Module _ _ _ imports _ _ _ _ _) docsNeed ->
       do  results <- readMVar resultsMVar
-          depsStatus <- checkDeps stuff results deps lastCompile
+          -- @LAMDERA opt-in timing, see Lamdera.Perf
+          depsStatus <- Lamdera.Perf.record (Module.toChars name ++ "\tdeps_wait") $ checkDeps stuff results deps lastCompile
           case depsStatus of
             DepsChange ifaces ->
               compile writer env docsNeed local source ifaces modul
@@ -689,7 +693,11 @@ compile :: File.Writer R.PROJECT -> Env -> DocsNeed -> Details.Local -> B.ByteSt
 compile writer (Env key root stuff projectType _ buildID _ _) docsNeed (Details.Local path time deps main lastChange _) source ifaces modul =
   let
     pkg = projectTypeToPkg projectType
+    -- @LAMDERA opt-in timing, see Lamdera.Perf
+    perf :: String -> IO a -> IO a
+    perf label = Lamdera.Perf.record (Module.toChars (Src.getName modul) ++ "\t" ++ label)
   in
+  perf "module" $
   case Compile.compile (Just (FP.makeRelative (R.toFilePath root) path)) pkg ifaces modul of
     Right (Compile.Artifacts canonical annotations objects) ->
       do  result <- makeDocs docsNeed canonical
@@ -702,8 +710,8 @@ compile writer (Env key root stuff projectType _ buildID _ _) docsNeed (Details.
               do  let name = Src.getName modul
                   let iface = I.fromModule pkg canonical annotations
                   let elmi = R.elmi stuff name
-                  File.writeBytes writer (R.elmo stuff name) Opt.eLocalGraph objects
-                  maybeOldi <- File.readBytes I.dInterface elmi
+                  perf "elmo_write" $ File.writeBytes writer (R.elmo stuff name) Opt.eLocalGraph objects
+                  maybeOldi <- perf "elmi_read_old" $ File.readBytes I.dInterface elmi
                   case maybeOldi of
                     Just oldi | oldi == iface ->
                       do  -- iface should be fully forced by equality check
@@ -713,7 +721,7 @@ compile writer (Env key root stuff projectType _ buildID _ _) docsNeed (Details.
 
                     _ ->
                       do  -- iface may be lazy still
-                          File.writeBytes writer elmi I.eInterface iface
+                          perf "elmi_write" $ File.writeBytes writer elmi I.eInterface iface
                           Reporting.report key Reporting.BDone
                           let local = Details.Local path time deps main buildID buildID
                           return (RNew local iface objects docs)

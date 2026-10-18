@@ -34,6 +34,7 @@ import Terminal (Parser(..))
 
 import qualified Lamdera
 import qualified Lamdera.PostCompile
+import qualified Lamdera.Perf
 
 -- FLAGS
 
@@ -254,7 +255,9 @@ generate :: File.Writer R.PROJECT -> Reporting.Style -> FilePath -> B.Builder ->
 generate writer style target builder names =
   Task.io $
     do  Dir.createDirectoryIfMissing True (FP.takeDirectory target)
-        File.writeBuilder writer target builder
+        -- @LAMDERA opt-in timing, see Lamdera.Perf. Writing forces the lazy builder, so this
+        -- is where JS generation actually happens.
+        Lamdera.Perf.record "(js)\tjs_generate_write" $ File.writeBuilder writer target builder
         Reporting.reportGenerate style names target
 
 
@@ -267,6 +270,8 @@ data DesiredMode = Debug | Dev | Prod
 
 toBuilder :: R.Stuff -> Details.Details -> DesiredMode -> Build.Artifacts -> Task B.Builder
 toBuilder stuff details desiredMode artifacts =
+  -- @LAMDERA opt-in timing, see Lamdera.Perf
+  Task.eio id $ Lamdera.Perf.record "(js)\tjs_load_objects" $ Task.run $
   Task.mapError Exit.MakeBadGenerate $
     case desiredMode of
       Debug -> Generate.debug stuff details artifacts

@@ -355,6 +355,7 @@ Executable lamdera
         Lamdera.PackageReplacements
         Lamdera.PackageReplacementsTH
         Lamdera.Parse.Extra
+        Lamdera.Perf
         Lamdera.PostCompile
         Lamdera.Project
         Lamdera.Relative

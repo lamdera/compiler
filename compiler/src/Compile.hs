@@ -35,6 +35,7 @@ import Lamdera
 import qualified Lamdera.UiSourceMap
 import qualified Lamdera.Nitpick.DebugLog
 import qualified Lamdera.Evergreen.ModifyAST
+import qualified Lamdera.Perf
 import qualified System.FilePath as FP
 
 
@@ -117,10 +118,13 @@ compile_ maybePath pkg ifaces modul = do
       -- moduleName = T.pack $ Data.Utf8.toChars $ Src.getName modul
 
   -- ()          <- debugPassText "starting canonical" "" (pure ())
-  canonical0  <- canonicalize pkg ifaces modul_
+  -- @LAMDERA opt-in timing, see Lamdera.Perf
+  let perf :: String -> Either e a -> Either e a
+      perf label = Lamdera.Perf.phase (Module.toChars (Src.getName modul) ++ "\t" ++ label)
+  canonical0  <- perf "canonicalize" $ canonicalize pkg ifaces modul_
   -- ()          <- debugPassText "starting canonical2" moduleName (pure ())
 
-  canonical2 <-
+  canonical2 <- perf "wire3_generate" $
     -- Add Canonical Wire gens, i.e. the `w3_[en|de]code_TYPENAME` functions
     Lamdera.Wire3.Core.addWireGenerations canonical0 pkg ifaces modul_
       -- Allow migrations to access non-exposed unsafeCoerce in lamdera/core
@@ -141,10 +145,10 @@ compile_ maybePath pkg ifaces modul = do
   --   pure (pure ())
 
   -- ()          <- debugPassText "starting typecheck" moduleName (pure ())
-  annotations <- typeCheck modul_ canonical2
+  annotations <- perf "typecheck" $ typeCheck modul_ canonical2
   -- ()          <- debugPassText "starting nitpick" moduleName (pure ())
-  ()          <- nitpick canonical2
-  ()          <- Lamdera.Nitpick.DebugLog.hasUselessDebugLogs canonical2
+  ()          <- perf "nitpick" $ nitpick canonical2
+  ()          <- perf "nitpick_debuglog" $ Lamdera.Nitpick.DebugLog.hasUselessDebugLogs canonical2
   let
       canonical3 :: Can.Module
       canonical3 =
@@ -160,7 +164,7 @@ compile_ maybePath pkg ifaces modul = do
 
   -- ()          <- debugPassText "starting optimize" moduleName (pure ())
 
-  objects     <- optimize modul_ annotations canonical3
+  objects     <- perf "optimize" (optimize modul_ annotations canonical3)
     -- @LAMDERA carry the Wire3 codec IR to JS generation (Lamdera.Wire3.Direct). Always,
     -- whatever LAMDERA_WIRE3_DIRECT says, so caches are the same with and without it.
     & fmap (Lamdera.Wire3.Direct.addDirectIR pkg canonical3)
