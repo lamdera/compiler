@@ -7,6 +7,7 @@ module Bytes.Encode
   , i8, i16, i32, i64, iX, int
   , bool, char, chars64
   , maybe
+  , count8
   , list8, list16, list32
   , dict8, dict16, dict32
   , set8, set16, set32
@@ -160,6 +161,30 @@ maybe e m =
 
 
 
+-- COUNT
+--
+-- @LAMDERA The *8 encoders below (list8, dict8, set8, array8, string8) used to write
+-- their count as a bare u8, so a 256th element silently wrapped the count and wrote an
+-- interface that could not be read back ("Corrupt File ... Error when expecting: Type").
+-- Hand-written Elm never gets near 255 type variables or constructor arguments, but
+-- Lamdera's generated Wire3 codecs do: a large app's w3_decode_BackendModel has 510.
+--
+-- So counts below 255 are still one byte, exactly as before, and 255 means "the real
+-- count follows as a u32". Every cache written before this change stays readable, unless
+-- it held a count of exactly 255, which now reads as the escape and fails to decode, so
+-- that one module is rebuilt. Same trick as Elm.Version's major/minor/patch encoding.
+-- Bytes.Decode.count8 is the other half.
+
+
+{-# INLINE count8 #-}
+count8 :: Int -> B.Builder
+count8 n =
+  if n < 255
+  then u8 (fromIntegral n)
+  else u8 255 <> u32 (fromIntegral n)
+
+
+
 -- LIST
 
 
@@ -171,7 +196,7 @@ list8  :: (a -> B.Builder) -> [a] -> B.Builder
 list16 :: (a -> B.Builder) -> [a] -> B.Builder
 list32 :: (a -> B.Builder) -> [a] -> B.Builder
 
-list8  e xs = u8  (fromIntegral (List.length xs)) <> mconcat (List.map e xs)
+list8  e xs = count8 (List.length xs) <> mconcat (List.map e xs)
 list16 e xs = u16 (fromIntegral (List.length xs)) <> mconcat (List.map e xs)
 list32 e xs = u32 (fromIntegral (List.length xs)) <> mconcat (List.map e xs)
 
@@ -188,7 +213,7 @@ dict8  :: (k -> B.Builder) -> (v -> B.Builder) -> Map.Map k v -> B.Builder
 dict16 :: (k -> B.Builder) -> (v -> B.Builder) -> Map.Map k v -> B.Builder
 dict32 :: (k -> B.Builder) -> (v -> B.Builder) -> Map.Map k v -> B.Builder
 
-dict8  eK eV d = u8  (fromIntegral (Map.size d)) <> Map.foldrWithKey (\k v b -> eK k <> eV v <> b) mempty d
+dict8  eK eV d = count8 (Map.size d) <> Map.foldrWithKey (\k v b -> eK k <> eV v <> b) mempty d
 dict16 eK eV d = u16 (fromIntegral (Map.size d)) <> Map.foldrWithKey (\k v b -> eK k <> eV v <> b) mempty d
 dict32 eK eV d = u32 (fromIntegral (Map.size d)) <> Map.foldrWithKey (\k v b -> eK k <> eV v <> b) mempty d
 
@@ -205,7 +230,7 @@ set8  :: (a -> B.Builder) -> Set.Set a -> B.Builder
 set16 :: (a -> B.Builder) -> Set.Set a -> B.Builder
 set32 :: (a -> B.Builder) -> Set.Set a -> B.Builder
 
-set8  e s = u8  (fromIntegral (Set.size s)) <> Set.foldr (\x b -> e x <> b) mempty s
+set8  e s = count8 (Set.size s) <> Set.foldr (\x b -> e x <> b) mempty s
 set16 e s = u16 (fromIntegral (Set.size s)) <> Set.foldr (\x b -> e x <> b) mempty s
 set32 e s = u32 (fromIntegral (Set.size s)) <> Set.foldr (\x b -> e x <> b) mempty s
 
@@ -222,7 +247,7 @@ array8  :: (a -> B.Builder) -> A.Array a -> B.Builder
 array16 :: (a -> B.Builder) -> A.Array a -> B.Builder
 array32 :: (a -> B.Builder) -> A.Array a -> B.Builder
 
-array8  e a = u8  (fromIntegral (A.size a)) <> A.foldr (\x b -> e x <> b) mempty a
+array8  e a = count8 (A.size a) <> A.foldr (\x b -> e x <> b) mempty a
 array16 e a = u16 (fromIntegral (A.size a)) <> A.foldr (\x b -> e x <> b) mempty a
 array32 e a = u32 (fromIntegral (A.size a)) <> A.foldr (\x b -> e x <> b) mempty a
 
@@ -239,7 +264,7 @@ string8  :: S.String -> B.Builder
 string16 :: S.String -> B.Builder
 string32 :: S.String -> B.Builder
 
-string8  s = u8  (fromIntegral (S.size s)) <> S.toBuilder s
+string8  s = count8 (S.size s) <> S.toBuilder s
 string16 s = u16 (fromIntegral (S.size s)) <> S.toBuilder s
 string32 s = u32 (fromIntegral (S.size s)) <> S.toBuilder s
 

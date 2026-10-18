@@ -9,6 +9,7 @@ module Bytes.Decode
   , i8#, i16#, i32#, i64#
   , bool, char, chars64
   , maybe
+  , count8
   , list8, list16, list32
   , dict8, dict16, dict32
   , set8, set16, set32
@@ -251,6 +252,22 @@ maybe d =
 
 
 
+-- COUNT
+--
+-- @LAMDERA The count of every *8 decoder: one byte below 255, or 255 then a u32. See
+-- Bytes.Encode.count8 for why.
+
+
+{-# INLINE count8 #-}
+count8 :: Decoder Word
+count8 =
+  do  n <- u8
+      if n < 255
+        then return (fromIntegral n)
+        else fromIntegral <$> u32
+
+
+
 -- LIST
 
 
@@ -258,7 +275,7 @@ list8  :: Decoder a -> Decoder [a]
 list16 :: Decoder a -> Decoder [a]
 list32 :: Decoder a -> Decoder [a]
 
-list8  d = list d . fromIntegral =<< u8
+list8  d = list d =<< count8
 list16 d = list d . fromIntegral =<< u16
 list32 d = list d . fromIntegral =<< u32
 
@@ -284,7 +301,7 @@ dict8  :: Decoder k -> Decoder v -> Decoder (Map.Map k v)
 dict16 :: Decoder k -> Decoder v -> Decoder (Map.Map k v)
 dict32 :: Decoder k -> Decoder v -> Decoder (Map.Map k v)
 
-dict8  k v = dict k v . fromIntegral =<< u8
+dict8  k v = dict k v =<< count8
 dict16 k v = dict k v . fromIntegral =<< u16
 dict32 k v = dict k v . fromIntegral =<< u32
 
@@ -311,7 +328,7 @@ set8  :: Decoder a -> Decoder (Set.Set a)
 set16 :: Decoder a -> Decoder (Set.Set a)
 set32 :: Decoder a -> Decoder (Set.Set a)
 
-set8  d = set d . fromIntegral =<< u8
+set8  d = set d =<< count8
 set16 d = set d . fromIntegral =<< u16
 set32 d = set d . fromIntegral =<< u32
 
@@ -341,7 +358,7 @@ array8  :: Decoder a -> Decoder (A.Array a)
 array16 :: Decoder a -> Decoder (A.Array a)
 array32 :: Decoder a -> Decoder (A.Array a)
 
-array8  d = array d . fromIntegral =<< u8
+array8  d = array d . fromIntegral =<< count8
 array16 d = array d . fromIntegral =<< u16
 array32 d = array d . fromIntegral =<< u32
 
@@ -407,7 +424,7 @@ string8  :: Decoder S.String
 string16 :: Decoder S.String
 string32 :: Decoder S.String
 
-string8  = bytes S.String . fromIntegral =<< u8
+string8  = bytes S.String . fromIntegral =<< count8
 string16 = bytes S.String . fromIntegral =<< u16
 string32 = bytes S.String . fromIntegral =<< u32
 
