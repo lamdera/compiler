@@ -286,9 +286,12 @@ typeToVarHelp :: Bool -> (Content -> IO Variable) -> Map.Map T.Var Variable -> T
 typeToVarHelp closed register aliasDict tipe =
   let
     go = typeToVarHelp closed register aliasDict
+    -- @LAMDERA a variable with no variables in it never needs generalizing (see
+    -- registerClosed)
+    reg = if closed then registerClosed else register
     part t =
       if closed && isCompositeType t
-        then register (Deferred (DeferredType Nothing aliasDict t))
+        then registerClosed (Deferred (DeferredType Nothing aliasDict t))
         else go t
   in
   case tipe of
@@ -297,24 +300,26 @@ typeToVarHelp closed register aliasDict tipe =
 
     AppN home name args ->
       do  argVars <- traverse part args
-          register (Structure (App1 home name argVars))
+          (if null args then registerClosed else reg) (Structure (App1 home name argVars))
 
     FunN a b ->
       do  aVar <- part a
           bVar <- part b
-          register (Structure (Fun1 aVar bVar))
+          reg (Structure (Fun1 aVar bVar))
 
     AliasN home name args aliasType source ->
-      do  argVars <- traverse (traverse part) args
-          let argDict = Map.fromList argVars
-          aliasVar <-
-            if closed || all (isClosedType . snd) args
-              then
-                do  key <- traverse makeSourceKey source
-                    body <- maybe (return aliasType) (\k -> shareBody k aliasType) key
-                    register (Deferred (DeferredType key argDict body))
-              else typeToVarHelp closed register argDict aliasType
-          register (Alias home name argVars aliasVar)
+      if closed || all (isClosedType . snd) args then
+        do  argVars <- traverse (traverse (typeToVarHelp True register aliasDict)) args
+            let argDict = Map.fromList argVars
+            key <- traverse makeSourceKey source
+            body <- maybe (return aliasType) (\k -> shareBody k aliasType) key
+            aliasVar <- registerClosed (Deferred (DeferredType key argDict body))
+            registerClosed (Alias home name argVars aliasVar)
+      else
+        do  argVars <- traverse (traverse part) args
+            let argDict = Map.fromList argVars
+            aliasVar <- typeToVarHelp closed register argDict aliasType
+            reg (Alias home name argVars aliasVar)
 
     PlaceHolder name ->
       return $ $(Map.require 'typeToVarHelp) name aliasDict T.varToChars
@@ -322,24 +327,43 @@ typeToVarHelp closed register aliasDict tipe =
     RecordN fields ext ->
       do  fieldVars <- traverse part fields
           extVar <- go ext
-          register (Structure (Record1 fieldVars extVar))
+          reg (Structure (Record1 fieldVars extVar))
 
     EmptyRecordN ->
-      register emptyRecord1
+      registerClosed emptyRecord1
 
     UnitN ->
-      register unit1
+      registerClosed unit1
 
     PairN a b ->
       do  aVar <- part a
           bVar <- part b
-          register (Structure (Pair1 aVar bVar))
+          reg (Structure (Pair1 aVar bVar))
 
     TripleN a b c ->
       do  aVar <- part a
           bVar <- part b
           cVar <- part c
-          register (Structure (Triple1 aVar bVar cVar))
+          reg (Structure (Triple1 aVar bVar cVar))
+
+
+{-| @LAMDERA A variable for a closed type (no variables anywhere inside it): a type
+with no arguments, unit, the empty record, a deferred closed type, and everything
+built while expanding one.
+
+Upstream registers every new variable in the pool of the current rank, and when the
+enclosing let is generalized, generalize walks every one of them: rank adjustment
+works out that a closed type has the outermost rank, and moves it to the outermost
+pool, where nothing ever looks at it again. A profile of the 920 module app put a
+third of all type checking in generalize, mostly on such variables (record fields of
+`Int`, `String`, deferred parts of big records). So they are made with the outermost
+rank to begin with, and not registered: the state generalize would have left them in.
+Unification only ever merges a closed type with equal types, so it stays closed, and
+a merged class takes the lowest rank, which is what generalize would give it too.
+-}
+registerClosed :: Content -> IO Variable
+registerClosed content =
+  UF.fresh (Descriptor content outermostRank noMark Nothing)
 
 
 {-| @LAMDERA One body per DeferredKey, for the whole build.
@@ -447,45 +471,47 @@ srcTypeToVarHelp :: Bool -> (Content -> IO Variable) -> Map.Map T.Var Variable -
 srcTypeToVarHelp closed register flexVars srcType =
   let
     go = srcTypeToVarHelp closed register flexVars
+    -- @LAMDERA see registerClosed
+    reg = if closed then registerClosed else register
     part t =
       if closed && isCompositeCanType t
-        then register (Deferred (DeferredSrc Nothing flexVars t))
+        then registerClosed (Deferred (DeferredSrc Nothing flexVars t))
         else go t
   in
   case srcType of
     Can.TLambda argument result ->
       do  argVar <- part argument
           resultVar <- part result
-          register (Structure (Fun1 argVar resultVar))
+          reg (Structure (Fun1 argVar resultVar))
 
     Can.TVar name ->
       return $ $(Map.require 'srcTypeToVarHelp) name flexVars T.varToChars
 
     Can.TType home name args ->
       do  argVars <- traverse part args
-          register (Structure (App1 home name argVars))
+          (if null args then registerClosed else reg) (Structure (App1 home name argVars))
 
     Can.TRecord fields maybeExt ->
       do  fieldVars <- traverse (\(Can.FieldType _ srcTipe) -> part srcTipe) fields
           extVar <-
             case maybeExt of
-              Nothing -> register emptyRecord1
+              Nothing -> registerClosed emptyRecord1
               Just ext -> return $ $(Map.require 'srcTypeToVarHelp) ext flexVars T.varToChars
-          register (Structure (Record1 fieldVars extVar))
+          reg (Structure (Record1 fieldVars extVar))
 
     Can.TUnit ->
-      register unit1
+      registerClosed unit1
 
     Can.TPair a b ->
       do  aVar <- part a
           bVar <- part b
-          register (Structure (Pair1 aVar bVar))
+          reg (Structure (Pair1 aVar bVar))
 
     Can.TTriple a b c ->
       do  aVar <- part a
           bVar <- part b
           cVar <- part c
-          register (Structure (Triple1 aVar bVar cVar))
+          reg (Structure (Triple1 aVar bVar cVar))
 
     Can.TAlias home name args aliasType ->
       do  argVars <- traverse (traverse part) args
@@ -493,13 +519,16 @@ srcTypeToVarHelp closed register flexVars srcType =
             case aliasType of
               Can.Holey tipe ->
                 do  origin <- makeOrigin tipe True
-                    register $ Deferred $ DeferredSrc (Just origin) (Map.fromList argVars) tipe
+                    let argDict = Map.fromList argVars
+                    (if Map.null argDict then registerClosed else reg) $
+                      Deferred $ DeferredSrc (Just origin) argDict tipe
 
               Can.Filled tipe ->
                 do  origin <- makeOrigin tipe False
-                    register $ Deferred $ DeferredSrc (Just origin) flexVars tipe
+                    (if Map.null flexVars then registerClosed else reg) $
+                      Deferred $ DeferredSrc (Just origin) flexVars tipe
 
-          register (Alias home name argVars aliasVar)
+          (if null args then registerClosed else reg) (Alias home name argVars aliasVar)
 
 
 isCompositeCanType :: Can.Type -> Bool
