@@ -416,6 +416,7 @@ Executable lamdera
         Test
         Test.BinaryCounts
         Test.ElmiTypeTable
+        Test.CompilePerf
         Test.Caching
         Test.EasyTestSpinner
         Test.Ext.Filewatch

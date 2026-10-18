@@ -55,12 +55,19 @@ fromSrcType freeVars sourceType =
               Can.Holey realType ->
                 fromSrcType (Map.fromList targs) realType
             )
-          -- @LAMDERA where it came from, see Type.Type.DeferredKey
+          -- @LAMDERA where it came from, see Type.Type.DeferredKey. Only when the
+          -- arguments as written have no type variables: inside an alias body they are
+          -- the body's parameters (`Html msg` in `type alias Config msg = { view : Html
+          -- msg }`), and the same written arguments then stand for different types in
+          -- different uses, so they would not decide the body.
           let source =
-                case aliasedType of
-                  Can.Filled realType -> (realType, False, map snd args)
-                  Can.Holey realType -> (realType, True, map snd args)
-          return (AliasN home name targs body (Just source))
+                if all (isClosedCanType . snd) args then
+                  case aliasedType of
+                    Can.Filled realType -> Just (realType, False, map snd args)
+                    Can.Holey realType -> Just (realType, True, map snd args)
+                else
+                  Nothing
+          return (AliasN home name targs body source)
 
     Can.TPair a b ->
       PairN
@@ -88,3 +95,19 @@ fromSrcType freeVars sourceType =
 fromSrcFieldType :: Map.Map T.Var Type -> Can.FieldType -> IO Type
 fromSrcFieldType freeVars (Can.FieldType _ tipe) =
   fromSrcType freeVars tipe
+
+
+-- @LAMDERA Whether a type as written has no type variables. An alias's real type only
+-- has the type variables of its arguments, so it is not looked at.
+isClosedCanType :: Can.Type -> Bool
+isClosedCanType tipe =
+  case tipe of
+    Can.TLambda a b -> isClosedCanType a && isClosedCanType b
+    Can.TVar _ -> False
+    Can.TType _ _ args -> all isClosedCanType args
+    Can.TRecord fields maybeExt ->
+      maybeExt == Nothing && all (\(Can.FieldType _ t) -> isClosedCanType t) fields
+    Can.TUnit -> True
+    Can.TPair a b -> isClosedCanType a && isClosedCanType b
+    Can.TTriple a b c -> isClosedCanType a && isClosedCanType b && isClosedCanType c
+    Can.TAlias _ _ args _ -> all (isClosedCanType . snd) args
