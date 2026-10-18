@@ -30,10 +30,19 @@ getJsOutput cache =
 
 
 asyncUpdateJsOutput :: Cache -> IO BS.ByteString -> IO ()
-asyncUpdateJsOutput (Cache mJsOutput) recompile = do
+asyncUpdateJsOutput cache recompile =
+  asyncUpdateJsOutputWith True cache recompile
+
+
+{-| `lamdera live --memory` passes False: it keeps its artifacts in memory, so the major GC
+after each rebuild mostly copies them around, and a Ctrl-C that lands while it runs is
+lost (seen on a 920 module app, with ~1GB to copy).
+-}
+asyncUpdateJsOutputWith :: Bool -> Cache -> IO BS.ByteString -> IO ()
+asyncUpdateJsOutputWith majorGC (Cache mJsOutput) recompile = do
   trackedForkIO "Ext.Sentry.asyncUpdateJsOutput" $ do
     takeMVar mJsOutput
     !bs <- track "recompile" $ recompile
     putMVar mJsOutput bs
-    System.Mem.performMajorGC
+    if majorGC then System.Mem.performMajorGC else pure ()
     pure ()

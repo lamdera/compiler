@@ -102,7 +102,7 @@ runWithRoot root (Flags maybePort shouldOpenBrowser inMemory) =
         recompile :: [String] -> IO ()
         recompile events = do
           -- Fork a recompile+cache update
-          Sentry.asyncUpdateJsOutput sentryCache $ do
+          Sentry.asyncUpdateJsOutputWith (not inMemory) sentryCache $ do -- @LAMDERA no forced major GC with --memory, see Ext.Sentry
             debug_ $ "🛫  recompile triggered by: " ++ show events
             harness <- Live.prepareLocalDev root
             let
