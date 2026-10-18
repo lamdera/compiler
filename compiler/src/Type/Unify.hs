@@ -172,14 +172,34 @@ guardedUnify left right =
         if equivalent
           then ok vars ()
           else
-            do  -- @LAMDERA expand deferred alias bodies before looking inside them
-                vars1 <- forceDeferred vars left
-                vars2 <- forceDeferred vars1 right
-                leftDesc <- UF.get left
-                rightDesc <- UF.get right
-                case actuallyUnify (Context left leftDesc right rightDesc) of
-                  Unify k ->
-                    k vars2 ok err
+            do  -- @LAMDERA two deferred parts built from the same closed type are the
+                -- same type: merge them without expanding either (Type.Type.sameDeferred)
+                (Descriptor leftContent leftRank _ _) <- UF.get left
+                (Descriptor rightContent rightRank _ _) <- UF.get right
+                case (leftContent, rightContent) of
+                  (Deferred d1, Deferred d2) | Type.sameDeferred d1 d2 ->
+                    do  UF.union left right (Descriptor leftContent (min leftRank rightRank) noMark Nothing)
+                        ok vars ()
+
+                  -- @LAMDERA a flexible variable takes on whatever it is unified with
+                  -- (unifyFlex), so a deferred type can be handed over as it is
+                  (FlexVar _, Deferred _) ->
+                    do  UF.union left right (Descriptor rightContent (min leftRank rightRank) noMark Nothing)
+                        ok vars ()
+
+                  (Deferred _, FlexVar _) ->
+                    do  UF.union left right (Descriptor leftContent (min leftRank rightRank) noMark Nothing)
+                        ok vars ()
+
+                  _ ->
+                    do  -- @LAMDERA expand deferred alias bodies before looking inside them
+                        vars1 <- forceDeferred vars left
+                        vars2 <- forceDeferred vars1 right
+                        leftDesc <- UF.get left
+                        rightDesc <- UF.get right
+                        case actuallyUnify (Context left leftDesc right rightDesc) of
+                          Unify k ->
+                            k vars2 ok err
 
 
 {-| @LAMDERA Expand a deferred alias body (see Type.Type.Deferred) into the variables

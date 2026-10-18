@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, TemplateHaskell #-}
+{-# LANGUAGE OverloadedStrings, TemplateHaskell, MagicHash #-}
 module Type.Type
   ( Constraint(..)
   , exists
@@ -33,6 +33,7 @@ module Type.Type
   , deferredVariables
   , traverseDeferred
   , expandDeferred
+  , sameDeferred
   , typeToVarWith
   , srcTypeToVarWith
   )
@@ -45,7 +46,9 @@ import Data.Foldable (foldrM)
 import qualified Data.Map.Strict as Map
 import qualified Data.Map.Utils as Map
 import Control.Exception (evaluate)
-import Data.IORef (IORef, newIORef, readIORef, modifyIORef')
+import Data.IORef (IORef, newIORef, readIORef, modifyIORef', atomicModifyIORef')
+import GHC.Exts (isTrue#, reallyUnsafePtrEquality#)
+import System.IO.Unsafe (unsafePerformIO)
 import qualified Data.IntMap.Strict as IntMap
 import System.Mem.StableName (StableName, makeStableName, hashStableName)
 import Data.Word (Word32)
@@ -172,10 +175,14 @@ deals with an alias's arguments, which are built as before.
   DeferredSrc: from Can.Type (annotations of foreign values, operators). The map is
     what the body's type variables stand for: the alias arguments for a Holey body,
     the annotation's free variables for a Filled one.
+
+When a closed body is expanded, its own parts are left Deferred too (see
+typeToVarHelp), so a Deferred can also be a field of a record, an argument of a type,
+and so on, not only the real type of an Alias. Those have no source to cache by.
 -}
 data Deferred
     = DeferredType (Maybe DeferredKey) (Map.Map T.Var Variable) Type
-    | DeferredSrc DeferredOrigin (Map.Map T.Var Variable) Can.Type
+    | DeferredSrc (Maybe DeferredOrigin) (Map.Map T.Var Variable) Can.Type
 
 
 {-| Where an alias node of a constraint type came from (Type.Instantiate): the Can.Type
@@ -232,8 +239,8 @@ deferredKey deferred canArgs =
     DeferredType maybeKey _ _ ->
       maybeKey
 
-    DeferredSrc (DeferredOrigin name isHoley) _ _ ->
-      Just (DeferredKey FromAnnotation name isHoley canArgs)
+    DeferredSrc maybeOrigin _ _ ->
+      fmap (\(DeferredOrigin name isHoley) -> DeferredKey FromAnnotation name isHoley canArgs) maybeOrigin
 
 
 deferredVariables :: Deferred -> [Variable]
@@ -256,8 +263,8 @@ the given action, and return the variable for its root.
 expandDeferred :: (Content -> IO Variable) -> Deferred -> IO Variable
 expandDeferred register deferred =
   case deferred of
-    DeferredType _ dict tipe -> typeToVarWith register dict tipe
-    DeferredSrc _ dict tipe -> srcTypeToVarWith register dict tipe
+    DeferredType _ dict tipe -> typeToVarHelp True register dict tipe
+    DeferredSrc _ dict tipe -> srcTypeToVarHelp (Map.null dict) register dict tipe
 
 
 {-| What used to be Type.Solve.typeToVar, with registering abstracted out so that a
@@ -265,37 +272,55 @@ Deferred can be expanded outside the solver, and alias bodies deferred when thei
 arguments are closed.
 -}
 typeToVarWith :: (Content -> IO Variable) -> Map.Map T.Var Variable -> Type -> IO Variable
-typeToVarWith register aliasDict tipe =
-  let go = typeToVarWith register aliasDict in
+typeToVarWith =
+  typeToVarHelp False
+
+
+{-| `closed`: every type in here is known to have no variables (the body of a
+DeferredType). Then the parts of a node that are themselves made of parts are left
+Deferred as well, so expanding, say, a large record only builds a variable per field:
+unifying it with `{ r | field : a }` (a field access or record update) looks at one of
+them. Not done otherwise, as finding out whether a part is closed means walking it.
+-}
+typeToVarHelp :: Bool -> (Content -> IO Variable) -> Map.Map T.Var Variable -> Type -> IO Variable
+typeToVarHelp closed register aliasDict tipe =
+  let
+    go = typeToVarHelp closed register aliasDict
+    part t =
+      if closed && isCompositeType t
+        then register (Deferred (DeferredType Nothing aliasDict t))
+        else go t
+  in
   case tipe of
     VarN v ->
       return v
 
     AppN home name args ->
-      do  argVars <- traverse go args
+      do  argVars <- traverse part args
           register (Structure (App1 home name argVars))
 
     FunN a b ->
-      do  aVar <- go a
-          bVar <- go b
+      do  aVar <- part a
+          bVar <- part b
           register (Structure (Fun1 aVar bVar))
 
     AliasN home name args aliasType source ->
-      do  argVars <- traverse (traverse go) args
+      do  argVars <- traverse (traverse part) args
           let argDict = Map.fromList argVars
           aliasVar <-
-            if all (isClosedType . snd) args
+            if closed || all (isClosedType . snd) args
               then
                 do  key <- traverse makeSourceKey source
-                    register (Deferred (DeferredType key argDict aliasType))
-              else typeToVarWith register argDict aliasType
+                    body <- maybe (return aliasType) (\k -> shareBody k aliasType) key
+                    register (Deferred (DeferredType key argDict body))
+              else typeToVarHelp closed register argDict aliasType
           register (Alias home name argVars aliasVar)
 
     PlaceHolder name ->
-      return $ $(Map.require 'typeToVarWith) name aliasDict T.varToChars
+      return $ $(Map.require 'typeToVarHelp) name aliasDict T.varToChars
 
     RecordN fields ext ->
-      do  fieldVars <- traverse go fields
+      do  fieldVars <- traverse part fields
           extVar <- go ext
           register (Structure (Record1 fieldVars extVar))
 
@@ -306,15 +331,87 @@ typeToVarWith register aliasDict tipe =
       register unit1
 
     PairN a b ->
-      do  aVar <- go a
-          bVar <- go b
+      do  aVar <- part a
+          bVar <- part b
           register (Structure (Pair1 aVar bVar))
 
     TripleN a b c ->
-      do  aVar <- go a
-          bVar <- go b
-          cVar <- go c
+      do  aVar <- part a
+          bVar <- part b
+          cVar <- part c
           register (Structure (Triple1 aVar bVar cVar))
+
+
+{-| @LAMDERA One body per DeferredKey, for the whole build.
+
+Two instances of an alias with equal keys have equal bodies (see DeferredKey), but
+Type.Instantiate builds a new one each time. Using the first one everywhere means the
+parts of those bodies are the same objects too, which lets Type.Unify see that two
+deferred parts are the same type without expanding them (sameDeferred): unifying two
+uses of a large record type no longer builds and unifies both, field by field, all the
+way down. Striped so that modules type checked in parallel rarely meet.
+-}
+shareBody :: DeferredKey -> Type -> IO Type
+shareBody key body =
+  let
+    hash = aliasCacheKeyHash key
+    stripe = sharedBodies !! (hash `mod` sharedBodyStripes)
+  in
+  atomicModifyIORef' stripe $ \table ->
+    let bucket = IntMap.findWithDefault [] hash table in
+    case lookup key bucket of
+      Just shared -> (table, shared)
+      Nothing -> (IntMap.insert hash ((key, body) : bucket) table, body)
+
+
+sharedBodyStripes :: Int
+sharedBodyStripes =
+  64
+
+
+{-# NOINLINE sharedBodies #-}
+sharedBodies :: [IORef (IntMap.IntMap [(DeferredKey, Type)])]
+sharedBodies =
+  unsafePerformIO (mapM (const (newIORef IntMap.empty)) [1 .. sharedBodyStripes])
+
+
+{-| @LAMDERA Whether two deferred types are certainly the same type: closed, and built
+from the same object. Unifying them then only needs to merge them, which is what
+unifying their expansions would come to (every part unifies with its twin).
+-}
+sameDeferred :: Deferred -> Deferred -> Bool
+sameDeferred d1 d2 =
+  case (d1, d2) of
+    (DeferredType _ _ t1, DeferredType _ _ t2) ->
+      -- a DeferredType is always closed
+      samePointer t1 t2
+
+    (DeferredSrc _ m1 t1, DeferredSrc _ m2 t2) ->
+      Map.null m1 && Map.null m2 && samePointer t1 t2
+
+    _ ->
+      False
+
+
+samePointer :: a -> a -> Bool
+samePointer a b =
+  isTrue# (reallyUnsafePtrEquality# a b)
+
+
+-- Worth deferring: building it would build more than one variable.
+isCompositeType :: Type -> Bool
+isCompositeType tipe =
+  case tipe of
+    AppN _ _ args -> not (null args)
+    FunN _ _ -> True
+    AliasN _ _ _ _ _ -> True
+    RecordN _ _ -> True
+    PairN _ _ -> True
+    TripleN _ _ _ -> True
+    PlaceHolder _ -> False
+    VarN _ -> False
+    EmptyRecordN -> False
+    UnitN -> False
 
 
 {-| Whether a type has no variables in it. An alias body only refers to the alias
@@ -340,56 +437,82 @@ isClosedType tipe =
 every alias body deferred.
 -}
 srcTypeToVarWith :: (Content -> IO Variable) -> Map.Map T.Var Variable -> Can.Type -> IO Variable
-srcTypeToVarWith register flexVars srcType =
-  let go = srcTypeToVarWith register flexVars in
+srcTypeToVarWith =
+  srcTypeToVarHelp False
+
+
+-- `closed` as in typeToVarHelp: here, a body with no type variables to map (the body of
+-- a DeferredSrc with an empty map).
+srcTypeToVarHelp :: Bool -> (Content -> IO Variable) -> Map.Map T.Var Variable -> Can.Type -> IO Variable
+srcTypeToVarHelp closed register flexVars srcType =
+  let
+    go = srcTypeToVarHelp closed register flexVars
+    part t =
+      if closed && isCompositeCanType t
+        then register (Deferred (DeferredSrc Nothing flexVars t))
+        else go t
+  in
   case srcType of
     Can.TLambda argument result ->
-      do  argVar <- go argument
-          resultVar <- go result
+      do  argVar <- part argument
+          resultVar <- part result
           register (Structure (Fun1 argVar resultVar))
 
     Can.TVar name ->
-      return $ $(Map.require 'srcTypeToVarWith) name flexVars T.varToChars
+      return $ $(Map.require 'srcTypeToVarHelp) name flexVars T.varToChars
 
     Can.TType home name args ->
-      do  argVars <- traverse go args
+      do  argVars <- traverse part args
           register (Structure (App1 home name argVars))
 
     Can.TRecord fields maybeExt ->
-      do  fieldVars <- traverse (\(Can.FieldType _ srcTipe) -> go srcTipe) fields
+      do  fieldVars <- traverse (\(Can.FieldType _ srcTipe) -> part srcTipe) fields
           extVar <-
             case maybeExt of
               Nothing -> register emptyRecord1
-              Just ext -> return $ $(Map.require 'srcTypeToVarWith) ext flexVars T.varToChars
+              Just ext -> return $ $(Map.require 'srcTypeToVarHelp) ext flexVars T.varToChars
           register (Structure (Record1 fieldVars extVar))
 
     Can.TUnit ->
       register unit1
 
     Can.TPair a b ->
-      do  aVar <- go a
-          bVar <- go b
+      do  aVar <- part a
+          bVar <- part b
           register (Structure (Pair1 aVar bVar))
 
     Can.TTriple a b c ->
-      do  aVar <- go a
-          bVar <- go b
-          cVar <- go c
+      do  aVar <- part a
+          bVar <- part b
+          cVar <- part c
           register (Structure (Triple1 aVar bVar cVar))
 
     Can.TAlias home name args aliasType ->
-      do  argVars <- traverse (traverse go) args
+      do  argVars <- traverse (traverse part) args
           aliasVar <-
             case aliasType of
               Can.Holey tipe ->
                 do  origin <- makeOrigin tipe True
-                    register $ Deferred $ DeferredSrc origin (Map.fromList argVars) tipe
+                    register $ Deferred $ DeferredSrc (Just origin) (Map.fromList argVars) tipe
 
               Can.Filled tipe ->
                 do  origin <- makeOrigin tipe False
-                    register $ Deferred $ DeferredSrc origin flexVars tipe
+                    register $ Deferred $ DeferredSrc (Just origin) flexVars tipe
 
           register (Alias home name argVars aliasVar)
+
+
+isCompositeCanType :: Can.Type -> Bool
+isCompositeCanType tipe =
+  case tipe of
+    Can.TLambda _ _ -> True
+    Can.TVar _ -> False
+    Can.TType _ _ args -> not (null args)
+    Can.TRecord _ _ -> True
+    Can.TUnit -> False
+    Can.TPair _ _ -> True
+    Can.TTriple _ _ _ -> True
+    Can.TAlias _ _ _ _ -> True
 
 
 {-# NOINLINE emptyRecord1 #-}
