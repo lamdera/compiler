@@ -1,51 +1,71 @@
 # `lamdera live --memory`: an in-memory build for live
 
-Branch `live-memory` (worktree `~/dev/projects/lamdera-compiler-live-memory`), on top of
-`elmi-type-table` (1ab97db3) with `wire3-typed-decoders` (8844fef4) merged. Not pushed.
+Branch `live-memory` (worktree `~/dev/projects/lamdera-compiler-live-memory`), rebased onto
+the final `compile-perf` (1957416e), which includes `elmi-type-table` and the Wire3 typed
+decoders. Not pushed. (The pre-rebase tip is kept as branch `live-memory-pre-rebase`,
+14aace8d.)
 
 
 ## Summary
 
-- **What works.** `lamdera live --memory` keeps every project build artifact in memory as
-  decoded values: per module the interface and the objects, plus the project `Details`
-  with the package interfaces and objects resolved. After the first build no rebuild
-  reads, writes, encodes or decodes anything under `elm-stuff/lamdera-*`, and the JS of
-  definitions whose module did not change is reused instead of rendered again. Everything
-  else is the normal live build (Wire3 injection, the post-compile and type hash checks,
-  `Generate.dev`, the harness, the REPL endpoint). Default `lamdera live` and every other
-  command are unchanged. On Ctrl-C what was compiled in memory is written to elm-stuff, so
-  the next start, `lamdera make` or plain `lamdera live` is warm.
-- **Correctness.** `Test.LiveMemory` builds two copies of a Lamdera app side by side, one in
-  memory and one from disk, through a dozen edits (body change, interface change, an arity
-  change behind an unchanged interface, a new constructor in Types with new Wire3 codecs,
-  a type error and its fix, touching elm.json, flush, restart): byte identical JS and
-  exactly the same set of recompiled modules after every step. On the large app every measured
-  rebuild (88 of them, both modes, both compilers) gave the same JS sha1 at the same step.
-  Full `stack test`: 141 passed, 7 pending (the pending count elmi-type-table had), no
-  failures.
-- **Hash-consed interfaces are essential.** A fresh interface is the unshared tree type
-  inference produces. Holding 920 of them cost 4.5GB of live heap on the large app with the base
-  compiler (1.6GB with compile-perf's alias change). `I.share` (new) rebuilds each with
-  every distinct type node allocated once: 0.8GB (0.9GB).
-- **Numbers (the large app, 920 modules).** What a rebuild costs now depends mostly on
-  compile-perf. With compile-perf merged (cd2ce8cb), a body edit to a leaf module takes
-  2.6s in memory mode against 3.2-3.4s by default, and an interface change to Types.elm
-  (391 modules) about 5s in both. On the base compiler the leaf edit is 2.8-3.0s against
-  3.8-4.3s, and the Types change is ~50s in both, because that build is ~90% GC (`-qg`).
-  The memory mode costs ~1.1GB of resident heap (49MB without it).
-- **Where the time goes now** (memory mode, compile-perf, leaf edit, 2.6s): about 2.0s is
-  `Lamdera.Wire3.Direct.replaceCodecs` reading every module's Wire3 IR back with the
-  derived `Read` instance, on every build, in both modes. compile-perf has a replacement
-  reader in progress; if it takes that 2.0s near zero, the same edit lands around 0.8s in
-  memory mode and 1.5s by default (an estimate, not measured). The rest is the JS traversal
-  (0.15-0.25s), concatenating the cached JS (0.3s; 0.6-0.75s after a Types change) and the
-  type hash check (0.1s).
-- **Found on the way:** a Ctrl-C that lands during the `performMajorGC` `Ext.Sentry` runs
-  after every rebuild is lost (pre-existing, both modes; the window is the length of that
-  GC). Memory mode now skips that forced GC, which made the first Ctrl-C right after a
-  rebuild work again there; default mode is unchanged.
-- **Gaps.** SIGTERM/SIGHUP do not flush; the store is dropped (not repaired) if a build
-  throws; ~1.1GB resident on the large app. See Known limitations.
+- **What it is.** `lamdera live --memory` keeps a project's build in memory between
+  rebuilds as decoded values: every module's interface and objects, the `Details` with the
+  package artifacts resolved, the sources (bytes, mtimes, parsed modules), the rendered JS
+  of every definition and the rendered Wire3 codecs. After the first build a rebuild reads,
+  writes, encodes or decodes nothing under `elm-stuff/lamdera-*` and stats almost nothing,
+  and only renders what changed. In freeze mode the page then gets a hot patch (just the
+  changed definitions and the values that use them, run in the running page's scope) instead
+  of evaluating the whole new bundle. Ctrl-C writes elm-stuff, so the next start, `lamdera
+  make` or plain `lamdera live` is warm. Default `lamdera live` and every other command are
+  unchanged.
+- **Numbers (the large app, 920 modules, final branch).**
+
+  | | default `lamdera live` | `--memory` |
+  | --- | --- | --- |
+  | first build, cold | 4.9s | 5.1s |
+  | first build, warm elm-stuff | 1.33s | 1.50s |
+  | Types.elm interface change (391 modules) | 2.76, 2.94; 2.81, 2.97s | 2.27, 2.31; 2.65, 2.25s |
+  | leaf body change (2 modules) | 1.20, 1.25; 1.25, 1.26s | 0.46, 0.46; 0.45, 0.46s |
+  | leaf body change, slow file system (300us per stat/open) | 2.11s | 0.52s |
+  | view edit to visible in the page (freeze mode) | 2.1s (full hot reload, 49MB) | 0.56-0.61s (hot patch, 1.9KB) |
+  | live heap | 53-83MB | 0.7-1.7GB |
+
+  JS identical in both modes at every step (sha1, with the hot patch hook and build number
+  taken out).
+- **Where the leaf edit's 0.46s goes** (memory): compiling 0.05s, type hash check 0 (skipped,
+  nothing it hashes changed), JS generation 0.38s (building the 58,000 entry global graph, walking
+  the 34,000 reachable definitions, the cache lookups, the listing), putting the page
+  together 0.01s. By default the same edit is 0.05s compiling, 0.2s for the type hash check's
+  second build of Types, and 0.95s generating the JS.
+- **The steps of this round**, each a commit:
+  1. Rebased onto compile-perf 1957416e (the old trial merge with cd2ce8cb, a buggy base,
+     and its numbers are gone; worktree and branch removed).
+  2. Sources in memory (Mario's `FileCache` idea, done on the source table): stats and reads
+     from a table updated by watcher events, with full resets on directory/rename events
+     and `elm.json`, a reconcile every 5s and on page load, and parsed modules kept. Worth
+     0.1-0.5s on a Types change locally and the whole crawl on a slow file system
+     (0.55s to 0.06s of `build` per leaf edit at 300us per stat).
+  3. Re-measured. The fast Wire3 IR reader (b353e45f) took `replaceCodecs` from 2.0s to
+     ~0.35s (reading 75-125ms, rendering the reachable codecs 200-300ms); those are now kept
+     between builds too. The type hash check uses the main build's interfaces and is skipped
+     when they are unchanged.
+  4. Hot patches for Simon's freeze mode hot reload, with the full hot reload as the
+     fallback (kernel/Wire3 codec changes, ports, effect managers, constructors, exports,
+     cycles of values, big patches, errors).
+  5. A plan for Matt Griffith's MCP and LSP daemon work from elm-dev on this store.
+- **Tests.** `Test.LiveMemory` (24 checks) builds a Lamdera app in memory and from disk
+  through a dozen edits: identical JS, identical recompiled modules, sources missed by the
+  watcher found by a reconcile, a directory event resetting the table, the type hashes
+  equal to a separate build's. `Test.HotPatch` (8 checks) builds a worker app across edits
+  and checks the patches (and full reloads where needed), and in node that the first build
+  plus the patches answers like the latest. Full `stack test`: 158 passed, 7 pending (the
+  same 7 as compile-perf), no failures.
+- **Gaps.** JS generation (global graph and walk, 0.38s) is now the largest part of a
+  memory rebuild; the memory mode holds ~1-1.7GB; a Ctrl-C is still occasionally lost (seen
+  once in ~20 runs, after 6 rebuilds, idle); the large app's own FrontendModel does not decode
+  with its codecs, so its freeze mode reloads the page after every hot reload, patch or
+  full (pre-existing, both paths); compile-perf has moved on (2589084a) and its
+  interface-bytes change conflicts with the memory path. See Known limitations.
 
 
 ## elm-dev: what is there and how it got there
@@ -160,9 +180,10 @@ artifacts in memory as decoded Haskell values across rebuilds:
 - the rendered JS of each top-level definition from the last build.
 
 A rebuild then never encodes, writes, reads or decodes anything under
-`elm-stuff/lamdera-*`. What still happens per rebuild: the crawl (one `stat` per module, a
-read and parse of each changed file), compiling what changed and what depends on a changed
-interface, and generating the JS (in part from the kept statements).
+`elm-stuff/lamdera-*`. What still happens per rebuild: the crawl (from the source table, see
+Sources in memory; a read and parse of each changed file), compiling what changed and what
+depends on a changed interface, and generating the JS (from the kept statements and Wire3
+codecs where nothing changed).
 
 ### Shape: elm-stuff in memory, keyed by the stuff directory
 
@@ -183,8 +204,9 @@ places in builder that touch project artifacts consult it:
 
 Every build of that project in the process goes through the same store: the live harness
 build, a manual compile of another `.elm` file from the browser (`serveElm_`), and the nested
-`Interfaces.all` build that `Lamdera.TypeHash.buildCheckHashes` runs. So the semantics are
-exactly those of elm-stuff, minus the codecs. Nothing above the builder changes:
+`Interfaces.all` build of the type hash check where it still runs (with `--memory` the check
+takes its interfaces from the main build instead, see The type hash check). So the
+semantics are exactly those of elm-stuff, minus the codecs. Nothing above the builder changes:
 `Develop.compile` (Details.load, Build.fromPaths, PostCompile.check, TypeHash, Generate.dev)
 runs as before, with Wire3 injection inside `Compile.compile` as before. Multiple entry
 points need nothing special: the store is per module, whichever root reaches it.
@@ -220,8 +242,10 @@ interfaces held; `LAMDERA_MEMORY_SHARE=0` turns it off):
 | --- | --- | --- |
 | base compiler: live heap after the build | 4,493MB | 771MB |
 | base compiler: peak in use / build time | 20.8GB / 75s | 13.2GB / 58s |
-| with compile-perf: live heap after the build | 1,594MB | 934MB (incl. the JS cache) |
-| with compile-perf: peak in use / build time | 6.5GB / 9.2s | 5.1GB / 7.2s |
+| final branch (compile-perf 1957416e): live heap after the build | 1,640MB | 984MB (incl. the JS and codec caches) |
+| final branch: peak in use / build time | 6.1GB / 4.9s | 4.3GB / 5.0s |
+
+(The base compiler rows are from before the rebase, on the compiler without compile-perf.)
 
 ### Reusing the JS of unchanged definitions
 
@@ -232,13 +256,12 @@ of which are in its deps. `Generate.JavaScript.generateCached` keeps, per global
 the arities of its deps and the rendered bytes, and reuses the bytes when the node is
 pointer equal (a check that can only miss, never be wrong) and the arities are unchanged.
 The traversal still runs in full, so the output order is identical; only the rendering is
-skipped. `Define`, `DefineTailFunc` and `Cycle` statements are cached; kernel nodes,
-including the Wire3 codecs that `replaceCodecs` renders every build, are emitted as before.
-Only `Generate.dev` (Mode.Dev, not ESM) uses it. The arity check is covered by a test whose
+skipped. Every node kind goes through it, kernel chunks included (the Wire3 codecs are
+kernel nodes that `replaceCodecsCached` keeps the same between builds, see Wire3 codecs),
+and each build also lists what it emitted, for hot patches (see Hot patches). Only
+`Generate.dev` (Mode.Dev, not ESM) uses it. The arity check is covered by a test whose
 dependency changes arity behind an unchanged interface (the importer is not recompiled but
-its JS must change); with the check disabled that test fails. On the large app (with compile-perf)
-it costs ~165MB and takes a leaf edit from 2.85-2.9s to 2.56-2.65s (rendering 0.3s instead
-of ~0.7s); on a 391 module rebuild the gain is within noise.
+its JS must change); with the check disabled that test fails.
 
 ### Disk
 
@@ -253,8 +276,8 @@ of ~0.7s); on a 391 module rebuild the gain is within noise.
   ever newer than the `.elmo` files compiled against it, and the old `d.dat` makes the
   normal build re-check every module that changed. If the process dies instead, elm-stuff
   is simply the stale but consistent state of the last disk build, and the next start
-  recompiles what changed since. Flush on the large app: 0.2s after Types edits (391 `.elmo`,
-  1 `.elmi`), 4.4-6.8s after a cold start (920 + 920).
+  recompiles what changed since. Flush on the large app: 0.24s after Types edits (391 `.elmo`,
+  1 `.elmi`), 2.2s after a cold start (920 + 920).
 - The REPL worker in the live UI does not read Lamdera's project elm-stuff (it compiles the
   project itself under its own `elm-stuff/0.19.3` in an in-browser file system, and reads
   only the package artifacts from `~/.elm`), so it is unaffected.
@@ -279,15 +302,18 @@ with `atomicModifyIORef'` per module.
 
 `Develop.runWithRoot` registers the store when `--memory` is given, wraps each rebuild in
 `withMemoryReset` (and `timedRebuild` for `LAMDERA_LIVE_TIMING`), wraps the server in
-`withMemoryFlush`, and asks `Ext.Sentry` not to force a major GC after each rebuild (that GC
-would mostly copy the kept artifacts, and loses a Ctrl-C that arrives during it, see Known
-limitations).
+`withMemoryFlush`, and rebuilds with `Sentry.updateJsOutputNow`: the JS output is taken
+before the clients are told (so a hot patch asked for right away waits for the build), and
+no major GC is forced after each rebuild (that GC would mostly copy the kept artifacts, and
+loses a Ctrl-C that arrives during it, see Known limitations). It also tells the source
+table what the watcher saw before each build, runs the background reconcile, reconciles
+when the page is loaded, and serves `/_patch`.
 
 ### Not changed
 
-- The crawl still `stat`s every module per rebuild. elm-dev content-compares every source
-  file instead (more robust to mtime games, more I/O); stats are cheap and also catch edits
-  the watcher misses (git checkout, editors that rename).
+- Builder's invalidation: the source table only decides what `stat` and `readUtf8` return
+  (see Sources in memory); what to recompile is still decided by comparing times and
+  interfaces, as on disk.
 - `lamdera make`, `check`, `deploy` and plain `lamdera live` are untouched.
 
 ### Timing output
@@ -296,165 +322,430 @@ limitations).
 `details` / `build` / `postcompile` / `typehash` / `objects` / `rest`, the modules
 compiled, the GC time and collections during it, what the store did (hits, disk reads,
 entries held) and, with `+RTS -T`, the heap after a major GC. By default `objects` is
-loading the objects and `rest` all of the JS generation; in memory mode `objects` also
-includes building the global graph and walking it (`replaceCodecs` included), and `rest`
-is rendering. The exit flush prints what it wrote and how long it took.
+loading the objects and `rest` all of the JS generation; in memory mode `objects` is all of
+the JS generation (building the global graph, the Wire3 codecs, the walk, rendering what
+changed and the listing for hot patches), and `rest` putting the page together. The exit
+flush prints what it wrote and how long it took.
 
 
-## Measurements (the large app, 920 modules)
+## Sources in memory
+
+With `--memory` the crawl's per-module source `stat`s and reads (`Build.crawlModule`,
+`crawlFile`, `checkModule`) go through a table in the store instead of the disk
+(`Ext.MemoryCache` SOURCES): `path -> Present mtime (Maybe bytes) (Maybe parsed module) |
+Absent`. An entry is filled the first time a path is looked at and then only changes when
+something says it may have:
+
+- **Watcher events** (`sourcesChanged`, from `Develop`'s rebuild, before the build): an
+  `.elm` path is re-stat'ed; same mtime and bytes never read means "read them now, no
+  change"; same mtime with different bytes, or a new mtime, replaces the entry (the time
+  becomes `File.zeroTime` when only the bytes moved, so the builder's own time check sees
+  a change). Everything else the builder does is unchanged: it still compares times with
+  `d.dat`'s and decides what to recompile.
+- **A directory event, a rename, or a path that vanished** (moving a folder, `git
+  checkout`, some editors' atomic saves): the whole table is forgotten and the next build
+  looks at the disk again, like the default.
+- **`elm.json`**: the store (and with it the table) is reset with the Details.
+- **The live harness** (`elm-stuff/lamdera`, written by `prepareLocalDev` before every build,
+  ignored by the watcher): the files it writes are reported to the table every build
+  (`Live.localDevFiles`). It is an extra source directory where every module is looked for
+  first and not found, so leaving it to the disk would cost a stat per module per build.
+- **A reconcile** (`reconcileSources`) stats every entry and refreshes those that differ: in
+  the background every 5s, and when the page is loaded (so a browser reload always shows
+  what is on disk, even after an edit the watcher missed, e.g. in an ignored directory or a
+  dropped event). This is Matt Griffith's `updateVfsFromFs` idea from elm-dev, as a safety
+  net rather than on every build. `.git/HEAD` needs no case of its own: the watcher filters
+  `.git`, but a branch switch shows up as file and directory events in `src`.
+- **Parsed modules** are kept next to the bytes (`sourceParseFor`): a module recompiled only
+  because a dependency's interface changed is not parsed again (389 of the 391 modules of a
+  Types.elm change on the large app).
+- `Build.makeScheduler` (compile-perf) stats every cached module's source for its size on
+  every build, in the calling thread; with `--memory` that size comes from the table
+  (`sourceSizeFor`), kept per mtime.
+- `LAMDERA_MEMORY_SOURCES=0` turns all of this off.
+
+What it saves on the large app: on a local SSD almost nothing per leaf edit (the crawl's 920 stats
+are ~10ms), and 0.1-0.5s on a Types.elm change (the parses kept). On a slow file system it
+is the whole crawl. Measured with a `DYLD_INSERT_LIBRARIES` shim that adds 300us to every
+`stat`/`lstat`/`fstatat`/`open`/`openat` under the project (a VM shared folder or a network
+mount), leaf body edit:
+
+| | rebuild | `build` (crawl + compile) | `typehash` |
+| --- | --- | --- | --- |
+| default | 2.1-2.2s | 0.53-0.56s | 0.53-0.64s |
+| `--memory`, sources from disk | 1.47s | 0.53-0.55s | 0.35s |
+| `--memory`, sources in memory, first version | 1.18-1.19s | 0.40-0.41s | 0.21-0.22s |
+| `--memory`, final (harness kept, scheduler sizes, hashes from the build) | 0.52s | 0.06s | 0 (skipped) |
+| `--memory`, final, local SSD for comparison | 0.45-0.46s | 0.05-0.06s | 0 (skipped) |
+
+The first version still paid ~1,200 stats per build: the harness directory (fixed by keeping
+it), compile-perf's scheduler sizes (920, fixed by `sourceSizeFor`) and the type hash
+check's second build of Types (fixed below). Found with the shim logging every slowed path
+with a timestamp (and a C backtrace for chosen paths), then a `HasCallStack` trace in
+`File.getTime`/`File.exists`.
+
+
+## The type hash check
+
+`Lamdera.TypeHash.buildCheckHashes`, run after every live build, builds `src/Types.elm` a
+second time (`Interfaces.all`: a whole second crawl, check and interface load of everything
+Types needs, 250 modules on the large app) to hash the Lamdera core types, and then throws the
+result away (it only forces the errors). With `--memory`, `buildCheckHashesFrom` takes the
+same interfaces from the build that just ran (Types' import closure, from the Details it
+wrote) and skips the hashing entirely when every one of them is the very value the last
+hashes came from (an interface that compiled the same stays the same value in memory,
+`MemoryCache.keepSame`). `Test.LiveMemory` checks the hashes equal a separate build's after a
+Types change. On the large app: 0.2s by default, 0.1s with the first version of memory mode,
+0.09-0.12s when a Types interface changed and 0ms otherwise. The default is unchanged (the
+same change would save it ~0.2s per rebuild there too).
+
+
+## Wire3 codecs (`replaceCodecs`)
+
+compile-perf's IR reader (b353e45f) took the 2.0s of `replaceCodecs` reading every type's
+Wire3 IR with the derived `Read` instance down to about 0.1s. Measured separately on the
+rebased branch (a temporary patch around `Generate.dev`, the large app, leaf edit): reading all
+IR and working out which codecs can be replaced (the spine) 75-125ms, rendering the JS of
+the 4,271 reachable `w3_` codecs 200-300ms, every build, in both modes.
+
+With `--memory`, `Lamdera.Wire3.Direct.replaceCodecsCached` keeps both between builds: the
+IR read from each `w3_ir_`/`w3_iru_` node (reused while the node's bytes are the same) and
+each rendered codec node (reused while its `Codec` and the direct arity of every type it
+refers to are the same, the only things rendering looks up). A codec rendered fresh gets a
+`_direct` map cut down to those types, so a kept node that is never rendered (codecs are
+rendered lazily, only the reachable ones) does not hold on to a whole build's map. The JS
+cache carries it from build to build. Same output (`Test.LiveMemory`, and the large app's JS sha1
+at every step). Leaf edit on the large app: the rendering part of the rebuild went from ~300ms to
+~120ms, the whole rebuild from 0.72s to 0.56s. A Types change gains little (within the
+noise of these runs): the types whose codecs it changes are rendered again.
+
+
+## Hot patches (lamdera live, freeze mode)
+
+### What there was
+
+Simon Lydell's hot reload (095173c1 "First step towards hot reloading", 0153bf45 "Only do
+hot reloads in freeze mode", 0ff02583/237627fe refresh when the Backend/FrontendModel
+changed, c83e76d9, and the error dialog commits): in freeze mode, on the websocket's `r`
+message, `extra/live.js` `hotReload()` fetches `/`, cuts the Elm JS out between the
+`// lamdera-elm-js-start`/`-end` markers, evaluates it into a fresh scope
+(`new Function(js).call(newScope)`), and calls `Elm.hot.reload(newScope)`. The Platform
+kernel (`extra/package-replacements/elm/core/.../Platform.js`, `_Platform_export__DEBUG`,
+`app.hotReload`) then swaps the running app's `impl` (init, update, view, subscriptions) for
+the new scope's, keeps the model, effect managers and ports, redraws and resubscribes.
+Afterwards the harness checks the stored BackendModel/FrontendModel bytes still decode
+with the new codecs (`verify*ModelDecodableAfterHotReload`) and reloads the page if not.
+Outside freeze mode every rebuild reloads the page.
+
+So each edit still evaluates the whole new bundle: 49MB on the large app, which also has to be
+generated and sent.
+
+### What the page gets now
+
+Elm's output is one scope (`(function(scope){ 'use strict'; ... }(this))`) of `var`
+definitions in dependency order: the F/A helpers, then every kernel chunk, then every
+definition (`$author$project$Module$name`, plus `$fn` direct-call names for functions of
+two or more arguments), then `_Platform_export(...)` and Lamdera's injections. A function
+looks up the definitions it uses each time it runs, so redefining one is seen by every
+caller; a value (anything worked out when the page loads, `main` included) holds on to
+what it was worked out from; kernel code comes before every definition, so it can only use
+them when called.
+
+With `--memory`:
+
+- Every build lists what it emitted, in output order (`Generate.JavaScript.Listing`: per
+  statement its global, kind, rendered bytes and deps; the kernel chunks; the exports and
+  injections), as part of the JS cache, which now handles every node kind (and kernel
+  chunks), not just definitions. The store keeps the last 10 listings, numbered
+  (`MemoryCache.recordJsBuild`).
+- The bundle has one more line inside its scope, `scope['__lamdera_patch'] =
+  function(code) { eval(code); }` (`patchHook`), and the page is told which build it runs
+  (`this.__lamderaJsVersion = N`, after the Elm JS).
+- In freeze mode `live.js` first asks `/_patch?from=N`. `Lamdera.HotPatch.diff` compares the
+  listings: the statements whose bytes changed or are new, plus every value that uses one
+  of them directly or not (one pass in output order), are sent with each `var NAME =` at
+  the start of a line turned into `NAME =` (and a name the page never had first made a
+  global, so later patches can assign it), then the programs are exported again into a
+  scratch scope and `Elm.hot.reload` from there, exactly the call the full hot reload
+  makes. The patch runs through the hook, so in the page's own scope. A page a few builds
+  behind gets the patches since its build, one after the other.
+- It answers `full <reason>` instead when a patch is not safe or not worth it, and `live.js`
+  then does the full hot reload as before (also on any error running a patch):
+  - kernel code changed or appeared (the Wire3 codecs of a changed type, a newly used
+    package's kernel);
+  - the exports or Lamdera's injected code changed;
+  - a constructor, port or effect manager changed, or a port or manager would have to be
+    worked out again (they register themselves when they run);
+  - a cycle of values would have to be worked out again;
+  - the patch would be more than half the page;
+  - the page's build is no longer kept, or there is no newer build (the last one failed:
+    the full path shows the error dialog as before; the next good build's patch removes it).
+- After a full hot reload the page takes the new scope's hook and build number, since the
+  app now runs the new scope's definitions.
+- The model checks after a hot reload run as before, so a model whose encoding changed
+  still reloads the page.
+- With `--memory` the watcher takes the JS output before telling the clients, so a patch
+  request made right away waits for the build.
+
+Not in freeze mode nothing changes: the page reloads.
+
+### Measured
+
+Save (file write) to the change visible in the page (a `MutationObserver` in the page,
+Playwright), freeze mode, a view function edit:
+
+| | counter example app | the large app login page (920 modules) |
+| --- | --- | --- |
+| `--memory`, hot patch | 41-169ms (patch 0.9-1.4KB gzipped, 4-6 statements) | 560ms, 605ms (patch 1.9KB, 5 statements, 8.6KB) |
+| default, full hot reload | | 2,085ms (49MB, 8.4MB gzipped) |
+| after a ToFrontend change (kernel codecs changed, full) | 166ms | |
+
+On the large app the 0.56-0.6s is the rebuild (0.43-0.46s), working out the patch on the server
+(40ms, diffing two 34,000 statement listings) and applying it. State was kept in every case
+(counter value, form contents, the backend model).
+
+the large app itself always reloads the page right after any hot reload, patch or full: its stored
+FrontendModel does not decode with its own codecs (checked in the page by decoding the
+`localStorage` copy through the hook: `Nothing`, with no patch applied), so the harness's
+model check reloads. That is the same with the full hot reload, and is the large app's (or the
+harness's) to look at; the times above are to the change being visible, before that reload.
+
+
+## Measurements (the large app, 920 modules, final branch)
 
 Machine: Apple Silicon, 16 cores, 128GB. Each run (`scratchpad/lm/livebench.py`) starts
 `lamdera live` with `LAMDERA_LIVE_TIMING=1 +RTS -T`, waits for the first build, then twice:
 an interface change to `src/Types.elm` (an unused top-level value appended; 391 modules
-recompile) and a body-only change to `src/Palette/Alert.elm` (a CSS class string in an
-unexposed value; the module and the harness recompile). It then reverts both, lets it
-rebuild, and stops it with SIGINT. Times are what the server reports from the start of the
-rebuild to the finished HTML; the wall time from the file write to that line is 0.0-0.7s
-more (watcher latency, debounce) and is in the raw results. Warm runs start from the
-previous run's elm-stuff, cold runs with none (package artifacts warm). The compile-perf
-agent ran the large app builds of its own during several runs (the script waits for any other
-`lamdera make`/`live` before each build, but not for `stack build`), so the 1-minute load
-average is given. Every run's JS was compared by sha1: both modes give byte identical JS
-at every step.
-
-### With compile-perf merged (the state this would ship in)
-
-Branch `live-memory-perf-trial` (worktree `~/dev/projects/lamdera-compiler-live-memory-perf`),
-a throwaway merge of this branch with compile-perf at cd2ce8cb (parallel GC back on, alias
-real types built lazily). The only conflict was `Build.compile`, where compile-perf wraps
-the same `.elmo`/`.elmi` calls this branch replaces in its `Lamdera.Perf` timing (kept both).
-Three warm runs per mode (load 3.5-7.4), the last with this branch's final commit.
+recompile) and a body-only change to `src/Palette/Alert.elm` (a CSS class string; the
+module and the harness recompile). It then reverts both, lets it rebuild, and stops it with
+SIGINT. Times are what the server reports from the start of the rebuild to the finished
+page; the wall time from the file write to that line is 0.02-0.15s more. Warm runs start
+from the previous run's elm-stuff, cold runs with none (package artifacts warm). The JS of
+every step was compared by sha1 (without the hot patch hook and the build number): the
+same in both modes at every step. Load average 4-6.
 
 | | default `lamdera live` | `lamdera live --memory` |
 | --- | --- | --- |
-| first build, cold (921 modules) | 7.1s, peak in use 5.3GB | 7.2-7.5s, peak in use 5.1-5.3GB |
-| first build, warm elm-stuff | 3.0, 3.0, 3.1s | 3.0, 3.5, 3.0s |
-| Types.elm interface change, 391 modules | 5.1, 5.4; 5.0, 5.2; 4.9, 5.2 | 5.4, 4.7; 5.0, 4.9; 4.9, 4.9 |
-| of which compiling (`build`) | 1.8-2.1s | 1.7-2.4s |
-| leaf body change, 2 modules | 3.2, 3.4; 3.2, 3.3; 3.2, 3.3 | 2.6, 2.6; 2.6, 2.6; 2.6, 2.6 |
-| live heap after GC | 49MB | 1.1GB |
-| RTS peak in use over a Types rebuild | 4.6-4.9GB | 6.4-6.8GB |
-| exit | | flush 0.2s, first Ctrl-C |
+| first build, cold (921 modules) | 4.93s, peak in use 4.6GB | 5.05s, peak in use 4.4GB |
+| first build, warm elm-stuff | 1.33s | 1.50s |
+| Types.elm interface change, 391 modules (cold run; warm run) | 2.76, 2.94; 2.81, 2.97s | 2.27, 2.31; 2.65, 2.25s |
+| of which compiling (`build`) | 1.64-1.76s | 1.21-1.67s |
+| of which type hash check | 0.19-0.21s | 0.09-0.20s |
+| of which JS (`objects` + `rest`) | 0.92-1.0s | 0.86-0.90s |
+| leaf body change, 2 modules (cold run; warm run) | 1.20, 1.25; 1.25, 1.26s | 0.456, 0.459; 0.449, 0.460s |
+| of which compiling / type hash / JS | 0.05 / 0.19-0.21 / 0.97-1.0s | 0.05-0.06 / 0 / 0.39-0.40s |
+| the same, slow file system (300us per stat/open) | 2.11s (0.56 / 0.55 / 1.0s) | 0.52s (0.06 / 0 / 0.45s) |
+| live heap after GC, over the run | 53-83MB | 0.7-1.7GB |
+| RTS peak in use over the run | 4.5GB | 6.5-6.9GB |
+| exit | | flush 0.24s (warm), 2.2s after a cold start (920 + 920 files) |
 
-A leaf edit in memory mode (2.6s): `objects` 2.15s, of which about 2.0s is
-`replaceCodecs` (measured separately: `graphModifications` alone takes 2.0s every build)
-and 0.15-0.25s the graph walk; rendering 0.3s; type hash check 0.1s; compiling 0.03s.
-By default the same edit spends 0.2s in the type hash check (a second, nested build of
-`src/Types.elm` and a second load of the package artifacts), 0.05s loading 920 `.elmo`,
-and 2.9s generating the JS (2.0s of it the same `replaceCodecs`).
+The numbers of the earlier trial merge with compile-perf at cd2ce8cb are discarded: that
+commit alone is buggy (fixed by 5952a85d).
 
-### Base compiler (this branch; RTS `-N -qg -A128m`), before the JS cache
+How the memory mode's leaf edit came down on the rebased branch (one run each, `scratchpad/lm`
+binaries):
 
-| | default `lamdera live` | `lamdera live --memory` |
+| | leaf body change | of which JS |
 | --- | --- | --- |
-| first build, cold (921 modules) | 62.8s (load 4.8), peak RSS 15.2GB | 57.7s (load 4.4), peak RSS 13.3GB |
-| first build, warm elm-stuff | 3.9s | 3.8s |
-| Types.elm interface change, 391 modules | 54.0, 54.5 (load 7.9, 6.6); 49.0, 52.5 (7.2, 5.8) | 54.6, 50.9 (3.2, 2.9); 50.5, 52.1 (2.8, 5.6) |
-| of which GC | 43.7-46.8s | 45.0-49.5s |
-| leaf body change, 2 modules | 3.8, 4.1; 3.9, 4.3 | 2.9, 3.0; 3.0, 3.0 |
-| live heap after GC | 49MB | 0.8-1.0GB |
-| RTS peak in use over a Types rebuild | 11.6-12.9GB | 11.9-13.2GB |
-
-With the JS cache on the base compiler (one run): leaf edit 2.8, 2.9s; Types change 55.6, 56.0s.
-
-Reading the tables:
-
-- The memory mode removes what it set out to remove: `details` and `objects` loading drop
-  to (near) zero, the type hash check halves, and nothing is read from disk once warm
-  (`store: 0 disk reads`). On the large app that, plus the JS cache, is worth 0.6-0.8s on a leaf
-  edit with compile-perf and ~1.1s on the base compiler; on a 391 module rebuild the
-  difference is within the noise of these runs.
-- On the base compiler a big rebuild is ~90% GC (sequential GC), and holding ~1GB more makes
-  every major collection more expensive, which cancels the saving on the Types change.
-  With compile-perf's parallel GC, GC is under 1.1s per rebuild and that effect is gone.
-- With compile-perf, JS generation is the largest part of every rebuild in both modes, and
-  most of it is `replaceCodecs` re-reading the Wire3 IR (compile-perf's next fix).
+| rebased, before this round's changes (`rb1`) | 0.70-0.73s | 0.57s |
+| sources in memory (`src1`/`src2`) | 0.71-0.78s | 0.58-0.63s |
+| scheduler sizes and type hashes from the table and the build (`src3`) | 0.71-0.74s | 0.55-0.61s |
+| Wire3 codecs kept (`src4`) | 0.56-0.57s | 0.41s |
+| type hashes skipped when unchanged (`src5`) | 0.44-0.50s | 0.38-0.43s |
+| hot patch listing (final) | 0.45-0.46s | 0.39-0.40s |
 
 
 ## Tests
 
-- `Test.ElmiTypeTable`: new case for `I.share` (50 annotations each with their own Model
-  tree come back equal, encode to the same bytes, and all 100 Model occurrences are one
-  value).
-- `Test.LiveMemory` (new, 17 checks): two copies of a Lamdera app built the way live builds
-  them, one with a registered store; byte identical JS and identical recompiled module
-  sets (and the expected ones) after: first build; no change; leaf body change; leaf
-  interface change (importer recompiles, its interface stays, its importer does not); a
-  dependency's arity changing behind an unchanged interface (importer not recompiled, its
-  JS changes, via the JS cache's arity check) and back; new constructor in Types (Wire3
-  codecs change); a type error (both fail) and its fix; touching elm.json (details
-  reloaded, store reset, full rebuild like disk); more in-memory rebuilds. Then: no `.elmo`
-  written while registered, a flush that a disk build finds up to date (only the harness
-  compiles), and a new store starting from it that reads nothing from disk once warm.
-- Full `stack test` (scratch `ELM_HOME`) on the final branch: 141 passed, 7 pending, no
-  failures. (elmi-type-table had 97 passed and 7 pending; the typed-decoders merge adds its
-  Wire3 cases and this branch the 18 above. Pending: the two TestMigrationGenerator e2e
-  scopes, two Test.Check scopes, Test.Ext.ElmPages.Check isWireCompatible, Test.Lamdera,
-  Test.WebGL.)
-- Manually: `lamdera live --memory` on a fresh `lamdera init` project and on the large app; edits
-  to Frontend (body) and Types (interface) update the served page; after Ctrl-C a plain
-  `lamdera live` on the flushed elm-stuff compiles only the harness and serves a
-  byte-identical page.
+- `Test.ElmiTypeTable`: a case for `I.share` (50 annotations each with their own Model tree
+  come back equal, encode to the same bytes, and all 100 Model occurrences are one value).
+- `Test.LiveMemory` (24 checks): two copies of a Lamdera app built the way live builds
+  them, one with a registered store; identical JS (but for the hot patch hook) and identical
+  recompiled module sets (and the expected ones) after: first build; no change; leaf body
+  change; leaf interface change; a dependency's arity changing behind an unchanged
+  interface, and back; a new constructor in Types (new Wire3 codecs), with the importers not
+  parsed again and the type hashes equal to a separate build of Types; a type error and its
+  fix; an edit the watcher did not report, not seen until a reconcile, then seen by both; a
+  directory event forgetting every kept source, after which the disk is looked at again;
+  touching elm.json; more rebuilds; nothing written to elm-stuff while registered; a flush
+  that a disk build finds up to date; a new store starting from it that reads nothing from
+  disk once warm.
+- `Test.HotPatch` (8 checks): a Platform.worker app with ports, built in memory after each
+  edit, the patch from the build before checked for what it holds and run in node on top
+  of the first build (which then must answer like the latest): a changed value (patched,
+  with the values using it worked out again, functions left alone), a changed function and
+  a new definition, patches from two builds back, an empty patch for an unchanged build,
+  and full reloads for a new port, new kernel code (Bitwise) and a build no longer kept.
+- Full `stack test` (scratch `ELM_HOME`): 158 passed, 7 pending (the same 7 as
+  compile-perf: the two TestMigrationGenerator e2e scopes, two Test.Check scopes,
+  Test.Ext.ElmPages.Check isWireCompatible, Test.Lamdera, Test.WebGL), no failures.
+- Manually, with Playwright: the counter example app and the large app in freeze mode, edits to a
+  value, a view function, a new constructor with a compile error and its fix (error dialog,
+  then removed by the next patch), a ToFrontend change (full hot reload, then patches into
+  the new scope), clicks working after each patch, state kept throughout.
 
 
 ## Known limitations
 
-- **A Ctrl-C during a forced major GC is lost** (GHC 9.8 threaded RTS, macOS; pre-existing).
-  `Ext.Sentry` forces one after every rebuild, so a Ctrl-C right after a rebuild did nothing
-  (a second one was needed): every time in memory mode, where that GC copies ~1GB, and in
-  about half of the default runs. Isolated with a build of `Ext.Sentry` without the GC:
-  SIGINT at the moment the rebuild finishes was lost 2/2 with the GC and handled 2/2
-  without, on both compilers; sent 0.3s or more later it was handled every time. Memory mode now skips the
-  forced GC (fb3e3fd3); default mode keeps it and keeps the (short) window.
-  `LAMDERA_LIVE_TIMING` with `+RTS -T` forces a major GC of its own for the heap figure,
-  which reopens the window, so the benchmark waits 3s before stopping the server.
-- Ctrl-C is the only exit that flushes. SIGTERM, SIGHUP (closing the terminal) or a crash
-  skip it; elm-stuff is then the stale but consistent state of the last disk build, and
-  the next start recompiles what changed since (same as the backend snapshot `withEnd`
-  saves today).
-- The flush takes the root lock, so it waits for a rebuild in progress.
-- A build that throws drops the whole store: correct, but the next rebuild reloads from an
-  elm-stuff that may be far behind.
-- A concurrent `lamdera make` on the same project in another terminal is safe (root lock,
-  and memory mode never trusts disk over its own state), but memory mode does not see its
-  results, may redo its work, and the exit flush overwrites what it wrote with the same
-  content.
-- Modules that disappear keep their store entry for the session; it is only read again if
-  a module of that name comes back, and that one is recompiled because its time differs.
-- Memory: ~1.1GB resident on the large app for the session, objects being roughly half, the JS
-  cache ~165MB.
+- **JS generation is now most of a memory rebuild** (0.38s of 0.46s on the large app): every build
+  still builds the global graph of 58,000 globals from the per-module graphs, runs
+  `graphModificationsCached` over it, and walks all 34,000 reachable definitions (cache
+  lookups and arity checks for each). See Next steps.
+- **Memory**: the live heap is 0.7GB after a warm start and grew to 1.7GB over six rebuilds
+  (25MB per leaf edit, ~100MB per Types change; the default grows ~10MB per build too). The
+  last 10 builds' listings are kept for hot patches (most bytes shared between them), so
+  the growth from those is bounded; not measured beyond six rebuilds.
+- **A Ctrl-C is sometimes lost.** Seen once in about 20 runs of this round, idle, 3s after the
+  sixth rebuild (the second one worked, and the flush ran); five idle trials after one build
+  were all handled. The forced GC that lost it reliably before is gone from memory mode, so
+  this is another window; not found.
+- **the large app's FrontendModel does not decode with its own codecs** (the copy the harness keeps
+  in `localStorage`, decoded in the page through the hook, gives `Nothing` before any patch),
+  so in freeze mode the harness reloads the page after every hot reload, patch or full.
+  Pre-existing and the same on both paths; the counter app keeps its state.
+- **Hot patches only in freeze mode**, as Simon's hot reload is: outside it the page reloads
+  as before.
+- **What forces the full hot reload**: any kernel change (on the large app every change to a type
+  that crosses the wire, since its codecs are kernel nodes), ports, effect managers, changed
+  constructors, cycles of values. Each of those could be patched with more care (codecs are
+  plain functions underneath, a constructor change is safe when no value of it is alive).
+- **The source table** trusts the watcher plus a 5s reconcile and the page-load reconcile;
+  an edit both miss is not seen until one of them runs. On a slow file system the reconcile
+  costs about as much as a default build's crawl, every 5s (1.2-1.6s at 300us per stat, in
+  the background).
+- Ctrl-C is the only exit that flushes. SIGTERM, SIGHUP or a crash skip it; elm-stuff is
+  then the stale but consistent state of the last disk build.
+- A build that throws drops the whole store; the next rebuild reloads from elm-stuff.
+- A concurrent `lamdera make` on the same project is safe but not seen by the memory mode.
+- **compile-perf has moved on** since 1957416e (8 commits, to 2589084a). One of them,
+  4396f9a7 "Build: compare a recompiled module's interface with the file by bytes", changes
+  the same lines of `Build.compile` as the memory mode's interface hooks: the memory path has
+  no file bytes and must keep comparing values against its kept interface (or keep the
+  bytes). Needs a careful merge; not done here, as 1957416e was the agreed base.
 
 
 ## Next steps
 
-1. **`replaceCodecs`** (2.0s of every rebuild on the large app, both modes): compile-perf's IR
-   reader is the fix and should land first. In memory mode it could go further and keep
-   each module's parsed IR (or the rendered codec nodes) next to its objects, so unchanged
-   modules' codecs are neither read nor rendered again.
-2. **Smaller retained objects.** Objects are about half of the ~1.1GB held. Names and
-   `Opt.Global`s are allocated per occurrence; interning them when objects enter the store
-   (like `I.share` does for types) would cut that.
-3. **Share interfaces in normal builds too.** During any build, results hold every fresh
-   interface until the build ends. `RSame` could return the old (shared, already decoded)
-   interface and `RNew` the `I.share`d one in `lamdera make` as well; on the base compiler
-   that is the 4.5GB vs 0.8GB difference above for a cold build, and with compile-perf
-   1.6GB vs 0.9GB. Worth measuring as part of compile-perf.
-4. **Compact regions for the store** (`GHC.Compact`): retained data would no longer be
-   copied by major GCs. Blocked today by the Wire3 IR, which is stored as pinned
-   `ByteString`s in `Opt.Kernel` nodes (not compactable); with the parallel GC the gain is
-   small anyway.
-5. **Flush on SIGTERM/SIGHUP.** And look at the lost SIGINT in default mode: either drop
-   the forced GC there too, or report it upstream with the small reproduction above.
-6. **Optional background write-behind** if warm starts after crashes matter.
+1. **Incremental global graph.** Keep the merged graph (and the graph after
+   `graphModificationsCached`) in the store and update it per changed module, instead of
+   rebuilding 58,000 entries every build; then walk from the changed globals only (the
+   listing gives the order). That is most of the remaining 0.38s.
+2. **Patch more**: Wire3 codec changes (send the changed kernel chunks for codecs, which are
+   self-contained functions), new ports (register them through the Platform kernel's hot
+   reload path), constructor changes when the model check passes.
+3. **Skip the full page render** when every connected page takes patches: the page is
+   rendered and kept every build (cheap now, 10ms, but 49MB held per version).
+4. **Bring the type hash change to the default** (`buildCheckHashesFrom` without the skip
+   would save the default ~0.2s per rebuild).
+5. **Smaller retained objects** (intern names and globals as `I.share` does types), and
+   compact regions once the Wire3 IR is no longer pinned bytes.
+6. **Flush on SIGTERM/SIGHUP**, and find the remaining lost Ctrl-C window.
+7. **The MCP/LSP daemon** below.
 
 ### Relation to the compile-perf work
 
-compile-perf (`~/dev/projects/lamdera-compiler-perf`, branch `compile-perf`) and this
-branch touch the same three lines of `Build.compile` (both wrap the `.elmo`/`.elmi`
-reads and writes); the trial merge resolved that by keeping compile-perf's `perf` labels
-around this branch's `MemoryCache` calls. Nothing else overlaps: compile-perf changes the
-type checker, the RTS options and (in progress, uncommitted) the Wire3 IR reader in
-`Lamdera.Wire3.Direct`; this branch changes how artifacts are stored and adds the JS cache
-in `Generate.JavaScript`. They combine cleanly and measurably (the first table): together
-a Types change goes from ~50s to ~5s and a leaf edit from ~4s to 2.6s, and once the IR
-reader lands the leaf edit should be well under a second in memory mode.
+This branch is rebased onto compile-perf 1957416e. compile-perf's `perf` labels wrap the
+memory mode's `.elmo`/`.elmi` calls in `Build.compile`; its scheduler (`Lamdera.Schedule`)
+gets its module sizes from the source table in memory mode; its IR reader is what the codec
+cache builds on. See Known limitations for the commits it has gained since.
+
+
+## Plan: an MCP and LSP daemon on the memory store (from Matt Griffith's elm-dev work)
+
+The point of a fast in-memory build is low latency for agentic edit/check loops (and
+editors): "does this compile, and what are the errors and types" in tens of milliseconds
+for a body edit, without generating 49MB of JS. elm-dev (Matt Griffith, BSD-3-Clause, at
+d9395458) has the daemon, MCP server and LSP around Mario's 2022 memory mode. What follows
+is what it exposes, what maps onto this branch's store, and what it would take. Nothing of
+it is implemented here.
+
+### What elm-dev exposes
+
+- **One global daemon** (`Watchtower.Server.Daemon`, state in `~/.elm/daemon/state.json`,
+  started on demand by `elm-dev mcp`/`elm-dev lsp`), with three local TCP ports (LSP, MCP,
+  the dev HTTP/websocket server). Editors and agents talk stdio to a small Rust proxy that
+  frames JSON-RPC onto the TCP port. Projects are discovered by walking the workspace for
+  `elm.json`; each has an id, and MCP keeps a focused project per connection.
+- **MCP** (`Watchtower.Server.MCP`, ~4.5k lines with protocol, docs rendering and guides):
+  8 tools, each taking an optional project `dir`: `check` (diagnostics for the project,
+  a file or a module, with warnings; also starts and polls background test runs), `docs`
+  (batched queries: project, modules, module, file, value, search, package), `install`,
+  `dependencies` (install, uninstall, unused, tree, size, upgrade), `test_install`,
+  `generate_scaffold_app`, `generate_scaffold_package`, `add` (pages, stores, effects from
+  elm-dev's app templates). Resources: an overview, the projects, architecture and style
+  guides, file/module/value/package docs, and a module graph (imports, exports,
+  dependents). No prompts. No tool for the type at a position, definitions or references.
+- **LSP** (`Watchtower.Server.LSP` and helpers, ~3.9k lines): what works is document sync
+  (incremental changes kept in memory, unsaved buffers compile), push and pull diagnostics
+  (errors, warnings such as unused imports and variables, test compile errors, unused
+  modules), hover (types and docs), definition, references (global ones by scanning every
+  module's canonical AST), a code lens to add a missing type signature, and formatting
+  (the `elm-format` binary). Completion, signature help, rename and a few more answer with
+  placeholder data; symbols, semantic tokens and folding are not offered.
+- **Per-file analysis captured during compile** (2025-08/09, in the vendored
+  `Ext.MemoryCached.Build.compile`): per module a `FileInfo` with the warnings (which stock
+  Elm drops), the module's `Docs`, its `Localizer`, its canonical AST, and a hover index
+  (region to type annotation) from a second constraint solving pass with a patched
+  `Type.Solve.runTypeAt`, lazily. Kept in one `TVar (Map FilePath FileInfo)`; a module that
+  was not recompiled gets no new entry, so the first compile recompiles everything to fill
+  them. Package docs come from the package cache's `docs.json`.
+- **Freshness**: per project an `fsVersion` (bumped by edits, watcher events and a full
+  rescan of the sources, `updateVfsFromFs`) and a `compileVersion`; MCP requests rescan
+  and compile only when stale. Editor buffers live in the file cache and are not
+  overwritten from disk while open.
+
+### What maps onto this branch
+
+| elm-dev | here |
+| --- | --- |
+| byte VFS for sources and elm-stuff (Mario's `FileCache`/`FileProxy`) | the store: decoded interfaces and objects, `Details`, the source table |
+| unsaved editor buffers in the VFS | a source overlay in the source table: `Present` with the buffer's bytes and a bumped time, marked open so neither the watcher nor the reconcile replaces it (new, small) |
+| `fsVersion`/`compileVersion` | the source table's changes and the build numbers (`jsVersion`) already there; make the source side a counter too |
+| canonical AST, docs, localizer, warnings per file | not kept yet: `Compile.compile` has the canonical module, annotations and (once kept) warnings for every fresh module; the parsed module is already in the source table, so the localizer and imports are free |
+| the hover index (second solve pass) | needs the same pass on compile-perf's solver, which differs a lot from 0.19.1's |
+| the dev server, websocket and hot reload | `lamdera live` itself (and its hot patches) |
+| the daemon and project discovery | `lamdera live --memory` is already a long-running server per project, with the store |
+
+Two things are better here than in elm-dev: an unchanged module keeps its analysis from
+the build that made it (elm-dev drops it and recompiles everything to fill it), and the
+store already knows exactly which modules a check recompiled.
+
+### What it would take
+
+1. **A check-only build** on the store: crawl and compile (with overlays), no JS, no type
+   hash unless Types changed. On the large app that is the `build` phase: 0.05s for a body edit,
+   1.2-1.7s for a Types interface change. A check of proposed content that is not saved
+   puts it in the table as an overlay and, after the check, puts the disk version back with
+   a bumped time, so the next real build recompiles that module from disk. 1 day.
+2. **Per-module analysis kept with each module's store entry**: canonical module,
+   annotations, warnings, docs, built from `Compile.compile`'s results for fresh modules and
+   on demand for a module that has none (re-check it from its kept parse, no codegen). Cost
+   to measure: canonical ASTs for 920 modules could be several hundred MB on the large app; keep
+   them lazily or only for files an editor or agent has asked about. 2-3 days.
+3. **MCP over HTTP on the live server** (`/_mcp`, JSON-RPC 2.0 with the streamable HTTP
+   transport, so an agent connects to the running `lamdera live` with no proxy). Tools:
+   `check` (project, file or proposed content; errors as Lamdera's JSON reports, compact),
+   `type_at`, `definition`, `references`, `docs` (project modules from the kept docs,
+   packages from `docs.json`), `module_graph` (from the `Details` locals), and the Lamdera
+   ones elm-dev cannot have: Wire/Evergreen status (the type hashes and what `lamdera check`
+   would say), evaluating an expression (the REPL endpoint is already there), the backend
+   model and the live log. Port from elm-dev: the protocol module, the docs rendering and
+   the definition/references lookups; leave out scaffolding, templates, the dependency
+   manager and the test runner. 3-4 days on top of 1 and 2.
+4. **The type at a position**: port `runTypeAt` to compile-perf's solver (it records the
+   type of every region while solving). 3-5 days, the riskiest part. Top-level and annotated
+   values work from the annotations alone, so `type_at` can start with those (half a day).
+5. **LSP** as `lamdera lsp` (stdio): if a `lamdera live --memory` is running for the
+   project, bridge to it (the live server would serve LSP over its websocket or a local
+   socket); otherwise run the store in process. Document sync into overlays, diagnostics
+   (push and pull), hover, definition, references, the add-type-signature code lens. Port
+   the LSP protocol types and helpers and `Watchtower.AST.{Lookup,Definition,References}`
+   to 0.19.3's canonical AST. 4-6 days.
+6. **Tests** (elm-dev runs them in a node subprocess, as background jobs): later.
+
+So a useful MCP for agents (1-3, with the annotation-only `type_at`) is about a week and a
+half; full hover and an LSP about two weeks more. What to watch: the memory cost of keeping
+canonical ASTs, compile-perf's solver changes for the hover pass, and keeping the
+store the single source of truth when an editor, an agent and the file watcher all change
+sources (one overlay per path, the newest wins, the watcher never overwrites an open
+buffer).

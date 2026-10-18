@@ -10,7 +10,8 @@ module Lamdera.HotPatch
 {- @LAMDERA hot patches for `lamdera live --memory`.
 
 After a rebuild the page normally loads the whole new bundle (49MB for a 920 module app),
-or in freeze mode evaluates it whole and hot reloads into it (extra/live.js hotReload).
+or in freeze mode evaluates it whole and hot reloads into it (Simon Lydell's hot reload:
+extra/live.js hotReload, and Elm.hot.reload in the Platform kernel replacement).
 With --memory every build also lists what it emitted (Generate.JavaScript.Listing), so
 the page can instead ask for a patch from the build it runs to the latest one: just the
 statements that changed, and the values that have to be worked out again, run in the

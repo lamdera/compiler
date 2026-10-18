@@ -469,9 +469,11 @@ flush store writer stuff writeDetails =
 -- What the watcher cannot be trusted for is handled by forgetting everything
 -- (resetSources, so the next build looks at the disk again as a disk build would): a
 -- directory event (a rename or a checkout), a path the watcher reports that is gone and
--- is not a file, an elm.json change (the store is reset), and a manual reconcile. The
--- periodic reconcile stats every path looked at, so an edit the watcher misses (an
--- ignored directory, a dropped event) is picked up within seconds.
+-- is not a file, and an elm.json change (the store is reset). A reconcile, every few
+-- seconds in the background and whenever the page is loaded, stats every path looked at,
+-- so an edit the watcher misses (an ignored directory, a dropped event) is picked up
+-- within seconds. (Matt Griffith's elm-dev rescans every source on each compile
+-- instead, updateVfsFromFs; here that is the safety net, not the main path.)
 --
 -- Only .elm files outside elm-stuff, and in elm-stuff/lamdera (the extra source
 -- directory of the live harness, where every module is looked for and not found), are
