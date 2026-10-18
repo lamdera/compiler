@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE MagicHash #-}
 
 module Lamdera.TypeHash where
 
@@ -27,6 +28,10 @@ import qualified Reporting.Doc as D
 import qualified Reporting.Task as Task
 import qualified Reporting.Exit
 import qualified Build
+import qualified Elm.Details as Details
+import Data.IORef (IORef, newIORef, readIORef, writeIORef)
+import System.IO.Unsafe (unsafePerformIO)
+import GHC.Exts (isTrue#, reallyUnsafePtrEquality#)
 
 import Lamdera
 import Lamdera.Types
@@ -80,6 +85,92 @@ buildCheckHashes artifacts = do
     -- if didBuildTypes
     --   then calculateLamderaHashes
     --   else pure $ Right ([], [])
+
+
+{-| @LAMDERA buildCheckHashes for `lamdera live --memory`: from the build that just ran,
+instead of building src/Types.elm a second time (Interfaces.all, a whole second crawl and
+check of everything Types needs, on every rebuild). The interfaces are the same ones: the
+project modules in Types' import closure (from the Details that build wrote) and the
+packages'.
+-}
+buildCheckHashesFrom :: Details.Details -> Build.Artifacts -> Task.Task Reporting.Exit.Reactor ()
+buildCheckHashesFrom details artifacts = do
+    Task.eio Reporting.Exit.ReactorBadBuild $ do
+      root <- getProjectRoot "buildCheckHashesFrom"
+      exists <- doesFileExist $ root ++ "/src/Types.elm"
+      if exists
+        then do
+          ifacesProject <- typesInterfaces details artifacts
+          -- In memory an interface that compiled to the same as before is the very same
+          -- value (MemoryCache.keepSame), so when every interface Types needs is the one
+          -- the last hashes were worked out from, so are the hashes: skip them.
+          lastIfaces <- readIORef lastHashed
+          let same =
+                Map.keysSet lastIfaces == Map.keysSet ifacesProject
+                && and (Map.elems (Map.intersectionWith (\a b -> isTrue# (reallyUnsafePtrEquality# a b)) lastIfaces ifacesProject))
+          if same
+            then pure $ Right ()
+            else do
+              _ <- hashesFromInterfaces details ifacesProject
+              writeIORef lastHashed ifacesProject
+              pure $ Right ()
+        else
+          pure $ Right ()
+
+
+{-# NOINLINE lastHashed #-}
+lastHashed :: IORef (Map.Map PrimModule.Name Interface.Interface)
+lastHashed =
+  unsafePerformIO (newIORef Map.empty)
+
+
+-- Types and the project modules it imports, directly or not, from the Details a build wrote.
+typesClosure :: Details.Details -> Set.Set PrimModule.Name
+typesClosure details =
+  importClosure Set.empty ["Types"]
+  where
+    locals = Details._locals details
+    importClosure seen names =
+      case names of
+        [] -> seen
+        name : rest
+          | Set.member name seen -> importClosure seen rest
+          | otherwise ->
+              case Map.lookup name locals of
+                Just local -> importClosure (Set.insert name seen) (Details._deps local ++ rest)
+                Nothing -> importClosure seen rest -- a package module
+
+
+-- The interfaces of Types' closure, from a build's artifacts and the Details it wrote.
+typesInterfaces :: Details.Details -> Build.Artifacts -> IO (Map.Map PrimModule.Name Interface.Interface)
+typesInterfaces details artifacts =
+  let
+    closure = typesClosure details
+    needed m =
+      case m of
+        Build.Fresh name _ _ -> Set.member name closure
+        Build.Cached name _ _ -> Set.member name closure
+  in
+  Interfaces.extractInterfaces $ filter needed $ Build._modules artifacts
+
+
+{-| calculateLamderaHashes, from a build's artifacts and the Details it wrote. -}
+calculateLamderaHashesFrom :: Details.Details -> Build.Artifacts -> IO (Either Reporting.Exit.BuildProblem ([Text], [(Text, [Text], DiffableType)]))
+calculateLamderaHashesFrom details artifacts =
+  hashesFromInterfaces details =<< typesInterfaces details artifacts
+
+
+hashesFromInterfaces :: Details.Details -> Map.Map PrimModule.Name Interface.Interface -> IO (Either Reporting.Exit.BuildProblem ([Text], [(Text, [Text], DiffableType)]))
+hashesFromInterfaces details ifacesProject = do
+  artifactsDeps <- Interfaces.allDepArtifacts_ details
+  let interfaces = Map.union ifacesProject (Interfaces._ifaces artifactsDeps)
+  inDebug <- Lamdera.isDebug
+  case Map.lookup "Types" interfaces of
+    Just iface_Types ->
+      calculateLamderaHashes_ interfaces iface_Types inDebug
+
+    Nothing ->
+      pure $ Right $ ([],[])
 
 
 {- Tracks types that have already been seen to ensure we can break cycles -}

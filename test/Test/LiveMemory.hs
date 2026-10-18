@@ -125,6 +125,14 @@ suite =
           scope "the importers recompiled for it are not parsed again" $ do
             counters <- io $ MemoryCache.takeCounters store
             expect (MemoryCache._parseHits counters >= 2)
+          scope "the type hashes taken from the build are those of a separate build of Types" $ do
+            hashes <- io $ typeHashes memDir
+            case hashes of
+              Right (fromBuild, separate) -> do
+                expect (not (null fromBuild))
+                expectEqual separate fromBuild
+              Left problem ->
+                crash problem
 
           scope "a type error fails both builds" $ do
             edit "src/Middle.elm" (T.replace "middleText =" "middleText =\n    1 + \"x\"\n\n\nbroken =")
@@ -221,12 +229,49 @@ compileLive dir = do
             artifacts <- Task.eio Exit.ReactorBadBuild $ Build.fromPaths writer Reporting.silent root stuff details (NE.List harness [])
             Task.io $ writeIORef freshRef $ Set.fromList [ Module.toChars name | Build.Fresh name _ _ <- Build._modules artifacts ]
             Lamdera.PostCompile.check details artifacts Exit.ReactorBadBuild
-            Lamdera.TypeHash.buildCheckHashes artifacts
+            memory <- Task.io $ MemoryCache.forStuff stuff
+            fresh <- Task.io $ maybe (pure Nothing) Details.fromMemory memory
+            case fresh of
+              Just builtDetails -> Lamdera.TypeHash.buildCheckHashesFrom builtDetails artifacts
+              Nothing -> Lamdera.TypeHash.buildCheckHashes artifacts
             Task.mapError Exit.ReactorBadGenerate $ Generate.dev stuff details artifacts
   fresh <- readIORef freshRef
   pure $
     case result of
       Right javascript -> Right (BSL.toStrict (B.toLazyByteString javascript), fresh)
+      Left exit -> Left (Exit.toString (Exit.reactorToReport exit))
+
+
+{-| The type hashes of a memory build, taken from its artifacts as Develop does with
+--memory, and from a separate build of src/Types.elm as the default does.
+-}
+typeHashes :: FilePath -> IO (Either String ([T.Text], [T.Text]))
+typeHashes dir = do
+  harness <- Lamdera.CLI.Live.prepareLocalDev dir
+  result <-
+    Ext.Common.withProjectRoot dir $
+    R.withRootLock (R.fromFilePath dir) $ \writer stuff ->
+      Task.run $
+        do  let root = R.fromFilePath dir
+            details <- Task.eio Exit.ReactorBadDetails $ Details.load writer Reporting.silent root stuff
+            artifacts <- Task.eio Exit.ReactorBadBuild $ Build.fromPaths writer Reporting.silent root stuff details (NE.List harness [])
+            Task.io $ do
+              memory <- MemoryCache.forStuff stuff
+              fresh <- maybe (pure Nothing) Details.fromMemory memory
+              case fresh of
+                Nothing ->
+                  pure (Left "no Details in memory")
+
+                Just builtDetails -> do
+                  fromBuild <- Lamdera.TypeHash.calculateLamderaHashesFrom builtDetails artifacts
+                  separate <- Lamdera.TypeHash.calculateLamderaHashes
+                  pure $
+                    case (fromBuild, separate) of
+                      (Right (a, _), Right (b, _)) -> Right (a, b)
+                      _ -> Left "a type hash calculation failed"
+  pure $
+    case result of
+      Right hashes -> hashes
       Left exit -> Left (Exit.toString (Exit.reactorToReport exit))
 
 

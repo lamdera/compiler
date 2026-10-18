@@ -53,6 +53,7 @@ import qualified Data.List as List
 import Ext.Common (trackedForkIO, whenDebug, stringToText)
 import qualified Ext.Filewatch as Filewatch
 import qualified Ext.Sentry as Sentry
+import qualified Ext.MemoryCache as MemoryCache -- @LAMDERA lamdera live --memory
 import Control.Concurrent.STM (atomically, newTVarIO, readTVar, writeTVar, TVar)
 
 import StandaloneInstances
@@ -363,7 +364,13 @@ compile path =
                 Task.io $ Live.reportFresh artifacts -- @LAMDERA LAMDERA_LIVE_TIMING
 
                 Live.phase "postcompile" $ Lamdera.PostCompile.check details artifacts Exit.ReactorBadBuild
-                Live.phase "typehash" $ Lamdera.TypeHash.buildCheckHashes artifacts
+                -- @LAMDERA with --memory, hash from this build's interfaces, not a second build of src/Types.elm
+                memory <- Task.io $ MemoryCache.forStuff stuff
+                fresh <- Task.io $ maybe (pure Nothing) Details.fromMemory memory
+                Live.phase "typehash" $
+                  case fresh of
+                    Just builtDetails -> Lamdera.TypeHash.buildCheckHashesFrom builtDetails artifacts
+                    Nothing -> Lamdera.TypeHash.buildCheckHashes artifacts
 
                 javascript <- Live.phase "objects" $ Task.mapError Exit.ReactorBadGenerate $ Generate.dev stuff details artifacts
                 let (NE.List name _) = Build.getRootNames artifacts
