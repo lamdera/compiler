@@ -145,9 +145,11 @@ runWithRoot root (Flags maybePort shouldOpenBrowser inMemory) =
         -- what is on disk
         serveApp :: FilePath -> Snap ()
         serveApp path = do
-          liftIO $ Live.reconcileSources memory $ \changed -> do
-            Sentry.updateJsOutputNow sentryCache (rebuild changed)
-            Live.refreshClients liveState
+          -- (only for the page itself: public files come through here too)
+          onlyWhen (takeExtension path == ".elm") $
+            liftIO $ Live.reconcileSources memory $ \changed -> do
+              Sentry.updateJsOutputNow sentryCache (rebuild changed)
+              Live.refreshClients liveState
           serveElm sentryCache path
 
       whenDebug $ do
