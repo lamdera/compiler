@@ -1,10 +1,10 @@
 # `lamdera live --memory`: an in-memory build for live
 
 Branch `live-memory` (worktree `~/dev/projects/lamdera-compiler-live-memory`), rebased onto
-`compile-perf` f9b569c4, which includes `elmi-type-table` and the Wire3 typed decoders. Not
+`compile-perf` 4d4e7b72, which includes `elmi-type-table` and the Wire3 typed decoders. Not
 pushed. The tips before each rebase are kept as branches: `live-memory-pre-rebase`
-(14aace8d, on elmi-type-table) and `live-memory-pre-rebase2` (4e7987f4, on compile-perf
-1957416e).
+(14aace8d, on elmi-type-table), `live-memory-pre-rebase2` (4e7987f4, on compile-perf
+1957416e) and `live-memory-pre-rebase3` (308e7cae, on f9b569c4).
 
 
 ## Summary
@@ -19,7 +19,8 @@ pushed. The tips before each rebase are kept as branches: `live-memory-pre-rebas
   of evaluating the whole new bundle. Ctrl-C writes elm-stuff, so the next start, `lamdera
   make` or plain `lamdera live` is warm. Default `lamdera live` and every other command are
   unchanged.
-- **Numbers (the large app, 920 modules, final branch on compile-perf f9b569c4).**
+- **Numbers (the large app, 920 modules; measured on compile-perf f9b569c4, the later rebase and
+  the idle changes leave rebuild times the same).**
 
   | | default `lamdera live` | `--memory` |
   | --- | --- | --- |
@@ -44,9 +45,14 @@ pushed. The tips before each rebase are kept as branches: `live-memory-pre-rebas
   default, ~85MB per Types change from compile-perf's type checker tables (never emptied in a
   long-running process) and ~120MB per Types change from the hot patch history (trimmed
   lazily, so never trimmed). Both are emptied or forced now; see Known limitations.
+- **Idle**: an idle `lamdera live` no longer collects: it ran a major GC about once a
+  second (the file watcher's keep-alive thread woke every second, and the RTS idle GC
+  follows any activity), which with `--memory` was 55% of a core doing nothing. Now 0% by
+  default and 1.5% with `--memory` (4% with a browser tab open), and a Ctrl-C is no longer
+  lost (0 of 44 tries, idle and during rebuilds; 2 of 20 before). See Idle below.
 - **The steps of this round**, each a commit:
-  1. Rebased onto compile-perf 1957416e, then again onto f9b569c4 (see Relation to the
-     compile-perf work). The old trial merge with cd2ce8cb (a buggy base) and its numbers
+  1. Rebased onto compile-perf 1957416e, then f9b569c4, then 4d4e7b72 (see Relation to
+     the compile-perf work). The old trial merge with cd2ce8cb (a buggy base) and its numbers
      are gone, worktree and branch removed.
   2. Sources in memory (Mario's `FileCache` idea, done on the source table): stats and reads
      from a table updated by watcher events, with full resets on directory/rename events
@@ -69,8 +75,7 @@ pushed. The tips before each rebase are kept as branches: `live-memory-pre-rebas
   plus the patches answers like the latest. Full `stack test`: 158 passed, 7 pending (the
   same 7 as compile-perf), no failures.
 - **Gaps.** JS generation (global graph and walk, 0.38s) is now the largest part of a
-  memory rebuild; the memory mode holds 1.4-1.5GB; a Ctrl-C is still occasionally lost
-  (the major GC window); the large app's own FrontendModel does not decode
+  memory rebuild; the memory mode holds 1.4-1.5GB; the large app's own FrontendModel does not decode
   with its codecs, so its freeze mode reloads the page after every hot reload, patch or
   full (pre-existing, both paths). See Known limitations.
 
@@ -609,14 +614,14 @@ binaries):
   (`sharedBodies`, and `canonicals` from 871997c5), which a long-running live never emptied
   (~85MB per Types change, both modes); and the hot patch history was trimmed with a lazy
   `take`, so every build held on to all earlier ones (and each kept Dynamic its whole JS
-  cache) until a page asked for a patch (~120MB per Types change). Live now empties the
-  tables before each rebuild (`Type.Type.resetSharedTables`; rebuild times unchanged) and the
-  history is forced when a build is recorded.
-- **A Ctrl-C is sometimes lost.** Seen once in about 20 normal runs of this round, idle, 3s
-  after the sixth rebuild (the second one worked, and the flush ran), and every time with
-  `+RTS -hT -i2` (which forces a major GC every 2 seconds); five idle trials after one build
-  were all handled. So it is still the major GC window: `LAMDERA_LIVE_TIMING`'s heap figure
-  forces one after every rebuild too.
+  cache) until a page asked for a patch (~120MB per Types change). compile-perf now empties
+  the tables when the last build using them finishes (4d4e7b72, `withSharedTables`, built
+  on this branch's `resetSharedTables`, which live called before each rebuild and no longer
+  needs to), and the history is forced when a build is recorded.
+- **A Ctrl-C arriving during a major GC can still be lost** (a GHC RTS matter). The idle
+  GCs that made that likely are gone (see Idle), but `LAMDERA_LIVE_TIMING`'s heap figure
+  forces a major GC after every rebuild, and a heap profile (`+RTS -hT -i2`) forces one
+  every two seconds; with the latter every Ctrl-C was lost.
 - **the large app's FrontendModel does not decode with its own codecs** (the copy the harness keeps
   in `localStorage`, decoded in the page through the hook, gives `Nothing` before any patch),
   so in freeze mode the harness reloads the page after every hot reload, patch or full.
@@ -652,12 +657,12 @@ binaries):
    would save the default ~0.2s per rebuild).
 5. **Smaller retained objects** (intern names and globals as `I.share` does types), and
    compact regions once the Wire3 IR is no longer pinned bytes.
-6. **Flush on SIGTERM/SIGHUP**, and find the remaining lost Ctrl-C window.
+6. **Flush on SIGTERM/SIGHUP.**
 7. **The MCP/LSP daemon** below.
 
 ### Relation to the compile-perf work
 
-This branch is rebased onto compile-perf f9b569c4. compile-perf's `perf` labels wrap the
+This branch is rebased onto compile-perf 4d4e7b72. compile-perf's `perf` labels wrap the
 memory mode's `.elmo`/`.elmi` calls in `Build.compile`; its scheduler (`Lamdera.Schedule`)
 gets its module sizes from the source table in memory mode; its IR reader is what the codec
 cache builds on.
@@ -673,6 +678,43 @@ before), and the new one is hash-consed into the store when not; without one, co
 byte comparison and write, unchanged. `Test.LiveMemory` builds the same edits both ways and
 checks that the same modules recompile after every step (an interface change whose
 importer's interface stays the same included).
+
+The third rebase (onto 4d4e7b72, where compile-perf scopes the type checker tables to the
+builds that use them) took compile-perf's `Type.Type` and dropped this branch's commit that
+emptied the tables from live (32f83d6d): `Build.fromPaths` and the others now empty them
+when they finish, which covers every live build in both modes. The only other conflicts
+were imports.
+
+
+## Idle
+
+The compile-perf agent noticed that an idle `lamdera live` ran a major GC about once a
+second. The cause is two things together: `Ext.Filewatch` kept its watch alive with a
+thread that slept one second at a time, and the RTS idle GC (`-I0.3`, the default) runs a
+major collection 0.3s after the program goes quiet following any activity. Every wakeup
+was followed by a collection of the whole heap. Measured on the large app, 30-60s idle after the
+first build, CPU time of the process (`ps`) and GCs (`+RTS -S`):
+
+| | default | `--memory` |
+| --- | --- | --- |
+| before | 0.9% of a core, 1 major GC/s | 55% of a core, 1 major GC/s (1.4GB copied each) |
+| watcher sleeps an hour at a time | 0%, no GCs | 11.6%, a major GC every 5s (the source reconcile) |
+| and `-Iw30` (at most one idle GC every 30s) | 0%, no GCs | 1.5-1.8%, 1 GC/min; 4% with a browser tab open |
+| (`-I0`, no idle GC at all, for comparison) | | 0.7% |
+
+`-Iw30` is now in the binary's default RTS options: idle GCs still return memory after a
+rebuild, just not after every timer. Rebuild times are the same with it in both modes
+(Types change 2.14-2.44s, leaf edit 0.49-0.50s in memory mode; 2.51-2.63s and 1.31-1.35s by
+default, same run conditions). The nonmoving collector (`-xn`) and the compacting
+collector (`-c`) for the old generation were tried for the memory mode: both made
+rebuilds slower (Types change 2.45-2.72s with `-xn`, 3.3-5.5s with `-c`; leaf edit
+0.54-0.62s with `-xn`), so neither is used.
+
+Ctrl-C (SIGINT), with `sigtest2.py`: a fresh `lamdera live` per try, alternately idle 1-8s
+or 0-1.5s into a rebuild started by a leaf edit, and a SIGINT that does not end the process
+within 20s counted as lost. Before (watcher waking every second, default idle GC, memory
+mode): 2 lost of 20, both idle. After: 0 lost of 24 in memory mode and 0 of 20 by default,
+the flush run every time in memory mode.
 
 
 ## Plan: an MCP and LSP daemon on the memory store (from Matt Griffith's elm-dev work)
