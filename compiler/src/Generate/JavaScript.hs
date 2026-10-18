@@ -747,6 +747,7 @@ toMainEsmExports mode mains =
 -- uses it for Mode.Dev Nothing).
 
 
+-- (a newtype, so evaluating a JsCache to WHNF builds the whole Map)
 newtype JsCache =
   JsCache (Map.Map Opt.Global CachedStmt)
 

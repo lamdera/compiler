@@ -42,6 +42,7 @@ import qualified Lamdera
 import qualified Lamdera.AppConfig
 import qualified Ext.MemoryCache as MemoryCache -- @LAMDERA lamdera live --memory
 import Data.Dynamic (fromDynamic, toDyn) -- @LAMDERA
+import Control.Exception (evaluate) -- @LAMDERA
 
 -- NOTE: This is used by Make, Repl, and Reactor right now. But it may be
 -- desireable to have Repl and Reactor to keep foreign objects in memory
@@ -86,6 +87,8 @@ dev stuff details (Build.Artifacts pkg _ roots modules) =
           Task.io $
           do  kept <- MemoryCache.getJsCache store
               let (js, cache) = JS.generateCached (maybe JS.emptyJsCache id (fromDynamic =<< kept)) mode graph mains
+              -- walk the graph now, so the kept cache does not hold on to the whole traversal state
+              _ <- evaluate cache
               MemoryCache.setJsCache store (toDyn cache)
               return js
 
