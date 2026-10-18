@@ -26,6 +26,10 @@ import qualified Control.Monad.State.Strict as State -- @LAMDERA
 import Data.Coerce (coerce)
 import qualified Data.IntMap.Strict as IntMap -- @LAMDERA
 import Data.Word (Word16) -- @LAMDERA
+import Data.Bits (xor) -- @LAMDERA
+import qualified Data.List as List -- @LAMDERA
+import qualified AST.Prim.Module as Module -- @LAMDERA
+import qualified String as S -- @LAMDERA
 import System.IO.Unsafe (unsafePerformIO) -- @LAMDERA
 import System.Mem.StableName (StableName, makeStableName, hashStableName) -- @LAMDERA
 import qualified Data.Map.Strict as Map
@@ -501,7 +505,7 @@ type Interning = State.State TableBuilder
 
 data TableBuilder =
   TableBuilder
-    { _tb_ids   :: !(Map.Map Key Int)
+    { _tb_ids   :: !(IntMap.IntMap [(Key, Int)]) -- @LAMDERA by hashKey, see node
     , _tb_size  :: !Int
     , _tb_nodes :: [Key] -- newest first
     , _tb_seen  :: !(IntMap.IntMap [(StableName Can.Type, Int)]) -- see internBody
@@ -529,7 +533,7 @@ withTypeTable :: (Ref -> Interning E.Builder) -> E.Builder
 withTypeTable encoder =
   let
     (body, TableBuilder _ size nodes _) =
-      State.runState (encoder ref) (TableBuilder Map.empty 0 [] IntMap.empty)
+      State.runState (encoder ref) (TableBuilder IntMap.empty 0 [] IntMap.empty)
 
     ref =
       if size <= 65536
@@ -620,16 +624,43 @@ stableNameOf tipe =
   tipe `seq` unsafePerformIO (makeStableName tipe)
 
 
+-- @LAMDERA The table is a hash table (hashKey, then == within a bucket) rather than a
+-- Map: a profile of the 920 module app put most of interface writing in comparing
+-- keys for the Map, a module name, package and type name at a time. The indexes, and
+-- so the bytes written, are the same: an entry still gets the next index the first
+-- time its key is seen.
 node :: Key -> Interning Int
 node key =
   do  TableBuilder ids size nodes seen <- State.get
-      case Map.lookup key ids of
+      let hash = hashKey key
+          bucket = IntMap.findWithDefault [] hash ids
+      case lookup key bucket of
         Just i ->
           return i
 
         Nothing ->
-          do  State.put (TableBuilder (Map.insert key size ids) (size + 1) (key : nodes) seen)
+          do  State.put (TableBuilder (IntMap.insert hash ((key, size) : bucket) ids) (size + 1) (key : nodes) seen)
               return size
+
+
+hashKey :: Key -> Int
+hashKey key =
+  case key of
+    KLambda a b -> mix (mix 1 a) b
+    KVar x -> mix 2 (hashVar x)
+    KRecord fs e ->
+      mix (Map.foldrWithKey (\n (i, t) h -> mix (mix (mix h (S.hash (N.toString n))) (fromIntegral i)) t) 3 fs) (maybe 0 hashVar e)
+    KUnit -> 4
+    KPair a b -> mix (mix 5 a) b
+    KTriple a b c -> mix (mix (mix 6 a) b) c
+    KAlias h n xs f t ->
+      mix (mix (List.foldl' (\acc (x, r) -> mix (mix acc (hashVar x)) r) (mix (mix 7 (hashHome h)) (S.hash (T.nameToString n))) xs) (if f then 1 else 0)) t
+    KType h n xs ->
+      List.foldl' mix (mix (mix 8 (hashHome h)) (S.hash (T.nameToString n))) xs
+  where
+    mix h x = (h * 1000003) `xor` x
+    hashVar (T.Var name _) = S.hash name
+    hashHome (ModuleName.Canonical _ m) = S.hash (Module.toString m)
 
 
 eKey :: Ref -> Key -> E.Builder

@@ -29,6 +29,7 @@ module String
   , equal
   , compareLexical
   , compareFast
+  , hash -- @LAMDERA
   )
   where
 
@@ -450,6 +451,26 @@ compareLexical (String ba1) (String ba2) =
 compareFast :: String -> String -> Ordering
 compareFast (String ba1) (String ba2) =
   Bytes.compareFast ba1 ba2
+
+
+-- @LAMDERA FNV-1a over the bytes, for hash tables (Elm.Interface's type table)
+hash :: String -> Int
+hash (String ba) =
+  let
+    len = I# (sizeofByteArray# ba)
+    go !i !h =
+      if i >= len then
+        h
+      else
+        case i of
+          I# i# -> go (i + 1) ((h `xorInt` I# (word2Int# (word8ToWord# (indexWord8Array# ba i#)))) * 1099511628211)
+  in
+  go 0 (-3750763034362895579)
+
+
+xorInt :: Int -> Int -> Int
+xorInt (I# a) (I# b) =
+  I# (xorI# a b)
 
 
 
