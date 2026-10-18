@@ -407,8 +407,13 @@ keptJsBuilds =
 recordJsBuild :: Store -> Dynamic -> IO Int
 recordJsBuild store listing =
   atomicModifyIORef' (_jsBuilds store) $ \(latest, kept) ->
-    let next = latest + 1 in
-    ((next, take keptJsBuilds ((next, listing) : kept)), next)
+    let
+      next = latest + 1
+      -- the spine is forced here: left to `take`, every build would hold on to all the
+      -- ones before it until a page asks for a patch
+      kept_ = take keptJsBuilds ((next, listing) : kept)
+    in
+    length kept_ `seq` ((next, kept_), next)
 
 
 {-| The number of the latest build (0 before the first). -}
