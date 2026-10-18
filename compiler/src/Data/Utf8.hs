@@ -540,7 +540,9 @@ encode8  :: Utf8 t -> E.Builder
 encode16 :: Utf8 t -> E.Builder
 encode32 :: Utf8 t -> E.Builder
 
-encode8  s = E.u8#  (wordToWord8#  (int2Word# (size# s))) <> toBuilder s
+-- @LAMDERA Escaped past 254 like the other *8 counts (Bytes.Encode.count8): a float
+-- literal longer than 255 characters used to wrap its length and corrupt the .elmo.
+encode8  s = E.count8 (I# (size# s)) <> toBuilder s
 encode16 s = E.u16# (wordToWord16# (int2Word# (size# s))) <> toBuilder s
 encode32 s = E.u32# (wordToWord32# (int2Word# (size# s))) <> toBuilder s
 
@@ -553,7 +555,7 @@ decode8  :: D.Decoder (Utf8 t)
 decode16 :: D.Decoder (Utf8 t)
 decode32 :: D.Decoder (Utf8 t)
 
-decode8  = D.bytes Utf8 . fromIntegral =<< D.u8
+decode8  = D.bytes Utf8 . fromIntegral =<< D.count8
 decode16 = D.bytes Utf8 . fromIntegral =<< D.u16
 decode32 = D.bytes Utf8 . fromIntegral =<< D.u32
 

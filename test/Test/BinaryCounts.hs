@@ -9,7 +9,12 @@ silently, so the compiler wrote .elmi files it could not read back ("Corrupt Fil
 Error when expecting: Type"). Lamdera's generated Wire3 codecs got there: a large app's
 w3_decode_BackendModel has 510 type variables. Counts of 255 and up are now written as
 255 followed by a u32, and smaller counts keep the exact one-byte format, so existing
-caches stay readable. See Bytes.Encode.count8.
+caches stay readable. See Bytes.Encode.count8. Float literals (Data.Utf8.encode8)
+had the same wrap.
+
+The end-to-end test compiles one module with every shape whose size the format
+records - type variables, constructor args, constructors, record fields, names, float
+and string literals - at 300, past the old ceiling, and reads back its .elmi and .elmo.
 
 -}
 
@@ -18,6 +23,7 @@ import qualified Data.ByteString.Builder as B
 import qualified Data.ByteString.Lazy as BSL
 import qualified Data.List as List
 import qualified Data.Map as Map
+import Data.Maybe (isJust)
 import qualified Data.Text as T
 import qualified System.Directory as Dir
 import System.FilePath ((</>))
@@ -27,6 +33,7 @@ import Lamdera hiding ((&))
 import Test.Helpers
 
 import qualified AST.Canonical as Can
+import qualified AST.Optimized as Opt
 import qualified AST.Prim.Name as N
 import qualified AST.Prim.TypeName as TN
 import qualified Bytes.Decode as D
@@ -77,7 +84,7 @@ suite = tests
           result <- io $ withTempFile bytes (D.fromFile decoder)
           expectEqual (Right (map fromIntegral xs)) (snd <$> result)
 
-  , scope "a module with 300 type variables, constructor args and a 300 character name writes an .elmi it can read back" $
+  , scope "a module with every size-dependent shape at 300 writes an .elmi and .elmo it can read back" $
       let
         project = "./test/scenario-binary-counts"
 
@@ -124,6 +131,29 @@ suite = tests
                 in expectEqual (wide, [wide]) (length vars, [ length args | Can.Ctor _ _ _ args <- ctors ])
               _ -> crash "union Many missing from Wide.elmi"
 
+          scope "record with 300 fields (dict32, u16 field index)" $
+            case [ a | (n, a) <- Map.toList (I._aliases iface), TN.nameToChars n == "WideRecord" ] of
+              [a] ->
+                case I.extractAlias a of
+                  Can.Alias _ (Can.TRecord fields _) -> expectEqual wide (Map.size fields)
+                  _ -> crash "WideRecord is not a record"
+              _ -> crash "alias WideRecord missing from Wide.elmi"
+
+          scope "300 constructors, plain and with args (list32, ctor index)" $ do
+            let ctorCount name =
+                  [ length ctors | (n, u) <- Map.toList (I._unions iface), TN.nameToChars n == name
+                                 , let Can.Union _ ctors _ _ = I.extractUnion u ]
+            expectEqual [wide] (ctorCount "ManyCtors")
+            expectEqual [wide] (ctorCount "ManyCtorsWithArgs")
+
+          -- The .elmo holds the optimized code: float literals (Utf8.encode8), string
+          -- literals, constructor indexes and the generated Wire3 codecs for all of the above.
+          scope "Wide.elmo reads back" $ do
+            elmoM <- io $ findFile (project </> "elm-stuff") "Wide.elmo"
+            elmo <- maybe (crash "Wide.elmo was not written") pure elmoM
+            graphM <- io $ File.readBytes Opt.dLocalGraph elmo
+            expect (isJust graphM)
+
           scope "alias vars (list8)" $
             case [ a | (n, a) <- Map.toList (I._aliases iface), TN.nameToChars n == "ManyAlias" ] of
               [a] ->
@@ -169,6 +199,40 @@ wideModule =
     , longName ++ " : Int"
     , longName ++ " ="
     , "    1"
+    , ""
+    , ""
+    , "type alias WideRecord ="
+    , "    { " ++ List.intercalate "\n    , " [ "f" ++ show i ++ " : Int" | i <- [1 .. wide] ]
+    , "    }"
+    , ""
+    , ""
+    , "wideRecord : WideRecord"
+    , "wideRecord ="
+    , "    { " ++ List.intercalate "\n    , " [ "f" ++ show i ++ " = " ++ show i | i <- [1 .. wide] ]
+    , "    }"
+    , ""
+    , ""
+    , "type ManyCtors"
+    , "    = " ++ List.intercalate "\n    | " [ "C" ++ show i | i <- [1 .. wide] ]
+    , ""
+    , ""
+    , "type ManyCtorsWithArgs"
+    , "    = " ++ List.intercalate "\n    | " [ "D" ++ show i ++ " Int" | i <- [1 .. wide] ]
+    , ""
+    , ""
+    , "lastCtor : ManyCtorsWithArgs"
+    , "lastCtor ="
+    , "    D" ++ show wide ++ " 1"
+    , ""
+    , ""
+    , "longFloat : Float"
+    , "longFloat ="
+    , "    1." ++ replicate 298 '1'
+    , ""
+    , ""
+    , "longString : String"
+    , "longString ="
+    , "    \"" ++ replicate 70000 's' ++ "\""
     ]
 
 
@@ -182,7 +246,14 @@ mainModule =
     , ""
     , ""
     , "main ="
-    , "    Html.text (String.fromInt Wide." ++ longName ++ ")"
+    , "    Html.text"
+    , "        (String.fromInt Wide." ++ longName
+    , "            ++ String.fromFloat Wide.longFloat"
+    , "            ++ Wide.longString"
+    , "            ++ String.fromInt Wide.wideRecord.f" ++ show wide
+    , "            ++ Debug.toString Wide.lastCtor"
+    , "            ++ Debug.toString Wide.C" ++ show wide
+    , "        )"
     ]
 
 
