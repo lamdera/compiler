@@ -74,6 +74,7 @@ import Lamdera ((&))
 import qualified Lamdera.Extensions
 import qualified Lamdera.PackageReplacements
 import qualified Lamdera.Version
+import qualified Type.Type -- @LAMDERA withSharedTables
 
 -- DETAILS
 
@@ -509,6 +510,7 @@ type Fingerprint =
 
 build :: File.Writer R.PACKAGES -> Reporting.DKey -> R.PackageCache -> MVar (Map.Map Pkg.Name (Fork.SafeMVar Dep)) -> Pkg.Name -> Solver.Details -> Fingerprint -> Set.Set Fingerprint -> IO Dep
 build writer key cache depsMVar pkg (Solver.Details vsn _) f fs =
+  Type.Type.withSharedTables $ -- @LAMDERA the type checker's shared tables last one package build
   do  eitherOutline <- Outline.read (R.packageRoot cache pkg vsn) True
       case eitherOutline of
         Left _ ->

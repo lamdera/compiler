@@ -66,6 +66,7 @@ import qualified Root as R
 import Lamdera
 import qualified Lamdera.Perf
 import qualified Lamdera.Schedule
+import qualified Type.Type -- @LAMDERA withSharedTables
 import Control.Concurrent (getNumCapabilities)
 import qualified System.Environment
 
@@ -127,6 +128,7 @@ toAbsoluteElm (AbsoluteSrcDir srcDir) path =
 
 fromExposed :: File.Writer R.PROJECT -> Reporting.Style -> R.Root -> R.Stuff -> Details.Details -> DocsGoal docs -> NE.List Module.Name -> IO (Either Exit.BuildProblem docs)
 fromExposed writer style root stuff details docsGoal exposed@(NE.List e es) =
+  Type.Type.withSharedTables $ -- @LAMDERA the type checker's shared tables last one build
   Reporting.trackBuild style $ \key ->
   do  env <- makeEnv key root stuff details
       dmvar <- Details.loadInterfaces stuff details
@@ -179,6 +181,7 @@ type Dependencies =
 
 fromPaths :: File.Writer R.PROJECT -> Reporting.Style -> R.Root -> R.Stuff -> Details.Details -> NE.List FilePath -> IO (Either Exit.BuildProblem Artifacts)
 fromPaths writer style root stuff details paths =
+  Type.Type.withSharedTables $ -- @LAMDERA the type checker's shared tables last one build
   Reporting.trackBuild style $ \key ->
   do  env <- makeEnv key root stuff details
 
@@ -945,6 +948,7 @@ data ReplArtifacts =
 
 fromRepl :: File.Writer R.PROJECT -> R.Root -> R.Stuff -> Details.Details -> B.ByteString -> IO (Either Exit.Repl ReplArtifacts)
 fromRepl writer root stuff details source =
+  Type.Type.withSharedTables $ -- @LAMDERA the type checker's shared tables last one build
   do  env@(Env _ _ _ projectType _ _ _ _) <- makeEnv Reporting.ignorer root stuff details
       result <- Parse.fromByteString projectType source
       case result of

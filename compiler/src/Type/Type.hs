@@ -39,6 +39,8 @@ module Type.Type
   , DeferredRecord(..) -- @LAMDERA
   , deferredRecord
   , closedEmptyRecord
+  , resetSharedTables -- @LAMDERA lamdera live
+  , withSharedTables -- @LAMDERA
   )
   where
 
@@ -48,8 +50,9 @@ import qualified Control.Monad.State.Strict as State
 import Data.Foldable (foldrM)
 import qualified Data.Map.Strict as Map
 import qualified Data.Map.Utils as Map
-import Control.Exception (evaluate)
-import Data.IORef (IORef, newIORef, readIORef, modifyIORef', atomicModifyIORef')
+import Control.Exception (evaluate, bracket_) -- @LAMDERA bracket_ for withSharedTables
+import Control.Monad (when) -- @LAMDERA
+import Data.IORef (IORef, newIORef, readIORef, writeIORef, modifyIORef', atomicModifyIORef')
 import GHC.Exts (isTrue#, reallyUnsafePtrEquality#)
 import System.IO.Unsafe (unsafePerformIO)
 import qualified Data.IntMap.Strict as IntMap
@@ -663,6 +666,44 @@ memoCanonical name canonical =
         case lookup name bucket of
           Just known -> (table, known)
           Nothing -> (IntMap.insert hash ((name, canonical) : bucket) table, canonical)
+
+
+{-| @LAMDERA Empty sharedBodies and canonicals. Both are keyed by the identity of type
+objects, so entries for objects of an earlier build are never hit again but keep their
+types alive: a long-running `lamdera live` grew by the types of every recompiled module on
+every rebuild. withSharedTables empties them when the last build using them finishes.
+Both are caches (an entry is what a miss would compute), so emptying them is safe at
+any time; a build that is running then only loses some sharing.
+-}
+resetSharedTables :: IO ()
+resetSharedTables =
+  do  mapM_ (\ref -> writeIORef ref IntMap.empty) sharedBodies
+      mapM_ (\ref -> writeIORef ref IntMap.empty) canonicals
+
+
+{-| @LAMDERA Scope sharedBodies and canonicals to the builds that use them, so that any
+long-running caller (lamdera live, the REPL, tests, the REPL worker) stays flat.
+
+Build.fromPaths / fromExposed / fromRepl, the package builds of Elm.Details, and
+Compile.typeCheck run inside it. When the last one running finishes, the tables are
+emptied. Overlapping builds share the tables until all of them are done, and the outer
+scopes keep them for a whole build: Compile.typeCheck on its own would empty them
+whenever no module happened to be in the type checker, and the modules of a build
+share bodies and conversions (shareBody, memoClosedCanonical).
+-}
+withSharedTables :: IO a -> IO a
+withSharedTables action =
+  bracket_
+    (atomicModifyIORef' sharedTableUsers (\n -> (n + 1, ())))
+    (do  remaining <- atomicModifyIORef' sharedTableUsers (\n -> (n - 1, n - 1))
+         when (remaining == 0) resetSharedTables)
+    action
+
+
+{-# NOINLINE sharedTableUsers #-}
+sharedTableUsers :: IORef Int
+sharedTableUsers =
+  unsafePerformIO (newIORef 0)
 
 
 {-# NOINLINE canonicals #-}

@@ -25,6 +25,7 @@ import qualified Reporting.Result as R
 import qualified Reporting.Render.Type.Localizer as Localizer
 import qualified Type.Constrain.Module as Type
 import qualified Type.Solve as Type
+import qualified Type.Type -- @LAMDERA withSharedTables
 
 -- import System.IO.Unsafe (unsafePerformIO)
 
@@ -78,7 +79,9 @@ canonicalize pkg ifaces modul =
 
 typeCheck :: Src.Module -> Can.Module -> Either E.Error (Map.Map N.Name Can.Annotation)
 typeCheck modul canonical =
-  case unsafePerformIO (Type.run =<< Type.constrain canonical) of
+  -- @LAMDERA inside withSharedTables, so that callers outside a Build (the REPL worker,
+  -- Ext.Query) do not keep the type checker's shared tables growing
+  case unsafePerformIO (Type.Type.withSharedTables (Type.run =<< Type.constrain canonical)) of
     Right annotations ->
       Right annotations
 
