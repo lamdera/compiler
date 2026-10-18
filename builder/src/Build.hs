@@ -19,6 +19,8 @@ import Control.Concurrent.MVar
 import Control.Monad (filterM, mapM_, sequence_)
 import Data.Coerce (coerce)
 import qualified Data.ByteString as B
+import qualified Data.ByteString.Builder as BB -- @LAMDERA
+import qualified Data.ByteString.Lazy as BSL -- @LAMDERA
 import qualified Data.Char as Char
 import qualified Data.List as List
 import qualified Data.Map.Utils as Map
@@ -434,6 +436,16 @@ checkModule writer env@(Env _ _ stuff projectType _ _ _ _) foreigns resultsMVar 
 
 
 
+-- @LAMDERA the raw bytes of a file, if it is there
+readBytesIfExists :: FilePath -> IO (Maybe B.ByteString)
+readBytesIfExists path =
+  do  exists <- Dir.doesFileExist path
+      if exists
+        then Just <$> B.readFile path
+        else return Nothing
+
+
+
 -- @LAMDERA SCHEDULING (see Lamdera.Schedule)
 
 
@@ -755,9 +767,16 @@ compile writer (Env key root stuff projectType _ buildID _ _) docsNeed (Details.
                   let iface = I.fromModule pkg canonical annotations
                   let elmi = R.elmi stuff name
                   perf "elmo_write" $ File.writeBytes writer (R.elmo stuff name) Opt.eLocalGraph objects
-                  maybeOldi <- perf "elmi_read_old" $ File.readBytes I.dInterface elmi
-                  case maybeOldi of
-                    Just oldi | oldi == iface ->
+                  -- @LAMDERA compare the new interface's bytes with the file, instead of
+                  -- decoding the old interface and comparing values. Encoding is a function
+                  -- of the value (Test.ElmiTypeTable: it round trips, re-encoding gives the
+                  -- same bytes), so equal bytes are equal interfaces. The encoding is needed
+                  -- to write it anyway, and decoding the old interface of every recompiled
+                  -- module was a fifth of a Types.elm rebuild in a profile of a large app.
+                  let ifaceBytes = BSL.toStrict (BB.toLazyByteString (I.eInterface iface))
+                  maybeOldBytes <- perf "elmi_read_old" $ readBytesIfExists elmi
+                  case maybeOldBytes of
+                    Just oldBytes | oldBytes == ifaceBytes ->
                       do  -- iface should be fully forced by equality check
                           Reporting.report key Reporting.BDone
                           let local = Details.Local path time deps main lastChange buildID
@@ -765,7 +784,7 @@ compile writer (Env key root stuff projectType _ buildID _ _) docsNeed (Details.
 
                     _ ->
                       do  -- iface may be lazy still
-                          perf "elmi_write" $ File.writeBytes writer elmi I.eInterface iface
+                          perf "elmi_write" $ File.writeBuilder writer elmi (BB.byteString ifaceBytes)
                           Reporting.report key Reporting.BDone
                           let local = Details.Local path time deps main buildID buildID
                           return (RNew local iface objects docs)
