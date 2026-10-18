@@ -17,8 +17,14 @@ Executable lamdera
     -- that left one thread doing every collection while the other cores waited: on a
     -- 920 module app, 54s of a 59s build was single threaded GC (+RTS -s), and with
     -- the parallel GC back on the same build takes 13s. Small projects are unchanged.
+    -- @LAMDERA -maxN12 rather than -N: each capability has its own 128MB nursery, so on
+    -- a 16 core Mac (12 performance + 4 efficiency cores) -N16 meant 2GB of nursery for
+    -- every invocation, and the efficiency cores slowed the parallel GC down. With 12 the
+    -- 920 module app's Types.elm rebuild went 1.48s -> 1.33s and 3.3GB -> 2.6GB RSS,
+    -- from scratch 2.49s either way with 0.6GB less RSS. Machines with 12 cores or
+    -- fewer are unchanged; override with +RTS -N (the binary has -rtsopts) or GHCRTS.
     -- Make everything an error, ignoring the ones that already sit in core
-    ghc-options: -O2 -rtsopts -threaded "-with-rtsopts=-N -A128m"
+    ghc-options: -O2 -rtsopts -threaded "-with-rtsopts=-maxN12 -A128m"
         -Wall
         -Werror
         -Wno-error=noncanonical-monad-instances
