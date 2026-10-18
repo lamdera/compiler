@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -58,6 +59,17 @@ import qualified Lamdera.Relative
 import qualified Lamdera.Version
 import qualified Ext.Common
 import qualified GHC.IO.Exception
+
+import Control.Exception (onException)
+import Data.Dynamic (fromDynamic)
+import qualified GHC.Clock
+import qualified GHC.Stats
+import qualified System.Mem
+import qualified Build
+import qualified Elm.Details as Details
+import qualified Ext.MemoryCache as MemoryCache
+import qualified File
+import qualified Root as R
 
 
 
@@ -820,3 +832,109 @@ passOnIndex pwd =
 
 
 -- x = 1
+
+
+
+-- IN MEMORY: lamdera live --memory
+
+
+{-| Keep this project's build artifacts in memory for the rest of the process, see
+Ext.MemoryCache. The first build loads from elm-stuff as usual; after that no
+rebuild reads or writes the project's elm-stuff until flushMemory.
+-}
+startMemory :: FilePath -> IO MemoryCache.Store
+startMemory root = do
+  stuff <- R.getStuff (R.fromFilePath root)
+  store <- MemoryCache.register stuff
+  atomicPutStrLn "🧠 --memory: build artifacts are kept in memory, elm-stuff is written on exit."
+  pure store
+
+
+{-| A build that throws (rather than reporting compile errors) may have stopped half way
+through updating the store, so drop it: the next build starts from elm-stuff again,
+which memory mode has left as the consistent state of the last disk build.
+-}
+withMemoryReset :: Maybe MemoryCache.Store -> IO a -> IO a
+withMemoryReset maybeStore io =
+  case maybeStore of
+    Nothing -> io
+    Just store -> io `onException` MemoryCache.reset store
+
+
+{-| On the way out, write what was compiled in memory to elm-stuff, so the next
+`lamdera live` or `lamdera make` starts warm.
+-}
+withMemoryFlush :: FilePath -> Maybe MemoryCache.Store -> IO () -> IO ()
+withMemoryFlush root maybeStore io =
+  case maybeStore of
+    Nothing -> io
+    Just store -> io `finally` flushMemory root store
+
+
+flushMemory :: FilePath -> MemoryCache.Store -> IO ()
+flushMemory root store =
+  R.withRootLock (R.fromFilePath root) $ \writer stuff -> do
+    let writeDetails dyn =
+          case fromDynamic dyn of
+            Just details -> File.writeBytes writer (R.details stuff) Details.eDetails (details :: Details.Details)
+            Nothing -> pure ()
+    (elmos, elmis) <- MemoryCache.flush store writer stuff writeDetails
+    onlyWhen (elmos + elmis > 0) $
+      atomicPutStrLn $ "🧠 --memory: wrote " <> show elmos <> " .elmo and " <> show elmis <> " .elmi files to elm-stuff"
+
+
+
+-- TIMING
+--
+-- With LAMDERA_LIVE_TIMING set, each rebuild prints how long it took to have fresh JS,
+-- how many modules were compiled, what the memory store did, and the heap after a major
+-- GC (needs +RTS -T). For measuring --memory against the default.
+
+
+timedRebuild :: Maybe MemoryCache.Store -> IO a -> IO a
+timedRebuild maybeStore io = do
+  enabled <- isTimingEnabled
+  if not enabled
+    then io
+    else do
+      start <- GHC.Clock.getMonotonicTimeNSec
+      !result <- io
+      end <- GHC.Clock.getMonotonicTimeNSec
+      counters <-
+        case maybeStore of
+          Just store -> do
+            c <- MemoryCache.takeCounters store
+            (ifaces, objects) <- MemoryCache.size store
+            pure $ " store: " <> show (MemoryCache._ifaceHits c) <> " interface hits, " <> show (MemoryCache._objectHits c) <> " object hits, " <> show (MemoryCache._diskReads c) <> " disk reads, holding " <> show ifaces <> " interfaces and " <> show objects <> " objects."
+          Nothing -> pure ""
+      heap <- heapSummary
+      atomicPutStrLn $ "🕐 live rebuild: " <> show ((end - start) `div` 1000000) <> "ms." <> counters <> heap
+      pure result
+
+
+reportFresh :: Build.Artifacts -> IO ()
+reportFresh artifacts = do
+  enabled <- isTimingEnabled
+  onlyWhen enabled $ do
+    let fresh = [ () | Build.Fresh _ _ _ <- Build._modules artifacts ]
+    atomicPutStrLn $ "🕐 live build: " <> show (length fresh) <> " modules compiled, " <> show (length (Build._modules artifacts)) <> " in the build"
+
+
+isTimingEnabled :: IO Bool
+isTimingEnabled = do
+  v <- lookupEnv "LAMDERA_LIVE_TIMING"
+  pure (v /= Nothing)
+
+
+heapSummary :: IO String
+heapSummary = do
+  enabled <- GHC.Stats.getRTSStatsEnabled
+  if not enabled
+    then pure ""
+    else do
+      System.Mem.performMajorGC
+      stats <- GHC.Stats.getRTSStats
+      let mb n = show (n `div` (1024 * 1024)) <> "MB"
+      pure $ " heap after GC: " <> mb (GHC.Stats.gcdetails_live_bytes (GHC.Stats.gc stats))
+        <> " live, " <> mb (GHC.Stats.gcdetails_mem_in_use_bytes (GHC.Stats.gc stats)) <> " in use, peak "
+        <> mb (GHC.Stats.max_mem_in_use_bytes stats) <> " in use."

@@ -67,6 +67,7 @@ data Flags =
   Flags
     { _port :: Maybe Int
     , _open :: Bool
+    , _memory :: Bool -- @LAMDERA lamdera live --memory, see Ext.MemoryCache
     }
 
 
@@ -78,7 +79,7 @@ run () flags = do
 
 
 runWithRoot :: FilePath -> Flags -> IO ()
-runWithRoot root (Flags maybePort shouldOpenBrowser) =
+runWithRoot root (Flags maybePort shouldOpenBrowser inMemory) =
   do
       Lamdera.setLiveMode True
       let port = maybe 8000 id maybePort
@@ -94,6 +95,9 @@ runWithRoot root (Flags maybePort shouldOpenBrowser) =
 
       sentryCache <- liftIO $ Sentry.init
 
+      -- @LAMDERA keep the build artifacts in memory between rebuilds
+      memory <- if inMemory then Just <$> Live.startMemory root else pure Nothing
+
       let
         recompile :: [String] -> IO ()
         recompile events = do
@@ -107,7 +111,7 @@ runWithRoot root (Flags maybePort shouldOpenBrowser) =
                   || stringContains "src/Bridge.elm" event
                 ) & length & (\v -> v > 0)
             onlyWhen typesRootChanged Lamdera.Constrain.resetTypeLocations
-            compileToBuilder harness
+            Live.timedRebuild memory $ Live.withMemoryReset memory $ compileToBuilder harness
           -- Simultaneously tell all clients to refresh. All those HTTP
           -- requests will open but block on the cache mVar, and then release
           -- immediately when compilation is finished, effectively "pushing"
@@ -129,7 +133,8 @@ runWithRoot root (Flags maybePort shouldOpenBrowser) =
 
       onlyWhen shouldOpenBrowser $ systemOpenPath $ stringToText $ "http://localhost:" ++ show port
 
-      Live.withEnd liveState $
+      Live.withMemoryFlush root memory $
+       Live.withEnd liveState $
        httpServe (config port) $ gcatchlog "general" $
         -- Add /public/* as if it were /* to mirror production, but still render .elm files as an Elm app first
         Live.serveLamderaPublicFiles root (serveElm sentryCache)
@@ -333,6 +338,7 @@ compile path =
           Task.run $
             do  details <- Task.eio Exit.ReactorBadDetails $ Details.load writer Reporting.silent root stuff
                 artifacts <- Task.eio Exit.ReactorBadBuild $ Build.fromPaths writer Reporting.silent root stuff details (NE.List path [])
+                Task.io $ Live.reportFresh artifacts -- @LAMDERA LAMDERA_LIVE_TIMING
 
                 Lamdera.PostCompile.check details artifacts Exit.ReactorBadBuild
                 Lamdera.TypeHash.buildCheckHashes artifacts
