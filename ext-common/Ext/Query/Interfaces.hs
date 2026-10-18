@@ -24,6 +24,7 @@ import qualified ThreadSafe.Fork as Fork
 import qualified Json.Encode as Encode
 
 import Ext.Common
+import qualified Ext.MemoryCache as MemoryCache
 
 
 all :: [FilePath] -> IO (Map.Map Module.Name I.Interface)
@@ -178,7 +179,7 @@ cachedHelp name ciMvar = do
     Build.Unneeded ->
       do  root <- getProjectRoot "cachedHelp"
           stuff <- R.getStuff (R.fromFilePath root)
-          maybeIface <- File.readBytes I.dInterface (R.elmi stuff name)
+          maybeIface <- MemoryCache.readElmiFor stuff name -- @LAMDERA was File.readBytes I.dInterface (R.elmi stuff name)
           case maybeIface of
             Nothing ->
               do  putMVar ciMvar Build.Corrupted

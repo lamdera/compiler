@@ -15,6 +15,8 @@ module Elm.Details
   , eDetails, dDetails
   --
   , isCompatibleAppElmVersion -- @LAMDERA exposed for Test.MultiVersion
+  , write -- @LAMDERA
+  , fromMemory -- @LAMDERA
   )
   where
 
@@ -75,6 +77,8 @@ import qualified Lamdera.Extensions
 import qualified Lamdera.PackageReplacements
 import qualified Lamdera.Version
 import qualified Type.Type -- @LAMDERA withSharedTables
+import qualified Ext.MemoryCache as MemoryCache
+import Data.Dynamic (fromDynamic, toDyn)
 
 -- DETAILS
 
@@ -179,6 +183,15 @@ verifyInstall writer root stuff (Solver.Env cache manager connection registry) o
 
 load :: File.Writer R.PROJECT -> Reporting.Style -> R.Root -> R.Stuff -> IO (Either Exit.Details Details)
 load writer style root stuff =
+  do  maybeMemory <- MemoryCache.forStuff stuff -- @LAMDERA
+      case maybeMemory of
+        Just memory -> loadInMemory memory writer style root stuff
+        Nothing -> loadFromDisk writer style root stuff
+
+
+-- @LAMDERA the original `load`
+loadFromDisk :: File.Writer R.PROJECT -> Reporting.Style -> R.Root -> R.Stuff -> IO (Either Exit.Details Details)
+loadFromDisk writer style root stuff =
   do  newTime <- File.getTime (R.elm_json root)
       maybeDetails <- File.readBytes dDetails (R.details stuff)
       case maybeDetails of
@@ -189,6 +202,67 @@ load writer style root stuff =
           if oldTime == newTime
           then return (Right details { _buildID = BuildID (n + 1) })
           else generate writer style root stuff newTime
+
+
+
+-- @LAMDERA LOAD IN MEMORY
+--
+-- With `lamdera live --memory` (see Ext.MemoryCache) the Details stay in memory between
+-- builds, with the package interfaces and objects resolved (ArtifactsFresh), so neither
+-- d.dat nor i.dat and o.dat are decoded again while elm.json is unchanged. When it
+-- changes (or nothing is kept yet) the disk path runs as usual, and the store is reset
+-- first so nothing kept from before can disagree with the Details loaded now.
+
+
+loadInMemory :: MemoryCache.Store -> File.Writer R.PROJECT -> Reporting.Style -> R.Root -> R.Stuff -> IO (Either Exit.Details Details)
+loadInMemory memory writer style root stuff =
+  do  newTime <- File.getTime (R.elm_json root)
+      kept <- fromMemory memory
+      case kept of
+        Just details@(Details oldTime _ (BuildID n) _ _ _) | oldTime == newTime ->
+          return (Right details { _buildID = BuildID (n + 1) })
+
+        _ ->
+          do  MemoryCache.reset memory
+              result <- loadFromDisk writer style root stuff
+              case result of
+                Left _ ->
+                  return result
+
+                Right details ->
+                  do  fresh <- resolveArtifacts stuff details
+                      MemoryCache.setDetails memory (toDyn fresh)
+                      return (Right fresh)
+
+
+fromMemory :: MemoryCache.Store -> IO (Maybe Details)
+fromMemory memory =
+  (>>= fromDynamic) <$> MemoryCache.getDetails memory
+
+
+resolveArtifacts :: R.Stuff -> Details -> IO Details
+resolveArtifacts stuff details =
+  case _extras details of
+    ArtifactsFresh _ _ ->
+      return details
+
+    ArtifactsCached ->
+      do  imvar <- loadInterfaces stuff details
+          omvar <- loadObjects stuff details
+          maybeIfaces <- Fork.await imvar
+          maybeObjects <- Fork.await omvar
+          case (maybeIfaces, maybeObjects) of
+            (Just ifaces, Just objects) -> return details { _extras = ArtifactsFresh ifaces objects }
+            _                           -> return details -- left to fail as it would from disk
+
+
+{-| Write d.dat, or keep the Details in memory with `lamdera live --memory`. -}
+write :: File.Writer R.PROJECT -> R.Stuff -> Details -> IO ()
+write writer stuff details =
+  do  maybeMemory <- MemoryCache.forStuff stuff
+      case maybeMemory of
+        Just memory -> MemoryCache.setDetails memory (toDyn details)
+        Nothing     -> File.writeBytes writer (R.details stuff) eDetails details
 
 
 

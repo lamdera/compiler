@@ -40,6 +40,7 @@ import qualified Root as R
 import Lamdera ((&))
 import qualified Lamdera
 import qualified Lamdera.AppConfig
+import qualified Ext.MemoryCache as MemoryCache -- @LAMDERA lamdera live --memory
 
 -- NOTE: This is used by Make, Repl, and Reactor right now. But it may be
 -- desireable to have Repl and Reactor to keep foreign objects in memory
@@ -162,7 +163,7 @@ loadObject :: R.Stuff -> Build.Module -> IO (Module.Name, Fork.SafeMVar (Maybe O
 loadObject stuff modul =
   case modul of
     Build.Fresh  name _ graph -> (,) name <$> Fork.cached (Just graph)
-    Build.Cached name _ _     -> (,) name <$> Fork.fork name (File.readBytes Opt.dLocalGraph (R.elmo stuff name))
+    Build.Cached name _ _     -> (,) name <$> Fork.fork name (MemoryCache.readElmoFor stuff name) -- @LAMDERA was File.readBytes Opt.dLocalGraph (R.elmo stuff name)
 
 
 
@@ -217,7 +218,7 @@ loadTypesHelp stuff modul =
           case cachedInterface of
             Build.Unneeded ->
               Fork.fork name $
-                do  maybeIface <- File.readBytes I.dInterface (R.elmi stuff name)
+                do  maybeIface <- MemoryCache.readElmiFor stuff name -- @LAMDERA was File.readBytes I.dInterface (R.elmi stuff name)
                     return $ Extract.fromInterface name <$> maybeIface
 
             Build.Loaded iface ->

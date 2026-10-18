@@ -69,6 +69,7 @@ import qualified Lamdera.Schedule
 import qualified Type.Type -- @LAMDERA withSharedTables
 import Control.Concurrent (getNumCapabilities)
 import qualified System.Environment
+import qualified Ext.MemoryCache as MemoryCache -- @LAMDERA lamdera live --memory
 
 
 
@@ -610,7 +611,7 @@ loadInterface stuff name ciMvar =
               return (Just (name, iface))
 
         Unneeded ->
-          do  maybeIface <- File.readBytes I.dInterface (R.elmi stuff name)
+          do  maybeIface <- MemoryCache.readElmiFor stuff name -- @LAMDERA was File.readBytes I.dInterface (R.elmi stuff name)
               case maybeIface of
                 Nothing ->
                   do  putMVar ciMvar Corrupted
@@ -768,29 +769,53 @@ compile writer (Env key root stuff projectType _ buildID _ _) docsNeed (Details.
             Right docs ->
               do  let name = Src.getName modul
                   let iface = I.fromModule pkg canonical annotations
-                  let elmi = R.elmi stuff name
-                  perf "elmo_write" $ File.writeBytes writer (R.elmo stuff name) Opt.eLocalGraph objects
-                  -- @LAMDERA compare the new interface's bytes with the file, instead of
-                  -- decoding the old interface and comparing values. Encoding is a function
-                  -- of the value (Test.ElmiTypeTable: it round trips, re-encoding gives the
-                  -- same bytes), so equal bytes are equal interfaces. The encoding is needed
-                  -- to write it anyway, and decoding the old interface of every recompiled
-                  -- module was a fifth of a Types.elm rebuild in a profile of a large app.
-                  let ifaceBytes = BSL.toStrict (BB.toLazyByteString (I.eInterface iface))
-                  maybeOldBytes <- perf "elmi_read_old" $ readBytesIfExists elmi
-                  case maybeOldBytes of
-                    Just oldBytes | oldBytes == ifaceBytes ->
-                      do  -- iface should be fully forced by equality check
-                          Reporting.report key Reporting.BDone
-                          let local = Details.Local path time deps main lastChange buildID
-                          return (RSame local iface objects docs)
+                  -- @LAMDERA with `lamdera live --memory` the artifacts stay in memory, see
+                  -- Ext.MemoryCache, and the new interface is compared as a value with the kept
+                  -- one (there are no old bytes to compare with; an unchanged interface keeps
+                  -- the kept, shared value). Without it, the byte comparison below.
+                  memory <- MemoryCache.forStuff stuff
+                  case memory of
+                    Just _ ->
+                      do  perf "elmo_write" $ MemoryCache.writeElmo memory writer stuff name objects
+                          maybeOldi <- perf "elmi_read_old" $ MemoryCache.readElmi memory stuff name
+                          case maybeOldi of
+                            Just oldi | oldi == iface ->
+                              do  -- iface should be fully forced by equality check
+                                  Reporting.report key Reporting.BDone
+                                  let local = Details.Local path time deps main lastChange buildID
+                                  return (RSame local (MemoryCache.keepSame memory oldi iface) objects docs)
 
-                    _ ->
-                      do  -- iface may be lazy still
-                          perf "elmi_write" $ File.writeBuilder writer elmi (BB.byteString ifaceBytes)
-                          Reporting.report key Reporting.BDone
-                          let local = Details.Local path time deps main buildID buildID
-                          return (RNew local iface objects docs)
+                            _ ->
+                              do  -- iface may be lazy still
+                                  iface_ <- perf "elmi_write" $ MemoryCache.writeElmi memory writer stuff name iface
+                                  Reporting.report key Reporting.BDone
+                                  let local = Details.Local path time deps main buildID buildID
+                                  return (RNew local iface_ objects docs)
+
+                    Nothing ->
+                      do  let elmi = R.elmi stuff name
+                          perf "elmo_write" $ File.writeBytes writer (R.elmo stuff name) Opt.eLocalGraph objects
+                          -- @LAMDERA compare the new interface's bytes with the file, instead of
+                          -- decoding the old interface and comparing values. Encoding is a function
+                          -- of the value (Test.ElmiTypeTable: it round trips, re-encoding gives the
+                          -- same bytes), so equal bytes are equal interfaces. The encoding is needed
+                          -- to write it anyway, and decoding the old interface of every recompiled
+                          -- module was a fifth of a Types.elm rebuild in a profile of a large app.
+                          let ifaceBytes = BSL.toStrict (BB.toLazyByteString (I.eInterface iface))
+                          maybeOldBytes <- perf "elmi_read_old" $ readBytesIfExists elmi
+                          case maybeOldBytes of
+                            Just oldBytes | oldBytes == ifaceBytes ->
+                              do  -- iface should be fully forced by equality check
+                                  Reporting.report key Reporting.BDone
+                                  let local = Details.Local path time deps main lastChange buildID
+                                  return (RSame local iface objects docs)
+
+                            _ ->
+                              do  -- iface may be lazy still
+                                  perf "elmi_write" $ File.writeBuilder writer elmi (BB.byteString ifaceBytes)
+                                  Reporting.report key Reporting.BDone
+                                  let local = Details.Local path time deps main buildID buildID
+                                  return (RNew local iface objects docs)
 
     Left err ->
       return $ RProblem $
@@ -810,7 +835,8 @@ projectTypeToPkg projectType =
 
 writeDetails :: File.Writer R.PROJECT -> R.Stuff -> Details.Details -> Map.Map Module.Name Result -> IO ()
 writeDetails writer stuff (Details.Details time outline buildID locals foreigns extras) results =
-  File.writeBytes writer (R.details stuff) Details.eDetails $
+  -- @LAMDERA was File.writeBytes writer (R.details stuff) Details.eDetails, Details.write keeps them in memory with `lamdera live --memory`
+  Details.write writer stuff $
     Details.Details time outline buildID (Map.foldrWithKey addNewLocal locals results) foreigns extras
 
 
