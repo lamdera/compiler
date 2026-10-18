@@ -22,6 +22,7 @@ import qualified Data.Map as Map
 import qualified Data.Set as Set
 import qualified Data.Text as T
 import qualified System.Directory as Dir
+import System.Mem.StableName (StableName, makeStableName)
 import System.FilePath ((</>))
 
 import EasyTest
@@ -79,6 +80,20 @@ suite = tests
       expect (either (const False) (const True) result)
       tableResult <- io $ decodeBytes I.dInterface (strict (E.u32 1 <> E.u8 0 <> E.u16 0 <> E.u16 0 <> Pkg.eName Pkg.dummyName <> E.u32 0 <> E.u32 0 <> E.u32 0 <> E.u32 0))
       expect (either (const True) (const False) tableResult)
+
+  , scope "share gives back an equal interface, with each distinct type allocated once" $ do
+      let fresh = unsharedInterface 50
+          shared = I.share fresh
+      expectEqual fresh shared
+      expectEqual (strict (I.eInterface fresh)) (strict (I.eInterface shared))
+      freshModels <- io $ traverse stableName (modelsOf fresh)
+      sharedModels <- io $ traverse stableName (modelsOf shared)
+      -- built separately for every annotation in the fresh interface, one value after share
+      expectEqual 50 (length (List.nub freshModels))
+      expectEqual 1 (length (List.nub sharedModels))
+      -- and the argument and result of every update are that same value too
+      sharedResults <- io $ traverse stableName (resultModelsOf shared)
+      expect (sharedModels == sharedResults)
 
   , scope "interfaces of a compiled project round trip, and a repeated Model is written once" $
       let
@@ -191,6 +206,37 @@ wideInterface n =
   (bigInterface 1)
     { I._values = Map.fromList [ (N.fromChars ("v" ++ show i), Can.Forall Map.empty (Can.TType home "T" [Can.TVar (TV.varFromChars ("a" ++ show i))])) | i <- [1 .. n] ]
     }
+
+
+-- every annotation builds its own Model tree, like inference does: nothing is shared
+unsharedInterface :: Int -> I.Interface
+unsharedInterface n =
+  (bigInterface 1)
+    { I._values = Map.fromList [ (N.fromChars ("update" ++ show i), Can.Forall Map.empty (Can.TLambda (freshModel i) (freshModel (i + n)))) | i <- [1 .. n] ]
+    }
+
+
+freshModel :: Int -> Can.Type
+freshModel i =
+  Can.TAlias home "Model" []
+    (Can.Filled (Can.TRecord
+      (Map.fromList [ (N.fromChars ("field" ++ show f), Can.FieldType (fromIntegral f) (Can.TType ModuleName.basics (if i < 0 then "Never" else "Int") [])) | f <- [0 .. 49 :: Int] ])
+      Nothing))
+
+
+modelsOf :: I.Interface -> [Can.Type]
+modelsOf iface =
+  [ m | Can.Forall _ (Can.TLambda m _) <- Map.elems (I._values iface) ]
+
+
+resultModelsOf :: I.Interface -> [Can.Type]
+resultModelsOf iface =
+  [ m | Can.Forall _ (Can.TLambda _ m) <- Map.elems (I._values iface) ]
+
+
+stableName :: a -> IO (StableName a)
+stableName a =
+  makeStableName $! a
 
 
 -- DependencyInterface has no Eq

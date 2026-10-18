@@ -1,4 +1,4 @@
-{-# LANGUAGE ExtendedLiterals, MagicHash, TemplateHaskell #-}
+{-# LANGUAGE BangPatterns, ExtendedLiterals, MagicHash, TemplateHaskell #-}
 module Elm.Interface
   ( Interface(..)
   , Union(..)
@@ -17,6 +17,8 @@ module Elm.Interface
   , eInterface, dInterface
   , eDependencyInterface, dDependencyInterface
   , eType, dType
+  --
+  , share -- @LAMDERA
   )
   where
 
@@ -729,3 +731,182 @@ dTypeRef (TypeTable dRef types) =
       case IntMap.lookup i types of
         Just t  -> return t
         Nothing -> D.expecting "TypeRef"
+
+
+
+-- SHARE
+--
+-- @LAMDERA `lamdera live --memory` keeps interfaces for the whole session. An interface
+-- fresh from type inference repeats the same expanded alias bodies at every use (see TYPE
+-- TABLE above), and holding hundreds of those trees costs gigabytes. `share` rebuilds an
+-- interface with each distinct type node allocated once, keyed exactly like the type
+-- table: the in-memory equivalent of writing the interface and reading it back, without
+-- the bytes. The result is == to the input and holds no reference to it.
+
+
+share :: Interface -> Interface
+share (Interface h vs us as bs) =
+  let
+    shared@(Interface _ vs_ us_ as_ bs_) =
+      State.evalState
+        ( do  !vs1 <- traverse shareAnnotation vs
+              !us1 <- traverse shareUnion us
+              !as1 <- traverse shareAlias as
+              !bs1 <- traverse shareBinop bs
+              return (Interface h vs1 us1 as1 bs1)
+        )
+        (Sharing Map.empty IntMap.empty 0)
+  in
+  vs_ `seq` us_ `seq` as_ `seq` bs_ `seq` shared
+
+
+type Sharer = State.State Sharing
+
+
+data Sharing =
+  Sharing
+    { _sh_ids   :: !(Map.Map Key Int)
+    , _sh_types :: !(IntMap.IntMap Can.Type)
+    , _sh_size  :: !Int
+    }
+
+
+shareAnnotation :: Can.Annotation -> Sharer Can.Annotation
+shareAnnotation (Can.Forall fvs t) =
+  do  !t_ <- shareType t
+      return $! Can.Forall fvs t_
+
+
+shareUnion :: Union -> Sharer Union
+shareUnion union =
+  case union of
+    OpenUnion    u -> (OpenUnion $!)    <$> shareUnion_ u
+    ClosedUnion  u -> (ClosedUnion $!)  <$> shareUnion_ u
+    PrivateUnion u -> (PrivateUnion $!) <$> shareUnion_ u
+
+
+shareUnion_ :: Can.Union -> Sharer Can.Union
+shareUnion_ (Can.Union vs cs n opts) =
+  do  !cs_ <- shareList (\(Can.Ctor c i a ts) -> do { !ts_ <- shareList shareType ts; return $! Can.Ctor c i a ts_ }) cs
+      return $! Can.Union vs cs_ n opts
+
+
+shareAlias :: Alias -> Sharer Alias
+shareAlias alias =
+  case alias of
+    PublicAlias  a -> (PublicAlias $!)  <$> shareAlias_ a
+    PrivateAlias a -> (PrivateAlias $!) <$> shareAlias_ a
+
+
+shareAlias_ :: Can.Alias -> Sharer Can.Alias
+shareAlias_ (Can.Alias vs t) =
+  do  !t_ <- shareType t
+      return $! Can.Alias vs t_
+
+
+shareBinop :: Binop -> Sharer Binop
+shareBinop (Binop n t a p) =
+  do  !t_ <- shareAnnotation t
+      return $! Binop n t_ a p
+
+
+shareList :: (a -> Sharer b) -> [a] -> Sharer [b]
+shareList f xs =
+  case xs of
+    [] ->
+      return []
+
+    x:rest ->
+      do  !y <- f x
+          !ys <- shareList f rest
+          return $! (y : ys)
+
+
+shareType :: Can.Type -> Sharer Can.Type
+shareType tipe =
+  snd <$> shareNode tipe
+
+
+{-| The node's index in the sharing table, and the one shared value for it. Children
+are shared first, so a new node is built from shared children only.
+-}
+shareNode :: Can.Type -> Sharer (Int, Can.Type)
+shareNode tipe =
+  case tipe of
+    Can.TLambda a b ->
+      do  (ia, !ta) <- shareNode a
+          (ib, !tb) <- shareNode b
+          sharedNode (KLambda ia ib) (Can.TLambda ta tb)
+
+    Can.TVar x ->
+      sharedNode (KVar x) tipe
+
+    Can.TRecord fs e ->
+      do  !fs_ <- traverse (\(Can.FieldType i t) -> do { (it, !tt) <- shareNode t; return $! SharedField i it tt }) fs
+          let !keyFields = Map.map (\(SharedField i it _) -> (i, it)) fs_
+          let !fields = Map.map (\(SharedField i _ tt) -> Can.FieldType i tt) fs_
+          sharedNode (KRecord keyFields e) (Can.TRecord fields e)
+
+    Can.TUnit ->
+      sharedNode KUnit tipe
+
+    Can.TPair a b ->
+      do  (ia, !ta) <- shareNode a
+          (ib, !tb) <- shareNode b
+          sharedNode (KPair ia ib) (Can.TPair ta tb)
+
+    Can.TTriple a b c ->
+      do  (ia, !ta) <- shareNode a
+          (ib, !tb) <- shareNode b
+          (ic, !tc) <- shareNode c
+          sharedNode (KTriple ia ib ic) (Can.TTriple ta tb tc)
+
+    Can.TAlias h n xs aliasType ->
+      do  !xs_ <- shareList (\(x,t) -> do { (it, !tt) <- shareNode t; return $! SharedArg x it tt }) xs
+          let !keyArgs = forceList (map (\(SharedArg x it _) -> (x, it)) xs_)
+          let !args = forceList (map (\(SharedArg x _ tt) -> (x, tt)) xs_)
+          case aliasType of
+            Can.Holey t ->
+              do  (it, !tt) <- shareNode t
+                  sharedNode (KAlias h n keyArgs False it) (Can.TAlias h n args (Can.Holey tt))
+
+            Can.Filled t ->
+              do  (it, !tt) <- shareNode t
+                  sharedNode (KAlias h n keyArgs True it) (Can.TAlias h n args (Can.Filled tt))
+
+    Can.TType h n xs ->
+      do  !xs_ <- shareList shareNode xs
+          let !keyArgs = forceList (map fst xs_)
+          let !args = forceList (map snd xs_)
+          sharedNode (KType h n keyArgs) (Can.TType h n args)
+
+
+data SharedField = SharedField !Word16 !Int !Can.Type
+
+
+data SharedArg = SharedArg !T.Var !Int !Can.Type
+
+
+sharedNode :: Key -> Can.Type -> Sharer (Int, Can.Type)
+sharedNode key fresh =
+  do  Sharing ids types size <- State.get
+      case Map.lookup key ids of
+        Just i ->
+          case IntMap.lookup i types of
+            Just t  -> return (i, t)
+            Nothing -> $(Crash.crash 'sharedNode) "a shared type index has no type"
+
+        Nothing ->
+          do  let !t = fresh
+              State.put (Sharing (Map.insert key size ids) (IntMap.insert size t types) (size + 1))
+              return (size, t)
+
+
+forceList :: [a] -> [a]
+forceList xs =
+  go xs `seq` xs
+  where
+    go ys =
+      case ys of
+        []     -> ()
+        y:rest -> y `seq` go rest
