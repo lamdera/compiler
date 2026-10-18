@@ -38,6 +38,17 @@ asyncUpdateJsOutput cache recompile =
 after each rebuild mostly copies them around, and a Ctrl-C that lands while it runs is
 lost (seen on a 920 module app, with ~1GB to copy).
 -}
+{-| Like asyncUpdateJsOutput, but the output is taken in the calling thread, so whoever
+reads it next waits for this rebuild. No forced GC (used with --memory).
+-}
+updateJsOutputNow :: Cache -> IO BS.ByteString -> IO ()
+updateJsOutputNow (Cache mJsOutput) recompile = do
+  _ <- takeMVar mJsOutput
+  trackedForkIO "Ext.Sentry.updateJsOutputNow" $ do
+    !bs <- track "recompile" $ recompile
+    putMVar mJsOutput bs
+
+
 asyncUpdateJsOutputWith :: Bool -> Cache -> IO BS.ByteString -> IO ()
 asyncUpdateJsOutputWith majorGC (Cache mJsOutput) recompile = do
   trackedForkIO "Ext.Sentry.asyncUpdateJsOutput" $ do

@@ -263,10 +263,11 @@ crawlDeps env mvar deps blockedValue =
 
 
 crawlModule :: Env -> MVar StatusDict -> DocsNeed -> Module.Name -> IO Status
-crawlModule env@(Env _ root _ projectType srcDirs buildID locals foreigns) mvar docsNeed name =
+crawlModule env@(Env _ root stuff projectType srcDirs buildID locals foreigns) mvar docsNeed name =
   do  let fileName = Module.toFilePath name <.> "elm"
 
-      paths <- filterM (File.exists . coerce) (map (`toAbsoluteElm` fileName) srcDirs)
+      -- @LAMDERA the source* functions are File.exists/getTime/readUtf8, from memory with `lamdera live --memory` (see Ext.MemoryCache, SOURCES)
+      paths <- filterM (MemoryCache.sourceExistsFor stuff . coerce) (map (`toAbsoluteElm` fileName) srcDirs)
 
       case paths of
         [elm@(AbsoluteElm path)] ->
@@ -275,7 +276,7 @@ crawlModule env@(Env _ root _ projectType srcDirs buildID locals foreigns) mvar 
               return $ SBadImport $ Import.Ambiguous path [] dep deps
 
             Nothing ->
-              do  newTime <- File.getTime path
+              do  newTime <- MemoryCache.sourceTimeFor stuff path -- @LAMDERA was File.getTime path
                   case Map.lookup name locals of
                     Nothing ->
                       crawlFile env mvar docsNeed name elm newTime buildID
@@ -311,10 +312,10 @@ crawlModule env@(Env _ root _ projectType srcDirs buildID locals foreigns) mvar 
 
 
 crawlFile :: Env -> MVar StatusDict -> DocsNeed -> Module.Name -> AbsoluteElm -> File.Time -> Details.BuildID -> IO Status
-crawlFile env@(Env _ _ _ projectType _ buildID _ _) mvar docsNeed expectedName (AbsoluteElm path) time lastChange =
-  do  source <- File.readUtf8 path
+crawlFile env@(Env _ _ stuff projectType _ buildID _ _) mvar docsNeed expectedName (AbsoluteElm path) time lastChange =
+  do  source <- MemoryCache.sourceReadFor stuff path -- @LAMDERA was File.readUtf8 path
       -- @LAMDERA opt-in timing, see Lamdera.Perf
-      result <- Lamdera.Perf.record (Module.toChars expectedName ++ "\tparse") $ Parse.fromByteString projectType source
+      result <- Lamdera.Perf.record (Module.toChars expectedName ++ "\tparse") $ MemoryCache.sourceParseFor stuff path time $ Parse.fromByteString projectType source
       case result of
         Left err ->
           return $ SBadSyntax path time source err
@@ -376,8 +377,9 @@ checkModule writer env@(Env _ _ stuff projectType _ _ _ _) foreigns resultsMVar 
           depsStatus <- Lamdera.Perf.record (Module.toChars name ++ "\tdeps_wait") $ checkDeps stuff results deps lastCompile
           case depsStatus of
             DepsChange ifaces -> slot $
-              do  source <- File.readUtf8 path
-                  result <- Lamdera.Perf.record (Module.toChars name ++ "\tparse") $ Parse.fromByteString projectType source
+              -- @LAMDERA with `lamdera live --memory` an unchanged module is not read or parsed again (Ext.MemoryCache, SOURCES)
+              do  source <- MemoryCache.sourceReadFor stuff path
+                  result <- Lamdera.Perf.record (Module.toChars name ++ "\tparse") $ MemoryCache.sourceParseFor stuff path time $ Parse.fromByteString projectType source
                   case result of
                     Right modul -> compile writer env (DocsNeed False) local source ifaces modul
                     Left err ->
@@ -392,8 +394,8 @@ checkModule writer env@(Env _ _ stuff projectType _ _ _ _) foreigns resultsMVar 
               return RBlocked
 
             DepsNotFound problems ->
-              do  source <- File.readUtf8 path
-                  result <- Parse.fromByteString projectType source
+              do  source <- MemoryCache.sourceReadFor stuff path -- @LAMDERA was File.readUtf8 path
+                  result <- MemoryCache.sourceParseFor stuff path time $ Parse.fromByteString projectType source -- @LAMDERA
                   return $ RProblem $ Error.Module name path time source $
                     case result of
                       Right (Src.Module _ _ _ imports _ _ _ _ _) ->

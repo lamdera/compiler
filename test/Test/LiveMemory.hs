@@ -59,17 +59,26 @@ suite =
       mapM_ writeProject [memDir, diskDir]
       Lamdera.setLiveMode True
       store <- registerStore memDir
-      pure (memDir, diskDir, store)
+      current <- newIORef store
+      pure (memDir, diskDir, store, current)
 
-    cleanup (memDir, diskDir, store) = do
-      MemoryCache.unregister store
+    cleanup (memDir, diskDir, _, current) = do
+      MemoryCache.unregister =<< readIORef current
       Lamdera.setLiveMode False
       rmdir memDir
       rmdir diskDir
 
-    test (memDir, diskDir, store) =
+    test (memDir, diskDir, store, current) =
       let
-        edit path f = io $ mapM_ (\dir -> editFile (dir </> path) f) [memDir, diskDir]
+        -- edit both copies, and tell the memory store, as the file watcher would
+        edit path f = io $ do
+          mapM_ (\dir -> editFile (dir </> path) f) [memDir, diskDir]
+          s <- readIORef current
+          _ <- MemoryCache.sourcesChanged s [memDir </> path]
+          pure ()
+
+        -- edit both copies, and tell nobody
+        editUnreported path f = io $ mapM_ (\dir -> editFile (dir </> path) f) [memDir, diskDir]
 
         -- build both, expect the same JS and the same compiled modules, and that those are `expected`
         step label expected = scope label $ do
@@ -108,9 +117,14 @@ suite =
           js2 <- step "and back" ["Leaf", "Lamdera.Live"]
           expect (js1 /= js2)
 
+
           edit "src/Types.elm" (T.replace "= Red\n    | Green" "= Red\n    | Green\n    | Blue")
+          _ <- io $ MemoryCache.takeCounters store
           js2 <- step "a new constructor in Types recompiles its importers, with new Wire3 codecs" ["Types", "Frontend", "Backend", "Lamdera.Live"]
           expect (BS.isInfixOf "$author$project$Types$Blue" js2)
+          scope "the importers recompiled for it are not parsed again" $ do
+            counters <- io $ MemoryCache.takeCounters store
+            expect (MemoryCache._parseHits counters >= 2)
 
           scope "a type error fails both builds" $ do
             edit "src/Middle.elm" (T.replace "middleText =" "middleText =\n    1 + \"x\"\n\n\nbroken =")
@@ -121,6 +135,23 @@ suite =
           edit "src/Middle.elm" (T.replace "middleText =\n    1 + \"x\"\n\n\nbroken =" "middleText =")
           _ <- step "fixing it recompiles only the fixed module" ["Middle", "Lamdera.Live"]
 
+          scope "an edit the watcher did not report is not seen until a reconcile" $ do
+            editUnreported "src/Leaf.elm" (T.replace "leaf-v2" "leaf-v2b")
+            mem <- io $ compileLive memDir
+            expectEqual (Right (Set.fromList ["Lamdera.Live"])) (fmap snd mem)
+            changed <- io $ MemoryCache.reconcileSources store
+            expectEqual [memDir </> "src/Leaf.elm"] changed
+          _ <- step "after the reconcile both see it" ["Leaf", "Lamdera.Live"]
+
+          scope "a directory event forgets every kept source" $ do
+            _ <- io $ MemoryCache.takeCounters store
+            forgot <- io $ MemoryCache.sourcesChanged store [memDir </> "src"]
+            expect forgot
+          _ <- step "and the next build looks at the disk again, finding nothing changed" ["Lamdera.Live"]
+          scope "(looked at the disk)" $ do
+            counters <- io $ MemoryCache.takeCounters store
+            expect (MemoryCache._sourceFs counters > 0)
+
           scope "elm-stuff is not written while the store is registered" $ do
             elmos <- io $ filter (List.isSuffixOf ".elmo") <$> (Dir.listDirectory =<< stuffDir memDir)
             expectEqual [] elmos
@@ -128,7 +159,7 @@ suite =
           io $ mapM_ (\dir -> touchElmJson (dir </> "elm.json")) [memDir, diskDir]
           _ <- step "touching elm.json reloads the details from disk, and rebuilds like a disk build" ["Backend", "Env", "Frontend", "Leaf", "Middle", "Types", "Lamdera.Live", "Lamdera.Repl"]
 
-          edit "src/Leaf.elm" (T.replace "leaf-v2" "leaf-v3")
+          edit "src/Leaf.elm" (T.replace "leaf-v2b" "leaf-v3")
           _ <- step "and keeps building in memory after that" ["Leaf", "Lamdera.Live"]
 
           scope "flushing writes elm-stuff that a disk build finds up to date" $ do
@@ -145,6 +176,7 @@ suite =
 
           scope "a new store starts from that elm-stuff" $ do
             store2 <- io $ registerStore memDir
+            io $ writeIORef current store2
             edit "src/Leaf.elm" (T.replace "leaf-v3" "leaf-v4")
             _ <- step "after a restart" ["Leaf", "Lamdera.Live"]
             counters <- io $ MemoryCache.takeCounters store2

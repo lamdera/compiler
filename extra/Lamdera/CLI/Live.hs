@@ -61,6 +61,8 @@ import qualified Ext.Common
 import qualified GHC.IO.Exception
 
 import Control.Exception (onException)
+import Control.Concurrent (threadDelay)
+import Control.Monad (forever)
 import Data.Dynamic (fromDynamic)
 import qualified GHC.Clock
 import qualified GHC.Stats
@@ -889,6 +891,44 @@ flushMemory root store = do
 
 
 
+-- SOURCES (see Ext.MemoryCache)
+
+
+memorySourcesChanged :: Maybe MemoryCache.Store -> [FilePath] -> IO ()
+memorySourcesChanged maybeStore events =
+  case maybeStore of
+    Nothing -> pure ()
+    Just store -> do
+      _ <- MemoryCache.sourcesChanged store events
+      pure ()
+
+
+{-| Every few seconds, look at the kept sources on disk again, and rebuild if any changed
+without the watcher saying so.
+-}
+startSourceReconcile :: Maybe MemoryCache.Store -> ([FilePath] -> IO ()) -> IO ()
+startSourceReconcile maybeStore recompile =
+  case maybeStore of
+    Nothing -> pure ()
+    Just store ->
+      Ext.Common.trackedForkIO "Lamdera.CLI.Live.startSourceReconcile" $ forever $ do
+        threadDelay 5000000
+        changed <- MemoryCache.reconcileSources store
+        onlyWhen (not (null changed)) $ do
+          atomicPutStrLn $ "🧠 --memory: changed without a watcher event: " <> show changed
+          recompile changed
+
+
+reconcileSources :: Maybe MemoryCache.Store -> ([FilePath] -> IO ()) -> IO ()
+reconcileSources maybeStore onChanged =
+  case maybeStore of
+    Nothing -> pure ()
+    Just store -> do
+      changed <- MemoryCache.reconcileSources store
+      onlyWhen (not (null changed)) $ onChanged changed
+
+
+
 -- TIMING
 --
 -- With LAMDERA_LIVE_TIMING set, each rebuild prints how long it took to have fresh JS,
@@ -912,7 +952,7 @@ timedRebuild maybeStore io = do
           Just store -> do
             c <- MemoryCache.takeCounters store
             (ifaces, objects) <- MemoryCache.size store
-            pure $ " store: " <> show (MemoryCache._ifaceHits c) <> " interface hits, " <> show (MemoryCache._objectHits c) <> " object hits, " <> show (MemoryCache._diskReads c) <> " disk reads, holding " <> show ifaces <> " interfaces and " <> show objects <> " objects."
+            pure $ " store: " <> show (MemoryCache._ifaceHits c) <> " interface hits, " <> show (MemoryCache._objectHits c) <> " object hits, " <> show (MemoryCache._diskReads c) <> " disk reads, " <> show (MemoryCache._sourceFs c) <> " source stats/reads, " <> show (MemoryCache._parseHits c) <> " parses kept, holding " <> show ifaces <> " interfaces and " <> show objects <> " objects."
           Nothing -> pure ""
       timings <- atomicModifyIORef' phases (\ps -> ([], reverse ps))
       let total = (end - start) `div` 1000000

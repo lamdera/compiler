@@ -99,11 +99,11 @@ runWithRoot root (Flags maybePort shouldOpenBrowser inMemory) =
       memory <- if inMemory then Just <$> Live.startMemory root else pure Nothing
 
       let
-        recompile :: [String] -> IO ()
-        recompile events = do
-          -- Fork a recompile+cache update
-          Sentry.asyncUpdateJsOutputWith (not inMemory) sentryCache $ do -- @LAMDERA no forced major GC with --memory, see Ext.Sentry
+        -- @LAMDERA split out of recompile, for the --memory refresh on page load below
+        rebuild :: [String] -> IO BS.ByteString
+        rebuild events = do
             debug_ $ "🛫  recompile triggered by: " ++ show events
+            Live.memorySourcesChanged memory events -- @LAMDERA what the watcher saw, see Ext.MemoryCache SOURCES
             harness <- Live.prepareLocalDev root
             let
               typesRootChanged = events & filter (\event ->
@@ -112,6 +112,11 @@ runWithRoot root (Flags maybePort shouldOpenBrowser inMemory) =
                 ) & length & (\v -> v > 0)
             onlyWhen typesRootChanged Lamdera.Constrain.resetTypeLocations
             Live.timedRebuild memory $ Live.withMemoryReset memory $ compileToBuilder harness
+
+        recompile :: [String] -> IO ()
+        recompile events = do
+          -- Fork a recompile+cache update
+          Sentry.asyncUpdateJsOutputWith (not inMemory) sentryCache (rebuild events) -- @LAMDERA no forced major GC with --memory, see Ext.Sentry
           -- Simultaneously tell all clients to refresh. All those HTTP
           -- requests will open but block on the cache mVar, and then release
           -- immediately when compilation is finished, effectively "pushing"
@@ -122,6 +127,21 @@ runWithRoot root (Flags maybePort shouldOpenBrowser inMemory) =
       recompile []
 
       Filewatch.watch root recompile
+
+      -- @LAMDERA with --memory, look at the kept sources on disk every few seconds, for
+      -- edits the watcher did not report
+      Live.startSourceReconcile memory recompile
+
+      let
+        -- @LAMDERA with --memory, loading the page looks at the kept sources on disk first,
+        -- and rebuilds before serving if any changed: a reload in the browser always shows
+        -- what is on disk
+        serveApp :: FilePath -> Snap ()
+        serveApp path = do
+          liftIO $ Live.reconcileSources memory $ \changed -> do
+            Sentry.updateJsOutputNow sentryCache (rebuild changed)
+            Live.refreshClients liveState
+          serveElm sentryCache path
 
       whenDebug $ do
         -- Watch LocalDev changes when in Debug mode to assist with development
@@ -137,7 +157,7 @@ runWithRoot root (Flags maybePort shouldOpenBrowser inMemory) =
        Live.withEnd liveState $
        httpServe (config port) $ gcatchlog "general" $
         -- Add /public/* as if it were /* to mirror production, but still render .elm files as an Elm app first
-        Live.serveLamderaPublicFiles root (serveElm sentryCache)
+        Live.serveLamderaPublicFiles root serveApp
         <|> (serveFiles root sentryCache)
         -- @WARNING, `serveDirectoryWith` implicitly uses Dir.getCurrentDirectory. We can't change '.' to `root` as it freaks out
         -- with the fully qualified path. And we can't use `System.Filepath.makeRelative` because it refuses to introduce `../`.
@@ -151,7 +171,7 @@ runWithRoot root (Flags maybePort shouldOpenBrowser inMemory) =
         <|> Live.serveExperimental root
         <|> Live.serveBem liveState
         <|> serveAssets -- Compiler packaged static files
-        <|> Live.serveUnmatchedUrlsToIndex root (serveElm sentryCache) -- Everything else without extensions goes to Lamdera.Live harness
+        <|> Live.serveUnmatchedUrlsToIndex root serveApp -- Everything else without extensions goes to Lamdera.Live harness
         <|> error404 -- Will get hit for any non-matching extensioned paths i.e. /hello.blah
 
 

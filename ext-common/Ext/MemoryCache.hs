@@ -20,6 +20,14 @@ module Ext.MemoryCache
   --
   , flush
   --
+  , sourceExistsFor
+  , sourceTimeFor
+  , sourceReadFor
+  , sourceParseFor
+  , sourcesChanged
+  , resetSources
+  , reconcileSources
+  --
   , Counters(..)
   , takeCounters
   , size
@@ -55,16 +63,21 @@ the builder is hooked rather than vendored.
 -}
 
 import Control.Exception (IOException, catch)
-import Control.Monad (forM_)
+import Control.Monad (forM, forM_)
+import qualified Data.ByteString as BS
 import Data.Dynamic (Dynamic)
 import Data.IORef
+import qualified Data.List as List
 import qualified Data.Map.Strict as Map
+import qualified Data.Maybe as Maybe
 import qualified Data.Set as Set
 import qualified System.Directory as Dir
 import qualified System.Environment as Env
+import qualified System.FilePath as FP
 import System.IO.Unsafe (unsafePerformIO)
 
 import qualified AST.Optimized as Opt
+import qualified AST.Source as Src
 import qualified AST.Prim.Module as Module
 import qualified Elm.Interface as I
 import qualified File
@@ -83,6 +96,7 @@ data Store =
     , _jsCache    :: !(IORef (Maybe Dynamic)) -- Generate.JavaScript.JsCache
     , _dirty      :: !(IORef Dirty)
     , _counters   :: !(IORef Counters)
+    , _sources    :: !(IORef (Map.Map FilePath Source)) -- see SOURCES
     }
 
 
@@ -115,13 +129,15 @@ data Counters =
     , _ifaceHits     :: !Int
     , _objectHits    :: !Int
     , _diskReads     :: !Int
+    , _sourceFs      :: !Int -- stat or read of a project source on disk
+    , _parseHits     :: !Int -- unchanged sources not parsed again
     }
   deriving (Show)
 
 
 noCounters :: Counters
 noCounters =
-  Counters 0 0 0 0
+  Counters 0 0 0 0 0 0
 
 
 
@@ -153,7 +169,7 @@ register stuff =
           return store
 
         Nothing ->
-          do  store <- Store dir <$> newIORef Map.empty <*> newIORef Nothing <*> newIORef Nothing <*> newIORef noDirt <*> newIORef noCounters
+          do  store <- Store dir <$> newIORef Map.empty <*> newIORef Nothing <*> newIORef Nothing <*> newIORef noDirt <*> newIORef noCounters <*> newIORef Map.empty
               atomicModifyIORef' registry $ \(Registry stores _) ->
                 (Registry (Map.insert dir store stores) Map.empty, ())
               return store
@@ -198,6 +214,7 @@ reset store =
       writeIORef (_details store) Nothing
       writeIORef (_jsCache store) Nothing
       writeIORef (_dirty store) noDirt
+      resetSources store
 
 
 size :: Store -> IO (Int, Int)
@@ -389,3 +406,215 @@ flush store writer stuff writeDetails =
       maybeDetails <- readIORef (_details store)
       forM_ maybeDetails $ \d -> if details then writeDetails d else return ()
       return (length elmos, length elmis)
+
+
+
+-- SOURCES
+--
+-- The project's .elm sources, as the builder sees them: whether a path exists, its time,
+-- its bytes and its parse. On disk the crawl stats every module in every source
+-- directory on every build, and a module recompiled only because an interface it
+-- imports changed is read and parsed again. In memory each path is looked at on disk
+-- once, and after that only when the file watcher reports it (sourcesChanged) or a
+-- reconcile finds it changed (reconcileSources). Times are the files' own mtimes, so
+-- the Details flushed to elm-stuff stay valid for a disk build; a file whose bytes
+-- change under an unchanged mtime gets its time bumped so the builder still sees it.
+--
+-- What the watcher cannot be trusted for is handled by forgetting everything
+-- (resetSources, so the next build looks at the disk again as a disk build would): a
+-- directory event (a rename or a checkout), a path the watcher reports that is gone and
+-- is not a file, an elm.json change (the store is reset), and a manual reconcile. The
+-- periodic reconcile stats every path looked at, so an edit the watcher misses (an
+-- ignored directory, a dropped event) is picked up within seconds.
+--
+-- Only .elm files outside elm-stuff are kept: the live harness and the Lamdera modules
+-- next to it are rewritten in elm-stuff before every build, without watcher events.
+-- LAMDERA_MEMORY_SOURCES=0 turns this off (sources come from disk, as before).
+
+
+data Source
+  = Present !File.Time !(Maybe BS.ByteString) !(Maybe Src.Module)
+  | Absent
+
+
+{-# NOINLINE keepSources #-}
+keepSources :: Bool
+keepSources =
+  unsafePerformIO $ (/= Just "0") <$> Env.lookupEnv "LAMDERA_MEMORY_SOURCES"
+
+
+kept :: FilePath -> Bool
+kept path =
+  keepSources
+  && FP.takeExtension path == ".elm"
+  && not ("elm-stuff" `elem` FP.splitDirectories path)
+
+
+resetSources :: Store -> IO ()
+resetSources store =
+  writeIORef (_sources store) Map.empty
+
+
+withSource :: R.Stuff -> FilePath -> IO a -> (Store -> Source -> IO a) -> IO a
+withSource stuff path fromDisk inMemory =
+  do  maybeStore <- if kept path then forStuff stuff else return Nothing
+      case maybeStore of
+        Nothing ->
+          fromDisk
+
+        Just store ->
+          do  sources <- readIORef (_sources store)
+              case Map.lookup path sources of
+                Just source ->
+                  inMemory store source
+
+                Nothing ->
+                  do  source <- lookAtDisk store path
+                      atomicModifyIORef' (_sources store) $ \m -> (Map.insertWith (\_ old -> old) path source m, ())
+                      inMemory store source
+
+
+lookAtDisk :: Store -> FilePath -> IO Source
+lookAtDisk store path =
+  do  count store $ \c -> c { _sourceFs = _sourceFs c + 1 }
+      exists <- Dir.doesFileExist path
+      if exists
+        then (\t -> Present t Nothing Nothing) <$> File.getTime path
+        else return Absent
+
+
+sourceExistsFor :: R.Stuff -> FilePath -> IO Bool
+sourceExistsFor stuff path =
+  withSource stuff path (File.exists path) $ \_ source ->
+    return $ case source of
+      Present _ _ _ -> True
+      Absent        -> False
+
+
+sourceTimeFor :: R.Stuff -> FilePath -> IO File.Time
+sourceTimeFor stuff path =
+  withSource stuff path (File.getTime path) $ \_ source ->
+    case source of
+      Present t _ _ -> return t
+      Absent        -> File.getTime path -- fails as it would on disk
+
+
+sourceReadFor :: R.Stuff -> FilePath -> IO BS.ByteString
+sourceReadFor stuff path =
+  withSource stuff path (File.readUtf8 path) $ \store source ->
+    case source of
+      Present _ (Just bytes) _ ->
+        return bytes
+
+      Present t Nothing _ ->
+        do  count store $ \c -> c { _sourceFs = _sourceFs c + 1 }
+            bytes <- File.readUtf8 path
+            update store path $ \old ->
+              case old of
+                Just (Present t2 Nothing m) | t2 == t -> Present t2 (Just bytes) m
+                _ -> Maybe.fromMaybe Absent old
+            return bytes
+
+      Absent ->
+        File.readUtf8 path -- fails as it would on disk
+
+
+{-| Parse a source, or give back the parse of the same file at the same time. Only
+successful parses are kept.
+-}
+sourceParseFor :: R.Stuff -> FilePath -> File.Time -> IO (Either e Src.Module) -> IO (Either e Src.Module)
+sourceParseFor stuff path time parse =
+  withSource stuff path parse $ \store source ->
+    case source of
+      Present t _ (Just modul) | t == time ->
+        do  count store $ \c -> c { _parseHits = _parseHits c + 1 }
+            return (Right modul)
+
+      _ ->
+        do  result <- parse
+            case result of
+              Right modul ->
+                update store path $ \old ->
+                  case old of
+                    Just (Present t2 bytes _) | t2 == time -> Present t2 bytes (Just modul)
+                    _ -> Maybe.fromMaybe Absent old
+
+              Left _ ->
+                return ()
+            return result
+
+
+update :: Store -> FilePath -> (Maybe Source -> Source) -> IO ()
+update store path f =
+  atomicModifyIORef' (_sources store) $ \m -> (Map.insert path (f (Map.lookup path m)) m, ())
+
+
+{-| What the file watcher reported. A changed .elm file is looked at again; anything that
+could mean many files moved at once (a directory, a path that is gone and was not a
+file) forgets everything. Returns whether anything kept was affected.
+-}
+sourcesChanged :: Store -> [FilePath] -> IO Bool
+sourcesChanged store paths =
+  or <$> forM paths (\path ->
+    if FP.takeExtension path == ".elm" && kept path then
+      refresh store path
+    else if "elm-stuff" `elem` FP.splitDirectories path || FP.takeFileName path == "elm.json" then
+      return False
+    else
+      do  isDir <- Dir.doesDirectoryExist path
+          isFile <- Dir.doesFileExist path
+          if isDir || (not isFile && null (FP.takeExtension path))
+            then resetSources store >> return True
+            else return False
+  )
+
+
+refresh :: Store -> FilePath -> IO Bool
+refresh store path =
+  do  sources <- readIORef (_sources store)
+      case Map.lookup path sources of
+        Nothing ->
+          return False -- never looked at, the next build looks at the disk anyway
+
+        Just old ->
+          do  new <- lookAtDisk store path
+              case (old, new) of
+                (Absent, Absent) ->
+                  return False
+
+                (Present oldTime oldBytes _, Present newTime _ _) | oldTime == newTime ->
+                  -- same mtime: only changed if the bytes are known to differ (or unknown)
+                  do  bytes <- File.readUtf8 path
+                      if Just bytes == oldBytes
+                        then return False
+                        else do  update store path $ \_ -> Present (bump oldTime) (Just bytes) Nothing
+                                 return True
+
+                _ ->
+                  do  update store path $ \_ -> new
+                      return True
+
+
+-- Any time other than the one the builder last saw makes it look at the file again. Only
+-- used when the file's mtime equals the old one, which is never zero.
+bump :: File.Time -> File.Time
+bump _ =
+  File.zeroTime
+
+
+{-| Look at every kept path on disk again (a stat each) and refresh the ones that
+differ. Cheap enough to run every few seconds, and on demand. Returns the paths that
+changed, for the caller to rebuild.
+-}
+reconcileSources :: Store -> IO [FilePath]
+reconcileSources store =
+  do  sources <- readIORef (_sources store)
+      changed <- forM (Map.toList sources) $ \(path, source) ->
+        do  exists <- Dir.doesFileExist path
+            differs <-
+              case (source, exists) of
+                (Absent, False)        -> return False
+                (Present t _ _, True)  -> (/= t) <$> File.getTime path
+                _                      -> return True
+            if differs then refresh store path >>= \r -> return (if r then Just path else Nothing) else return Nothing
+      return (Maybe.catMaybes changed)
