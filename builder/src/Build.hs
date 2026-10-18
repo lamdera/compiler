@@ -150,7 +150,7 @@ fromExposed writer style root stuff details docsGoal exposed@(NE.List e es) =
 
         Right foreigns ->
           do  rmvar <- newEmptyMVar
-              sched <- makeScheduler statuses -- @LAMDERA see Lamdera.Schedule
+              sched <- makeScheduler stuff statuses -- @LAMDERA see Lamdera.Schedule
               resultMVars <- Fork.forkWithKey (checkModule writer env foreigns rmvar sched) statuses
               putMVar rmvar resultMVars
               results <- traverse Fork.await resultMVars
@@ -207,7 +207,7 @@ fromPaths writer style root stuff details paths =
                 Right foreigns ->
                   do  -- compile
                       rmvar <- newEmptyMVar
-                      sched <- makeScheduler statuses -- @LAMDERA see Lamdera.Schedule
+                      sched <- makeScheduler stuff statuses -- @LAMDERA see Lamdera.Schedule
                       resultsMVars <- Fork.forkWithKey (checkModule writer env foreigns rmvar sched) statuses
                       putMVar rmvar resultsMVars
                       rrootMVars <- traverse (Fork.fork_ . checkRoot env resultsMVars) sroots
@@ -455,11 +455,11 @@ readBytesIfExists path =
 -- @LAMDERA SCHEDULING (see Lamdera.Schedule)
 
 
-makeScheduler :: Map.Map Module.Name Status -> IO (Lamdera.Schedule.Scheduler Module.Name)
-makeScheduler statuses =
+makeScheduler :: R.Stuff -> Map.Map Module.Name Status -> IO (Lamdera.Schedule.Scheduler Module.Name)
+makeScheduler stuff statuses =
   do  caps <- getNumCapabilities
       off <- System.Environment.lookupEnv "LAMDERA_NO_SCHEDULE"
-      costs <- Map.traverseWithKey (\_ status -> statusCost status) statuses
+      costs <- Map.traverseWithKey (\_ status -> statusCost stuff status) statuses
       let deps = Map.map statusDeps statuses
           slots = maybe caps (const maxBound) off
       Lamdera.Schedule.new slots (Lamdera.Schedule.priorities deps costs)
@@ -474,14 +474,14 @@ statusDeps status =
 
 
 -- Roughly how much work a module is: its source size in KB, at least 1.
-statusCost :: Status -> IO Int
-statusCost status =
+statusCost :: R.Stuff -> Status -> IO Int
+statusCost stuff status =
   case status of
     SChanged _ source _ _ ->
       return (1 + B.length source `div` 1024)
 
     SCached (Details.Local path _ _ _ _ _) ->
-      do  size <- Dir.getFileSize path
+      do  size <- MemoryCache.sourceSizeFor stuff path -- @LAMDERA was Dir.getFileSize path (a stat per cached module per build)
           return (1 + fromIntegral size `div` 1024)
 
     _ ->
@@ -999,7 +999,7 @@ fromRepl writer root stuff details source =
 
                 Right foreigns ->
                   do  rmvar <- newEmptyMVar
-                      sched <- makeScheduler statuses -- @LAMDERA see Lamdera.Schedule
+                      sched <- makeScheduler stuff statuses -- @LAMDERA see Lamdera.Schedule
                       resultMVars <- Fork.forkWithKey (checkModule writer env foreigns rmvar sched) statuses
                       putMVar rmvar resultMVars
                       results <- traverse Fork.await resultMVars

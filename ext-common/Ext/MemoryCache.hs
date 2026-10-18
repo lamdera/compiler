@@ -24,6 +24,7 @@ module Ext.MemoryCache
   , sourceTimeFor
   , sourceReadFor
   , sourceParseFor
+  , sourceSizeFor
   , sourcesChanged
   , resetSources
   , reconcileSources
@@ -97,6 +98,7 @@ data Store =
     , _dirty      :: !(IORef Dirty)
     , _counters   :: !(IORef Counters)
     , _sources    :: !(IORef (Map.Map FilePath Source)) -- see SOURCES
+    , _sizes      :: !(IORef (Map.Map FilePath (File.Time, Integer))) -- source sizes, by mtime, for Build's scheduler
     }
 
 
@@ -169,7 +171,7 @@ register stuff =
           return store
 
         Nothing ->
-          do  store <- Store dir <$> newIORef Map.empty <*> newIORef Nothing <*> newIORef Nothing <*> newIORef noDirt <*> newIORef noCounters <*> newIORef Map.empty
+          do  store <- Store dir <$> newIORef Map.empty <*> newIORef Nothing <*> newIORef Nothing <*> newIORef noDirt <*> newIORef noCounters <*> newIORef Map.empty <*> newIORef Map.empty
               atomicModifyIORef' registry $ \(Registry stores _) ->
                 (Registry (Map.insert dir store stores) Map.empty, ())
               return store
@@ -456,7 +458,8 @@ kept path =
 
 resetSources :: Store -> IO ()
 resetSources store =
-  writeIORef (_sources store) Map.empty
+  do  writeIORef (_sources store) Map.empty
+      writeIORef (_sizes store) Map.empty
 
 
 withSource :: R.Stuff -> FilePath -> IO a -> (Store -> Source -> IO a) -> IO a
@@ -501,6 +504,32 @@ sourceTimeFor stuff path =
     case source of
       Present t _ _ -> return t
       Absent        -> File.getTime path -- fails as it would on disk
+
+
+{-| The size of a source in bytes, for Build's scheduler (which looks at every cached
+module's size on every build): from the kept bytes, or from a size taken at the same mtime.
+-}
+sourceSizeFor :: R.Stuff -> FilePath -> IO Integer
+sourceSizeFor stuff path =
+  withSource stuff path (Dir.getFileSize path) $ \store source ->
+    case source of
+      Present _ (Just bytes) _ ->
+        return (fromIntegral (BS.length bytes))
+
+      Present t Nothing _ ->
+        do  sizes <- readIORef (_sizes store)
+            case Map.lookup path sizes of
+              Just (t2, size) | t2 == t ->
+                return size
+
+              _ ->
+                do  count store $ \c -> c { _sourceFs = _sourceFs c + 1 }
+                    size <- Dir.getFileSize path
+                    atomicModifyIORef' (_sizes store) $ \m -> (Map.insert path (t, size) m, ())
+                    return size
+
+      Absent ->
+        Dir.getFileSize path -- fails as it would on disk
 
 
 sourceReadFor :: R.Stuff -> FilePath -> IO BS.ByteString
