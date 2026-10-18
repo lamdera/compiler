@@ -7,6 +7,7 @@ import Control.Monad (liftM2)
 import qualified Data.Map as Map
 import qualified Data.OneOrMore as OneOrMore
 import Control.Concurrent.MVar
+import Data.IORef (newIORef, readIORef, writeIORef)
 
 import qualified Data.NonEmptyList as NE
 import qualified AST.Optimized as Opt
@@ -152,20 +153,31 @@ runTaskUnsafe task = do
 
 extractInterfaces :: [Build.Module] -> IO (Map.Map Module.Name I.Interface)
 extractInterfaces modu = do
+  -- @LAMDERA find the stuff directory once, not once per cached module (a few syscalls each)
+  stuffRef <- newIORef Nothing
+  let getStuff = do
+        known <- readIORef stuffRef
+        case known of
+          Just stuff -> pure stuff
+          Nothing -> do
+            root <- getProjectRoot "cachedHelp"
+            stuff <- R.getStuff (R.fromFilePath root)
+            writeIORef stuffRef (Just stuff)
+            pure stuff
   k <- modu
     & mapM (\m ->
       case m of
         Build.Fresh nameRaw ifaces _ ->
           pure $ Just (nameRaw, ifaces)
         Build.Cached name _ mCachedInterface ->
-          cachedHelp name mCachedInterface
+          cachedHelp getStuff name mCachedInterface
     )
   pure $ Map.fromList $ justs k
 
 
 {- Appropriated from Build.loadInterface -}
-cachedHelp :: Module.Name -> MVar Build.CachedInterface -> IO (Maybe (Module.Name, I.Interface))
-cachedHelp name ciMvar = do
+cachedHelp :: IO R.Stuff -> Module.Name -> MVar Build.CachedInterface -> IO (Maybe (Module.Name, I.Interface))
+cachedHelp getStuff name ciMvar = do
   cachedInterface <- takeMVar ciMvar
   case cachedInterface of
     Build.Corrupted ->
@@ -177,8 +189,7 @@ cachedHelp name ciMvar = do
           return (Just (name, iface))
 
     Build.Unneeded ->
-      do  root <- getProjectRoot "cachedHelp"
-          stuff <- R.getStuff (R.fromFilePath root)
+      do  stuff <- getStuff
           maybeIface <- MemoryCache.readElmiFor stuff name -- @LAMDERA was File.readBytes I.dInterface (R.elmi stuff name)
           case maybeIface of
             Nothing ->

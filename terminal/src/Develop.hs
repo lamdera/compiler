@@ -105,6 +105,7 @@ runWithRoot root (Flags maybePort shouldOpenBrowser inMemory) =
             debug_ $ "🛫  recompile triggered by: " ++ show events
             Live.memorySourcesChanged memory events -- @LAMDERA what the watcher saw, see Ext.MemoryCache SOURCES
             harness <- Live.prepareLocalDev root
+            onlyWhen inMemory $ Live.memorySourcesChanged memory =<< Live.localDevFiles root -- @LAMDERA and what prepareLocalDev may have written
             let
               typesRootChanged = events & filter (\event ->
                      stringContains "src/Types.elm" event

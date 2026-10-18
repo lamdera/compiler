@@ -173,6 +173,15 @@ prepareLocalDev root = do
   pure $ cache </> harnessPath
 
 
+{-| The files prepareLocalDev writes, for the --memory source table (the file watcher
+ignores elm-stuff).
+-}
+localDevFiles :: FilePath -> IO [FilePath]
+localDevFiles root = do
+  overrideM <- Lamdera.Relative.readDir TE.decodeUtf8 "extra/LocalDev/runtime-src"
+  pure $ fmap ((lamderaCache root </>) . fst) (fromMaybe lamderaLocalDevDir overrideM)
+
+
 replaceVersionMarker :: Text -> Text
 replaceVersionMarker lamderaLive = do
   let (m,mi,p) = Lamdera.Version.raw

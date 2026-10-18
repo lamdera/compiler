@@ -427,8 +427,10 @@ flush store writer stuff writeDetails =
 -- periodic reconcile stats every path looked at, so an edit the watcher misses (an
 -- ignored directory, a dropped event) is picked up within seconds.
 --
--- Only .elm files outside elm-stuff are kept: the live harness and the Lamdera modules
--- next to it are rewritten in elm-stuff before every build, without watcher events.
+-- Only .elm files outside elm-stuff, and in elm-stuff/lamdera (the extra source
+-- directory of the live harness, where every module is looked for and not found), are
+-- kept. The live loop reports the files it writes there (Lamdera.CLI.Live.localDevFiles)
+-- before every build, as the watcher ignores elm-stuff.
 -- LAMDERA_MEMORY_SOURCES=0 turns this off (sources come from disk, as before).
 
 
@@ -447,7 +449,9 @@ kept :: FilePath -> Bool
 kept path =
   keepSources
   && FP.takeExtension path == ".elm"
-  && not ("elm-stuff" `elem` FP.splitDirectories path)
+  && (not ("elm-stuff" `elem` dirs) || ["elm-stuff", "lamdera"] `List.isInfixOf` dirs)
+  where
+    dirs = FP.splitDirectories path
 
 
 resetSources :: Store -> IO ()
@@ -558,7 +562,7 @@ sourcesChanged store paths =
   or <$> forM paths (\path ->
     if FP.takeExtension path == ".elm" && kept path then
       refresh store path
-    else if "elm-stuff" `elem` FP.splitDirectories path || FP.takeFileName path == "elm.json" then
+    else if "elm-stuff" `elem` FP.splitDirectories path || FP.takeFileName path == "elm.json" || FP.takeExtension path == ".elm" then
       return False
     else
       do  isDir <- Dir.doesDirectoryExist path
@@ -582,13 +586,21 @@ refresh store path =
                 (Absent, Absent) ->
                   return False
 
-                (Present oldTime oldBytes _, Present newTime _ _) | oldTime == newTime ->
-                  -- same mtime: only changed if the bytes are known to differ (or unknown)
+                (Present oldTime oldBytes parsed, Present newTime _ _) | oldTime == newTime ->
+                  -- same mtime: changed only if the bytes are known and differ. Bytes never
+                  -- read are read now, to compare against next time.
                   do  bytes <- File.readUtf8 path
-                      if Just bytes == oldBytes
-                        then return False
-                        else do  update store path $ \_ -> Present (bump oldTime) (Just bytes) Nothing
-                                 return True
+                      case oldBytes of
+                        Nothing ->
+                          do  update store path $ \_ -> Present oldTime (Just bytes) parsed
+                              return False
+
+                        Just known | known == bytes ->
+                          return False
+
+                        Just _ ->
+                          do  update store path $ \_ -> Present (bump oldTime) (Just bytes) Nothing
+                              return True
 
                 _ ->
                   do  update store path $ \_ -> new
