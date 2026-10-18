@@ -34,10 +34,6 @@ asyncUpdateJsOutput cache recompile =
   asyncUpdateJsOutputWith True cache recompile
 
 
-{-| `lamdera live --memory` passes False: it keeps its artifacts in memory, so the major GC
-after each rebuild mostly copies them around, and a Ctrl-C that lands while it runs is
-lost (seen on a 920 module app, with ~1GB to copy).
--}
 {-| Like asyncUpdateJsOutput, but the output is taken in the calling thread, so whoever
 reads it next waits for this rebuild. No forced GC (used with --memory).
 -}
@@ -49,6 +45,10 @@ updateJsOutputNow (Cache mJsOutput) recompile = do
     putMVar mJsOutput bs
 
 
+{-| `lamdera live --memory` passes False: it keeps its artifacts in memory, so the major GC
+after each rebuild mostly copies them around, and a Ctrl-C that lands while it runs is
+lost (seen on a 920 module app, with ~1GB to copy).
+-}
 asyncUpdateJsOutputWith :: Bool -> Cache -> IO BS.ByteString -> IO ()
 asyncUpdateJsOutputWith majorGC (Cache mJsOutput) recompile = do
   trackedForkIO "Ext.Sentry.asyncUpdateJsOutput" $ do

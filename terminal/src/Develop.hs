@@ -16,6 +16,7 @@ import qualified Control.Exception.Lifted
 import qualified Data.ByteString.Builder as B
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BSL
+import qualified Data.ByteString.Char8 as BS8 -- @LAMDERA
 import qualified Data.HashMap.Strict as HashMap
 import Data.Monoid ((<>))
 import qualified Data.NonEmptyList as NE
@@ -118,7 +119,11 @@ runWithRoot root (Flags maybePort shouldOpenBrowser inMemory) =
         recompile :: [String] -> IO ()
         recompile events = do
           -- Fork a recompile+cache update
-          Sentry.asyncUpdateJsOutputWith (not inMemory) sentryCache (rebuild events) -- @LAMDERA no forced major GC with --memory, see Ext.Sentry
+          -- @LAMDERA with --memory: no forced major GC (see Ext.Sentry), and the output is
+          -- taken before the clients are told, so a hot patch asked for next waits for it
+          if inMemory
+            then Sentry.updateJsOutputNow sentryCache (rebuild events)
+            else Sentry.asyncUpdateJsOutputWith True sentryCache (rebuild events)
           -- Simultaneously tell all clients to refresh. All those HTTP
           -- requests will open but block on the cache mVar, and then release
           -- immediately when compilation is finished, effectively "pushing"
@@ -168,6 +173,7 @@ runWithRoot root (Flags maybePort shouldOpenBrowser inMemory) =
         <|> serveDirectoryWith directoryConfig "."
         <|> Live.serveWebsocket root liveState
         <|> route [ ("_r/:endpoint", Live.serveRpc liveState port) ]
+        <|> route [ ("_patch", servePatch sentryCache memory) ] -- @LAMDERA --memory hot patches, see Lamdera.HotPatch
         <|> route [ ("_c", Lamdera.Repl.serve root Live.jsonResponse Live.error404) ]
         <|> Live.openEditorHandler root
         <|> Live.serveExperimental root
@@ -274,6 +280,20 @@ serveCode path =
 
 
 
+-- @LAMDERA /_patch?from=<build>, see Lamdera.HotPatch. Waits for a rebuild in progress.
+servePatch :: Sentry.Cache -> Maybe MemoryCache.Store -> Snap ()
+servePatch sentryCache memory =
+  do  from <- getQueryParam "from"
+      _ <- liftIO $ Sentry.getJsOutput sentryCache
+      patch <-
+        case fmap (reads . BS8.unpack) from of
+          Just [(version, "")] -> liftIO $ Live.hotPatch memory version
+          _ -> pure "full no build given"
+      modifyResponse (setContentType "text/javascript" . setHeader "Cache-Control" "no-store")
+      writeBS patch
+
+
+
 -- SERVE ELM
 
 serveElm :: Sentry.Cache -> FilePath -> Snap ()
@@ -374,7 +394,9 @@ compile path =
 
                 javascript <- Live.phase "objects" $ Task.mapError Exit.ReactorBadGenerate $ Generate.dev stuff details artifacts
                 let (NE.List name _) = Build.getRootNames artifacts
-                return $ Html.sandwich (R.toFilePath root) name javascript
+                -- @LAMDERA with --memory the page knows which build it runs, for hot patches
+                version <- Task.io $ maybe (pure mempty) Live.jsVersionMarker memory
+                return $ Html.sandwich (R.toFilePath root) name (javascript <> version)
 
 
 

@@ -90,6 +90,7 @@ dev stuff details (Build.Artifacts pkg _ roots modules) =
               -- walk the graph now, so the kept cache does not hold on to the whole traversal state
               _ <- evaluate cache
               MemoryCache.setJsCache store (toDyn cache)
+              _ <- MemoryCache.recordJsBuild store (toDyn (JS.jsCacheListing cache)) -- for Lamdera.HotPatch
               return js
 
         _ ->

@@ -11,6 +11,7 @@ import qualified System.Directory as Dir
 import System.FilePath as FP
 import Control.Exception (finally, throw)
 import Language.Haskell.TH (runIO)
+import Language.Haskell.TH.Syntax (addDependentFile)
 import Data.FileEmbed (bsToExp)
 import qualified System.Directory as Dir
 
@@ -66,4 +67,7 @@ lamderaLiveHead root = do
 
 lamderaLive :: BS.ByteString
 lamderaLive =
-  $(bsToExp =<< runIO (Lamdera.Relative.readByteString "extra/dist/live.js"))
+  -- addDependentFile: without it GHC doesn't rebuild this module when only the JS
+  -- changes, and silently keeps embedding the old live.js.
+  $(do  addDependentFile "extra/dist/live.js"
+        bsToExp =<< runIO (Lamdera.Relative.readByteString "extra/dist/live.js"))

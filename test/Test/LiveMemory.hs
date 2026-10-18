@@ -38,6 +38,7 @@ import qualified Elm.Details as Details
 import qualified Ext.Common
 import qualified Ext.MemoryCache as MemoryCache
 import qualified Generate
+import qualified Generate.JavaScript as JS
 import qualified Lamdera.CLI.Live
 import qualified Lamdera.PostCompile
 import qualified Lamdera.TypeHash
@@ -87,8 +88,9 @@ suite =
             (Right (memJs, memFresh), Right (diskJs, diskFresh)) -> do
               expectEqual (Set.fromList expected) memFresh
               expectEqual diskFresh memFresh
-              -- not expectEqual: a failure would print the whole JS
-              expect (memJs == diskJs)
+              -- not expectEqual: a failure would print the whole JS. In memory the JS also
+              -- has the hot patch hook, and nothing else
+              expect (BS.isInfixOf hook memJs && withoutHook memJs == diskJs)
               pure memJs
 
             (Left memErr, Left diskErr) ->
@@ -273,6 +275,17 @@ typeHashes dir = do
     case result of
       Right hashes -> hashes
       Left exit -> Left (Exit.toString (Exit.reactorToReport exit))
+
+
+hook :: BS.ByteString
+hook =
+  BSL.toStrict (B.toLazyByteString JS.patchHook)
+
+
+withoutHook :: BS.ByteString -> BS.ByteString
+withoutHook js =
+  let (before, after) = BS.breakSubstring hook js in
+  if BS.null after then js else before <> BS.drop (BS.length hook) after
 
 
 isLeft :: Either a b -> Bool

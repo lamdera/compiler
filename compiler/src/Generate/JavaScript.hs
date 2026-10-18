@@ -5,6 +5,7 @@ module Generate.JavaScript
   , generateForRepl
   , generateForReplEndpoint
   , JsCache, emptyJsCache, generateCached -- @LAMDERA lamdera live --memory
+  , Listing(..), Emitted(..), EmitKind(..), jsCacheListing, patchHook -- @LAMDERA lamdera live --memory hot patches, see Lamdera.HotPatch
   )
   where
 
@@ -60,12 +61,13 @@ generate mode globalGraph mains =
 -- @LAMDERA the original `generate`, from a given starting state
 generateFrom :: State -> Mode.Mode -> Opt.GlobalGraph -> Mains -> (B.Builder, State)
 generateFrom startState mode (Opt.GlobalGraph graph_ _) mains =
-  generateFromGraph startState mode (Lamdera.Injection.graphModifications mode mains graph_) mains
+  generateFromGraph startState mempty mode (Lamdera.Injection.graphModifications mode mains graph_) mains
 
 
--- @LAMDERA generateFrom, given the graph after Lamdera.Injection.graphModifications
-generateFromGraph :: State -> Mode.Mode -> Graph -> Mains -> (B.Builder, State)
-generateFromGraph startState mode graph mains =
+-- @LAMDERA generateFrom, given the graph after Lamdera.Injection.graphModifications, and
+-- with `inside` added at the end of the scope the definitions are in
+generateFromGraph :: State -> B.Builder -> Mode.Mode -> Graph -> Mains -> (B.Builder, State)
+generateFromGraph startState inside mode graph mains =
   let
     state = Map.foldrWithKey (addMain mode graph) startState mains
   in
@@ -77,6 +79,7 @@ generateFromGraph startState mode graph mains =
   <> stateToBuilder state
   <> toMainExports mode mains
   <> Lamdera.Injection.source mode mains
+  <> inside
   <> "}(this));"
   <> "\n" <> Lamdera.Injection.elmPkgJs mode mains <> "\n"
 
@@ -227,67 +230,68 @@ addGlobalHelp mode graph global state =
     -- (addStmtFor is addStmt that can reuse the statement from the last build, see JS CACHE)
     node@(Opt.Define (Opt.Function args body) deps)
       | length args > 1 ->
-          addStmtFor argLookup global node deps
+          addStmtFor EFunction argLookup global node deps
             (addDeps deps state)
             (fn global args (Expr.generateFunctionImplementation mode argLookup args body))
 
     node@(Opt.Define expr deps) ->
-      addStmtFor argLookup global node deps (addDeps deps state) (
+      addStmtFor (case expr of { Opt.Function _ _ -> EFunction; _ -> EValue }) argLookup global node deps (addDeps deps state) (
         var global (Expr.generate mode argLookup expr)
       )
 
     node@(Opt.DefineTailFunc argNames body deps) ->
-      addStmtFor argLookup global node deps (addDeps deps state) (
+      addStmtFor EFunction argLookup global node deps (addDeps deps state) (
         let (Opt.Global _ name) = global in
         var global (Expr.generateTailDef mode argLookup name argNames body)
       )
 
     -- @LAMDERA
-    Opt.Ctor index arity
+    node@(Opt.Ctor index arity)
       | arity > 1 ->
-          addStmt
+          addStmtFor EConstant argLookup global node Set.empty
             state
             (ctor global arity (Expr.generateCtorImplementation mode global index arity))
 
-    Opt.Ctor index arity ->
-      addStmt state (
+    node@(Opt.Ctor index arity) ->
+      addStmtFor EConstant argLookup global node Set.empty state (
         var global (Expr.generateCtor mode global index arity)
       )
 
     Opt.Link linkedGlobal ->
+      addLink global linkedGlobal $ -- @LAMDERA see JS CACHE
       addGlobal mode graph state linkedGlobal
 
     node@(Opt.Cycle names values functions deps) ->
-      addStmtFor argLookup global node deps (addDeps deps state) (
+      addStmtFor (if null values then EFunction else ECycleValues) argLookup global node deps (addDeps deps state) (
         generateCycle mode argLookup global names values functions
       )
 
     Opt.Manager effectsType ->
       generateManager mode graph global effectsType state
 
-    Opt.Kernel chunks deps ->
+    node@(Opt.Kernel chunks deps) ->
       if isDebugger global && not (Mode.isDebug mode) then
         state
       else
-        addKernel (addDeps deps state) (generateKernel mode chunks)
+        addKernelFor global node (addDeps deps state) (generateKernel mode chunks) -- @LAMDERA was addKernel, see JS CACHE
 
-    Opt.Enum index ->
-      addStmt state (
+    node@(Opt.Enum index) ->
+      addStmtFor EConstant argLookup global node Set.empty state (
         generateEnum mode global index
       )
 
-    Opt.Box ->
-      addStmt (addGlobal mode graph state identity) (
+    node@Opt.Box ->
+      addStmtFor EConstant argLookup global node (Set.singleton identity) (addGlobal mode graph state identity) (
         generateBox mode global
       )
 
-    Opt.PortIncoming decoder deps ->
-      addStmt (addDeps deps state) (
+    node@(Opt.PortIncoming decoder deps) ->
+      addStmtFor EPort argLookup global node deps (addDeps deps state) (
         generatePort mode global [N.ascii|incomingPort|] decoder
       )
 
-    Opt.PortOutgoing encoder deps ->
-      addStmt (addDeps deps state) (
+    node@(Opt.PortOutgoing encoder deps) ->
+      addStmtFor EPort argLookup global node deps (addDeps deps state) (
         generatePort mode global [N.ascii|outgoingPort|] encoder
       )
 
@@ -503,7 +507,7 @@ generatePort mode (Opt.Global home name) makePort converter =
 
 
 generateManager :: Mode.Mode -> Graph -> Opt.Global -> Opt.EffectsType -> State -> State
-generateManager mode graph (Opt.Global home@(ModuleName.Canonical _ moduleName) _) effectsType state =
+generateManager mode graph global@(Opt.Global home@(ModuleName.Canonical _ moduleName) _) effectsType state =
   let
     managerLVar =
       JS.LBracket
@@ -517,7 +521,7 @@ generateManager mode graph (Opt.Global home@(ModuleName.Canonical _ moduleName) 
       JS.ExprStmt $ JS.Assign managerLVar $
         JS.Call (JS.Ref (JsName.fromKernel Module.kernel_platform [N.ascii|createManager|])) args
   in
-  addStmt (List.foldl' (addGlobal mode graph) state deps) $
+  addRecorded EManager global (Set.fromList deps) (List.foldl' (addGlobal mode graph) state deps) $ -- @LAMDERA was addStmt, see JS CACHE
     JS.Block (createManager : stmts)
 
 
@@ -747,21 +751,31 @@ toMainEsmExports mode mains =
 -- its deps are unchanged. The traversal still runs in full, so the output order is the
 -- same; only the rendering of unchanged definitions is skipped.
 --
--- Only Define, DefineTailFunc and Cycle statements are cached: they are where nearly all
--- the work is. Kernel nodes (which include the Wire3 codecs replaceCodecs renders each
--- build) are cheap to emit and are never cached. Use it with one Mode only (Generate.dev
--- uses it for Mode.Dev Nothing).
+-- Every statement and kernel chunk goes through the cache (Define, DefineTailFunc and
+-- Cycle statements are where nearly all the work is; the Wire3 codecs are kernel nodes
+-- that Lamdera.Wire3.Direct.replaceCodecsCached keeps the same between builds). Use it
+-- with one Mode only (Generate.dev uses it for Mode.Dev Nothing).
+--
+-- Each cached build also lists what it emitted, in output order (a Listing), so that
+-- Lamdera.HotPatch can work out what a running page needs to catch up with the next
+-- build, and the output gets `patchHook`, the page's way into the scope of the
+-- definitions.
 
 
--- (strict fields, so evaluating a JsCache to WHNF builds the whole Map, and the kept
--- Wire3 codecs, see Lamdera.Wire3.Direct.replaceCodecsCached)
+-- (strict fields, so evaluating a JsCache to WHNF builds the whole Map, the kept Wire3
+-- codecs and the listing)
 data JsCache =
-  JsCache !(Map.Map Opt.Global CachedStmt) !Lamdera.Wire3.Direct.CodecCache
+  JsCache !(Map.Map Opt.Global CachedStmt) !Lamdera.Wire3.Direct.CodecCache !Listing
 
 
 emptyJsCache :: JsCache
 emptyJsCache =
-  JsCache Map.empty Lamdera.Wire3.Direct.emptyCodecCache
+  JsCache Map.empty Lamdera.Wire3.Direct.emptyCodecCache emptyListing
+
+
+jsCacheListing :: JsCache -> Listing
+jsCacheListing (JsCache _ _ listing) =
+  listing
 
 
 data CachedStmt =
@@ -770,32 +784,89 @@ data CachedStmt =
 
 data Caching
   = NoCaching
-  | Caching !(Map.Map Opt.Global CachedStmt) !(Map.Map Opt.Global CachedStmt) -- last build, this build
+  | Caching !(Map.Map Opt.Global CachedStmt) !(Map.Map Opt.Global CachedStmt) [Emitted] [Emitted] -- last build, this build, and this build's statements and kernels (last first)
+
+
+-- What one build emitted, for Lamdera.HotPatch.
+data Listing =
+  Listing
+    { _lsStatements :: ![Emitted] -- in output order, links included (with no bytes)
+    , _lsKernels :: ![Emitted] -- in output order (all of them come before the statements)
+    , _lsExports :: !BS.ByteString -- toMainExports
+    , _lsFixed :: !BS.ByteString -- the rest of what is not a definition (injections)
+    }
+
+
+emptyListing :: Listing
+emptyListing =
+  Listing [] [] BS.empty BS.empty
+
+
+data Emitted =
+  Emitted
+    { _emGlobal :: !Opt.Global
+    , _emKind :: !EmitKind
+    , _emBytes :: !BS.ByteString
+    , _emDeps :: !(Set.Set Opt.Global)
+    }
+
+
+data EmitKind
+  = EFunction -- functions, tail functions and cycles of functions: refer to others when called
+  | EValue -- worked out once, when the page loads
+  | EConstant -- constructors, enums and boxes
+  | ECycleValues
+  | EPort
+  | EManager
+  | EKernel
+  | ELink -- no output: a name for its target (a cycle)
+  deriving (Eq, Show)
+
+
+-- The page's way into the scope of the definitions: runs a patch's statements there.
+patchHook :: B.Builder
+patchHook =
+  "\nscope['__lamdera_patch'] = function(__lamdera_code) { eval(__lamdera_code); };\n"
 
 
 {-| `generate`, reusing the statements of the last build where they are still valid, and
 returning the cache for the next one.
 -}
 generateCached :: JsCache -> Mode.Mode -> Opt.GlobalGraph -> Mains -> (B.Builder, JsCache)
-generateCached (JsCache old codecs) mode (Opt.GlobalGraph graph_ _) mains =
+generateCached (JsCache old codecs _) mode (Opt.GlobalGraph graph_ _) mains =
   let
     (graph, codecs_) = Lamdera.Injection.graphModificationsCached codecs mode mains graph_
-    (builder, state) = generateFromGraph (emptyState { _caching = Caching old Map.empty }) mode graph mains
+    (builder, state) = generateFromGraph (emptyState { _caching = Caching old Map.empty [] [] }) patchHook mode graph mains
+    exports = strictBytes (toMainExports mode mains)
+    fixed = strictBytes (Lamdera.Injection.source mode mains <> Lamdera.Injection.elmPkgJs mode mains)
   in
   ( builder
   , case _caching state of
-      Caching _ new -> JsCache new codecs_
-      NoCaching     -> JsCache Map.empty codecs_
+      Caching _ new stmts kernels -> JsCache new codecs_ (mkListing (reverse stmts) (reverse kernels) exports fixed)
+      NoCaching                   -> JsCache Map.empty codecs_ emptyListing
   )
 
 
-addStmtFor :: FnArgLookup -> Opt.Global -> Opt.Node -> Set.Set Opt.Global -> State -> JS.Stmt -> State
-addStmtFor argLookup global node deps state stmt =
+mkListing :: [Emitted] -> [Emitted] -> BS.ByteString -> BS.ByteString -> Listing
+mkListing stmts kernels exports fixed =
+  let
+    forceAll = List.foldl' (\() e -> e `seq` ()) ()
+  in
+  forceAll stmts `seq` forceAll kernels `seq` Listing stmts kernels exports fixed
+
+
+strictBytes :: B.Builder -> BS.ByteString
+strictBytes =
+  BSL.toStrict . B.toLazyByteString
+
+
+addStmtFor :: EmitKind -> FnArgLookup -> Opt.Global -> Opt.Node -> Set.Set Opt.Global -> State -> JS.Stmt -> State
+addStmtFor kind argLookup global node deps state stmt =
   case _caching state of
     NoCaching ->
       addStmt state stmt
 
-    Caching old new ->
+    Caching old new stmts kernels ->
       let
         arities = map (\(Opt.Global home name) -> argLookup home name) (Set.toList deps)
 
@@ -806,8 +877,52 @@ addStmtFor argLookup global node deps state stmt =
                   cached
 
             _ ->
-              CachedStmt node arities (BSL.toStrict (B.toLazyByteString (JS.stmtToBuilder stmt)))
+              CachedStmt node arities (strictBytes (JS.stmtToBuilder stmt))
 
         CachedStmt _ _ bytes = entry
       in
-      addBuilder (state { _caching = Caching old (Map.insert global entry new) }) (B.byteString bytes)
+      addBuilder (state { _caching = Caching old (Map.insert global entry new) (Emitted global kind bytes deps : stmts) kernels }) (B.byteString bytes)
+
+
+-- addKernel, through the cache
+addKernelFor :: Opt.Global -> Opt.Node -> State -> B.Builder -> State
+addKernelFor global node state kernel =
+  case _caching state of
+    NoCaching ->
+      addKernel state kernel
+
+    Caching old new stmts kernels ->
+      let
+        entry =
+          case Map.lookup global old of
+            Just cached@(CachedStmt oldNode _ _) | isTrue# (reallyUnsafePtrEquality# oldNode node) ->
+              cached
+
+            _ ->
+              CachedStmt node [] (strictBytes kernel)
+
+        CachedStmt _ _ bytes = entry
+      in
+      addKernel (state { _caching = Caching old (Map.insert global entry new) stmts (Emitted global EKernel bytes Set.empty : kernels) }) (B.byteString bytes)
+
+
+-- addStmt, listed (not cached)
+addRecorded :: EmitKind -> Opt.Global -> Set.Set Opt.Global -> State -> JS.Stmt -> State
+addRecorded kind global deps state stmt =
+  case _caching state of
+    NoCaching ->
+      addStmt state stmt
+
+    Caching old new stmts kernels ->
+      let bytes = strictBytes (JS.stmtToBuilder stmt) in
+      addBuilder (state { _caching = Caching old new (Emitted global kind bytes deps : stmts) kernels }) (B.byteString bytes)
+
+
+addLink :: Opt.Global -> Opt.Global -> State -> State
+addLink global target state =
+  case _caching state of
+    NoCaching ->
+      state
+
+    Caching old new stmts kernels ->
+      state { _caching = Caching old new (Emitted global ELink BS.empty (Set.singleton target) : stmts) kernels }

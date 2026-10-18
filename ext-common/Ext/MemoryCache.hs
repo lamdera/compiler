@@ -10,6 +10,9 @@ module Ext.MemoryCache
   , setDetails
   , getJsCache
   , setJsCache
+  , recordJsBuild
+  , jsVersion
+  , jsBuildsSince
   --
   , readElmi
   , readElmiFor
@@ -99,6 +102,7 @@ data Store =
     , _counters   :: !(IORef Counters)
     , _sources    :: !(IORef (Map.Map FilePath Source)) -- see SOURCES
     , _sizes      :: !(IORef (Map.Map FilePath (File.Time, Integer))) -- source sizes, by mtime, for Build's scheduler
+    , _jsBuilds   :: !(IORef (Int, [(Int, Dynamic)])) -- see JS BUILDS
     }
 
 
@@ -171,7 +175,7 @@ register stuff =
           return store
 
         Nothing ->
-          do  store <- Store dir <$> newIORef Map.empty <*> newIORef Nothing <*> newIORef Nothing <*> newIORef noDirt <*> newIORef noCounters <*> newIORef Map.empty <*> newIORef Map.empty
+          do  store <- Store dir <$> newIORef Map.empty <*> newIORef Nothing <*> newIORef Nothing <*> newIORef noDirt <*> newIORef noCounters <*> newIORef Map.empty <*> newIORef Map.empty <*> newIORef (0, [])
               atomicModifyIORef' registry $ \(Registry stores _) ->
                 (Registry (Map.insert dir store stores) Map.empty, ())
               return store
@@ -384,6 +388,46 @@ keepSame maybeStore old fresh =
 markDirty :: Store -> (Dirty -> Dirty) -> IO ()
 markDirty store f =
   atomicModifyIORef' (_dirty store) $ \d -> (f d, ())
+
+
+
+-- JS BUILDS
+--
+-- Each build's Generate.JavaScript.Listing (as a Dynamic), numbered, the last few kept:
+-- the page says which build it runs, and Lamdera.HotPatch works out what it needs from
+-- the listings since.
+
+
+keptJsBuilds :: Int
+keptJsBuilds =
+  10
+
+
+{-| Keep the listing of a new build, returning its number. -}
+recordJsBuild :: Store -> Dynamic -> IO Int
+recordJsBuild store listing =
+  atomicModifyIORef' (_jsBuilds store) $ \(latest, kept) ->
+    let next = latest + 1 in
+    ((next, take keptJsBuilds ((next, listing) : kept)), next)
+
+
+{-| The number of the latest build (0 before the first). -}
+jsVersion :: Store -> IO Int
+jsVersion store =
+  fst <$> readIORef (_jsBuilds store)
+
+
+{-| The listings of build `from` and of every build after it, oldest first, when `from`
+is still kept, with the number of the latest.
+-}
+jsBuildsSince :: Store -> Int -> IO (Maybe (Int, [Dynamic]))
+jsBuildsSince store from =
+  do  (latest, kept) <- readIORef (_jsBuilds store)
+      let since = takeWhile ((>= from) . fst) kept
+      return $
+        if any ((== from) . fst) since
+          then Just (latest, map snd (reverse since))
+          else Nothing
 
 
 

@@ -357,6 +357,7 @@ Executable lamdera
         Lamdera.Hints
         Lamdera.Init
         Lamdera.Injection
+        Lamdera.HotPatch
         Lamdera.Lexical
         Lamdera.Live
         Lamdera.Make
@@ -425,6 +426,7 @@ Executable lamdera
         Test.ElmiTypeTable
         Test.CompilePerf
         Test.LiveMemory
+        Test.HotPatch
         Test.Caching
         Test.EasyTestSpinner
         Test.Ext.Filewatch

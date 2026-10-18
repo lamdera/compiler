@@ -510,6 +510,44 @@ var Base64Binary = {
 let errorDialog = null
 
 function hotReload() {
+  return hotPatch().then(patched => patched ? null : fullHotReload())
+}
+
+// @LAMDERA `lamdera live --memory`: ask for just what changed since the build this page
+// runs (see extra/Lamdera/HotPatch.hs) and run it in the page's scope. Resolves to false
+// when the whole page has to be hot reloaded instead.
+function hotPatch() {
+  const version = window.__lamderaJsVersion
+  if (typeof window.__lamdera_patch !== "function" || typeof version !== "number") {
+    return Promise.resolve(false)
+  }
+  return fetch("/_patch?from=" + version)
+    .then(response => response.ok ? response.text() : "full " + response.status)
+    .then(text => {
+      if (!text.startsWith("patch ")) {
+        console.info("[lamdera] hot reloading the whole page: " + text.slice(5))
+        return false
+      }
+      const newline = text.indexOf("\n")
+      const latest = parseInt(text.slice(6, newline), 10)
+      const code = text.slice(newline + 1)
+      if (code.length > 0) {
+        window.__lamdera_patch(code)
+      }
+      window.__lamderaJsVersion = latest
+      if (errorDialog) {
+        errorDialog.remove()
+        errorDialog = null
+      }
+      return true
+    })
+    .catch(error => {
+      console.error(error)
+      return false
+    })
+}
+
+function fullHotReload() {
   return fetch("/")
     .then(response => response.text())
     .then(html => {
@@ -539,6 +577,11 @@ function hotReload() {
         const newScope = {}
         f.call(newScope)
         Elm.hot.reload(newScope)
+        // @LAMDERA the app now runs the new scope's definitions: patch those from now on
+        if (typeof newScope.__lamdera_patch === "function") {
+          window.__lamdera_patch = newScope.__lamdera_patch
+          window.__lamderaJsVersion = newScope.__lamderaJsVersion
+        }
       }
     })
     .catch(error => {

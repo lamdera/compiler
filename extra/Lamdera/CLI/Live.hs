@@ -70,6 +70,8 @@ import qualified System.Mem
 import qualified Build
 import qualified Elm.Details as Details
 import qualified Ext.MemoryCache as MemoryCache
+import qualified Generate.JavaScript as JS
+import qualified Lamdera.HotPatch as HotPatch
 import qualified File
 import qualified Reporting.Task as Task
 import qualified Root as R
@@ -935,6 +937,71 @@ reconcileSources maybeStore onChanged =
     Just store -> do
       changed <- MemoryCache.reconcileSources store
       onlyWhen (not (null changed)) $ onChanged changed
+
+
+
+-- HOT PATCHES (see Lamdera.HotPatch)
+
+
+{-| With --memory, tells the page which build it runs (this goes after the Elm JS, so a
+full hot reload of a new page sets it on the scope it evaluates that page into).
+-}
+jsVersionMarker :: MemoryCache.Store -> IO B.Builder
+jsVersionMarker store = do
+  version <- MemoryCache.jsVersion store
+  pure $ "\n;this.__lamderaJsVersion = " <> B.intDec version <> ";\n"
+
+
+{-| What a page running build `from` gets from /_patch: "patch <latest>\n" and the JS to
+run, or "full <why not>".
+-}
+hotPatch :: Maybe MemoryCache.Store -> Int -> IO BS.ByteString
+hotPatch maybeStore from = do
+  start <- GHC.Clock.getMonotonicTimeNSec
+  result <-
+    case maybeStore of
+      Nothing ->
+        pure $ Left "not built in memory"
+
+      Just store -> do
+        since <- MemoryCache.jsBuildsSince store from
+        pure $
+          case since of
+            Nothing ->
+              Left "that build is no longer kept"
+
+            Just (latest, dyns) ->
+              case traverse fromDynamic dyns of
+                Just listings@(_ : newer@(_ : _)) ->
+                  let steps = zipWith HotPatch.diff listings newer in
+                  case [ reason | HotPatch.Full reason <- steps ] of
+                    reason : _ ->
+                      Left reason
+
+                    [] ->
+                      let statements = concat [ patch | HotPatch.Patch patch <- steps ] in
+                      Right (latest, statements, HotPatch.render statements (JS._lsExports (last listings)))
+
+                _ ->
+                  Left "no newer build"
+  case result of
+    Left reason -> do
+      timingLog $ "🔥 hot patch from build " <> show from <> ": full reload, " <> reason
+      pure $ "full " <> Data.ByteString.Char8.pack reason
+
+    Right (latest, statements, js) -> do
+      let bytes = BSL.toStrict $ B.toLazyByteString $ "patch " <> B.intDec latest <> "\n" <> js
+      end <- GHC.Clock.getMonotonicTimeNSec
+      timingLog $ "🔥 hot patch from build " <> show from <> " to " <> show latest <> ": "
+        <> show (length statements) <> " statements, " <> show (BS.length bytes) <> " bytes, in "
+        <> show ((end - start) `div` 1000000) <> "ms"
+      pure bytes
+
+
+timingLog :: String -> IO ()
+timingLog message = do
+  enabled <- isTimingEnabled
+  onlyWhen enabled $ atomicPutStrLn message
 
 
 
