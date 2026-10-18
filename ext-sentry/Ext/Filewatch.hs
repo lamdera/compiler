@@ -111,7 +111,9 @@ watch root action = do
       )
 
     -- sleep forever (until interrupted)
-    forever $ threadDelay 1000000
+    -- (an hour at a time: waking every second, as this did, made an idle `lamdera live` run
+    -- the RTS idle GC, a major collection of the whole heap, about once a second)
+    forever $ threadDelay (3600 * 1000000)
 
 
 watchFile :: FilePath -> ([FilePath] -> IO ()) -> IO ()
