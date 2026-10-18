@@ -424,6 +424,7 @@ Executable lamdera
         Test.BinaryCounts
         Test.ElmiTypeTable
         Test.CompilePerf
+        Test.LiveMemory
         Test.Caching
         Test.EasyTestSpinner
         Test.Ext.Filewatch

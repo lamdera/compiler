@@ -17,6 +17,7 @@ import qualified Test.Caching
 import qualified Test.BinaryCounts
 import qualified Test.ElmiTypeTable
 import qualified Test.CompilePerf
+import qualified Test.LiveMemory
 import qualified Test.Check
 import qualified Test.Wire
 import qualified Test.WireGolden
@@ -177,5 +178,6 @@ allTests =
     , scope "Test.BinaryCounts -> " $ Test.BinaryCounts.suite
     , scope "Test.ElmiTypeTable -> " $ Test.ElmiTypeTable.suite
     , scope "Test.CompilePerf -> " $ Test.CompilePerf.suite
+    , scope "Test.LiveMemory -> " $ Test.LiveMemory.suite
     , scope "Test.EasyTestSpinner -> " $ Test.EasyTestSpinner.suite
     ]
