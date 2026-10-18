@@ -982,6 +982,6 @@ heapSummary = do
       System.Mem.performMajorGC
       stats <- GHC.Stats.getRTSStats
       let mb n = show (n `div` (1024 * 1024)) <> "MB"
-      pure $ " heap after GC: " <> mb (GHC.Stats.gcdetails_live_bytes (GHC.Stats.gc stats))
+      pure $ " " <> mb (GHC.Stats.gcdetails_live_bytes (GHC.Stats.gc stats))
         <> " live, " <> mb (GHC.Stats.gcdetails_mem_in_use_bytes (GHC.Stats.gc stats)) <> " in use, peak "
         <> mb (GHC.Stats.max_mem_in_use_bytes stats) <> " in use."
