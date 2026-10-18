@@ -197,6 +197,15 @@ load writer style root stuff =
 generate :: File.Writer R.PROJECT -> Reporting.Style -> R.Root -> R.Stuff -> File.Time -> IO (Either Exit.Details Details)
 generate writer style root stuff time =
   Reporting.trackDetails style $ \key ->
+    do  -- @LAMDERA an app first tries the cached registry (see generateFromCachedRegistry)
+        cachedResult <- generateFromCachedRegistry writer key root stuff time
+        case cachedResult of
+          Just details -> return details
+          Nothing -> generateOnline writer key root stuff time
+
+
+generateOnline :: File.Writer R.PROJECT -> Reporting.DKey -> R.Root -> R.Stuff -> File.Time -> IO (Either Exit.Details Details)
+generateOnline writer key root stuff time =
     do  result <- initEnv key root stuff
         case result of
           Left exit ->
@@ -206,6 +215,38 @@ generate writer style root stuff time =
             case outline of
               Outline.Pkg pkg -> Task.run (verifyPkg writer env time pkg)
               Outline.App app -> Task.run (verifyApp writer env time app)
+
+
+{-| @LAMDERA Building details asks the package server for registry updates first
+(Solver.initEnv), a network round trip on every build without elm-stuff that took
+longer than compiling a whole small app. An application's elm.json pins exact
+versions, so the solver only has to find those versions: if the registry as last
+fetched has them, the solution is the one a fresh registry gives. So an app tries
+the cached registry first, and only when that finds no solution (a pinned version
+newer than the cached registry) does it go through the usual path, which updates the
+registry and solves again. Packages (version ranges, where a fresh registry can give
+a newer solution) always take the usual path, as do Install, Init and friends.
+Downloading missing packages and their elm.json works as before either way.
+-}
+generateFromCachedRegistry :: File.Writer R.PROJECT -> Reporting.DKey -> R.Root -> R.Stuff -> File.Time -> IO (Maybe (Either Exit.Details Details))
+generateFromCachedRegistry writer key root stuff time =
+  do  eitherOutline <- Outline.read root False
+      case eitherOutline of
+        Right (Outline.App app) ->
+          do  maybeEnv <- Solver.initEnvCached
+              case maybeEnv of
+                Nothing ->
+                  return Nothing
+
+                Just (Solver.Env cache manager connection registry) ->
+                  do  let env = Env key stuff cache manager connection registry
+                      result <- Task.run (verifyApp writer env time app)
+                      case result of
+                        Left (Exit.DetailsNoSolution _) -> return Nothing
+                        _ -> return (Just result)
+
+        _ ->
+          return Nothing
 
 
 

@@ -12,6 +12,7 @@ module Deps.Solver
   --
   , Env(..)
   , initEnv
+  , initEnvCached -- @LAMDERA
   )
   where
 
@@ -358,6 +359,20 @@ constraintsDecoder =
 
 data Env =
   Env R.PackageCache Http.Manager Connection Registry.Registry
+
+
+-- @LAMDERA The package registry as last fetched, without asking the server for updates
+-- (initEnv always does: a round trip on every build without elm-stuff). Nothing when
+-- there is no cached registry yet. Elm.Details uses it for an app's first attempt: an
+-- app's elm.json pins exact versions, so if they are all in the cached registry the
+-- solution is the same as with a fresh one, and if not it tries again with initEnv.
+initEnvCached :: IO (Maybe Env)
+initEnvCached =
+  do  mvar  <- Fork.fork_ Http.getManager
+      cache <- R.getPackageCache
+      maybeRegistry <- R.withRegistryLock cache $ \_ -> Registry.read cache
+      manager <- Fork.await mvar
+      return $ fmap (Env cache manager (Online manager)) maybeRegistry
 
 
 initEnv :: IO (Either Exit.RegistryProblem Env)
