@@ -148,6 +148,242 @@ data IR = IR (Maybe Codec) (Maybe Codec)
   deriving (Show, Read, Eq)
 
 
+-- READING STORED IR
+--
+-- The IR is stored in the .elmo as its derived `show`, and every one in the graph is
+-- read back at JS generation time. The derived Read instance made that most of the JS
+-- generation of a large app: 21GB of allocation and over 2s for a 920 module app, to
+-- read ~6MB of IR. `readStored` reads exactly what `show` writes (constructor
+-- applications with parentheses around arguments that are applications, lists,
+-- tuples, string literals with Haskell escapes, non-negative Ints) in one pass, and
+-- falls back to `reads` for anything it does not recognise, so it reads the same
+-- values `reads` would.
+
+
+readStored :: Read a => Parser a -> BS.ByteString -> Maybe a
+readStored parser bs =
+  case runParser parser bs of
+    Just (value, rest) | BS.null rest ->
+      Just value
+
+    _ ->
+      case reads (BS8.unpack bs) of
+        [(value, "")] -> Just value
+        _ -> Nothing
+
+
+newtype Parser a =
+  Parser { runParser :: BS.ByteString -> Maybe (a, BS.ByteString) }
+
+
+instance Functor Parser where
+  fmap f (Parser p) =
+    Parser $ \bs -> case p bs of
+      Just (a, rest) -> Just (f a, rest)
+      Nothing -> Nothing
+
+
+instance Applicative Parser where
+  pure a =
+    Parser $ \bs -> Just (a, bs)
+
+  Parser pf <*> Parser pa =
+    Parser $ \bs -> case pf bs of
+      Just (f, rest) -> case pa rest of
+        Just (a, rest2) -> Just (f a, rest2)
+        Nothing -> Nothing
+      Nothing -> Nothing
+
+
+instance Monad Parser where
+  Parser pa >>= f =
+    Parser $ \bs -> case pa bs of
+      Just (a, rest) -> runParser (f a) rest
+      Nothing -> Nothing
+
+
+pFail :: Parser a
+pFail =
+  Parser (const Nothing)
+
+
+pChar :: Char -> Parser ()
+pChar c =
+  Parser $ \bs -> case BS8.uncons bs of
+    Just (c2, rest) | c2 == c -> Just ((), rest)
+    _ -> Nothing
+
+
+pPeek :: Parser (Maybe Char)
+pPeek =
+  Parser $ \bs -> Just (fst <$> BS8.uncons bs, bs)
+
+
+-- A constructor name.
+pIdent :: Parser BS.ByteString
+pIdent =
+  Parser $ \bs ->
+    let (name, rest) = BS8.span (\c -> c == '_' || c == '\'' || ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || ('0' <= c && c <= '9')) bs in
+    if BS.null name then Nothing else Just (name, rest)
+
+
+-- An argument of a constructor application (showsPrec 11): an application in
+-- parentheses, or a nullary constructor, list or literal as is. (A tuple argument
+-- also starts with a parenthesis, so tuples are read with pChar ' ' and pPair /
+-- pTriple directly, never through here.)
+pArg :: Parser a -> Parser a
+pArg p =
+  do  next <- pPeek
+      case next of
+        Just '(' -> pChar '(' *> p <* pChar ')'
+        _ -> p
+
+
+-- One application argument: a space, then the argument.
+pSpaced :: Parser a -> Parser a
+pSpaced p =
+  pChar ' ' *> pArg p
+
+
+pList :: Parser a -> Parser [a]
+pList p =
+  do  pChar '['
+      next <- pPeek
+      case next of
+        Just ']' -> pChar ']' *> pure []
+        _ ->
+          let rest acc =
+                do  c <- pPeek
+                    case c of
+                      Just ',' -> pChar ',' *> (p >>= \x -> rest (x : acc))
+                      Just ']' -> pChar ']' *> pure (reverse acc)
+                      _ -> pFail
+          in
+          p >>= \x -> rest [x]
+
+
+pPair :: Parser a -> Parser b -> Parser (a, b)
+pPair pa pb =
+  (,) <$> (pChar '(' *> pa) <*> (pChar ',' *> pb <* pChar ')')
+
+
+pTriple :: Parser a -> Parser b -> Parser c -> Parser (a, b, c)
+pTriple pa pb pc =
+  (,,) <$> (pChar '(' *> pa) <*> (pChar ',' *> pb) <*> (pChar ',' *> pc <* pChar ')')
+
+
+pInt :: Parser Int
+pInt =
+  Parser $ \bs -> case BS8.readInt bs of
+    Just (n, rest) | n >= 0 -> Just (n, rest)
+    _ -> Nothing
+
+
+-- A string literal as `show` writes it. Only the plain characters, the simple escapes
+-- and decimal character codes are handled; anything else fails, and readStored falls
+-- back to `reads`.
+pString :: Parser String
+pString =
+  pChar '"' *> go []
+  where
+    go acc =
+      Parser $ \bs ->
+        let (plain, rest) = BS8.span (\c -> c /= '"' && c /= '\\') bs
+            acc2 = reverse (BS8.unpack plain) ++ acc
+        in
+        case BS8.uncons rest of
+          Just ('"', rest2) -> Just (reverse acc2, rest2)
+          Just ('\\', rest2) ->
+            case BS8.uncons rest2 of
+              Just ('\\', rest3) -> runParser (go ('\\' : acc2)) rest3
+              Just ('"', rest3) -> runParser (go ('"' : acc2)) rest3
+              Just ('n', rest3) -> runParser (go ('\n' : acc2)) rest3
+              Just ('t', rest3) -> runParser (go ('\t' : acc2)) rest3
+              Just ('&', rest3) -> runParser (go acc2) rest3
+              Just (d, _) | '0' <= d && d <= '9' ->
+                -- a character past '\DEL', written as its decimal code (`show` of an
+                -- identifier with accents)
+                case BS8.readInt rest2 of
+                  Just (code, rest3) | code <= 0x10FFFF -> runParser (go (toEnum code : acc2)) rest3
+                  _ -> Nothing
+              _ -> Nothing
+          _ -> Nothing
+
+
+pMaybe :: Parser a -> Parser (Maybe a)
+pMaybe p =
+  do  name <- pIdent
+      case name of
+        "Nothing" -> pure Nothing
+        "Just" -> Just <$> pSpaced p
+        _ -> pFail
+
+
+pIR :: Parser IR
+pIR =
+  do  name <- pIdent
+      case name of
+        "IR" -> IR <$> pSpaced (pMaybe pCodec) <*> pSpaced (pMaybe pCodec)
+        _ -> pFail
+
+
+pCodec :: Parser Codec
+pCodec =
+  do  name <- pIdent
+      case name of
+        "Codec" -> Codec <$> pSpaced (pList pString) <*> pSpaced pBody
+        _ -> pFail
+
+
+pBody :: Parser Body
+pBody =
+  do  name <- pIdent
+      case name of
+        "BAlias" -> BAlias <$> pSpaced pW
+        "BUnion" -> BUnion <$> pSpaced pString <*> pSpaced pInt <*> pSpaced (pList pAlt)
+        "BValidate" -> BValidate <$> pSpaced pString <*> pSpaced pBody
+        _ -> pFail
+
+
+pAlt :: Parser Alt
+pAlt =
+  do  name <- pIdent
+      case name of
+        "Alt" -> Alt <$> pSpaced pString <*> pSpaced pInt <*> pSpaced (pList pW)
+        _ -> pFail
+
+
+pW :: Parser W
+pW =
+  do  name <- pIdent
+      case name of
+        "WInt" -> pure WInt
+        "WFloat" -> pure WFloat
+        "WBool" -> pure WBool
+        "WOrder" -> pure WOrder
+        "WString" -> pure WString
+        "WChar" -> pure WChar
+        "WUnit" -> pure WUnit
+        "WBytes" -> pure WBytes
+        "WTime" -> pure WTime
+        "WFail" -> pure WFail
+        "WElm" -> WElm <$> pSpaced pString <*> pSpaced pString
+        "WList" -> WList <$> pSpaced pW
+        "WMaybe" -> WMaybe <$> pSpaced pW
+        "WSet" -> WSet <$> pSpaced pW
+        "WArray" -> WArray <$> pSpaced pW
+        "WResult" -> WResult <$> pSpaced pW <*> pSpaced pW
+        "WDict" -> WDict <$> pSpaced pW <*> pSpaced pW
+        "WPair" -> WPair <$> pSpaced pW <*> pSpaced pW
+        "WTriple" -> WTriple <$> pSpaced pW <*> pSpaced pW <*> pSpaced pW
+        "WSeqDict" -> WSeqDict <$> pSpaced pW <*> pSpaced pW
+        "WSeqSet" -> WSeqSet <$> pSpaced pW
+        "WRecord" -> WRecord <$> pSpaced (pList (pPair pString pW))
+        "WTVar" -> WTVar <$> pSpaced pString
+        "WRef" -> WRef <$> (pChar ' ' *> pTriple pString pString pString) <*> pSpaced pString <*> pSpaced (pList pW)
+        _ -> pFail
+
+
 -- DECODER FAMILIES
 --
 -- The validating chain (`w3_decode_<T>`, which runs `w3_validate_<T>` where one is
@@ -784,9 +1020,9 @@ replaceCodecs mode graph =
         (\(Opt.Global home name) node acc ->
             case (List.stripPrefix "w3_ir_" (Name.toChars name), node) of
               (Just typeName, Opt.Kernel [K.JS bs] _) ->
-                case reads (BS8.unpack bs) of
-                  [(ir, "")] -> Map.insert (homeOf home, typeName) ir acc
-                  _ -> acc
+                case readStored pIR bs of
+                  Just ir -> Map.insert (homeOf home, typeName) ir acc
+                  Nothing -> acc
               _ -> acc
         )
         Map.empty
@@ -799,9 +1035,9 @@ replaceCodecs mode graph =
         (\(Opt.Global home name) node acc ->
             case (List.stripPrefix "w3_iru_" (Name.toChars name), node) of
               (Just typeName, Opt.Kernel [K.JS bs] _) ->
-                case reads (BS8.unpack bs) of
-                  [(codec, "")] -> Map.insert (homeOf home, typeName) codec acc
-                  _ -> acc
+                case readStored pCodec bs of
+                  Just codec -> Map.insert (homeOf home, typeName) codec acc
+                  Nothing -> acc
               _ -> acc
         )
         Map.empty
