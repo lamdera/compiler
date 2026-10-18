@@ -336,14 +336,15 @@ compile path =
         Just root ->
           R.withRootLock root $ \writer stuff ->
           Task.run $
-            do  details <- Task.eio Exit.ReactorBadDetails $ Details.load writer Reporting.silent root stuff
-                artifacts <- Task.eio Exit.ReactorBadBuild $ Build.fromPaths writer Reporting.silent root stuff details (NE.List path [])
+            -- @LAMDERA Live.phase times each step for LAMDERA_LIVE_TIMING
+            do  details <- Live.phase "details" $ Task.eio Exit.ReactorBadDetails $ Details.load writer Reporting.silent root stuff
+                artifacts <- Live.phase "build" $ Task.eio Exit.ReactorBadBuild $ Build.fromPaths writer Reporting.silent root stuff details (NE.List path [])
                 Task.io $ Live.reportFresh artifacts -- @LAMDERA LAMDERA_LIVE_TIMING
 
-                Lamdera.PostCompile.check details artifacts Exit.ReactorBadBuild
-                Lamdera.TypeHash.buildCheckHashes artifacts
+                Live.phase "postcompile" $ Lamdera.PostCompile.check details artifacts Exit.ReactorBadBuild
+                Live.phase "typehash" $ Lamdera.TypeHash.buildCheckHashes artifacts
 
-                javascript <- Task.mapError Exit.ReactorBadGenerate $ Generate.dev stuff details artifacts
+                javascript <- Live.phase "objects" $ Task.mapError Exit.ReactorBadGenerate $ Generate.dev stuff details artifacts
                 let (NE.List name _) = Build.getRootNames artifacts
                 return $ Html.sandwich (R.toFilePath root) name javascript
 

@@ -19,7 +19,7 @@ import qualified Data.Map as Map
 import qualified Data.HashMap.Strict as HashMap
 import qualified Data.List as List
 import Data.Maybe (fromMaybe)
-import GHC.Word (Word64)
+import GHC.Word (Word32, Word64)
 
 import qualified System.Directory as Dir
 import qualified System.FilePath as FP
@@ -69,7 +69,10 @@ import qualified Build
 import qualified Elm.Details as Details
 import qualified Ext.MemoryCache as MemoryCache
 import qualified File
+import qualified Reporting.Task as Task
 import qualified Root as R
+import Data.IORef (IORef, newIORef, atomicModifyIORef')
+import System.IO.Unsafe (unsafePerformIO)
 
 
 
@@ -872,15 +875,17 @@ withMemoryFlush root maybeStore io =
 
 
 flushMemory :: FilePath -> MemoryCache.Store -> IO ()
-flushMemory root store =
+flushMemory root store = do
+  start <- GHC.Clock.getMonotonicTimeNSec
   R.withRootLock (R.fromFilePath root) $ \writer stuff -> do
     let writeDetails dyn =
           case fromDynamic dyn of
             Just details -> File.writeBytes writer (R.details stuff) Details.eDetails (details :: Details.Details)
             Nothing -> pure ()
     (elmos, elmis) <- MemoryCache.flush store writer stuff writeDetails
+    end <- GHC.Clock.getMonotonicTimeNSec
     onlyWhen (elmos + elmis > 0) $
-      atomicPutStrLn $ "🧠 --memory: wrote " <> show elmos <> " .elmo and " <> show elmis <> " .elmi files to elm-stuff"
+      atomicPutStrLn $ "🧠 --memory: wrote " <> show elmos <> " .elmo and " <> show elmis <> " .elmi files to elm-stuff in " <> show ((end - start) `div` 1000000) <> "ms"
 
 
 
@@ -897,9 +902,11 @@ timedRebuild maybeStore io = do
   if not enabled
     then io
     else do
+      gcBefore <- gcCounters
       start <- GHC.Clock.getMonotonicTimeNSec
       !result <- io
       end <- GHC.Clock.getMonotonicTimeNSec
+      gcAfter <- gcCounters
       counters <-
         case maybeStore of
           Just store -> do
@@ -907,9 +914,39 @@ timedRebuild maybeStore io = do
             (ifaces, objects) <- MemoryCache.size store
             pure $ " store: " <> show (MemoryCache._ifaceHits c) <> " interface hits, " <> show (MemoryCache._objectHits c) <> " object hits, " <> show (MemoryCache._diskReads c) <> " disk reads, holding " <> show ifaces <> " interfaces and " <> show objects <> " objects."
           Nothing -> pure ""
+      timings <- atomicModifyIORef' phases (\ps -> ([], reverse ps))
+      let total = (end - start) `div` 1000000
+          inPhases = sum (map snd timings) `div` 1000000
+          breakdown = concatMap (\(label, ns) -> label <> " " <> show (ns `div` 1000000) <> "ms, ") timings
+      let gc =
+            case (gcBefore, gcAfter) of
+              (Just (ns0, n0, gcs0), Just (ns1, n1, gcs1)) ->
+                " GC " <> show ((ns1 - ns0) `div` 1000000) <> "ms in " <> show (gcs1 - gcs0) <> " collections, " <> show (n1 - n0) <> " major."
+              _ -> ""
+      atomicPutStrLn $ "🕐 live rebuild: " <> show total <> "ms (" <> breakdown <> "rest " <> show (total - inPhases) <> "ms)." <> gc <> counters
       heap <- heapSummary
-      atomicPutStrLn $ "🕐 live rebuild: " <> show ((end - start) `div` 1000000) <> "ms." <> counters <> heap
+      onlyWhen (heap /= "") $ atomicPutStrLn $ "🕐 heap after GC:" <> heap
       pure result
+
+
+{-# NOINLINE phases #-}
+phases :: IORef [(String, Word64)]
+phases =
+  unsafePerformIO $ newIORef []
+
+
+{-| Time a step of the live build, for the LAMDERA_LIVE_TIMING breakdown. -}
+phase :: String -> Task.Task x a -> Task.Task x a
+phase label task = do
+  enabled <- Task.io isTimingEnabled
+  if not enabled
+    then task
+    else do
+      t0 <- Task.io GHC.Clock.getMonotonicTimeNSec
+      a <- task
+      t1 <- Task.io GHC.Clock.getMonotonicTimeNSec
+      Task.io $ atomicModifyIORef' phases (\ps -> ((label, t1 - t0) : ps, ()))
+      pure a
 
 
 reportFresh :: Build.Artifacts -> IO ()
@@ -924,6 +961,16 @@ isTimingEnabled :: IO Bool
 isTimingEnabled = do
   v <- lookupEnv "LAMDERA_LIVE_TIMING"
   pure (v /= Nothing)
+
+
+gcCounters :: IO (Maybe (GHC.Stats.RtsTime, Word32, Word32))
+gcCounters = do
+  enabled <- GHC.Stats.getRTSStatsEnabled
+  if not enabled
+    then pure Nothing
+    else do
+      stats <- GHC.Stats.getRTSStats
+      pure $ Just (GHC.Stats.gc_elapsed_ns stats, GHC.Stats.major_gcs stats, GHC.Stats.gcs stats)
 
 
 heapSummary :: IO String
