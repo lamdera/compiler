@@ -6,6 +6,7 @@ module Type.Unify
   where
 
 
+import Data.IORef (newIORef, modifyIORef', readIORef)
 import qualified Data.Map.Strict as Map
 
 import qualified AST.Prim.Name as N
@@ -171,11 +172,38 @@ guardedUnify left right =
         if equivalent
           then ok vars ()
           else
-            do  leftDesc <- UF.get left
+            do  -- @LAMDERA expand deferred alias bodies before looking inside them
+                vars1 <- forceDeferred vars left
+                vars2 <- forceDeferred vars1 right
+                leftDesc <- UF.get left
                 rightDesc <- UF.get right
                 case actuallyUnify (Context left leftDesc right rightDesc) of
                   Unify k ->
-                    k vars ok err
+                    k vars2 ok err
+
+
+{-| @LAMDERA Expand a deferred alias body (see Type.Type.Deferred) into the variables
+upstream would have built when the alias was first turned into variables. The new
+variables are handed back like the ones `fresh` makes, so the solver introduces them
+at the current rank and generalization adjusts their ranks as usual.
+-}
+forceDeferred :: [Variable] -> Variable -> IO [Variable]
+forceDeferred vars var =
+  do  (Descriptor content rank _ _) <- UF.get var
+      case content of
+        Deferred deferred ->
+          do  created <- newIORef vars
+              let register content_ =
+                    do  v <- UF.fresh (Descriptor content_ rank noMark Nothing)
+                        modifyIORef' created (v:)
+                        return v
+              real <- Type.expandDeferred register deferred
+              (Descriptor realContent realRank _ _) <- UF.get real
+              UF.union var real (Descriptor realContent (min rank realRank) noMark Nothing)
+              readIORef created
+
+        _ ->
+          return vars
 
 
 subUnify :: Variable -> Variable -> Unify ()
@@ -203,6 +231,9 @@ actuallyUnify context@(Context _ (Descriptor firstContent _ _ _) _ (Descriptor s
 
     Structure flatType ->
         unifyStructure context flatType firstContent secondContent
+
+    Deferred _ ->
+        deferredReachedUnify
 
     Error ->
         -- If there was an error, just pretend it is okay. This lets us avoid
@@ -244,6 +275,9 @@ unifyFlex context content otherContent =
     Structure _ ->
         merge context otherContent
 
+    Deferred _ ->
+        deferredReachedUnify
+
 
 
 -- UNIFY RIGID VARIABLES
@@ -277,6 +311,9 @@ unifyRigid context maybeSuper content otherContent =
 
     Structure _ ->
         mismatch
+
+    Deferred _ ->
+        deferredReachedUnify
 
     Error ->
         merge context Error
@@ -336,6 +373,9 @@ unifyFlexSuper context super content otherContent =
 
     Alias _ _ _ realVar ->
         subUnify (_first context) realVar
+
+    Deferred _ ->
+        deferredReachedUnify
 
     Error ->
         merge context Error
@@ -482,6 +522,9 @@ unifyAlias context home name args realVar otherContent =
     Structure _ ->
       subUnify realVar (_second context)
 
+    Deferred _ ->
+      deferredReachedUnify
+
     Error ->
       merge context Error
 
@@ -560,11 +603,11 @@ unifyStructure context flatType content otherContent =
 
           (Record1 fields1 ext1, Record1 fields2 ext2) ->
               Unify $ \vars ok err ->
-                do  structure1 <- gatherFields fields1 ext1
-                    structure2 <- gatherFields fields2 ext2
+                do  (vars1, structure1) <- gatherFields vars fields1 ext1
+                    (vars2, structure2) <- gatherFields vars1 fields2 ext2
                     case unifyRecord context structure1 structure2 of
                       Unify k ->
-                        k vars ok err
+                        k vars2 ok err
 
           (Pair1 a b, Pair1 x y) ->
               do  subUnify a x
@@ -582,6 +625,9 @@ unifyStructure context flatType content otherContent =
 
           _ ->
               mismatch
+
+    Deferred _ ->
+        deferredReachedUnify
 
     Error ->
         merge context Error
@@ -693,17 +739,27 @@ data RecordStructure =
     }
 
 
-gatherFields :: Map.Map N.Name Variable -> Variable -> IO RecordStructure
-gatherFields fields variable =
-  do  (Descriptor content _ _ _) <- UF.get variable
+-- @LAMDERA threads the new variables from expanding deferred alias bodies, see
+-- forceDeferred
+gatherFields :: [Variable] -> Map.Map N.Name Variable -> Variable -> IO ([Variable], RecordStructure)
+gatherFields vars fields variable =
+  do  vars1 <- forceDeferred vars variable
+      (Descriptor content _ _ _) <- UF.get variable
       case content of
         Structure (Record1 subFields subExt) ->
-            gatherFields (Map.union fields subFields) subExt
+            gatherFields vars1 (Map.union fields subFields) subExt
 
         Alias _ _ _ var ->
             -- TODO may be dropping useful alias info here
-            gatherFields fields var
+            gatherFields vars1 fields var
 
         _ ->
-            return (RecordStructure fields variable)
+            return (vars1, RecordStructure fields variable)
+
+
+-- @LAMDERA guardedUnify expands both sides first, so a Deferred is never unified
+deferredReachedUnify :: Unify a
+deferredReachedUnify =
+  error "Type.Unify: a deferred alias body reached unification without being expanded"
+
 

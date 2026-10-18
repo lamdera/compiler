@@ -420,6 +420,10 @@ adjustRankContent youngMark visitMark groupRank content =
           -- THEORY: anything in the realVar would be outermostRank
           foldM (\rank (_, argVar) -> max rank <$> go argVar) outermostRank args
 
+      Deferred deferred ->
+          -- @LAMDERA a deferred real type only refers to these variables
+          foldM (\rank var -> max rank <$> go var) outermostRank (deferredVariables deferred)
+
       Error ->
           return groupRank
 
@@ -454,49 +458,8 @@ typeToVariable rank pools tipe =
 --
 typeToVar :: Int -> Pools -> Map.Map T.Var Variable -> Type -> IO Variable
 typeToVar rank pools aliasDict tipe =
-  let go = typeToVar rank pools aliasDict in
-  case tipe of
-    VarN v ->
-      return v
-
-    AppN home name args ->
-      do  argVars <- traverse go args
-          register rank pools (Structure (App1 home name argVars))
-
-    FunN a b ->
-      do  aVar <- go a
-          bVar <- go b
-          register rank pools (Structure (Fun1 aVar bVar))
-
-    AliasN home name args aliasType ->
-      do  argVars <- traverse (traverse go) args
-          aliasVar <- typeToVar rank pools (Map.fromList argVars) aliasType
-          register rank pools (Alias home name argVars aliasVar)
-
-    PlaceHolder name ->
-      return $ $(Map.require 'typeToVar) name aliasDict T.varToChars
-
-    RecordN fields ext ->
-      do  fieldVars <- traverse go fields
-          extVar <- go ext
-          register rank pools (Structure (Record1 fieldVars extVar))
-
-    EmptyRecordN ->
-      register rank pools emptyRecord1
-
-    UnitN ->
-      register rank pools unit1
-
-    PairN a b ->
-      do  aVar <- go a
-          bVar <- go b
-          register rank pools (Structure (Pair1 aVar bVar))
-
-    TripleN a b c ->
-      do  aVar <- go a
-          bVar <- go b
-          cVar <- go c
-          register rank pools (Structure (Triple1 aVar bVar cVar))
+  -- @LAMDERA moved to Type.Type.typeToVarWith, which defers alias bodies
+  typeToVarWith (register rank pools) aliasDict tipe
 
 
 register :: Int -> Pools -> Content -> IO Variable
@@ -506,16 +469,7 @@ register rank pools content =
       return var
 
 
-{-# NOINLINE emptyRecord1 #-}
-emptyRecord1 :: Content
-emptyRecord1 =
-  Structure EmptyRecord1
-
-
-{-# NOINLINE unit1 #-}
-unit1 :: Content
-unit1 =
-  Structure Unit1
+-- @LAMDERA emptyRecord1 and unit1 moved to Type.Type with typeToVarWith
 
 
 
@@ -543,58 +497,8 @@ srcTypeToVariable rank pools freeVars srcType =
 
 srcTypeToVar :: Int -> Pools -> Map.Map T.Var Variable -> Can.Type -> IO Variable
 srcTypeToVar rank pools flexVars srcType =
-  let go = srcTypeToVar rank pools flexVars in
-  case srcType of
-    Can.TLambda argument result ->
-      do  argVar <- go argument
-          resultVar <- go result
-          register rank pools (Structure (Fun1 argVar resultVar))
-
-    Can.TVar name ->
-      return $ $(Map.require 'srcTypeToVar) name flexVars T.varToChars
-
-    Can.TType home name args ->
-      do  argVars <- traverse go args
-          register rank pools (Structure (App1 home name argVars))
-
-    Can.TRecord fields maybeExt ->
-      do  fieldVars <- traverse (srcFieldTypeToVar rank pools flexVars) fields
-          extVar <-
-            case maybeExt of
-              Nothing -> register rank pools emptyRecord1
-              Just ext -> return $ $(Map.require 'srcTypeToVar) ext flexVars T.varToChars
-          register rank pools (Structure (Record1 fieldVars extVar))
-
-    Can.TUnit ->
-      register rank pools unit1
-
-    Can.TPair a b ->
-      do  aVar <- go a
-          bVar <- go b
-          register rank pools (Structure (Pair1 aVar bVar))
-
-    Can.TTriple a b c ->
-      do  aVar <- go a
-          bVar <- go b
-          cVar <- go c
-          register rank pools (Structure (Triple1 aVar bVar cVar))
-
-    Can.TAlias home name args aliasType ->
-      do  argVars <- traverse (traverse go) args
-          aliasVar <-
-            case aliasType of
-              Can.Holey tipe ->
-                srcTypeToVar rank pools (Map.fromList argVars) tipe
-
-              Can.Filled tipe ->
-                go tipe
-
-          register rank pools (Alias home name argVars aliasVar)
-
-
-srcFieldTypeToVar :: Int -> Pools -> Map.Map T.Var Variable -> Can.FieldType -> IO Variable
-srcFieldTypeToVar rank pools flexVars (Can.FieldType _ srcTipe) =
-  srcTypeToVar rank pools flexVars srcTipe
+  -- @LAMDERA moved to Type.Type.srcTypeToVarWith, which defers alias bodies
+  srcTypeToVarWith (register rank pools) flexVars srcType
 
 
 
@@ -659,6 +563,12 @@ makeCopyHelp maxRank pools variable =
                     do  newArgs <- mapM (traverse (makeCopyHelp maxRank pools)) args
                         newRealType <- makeCopyHelp maxRank pools realType
                         UF.set copy $ makeDescriptor (Alias home name newArgs newRealType)
+                        return copy
+
+                  Deferred deferred ->
+                    -- @LAMDERA still deferred, now over the copied variables
+                    do  newDeferred <- traverseDeferred (makeCopyHelp maxRank pools) deferred
+                        UF.set copy $ makeDescriptor (Deferred newDeferred)
                         return copy
 
                   Error ->
@@ -727,6 +637,10 @@ restoreContent content =
     Alias _ _ args var ->
       do  mapM_ (traverse restore) args
           restore var
+
+    Deferred deferred ->
+      -- @LAMDERA
+      mapM_ restore (deferredVariables deferred)
 
     Error ->
         return ()

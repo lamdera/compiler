@@ -437,6 +437,7 @@ deriving instance Show Reporting.Error.Type.PCategory
 deriving instance Show Type.Type.Descriptor
 -- deriving instance (Show a) => Show (Type.UnionFind.Point a)
 deriving instance Show Type.Type.Content
+deriving instance Show Type.Type.Deferred
 deriving instance Show Type.Type.SuperType
 deriving instance Show Type.Type.FlatType
 deriving instance Show Type.Type.Mark

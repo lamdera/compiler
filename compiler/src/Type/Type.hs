@@ -24,6 +24,13 @@ module Type.Type
   , nameToRigid
   , toAnnotation
   , toErrorType
+  -- @LAMDERA deferred alias bodies, see Deferred below
+  , Deferred(..)
+  , deferredVariables
+  , traverseDeferred
+  , expandDeferred
+  , typeToVarWith
+  , srcTypeToVarWith
   )
   where
 
@@ -32,6 +39,7 @@ import Control.Monad.State.Strict (StateT, liftIO)
 import qualified Control.Monad.State.Strict as State
 import Data.Foldable (foldrM)
 import qualified Data.Map.Strict as Map
+import qualified Data.Map.Utils as Map
 import Data.Word (Word32)
 
 import qualified Crash
@@ -129,7 +137,209 @@ data Content
     | RigidSuper SuperType T.Var
     | Structure FlatType
     | Alias ModuleName.Canonical T.Name [(T.Var,Variable)] Variable
+    | Deferred Deferred -- @LAMDERA only ever the real type of an Alias, see Deferred
     | Error
+
+
+{-| @LAMDERA The real type of an alias, not expanded yet.
+
+Upstream builds a variable for every node of an alias's real type each time a type
+mentioning the alias is turned into variables: every annotation, every reference to
+a foreign value, every pattern and expectation. Aliases unify with each other by name
+and arguments, so most of those real types are never looked at. An app with a large
+Model record (aliases of records of aliases...) spent most of its type checking
+building them: 215M variables for 4M unifications on a 390 module rebuild.
+
+So the real type starts out as a Deferred: the body, plus the variables its free type
+variables stand for. It is expanded, building exactly the variables upstream would
+have built up front, the first time something needs to look inside it: unifying it
+with a structure or a different alias (Type.Unify forces it), gathering record fields,
+or turning it back into a type (toAnnotation, toErrorType). Anything else only ever
+deals with an alias's arguments, which are built as before.
+
+  DeferredType: from Type (constraint types). Only used when the alias arguments have
+    no variables in them, so the body (which only refers to the arguments) has none
+    either, and Variables embedded in the body never need remapping when copied.
+
+  DeferredSrc: from Can.Type (annotations of foreign values, operators). The map is
+    what the body's type variables stand for: the alias arguments for a Holey body,
+    the annotation's free variables for a Filled one.
+-}
+data Deferred
+    = DeferredType (Map.Map T.Var Variable) Type
+    | DeferredSrc (Map.Map T.Var Variable) Can.Type
+
+
+deferredVariables :: Deferred -> [Variable]
+deferredVariables deferred =
+  case deferred of
+    DeferredType dict _ -> Map.elems dict
+    DeferredSrc dict _ -> Map.elems dict
+
+
+traverseDeferred :: (Variable -> IO Variable) -> Deferred -> IO Deferred
+traverseDeferred f deferred =
+  case deferred of
+    DeferredType dict tipe -> (\d -> DeferredType d tipe) <$> traverse f dict
+    DeferredSrc dict tipe -> (\d -> DeferredSrc d tipe) <$> traverse f dict
+
+
+{-| Build the variables for a deferred real type, registering each new variable with
+the given action, and return the variable for its root.
+-}
+expandDeferred :: (Content -> IO Variable) -> Deferred -> IO Variable
+expandDeferred register deferred =
+  case deferred of
+    DeferredType dict tipe -> typeToVarWith register dict tipe
+    DeferredSrc dict tipe -> srcTypeToVarWith register dict tipe
+
+
+{-| What used to be Type.Solve.typeToVar, with registering abstracted out so that a
+Deferred can be expanded outside the solver, and alias bodies deferred when their
+arguments are closed.
+-}
+typeToVarWith :: (Content -> IO Variable) -> Map.Map T.Var Variable -> Type -> IO Variable
+typeToVarWith register aliasDict tipe =
+  let go = typeToVarWith register aliasDict in
+  case tipe of
+    VarN v ->
+      return v
+
+    AppN home name args ->
+      do  argVars <- traverse go args
+          register (Structure (App1 home name argVars))
+
+    FunN a b ->
+      do  aVar <- go a
+          bVar <- go b
+          register (Structure (Fun1 aVar bVar))
+
+    AliasN home name args aliasType ->
+      do  argVars <- traverse (traverse go) args
+          let argDict = Map.fromList argVars
+          aliasVar <-
+            if all (isClosedType . snd) args
+              then register (Deferred (DeferredType argDict aliasType))
+              else typeToVarWith register argDict aliasType
+          register (Alias home name argVars aliasVar)
+
+    PlaceHolder name ->
+      return $ $(Map.require 'typeToVarWith) name aliasDict T.varToChars
+
+    RecordN fields ext ->
+      do  fieldVars <- traverse go fields
+          extVar <- go ext
+          register (Structure (Record1 fieldVars extVar))
+
+    EmptyRecordN ->
+      register emptyRecord1
+
+    UnitN ->
+      register unit1
+
+    PairN a b ->
+      do  aVar <- go a
+          bVar <- go b
+          register (Structure (Pair1 aVar bVar))
+
+    TripleN a b c ->
+      do  aVar <- go a
+          bVar <- go b
+          cVar <- go c
+          register (Structure (Triple1 aVar bVar cVar))
+
+
+{-| Whether a type has no variables in it. An alias body only refers to the alias
+arguments, so an alias is closed when its arguments are, and the body is not looked at
+(it is built lazily, see Type.Instantiate).
+-}
+isClosedType :: Type -> Bool
+isClosedType tipe =
+  case tipe of
+    PlaceHolder _ -> False
+    AliasN _ _ args _ -> all (isClosedType . snd) args
+    VarN _ -> False
+    AppN _ _ args -> all isClosedType args
+    FunN a b -> isClosedType a && isClosedType b
+    EmptyRecordN -> True
+    RecordN fields ext -> all isClosedType fields && isClosedType ext
+    UnitN -> True
+    PairN a b -> isClosedType a && isClosedType b
+    TripleN a b c -> isClosedType a && isClosedType b && isClosedType c
+
+
+{-| What used to be Type.Solve.srcTypeToVar, with registering abstracted out, and
+every alias body deferred.
+-}
+srcTypeToVarWith :: (Content -> IO Variable) -> Map.Map T.Var Variable -> Can.Type -> IO Variable
+srcTypeToVarWith register flexVars srcType =
+  let go = srcTypeToVarWith register flexVars in
+  case srcType of
+    Can.TLambda argument result ->
+      do  argVar <- go argument
+          resultVar <- go result
+          register (Structure (Fun1 argVar resultVar))
+
+    Can.TVar name ->
+      return $ $(Map.require 'srcTypeToVarWith) name flexVars T.varToChars
+
+    Can.TType home name args ->
+      do  argVars <- traverse go args
+          register (Structure (App1 home name argVars))
+
+    Can.TRecord fields maybeExt ->
+      do  fieldVars <- traverse (\(Can.FieldType _ srcTipe) -> go srcTipe) fields
+          extVar <-
+            case maybeExt of
+              Nothing -> register emptyRecord1
+              Just ext -> return $ $(Map.require 'srcTypeToVarWith) ext flexVars T.varToChars
+          register (Structure (Record1 fieldVars extVar))
+
+    Can.TUnit ->
+      register unit1
+
+    Can.TPair a b ->
+      do  aVar <- go a
+          bVar <- go b
+          register (Structure (Pair1 aVar bVar))
+
+    Can.TTriple a b c ->
+      do  aVar <- go a
+          bVar <- go b
+          cVar <- go c
+          register (Structure (Triple1 aVar bVar cVar))
+
+    Can.TAlias home name args aliasType ->
+      do  argVars <- traverse (traverse go) args
+          aliasVar <-
+            register $ Deferred $
+              case aliasType of
+                Can.Holey tipe ->
+                  DeferredSrc (Map.fromList argVars) tipe
+
+                Can.Filled tipe ->
+                  DeferredSrc flexVars tipe
+
+          register (Alias home name argVars aliasVar)
+
+
+{-# NOINLINE emptyRecord1 #-}
+emptyRecord1 :: Content
+emptyRecord1 =
+  Structure EmptyRecord1
+
+
+{-# NOINLINE unit1 #-}
+unit1 :: Content
+unit1 =
+  Structure Unit1
+
+
+-- @LAMDERA a Deferred that is only being looked at (toAnnotation, toErrorType) is
+-- expanded into variables nobody else can see, and left deferred.
+temporaryVariable :: Content -> IO Variable
+temporaryVariable content =
+  UF.fresh (Descriptor content noRank noMark Nothing)
 
 
 data SuperType
@@ -341,6 +551,10 @@ variableToCanType variable =
                 canType <- variableToCanType realVariable
                 return (Can.TAlias home name canArgs (Can.Filled canType))
 
+        Deferred deferred ->
+            -- @LAMDERA see Deferred
+            variableToCanType =<< liftIO (expandDeferred temporaryVariable deferred)
+
         Error ->
             $(Crash.crash 'variableToCanType) "cannot handle Error types in variableToCanType"
 
@@ -455,6 +669,10 @@ contentToErrorType variable content =
         do  errArgs <- traverse (traverse variableToErrorType) args
             errType <- variableToErrorType realVariable
             return (ET.Alias home name errArgs errType)
+
+    Deferred deferred ->
+        -- @LAMDERA see Deferred
+        variableToErrorType =<< liftIO (expandDeferred temporaryVariable deferred)
 
     Error ->
         return ET.Error
@@ -622,6 +840,10 @@ getVarNames var takenNames =
 
               Alias _ _ args _ ->
                 foldrM getVarNames takenNames (map snd args)
+
+              Deferred _ ->
+                -- @LAMDERA only reachable through an Alias, which looks at its args
+                return takenNames
 
               Structure flatType ->
                 case flatType of

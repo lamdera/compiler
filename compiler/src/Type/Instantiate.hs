@@ -7,6 +7,7 @@ module Type.Instantiate
 
 
 import qualified Data.Map.Strict as Map
+import System.IO.Unsafe (unsafeInterleaveIO)
 import qualified Data.Map.Utils as Map
 
 import qualified AST.Canonical as Can
@@ -43,12 +44,17 @@ fromSrcType freeVars sourceType =
     Can.TAlias home name args aliasedType ->
       do  targs <- traverse (traverse (fromSrcType freeVars)) args
           AliasN home name targs <$>
-            case aliasedType of
+            -- @LAMDERA built lazily: the solver defers alias bodies (Type.Type.Deferred)
+            -- and most are never looked at. Building one has no effects, the IO is only
+            -- there for the shape of this function.
+            unsafeInterleaveIO
+            (case aliasedType of
               Can.Filled realType ->
                 fromSrcType freeVars realType
 
               Can.Holey realType ->
                 fromSrcType (Map.fromList targs) realType
+            )
 
     Can.TPair a b ->
       PairN

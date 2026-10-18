@@ -73,5 +73,9 @@ occursHelp seen var foundCycle =
           Alias _ _ args _ ->
               foldrM (occursHelp (var:seen)) foundCycle (map snd args)
 
+          Deferred _ ->
+              -- @LAMDERA only reachable through an Alias, which looks at its args
+              return foundCycle
+
           Error ->
               return foundCycle
