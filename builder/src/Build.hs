@@ -63,6 +63,9 @@ import qualified Root as R
 
 import Lamdera
 import qualified Lamdera.Perf
+import qualified Lamdera.Schedule
+import Control.Concurrent (getNumCapabilities)
+import qualified System.Environment
 
 
 
@@ -142,7 +145,8 @@ fromExposed writer style root stuff details docsGoal exposed@(NE.List e es) =
 
         Right foreigns ->
           do  rmvar <- newEmptyMVar
-              resultMVars <- Fork.forkWithKey (checkModule writer env foreigns rmvar) statuses
+              sched <- makeScheduler statuses -- @LAMDERA see Lamdera.Schedule
+              resultMVars <- Fork.forkWithKey (checkModule writer env foreigns rmvar sched) statuses
               putMVar rmvar resultMVars
               results <- traverse Fork.await resultMVars
               writeDetails writer stuff details results
@@ -197,7 +201,8 @@ fromPaths writer style root stuff details paths =
                 Right foreigns ->
                   do  -- compile
                       rmvar <- newEmptyMVar
-                      resultsMVars <- Fork.forkWithKey (checkModule writer env foreigns rmvar) statuses
+                      sched <- makeScheduler statuses -- @LAMDERA see Lamdera.Schedule
+                      resultsMVars <- Fork.forkWithKey (checkModule writer env foreigns rmvar sched) statuses
                       putMVar rmvar resultsMVars
                       rrootMVars <- traverse (Fork.fork_ . checkRoot env resultsMVars) sroots
                       results <- traverse Fork.await resultsMVars
@@ -354,15 +359,17 @@ data CachedInterface
   | Corrupted
 
 
-checkModule :: File.Writer R.PROJECT -> Env -> Dependencies -> MVar ResultDict -> Module.Name -> Status -> IO Result
-checkModule writer env@(Env _ _ stuff projectType _ _ _ _) foreigns resultsMVar name status =
+checkModule :: File.Writer R.PROJECT -> Env -> Dependencies -> MVar ResultDict -> Lamdera.Schedule.Scheduler Module.Name -> Module.Name -> Status -> IO Result
+checkModule writer env@(Env _ _ stuff projectType _ _ _ _) foreigns resultsMVar sched name status =
+  -- @LAMDERA compile once a slot is free, critical path first (Lamdera.Schedule)
+  let slot = Lamdera.Schedule.withSlot sched name in
   case status of
     SCached local@(Details.Local path time deps hasMain lastChange lastCompile) ->
       do  results <- readMVar resultsMVar
           -- @LAMDERA opt-in timing, see Lamdera.Perf
           depsStatus <- Lamdera.Perf.record (Module.toChars name ++ "\tdeps_wait") $ checkDeps stuff results deps lastCompile
           case depsStatus of
-            DepsChange ifaces ->
+            DepsChange ifaces -> slot $
               do  source <- File.readUtf8 path
                   result <- Lamdera.Perf.record (Module.toChars name ++ "\tparse") $ Parse.fromByteString projectType source
                   case result of
@@ -395,13 +402,13 @@ checkModule writer env@(Env _ _ stuff projectType _ _ _ _) foreigns resultsMVar 
           depsStatus <- Lamdera.Perf.record (Module.toChars name ++ "\tdeps_wait") $ checkDeps stuff results deps lastCompile
           case depsStatus of
             DepsChange ifaces ->
-              compile writer env docsNeed local source ifaces modul
+              slot $ compile writer env docsNeed local source ifaces modul
 
             DepsSame same cached ->
               do  maybeLoaded <- loadInterfaces stuff same cached
                   case maybeLoaded of
                     Nothing     -> return RBlocked
-                    Just ifaces -> compile writer env docsNeed local source ifaces modul
+                    Just ifaces -> slot $ compile writer env docsNeed local source ifaces modul
 
             DepsBlock ->
               return RBlocked
@@ -424,6 +431,43 @@ checkModule writer env@(Env _ _ stuff projectType _ _ _ _) foreigns resultsMVar 
 
     SKernel ->
       return RKernel
+
+
+
+-- @LAMDERA SCHEDULING (see Lamdera.Schedule)
+
+
+makeScheduler :: Map.Map Module.Name Status -> IO (Lamdera.Schedule.Scheduler Module.Name)
+makeScheduler statuses =
+  do  caps <- getNumCapabilities
+      off <- System.Environment.lookupEnv "LAMDERA_NO_SCHEDULE"
+      costs <- Map.traverseWithKey (\_ status -> statusCost status) statuses
+      let deps = Map.map statusDeps statuses
+          slots = maybe caps (const maxBound) off
+      Lamdera.Schedule.new slots (Lamdera.Schedule.priorities deps costs)
+
+
+statusDeps :: Status -> [Module.Name]
+statusDeps status =
+  case status of
+    SCached (Details.Local _ _ deps _ _ _) -> deps
+    SChanged (Details.Local _ _ deps _ _ _) _ _ _ -> deps
+    _ -> []
+
+
+-- Roughly how much work a module is: its source size in KB, at least 1.
+statusCost :: Status -> IO Int
+statusCost status =
+  case status of
+    SChanged _ source _ _ ->
+      return (1 + B.length source `div` 1024)
+
+    SCached (Details.Local path _ _ _ _ _) ->
+      do  size <- Dir.getFileSize path
+          return (1 + fromIntegral size `div` 1024)
+
+    _ ->
+      return 1
 
 
 
@@ -904,7 +948,8 @@ fromRepl writer root stuff details source =
 
                 Right foreigns ->
                   do  rmvar <- newEmptyMVar
-                      resultMVars <- Fork.forkWithKey (checkModule writer env foreigns rmvar) statuses
+                      sched <- makeScheduler statuses -- @LAMDERA see Lamdera.Schedule
+                      resultMVars <- Fork.forkWithKey (checkModule writer env foreigns rmvar sched) statuses
                       putMVar rmvar resultMVars
                       results <- traverse Fork.await resultMVars
                       writeDetails writer stuff details results

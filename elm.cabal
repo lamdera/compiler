@@ -360,6 +360,7 @@ Executable lamdera
         Lamdera.PackageReplacementsTH
         Lamdera.Parse.Extra
         Lamdera.Perf
+        Lamdera.Schedule
         Lamdera.PostCompile
         Lamdera.Project
         Lamdera.Relative
