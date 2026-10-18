@@ -755,7 +755,7 @@ share (Interface h vs us as bs) =
               !bs1 <- traverse shareBinop bs
               return (Interface h vs1 us1 as1 bs1)
         )
-        (Sharing Map.empty IntMap.empty 0)
+        (Sharing Map.empty IntMap.empty 0 IntMap.empty)
   in
   vs_ `seq` us_ `seq` as_ `seq` bs_ `seq` shared
 
@@ -768,6 +768,7 @@ data Sharing =
     { _sh_ids   :: !(Map.Map Key Int)
     , _sh_types :: !(IntMap.IntMap Can.Type)
     , _sh_size  :: !Int
+    , _sh_seen  :: !(IntMap.IntMap [(StableName Can.Type, (Int, Can.Type))]) -- see shareBody
     }
 
 
@@ -867,11 +868,11 @@ shareNode tipe =
           let !args = forceList (map (\(SharedArg x _ tt) -> (x, tt)) xs_)
           case aliasType of
             Can.Holey t ->
-              do  (it, !tt) <- shareNode t
+              do  (it, !tt) <- shareBody t
                   sharedNode (KAlias h n keyArgs False it) (Can.TAlias h n args (Can.Holey tt))
 
             Can.Filled t ->
-              do  (it, !tt) <- shareNode t
+              do  (it, !tt) <- shareBody t
                   sharedNode (KAlias h n keyArgs True it) (Can.TAlias h n args (Can.Filled tt))
 
     Can.TType h n xs ->
@@ -879,6 +880,25 @@ shareNode tipe =
           let !keyArgs = forceList (map fst xs_)
           let !args = forceList (map snd xs_)
           sharedNode (KType h n keyArgs) (Can.TType h n args)
+
+
+{-| An alias's real type, shared once per value in memory, like internBody for the type
+table: the same body object turns up in many annotations, and sharing it again can only
+give the same node.
+-}
+shareBody :: Can.Type -> Sharer (Int, Can.Type)
+shareBody tipe =
+  do  let name = stableNameOf tipe
+          hash = hashStableName name
+      seen <- State.gets _sh_seen
+      case lookup name (IntMap.findWithDefault [] hash seen) of
+        Just done ->
+          return done
+
+        Nothing ->
+          do  done <- shareNode tipe
+              State.modify' $ \sh -> sh { _sh_seen = IntMap.insertWith (++) hash [(name, done)] (_sh_seen sh) }
+              return done
 
 
 data SharedField = SharedField !Word16 !Int !Can.Type
@@ -889,7 +909,7 @@ data SharedArg = SharedArg !T.Var !Int !Can.Type
 
 sharedNode :: Key -> Can.Type -> Sharer (Int, Can.Type)
 sharedNode key fresh =
-  do  Sharing ids types size <- State.get
+  do  Sharing ids types size seen <- State.get
       case Map.lookup key ids of
         Just i ->
           case IntMap.lookup i types of
@@ -898,7 +918,7 @@ sharedNode key fresh =
 
         Nothing ->
           do  let !t = fresh
-              State.put (Sharing (Map.insert key size ids) (IntMap.insert size t types) (size + 1))
+              State.put (Sharing (Map.insert key size ids) (IntMap.insert size t types) (size + 1) seen)
               return (size, t)
 
 
