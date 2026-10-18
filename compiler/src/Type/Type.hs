@@ -556,6 +556,157 @@ unit1 =
   Structure Unit1
 
 
+{-| @LAMDERA What toAnnotation gives for a closed Deferred, without building the
+variables: the conversion of its untouched expansion (typeToVarWith or
+srcTypeToVarWith, then variableToCanType), computed directly. Only for closed ones:
+an open one refers to variables that are named as the conversion meets them.
+-}
+closedCanonical :: Deferred -> Maybe Can.Type
+closedCanonical deferred =
+  case deferred of
+    DeferredType _ _ tipe ->
+      Just (typeCanonical tipe)
+
+    DeferredSrc _ dict tipe | Map.null dict ->
+      Just (srcCanonical Map.empty tipe)
+
+    DeferredSrc _ _ _ ->
+      Nothing
+
+
+-- closedCanonical, once per body object for the whole build (bodies are shared, see
+-- shareBody), so the parts of a big record are converted once and shared.
+memoClosedCanonical :: Deferred -> IO (Maybe Can.Type)
+memoClosedCanonical deferred =
+  case deferred of
+    DeferredType _ _ tipe ->
+      do  name <- TypeBodyName <$> (makeStableName =<< evaluate tipe)
+          Just <$> memoCanonical name (typeCanonical tipe)
+
+    DeferredSrc _ dict tipe | Map.null dict ->
+      do  name <- SrcBodyName <$> (makeStableName =<< evaluate tipe)
+          Just <$> memoCanonical name (srcCanonical Map.empty tipe)
+
+    DeferredSrc _ _ _ ->
+      return Nothing
+
+
+data BodyName
+  = TypeBodyName !(StableName Type)
+  | SrcBodyName !(StableName Can.Type)
+  deriving (Eq)
+
+
+memoCanonical :: BodyName -> Can.Type -> IO Can.Type
+memoCanonical name canonical =
+  do  let hash = case name of { TypeBodyName n -> 2 * hashStableName n; SrcBodyName n -> 2 * hashStableName n + 1 }
+          stripe = canonicals !! (hash `mod` sharedBodyStripes)
+      atomicModifyIORef' stripe $ \table ->
+        let bucket = IntMap.findWithDefault [] hash table in
+        case lookup name bucket of
+          Just known -> (table, known)
+          Nothing -> (IntMap.insert hash ((name, canonical) : bucket) table, canonical)
+
+
+{-# NOINLINE canonicals #-}
+canonicals :: [IORef (IntMap.IntMap [(BodyName, Can.Type)])]
+canonicals =
+  unsafePerformIO (mapM (const (newIORef IntMap.empty)) [1 .. sharedBodyStripes])
+
+
+-- variableToCanType of the expansion of a closed Type (typeToVarWith): record fields
+-- get index 0, extensions are merged in, every alias is Filled.
+typeCanonical :: Type -> Can.Type
+typeCanonical tipe =
+  case tipe of
+    AppN home name args ->
+      Can.TType home name (map typeCanonical args)
+
+    FunN a b ->
+      Can.TLambda (typeCanonical a) (typeCanonical b)
+
+    EmptyRecordN ->
+      Can.TRecord Map.empty Nothing
+
+    RecordN fields ext ->
+      canonicalRecord (Map.map typeCanonical fields) (typeCanonical ext)
+
+    UnitN ->
+      Can.TUnit
+
+    PairN a b ->
+      Can.TPair (typeCanonical a) (typeCanonical b)
+
+    TripleN a b c ->
+      Can.TTriple (typeCanonical a) (typeCanonical b) (typeCanonical c)
+
+    AliasN home name args body _ ->
+      Can.TAlias home name (map (fmap typeCanonical) args) (Can.Filled (typeCanonical body))
+
+    VarN _ ->
+      error "Type.Type.typeCanonical: not a closed type"
+
+    PlaceHolder _ ->
+      error "Type.Type.typeCanonical: not a closed type"
+
+
+-- The same for a Can.Type (srcTypeToVarWith), given what its type variables stand for.
+srcCanonical :: Map.Map T.Var Can.Type -> Can.Type -> Can.Type
+srcCanonical vars tipe =
+  let go = srcCanonical vars in
+  case tipe of
+    Can.TLambda a b ->
+      Can.TLambda (go a) (go b)
+
+    Can.TVar name ->
+      $(Map.require 'srcCanonical) name vars T.varToChars
+
+    Can.TType home name args ->
+      Can.TType home name (map go args)
+
+    Can.TRecord fields maybeExt ->
+      canonicalRecord
+        (Map.map (\(Can.FieldType _ t) -> go t) fields)
+        (case maybeExt of
+          Nothing -> Can.TRecord Map.empty Nothing
+          Just ext -> $(Map.require 'srcCanonical) ext vars T.varToChars
+        )
+
+    Can.TUnit ->
+      Can.TUnit
+
+    Can.TPair a b ->
+      Can.TPair (go a) (go b)
+
+    Can.TTriple a b c ->
+      Can.TTriple (go a) (go b) (go c)
+
+    Can.TAlias home name args aliasType ->
+      let
+        canArgs = map (fmap go) args
+        body =
+          case aliasType of
+            Can.Holey t -> srcCanonical (Map.fromList canArgs) t
+            Can.Filled t -> go t
+      in
+      Can.TAlias home name canArgs (Can.Filled body)
+
+
+-- termToCanType's Record1 case
+canonicalRecord :: Map.Map N.Name Can.Type -> Can.Type -> Can.Type
+canonicalRecord fields ext =
+  let canFields = Map.map (Can.FieldType 0) fields in
+  case Type.iteratedDealias ext of
+    Can.TRecord subFields subExt ->
+      Can.TRecord (Map.union subFields canFields) subExt
+
+    Can.TVar name ->
+      Can.TRecord canFields (Just name)
+
+    _ ->
+      error "Type.Type.canonicalRecord: not a record extension"
+
+
 -- @LAMDERA a Deferred that is only being looked at (toAnnotation, toErrorType) is
 -- expanded into variables nobody else can see, and left deferred.
 temporaryVariable :: Content -> IO Variable
@@ -836,8 +987,14 @@ variableToCanType cache variable =
                 return (Can.TAlias home name canArgs (Can.Filled canType))
 
         Deferred deferred ->
-            -- @LAMDERA see Deferred
-            variableToCanType cache =<< liftIO (expandDeferred temporaryVariable deferred)
+            -- @LAMDERA see Deferred. A closed one converts without building variables.
+            do  known <- liftIO (memoClosedCanonical deferred)
+                case known of
+                  Just canType ->
+                    return canType
+
+                  Nothing ->
+                    variableToCanType cache =<< liftIO (expandDeferred temporaryVariable deferred)
 
         Error ->
             $(Crash.crash 'variableToCanType) "cannot handle Error types in variableToCanType"
