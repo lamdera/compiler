@@ -8,6 +8,8 @@ module Ext.MemoryCache
   --
   , getDetails
   , setDetails
+  , getJsCache
+  , setJsCache
   --
   , readElmi
   , readElmiFor
@@ -78,6 +80,7 @@ data Store =
     { _dir        :: !FilePath
     , _modules    :: !(IORef (Map.Map Module.Name Entry))
     , _details    :: !(IORef (Maybe Dynamic))
+    , _jsCache    :: !(IORef (Maybe Dynamic)) -- Generate.JavaScript.JsCache
     , _dirty      :: !(IORef Dirty)
     , _counters   :: !(IORef Counters)
     }
@@ -150,7 +153,7 @@ register stuff =
           return store
 
         Nothing ->
-          do  store <- Store dir <$> newIORef Map.empty <*> newIORef Nothing <*> newIORef noDirt <*> newIORef noCounters
+          do  store <- Store dir <$> newIORef Map.empty <*> newIORef Nothing <*> newIORef Nothing <*> newIORef noDirt <*> newIORef noCounters
               atomicModifyIORef' registry $ \(Registry stores _) ->
                 (Registry (Map.insert dir store stores) Map.empty, ())
               return store
@@ -193,6 +196,7 @@ reset :: Store -> IO ()
 reset store =
   do  writeIORef (_modules store) Map.empty
       writeIORef (_details store) Nothing
+      writeIORef (_jsCache store) Nothing
       writeIORef (_dirty store) noDirt
 
 
@@ -216,6 +220,23 @@ setDetails :: Store -> Dynamic -> IO ()
 setDetails store details =
   do  writeIORef (_details store) (Just details)
       atomicModifyIORef' (_dirty store) $ \d -> (d { _dirtyDetails = True }, ())
+
+
+
+-- JS
+--
+-- The rendered statements of the last JS generation (Generate.JavaScript.generateCached),
+-- kept as a Dynamic for the same reason as the Details.
+
+
+getJsCache :: Store -> IO (Maybe Dynamic)
+getJsCache store =
+  readIORef (_jsCache store)
+
+
+setJsCache :: Store -> Dynamic -> IO ()
+setJsCache store cache =
+  writeIORef (_jsCache store) (Just cache)
 
 
 

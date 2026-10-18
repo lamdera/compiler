@@ -1,15 +1,19 @@
-{-# LANGUAGE ExtendedLiterals, OverloadedStrings, QuasiQuotes, TemplateHaskell #-}
+{-# LANGUAGE BangPatterns, ExtendedLiterals, MagicHash, OverloadedStrings, QuasiQuotes, TemplateHaskell #-}
 module Generate.JavaScript
   ( generate
   , generateEsm
   , generateForRepl
   , generateForReplEndpoint
+  , JsCache, emptyJsCache, generateCached -- @LAMDERA lamdera live --memory
   )
   where
 
 
 import Prelude hiding (cycle, print)
+import qualified Data.ByteString as BS -- @LAMDERA
 import qualified Data.ByteString.Builder as B
+import qualified Data.ByteString.Lazy as BSL -- @LAMDERA
+import GHC.Exts (isTrue#, reallyUnsafePtrEquality#) -- @LAMDERA
 import Data.Monoid ((<>))
 import qualified Data.List as List
 import qualified Data.Map as Map
@@ -48,11 +52,18 @@ type Mains = Map.Map ModuleName.Canonical Opt.Main
 
 
 generate :: Mode.Mode -> Opt.GlobalGraph -> Mains -> B.Builder
-generate mode (Opt.GlobalGraph graph_ _) mains =
+generate mode globalGraph mains =
+  fst (generateFrom emptyState mode globalGraph mains) -- @LAMDERA see generateCached
+
+
+-- @LAMDERA the original `generate`, from a given starting state
+generateFrom :: State -> Mode.Mode -> Opt.GlobalGraph -> Mains -> (B.Builder, State)
+generateFrom startState mode (Opt.GlobalGraph graph_ _) mains =
   let
     graph = Lamdera.Injection.graphModifications mode mains graph_
-    state = Map.foldrWithKey (addMain mode graph) emptyState mains
+    state = Map.foldrWithKey (addMain mode graph) startState mains
   in
+  flip (,) state $
   Lamdera.Injection.versionsComment <>
   "(function(scope){\n'use strict';"
   <> Functions.functions
@@ -162,16 +173,17 @@ data State =
     { _revKernels :: [B.Builder]
     , _revBuilders :: [B.Builder]
     , _seenGlobals :: Set.Set Opt.Global
+    , _caching :: !Caching -- @LAMDERA see JS CACHE
     }
 
 
 emptyState :: State
 emptyState =
-  State mempty [] Set.empty
+  State mempty [] Set.empty NoCaching
 
 
 stateToBuilder :: State -> B.Builder
-stateToBuilder (State revKernels revBuilders _) =
+stateToBuilder (State revKernels revBuilders _ _) =
   prependBuilders revKernels (prependBuilders revBuilders mempty)
 
 
@@ -185,12 +197,12 @@ prependBuilders revBuilders monolith =
 
 
 addGlobal :: Mode.Mode -> Graph -> State -> Opt.Global -> State
-addGlobal mode graph state@(State revKernels builders seen) global =
+addGlobal mode graph state@(State revKernels builders seen caching) global =
   if Set.member global seen then
     state
   else
     addGlobalHelp mode graph global $
-      State revKernels builders (Set.insert global seen)
+      State revKernels builders (Set.insert global seen) caching
 
 
 addGlobalHelp :: Mode.Mode -> Graph -> Opt.Global -> State -> State
@@ -206,19 +218,20 @@ addGlobalHelp mode graph global state =
   in
   case $(Map.require 'addGlobalHelp) global graph globalToChars of
     -- @LAMDERA
-    Opt.Define (Opt.Function args body) deps
+    -- (addStmtFor is addStmt that can reuse the statement from the last build, see JS CACHE)
+    node@(Opt.Define (Opt.Function args body) deps)
       | length args > 1 ->
-          addStmt
+          addStmtFor argLookup global node deps
             (addDeps deps state)
             (fn global args (Expr.generateFunctionImplementation mode argLookup args body))
 
-    Opt.Define expr deps ->
-      addStmt (addDeps deps state) (
+    node@(Opt.Define expr deps) ->
+      addStmtFor argLookup global node deps (addDeps deps state) (
         var global (Expr.generate mode argLookup expr)
       )
 
-    Opt.DefineTailFunc argNames body deps ->
-      addStmt (addDeps deps state) (
+    node@(Opt.DefineTailFunc argNames body deps) ->
+      addStmtFor argLookup global node deps (addDeps deps state) (
         let (Opt.Global _ name) = global in
         var global (Expr.generateTailDef mode argLookup name argNames body)
       )
@@ -238,8 +251,8 @@ addGlobalHelp mode graph global state =
     Opt.Link linkedGlobal ->
       addGlobal mode graph state linkedGlobal
 
-    Opt.Cycle names values functions deps ->
-      addStmt (addDeps deps state) (
+    node@(Opt.Cycle names values functions deps) ->
+      addStmtFor argLookup global node deps (addDeps deps state) (
         generateCycle mode argLookup global names values functions
       )
 
@@ -279,13 +292,13 @@ addStmt state stmt =
 
 
 addBuilder :: State -> B.Builder -> State
-addBuilder (State revKernels revBuilders seen) builder =
-  State revKernels (builder:revBuilders) seen
+addBuilder (State revKernels revBuilders seen caching) builder =
+  State revKernels (builder:revBuilders) seen caching
 
 
 addKernel :: State -> B.Builder -> State
-addKernel (State revKernels revBuilders seen) kernel =
-  State (kernel:revKernels) revBuilders seen
+addKernel (State revKernels revBuilders seen caching) kernel =
+  State (kernel:revKernels) revBuilders seen caching
 
 
 var :: Opt.Global -> Expr.Code -> JS.Stmt
@@ -715,3 +728,77 @@ toMainEsmExports mode mains =
   in
   "export const Elm = " <> exports <> ";"
 
+
+
+-- JS CACHE
+--
+-- @LAMDERA `lamdera live --memory` keeps every module's objects in memory, so between two
+-- builds a module that was not recompiled has the very same Opt.Node values. The JS of a
+-- top-level definition depends on its node and, through direct calls (makeArgLookup), on
+-- the arities of the globals it refers to, all of which are in its deps. So the rendered
+-- statement of the last build is reused when the node is the same value (pointer equal,
+-- so the check costs nothing and can only ever miss, never be wrong) and the arities of
+-- its deps are unchanged. The traversal still runs in full, so the output order is the
+-- same; only the rendering of unchanged definitions is skipped.
+--
+-- Only Define, DefineTailFunc and Cycle statements are cached: they are where nearly all
+-- the work is. Kernel nodes (which include the Wire3 codecs replaceCodecs renders each
+-- build) are cheap to emit and are never cached. Use it with one Mode only (Generate.dev
+-- uses it for Mode.Dev Nothing).
+
+
+newtype JsCache =
+  JsCache (Map.Map Opt.Global CachedStmt)
+
+
+emptyJsCache :: JsCache
+emptyJsCache =
+  JsCache Map.empty
+
+
+data CachedStmt =
+  CachedStmt Opt.Node [Maybe Int] !BS.ByteString
+
+
+data Caching
+  = NoCaching
+  | Caching !(Map.Map Opt.Global CachedStmt) !(Map.Map Opt.Global CachedStmt) -- last build, this build
+
+
+{-| `generate`, reusing the statements of the last build where they are still valid, and
+returning the cache for the next one.
+-}
+generateCached :: JsCache -> Mode.Mode -> Opt.GlobalGraph -> Mains -> (B.Builder, JsCache)
+generateCached (JsCache old) mode globalGraph mains =
+  let
+    (builder, state) = generateFrom (emptyState { _caching = Caching old Map.empty }) mode globalGraph mains
+  in
+  ( builder
+  , case _caching state of
+      Caching _ new -> JsCache new
+      NoCaching     -> JsCache Map.empty
+  )
+
+
+addStmtFor :: FnArgLookup -> Opt.Global -> Opt.Node -> Set.Set Opt.Global -> State -> JS.Stmt -> State
+addStmtFor argLookup global node deps state stmt =
+  case _caching state of
+    NoCaching ->
+      addStmt state stmt
+
+    Caching old new ->
+      let
+        arities = map (\(Opt.Global home name) -> argLookup home name) (Set.toList deps)
+
+        entry =
+          case Map.lookup global old of
+            Just cached@(CachedStmt oldNode oldArities _)
+              | isTrue# (reallyUnsafePtrEquality# oldNode node) && oldArities == arities ->
+                  cached
+
+            _ ->
+              CachedStmt node arities (BSL.toStrict (B.toLazyByteString (JS.stmtToBuilder stmt)))
+
+        CachedStmt _ _ bytes = entry
+      in
+      addBuilder (state { _caching = Caching old (Map.insert global entry new) }) (B.byteString bytes)

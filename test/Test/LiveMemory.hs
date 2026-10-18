@@ -99,6 +99,15 @@ suite =
           edit "src/Leaf.elm" (<> "\n\nleafExtra : Int\nleafExtra =\n    1\n")
           _ <- step "an interface change to a leaf recompiles its importer, whose interface stays" ["Leaf", "Middle", "Lamdera.Live"]
 
+          -- Same type, so the same interface and Middle is not recompiled, but leafJoin now
+          -- takes one argument: Middle's direct call to it must change in the JS. In memory
+          -- the JS of Middle.middleText is reused only while the arities it calls are the same.
+          edit "src/Leaf.elm" (T.replace "leafJoin a b =\n    a ++ b" "leafJoin a =\n    \\b -> a ++ b")
+          js1 <- step "an arity change behind an unchanged interface regenerates the callers' JS" ["Leaf", "Lamdera.Live"]
+          edit "src/Leaf.elm" (T.replace "leafJoin a =\n    \\b -> a ++ b" "leafJoin a b =\n    a ++ b")
+          js2 <- step "and back" ["Leaf", "Lamdera.Live"]
+          expect (js1 /= js2)
+
           edit "src/Types.elm" (T.replace "= Red\n    | Green" "= Red\n    | Green\n    | Blue")
           js2 <- step "a new constructor in Types recompiles its importers, with new Wire3 codecs" ["Types", "Frontend", "Backend", "Lamdera.Live"]
           expect (BS.isInfixOf "$author$project$Types$Blue" js2)
@@ -227,8 +236,8 @@ writeProject dir = do
   writeUtf8 (dir </> "src/Frontend.elm") frontendModule
   writeUtf8 (dir </> "src/Backend.elm") backendModule
   writeUtf8 (dir </> "src/Env.elm") "module Env exposing (..)\n\n\ndummyConfigItem =\n    \"\"\n"
-  writeUtf8 (dir </> "src/Leaf.elm") "module Leaf exposing (..)\n\n\nleafText : String\nleafText =\n    \"leaf-v1\"\n"
-  writeUtf8 (dir </> "src/Middle.elm") "module Middle exposing (middleText)\n\nimport Leaf\n\n\nmiddleText : String\nmiddleText =\n    \"middle:\" ++ Leaf.leafText\n"
+  writeUtf8 (dir </> "src/Leaf.elm") "module Leaf exposing (..)\n\n\nleafText : String\nleafText =\n    \"leaf-v1\"\n\n\nleafJoin : String -> String -> String\nleafJoin a b =\n    a ++ b\n"
+  writeUtf8 (dir </> "src/Middle.elm") "module Middle exposing (middleText)\n\nimport Leaf\n\n\nmiddleText : String\nmiddleText =\n    Leaf.leafJoin \"middle:\" Leaf.leafText\n"
 
 
 -- what `lamdera init` writes: the live harness needs elm/bytes as a direct dependency

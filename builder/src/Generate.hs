@@ -41,6 +41,7 @@ import Lamdera ((&))
 import qualified Lamdera
 import qualified Lamdera.AppConfig
 import qualified Ext.MemoryCache as MemoryCache -- @LAMDERA lamdera live --memory
+import Data.Dynamic (fromDynamic, toDyn) -- @LAMDERA
 
 -- NOTE: This is used by Make, Repl, and Reactor right now. But it may be
 -- desireable to have Repl and Reactor to keep foreign objects in memory
@@ -78,9 +79,20 @@ dev stuff details (Build.Artifacts pkg _ roots modules) =
       graph <- Task.io $ Lamdera.AppConfig.injectConfig graph_
       let mains = gatherMains pkg objects roots
       esmEnabled <- Task.io $ Lamdera.useEsm
-      return $ JS.generate mode graph mains
-        & Lamdera.alternativeImplementationWhen esmEnabled
-            (JS.generateEsm mode graph mains)
+      -- @LAMDERA with `lamdera live --memory` reuse the JS of definitions that did not change
+      memory <- Task.io $ MemoryCache.forStuff stuff
+      case memory of
+        Just store | not esmEnabled ->
+          Task.io $
+          do  kept <- MemoryCache.getJsCache store
+              let (js, cache) = JS.generateCached (maybe JS.emptyJsCache id (fromDynamic =<< kept)) mode graph mains
+              MemoryCache.setJsCache store (toDyn cache)
+              return js
+
+        _ ->
+          return $ JS.generate mode graph mains
+            & Lamdera.alternativeImplementationWhen esmEnabled
+                (JS.generateEsm mode graph mains)
 
 
 prod :: R.Stuff -> Details.Details -> Build.Artifacts -> Task B.Builder
