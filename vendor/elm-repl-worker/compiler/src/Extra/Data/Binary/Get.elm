@@ -19,6 +19,7 @@ module Extra.Data.Binary.Get exposing
     , liftM4
     , liftM5
     , liftM6
+    , repeatFold
     , return
     , runGetOrFail
     )
@@ -267,3 +268,29 @@ getSequenceStep ga ( length, remaining1, result ) =
                         Bytes.Decode.Loop ( length - 1, remaining2, a :: result )
             )
             (ga remaining1)
+
+
+{-| @LAMDERA Run a step n times, each from the state the previous one returned, in a
+Bytes.Decode.loop so a long run does not grow the stack the way chained binds would.
+-}
+repeatFold : Int -> (s -> Get s) -> s -> Get s
+repeatFold length step initial remaining =
+    Bytes.Decode.loop ( length, remaining, initial ) (repeatFoldStep step)
+
+
+repeatFoldStep : (s -> Get s) -> ( Int, ByteOffset, s ) -> Bytes.Decode.Decoder (Bytes.Decode.Step ( Int, ByteOffset, s ) (Either ( ByteOffset, String ) ( ByteOffset, s )))
+repeatFoldStep step ( length, remaining1, state ) =
+    if length <= 0 then
+        Bytes.Decode.succeed (Bytes.Decode.Done (Right ( remaining1, state )))
+
+    else
+        Bytes.Decode.map
+            (\rs ->
+                case rs of
+                    Left ( remaining2, err ) ->
+                        Bytes.Decode.Done (Left ( remaining2, err ))
+
+                    Right ( remaining2, s ) ->
+                        Bytes.Decode.Loop ( length - 1, remaining2, s )
+            )
+            (step state remaining1)

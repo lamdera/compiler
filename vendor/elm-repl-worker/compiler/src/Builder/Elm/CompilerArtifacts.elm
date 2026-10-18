@@ -33,6 +33,7 @@ file name, in its own format (see Builder.Elm.Details.verifyDep).
 -}
 
 
+import Array exposing (Array)
 import Bitwise
 import Compiler.AST.Canonical as Can
 import Compiler.AST.Optimized as Opt
@@ -113,7 +114,7 @@ bool =
 
 string8 : Get String
 string8 =
-  BG.bind u8 BG.getString
+  BG.bind count8 BG.getString
 
 
 string32 : Get String
@@ -132,9 +133,17 @@ maybe getA =
   if tag == 0 then BG.return Nothing else BG.fmap Just getA
 
 
+{-| @LAMDERA Bytes.Decode.count8, the count of every *8 decoder (list8, dict8, string8):
+one byte below 255, or 255 then a u32. -}
+count8 : Get Int
+count8 =
+  BG.bind u8 <| \n ->
+  if n < 255 then BG.return n else u32
+
+
 list8 : Get a -> Get (TList a)
 list8 getA =
-  BG.bind u8 (BG.getSequence getA)
+  BG.bind count8 (BG.getSequence getA)
 
 
 list32 : Get a -> Get (TList a)
@@ -220,47 +229,50 @@ getPosition =
 -- INTERFACES (Elm.Interface)
 
 
+{-| @LAMDERA Like I.dInterface, a Private interface starts (after its tag) with its own
+type table. -}
 getDependencyInterface : Get I.DependencyInterface
 getDependencyInterface =
   tagged "DependencyInterface" <| \tag ->
   case tag of
     0 -> Just <| BG.fmap I.Public getInterface
-    1 -> Just <| BG.liftM3 I.Private getPkgName (dict32 getName getCanUnion) (dict32 getName getCanAlias)
+    1 -> Just <| BG.bind getTypeTable <| \table -> BG.liftM3 I.Private getPkgName (dict32 getName (getCanUnion table)) (dict32 getName (getCanAlias table))
     _ -> Nothing
 
 
 getInterface : Get I.Interface
 getInterface =
+  BG.bind getTypeTable <| \table ->
   BG.liftM5 I.Interface
     getPkgName
-    (dict32 getName getAnnotation)
-    (dict32 getName getUnion)
-    (dict32 getName getAlias)
-    (dict32 getName getBinop)
+    (dict32 getName (getAnnotation table))
+    (dict32 getName (getUnion table))
+    (dict32 getName (getAlias table))
+    (dict32 getName (getBinop table))
 
 
-getUnion : Get I.Union
-getUnion =
+getUnion : TypeTable -> Get I.Union
+getUnion table =
   tagged "Union" <| \tag ->
   case tag of
-    0 -> Just <| BG.fmap I.OpenUnion getCanUnion
-    1 -> Just <| BG.fmap I.ClosedUnion getCanUnion
-    2 -> Just <| BG.fmap I.PrivateUnion getCanUnion
+    0 -> Just <| BG.fmap I.OpenUnion (getCanUnion table)
+    1 -> Just <| BG.fmap I.ClosedUnion (getCanUnion table)
+    2 -> Just <| BG.fmap I.PrivateUnion (getCanUnion table)
     _ -> Nothing
 
 
-getAlias : Get I.Alias
-getAlias =
+getAlias : TypeTable -> Get I.Alias
+getAlias table =
   tagged "Alias" <| \tag ->
   case tag of
-    0 -> Just <| BG.fmap I.PublicAlias getCanAlias
-    1 -> Just <| BG.fmap I.PrivateAlias getCanAlias
+    0 -> Just <| BG.fmap I.PublicAlias (getCanAlias table)
+    1 -> Just <| BG.fmap I.PrivateAlias (getCanAlias table)
     _ -> Nothing
 
 
-getBinop : Get I.Binop
-getBinop =
-  BG.liftM4 I.Binop getName getAnnotation getAssociativity (BG.fmap Binop.Precedence u8)
+getBinop : TypeTable -> Get I.Binop
+getBinop table =
+  BG.liftM4 I.Binop getName (getAnnotation table) getAssociativity (BG.fmap Binop.Precedence u8)
 
 
 getAssociativity : Get Binop.Associativity
@@ -273,19 +285,19 @@ getAssociativity =
     _ -> Nothing
 
 
-getCanAlias : Get Can.Alias
-getCanAlias =
-  BG.liftM2 Can.Alias (list8 getVar) getType
+getCanAlias : TypeTable -> Get Can.Alias
+getCanAlias table =
+  BG.liftM2 Can.Alias (list8 getVar) (getTypeRef table)
 
 
-getCanUnion : Get Can.Union
-getCanUnion =
-  BG.liftM4 Can.Union (list8 getVar) (list32 getCtor) int getCtorOpts
+getCanUnion : TypeTable -> Get Can.Union
+getCanUnion table =
+  BG.liftM4 Can.Union (list8 getVar) (list32 (getCtor table)) int getCtorOpts
 
 
-getCtor : Get Can.Ctor
-getCtor =
-  BG.liftM4 Can.Ctor getName getIndex int (list8 getType)
+getCtor : TypeTable -> Get Can.Ctor
+getCtor table =
+  BG.liftM4 Can.Ctor getName getIndex int (list8 (getTypeRef table))
 
 
 getCtorOpts : Get Can.CtorOpts
@@ -298,39 +310,66 @@ getCtorOpts =
     _ -> Nothing
 
 
-getAnnotation : Get Can.Annotation
-getAnnotation =
-  BG.liftM2 Can.Forall (dict8 getVar (BG.return ())) getType
+getAnnotation : TypeTable -> Get Can.Annotation
+getAnnotation table =
+  BG.liftM2 Can.Forall (dict8 getVar (BG.return ())) (getTypeRef table)
 
 
-getType : Get Can.Type
-getType offset =
-  (tagged "Type" <| \tag ->
-    case tag of
-      0 -> Just <| BG.liftM2 Can.TLambda getType getType
-      1 -> Just <| BG.fmap Can.TVar getVar
-      2 -> Just <| BG.liftM2 Can.TRecord (dict32 getName getFieldType) (maybe getVar)
-      3 -> Just <| BG.return Can.TUnit
-      4 -> Just <| BG.liftM2 (\a b -> Can.TTuple a b Nothing) getType getType
-      5 -> Just <| BG.liftM3 (\a b c -> Can.TTuple a b (Just c)) getType getType getType
-      6 -> Just <| BG.liftM4 Can.TAlias getCanonical getName (list8 (BG.liftM2 Tuple.pair getVar getType)) getAliasType
-      7 -> Just <| BG.liftM3 Can.TType getCanonical getName (list8 getType)
-      _ -> Nothing
-  ) offset
+
+-- TYPE TABLE (Elm.Interface dTypeTable)
 
 
-getAliasType : Get Can.AliasType
-getAliasType =
-  tagged "AliasType" <| \tag ->
+{-| @LAMDERA Every type in an interface is written once, in a table at its start, and
+referred to by index everywhere else (see TYPE TABLE in the compiler's
+Elm.Interface): a u32 count, then the entries, each like the inline Type encoding but
+with its child types as refs to earlier entries. A ref is a u16 when the table has at
+most 65536 entries and a u32 otherwise.
+-}
+type TypeTable =
+  TypeTable (Get Int) (Array Can.Type)
+
+
+getTypeTable : Get TypeTable
+getTypeTable =
+  BG.bind u32 <| \size ->
+  let ref = if size <= 65536 then u16 else u32 in
+  BG.repeatFold size (\types -> BG.fmap (\t -> Array.push t types) (getTypeEntry (TypeTable ref types))) Array.empty
+    |> BG.fmap (TypeTable ref)
+
+
+{-| Only the entries before this one are in the table yet, so a ref forward is
+rejected as corrupt rather than followed. -}
+getTypeRef : TypeTable -> Get Can.Type
+getTypeRef (TypeTable ref types) =
+  BG.bind ref <| \i ->
+  case Array.get i types of
+    Just t -> BG.return t
+    Nothing -> BG.fail ("type ref " ++ String.fromInt i ++ " outside the type table")
+
+
+getTypeEntry : TypeTable -> Get Can.Type
+getTypeEntry table =
+  let ref = getTypeRef table in
+  tagged "Type" <| \tag ->
   case tag of
-    0 -> Just <| BG.fmap Can.Holey getType
-    1 -> Just <| BG.fmap Can.Filled getType
+    0 -> Just <| BG.liftM2 Can.TLambda ref ref
+    1 -> Just <| BG.fmap Can.TVar getVar
+    2 -> Just <| BG.liftM2 Can.TRecord (dict32 getName (BG.liftM2 Can.FieldType u16 ref)) (maybe getVar)
+    3 -> Just <| BG.return Can.TUnit
+    4 -> Just <| BG.liftM2 (\a b -> Can.TTuple a b Nothing) ref ref
+    5 -> Just <| BG.liftM3 (\a b c -> Can.TTuple a b (Just c)) ref ref ref
+    6 -> Just <| BG.liftM4 Can.TAlias getCanonical getName (list8 (BG.liftM2 Tuple.pair getVar ref)) (getAliasType ref)
+    7 -> Just <| BG.liftM3 Can.TType getCanonical getName (list8 ref)
     _ -> Nothing
 
 
-getFieldType : Get Can.FieldType
-getFieldType =
-  BG.liftM2 Can.FieldType u16 getType
+getAliasType : Get Can.Type -> Get Can.AliasType
+getAliasType ref =
+  tagged "AliasType" <| \tag ->
+  case tag of
+    0 -> Just <| BG.fmap Can.Holey ref
+    1 -> Just <| BG.fmap Can.Filled ref
+    _ -> Nothing
 
 
 
