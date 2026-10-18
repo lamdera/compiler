@@ -23,8 +23,14 @@ Executable lamdera
     -- 920 module app's Types.elm rebuild went 1.48s -> 1.33s and 3.3GB -> 2.6GB RSS,
     -- from scratch 2.49s either way with 0.6GB less RSS. Machines with 12 cores or
     -- fewer are unchanged; override with +RTS -N (the binary has -rtsopts) or GHCRTS.
+    -- @LAMDERA -Iw30: at most one idle GC every 30s. The idle GC is a major collection of
+    -- the whole heap, run whenever the program goes quiet after any activity at all, so a
+    -- `lamdera live` woken by a timer (the source reconcile every 5s, the browser's
+    -- messages) collected after each one: with --memory (1.4GB live on a 920 module app)
+    -- 12% of a core while idle, 1.8% with -Iw30. Rebuild times are the same; commands that
+    -- never go idle are unaffected.
     -- Make everything an error, ignoring the ones that already sit in core
-    ghc-options: -O2 -rtsopts -threaded "-with-rtsopts=-maxN12 -A128m"
+    ghc-options: -O2 -rtsopts -threaded "-with-rtsopts=-maxN12 -A128m -Iw30"
         -Wall
         -Werror
         -Wno-error=noncanonical-monad-instances
