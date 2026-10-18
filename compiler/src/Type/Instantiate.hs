@@ -43,7 +43,7 @@ fromSrcType freeVars sourceType =
 
     Can.TAlias home name args aliasedType ->
       do  targs <- traverse (traverse (fromSrcType freeVars)) args
-          AliasN home name targs <$>
+          body <-
             -- @LAMDERA built lazily: the solver defers alias bodies (Type.Type.Deferred)
             -- and most are never looked at. Building one has no effects, the IO is only
             -- there for the shape of this function.
@@ -55,6 +55,12 @@ fromSrcType freeVars sourceType =
               Can.Holey realType ->
                 fromSrcType (Map.fromList targs) realType
             )
+          -- @LAMDERA where it came from, see Type.Type.DeferredKey
+          let source =
+                case aliasedType of
+                  Can.Filled realType -> (realType, False, map snd args)
+                  Can.Holey realType -> (realType, True, map snd args)
+          return (AliasN home name targs body (Just source))
 
     Can.TPair a b ->
       PairN

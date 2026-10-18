@@ -438,6 +438,10 @@ deriving instance Show Type.Type.Descriptor
 -- deriving instance (Show a) => Show (Type.UnionFind.Point a)
 deriving instance Show Type.Type.Content
 deriving instance Show Type.Type.Deferred
+instance Show Type.Type.DeferredKey where
+  show _ = "<DeferredKey>"
+instance Show Type.Type.DeferredOrigin where
+  show _ = "<DeferredOrigin>"
 deriving instance Show Type.Type.SuperType
 deriving instance Show Type.Type.FlatType
 deriving instance Show Type.Type.Mark

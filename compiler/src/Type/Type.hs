@@ -23,9 +23,13 @@ module Type.Type
   , nameToFlex
   , nameToRigid
   , toAnnotation
+  , toAnnotations -- @LAMDERA
   , toErrorType
   -- @LAMDERA deferred alias bodies, see Deferred below
   , Deferred(..)
+  , DeferredKey
+  , DeferredOrigin
+  , AliasSource
   , deferredVariables
   , traverseDeferred
   , expandDeferred
@@ -40,6 +44,10 @@ import qualified Control.Monad.State.Strict as State
 import Data.Foldable (foldrM)
 import qualified Data.Map.Strict as Map
 import qualified Data.Map.Utils as Map
+import Control.Exception (evaluate)
+import Data.IORef (IORef, newIORef, readIORef, modifyIORef')
+import qualified Data.IntMap.Strict as IntMap
+import System.Mem.StableName (StableName, makeStableName, hashStableName)
 import Data.Word (Word32)
 
 import qualified Crash
@@ -106,7 +114,7 @@ data FlatType
 
 data Type
     = PlaceHolder T.Var
-    | AliasN ModuleName.Canonical T.Name [(T.Var, Type)] Type
+    | AliasN ModuleName.Canonical T.Name [(T.Var, Type)] Type (Maybe AliasSource) -- @LAMDERA source, see DeferredKey
     | VarN Variable
     | AppN ModuleName.Canonical T.Name [Type]
     | FunN Type Type
@@ -166,22 +174,80 @@ deals with an alias's arguments, which are built as before.
     the annotation's free variables for a Filled one.
 -}
 data Deferred
-    = DeferredType (Map.Map T.Var Variable) Type
-    | DeferredSrc (Map.Map T.Var Variable) Can.Type
+    = DeferredType (Maybe DeferredKey) (Map.Map T.Var Variable) Type
+    | DeferredSrc DeferredOrigin (Map.Map T.Var Variable) Can.Type
+
+
+{-| Where an alias node of a constraint type came from (Type.Instantiate): the Can.Type
+inside its Holey / Filled (True = Holey), and its arguments as written.
+-}
+type AliasSource =
+  (Can.Type, Bool, [Can.Type])
+
+
+{-| Identifies what a still-deferred real type turns into, for toAnnotation's
+AliasCache. Two Deferreds with equal keys convert to equal Can.Types:
+
+  FromConstraint: a DeferredType's body is built (Type.Instantiate) from the Can.Type
+    of the alias definition (or Filled body) and the alias arguments as written,
+    which are closed, so the body is decided by that Can.Type and those arguments.
+
+  FromAnnotation: a DeferredSrc's body is a Can.Type whose type variables stand for
+    the alias arguments (Holey: they are the arguments; Filled: an alias's real type
+    only has the type variables of its arguments). Given the arguments as converted
+    for this annotation, the conversion is decided by that Can.Type.
+
+The Can.Type is compared by StableName (its identity), not by value: equal identity
+is all that is needed, it is cheap, and the bodies in question are shared already
+(alias definitions come from one place, foreign annotations from one interface).
+-}
+data DeferredKey =
+  DeferredKey !DeferredKind !(StableName Can.Type) !Bool ![Can.Type]
+  deriving (Eq)
+
+
+data DeferredKind = FromConstraint | FromAnnotation
+  deriving (Eq)
+
+
+data DeferredOrigin =
+  DeferredOrigin !(StableName Can.Type) !Bool
+
+
+makeSourceKey :: AliasSource -> IO DeferredKey
+makeSourceKey (inner, isHoley, args) =
+  do  name <- makeStableName =<< evaluate inner
+      return (DeferredKey FromConstraint name isHoley args)
+
+
+makeOrigin :: Can.Type -> Bool -> IO DeferredOrigin
+makeOrigin body isHoley =
+  do  name <- makeStableName =<< evaluate body
+      return (DeferredOrigin name isHoley)
+
+
+deferredKey :: Deferred -> [Can.Type] -> Maybe DeferredKey
+deferredKey deferred canArgs =
+  case deferred of
+    DeferredType maybeKey _ _ ->
+      maybeKey
+
+    DeferredSrc (DeferredOrigin name isHoley) _ _ ->
+      Just (DeferredKey FromAnnotation name isHoley canArgs)
 
 
 deferredVariables :: Deferred -> [Variable]
 deferredVariables deferred =
   case deferred of
-    DeferredType dict _ -> Map.elems dict
-    DeferredSrc dict _ -> Map.elems dict
+    DeferredType _ dict _ -> Map.elems dict
+    DeferredSrc _ dict _ -> Map.elems dict
 
 
 traverseDeferred :: (Variable -> IO Variable) -> Deferred -> IO Deferred
 traverseDeferred f deferred =
   case deferred of
-    DeferredType dict tipe -> (\d -> DeferredType d tipe) <$> traverse f dict
-    DeferredSrc dict tipe -> (\d -> DeferredSrc d tipe) <$> traverse f dict
+    DeferredType key dict tipe -> (\d -> DeferredType key d tipe) <$> traverse f dict
+    DeferredSrc origin dict tipe -> (\d -> DeferredSrc origin d tipe) <$> traverse f dict
 
 
 {-| Build the variables for a deferred real type, registering each new variable with
@@ -190,8 +256,8 @@ the given action, and return the variable for its root.
 expandDeferred :: (Content -> IO Variable) -> Deferred -> IO Variable
 expandDeferred register deferred =
   case deferred of
-    DeferredType dict tipe -> typeToVarWith register dict tipe
-    DeferredSrc dict tipe -> srcTypeToVarWith register dict tipe
+    DeferredType _ dict tipe -> typeToVarWith register dict tipe
+    DeferredSrc _ dict tipe -> srcTypeToVarWith register dict tipe
 
 
 {-| What used to be Type.Solve.typeToVar, with registering abstracted out so that a
@@ -214,12 +280,14 @@ typeToVarWith register aliasDict tipe =
           bVar <- go b
           register (Structure (Fun1 aVar bVar))
 
-    AliasN home name args aliasType ->
+    AliasN home name args aliasType source ->
       do  argVars <- traverse (traverse go) args
           let argDict = Map.fromList argVars
           aliasVar <-
             if all (isClosedType . snd) args
-              then register (Deferred (DeferredType argDict aliasType))
+              then
+                do  key <- traverse makeSourceKey source
+                    register (Deferred (DeferredType key argDict aliasType))
               else typeToVarWith register argDict aliasType
           register (Alias home name argVars aliasVar)
 
@@ -257,7 +325,7 @@ isClosedType :: Type -> Bool
 isClosedType tipe =
   case tipe of
     PlaceHolder _ -> False
-    AliasN _ _ args _ -> all (isClosedType . snd) args
+    AliasN _ _ args _ _ -> all (isClosedType . snd) args
     VarN _ -> False
     AppN _ _ args -> all isClosedType args
     FunN a b -> isClosedType a && isClosedType b
@@ -312,13 +380,14 @@ srcTypeToVarWith register flexVars srcType =
     Can.TAlias home name args aliasType ->
       do  argVars <- traverse (traverse go) args
           aliasVar <-
-            register $ Deferred $
-              case aliasType of
-                Can.Holey tipe ->
-                  DeferredSrc (Map.fromList argVars) tipe
+            case aliasType of
+              Can.Holey tipe ->
+                do  origin <- makeOrigin tipe True
+                    register $ Deferred $ DeferredSrc origin (Map.fromList argVars) tipe
 
-                Can.Filled tipe ->
-                  DeferredSrc flexVars tipe
+              Can.Filled tipe ->
+                do  origin <- makeOrigin tipe False
+                    register $ Deferred $ DeferredSrc origin flexVars tipe
 
           register (Alias home name argVars aliasVar)
 
@@ -507,18 +576,60 @@ toSuper (T.Var _ c) =
 
 toAnnotation :: Variable -> IO Can.Annotation
 toAnnotation variable =
+  do  cache <- newAliasCache
+      toAnnotationWith cache variable
+
+
+{-| @LAMDERA The annotations of a whole module, sharing one AliasCache, so that every
+use of an alias with the same arguments (say a large Model record) in the module's
+annotations is converted once, and is the same Can.Type in memory.
+-}
+toAnnotations :: Map.Map N.Name Variable -> IO (Map.Map N.Name Can.Annotation)
+toAnnotations env =
+  do  cache <- newAliasCache
+      traverse (toAnnotationWith cache) env
+
+
+toAnnotationWith :: AliasCache -> Variable -> IO Can.Annotation
+toAnnotationWith cache variable =
   do  userNames <- getVarNames variable Map.empty
       (tipe, NameState freeVars _ _ _ _ _) <-
-        State.runStateT (variableToCanType variable) (makeNameState userNames)
+        State.runStateT (variableToCanType cache variable) (makeNameState userNames)
       return $ Can.Forall freeVars tipe
 
 
-variableToCanType :: Variable -> StateT NameState IO Can.Type
-variableToCanType variable =
+{-| @LAMDERA The conversion of each still-deferred real type seen so far, by
+DeferredKey (bucketed by the StableName's hash).
+
+Most real types in a module's annotations were never looked at by the solver, so they
+are still Deferred, and the same few (a Model record, a page context) come up again in
+annotation after annotation. Converting each one once, and sharing the result, gives
+values == to converting it at every use, without expanding and walking it every time,
+and leaves one copy of it in memory. A real type that has been expanded is converted
+as before: once unification has been inside it, it can differ (a record unified with
+another one keeps the other's field variables, so an alias there can turn into its
+expansion), so it is never cached.
+-}
+type AliasCache =
+  IORef (IntMap.IntMap [(DeferredKey, Can.Type)])
+
+
+newAliasCache :: IO AliasCache
+newAliasCache =
+  newIORef IntMap.empty
+
+
+aliasCacheKeyHash :: DeferredKey -> Int
+aliasCacheKeyHash (DeferredKey _ name _ _) =
+  hashStableName name
+
+
+variableToCanType :: AliasCache -> Variable -> StateT NameState IO Can.Type
+variableToCanType cache variable =
   do  (Descriptor content _ _ _) <- liftIO $ UF.get variable
       case content of
         Structure term ->
-            termToCanType term
+            termToCanType cache term
 
         FlexVar maybeName ->
           case maybeName of
@@ -547,35 +658,56 @@ variableToCanType variable =
             return (Can.TVar name)
 
         Alias home name args realVariable ->
-            do  canArgs <- traverse (traverse variableToCanType) args
-                canType <- variableToCanType realVariable
+            do  canArgs <- traverse (traverse (variableToCanType cache)) args
+                -- @LAMDERA see AliasCache
+                (Descriptor realContent _ _ _) <- liftIO $ UF.get realVariable
+                let maybeKey =
+                      case realContent of
+                        Deferred deferred -> deferredKey deferred (map snd canArgs)
+                        _ -> Nothing
+                canType <-
+                  case maybeKey of
+                    Just key ->
+                      do  let hash = aliasCacheKeyHash key
+                          bucket <- liftIO $ IntMap.findWithDefault [] hash <$> readIORef cache
+                          case lookup key bucket of
+                            Just canType ->
+                              return canType
+
+                            Nothing ->
+                              do  canType <- variableToCanType cache realVariable
+                                  liftIO $ modifyIORef' cache (IntMap.insertWith (++) hash [(key, canType)])
+                                  return canType
+
+                    Nothing ->
+                      variableToCanType cache realVariable
                 return (Can.TAlias home name canArgs (Can.Filled canType))
 
         Deferred deferred ->
             -- @LAMDERA see Deferred
-            variableToCanType =<< liftIO (expandDeferred temporaryVariable deferred)
+            variableToCanType cache =<< liftIO (expandDeferred temporaryVariable deferred)
 
         Error ->
             $(Crash.crash 'variableToCanType) "cannot handle Error types in variableToCanType"
 
 
-termToCanType :: FlatType -> StateT NameState IO Can.Type
-termToCanType term =
+termToCanType :: AliasCache -> FlatType -> StateT NameState IO Can.Type
+termToCanType cache term =
   case term of
     App1 home name args ->
-      Can.TType home name <$> traverse variableToCanType args
+      Can.TType home name <$> traverse (variableToCanType cache) args
 
     Fun1 a b ->
       Can.TLambda
-        <$> variableToCanType a
-        <*> variableToCanType b
+        <$> variableToCanType cache a
+        <*> variableToCanType cache b
 
     EmptyRecord1 ->
       return $ Can.TRecord Map.empty Nothing
 
     Record1 fields extension ->
-      do  canFields <- traverse fieldToCanType fields
-          canExt <- Type.iteratedDealias <$> variableToCanType extension
+      do  canFields <- traverse (fieldToCanType cache) fields
+          canExt <- Type.iteratedDealias <$> variableToCanType cache extension
           return $
               case canExt of
                 Can.TRecord subFields subExt ->
@@ -592,19 +724,19 @@ termToCanType term =
 
     Pair1 a b ->
       Can.TPair
-        <$> variableToCanType a
-        <*> variableToCanType b
+        <$> variableToCanType cache a
+        <*> variableToCanType cache b
 
     Triple1 a b c ->
       Can.TTriple
-        <$> variableToCanType a
-        <*> variableToCanType b
-        <*> variableToCanType c
+        <$> variableToCanType cache a
+        <*> variableToCanType cache b
+        <*> variableToCanType cache c
 
 
-fieldToCanType :: Variable -> StateT NameState IO Can.FieldType
-fieldToCanType variable =
-  do  tipe <- variableToCanType variable
+fieldToCanType :: AliasCache -> Variable -> StateT NameState IO Can.FieldType
+fieldToCanType cache variable =
+  do  tipe <- variableToCanType cache variable
       return (Can.FieldType 0 tipe)
 
 

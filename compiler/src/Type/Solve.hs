@@ -41,7 +41,8 @@ run constraint =
 
       case errors of
         [] ->
-          Right <$> traverse Type.toAnnotation env
+          -- @LAMDERA one alias cache for the whole module, see Type.Type.AliasCache
+          Right <$> Type.toAnnotations env
 
         e:es ->
           return $ Left (NE.List e es)
