@@ -59,6 +59,7 @@ import Data.IORef
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import qualified System.Directory as Dir
+import qualified System.Environment as Env
 import System.IO.Unsafe (unsafePerformIO)
 
 import qualified AST.Optimized as Opt
@@ -314,10 +315,19 @@ writeElmi maybeStore writer stuff name iface =
           return iface
 
     Just store ->
-      do  let !shared = I.share iface
+      do  let !shared = if shareInterfaces then I.share iface else iface
           updateEntry store name $ \e -> e { _iface = Just shared }
           markDirty store $ \d -> d { _dirtyInterfaces = Set.insert name (_dirtyInterfaces d) }
           return shared
+
+
+{-| LAMDERA_MEMORY_SHARE=0 keeps fresh interfaces as they come out of the compiler, to
+measure what hash-consing them saves.
+-}
+{-# NOINLINE shareInterfaces #-}
+shareInterfaces :: Bool
+shareInterfaces =
+  unsafePerformIO $ (/= Just "0") <$> Env.lookupEnv "LAMDERA_MEMORY_SHARE"
 
 
 {-| An interface that compiled to the same as before: in memory keep the old value
