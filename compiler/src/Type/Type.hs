@@ -36,6 +36,9 @@ module Type.Type
   , sameDeferred
   , typeToVarWith
   , srcTypeToVarWith
+  , DeferredRecord(..) -- @LAMDERA
+  , deferredRecord
+  , closedEmptyRecord
   )
   where
 
@@ -345,6 +348,60 @@ typeToVarHelp closed register aliasDict tipe =
           bVar <- part b
           cVar <- part c
           reg (Structure (Triple1 aVar bVar cVar))
+
+
+{-| @LAMDERA A closed deferred record type with no extension (the expansion of a
+record alias like a big Model, or a record part of one), seen field by field without
+building it: Type.Unify uses it to unify such a record with `{ r | field : a }` (a field
+access or record update) by building only the fields that are named, and leaving the
+rest deferred. `_drField` builds the variable expanding the whole record would have
+built for a field; `_drRest` a closed deferred record of the given fields.
+-}
+data DeferredRecord =
+  DeferredRecord
+    { _drFields :: Map.Map N.Name ()
+    , _drField :: N.Name -> IO Variable
+    , _drRest :: Map.Map N.Name () -> IO Variable
+    }
+
+
+-- the extension of a deferred record, as expanding it would build it
+closedEmptyRecord :: IO Variable
+closedEmptyRecord =
+  registerClosed emptyRecord1
+
+
+deferredRecord :: Deferred -> Maybe DeferredRecord
+deferredRecord deferred =
+  case deferred of
+    DeferredType _ dict (RecordN fields EmptyRecordN) ->
+      Just $ DeferredRecord
+        { _drFields = Map.map (const ()) fields
+        , _drField = \name ->
+            -- as typeToVarHelp True would for the field
+            let t = fields Map.! name in
+            if isCompositeType t
+              then registerClosed (Deferred (DeferredType Nothing dict t))
+              else typeToVarHelp True registerClosed dict t
+        , _drRest = \keep ->
+            registerClosed (Deferred (DeferredType Nothing dict (RecordN (Map.intersection fields keep) EmptyRecordN)))
+        }
+
+    DeferredSrc _ dict (Can.TRecord fields Nothing) | Map.null dict ->
+      Just $ DeferredRecord
+        { _drFields = Map.map (const ()) fields
+        , _drField = \name ->
+            -- as srcTypeToVarHelp True would for the field
+            let (Can.FieldType _ t) = fields Map.! name in
+            if isCompositeCanType t
+              then registerClosed (Deferred (DeferredSrc Nothing dict t))
+              else srcTypeToVarHelp True registerClosed dict t
+        , _drRest = \keep ->
+            registerClosed (Deferred (DeferredSrc Nothing dict (Can.TRecord (Map.intersection fields keep) Nothing)))
+        }
+
+    _ ->
+      Nothing
 
 
 {-| @LAMDERA A variable for a closed type (no variables anywhere inside it): a type

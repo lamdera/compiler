@@ -192,14 +192,83 @@ guardedUnify left right =
                         ok vars ()
 
                   _ ->
-                    do  -- @LAMDERA expand deferred alias bodies before looking inside them
-                        vars1 <- forceDeferred vars left
-                        vars2 <- forceDeferred vars1 right
-                        leftDesc <- UF.get left
-                        rightDesc <- UF.get right
-                        case actuallyUnify (Context left leftDesc right rightDesc) of
-                          Unify k ->
-                            k vars2 ok err
+                    do  leftDesc0 <- UF.get left
+                        rightDesc0 <- UF.get right
+                        shortcut <- unifyDeferredRecord vars (Context left leftDesc0 right rightDesc0)
+                        case shortcut of
+                          Just (vars0, Unify k) ->
+                            k vars0 ok err
+
+                          Nothing ->
+                            do  -- @LAMDERA expand deferred alias bodies before looking inside them
+                                vars1 <- forceDeferred vars left
+                                vars2 <- forceDeferred vars1 right
+                                leftDesc <- UF.get left
+                                rightDesc <- UF.get right
+                                case actuallyUnify (Context left leftDesc right rightDesc) of
+                                  Unify k ->
+                                    k vars2 ok err
+
+
+{-| @LAMDERA Unify a closed deferred record (Type.Type.deferredRecord) with a record
+structure that names no field the deferred one lacks (`{ r | field : a }`: a field
+access or record update on a big Model), without expanding the deferred one.
+
+Expanding it and unifying (unifyStructure, then unifyRecord) would build a variable
+for every field, unify the named ones, and bind the rest to a new record of the other
+fields. This does the same with variables for the named fields only, and the rest as a
+deferred record: the same unifications, the same merge (unifySharedFields), the same
+record left behind, but the fields nobody named stay unbuilt. The rest record has the
+outermost rank and is not introduced: it is closed, which is where generalize would
+leave it. Anything else (the other side names a field this one lacks, or it is not a
+record) goes through forceDeferred as before.
+-}
+unifyDeferredRecord :: [Variable] -> Context -> IO (Maybe ([Variable], Unify ()))
+unifyDeferredRecord vars context@(Context _ (Descriptor firstContent _ _ _) _ (Descriptor secondContent _ _ _)) =
+  case (firstContent, secondContent) of
+    (Deferred d, Structure (Record1 fields ext)) ->
+      case Type.deferredRecord d of
+        Just record -> withRecord True record fields ext
+        Nothing -> return Nothing
+
+    (Structure (Record1 fields ext), Deferred d) ->
+      case Type.deferredRecord d of
+        Just record -> withRecord False record fields ext
+        Nothing -> return Nothing
+
+    _ ->
+      return Nothing
+  where
+    withRecord deferredFirst record@(Type.DeferredRecord names _ _) fields ext =
+      do  (vars1, RecordStructure otherFields otherExt) <- gatherFields vars fields ext
+          if Map.null (Map.difference otherFields names)
+            then Just . (,) vars1 <$> unifyAgainst deferredFirst record otherFields otherExt
+            else return Nothing
+
+    unifyAgainst deferredFirst (Type.DeferredRecord names field rest) otherFields otherExt =
+      do  let unique = Map.difference names otherFields
+          named <- Map.traverseWithKey (\name _ -> field name) (Map.intersection names otherFields)
+          let shared =
+                if deferredFirst
+                  then Map.intersectionWith (,) named otherFields
+                  else Map.intersectionWith (,) otherFields named
+          if Map.null unique
+            then
+              do  ext <- Type.closedEmptyRecord
+                  return $
+                    if deferredFirst
+                      then do subUnify ext otherExt
+                              unifySharedFields context shared Map.empty ext
+                      else do subUnify otherExt ext
+                              unifySharedFields context shared Map.empty otherExt
+            else
+              do  sub <- rest unique
+                  return $
+                    if deferredFirst
+                      then do subUnify sub otherExt
+                              unifySharedFields context shared Map.empty sub
+                      else do subUnify otherExt sub
+                              unifySharedFields context shared Map.empty sub
 
 
 {-| @LAMDERA Expand a deferred alias body (see Type.Type.Deferred) into the variables
