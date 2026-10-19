@@ -238,7 +238,9 @@ resolvedRecordFieldMapM fieldMap extensibleName tvarMap =
               Just $ fieldMap <> fieldMapExtended
 
             TAlias moduleName typeName tvars (Holey tipe) -> do
-              let newResolvedTvars = tvars & fmap (\(n, t) -> (n, resolveTvar tvarMap t))
+              -- See expansionTvarMap: without it, nested extensible aliases that
+              -- share a parameter name never terminate
+              let newResolvedTvars = tvars & fmap (\(n, t) -> (n, resolveTvar (expansionTvarMap extensibleName tvarMap) t))
               case resolveTvar newResolvedTvars tipe of
                 TRecord fieldMapExtensible _ ->
                   fieldMap
@@ -250,7 +252,7 @@ resolvedRecordFieldMapM fieldMap extensibleName tvarMap =
                 _ -> Nothing
 
             TAlias moduleName typeName tvars (Filled tipe) -> do
-              let newResolvedTvars = tvars & fmap (\(n, t) -> (n, resolveTvar tvarMap t))
+              let newResolvedTvars = tvars & fmap (\(n, t) -> (n, resolveTvar (expansionTvarMap extensibleName tvarMap) t))
               case resolveTvar newResolvedTvars tipe of
                 TRecord fieldMapExtensible _ ->
                   fieldMap
@@ -280,6 +282,31 @@ resolvedRecordFieldMapM fieldMap extensibleName tvarMap =
 
     -- Not an extensible record
     Nothing -> Nothing
+
+
+{-| The substitution to resolve an extension's alias arguments with, while expanding that
+extension: `tvarMap` without the extension's own name.
+
+When the row tail of a record being resolved is bound to an alias, e.g. `A`'s `m` in
+
+    type alias A m = { m | a : Int }
+    type alias B m = { m | b : Int }
+    type alias Model m = A (B { m | x : Bool })
+
+the alias's arguments (`{ m | x : Bool }`) are written in the REFERENCING scope, yet they
+are resolved again with `tvarMap`, the alias's own parameters. While the names differ that
+second pass finds nothing to substitute. When they coincide, as with `m` above, the
+argument's row tail `m` looks up the very binding being expanded, which leads back to this
+same expansion: resolveTvar and resolvedRecordFieldMapM recursed until the machine ran out
+of memory (concourse's `SideBar.Model`, 22-47GB during `lamdera make`).
+
+Dropping the binding being expanded cuts that cycle and nothing else: any forced use of it
+in that second pass was the infinite one, so every type that resolved before resolves to
+the same thing now, and the shared name case resolves like the differently named one.
+-}
+expansionTvarMap :: TV.Var -> [(TV.Var, Type)] -> [(TV.Var, Type)]
+expansionTvarMap extensibleName tvarMap =
+  tvarMap & filter (\(n, _) -> n /= extensibleName)
 
 
 resolveFieldMap tipe tvarMap =
@@ -955,7 +982,8 @@ resolveTvar tvarMap t =
                 & (\newFieldMap -> TRecord newFieldMap Nothing )
 
             TAlias moduleName typeName tvars (Holey tipe) -> do
-              let newResolvedTvars = tvars & fmap (\(n, t) -> (n, resolveTvar tvarMap t))
+              -- See expansionTvarMap
+              let newResolvedTvars = tvars & fmap (\(n, t) -> (n, resolveTvar (expansionTvarMap extensibleName tvarMap) t))
               case resolveTvar newResolvedTvars tipe of
                 TRecord fieldMapExtensible _ ->
                   fieldMap
@@ -968,7 +996,7 @@ resolveTvar tvarMap t =
                 _ -> error $ "bad nesting Holey" ++ show tipe
 
             TAlias moduleName typeName tvars (Filled tipe) -> do
-              let newResolvedTvars = tvars & fmap (\(n, t) -> (n, resolveTvar tvarMap t))
+              let newResolvedTvars = tvars & fmap (\(n, t) -> (n, resolveTvar (expansionTvarMap extensibleName tvarMap) t))
               case resolveTvar newResolvedTvars tipe of
                 TRecord fieldMapExtensible _ ->
                   fieldMap
@@ -1350,3 +1378,4 @@ defTopLevelRefs def =
   case def of
     Def _ _ e          -> topLevelRefsInExpr e
     TypedDef _ _ _ e _ -> topLevelRefsInExpr e
+
