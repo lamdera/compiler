@@ -436,7 +436,10 @@ encodeTypeValue depth ifaces cname tipe value =
     TRecord fieldMap maybeExtensible ->
       case maybeExtensible of
         Just extensibleName ->
-          (lvar $ N.fromChars $ "w3_x_c_" ++ TV.varToChars extensibleName)
+          -- The codec of the whole record, applied to the value like every other case here
+          -- (it used to be left unapplied, a function among the Encoders, which never
+          -- typechecked: e.g. a constructor argument or a record field `{ a | x : Int }`)
+          call (lvar $ N.fromChars $ "w3_x_c_" ++ TV.varToChars extensibleName) [ value ]
 
         Nothing ->
           call (encoderForType depth ifaces cname tipe) [ value ]

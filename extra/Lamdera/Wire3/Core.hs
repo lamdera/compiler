@@ -241,9 +241,9 @@ addWireGenerations_ canonical pkg ifaces modul =
       (Can._unions canonical)
         & Lexical.toList
         & concatMap (\(name, union) ->
-            [ (encoderUnion isTest_ ifaces pkg modul decls_ name union)
-            , (decoderUnion DecodeValidating isTest_ ifaces pkg modul decls_ name union)
-            , (decoderUnion DecodeUnsafe     isTest_ ifaces pkg modul decls_ name union)
+            [ (encoderUnion moduleRowConstraints isTest_ ifaces pkg modul decls_ name union)
+            , (decoderUnion moduleRowConstraints DecodeValidating isTest_ ifaces pkg modul decls_ name union)
+            , (decoderUnion moduleRowConstraints DecodeUnsafe     isTest_ ifaces pkg modul decls_ name union)
             ]
             & (\defs ->
                 if recursesIrregularly cname (Can._unions canonical) name union
@@ -257,14 +257,19 @@ addWireGenerations_ canonical pkg ifaces modul =
     decoderComparableParams =
       comparableParams ifaces cname (Can._unions canonical) (Can._aliases canonical)
 
+    -- The record constraints the codecs of this module's types put on their parameters,
+    -- and those of the types they reference (see RowConstraints)
+    moduleRowConstraints =
+      rowConstraints ifaces cname (Can._unions canonical) (Can._aliases canonical)
+
     aliasDefs =
       (Can._aliases canonical)
         & Lexical.toList
         & filter (\(_, Alias _ tipe) -> not (isLambdaType tipe))
         & concatMap (\(name, alias) ->
-            [ (encoderAlias isTest_ ifaces pkg modul decls_ name alias)
-            , (decoderAlias DecodeValidating isTest_ ifaces pkg modul decls_ name alias)
-            , (decoderAlias DecodeUnsafe     isTest_ ifaces pkg modul decls_ name alias)
+            [ (encoderAlias moduleRowConstraints isTest_ ifaces pkg modul decls_ name alias)
+            , (decoderAlias moduleRowConstraints DecodeValidating isTest_ ifaces pkg modul decls_ name alias)
+            , (decoderAlias moduleRowConstraints DecodeUnsafe     isTest_ ifaces pkg modul decls_ name alias)
             ]
         )
 
@@ -525,8 +530,8 @@ addExport def exports =
       Map.insert name_ A.zero exports
 
 
-encoderUnion :: Bool -> Map.Map PrimModule.Name I.Interface -> Pkg.Name -> Src.Module -> Decls -> TN.Name -> Union -> Def
-encoderUnion isTest_ ifaces pkg modul decls unionName union =
+encoderUnion :: RowConstraints -> Bool -> Map.Map PrimModule.Name I.Interface -> Pkg.Name -> Src.Module -> Decls -> TN.Name -> Union -> Def
+encoderUnion rowConstraints isTest_ ifaces pkg modul decls unionName union =
   let
     !_ = runTests isTest_ "encoderUnion" pkg modul decls generatedName finalGen union (unionAsModule cname unionName union)
 
@@ -535,8 +540,10 @@ encoderUnion isTest_ ifaces pkg modul decls unionName union =
     tvars = _u_vars union
     -- ptvars = tvars & fmap (\tvar -> pvar $ Data.Name.fromChars $ "w3_x_c_" ++ Data.Name.toChars tvar )
 
-    ptvarsTyped = tvars & fmap (\tvar ->
-        (pvar $ N.fromChars $ "w3_x_c_" ++ TV.varToChars tvar, TLambda (TVar tvar) tLamdera_Wire_Encoder_Holey)
+    -- A parameter can be constrained to a record by the constructors' arguments, as in
+    -- encoderAlias (see RowConstraints)
+    ptvarsTyped = zip tvars (fmap snd (rowConstraints cname unionName) ++ repeat Map.empty) & fmap (\(tvar, constraints) ->
+        (pvar $ N.fromChars $ "w3_x_c_" ++ TV.varToChars tvar, TLambda (constrainTvarBy tvar constraints) tLamdera_Wire_Encoder_Holey)
       )
 
     numCtors = length $ _u_alts union
@@ -567,7 +574,7 @@ encoderUnion isTest_ ifaces pkg modul decls unionName union =
 
                     paramEncoders =
                       paramTypes & imap (\pi_ paramType ->
-                          encodeTypeValue 0 ifaces cname paramType (lvar (N.fromChars $ "v" ++ show pi_))
+                          encodeTypeValue 0 ifaces cname (extendRowArgs rowConstraints paramType) (lvar (N.fromChars $ "v" ++ show pi_))
                       )
 
                     branchHandler =
@@ -614,8 +621,8 @@ encoderUnion isTest_ ifaces pkg modul decls unionName union =
   finalGen
 
 
-decoderUnion :: DecodeMode -> Bool -> Map.Map PrimModule.Name I.Interface -> Pkg.Name -> Src.Module -> Decls -> TN.Name -> Union -> Def
-decoderUnion mode isTest_ ifaces pkg modul decls unionName union =
+decoderUnion :: RowConstraints -> DecodeMode -> Bool -> Map.Map PrimModule.Name I.Interface -> Pkg.Name -> Src.Module -> Decls -> TN.Name -> Union -> Def
+decoderUnion rowConstraints mode isTest_ ifaces pkg modul decls unionName union =
   let
     !_ = runTests isTest_ "decoderUnion" pkg modul decls generatedName generated union (unionAsModule cname unionName union)
 
@@ -653,7 +660,7 @@ decoderUnion mode isTest_ ifaces pkg modul decls unionName union =
                     & imap (\i (Ctor tagName tagIndex numParams paramTypes) ->
                         CaseBranch (pint i) $
                           ([(succeedDecode (vctor tagName tagIndex paramTypes))]
-                          ++ fmap (\paramType -> andMapDecode1 ((decoderForType mode ifaces cname paramType))) paramTypes)
+                          ++ fmap (\paramType -> andMapDecode1 ((decoderForType mode ifaces cname (extendRowArgs rowConstraints paramType)))) paramTypes)
                             & foldlPairs (|>)
                     )
                     & (\l -> l ++ [CaseBranch pAny_ $ failDecode (N.toChars generatedName <> " unexpected union tag index")])
@@ -694,26 +701,43 @@ decoderUnion mode isTest_ ifaces pkg modul decls unionName union =
 -- on that tvar name, returning all the constraint field names and types. This can then be used
 -- to construct an anonymous record constraint for the type signature.
 -- See Wire_Record_Extensible4_DB.elm for an example.
-getRecordConstraints :: TV.Var -> Type -> Map.Map N.Name Type
-getRecordConstraints tvarName tipe =
+--
+-- A custom type's codecs can constrain their parameters too (see RowConstraints), so
+-- those are looked up in `rowConstraints`.
+getRecordConstraints :: RowConstraints -> TV.Var -> Type -> Map.Map N.Name Type
+getRecordConstraints rowConstraints tvarName tipe =
   -- @TODO cover all the possible constraint types!
   -- debugHaskellPass ("🔵 getRecordConstraints ") (tvarName, tipe) $
   case tipe of
     TType cname aliasName tvars ->
-      tvars & fmap (getRecordConstraints tvarName) & Map.unions
+      let
+        -- `ProcessCheckpointResult race player`'s codecs take the codec of a
+        -- `{ player | moves : List Int, status : Int }` for `player`, so where we are the
+        -- row tail of the argument applied there, those fields are constraints on us as
+        -- well, in terms of the arguments applied here (as for an alias's Holey body below).
+        params = rowConstraints cname aliasName
+        constraintsOfType =
+          zip params tvars
+            & List.filter (\(_, argType) -> extendsTvar tvarName argType)
+            & fmap (\((_, fields), _) ->
+                fields & fmap (substituteTvars (Map.fromList (zip (fmap fst params) tvars)))
+              )
+            & Map.unions
+      in
+      Map.union constraintsOfType (tvars & fmap (getRecordConstraints rowConstraints tvarName) & Map.unions)
 
     TRecord fields ext ->
       case ext of
         Nothing ->
-          fields & fmap (\(FieldType _ t) -> getRecordConstraints tvarName t) & Map.unions
+          fields & fmap (\(FieldType _ t) -> getRecordConstraints rowConstraints tvarName t) & Map.unions
 
         Just extName ->
           if extName == tvarName
             then fields & fmap (\(FieldType _ t) -> t)
             else Map.empty
 
-    TPair a_ b    -> [a_, b]    & fmap (getRecordConstraints tvarName) & Map.unions
-    TTriple a_ b c -> [a_, b, c] & fmap (getRecordConstraints tvarName) & Map.unions
+    TPair a_ b    -> [a_, b]    & fmap (getRecordConstraints rowConstraints tvarName) & Map.unions
+    TTriple a_ b c -> [a_, b, c] & fmap (getRecordConstraints rowConstraints tvarName) & Map.unions
 
     TAlias moduleName typeName tvars aType ->
       let
@@ -721,7 +745,7 @@ getRecordConstraints tvarName tipe =
         -- `BrowserStream (WithWindowSize a)`, where the constraint on `a` lives in the
         -- argument rather than in BrowserStream's own body.
         constraintsInArgs =
-          tvars & fmap (\(_, argType) -> getRecordConstraints tvarName argType) & Map.unions
+          tvars & fmap (\(_, argType) -> getRecordConstraints rowConstraints tvarName argType) & Map.unions
 
         constraintsInBody =
           case aType of
@@ -741,7 +765,7 @@ getRecordConstraints tvarName tipe =
                     -- extracting it for, and type inference dies on a Map.! in
                     -- Type.Instantiate, reaching users as "thread blocked indefinitely in an
                     -- MVar operation".
-                    getRecordConstraints paramName t
+                    getRecordConstraints rowConstraints paramName t
                       & fmap (substituteTvars (Map.fromList tvars))
                   )
                 & Map.unions
@@ -750,7 +774,7 @@ getRecordConstraints tvarName tipe =
             Filled t ->
               -- A Filled body has already had its arguments substituted into it, so the
               -- names in it are ours as they stand.
-              getRecordConstraints tvarName t
+              getRecordConstraints rowConstraints tvarName t
               -- extractors & fmap (\extractor -> extractor t) & Map.unions
       in
       Map.union constraintsInBody constraintsInArgs
@@ -937,11 +961,15 @@ normaliseTvarNames renames t =
 -- name and a type, and if the type is a constrained record, it returns a new type
 -- that includes the constraint. Otherwise it returns the original TVar.
 -- See Wire_Record_Extensible4_DB.elm for an example.
-constrainTvar :: TV.Var -> Type -> Type
-constrainTvar tvarName tipe =
+constrainTvar :: RowConstraints -> TV.Var -> Type -> Type
+constrainTvar rowConstraints tvarName tipe =
   -- debugHaskellPassWhen (tvarName == "compatibleA") ("🧡 constrainTvar") (tvarName, tipe) $
-  let constraints = getRecordConstraints tvarName tipe
-  in
+  constrainTvarBy tvarName (getRecordConstraints rowConstraints tvarName tipe)
+
+
+{-| constrainTvar, for constraints already gathered -}
+constrainTvarBy :: TV.Var -> Map.Map N.Name Type -> Type
+constrainTvarBy tvarName constraints =
   if Map.size constraints > 0 then
     constraints
       -- Field indexes in Lamdera's (pre Elm 0.19.3) name order, see Lamdera.Lexical
@@ -953,8 +981,173 @@ constrainTvar tvarName tipe =
     TVar tvarName
 
 
-encoderAlias :: Bool -> Map.Map PrimModule.Name I.Interface -> Pkg.Name -> Src.Module -> Decls -> TN.Name -> Alias -> Def
-encoderAlias isTest_ ifaces pkg modul decls aliasName alias@(Alias tvars tipe) =
+{-| The record constraints the codecs of a custom type or alias put on each of its
+parameters, by type: the parameter, and the fields its `w3_x_c_<tvar>` codec's record has
+to have, written in the type's own parameters. Empty for a parameter that is not
+constrained.
+
+    type alias Player a = { a | status : Int, moves : List Int }
+    type alias ProcessLine race player = { race : race, player : Player player, step : Int }
+    type ProcessCheckpointResult race player
+        = PlayerActive (ProcessLine race player)
+        | PlayerFinished (ProcessLine race player)
+
+The codec of a type variable that is a row tail is the codec of the whole record it ends
+(see Wire_Record_Extensible1_Basic), so ProcessLine's codecs take the codec of a
+`{ player | moves : List Int, status : Int }` for `player`, and encoderAlias says so in its
+signature. A custom type's codecs pass theirs on, so they need it too: its encoder was
+annotated with a plain `player -> Encoder`, a TYPE MISMATCH, and the codecs of any
+`ProcessCheckpointResult String { name : String }` were called with the codec of just
+`{ name : String }`, where they need the whole `{ moves, name, status }` (see
+extendRowArgs). an app hits both. Such a custom type never compiled, and every other
+custom type has no constraints, so nothing that compiled changes.
+
+An alias's are the ones encoderAlias already puts in its signature; they are here for
+extendRowArgs. The types of this module can constrain each other's parameters, so they are
+solved together, to a fixpoint. Foreign ones are read off their encoder's signature in the
+interface.
+-}
+type RowConstraints = Module.Canonical -> TN.Name -> [(TV.Var, Map.Map N.Name Type)]
+
+
+rowConstraints :: Map.Map PrimModule.Name I.Interface -> Module.Canonical -> Map.Map TN.Name Union -> Map.Map TN.Name Alias -> RowConstraints
+rowConstraints ifaces cname unions aliases =
+  let
+    lookupIn :: Map.Map TN.Name [(TV.Var, Map.Map N.Name Type)] -> RowConstraints
+    lookupIn solved moduleName typeName =
+      if moduleName == cname
+        then Map.findWithDefault [] typeName solved
+        else foreignRowConstraints ifaces moduleName typeName
+
+    -- Each type's parameters, and the types its codecs encode. An alias's are the
+    -- constraints encoderAlias puts in its signature.
+    localTypes :: Map.Map TN.Name ([TV.Var], [Type])
+    localTypes =
+      Map.union
+        (unions & fmap (\union ->
+          (_u_vars union, _u_alts union & concatMap (\(Ctor _ _ _ types) -> types))))
+        (aliases & fmap (\(Alias tvars tipe) -> (tvars, [tipe])))
+
+    step solved =
+      localTypes & fmap (\(tvars, types) ->
+          tvars & fmap (\tvar ->
+            ( tvar
+            , types
+                & fmap (getRecordConstraints (lookupIn solved) tvar . normaliseTvarNames Map.empty)
+                & Map.unions
+            )
+          )
+        )
+
+    -- Fields only ever get added, and only fields the definitions mention, so this
+    -- settles; the bound is only a guard.
+    fixpoint :: Int -> Map.Map TN.Name [(TV.Var, Map.Map N.Name Type)] -> Map.Map TN.Name [(TV.Var, Map.Map N.Name Type)]
+    fixpoint n solved =
+      let next = step solved
+      in if next == solved || n <= 0 then next else fixpoint (n - 1) next
+  in
+  lookupIn (fixpoint (2 * Map.size localTypes + 2) (localTypes & fmap (\(tvars, _) -> tvars & fmap (\tvar -> (tvar, Map.empty)))))
+
+
+{-| A foreign type's RowConstraints, from its encoder's signature in the interface:
+`({ player | moves : List Int, status : Int } -> Encoder) -> ...`. Interfaces built before
+custom types' encoders were constrained have none, as before.
+-}
+foreignRowConstraints :: Map.Map PrimModule.Name I.Interface -> Module.Canonical -> TN.Name -> [(TV.Var, Map.Map N.Name Type)]
+foreignRowConstraints ifaces moduleName typeName =
+  let
+    codecArgs t =
+      case t of
+        TLambda (TLambda arg _) rest -> arg : codecArgs rest
+        _ -> []
+
+    constraintOf arg =
+      case arg of
+        TVar tvar -> Just (tvar, Map.empty)
+        TRecord fields (Just tvar) -> Just (tvar, fields & fmap (\(FieldType _ t) -> t))
+        _ -> Nothing
+  in
+  case foreignTypeSig moduleName (N.fromChars $ "w3_encode_" ++ TN.nameToChars typeName) ifaces of
+    Just (Forall _ tipe) -> codecArgs tipe & mapM constraintOf & maybe [] id
+    Nothing -> []
+
+
+{-| `tipe`, with each closed record argument a type constrains (see RowConstraints)
+extended with the constraint's fields, so that the codec generated for that argument is the
+one the type's codecs take: `ProcessCheckpointResult String { name : String }` becomes
+`ProcessCheckpointResult String { moves : List Int, name : String, status : Int }`.
+
+Only for generating codecs: Elm reads the constraint's fields back off the codec, and
+infers `{ name : String }` again. Any other argument is left as it is: the codec of a type
+variable or of an open record is the `w3_x_c_<tvar>` of its row tail either way.
+
+An alias is called the same way unless the constrained parameter is the row tail of its
+own body (`Player a`, `A (B m)`): those are inlined instead (inlineIfRecordOrCall, and the
+same in the decoder), which already adds the alias's fields, and stay exactly as they
+were. The rest, e.g. `type alias W a = { inner : Player a }`, were called with the codec
+of the argument alone, `W { name : String }` with that of `{ name : String }`: the encoder
+dropped `moves` and `status`, and the decoder's type was missing them (a TYPE MISMATCH
+wherever it is used at `W { name : String }`).
+-}
+extendRowArgs :: RowConstraints -> Type -> Type
+extendRowArgs rowConstraints tipe =
+  let
+    go = extendRowArgs rowConstraints
+
+    isClosedRecord t =
+      case t of
+        TRecord _ Nothing -> True
+        TAlias _ _ args (Holey body) -> isClosedRecord (substituteRows (Map.fromList args) body)
+        TAlias _ _ _ (Filled body) -> isClosedRecord body
+        _ -> False
+
+    -- The arguments, each extended with its constraint where `extends` allows
+    extendArgs moduleName typeName extends args =
+      let
+        constraints = rowConstraints moduleName typeName
+        subs = Map.fromList (zip (fmap fst constraints) args)
+
+        extendArg arg constraint =
+          case constraint of
+            Just (param, fields) | not (Map.null fields) && extends param && isClosedRecord arg ->
+              fields
+                -- Field indexes in Lamdera's (pre Elm 0.19.3) name order, see Lamdera.Lexical
+                & Lexical.toList
+                & imap (\i (name, t) -> (name, FieldType (fromIntegral i) (substituteRows subs t)))
+                & Map.fromList
+                & (\extension -> extendRow extension arg)
+            _ -> arg
+      in
+      if all (Map.null . snd) constraints
+        then args
+        else zipWith extendArg args (fmap Just constraints ++ repeat Nothing)
+  in
+  case tipe of
+    TType moduleName typeName params ->
+      TType moduleName typeName (extendArgs moduleName typeName (const True) (fmap go params))
+
+    TLambda t1 t2 -> TLambda (go t1) (go t2)
+    TRecord fieldMap ext -> TRecord (fieldMap & fmap (\(FieldType index t) -> FieldType index (go t))) ext
+    TUnit -> tipe
+    TVar _ -> tipe
+    TPair a_ b -> TPair (go a_) (go b)
+    TTriple a_ b c -> TTriple (go a_) (go b) (go c)
+
+    TAlias moduleName typeName args (Holey body) ->
+      let
+        args_ = args & fmap (\(n, t) -> (n, go t))
+        extended = extendArgs moduleName typeName (\param -> not (extendsTvar param body)) (fmap snd args_)
+      in
+      TAlias moduleName typeName (zip (fmap fst args_) extended) (Holey (go body))
+
+    -- Already substituted, so which parameter is the row tail of the body can't be told
+    -- any more; left as it was
+    TAlias moduleName typeName args (Filled body) ->
+      TAlias moduleName typeName (args & fmap (\(n, t) -> (n, go t))) (Filled (go body))
+
+
+encoderAlias :: RowConstraints -> Bool -> Map.Map PrimModule.Name I.Interface -> Pkg.Name -> Src.Module -> Decls -> TN.Name -> Alias -> Def
+encoderAlias rowConstraints isTest_ ifaces pkg modul decls aliasName alias@(Alias tvars tipe) =
   let
     !_ = runTests isTest_ "encoderAlias" pkg modul decls generatedName finalGen alias (aliasAsModule cname aliasName alias)
 
@@ -965,7 +1158,7 @@ encoderAlias isTest_ ifaces pkg modul decls aliasName alias@(Alias tvars tipe) =
     normalisedTvarsType = normaliseTvarNames Map.empty tipe
 
     ptvarsTyped = tvars & fmap (\tvar ->
-        let constrainedTvar = constrainTvar tvar normalisedTvarsType
+        let constrainedTvar = constrainTvar rowConstraints tvar normalisedTvarsType
         in
         ( pvar $ N.fromChars $ "w3_x_c_" ++ TV.varToChars tvar
         , TLambda constrainedTvar tLamdera_Wire_Encoder_Holey
@@ -976,7 +1169,7 @@ encoderAlias isTest_ ifaces pkg modul decls aliasName alias@(Alias tvars tipe) =
         (tvar, TVar tvar)
       )
 
-    generatedBody = deepEncoderForType 0 ifaces cname tipe
+    generatedBody = deepEncoderForType 0 ifaces cname (extendRowArgs rowConstraints tipe)
 
     -- = Def (A.Located Name) [Pattern] Expr
     -- generated = Def (a (generatedName)) ptvars $
@@ -1016,8 +1209,8 @@ encoderAlias isTest_ ifaces pkg modul decls aliasName alias@(Alias tvars tipe) =
   finalGen
 
 
-decoderAlias :: DecodeMode -> Bool -> Map.Map PrimModule.Name I.Interface -> Pkg.Name -> Src.Module -> Decls -> TN.Name -> Alias -> Def
-decoderAlias mode isTest_ ifaces pkg modul decls aliasName alias@(Alias tvars tipe) =
+decoderAlias :: RowConstraints -> DecodeMode -> Bool -> Map.Map PrimModule.Name I.Interface -> Pkg.Name -> Src.Module -> Decls -> TN.Name -> Alias -> Def
+decoderAlias rowConstraints mode isTest_ ifaces pkg modul decls aliasName alias@(Alias tvars tipe) =
   let
     !_ = runTests isTest_ "decoderAlias" pkg modul decls generatedName generated alias (aliasAsModule cname aliasName alias)
 
@@ -1027,7 +1220,7 @@ decoderAlias mode isTest_ ifaces pkg modul decls aliasName alias@(Alias tvars ti
 
     generated = Def (a (generatedName)) ptvars $
       -- debugDecoder (Data.Name.toElmString aliasName) $
-      decoderForType mode ifaces cname tipe
+      decoderForType mode ifaces cname (extendRowArgs rowConstraints tipe)
   in
   generated
 

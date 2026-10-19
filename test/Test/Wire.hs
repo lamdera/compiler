@@ -122,6 +122,7 @@ wireTestFiles =
   , "src/Test/Wire_Record_Extensible8_NestedRecordArg.elm"
   , "src/Test/Wire_Record_Extensible9_Unimported.elm"
   , "src/Test/Wire_Record_Extensible10_AliasChain.elm"
+  , "src/Test/Wire_Record_Extensible11_UnionOfAliasRow.elm"
   , "src/Test/Wire_Phantom.elm"
   , "src/Test/Wire_Tvar_Deep.elm"
   , "src/Test/Wire_Tvar_Deep2.elm"

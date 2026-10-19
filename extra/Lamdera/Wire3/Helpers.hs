@@ -446,15 +446,6 @@ substituteRows :: Map.Map TV.Var Type -> Type -> Type
 substituteRows subs t =
   let
     go = substituteRows subs
-
-    extendRow fields bound =
-      case bound of
-        TRecord moreFields ext -> TRecord (Map.union fields moreFields) ext
-        TVar v -> TRecord fields (Just v)
-        TAlias _ _ args (Holey body) -> extendRow fields (substituteRows (Map.fromList args) body)
-        TAlias _ _ _ (Filled body) -> extendRow fields body
-        -- Not a record: Elm does not allow it as a row tail
-        _ -> TRecord fields Nothing
   in
   case t of
     TVar v -> Map.findWithDefault t v subs
@@ -471,6 +462,21 @@ substituteRows subs t =
     TTriple a_ b c -> TTriple (go a_) (go b) (go c)
     TAlias home name args (Holey body) -> TAlias home name (args & fmap (\(n, v) -> (n, go v))) (Holey body)
     TAlias home name args (Filled body) -> TAlias home name (args & fmap (\(n, v) -> (n, go v))) (Filled (go body))
+
+
+{-| `fields` added to the record `bound`, as when `bound` is substituted for the row tail of
+`{ r | fields }`: a record's fields are merged in, a type variable becomes the row tail,
+and an alias is expanded to its record first.
+-}
+extendRow :: Map.Map N.Name FieldType -> Type -> Type
+extendRow fields bound =
+  case bound of
+    TRecord moreFields ext -> TRecord (Map.union fields moreFields) ext
+    TVar v -> TRecord fields (Just v)
+    TAlias _ _ args (Holey body) -> extendRow fields (substituteRows (Map.fromList args) body)
+    TAlias _ _ _ (Filled body) -> extendRow fields body
+    -- Not a record: Elm does not allow it as a row tail
+    _ -> TRecord fields Nothing
 
 
 resolveFieldMap tipe tvarMap =
