@@ -90,6 +90,21 @@ getForeignSig tipe moduleName generatedName ifaces =
           extractedFreevars = extractTvarsInType tipe_ & fmap (\t -> (t, ())) & Map.fromList
         in
         Forall (Map.union freeVars extractedFreevars) tipe_
+      Nothing | Map.notMember (Module._module moduleName) ifaces && not (null (useSiteArgs tipe)) ->
+        -- The codec's module is not among this module's imports, so its signature cannot
+        -- be looked up: an extensible record alias chain was inlined here (see
+        -- reachesExtensibleRecord) and brought in a field type from a module only the
+        -- alias's own module imports. The failure signatures below take no codec
+        -- arguments, so the call this codec is about to get, with one per type
+        -- argument, failed with TOO MANY ARGS (concourse's `Application.Models.Session`,
+        -- through `SideBar.Model`'s `WebData (List Concourse.Pipeline)` field).
+        --
+        -- The codec does exist (its module is compiled, it is just not imported here),
+        -- so give it the signature of exactly this use instead: a codec for each
+        -- argument, then the type as written here. Only ever reached by a call that
+        -- could not typecheck before, so nothing that compiled changes.
+        useSiteSig tipe (useSiteArgs tipe) generatedName
+
       Nothing ->
         -- If a foreign type gen function cannot be find, it must be banned!
         -- So add type-sig for failure encoder or decoder as appropriate.
@@ -112,6 +127,52 @@ getForeignSig tipe moduleName generatedName ifaces =
             else
               error $ "impossible getForeignSig on non-wire function: " ++ N.toChars generatedName
 
+
+
+{-| The type arguments a codec reference for this type is called with: the generated code
+passes a codec for each of them before the value (see Encoder/Decoder).
+-}
+useSiteArgs :: Type -> [Type]
+useSiteArgs tipe =
+  case tipe of
+    TType _ _ params -> params
+    TAlias _ _ tvars _ -> fmap snd tvars
+    _ -> []
+
+
+{-| A foreign codec's signature for one use, built from the type at that use, see
+getForeignSig: `(arg -> Encoder) -> ... -> tipe -> Encoder`, or
+`Decoder arg -> ... -> Decoder tipe`.
+
+Every type variable in it is quantified, record extensions included, so each use gets its
+own (Type.Instantiate dies on a Map.! for a variable missing from the quantifier).
+-}
+useSiteSig :: Type -> [Type] -> N.Name -> Can.Annotation
+useSiteSig tipe args generatedName =
+  let
+    decoderOf t =
+      TAlias mLamdera_Wire "Decoder" [("a", t)]
+        (Filled (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [t]))
+
+    sig =
+      if T.isPrefixOf "w3_encode_" (T.pack $ N.toChars generatedName)
+        then foldr (\arg rest -> TLambda (TLambda arg tLamdera_Wire_Encoder) rest) (TLambda tipe tLamdera_Wire_Encoder) args
+        else foldr (\arg rest -> TLambda (decoderOf arg) rest) (decoderOf tipe) args
+
+    tvarsIn t =
+      case t of
+        TLambda t1 t2 -> tvarsIn t1 ++ tvarsIn t2
+        TVar v -> [v]
+        TType _ _ params -> concatMap tvarsIn params
+        TRecord fieldMap ext ->
+          maybe [] (: []) ext ++ concatMap (\(FieldType _ ft) -> tvarsIn ft) (Map.elems fieldMap)
+        TUnit -> []
+        TPair a_ b -> tvarsIn a_ ++ tvarsIn b
+        TTriple a_ b c -> tvarsIn a_ ++ tvarsIn b ++ tvarsIn c
+        TAlias _ _ tvars (Holey body) -> tvarsIn body ++ concatMap (tvarsIn . snd) tvars
+        TAlias _ _ tvars (Filled body) -> tvarsIn body ++ concatMap (tvarsIn . snd) tvars
+  in
+  Forall (tvarsIn sig & fmap (\v -> (v, ())) & Map.fromList) sig
 
 
 {- NOTE: Any recursive usage of these types in user-code will get caught in the TypeHash first,
