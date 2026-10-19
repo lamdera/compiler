@@ -3,16 +3,20 @@
 
 module Test.LiveMemory where
 
-{-| `lamdera live --memory` (Ext.MemoryCache): the build artifacts of a project stay in
-memory between rebuilds instead of going through elm-stuff.
+{-| The `lamdera live` session (Ext.MemoryCache): the build artifacts of a project are kept
+as values between rebuilds, either only in memory (`lamdera live --memory`, InMemory) or
+on disk as always and in memory too (plain `lamdera live`, OnDisk).
 
-Two copies of the same Lamdera app are built side by side the way `lamdera live`
-builds them (the Lamdera.Live harness as the root, Wire3 on, live mode on): one with a
-memory store registered, one from disk as always. The same edits are made to both.
-After every edit both must give byte identical JS, and both must have compiled exactly
-the same modules, which must be the ones the edit should recompile. At the end the
-memory copy is flushed to elm-stuff, and a disk build of it must find nothing to
-compile but the harness.
+Three copies of the same Lamdera app are built side by side the way `lamdera live`
+builds them (the Lamdera.Live harness as the root, Wire3 on, live mode on): one with an
+InMemory store registered, one with an OnDisk store, one from disk with no store, as
+`lamdera make` builds. The same edits are made to all three. After every edit all must
+give byte identical JS (but for the hot patch hook the two sessions add), and all must
+have compiled exactly the same modules, which must be the ones the edit should
+recompile. The OnDisk copy is also changed behind its back, as another process would
+(a build of its own, a touched artifact, elm-stuff removed): it must notice, give the
+same JS, and give pages a full reload. At the end the memory copy is flushed to
+elm-stuff, and a disk build of it must find nothing to compile but the harness.
 
 -}
 
@@ -57,47 +61,65 @@ suite =
     setup = do
       memDir <- Dir.makeAbsolute "./test/scenario-live-memory-mem"
       diskDir <- Dir.makeAbsolute "./test/scenario-live-memory-disk"
-      mapM_ writeProject [memDir, diskDir]
+      sessDir <- Dir.makeAbsolute "./test/scenario-live-memory-session"
+      mapM_ writeProject [memDir, diskDir, sessDir]
       Lamdera.setLiveMode True
-      store <- registerStore memDir
+      store <- registerStore MemoryCache.InMemory memDir
+      sess <- registerStore MemoryCache.OnDisk sessDir
       current <- newIORef store
-      pure (memDir, diskDir, store, current)
+      pure (memDir, diskDir, sessDir, store, sess, current)
 
-    cleanup (memDir, diskDir, _, current) = do
+    cleanup (memDir, diskDir, sessDir, _, sess, current) = do
       MemoryCache.unregister =<< readIORef current
+      MemoryCache.unregister sess
       Lamdera.setLiveMode False
       rmdir memDir
       rmdir diskDir
+      rmdir sessDir
 
-    test (memDir, diskDir, store, current) =
+    test (memDir, diskDir, sessDir, store, sess, current) =
       let
-        -- edit both copies, and tell the memory store, as the file watcher would
+        -- edit every copy, and tell the stores, as the file watcher would
         edit path f = io $ do
-          mapM_ (\dir -> editFile (dir </> path) f) [memDir, diskDir]
+          mapM_ (\dir -> editFile (dir </> path) f) [memDir, diskDir, sessDir]
           s <- readIORef current
           _ <- MemoryCache.sourcesChanged s [memDir </> path]
+          _ <- MemoryCache.sourcesChanged sess [sessDir </> path]
           pure ()
 
-        -- edit both copies, and tell nobody
-        editUnreported path f = io $ mapM_ (\dir -> editFile (dir </> path) f) [memDir, diskDir]
+        -- edit every copy, and tell nobody
+        editUnreported path f = io $ mapM_ (\dir -> editFile (dir </> path) f) [memDir, diskDir, sessDir]
 
-        -- build both, expect the same JS and the same compiled modules, and that those are `expected`
+        -- build all three, expect the same JS and the same compiled modules, and that those are `expected`
         step label expected = scope label $ do
-          (mem, disk) <- io $ (,) <$> compileLive memDir <*> compileLive diskDir
-          case (mem, disk) of
-            (Right (memJs, memFresh), Right (diskJs, diskFresh)) -> do
+          (mem, disk, onDisk) <- io $ (,,) <$> compileLive memDir <*> compileLive diskDir <*> compileLive sessDir
+          case (mem, disk, onDisk) of
+            (Right (memJs, memFresh), Right (diskJs, diskFresh), Right (sessJs, sessFresh)) -> do
               expectEqual (Set.fromList expected) memFresh
               expectEqual diskFresh memFresh
-              -- not expectEqual: a failure would print the whole JS. In memory the JS also
+              expectEqual diskFresh sessFresh
+              -- not expectEqual: a failure would print the whole JS. In a session the JS also
               -- has the hot patch hook, and nothing else
               expect (BS.isInfixOf hook memJs && withoutHook memJs == diskJs)
+              expect (sessJs == memJs)
               pure memJs
 
-            (Left memErr, Left diskErr) ->
-              crash $ "both builds failed:\n" ++ memErr ++ "\n" ++ diskErr
+            (Left memErr, Left diskErr, Left _) ->
+              crash $ "the builds failed:\n" ++ memErr ++ "\n" ++ diskErr
 
             _ ->
-              crash $ "only one build failed:\n" ++ show (fmap snd mem) ++ "\n" ++ show (fmap snd disk)
+              crash $ "only some builds failed:\n" ++ show (fmap snd mem) ++ "\n" ++ show (fmap snd disk) ++ "\n" ++ show (fmap snd onDisk)
+
+        -- build the OnDisk copy alone, and compare its JS with the last of the disk copy
+        sessionAlone = do
+          sessResult <- io $ compileLive sessDir
+          diskResult <- io $ compileLive diskDir
+          case (sessResult, diskResult) of
+            (Right (sessJs, sessFresh), Right (diskJs, _)) -> do
+              expect (BS.isInfixOf hook sessJs && withoutHook sessJs == diskJs)
+              pure sessFresh
+            _ ->
+              crash "a build failed"
       in
       do  _ <- step "the first build compiles everything" ["Backend", "Env", "Frontend", "Leaf", "Middle", "Types", "Lamdera.Live", "Lamdera.Repl"]
 
@@ -140,7 +162,8 @@ suite =
             edit "src/Middle.elm" (T.replace "middleText =" "middleText =\n    1 + \"x\"\n\n\nbroken =")
             mem <- io $ compileLive memDir
             disk <- io $ compileLive diskDir
-            expect (isLeft mem && isLeft disk)
+            onDisk <- io $ compileLive sessDir
+            expect (isLeft mem && isLeft disk && isLeft onDisk)
 
           edit "src/Middle.elm" (T.replace "middleText =\n    1 + \"x\"\n\n\nbroken =" "middleText =")
           _ <- step "fixing it recompiles only the fixed module" ["Middle", "Lamdera.Live"]
@@ -166,7 +189,62 @@ suite =
             elmos <- io $ filter (List.isSuffixOf ".elmo") <$> (Dir.listDirectory =<< stuffDir memDir)
             expectEqual [] elmos
 
-          io $ mapM_ (\dir -> touchElmJson (dir </> "elm.json")) [memDir, diskDir]
+          scope "OnDisk elm-stuff is written as always" $ do
+            elmos <- io $ filter (List.isSuffixOf ".elmo") <$> (Dir.listDirectory =<< stuffDir sessDir)
+            expect (length elmos >= 6)
+
+          scope "OnDisk a rebuild with nothing changed reads nothing from disk" $ do
+            _ <- io $ MemoryCache.takeCounters sess
+            _ <- sessionAlone
+            counters <- io $ MemoryCache.takeCounters sess
+            expectEqual 0 (MemoryCache._diskReads counters)
+            expect (MemoryCache._objectHits counters > 0)
+
+          scope "OnDisk the type hashes taken from the build are those of a separate build of Types" $ do
+            hashes <- io $ typeHashes sessDir
+            case hashes of
+              Right (fromBuild, separate) -> do
+                expect (not (null fromBuild))
+                expectEqual separate fromBuild
+              Left problem ->
+                crash problem
+
+          scope "OnDisk another process building the project is noticed" $ do
+            before <- io $ MemoryCache.externalChanges sess
+            version <- io $ MemoryCache.jsVersion sess
+            edit "src/Leaf.elm" (T.replace "leaf-v2b" "leaf-v2c")
+            -- what a `lamdera make` in another terminal would do: build it, write elm-stuff
+            other <- io $ MemoryCache.suspended sess (compileLive sessDir)
+            expectEqual (Right (Set.fromList ["Leaf", "Lamdera.Live"])) (fmap snd other)
+            -- the session's next build: d.dat moved, so everything kept is dropped and it
+            -- starts from the disk, finding Leaf compiled already
+            fresh <- sessionAlone
+            expectEqual (Set.fromList ["Lamdera.Live"]) fresh
+            after <- io $ MemoryCache.externalChanges sess
+            expect (after > before)
+            -- and the page running the build before gets a full reload, not a patch
+            patch <- io $ Lamdera.CLI.Live.hotPatch (Just sess) version
+            expect (BS.isPrefixOf "full " patch)
+          _ <- io $ compileLive memDir -- (catch up: sessionAlone built the disk copy, not this one)
+          _ <- step "and every copy agrees after it" ["Lamdera.Live"]
+
+          scope "OnDisk an artifact rewritten behind its back is read again" $ do
+            leafElmo <- (</> "Leaf.elmo") <$> io (stuffDir sessDir)
+            io $ sleep 10 >> BS.readFile leafElmo >>= \bytes -> BS.length bytes `seq` BS.writeFile leafElmo bytes
+            _ <- io $ MemoryCache.takeCounters sess
+            before <- io $ MemoryCache.externalChanges sess
+            _ <- sessionAlone
+            counters <- io $ MemoryCache.takeCounters sess
+            expectEqual 1 (MemoryCache._staleReads counters)
+            after <- io $ MemoryCache.externalChanges sess
+            expectEqual (before + 1) after
+
+          scope "OnDisk elm-stuff removed: the next build starts from scratch" $ do
+            io $ rmdir =<< stuffDir sessDir
+            fresh <- sessionAlone
+            expectEqual (Set.fromList ["Backend", "Env", "Frontend", "Leaf", "Middle", "Types", "Lamdera.Live", "Lamdera.Repl"]) fresh
+
+          io $ mapM_ (\dir -> touchElmJson (dir </> "elm.json")) [memDir, diskDir, sessDir]
           _ <- step "touching elm.json reloads the details from disk, and rebuilds like a disk build" ["Backend", "Env", "Frontend", "Leaf", "Middle", "Types", "Lamdera.Live", "Lamdera.Repl"]
 
           edit "src/Leaf.elm" (T.replace "leaf-v2b" "leaf-v3")
@@ -185,7 +263,7 @@ suite =
                 crash "a build failed after the flush"
 
           scope "a new store starts from that elm-stuff" $ do
-            store2 <- io $ registerStore memDir
+            store2 <- io $ registerStore MemoryCache.InMemory memDir
             io $ writeIORef current store2
             edit "src/Leaf.elm" (T.replace "leaf-v3" "leaf-v4")
             _ <- step "after a restart" ["Leaf", "Lamdera.Live"]
@@ -204,10 +282,10 @@ suite =
 -- BUILD
 
 
-registerStore :: FilePath -> IO MemoryCache.Store
-registerStore dir = do
+registerStore :: MemoryCache.Backing -> FilePath -> IO MemoryCache.Store
+registerStore backing dir = do
   stuff <- R.getStuff (R.fromFilePath dir)
-  MemoryCache.register stuff
+  MemoryCache.register backing stuff
 
 
 stuffDir :: FilePath -> IO FilePath

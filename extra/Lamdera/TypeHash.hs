@@ -87,7 +87,8 @@ buildCheckHashes artifacts = do
     --   else pure $ Right ([], [])
 
 
-{-| @LAMDERA buildCheckHashes for `lamdera live --memory`: from the build that just ran,
+{-| @LAMDERA buildCheckHashes for a `lamdera live` session (either backing, see
+Ext.MemoryCache): from the build that just ran,
 instead of building src/Types.elm a second time (Interfaces.all, a whole second crawl and
 check of everything Types needs, on every rebuild). The interfaces are the same ones: the
 project modules in Types' import closure (from the Details that build wrote) and the
@@ -101,8 +102,9 @@ buildCheckHashesFrom details artifacts = do
       if exists
         then do
           ifacesProject <- typesInterfaces details artifacts
-          -- In memory an interface that compiled to the same as before is the very same
-          -- value (MemoryCache.keepSame), so when every interface Types needs is the one
+          -- In a session an interface that compiled to the same as before is the very same
+          -- value (MemoryCache.keepSame InMemory, MemoryCache.sameOnDisk and the stamped
+          -- reads OnDisk), so when every interface Types needs is the one
           -- the last hashes were worked out from, so are the hashes: skip them.
           lastIfaces <- readIORef lastHashed
           let same =

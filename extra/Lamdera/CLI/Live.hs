@@ -851,19 +851,35 @@ passOnIndex pwd =
 
 
 
--- IN MEMORY: lamdera live --memory
+-- THE LIVE SESSION: what `lamdera live` keeps between rebuilds (see Ext.MemoryCache)
 
 
-{-| Keep this project's build artifacts in memory for the rest of the process, see
-Ext.MemoryCache. The first build loads from elm-stuff as usual; after that no
-rebuild reads or writes the project's elm-stuff until flushMemory.
+{-| Keep this project's build artifacts as decoded values for the rest of the process, see
+Ext.MemoryCache, either only in memory (--memory: after the first build no rebuild reads
+or writes the project's elm-stuff until flushMemory) or on disk as always, with the
+values kept as well. Either way the rebuilds reuse the JS of unchanged definitions and
+the Wire3 codecs, skip the type hashes when nothing they hash changed, and pages in
+freeze mode get hot patches.
+
+LAMDERA_LIVE_SESSION=0 keeps nothing (each rebuild as a separate `lamdera make` would,
+the way `lamdera live` worked before), unless --memory is given.
 -}
-startMemory :: FilePath -> IO MemoryCache.Store
-startMemory root = do
-  stuff <- R.getStuff (R.fromFilePath root)
-  store <- MemoryCache.register stuff
-  atomicPutStrLn "🧠 --memory: build artifacts are kept in memory, elm-stuff is written on exit."
-  pure store
+startSession :: FilePath -> Bool -> IO (Maybe MemoryCache.Store)
+startSession root inMemory = do
+  off <- (== Just "0") <$> lookupEnv "LAMDERA_LIVE_SESSION"
+  if off && not inMemory
+    then pure Nothing
+    else do
+      stuff <- R.getStuff (R.fromFilePath root)
+      store <- MemoryCache.register (if inMemory then MemoryCache.InMemory else MemoryCache.OnDisk) stuff
+      onlyWhen inMemory $
+        atomicPutStrLn "🧠 --memory: build artifacts are kept in memory, elm-stuff is written on exit."
+      pure (Just store)
+
+
+isInMemory :: Maybe MemoryCache.Store -> Bool
+isInMemory maybeStore =
+  fmap MemoryCache.backing maybeStore == Just MemoryCache.InMemory
 
 
 {-| A build that throws (rather than reporting compile errors) may have stopped half way
@@ -883,8 +899,8 @@ withMemoryReset maybeStore io =
 withMemoryFlush :: FilePath -> Maybe MemoryCache.Store -> IO () -> IO ()
 withMemoryFlush root maybeStore io =
   case maybeStore of
-    Nothing -> io
-    Just store -> io `finally` flushMemory root store
+    Just store | MemoryCache.backing store == MemoryCache.InMemory -> io `finally` flushMemory root store
+    _ -> io -- OnDisk elm-stuff is always up to date
 
 
 flushMemory :: FilePath -> MemoryCache.Store -> IO ()
@@ -920,14 +936,14 @@ without the watcher saying so.
 startSourceReconcile :: Maybe MemoryCache.Store -> ([FilePath] -> IO ()) -> IO ()
 startSourceReconcile maybeStore recompile =
   case maybeStore of
-    Nothing -> pure ()
-    Just store ->
+    Just store | MemoryCache.backing store == MemoryCache.InMemory ->
       Ext.Common.trackedForkIO "Lamdera.CLI.Live.startSourceReconcile" $ forever $ do
         threadDelay 5000000
         changed <- MemoryCache.reconcileSources store
         onlyWhen (not (null changed)) $ do
           atomicPutStrLn $ "🧠 --memory: changed without a watcher event: " <> show changed
           recompile changed
+    _ -> pure () -- OnDisk the sources are read from disk on every build
 
 
 reconcileSources :: Maybe MemoryCache.Store -> ([FilePath] -> IO ()) -> IO ()
@@ -961,7 +977,7 @@ hotPatch maybeStore from = do
   result <-
     case maybeStore of
       Nothing ->
-        pure $ Left "not built in memory"
+        pure $ Left "no live session"
 
       Just store -> do
         since <- MemoryCache.jsBuildsSince store from
@@ -1028,7 +1044,7 @@ timedRebuild maybeStore io = do
           Just store -> do
             c <- MemoryCache.takeCounters store
             (ifaces, objects) <- MemoryCache.size store
-            pure $ " store: " <> show (MemoryCache._ifaceHits c) <> " interface hits, " <> show (MemoryCache._objectHits c) <> " object hits, " <> show (MemoryCache._diskReads c) <> " disk reads, " <> show (MemoryCache._sourceFs c) <> " source stats/reads, " <> show (MemoryCache._parseHits c) <> " parses kept, holding " <> show ifaces <> " interfaces and " <> show objects <> " objects."
+            pure $ " store: " <> show (MemoryCache._ifaceHits c) <> " interface hits, " <> show (MemoryCache._objectHits c) <> " object hits, " <> show (MemoryCache._diskReads c) <> " disk reads, " <> show (MemoryCache._sourceFs c) <> " source stats/reads, " <> show (MemoryCache._parseHits c) <> " parses kept, " <> show (MemoryCache._staleReads c) <> " changed by someone else, holding " <> show ifaces <> " interfaces and " <> show objects <> " objects (" <> show (MemoryCache.backing store) <> ")."
           Nothing -> pure ""
       timings <- atomicModifyIORef' phases (\ps -> ([], reverse ps))
       let total = (end - start) `div` 1000000

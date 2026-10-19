@@ -2,9 +2,11 @@
 {-# LANGUAGE QuasiQuotes #-}
 module Test.HotPatch where
 
-{-| Lamdera.HotPatch, the `lamdera live --memory` hot patches.
+{-| Lamdera.HotPatch, the `lamdera live` hot patches.
 
-A small Platform.worker app is built in memory after each edit. The patch from the
+A small Platform.worker app is built in a live session after each edit, once with the
+artifacts only in memory (`lamdera live --memory`) and once on disk (plain `lamdera
+live`). The patch from the
 build before must be a patch where one is safe (and only what it needs), and a full
 reload where it is not. And in node, running the first build's JS and then each patch
 in its scope must answer like the latest build does.
@@ -43,12 +45,20 @@ all = EasyTest.run suite
 
 suite :: Test ()
 suite =
+  tests
+    [ scope "InMemory" $ suiteFor MemoryCache.InMemory
+    , scope "OnDisk" $ suiteFor MemoryCache.OnDisk
+    ]
+
+
+suiteFor :: MemoryCache.Backing -> Test ()
+suiteFor backing =
   let
     setup = do
-      dir <- Dir.makeAbsolute "./test/scenario-hot-patch"
+      dir <- Dir.makeAbsolute ("./test/scenario-hot-patch-" ++ show backing)
       writeProject dir
       stuff <- R.getStuff (R.fromFilePath dir)
-      store <- MemoryCache.register stuff
+      store <- MemoryCache.register backing stuff
       pure (dir, store)
 
     cleanup (dir, store) = do
@@ -153,7 +163,7 @@ suite =
   using setup cleanup test
 
 
-{-| What Develop.compile does for `lamdera live --memory` (without the live harness). -}
+{-| What Develop.compile does for `lamdera live` (without the live harness). -}
 buildJs :: FilePath -> IO (Either String BS.ByteString)
 buildJs dir = do
   result <-

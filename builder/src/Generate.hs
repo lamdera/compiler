@@ -80,7 +80,7 @@ dev stuff details (Build.Artifacts pkg _ roots modules) =
       graph <- Task.io $ Lamdera.AppConfig.injectConfig graph_
       let mains = gatherMains pkg objects roots
       esmEnabled <- Task.io $ Lamdera.useEsm
-      -- @LAMDERA with `lamdera live --memory` reuse the JS of definitions that did not change
+      -- @LAMDERA with a `lamdera live` session (either backing) reuse the JS of definitions that did not change
       memory <- Task.io $ MemoryCache.forStuff stuff
       case memory of
         Just store | not esmEnabled ->

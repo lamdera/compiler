@@ -97,8 +97,9 @@ runWithRoot root (Flags maybePort shouldOpenBrowser inMemory) =
 
       sentryCache <- liftIO $ Sentry.init
 
-      -- @LAMDERA keep the build artifacts in memory between rebuilds
-      memory <- if inMemory then Just <$> Live.startMemory root else pure Nothing
+      -- @LAMDERA keep the build artifacts between rebuilds, on disk as always and as values
+      -- in the session (or with --memory only in memory), see Live.startSession
+      memory <- Live.startSession root inMemory
 
       let
         -- @LAMDERA split out of recompile, for the --memory refresh on page load below
@@ -119,11 +120,11 @@ runWithRoot root (Flags maybePort shouldOpenBrowser inMemory) =
         recompile :: [String] -> IO ()
         recompile events = do
           -- Fork a recompile+cache update
-          -- @LAMDERA with --memory: no forced major GC (see Ext.Sentry), and the output is
-          -- taken before the clients are told, so a hot patch asked for next waits for it
-          if inMemory
-            then Sentry.updateJsOutputNow sentryCache (rebuild events)
-            else Sentry.asyncUpdateJsOutputWith True sentryCache (rebuild events)
+          -- @LAMDERA with a live session: no forced major GC (see Ext.Sentry), and the output
+          -- is taken before the clients are told, so a hot patch asked for next waits for it
+          case memory of
+            Just _ -> Sentry.updateJsOutputNow sentryCache (rebuild events)
+            Nothing -> Sentry.asyncUpdateJsOutputWith True sentryCache (rebuild events)
           -- Simultaneously tell all clients to refresh. All those HTTP
           -- requests will open but block on the cache mVar, and then release
           -- immediately when compilation is finished, effectively "pushing"
@@ -175,7 +176,7 @@ runWithRoot root (Flags maybePort shouldOpenBrowser inMemory) =
         <|> serveDirectoryWith directoryConfig "."
         <|> Live.serveWebsocket root liveState
         <|> route [ ("_r/:endpoint", Live.serveRpc liveState port) ]
-        <|> route [ ("_patch", servePatch sentryCache memory) ] -- @LAMDERA --memory hot patches, see Lamdera.HotPatch
+        <|> route [ ("_patch", servePatch sentryCache memory) ] -- @LAMDERA live session hot patches, see Lamdera.HotPatch
         <|> route [ ("_c", Lamdera.Repl.serve root Live.jsonResponse Live.error404) ]
         <|> Live.openEditorHandler root
         <|> Live.serveExperimental root
@@ -386,7 +387,7 @@ compile path =
                 Task.io $ Live.reportFresh artifacts -- @LAMDERA LAMDERA_LIVE_TIMING
 
                 Live.phase "postcompile" $ Lamdera.PostCompile.check details artifacts Exit.ReactorBadBuild
-                -- @LAMDERA with --memory, hash from this build's interfaces, not a second build of src/Types.elm
+                -- @LAMDERA with a live session, hash from this build's interfaces, not a second build of src/Types.elm
                 memory <- Task.io $ MemoryCache.forStuff stuff
                 fresh <- Task.io $ maybe (pure Nothing) Details.fromMemory memory
                 Live.phase "typehash" $
@@ -396,7 +397,7 @@ compile path =
 
                 javascript <- Live.phase "objects" $ Task.mapError Exit.ReactorBadGenerate $ Generate.dev stuff details artifacts
                 let (NE.List name _) = Build.getRootNames artifacts
-                -- @LAMDERA with --memory the page knows which build it runs, for hot patches
+                -- @LAMDERA with a live session the page knows which build it runs, for hot patches
                 version <- Task.io $ maybe (pure mempty) Live.jsVersionMarker memory
                 return $ Html.sandwich (R.toFilePath root) name (javascript <> version)
 

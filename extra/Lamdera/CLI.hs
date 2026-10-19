@@ -39,7 +39,7 @@ live =
       flags Develop.Flags
         |-- flag "port" port_ "The port of the server (default: 8000)"
         |-- onOff "open" "Open a web browser to view the local server"
-        |-- onOff "memory" "Keep build artifacts in memory between rebuilds instead of writing and reading elm-stuff, so a rebuild skips that disk and decoding work. elm-stuff is written on exit."
+        |-- onOff "memory" "Keep the build artifacts and the sources only in memory between rebuilds, instead of writing elm-stuff on every rebuild and reading the sources from disk. elm-stuff is written on exit. (Either way `lamdera live` keeps what it built between rebuilds, reuses what did not change and sends hot patches; this only changes where it is kept.)"
   in
   Terminal.Command "live" (Common summary) details example noArgs liveFlags Develop.run
 

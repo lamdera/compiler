@@ -777,7 +777,7 @@ compile writer (Env key root stuff projectType _ buildID _ _) docsNeed (Details.
                   -- the kept, shared value). Without it, the byte comparison below.
                   memory <- MemoryCache.forStuff stuff
                   case memory of
-                    Just _ ->
+                    Just store | MemoryCache.backing store == MemoryCache.InMemory ->
                       do  perf "elmo_write" $ MemoryCache.writeElmo memory writer stuff name objects
                           maybeOldi <- perf "elmi_read_old" $ MemoryCache.readElmi memory stuff name
                           case maybeOldi of
@@ -794,9 +794,11 @@ compile writer (Env key root stuff projectType _ buildID _ _) docsNeed (Details.
                                   let local = Details.Local path time deps main buildID buildID
                                   return (RNew local iface_ objects docs)
 
-                    Nothing ->
+                    -- @LAMDERA (with plain `lamdera live` the store is OnDisk: the same writes, and
+                    -- it keeps the values too, see MemoryCache.writeElmo/sameOnDisk/wroteElmi)
+                    _ ->
                       do  let elmi = R.elmi stuff name
-                          perf "elmo_write" $ File.writeBytes writer (R.elmo stuff name) Opt.eLocalGraph objects
+                          perf "elmo_write" $ MemoryCache.writeElmo memory writer stuff name objects -- @LAMDERA was File.writeBytes writer (R.elmo stuff name) Opt.eLocalGraph objects
                           -- @LAMDERA compare the new interface's bytes with the file, instead of
                           -- decoding the old interface and comparing values. Encoding is a function
                           -- of the value (Test.ElmiTypeTable: it round trips, re-encoding gives the
@@ -808,16 +810,18 @@ compile writer (Env key root stuff projectType _ buildID _ _) docsNeed (Details.
                           case maybeOldBytes of
                             Just oldBytes | oldBytes == ifaceBytes ->
                               do  -- iface should be fully forced by equality check
+                                  iface_ <- MemoryCache.sameOnDisk memory stuff name iface -- @LAMDERA
                                   Reporting.report key Reporting.BDone
                                   let local = Details.Local path time deps main lastChange buildID
-                                  return (RSame local iface objects docs)
+                                  return (RSame local iface_ objects docs)
 
                             _ ->
                               do  -- iface may be lazy still
                                   perf "elmi_write" $ File.writeBuilder writer elmi (BB.byteString ifaceBytes)
+                                  iface_ <- MemoryCache.wroteElmi memory stuff name iface -- @LAMDERA
                                   Reporting.report key Reporting.BDone
                                   let local = Details.Local path time deps main buildID buildID
-                                  return (RNew local iface objects docs)
+                                  return (RNew local iface_ objects docs)
 
     Left err ->
       return $ RProblem $

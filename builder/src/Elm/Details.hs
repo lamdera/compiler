@@ -207,9 +207,10 @@ loadFromDisk writer style root stuff =
 
 -- @LAMDERA LOAD IN MEMORY
 --
--- With `lamdera live --memory` (see Ext.MemoryCache) the Details stay in memory between
--- builds, with the package interfaces and objects resolved (ArtifactsFresh), so neither
--- d.dat nor i.dat and o.dat are decoded again while elm.json is unchanged. When it
+-- With `lamdera live` (see Ext.MemoryCache) the Details stay in memory between builds,
+-- with the package interfaces and objects resolved (ArtifactsFresh), so neither d.dat
+-- nor i.dat and o.dat are decoded again while elm.json is unchanged and (OnDisk, plain
+-- `lamdera live`) d.dat is still the file the kept Details were written to. When either
 -- changes (or nothing is kept yet) the disk path runs as usual, and the store is reset
 -- first so nothing kept from before can disagree with the Details loaded now.
 
@@ -218,8 +219,9 @@ loadInMemory :: MemoryCache.Store -> File.Writer R.PROJECT -> Reporting.Style ->
 loadInMemory memory writer style root stuff =
   do  newTime <- File.getTime (R.elm_json root)
       kept <- fromMemory memory
+      onDisk <- MemoryCache.detailsStillOnDisk memory stuff
       case kept of
-        Just details@(Details oldTime _ (BuildID n) _ _ _) | oldTime == newTime ->
+        Just details@(Details oldTime _ (BuildID n) _ _ _) | oldTime == newTime && onDisk ->
           return (Right details { _buildID = BuildID (n + 1) })
 
         _ ->
@@ -231,7 +233,7 @@ loadInMemory memory writer style root stuff =
 
                 Right details ->
                   do  fresh <- resolveArtifacts stuff details
-                      MemoryCache.setDetails memory (toDyn fresh)
+                      MemoryCache.loadedDetails memory stuff (toDyn fresh)
                       return (Right fresh)
 
 
@@ -256,13 +258,22 @@ resolveArtifacts stuff details =
             _                           -> return details -- left to fail as it would from disk
 
 
-{-| Write d.dat, or keep the Details in memory with `lamdera live --memory`. -}
+{-| Write d.dat, or with `lamdera live` keep the Details too (OnDisk), or only (InMemory,
+`lamdera live --memory`).
+-}
 write :: File.Writer R.PROJECT -> R.Stuff -> Details -> IO ()
 write writer stuff details =
   do  maybeMemory <- MemoryCache.forStuff stuff
       case maybeMemory of
-        Just memory -> MemoryCache.setDetails memory (toDyn details)
-        Nothing     -> File.writeBytes writer (R.details stuff) eDetails details
+        Just memory | MemoryCache.backing memory == MemoryCache.InMemory ->
+          MemoryCache.setDetails memory (toDyn details)
+
+        Just memory ->
+          do  File.writeBytes writer (R.details stuff) eDetails details
+              MemoryCache.wroteDetails memory stuff (toDyn details)
+
+        Nothing ->
+          File.writeBytes writer (R.details stuff) eDetails details
 
 
 
