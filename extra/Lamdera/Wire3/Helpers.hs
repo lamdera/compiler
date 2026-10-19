@@ -302,7 +302,7 @@ resolvedRecordFieldMapM fieldMap extensibleName tvarMap =
               -- See expansionTvarMap: without it, nested extensible aliases that
               -- share a parameter name never terminate
               let newResolvedTvars = tvars & fmap (\(n, t) -> (n, resolveTvar (expansionTvarMap extensibleName tvarMap) t))
-              case resolveTvar newResolvedTvars tipe of
+              case throughFilledAliases (resolveTvar newResolvedTvars tipe) of
                 TRecord fieldMapExtensible _ ->
                   fieldMap
                     & Map.union fieldMapExtensible
@@ -310,11 +310,11 @@ resolvedRecordFieldMapM fieldMap extensibleName tvarMap =
                         FieldType index (resolveTvar newResolvedTvars tipe)
                       )
                     & Just
-                _ -> Nothing
+                _ -> closedExtensionFields fieldMap tvarMap extensibleType
 
             TAlias moduleName typeName tvars (Filled tipe) -> do
               let newResolvedTvars = tvars & fmap (\(n, t) -> (n, resolveTvar (expansionTvarMap extensibleName tvarMap) t))
-              case resolveTvar newResolvedTvars tipe of
+              case throughFilledAliases (resolveTvar newResolvedTvars tipe) of
                 TRecord fieldMapExtensible _ ->
                   fieldMap
                     & Map.union fieldMapExtensible
@@ -322,7 +322,7 @@ resolvedRecordFieldMapM fieldMap extensibleName tvarMap =
                         FieldType index (resolveTvar newResolvedTvars tipe)
                       )
                     & Just
-                _ -> Nothing
+                _ -> closedExtensionFields fieldMap tvarMap extensibleType
 
             {-|
               This should be impossible, but can happen with code like this:
@@ -368,6 +368,109 @@ the same thing now, and the shared name case resolves like the differently named
 expansionTvarMap :: TV.Var -> [(TV.Var, Type)] -> [(TV.Var, Type)]
 expansionTvarMap extensibleName tvarMap =
   tvarMap & filter (\(n, _) -> n /= extensibleName)
+
+
+{-| A resolved extension's record, looking through the aliases in front of it.
+
+The extension of a record being resolved can be bound to an alias whose body is itself an
+alias, e.g. `C` in
+
+    type alias A a = { a | fa : Int }
+    type alias B b = { b | fb : Int }
+    type alias D d = { d | fd : Int }
+    type alias C = D { fe : Int }
+    type alias X = A (B C)
+
+Resolving `C` gives `D { fe : Int }`, an alias (Filled, as resolveTvar leaves every alias)
+of the record `{ fd : Int, fe : Int }`, not that record itself. Expecting a TRecord there
+either crashed the compiler ("bad nesting Holey", resolveTvar) or gave up on inlining the
+chain (resolvedRecordFieldMapM), which then called `A`'s codec with `C`'s, the codec of a
+record without `A`'s fields: a TYPE MISMATCH in the generated code (massivedecks'
+`MassiveDecks.Card.Source.Methods.ExternalMethods`). Neither ever compiled, so looking
+through the aliases changes nothing that did.
+-}
+throughFilledAliases :: Type -> Type
+throughFilledAliases tipe =
+  case tipe of
+    TAlias _ _ _ (Filled inner) -> throughFilledAliases inner
+    _ -> tipe
+
+
+{-| The fields of a record whose row tail is bound to `extensibleType`, when following that
+binding down through its aliases ends in a closed record. Nothing when it ends in a bare
+type variable, an open row: the alias's own codec is then called with the codec of its
+argument, which is row polymorphic, and that typechecks (`A (B m)`).
+
+resolvedRecordFieldMapM's last resort. resolveTvar declines to substitute a binding that
+is still generic, which is right for the foreign signatures it was written for, but here
+it stops the row tail of an inner alias from being followed whenever an argument mentions
+a type variable, e.g. `A1 (B1 (C m))` over
+
+    type alias A1 a = { a | fa : Int }
+    type alias B1 b = { b | fb : Int }
+    type alias C m = D (E m)
+
+so the chain was not inlined, and `A1`'s codec was called with `B1 (C m)`'s, the codec of
+a closed record without `fa`. That can never typecheck (massivedecks'
+`MassiveDecks.Card.Source.Methods.ExternalMethods msg`), so this only ever changes what
+did not compile.
+
+`extensibleType` is written in the referencing scope, so it is expanded as it stands, with
+each alias's parameters substituted in its own body (see substituteRows). `fieldMap` is the
+inlined alias's own fields, written in its parameters, `tvarMap`.
+-}
+closedExtensionFields :: Map.Map N.Name FieldType -> [(TV.Var, Type)] -> Type -> Maybe (Map.Map N.Name FieldType)
+closedExtensionFields fieldMap tvarMap extensibleType =
+  let
+    closedRecord t =
+      case t of
+        TRecord fields Nothing -> Just fields
+        TAlias _ _ _ (Filled body) -> closedRecord body
+        TAlias _ _ args (Holey body) -> closedRecord (substituteRows (Map.fromList args) body)
+        _ -> Nothing
+
+    ownFields =
+      fieldMap & fmap (\(FieldType index tipe) -> FieldType index (substituteRows (Map.fromList tvarMap) tipe))
+  in
+  closedRecord extensibleType
+    & fmap (\extensionFields -> Map.union extensionFields ownFields)
+
+
+{-| Simultaneous substitution of type variables, row tails included: substituting a record
+for the row tail of another merges the two, `{ a | x : Int }` with `a` bound to
+`{ r | y : Int }` is `{ r | x : Int, y : Int }`, and an alias bound there is expanded to
+its record first. A Holey alias body is in that alias's own parameters, so only its
+arguments are substituted.
+-}
+substituteRows :: Map.Map TV.Var Type -> Type -> Type
+substituteRows subs t =
+  let
+    go = substituteRows subs
+
+    extendRow fields bound =
+      case bound of
+        TRecord moreFields ext -> TRecord (Map.union fields moreFields) ext
+        TVar v -> TRecord fields (Just v)
+        TAlias _ _ args (Holey body) -> extendRow fields (substituteRows (Map.fromList args) body)
+        TAlias _ _ _ (Filled body) -> extendRow fields body
+        -- Not a record: Elm does not allow it as a row tail
+        _ -> TRecord fields Nothing
+  in
+  case t of
+    TVar v -> Map.findWithDefault t v subs
+    TLambda t1 t2 -> TLambda (go t1) (go t2)
+    TType home name params -> TType home name (fmap go params)
+    TRecord fieldMap ext ->
+      let fields = fieldMap & fmap (\(FieldType index tipe) -> FieldType index (go tipe))
+      in
+      case ext >>= (\e -> Map.lookup e subs) of
+        Just bound -> extendRow fields bound
+        Nothing -> TRecord fields ext
+    TUnit -> t
+    TPair a_ b -> TPair (go a_) (go b)
+    TTriple a_ b c -> TTriple (go a_) (go b) (go c)
+    TAlias home name args (Holey body) -> TAlias home name (args & fmap (\(n, v) -> (n, go v))) (Holey body)
+    TAlias home name args (Filled body) -> TAlias home name (args & fmap (\(n, v) -> (n, go v))) (Filled (go body))
 
 
 resolveFieldMap tipe tvarMap =
@@ -1059,7 +1162,7 @@ resolveTvar tvarMap t =
             TAlias moduleName typeName tvars (Holey tipe) -> do
               -- See expansionTvarMap
               let newResolvedTvars = tvars & fmap (\(n, t) -> (n, resolveTvar (expansionTvarMap extensibleName tvarMap) t))
-              case resolveTvar newResolvedTvars tipe of
+              case throughFilledAliases (resolveTvar newResolvedTvars tipe) of
                 TRecord fieldMapExtensible _ ->
                   fieldMap
                     & Map.union fieldMapExtensible
@@ -1072,7 +1175,7 @@ resolveTvar tvarMap t =
 
             TAlias moduleName typeName tvars (Filled tipe) -> do
               let newResolvedTvars = tvars & fmap (\(n, t) -> (n, resolveTvar (expansionTvarMap extensibleName tvarMap) t))
-              case resolveTvar newResolvedTvars tipe of
+              case throughFilledAliases (resolveTvar newResolvedTvars tipe) of
                 TRecord fieldMapExtensible _ ->
                   fieldMap
                     & Map.union fieldMapExtensible
