@@ -245,7 +245,17 @@ addWireGenerations_ canonical pkg ifaces modul =
             , (decoderUnion DecodeValidating isTest_ ifaces pkg modul decls_ name union)
             , (decoderUnion DecodeUnsafe     isTest_ ifaces pkg modul decls_ name union)
             ]
+            & (\defs ->
+                if recursesIrregularly cname (Can._unions canonical) name union
+                  then withPolymorphicRecursion cname decoderComparableParams name union defs
+                  else defs
+              )
         )
+
+    -- Which decoder type parameters have to be comparable, for the decoder signatures.
+    -- Only needed by the decoders withPolymorphicRecursion annotates.
+    decoderComparableParams =
+      comparableParams ifaces cname (Can._unions canonical) (Can._aliases canonical)
 
     aliasDefs =
       (Can._aliases canonical)
@@ -1020,3 +1030,355 @@ decoderAlias mode isTest_ ifaces pkg modul decls aliasName alias@(Alias tvars ti
       decoderForType mode ifaces cname tipe
   in
   generated
+
+
+{-| Which type parameters of the decoders generated for a module's types have to be
+`comparable`, by type and parameter position.
+
+The decoders are annotated, and a parameter whose decoder ends up decoding a Set element
+or a Dict key, directly or through another decoder, has to be called comparable in that
+annotation. Otherwise the annotation is more general than its body, and the module no
+longer typechecks. Encoders never need this, encoding a Set or Dict asks nothing of its
+elements, so encoderUnion and encoderAlias get to use the type's own names.
+
+What one type needs depends on the types it references, which in this module includes
+itself and its neighbours, so all of the module's types are solved together, to a
+fixpoint. Foreign types are read off their decoder's signature in the interface.
+
+-}
+type ComparableParams = Module.Canonical -> TN.Name -> [Bool]
+
+
+comparableParams :: Map.Map PrimModule.Name I.Interface -> Module.Canonical -> Map.Map TN.Name Union -> Map.Map TN.Name Alias -> ComparableParams
+comparableParams ifaces cname unions aliases =
+  let
+    -- The type parameters of each decoder generated here, and the types its body decodes
+    localTypes :: Map.Map TN.Name ([TV.Var], [Type])
+    localTypes =
+      Map.union
+        (unions & fmap (\union ->
+          (_u_vars union, _u_alts union & concatMap (\(Ctor _ _ _ paramTypes) -> paramTypes))))
+        (aliases
+          & Map.filter (\(Alias _ tipe) -> not (isLambdaType tipe))
+          & fmap (\(Alias tvars tipe) -> (tvars, [tipe])))
+
+    lookupIn :: Map.Map TN.Name [Bool] -> ComparableParams
+    lookupIn solved moduleName typeName =
+      if moduleName == cname
+        then Map.findWithDefault [] typeName solved
+        else foreignComparableParams ifaces moduleName typeName
+
+    step solved =
+      localTypes & fmap (\(tvars, types) ->
+          let needed = types & concatMap (decoderComparableTvars (lookupIn solved))
+          in
+          tvars & fmap (\tvar -> isComparableTvar tvar || elem tvar needed)
+        )
+
+    -- Monotone (a parameter only ever becomes comparable) over finitely many flags, so
+    -- this terminates.
+    fixpoint solved =
+      let next = step solved
+      in if next == solved then solved else fixpoint next
+  in
+  lookupIn (fixpoint (localTypes & fmap (\(tvars, _) -> fmap (const False) tvars)))
+
+
+{-| The comparable flags of a foreign type's decoder parameters, from its signature in the
+interface: `Decoder comparable -> ...`. Interfaces built before decoders were annotated
+carry the inferred signature instead, which names its constrained variables the same way.
+-}
+foreignComparableParams :: Map.Map PrimModule.Name I.Interface -> Module.Canonical -> TN.Name -> [Bool]
+foreignComparableParams ifaces moduleName typeName =
+  let
+    args t =
+      case t of
+        TLambda arg rest -> arg : args rest
+        _ -> []
+
+    decodesComparableTvar arg =
+      case arg of
+        TAlias _ "Decoder" [(_, TVar tvar)] _ -> isComparableTvar tvar
+        TType _ "Decoder" [TVar tvar] -> isComparableTvar tvar
+        _ -> False
+  in
+  case foreignTypeSig moduleName (N.fromChars $ "w3_decode_" ++ TN.nameToChars typeName) ifaces of
+    Just (Forall _ tipe) -> args tipe & fmap decodesComparableTvar
+    Nothing -> []
+
+
+isComparableTvar :: TV.Var -> Bool
+isComparableTvar (TV.Var _ constraint) =
+  case constraint of
+    TV.Comparable -> True
+    TV.CompAppend -> True
+    _ -> False
+
+
+{-| The type variables whose `w3_x_c_<tvar>` decoders the decoder for `tipe` needs to
+produce a comparable value.
+
+This follows decoderForType case for case, because it is answering a question about the
+code decoderForType generates, so a change to one needs the same change in the other.
+-}
+decoderComparableTvars :: ComparableParams -> Type -> [TV.Var]
+decoderComparableTvars comparableParams tipe =
+  let
+    go = decoderComparableTvars comparableParams
+
+    -- Calling the decoder for a type with decoders for its parameters
+    applied moduleName typeName params =
+      zip (comparableParams moduleName typeName ++ repeat False) params
+        & concatMap (\(isComparable, param) ->
+            (if isComparable then comparableTvars param else []) ++ go param
+          )
+
+    fields fieldMap =
+      fieldMap & fieldsToList & concatMap (\(_, field) -> go field)
+  in
+  if containsUnsupportedTypes tipe then
+    []
+  else
+  case tipe of
+    TPair a_ b -> go a_ ++ go b
+    TTriple a_ b c -> go a_ ++ go b ++ go c
+
+    TType (Module.Canonical (Name "elm" "core") "Set") "Set" [ptype] ->
+      comparableTvars ptype ++ go ptype
+
+    TType (Module.Canonical (Name "elm" "core") "Dict") "Dict" [key, val] ->
+      comparableTvars key ++ go key ++ go val
+
+    -- The rest of decoderForType's built in decoders ask nothing of their parameters
+    TType (Module.Canonical (Name "elm" "core") "Maybe") "Maybe" [ptype] -> go ptype
+    TType (Module.Canonical (Name "elm" "core") "List") "List" [ptype] -> go ptype
+    TType (Module.Canonical (Name "elm" "core") "Array") "Array" [ptype] -> go ptype
+    TType (Module.Canonical (Name "lamdera" "containers") "SeqSet") "SeqSet" [ptype] -> go ptype
+    TType (Module.Canonical (Name "elm" "core") "Result") "Result" [err, a_] -> go err ++ go a_
+    TType (Module.Canonical (Name "lamdera" "containers") "SeqDict") "SeqDict" [key, val] -> go key ++ go val
+    TType (Module.Canonical (Name "elm" "bytes") "Bytes") "Bytes" _ -> []
+    TType (Module.Canonical (Name "elm" "time") "Time") "Posix" _ -> []
+    TType (Module.Canonical (Name "elm" "file") "File") "File" _ -> []
+    TType (Module.Canonical (Name "elm-explorations" "webgl") "WebGL.Texture") "Texture" _ -> []
+
+    TType moduleName typeName params ->
+      if isUnsupportedKernelType tipe
+        then []
+        else applied moduleName typeName params
+
+    TRecord fieldMap maybeExtensible ->
+      case maybeExtensible of
+        -- The parameter decoder is used for the whole record, as is
+        Just _ -> []
+        Nothing -> fields fieldMap
+
+    TAlias moduleName typeName tvars_ aType ->
+      let
+        innerType = case aType of { Holey t -> t; Filled t -> t }
+
+        normalDecoder = applied moduleName typeName (fmap snd tvars_)
+
+        inlinedRecord fieldMap extensibleName =
+          case resolvedRecordFieldMapM fieldMap extensibleName tvars_ of
+            Just resolved -> go (TRecord resolved Nothing & resolveTvar tvars_)
+            Nothing -> normalDecoder
+      in
+      if isUnsupportedKernelType tipe
+      then []
+      else if isLambdaType innerType
+      then []
+      else
+        case aType of
+          Holey (TRecord fieldMap extensibleName) -> inlinedRecord fieldMap extensibleName
+          Holey t ->
+            if reachesExtensibleRecord t
+              then
+                case resolveTvar tvars_ t of
+                  TAlias _ _ _ (Filled (TRecord fieldMap Nothing)) -> fields fieldMap
+                  _ -> normalDecoder
+              else normalDecoder
+          Filled (TRecord fieldMap extensibleName) -> inlinedRecord fieldMap extensibleName
+          Filled _ -> normalDecoder
+
+    TVar _ -> []
+    TLambda _ _ -> []
+    TUnit -> []
+
+
+{-| The type variables that have to be comparable for a value of this type to be. -}
+comparableTvars :: Type -> [TV.Var]
+comparableTvars tipe =
+  case tipe of
+    TVar tvar -> [tvar]
+    TPair a_ b -> comparableTvars a_ ++ comparableTvars b
+    TTriple a_ b c -> comparableTvars a_ ++ comparableTvars b ++ comparableTvars c
+    TType (Module.Canonical (Name "elm" "core") "List") "List" [ptype] -> comparableTvars ptype
+    TAlias _ _ _ (Filled t) -> comparableTvars t
+    TAlias _ _ tvars_ (Holey t) -> comparableTvars (substituteTvars (Map.fromList tvars_) t)
+    -- Everything else is either comparable already or never can be, either way there's
+    -- nothing a type variable can do about it.
+    _ -> []
+
+
+
+{-| The name a decoder's signature uses for one of its type's parameters.
+
+The type's own name, unless the parameter has to be comparable (see ComparableParams)
+and isn't named that way already, in which case it's renamed to say so:
+`type Bag a = Bag (Set a)` decodes with `Decoder comparable_a -> Decoder (Bag comparable_a)`.
+-}
+decoderSigTvar :: ComparableParams -> Module.Canonical -> TN.Name -> [TV.Var] -> TV.Var -> TV.Var
+decoderSigTvar comparableParams cname typeName tvars tvar =
+  let
+    isComparable =
+      zip tvars (comparableParams cname typeName ++ repeat False)
+        & any (\(t, flag) -> t == tvar && flag)
+
+    fresh prefix =
+      let
+        candidates = iterate (++ "_") (prefix ++ TV.varToChars tvar)
+        taken = fmap TV.varToChars tvars
+      in
+      candidates & List.find (\c -> notElem c taken) & maybe tvar TV.varFromChars
+  in
+  if not isComparable
+    then tvar
+    else
+      case tvar of
+        TV.Var _ TV.Any -> fresh "comparable_"
+        -- Appendable is the one constraint that doesn't already unify with comparable
+        TV.Var _ TV.Appendable -> fresh "compappend_"
+        _ -> tvar
+
+
+{-| Codecs for a custom type that refers to itself at OTHER type arguments than its own
+parameters: a non-regular (or "nested") data type, such as elm-fontawesome's
+
+    type Icon hasId = Icon { ..., outer : Maybe (Icon WithId) }
+
+Elm has no polymorphic recursion. Inside its own definition a function is only ever used
+at the very type it is being defined at, annotation or not, so the encoder for `Icon hasId`
+cannot call itself to encode an `Icon WithId` (a TYPE MISMATCH, `hasId` against `WithId`),
+and an unannotated decoder that does so is inferred at `WithId` only, failing wherever
+`Icon` is used at another argument (or, for `type Nested a = ... (Nested (List a))`,
+failing outright with an INFINITE TYPE). Recursion through another definition is fine
+though: an annotated definition used by a DIFFERENT definition of the same recursive group
+is instantiated afresh at each use, and an unannotated one is generalised before the
+annotated ones are checked.
+
+So for such a type (see recursesIrregularly) each codec:
+
+  - is annotated, if it is not already: the decoders are plain inferred Defs, and only an
+    annotation lets the other definitions use them at any argument. The signature is the
+    encoders' own shape, `Decoder a -> Decoder (T a)`, with `a` renamed to say comparable
+    where the decoder needs it (see ComparableParams);
+  - refers to itself through a forwarder instead, `w3_polyrec_<encode|decode|unsafe_decode>_T`,
+    an annotated definition that only calls the codec back with the same arguments. The
+    forwarder's name deliberately lacks the `w3_encode_`/`w3_decode_` prefixes that
+    codecs are recognised by (Lamdera.Wire3.Direct, the reporting filters only look at `w3_`).
+
+The bodies are otherwise exactly what they were, so the bytes are the same. Every other
+type's codecs are left exactly as they were.
+-}
+withPolymorphicRecursion :: Module.Canonical -> ComparableParams -> TN.Name -> Union -> [Def] -> [Def]
+withPolymorphicRecursion cname compParams unionName union defs =
+  defs
+    & fmap (annotateUnionDecoder cname compParams unionName union)
+    & concatMap (forwardSelfReferences cname)
+
+
+{-| Does this custom type reach a reference to itself, at other arguments than its own
+parameters? Directly, or through the other types of this module it reaches (custom types
+and aliases, with their arguments substituted in): codecs of types from other modules
+cannot lead back here.
+
+Functions are not followed: their codecs fail without referring to anything. Each other
+custom type is entered once, with the arguments it is first reached at, which is all it
+takes for the shapes found in practice and keeps this finite for types that grow on the
+way down.
+-}
+recursesIrregularly :: Module.Canonical -> Map.Map TN.Name Union -> TN.Name -> Union -> Bool
+recursesIrregularly cname unions unionName union =
+  let
+    ownParams = _u_vars union & fmap TVar
+
+    ctorParams u = _u_alts u & concatMap (\(Ctor _ _ _ paramTypes) -> paramTypes)
+
+    walk :: [TN.Name] -> [Type] -> Bool
+    walk visited types =
+      case types of
+        [] -> False
+        t : rest ->
+          case t of
+            TType home name args ->
+              if home == cname && name == unionName then
+                args /= ownParams || walk visited rest
+              else
+                case Map.lookup name unions of
+                  Just other | home == cname && notElem name visited ->
+                    let subs = Map.fromList (zip (_u_vars other) args)
+                    in walk (name : visited) (args ++ fmap (substituteTvars subs) (ctorParams other) ++ rest)
+                  _ ->
+                    walk visited (args ++ rest)
+
+            TRecord fieldMap _ -> walk visited ((fieldMap & Map.elems & fmap (\(FieldType _ ft) -> ft)) ++ rest)
+
+            TAlias _ _ args (Holey body) -> walk visited (substituteTvars (Map.fromList args) body : rest)
+            TAlias _ _ _ (Filled body) -> walk visited (body : rest)
+
+            TPair a_ b -> walk visited (a_ : b : rest)
+            TTriple a_ b c -> walk visited (a_ : b : c : rest)
+
+            TLambda _ _ -> walk visited rest
+            TVar _ -> walk visited rest
+            TUnit -> walk visited rest
+  in
+  walk [] (ctorParams union)
+
+
+{-| Annotate a custom type's (inferred) decoder, see withPolymorphicRecursion. Encoders and
+decoders that are already annotated are left as they are.
+-}
+annotateUnionDecoder :: Module.Canonical -> ComparableParams -> TN.Name -> Union -> Def -> Def
+annotateUnionDecoder cname compParams unionName union def =
+  case def of
+    Def name ptvars body ->
+      let
+        tvars = _u_vars union
+        sigTvar = decoderSigTvar compParams cname unionName tvars
+        ptvarsTyped = zip ptvars tvars & fmap (\(p, tvar) -> (p, tWire_Decoder_Sig (TVar (sigTvar tvar))))
+        freeVars = tvars & fmap (\tvar -> (sigTvar tvar, ())) & Map.fromList
+      in
+      TypedDef name freeVars ptvarsTyped body $
+        tWire_Decoder_Sig (TType cname unionName (tvars & fmap (TVar . sigTvar)))
+
+    TypedDef _ _ _ _ _ ->
+      def
+
+
+{-| An annotated codec that refers to itself, split into the codec, now referring to a
+forwarder instead, and that forwarder, see withPolymorphicRecursion.
+-}
+forwardSelfReferences :: Module.Canonical -> Def -> [Def]
+forwardSelfReferences cname def =
+  case def of
+    TypedDef (A.At region name) freeVars typedArgs body resultType | elem name (topLevelRefsInExpr body) ->
+      let
+        forwarder = N.fromChars $ "w3_polyrec_" ++ drop (length ("w3_" :: String)) (N.toChars name)
+
+        argNames =
+          typedArgs & fmap (\(pattern, _) ->
+            case pattern of
+              A.At _ (PVar n) -> n
+              _ -> error $ "forwardSelfReferences: unexpected codec argument pattern in " ++ N.toChars name
+          )
+
+        forwarderBody =
+          call (a (VarTopLevel cname name)) (argNames & fmap lvar)
+      in
+      [ TypedDef (A.At region name) freeVars typedArgs (renameTopLevelRef cname name forwarder body) resultType
+      , TypedDef (a forwarder) freeVars (zip (argNames & fmap pvar) (fmap snd typedArgs)) forwarderBody resultType
+      ]
+
+    _ ->
+      [def]

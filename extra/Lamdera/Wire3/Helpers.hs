@@ -853,6 +853,20 @@ tLamdera_Wire_Encoder_Holey =
      (Holey (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Encode") "Encoder" [])))
 
 
+{-| The type generated decoders are annotated with: `Bytes.Decode.Decoder tipe`.
+
+Deliberately not `Lamdera.Wire3.Decoder tipe`, though that's the same type. The point of
+annotating the decoders is the size of their signatures in the interface, where an alias
+is written out with its arguments AND its expanded body, so `Lamdera.Wire3.Decoder T`
+carries `T` twice. For a model that's most of the .elmi: on one customer app this alone
+made w3_decode_FrontendModelRecord's signature 1.27MB rather than 636KB.
+
+-}
+tWire_Decoder_Sig :: Type -> Type
+tWire_Decoder_Sig tipe =
+  TType (Module.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [tipe]
+
+
 mLamdera_Wire = (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire3")
 mLamdera_SeqDict = (Module.Canonical (Name "lamdera" "containers") "SeqDict")
 mLamdera_SeqSet = (Module.Canonical (Name "lamdera" "containers") "SeqSet")
@@ -1378,4 +1392,54 @@ defTopLevelRefs def =
   case def of
     Def _ _ e          -> topLevelRefsInExpr e
     TypedDef _ _ _ e _ -> topLevelRefsInExpr e
+
+
+{-| Point every VarTopLevel reference to `from` (in module `home`) at `to` instead,
+everywhere in an expression. Covers every Expr_ constructor, like topLevelRefsInExpr.
+
+Used to send a codec's references to itself through a forwarder, see
+Lamdera.Wire3.Core.withPolymorphicRecursion.
+-}
+renameTopLevelRef :: Module.Canonical -> N.Name -> N.Name -> Expr -> Expr
+renameTopLevelRef home from to (A.At region expr) =
+  let
+    go = renameTopLevelRef home from to
+
+    goDef def =
+      case def of
+        Def n ps e -> Def n ps (go e)
+        TypedDef n fv ps e t -> TypedDef n fv ps (go e) t
+  in
+  A.At region $
+  case expr of
+    VarTopLevel h name | h == home && name == from -> VarTopLevel h to
+    VarLocal _              -> expr
+    VarTopLevel _ _         -> expr
+    VarKernel _ _           -> expr
+    VarForeign _ _ _        -> expr
+    VarCtor _ _ _ _ _       -> expr
+    VarDebug _ _ _          -> expr
+    VarOperator _ _ _ _     -> expr
+    Chr _                   -> expr
+    Str _                   -> expr
+    Int _                   -> expr
+    Float _                 -> expr
+    List es                 -> List (fmap go es)
+    Negate e                -> Negate (go e)
+    Binop op h n ann e1 e2  -> Binop op h n ann (go e1) (go e2)
+    Lambda ps e             -> Lambda ps (go e)
+    Call e es               -> Call (go e) (fmap go es)
+    If branches finalElse   -> If (fmap (\(c, t) -> (go c, go t)) branches) (go finalElse)
+    Let def e               -> Let (goDef def) (go e)
+    LetRec defs e           -> LetRec (fmap goDef defs) (go e)
+    LetDestruct p e1 e2     -> LetDestruct p (go e1) (go e2)
+    Case scrutinee branches -> Case (go scrutinee) (fmap (\(CaseBranch p e) -> CaseBranch p (go e)) branches)
+    Accessor _              -> expr
+    Access e field          -> Access (go e) field
+    Update n e fieldUpdates -> Update n (go e) (fmap (\(FieldUpdate r ue) -> FieldUpdate r (go ue)) fieldUpdates)
+    Record fields           -> Record (fmap go fields)
+    Unit                    -> expr
+    Pair e1 e2              -> Pair (go e1) (go e2)
+    Triple e1 e2 e3         -> Triple (go e1) (go e2) (go e3)
+    Shader _ _              -> expr
 
