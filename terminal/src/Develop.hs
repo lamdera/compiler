@@ -54,7 +54,7 @@ import qualified Data.List as List
 import Ext.Common (trackedForkIO, whenDebug, stringToText)
 import qualified Ext.Filewatch as Filewatch
 import qualified Ext.Sentry as Sentry
-import qualified Ext.MemoryCache as MemoryCache -- @LAMDERA lamdera live --memory
+import qualified Ext.MemoryCache as MemoryCache -- @LAMDERA the lamdera live session
 import Control.Concurrent.STM (atomically, newTVarIO, readTVar, writeTVar, TVar)
 
 import StandaloneInstances

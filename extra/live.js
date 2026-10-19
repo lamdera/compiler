@@ -513,7 +513,7 @@ function hotReload() {
   return hotPatch().then(patched => patched ? null : fullHotReload())
 }
 
-// @LAMDERA `lamdera live --memory`: ask for just what changed since the build this page
+// @LAMDERA `lamdera live` (either mode): ask for just what changed since the build this page
 // runs (see extra/Lamdera/HotPatch.hs) and run it in the page's scope. Resolves to false
 // when the whole page has to be hot reloaded instead.
 function hotPatch() {

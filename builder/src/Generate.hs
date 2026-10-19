@@ -40,7 +40,7 @@ import qualified Root as R
 import Lamdera ((&))
 import qualified Lamdera
 import qualified Lamdera.AppConfig
-import qualified Ext.MemoryCache as MemoryCache -- @LAMDERA lamdera live --memory
+import qualified Ext.MemoryCache as MemoryCache -- @LAMDERA the lamdera live session
 import Data.Dynamic (fromDynamic, toDyn) -- @LAMDERA
 import Control.Exception (evaluate) -- @LAMDERA
 

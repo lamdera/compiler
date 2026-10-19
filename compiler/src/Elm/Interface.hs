@@ -736,7 +736,7 @@ dTypeRef (TypeTable dRef types) =
 
 -- SHARE
 --
--- @LAMDERA `lamdera live --memory` keeps interfaces for the whole session. An interface
+-- @LAMDERA `lamdera live` keeps interfaces for the whole session (Ext.MemoryCache). An interface
 -- fresh from type inference repeats the same expanded alias bodies at every use (see TYPE
 -- TABLE above), and holding hundreds of those trees costs gigabytes. `share` rebuilds an
 -- interface with each distinct type node allocated once, keyed exactly like the type

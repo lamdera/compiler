@@ -72,7 +72,7 @@ graphModifications mode mains graph_ = do
     else graph
 
 
--- @LAMDERA graphModifications for `lamdera live --memory`, keeping the rendered Wire3 codecs
+-- @LAMDERA graphModifications for the `lamdera live` session, keeping the rendered Wire3 codecs
 -- between builds (see Lamdera.Wire3.Direct.replaceCodecsCached)
 graphModificationsCached :: Lamdera.Wire3.Direct.CodecCache -> Mode.Mode -> Mains -> Map.Map Opt.Global Opt.Node -> (Map.Map Opt.Global Opt.Node, Lamdera.Wire3.Direct.CodecCache)
 graphModificationsCached cache mode mains graph_ =

@@ -69,7 +69,7 @@ import qualified Lamdera.Schedule
 import qualified Type.Type -- @LAMDERA withSharedTables
 import Control.Concurrent (getNumCapabilities)
 import qualified System.Environment
-import qualified Ext.MemoryCache as MemoryCache -- @LAMDERA lamdera live --memory
+import qualified Ext.MemoryCache as MemoryCache -- @LAMDERA the lamdera live session
 
 
 
@@ -771,7 +771,7 @@ compile writer (Env key root stuff projectType _ buildID _ _) docsNeed (Details.
             Right docs ->
               do  let name = Src.getName modul
                   let iface = I.fromModule pkg canonical annotations
-                  -- @LAMDERA with `lamdera live --memory` the artifacts stay in memory, see
+                  -- @LAMDERA with `lamdera live --memory` the artifacts stay only in memory, see
                   -- Ext.MemoryCache, and the new interface is compared as a value with the kept
                   -- one (there are no old bytes to compare with; an unchanged interface keeps
                   -- the kept, shared value). Without it, the byte comparison below.
@@ -841,7 +841,7 @@ projectTypeToPkg projectType =
 
 writeDetails :: File.Writer R.PROJECT -> R.Stuff -> Details.Details -> Map.Map Module.Name Result -> IO ()
 writeDetails writer stuff (Details.Details time outline buildID locals foreigns extras) results =
-  -- @LAMDERA was File.writeBytes writer (R.details stuff) Details.eDetails, Details.write keeps them in memory with `lamdera live --memory`
+  -- @LAMDERA was File.writeBytes writer (R.details stuff) Details.eDetails, Details.write also keeps them in memory with `lamdera live` (only there with --memory)
   Details.write writer stuff $
     Details.Details time outline buildID (Map.foldrWithKey addNewLocal locals results) foreigns extras
 

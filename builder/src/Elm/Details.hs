@@ -77,7 +77,7 @@ import qualified Lamdera.Extensions
 import qualified Lamdera.PackageReplacements
 import qualified Lamdera.Version
 import qualified Type.Type -- @LAMDERA withSharedTables
-import qualified Ext.MemoryCache as MemoryCache -- @LAMDERA lamdera live --memory
+import qualified Ext.MemoryCache as MemoryCache -- @LAMDERA the lamdera live session
 import Data.Dynamic (fromDynamic, toDyn) -- @LAMDERA
 
 -- DETAILS

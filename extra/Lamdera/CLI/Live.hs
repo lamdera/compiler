@@ -959,7 +959,7 @@ reconcileSources maybeStore onChanged =
 -- HOT PATCHES (see Lamdera.HotPatch)
 
 
-{-| With --memory, tells the page which build it runs (this goes after the Elm JS, so a
+{-| In a live session, tells the page which build it runs (this goes after the Elm JS, so a
 full hot reload of a new page sets it on the scope it evaluates that page into).
 -}
 jsVersionMarker :: MemoryCache.Store -> IO B.Builder
@@ -1025,7 +1025,7 @@ timingLog message = do
 --
 -- With LAMDERA_LIVE_TIMING set, each rebuild prints how long it took to have fresh JS,
 -- how many modules were compiled, what the memory store did, and the heap after a major
--- GC (needs +RTS -T). For measuring --memory against the default.
+-- GC (needs +RTS -T). For measuring --memory against the default (and LAMDERA_LIVE_SESSION=0).
 
 
 timedRebuild :: Maybe MemoryCache.Store -> IO a -> IO a

@@ -35,7 +35,7 @@ asyncUpdateJsOutput cache recompile =
 
 
 {-| Like asyncUpdateJsOutput, but the output is taken in the calling thread, so whoever
-reads it next waits for this rebuild. No forced GC (used with --memory).
+reads it next waits for this rebuild. No forced GC (used by the `lamdera live` session).
 -}
 updateJsOutputNow :: Cache -> IO BS.ByteString -> IO ()
 updateJsOutputNow (Cache mJsOutput) recompile = do
@@ -45,9 +45,9 @@ updateJsOutputNow (Cache mJsOutput) recompile = do
     putMVar mJsOutput bs
 
 
-{-| `lamdera live --memory` passes False: it keeps its artifacts in memory, so the major GC
+{-| (`lamdera live` with a session uses updateJsOutputNow instead: it keeps its artifacts in memory, so the major GC
 after each rebuild mostly copies them around, and a Ctrl-C that lands while it runs is
-lost (seen on a 920 module app, with ~1GB to copy).
+lost (seen on a 920 module app, with ~1GB to copy).)
 -}
 asyncUpdateJsOutputWith :: Bool -> Cache -> IO BS.ByteString -> IO ()
 asyncUpdateJsOutputWith majorGC (Cache mJsOutput) recompile = do

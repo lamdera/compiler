@@ -6,7 +6,7 @@ module Lamdera.Wire3.Direct
   ( addDirectIR
   , replaceCodecs
   , directEnabled
-  , CodecCache, emptyCodecCache, replaceCodecsCached -- @LAMDERA lamdera live --memory
+  , CodecCache, emptyCodecCache, replaceCodecsCached -- @LAMDERA the lamdera live session
   ) where
 
 {- Direct JS Wire3 codecs (C2, docs/plans/wire3-codegen-research.md in the runtime repo).
@@ -1021,7 +1021,7 @@ replaceCodecs mode graph =
 
 -- CACHED REPLACING
 --
--- @LAMDERA `lamdera live --memory` runs replaceCodecs on every rebuild, over every module's
+-- @LAMDERA `lamdera live` (either mode) runs replaceCodecs on every rebuild, over every module's
 -- codecs. Reading the stored IR of every type and rendering the JS of every reachable
 -- codec again was a few hundred ms of each rebuild of a 920 module app, for codecs that
 -- almost never change. replaceCodecsCached keeps both from the last build:

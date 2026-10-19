@@ -4,8 +4,8 @@ module Generate.JavaScript
   , generateEsm
   , generateForRepl
   , generateForReplEndpoint
-  , JsCache, emptyJsCache, generateCached -- @LAMDERA lamdera live --memory
-  , Listing(..), Emitted(..), EmitKind(..), jsCacheListing, patchHook -- @LAMDERA lamdera live --memory hot patches, see Lamdera.HotPatch
+  , JsCache, emptyJsCache, generateCached -- @LAMDERA the lamdera live session
+  , Listing(..), Emitted(..), EmitKind(..), jsCacheListing, patchHook -- @LAMDERA lamdera live hot patches, see Lamdera.HotPatch
   )
   where
 
@@ -742,7 +742,7 @@ toMainEsmExports mode mains =
 
 -- JS CACHE
 --
--- @LAMDERA `lamdera live --memory` keeps every module's objects in memory, so between two
+-- @LAMDERA `lamdera live` keeps every module's objects in memory (Ext.MemoryCache, either backing), so between two
 -- builds a module that was not recompiled has the very same Opt.Node values. The JS of a
 -- top-level definition depends on its node and, through direct calls (makeArgLookup), on
 -- the arities of the globals it refers to, all of which are in its deps. So the rendered
