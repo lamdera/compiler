@@ -364,6 +364,7 @@ Executable lamdera
         Lamdera.Init
         Lamdera.Injection
         Lamdera.HotPatch
+        Lamdera.Cores
         Lamdera.Lexical
         Lamdera.Live
         Lamdera.Make
@@ -433,6 +434,7 @@ Executable lamdera
         Test.CompilePerf
         Test.LiveMemory
         Test.HotPatch
+        Test.Cores
         Test.Caching
         Test.EasyTestSpinner
         Test.Ext.Filewatch

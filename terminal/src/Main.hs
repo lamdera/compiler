@@ -28,6 +28,7 @@ import qualified Repl
 import qualified Lamdera.Version
 import qualified Lamdera.CLI
 import qualified Lamdera.Version
+import Lamdera.Cores (withCores) -- @LAMDERA --cores, see Lamdera.Cores
 
 -- MAIN
 
@@ -36,18 +37,19 @@ main :: IO ()
 main =
   Terminal.app intro outro
     -- @LAMDERA additions + removals
-    [ Lamdera.CLI.live
+    -- @LAMDERA withCores: the commands that compile take --cores N (see Lamdera.Cores)
+    [ withCores Lamdera.CLI.live
     , Lamdera.CLI.login
-    , Lamdera.CLI.check
-    , Lamdera.CLI.deploy
+    , withCores Lamdera.CLI.check
+    , withCores Lamdera.CLI.deploy
     , init
-    , install
-    , make
-    , repl
+    , withCores install
+    , withCores make
+    , withCores repl
     , Lamdera.CLI.reset
     , Lamdera.CLI.update
-    , Lamdera.CLI.annotate
-    , Lamdera.CLI.eval
+    , withCores Lamdera.CLI.annotate
+    , withCores Lamdera.CLI.eval
     , Lamdera.CLI.backend
     , Lamdera.CLI.format
     -- , reactor
