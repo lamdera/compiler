@@ -241,9 +241,11 @@ addWireGenerations_ canonical pkg ifaces modul =
       (Can._unions canonical)
         & Lexical.toList
         & concatMap (\(name, union) ->
-            [ (encoderUnion moduleRowConstraints isTest_ ifaces pkg modul decls_ name union)
-            , (decoderUnion moduleRowConstraints DecodeValidating isTest_ ifaces pkg modul decls_ name union)
-            , (decoderUnion moduleRowConstraints DecodeUnsafe     isTest_ ifaces pkg modul decls_ name union)
+            let rowCodecs = unionRowCodecs name union & either (const Nothing) id
+            in
+            [ (encoderUnion rowCodecs moduleRowConstraints isTest_ ifaces pkg modul decls_ name union)
+            , (decoderUnion rowCodecs moduleRowConstraints DecodeValidating isTest_ ifaces pkg modul decls_ name union)
+            , (decoderUnion rowCodecs moduleRowConstraints DecodeUnsafe     isTest_ ifaces pkg modul decls_ name union)
             ]
             & (\defs ->
                 if recursesIrregularly cname (Can._unions canonical) name union
@@ -262,14 +264,53 @@ addWireGenerations_ canonical pkg ifaces modul =
     moduleRowConstraints =
       rowConstraints ifaces cname (Can._unions canonical) (Can._aliases canonical)
 
+    -- The codecs of the types where a parameter is the row tail of more than one record
+    -- (see RowSets), and the compile errors for those that can't have them
+    moduleRowSets =
+      rowSets ifaces cname (Can._unions canonical) (Can._aliases canonical)
+
+    unionRowCodecs name union =
+      rowCodecsFor moduleRowSets cname name (_u_vars union) (_u_alts union & concatMap (\(Ctor _ _ _ types) -> types))
+
+    aliasRowCodecs name (Alias tvars tipe) =
+      rowCodecsFor moduleRowSets cname name tvars [tipe]
+
+    rowCodecsCheck =
+      ((Can._unions canonical)
+        & Lexical.toList
+        & fmap (\(name, union) ->
+            case unionRowCodecs name union of
+              Left problem -> Left (rowCodecsError name problem)
+              Right (Just _) | recursesIrregularly cname (Can._unions canonical) name union ->
+                -- withPolymorphicRecursion annotates the decoder with a parameter per type
+                -- parameter
+                Left $ rowCodecsError name $
+                  "a type variable is the row tail of more than one record, and the type also refers to itself at other type arguments than its own."
+              Right _ -> Right ()
+          )
+      )
+      ++
+      ((Can._aliases canonical)
+        & Lexical.toList
+        & filter (\(_, Alias _ tipe) -> not (isLambdaType tipe))
+        & fmap (\(name, alias) ->
+            case aliasRowCodecs name alias of
+              Left problem -> Left (rowCodecsError name problem)
+              Right _ -> Right ()
+          )
+      )
+      & sequence_
+
     aliasDefs =
       (Can._aliases canonical)
         & Lexical.toList
         & filter (\(_, Alias _ tipe) -> not (isLambdaType tipe))
         & concatMap (\(name, alias) ->
-            [ (encoderAlias moduleRowConstraints isTest_ ifaces pkg modul decls_ name alias)
-            , (decoderAlias moduleRowConstraints DecodeValidating isTest_ ifaces pkg modul decls_ name alias)
-            , (decoderAlias moduleRowConstraints DecodeUnsafe     isTest_ ifaces pkg modul decls_ name alias)
+            let rowCodecs = aliasRowCodecs name alias & either (const Nothing) id
+            in
+            [ (encoderAlias rowCodecs moduleRowConstraints isTest_ ifaces pkg modul decls_ name alias)
+            , (decoderAlias rowCodecs moduleRowConstraints DecodeValidating isTest_ ifaces pkg modul decls_ name alias)
+            , (decoderAlias rowCodecs moduleRowConstraints DecodeUnsafe     isTest_ ifaces pkg modul decls_ name alias)
             ]
         )
 
@@ -348,10 +389,15 @@ addWireGenerations_ canonical pkg ifaces modul =
           Left err
 
         Right () ->
-          Right $ canonical
-            { _decls = extendedDecls
-            , _exports = extendedExports
-            }
+          case rowCodecsCheck of
+            Left err ->
+              Left err
+
+            Right () ->
+              Right $ canonical
+                { _decls = extendedDecls
+                , _exports = extendedExports
+                }
 
 
 {-
@@ -530,8 +576,8 @@ addExport def exports =
       Map.insert name_ A.zero exports
 
 
-encoderUnion :: RowConstraints -> Bool -> Map.Map PrimModule.Name I.Interface -> Pkg.Name -> Src.Module -> Decls -> TN.Name -> Union -> Def
-encoderUnion rowConstraints isTest_ ifaces pkg modul decls unionName union =
+encoderUnion :: Maybe RowCodecs -> RowConstraints -> Bool -> Map.Map PrimModule.Name I.Interface -> Pkg.Name -> Src.Module -> Decls -> TN.Name -> Union -> Def
+encoderUnion rowCodecs rowConstraints isTest_ ifaces pkg modul decls unionName union =
   let
     !_ = runTests isTest_ "encoderUnion" pkg modul decls generatedName finalGen union (unionAsModule cname unionName union)
 
@@ -542,9 +588,19 @@ encoderUnion rowConstraints isTest_ ifaces pkg modul decls unionName union =
 
     -- A parameter can be constrained to a record by the constructors' arguments, as in
     -- encoderAlias (see RowConstraints)
-    ptvarsTyped = zip tvars (fmap snd (rowConstraints cname unionName) ++ repeat Map.empty) & fmap (\(tvar, constraints) ->
-        (pvar $ N.fromChars $ "w3_x_c_" ++ TV.varToChars tvar, TLambda (constrainTvarBy tvar constraints) tLamdera_Wire_Encoder_Holey)
-      )
+    ptvarsTyped =
+      case rowCodecs of
+        -- A codec for each record a parameter is the row tail of (see RowSets)
+        Just rc ->
+          _rc_params rc & fmap (\(tvar, codecVar, fields) ->
+            (pvar $ N.fromChars $ "w3_x_c_" ++ TV.varToChars codecVar, TLambda (constrainTvarBy tvar fields) tLamdera_Wire_Encoder_Holey)
+          )
+        Nothing ->
+          zip tvars (fmap snd (rowConstraints cname unionName) ++ repeat Map.empty) & fmap (\(tvar, constraints) ->
+            (pvar $ N.fromChars $ "w3_x_c_" ++ TV.varToChars tvar, TLambda (constrainTvarBy tvar constraints) tLamdera_Wire_Encoder_Holey)
+          )
+
+    forCodecs = maybe (extendRowArgs rowConstraints) _rc_select rowCodecs
 
     numCtors = length $ _u_alts union
 
@@ -574,7 +630,7 @@ encoderUnion rowConstraints isTest_ ifaces pkg modul decls unionName union =
 
                     paramEncoders =
                       paramTypes & imap (\pi_ paramType ->
-                          encodeTypeValue 0 ifaces cname (extendRowArgs rowConstraints paramType) (lvar (N.fromChars $ "v" ++ show pi_))
+                          encodeTypeValue 0 ifaces cname (forCodecs paramType) (lvar (N.fromChars $ "v" ++ show pi_))
                       )
 
                     branchHandler =
@@ -621,8 +677,8 @@ encoderUnion rowConstraints isTest_ ifaces pkg modul decls unionName union =
   finalGen
 
 
-decoderUnion :: RowConstraints -> DecodeMode -> Bool -> Map.Map PrimModule.Name I.Interface -> Pkg.Name -> Src.Module -> Decls -> TN.Name -> Union -> Def
-decoderUnion rowConstraints mode isTest_ ifaces pkg modul decls unionName union =
+decoderUnion :: Maybe RowCodecs -> RowConstraints -> DecodeMode -> Bool -> Map.Map PrimModule.Name I.Interface -> Pkg.Name -> Src.Module -> Decls -> TN.Name -> Union -> Def
+decoderUnion rowCodecs rowConstraints mode isTest_ ifaces pkg modul decls unionName union =
   let
     !_ = runTests isTest_ "decoderUnion" pkg modul decls generatedName generated union (unionAsModule cname unionName union)
 
@@ -630,8 +686,15 @@ decoderUnion rowConstraints mode isTest_ ifaces pkg modul decls unionName union 
     cname = Module.Canonical pkg (Src.getName modul)
     tvars = _u_vars union
     tvarsTypesig = tvars & foldl (\acc name -> Map.insert name () acc ) Map.empty
-    ptvars = tvars & fmap (\tvar -> pvar $ N.fromChars $ "w3_x_c_" ++ TV.varToChars tvar )
+    ptvars =
+      case rowCodecs of
+        -- A codec for each record a parameter is the row tail of (see RowSets)
+        Just rc -> _rc_params rc & fmap (\(_, codecVar, _) -> pvar $ N.fromChars $ "w3_x_c_" ++ TV.varToChars codecVar)
+        Nothing -> tvars & fmap (\tvar -> pvar $ N.fromChars $ "w3_x_c_" ++ TV.varToChars tvar )
     unionType = TType cname unionName (fmap TVar tvars)
+
+    -- Only the types decoded change, the constructors keep their own
+    forCodecs = maybe (extendRowArgs rowConstraints) _rc_select rowCodecs
 
     vctor :: N.Name -> Index.ZeroBased -> [Type] -> Expr
     vctor tagName index paramTypes =
@@ -660,7 +723,7 @@ decoderUnion rowConstraints mode isTest_ ifaces pkg modul decls unionName union 
                     & imap (\i (Ctor tagName tagIndex numParams paramTypes) ->
                         CaseBranch (pint i) $
                           ([(succeedDecode (vctor tagName tagIndex paramTypes))]
-                          ++ fmap (\paramType -> andMapDecode1 ((decoderForType mode ifaces cname (extendRowArgs rowConstraints paramType)))) paramTypes)
+                          ++ fmap (\paramType -> andMapDecode1 ((decoderForType mode ifaces cname (forCodecs paramType)))) paramTypes)
                             & foldlPairs (|>)
                     )
                     & (\l -> l ++ [CaseBranch pAny_ $ failDecode (N.toChars generatedName <> " unexpected union tag index")])
@@ -1146,8 +1209,396 @@ extendRowArgs rowConstraints tipe =
       TAlias moduleName typeName (args & fmap (\(n, t) -> (n, go t))) (Filled (go body))
 
 
-encoderAlias :: RowConstraints -> Bool -> Map.Map PrimModule.Name I.Interface -> Pkg.Name -> Src.Module -> Decls -> TN.Name -> Alias -> Def
-encoderAlias rowConstraints isTest_ ifaces pkg modul decls aliasName alias@(Alias tvars tipe) =
+{-| Every record each parameter of a type is the row tail of in its codecs, by type: the
+parameter, and the fields of each of those records, in its own parameters, one entry per
+set of field names. A parameter used on its own (`List a`) has the record with no fields
+of its own, and one that is not used at all has none.
+
+    type alias Player a = { a | status : Int, moves : List Int }
+    type T a = A { a | x : Int } | B (Player a)
+
+The codec of a type variable that is a row tail is the codec of the whole record it ends
+(see RowConstraints), so one codec for `a` would have to be the codec of a
+`{ a | x : Int }` and of a `{ a | moves : List Int, status : Int }` at once. RowConstraints
+merged the two into one `{ a | moves, status, x }`, and nothing has both: the encoder was a
+TYPE MISMATCH, and inferring the decoder never finished. Elm's unifier has to tell
+`{ a | x : Int }` from `{ a | moves : List Int, status : Int }` there, and instead of failing
+it trades the row tail for a fresh one and arrives back at the same question, forever
+(Type.Unify.unifyRecord, now guarded; plain Elm 0.19.1 hangs on such a decoder written by
+hand too). `lamdera make` grew past 46GB on it within a minute.
+
+Such a parameter's codecs now take a codec for each of its records instead, in the order
+here, the record with no fields first: `T`'s encoder is
+
+    w3_encode_T :
+        ({ a | moves : List Int, status : Int } -> Lamdera.Wire3.Encoder)
+        -> ({ a | x : Int } -> Lamdera.Wire3.Encoder)
+        -> T a
+        -> Lamdera.Wire3.Encoder
+
+and `T { name : String }` is encoded with the codecs of a `{ moves, name, status }` and of
+a `{ name, x }` (see selectRows). A parameter with a single record keeps its single codec.
+The types of this module are solved together, to a fixpoint, as for RowConstraints, and
+foreign ones are read off their encoder's signature in the interface, a parameter's codecs
+being next to each other.
+
+Only for types where some parameter, of theirs or of a type they use, has more than one
+record (see rowCodecsFor): those never compiled, and every other type's codecs are
+generated exactly as before.
+-}
+type RowSets = Module.Canonical -> TN.Name -> [(TV.Var, [Map.Map N.Name Type])]
+
+
+rowSets :: Map.Map PrimModule.Name I.Interface -> Module.Canonical -> Map.Map TN.Name Union -> Map.Map TN.Name Alias -> RowSets
+rowSets ifaces cname unions aliases =
+  let
+    lookupIn :: Map.Map TN.Name [(TV.Var, [Map.Map N.Name Type])] -> RowSets
+    lookupIn solved moduleName typeName =
+      if moduleName == cname
+        then Map.findWithDefault [] typeName solved
+        else foreignRowSets ifaces moduleName typeName
+
+    localTypes :: Map.Map TN.Name ([TV.Var], [Type])
+    localTypes =
+      Map.union
+        (unions & fmap (\union ->
+          (_u_vars union, _u_alts union & concatMap (\(Ctor _ _ _ types) -> types))))
+        (aliases
+          & Map.filter (\(Alias _ tipe) -> not (isLambdaType tipe))
+          & fmap (\(Alias tvars tipe) -> (tvars, [tipe])))
+
+    step solved =
+      localTypes & fmap (\(tvars, types) ->
+          tvars & fmap (\tvar ->
+            (tvar, types & concatMap (rowRecords (lookupIn solved) Map.empty tvar) & distinctRows)
+          )
+        )
+
+    -- Fields only come from the definitions, so this settles; the bound is only a guard
+    -- (a type not settled by then gets a compile error from selectRows, not a hang).
+    fixpoint :: Int -> Map.Map TN.Name [(TV.Var, [Map.Map N.Name Type])] -> Map.Map TN.Name [(TV.Var, [Map.Map N.Name Type])]
+    fixpoint n solved =
+      let next = step solved
+      in if next == solved || n <= 0 then next else fixpoint (n - 1) next
+  in
+  lookupIn (fixpoint (4 * Map.size localTypes + 8) (localTypes & fmap (\(tvars, _) -> tvars & fmap (\tvar -> (tvar, [])))))
+
+
+{-| A foreign type's RowSets, from its encoder's signature in the interface (see
+foreignRowConstraints), a parameter's codecs being next to each other. -}
+foreignRowSets :: Map.Map PrimModule.Name I.Interface -> Module.Canonical -> TN.Name -> [(TV.Var, [Map.Map N.Name Type])]
+foreignRowSets ifaces moduleName typeName =
+  foreignRowConstraints ifaces moduleName typeName
+    & List.groupBy (\(tvar1, _) (tvar2, _) -> tvar1 == tvar2)
+    & concatMap (\group ->
+        case group of
+          (tvar, _) : _ -> [(tvar, fmap snd group)]
+          [] -> []
+      )
+
+
+{-| The records `tvar` is the row tail of in the codecs of `tipe` (see RowSets), each
+with the fields `pending` adds to the record `tipe` itself ends, if it ends in `tvar`.
+Follows the codecs Encoder/Decoder generate: nothing inside functions or unsupported types
+refers to a codec.
+-}
+rowRecords :: RowSets -> Map.Map N.Name Type -> TV.Var -> Type -> [Map.Map N.Name Type]
+rowRecords sets pending tvar tipe =
+  let
+    go = rowRecords sets Map.empty tvar
+
+    fieldTypes fields = fields & fmap (\(FieldType _ t) -> t)
+  in
+  if isUnsupportedKernelType tipe then
+    []
+  else
+  case tipe of
+    TVar v -> if v == tvar then [pending] else []
+
+    -- The codec of an open record is its row tail's, whole: its fields are not looked at
+    -- here (`type alias Record a = { a | field : a }` has the one record)
+    TRecord fields (Just ext) ->
+      if ext == tvar then [Map.union pending (fieldTypes fields)] else []
+
+    TRecord fields Nothing ->
+      fieldTypes fields & Map.elems & concatMap go
+
+    TType moduleName typeName args ->
+      let
+        params = sets moduleName typeName
+        subs = Map.fromList (zip (fmap fst params) args)
+      in
+      zip args (fmap snd params ++ repeat [])
+        & concatMap (\(arg, argRows) ->
+            (if null argRows then [Map.empty] else argRows)
+              & concatMap (\fields -> rowRecords sets (fmap (substituteRows subs) fields) tvar arg)
+          )
+
+    -- With each alias's arguments substituted in its body, merging rows, so the records
+    -- come out whole: `Outer (Middle m)` is the one `{ m | middle, outer }`
+    TAlias _ _ args (Holey body) ->
+      if isLambdaType body then [] else rowRecords sets pending tvar (substituteRows (Map.fromList args) body)
+
+    TAlias _ _ _ (Filled body) ->
+      if isLambdaType body then [] else rowRecords sets pending tvar body
+
+    TPair a_ b -> go a_ ++ go b
+    TTriple a_ b c -> go a_ ++ go b ++ go c
+    TUnit -> []
+    TLambda _ _ -> []
+
+
+{-| One record per set of field names, in a fixed order, the one with no fields first.
+Capped, as a guard: a parameter with more records than that gets a compile error from
+selectRows rather than ever more codecs. -}
+distinctRows :: [Map.Map N.Name Type] -> [Map.Map N.Name Type]
+distinctRows rows =
+  rows
+    & List.nubBy (\x y -> Map.keys x == Map.keys y)
+    -- By the names as text, as Lamdera.Lexical (Name's own Ord isn't that since Elm 0.19.3)
+    & List.sortOn (\fields -> fields & Map.keys & fmap N.toChars & List.sort)
+    & take 16
+
+
+{-| The codecs a type's codecs take for one of its parameters: the type variable each one
+is named after (`w3_x_c_<tvar>`), and the fields of the record it is for. A parameter with
+at most one record has the one codec it always had; one with more has a codec per record
+(see RowSets), the one with no fields keeping the parameter's own name and the others
+numbered, `w3_x_c_a__1`, `w3_x_c_a__2`, ...
+-}
+codecParams :: TV.Var -> [Map.Map N.Name Type] -> [(TV.Var, Map.Map N.Name Type)]
+codecParams tvar rows =
+  case rows of
+    [] -> [(tvar, Map.empty)]
+    [fields] -> [(tvar, fields)]
+    _ ->
+      (if any Map.null rows then [(tvar, Map.empty)] else [])
+        ++ (rows
+              & filter (not . Map.null)
+              & zip [1 :: Int ..]
+              & fmap (\(i, fields) -> (TV.varFromChars (TV.varToChars tvar ++ "__" ++ show i), fields))
+           )
+
+
+hasManyRows :: [Map.Map N.Name Type] -> Bool
+hasManyRows rows =
+  length rows >= 2
+
+
+{-| The codecs of one of this module's types, where some parameter, of its own or of a type
+it uses, is the row tail of more than one record (see RowSets): the codecs its codecs take
+(the parameter, the type variable the codec is named after, the record's fields), and the
+types to generate them from, with each record ending in one of those parameters ending in
+the type variable of the codec for it instead, and each argument to such a parameter of
+another type given once per record (see selectRows).
+-}
+data RowCodecs =
+  RowCodecs
+    { _rc_params :: [(TV.Var, TV.Var, Map.Map N.Name Type)]
+    , _rc_select :: Type -> Type
+    }
+
+
+{-| The RowCodecs of a type with these parameters, generating codecs for these types:
+Nothing when no parameter involved has more than one record, which is every type that ever
+compiled, so their codecs stay exactly as they were; a Left when one of the types can't be
+given them.
+-}
+rowCodecsFor :: RowSets -> Module.Canonical -> TN.Name -> [TV.Var] -> [Type] -> Either String (Maybe RowCodecs)
+rowCodecsFor sets cname typeName tvars types =
+  let
+    ownRows = sets cname typeName
+    own = ownRows & filter (hasManyRows . snd) & Map.fromList
+    select = selectRows sets own Map.empty
+  in
+  if Map.null own && not (any (reachesManyRows sets) types)
+    then Right Nothing
+    else do
+      mapM_ select types
+      Right $ Just $ RowCodecs
+        { _rc_params =
+            zip tvars (fmap snd ownRows ++ repeat [])
+              & concatMap (\(tvar, rows) -> codecParams tvar rows & fmap (\(codecVar, fields) -> (tvar, codecVar, fields)))
+        , _rc_select = \t -> either (\err -> error $ "rowCodecsFor: " ++ err) id (select t)
+        }
+
+
+{-| Does generating codecs for this type call the codecs of a type with a parameter that
+has more than one record (see RowSets)? -}
+reachesManyRows :: RowSets -> Type -> Bool
+reachesManyRows sets tipe =
+  let
+    go = reachesManyRows sets
+    calleeHasMany moduleName typeName = sets moduleName typeName & any (hasManyRows . snd)
+  in
+  if isUnsupportedKernelType tipe then
+    False
+  else
+  case tipe of
+    TType moduleName typeName args -> calleeHasMany moduleName typeName || any go args
+    TRecord _ (Just _) -> False
+    TRecord fields Nothing -> fields & Map.elems & any (\(FieldType _ t) -> go t)
+    TAlias moduleName typeName args (Holey body) -> calleeHasMany moduleName typeName || any (go . snd) args || go body
+    TAlias moduleName typeName args (Filled body) -> calleeHasMany moduleName typeName || any (go . snd) args || go body
+    TPair a_ b -> go a_ || go b
+    TTriple a_ b c -> go a_ || go b || go c
+    TVar _ -> False
+    TUnit -> False
+    TLambda _ _ -> False
+
+
+{-| `tipe`, for generating codecs from where the parameters in `own` each have more than one
+record (see RowSets): a record ending in one of them ends in the type variable of the codec
+for that record instead (codecParams), and an argument to a parameter of another type that
+has more than one record is given once for each of them, each time as the record that
+codec is for:
+
+    T { name : String }  -->  T { moves : List Int, name : String, status : Int } { name : String, x : Int }
+    T b                  -->  T b__1 b__2
+
+Not a type Elm would accept, but Encoder and Decoder generate the right codecs from it: a
+codec for each argument, `w3_x_c_<tvar>` for each type variable. A closed record argument
+to a constrained parameter is extended with the record's fields, as in extendRowArgs, and
+the records an argument's row tail ends get the fields of the parameter's record too
+(`pending`), so they end in the right codec's type variable.
+
+`own` is empty in the body of an alias (those are in the alias's own parameters).
+-}
+selectRows :: RowSets -> Map.Map TV.Var [Map.Map N.Name Type] -> Map.Map N.Name Type -> Type -> Either String Type
+selectRows sets own pending tipe =
+  let
+    go = selectRows sets own Map.empty
+
+    codecVar v fields =
+      case Map.lookup v own of
+        Nothing -> Right v
+        Just rows ->
+          case codecParams v rows & List.find (\(_, rowFields) -> Map.keys rowFields == Map.keys fields) of
+            Just (var, _) -> Right var
+            Nothing ->
+              Left $ "the type variable `" ++ TV.varToChars v ++ "` is the row tail of a record with "
+                ++ fieldNames fields ++ " there, and I could not work out a codec for that record."
+
+    fieldNames fields =
+      if Map.null fields
+        then "no fields of its own"
+        else "the fields " ++ List.intercalate ", " (fields & Map.keys & fmap N.toChars)
+
+    asFieldTypes fields =
+      fields
+        -- Field indexes in Lamdera's (pre Elm 0.19.3) name order, see Lamdera.Lexical
+        & Lexical.toList
+        & imap (\i (name, t) -> (name, FieldType (fromIntegral i) t))
+        & Map.fromList
+
+    -- The arguments a type with these parameters is called with: for each parameter, an
+    -- argument per record (see codecParams), each with its record's fields. `rowTail` says
+    -- whether a parameter is the row tail of an alias's own body, which is inlined rather
+    -- than called (see extendRowArgs): its argument gets what extends the alias too.
+    callArgs :: [(TV.Var, [Map.Map N.Name Type])] -> (TV.Var -> Bool) -> [(TV.Var, Type)] -> Either String [(TV.Var, Type)]
+    callArgs params rowTail args =
+      let
+        subs = Map.fromList (zip (fmap fst params) (fmap snd args))
+      in
+      zip args (fmap Just params ++ repeat Nothing)
+        & mapM (\((name, arg), param) ->
+            case param of
+              Nothing ->
+                go arg & fmap (\arg_ -> [(name, arg_)])
+
+              Just (paramVar, rows) | rowTail paramVar ->
+                let fields = rows & Map.unions & fmap (substituteRows subs)
+                in selectRows sets own (Map.union pending fields) arg & fmap (\arg_ -> [(name, arg_)])
+
+              Just (paramVar, rows) ->
+                codecParams paramVar rows
+                  & mapM (\(var, rowFields) ->
+                      let
+                        fields = rowFields & fmap (substituteRows subs)
+                        extended =
+                          if not (Map.null fields) && isClosedRecordType arg
+                            then extendRow (asFieldTypes fields) arg
+                            else arg
+                      in
+                      selectRows sets own fields extended & fmap (\arg_ -> (if length rows >= 2 then var else name, arg_))
+                    )
+          )
+        & fmap concat
+  in
+  if isUnsupportedKernelType tipe then
+    Right tipe
+  else
+  case tipe of
+    TVar v -> TVar <$> codecVar v pending
+
+    -- Only its row tail's codec is used for an open record, see rowRecords
+    TRecord fields (Just ext) -> do
+      ext_ <- codecVar ext (Map.union pending (fields & fmap (\(FieldType _ t) -> t)))
+      Right (TRecord fields (Just ext_))
+
+    TRecord fields Nothing -> do
+      fields_ <- traverse (\(FieldType index t) -> FieldType index <$> go t) fields
+      Right (TRecord fields_ Nothing)
+
+    TType moduleName typeName args -> do
+      args_ <- callArgs (sets moduleName typeName) (const False) (fmap (\arg -> (TV.varFromChars "_", arg)) args)
+      Right (TType moduleName typeName (fmap snd args_))
+
+    TAlias moduleName typeName args (Holey body) ->
+      let
+        params = sets moduleName typeName
+        manyRows = params & filter (hasManyRows . snd) & fmap fst
+      in
+      if isLambdaType body then
+        Right tipe
+      else if reachesExtensibleRecord body && not (null manyRows) then
+        -- Such an alias is inlined where its row tail is a record (see
+        -- inlineIfRecordOrCall), with the one argument of each parameter substituted in
+        -- its body, so this inlines it already, with each of its records whole:
+        -- `{ r | f : { p | x : Int }, g : { p | y : Int } }` at `{ z : Int }` and
+        -- `{ name : String }` is the `{ f : { name, x }, g : { name, y }, z }` it stands for.
+        -- One whose row tail is a type variable is a record ending in that variable's codec
+        -- either way.
+        selectRows sets own pending (substituteRows (Map.fromList args) body)
+      else do
+        body_ <- selectRows sets Map.empty Map.empty body
+        args_ <- callArgs params (\param -> extendsTvar param body) args
+        Right (TAlias moduleName typeName args_ (Holey body_))
+
+    TAlias moduleName typeName args (Filled body) -> do
+      body_ <- go body
+      args_ <- callArgs (sets moduleName typeName) (const False) args
+      Right (TAlias moduleName typeName args_ (Filled body_))
+
+    TPair a_ b -> TPair <$> go a_ <*> go b
+    TTriple a_ b c -> TTriple <$> go a_ <*> go b <*> go c
+    TUnit -> Right tipe
+    TLambda _ _ -> Right tipe
+
+
+{-| Is this a closed record, through its aliases? (As in extendRowArgs.) -}
+isClosedRecordType :: Type -> Bool
+isClosedRecordType t =
+  case t of
+    TRecord _ Nothing -> True
+    TAlias _ _ args (Holey body) -> isClosedRecordType (substituteRows (Map.fromList args) body)
+    TAlias _ _ _ (Filled body) -> isClosedRecordType body
+    _ -> False
+
+
+{-| The compile error for a type whose codecs can't be generated (see rowCodecsFor) -}
+rowCodecsError :: TN.Name -> String -> D.Doc
+rowCodecsError typeName problem =
+  D.stack
+    [ D.fromChars $ "Wire3 cannot generate codecs for " ++ TN.nameToChars typeName
+    , D.reflow $ "In `" ++ TN.nameToChars typeName ++ "`, " ++ problem
+    , D.reflow
+        "Giving each record its own type variable avoids this, e.g. `type T a b = A { a | x : Int } | B (Player b)` rather than `type T a = A { a | x : Int } | B (Player a)`. Please also report this at https://github.com/lamdera/compiler/issues with the types involved, so it can be supported."
+    ]
+
+
+encoderAlias :: Maybe RowCodecs -> RowConstraints -> Bool -> Map.Map PrimModule.Name I.Interface -> Pkg.Name -> Src.Module -> Decls -> TN.Name -> Alias -> Def
+encoderAlias rowCodecs rowConstraints isTest_ ifaces pkg modul decls aliasName alias@(Alias tvars tipe) =
   let
     !_ = runTests isTest_ "encoderAlias" pkg modul decls generatedName finalGen alias (aliasAsModule cname aliasName alias)
 
@@ -1157,19 +1608,27 @@ encoderAlias rowConstraints isTest_ ifaces pkg modul decls aliasName alias@(Alia
 
     normalisedTvarsType = normaliseTvarNames Map.empty tipe
 
-    ptvarsTyped = tvars & fmap (\tvar ->
-        let constrainedTvar = constrainTvar rowConstraints tvar normalisedTvarsType
-        in
-        ( pvar $ N.fromChars $ "w3_x_c_" ++ TV.varToChars tvar
-        , TLambda constrainedTvar tLamdera_Wire_Encoder_Holey
-        )
-      )
+    ptvarsTyped =
+      case rowCodecs of
+        -- A codec for each record a parameter is the row tail of (see RowSets)
+        Just rc ->
+          _rc_params rc & fmap (\(tvar, codecVar, fields) ->
+            (pvar $ N.fromChars $ "w3_x_c_" ++ TV.varToChars codecVar, TLambda (constrainTvarBy tvar fields) tLamdera_Wire_Encoder_Holey)
+          )
+        Nothing ->
+          tvars & fmap (\tvar ->
+            let constrainedTvar = constrainTvar rowConstraints tvar normalisedTvarsType
+            in
+            ( pvar $ N.fromChars $ "w3_x_c_" ++ TV.varToChars tvar
+            , TLambda constrainedTvar tLamdera_Wire_Encoder_Holey
+            )
+          )
 
     tvarsNameTyped = tvars & fmap (\tvar ->
         (tvar, TVar tvar)
       )
 
-    generatedBody = deepEncoderForType 0 ifaces cname (extendRowArgs rowConstraints tipe)
+    generatedBody = deepEncoderForType 0 ifaces cname (maybe (extendRowArgs rowConstraints) _rc_select rowCodecs tipe)
 
     -- = Def (A.Located Name) [Pattern] Expr
     -- generated = Def (a (generatedName)) ptvars $
@@ -1209,18 +1668,22 @@ encoderAlias rowConstraints isTest_ ifaces pkg modul decls aliasName alias@(Alia
   finalGen
 
 
-decoderAlias :: RowConstraints -> DecodeMode -> Bool -> Map.Map PrimModule.Name I.Interface -> Pkg.Name -> Src.Module -> Decls -> TN.Name -> Alias -> Def
-decoderAlias rowConstraints mode isTest_ ifaces pkg modul decls aliasName alias@(Alias tvars tipe) =
+decoderAlias :: Maybe RowCodecs -> RowConstraints -> DecodeMode -> Bool -> Map.Map PrimModule.Name I.Interface -> Pkg.Name -> Src.Module -> Decls -> TN.Name -> Alias -> Def
+decoderAlias rowCodecs rowConstraints mode isTest_ ifaces pkg modul decls aliasName alias@(Alias tvars tipe) =
   let
     !_ = runTests isTest_ "decoderAlias" pkg modul decls generatedName generated alias (aliasAsModule cname aliasName alias)
 
     generatedName = N.fromChars $ decodePrefix mode ++ TN.nameToChars aliasName
     cname = Module.Canonical pkg (Src.getName modul)
-    ptvars = tvars & fmap (\tvar -> pvar $ N.fromChars $ "w3_x_c_" ++ TV.varToChars tvar )
+    ptvars =
+      case rowCodecs of
+        -- A codec for each record a parameter is the row tail of (see RowSets)
+        Just rc -> _rc_params rc & fmap (\(_, codecVar, _) -> pvar $ N.fromChars $ "w3_x_c_" ++ TV.varToChars codecVar)
+        Nothing -> tvars & fmap (\tvar -> pvar $ N.fromChars $ "w3_x_c_" ++ TV.varToChars tvar )
 
     generated = Def (a (generatedName)) ptvars $
       -- debugDecoder (Data.Name.toElmString aliasName) $
-      decoderForType mode ifaces cname (extendRowArgs rowConstraints tipe)
+      decoderForType mode ifaces cname (maybe (extendRowArgs rowConstraints) _rc_select rowCodecs tipe)
   in
   generated
 

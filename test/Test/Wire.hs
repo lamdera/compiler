@@ -123,6 +123,7 @@ wireTestFiles =
   , "src/Test/Wire_Record_Extensible9_Unimported.elm"
   , "src/Test/Wire_Record_Extensible10_AliasChain.elm"
   , "src/Test/Wire_Record_Extensible11_UnionOfAliasRow.elm"
+  , "src/Test/Wire_Record_Extensible12_ManyRows.elm"
   , "src/Test/Wire_Phantom.elm"
   , "src/Test/Wire_Tvar_Deep.elm"
   , "src/Test/Wire_Tvar_Deep2.elm"
@@ -279,4 +280,8 @@ wireValidateErrors = do
     , scope "validator module referencing a generated decoder in user code" $ do
         actual <- compileCapture "src/Test/Wire_Validate_Err_WireRefDecode.elm"
         expectTextContains actual "cannot reference generated wire functions"
+
+    , scope "row tail of several records in a type recursing at other arguments" $ do
+        actual <- compileCapture "src/Test/Wire_Record_Extensible12_ManyRows_Err_PolyRec.elm"
+        expectTextContains actual "Wire3 cannot generate codecs for Poly"
     ]
