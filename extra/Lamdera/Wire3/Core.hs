@@ -1062,7 +1062,7 @@ signature. A custom type's codecs pass theirs on, so they need it too: its encod
 annotated with a plain `player -> Encoder`, a TYPE MISMATCH, and the codecs of any
 `ProcessCheckpointResult String { name : String }` were called with the codec of just
 `{ name : String }`, where they need the whole `{ moves, name, status }` (see
-extendRowArgs). an app hits both. Such a custom type never compiled, and every other
+extendRowArgs). An app hits both. Such a custom type never compiled, and every other
 custom type has no constraints, so nothing that compiled changes.
 
 An alias's are the ones encoderAlias already puts in its signature; they are here for

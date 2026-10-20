@@ -2,7 +2,7 @@
 
 module Test.CompilePerf where
 
-{-| Regressions for the compile time work (notes/compile-perf-findings.md).
+{-| Regressions for the compile time work.
 
 The type checker defers alias real types (Type.Type.Deferred) and converts the ones
 it never looked inside once per module (Type.Type.AliasCache). Both must give exactly

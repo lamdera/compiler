@@ -4,8 +4,7 @@
 # usage: notes/build-profiled.sh <dir>
 #
 # `stack build --profile` fails on this repo as it is: the whole compiler is one
-# executable, and some of its modules use Template Haskell. "Why profiling failed on
-# macOS" in notes/compile-perf-findings.md has the errors and the reasons. This copies
+# executable, and some of its modules use Template Haskell. This copies
 # the working tree's tracked files to <dir>, turns the executable into a library plus a
 # one module executable (Cabal builds a library the normal way before the profiled way,
 # which leaves Template Haskell the objects it needs), and builds it with profiling and
