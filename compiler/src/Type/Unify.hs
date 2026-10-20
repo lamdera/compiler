@@ -645,6 +645,16 @@ unifyRecord context (RecordStructure fields1 ext1) (RecordStructure fields2 ext2
           unifySharedFields context sharedFields Map.empty subRecord
 
     else
+      -- @LAMDERA two records with the same row tail and fields of their own on both
+      -- sides, e.g. `{ a | x : Int }` against `{ a | status : Int }`, can never unify:
+      -- `a` would have to hold each side's fields, so each side the other's twice. The
+      -- unification below never finds that out, it trades the row tail for a fresh one
+      -- and arrives back at the same question, forever, allocating as it goes (Elm 0.19.1
+      -- does the same). Fail it as the mismatch it is.
+      Unify (\vars ok err ->
+        do  sameTail <- UF.equivalent ext1 ext2
+            if sameTail then err vars () else ok vars ()
+      ) >>
       do  let otherFields = Map.union uniqueFields1 uniqueFields2
           ext <- fresh context Type.unnamedFlexVar
           sub1 <- fresh context (Structure (Record1 uniqueFields1 ext))
