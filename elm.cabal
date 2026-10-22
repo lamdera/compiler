@@ -437,6 +437,7 @@ Executable lamdera
         Test.WireGolden
         Test.MultiVersion
         Test.JsOutput
+        Test.MsgLogContext
         Test.WebGL
         Test.BackwardsCompat
         Test.Lamdera.Evergreen.TestMigrationHarness

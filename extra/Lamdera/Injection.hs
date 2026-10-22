@@ -207,6 +207,119 @@ injections outputType mode =
 
     var isLamderaRuntime = typeof isLamdera !== 'undefined';
 
+    // Log context: lets the runtime attribute every log line (and outbound request) to the
+    // backend Msg that caused it, including the Cmds that Msg returned and every Task chain
+    // they start, through later async continuations.
+    //
+    // Contract with the runtime (all of it is inert unless the runtime defines a global
+    // `lamderaMsgBegin` function before this file is evaluated):
+    //   - lamderaMsgBegin() is called right before each backend `update`; it returns the msg
+    //     id N (an integer the runtime owns).
+    //   - global.lamderaCtx is N while `update` runs for that msg, and "N:cmd" while its Cmds
+    //     are dispatched and while any scheduler process started by them is being stepped,
+    //     including async resumes (Http responses, Process.sleep, Time.now, ...).
+    //     Outside of those it is restored to what it was before (normally null/undefined).
+    //   - insertEvent gets N as its 7th argument.
+    //
+    // How: every scheduler process remembers the context it was started in (proc.lc) and
+    // every message sent to a process's mailbox remembers the context of its sender
+    // (proc.lcq, consumed in step with the mailbox). Each step sets global.lamderaCtx to the
+    // process's context and restores it after. Effects queued for dispatch carry the context
+    // of the update that produced them. The kernel functions are wrapped here rather than
+    // edited, so frontend output and non-runtime backends are untouched.
+    var _Lamdera_G = typeof globalThis !== 'undefined' ? globalThis : global;
+    var _Lamdera_pendingMid = null; // id of the msg whose effects the next _Platform_enqueueEffects dispatches
+    var _Lamdera_fxCtx = []; // context per entry of the kernel's effects queue, in the same order
+    var _Lamdera_proc = null; // the process being stepped
+
+    function _Lamdera_curCtx() {
+      var c = _Lamdera_G.lamderaCtx;
+      return c === undefined ? null : c;
+    }
+
+    if ( isLamderaRuntime
+      && typeof lamderaMsgBegin === 'function'
+      && typeof _Scheduler_enqueue === 'function'
+      && typeof _Scheduler_step === 'function'
+      && typeof _Scheduler_rawSend === 'function'
+      && typeof _Scheduler_receive === 'function'
+      && typeof _Platform_enqueueEffects === 'function'
+      && typeof _Platform_dispatchEffects === 'function'
+      ) {
+      (function() {
+        var enqueue = _Scheduler_enqueue;
+        var step = _Scheduler_step;
+        var rawSend = _Scheduler_rawSend;
+        var receive = _Scheduler_receive;
+        var enqueueEffects = _Platform_enqueueEffects;
+        var dispatchEffects = _Platform_dispatchEffects;
+
+        // A new process is enqueued once by _Scheduler_rawSpawn, from within whatever spawned
+        // it, so that is where it picks up its context. Later enqueues (async resumes) keep it.
+        _Scheduler_enqueue = function(proc) {
+          if (proc.lc === undefined) { proc.lc = _Lamdera_curCtx(); }
+          enqueue(proc);
+        };
+
+        _Scheduler_step = function(proc) {
+          var prevCtx = _Lamdera_G.lamderaCtx;
+          var prevProc = _Lamdera_proc;
+          _Lamdera_G.lamderaCtx = proc.lc;
+          _Lamdera_proc = proc;
+          try {
+            step(proc);
+          } finally {
+            _Lamdera_G.lamderaCtx = prevCtx;
+            _Lamdera_proc = prevProc;
+          }
+        };
+
+        // Long lived processes (effect managers) receive messages from many msgs, sometimes
+        // several before they get stepped, so the context travels with each message.
+        _Scheduler_rawSend = function(proc, msg) {
+          var c = _Lamdera_curCtx();
+          if (proc.lcq === undefined) { proc.lcq = [c]; } else { proc.lcq.push(c); }
+          rawSend(proc, msg);
+        };
+
+        // Receive callbacks run from _Scheduler_step right after it takes the next message
+        // off the mailbox, so the matching context comes off proc.lcq here.
+        _Scheduler_receive = function(callback) {
+          return receive(function(msg) {
+            var p = _Lamdera_proc;
+            if (p !== null && p.lcq !== undefined && p.lcq.length > 0) {
+              _Lamdera_G.lamderaCtx = p.lc = p.lcq.shift();
+            }
+            return callback(msg);
+          });
+        };
+
+        // Effects can be queued behind the ones being dispatched (an update triggered
+        // synchronously from within a dispatch), so each queued entry keeps its own context.
+        _Platform_enqueueEffects = function(managers, cmdBag, subBag) {
+          var c;
+          if (_Lamdera_pendingMid !== null) {
+            c = _Lamdera_pendingMid + ':cmd';
+            _Lamdera_pendingMid = null;
+          } else {
+            c = _Lamdera_curCtx();
+          }
+          _Lamdera_fxCtx.push(c);
+          enqueueEffects(managers, cmdBag, subBag);
+        };
+
+        _Platform_dispatchEffects = function(managers, cmdBag, subBag) {
+          var prevCtx = _Lamdera_G.lamderaCtx;
+          _Lamdera_G.lamderaCtx = _Lamdera_fxCtx.length > 0 ? _Lamdera_fxCtx.shift() : _Lamdera_curCtx();
+          try {
+            dispatchEffects(managers, cmdBag, subBag);
+          } finally {
+            _Lamdera_G.lamderaCtx = prevCtx;
+          }
+        };
+      })();
+    }
+
     // Streams the Wire3 encoding of a BackendModel (e.g. app.fns.getUserModel()) in chunks,
     // so a snapshot never has to exist as one buffer. onChunk(u8) gets a Uint8Array view
     // into a reused chunk: it is only valid during the call, so consume it synchronously
@@ -251,9 +364,31 @@ injections outputType mode =
 
       callUpdate.call = function(update, msg, model) {
         var serializeDuration, logDuration = null;
+
+        // Log context, see _Lamdera_G above. mid stays null without the runtime hook.
+        var mid = null;
+        var prevCtx;
+        if (isLamderaRuntime && typeof lamderaMsgBegin === 'function') {
+          prevCtx = _Lamdera_G.lamderaCtx;
+          mid = lamderaMsgBegin();
+          if (mid === undefined) { mid = null; }
+        }
+
         var start = mtime();
 
-        var pair = A2(update, msg, model);
+        var pair;
+        if (mid === null) {
+          pair = A2(update, msg, model);
+        } else {
+          _Lamdera_G.lamderaCtx = mid;
+          try {
+            pair = A2(update, msg, model);
+          } finally {
+            _Lamdera_G.lamderaCtx = prevCtx;
+          }
+        }
+        // The Cmds of this update are dispatched next (sendToApp calls _Platform_enqueueEffects)
+        _Lamdera_pendingMid = mid;
 
         const updateDuration = mtime() - start;
         start = mtime();
@@ -263,7 +398,7 @@ injections outputType mode =
           const s = $$author$$project$$LBR$$serialize(msg);
           serializeDuration = mtime() - start;
           start = mtime();
-          insertEvent(pos, global.config.version, s.a, updateDuration, serializeDuration, A2($$elm$$core$$Maybe$$withDefault, null, s.b));
+          insertEvent(pos, global.config.version, s.a, updateDuration, serializeDuration, A2($$elm$$core$$Maybe$$withDefault, null, s.b), mid);
           logDuration = mtime() - start;
         }
 

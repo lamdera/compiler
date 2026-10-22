@@ -26,6 +26,7 @@ import qualified Test.Ext.ElmPages.Check
 import qualified Test.Ext.Filewatch
 import qualified Test.TypeHashes
 import qualified Test.JsOutput
+import qualified Test.MsgLogContext
 import qualified Test.WebGL
 import qualified Test.BackwardsCompat
 import qualified Test.EasyTestSpinner
@@ -171,6 +172,7 @@ allTests =
     , scope "Lamdera.Evergreen.TestMigrationGenerator -> " $ Test.Lamdera.Evergreen.TestMigrationGenerator.suite
     , scope "Test.WebGL -> " $ Test.WebGL.suite
     , scope "Test.JsOutput -> " $ Test.JsOutput.suite
+    , scope "Test.MsgLogContext -> " $ Test.MsgLogContext.suite
     , scope "Test.BackwardsCompat -> " $ Test.BackwardsCompat.suite
     , scope "Test.BinaryCounts -> " $ Test.BinaryCounts.suite
     , scope "Test.ElmiTypeTable -> " $ Test.ElmiTypeTable.suite
