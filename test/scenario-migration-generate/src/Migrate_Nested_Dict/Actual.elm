@@ -19,6 +19,7 @@ See <https://dashboard.lamdera.app/docs/evergreen> for more info.
 
 -}
 
+import Dict
 import Lamdera.Migrations exposing (..)
 import Migrate_Nested_Dict.New
 import Migrate_Nested_Dict.Old

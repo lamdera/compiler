@@ -345,9 +345,13 @@ migrateUnionDefinition_ author pkg oldUnion newUnion tvarMapOld tvarMapNew oldVe
     Nothing ->
       xMigrationNested
       ( migration
-      , Set.empty
+      , tvarMigrations & fmap migrationFnImports & Set.unions
       , (MigrationDefinition
-            { migrationDefImports = Set.fromList [oldModuleNameCanonical, newModuleNameCanonical]
+            { migrationDefImports =
+                -- The constructor migrations are inlined into this definition, so it needs their imports too
+                -- (e.g. `Dict` for a `Dict` migration in a constructor param)
+                Set.fromList [oldModuleNameCanonical, newModuleNameCanonical]
+                  <> (constructorMigrations & fmap migrationFnImports & Set.unions)
             , migrationDef =
               -- Map.singleton migrationName $
               T.concat
@@ -516,7 +520,7 @@ migrateAliasDefinition oldVersion newVersion moduleOld scope identifier@(author,
     Nothing ->
       xMigrationNested
       ( migration_
-      , Set.fromList [moduleOld, newModuleNameCanonical]
+      , Set.fromList [moduleOld, newModuleNameCanonical] <> (tvarMigrations & fmap migrationFnImports & Set.unions)
       , (MigrationDefinition
             { migrationDefImports = imps
             , migrationDef =
