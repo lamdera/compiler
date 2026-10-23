@@ -24,7 +24,7 @@
   #
   # Released builds are in Lamdera's binary cache (cache.lamdera.com/nix, declared in
   # nixConfig below), so a user with it does not build anything: the compiler is a
-  # ~90MB download. Without it, the first build compiles most of the Haskell
+  # ~16MB download. Without it, the first build compiles most of the Haskell
   # dependencies from source, which takes hours. Lamdera's runtime repo publishes it
   # (scripts/nix-cache-publish.sh).
   #
