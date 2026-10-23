@@ -106,9 +106,8 @@ build_binary_docker() {
     # file lock (0% CPU hang). Deps have no such TH, so they stay -j4.
     GHCOPTS_LAMDERA="-j1 +RTS -A256m -RTS -split-sections -optc-Os -optl=-pthread -optl-lgcc"
     # @LAMDERA snap-server's foreign import calls sendfile64, which musl >= 1.2.4 (the
-    # ghc-musl base's alpine) no longer offers to static links. It is aliased to sendfile
-    # for the elm package's link only, in cabal.project: these options reach every local
-    # package, and the alias fails the elm-format libraries' shared object links.
+    # ghc-musl base's alpine) no longer offers to static links. The base image adds it
+    # back to libc.a (distribution/docker/ghc-musl-base.dockerfile).
 
     # GOAL: build non-elm/elm-format deps first to save time and cut out baseline issues
     # cabal build --dry-run | grep ' - ' | grep -v 'elm-' | grep -v 'avh4' | cut -d' ' -f3 | sed 's/-[^-]*$//' | xargs -I{} cabal build {} --only-dependencies $CABALOPTS --ghc-options="$GHCOPTS"
@@ -145,7 +144,7 @@ mkdir -p $dist
 # @LAMDERA back on ghc-musl:9.8.4 after 1.5.0: the alpine 3.17 base's ghcup GHC has boot
 # libraries without split sections, which more than doubled the binary (28.6MB in 1.4.0,
 # built on ghc-musl:9.2.8, to 74MB). sendfile64 is now aliased at link time instead, see
-# cabal.project and distribution/docker/ghc-musl-base.dockerfile.
+# distribution/docker/ghc-musl-base.dockerfile.
 docker $dockerHost build --progress=plain \
     -t lamdera-arm64-musl-base:latest \
     -f distribution/docker/ghc-musl-base.dockerfile .

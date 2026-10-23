@@ -12,10 +12,12 @@
 #
 # This image's alpine (3.24, musl 1.2.5) no longer lets new code link against
 # sendfile64, which snap-server's foreign import hard-codes (see elm/compiler
-# 8a941d56). cabal.project aliases it to sendfile at link time
-# (-Wl,--defsym=sendfile64=sendfile), which is the same function on musl, where off_t is
-# always 64 bit. Template Haskell is unaffected: it dlopens the dependencies' shared
-# objects, and musl's dynamic linker still resolves the LFS64 names.
+# 8a941d56): libc.a no longer has it. The RUN below adds it back to libc.a as a call to
+# sendfile, which is the same function on musl, where off_t is always 64 bit. A link
+# flag can't do it: --defsym=sendfile64=sendfile also reaches the shared objects GHC
+# links for Template Haskell and for libraries, which have no sendfile to alias, and
+# fails them. Template Haskell itself is unaffected: it dlopens the dependencies'
+# shared objects, and musl's dynamic linker still resolves the LFS64 names.
 #
 # Pinned by digest because the 9.8.4 tag is rebuilt in place. This digest is the
 # multi-arch index of the 2026-10-23 build (alpine 3.24.3, cabal 3.10.3.0); docker picks
@@ -28,5 +30,16 @@ FROM glcr.b-data.ch/ghc/ghc-musl:9.8.4@sha256:ffdc665c9d82bc886bb4e0a2693c7044a8
 # which shell out to `esbuild`. The image has git, gcc, and the static gmp/zlib/ncurses/ffi.
 RUN apk add --no-cache nodejs npm
 RUN npm install -g esbuild
+
+# sendfile64 back in the static libc, see the top of this file.
+RUN printf '%s\n' \
+      '#include <sys/types.h>' \
+      'ssize_t sendfile(int, int, off_t *, size_t);' \
+      'ssize_t sendfile64(int out, int in, off_t *ofs, size_t n) { return sendfile(out, in, ofs, n); }' \
+      > /tmp/sendfile64.c \
+ && gcc -O2 -fPIC -c /tmp/sendfile64.c -o /tmp/sendfile64.o \
+ && ar rs /usr/lib/libc.a /tmp/sendfile64.o \
+ && nm /usr/lib/libc.a 2>/dev/null | grep -q ' T sendfile64$' \
+ && rm /tmp/sendfile64.c /tmp/sendfile64.o
 
 WORKDIR /root/compiler
