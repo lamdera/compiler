@@ -11,8 +11,22 @@
   #   ...
   #   inputs.lamdera-compiler.packages.${system}.lamdera
   #
+  # From the public repo, by release tag:
+  #
+  #   nix run 'git+https://github.com/lamdera/compiler?ref=refs/tags/<version>&submodules=1#lamdera'
+  #
   # '?submodules=1' is REQUIRED: vendor/elm-format and the
   # extra/package-replacements/* packages are git submodules and part of the build.
+  # Use git+https:, not github:. The github: fetcher downloads a tarball, which has
+  # no submodules, so the build fails on the missing packages even with
+  # '?submodules=1'. The submodule URLs in .gitmodules are https so they fetch
+  # without GitHub SSH access.
+  #
+  # Released builds are in Lamdera's binary cache (cache.lamdera.com/nix, declared in
+  # nixConfig below), so a user with it does not build anything: the compiler is a
+  # ~90MB download. Without it, the first build compiles most of the Haskell
+  # dependencies from source, which takes hours. Lamdera's runtime repo publishes it
+  # (scripts/nix-cache-publish.sh).
   #
   # WHY haskell.nix, having previously used stacklock2nix
   # ---------------------------------------------------
@@ -48,8 +62,14 @@
   description = "Lamdera compiler, built from source";
 
   nixConfig = {
-    extra-substituters = [ "https://cache.iog.io" ];
-    extra-trusted-public-keys = [ "hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ=" ];
+    extra-substituters = [
+      "https://cache.lamdera.com/nix"
+      "https://cache.iog.io"
+    ];
+    extra-trusted-public-keys = [
+      "lamdera-1:w+65NzPpR0TaRfDlHVzCZceZKyvxJZrKvbASMo7DMPA="
+      "hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ="
+    ];
   };
 
   inputs = {
