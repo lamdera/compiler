@@ -1,3 +1,5 @@
+# @LAMDERA no longer used by build-linux-arm64-musl.sh: its ghcup GHC's boot libraries
+# lack split sections. See ghc-musl-base.dockerfile. Kept as the known-good fallback.
 # @LAMDERA arm64 musl base, mirroring x86_64-musl-base.dockerfile.
 # Alpine 3.17 is the sweet spot for a static aarch64 build:
 #  - musl 1.2.3 still provides sendfile64 (dropped in musl 1.2.4 / alpine >= 3.18),

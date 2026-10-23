@@ -105,6 +105,12 @@ build_binary_docker() {
     # the two splices download the same packages concurrently and deadlock on the package
     # file lock (0% CPU hang). Deps have no such TH, so they stay -j4.
     GHCOPTS_LAMDERA="-j1 +RTS -A256m -RTS -split-sections -optc-Os -optl=-pthread -optl-lgcc"
+    # @LAMDERA snap-server's foreign import calls sendfile64, which musl >= 1.2.4 (the
+    # ghc-musl base's alpine) no longer offers to static links. Alias it to sendfile, the
+    # same function on musl (off_t is always 64 bit); -u makes sure sendfile is linked.
+    SENDFILE64="-optl-Wl,-u,sendfile -optl-Wl,--defsym=sendfile64=sendfile"
+    GHCOPTS="$GHCOPTS $SENDFILE64"
+    GHCOPTS_LAMDERA="$GHCOPTS_LAMDERA $SENDFILE64"
 
     # GOAL: build non-elm/elm-format deps first to save time and cut out baseline issues
     # cabal build --dry-run | grep ' - ' | grep -v 'elm-' | grep -v 'avh4' | cut -d' ' -f3 | sed 's/-[^-]*$//' | xargs -I{} cabal build {} --only-dependencies $CABALOPTS --ghc-options="$GHCOPTS"
@@ -138,9 +144,13 @@ mkdir -p $dist
 # gcc 12 libgcc has the aarch64 outline-atomics the GHC RTS needs; it also bakes in
 # esbuild/node for the reactor/repl-worker TH. See distribution/docker/arm64-musl-base.dockerfile.
 # (Previously used glcr.b-data.ch/ghc/ghc-musl:9.8.4, but its newer alpine dropped sendfile64.)
+# @LAMDERA back on ghc-musl:9.8.4 after 1.5.0: the alpine 3.17 base's ghcup GHC has boot
+# libraries without split sections, which more than doubled the binary (28.6MB in 1.4.0,
+# built on ghc-musl:9.2.8, to 74MB). sendfile64 is now aliased at link time instead, see
+# SENDFILE64 above and distribution/docker/ghc-musl-base.dockerfile.
 docker $dockerHost build --progress=plain \
     -t lamdera-arm64-musl-base:latest \
-    -f distribution/docker/arm64-musl-base.dockerfile .
+    -f distribution/docker/ghc-musl-base.dockerfile .
 
 [ "$GITHUB_ACTIONS" == "true" ] && runMode="--rm -i" || runMode="-it"
 docker $dockerHost run \

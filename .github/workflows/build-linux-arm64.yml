@@ -27,7 +27,8 @@ jobs:
         with:
           path: ${{ github.workspace }}/user-build-cache/linux-arm64
           # cabal.project too: its package settings (split-sections) change every dependency's build
-          key: linux-arm64-cabal-${{ hashFiles('cabal.project.freeze', 'cabal.project') }}
+          # and the base image: a different GHC build means different boot package ids
+          key: linux-arm64-cabal-${{ hashFiles('cabal.project.freeze', 'cabal.project', 'distribution/docker/ghc-musl-base.dockerfile') }}
           restore-keys: |
             linux-arm64-cabal-
       - name: Install git submodules
