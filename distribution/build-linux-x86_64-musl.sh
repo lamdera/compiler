@@ -139,6 +139,9 @@ docker $dockerHost run \
 ls -alh "$bin"
 chmod a+x "$bin"
 file "$bin"
+# @LAMDERA the release must stay a static musl binary so it runs on any distro, however
+# old its libc. Fail here rather than ship a dynamic one after a toolchain change.
+file "$bin" | grep -qE 'statically linked|static-pie linked' || { echo "$bin is not statically linked"; exit 1; }
 checkVersionStamp "$bin"
 ls -alh "$bin"
 echo "put $bin next/lamdera-next-$os-$arch" | sftp -i ~/.ssh/id_ed25519 -P 22 github@apps.lamdera.com
