@@ -1058,6 +1058,9 @@ tWire_Decoder_Sig tipe =
 mLamdera_Wire = (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire3")
 mLamdera_SeqDict = (Module.Canonical (Name "lamdera" "containers") "SeqDict")
 mLamdera_SeqSet = (Module.Canonical (Name "lamdera" "containers") "SeqSet")
+mLamdera_BiSeqDict = (Module.Canonical (Name "lamdera" "containers") "BiSeqDict")
+mLamdera_MultiSeqDict = (Module.Canonical (Name "lamdera" "containers") "MultiSeqDict")
+mLamdera_MultiBiSeqDict = (Module.Canonical (Name "lamdera" "containers") "MultiBiSeqDict")
 mBytes_Encode = (Module.Canonical (Name "elm" "bytes") "Bytes.Encode")
 mBytes_Decode = (Module.Canonical (Name "elm" "bytes") "Bytes.Decode")
 
@@ -1097,6 +1100,15 @@ unwrapAliasesDeep t =
 
     TType (Module.Canonical (Name "lamdera" "containers") "SeqDict") "SeqDict" [key, val] ->
       TType (Module.Canonical (Name "lamdera" "containers") "SeqDict") "SeqDict" [unwrapAliasesDeep key, unwrapAliasesDeep val]
+
+    TType (Module.Canonical (Name "lamdera" "containers") "BiSeqDict") "BiSeqDict" [key, val] ->
+      TType (Module.Canonical (Name "lamdera" "containers") "BiSeqDict") "BiSeqDict" [unwrapAliasesDeep key, unwrapAliasesDeep val]
+
+    TType (Module.Canonical (Name "lamdera" "containers") "MultiSeqDict") "MultiSeqDict" [key, val] ->
+      TType (Module.Canonical (Name "lamdera" "containers") "MultiSeqDict") "MultiSeqDict" [unwrapAliasesDeep key, unwrapAliasesDeep val]
+
+    TType (Module.Canonical (Name "lamdera" "containers") "MultiBiSeqDict") "MultiBiSeqDict" [key, val] ->
+      TType (Module.Canonical (Name "lamdera" "containers") "MultiBiSeqDict") "MultiBiSeqDict" [unwrapAliasesDeep key, unwrapAliasesDeep val]
 
     TType moduleName typeName params ->
       -- t -- @TODO wrong to not de-alias params?
