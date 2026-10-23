@@ -26,7 +26,8 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ github.workspace }}/user-build-cache/linux-x86_64
-          key: linux-x86_64-cabal-${{ hashFiles('cabal.project.freeze') }}
+          # cabal.project too: its package settings (split-sections) change every dependency's build
+          key: linux-x86_64-cabal-${{ hashFiles('cabal.project.freeze', 'cabal.project') }}
           restore-keys: |
             linux-x86_64-cabal-
       # Anything listed here makes the binary's version -dirty (see distribution/common.sh).

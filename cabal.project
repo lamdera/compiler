@@ -22,3 +22,14 @@ source-repository-package
     type: git
     location: https://github.com/noteed/language-glsl.git
     tag: 99c3aae76363b127679da640a6f00d61d2203830
+
+-- @LAMDERA build every dependency with -split-sections, not just our own packages. The
+-- musl release builds pass -split-sections in `cabal build --ghc-options`, but cabal
+-- applies command line ghc-options to local packages only, so the ~150 Hackage
+-- dependencies were built as one .text section per module, and the link's
+-- --gc-sections (which GHC passes on ELF) could drop nothing from them: any module the
+-- binary touched came in whole, Typeable metadata, unused instances and all.
+-- Linux only in effect: Mach-O dead-strips per symbol without it (except on
+-- aarch64-darwin, where GHC can't), and stack/nix builds don't read this file.
+package *
+  split-sections: True
