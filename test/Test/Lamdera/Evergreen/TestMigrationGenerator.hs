@@ -118,6 +118,7 @@ testExamples = withTestEnv $ do
         , "src/Migrate_All"
         , "src/Migrate_Union_Renamed"
         , "src/Migrate_Nested_Dict"
+        , "src/Migrate_Alias_Paramed"
         ]
 
     catchTestException :: FilePath -> SomeException -> IO a
