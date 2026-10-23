@@ -1,3 +1,5 @@
+# @LAMDERA no longer used by build-linux-x86_64-musl.sh: its ghcup GHC's boot libraries
+# lack split sections. See ghc-musl-base.dockerfile. Kept as the known-good fallback.
 FROM alpine:3.15 AS build
 
 RUN apk add --no-cache \

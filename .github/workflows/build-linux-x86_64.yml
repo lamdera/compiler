@@ -27,7 +27,8 @@ jobs:
         with:
           path: ${{ github.workspace }}/user-build-cache/linux-x86_64
           # cabal.project too: its package settings (split-sections) change every dependency's build
-          key: linux-x86_64-cabal-${{ hashFiles('cabal.project.freeze', 'cabal.project') }}
+          # and the base image: a different GHC build means different boot package ids
+          key: linux-x86_64-cabal-${{ hashFiles('cabal.project.freeze', 'cabal.project', 'distribution/docker/ghc-musl-base.dockerfile') }}
           restore-keys: |
             linux-x86_64-cabal-
       # Anything listed here makes the binary's version -dirty (see distribution/common.sh).
