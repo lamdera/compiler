@@ -31,6 +31,10 @@ import Control.Exception (finally, try, SomeException)
 import qualified Language.Haskell.TH as TH
 import Data.FileEmbed (bsToExp)
 import qualified Data.Aeson.Encoding as A
+import qualified Data.Aeson as Aeson
+import qualified Data.Aeson.Types as Aeson
+import qualified Data.Aeson.Key as AesonKey
+import qualified Data.Aeson.KeyMap as AesonKeyMap
 
 import Snap.Core hiding (path, headers)
 import qualified Data.CaseInsensitive as CI
@@ -714,19 +718,28 @@ serveRpc (mClients, mLeader, mChan, beState) port = do
       case chanTextM of
         Just chanText -> do
           let
-            decoder :: D.Decoder D.ParseError (Int, BS.ByteString, [(Text, Text)], (String, B.Builder))
+            -- Decoded with aeson rather than Json.Decode: that parser is written for elm.json and
+            -- rejects negative and fractional numbers, which a response value can hold (lamdera/compiler#108).
+            decoder :: Aeson.Value -> Aeson.Parser (Int, BS.ByteString, [(Text, Text)], (String, B.Builder))
             decoder =
-              D.map4 (,,,)
-                (D.field "c" D.int & D.withDefault 200)
-                (D.field "ct" (D.text & fmap Ext.Common.textToBs) & D.withDefault "OK")
-                (D.field "h" (D.pairs D.textKeyDecoder D.text) & D.withDefault [])
-                (D.oneOf
-                    [ D.field "i" (D.value & fmap (\v -> ("i", E.encode v))) -- Bytes
-                    , D.field "v" (D.value & fmap (\v -> ("v", E.encode v))) -- Json.Value
-                    , D.field "vs" (D.jsonString & fmap (\v -> ("vs", Json.String.toBuilder v))) -- String
-                    ])
+              Aeson.withObject "rpc response" $ \o -> do
+                statusCode <- o Aeson..:? "c" Aeson..!= 200
+                statusText <- o Aeson..:? "ct" Aeson..!= "OK"
+                headers <- o Aeson..:? "h" Aeson..!= AesonKeyMap.empty
+                body <-
+                  case (AesonKeyMap.lookup "i" o, AesonKeyMap.lookup "v" o, AesonKeyMap.lookup "vs" o) of
+                    (Just v, _, _) -> pure ("i", A.fromEncoding (Aeson.toEncoding v)) -- Bytes
+                    (_, Just v, _) -> pure ("v", A.fromEncoding (Aeson.toEncoding v)) -- Json.Value
+                    (_, _, Just v) -> Aeson.withText "vs" (\t -> pure ("vs", TE.encodeUtf8Builder t)) v -- String
+                    _ -> fail "expected one of the fields i, v or vs"
+                pure
+                  ( statusCode
+                  , Ext.Common.textToBs statusText
+                  , headers & AesonKeyMap.toList & fmap (\(k, v) -> (AesonKey.toText k, v))
+                  , body
+                  )
 
-          decodeResult <- liftIO $ D.fromByteString decoder (TE.encodeUtf8 chanText)
+            decodeResult = Aeson.eitherDecodeStrict (TE.encodeUtf8 chanText) >>= Aeson.parseEither decoder
           case decodeResult of
             Right (statusCode, statusText, headers, (bodyType, bodyEncoded)) -> do
 
@@ -746,7 +759,7 @@ serveRpc (mClients, mLeader, mChan, beState) port = do
               writeBuilder bodyEncoded
 
             Left jsonProblem -> do
-              debugT $ "😢 rpc response decoding failed: " <> show_ jsonProblem <> "\n" <> chanText
+              debugT $ "😢 rpc response decoding failed: " <> T.pack jsonProblem <> "\n" <> chanText
               writeBuilder $ B.byteString $ "rpc response decoding failed for " <> TE.encodeUtf8 chanText
 
 
