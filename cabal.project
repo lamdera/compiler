@@ -33,3 +33,13 @@ source-repository-package
 -- aarch64-darwin, where GHC can't), and stack/nix builds don't read this file.
 package *
   split-sections: True
+
+-- @LAMDERA snap-server's foreign import calls sendfile64, which musl >= 1.2.4 (the
+-- ghc-musl base's alpine, used by the Linux release builds) no longer offers to static
+-- links. Alias it to sendfile, the same function on musl (off_t is always 64 bit); -u
+-- makes sure sendfile is linked. Only on the elm package, whose one component is the
+-- executable: on a library's shared object link (the vendored elm-format packages)
+-- there is no libc to find sendfile in, and --defsym fails the link.
+if os(linux)
+  package elm
+    ghc-options: -optl-Wl,-u,sendfile -optl-Wl,--defsym=sendfile64=sendfile

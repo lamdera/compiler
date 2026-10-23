@@ -12,7 +12,7 @@
 #
 # This image's alpine (3.24, musl 1.2.5) no longer lets new code link against
 # sendfile64, which snap-server's foreign import hard-codes (see elm/compiler
-# 8a941d56). The build scripts alias it to sendfile at link time
+# 8a941d56). cabal.project aliases it to sendfile at link time
 # (-Wl,--defsym=sendfile64=sendfile), which is the same function on musl, where off_t is
 # always 64 bit. Template Haskell is unaffected: it dlopens the dependencies' shared
 # objects, and musl's dynamic linker still resolves the LFS64 names.
