@@ -719,6 +719,15 @@ canAliasToMigration oldVersion newVersion scope interfaces recursionSet (typeNew
             tvarsOld :: [Text]
             tvarsOld = tvarMapOldReplaced & fmap (nameToText . fst)
 
+            -- The top level definition we're about to generate is shared by every usage of this
+            -- alias, and its type signature is generic (`(a_old -> a_new) -> ...`), so its body
+            -- has to be generic too. Resolving the tvars to whatever this particular usage
+            -- applied them to would make tvar-typed fields look unchanged (`a` vs `a`) and emit
+            -- `old.field` where `old.field |> migrate_a` is required.
+            -- @NOTE the union equivalent does the same thing, see `constructorMigrations`.
+            genericTvarMap :: TvarMap -> TvarMap
+            genericTvarMap tvarMap_ = tvarMap_ & fmap (\(tvarName, _) -> (tvarName, Can.TVar tvarName))
+
             (MigrationNested migrationAliasedType imps subDefs) =
               let
                 cTypeOld =
@@ -726,7 +735,7 @@ canAliasToMigration oldVersion newVersion scope interfaces recursionSet (typeNew
                     Can.Holey cTypeOld_ -> cTypeOld_
                     Can.Filled cTypeOld_ ->cTypeOld_
               in
-              canToMigration oldVersion newVersion moduleNameNew interfaces recursionSet cType (Just cTypeOld) tvarMapOldReplaced tvarMapNew "old"
+              canToMigration oldVersion newVersion moduleNameNew interfaces recursionSet cType (Just cTypeOld) (genericTvarMap tvarMapOldReplaced) (genericTvarMap tvarMapNew) "old"
 
             -- typeScope = if moduleNameNew == scope then "" else T.concat [nameToText module_, "."]
 

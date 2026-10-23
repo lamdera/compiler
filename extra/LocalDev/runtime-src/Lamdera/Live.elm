@@ -261,7 +261,7 @@ init flags url key =
 
                 Just frontendModelBytes ->
                     if devbar.freeze then
-                        case Wire.bytesDecode Types.w3_decode_FrontendModel frontendModelBytes of
+                        case Wire.bytesDecode Types.w3_unsafe_decode_FrontendModel frontendModelBytes of
                             Just restoredFem ->
                                 ( restoredFem
                                 , Cmd.none
@@ -286,7 +286,7 @@ init flags url key =
                     ( ibem, iBeCmds, Nothing )
 
                 Just backendModelBytes ->
-                    case Wire.bytesDecode Types.w3_decode_BackendModel backendModelBytes of
+                    case Wire.bytesDecode Types.w3_unsafe_decode_BackendModel backendModelBytes of
                         Just restoredBem ->
                             ( restoredBem
                             , Cmd.none
@@ -561,7 +561,7 @@ update msg m =
                             ( m, Cmd.none )
 
         ReceivedToFrontend args ->
-            case Wire.bytesDecode Types.w3_decode_ToFrontend args.b of
+            case Wire.bytesDecode Types.w3_unsafe_decode_ToFrontend args.b of
                 Just toFrontend ->
                     let
                         x =
@@ -585,7 +585,7 @@ update msg m =
                     ( m, Cmd.none )
 
         ReceivedBackendModel bytes ->
-            case Wire.bytesDecode Types.w3_decode_BackendModel bytes of
+            case Wire.bytesDecode Types.w3_unsafe_decode_BackendModel bytes of
                 Just newBem ->
                     let
                         x =
@@ -1026,7 +1026,7 @@ update msg m =
                     ( m, Cmd.none )
 
                 Leader ->
-                    case Wire.bytesDecode Types.w3_decode_BackendModel backendModelBytes of
+                    case Wire.bytesDecode Types.w3_unsafe_decode_BackendModel backendModelBytes of
                         Just _ ->
                             ( m, Cmd.none )
 
@@ -1035,7 +1035,7 @@ update msg m =
                             ( m, Browser.Navigation.reload )
 
         VerifyFrontendModelDecodableAfterHotReload frontendModelBytes ->
-            case Wire.bytesDecode Types.w3_decode_FrontendModel frontendModelBytes of
+            case Wire.bytesDecode Types.w3_unsafe_decode_FrontendModel frontendModelBytes of
                 Just _ ->
                     ( m, Cmd.none )
 
