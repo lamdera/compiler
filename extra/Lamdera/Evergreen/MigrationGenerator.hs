@@ -202,11 +202,11 @@ migrateUnionDefinition typeDefOld oldVersion newVersion scope identifier@(author
     (Alias moduleNameOld typeNameOld aliasOld) ->
       unimplemented "" ("`" <> nameToText typeNameNew <> "` was a type alias, but now it's a custom type. I need you to write this migration.")
     (Union moduleNameOld typeNameOld unionOld) ->
-      migrateUnionDefinition_ author pkg unionOld newUnion tvarMapOld tvarMapNew oldVersion newVersion typeNameNew newModule identifier (dropCan moduleNameOld) interfaces recursionSet scope
+      migrateUnionDefinition_ author pkg unionOld newUnion tvarMapOld tvarMapNew oldVersion newVersion typeNameOld typeNameNew newModule identifier (dropCan moduleNameOld) interfaces recursionSet scope
 
 
-migrateUnionDefinition_ :: Pkg.Author -> Pkg.Project -> Can.Union -> Can.Union -> TvarMap -> TvarMap -> Int -> Int -> TN.Name -> PrimModule.Name -> TypeIdentifier -> PrimModule.Name -> Interfaces -> RecursionSet -> ModuleName.Canonical -> Migration
-migrateUnionDefinition_ author pkg oldUnion newUnion tvarMapOld tvarMapNew oldVersion newVersion typeName newModule identifier oldModuleName interfaces recursionSet scope =
+migrateUnionDefinition_ :: Pkg.Author -> Pkg.Project -> Can.Union -> Can.Union -> TvarMap -> TvarMap -> Int -> Int -> TN.Name -> TN.Name -> PrimModule.Name -> TypeIdentifier -> PrimModule.Name -> Interfaces -> RecursionSet -> ModuleName.Canonical -> Migration
+migrateUnionDefinition_ author pkg oldUnion newUnion tvarMapOld tvarMapNew oldVersion newVersion typeNameOld typeName newModule identifier oldModuleName interfaces recursionSet scope =
   let
     oldModuleNameCanonical :: ModuleName.Canonical
     oldModuleNameCanonical = ModuleName.Canonical (Pkg.Name author pkg) oldModuleName
@@ -280,7 +280,7 @@ migrateUnionDefinition_ author pkg oldUnion newUnion tvarMapOld tvarMapNew oldVe
     migrationTypeSignature = T.concat
       [ paramMigrationFnsTypeSig & T.intercalate " -> " & suffixIfNonempty " -> "
       , " "
-      , oldModuleName & nameToText, ".", typeName & nameToText
+      , oldModuleName & nameToText, ".", typeNameOld & nameToText
       , " "
       , tvarsOld & fmap (\tvar -> T.concat [nameToText tvar, "_old"]) & T.intercalate " "
       , " -> "
