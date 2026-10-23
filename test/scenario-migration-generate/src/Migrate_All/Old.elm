@@ -8,6 +8,7 @@ import Evergreen.V1.External
 import Evergreen.V1.IncludedByParam
 import Evergreen.V1.IncludedBySpecialCasedParam
 import Lamdera
+import SeqDict exposing (SeqDict)
 import Set exposing (Set)
 import Time
 import Url
@@ -57,6 +58,7 @@ type alias BackendModel =
 
     -- TODO
     , nestedDictCustomType : Dict String (Dict Int UserType)
+    , nestedSeqDictCustomKey : Dict String (SeqDict UserType Int)
 
     -- WIP
     , depthTests : Dict String Depth

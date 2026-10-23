@@ -34,6 +34,7 @@ import Maybe
 import Migrate_All.New
 import Migrate_All.Old
 import Result
+import SeqDict
 import Set
 
 
@@ -144,7 +145,7 @@ migrate_Migrate_All_New_BackendModel old =
     , unchangedDictAnonymousRecord =
         old.unchangedDictAnonymousRecord
             |> Dict.map
-                (\k ->
+                (\_ ->
                     \rec ->
                         { name = rec.name
                         , age = rec.age
@@ -169,7 +170,7 @@ migrate_Migrate_All_New_BackendModel old =
     , withCustomList = old.withCustomList |> List.map migrate_Migrate_All_New_UserType
     , withCustomSet = old.withCustomSet |> Set.map (Unimplemented {- Type changed from `Int` to `String`. I need you to write this migration. -})
     , withCustomArray = old.withCustomArray |> Array.map migrate_Migrate_All_New_UserType
-    , withCustomDict = old.withCustomDict |> Dict.map (\k -> migrate_Migrate_All_New_UserType)
+    , withCustomDict = old.withCustomDict |> Dict.map (\_ -> migrate_Migrate_All_New_UserType)
     , withCustomResult = old.withCustomResult |> Result.mapError migrate_Migrate_All_New_UserType >> Result.map migrate_Migrate_All_New_UserType
     , externalUnion = old.externalUnion |> migrate_External_ExternalUnion
     , added = (Unimplemented {- Type `Int` was added in V2. I need you to set a default value. -})
@@ -180,7 +181,8 @@ migrate_Migrate_All_New_BackendModel old =
     , time = old.time
     , url = old.url
     , userCache = old.userCache |> migrate_AssocList_Dict identity migrate_IncludedBySpecialCasedParam_Custom
-    , nestedDictCustomType = old.nestedDictCustomType |> Dict.map (\k -> Dict.map (\k -> migrate_Migrate_All_New_UserType))
+    , nestedDictCustomType = old.nestedDictCustomType |> Dict.map (\_ -> Dict.map (\_ -> migrate_Migrate_All_New_UserType))
+    , nestedSeqDictCustomKey = old.nestedSeqDictCustomKey |> Dict.map (\_ -> SeqDict.toList >> List.map (Tuple.mapFirst migrate_Migrate_All_New_UserType) >> SeqDict.fromList)
     , apps = (Unimplemented {- Type `Dict (String) (Migrate_All.New.App)` was added in V2. I need you to set a default value. -})
     , id = old.id |> migrate_Migrate_All_New_Id
     , depthTests = (Unimplemented {- Field of type `Dict (String) (Migrate_All.Old.Depth)` was removed in V2. I need you to do something with the `old.depthTests` value if you wish to keep the data, then remove this line. -})
@@ -204,7 +206,6 @@ migrate_Migrate_All_New_Id old =
     case old of
         Migrate_All.Old.Id p0 ->
             Migrate_All.New.Id p0
-
 
 
 migrate_Migrate_All_New_UserType : Migrate_All.Old.UserType -> Migrate_All.New.UserType
@@ -344,3 +345,4 @@ migrate_Migrate_All_New_UserType old =
                See https://dashboard.lamdera.app/tips/modified-custom-type for more info.
             -}
             (Unimplemented {- New constructors were added. I need you to resolve the above notices and then remove this case. -})
+
