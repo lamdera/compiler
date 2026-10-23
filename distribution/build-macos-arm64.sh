@@ -30,11 +30,14 @@ fi
 
 cd "$scriptDir/.."                                        # Move into the project root
 git submodule init && git submodule update
+excludeBuildLeftovers
+gitTreeReport
 
 $stack install --local-bin-path $dist
 
 cp $dist/lamdera $bin                                     # Copy built binary to dist
 strip $bin                                                # Strip symbols to reduce binary size (90M -> 56M)
+checkVersionStamp $bin
 file $bin
 ls -alh $bin
 echo "put $bin next/lamdera-next-$os-$arch" | sftp -i ~/.ssh/id_ed25519 -P 22 github@apps.lamdera.com

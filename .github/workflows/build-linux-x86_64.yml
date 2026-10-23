@@ -29,6 +29,15 @@ jobs:
           key: linux-x86_64-cabal-${{ hashFiles('cabal.project.freeze') }}
           restore-keys: |
             linux-x86_64-cabal-
+      # Anything listed here makes the binary's version -dirty (see distribution/common.sh).
+      # The Linux builds print it again inside docker, right before the lamdera package
+      # compiles, since the cabal store and dist-newstyle only appear there.
+      - name: Show git tree state before the build
+        run: |
+          git submodule update --init
+          source distribution/common.sh
+          excludeBuildLeftovers
+          gitTreeReport
       - name: Run distribution script
         run: |
           cd distribution

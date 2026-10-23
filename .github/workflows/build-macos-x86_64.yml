@@ -21,6 +21,13 @@ jobs:
       - uses: actions/checkout@v3
       - uses: freckle/stack-cache-action@v2
       - run: echo "${HOME}/.local/bin" >> $GITHUB_PATH
+      # Anything listed here makes the binary's version -dirty (see distribution/common.sh).
+      - name: Show git tree state before the build
+        run: |
+          git submodule update --init
+          source distribution/common.sh
+          excludeBuildLeftovers
+          gitTreeReport
       - name: Run distribution script
         run: |
           mkdir -p ~/.local/bin

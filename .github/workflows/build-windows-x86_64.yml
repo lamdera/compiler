@@ -103,11 +103,23 @@ jobs:
       # GHC 9.4+ on Windows ships an LLVM toolchain with libc++, not GCC's libstdc++, so
       # stack.yaml's -lstdc++ (needed for the Linux and macOS links) makes Template
       # Haskell fail to load "stdc++" here. Drop it for this build only.
+      # @LAMDERA in a gitignored copy, not stack.yaml itself: an edited tracked file makes
+      # the tree dirty, which stamps the binary's version -dirty (githash). It sits next to
+      # stack.yaml because stack resolves the packages' relative paths from its directory.
       - name: Drop -lstdc++ from stack.yaml
         shell: bash
         run: |
-          sed -i 's/: -lstdc++$/: ""/; s/ -lstdc++//g' stack.yaml
-          grep -n -A2 'ghc-options' stack.yaml
+          sed 's/: -lstdc++$/: ""/; s/ -lstdc++//g' stack.yaml > stack-windows.yaml
+          cp stack.yaml.lock stack-windows.yaml.lock
+          grep -n -A2 'ghc-options' stack-windows.yaml
+
+      # Anything listed here makes the binary's version -dirty (see distribution/common.sh).
+      - name: Show git tree state before the build
+        shell: bash
+        run: |
+          source distribution/common.sh
+          excludeBuildLeftovers
+          gitTreeReport
 
       # Use a retry action because inexplicably sometimes stack install stalls
       # indefinitely after the `compiling Main` step, but then succeeds immediately
@@ -121,7 +133,7 @@ jobs:
           # https://gitlab.haskell.org/ghc/ghc/-/issues/20010#note_359766
           command: |
             export LANG=C.UTF-8
-            stack install --ghc-options '-optl"-Wl,-Bstatic,-lwinpthread,-Bdynamic"'
+            stack install --stack-yaml stack-windows.yaml --ghc-options '-optl"-Wl,-Bstatic,-lwinpthread,-Bdynamic"'
 
       - name: Copy binary files, dlls & check
         run: |
@@ -130,6 +142,12 @@ jobs:
           cp distribution/dlls/* lamdera/
           ./lamdera/lamdera.exe --version-full
           objdump -p lamdera/lamdera.exe | grep 'DLL Name' || true
+
+      - name: Check the version stamp
+        shell: bash
+        run: |
+          source distribution/common.sh
+          checkVersionStamp lamdera/lamdera.exe
 
       - name: Create distribution zip
         uses: vimtor/action-zip@v1

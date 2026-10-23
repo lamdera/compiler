@@ -28,6 +28,7 @@ fi
 
 cd "$compilerRoot"                                        # Move into the project root
 git submodule init && git submodule update
+excludeBuildLeftovers
 # Fetch origin/master in package-replacement submodules so the TH code can diff against it.
 # Docker has no SSH so this must happen on the host where git+ssh works.
 for dir in extra/package-replacements/*/*; do
@@ -94,6 +95,9 @@ build_binary_docker() {
     # cabal build --dry-run | grep ' - ' | grep -v 'elm-' | grep -v 'avh4' | cut -d' ' -f3 | sed 's/-[^-]*$//' | xargs -I{} cabal build {} --only-dependencies $CABALOPTS --ghc-options="$GHCOPTS"
     cabal build --only-dependencies $CABALOPTS --ghc-options="$GHCOPTS"
 
+    # GOAL: show the tree githash is about to stamp; anything listed makes the version -dirty
+    gitTreeReport
+
     # GOAL: build the Lamdera binary statically
     cabal build $CABALOPTS --ghc-options="$GHCOPTS_LAMDERA" || true
 
@@ -120,10 +124,11 @@ docker $dockerHost run \
     -v "$mountRoot:/root/compiler" \
     -v "$cacheRoot:/root/cache" \
     $runMode lamdera-x86_64-musl-base:latest \
-    bash -c "$(declare -f build_binary_docker); build_binary_docker '$bin' '$GITHUB_ACTIONS' '$(id -u)' '$(id -g)'"
+    bash -c "$(declare -f build_binary_docker gitTreeReport); build_binary_docker '$bin' '$GITHUB_ACTIONS' '$(id -u)' '$(id -g)'"
 
 ls -alh "$bin"
 chmod a+x "$bin"
 file "$bin"
+checkVersionStamp "$bin"
 ls -alh "$bin"
 echo "put $bin next/lamdera-next-$os-$arch" | sftp -i ~/.ssh/id_ed25519 -P 22 github@apps.lamdera.com

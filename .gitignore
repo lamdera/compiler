@@ -21,3 +21,17 @@ elm-home
 # nix build output symlinks
 /result
 /result-*
+
+
+# @LAMDERA release build leftovers. githash stamps `lamdera --version-full` with -dirty
+# when `git status --porcelain` lists anything (untracked files included), so whatever a
+# build writes into the checkout before extra/Lamdera/Version.hs compiles must be ignored.
+# cabal builds (the Linux musl builds), incl. the language-glsl source-repository-package clone
+dist-newstyle/
+# the Linux CI's cabal store + index, cached at $GITHUB_WORKSPACE/user-build-cache
+/user-build-cache/
+# Lamdera.Repl's temporary unminified worker (local builds without GITHUB_ACTIONS=true)
+/extra/repl-worker.js
+# the Windows workflow's stack.yaml without -lstdc++ (see build-windows-x86_64.yml)
+/stack-windows.yaml
+/stack-windows.yaml.lock
