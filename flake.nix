@@ -202,7 +202,15 @@
                   # Lamdera.Repl splice shells out to it while compiling the repl
                   # worker, and Ext.Common aborts with "please install the
                   # following required binary: esbuild".
-                  build-tools = [ pkgs.esbuild ];
+                  #
+                  # On darwin the same splices load the TLS root certificates through
+                  # crypton-x509-system, which runs Apple's `security find-certificate`,
+                  # absent from the build's PATH ("security: createProcess:
+                  # posix_spawnp: does not exist"). This stands in for it with the
+                  # PEM bundle from nixpkgs' cacert, the same format it prints.
+                  build-tools = [ pkgs.esbuild ]
+                    ++ pkgs.lib.optional pkgs.stdenv.hostPlatform.isDarwin
+                      (pkgs.writeShellScriptBin "security" "cat ${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt");
 
                   # Serialize GHC's upsweep for THIS package. Two Template
                   # Haskell splices invoke the Elm compiler during the build
@@ -239,6 +247,15 @@
                   "-optc=-Wno-error=incompatible-pointer-types"
                   "-optc=-Wno-error=discarded-qualifiers"
                 ];
+
+                # stack.yaml turns on regex-posix's bundled C regex library for
+                # Windows, where there is no system one. Its K&R-style C does not
+                # compile with the clang of the darwin stdenv ("unknown type name
+                # 'pattern'"), and macOS has POSIX regex in libc anyway, so darwin
+                # builds use that. Linux keeps the flag, so its store paths (what
+                # the servers and the binary cache hold) do not change.
+                packages.regex-posix.flags._regex-posix-clib =
+                  pkgs.lib.mkIf pkgs.stdenv.hostPlatform.isDarwin (pkgs.lib.mkForce false);
               }
             ];
           };
