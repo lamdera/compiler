@@ -367,7 +367,7 @@ decoderForType mode ifaces cname tipe =
             then (a (VarTopLevel moduleName generatedName))
             else (a (VarForeign moduleName generatedName (getForeignSig tipe moduleName generatedName ifaces)))
       in
-      if isUnsupportedKernelType tipe
+      if isUnsupportedKernelType tipe || hasNoGeneratedCodec tipe
         then failDecode (N.toChars generatedName <> " isUnsupportedKernelType")
         else
           case params of
@@ -409,7 +409,7 @@ decoderForType mode ifaces cname tipe =
                         decoderForType mode ifaces cname tvarType
                ) tvars_
       in
-      if isUnsupportedKernelType tipe
+      if isUnsupportedKernelType tipe || hasNoGeneratedCodec tipe
       then failDecode (N.toChars generatedName <> " isUnsupportedKernelType")
       else if isLambdaType innerType
       then failDecode "lambda"

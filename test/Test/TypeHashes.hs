@@ -16,6 +16,10 @@ import qualified Lamdera.Relative
 import qualified Ext.Query.Interfaces as Interfaces
 import qualified Lamdera.TypeHash
 import qualified Ext.Common
+import qualified Data.Map as Map
+import qualified Data.Text as T
+import Make (Flags(..))
+import qualified Make
 
 all = EasyTest.run suite
 
@@ -166,6 +170,47 @@ suite = tests
         sha_second = textSha1 "C[[R[SS]][S][Res[S,L[R[SS]]]][Res[S,R[SL[C[[][]]]SS]]][D[S,I]][D[S,R[C[[I]]SC[[I]]SC[[S]]L[C[[][]]]SS]]][D[S,R[C[[I]]SSS]]][][][][Res[S,R[SL[C[[][]]]SS]]]]"
 
       expect $ sha_first /= sha_second
+
+  , scope "types from packages without generated codecs (lamdera/compiler#70)" $ do
+      project <- io $ Lamdera.Relative.requireDir "test/scenario-no-codec-types"
+
+      scope "code generation reaches their codecs without crashing" $ do
+        let elmStuff = project ++ "/elm-stuff"
+        io $ rmdir elmStuff
+        output <- catchOutput $
+          Ext.Common.withProjectRoot project $
+            Make.run ["src/Main_.elm"] $
+              Make.Flags
+                { _debug = False
+                , _optimize = False
+                , _output = Just (Make.JS "elm-stuff/tmp.js")
+                , _report = Nothing
+                , _docs = Nothing
+                , _noWire = False
+                , _optimizeLegible = False
+                , _esm = False
+                }
+        js <- io $ readUtf8Text $ elmStuff ++ "/tmp.js"
+        io $ rmdir elmStuff
+        expectTextDoesNotContain output "TOO MANY ARGS"
+        expectTextDoesNotContain output "unable to find"
+        expect $ maybe False (T.isInfixOf "w3_encode_BackendModel") js
+
+      scope "lamdera check rejects them, and still takes Bytes" $ do
+        let
+          errorsFor typeName = do
+            interfaces <- Interfaces.all [ "src/Types.elm" ]
+            case Map.lookup "Types" interfaces of
+              Just iface -> pure $ Lamdera.TypeHash.diffableTypeErrors (Lamdera.TypeHash.diffableTypeByName interfaces typeName "Types" iface)
+              Nothing -> pure [ "Types not found" ]
+
+        (modelErrors, supportedErrors) <- ioSilenced $ Ext.Common.withProjectRoot project $
+          (,) <$> errorsFor "BackendModel" <*> errorsFor "Supported"
+
+        let modelErrorText = T.intercalate "\n" modelErrors
+        expectTextContains modelErrorText "must not contain `Endianness` from elm/bytes:Bytes"
+        expectTextContains modelErrorText "must not contain `Step` from elm/bytes:Bytes.Decode"
+        expectEqual supportedErrors []
   ]
 
 

@@ -233,7 +233,7 @@ encoderForType depth ifaces cname tipe =
             else (a (VarForeign moduleName generatedName (getForeignSig tipe moduleName generatedName ifaces)))
 
       in
-      if isUnsupportedKernelType tipe
+      if isUnsupportedKernelType tipe || hasNoGeneratedCodec tipe
         then failEncode
         else decoder
 
@@ -270,7 +270,7 @@ encoderForType depth ifaces cname tipe =
             -- Referenced type is defined in another module
             else (a (VarForeign moduleName generatedName (getForeignSig tipe moduleName generatedName ifaces)))
       in
-      if isUnsupportedKernelType tipe
+      if isUnsupportedKernelType tipe || hasNoGeneratedCodec tipe
         then failEncode
         else encoder
 
@@ -319,7 +319,7 @@ deepEncoderForType depth ifaces cname tipe =
 
 
     TType moduleName typeName params ->
-      if isUnsupportedKernelType tipe
+      if isUnsupportedKernelType tipe || hasNoGeneratedCodec tipe
         then failEncode
         else
           case params of
@@ -339,7 +339,7 @@ deepEncoderForType depth ifaces cname tipe =
 
     TAlias moduleName typeName tvars aType ->
       let innerType = case aType of { Holey t -> t; Filled t -> t }
-      in if isUnsupportedKernelType tipe || isLambdaType innerType
+      in if isUnsupportedKernelType tipe || hasNoGeneratedCodec tipe || isLambdaType innerType
         then failEncode
         else inlineIfRecordOrCall depth ifaces cname tipe tvars aType
 
@@ -429,7 +429,7 @@ encodeTypeValue depth ifaces cname tipe value =
 
 
     TType moduleName typeName params ->
-      if isUnsupportedKernelType tipe
+      if isUnsupportedKernelType tipe || hasNoGeneratedCodec tipe
         then call failEncode [ a Unit ]
         else call (encoderForType depth ifaces cname tipe) $ fmap (deepEncoderForType depth ifaces cname) params ++ [ value ]
 
@@ -445,7 +445,7 @@ encodeTypeValue depth ifaces cname tipe value =
           call (encoderForType depth ifaces cname tipe) [ value ]
 
     TAlias moduleName typeName tvars aType ->
-      if isUnsupportedKernelType tipe
+      if isUnsupportedKernelType tipe || hasNoGeneratedCodec tipe
         then call failEncode [ a Unit ]
         else
           let

@@ -56,6 +56,22 @@ shouldHaveCodecsGenerated name =
     _ -> True
 
 
+{-| A type from a package that gets no generated codecs (see shouldHaveCodecsGenerated)
+and that none of the special cases in Encoder/Decoder handled, as those match before the
+general case that asks this. There is no codec to call for it, so it encodes and decodes
+as a failure like an unsupported kernel type, and `lamdera check` rejects it (TypeHash).
+
+Calling the codec it would have had instead failed to compile with TOO MANY ARGS for a
+type with parameters, and crashed code generation for one without (lamdera/compiler#70).
+-}
+hasNoGeneratedCodec :: Type -> Bool
+hasNoGeneratedCodec tipe =
+  case tipe of
+    TType (Module.Canonical pkg _) _ _ -> not (shouldHaveCodecsGenerated pkg)
+    TAlias (Module.Canonical pkg _) _ _ _ -> not (shouldHaveCodecsGenerated pkg)
+    _ -> False
+
+
 {- Which decoder chain we are generating.
 
 Every custom type and alias gets TWO decoders:
