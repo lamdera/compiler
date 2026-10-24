@@ -64,15 +64,16 @@ data Flags =
   Flags
     { _destructiveMigration :: Bool
     , _force :: Bool
+    , _destructiveMigrationExceptBackend :: Bool
     }
 
 
 run_ :: IO ()
-run_ = run () (Lamdera.CLI.Check.Flags { _destructiveMigration = False, _force = False })
+run_ = run () (Lamdera.CLI.Check.Flags { _destructiveMigration = False, _force = False, _destructiveMigrationExceptBackend = False })
 
 
 run :: () -> Lamdera.CLI.Check.Flags -> IO ()
-run () flags@(Lamdera.CLI.Check.Flags destructiveMigration force) = do
+run () flags@(Lamdera.CLI.Check.Flags destructiveMigration force destructiveExceptBackend) = do
   debug_ "Starting check..."
 
   inProduction_ <- Lamdera.inProduction
@@ -98,7 +99,7 @@ run () flags@(Lamdera.CLI.Check.Flags destructiveMigration force) = do
 
 
 runHelp :: () -> Lamdera.CLI.Check.Flags -> IO ()
-runHelp () flags@(Lamdera.CLI.Check.Flags destructiveMigration force) = do
+runHelp () flags@(Lamdera.CLI.Check.Flags destructiveMigration force destructiveExceptBackend) = do
   Lamdera.setCheckMode True
 
   -- appNameEnvM <- Env.lookupEnv "LAMDERA_APP_NAME"
@@ -139,7 +140,7 @@ runHelp () flags@(Lamdera.CLI.Check.Flags destructiveMigration force) = do
 
       if ips == [] && not inProduction_
         then offlineCheck root
-        else onlineCheck root appName inDebug localTypes externalTypeWarnings isHoistRebuild forceVersion forceNotProd inProduction_ destructiveMigration
+        else onlineCheck root appName inDebug localTypes externalTypeWarnings isHoistRebuild forceVersion forceNotProd inProduction_ destructiveMigration destructiveExceptBackend
 
   Lamdera.setCheckMode False
 
@@ -195,7 +196,7 @@ offlineCheck root = do
   pure ()
 
 
-onlineCheck root appName inDebug localTypes externalTypeWarnings isHoistRebuild forceVersion forceNotProd inProduction_ destructiveMigration = do
+onlineCheck root appName inDebug localTypes externalTypeWarnings isHoistRebuild forceVersion forceNotProd inProduction_ destructiveMigration destructiveExceptBackend = do
 
   (prodVersion, productionTypes, nextVersion) <- getProdInfo appName inProduction_ forceNotProd forceVersion isHoistRebuild localTypes
 
@@ -265,6 +266,15 @@ onlineCheck root appName inDebug localTypes externalTypeWarnings isHoistRebuild 
                 writeUtf8 nextMigrationPath destructive
                 pure ()
 
+              -- Unlike --destructive-migration, the BackendModel migration in an existing file may be hand written
+              onlyWhen (destructiveExceptBackend && not destructiveMigration) $
+                Progress.throw $
+                  Help.report "MIGRATION ALREADY EXISTS" (Just nextMigrationPathBare)
+                    ("--destructive-migration-except-backend only applies when generating a new migration, and there is already one here:")
+                    [ D.dullyellow $ D.reflow $ nextMigrationPath
+                    , D.reflow "If you haven't written anything in it you want to keep, delete it and run `lamdera check --destructive-migration-except-backend` again."
+                    ]
+
               debug $ "Reading migration source..."
               migrationSource <- T.decodeUtf8 <$> IO.readUtf8 nextMigrationPath
 
@@ -325,7 +335,7 @@ onlineCheck root appName inDebug localTypes externalTypeWarnings isHoistRebuild 
                       then
                         Lamdera.Evergreen.MigrationDestructive.generate lastLocalTypeChangeVersion nextVersion typeCompares
                       else
-                        Lamdera.Evergreen.MigrationGenerator.betweenVersions typeCompares lastLocalTypeChangeVersion nextVersion root
+                        Lamdera.Evergreen.MigrationGenerator.betweenVersions destructiveExceptBackend typeCompares lastLocalTypeChangeVersion nextVersion root
                   writeUtf8 nextMigrationPath defaultMigrations
 
                   Progress.throw $
