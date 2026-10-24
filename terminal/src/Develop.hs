@@ -175,7 +175,7 @@ runWithRoot root (Flags maybePort shouldOpenBrowser inMemory) =
         -- `Dir.setCurrentDirectory root` at the top of this file to have worked correctly – which it seems it doesn't always do.
         <|> serveDirectoryWith directoryConfig "."
         <|> Live.serveWebsocket root liveState
-        <|> route [ ("_r/:endpoint", Live.serveRpc liveState port) ]
+        <|> route [ ("_r/:endpoint", method POST $ Live.serveRpc liveState port) ] -- POST only, like production
         <|> route [ ("_patch", servePatch sentryCache memory) ] -- @LAMDERA live session hot patches, see Lamdera.HotPatch
         <|> route [ ("_c", Lamdera.Repl.serve root Live.jsonResponse Live.error404) ]
         <|> Live.openEditorHandler root

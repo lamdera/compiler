@@ -652,12 +652,14 @@ serveRpc (mClients, mLeader, mChan, beState) port = do
   mEndpoint <- getParam "endpoint"
   rbody <- readRequestBody _10MB
   mSid <- getCookie "sid"
-  requestHeaders :: [(BS.ByteString, BS.ByteString)] <- fmap (\(cs, s) -> (CI.original cs, s)) <$> listHeaders <$> getRequest
+  requestHeaders :: [(BS.ByteString, BS.ByteString)] <- fmap (\(cs, s) -> (CI.foldedCase cs, s)) <$> listHeaders <$> getRequest
 
   -- E.chars perfoms character escaping, as header values can often have " within them
-  let requestHeadersJson = requestHeaders & fmap (Ext.Common.bsToUtf8 *** (E.chars . Ext.Common.bsToString)) & E.object
+  let requestHeadersJson = requestHeaders & nodeRequestHeaders & fmap (Ext.Common.bsToUtf8 *** (E.chars . Ext.Common.bsToString)) & E.object
 
-  contentType :: Maybe BS.ByteString <- getHeader "Content-Type" <$> getRequest
+  -- Just the media type, so `application/json; charset=utf-8` is JSON like it is for production's body parsers
+  contentType :: Maybe BS.ByteString <-
+    fmap (TE.encodeUtf8 . T.toLower . T.strip . T.takeWhile (/= ';') . TE.decodeUtf8) . getHeader "Content-Type" <$> getRequest
 
   debug $ "RPC:↘️ " ++ show (contentType, mEndpoint, mSid, rbody)
 
@@ -720,18 +722,24 @@ serveRpc (mClients, mLeader, mChan, beState) port = do
           let
             -- Decoded with aeson rather than Json.Decode: that parser is written for elm.json and
             -- rejects negative and fractional numbers, which a response value can hold (lamdera/compiler#108).
-            decoder :: Aeson.Value -> Aeson.Parser (Int, BS.ByteString, [(Text, Text)], (String, B.Builder))
+            decoder :: Aeson.Value -> Aeson.Parser (Int, BS.ByteString, [(Text, Text)], RpcResponseBody)
             decoder =
               Aeson.withObject "rpc response" $ \o -> do
                 statusCode <- o Aeson..:? "c" Aeson..!= 200
                 statusText <- o Aeson..:? "ct" Aeson..!= "OK"
                 headers <- o Aeson..:? "h" Aeson..!= AesonKeyMap.empty
-                body <-
-                  case (AesonKeyMap.lookup "i" o, AesonKeyMap.lookup "v" o, AesonKeyMap.lookup "vs" o) of
-                    (Just v, _, _) -> pure ("i", A.fromEncoding (Aeson.toEncoding v)) -- Bytes
-                    (_, Just v, _) -> pure ("v", A.fromEncoding (Aeson.toEncoding v)) -- Json.Value
-                    (_, _, Just v) -> Aeson.withText "vs" (\t -> pure ("vs", TE.encodeUtf8Builder t)) v -- String
-                    _ -> fail "expected one of the fields i, v or vs"
+                bytes <- o Aeson..:? "i"
+                string <- o Aeson..:? "vs"
+                -- live.js serialises the Json.Value with the browser's JSON.stringify, the same
+                -- function the production runtime's res.json uses, so numbers come out identically
+                json <- o Aeson..:? "vj"
+                let
+                  -- Same precedence as the production runtime (runtime/backend.js)
+                  body =
+                    case (bytes, string) of
+                      (Just ints, _) -> RpcBytes (BS.pack (fmap fromIntegral (ints :: [Int])))
+                      (_, Just s) -> RpcString s
+                      _ -> RpcJson json
                 pure
                   ( statusCode
                   , Ext.Common.textToBs statusText
@@ -741,22 +749,41 @@ serveRpc (mClients, mLeader, mChan, beState) port = do
 
             decodeResult = Aeson.eitherDecodeStrict (TE.encodeUtf8 chanText) >>= Aeson.parseEither decoder
           case decodeResult of
-            Right (statusCode, statusText, headers, (bodyType, bodyEncoded)) -> do
+            Right (statusCode, statusText, headers, body) -> do
+              let
+                isHeader name (key, _) = T.toLower key == name
 
-              let response = TL.toStrict $ TLE.decodeUtf8 $ B.toLazyByteString bodyEncoded
-              debugT $ "RPC:↙️  response:" <> response
+                -- Production blocks Set-Cookie from RPC responses, so cookies can't be stuffed across *.lamdera.app
+                (blockedCookies, appHeaders) = headers & List.partition (isHeader "set-cookie")
+
+                appContentType = appHeaders & List.find (isHeader "content-type") & fmap (expressSetContentType . snd)
+
+                -- The Content-Type express ends up sending: res.end for bytes leaves it as is,
+                -- res.send and res.json default it and force the charset to utf-8
+                (contentType, bodyBuilder, bodyLog) =
+                  case body of
+                    RpcBytes bs ->
+                      (appContentType & fromMaybe "application/octet-stream", B.byteString bs, "[bytes]")
+                    RpcString s ->
+                      (appContentType & fromMaybe "text/html" & expressSetCharsetUtf8, TE.encodeUtf8Builder s, s)
+                    RpcJson j ->
+                      (appContentType & fromMaybe "application/json" & expressSetCharsetUtf8, j & maybe mempty TE.encodeUtf8Builder, j & fromMaybe "")
+
+              debugT $ "RPC:↙️  response:" <> bodyLog
               debug $ show (statusCode, statusText)
-              onlyWhen (bodyType == "i") (modifyResponse $ setContentType "application/octet-stream")
-              onlyWhen (bodyType == "v") (modifyResponse $ setContentType "application/json; charset=utf-8")
-              onlyWhen (bodyType == "vs") (modifyResponse $ setContentType "text/plain; charset=utf-8")
-
               debug $ show headers
-              headers & mapM (\(key, value) ->
-                  modifyResponse $ setHeader (Ext.Common.textToBs key & CI.mk) (Ext.Common.textToBs value)
+
+              blockedCookies & mapM_ (\(key, value) ->
+                  liftIO $ atomicPutStrLn $ T.unpack $ "Blocked Set-Cookie header from RPC response: " <> key <> ": " <> value
                 )
 
+              appHeaders & filter (not . isHeader "content-type") & mapM_ (\(key, value) ->
+                  modifyResponse $ setHeader (Ext.Common.textToBs key & CI.mk) (Ext.Common.textToBs value)
+                )
+              modifyResponse $ setContentType (Ext.Common.textToBs contentType)
+
               modifyResponse $ setResponseStatus statusCode statusText
-              writeBuilder bodyEncoded
+              writeBuilder bodyBuilder
 
             Left jsonProblem -> do
               debugT $ "😢 rpc response decoding failed: " <> T.pack jsonProblem <> "\n" <> chanText
@@ -765,12 +792,79 @@ serveRpc (mClients, mLeader, mChan, beState) port = do
 
         Nothing -> do
           debugT $ "⏰ RPC timed out for:" <> requestPayload
-          writeBuilder $ B.byteString $ TE.encodeUtf8 $ "error:timeout:" <> show_ seconds <> "s"
+          -- What production answers when the app doesn't respond within 10s
+          modifyResponse $ setResponseStatus 503 "Service Unavailable"
+          modifyResponse $ setContentType "application/json; charset=utf-8"
+          writeBuilder "{\"error\":{}}"
 
 
     Nothing -> do
       debug "RPC: no active leader"
       error503 $ B.string8 $ "it appears no browser instances are running! Please open http://localhost:" <> show port <> " in a browser."
+
+
+-- Request headers the way node's req.headers has them, which is what the app gets in production:
+-- names lowercased, and a repeated header joined, except the ones node keeps only the first of
+nodeRequestHeaders :: [(BS.ByteString, BS.ByteString)] -> [(BS.ByteString, BS.ByteString)]
+nodeRequestHeaders headers =
+  let
+    firstOnly =
+      [ "age", "authorization", "content-length", "content-type", "etag", "expires", "from", "host"
+      , "if-modified-since", "if-unmodified-since", "last-modified", "location", "max-forwards"
+      , "proxy-authorization", "referer", "retry-after", "server", "user-agent"
+      ]
+
+    merge acc (key, value) =
+      case lookup key acc of
+        Nothing -> acc ++ [(key, value)]
+        Just existing
+          | key `elem` firstOnly -> acc
+          | otherwise ->
+              let joined = existing <> (if key == "cookie" then "; " else ", ") <> value
+              in acc & fmap (\(k, v) -> if k == key then (k, joined) else (k, v))
+  in
+  -- (Snap lists a repeated header's values newest first)
+  List.foldl' merge [] (reverse headers)
+
+
+data RpcResponseBody
+  = RpcBytes BS.ByteString
+  | RpcString Text
+  | RpcJson (Maybe Text) -- Nothing when the Json.Value was undefined, which res.json sends as an empty body
+
+
+-- What express's res.set does to a Content-Type an app sets: a text or JSON type with no charset gets utf-8
+expressSetContentType :: Text -> Text
+expressSetContentType value =
+  let
+    hasCharset =
+      value & T.splitOn ";" & drop 1
+        & any (\param -> param & T.stripStart & T.stripPrefix "charset" & maybe False (T.isPrefixOf "=" . T.stripStart))
+
+    mediaType = value & T.takeWhile (/= ';')
+
+    isUtf8Type =
+      "text/" `T.isPrefixOf` mediaType
+        || "application/javascript" `T.isPrefixOf` mediaType
+        || "application/json" `T.isPrefixOf` mediaType
+  in
+  if not hasCharset && isUtf8Type then value <> "; charset=utf-8" else value
+
+
+-- What express's res.send and res.json do to the Content-Type of a string body: re-format it with charset=utf-8
+expressSetCharsetUtf8 :: Text -> Text
+expressSetCharsetUtf8 value =
+  case T.splitOn ";" value of
+    [] -> value
+    mediaType : params ->
+      let
+        parsedParams =
+          params
+            & fmap (\param -> param & T.breakOn "=" & (\(k, v) -> (k & T.strip & T.toLower, v & T.drop 1 & T.strip)))
+            & filter (\(k, _) -> k /= "" && k /= "charset")
+      in
+      ((mediaType & T.strip & T.toLower) : (("charset", "utf-8") : parsedParams & List.sortOn fst & fmap (\(k, v) -> k <> "=" <> v)))
+        & T.intercalate "; "
 
 
 -- andThen :: (a -> D.Decoder e b) -> D.Decoder e a -> D.Decoder e b

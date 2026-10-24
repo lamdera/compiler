@@ -320,6 +320,12 @@ window.setupApp = function(name, elid) {
           }, 10000)
           .then((result) => {
             app.ports.rpcOut.unsubscribe(returnHandler)
+            // Serialised here with JSON.stringify, as production's res.json does, so the
+            // number formatting matches exactly (aeson would print 1.5e300 as 301 digits)
+            if (response.v !== undefined) {
+              response.vj = JSON.stringify(response.v)
+              delete response.v
+            }
             msgEmitter(response)
           })
           .catch((error) => {
