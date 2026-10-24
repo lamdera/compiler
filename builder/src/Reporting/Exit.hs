@@ -2204,6 +2204,7 @@ toModuleNameConventionTable srcDir names =
 data Generate
   = GenerateCannotLoadArtifacts
   | GenerateCannotOptimizeDebugValues Module.Name [Module.Name]
+  | GenerateMissingLamderaCodecs [String] -- @LAMDERA
 
 
 toGenerateReport :: Generate -> Help.Report
@@ -2211,6 +2212,17 @@ toGenerateReport problem =
   case problem of
     GenerateCannotLoadArtifacts ->
       corruptCacheReport
+
+    -- @LAMDERA
+    GenerateMissingLamderaCodecs uses ->
+      Help.report "MISSING DEPENDENCY" Nothing
+        "These pass `Bytes` between Elm and JavaScript:"
+        [ D.indent 4 $ D.red $ D.vcat $ map D.fromChars uses
+        , D.reflow $
+            "Sending `Bytes` through ports and flags is something Lamdera adds to Elm, and it\
+            \ needs the lamdera/codecs package, which this project does not depend on. Add it with:"
+        , D.indent 4 $ D.green "lamdera install lamdera/codecs"
+        ]
 
     GenerateCannotOptimizeDebugValues m ms ->
       Help.report "DEBUG REMNANTS" Nothing

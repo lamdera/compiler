@@ -15,6 +15,7 @@ import qualified Data.ByteString.Builder as B
 import qualified Data.Map as Map
 import qualified Data.Map.Utils as Map
 import qualified Data.Maybe as Maybe
+import qualified Data.Set as Set -- @LAMDERA
 import qualified Data.NonEmptyList as NE
 
 import qualified ThreadSafe.Fork as Fork
@@ -40,6 +41,7 @@ import qualified Root as R
 import Lamdera ((&))
 import qualified Lamdera
 import qualified Lamdera.AppConfig
+import qualified Lamdera.CompileMeta -- @LAMDERA checkForLamderaCodecs
 import qualified Ext.MemoryCache as MemoryCache -- @LAMDERA the lamdera live session
 import Data.Dynamic (fromDynamic, toDyn) -- @LAMDERA
 import Control.Exception (evaluate) -- @LAMDERA
@@ -66,6 +68,7 @@ debug stuff details (Build.Artifacts pkg ifaces roots modules) =
       let graph_ = objectsToGlobalGraph objects
       graph <- Task.io $ Lamdera.AppConfig.injectConfig graph_
       let mains = gatherMains pkg objects roots
+      checkForLamderaCodecs graph mains -- @LAMDERA
       esmEnabled <- Task.io $ Lamdera.useEsm
       return $ JS.generate mode graph mains
         & Lamdera.alternativeImplementationWhen esmEnabled
@@ -79,6 +82,7 @@ dev stuff details (Build.Artifacts pkg _ roots modules) =
       let graph_ = objectsToGlobalGraph objects
       graph <- Task.io $ Lamdera.AppConfig.injectConfig graph_
       let mains = gatherMains pkg objects roots
+      checkForLamderaCodecs graph mains -- @LAMDERA
       esmEnabled <- Task.io $ Lamdera.useEsm
       -- @LAMDERA with a `lamdera live` session (either backing) reuse the JS of definitions that did not change
       memory <- Task.io $ MemoryCache.forStuff stuff
@@ -112,6 +116,7 @@ prod stuff details (Build.Artifacts pkg _ roots modules) =
                    & Lamdera.alternativeImplementationWhen longNamesEnabled
                        (Mode.Prod (Mode.legibleFieldNames graph))
       let mains = gatherMains pkg objects roots
+      checkForLamderaCodecs graph mains -- @LAMDERA
       esmEnabled <- Task.io $ Lamdera.useEsm
       return $ JS.generate mode graph mains
         & Lamdera.alternativeImplementationWhen esmEnabled
@@ -136,6 +141,61 @@ checkForDebugUses (Objects _ locals) =
   case Map.keys (Map.filter Nitpick.hasDebugUses locals) of
     []   -> return ()
     m:ms -> Task.throw (Exit.GenerateCannotOptimizeDebugValues m ms)
+
+
+
+-- @LAMDERA CHECK FOR LAMDERA CODECS
+
+
+{-| Bytes in a port or in flags is a Lamdera addition, converted at the boundary by
+helpers in lamdera/codecs (see Optimize.Port). Lamdera apps always have that package
+through lamdera/core, but other projects compiled with lamdera might not, and code
+generation then crashed on the missing definition (lamdera/compiler#26, #59).
+Only what main reaches counts, as code generation drops the rest.
+-}
+checkForLamderaCodecs :: Opt.GlobalGraph -> Map.Map ModuleName.Canonical Opt.Main -> Task ()
+checkForLamderaCodecs graph mains =
+  let
+    nodes = Opt._g_nodes graph
+
+    missing =
+      Set.fromList
+        [ Opt.Global ModuleName.lamderaWire3 (N.fromChars "encodeBytes_")
+        , Opt.Global ModuleName.lamderaWire3 (N.fromChars "decodeBytes_")
+        ]
+        & Set.filter (\global -> Map.notMember global nodes)
+
+    reach seen worklist =
+      case worklist of
+        [] -> seen
+        global : rest
+          | Set.member global seen -> reach seen rest
+          | otherwise ->
+              reach (Set.insert global seen)
+                (Set.toList (Lamdera.CompileMeta.nodeDeps (Map.lookup global nodes)) ++ rest)
+
+    needingCodecs =
+      reach Set.empty (fmap (\home -> Opt.Global home N.main) (Map.keys mains))
+        & Set.toList
+        & Maybe.mapMaybe (\global ->
+            case Map.lookup global nodes of
+              Just node
+                | not (Set.disjoint missing (Lamdera.CompileMeta.nodeDeps (Just node))) ->
+                    Just (describe global node)
+              _ ->
+                Nothing
+          )
+
+    describe (Opt.Global (ModuleName.Canonical _ home) name) node =
+      case node of
+        Opt.PortIncoming _ _ -> "port `" <> N.toChars name <> "` in " <> Module.toChars home
+        Opt.PortOutgoing _ _ -> "port `" <> N.toChars name <> "` in " <> Module.toChars home
+        _ | name == N.main -> "the flags of `main` in " <> Module.toChars home
+        _ -> Module.toChars home <> "." <> N.toChars name
+  in
+  if Set.null missing || null needingCodecs
+    then return ()
+    else Task.throw (Exit.GenerateMissingLamderaCodecs needingCodecs)
 
 
 
