@@ -37,8 +37,8 @@ import qualified Lamdera.Wire3.Helpers
 import Lamdera.Evergreen.MigrationGeneratorHelpers
 import Lamdera.Evergreen.MigrationSpecialCases
 
-betweenVersions :: CoreTypeDiffs -> Int -> Int -> String -> IO Text
-betweenVersions coreTypeDiffs oldVersion newVersion root = do
+betweenVersions :: Bool -> CoreTypeDiffs -> Int -> Int -> String -> IO Text
+betweenVersions destructiveExceptBackend coreTypeDiffs oldVersion newVersion root = do
     let
         paths = NE.List ("src/Evergreen/V" <> show oldVersion <> "/Types.elm") ["src/Evergreen/V" <> show newVersion <> "/Types.elm"]
         moduleNameString = "Evergreen.V" <> show newVersion <> ".Types"
@@ -50,15 +50,15 @@ betweenVersions coreTypeDiffs oldVersion newVersion root = do
       case Map.lookup (PrimModule.fromChars moduleNameString) interfaces of
         Just interface -> do
           debug $ "starting generatefor"
-          generateFor coreTypeDiffs oldVersion newVersion interfaces (interfaces Sanity.! (PrimModule.fromChars $ "Evergreen.V" <> show newVersion <> ".Types"))
+          generateFor destructiveExceptBackend coreTypeDiffs oldVersion newVersion interfaces (interfaces Sanity.! (PrimModule.fromChars $ "Evergreen.V" <> show newVersion <> ".Types"))
 
         Nothing ->
           error $ "Fatal: could not find the module `" <> moduleNameString <> "`, please report this issue in Discord with your project code."
 
     pure $ Ext.ElmFormat.formatOrPassthrough res
 
-generateFor :: CoreTypeDiffs -> Int -> Int -> Interfaces -> Interface.Interface -> IO Text
-generateFor coreTypeDiffs oldVersion newVersion interfaces iface_Types = do
+generateFor :: Bool -> CoreTypeDiffs -> Int -> Int -> Interfaces -> Interface.Interface -> IO Text
+generateFor destructiveExceptBackend coreTypeDiffs oldVersion newVersion interfaces iface_Types = do
   let
     moduleName :: ModuleName.Canonical
     moduleName = ModuleName.Canonical (Pkg.Name "author" "project") (PrimModule.fromChars $ "Evergreen.V" <> show newVersion <> ".Types")
@@ -69,7 +69,7 @@ generateFor coreTypeDiffs oldVersion newVersion interfaces iface_Types = do
     coreMigrations =
       coreTypeDiffs
         & fmap (\(t, oldHash, newHash) ->
-            (t, coreTypeMigration (oldHash /= newHash) oldVersion newVersion interfaces moduleName t iface_Types)
+            (t, coreTypeMigration (oldHash /= newHash) (destructiveExceptBackend && TN.nameToChars t /= "BackendModel") oldVersion newVersion interfaces moduleName t iface_Types)
         )
   pure $ migrationsToFile migrationModuleText oldVersion newVersion coreMigrations moduleName
 
@@ -133,8 +133,9 @@ helpfulInformation =
   |]
 
 
-coreTypeMigration :: Bool -> Int -> Int -> Interfaces -> ModuleName.Canonical -> TN.Name -> Interface.Interface -> Migration
-coreTypeMigration typeDidChange oldVersion newVersion interfaces newModule typeName interface = do
+-- `destructive`: a change resets the model or ignores old msgs, as with `lamdera check --destructive-migration`
+coreTypeMigration :: Bool -> Bool -> Int -> Int -> Interfaces -> ModuleName.Canonical -> TN.Name -> Interface.Interface -> Migration
+coreTypeMigration typeDidChange destructive oldVersion newVersion interfaces newModule typeName interface = do
   let
     recursionIdentifier :: (ModuleName.Canonical, TN.Name)
     recursionIdentifier = (newModule, typeName)
@@ -164,7 +165,10 @@ coreTypeMigration typeDidChange oldVersion newVersion interfaces newModule typeN
         , lowerFirstLetter_ $ nameToText typeName, " old =\n    ", migration
         ]
 
-  if typeDidChange
+  if typeDidChange && destructive
+    then
+      (MigrationNested (migrationWrapper (destructiveForType typeName)) Set.empty Map.empty)
+    else if typeDidChange
     then
       case (findDef oldModule typeName interfaces, findDef newModule typeName interfaces) of
         (Just (Alias mOld typeNameOld aliasOld), Just (Alias mNew typeNameNew aliasNew)) -> do

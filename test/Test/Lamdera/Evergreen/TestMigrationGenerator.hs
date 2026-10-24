@@ -53,6 +53,7 @@ suite = tests
   [
     scope "migration-scenarios" testExamples
   , scope "e2e migration: 1 -> 2" $ testMigrationGeneration "scenario-migration-generate" 1 2
+  , scope "e2e migration: 1 -> 2, --destructive-migration-except-backend" testDestructiveExceptBackend
   , scope "containsUserTypes" testContainsUserTypes
   ]
 
@@ -71,7 +72,7 @@ testMigrationGeneration _scenario oldVersion newVersion = do
         ["x","x","x","o","o","o"]
 
   mock <- io $ Lamdera.Relative.readFile $ "test/scenario-migration-generate/src/Evergreen/Migrate/V" <> show newVersion <> ".elm"
-  result <- io $ MigrationGenerator.betweenVersions typeCompares oldVersion newVersion projectRoot
+  result <- io $ MigrationGenerator.betweenVersions False typeCompares oldVersion newVersion projectRoot
 
   _ <- io $ Lamdera.Relative.writeFile ("test/scenario-migration-generate/src/Evergreen/Migrate/VX" <> show newVersion <> ".elm") result
 
@@ -89,6 +90,38 @@ testMigrationGeneration _scenario oldVersion newVersion = do
   compilationStdout `expectTextContains`
     -- "This `Unimplemented` value is a:\n\n    UnimplementedMigration"
     "This `Unimplemented` value is a:"
+
+
+-- lamdera/compiler#93: only BackendModel gets a generated migration, the other changed types are dropped
+-- (never MsgUnchanged/ModelUnchanged, whose old encoding the new decoder would get)
+testDestructiveExceptBackend :: Test ()
+testDestructiveExceptBackend = do
+  projectRoot <- io $ Lamdera.Relative.requireDir "test/scenario-migration-generate"
+
+  let
+      typeCompares = zipWith3
+        (\label local prod -> (label, T.unpack local, T.unpack prod))
+        (Lamdera.Types.core)
+        ["o","o","o","o","o","o"]
+        ["x","x","x","o","o","o"]
+
+  normal <- io $ MigrationGenerator.betweenVersions False typeCompares 1 2 projectRoot
+  result <- io $ MigrationGenerator.betweenVersions True typeCompares 1 2 projectRoot
+
+  let
+    definition name text =
+      text & T.splitOn ("\n\n\n" <> name <> " :") & drop 1 & take 1 & T.concat & T.splitOn "\n\n\n" & take 1 & T.concat
+
+  scope "backendModel is migrated as usual" $
+    expectEqual (definition "backendModel" normal) (definition "backendModel" result)
+  scope "frontendModel resets" $
+    definition "frontendModel" result `expectTextContains` "frontendModel old =\n    ModelReset"
+  scope "frontendMsg ignores old values" $
+    definition "frontendMsg" result `expectTextContains` "frontendMsg old =\n    MsgOldValueIgnored"
+  scope "unchanged types stay unchanged" $
+    definition "toBackend" result `expectTextContains` "toBackend old =\n    MsgUnchanged"
+  scope "no frontend migration functions" $
+    expect $ not $ T.isInfixOf "migrate_Types_FrontendModel" result
 
 
 testContainsUserTypes = do
