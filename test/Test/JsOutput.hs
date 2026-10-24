@@ -201,4 +201,32 @@ suite =
 
         Nothing ->
           crash "JS output could not be read."
+    , scope "Bytes in ports and flags without lamdera/codecs is a compile error, not a crash (lamdera/compiler#26, #59)" $ do
+      project <- io $ Lamdera.Relative.requireDir "test/bytes-ports-without-codecs"
+      let
+        elmHome = project ++ "/elm-home"
+        elmStuff = project ++ "/elm-stuff"
+
+      io $ rmdir elmHome >> rmdir elmStuff
+      actual <- catchOutput $
+        Test.Helpers.withElmHome elmHome $
+          Ext.Common.withProjectRoot project $
+            Make.run ["src/Generate.elm"] $
+              Make.Flags
+                { _debug = False
+                , _optimize = False
+                , _output = Just (Make.JS "elm-stuff/tmp.js")
+                , _report = Nothing
+                , _docs = Nothing
+                , _noWire = True
+                , _optimizeLegible = False
+                , _esm = False
+                }
+      io $ rmdir elmHome >> rmdir elmStuff
+
+      expectTextContains actual "port `inc` in Generate"
+      expectTextContains actual "port `out` in Generate"
+      expectTextContains actual "the flags of `main` in Generate"
+      expectTextContains actual "lamdera install lamdera/codecs"
+      expectTextDoesNotContain actual "unable to find"
     ]
