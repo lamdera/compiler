@@ -515,6 +515,15 @@ canonicalToDiffableType targetName interfaces recursionSet canonical tvarMap =
         -- ((ModuleName.Canonical (Pkg.Name "elm-explorations" _) (N.Name n)), _) ->
         --   DError $ "❗️unhandled elm-explorations type: " <> (T.pack $ show moduleName) <> ":" <> (T.pack $ show name)
 
+        -- A package that gets no generated codecs, and a type of it the cases above don't handle:
+        -- the Wire codecs encode and decode it as a failure (hasNoGeneratedCodec), so it must not be
+        -- let through to deploy. Bytes is the one supported type from these that is hashed below.
+        (author, pkg, module_, tipe)
+          | not (shouldHaveCodecsGenerated (ModuleName._package moduleName))
+              && (author, pkg, module_, tipe) /= ("elm", "bytes", "Bytes", "Bytes") ->
+              DError $ "must not contain `" <> tipe <> "` from " <> author <> "/" <> pkg <> ":" <> module_
+                <> ", which Lamdera can't send or store yet"
+
         (author, pkg, module_, tipe) ->
           -- Anything else must not be a core type, recurse to find it
 
