@@ -170,7 +170,7 @@ reactor =
         \ the refresh button in the browser to recompile things."
 
     reactorFlags =
-      flags (\port -> Develop.Flags port False False)
+      flags (\port -> Develop.Flags port Nothing False False)
         |-- flag "port" port_ "The port of the server (default: 8000)"
   in
   Terminal.Command "reactor" (Common summary) details example noArgs reactorFlags Develop.run

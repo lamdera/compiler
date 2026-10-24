@@ -336,6 +336,7 @@ Executable lamdera
         Lamdera.CompileMeta
         Lamdera.CLI
         Lamdera.CLI.Live
+        Lamdera.CLI.LocalOnly
         Lamdera.CLI.Login
         Lamdera.CLI.Check
         Lamdera.CLI.Deploy

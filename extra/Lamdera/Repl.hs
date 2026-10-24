@@ -31,6 +31,7 @@ import qualified Lamdera
 import qualified Lamdera.Relative
 import qualified Ext.Common
 import qualified Lamdera.Version
+import qualified Lamdera.CLI.LocalOnly as LocalOnly
 
 
 
@@ -146,17 +147,20 @@ serveFiles root jsonResponse error404 path = do
       | path == "~/.elm"            = elmHome
       | T.isPrefixOf "~/.elm/" path = elmHome </> T.unpack (T.drop 7 path)
       | otherwise                   = root </> T.unpack path
-  exists_ <- Lamdera.liftIO $ Dir.doesPathExist fullpath
-  if exists_
-    then do
-      isDir_ <- Lamdera.liftIO $ Dir.doesDirectoryExist fullpath
+  -- @LAMDERA only inside the project and ~/.elm, the two the REPL mounts: `root </>` an
+  -- absolute path is that path, so /_c//etc/hosts would otherwise read /etc/hosts
+  allowed <- Lamdera.liftIO $ LocalOnly.resolveWithin [root, elmHome] fullpath
+  exists_ <- Lamdera.liftIO $ maybe (pure False) Dir.doesPathExist allowed
+  case (allowed, exists_) of
+    (Just resolved, True) -> do
+      isDir_ <- Lamdera.liftIO $ Dir.doesDirectoryExist resolved
       if isDir_
         then do
-          dir <- Lamdera.liftIO $ serveDir fullpath
+          dir <- Lamdera.liftIO $ serveDir resolved
           jsonResponse $ JE.encode dir
         else do
-          S.sendFile fullpath
-    else do
+          S.sendFile resolved
+    _ ->
       error404 "path not found"
 
 

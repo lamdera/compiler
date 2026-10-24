@@ -46,6 +46,7 @@ import Lamdera
 import qualified Lamdera.CLI.Live as Live
 import qualified Lamdera.Constrain
 import qualified Lamdera.Repl
+import qualified Lamdera.CLI.LocalOnly as LocalOnly
 import qualified Lamdera.ReverseProxy
 import qualified Lamdera.TypeHash
 import qualified Lamdera.PostCompile
@@ -68,6 +69,7 @@ import qualified Reporting.Error as Error
 data Flags =
   Flags
     { _port :: Maybe Int
+    , _bind :: Maybe String -- @LAMDERA lamdera live --bind, see Lamdera.CLI.LocalOnly
     , _open :: Bool
     , _memory :: Bool -- @LAMDERA lamdera live --memory, see Ext.MemoryCache
     }
@@ -81,12 +83,16 @@ run () flags = do
 
 
 runWithRoot :: FilePath -> Flags -> IO ()
-runWithRoot root (Flags maybePort shouldOpenBrowser inMemory) =
+runWithRoot root (Flags maybePort maybeBind shouldOpenBrowser inMemory) =
   do
       Lamdera.setLiveMode True
       let port = maybe 8000 id maybePort
+      -- @LAMDERA only this computer unless --bind says otherwise (Snap's default is every interface)
+      let bind = maybe "127.0.0.1" id maybeBind
       liftIO $ Lamdera.stdoutSetup
       atomicPutStrLn $ "Go to http://localhost:" ++ show port ++ " to see your project dashboard."
+      onlyWhen (not $ LocalOnly.isLoopbackBind bind) $
+        atomicPutStrLn $ "Also serving the app on " ++ bind ++ ":" ++ show port ++ " (--bind), reachable from other devices. The REPL and file tools stay on this computer."
 
       Lamdera.setProjectRoot root
 
@@ -165,7 +171,10 @@ runWithRoot root (Flags maybePort shouldOpenBrowser inMemory) =
 
       Live.withMemoryFlush root memory $
        Live.withEnd liveState $
-       httpServe (config port) $ gcatchlog "general" $
+       httpServe (config bind port) $ gcatchlog "general" $
+        -- @LAMDERA /_c and /_x/* only for this computer, see Lamdera.CLI.LocalOnly
+        LocalOnly.forbidRemoteDevTools
+        <|>
         -- Add /public/* as if it were /* to mirror production, but still render .elm files as an Elm app first
         Live.serveLamderaPublicFiles root serveApp
         <|> (serveFiles root sentryCache)
@@ -202,9 +211,9 @@ gcatchlog tag snap =
 
 
 
-config :: Int -> Config Snap a
-config port =
-  setVerbose True $ setPort port $
+config :: String -> Int -> Config Snap a
+config bind port =
+  setVerbose True $ setPort port $ setBind (BS8.pack bind) $ -- @LAMDERA
     -- setAccessLog ConfigNoLog $ setErrorLog ConfigNoLog $ defaultConfig
     -- Unsure why errors aren't logged in original impl, exceptions get eaten otherwise...
     setAccessLog (ConfigIoLog Live.logger) $ setErrorLog (ConfigIoLog Live.logger) $ defaultConfig

@@ -50,6 +50,7 @@ import qualified Data.UUID.V4 as UUID
 import BroadcastChan
 import Control.Timeout (timeout)
 import qualified Network.WebSockets.Snap as WS
+import qualified Lamdera.CLI.LocalOnly as LocalOnly
 import SocketServer
 
 import System.Entropy (getEntropy)
@@ -407,11 +408,13 @@ serveExperimentalRead root path = do
     fullpath :: FilePath
     fullpath = root </> (T.unpack path)
   debug $ "_x/read: " ++ show fullpath
-  exists_ <- liftIO $ Dir.doesFileExist fullpath
-  if exists_
-    then do
-      sendFile fullpath
-    else do
+  -- @LAMDERA only inside the project, see Lamdera.CLI.LocalOnly
+  allowed <- liftIO $ LocalOnly.resolveWithin [root] fullpath
+  exists_ <- liftIO $ maybe (pure False) Dir.doesFileExist allowed
+  case (allowed, exists_) of
+    (Just resolved, True) -> do
+      sendFile resolved
+    _ -> do
       error404 "file not found"
 
 
@@ -424,6 +427,10 @@ serveExperimentalWrite root path = do
     fullpath :: FilePath
     fullpath = root </> (T.unpack path)
   debug $ "_x/write: " ++ show fullpath
+
+  -- @LAMDERA only inside the project, see Lamdera.CLI.LocalOnly
+  allowed <- liftIO $ LocalOnly.resolveWithin [root] fullpath
+  onlyWhen (allowed == Nothing) $ error400PlainText "Can only write inside the project"
 
   contentType :: Maybe BS.ByteString <- getHeader "Content-Type" <$> getRequest
 
@@ -451,7 +458,9 @@ serveExperimentalList root path = do
     fullpath :: FilePath
     fullpath = root </> (T.unpack path)
   debug $ "_x/list: " ++ show fullpath
-  exists_ <- liftIO $ Dir.doesDirectoryExist fullpath
+  -- @LAMDERA only inside the project, see Lamdera.CLI.LocalOnly
+  allowed <- liftIO $ LocalOnly.resolveWithin [root] fullpath
+  exists_ <- liftIO $ maybe (pure False) Dir.doesDirectoryExist allowed
   if exists_
     then do
       files <- liftIO $ Dir.getDirectoryContents fullpath
@@ -469,7 +478,9 @@ serveEditorOpen root path row column = do
   debug $ "_x/editor received: " ++ show path
   let fullpath = root </> path
   debug $ "_x/editor: " ++ show fullpath
-  exists_ <- liftIO $ Dir.doesFileExist fullpath
+  -- @LAMDERA only inside the project, see Lamdera.CLI.LocalOnly
+  allowed <- liftIO $ LocalOnly.resolveWithin [root] fullpath
+  exists_ <- liftIO $ maybe (pure False) Dir.doesFileExist allowed
   if exists_
     then do
       tryOpenInDetectedEditor root fullpath row column

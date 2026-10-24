@@ -38,6 +38,7 @@ live =
     liveFlags =
       flags Develop.Flags
         |-- flag "port" port_ "The port of the server (default: 8000)"
+        |-- flag "bind" bind_ "The address to listen on (default: 127.0.0.1, only this computer). Use --bind=0.0.0.0 to open the app from other devices on your network, like your phone. The REPL and file tools stay available only on this computer."
         |-- onOff "open" "Open a web browser to view the local server"
         |-- onOff "memory" "Keep the build artifacts and the sources only in memory between rebuilds, instead of writing elm-stuff on every rebuild and reading the sources from disk. elm-stuff is written on exit. (Either way `lamdera live` keeps what it built between rebuilds, reuses what did not change and sends hot patches; this only changes where it is kept.)"
   in
@@ -52,6 +53,17 @@ port_ =
     , _parser = readMaybe
     , _suggest = \_ -> return []
     , _examples = \_ -> return ["3000","8000"]
+    }
+
+
+bind_ :: Parser String
+bind_ =
+  Parser
+    { _singular = "address"
+    , _plural = "addresses"
+    , _parser = Just
+    , _suggest = \_ -> return []
+    , _examples = \_ -> return ["127.0.0.1","0.0.0.0"]
     }
 
 
