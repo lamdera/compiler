@@ -14,9 +14,10 @@ import qualified Ext.Common
 import qualified Lamdera.Relative
 import qualified Test.HotPatch as HotPatch
 import qualified Data.Text as T
-import Control.Monad (forM_)
+import Control.Monad (forM_, when)
 import NeatInterpolation (text)
 import qualified System.Environment as Env
+import qualified System.Directory as Dir
 import System.Exit (ExitCode(..))
 import System.FilePath ((</>))
 import qualified System.Process as Process
@@ -250,6 +251,24 @@ suite =
       esmMake dir ["--esm", "--optimize", "--output=Main.mjs"]
       esmCommand dir "node"
         ["--input-type=module", "-e", "import { Elm } from './Main.mjs'; import assert from 'node:assert/strict'; assert.equal(Elm.hot, undefined); assert.ok(Elm.Main.init().ports.ask);"]
+    , scope "ESM rejects explicit and default HTML output" $ esmProject $ \dir -> do
+      forM_ [[], ["--debug"], ["--optimize"], ["--optimize-legible"]] $ \mode ->
+        forM_ [[], ["--output=index.html"]] $ \output -> do
+          let child = (Process.proc "lamdera" (["make", "src/Main.elm", "--no-wire", "--esm"] ++ mode ++ output))
+                { Process.cwd = Just dir }
+          (exit, out, err) <- Process.readCreateProcessWithExitCode child ""
+          when (exit == ExitSuccess || not ("ESM REQUIRES JAVASCRIPT OUTPUT" `T.isInfixOf` T.pack (out ++ err))) $
+            ioError $ userError $ "Expected ESM/HTML rejection:\n" ++ out ++ err
+          exists <- Dir.doesFileExist (dir </> "index.html")
+          when exists $ ioError $ userError "Rejected ESM/HTML compilation wrote index.html"
+      esmMake dir ["--output=index.html"]
+      esmMake dir ["--esm", "--output=/dev/null"]
+      Just source <- readUtf8Text (dir </> "src/Main.elm")
+      writeUtf8 (dir </> "src/Other.elm") (T.replace "port module Main" "port module Other" source)
+      esmCommand dir "lamdera" ["make", "src/Main.elm", "src/Other.elm", "--no-wire", "--esm"]
+      Just javascript <- readUtf8Text (dir </> "elm.js")
+      when (not ("export const Elm" `T.isInfixOf` javascript)) $
+        ioError $ userError "Multiple ESM mains without --output must generate JavaScript"
     ]
 
 

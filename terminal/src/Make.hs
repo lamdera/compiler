@@ -83,7 +83,7 @@ run paths flags@(Flags _ _ _ report _ noWire optimizeLegible esm) =
 
 
 runHelp :: R.Root -> [FilePath] -> Reporting.Style -> Flags -> IO (Either Exit.Make ())
-runHelp root paths style (Flags debug optimize maybeOutput _ maybeDocs _ optimizeLegible _) =
+runHelp root paths style (Flags debug optimize maybeOutput _ maybeDocs _ optimizeLegible esm) =
   R.withRootLock root $ \writer stuff ->
   Task.run $
   do  desiredMode <- getMode debug (optimize || optimizeLegible)
@@ -95,6 +95,10 @@ runHelp root paths style (Flags debug optimize maybeOutput _ maybeDocs _ optimiz
 
         p:ps ->
           do  artifacts <- buildPaths writer style root stuff details (NE.List p ps)
+              case (esm, maybeOutput, getMains artifacts) of
+                (True, Just (Html _), _) -> Task.throw Exit.MakeEsmHtml
+                (True, Nothing, [_]) -> Task.throw Exit.MakeEsmHtml
+                _ -> return ()
               res <- case maybeOutput of
                 Nothing ->
                   case getMains artifacts of
