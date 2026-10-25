@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE QuasiQuotes #-}
 
 module Test.JsOutput where
 
@@ -11,6 +12,15 @@ import Make (Flags(..))
 import qualified Make
 import qualified Ext.Common
 import qualified Lamdera.Relative
+import qualified Test.HotPatch as HotPatch
+import qualified Data.Text as T
+import Control.Monad (forM_)
+import NeatInterpolation (text)
+import qualified System.Environment as Env
+import System.Exit (ExitCode(..))
+import System.FilePath ((</>))
+import qualified System.Process as Process
+import qualified System.IO.Temp as Temp
 
 suite :: Test ()
 suite =
@@ -229,4 +239,68 @@ suite =
       expectTextContains actual "the flags of `main` in Generate"
       expectTextContains actual "lamdera install lamdera/codecs"
       expectTextDoesNotContain actual "unable to find"
+    , scope "ESM named export and stateful hot reload" $ requireBinaryOnPath "node" $ esmProject $ \dir -> do
+      writeUtf8 (dir </> "check.mjs") hotReloadCheck
+      forM_ [[], ["--debug"]] $ \mode -> do
+        HotPatch.editFile (dir </> "src/Leaf.elm") (T.replace "leaf-v2" "leaf-v1")
+        esmMake dir (mode ++ ["--esm", "--output=Main.mjs"])
+        HotPatch.editFile (dir </> "src/Leaf.elm") (T.replace "leaf-v1" "leaf-v2")
+        esmMake dir (mode ++ ["--esm", "--output=Changed.mjs"])
+        esmCommand dir "node" ["check.mjs"]
+      esmMake dir ["--esm", "--optimize", "--output=Main.mjs"]
+      esmCommand dir "node"
+        ["--input-type=module", "-e", "import { Elm } from './Main.mjs'; import assert from 'node:assert/strict'; assert.equal(Elm.hot, undefined); assert.ok(Elm.Main.init().ports.ask);"]
     ]
+
+
+esmProject :: (FilePath -> IO ()) -> Test ()
+esmProject check = do
+  io $ Temp.withSystemTempDirectory "lamdera-esm" $ \dir -> do
+    HotPatch.writeProject dir
+    -- A nontrivial model makes resetting the worker on reload observable.
+    HotPatch.editFile (dir </> "src/Main.elm") $
+      T.replace "Program () () Msg" "Program () Int Msg"
+      . T.replace "( (), Cmd.none )" "( 0, Cmd.none )"
+      . T.replace "( model, answer" "( model + 1, answer"
+      . T.replace "(Leaf.unrelated 1)" "(model + 1)"
+    check dir
+  ok
+
+
+-- Use the CLI in a fresh process: ESM and LDEBUG are sticky process globals.
+esmMake :: FilePath -> [String] -> IO ()
+esmMake dir flags = esmCommand dir "lamdera" (["make", "src/Main.elm", "--no-wire"] ++ flags)
+
+
+esmCommand :: FilePath -> FilePath -> [String] -> IO ()
+esmCommand dir binary args = do
+  environment <- Env.getEnvironment
+  let child = (Process.proc binary args)
+        { Process.cwd = Just dir
+        , Process.env = Just (("LDEBUG", "1") : filter (\(key, _) -> key /= "LDEBUG") environment)
+        }
+  (exit, out, err) <- Process.readCreateProcessWithExitCode child ""
+  case exit of
+    ExitSuccess -> pure ()
+    ExitFailure code -> ioError $ userError $ unwords (binary : args) ++ " failed (" ++ show code ++ "):\n" ++ out ++ err
+
+
+hotReloadCheck :: T.Text
+hotReloadCheck = [text|
+import assert from 'node:assert/strict';
+import { Elm } from './Main.mjs';
+import * as changed from './Changed.mjs';
+assert.equal(typeof Elm.hot?.reload, 'function');
+const app = Elm.Main.init();
+const answers = [];
+app.ports.answer.subscribe(value => answers.push(value));
+const tick = () => new Promise(resolve => setTimeout(resolve, 10));
+app.ports.ask.send('q');
+await tick();
+assert.deepEqual(answers, ['q LEAF-V11']);
+Elm.hot.reload(changed);
+app.ports.ask.send('q');
+await tick();
+assert.deepEqual(answers, ['q LEAF-V11', 'q LEAF-V22']);
+app.stop();
+|]

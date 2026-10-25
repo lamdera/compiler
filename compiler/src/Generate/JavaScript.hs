@@ -723,21 +723,14 @@ generateEsm mode (Opt.GlobalGraph graph_ _) mains =
     graph = Lamdera.Injection.graphModifications mode mains graph_
     state = Map.foldrWithKey (addMain mode graph) emptyState mains
   in
-  Functions.functions
+  "var scope = {};\n"
+  <> Functions.functions
   -- <> perfNote mode -- @NOTE given user never manages JS generation in Lamdera, hide the perf note
   <> stateToBuilder state
-  <> toMainEsmExports mode mains
+  <> toMainExports mode mains
+  <> "\nexport const Elm = scope.Elm;\n"
   <> Lamdera.Injection.source mode mains
   <> "\n" <> Lamdera.Injection.elmPkgJs mode mains <> "\n"
-
-
-toMainEsmExports :: Mode.Mode -> Mains -> B.Builder
-toMainEsmExports mode mains =
-  let
-    exports = generateExports mode (Map.foldrWithKey addToTrie emptyTrie mains)
-  in
-  "export const Elm = " <> exports <> ";"
-
 
 
 -- JS CACHE
