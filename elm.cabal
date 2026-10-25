@@ -512,6 +512,7 @@ Executable lamdera
 Test-Suite lamdera-tests
     type: exitcode-stdio-1.0
     main-is: TestMain.hs
+    build-tool-depends: elm:lamdera
     ghc-options: -O0 -rtsopts -threaded "-with-rtsopts=-N"
     default-language: Haskell2010
     hs-source-dirs:
