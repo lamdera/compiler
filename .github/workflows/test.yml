@@ -39,6 +39,8 @@ jobs:
 
       - name: Set up test environment
         run: |
+          # The migration generator tests format their output with elm-format
+          npm install -g elm-format@0.8.7
           mkdir -p ~/elm-home-elmx-test
           mkdir -p ~/lamdera/overrides/packages
 
