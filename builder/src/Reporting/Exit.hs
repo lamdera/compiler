@@ -1838,6 +1838,7 @@ toRedirectDoc response =
 data Make
   = MakeNoOutline
   | MakeCannotOptimizeAndDebug
+  | MakeEsmHtml
   | MakeBadDetails Details
   | MakeAppNeedsFileNames
   | MakePkgNeedsExposing
@@ -1870,6 +1871,14 @@ makeToReport make =
             "I need to take away information to optimize things, and I need to\
             \ add information to add the debugger. It is impossible to do both\
             \ at once though! Pick just one of those flags and it should work!"
+        ]
+
+    MakeEsmHtml ->
+      Help.report "ESM REQUIRES JAVASCRIPT OUTPUT" Nothing
+        "The --esm flag cannot be used with HTML output."
+        [ D.reflow
+            "Use --output=elm.js to generate an ECMAScript module, or remove --esm\
+            \ to generate HTML."
         ]
 
     MakeBadDetails detailsProblem ->
