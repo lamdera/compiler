@@ -8,7 +8,9 @@ name: Test
 jobs:
   test:
     name: Run tests
-    runs-on: macos-latest
+    # macos-latest moved to macOS 27, whose SDK GHC 9.8.4 cannot link against
+    # ("tapi error: malformed file"); the release builds pin macos-15 too.
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
         with:
