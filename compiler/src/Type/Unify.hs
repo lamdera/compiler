@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings, Rank2Types #-}
 module Type.Unify
   ( Answer(..)
+  , Vars(..)
   , unify
   )
   where
@@ -24,22 +25,49 @@ import qualified Type.UnionFind as UF
 
 
 data Answer
-  = Ok [Variable]
-  | Err [Variable] Error.Type Error.Type
+  = Ok Vars
+  | Err Vars Error.Type Error.Type
+
+
+{-| @LAMDERA The variables a unification made, for the solver to register in a pool.
+
+  _fresh: made by `fresh` (and unifyComparableRecursive), as upstream. The solver
+    introduces them at the current rank, and puts them in the current pool.
+
+  _expanded: made by forceDeferred, expanding a deferred alias body, with the rank of
+    the deferred variable. The solver puts them in the current pool too, so the
+    current let's generalize adjusts their ranks, but leaves their ranks as they are:
+    unification may already have merged them into older classes (lowering the rank of
+    the class), and introducing them at the current rank would raise it again. A class
+    whose rank is raised that way, and whose representative sits in an older pool, is
+    not generalized with the current let (generalize skips redundant variables), so it
+    reaches the older pool's generalize with a rank above that pool's: the "index out
+    of bounds" crash in poolToRankTable.
+-}
+data Vars =
+  Vars
+    { _fresh :: [Variable]
+    , _expanded :: [Variable]
+    }
+
+
+noVars :: Vars
+noVars =
+  Vars [] []
 
 
 unify :: Variable -> Variable -> IO Answer
 unify v1 v2 =
   case guardedUnify v1 v2 of
     Unify k ->
-      k [] onSuccess $ \vars () ->
+      k noVars onSuccess $ \vars () ->
         do  t1 <- Type.toErrorType v1
             t2 <- Type.toErrorType v2
             UF.union v1 v2 errorDescriptor
             return (Err vars t1 t2)
 
 
-onSuccess :: [Variable] -> () -> IO Answer
+onSuccess :: Vars -> () -> IO Answer
 onSuccess vars () =
   return (Ok vars)
 
@@ -56,9 +84,9 @@ errorDescriptor =
 
 newtype Unify a =
   Unify (forall r.
-    [Variable]
-    -> ([Variable] -> a -> IO r)
-    -> ([Variable] -> () -> IO r)
+    Vars
+    -> (Vars -> a -> IO r)
+    -> (Vars -> () -> IO r)
     -> IO r
   )
 
@@ -117,7 +145,7 @@ register :: IO Variable -> Unify Variable
 register mkVar =
   Unify $ \vars ok _ ->
     do  var <- mkVar
-        ok (var:vars) var
+        ok (vars { _fresh = var : _fresh vars }) var
 
 
 mismatch :: Unify a
@@ -223,7 +251,7 @@ outermost rank and is not introduced: it is closed, which is where generalize wo
 leave it. Anything else (the other side names a field this one lacks, or it is not a
 record) goes through forceDeferred as before.
 -}
-unifyDeferredRecord :: [Variable] -> Context -> IO (Maybe ([Variable], Unify ()))
+unifyDeferredRecord :: Vars -> Context -> IO (Maybe (Vars, Unify ()))
 unifyDeferredRecord vars context@(Context _ (Descriptor firstContent _ _ _) _ (Descriptor secondContent _ _ _)) =
   case (firstContent, secondContent) of
     (Deferred d, Structure (Record1 fields ext)) ->
@@ -273,15 +301,19 @@ unifyDeferredRecord vars context@(Context _ (Descriptor firstContent _ _ _) _ (D
 
 {-| @LAMDERA Expand a deferred alias body (see Type.Type.Deferred) into the variables
 upstream would have built when the alias was first turned into variables. The new
-variables are handed back like the ones `fresh` makes, so the solver introduces them
-at the current rank and generalization adjusts their ranks as usual.
+variables used to be handed back like the ones `fresh` makes, so the solver introduced
+them at the current rank and generalization adjusted their ranks as usual. But the
+solver only does that once unification is done, and by then they may have been merged
+into older classes, whose rank that raised (see Vars). They are now handed back as
+`_expanded`, with the rank of the deferred variable, and the solver puts them in the
+current pool without changing their rank, so generalization adjusts them as usual.
 -}
-forceDeferred :: [Variable] -> Variable -> IO [Variable]
+forceDeferred :: Vars -> Variable -> IO Vars
 forceDeferred vars var =
   do  (Descriptor content rank _ _) <- UF.get var
       case content of
         Deferred deferred ->
-          do  created <- newIORef vars
+          do  created <- newIORef (_expanded vars)
               let register content_ =
                     do  v <- UF.fresh (Descriptor content_ rank noMark Nothing)
                         modifyIORef' created (v:)
@@ -289,7 +321,8 @@ forceDeferred vars var =
               real <- Type.expandDeferred register deferred
               (Descriptor realContent realRank _ _) <- UF.get real
               UF.union var real (Descriptor realContent (min rank realRank) noMark Nothing)
-              readIORef created
+              expanded <- readIORef created
+              return (vars { _expanded = expanded })
 
         _ ->
           return vars
@@ -618,7 +651,7 @@ unifyAlias context home name args realVar otherContent =
       merge context Error
 
 
-unifyAliasArgs :: [Variable] -> Context -> [(T.Var,Variable)] -> [(T.Var,Variable)] -> ([Variable] -> () -> IO r) -> ([Variable] -> () -> IO r) -> IO r
+unifyAliasArgs :: Vars -> Context -> [(T.Var,Variable)] -> [(T.Var,Variable)] -> (Vars -> () -> IO r) -> (Vars -> () -> IO r) -> IO r
 unifyAliasArgs vars context args1 args2 ok err =
   case args1 of
     (_,arg1):others1 ->
@@ -726,7 +759,7 @@ unifyStructure context flatType content otherContent =
 -- UNIFY ARGS
 
 
-unifyArgs :: [Variable] -> Context -> [Variable] -> [Variable] -> ([Variable] -> () -> IO r) -> ([Variable] -> () -> IO r) -> IO r
+unifyArgs :: Vars -> Context -> [Variable] -> [Variable] -> (Vars -> () -> IO r) -> (Vars -> () -> IO r) -> IO r
 unifyArgs vars context args1 args2 ok err =
   case args1 of
     arg1:others1 ->
@@ -830,7 +863,7 @@ data RecordStructure =
 
 -- @LAMDERA threads the new variables from expanding deferred alias bodies, see
 -- forceDeferred
-gatherFields :: [Variable] -> Map.Map N.Name Variable -> Variable -> IO ([Variable], RecordStructure)
+gatherFields :: Vars -> Map.Map N.Name Variable -> Variable -> IO (Vars, RecordStructure)
 gatherFields vars fields variable =
   do  vars1 <- forceDeferred vars variable
       (Descriptor content _ _ _) <- UF.get variable

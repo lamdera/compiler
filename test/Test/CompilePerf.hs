@@ -77,6 +77,40 @@ suite = tests
             expectEqual [] [ u | u@(arg, real) <- htmlUses "get2", arg /= "Msg2" || real /= "Msg2" ]
       in
       using setup cleanup test
+
+  , scope "an expanded alias body merged into an older variable keeps its rank" $
+      -- Reduced from elm-pages' Test.PagesProgram, which 1.5.0 failed to compile with
+      -- "index out of bounds (3,3)". The first let makes `config` a record at the rank
+      -- of `run`. In the second let, `Plat.update config` expands Config's deferred body
+      -- (Type.Unify.forceDeferred) and merges it into that record. The solver then
+      -- introduced the expanded variables at the inner let's rank, which raised the
+      -- merged class back to it. `b` is only reachable through that class, so the inner
+      -- generalize left the class at the inner rank, but did not generalize it, as its
+      -- representative (`config`'s record) is not in the inner pool. Generalizing `run`
+      -- then met a variable with a rank above its pool's (Type.Solve.poolToRankTable).
+      let
+        project = "./test/scenario-compile-perf-rank"
+
+        setup = do
+          rmdir project
+          Dir.createDirectoryIfMissing True (project </> "src")
+          Dir.copyFile "./test/scenario-empty-elm-init/elm.json" (project </> "elm.json")
+          writeUtf8 (project </> "src/Plat.elm") rankPlatModule
+          writeUtf8 (project </> "src/Main.elm") rankMainModule
+
+        cleanup _ =
+          rmdir project
+
+        test _ = do
+          io $ do
+            Lamdera.unsetEnv "LOVR"
+            Lamdera.unsetEnv "LTEST"
+            Lamdera.unsetEnv "LDEBUG"
+          actual <- catchOutput $ Lamdera.Compile.makeDev project ["src/Main.elm"]
+          expectTextDoesNotContain actual "index out of bounds"
+          expectTextContains actual "Success! Compiled 2 modules."
+      in
+      using setup cleanup test
   ]
 
 
@@ -139,4 +173,44 @@ mainModule =
     , "import Wrapped"
     , ""
     , "main = Html.text (String.fromInt (Wrapped.get2 { inner = Html.text \"\", n = 0 }).n)"
+    ]
+
+
+rankPlatModule :: T.Text
+rankPlatModule =
+  T.unlines
+    [ "module Plat exposing (Config, update)"
+    , ""
+    , "type alias Config a b ="
+    , "    { toRoute : String -> a"
+    , "    , other : b -> a"
+    , "    }"
+    , ""
+    , "update : Config a b -> Int"
+    , "update config ="
+    , "    0"
+    ]
+
+
+rankMainModule :: T.Text
+rankMainModule =
+  T.unlines
+    [ "module Main exposing (main)"
+    , ""
+    , "import Html"
+    , "import Plat"
+    , ""
+    , "run config ="
+    , "    let"
+    , "        route ="
+    , "            config.toRoute \"\""
+    , "    in"
+    , "    let"
+    , "        n ="
+    , "            Plat.update config"
+    , "    in"
+    , "    n"
+    , ""
+    , "main ="
+    , "    Html.text (String.fromInt (run { toRoute = String.length, other = identity }))"
     ]

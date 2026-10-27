@@ -90,11 +90,11 @@ solve env rank pools state constraint =
           answer <- Unify.unify actual expected
           case answer of
             Unify.Ok vars ->
-              do  introduce rank pools vars
+              do  introduceVars rank pools vars
                   return state
 
             Unify.Err vars actualType expectedType ->
-              do  introduce rank pools vars
+              do  introduceVars rank pools vars
                   return $ addError state $
                     Error.BadExpr region category actualType $
                       Error.typeReplace expectation expectedType
@@ -105,11 +105,11 @@ solve env rank pools state constraint =
           answer <- Unify.unify actual expected
           case answer of
             Unify.Ok vars ->
-              do  introduce rank pools vars
+              do  introduceVars rank pools vars
                   return state
 
             Unify.Err vars actualType expectedType ->
-              do  introduce rank pools vars
+              do  introduceVars rank pools vars
                   return $ addError state $
                     Error.BadExpr region (Error.Local name) actualType $
                       Error.typeReplace expectation expectedType
@@ -120,11 +120,11 @@ solve env rank pools state constraint =
           answer <- Unify.unify actual expected
           case answer of
             Unify.Ok vars ->
-              do  introduce rank pools vars
+              do  introduceVars rank pools vars
                   return state
 
             Unify.Err vars actualType expectedType ->
-              do  introduce rank pools vars
+              do  introduceVars rank pools vars
                   return $ addError state $
                     Error.BadExpr region (Error.Foreign name) actualType $
                       Error.typeReplace expectation expectedType
@@ -135,11 +135,11 @@ solve env rank pools state constraint =
           answer <- Unify.unify actual expected
           case answer of
             Unify.Ok vars ->
-              do  introduce rank pools vars
+              do  introduceVars rank pools vars
                   return state
 
             Unify.Err vars actualType expectedType ->
-              do  introduce rank pools vars
+              do  introduceVars rank pools vars
                   return $ addError state $
                     Error.BadExpr region (Error.Operator op) actualType $
                       Error.typeReplace expectation expectedType
@@ -150,11 +150,11 @@ solve env rank pools state constraint =
           answer <- Unify.unify actual expected
           case answer of
             Unify.Ok vars ->
-              do  introduce rank pools vars
+              do  introduceVars rank pools vars
                   return state
 
             Unify.Err vars actualType expectedType ->
-              do  introduce rank pools vars
+              do  introduceVars rank pools vars
                   return $ addError state $
                     Error.BadPattern region category actualType
                       (Error.ptypeReplace expectation expectedType)
@@ -438,6 +438,16 @@ adjustRankContent youngMark visitMark groupRank content =
 
 
 -- REGISTER VARIABLES
+
+
+-- @LAMDERA the variables a unification made, see Type.Unify.Vars. The variables of an
+-- expanded alias body go in the current pool with whatever rank unification has left
+-- them: introducing them at the current rank could raise the rank of an older class
+-- they were merged into, which then escapes generalization.
+introduceVars :: Int -> Pools -> Unify.Vars -> IO ()
+introduceVars rank pools (Unify.Vars fresh expanded) =
+  do  MVector.modify pools (expanded++) rank
+      introduce rank pools fresh
 
 
 introduce :: Int -> Pools -> [Variable] -> IO ()
