@@ -251,6 +251,29 @@ suite =
       esmMake dir ["--esm", "--optimize", "--output=Main.mjs"]
       esmCommand dir "node"
         ["--input-type=module", "-e", "import { Elm } from './Main.mjs'; import assert from 'node:assert/strict'; assert.equal(Elm.hot, undefined); assert.ok(Elm.Main.init().ports.ask);"]
+    , scope "Wire3: a record holding a Browser.Navigation.Key round trips" $ requireBinaryOnPath "node" $ do
+      -- The Key is a JS function at runtime, not a `Key` value. 1.5.0's direct encoder
+      -- looked at its `.$`, wrote nothing, and the decode failed: `lamdera live` freeze
+      -- mode then reset every FrontendModel holding a Key on reload.
+      io $ Temp.withSystemTempDirectory "lamdera-wire-key" $ \dir -> do
+        writeUtf8 (dir </> "elm.json") navigationKeyElmJson
+        writeUtf8 (dir </> "src/Main.elm") navigationKeyMain
+        environment <- Env.getEnvironment
+        forM_ [[], ["--optimize"]] $ \mode -> do
+          -- Its own ELM_HOME, so the packages' codecs are built by this compiler
+          let child = (Process.proc "lamdera" (["make", "src/Main.elm", "--output=elm.js"] ++ mode))
+                { Process.cwd = Just dir
+                , Process.env = Just (("ELM_HOME", dir </> "elm-home") : filter (\(key, _) -> key /= "ELM_HOME" && key /= "LDEBUG") environment)
+                }
+          (exit, out, err) <- Process.readCreateProcessWithExitCode child ""
+          when (exit /= ExitSuccess) $ ioError $ userError $ "lamdera make failed:\n" ++ out ++ err
+          Just javascript <- readUtf8Text (dir </> "elm.js")
+          let (before, after) = T.breakOnEnd "}(this));" javascript
+          writeUtf8 (dir </> "elm.js") $
+            T.dropEnd 9 before <> "\nscope.roundTrip = $author$project$Main$roundTrip;\n}(this));" <> after
+          esmCommand dir "node"
+            ["-e", "const r = require('./elm.js').roundTrip(function () {}); if (!(r.a === 5)) { console.error(r); process.exit(1); }"]
+      ok
     , scope "ESM rejects explicit and default HTML output" $ esmProject $ \dir -> do
       forM_ [[], ["--debug"], ["--optimize"], ["--optimize-legible"]] $ \mode ->
         forM_ [[], ["--output=index.html"]] $ \output -> do
@@ -322,4 +345,60 @@ app.ports.ask.send('q');
 await tick();
 assert.deepEqual(answers, ['q LEAF-V11', 'q LEAF-V22']);
 app.stop();
+|]
+
+
+navigationKeyElmJson :: T.Text
+navigationKeyElmJson = [text|
+{
+    "type": "application",
+    "source-directories": ["src"],
+    "elm-version": "0.19.1",
+    "dependencies": {
+        "direct": {
+            "elm/browser": "1.0.2",
+            "elm/bytes": "1.0.8",
+            "elm/core": "1.0.5",
+            "lamdera/codecs": "1.0.0"
+        },
+        "indirect": {
+            "elm/html": "1.0.0",
+            "elm/json": "1.1.3",
+            "elm/time": "1.0.0",
+            "elm/url": "1.0.0",
+            "elm/virtual-dom": "1.0.3"
+        }
+    },
+    "test-dependencies": { "direct": {}, "indirect": {} }
+}
+|]
+
+
+navigationKeyMain :: T.Text
+navigationKeyMain = [text|
+module Main exposing (..)
+
+import Browser.Navigation
+import Lamdera.Wire3 as W
+import Platform
+
+
+type alias WithKey =
+    { key : Browser.Navigation.Key, n : Int }
+
+
+roundTrip : Browser.Navigation.Key -> Maybe Int
+roundTrip key =
+    W.bytesEncode (w3_encode_WithKey { key = key, n = 5 })
+        |> W.bytesDecode w3_decode_WithKey
+        |> Maybe.map .n
+
+
+main : Program () (Browser.Navigation.Key -> Maybe Int) ()
+main =
+    Platform.worker
+        { init = \_ -> ( roundTrip, Cmd.none )
+        , update = \_ m -> ( m, Cmd.none )
+        , subscriptions = \_ -> Sub.none
+        }
 |]
