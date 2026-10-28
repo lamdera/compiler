@@ -124,6 +124,8 @@ items =
     , ( "Vec3", IVec3 (vec3 1 2 3) )
     , ( "Vec4", IVec4 (Math.Vector4.vec4 1 2 3 4) )
     , ( "Mat4", IMat4 Math.Matrix4.identity )
+    , ( "Mat4 rotated", IMat4 (Math.Matrix4.makeRotate 0.3 (vec3 1 2 3) |> Math.Matrix4.translate3 4 5 6) )
+    , ( "Vec3 odd floats", IVec3 (vec3 (0 / 0) -0 (1 / 0)) )
     , ( "Vecs record", IVecs { v2 = Math.Vector2.vec2 1 2, v3 = vec3 1 2 3, v4 = Math.Vector4.vec4 1 2 3 4, m4 = Math.Matrix4.identity } )
     , ( "List Vec3", IVec3List [ vec3 1 2 3, vec3 4 5 6 ] )
     , ( "Box Vec3", IVec3Box (Box (vec3 1 2 3)) )

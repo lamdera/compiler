@@ -78,7 +78,7 @@ for (const mode of modes) {
   for (let i = 0; i < bItems.length; i++) {
     const name = bItems[i].a, item = bItems[i].b;
     n++;
-    if (/File|file|Texture/.test(name)) {
+    if (/File|file|Texture|Shader|Entity|WebGL record/.test(name)) {
       // Ref numbers depend on the order the encoder visits the values (the Elm codecs' List.map
       // runs right to left, the direct codecs left to right), not part of the format: each
       // build must give the same number of bytes and decode its own bytes back to exactly
@@ -92,6 +92,24 @@ for (const mode of modes) {
       continue;
     }
     const eb = attempt(() => bytesOf(B.encode(item))), ed = attempt(() => bytesOf(D.encode(item)));
+    // Kernel values with a real codec (linear-algebra's Float64Arrays, and the Meshes made
+    // of them) must come back as exactly the values encoded, not just agree between the
+    // two codecs.
+    if (/Vec|Mat4|Mesh/.test(name)) {
+      for (const [side, X, e] of [['base', B, eb], ['direct', D, ed]]) {
+        const d = e.ok && attempt(() => X.decode(new DataView(new Uint8Array(e.v).buffer)));
+        check(`${mode} ${name}: ${side} decodes to the value encoded`, d && d.ok && isJust(d.v) && same(d.v.a, item));
+      }
+      // 1.5.1 and earlier wrote just the tag 0 for each of these: it decodes to all zeros
+      if (/^(Vec[234]|Mat4)$/.test(name) && eb.ok) {
+        const legacy = new DataView(new Uint8Array([eb.v[0], 0]).buffer);
+        const n = { Vec2: 2, Vec3: 3, Vec4: 4, Mat4: 16 }[name];
+        for (const [side, X] of [['base', B], ['direct', D]]) {
+          const d = attempt(() => X.decode(legacy));
+          check(`${mode} ${name}: ${side} decodes a 1.5.1 tag 0 to zeros`, d.ok && isJust(d.v) && same(d.v.a.a, new Float64Array(n)));
+        }
+      }
+    }
     const sameEnc = eb.ok === ed.ok && (eb.ok ? eb.v.equals(ed.v) : eb.e === ed.e);
     check(`${mode} ${name}: encode base ${eb.ok ? eb.v.toString('hex') : 'threw ' + eb.e} direct ${ed.ok ? ed.v.toString('hex') : 'threw ' + ed.e}`, sameEnc);
     if (process.env.VERBOSE) console.log(mode, name, eb.ok ? eb.v.toString('hex') : 'threw ' + eb.e, ed.ok ? ed.v.toString('hex') : 'threw ' + ed.e);

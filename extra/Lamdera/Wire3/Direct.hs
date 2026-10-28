@@ -76,6 +76,7 @@ import qualified Data.Index as Index
 import qualified AST.Prim.Module as PrimModule
 import qualified AST.Prim.Name as Name
 import qualified AST.Prim.Operator as Op
+import qualified AST.Prim.TypeVar as TV
 import qualified Data.String
 import qualified Elm.Kernel as K
 import qualified Elm.ModuleName as ModuleName
@@ -110,6 +111,7 @@ data W
   | WTime
   | WFail                       -- failEncode/failDecode: writes nothing, never decodes
   | WElm String String          -- leaf codec bridged through lamdera/codecs (encodeRef/decodeRef)
+  | WFloats Int                 -- a Float64Array of n components (Helpers.KernelCodec FloatArray)
   | WList W
   | WMaybe W
   | WSet W
@@ -372,6 +374,7 @@ pW =
         "WTime" -> pure WTime
         "WFail" -> pure WFail
         "WElm" -> WElm <$> pSpaced pString <*> pSpaced pString
+        "WFloats" -> WFloats <$> pSpaced pInt
         "WList" -> WList <$> pSpaced pW
         "WMaybe" -> WMaybe <$> pSpaced pW
         "WSet" -> WSet <$> pSpaced pW
@@ -428,6 +431,8 @@ addDirectIR pkg canonical graph@(Opt.LocalGraph main nodes fields) =
         Maybe.mapMaybe
           (\(name, encDef) ->
               case List.stripPrefix "w3_encode_" name of
+                Just typeName | Just codec <- kernelIR canonical typeName ->
+                  Just (typeName, IR (Just codec) (Just codec))
                 Just typeName ->
                   do  decDef <- Map.lookup ("w3_decode_" ++ typeName) byName
                       let ir = debugLowering modul typeName encDef decDef (lowerCodec encDef decDef)
@@ -443,6 +448,8 @@ addDirectIR pkg canonical graph@(Opt.LocalGraph main nodes fields) =
         Maybe.mapMaybe
           (\(name, decDef) ->
               case List.stripPrefix (_famElm unsafeFam) name of
+                Just typeName | Just codec <- kernelIR canonical typeName ->
+                  Just (typeName, codec)
                 Just typeName ->
                   do  codec <- debugLoweringUnsafe modul typeName decDef (lowerDecoderDef unsafeFam decDef)
                       Just (typeName, codec)
@@ -471,6 +478,22 @@ addDirectIR pkg canonical graph@(Opt.LocalGraph main nodes fields) =
           unsafeCodecs
     in
     Opt.LocalGraph main newNodes fields
+
+
+-- A type whose runtime value is a kernel value (Helpers.KernelCodec): its Elm codecs in
+-- its own module are written for that value (Wire3.Core.kernelEncoderBody), in shapes
+-- the lowering doesn't need to know, so its IR comes from the type instead, in the same
+-- format. Its parameters, if any, are taken and ignored, as by the Elm codecs.
+kernelIR :: Can.Module -> String -> Maybe Codec
+kernelIR canonical typeName =
+  do  let tn = Data.String.fromString typeName
+      kc <- Helpers.kernelCodec (Can._name canonical) tn
+      union <- Map.lookup tn (Can._unions canonical)
+      let params = fmap TV.varToChars (Can._u_vars union)
+      Just $ Codec params $ BAlias $
+        case kc of
+          Helpers.FloatArray _ fields _ -> WFloats (length fields)
+          Helpers.JsRef -> WElm "encodeRef" "decodeRef"
 
 
 {-# NOINLINE debugEnabled #-}
@@ -1558,6 +1581,7 @@ enc ctx env d w v =
       do  let g = elmGlobal wireHome e
           dep g
           return ["_W3_elmEnc(" ++ globalJs g ++ "(" ++ v ++ "));"]
+    WFloats n -> return ["_W3_f64s(" ++ v ++ ", " ++ show n ++ ");"]
 
     WList e -> encListLike ctx env d e v
     WSeqSet e ->
@@ -1932,6 +1956,7 @@ decE dc w =
       do  let g = elmGlobal wireHome dn
           dep g
           return ("_W3_elmDec(" ++ globalJs g ++ ")")
+    WFloats n -> return ("_W3_rf64s(" ++ show n ++ ")")
 
     WList e ->
       do  ee <- decE dc e

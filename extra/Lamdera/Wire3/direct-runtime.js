@@ -1,5 +1,5 @@
 // ---- Wire3 direct codec runtime (see Lamdera/Wire3/Direct.hs) ----
-// W3_RUNTIME_VERSION 2026-09-30.2 (checked against the compiler binary by test/wire3-direct-proto/full/build.sh)
+// W3_RUNTIME_VERSION 2026-10-28.1 (checked against the compiler binary by test/wire3-direct-proto/full/build.sh)
 // Emitted once as a kernel node inside the Elm IIFE, after a small mode-specific
 // prelude Direct.hs generates (_W3_bytesNode, _W3_decoderValue, _W3_decoderFnOf,
 // _W3_T_RBNODE, _W3_T_SUBTREE). It references kernel and Elm globals only inside
@@ -68,6 +68,14 @@ function _W3_f64(f) {
   _W3_grow(8);
   _W3_dv.setFloat64(_W3_pos, f, true);
   _W3_pos += 8;
+}
+
+// elm-explorations/linear-algebra's Vec2/3/4 and Mat4, Float64Arrays of n components
+// (Helpers.KernelCodec FloatArray): a tag 1, then each component in array order, as the
+// Elm codecs write them through the kernel's toRecord.
+function _W3_f64s(a, n) {
+  _W3_u8(1);
+  for (var i = 0; i < n; i++) _W3_f64(a[i]);
 }
 
 // Lamdera.Wire3.intDivBy / modBy, exactly (Ints can be fractional in Elm JS).
@@ -323,6 +331,19 @@ function _W3_rf64() {
   var v = _W3_rdv.getFloat64(_W3_rpos, true);
   _W3_rpos += 8;
   return v;
+}
+
+// A tag 0 is what 1.5.1 and earlier wrote for these, having lost the value: all zeros, as
+// the Elm decoders give.
+function _W3_rf64s(n) {
+  switch (_W3_ru8()) {
+    case 0: return new Float64Array(n);
+    case 1:
+      var a = new Float64Array(n);
+      for (var i = 0; i < n; i++) a[i] = _W3_rf64();
+      return a;
+    default: throw 0;
+  }
 }
 
 // Lamdera.Wire3.unsignedToSigned. Only ever called with an integer in [0, 2^32), where

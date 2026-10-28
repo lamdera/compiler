@@ -216,13 +216,25 @@ isUnsupportedKernelType tipe =
     TType (Module.Canonical (Name "elm" "bytes") "Bytes.Encode") "Encoder" _ -> True
     TType (Module.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" _ -> True
 
-    TType (Module.Canonical (Name "elm" "virtualdom") "VirtualDom") "Node" _ -> True
-    TType (Module.Canonical (Name "elm" "virtualdom") "VirtualDom") "Attribute" _ -> True
-    TType (Module.Canonical (Name "elm" "virtualdom") "VirtualDom") "Handler" _ -> True
+    -- Spelled `elm/virtualdom` up to 1.5.1, so these never matched and Html encoded as the
+    -- placeholder its `type Node msg = Node` declares, which decoded to a value that
+    -- crashed the first render
+    TType (Module.Canonical (Name "elm" "virtual-dom") "VirtualDom") "Node" _ -> True
+    TType (Module.Canonical (Name "elm" "virtual-dom") "VirtualDom") "Attribute" _ -> True
+    TType (Module.Canonical (Name "elm" "virtual-dom") "VirtualDom") "Handler" _ -> True
 
     TType (Module.Canonical (Name "elm" "json") "Json.Encode") "Value" _ -> True -- js type
     TType (Module.Canonical (Name "elm" "json") "Json.Decode") "Decoder" _ -> True -- js type
     TType (Module.Canonical (Name "elm" "json") "Json.Decode") "Value" _ -> True -- js type
+
+    -- Rejected by lamdera check (TypeHash) like the ones above, but declared as plain
+    -- single-variant types (`type Regex = Regex`), so their generated codecs wrote and
+    -- read a placeholder instead of failing
+    TType (Module.Canonical (Name "elm" "regex") "Regex") "Regex" _ -> True -- a RegExp
+    TType (Module.Canonical (Name "elm" "http") "Http") "Body" _ -> True
+    TType (Module.Canonical (Name "elm" "http") "Http") "Part" _ -> True
+    TType (Module.Canonical (Name "elm" "http") "Http") "Expect" _ -> True -- holds functions
+    TType (Module.Canonical (Name "elm" "http") "Http") "Resolver" _ -> True -- holds functions
 
     TType (Module.Canonical (Name "lamdera" "containers") "JsArray2") "JsArray2" _ -> True
 
@@ -238,8 +250,73 @@ isUnsupportedKernelType tipe =
 
     -- Disable for now, but need to revisit these and whether we want actual proper wire support
     -- , (("elm/browser", "Browser.Navigation") "Key" _ -> True -- This is a JS backed value
+    --
+    -- Revisited: Lamdera's elm/browser (extra/package-replacements) makes the Key a plain
+    -- `{ $: 0 }` that Browser.Navigation's functions take as a password and never look
+    -- into (the real URL-change function is the kernel's `_Browser_key`). The Key holds
+    -- no data, so its generated codec (tag 0, decoded to `Key`) round trips it, and any
+    -- decoded Key works with pushUrl and friends.
 
     _ -> False
+
+
+{-| Types from packages whose runtime values are JS kernel values rather than the
+constructor they are declared with (`type Vec3 = Vec3` is a Float64Array at runtime), that
+still get a real codec. The codecs generated in their own module (Wire3.Core) are written
+for the runtime value instead of the declared constructor, and Wire3.Direct renders the
+same wire format directly. Everything else that refers to them calls those codecs.
+
+  * FloatArray: elm-explorations/linear-algebra's vectors and matrices, a Float64Array
+    of `length fields` components. Written as a tag 1 then each component as a Float, in
+    array order. Up to 1.5.1 these were written as just the tag 0 and decoded to a
+    placeholder that lost the value, so a tag 0 still decodes, to all zeros: what an old
+    snapshot holds for them was lost when it was written, and this keeps the rest of it.
+    Encoded through the kernel's `<toRecord>`, decoded through its `<build>`.
+
+  * JsRef: frontend values that hold GPU or browser handles and can't be written out.
+    Written as a reference into the JS context that encoded them (encodeRef/decodeRef),
+    so they only decode in that same context (lamdera live's hot reload), and
+    lamdera check only lets them into FrontendModel and FrontendMsg (TypeHash).
+-}
+data KernelCodec
+  = FloatArray String [N.Name] FloatArrayBuild -- toRecord kernel function, fields in array order
+  | JsRef
+
+
+data FloatArrayBuild
+  = Positional String -- a kernel function taking the components (MJS.v3)
+  | FromRecord String -- a kernel function taking the toRecord record (MJS.m4x4fromRecord)
+
+
+kernelCodec :: Module.Canonical -> TN.Name -> Maybe KernelCodec
+kernelCodec (Module.Canonical pkg modul) typeName =
+  case (pkg, PrimModule.toChars modul, TN.nameToChars typeName) of
+    -- linear-algebra 1.0.0's `v3fromRecord` refers to a kernel function that doesn't
+    -- exist, so the vectors are built with the constructors, which every version has
+    (Name "elm-explorations" "linear-algebra", "Math.Vector2", "Vec2") ->
+      Just $ FloatArray "v2toRecord" ["x", "y"] (Positional "v2")
+    (Name "elm-explorations" "linear-algebra", "Math.Vector3", "Vec3") ->
+      Just $ FloatArray "v3toRecord" ["x", "y", "z"] (Positional "v3")
+    (Name "elm-explorations" "linear-algebra", "Math.Vector4", "Vec4") ->
+      Just $ FloatArray "v4toRecord" ["x", "y", "z", "w"] (Positional "v4")
+    (Name "elm-explorations" "linear-algebra", "Math.Matrix4", "Mat4") ->
+      -- Column major, as the kernel's m4x4toRecord/m4x4fromRecord index the array
+      Just $ FloatArray "m4x4toRecord"
+        [ "m11", "m21", "m31", "m41", "m12", "m22", "m32", "m42"
+        , "m13", "m23", "m33", "m43", "m14", "m24", "m34", "m44"
+        ]
+        (FromRecord "m4x4fromRecord")
+
+    (Name "elm" "file", "File", "File") -> Just JsRef
+    (Name "elm-explorations" "webgl", "WebGL.Texture", "Texture") -> Just JsRef
+    -- `{ src, attributes, uniforms }`, where the maps from GLSL names to record fields are
+    -- this build's (--optimize shortens field names per build), and the kernel's program
+    -- cache id once drawn: code, not data
+    (Name "elm-explorations" "webgl", "WebGL", "Shader") -> Just JsRef
+    -- Settings, two Shaders, a Mesh and the uniforms (Textures among them): a draw call
+    (Name "elm-explorations" "webgl", "WebGL", "Entity") -> Just JsRef
+
+    _ -> Nothing
 
 
 isLambdaType :: Type -> Bool

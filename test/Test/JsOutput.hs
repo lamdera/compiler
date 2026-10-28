@@ -256,12 +256,20 @@ suite =
       -- looked at its `.$`, wrote nothing, and the decode failed: `lamdera live` freeze
       -- mode then reset every FrontendModel holding a Key on reload.
       io $ wire3RoundTrip "lamdera-wire-key" navigationKeyElmJson navigationKeyMain "function () {}"
+      -- In Lamdera's own elm/browser (extra/package-replacements) the Key is `{ $: 0 }`, a
+      -- password that Browser.Navigation's functions never look into.
+      io $ wire3RoundTrip "lamdera-wire-key" navigationKeyElmJson navigationKeyMain "{ $: 0 }"
       ok
     , scope "Wire3: a record holding kernel-backed single-variant values round trips" $ requireBinaryOnPath "node" $ do
       -- Math.Vector3.Vec3 (`type Vec3 = Vec3`, a Float64Array at runtime) and Regex.Regex
       -- (`type Regex = Regex`, a RegExp) hit the same 1.5.0 bug as the Key. lamdera check
       -- lets a Vec3 into ToBackend, ToFrontend and BackendModel, so 1.5.0 dropped those
       -- messages and could not restore such a BackendModel, in production too.
+      --
+      -- 1.5.1 still decoded every linear-algebra value to a placeholder that lost it. They
+      -- now have a real codec (Wire3.Helpers.KernelCodec): the decoded values must be the
+      -- ones encoded, and work with the package's functions. Regex, which lamdera check
+      -- rejects, now fails to encode instead of round tripping a placeholder.
       io $ wire3RoundTrip "lamdera-wire-kernel" kernelValuesElmJson kernelValuesMain "undefined"
       ok
     , scope "ESM rejects explicit and default HTML output" $ esmProject $ \dir -> do
@@ -433,9 +441,13 @@ kernelValuesElmJson = [text|
             "elm/json": "1.1.3",
             "elm/regex": "1.0.0",
             "elm-explorations/linear-algebra": "1.0.3",
+            "elm-explorations/webgl": "1.1.3",
             "lamdera/codecs": "1.0.0"
         },
-        "indirect": {}
+        "indirect": {
+            "elm/html": "1.0.0",
+            "elm/virtual-dom": "1.0.3"
+        }
     },
     "test-dependencies": { "direct": {}, "indirect": {} }
 }
@@ -447,9 +459,13 @@ kernelValuesMain = [text|
 module Main exposing (..)
 
 import Lamdera.Wire3 as W
-import Math.Vector3 exposing (Vec3, vec3)
+import Math.Matrix4 as Mat4 exposing (Mat4)
+import Math.Vector2 as Vec2 exposing (Vec2, vec2)
+import Math.Vector3 as Vec3 exposing (Vec3, vec3)
+import Math.Vector4 as Vec4 exposing (Vec4, vec4)
 import Platform
 import Regex exposing (Regex)
+import WebGL
 
 
 type Wrapped a
@@ -457,22 +473,68 @@ type Wrapped a
 
 
 type alias Kernel =
-    { position : Vec3, positions : List Vec3, wrapped : Wrapped Vec3, regex : Regex, n : Int }
+    { position : Vec3
+    , positions : List Vec3
+    , wrapped : Wrapped Vec3
+    , v2 : Vec2
+    , v4 : Vec4
+    , m4 : Mat4
+    , mesh : WebGL.Mesh { pos : Vec3 }
+    , n : Int
+    }
+
+
+type alias WithRegex =
+    { regex : Regex, n : Int }
+
+
+kernel : Kernel
+kernel =
+    { position = vec3 1 2 3
+    , positions = [ vec3 4 5 6 ]
+    , wrapped = Wrapped (vec3 7 8 9)
+    , v2 = vec2 1.5 (-2.5)
+    , v4 = vec4 1 2 3 4
+    , m4 = Mat4.makeRotate 0.3 (vec3 1 2 3) |> Mat4.translate3 4 5 6
+    , mesh = WebGL.triangles [ ( { pos = vec3 0 0 0 }, { pos = vec3 1 0 0 }, { pos = vec3 0 1 0 } ) ]
+    , n = 5
+    }
+
+
+same : Kernel -> Kernel -> Bool
+same a b =
+    (Vec3.toRecord a.position == Vec3.toRecord b.position)
+        && (List.map Vec3.toRecord a.positions == List.map Vec3.toRecord b.positions)
+        && (case ( a.wrapped, b.wrapped ) of
+                ( Wrapped x, Wrapped y ) ->
+                    Vec3.toRecord x == Vec3.toRecord y
+           )
+        && (Vec2.toRecord a.v2 == Vec2.toRecord b.v2)
+        && (Vec4.toRecord a.v4 == Vec4.toRecord b.v4)
+        && (Mat4.toRecord a.m4 == Mat4.toRecord b.m4)
+        && (a.mesh == b.mesh)
+        -- the decoded values are the kernel's own, so its functions work on them
+        && (Vec3.getX (Vec3.add b.position (vec3 1 1 1)) == 2)
+        && (Mat4.toRecord (Mat4.mul b.m4 Mat4.identity) == Mat4.toRecord a.m4)
 
 
 roundTrip : () -> Maybe Int
 roundTrip _ =
-    W.bytesEncode
-        (w3_encode_Kernel
-            { position = vec3 1 2 3
-            , positions = [ vec3 4 5 6 ]
-            , wrapped = Wrapped (vec3 7 8 9)
-            , regex = Regex.fromString "a+" |> Maybe.withDefault Regex.never
-            , n = 5
-            }
-        )
+    let
+        regexDecoded =
+            W.bytesEncode (w3_encode_WithRegex { regex = Regex.fromString "a+" |> Maybe.withDefault Regex.never, n = 5 })
+                |> W.bytesDecode w3_decode_WithRegex
+    in
+    W.bytesEncode (w3_encode_Kernel kernel)
         |> W.bytesDecode w3_decode_Kernel
-        |> Maybe.map .n
+        |> Maybe.andThen
+            (\decoded ->
+                if same kernel decoded && regexDecoded == Nothing then
+                    Just decoded.n
+
+                else
+                    Nothing
+            )
 
 
 main : Program () (() -> Maybe Int) ()

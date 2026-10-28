@@ -211,6 +211,58 @@ suite = tests
         expectTextContains modelErrorText "must not contain `Endianness` from elm/bytes:Bytes"
         expectTextContains modelErrorText "must not contain `Step` from elm/bytes:Bytes.Decode"
         expectEqual supportedErrors []
+
+  , scope "JS kernel-backed types: real codecs anywhere, JS refs in Frontend types only, the rest nowhere" $ do
+      project <- io $ Lamdera.Relative.requireDir "test/scenario-kernel-types"
+
+      let
+        diffable typeName = do
+          interfaces <- Interfaces.all [ "src/Types.elm" ]
+          case Map.lookup "Types" interfaces of
+            Just iface -> pure $ Just (Lamdera.TypeHash.diffableTypeByName interfaces typeName "Types" iface)
+            Nothing -> pure Nothing
+
+        errorsFor typeName =
+          maybe [ "Types not found" ] Lamdera.TypeHash.diffableTypeErrors <$> diffable typeName
+
+        textFor typeName =
+          maybe "Types not found" Lamdera.TypeHash.diffableTypeToText <$> diffable typeName
+
+      results <- ioSilenced $ Ext.Common.withProjectRoot project $
+        mapM (\typeName -> (,) typeName <$> errorsFor typeName)
+          [ "FrontendModel", "FrontendMsg", "BackendModel", "BackendMsg", "ToFrontend", "ToBackend", "Banned" ]
+
+      (vecsText, frontendModelText) <- ioSilenced $ Ext.Common.withProjectRoot project $
+        (,) <$> textFor "Vecs" <*> textFor "FrontendModel"
+
+      let errorsOf typeName = maybe [] id (lookup typeName results)
+
+      scope "linear-algebra, Mesh and Key are allowed everywhere, File, Texture, Shader and Entity in Frontend types" $
+        expectEqual
+          (fmap (\t -> (t, errorsOf t)) [ "FrontendModel", "FrontendMsg", "BackendModel", "BackendMsg", "ToFrontend" ])
+          (fmap (\t -> (t, [])) [ "FrontendModel", "FrontendMsg", "BackendModel", "BackendMsg", "ToFrontend" ])
+
+      scope "Shader and Entity are rejected outside Frontend types" $ do
+        let toBackend = T.intercalate "\n" (errorsOf "ToBackend")
+        expectTextContains toBackend "must not contain the Frontend-only type `Shader` from elm-explorations/webgl:WebGL"
+        expectTextContains toBackend "must not contain the Frontend-only type `Entity` from elm-explorations/webgl:WebGL"
+        expectEqual (length (errorsOf "ToBackend")) 2
+
+      scope "kernel types without a codec are rejected" $ do
+        let banned = T.intercalate "\n" (errorsOf "Banned")
+        expectTextContains banned "must not contain kernel type `Regex` from elm/regex:Regex"
+        expectTextContains banned "must not contain kernel type `Node` from elm/virtual-dom:VirtualDom"
+        expectTextContains banned "must not contain kernel type `Body` from elm/http:Http"
+        expectTextContains banned "must not contain kernel type `Value` from elm/json:Json.Encode"
+
+      scope "each linear-algebra type hashes as its components, so changing one for another is a change" $
+        expectEqual vecsText "R[C[[FFFFFFFFFFFFFFFF]]C[[FF]]C[[FFF]]C[[FFFF]]]"
+
+      scope "JS refs hash by name" $ do
+        expectTextContains frontendModelText "KB[WebGL.Shader]"
+        expectTextContains frontendModelText "KB[WebGL.Entity]"
+        expectTextContains frontendModelText "KB[WebGL.Texture.Texture]"
+        expectTextContains frontendModelText "KB[File.File]"
   ]
 
 

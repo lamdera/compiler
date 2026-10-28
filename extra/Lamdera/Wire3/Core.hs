@@ -672,7 +672,19 @@ encoderUnion rowCodecs rowConstraints isTest_ ifaces pkg modul decls unionName u
             (Holey (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Encode") "Encoder" [])))
 
 
-    finalGen = generatedTyped
+    -- A type whose runtime value is a kernel value gets a codec for that (see KernelCodec)
+    finalGen =
+      case kernelCodec cname unionName of
+        Just kc ->
+          TypedDef (a (generatedName)) freeVars (ptvarsTyped ++ [(pvar "w3v", ttype)]) (kernelEncoderBody kc (lvar "w3v")) $
+            (TAlias
+                  (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire3")
+                  "Encoder"
+                  []
+                  (Holey (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Encode") "Encoder" [])))
+
+        Nothing ->
+          generatedTyped
   in
   finalGen
 
@@ -744,7 +756,7 @@ decoderUnion rowCodecs rowConstraints mode isTest_ ifaces pkg modul decls unionN
         DecodeUnsafe ->
           baseBody
 
-    generated =
+    generated_ =
       Def
       -- TypedDef
         (a (generatedName))
@@ -756,8 +768,120 @@ decoderUnion rowCodecs rowConstraints mode isTest_ ifaces pkg modul decls unionN
         --   "Decoder"
         --   [("a", unionType)]
         --   (Holey (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [TVar "a"])))
+
+    -- A type whose runtime value is a kernel value gets a codec for that (see KernelCodec).
+    -- Annotated, as its body builds the value with untyped kernel functions.
+    generated =
+      case kernelCodec cname unionName of
+        Just kc@(FloatArray _ _ _) ->
+          TypedDef (a (generatedName)) Map.empty [] (kernelDecoderBody kc) (tWire_Decoder_Sig unionType)
+
+        Just kc ->
+          Def (a (generatedName)) ptvars (kernelDecoderBody kc)
+
+        Nothing ->
+          generated_
   in
   generated
+
+
+{-| The codecs of a type whose runtime value is a kernel value (see KernelCodec), in the
+type's own module. Wire3.Direct renders the same format directly (kernelIR).
+
+    -- FloatArray, e.g. Math.Vector3.Vec3
+    w3_encode_Vec3 w3v =
+        let w3_r = Elm.Kernel.MJS.v3toRecord w3v
+        in encodeSequenceWithoutLength [ unsignedInt8 1, encodeFloat w3_r.x, encodeFloat w3_r.y, encodeFloat w3_r.z ]
+
+    w3_decode_Vec3 =
+        unsignedInt8 |> andThenDecode (\w3v ->
+            case w3v of
+                1 -> succeedDecode (\w3_c0 w3_c1 w3_c2 -> Elm.Kernel.MJS.v3 w3_c0 w3_c1 w3_c2)
+                        |> andMapDecode decodeFloat |> andMapDecode decodeFloat |> andMapDecode decodeFloat
+                0 -> succeedDecode ((\w3_c0 w3_c1 w3_c2 -> Elm.Kernel.MJS.v3 w3_c0 w3_c1 w3_c2) 0 0 0)
+                _ -> failDecode
+        )
+
+    -- JsRef
+    w3_encode_Shader w3_x_c_attributes w3_x_c_uniforms w3_x_c_varyings w3v = encodeRef w3v
+    w3_decode_Shader w3_x_c_attributes w3_x_c_uniforms w3_x_c_varyings = decodeRef
+-}
+kernelEncoderBody :: KernelCodec -> Expr -> Expr
+kernelEncoderBody kc value =
+  case kc of
+    FloatArray toRecord fields _ ->
+      a (Let
+          (Def (a "w3_r") [] (call (a (VarKernel "MJS" (N.fromChars toRecord))) [ value ]))
+          (encodeSequenceWithoutLength $ list $
+              encodeUnsignedInt8 (int 1)
+                : fmap (\field -> call wireEncodeFloat [ a (Access (lvar "w3_r") (a field)) ]) fields
+          )
+        )
+
+    JsRef ->
+      call wireEncodeRef [ value ]
+
+
+kernelDecoderBody :: KernelCodec -> Expr
+kernelDecoderBody kc =
+  case kc of
+    FloatArray _ fields build ->
+      let
+        components = fields & imap (\i _ -> N.fromChars ("w3_c" ++ show i))
+
+        construct =
+          a (Lambda (fmap pvar components) $
+              case build of
+                Positional fn ->
+                  call (a (VarKernel "MJS" (N.fromChars fn))) (fmap lvar components)
+                FromRecord fn ->
+                  call (a (VarKernel "MJS" (N.fromChars fn)))
+                    [ a (Record (Map.fromList (zip fields (fmap lvar components)))) ]
+            )
+      in
+      decodeUnsignedInt8 |> andThenDecode1
+        (lambda1 (pvar "w3v") $
+          caseof (lvar "w3v")
+            [ CaseBranch (pint 1) $
+                ([ succeedDecode construct ] ++ fmap (\_ -> andMapDecode1 wireDecodeFloat) fields)
+                  & foldlPairs (|>)
+            , CaseBranch (pint 0) $
+                succeedDecode (call construct (fmap (\_ -> int 0) fields))
+            , CaseBranch pAny_ $ failDecode "kernelDecoderBody unexpected tag"
+            ]
+        )
+
+    JsRef ->
+      wireDecodeRef
+
+
+wireEncodeFloat :: Expr
+wireEncodeFloat =
+  a (VarForeign mLamdera_Wire "encodeFloat"
+      (Forall Map.empty (TLambda (TType (Module.Canonical (Name "elm" "core") "Basics") "Float" []) tLamdera_Wire_Encoder)))
+
+
+wireDecodeFloat :: Expr
+wireDecodeFloat =
+  callDecoder "decodeFloat" (TType (Module.Canonical (Name "elm" "core") "Basics") "Float" [])
+
+
+wireEncodeRef :: Expr
+wireEncodeRef =
+  a (VarForeign mLamdera_Wire "encodeRef"
+      (Forall (Map.fromList [("a", ())]) (TLambda (TVar "a") tLamdera_Wire_Encoder)))
+
+
+wireDecodeRef :: Expr
+wireDecodeRef =
+  a (VarForeign mLamdera_Wire "decodeRef"
+      (Forall
+         (Map.fromList [("a", ())])
+         (TAlias
+            mLamdera_Wire
+            "Decoder"
+            [("a", TVar "a")]
+            (Filled (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Decode") "Decoder" [TVar "a"])))))
 
 
 -- Takes a tvar name and a type, and recursively searches for any extensible record constraints
