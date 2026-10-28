@@ -2,6 +2,7 @@ module Types exposing (..)
 
 import Array exposing (Array)
 import Big exposing (Big)
+import Browser.Navigation
 import Bytes exposing (Bytes)
 import Dict exposing (Dict)
 import Random
@@ -161,6 +162,14 @@ type alias WithFn =
 type HasFn
     = HasFn WithFn
     | NoFn Int
+
+
+{-| Browser.Navigation.Key is declared `type Key = Key`, but at runtime it is the JS
+function Browser.application hands to init. Its tag is written whatever the value, as the
+Elm codec's single-variant `case` does, so a FrontendModel holding one round trips.
+-}
+type alias WithKey =
+    { key : Browser.Navigation.Key, n : Int }
 
 
 -- deep recursion through a wide record (cold-depth oracle)

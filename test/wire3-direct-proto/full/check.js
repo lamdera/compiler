@@ -58,6 +58,14 @@ for (const mode of modes) {
     const db = B.decodeHasFn(B.encodeHasFn(hf.a)), dd = D.decodeHasFn(B.encodeHasFn(hf.a));
     check(`${mode} HasFn decode ${i}`, isJust(db) === isJust(dd) && (!isJust(db) || same(db, dd)));
   }
+  // WithKey: a Browser.Navigation.Key is a JS function at runtime, not a `Key` value. Its
+  // tag is still written, so the record round trips (lamdera live freeze mode needs this)
+  {
+    const fakeKey = function () {};
+    const eb = B.encodeWithKey(B.withKey(fakeKey)), ed = D.encodeWithKey(D.withKey(fakeKey));
+    check(`${mode} WithKey encode`, bytesOf(eb).equals(bytesOf(ed)));
+    check(`${mode} WithKey decode`, isJust(B.decodeWithKey(ed)) && isJust(D.decodeWithKey(ed)));
+  }
   for (const n of [0, 1, 2, 3, 7, 16, 50, 300, 2000, 20000, 'e0', 'e1', 'e5', 'e30', 'e31', 'e40']) {
     const m = typeof n === 'string' ? B.edge(+n.slice(1)) : B.gen(n);
     const base = bytesOf(B.encode(m));

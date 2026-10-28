@@ -1735,6 +1735,15 @@ encUnion ctx env opts width alts v =
           inner <- enc ctx env 1 p payload
           return (writeTag (0 :: Int) : inner)
 
+    -- A single variant is written without looking at the value, as Elm's own `case` on it
+    -- does, and so the Elm-level encoder did. Some such values are not that variant at
+    -- runtime: Browser.Navigation.Key is declared `type Key = Key` but is a JS function,
+    -- whose `.$` matched no case, so nothing was written and the decode failed (lamdera
+    -- live freeze mode lost every FrontendModel holding a Key).
+    (_, [Alt _ _ params]) ->
+      do  inner <- concat <$> traverse (\(pi_, p) -> enc ctx env 1 p (v ++ "." ++ ctorFieldJs pi_)) (zip [0..] params)
+          return (writeTag (0 :: Int) : inner)
+
     ("Enum", _) ->
       let
         subject = if isProd mode then v else v ++ ".$"

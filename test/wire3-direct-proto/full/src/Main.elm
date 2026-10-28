@@ -2,6 +2,7 @@ port module Main exposing (..)
 
 import Array
 import Big
+import Browser.Navigation
 import Bytes exposing (Bytes)
 import Bytes.Encode
 import Dict
@@ -284,6 +285,21 @@ hasFns =
     [ HasFn { f = \x -> x, n = 3 }, NoFn 7 ]
 
 
+withKey : Browser.Navigation.Key -> WithKey
+withKey key =
+    { key = key, n = 5 }
+
+
+encodeWithKey : WithKey -> Bytes
+encodeWithKey w =
+    W.bytesEncode (w3_encode_WithKey w)
+
+
+decodeWithKey : Bytes -> Maybe WithKey
+decodeWithKey b =
+    W.bytesDecode w3_decode_WithKey b
+
+
 decodeFat3 : Bytes -> Maybe Fat3
 decodeFat3 b =
     W.bytesDecode w3_decode_Fat3 b
@@ -337,6 +353,9 @@ type alias Api =
     , encodeHasFn : HasFn -> Bytes
     , decodeHasFn : Bytes -> Maybe HasFn
     , hasFns : List HasFn
+    , withKey : Browser.Navigation.Key -> WithKey
+    , encodeWithKey : WithKey -> Bytes
+    , decodeWithKey : Bytes -> Maybe WithKey
     , depth : List ( String, Bytes -> Bool )
     , decodeSNaN : Bytes -> Maybe SNaN
     , encodeSNaN : SNaN -> Bytes
@@ -352,7 +371,7 @@ type alias Api =
 main : Program () Api ()
 main =
     Platform.worker
-        { init = \_ -> ( { gen = gen, edge = edge, encode = encode, decode = decode, encodeHasFn = encodeHasFn, decodeHasFn = decodeHasFn, hasFns = hasFns, depth = depthProbes, decodeSNaN = decodeSNaN, encodeSNaN = encodeSNaN, vgen = vgen, vencode = vencode, vdecode = vdecode, vdecodeUnsafe = vdecodeUnsafe, vdecoder = vdecoder, vdecoderUnsafe = vdecoderUnsafe }, out 0 )
+        { init = \_ -> ( { gen = gen, edge = edge, encode = encode, decode = decode, encodeHasFn = encodeHasFn, decodeHasFn = decodeHasFn, hasFns = hasFns, withKey = withKey, encodeWithKey = encodeWithKey, decodeWithKey = decodeWithKey, depth = depthProbes, decodeSNaN = decodeSNaN, encodeSNaN = encodeSNaN, vgen = vgen, vencode = vencode, vdecode = vdecode, vdecodeUnsafe = vdecodeUnsafe, vdecoder = vdecoder, vdecoderUnsafe = vdecoderUnsafe }, out 0 )
         , update = \_ m -> ( m, Cmd.none )
         , subscriptions = \_ -> Sub.none
         }
