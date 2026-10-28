@@ -255,24 +255,14 @@ suite =
       -- The Key is a JS function at runtime, not a `Key` value. 1.5.0's direct encoder
       -- looked at its `.$`, wrote nothing, and the decode failed: `lamdera live` freeze
       -- mode then reset every FrontendModel holding a Key on reload.
-      io $ Temp.withSystemTempDirectory "lamdera-wire-key" $ \dir -> do
-        writeUtf8 (dir </> "elm.json") navigationKeyElmJson
-        writeUtf8 (dir </> "src/Main.elm") navigationKeyMain
-        environment <- Env.getEnvironment
-        forM_ [[], ["--optimize"]] $ \mode -> do
-          -- Its own ELM_HOME, so the packages' codecs are built by this compiler
-          let child = (Process.proc "lamdera" (["make", "src/Main.elm", "--output=elm.js"] ++ mode))
-                { Process.cwd = Just dir
-                , Process.env = Just (("ELM_HOME", dir </> "elm-home") : filter (\(key, _) -> key /= "ELM_HOME" && key /= "LDEBUG") environment)
-                }
-          (exit, out, err) <- Process.readCreateProcessWithExitCode child ""
-          when (exit /= ExitSuccess) $ ioError $ userError $ "lamdera make failed:\n" ++ out ++ err
-          Just javascript <- readUtf8Text (dir </> "elm.js")
-          let (before, after) = T.breakOnEnd "}(this));" javascript
-          writeUtf8 (dir </> "elm.js") $
-            T.dropEnd 9 before <> "\nscope.roundTrip = $author$project$Main$roundTrip;\n}(this));" <> after
-          esmCommand dir "node"
-            ["-e", "const r = require('./elm.js').roundTrip(function () {}); if (!(r.a === 5)) { console.error(r); process.exit(1); }"]
+      io $ wire3RoundTrip "lamdera-wire-key" navigationKeyElmJson navigationKeyMain "function () {}"
+      ok
+    , scope "Wire3: a record holding kernel-backed single-variant values round trips" $ requireBinaryOnPath "node" $ do
+      -- Math.Vector3.Vec3 (`type Vec3 = Vec3`, a Float64Array at runtime) and Regex.Regex
+      -- (`type Regex = Regex`, a RegExp) hit the same 1.5.0 bug as the Key. lamdera check
+      -- lets a Vec3 into ToBackend, ToFrontend and BackendModel, so 1.5.0 dropped those
+      -- messages and could not restore such a BackendModel, in production too.
+      io $ wire3RoundTrip "lamdera-wire-kernel" kernelValuesElmJson kernelValuesMain "undefined"
       ok
     , scope "ESM rejects explicit and default HTML output" $ esmProject $ \dir -> do
       forM_ [[], ["--debug"], ["--optimize"], ["--optimize-legible"]] $ \mode ->
@@ -293,6 +283,32 @@ suite =
       when (not ("export const Elm" `T.isInfixOf` javascript)) $
         ioError $ userError "Multiple ESM mains without --output must generate JavaScript"
     ]
+
+
+{-| Builds the project (an `elm.json` and a `src/Main.elm` whose `roundTrip` returns
+`Maybe Int`) in dev and --optimize, calls `roundTrip` with the JS expression `argument`,
+and fails unless it gives `Just 5`.
+-}
+wire3RoundTrip :: String -> T.Text -> T.Text -> String -> IO ()
+wire3RoundTrip name elmJson main argument =
+  Temp.withSystemTempDirectory name $ \dir -> do
+    writeUtf8 (dir </> "elm.json") elmJson
+    writeUtf8 (dir </> "src/Main.elm") main
+    environment <- Env.getEnvironment
+    forM_ [[], ["--optimize"]] $ \mode -> do
+      -- Its own ELM_HOME, so the packages' codecs are built by this compiler
+      let child = (Process.proc "lamdera" (["make", "src/Main.elm", "--output=elm.js"] ++ mode))
+            { Process.cwd = Just dir
+            , Process.env = Just (("ELM_HOME", dir </> "elm-home") : filter (\(key, _) -> key /= "ELM_HOME" && key /= "LDEBUG") environment)
+            }
+      (exit, out, err) <- Process.readCreateProcessWithExitCode child ""
+      when (exit /= ExitSuccess) $ ioError $ userError $ "lamdera make failed:\n" ++ out ++ err
+      Just javascript <- readUtf8Text (dir </> "elm.js")
+      let (before, after) = T.breakOnEnd "}(this));" javascript
+      writeUtf8 (dir </> "elm.js") $
+        T.dropEnd 9 before <> "\nscope.roundTrip = $author$project$Main$roundTrip;\n}(this));" <> after
+      esmCommand dir "node"
+        ["-e", "const r = require('./elm.js').roundTrip(" ++ argument ++ "); if (!(r.a === 5)) { console.error(r); process.exit(1); }"]
 
 
 esmProject :: (FilePath -> IO ()) -> Test ()
@@ -395,6 +411,71 @@ roundTrip key =
 
 
 main : Program () (Browser.Navigation.Key -> Maybe Int) ()
+main =
+    Platform.worker
+        { init = \_ -> ( roundTrip, Cmd.none )
+        , update = \_ m -> ( m, Cmd.none )
+        , subscriptions = \_ -> Sub.none
+        }
+|]
+
+
+kernelValuesElmJson :: T.Text
+kernelValuesElmJson = [text|
+{
+    "type": "application",
+    "source-directories": ["src"],
+    "elm-version": "0.19.1",
+    "dependencies": {
+        "direct": {
+            "elm/bytes": "1.0.8",
+            "elm/core": "1.0.5",
+            "elm/json": "1.1.3",
+            "elm/regex": "1.0.0",
+            "elm-explorations/linear-algebra": "1.0.3",
+            "lamdera/codecs": "1.0.0"
+        },
+        "indirect": {}
+    },
+    "test-dependencies": { "direct": {}, "indirect": {} }
+}
+|]
+
+
+kernelValuesMain :: T.Text
+kernelValuesMain = [text|
+module Main exposing (..)
+
+import Lamdera.Wire3 as W
+import Math.Vector3 exposing (Vec3, vec3)
+import Platform
+import Regex exposing (Regex)
+
+
+type Wrapped a
+    = Wrapped a
+
+
+type alias Kernel =
+    { position : Vec3, positions : List Vec3, wrapped : Wrapped Vec3, regex : Regex, n : Int }
+
+
+roundTrip : () -> Maybe Int
+roundTrip _ =
+    W.bytesEncode
+        (w3_encode_Kernel
+            { position = vec3 1 2 3
+            , positions = [ vec3 4 5 6 ]
+            , wrapped = Wrapped (vec3 7 8 9)
+            , regex = Regex.fromString "a+" |> Maybe.withDefault Regex.never
+            , n = 5
+            }
+        )
+        |> W.bytesDecode w3_decode_Kernel
+        |> Maybe.map .n
+
+
+main : Program () (() -> Maybe Int) ()
 main =
     Platform.worker
         { init = \_ -> ( roundTrip, Cmd.none )
