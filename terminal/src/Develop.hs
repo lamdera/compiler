@@ -140,7 +140,21 @@ runWithRoot root (Flags maybePort maybeBind shouldOpenBrowser inMemory) =
       -- Warm the cache
       recompile []
 
-      Filewatch.watch root recompile
+      -- @LAMDERA a change to stylesheets only is swapped in place in the browser, without
+      -- a recompile or a page reload, see Live.stylesheetOnlyChange
+      canonicalRoot <- Dir.canonicalizePath root
+      let
+        onFilesChanged :: [String] -> IO ()
+        onFilesChanged events = do
+          changes <- mapM (\event -> (,) event <$> Dir.doesPathExist event) events
+          case Live.stylesheetOnlyChange [root, canonicalRoot] changes of
+            Just paths -> Live.reloadStylesheets liveState paths
+            Nothing -> do
+              recompile events
+              let stylesheets = Live.changedStylesheets [root, canonicalRoot] changes
+              onlyWhen (not (null stylesheets)) $ Live.reloadStylesheets liveState stylesheets
+
+      Filewatch.watch root onFilesChanged
 
       -- @LAMDERA with --memory, look at the kept sources on disk every few seconds, for
       -- edits the watcher did not report
@@ -254,7 +268,7 @@ serveFiles root sentryCache =
       -- @LAMDERA Ensure we don't serve anything in /public/*, as we want to serve those via `/*` to mirror production
       guard (not $ "public" `List.isPrefixOf` path)
       guard =<< liftIO (Dir.doesFileExist (root </> path))
-      serveElm_ root path <|> serveFilePretty (root </> path)
+      serveElm_ root path <|> (Live.revalidate >> serveFilePretty (root </> path))
 
 
 

@@ -19,6 +19,7 @@ import qualified Data.Map as Map
 import qualified Data.HashMap.Strict as HashMap
 import qualified Data.List as List
 import Data.Maybe (fromMaybe)
+import qualified Data.Char
 import GHC.Word (Word32, Word64)
 
 import qualified System.Directory as Dir
@@ -126,7 +127,16 @@ serveLamderaPublicFiles root serveElm =
       let pubFile = root </> "public" </> file
       guard =<< liftIO (Dir.doesFileExist pubFile)
       -- debug $ "serving lamdera public files: " <> file
-      serveElm pubFile <|> serveDirectoryWith directoryConfig (root </> "public")
+      serveElm pubFile <|> (revalidate >> serveDirectoryWith directoryConfig (root </> "public"))
+
+
+{-| Files from the project are revalidated on every use (a cheap 304 when unchanged), so
+a stylesheet swap, or a reload, never gets a stale copy from the browser cache: the
+@import'ed files of a swapped stylesheet keep their URLs. See reloadStylesheets.
+-}
+revalidate :: Snap ()
+revalidate =
+  modifyResponse $ setHeader "Cache-Control" "no-cache"
 
 
 directoryConfig :: MonadSnap m => DirectoryConfig m
@@ -242,6 +252,75 @@ lamderaLocalDevDir =
 
 refreshClients (mClients, mLeader, mChan, beState) =
   SocketServer.broadcastImpl mClients "{\"t\":\"r\"}" -- r is refresh, see live.js
+
+
+{-| When every changed file is a stylesheet, the URL paths they are served at, so the
+browser can swap them in place (see reloadStylesheets in live.js) without a recompile or
+a page reload: DOM-only state like an open <dialog>, scroll or focus survives. Nothing
+when any change is something else, which keeps the recompile and refresh.
+
+Each change comes with whether its file still exists. Files already gone that are not
+Elm sources are left out: they are what editors leave behind while saving (vim's 4913
+and style.css~, JetBrains' style.css___jb_tmp___, sed -i's .!123!style.css). The
+stylesheets swapped are the ones still there, or all of them when all were removed.
+
+Files in public/ are served from /, other project files at their own path (see
+serveLamderaPublicFiles and Develop.serveFiles). The roots are the project root as given
+and canonicalised, as the watcher may report /private/tmp/... for /tmp/... on macOS.
+-}
+stylesheetOnlyChange :: [FilePath] -> [(FilePath, Bool)] -> Maybe [Text]
+stylesheetOnlyChange roots changes =
+  let
+    relevant = filter (\(path, exists) -> exists || hasExtension ".elm" path || isStylesheet path) changes
+    present = [ path | (path, True) <- relevant ]
+  in
+  if not (null relevant) && all (isStylesheet . fst) relevant
+    then Just $ List.nub $ fmap (stylesheetUrlPath roots) $ if null present then fmap fst relevant else present
+    else Nothing
+
+
+{-| The stylesheets among changes that also need a recompile, see stylesheetOnlyChange.
+They are swapped too: a hot reload in freeze mode does not fetch them again.
+-}
+changedStylesheets :: [FilePath] -> [(FilePath, Bool)] -> [Text]
+changedStylesheets roots changes =
+  List.nub [ stylesheetUrlPath roots path | (path, True) <- changes, isStylesheet path ]
+
+
+isStylesheet :: FilePath -> Bool
+isStylesheet =
+  hasExtension ".css"
+
+
+hasExtension :: String -> FilePath -> Bool
+hasExtension ext path =
+  map Data.Char.toLower (FP.takeExtension path) == ext
+
+
+stylesheetUrlPath :: [FilePath] -> FilePath -> Text
+stylesheetUrlPath roots path =
+  let
+    relative =
+      roots
+        & fmap (\root -> FP.makeRelative root path)
+        & List.find FP.isRelative
+        & fromMaybe path
+
+    served =
+      case FP.splitDirectories relative of
+        "public" : rest -> rest
+        other -> filter (/= "/") other
+  in
+  T.pack $ "/" ++ List.intercalate "/" served
+
+
+{-| Tell every client which stylesheets changed, see stylesheetOnlyChange. -}
+reloadStylesheets :: LiveState -> [Text] -> IO ()
+reloadStylesheets (mClients, mLeader, mChan, beState) paths = do
+  debugT $ "🎨 stylesheets changed, swapping in place: " <> T.intercalate ", " paths
+  SocketServer.broadcastImpl mClients $ -- css is a stylesheet swap, see live.js
+    TE.decodeUtf8 $ BSL.toStrict $ Aeson.encode $
+      Aeson.object [ "t" Aeson..= ("css" :: Text), "p" Aeson..= paths ]
 
 
 serveWebsocket root (mClients, mLeader, mChan, beState) =

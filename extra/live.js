@@ -61,6 +61,9 @@ var msgHandler = function(e) {
     case "r":
       document.location.reload()
       break;
+    case "css":
+      reloadStylesheets(d.p)
+      break;
   }
 }
 
@@ -231,6 +234,10 @@ window.setupApp = function(name, elid) {
         } else {
           document.location.reload()
         }
+        break;
+
+      case "css": // only stylesheets changed, swap them in place, see Lamdera.CLI.Live.stylesheetOnlyChange
+        reloadStylesheets(d.p)
         break;
 
       case "s": // setup message, will get called again if websocket drops and reconnects
@@ -625,4 +632,94 @@ function fullHotReload() {
     .catch(error => {
       console.error(error)
     })
+}
+
+
+// @LAMDERA `lamdera live`: swap changed stylesheets in place, without a page reload or a
+// hot reload, so DOM-only state (an open <dialog>, scroll, focus, typed input) survives.
+// `paths` are the URL paths of the changed files, e.g. ["/style.css"].
+//
+// A <link rel=stylesheet> for a changed path is reloaded with a cache-busting query. The
+// link element itself is kept (Elm's virtual DOM may own it): a copy with the new URL is
+// added first and the original only switched once the copy has loaded, so the page never
+// shows unstyled. An @import of a changed path is re-imported with a cache-busting URL.
+// When nothing on the page refers to a changed path (an @import inside an @import, a
+// stylesheet the server knows by another path), every same-origin stylesheet is reloaded.
+function reloadStylesheets(paths) {
+  const changed = new Set(paths)
+  const stamp = Date.now()
+
+  const sameOrigin = href => {
+    try {
+      const url = new URL(href, document.baseURI)
+      return url.origin === window.location.origin ? url : null
+    } catch (err) {
+      return null
+    }
+  }
+
+  const bust = url => {
+    url.searchParams.set("lamdera-css", stamp)
+    return url.href
+  }
+
+  const links = Array.from(document.querySelectorAll('link[rel~="stylesheet"][href]'))
+    .filter(link => !link.dataset.lamderaCssSwap && sameOrigin(link.href) !== null)
+
+  const matching = links.filter(link => changed.has(sameOrigin(link.href).pathname))
+
+  let imports = 0
+  const reimport = sheet => {
+    let rules = null
+    try { rules = sheet.cssRules } catch (err) { return } // cross-origin
+    for (let i = rules.length - 1; i >= 0; i--) {
+      const rule = rules[i]
+      if (typeof CSSImportRule === "undefined" || !(rule instanceof CSSImportRule)) { continue }
+      const url = sameOrigin(new URL(rule.href, sheet.href || document.baseURI).href)
+      if (url !== null && changed.has(url.pathname)) {
+        const text = rule.cssText.split(rule.href).join(bust(url))
+        try {
+          sheet.deleteRule(i)
+          sheet.insertRule(text, i)
+          imports++
+        } catch (err) {
+          console.error(err)
+        }
+      } else if (rule.styleSheet) {
+        reimport(rule.styleSheet)
+      }
+    }
+  }
+  Array.from(document.styleSheets).forEach(reimport)
+
+  const toSwap = matching.length + imports > 0 ? matching : links
+  if (toSwap.length === 0) {
+    console.info("[lamdera] stylesheets changed but none are on this page: " + paths.join(", "))
+    return
+  }
+  console.info("[lamdera] reloading stylesheets: " + paths.join(", "))
+  toSwap.forEach(link => swapStylesheet(link, bust(sameOrigin(link.href))))
+}
+
+function swapStylesheet(link, href) {
+  // Saves in quick succession: only the latest swap switches the original link over
+  link.lamderaCssHref = href
+  const copy = link.cloneNode(false)
+  copy.dataset.lamderaCssSwap = "true"
+  copy.href = href
+  const done = () => { copy.remove() }
+  copy.addEventListener("error", done)
+  copy.addEventListener("load", () => {
+    if (link.lamderaCssHref !== href) { done(); return }
+    link.addEventListener("load", done, { once: true })
+    link.addEventListener("error", done, { once: true })
+    link.href = href
+  })
+  // Next to a link in the <head>; a link in the <body> belongs to Elm, whose virtual DOM
+  // finds its nodes by position, so its copy goes to the end of the <head> instead.
+  if (link.parentNode === document.head) {
+    link.after(copy)
+  } else {
+    document.head.appendChild(copy)
+  }
 }

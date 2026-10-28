@@ -435,6 +435,7 @@ Executable lamdera
         Test.CompilePerf
         Test.LiveMemory
         Test.HotPatch
+        Test.LiveStylesheets
         Test.Cores
         Test.Caching
         Test.EasyTestSpinner
