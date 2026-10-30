@@ -456,6 +456,7 @@ Executable lamdera
         Test.Wire
         Test.WireGolden
         Test.WireSchema
+        Test.CLI
         Test.MultiVersion
         Test.JsOutput
         Test.MsgLogContext
