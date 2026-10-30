@@ -42,6 +42,7 @@ import Lamdera ((&))
 import qualified Lamdera
 import qualified Lamdera.AppConfig
 import qualified Lamdera.CompileMeta -- @LAMDERA checkForLamderaCodecs
+import qualified Lamdera.WireSchema -- @LAMDERA
 import qualified Ext.MemoryCache as MemoryCache -- @LAMDERA the lamdera live session
 import Data.Dynamic (fromDynamic, toDyn) -- @LAMDERA
 import Control.Exception (evaluate) -- @LAMDERA
@@ -69,6 +70,7 @@ debug stuff details (Build.Artifacts pkg ifaces roots modules) =
       graph <- Task.io $ Lamdera.AppConfig.injectConfig graph_
       let mains = gatherMains pkg objects roots
       checkForLamderaCodecs graph mains -- @LAMDERA
+      Task.io $ Lamdera.WireSchema.writeForGraph pkg graph -- @LAMDERA elm-stuff/lamdera/.lamdera-wire-schema.json
       esmEnabled <- Task.io $ Lamdera.useEsm
       return $ JS.generate mode graph mains
         & Lamdera.alternativeImplementationWhen esmEnabled
@@ -83,6 +85,7 @@ dev stuff details (Build.Artifacts pkg _ roots modules) =
       graph <- Task.io $ Lamdera.AppConfig.injectConfig graph_
       let mains = gatherMains pkg objects roots
       checkForLamderaCodecs graph mains -- @LAMDERA
+      Task.io $ Lamdera.WireSchema.writeForGraph pkg graph -- @LAMDERA elm-stuff/lamdera/.lamdera-wire-schema.json
       esmEnabled <- Task.io $ Lamdera.useEsm
       -- @LAMDERA with a `lamdera live` session (either backing) reuse the JS of definitions that did not change
       memory <- Task.io $ MemoryCache.forStuff stuff
@@ -117,6 +120,7 @@ prod stuff details (Build.Artifacts pkg _ roots modules) =
                        (Mode.Prod (Mode.legibleFieldNames graph))
       let mains = gatherMains pkg objects roots
       checkForLamderaCodecs graph mains -- @LAMDERA
+      Task.io $ Lamdera.WireSchema.writeForGraph pkg graph -- @LAMDERA elm-stuff/lamdera/.lamdera-wire-schema.json
       esmEnabled <- Task.io $ Lamdera.useEsm
       return $ JS.generate mode graph mains
         & Lamdera.alternativeImplementationWhen esmEnabled

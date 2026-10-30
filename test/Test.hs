@@ -24,6 +24,7 @@ import qualified Test.Cores
 import qualified Test.Check
 import qualified Test.Wire
 import qualified Test.WireGolden
+import qualified Test.WireSchema
 import qualified Test.MultiVersion
 import qualified Test.PackageProblem
 import qualified Test.Ext.ElmPages.Check
@@ -165,6 +166,7 @@ allTests =
     -- , scope "Test.Snapshot -> " $ Test.Snapshot.suite
     , scope "Test.Wire -> " $ Test.Wire.suite
     , scope "Test.WireGolden -> " $ Test.WireGolden.suite
+    , scope "Test.WireSchema -> " $ Test.WireSchema.suite
     , scope "Test.MultiVersion -> " $ Test.MultiVersion.suite
     -- Disable temporarily as the cache busting is crazy aggressive meaning 100mb redownload each run :|
     , scope "Test.Ext.ElmPages.Check -> " $ Test.Ext.ElmPages.Check.suite

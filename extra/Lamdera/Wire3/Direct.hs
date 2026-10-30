@@ -7,6 +7,7 @@ module Lamdera.Wire3.Direct
   , replaceCodecs
   , directEnabled
   , CodecCache, emptyCodecCache, replaceCodecsCached -- @LAMDERA the lamdera live session
+  , IR(..), Codec(..), Body(..), Alt(..), W(..), Home, readIR -- @LAMDERA Lamdera.WireSchema
   ) where
 
 {- Direct JS Wire3 codecs (C2, docs/plans/wire3-codegen-research.md in the runtime repo).
@@ -176,6 +177,12 @@ readStored parser bs =
       case reads (BS8.unpack bs) of
         [(value, "")] -> Just value
         _ -> Nothing
+
+
+-- The IR stored in a `w3_ir_<T>` node (Lamdera.WireSchema reads it too).
+readIR :: BS.ByteString -> Maybe IR
+readIR =
+  readStored pIR
 
 
 newtype Parser a =

@@ -349,6 +349,7 @@ Executable lamdera
         Lamdera.CLI.Format
 
         Lamdera.AppConfig
+        Lamdera.WireSchema
         Lamdera.Checks
         Lamdera.Constrain
         Lamdera.Evergreen.MigrationDestructive
@@ -448,6 +449,7 @@ Executable lamdera
         Test.TypeHashes
         Test.Wire
         Test.WireGolden
+        Test.WireSchema
         Test.MultiVersion
         Test.JsOutput
         Test.MsgLogContext
