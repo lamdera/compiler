@@ -347,6 +347,12 @@ Executable lamdera
         Lamdera.CLI.Interpreter
         Lamdera.CLI.Backend
         Lamdera.CLI.Format
+        Lamdera.CLI.Dashboard
+        Lamdera.CLI.App
+        Lamdera.CLI.Env
+        Lamdera.CLI.Domains
+        Lamdera.CLI.Logs
+        Lamdera.CLI.Events
 
         Lamdera.AppConfig
         Lamdera.WireSchema

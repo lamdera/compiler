@@ -156,7 +156,11 @@ argsToDocHelp command args names =
 
 toToken :: String -> String
 toToken string =
-  "<" ++ map (\c -> if c == ' ' then '-' else c) string ++ ">"
+  case string of
+    -- @LAMDERA a parser named "=word" is that fixed word, the verb of a command
+    -- (`lamdera app list`, Lamdera.CLI.Dashboard.verb), shown as is rather than as <list>
+    '=' : word -> word
+    _ -> "<" ++ map (\c -> if c == ' ' then '-' else c) string ++ ">"
 
 
 flagsToDocs :: Flags flags -> [P.Doc] -> [P.Doc]
@@ -287,6 +291,7 @@ exitWithError err =
 toArgErrorRank :: ArgError -> Int -- lower is better
 toArgErrorRank err =
   case err of
+    ArgBad _ (Expectation ('=' : _) _) -> 3 -- @LAMDERA another verb's alternative, see toToken
     ArgBad _ _   -> 0
     ArgMissing _ -> 1
     ArgExtras _  -> 2

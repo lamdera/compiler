@@ -52,6 +52,11 @@ main =
     , withCores Lamdera.CLI.eval
     , Lamdera.CLI.backend
     , Lamdera.CLI.format
+    , Lamdera.CLI.app
+    , Lamdera.CLI.env
+    , Lamdera.CLI.domains
+    , Lamdera.CLI.logs
+    , Lamdera.CLI.events
     -- , reactor
     -- , bump
     -- , diff
