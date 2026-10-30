@@ -70,14 +70,11 @@ checkApiLoop inProduction appName token =
       Right response ->
         case response of
           "init" -> do
+            web <- Lamdera.Http.dashboardWebUrl (Just appName)
             let
               mask = textSha1 $ "x827c2" <> token
               url =
-                if textContains "-local" appName
-                  then
-                    "http://localhost:8082/auth/cli/" <> mask
-                  else
-                    "https://dashboard.lamdera.app/auth/cli/" <> mask
+                T.pack web <> "/auth/cli/" <> mask
 
             putStrLn $ "───> Opening " <> T.unpack url
             sleep 1000
@@ -136,50 +133,91 @@ removeToken = do
 validateCliToken :: IO Text
 validateCliToken = do
   appName <- Lamdera.Project.appNameOrThrow
+  validateCliTokenFor (Just appName)
+
+
+{-| validateCliToken for an app, or for none: a valid token, or the problem reported and
+exit. -}
+validateCliTokenFor :: Maybe Text -> IO Text
+validateCliTokenFor appNameM = do
+  result <- checkCliToken appNameM
+  case result of
+    Right token ->
+      pure token
+
+    Left problem ->
+      case problem of
+        CliAuthHttp error -> do
+          Lamdera.Http.printHttpError error "I need to validate the CLI session"
+          exitFailure
+
+        _ -> do
+          Progress.report $ D.fillSep ["───>", D.red (D.fromChars (T.unpack (cliAuthProblemText problem)))]
+          exitFailure
+
+
+data CliAuthProblem
+  = CliAuthNoToken
+  | CliAuthInvalid
+  | CliAuthHttp Lamdera.Http.Error
+
+
+cliAuthProblemText :: CliAuthProblem -> Text
+cliAuthProblemText problem =
+  case problem of
+    CliAuthNoToken -> "No CLI auth, please run `lamdera login`"
+    CliAuthInvalid -> "Invalid CLI auth, please re-run `lamdera login`"
+    CliAuthHttp error -> "I could not reach the Lamdera dashboard to validate the CLI session: " <> T.pack (show error)
+
+
+{-| The CLI token, checked with the dashboard, without printing anything. An invalid
+token is removed, as `lamdera login` would replace it anyway. -}
+checkCliToken :: Maybe Text -> IO (Either CliAuthProblem Text)
+checkCliToken appNameM = do
   elmHome <- Root.getElmHomePath
   existingToken <- getToken
 
   case existingToken of
     Just token -> do
-      apiSession <- fetchApiSession appName token
+      apiSession <- fetchApiSessionFor appNameM token
 
       case apiSession of
         Right "success" -> do
-          pure token
+          pure $ Right token
 
         Left error -> do
           case error of
             Lamdera.Http.HttpError httpExit -> do
-              Lamdera.Http.printHttpError error "I need to validate the CLI session"
-              exitFailure
+              pure $ Left $ CliAuthHttp error
 
             _ -> do
-              Progress.report $ D.fillSep ["───>", D.red "Invalid CLI auth, please re-run `lamdera login`"]
               removeToken
-              exitFailure
+              pure $ Left CliAuthInvalid
 
         _ -> do
-          Progress.report $ D.fillSep ["───>", D.red "Invalid CLI auth, please re-run `lamdera login`"]
           removeToken
-          exitFailure
+          pure $ Left CliAuthInvalid
 
 
     Nothing -> do
       debug_ $ "Found no token in " <> elmHome
-      Progress.report $ D.fillSep ["───>", D.red "No CLI auth, please run `lamdera login`"]
-      exitFailure
+      pure $ Left CliAuthNoToken
 
 
 fetchApiSession :: Text -> Text -> IO (Either Lamdera.Http.Error Text)
 fetchApiSession appName token =
+  fetchApiSessionFor (Just appName) token
+
+
+{-| fetchApiSession for an app, or for none (`lamdera app list` and `app create` work
+outside any app). The app name only picks the dashboard (see Lamdera.Http.dashboardFor). -}
+fetchApiSessionFor :: Maybe Text -> Text -> IO (Either Lamdera.Http.Error Text)
+fetchApiSessionFor appNameM token = do
+  dashboard <- Lamdera.Http.dashboardFor appNameM
   let
     endpoint =
-      if textContains "-local" appName
-        then
-          "http://localhost:8082/_r/apiSessionJson"
-          -- "https://" <> T.unpack appName <> ".lamdera.test/_i"
-        else
-          "https://dashboard.lamdera.app/_r/apiSessionJson"
+      Lamdera.Http.dashboardEndpoint dashboard "/_r/apiSessionJson"
+      -- "https://" <> T.unpack appName <> ".lamdera.test/_i"
 
     body =
       E.object [ ("token", E.jsonString $ Json.String.fromChars $ T.unpack token) ]
@@ -187,8 +225,7 @@ fetchApiSession appName token =
     decoder =
       D.jsonString
 
-  in
-  (fmap $ T.pack . Json.String.toChars) <$> Lamdera.Http.normalRpcJson "fetchApiSession" body endpoint decoder
+  (fmap $ T.pack . Json.String.toChars) <$> Lamdera.Http.normalRpcJsonVia (Lamdera.Http._dashboardSocket dashboard) "fetchApiSession" body endpoint decoder
 
 
 doUntil :: (a -> Bool) -> (IO a) -> IO ()

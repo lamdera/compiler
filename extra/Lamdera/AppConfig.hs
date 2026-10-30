@@ -297,19 +297,12 @@ extract rawConfig = do
 fetchAppConfigItems :: Text -> Text -> IO (Either Lamdera.Http.Error (WithErrorField [(Text, Text, Bool, Bool)]))
 fetchAppConfigItems appName token = do
   -- Prefer a local unix socket when present, otherwise use HTTP.
-  dashboardSocket <- Lamdera.Http.socketPathIfExists "dashboard"
+  dashboard <- Lamdera.Http.dashboardFor (Just appName)
   let
-    endpoint =
-      case dashboardSocket of
-        Just _ ->
-          "http://dashboard.lamdera.app/_r/configItemsJson"
+    dashboardSocket = Lamdera.Http._dashboardSocket dashboard
 
-        Nothing ->
-          if textContains "-local" appName
-            then
-              "http://localhost:8082/_r/configItemsJson"
-            else
-              "https://dashboard.lamdera.app/_r/configItemsJson"
+    endpoint =
+      Lamdera.Http.dashboardEndpoint dashboard "/_r/configItemsJson"
 
     body =
       E.object

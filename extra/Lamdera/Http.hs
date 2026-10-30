@@ -68,6 +68,71 @@ socketPathIfExists name = do
   pure $ if exists then Just path else Nothing
 
 
+{-| Where the dashboard is, for an app (when known): the base URL every dashboard request
+goes to, and the unix socket to reach it through when there is one locally.
+
+  - LAMDERA_DASHBOARD_URL overrides everything (tests point the CLI at a stub with it);
+  - else the local `dashboard` socket on a server that has one;
+  - else http://localhost:8082 for `-local` apps (the dashboard in local development);
+  - else https://dashboard.lamdera.app.
+-}
+data Dashboard =
+  Dashboard
+    { _dashboardUrl :: String
+    , _dashboardSocket :: Maybe FilePath
+    }
+    deriving (Show, Eq)
+
+
+dashboardFor :: Maybe Text -> IO Dashboard
+dashboardFor appNameM = do
+  overrideM <- dashboardOverride
+  case overrideM of
+    Just url ->
+      pure $ Dashboard url Nothing
+
+    Nothing -> do
+      dashboardSocket <- socketPathIfExists "dashboard"
+      case dashboardSocket of
+        Just _ ->
+          pure $ Dashboard "http://dashboard.lamdera.app" dashboardSocket
+
+        Nothing ->
+          pure $ Dashboard (dashboardWebUrl_ Nothing appNameM) Nothing
+
+
+{-| The dashboard's URL for links people open in a browser (never the socket). -}
+dashboardWebUrl :: Maybe Text -> IO String
+dashboardWebUrl appNameM = do
+  overrideM <- dashboardOverride
+  pure $ dashboardWebUrl_ overrideM appNameM
+
+
+dashboardWebUrl_ :: Maybe String -> Maybe Text -> String
+dashboardWebUrl_ overrideM appNameM =
+  case overrideM of
+    Just url -> url
+    Nothing ->
+      if maybe False (textContains "-local") appNameM
+        then "http://localhost:8082"
+        else "https://dashboard.lamdera.app"
+
+
+dashboardOverride :: IO (Maybe String)
+dashboardOverride = do
+  envM <- Env.lookupEnv "LAMDERA_DASHBOARD_URL"
+  pure $
+    case envM of
+      Just url | not (null url) -> Just (reverse (dropWhile (== '/') (reverse url)))
+      _ -> Nothing
+
+
+{-| A dashboard endpoint, e.g. `dashboardEndpoint d "/_r/configItemsJson"`. -}
+dashboardEndpoint :: Dashboard -> String -> String
+dashboardEndpoint dashboard path =
+  _dashboardUrl dashboard <> path
+
+
 {-| Whether bootstrap mode is active for this build.
 
 Bootstrap is ONLY ever used by the local test environment — LAMDERA_BOOTSTRAP is
