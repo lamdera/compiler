@@ -114,6 +114,9 @@ Executable lamdera
         -- Live
         websockets,
         websockets-snap,
+        -- lamdera live --serve: wss to the live relay, see Lamdera.CLI.LiveServe
+        crypton-connection,
+        data-default,
         stm,
         uuid,
         broadcast-chan,
@@ -352,6 +355,7 @@ Executable lamdera
         Lamdera.CLI.Env
         Lamdera.CLI.Domains
         Lamdera.CLI.Logs
+        Lamdera.CLI.LiveServe
         Lamdera.CLI.Events
 
         Lamdera.AppConfig
@@ -457,6 +461,7 @@ Executable lamdera
         Test.WireGolden
         Test.WireSchema
         Test.CLI
+        Test.LiveServe
         Test.MultiVersion
         Test.JsOutput
         Test.MsgLogContext
@@ -599,6 +604,9 @@ Test-Suite lamdera-tests
         -- Live
         websockets,
         websockets-snap,
+        -- lamdera live --serve: wss to the live relay, see Lamdera.CLI.LiveServe
+        crypton-connection,
+        data-default,
         stm,
         uuid,
         broadcast-chan,

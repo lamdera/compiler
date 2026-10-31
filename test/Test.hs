@@ -26,6 +26,7 @@ import qualified Test.Wire
 import qualified Test.WireGolden
 import qualified Test.WireSchema
 import qualified Test.CLI
+import qualified Test.LiveServe
 import qualified Test.MultiVersion
 import qualified Test.PackageProblem
 import qualified Test.Ext.ElmPages.Check
@@ -140,7 +141,7 @@ liveReloadLive = do
   setEnv "LDEBUG" "1"
   setEnv "EXPERIMENTAL" "1"
   let p = "test/scenario-alltypes"
-  trackedForkIO "Test.liveReloadLive" $ Develop.runWithRoot p (Develop.Flags Nothing Nothing False False)
+  trackedForkIO "Test.liveReloadLive" $ Develop.runWithRoot p (Develop.Flags Nothing Nothing False False False Nothing)
 
   -- Doing this actually makes no sense in the :rr context, as the thread is long-running so it's the same as
   -- disabling the ENV vars mid-run! But leaving it here as a reminder, because it _does_ pollute the ENV
@@ -169,6 +170,7 @@ allTests =
     , scope "Test.WireGolden -> " $ Test.WireGolden.suite
     , scope "Test.WireSchema -> " $ Test.WireSchema.suite
     , scope "Test.CLI -> " $ Test.CLI.suite
+    , scope "Test.LiveServe -> " $ Test.LiveServe.suite
     , scope "Test.MultiVersion -> " $ Test.MultiVersion.suite
     -- Disable temporarily as the cache busting is crazy aggressive meaning 100mb redownload each run :|
     , scope "Test.Ext.ElmPages.Check -> " $ Test.Ext.ElmPages.Check.suite

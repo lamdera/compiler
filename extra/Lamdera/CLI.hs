@@ -44,9 +44,11 @@ live =
     liveFlags =
       flags Develop.Flags
         |-- flag "port" port_ "The port of the server (default: 8000)"
-        |-- flag "bind" bind_ "The address to listen on (default: 127.0.0.1, only this computer). Use --bind=0.0.0.0 to open the app from other devices on your network, like your phone. The REPL and file tools stay available only on this computer."
+        |-- flag "bind" bind_ "The address to listen on (default: 127.0.0.1, only this computer). Use --bind=0.0.0.0 to open the app from other devices on your network, like your phone. The REPL, the file tools and the project's own files stay available only on this computer."
         |-- onOff "open" "Open a web browser to view the local server"
         |-- onOff "memory" "Keep the build artifacts and the sources only in memory between rebuilds, instead of writing elm-stuff on every rebuild and reading the sources from disk. elm-stuff is written on exit. (Either way `lamdera live` keeps what it built between rebuilds, reuses what did not change and sends hot patches; this only changes where it is kept.)"
+        |-- onOff "serve" "Also share the app at a public https://<app>-<random>.live.lamdera.app address while `lamdera live` runs, for anyone with the link (needs `lamdera login`). Visitors share the backend with your own browser tabs; they get the app only: not the dev bar, the REPL, or the project's files."
+        |-- flag "app" appName_ "The app --serve shares, if not the one of this project's `lamdera` git remote"
   in
   Terminal.Command "live" (Common summary) details example noArgs liveFlags Develop.run
 

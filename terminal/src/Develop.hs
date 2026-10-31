@@ -47,6 +47,7 @@ import qualified Lamdera.CLI.Live as Live
 import qualified Lamdera.Constrain
 import qualified Lamdera.Repl
 import qualified Lamdera.CLI.LocalOnly as LocalOnly
+import qualified Lamdera.CLI.LiveServe as LiveServe
 import qualified Lamdera.ReverseProxy
 import qualified Lamdera.TypeHash
 import qualified Lamdera.PostCompile
@@ -72,6 +73,8 @@ data Flags =
     , _bind :: Maybe String -- @LAMDERA lamdera live --bind, see Lamdera.CLI.LocalOnly
     , _open :: Bool
     , _memory :: Bool -- @LAMDERA lamdera live --memory, see Ext.MemoryCache
+    , _serve :: Bool -- @LAMDERA lamdera live --serve, see Lamdera.CLI.LiveServe
+    , _app :: Maybe String -- @LAMDERA the app --serve shares, if not the project's
     }
 
 
@@ -83,7 +86,7 @@ run () flags = do
 
 
 runWithRoot :: FilePath -> Flags -> IO ()
-runWithRoot root (Flags maybePort maybeBind shouldOpenBrowser inMemory) =
+runWithRoot root (Flags maybePort maybeBind shouldOpenBrowser inMemory serve appM) =
   do
       Lamdera.setLiveMode True
       let port = maybe 8000 id maybePort
@@ -92,12 +95,19 @@ runWithRoot root (Flags maybePort maybeBind shouldOpenBrowser inMemory) =
       liftIO $ Lamdera.stdoutSetup
       atomicPutStrLn $ "Go to http://localhost:" ++ show port ++ " to see your project dashboard."
       onlyWhen (not $ LocalOnly.isLoopbackBind bind) $
-        atomicPutStrLn $ "Also serving the app on " ++ bind ++ ":" ++ show port ++ " (--bind), reachable from other devices. The REPL and file tools stay on this computer."
+        atomicPutStrLn $ "Also serving the app on " ++ bind ++ ":" ++ show port ++ " (--bind), reachable from other devices. The REPL, the file tools and the project's own files stay on this computer."
 
       Lamdera.setProjectRoot root
 
       onlyWhen (port == 8001) $
         error "Port 8001 is reserved for the Lamdera proxy, please pick another port."
+
+      -- @LAMDERA lamdera live --serve: the app and the CLI login are checked before
+      -- anything starts, so a problem with either stops here with what to do
+      shareM <-
+        if serve
+          then Just <$> LiveServe.prepare appM
+          else pure Nothing
 
       liveState <- liftIO $ Live.init
 
@@ -183,20 +193,32 @@ runWithRoot root (Flags maybePort maybeBind shouldOpenBrowser inMemory) =
 
       onlyWhen shouldOpenBrowser $ systemOpenPath $ stringToText $ "http://localhost:" ++ show port
 
+      -- @LAMDERA lamdera live --serve: share this server at https://<app>-<random>.live.lamdera.app
+      -- through the tunnel, which forwards each request to this server (see Lamdera.CLI.LiveServe)
+      let withShare io =
+            case shareM of
+              Just share -> LiveServe.withTunnel share (LiveServe.localTarget bind port) io
+              Nothing -> io
+
       Live.withMemoryFlush root memory $
        Live.withEnd liveState $
+       withShare $
        httpServe (config bind port) $ gcatchlog "general" $
         -- @LAMDERA /_c and /_x/* only for this computer, see Lamdera.CLI.LocalOnly
         LocalOnly.forbidRemoteDevTools
+        -- @LAMDERA and no dotfiles for anyone else (a --serve visitor, a device through --bind)
+        <|> LocalOnly.forbidRemoteDotfiles
         <|>
         -- Add /public/* as if it were /* to mirror production, but still render .elm files as an Elm app first
         Live.serveLamderaPublicFiles root serveApp
-        <|> (serveFiles root sentryCache)
+        -- @LAMDERA the project's files at their own path only for this computer: anyone else
+        -- gets what the app needs (public/, the app, its sockets and RPCs), as in production
+        <|> LocalOnly.localOnly (serveFiles root sentryCache)
         -- @WARNING, `serveDirectoryWith` implicitly uses Dir.getCurrentDirectory. We can't change '.' to `root` as it freaks out
         -- with the fully qualified path. And we can't use `System.Filepath.makeRelative` because it refuses to introduce `../`.
         -- So if the user has accidentally run `lamdera live` in a subfolder of their project root, this next line is relying on the
         -- `Dir.setCurrentDirectory root` at the top of this file to have worked correctly – which it seems it doesn't always do.
-        <|> serveDirectoryWith directoryConfig "."
+        <|> LocalOnly.localOnly (serveDirectoryWith directoryConfig ".")
         <|> Live.serveWebsocket root liveState
         <|> route [ ("_r/:endpoint", method POST $ Live.serveRpc liveState port) ] -- POST only, like production
         <|> route [ ("_patch", servePatch sentryCache memory) ] -- @LAMDERA live session hot patches, see Lamdera.HotPatch

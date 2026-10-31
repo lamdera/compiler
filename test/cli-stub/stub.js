@@ -26,6 +26,9 @@ function answer(op, body) {
       return { ok: [{ appId: 'demo', plan: 'hobby', owner: 'mario', version: 3, created: 1700000000000, url: 'https://demo.lamdera.app', preview: false }] }
     case 'appInfo':
       return { pending: 'info1' }
+    case 'liveShare':
+      // what the live relay asks (lamdera live --serve)
+      return body.key === 'test-token' ? { ok: { appId: body.appId, username: 'mario' } } : { error: 'invalid token, please run `lamdera login` again' }
     case 'appDelete':
       return body.confirm === body.appId ? { ok: { deleted: body.appId } } : { error: 'confirm must be the app name' }
     case 'envSet':
