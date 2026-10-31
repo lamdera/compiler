@@ -3,6 +3,12 @@
 
 module Lamdera.CLI.LocalOnly
   ( forbidRemoteDevTools
+  , forbidRemoteDotfiles
+  , localOnly
+  , isLocalRequest
+  , isLocal
+  , isLocalHost
+  , hasDotSegment
   , resolveWithin
   , isLoopbackBind
   ) where
@@ -14,6 +20,13 @@ module Lamdera.CLI.LocalOnly
    They answer only this computer, also when `lamdera live --bind` serves the app
    to the network (a phone on the same Wi-Fi), and only for paths inside the
    directories they are for.
+
+   The same goes for the project's files at their own path (/src/Backend.elm,
+   /elm.json) and directory listings: a request that is not local only gets what the
+   app itself needs, as in production (see localOnly, forbidRemoteDotfiles). That is
+   what `lamdera live --serve` relies on: its tunnel forwards each request from this
+   computer, but with the Host it was sent to (<app>-<random>.live.lamdera.app), so
+   none of it counts as local.
 -}
 
 import Control.Exception (SomeException, try)
@@ -33,9 +46,9 @@ forbidRemoteDevTools :: Snap ()
 forbidRemoteDevTools = do
   request <- getRequest
   let
-    path = maybe (rqPathInfo request) id (urlDecode (rqPathInfo request))
+    path = decodedPath request
     firstSegment = BS8.takeWhile (\c -> c /= '/' && c /= '\\') (BS8.dropWhile (\c -> c == '/' || c == '\\') path)
-    local = isLoopbackClient (rqClientAddr request) && maybe True isLocalHost (getHeader "Host" request)
+    local = isLocalRequest request
   if firstSegment `elem` ["_c", "_x"] && not local
     then do
       modifyResponse $ setResponseStatus 403 "Forbidden"
@@ -44,6 +57,56 @@ forbidRemoteDevTools = do
       getResponse >>= finishWith
     else
       pass
+
+
+-- | Answers 404 for a request that is not local and names a dotfile or a dot
+-- directory anywhere in its path (/.env, /.git/config, /public/.secret): never part
+-- of what an app serves. Passes everything else on.
+forbidRemoteDotfiles :: Snap ()
+forbidRemoteDotfiles = do
+  request <- getRequest
+  if not (isLocalRequest request) && hasDotSegment (decodedPath request)
+    then do
+      modifyResponse $ setResponseStatus 404 "Not Found"
+      modifyResponse $ setContentType "text/plain; charset=utf-8"
+      writeBS "Not found\n"
+      getResponse >>= finishWith
+    else
+      pass
+
+
+-- | The handler only for local requests (see isLocalRequest), passing on the others:
+-- for the parts of `lamdera live` that serve the project's own files at their path,
+-- which the app does not need (it is served from public/ and the compiled harness).
+localOnly :: Snap () -> Snap ()
+localOnly handler = do
+  request <- getRequest
+  if isLocalRequest request then handler else pass
+
+
+-- | Whether a request comes from this computer, with a Host a DNS rebinding page
+-- can't send (localhost, *.localhost or an IP address). A request through the
+-- `lamdera live --serve` tunnel comes from this computer, but with the preview's Host.
+isLocalRequest :: Request -> Bool
+isLocalRequest request =
+  isLocal (rqClientAddr request) (getHeader "Host" request)
+
+
+-- | isLocalRequest from the client address and the Host header.
+isLocal :: BS8.ByteString -> Maybe BS8.ByteString -> Bool
+isLocal clientAddr hostHeader =
+  isLoopbackClient clientAddr && maybe True isLocalHost hostHeader
+
+
+-- | Whether any segment of a path starts with a dot ("." and ".." included).
+hasDotSegment :: BS8.ByteString -> Bool
+hasDotSegment path =
+  any (\segment -> "." `BS8.isPrefixOf` segment) (BS8.splitWith (\c -> c == '/' || c == '\\') path)
+
+
+decodedPath :: Request -> BS8.ByteString
+decodedPath request =
+  maybe (rqPathInfo request) id (urlDecode (rqPathInfo request))
 
 
 -- | The real path of `path` with symlinks resolved, if that is inside one of `roots`

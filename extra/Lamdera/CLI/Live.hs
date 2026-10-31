@@ -328,6 +328,8 @@ serveWebsocket root (mClients, mLeader, mChan, beState) =
       guard (file == "_w")
       mKey <- getHeader "sec-websocket-key" <$> getRequest
       mSid <- getCookie "sid"
+      -- @LAMDERA a visitor through `lamdera live --serve` (or --bind), see allowedFromClient
+      remote <- not . LocalOnly.isLocalRequest <$> getRequest
 
       randBytes <- liftIO $ getEntropy 20
       let newSid = BSL.toStrict $ B.toLazyByteString $ B.byteStringHex randBytes
@@ -378,6 +380,11 @@ serveWebsocket root (mClients, mLeader, mChan, beState) =
                     pure Nothing
 
               onReceive clientId text = do
+               leaderNow <- readTVarIO mLeader
+               if not (allowedFromClient remote (leaderNow == Just clientId) text)
+                then
+                  debugT $ "[socketRecieve] ignored from a remote client: " <> T.take 40 text
+                else do
                 -- debugT $ "[socketRecieve ] " <> text
                 if T.isPrefixOf "{\"t\":\"env\"," text
                   then do
@@ -421,6 +428,20 @@ serveWebsocket root (mClients, mLeader, mChan, beState) =
 
         Nothing ->
           error404 "missing sec-websocket-key header"
+
+{-| Whether `lamdera live` acts on a message from a browser's /_w socket. Everything
+from this computer. From anyone else (a `lamdera live --serve` visitor, a device
+through --bind), not what only the developer does: switching the env mode, which
+writes the project's files, and saving the backend model, unless the visitor's tab
+is the leader that runs the backend (that is how the model is kept).
+-}
+allowedFromClient :: Bool -> Bool -> Text -> Bool
+allowedFromClient remote isLeader text
+  | not remote = True
+  | T.isPrefixOf "{\"t\":\"env\"," text = False
+  | T.isSuffixOf "\"t\":\"p\"}" text = isLeader
+  | otherwise = True
+
 
 openEditorHandler :: FilePath -> Snap ()
 openEditorHandler root = do

@@ -177,6 +177,7 @@ type alias Model =
     , nodeType : NodeType
     , devbar : DevBar
     , resetModelNames : List String
+    , remoteVisitor : Bool
     }
 
 
@@ -376,6 +377,7 @@ init flags url key =
       , clientId = flags.c
       , devbar = devbar
       , resetModelNames = List.filterMap identity [ femReset, bemReset ]
+      , remoteVisitor = isRemoteHost url.host
       }
     , Cmd.batch
         [ Cmd.map FEMsg newFeCmds
@@ -1728,13 +1730,71 @@ mapDocument model msg { title, body } =
         List.map (Html.map msg) body
             ++ [ Html.node "lamdera-devbar"
                     []
-                    (lamderaUI
-                        model.devbar
-                        model.resetModelNames
-                        model.nodeType
+                    (if model.remoteVisitor then
+                        [ Html.Lazy.lazy remotePreviewBadge model.devbar.liveStatus ]
+
+                     else
+                        lamderaUI
+                            model.devbar
+                            model.resetModelNames
+                            model.nodeType
                     )
                ]
     }
+
+
+{-| A page opened by any other name than this computer's (localhost, *.localhost or an
+IP address, which includes a phone through `lamdera live --bind`): a visitor to a
+`lamdera live --serve` preview at <app>-<random>.live.lamdera.app. They get the app
+and a small notice instead of the dev bar: its mode switch, backend reset, REPL and
+file tools are the developer's (and refused for remote clients by lamdera live itself).
+-}
+isRemoteHost : String -> Bool
+isRemoteHost host =
+    let
+        name =
+            String.toLower host
+
+        isIPv4 =
+            case String.split "." name of
+                [ _, _, _, _ ] ->
+                    String.split "." name |> List.all (\part -> part /= "" && String.all Char.isDigit part)
+
+                _ ->
+                    False
+
+        isIPv6 =
+            String.startsWith "[" name || String.contains ":" name
+    in
+    not (name == "localhost" || String.endsWith ".localhost" name || isIPv4 || isIPv6)
+
+
+remotePreviewBadge : LiveStatus -> Html Msg
+remotePreviewBadge liveStatus =
+    div
+        [ style "font-family" "system-ui, Helvetica Neue, sans-serif"
+        , style "font-size" "11px"
+        , style "position" "fixed"
+        , style "z-index" "2147483647"
+        , style "bottom" "5px"
+        , style "right" "5px"
+        , style "padding" "3px 7px"
+        , style "color" white
+        , style "background-color" charcoal
+        , style "border-radius" "5px"
+        , style "opacity" "0.8"
+        , style "pointer-events" "none"
+        , class "lamdera-live-preview"
+        ]
+        [ text
+            (case liveStatus of
+                Online ->
+                    "lamdera live preview"
+
+                Offline ->
+                    "lamdera live preview (reconnecting...)"
+            )
+        ]
 
 
 icon fn size hex =
