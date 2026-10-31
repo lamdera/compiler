@@ -19,6 +19,8 @@ module Lamdera.CLI.LiveServe
   , parseRelayUrl
   , defaultRelay
   , helloJson
+  , machineSecretPath
+  , machineSecret
   , ServerMessage(..)
   , parseServerMessage
   , backoffSeconds
@@ -96,6 +98,13 @@ import Control.Monad.Except (catchError)
 import Text.Read (readMaybe)
 
 import qualified Reporting.Doc as D
+import qualified Root
+import qualified Data.Char as Char
+import qualified System.Directory as Dir
+import qualified System.Entropy as Entropy
+import qualified System.FilePath as FP
+import System.FilePath ((</>))
+import qualified System.PosixCompat.Files as Files
 
 import Lamdera (debug_)
 import qualified Lamdera.CLI.Login as Login
@@ -114,6 +123,7 @@ data Share =
     { _shareApp :: T.Text
     , _shareToken :: T.Text
     , _shareRelay :: RelayUrl
+    , _shareMachine :: T.Text -- this computer's secret for the app, see machineSecret
     }
 
 
@@ -139,9 +149,9 @@ localTarget bind port =
 
 
 {-| The app and the CLI login --serve needs, or what to do about them reported and exit,
-before `lamdera live` starts. -}
-prepare :: Maybe String -> IO Share
-prepare appM = do
+before `lamdera live` starts. With `new` (--serve-new), the app gets a new address. -}
+prepare :: Maybe String -> Bool -> IO Share
+prepare appM new = do
   appNameM <-
     case appM of
       Just name -> pure (Just (T.pack name))
@@ -172,9 +182,47 @@ prepare appM = do
     case maybe (Right defaultRelay) parseRelayUrl (mfilter_ relayM) of
       Right r -> pure r
       Left problem -> failWith ("LAMDERA_LIVE_RELAY: " <> T.pack problem)
-  pure (Share appName token relay)
+  elmHome <- Root.getElmHomePath
+  machine <- machineSecret (machineSecretPath elmHome appName) new
+  when new $
+    Progress.report $ D.fillSep $
+      [ "───>", D.yellow "New preview address" ]
+        ++ fmap D.fromChars (words ("for " <> T.unpack appName <> " (--serve-new): the previous link stops working. The new one stays the same each time you share " <> T.unpack appName <> " from this computer."))
+  pure (Share appName token relay machine)
   where
     mfilter_ m = case m of { Just s | not (null s) -> Just s; _ -> Nothing }
+
+
+{-| Where this computer keeps its secret for sharing an app: the relay derives the
+preview's name from it (with the user and the app), so the address is the same every
+time the app is shared from here. -}
+machineSecretPath :: FilePath -> T.Text -> FilePath
+machineSecretPath elmHome appName =
+  elmHome </> ".lamdera-live" </> T.unpack appName
+
+
+{-| The secret at `path`, made the first time, or new when `rotate` (--serve-new). 48 hex
+characters, readable only by its owner. -}
+machineSecret :: FilePath -> Bool -> IO T.Text
+machineSecret path rotate = do
+  existing <-
+    if rotate
+      then pure Nothing
+      else do
+        exists <- Dir.doesFileExist path
+        if exists then Just . T.strip . TE.decodeUtf8 <$> BS.readFile path else pure Nothing
+  case existing of
+    Just secret | T.length secret >= 16 && T.all (\c -> Char.isAsciiLower c || Char.isDigit c) secret ->
+      pure secret
+    _ -> do
+      bytes <- Entropy.getEntropy 24
+      let secret = T.pack (concatMap hex (BS.unpack bytes))
+      Dir.createDirectoryIfMissing True (FP.takeDirectory path)
+      BS.writeFile path (TE.encodeUtf8 secret)
+      Files.setFileMode path (Files.ownerReadMode `Files.unionFileModes` Files.ownerWriteMode)
+      pure secret
+  where
+    hex w = let (a, b) = w `divMod` 16 in [ Char.intToDigit (fromIntegral a), Char.intToDigit (fromIntegral b) ]
 
 
 failWith :: T.Text -> IO a
@@ -311,13 +359,14 @@ maxChunk =
 -- CONTROL MESSAGES
 
 
-helloJson :: T.Text -> T.Text -> Maybe (T.Text, T.Text) -> BSL.ByteString
-helloJson token app resumeM =
+helloJson :: T.Text -> T.Text -> T.Text -> Maybe (T.Text, T.Text) -> BSL.ByteString
+helloJson token app machine resumeM =
   Aeson.encode $ Aeson.object $
     [ "t" Aeson..= ("hello" :: T.Text)
     , "v" Aeson..= (1 :: Int)
     , "token" Aeson..= token
     , "app" Aeson..= app
+    , "machine" Aeson..= machine
     , "client" Aeson..= T.pack ("lamdera " <> Lamdera.Version.short)
     ]
     ++ case resumeM of
@@ -448,7 +497,7 @@ announce previous url =
     Nothing ->
       Progress.report $ D.vcat
         [ D.fillSep [ "───>", D.green "Sharing at", D.green (D.fromChars (T.unpack url)) ]
-        , D.reflow "     Anyone with this link can use the app, sharing its backend with your own browser tabs. The dev bar, the REPL and the project's files stay on this computer. The link stops working when `lamdera live` stops."
+        , D.reflow "     Anyone with this link can use the app, sharing its backend with your own browser tabs, after a notice that it runs on your computer. The dev bar, the REPL and the project's files stay on this computer. The link works while `lamdera live` runs, and is the same each time you share this app from this computer (`lamdera live --serve-new` for a new one)."
         ]
     Just (oldUrl, _, _) | oldUrl == url ->
       Progress.report $ D.fillSep [ "───>", D.green "Reconnected, still sharing at", D.green (D.fromChars (T.unpack url)) ]
@@ -516,7 +565,7 @@ instance Exception Lost
 
 session :: Share -> Target -> Maybe (T.Text, T.Text) -> IORef Time.POSIXTime -> WS.Connection -> (T.Text -> T.Text -> T.Text -> IO ()) -> IO SessionEnd
 session share target resumeM lastSeen conn onReady = do
-  WS.sendTextData conn (helloJson (_shareToken share) (_shareApp share) resumeM)
+  WS.sendTextData conn (helloJson (_shareToken share) (_shareApp share) (_shareMachine share) resumeM)
   first <- WS.receiveDataMessage conn
   case first of
     WS.Text bytes _ ->

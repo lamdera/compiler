@@ -21,6 +21,11 @@ import Snap.Core (Snap, writeBS)
 import qualified Snap.Core
 import qualified Snap.Test
 
+import qualified Data.Char as Char
+import System.FilePath ((</>))
+import qualified System.IO.Temp as Temp
+import qualified System.PosixCompat.Files as Files
+
 import EasyTest
 
 import Lamdera.CLI.LiveServe
@@ -34,6 +39,7 @@ suite =
     [ scope "frames" frames
     , scope "relay url" relayUrls
     , scope "messages" controlMessages
+    , scope "machine secret" machineSecrets
     , scope "local or not" localOrNot
     , scope "serving a remote request" serving
     , scope "socket messages from remote clients" socketMessages
@@ -77,13 +83,14 @@ relayUrls = do
 
 controlMessages :: Test ()
 controlMessages = do
-  let hello = Aeson.decode (helloJson "tok" "my-app" Nothing) :: Maybe Aeson.Value
+  let hello = Aeson.decode (helloJson "tok" "my-app" "machine-secret-1234" Nothing) :: Maybe Aeson.Value
   helloV <- expectJust hello
   expectEqual (Just "hello") (field "t" helloV)
   expectEqual (Just "tok") (field "token" helloV)
   expectEqual (Just "my-app") (field "app" helloV)
   expectEqual Nothing (field "resume" helloV)
-  resumed <- expectJust (Aeson.decode (helloJson "tok" "my-app" (Just ("my-app-abc123.live.lamdera.app", "key"))) :: Maybe Aeson.Value)
+  expectEqual (Just "machine-secret-1234") (field "machine" helloV)
+  resumed <- expectJust (Aeson.decode (helloJson "tok" "my-app" "machine-secret-1234" (Just ("my-app-abc123.live.lamdera.app", "key"))) :: Maybe Aeson.Value)
   expectEqual (Just "my-app-abc123.live.lamdera.app") (field "resume" resumed)
   expectEqual (Just "key") (field "resumeKey" resumed)
   expectEqual
@@ -101,6 +108,27 @@ controlMessages = do
             Just (Aeson.String s) -> Just s
             _ -> Nothing
         _ -> Nothing
+
+{-| The per-app secret --serve keeps on this computer, which the preview's name is
+derived from: made once, kept, new with --serve-new. -}
+machineSecrets :: Test ()
+machineSecrets = do
+  expectEqual ("/home/me/.elm" </> ".lamdera-live" </> "my-app") (machineSecretPath "/home/me/.elm" "my-app")
+  (first, again, rotated, afterRotate, mode) <- io $ Temp.withSystemTempDirectory "live-serve" $ \dir -> do
+    let path = machineSecretPath dir "my-app"
+    first <- machineSecret path False
+    again <- machineSecret path False
+    rotated <- machineSecret path True
+    afterRotate <- machineSecret path False
+    mode <- Files.fileMode <$> Files.getFileStatus path
+    pure (first, again, rotated, afterRotate, mode)
+  expectEqual 48 (T.length first)
+  expect (T.all (\c -> Char.isDigit c || (c >= 'a' && c <= 'f')) first)
+  expectEqual first again
+  expectNotEqual first rotated
+  expectEqual rotated afterRotate
+  expectEqual (Files.ownerReadMode `Files.unionFileModes` Files.ownerWriteMode) (mode `Files.intersectFileModes` Files.accessModes)
+
 
 localOrNot :: Test ()
 localOrNot = do

@@ -74,6 +74,7 @@ data Flags =
     , _open :: Bool
     , _memory :: Bool -- @LAMDERA lamdera live --memory, see Ext.MemoryCache
     , _serve :: Bool -- @LAMDERA lamdera live --serve, see Lamdera.CLI.LiveServe
+    , _serveNew :: Bool -- @LAMDERA lamdera live --serve-new: --serve, with a new address
     , _app :: Maybe String -- @LAMDERA the app --serve shares, if not the project's
     }
 
@@ -86,7 +87,7 @@ run () flags = do
 
 
 runWithRoot :: FilePath -> Flags -> IO ()
-runWithRoot root (Flags maybePort maybeBind shouldOpenBrowser inMemory serve appM) =
+runWithRoot root (Flags maybePort maybeBind shouldOpenBrowser inMemory serveFlag serveNew appM) =
   do
       Lamdera.setLiveMode True
       let port = maybe 8000 id maybePort
@@ -105,8 +106,8 @@ runWithRoot root (Flags maybePort maybeBind shouldOpenBrowser inMemory serve app
       -- @LAMDERA lamdera live --serve: the app and the CLI login are checked before
       -- anything starts, so a problem with either stops here with what to do
       shareM <-
-        if serve
-          then Just <$> LiveServe.prepare appM
+        if serveFlag || serveNew
+          then Just <$> LiveServe.prepare appM serveNew
           else pure Nothing
 
       liveState <- liftIO $ Live.init
