@@ -690,12 +690,13 @@ intern tipe =
     TEmpty ->
       node KEmpty
 
+    -- @LAMDERA F.withOrder: keyed by the order that is written (see F.withOrder)
     TRecord fs ->
-      do  fs_ <- F.traverse intern fs
+      do  fs_ <- F.traverse intern (F.withOrder fs)
           node (KRecord fs_)
 
     TExtRec fs i ->
-      do  fs_ <- F.traverse intern fs
+      do  fs_ <- F.traverse intern (F.withOrder fs)
           node (KExtRec fs_ i)
 
 

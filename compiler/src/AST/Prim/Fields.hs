@@ -38,6 +38,7 @@ module AST.Prim.Fields
   --
   , encode
   , decode
+  , withOrder -- @LAMDERA
   )
   where
 
@@ -390,6 +391,42 @@ eOrder o dict
       | num <= 0x100   =       n#
       | num <= 0x10000 = 2# *# n#
       | otherwise      = 4# *# n#
+
+
+-- @LAMDERA The same fields with the order eOrder writes for them: an unordered Fields
+-- gets the key order (0, 1, ...), which is how it is written and so how it reads back.
+-- Elm.Interface interns record types by equality, which compares the order bytes, so
+-- without this an unordered record and the same record with the key order written out
+-- were two type table entries that read back as one, and re-encoding an interface
+-- read from disk gave a smaller table than the compiler wrote.
+withOrder :: Fields a -> Fields a
+withOrder fields@(Fields order dict) =
+  if isTrue# (sizeofByteArray# order ==# len)
+  then fields
+  else
+    runST $ ST $ \s0 ->
+      case newByteArray# len s0 of { (# s1, mba #) ->
+      case fill mba 0# s1 of { s2 ->
+      case unsafeFreezeByteArray# mba s2 of { (# s3, ba #) ->
+        (# s3, Fields ba dict #)
+      }}}
+  where
+    !(I# num) = NEM.size dict
+
+    len
+      | isTrue# (num <=# 0x100#  ) =       num
+      | isTrue# (num <=# 0x10000#) = 2# *# num
+      | otherwise                  = 4# *# num
+
+    fill mba i s =
+      if isTrue# (i >=# num) then s else
+        case write mba i s of
+          s1 -> fill mba (i +# 1#) s1
+
+    write mba i s
+      | isTrue# (num <=# 0x100#  ) = writeWord8Array#  mba i (wordToWord8#  (int2Word# i)) s
+      | isTrue# (num <=# 0x10000#) = writeWord16Array# mba i (wordToWord16# (int2Word# i)) s
+      | otherwise                  = writeWord32Array# mba i (wordToWord32# (int2Word# i)) s
 
 
 -- @LAMDERA 0, 1, ... in the width eOrder uses for this many fields
