@@ -2,8 +2,8 @@
 module Generate.JavaScript
   ( generate
   , generateEsm
-  , generateForRepl
-  , generateForReplEndpoint
+  , genForRepl
+  , genForReplEndpoint
   , JsCache, emptyJsCache, generateCached -- @LAMDERA the lamdera live session
   , Listing(..), Emitted(..), EmitKind(..), jsCacheListing, patchHook -- @LAMDERA lamdera live hot patches, see Lamdera.HotPatch
   )
@@ -24,11 +24,12 @@ import qualified Data.Set as Set
 import qualified Crash
 import qualified String as S
 
-import qualified AST.Canonical as Can
 import qualified AST.Optimized as Opt
 import qualified AST.Prim.Module as Module
 import qualified AST.Prim.Name as N
+import qualified AST.Prim.Tag as Tag
 import qualified Data.Index as Index
+import qualified Elm.Interface as I
 import qualified Elm.Kernel as K
 import qualified Elm.ModuleName as ModuleName
 import qualified Elm.Package as Pkg
@@ -39,7 +40,6 @@ import qualified Generate.JavaScript.Name as JsName
 import qualified Generate.Mode as Mode
 import qualified Reporting.Doc as D
 import qualified Reporting.Render.Type as RT
-import qualified Reporting.Render.Type.Localizer as L
 
 
 import qualified Lamdera.Injection
@@ -49,7 +49,7 @@ import qualified Lamdera.Wire3.Direct -- @LAMDERA JsCache
 
 
 type Graph = Map.Map Opt.Global Opt.Node
-type FnArgLookup = ModuleName.Canonical -> N.Name -> Maybe Int
+type FnArgLookup = Expr.FnArgLookup
 type Mains = Map.Map ModuleName.Canonical Opt.Main
 
 
@@ -109,8 +109,8 @@ perfNote mode =
 -- GENERATE FOR REPL
 
 
-generateForRepl :: Bool -> L.Localizer -> Opt.GlobalGraph -> ModuleName.Canonical -> N.Name -> Can.Annotation -> B.Builder
-generateForRepl ansi localizer (Opt.GlobalGraph graph _) home name (Can.Forall _ tipe) =
+genForRepl :: Bool -> RT.Localizer -> Opt.GlobalGraph -> ModuleName.Canonical -> N.Name -> I.Annotation -> B.Builder
+genForRepl ansi localizer (Opt.GlobalGraph graph _) home name tipe =
   let
     mode = Mode.Dev Nothing
     debugState = addGlobal mode graph emptyState (Opt.Global ModuleName.debug [N.ascii|toString|])
@@ -122,12 +122,12 @@ generateForRepl ansi localizer (Opt.GlobalGraph graph _) home name (Can.Forall _
   <> print ansi localizer home name tipe
 
 
-print :: Bool -> L.Localizer -> ModuleName.Canonical -> N.Name -> Can.Type -> B.Builder
+print :: Bool -> RT.Localizer -> ModuleName.Canonical -> N.Name -> I.Annotation -> B.Builder
 print ansi localizer home name tipe =
   let
     value = JsName.toBuilder (JsName.fromGlobal home name)
     toString = JsName.toBuilder (JsName.fromKernel Module.kernel_debug [N.ascii|toAnsiString|])
-    tipeDoc = RT.canToDoc localizer RT.None tipe
+    tipeDoc = RT.iToDoc localizer RT.None tipe
     bool = if ansi then "true" else "false"
   in
   "var _value = " <> toString <> "(" <> bool <> ", " <> value <> ");\n\
@@ -144,8 +144,8 @@ print ansi localizer home name tipe =
 -- GENERATE FOR REPL ENDPOINT
 
 
-generateForReplEndpoint :: L.Localizer -> Opt.GlobalGraph -> ModuleName.Canonical -> Maybe N.Name -> Can.Annotation -> B.Builder
-generateForReplEndpoint localizer (Opt.GlobalGraph graph _) home maybeName (Can.Forall _ tipe) =
+genForReplEndpoint :: RT.Localizer -> Opt.GlobalGraph -> ModuleName.Canonical -> Maybe N.Name -> I.Annotation -> B.Builder
+genForReplEndpoint localizer (Opt.GlobalGraph graph _) home maybeName tipe =
   let
     name = maybe N.replValueToPrint id maybeName
     mode = Mode.Dev Nothing
@@ -157,13 +157,13 @@ generateForReplEndpoint localizer (Opt.GlobalGraph graph _) home maybeName (Can.
   <> postMessage localizer home maybeName tipe
 
 
-postMessage :: L.Localizer -> ModuleName.Canonical -> Maybe N.Name -> Can.Type -> B.Builder
+postMessage :: RT.Localizer -> ModuleName.Canonical -> Maybe N.Name -> I.Annotation -> B.Builder
 postMessage localizer home maybeName tipe =
   let
     name = maybe N.replValueToPrint id maybeName
     value = JsName.toBuilder (JsName.fromGlobal home name)
     toString = JsName.toBuilder (JsName.fromKernel Module.kernel_debug [N.ascii|toAnsiString|])
-    tipeDoc = RT.canToDoc localizer RT.None tipe
+    tipeDoc = RT.iToDoc localizer RT.None tipe
     toName n = "\"" <> N.toBuilder n <> "\""
   in
   "self.postMessage({\n\
@@ -228,72 +228,64 @@ addGlobalHelp mode graph global state =
   case $(Map.require 'addGlobalHelp) global graph globalToChars of
     -- @LAMDERA
     -- (addStmtFor is addStmt that can reuse the statement from the last build, see JS CACHE)
-    node@(Opt.Define (Opt.Function args body) deps)
-      | length args > 1 ->
+    node@(Opt.Define (Opt.Function x xs body) deps)
+      | not (null xs) ->
           addStmtFor EFunction argLookup global node deps
             (addDeps deps state)
-            (fn global args (Expr.generateFunctionImplementation mode argLookup args body))
+            (fn global (x:xs) (Expr.genFunctionImplementation mode argLookup (x:xs) body))
 
     node@(Opt.Define expr deps) ->
-      addStmtFor (case expr of { Opt.Function _ _ -> EFunction; _ -> EValue }) argLookup global node deps (addDeps deps state) (
+      addStmtFor (case expr of { Opt.Function _ _ _ -> EFunction; _ -> EValue }) argLookup global node deps (addDeps deps state) $
         var global (Expr.generate mode argLookup expr)
-      )
 
-    node@(Opt.DefineTailFunc argNames body deps) ->
-      addStmtFor EFunction argLookup global node deps (addDeps deps state) (
+    node@(Opt.DefineTailFunc x xs body deps) ->
+      addStmtFor EFunction argLookup global node deps (addDeps deps state) $
         let (Opt.Global _ name) = global in
-        var global (Expr.generateTailDef mode argLookup name argNames body)
-      )
+        var global (Expr.genTailDef mode argLookup name x xs body)
 
-    -- @LAMDERA
-    node@(Opt.Ctor index arity)
-      | arity > 1 ->
-          addStmtFor EConstant argLookup global node Set.empty
-            state
-            (ctor global arity (Expr.generateCtorImplementation mode global index arity))
+    -- @LAMDERA constructors with more than one argument get a direct function too
+    node@(Opt.Variant t a)
+      | a > 1 ->
+          addStmtFor EConstant argLookup global node Set.empty state $
+            ctor global a (Expr.genCtorImplementation mode global (Just t) a)
 
-    node@(Opt.Ctor index arity) ->
-      addStmtFor EConstant argLookup global node Set.empty state (
-        var global (Expr.generateCtor mode global index arity)
-      )
+    node@(Opt.Vector a)
+      | a > 1 ->
+          addStmtFor EConstant argLookup global node Set.empty state $
+            ctor global a (Expr.genCtorImplementation mode global Nothing a)
+
+    node@(Opt.Variant t a) -> addStmtFor EConstant argLookup global node Set.empty state $ var global $ Expr.genVariant mode global t a
+    node@(Opt.Enum    t  ) -> addStmtFor EConstant argLookup global node Set.empty state $ var global $ Expr.genEnum    mode global t
+    node@(Opt.Vector    a) -> addStmtFor EConstant argLookup global node Set.empty state $ var global $ Expr.genVector  mode global   a
+    node@ Opt.Void         -> addStmtFor EConstant argLookup global node Set.empty state $ var global $ Expr.genVoid    mode global
+
+    node@Opt.Box ->
+      addStmtFor EConstant argLookup global node (Set.singleton identity) (addGlobal mode graph state identity) $
+        genBox mode global
 
     Opt.Link linkedGlobal ->
       addLink global linkedGlobal $ -- @LAMDERA see JS CACHE
       addGlobal mode graph state linkedGlobal
 
-    node@(Opt.Cycle names values functions deps) ->
-      addStmtFor (if null values then EFunction else ECycleValues) argLookup global node deps (addDeps deps state) (
-        generateCycle mode argLookup global names values functions
-      )
+    node@(Opt.Cycle n ns values functions deps) ->
+      addStmtFor (if null values then EFunction else ECycleValues) argLookup global node deps (addDeps deps state) $
+        genCycle mode argLookup global n ns values functions
 
     Opt.Manager effectsType ->
-      generateManager mode graph global effectsType state
+      genManager mode graph global effectsType state
 
     node@(Opt.Kernel chunks deps) ->
-      if isDebugger global && not (Mode.isDebug mode) then
-        state
-      else
-        addKernelFor global node (addDeps deps state) (generateKernel mode chunks) -- @LAMDERA was addKernel, see JS CACHE
-
-    node@(Opt.Enum index) ->
-      addStmtFor EConstant argLookup global node Set.empty state (
-        generateEnum mode global index
-      )
-
-    node@Opt.Box ->
-      addStmtFor EConstant argLookup global node (Set.singleton identity) (addGlobal mode graph state identity) (
-        generateBox mode global
-      )
+      if isDebugger global && not (Mode.isDebug mode)
+      then state
+      else addKernelFor global node (addDeps deps state) (genKernel mode chunks) -- @LAMDERA was addKernel, see JS CACHE
 
     node@(Opt.PortIncoming decoder deps) ->
-      addStmtFor EPort argLookup global node deps (addDeps deps state) (
-        generatePort mode global [N.ascii|incomingPort|] decoder
-      )
+      addStmtFor EPort argLookup global node deps (addDeps deps state) $
+        genPort mode global [N.ascii|incomingPort|] decoder
 
     node@(Opt.PortOutgoing encoder deps) ->
-      addStmtFor EPort argLookup global node deps (addDeps deps state) (
-        generatePort mode global [N.ascii|outgoingPort|] encoder
-      )
+      addStmtFor EPort argLookup global node deps (addDeps deps state) $
+        genPort mode global [N.ascii|outgoingPort|] encoder
 
 
 addStmt :: State -> JS.Stmt -> State
@@ -325,12 +317,12 @@ isDebugger (Opt.Global (ModuleName.Canonical _ home) _) =
 -- GENERATE CYCLES
 
 
-generateCycle :: Mode.Mode -> FnArgLookup -> Opt.Global -> [N.Name] -> [(N.Name, Opt.Expr)] -> [Opt.Def] -> JS.Stmt
-generateCycle mode argLookup (Opt.Global home _) names values functions =
+genCycle :: Mode.Mode -> FnArgLookup -> Opt.Global -> N.Name -> [N.Name] -> [(N.Name, Opt.Expr)] -> [Opt.Def] -> JS.Stmt
+genCycle mode argLookup (Opt.Global home _) n ns values functions =
   JS.Block
-    [ JS.Block $ map (generateCycleFunc mode argLookup home) functions
-    , JS.Block $ map (generateSafeCycle mode argLookup home) values
-    , case map (generateRealCycle home) values of
+    [ JS.Block $ map (genCycleFunc mode argLookup home) functions
+    , JS.Block $ map (genSafeCycle mode argLookup home) values
+    , case map (genRealCycle home) values of
         [] ->
           JS.EmptyStmt
 
@@ -342,48 +334,48 @@ generateCycle mode argLookup (Opt.Global home _) names values functions =
               Mode.Dev _ ->
                 JS.Try (JS.Block realBlock) JsName.dollar $ JS.Throw $ JS.String $
                   "Some top-level definitions from `" <> Module.toBuilder (ModuleName._module home) <> "` are causing infinite recursion:\\n"
-                  <> drawCycle names
+                  <> drawCycle n ns
                   <> "\\n\\nThese errors are very tricky, so read "
                   <> B.stringUtf8 (D.makeNakedLink "bad-recursion")
                   <> " to learn how to fix it!"
     ]
 
 
-generateCycleFunc :: Mode.Mode -> FnArgLookup -> ModuleName.Canonical -> Opt.Def -> JS.Stmt
-generateCycleFunc mode argLookup home def =
+genCycleFunc :: Mode.Mode -> FnArgLookup -> ModuleName.Canonical -> Opt.Def -> JS.Stmt
+genCycleFunc mode argLookup home def =
   case def of
     -- @LAMDERA
-    Opt.Def name (Opt.Function args body)
-      | length args > 1 ->
-          fn (Opt.Global home name) args (Expr.generateFunctionImplementation mode argLookup args body)
-    
+    Opt.Def name (Opt.Function x xs body)
+      | not (null xs) ->
+          fn (Opt.Global home name) (x:xs) (Expr.genFunctionImplementation mode argLookup (x:xs) body)
+
     Opt.Def name expr ->
       JS.Var (JsName.fromGlobal home name) (Expr.codeToExpr (Expr.generate mode argLookup expr))
-    
+
     -- @LAMDERA
-    Opt.TailDef name args expr
-      | length args > 1 ->
+    Opt.TailDef name x xs expr
+      | not (null xs) ->
           let
             directFnName = JsName.fromGlobalDirectFn home name
-            argNames = map JsName.fromLocal args
+            argNames = map JsName.fromLocal (x:xs)
           in
           JS.Block
-            [ JS.Var directFnName (Expr.codeToExpr (Expr.generateTailDefImplementation mode argLookup name args expr))
-            , JS.Var (JsName.fromGlobal home name) (Expr.codeToExpr (Expr.generateCurriedFunctionRef argNames directFnName))
+            [ JS.Var directFnName (Expr.codeToExpr (Expr.genTailDefImplementation mode argLookup name (x:xs) expr))
+            , JS.Var (JsName.fromGlobal home name) (Expr.codeToExpr (Expr.genCurriedFunctionRef argNames directFnName))
             ]
-    
-    Opt.TailDef name args expr ->
-      JS.Var (JsName.fromGlobal home name) (Expr.codeToExpr (Expr.generateTailDef mode argLookup name args expr))
+
+    Opt.TailDef name x xs expr ->
+      JS.Var (JsName.fromGlobal home name) (Expr.codeToExpr (Expr.genTailDef mode argLookup name x xs expr))
 
 
-generateSafeCycle :: Mode.Mode -> FnArgLookup -> ModuleName.Canonical -> (N.Name, Opt.Expr) -> JS.Stmt
-generateSafeCycle mode argLookup home (name, expr) =
+genSafeCycle :: Mode.Mode -> FnArgLookup -> ModuleName.Canonical -> (N.Name, Opt.Expr) -> JS.Stmt
+genSafeCycle mode argLookup home (name, expr) =
   JS.FunctionStmt (JsName.fromCycle home name) [] $
     Expr.codeToStmtList (Expr.generate mode argLookup expr)
 
 
-generateRealCycle :: ModuleName.Canonical -> (N.Name, expr) -> JS.Stmt
-generateRealCycle home (name, _) =
+genRealCycle :: ModuleName.Canonical -> (N.Name, expr) -> JS.Stmt
+genRealCycle home (name, _) =
   let
     safeName = JsName.fromCycle home name
     realName = JsName.fromGlobal home name
@@ -395,23 +387,23 @@ generateRealCycle home (name, _) =
     ]
 
 
-drawCycle :: [N.Name] -> B.Builder
-drawCycle names =
+drawCycle :: N.Name -> [N.Name] -> B.Builder
+drawCycle n ns =
   let
     topLine       = "\\n  ┌─────┐"
     nameLine name = "\\n  │    " <> N.toBuilder name
     midLine       = "\\n  │     ↓"
     bottomLine    = "\\n  └─────┘"
   in
-  mconcat (topLine : List.intersperse midLine (map nameLine names) ++ [ bottomLine ])
+  mconcat (topLine : List.intersperse midLine (map nameLine (n:ns)) ++ [ bottomLine ])
 
 
 
 -- GENERATE KERNEL
 
 
-generateKernel :: Mode.Mode -> [K.Chunk] -> B.Builder
-generateKernel mode chunks =
+genKernel :: Mode.Mode -> [K.Chunk] -> B.Builder
+genKernel mode chunks =
   List.foldr (addChunk mode) mempty chunks
 
 
@@ -428,7 +420,7 @@ addChunk mode chunk builder =
       JsName.toBuilder (JsName.fromKernel home name) <> builder
 
     K.ElmField name ->
-      JsName.toBuilder (Expr.generateField mode name) <> builder
+      JsName.toBuilder (Expr.genField mode name) <> builder
 
     K.JsField int ->
       JsName.toBuilder (JsName.fromInt int) <> builder
@@ -454,33 +446,15 @@ addChunk mode chunk builder =
 
 
 
--- GENERATE ENUM
-
-
-generateEnum :: Mode.Mode -> Opt.Global -> Index.ZeroBased -> JS.Stmt
-generateEnum mode global@(Opt.Global home name) index =
-  JS.Var (JsName.fromGlobal home name) $
-    case mode of
-      Mode.Dev _ ->
-        Expr.codeToExpr (Expr.generateCtor mode global index 0)
-
-      Mode.Prod _ ->
-        JS.Int (Index.toMachine index)
-
-
-
 -- GENERATE BOX
 
 
-generateBox :: Mode.Mode -> Opt.Global -> JS.Stmt
-generateBox mode global@(Opt.Global home name) =
+genBox :: Mode.Mode -> Opt.Global -> JS.Stmt
+genBox mode global@(Opt.Global home name) =
   JS.Var (JsName.fromGlobal home name) $
     case mode of
-      Mode.Dev _ ->
-        Expr.codeToExpr (Expr.generateCtor mode global Index.first 1)
-
-      Mode.Prod _ ->
-        JS.Ref (JsName.fromGlobal ModuleName.basics N.identity)
+      Mode.Dev  _ -> Expr.codeToExpr (Expr.genVariant mode global Tag.zero 1)
+      Mode.Prod _ -> JS.Ref (JsName.fromGlobal ModuleName.basics N.identity)
 
 
 {-# NOINLINE identity #-}
@@ -493,8 +467,8 @@ identity =
 -- GENERATE PORTS
 
 
-generatePort :: Mode.Mode -> Opt.Global -> N.Name -> Opt.Expr -> JS.Stmt
-generatePort mode (Opt.Global home name) makePort converter =
+genPort :: Mode.Mode -> Opt.Global -> N.Name -> Opt.Expr -> JS.Stmt
+genPort mode (Opt.Global home name) makePort converter =
   JS.Var (JsName.fromGlobal home name) $
     JS.Call (JS.Ref (JsName.fromKernel Module.kernel_platform makePort))
       [ JS.String (N.toBuilder name)
@@ -506,8 +480,8 @@ generatePort mode (Opt.Global home name) makePort converter =
 -- GENERATE MANAGER
 
 
-generateManager :: Mode.Mode -> Graph -> Opt.Global -> Opt.EffectsType -> State -> State
-generateManager mode graph global@(Opt.Global home@(ModuleName.Canonical _ moduleName) _) effectsType state =
+genManager :: Mode.Mode -> Graph -> Opt.Global -> Opt.EffectsType -> State -> State
+genManager mode graph global@(Opt.Global home@(ModuleName.Canonical _ moduleName) _) effectsType state =
   let
     managerLVar =
       JS.LBracket
@@ -515,7 +489,7 @@ generateManager mode graph global@(Opt.Global home@(ModuleName.Canonical _ modul
         (JS.String (Module.toBuilder moduleName))
 
     (deps, args, stmts) =
-      generateManagerHelp home effectsType
+      genManagerHelp home effectsType
 
     createManager =
       JS.ExprStmt $ JS.Assign managerLVar $
@@ -525,8 +499,8 @@ generateManager mode graph global@(Opt.Global home@(ModuleName.Canonical _ modul
     JS.Block (createManager : stmts)
 
 
-generateLeaf :: ModuleName.Canonical -> N.Name -> JS.Stmt
-generateLeaf home@(ModuleName.Canonical _ moduleName) name =
+genLeaf :: ModuleName.Canonical -> N.Name -> JS.Stmt
+genLeaf home@(ModuleName.Canonical _ moduleName) name =
   JS.Var (JsName.fromGlobal home name) $
     JS.Call leaf [ JS.String (Module.toBuilder moduleName) ]
 
@@ -538,8 +512,8 @@ leaf =
   JS.Ref (JsName.fromKernel Module.kernel_platform [N.ascii|leaf|])
 
 
-generateManagerHelp :: ModuleName.Canonical -> Opt.EffectsType -> ([Opt.Global], [JS.Expr], [JS.Stmt])
-generateManagerHelp home effectsType =
+genManagerHelp :: ModuleName.Canonical -> Opt.EffectsType -> ([Opt.Global], [JS.Expr], [JS.Stmt])
+genManagerHelp home effectsType =
   let
     dep name = Opt.Global home name
     ref name = JS.Ref (JsName.fromGlobal home name)
@@ -548,20 +522,20 @@ generateManagerHelp home effectsType =
     Opt.Cmd ->
       ( [ dep [N.ascii|init|], dep [N.ascii|onEffects|], dep [N.ascii|onSelfMsg|], dep [N.ascii|cmdMap|] ]
       , [ ref [N.ascii|init|], ref [N.ascii|onEffects|], ref [N.ascii|onSelfMsg|], ref [N.ascii|cmdMap|] ]
-      , [ generateLeaf home [N.ascii|command|] ]
+      , [ genLeaf home [N.ascii|command|] ]
       )
 
     Opt.Sub ->
       ( [ dep [N.ascii|init|], dep [N.ascii|onEffects|], dep [N.ascii|onSelfMsg|], dep [N.ascii|subMap|] ]
       , [ ref [N.ascii|init|], ref [N.ascii|onEffects|], ref [N.ascii|onSelfMsg|], JS.Int 0, ref [N.ascii|subMap|] ]
-      , [ generateLeaf home [N.ascii|subscription|] ]
+      , [ genLeaf home [N.ascii|subscription|] ]
       )
 
     Opt.Fx ->
       ( [ dep [N.ascii|init|], dep [N.ascii|onEffects|], dep [N.ascii|onSelfMsg|], dep [N.ascii|cmdMap|], dep [N.ascii|subMap|] ]
       , [ ref [N.ascii|init|], ref [N.ascii|onEffects|], ref [N.ascii|onSelfMsg|], ref [N.ascii|cmdMap|], ref [N.ascii|subMap|] ]
-      , [ generateLeaf home [N.ascii|command|]
-        , generateLeaf home [N.ascii|subscription|]
+      , [ genLeaf home [N.ascii|command|]
+        , genLeaf home [N.ascii|subscription|]
         ]
       )
 
@@ -574,13 +548,13 @@ toMainExports :: Mode.Mode -> Mains -> B.Builder
 toMainExports mode mains =
   let
     export = JsName.fromKernel Module.kernel_platform [N.ascii|export|]
-    exports = generateExports mode (Map.foldrWithKey addToTrie emptyTrie mains)
+    exports = genExports mode (Map.foldrWithKey addToTrie emptyTrie mains)
   in
   JsName.toBuilder export <> "(" <> exports <> ");"
 
 
-generateExports :: Mode.Mode -> Trie -> B.Builder
-generateExports mode (Trie maybeMain subs) =
+genExports :: Mode.Mode -> Trie -> B.Builder
+genExports mode (Trie maybeMain subs) =
   let
     starter end =
       case maybeMain of
@@ -589,7 +563,7 @@ generateExports mode (Trie maybeMain subs) =
 
         Just (home, main) ->
           "{'init':"
-          <> JS.exprToBuilder (Expr.generateMain mode (\_ _ -> Nothing) home main)
+          <> JS.exprToBuilder (Expr.genMain mode (\_ _ -> Nothing) home main)
           <> end
     in
     case Map.toList subs of
@@ -599,13 +573,13 @@ generateExports mode (Trie maybeMain subs) =
       (name, subTrie) : otherSubTries ->
         starter "," <>
         "'" <> S.toBuilder name <> "':"
-        <> generateExports mode subTrie
+        <> genExports mode subTrie
         <> List.foldl' (addSubTrie mode) "}" otherSubTries
 
 
 addSubTrie :: Mode.Mode -> B.Builder -> (S.String, Trie) -> B.Builder
 addSubTrie mode end (name, trie) =
-  ",'" <> S.toBuilder name <> "':" <> generateExports mode trie <> end
+  ",'" <> S.toBuilder name <> "':" <> genExports mode trie <> end
 
 
 
@@ -659,21 +633,24 @@ checkedMerge a b =
 makeArgLookup :: Graph -> FnArgLookup
 makeArgLookup graph home name =
   case Map.lookup (Opt.Global home name) graph of
-    Just (Opt.Define (Opt.Function args _) _) ->
-      Just (length args)
+    Just (Opt.Define (Opt.Function _ xs _) _) ->
+      Just (1 + length xs)
 
-    Just (Opt.Ctor _ arity) ->
+    Just (Opt.Variant _ arity) ->
+      Just arity
+
+    Just (Opt.Vector arity) ->
       Just arity
 
     Just (Opt.Link global) ->
       case Map.lookup global graph of
-        Just (Opt.Cycle names _ defs _) ->
+        Just (Opt.Cycle _ _ _ defs _) ->
           case List.find (\d -> defName d == name) defs of
-            Just (Opt.Def _ (Opt.Function args _)) ->
-              Just (length args)
+            Just (Opt.Def _ (Opt.Function _ xs _)) ->
+              Just (1 + length xs)
 
-            Just (Opt.TailDef _ args _) ->
-              Just (length args)
+            Just (Opt.TailDef _ _ xs _) ->
+              Just (1 + length xs)
 
             _ ->
               -- This disables direct function calls eg. for mutually recursive
@@ -690,7 +667,7 @@ makeArgLookup graph home name =
 
 defName :: Opt.Def -> N.Name
 defName (Opt.Def name _) = name
-defName (Opt.TailDef name _ _) = name
+defName (Opt.TailDef name _ _ _) = name
 
 
 fn :: Opt.Global -> [N.Name] -> Expr.Code -> JS.Stmt
@@ -701,7 +678,7 @@ fn (Opt.Global home name) args code =
   in
   JS.Block
     [ JS.Var directFnName (Expr.codeToExpr code)
-    , JS.Var (JsName.fromGlobal home name) $ Expr.codeToExpr (Expr.generateCurriedFunctionRef argNames directFnName)
+    , JS.Var (JsName.fromGlobal home name) $ Expr.codeToExpr (Expr.genCurriedFunctionRef argNames directFnName)
     ]
 
 
@@ -713,7 +690,7 @@ ctor (Opt.Global home name) arity code =
   in
   JS.Block
     [ JS.Var directFnName (Expr.codeToExpr code)
-    , JS.Var (JsName.fromGlobal home name) $ Expr.codeToExpr (Expr.generateCurriedFunctionRef argNames directFnName)
+    , JS.Var (JsName.fromGlobal home name) $ Expr.codeToExpr (Expr.genCurriedFunctionRef argNames directFnName)
     ]
 
 

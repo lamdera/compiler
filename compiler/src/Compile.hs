@@ -1,3 +1,4 @@
+{-# LANGUAGE Rank2Types #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE BangPatterns #-}
 {-# OPTIONS_GHC -fno-warn-unused-do-bind #-}
@@ -12,22 +13,17 @@ import qualified Data.Map as Map
 
 import qualified AST.Source as Src
 import qualified AST.Canonical as Can
+import qualified AST.Typed as Tpd
 import qualified AST.Optimized as Opt
+import qualified AST.Prim.Mode as Mode
 import qualified AST.Prim.Module as Module
-import qualified AST.Prim.Name as N
 import qualified Canonicalize.Module as Canonicalize
 import qualified Elm.Interface as I
-import qualified Elm.Package as Pkg
 import qualified Nitpick.PatternMatches as PatternMatches
 import qualified Optimize.Module as Optimize
 import qualified Reporting.Error as E
-import qualified Reporting.Result as R
-import qualified Reporting.Render.Type.Localizer as Localizer
-import qualified Type.Constrain.Module as Type
-import qualified Type.Solve as Type
-import qualified Type.Type -- @LAMDERA withSharedTables
-
--- import System.IO.Unsafe (unsafePerformIO)
+import qualified Reporting.Render.Type as RT
+import qualified Type.Check as Type
 
 import qualified Lamdera.Wire3.Core
 import qualified Lamdera.Wire3.Direct
@@ -42,133 +38,178 @@ import qualified System.FilePath as FP
 
 -- import StandaloneInstances
 
+
+
 -- COMPILE
 
 
 data Artifacts =
-  Artifacts
-    { _modul :: Can.Module
-    , _types :: Map.Map N.Name Can.Annotation
-    , _graph :: Opt.LocalGraph
-    }
+  Artifacts Tpd.Module I.Interface Opt.LocalGraph
 
 
 {- The original compile function for reference. `maybePath` parameter added by Lamdera. -}
-compile :: Maybe FilePath -> Pkg.Name -> Map.Map Module.Name I.Interface -> Src.Module -> Either E.Error Artifacts
-compile maybePath pkg ifaces modul =
-  Lamdera.alternativeImplementationWhen Lamdera.isWireEnabled_ (compile_ maybePath pkg ifaces modul) $
-  do  canonical   <- canonicalize pkg ifaces modul
-      annotations <- typeCheck modul canonical
-      ()          <- nitpick canonical
-      objects     <- optimize modul annotations canonical
-      return (Artifacts canonical annotations objects)
+compile :: Maybe FilePath -> Mode.Mode -> Map.Map Module.Name I.Interface -> Src.Module -> IO (Either E.Errors Artifacts)
+compile maybePath mode ifaces modul =
+  Lamdera.alternativeImplementationWhen Lamdera.isWireEnabled_ (compile_ maybePath mode ifaces modul) $
+  run $
+  do  can         <- canonicalize mode ifaces modul
+      (iface,tpd) <- typeCheck modul can
+      ()          <- nitpick tpd
+      objects     <- optimize modul iface tpd
+      return (Artifacts tpd iface objects)
+
 
 
 -- PHASES
 
 
-canonicalize :: Pkg.Name -> Map.Map Module.Name I.Interface -> Src.Module -> Either E.Error Can.Module
-canonicalize pkg ifaces modul =
-  case snd $ R.run $ Canonicalize.canonicalize pkg ifaces modul of
-    Right canonical ->
-      Right canonical
-
-    Left errors ->
-      Left $ E.BadNames errors
-
-
-typeCheck :: Src.Module -> Can.Module -> Either E.Error (Map.Map N.Name Can.Annotation)
-typeCheck modul canonical =
-  -- @LAMDERA inside withSharedTables, so that callers outside a Build (the REPL worker,
-  -- Ext.Query) do not keep the type checker's shared tables growing
-  case unsafePerformIO (Type.Type.withSharedTables (Type.run =<< Type.constrain canonical)) of
-    Right annotations ->
-      Right annotations
-
-    Left errors ->
-      Left (E.BadTypes (Localizer.fromModule modul) errors)
+canonicalize :: Mode.Mode -> Map.Map Module.Name I.Interface -> Src.Module -> Task Can.Module
+canonicalize mode ifaces modul =
+  Task $ \ok err ->
+    case Canonicalize.canonicalize mode ifaces modul of
+      Canonicalize.Result k ->
+        k []
+          (\_ a -> ok a)
+          (\_ x -> err (E.BadNames x))
 
 
-nitpick :: Can.Module -> Either E.Error ()
-nitpick canonical =
-  case PatternMatches.check canonical of
-    Right () ->
-      Right ()
+typeCheck :: Src.Module -> Can.Module -> Task (I.Interface, Tpd.Module)
+typeCheck src can =
+  Task $ \ok err ->
+    do  outcome <- Type.check can
+        case outcome of
+          Type.Ok (iface,tpd) -> ok (iface, tpd)
+          Type.BadType    xs  -> err $ E.BadTypes (RT.fromSourceModule src) xs
+          Type.BadNitpick xs  -> err $ E.BadNitpick xs
 
-    Left errors ->
-      Left (E.BadPatterns errors)
+
+nitpick :: Tpd.Module -> Task ()
+nitpick tpd =
+  Task $ \ok err ->
+    case PatternMatches.check tpd of
+      Right () -> ok ()
+      Left  xs -> err $ E.BadPatterns xs
 
 
-optimize :: Src.Module -> Map.Map N.Name Can.Annotation -> Can.Module -> Either E.Error Opt.LocalGraph
-optimize modul annotations canonical =
-  case snd $ R.run $ Optimize.optimize annotations canonical of
-    Right localGraph ->
-      Right localGraph
+optimize :: Src.Module -> I.Interface -> Tpd.Module -> Task Opt.LocalGraph
+optimize modul (I.Interface _ annotations _ _) typed =
+  Task $ \ok err ->
+    case Optimize.optimize annotations typed of
+      Optimize.Result k ->
+        k []
+          (\_ opt -> ok opt)
+          (\_ xs  -> err (E.BadMains (RT.fromSourceModule modul) xs))
 
-    Left errors ->
-      Left (E.BadMains (Localizer.fromModule modul) errors)
+
+
+-- TASK
+
+
+newtype Task a =
+  Task (forall r. (a -> IO r) -> (E.Errors -> IO r) -> IO r)
+
+
+run :: Task a -> IO (Either E.Errors a)
+run (Task k) =
+  k (return . Right) (return . Left)
+
+
+instance Functor Task where
+  {-# INLINE fmap #-}
+  fmap func (Task k) =
+    Task $ \ok err ->
+      k (ok . func) err
+
+
+instance Applicative Task where
+  {-# INLINE pure #-}
+  pure a =
+    Task $ \ok _ ->
+      ok a
+
+  {-# INLINE (<*>) #-}
+  (<*>) (Task kFunc) (Task kArg) =
+    Task $ \ok err ->
+      let
+        okF func = kArg (ok . func) err
+      in
+      kFunc okF err
+
+
+instance Monad Task where
+  {-# INLINE (>>=) #-}
+  (>>=) (Task kA) callback =
+    Task $ \ok err ->
+      let
+        okA a =
+          case callback a of
+            Task kB -> kB ok err
+      in
+      kA okA err
+
+
+
 
 -- @LAMDERA
 
-compile_ :: Maybe FilePath -> Pkg.Name -> Map.Map Module.Name I.Interface -> Src.Module -> Either E.Error Artifacts
-compile_ maybePath pkg ifaces modul = do
-  -- @TEMPORARY debugging
-  -- Inject stub definitions for wire functions, so the canonicalize phase can run
-  -- Necessary for user-code which references yet-to-be generated functions
-  let modul_ =
-        modul
-          & Lamdera.Wire3.Interfaces.modifyModul pkg ifaces
-      -- moduleName = T.pack $ Data.Utf8.toChars $ Src.getName modul
 
-  -- ()          <- debugPassText "starting canonical" "" (pure ())
-  -- @LAMDERA opt-in timing, see Lamdera.Perf
-  let perf :: String -> Either e a -> Either e a
-      perf label = Lamdera.Perf.phase (Module.toChars (Src.getName modul) ++ "\t" ++ label)
-  canonical0  <- perf "canonicalize" $ canonicalize pkg ifaces modul_
-  -- ()          <- debugPassText "starting canonical2" moduleName (pure ())
+compile_ :: Maybe FilePath -> Mode.Mode -> Map.Map Module.Name I.Interface -> Src.Module -> IO (Either E.Errors Artifacts)
+compile_ maybePath mode ifaces modul =
+  run $
+  do  let pkg = Mode.toPackage mode
+      -- Inject stub definitions for wire functions, so the canonicalize phase can run
+      -- Necessary for user-code which references yet-to-be generated functions
+      let modul_ =
+            modul
+              & Lamdera.Wire3.Interfaces.modifyModul pkg ifaces
+      -- @LAMDERA opt-in timing, see Lamdera.Perf
+      let perf :: String -> Task a -> Task a
+          perf label = perfTask (Module.toChars (Src.getName (Src._header modul)) ++ "\t" ++ label)
+      canonical0 <- perf "canonicalize" $ canonicalize mode ifaces modul_
 
-  canonical2 <- perf "wire3_generate" $
-    -- Add Canonical Wire gens, i.e. the `w3_[en|de]code_TYPENAME` functions
-    Lamdera.Wire3.Core.addWireGenerations canonical0 pkg ifaces modul_
-      -- Allow migrations to access non-exposed unsafeCoerce in lamdera/core
-      & fmap Lamdera.Evergreen.ModifyAST.update
+      -- Add Canonical Wire gens, i.e. the `w3_[en|de]code_TYPENAME` functions
+      (canonical2, generated) <- perf "wire3_generate" $
+        fromEither $
+          Lamdera.Wire3.Core.addWireGenerations canonical0 pkg ifaces modul_
+            -- Allow migrations to access non-exposed unsafeCoerce in lamdera/core
+            & fmap (\(c, g) -> (Lamdera.Evergreen.ModifyAST.update c, g))
 
-  -- () <- unsafePerformIO $ do
-  --   case (pkg, Src.getName modul) of
-  --     ((Pkg.Name "author" "project"), "Page") -> do
-  --       -- canonical_
-  --       --   & Can._decls
-  --       --   & Lamdera.Wire.Helpers.findDef "testing"
-  --       --   & formatHaskellValue "Compile.findDef"
-  --       atomicPutStrLn $ T.unpack $ T.take 5000 $ ToSource.convert canonical2
-  --       pure ()
-  --     _ ->
-  --       pure ()
-  --   -- writeUtf8 "canprinted_without.txt" (hindentFormatValue canonical_)
-  --   pure (pure ())
+      (iface, tpd) <- perf "typecheck" $ typeCheck modul_ canonical2
+      ()           <- perf "nitpick" $ nitpick tpd
+      ()           <- perf "nitpick_debuglog" $ fromEither $ Lamdera.Nitpick.DebugLog.hasUselessDebugLogs tpd
+      let
+          tpd3 :: Tpd.Module
+          tpd3 =
+            if (Lamdera.unsafePerformIO Lamdera.isLiveMode)
+              then
+                case maybePath of
+                  Just path ->
+                    Lamdera.UiSourceMap.updateDecls path (Tpd._name tpd) (Tpd._decls tpd)
+                         & (\newDecls -> tpd { Tpd._decls = newDecls })
+                  Nothing ->
+                    tpd
+              else tpd
 
-  -- ()          <- debugPassText "starting typecheck" moduleName (pure ())
-  annotations <- perf "typecheck" $ typeCheck modul_ canonical2
-  -- ()          <- debugPassText "starting nitpick" moduleName (pure ())
-  ()          <- perf "nitpick" $ nitpick canonical2
-  ()          <- perf "nitpick_debuglog" $ Lamdera.Nitpick.DebugLog.hasUselessDebugLogs canonical2
-  let
-      canonical3 :: Can.Module
-      canonical3 =
-        if (Lamdera.unsafePerformIO Lamdera.isLiveMode)
-          then
-            case maybePath of
-              Just path ->
-                Lamdera.UiSourceMap.updateDecls path (Can._name canonical2) (Can._decls canonical2)
-                     & (\newDecls -> canonical2 { Can._decls = newDecls })
-              Nothing ->
-                canonical2
-          else canonical2
+      objects <- perf "optimize" (optimize modul_ iface tpd3)
+      -- @LAMDERA carry the Wire3 codec IR to JS generation (Lamdera.Wire3.Direct). Always,
+      -- whatever LAMDERA_WIRE3_DIRECT says, so caches are the same with and without it.
+      let objects_ = Lamdera.Wire3.Direct.addDirectIR pkg (Tpd._name tpd3) generated objects
+      return (Artifacts tpd3 iface objects_)
 
-  -- ()          <- debugPassText "starting optimize" moduleName (pure ())
 
-  objects     <- perf "optimize" (optimize modul_ annotations canonical3)
-    -- @LAMDERA carry the Wire3 codec IR to JS generation (Lamdera.Wire3.Direct). Always,
-    -- whatever LAMDERA_WIRE3_DIRECT says, so caches are the same with and without it.
-    & fmap (Lamdera.Wire3.Direct.addDirectIR pkg canonical3)
-  return (Artifacts canonical3 annotations objects)
+fromEither :: Either E.Errors a -> Task a
+fromEither result =
+  Task $ \ok err ->
+    case result of
+      Right a -> ok a
+      Left x -> err x
+
+
+-- @LAMDERA Lamdera.Perf.record around a phase, decided before the next phase starts
+perfTask :: String -> Task a -> Task a
+perfTask label task =
+  Task $ \ok err ->
+    do  result <- Lamdera.Perf.record label (run task)
+        case result of
+          Right a -> ok a
+          Left x -> err x

@@ -2132,7 +2132,7 @@ toProjectProblemReport projectProblem =
         "Your module imports form a cycle:"
         [ D.cycle cycle D.fromModule
         , D.reflow $
-            "Learn more about why this is disallowed and how to break cycles here:"
+            "Learn more about why this is disallowed and how to break cycles here: "
             ++ D.makeLink "import-cycles"
         ]
 
@@ -2310,7 +2310,7 @@ reactorToReport problem =
 
 data Repl
   = ReplBadDetails Details
-  | ReplBadInput R.Root BS.ByteString Error.Error
+  | ReplBadInput R.Root BS.ByteString Error.Errors
   | ReplBadLocalDeps R.Root Error.Module [Error.Module]
   | ReplProjectProblem BuildProjectProblem
   | ReplBadGenerate Generate

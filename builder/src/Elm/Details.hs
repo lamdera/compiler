@@ -43,9 +43,10 @@ import qualified Bytes.Encode as E
 import qualified Crash
 import qualified ThreadSafe.Fork as Fork
 
-import qualified AST.Canonical as Can
 import qualified AST.Source as Src
+import qualified AST.Typed as Tpd
 import qualified AST.Optimized as Opt
+import qualified AST.Prim.Mode as Mode
 import qualified AST.Prim.Module as Module
 import qualified Compile
 import qualified Deps.Registry as Registry
@@ -522,8 +523,8 @@ gatherForeigns pkg (Artifacts ifaces _) foreigns =
   let
     isPublic di =
       case di of
-        I.Public _      -> Just (OneOrMore.one pkg)
-        I.Private _ _ _ -> Nothing
+        I.Public _    -> Just (OneOrMore.one pkg)
+        I.Private _ _ -> Nothing
   in
   Map.unionWith OneOrMore.more foreigns (Map.mapMaybe isPublic ifaces)
 
@@ -724,8 +725,8 @@ gatherForeignInterfaces directArtifacts =
     isPublic :: I.DependencyInterface -> Maybe (OneOrMore.OneOrMore I.Interface)
     isPublic di =
       case di of
-        I.Public iface  -> Just (OneOrMore.one iface)
-        I.Private _ _ _ -> Nothing
+        I.Public iface -> Just (OneOrMore.one iface)
+        I.Private _ _  -> Nothing
 
 
 
@@ -771,9 +772,9 @@ crawlFile :: Map.Map Module.Name ForeignInterface -> MVar StatusDict -> Pkg.Name
 crawlFile foreignDeps mvar pkg src docsStatus expectedName path =
   do  bytes <- File.readUtf8 path
                & Lamdera.alternativeImplementationPassthrough (Lamdera.PackageReplacements.getReplacement pkg expectedName)
-      result <- Parse.fromByteString (Parse.Package pkg) bytes
+      result <- Parse.fromByteString (Mode.Package pkg) bytes
       case result of
-        Right modul@(Src.Module (Just (A.At _ actualName)) _ _ imports _ _ _ _ _) | expectedName == actualName ->
+        Right modul@(Src.Module (Src.YesHeader _ (A.At _ actualName) _) _ imports _ _) | expectedName == actualName ->
           do  deps <- crawlImports foreignDeps mvar pkg src imports
               return (Just (SLocal docsStatus deps modul))
 
@@ -815,8 +816,8 @@ crawlKernel foreignDeps mvar pkg src name =
 getDepHome :: ForeignInterface -> Maybe Pkg.Name
 getDepHome fi =
   case fi of
-    ForeignSpecific (I.Interface pkg _ _ _ _) -> Just pkg
-    ForeignAmbiguous                          -> Nothing
+    ForeignSpecific (I.Interface pkg _ _ _) -> Just pkg
+    ForeignAmbiguous                        -> Nothing
 
 
 
@@ -841,14 +842,14 @@ compile pkg mvar _ status =
               return Nothing
 
             Just results ->
-              case Compile.compile Nothing pkg (Map.mapMaybe getInterface results) modul of
-                Left _ ->
-                  return Nothing
+              do  result <- Compile.compile Nothing (Mode.Package pkg) (Map.mapMaybe getInterface results) modul -- @LAMDERA maybePath
+                  case result of
+                    Left _ ->
+                      return Nothing
 
-                Right (Compile.Artifacts canonical annotations objects) ->
-                  do  let ifaces = I.fromModule pkg canonical annotations
-                      docs <- makeDocs docsStatus canonical
-                      return $ Just $ RLocal ifaces objects docs
+                    Right (Compile.Artifacts tpd iface objs) ->
+                      do  docs <- makeDocs docsStatus tpd
+                          return $ Just $ RLocal iface objs docs
 
     SForeign iface ->
       return (Just (RForeign iface))
@@ -886,7 +887,7 @@ getDocsStatus cache pkg vsn =
         else return DocsNeeded
 
 
-makeDocs :: DocsStatus -> Can.Module -> IO (Maybe Docs.Module)
+makeDocs :: DocsStatus -> Tpd.Module -> IO (Maybe Docs.Module)
 makeDocs status modul =
   case status of
     DocsNeeded ->

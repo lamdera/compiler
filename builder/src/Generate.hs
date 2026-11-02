@@ -132,7 +132,7 @@ repl stuff details ansi (Build.ReplArtifacts home modules localizer annotations)
   do  objects <- finalizeObjects =<< loadObjects stuff details modules
       let graph_ = objectsToGlobalGraph objects
       graph <- Task.io $ Lamdera.AppConfig.injectConfig graph_
-      return $ JS.generateForRepl ansi localizer graph home name $
+      return $ JS.genForRepl ansi localizer graph home name $
         $(Map.require 'repl) name annotations N.toChars
 
 
