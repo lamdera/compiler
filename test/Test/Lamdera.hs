@@ -42,7 +42,7 @@ suite = tests
           actual <- catchOutput $ withStdinYesAll $ Ext.Common.withProjectRoot tmpFolder $ Init.run () ()
 
           expectTextContains actual
-            "Hello! Lamdera projects always start with an elm.json file, as well as four\\nsource files: Frontend.elm , Backend.elm , Types.elm and Env.elm\\n\\nIf you're new to Elm, the best starting point is\\n<https://elm-lang.org/0.19.3/init>\\n\\nOtherwise check out <https://dashboard.lamdera.app/docs/building> for Lamdera\\nspecific information!\\n\\nKnowing all that, would you like me to create a starter implementation? [Y/n]:"
+            "Hello! Lamdera projects always start with an elm.json file, as well as four\\nsource files: Frontend.elm , Backend.elm , Types.elm and Env.elm\\n\\nIf you're new to Elm, the best starting point is\\n<https://elm-lang.org/0.19.4/init>\\n\\nOtherwise check out <https://dashboard.lamdera.app/docs/building> for Lamdera\\nspecific information!\\n\\nKnowing all that, would you like me to create a starter implementation? [Y/n]:"
 
           expectTextContains actual
             "Okay, I created it! Now read those links, or get going with `lamdera live`.\\n"
@@ -50,7 +50,7 @@ suite = tests
           -- New projects are created for the compiler's own Elm version.
           elmJsonM <- io $ readUtf8Text $ tmpFolder </> "elm.json"
           case elmJsonM of
-            Just elmJson -> expectTextContains elmJson "\"elm-version\": \"0.19.3\""
+            Just elmJson -> expectTextContains elmJson "\"elm-version\": \"0.19.4\""
             Nothing -> crash "init did not write elm.json"
 
       in
