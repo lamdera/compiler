@@ -364,20 +364,56 @@ run :: Variable -> (Variable -> Namer t) -> (A.Array T.Var -> t -> result) -> IO
 run variable toNamer toResult =
   do  seen  <- toUniques variable Map.empty
       state <- initState seen
-      case toNamer variable of
-        Namer k ->
-          k state $ \(State vars _) tipe ->
-            return (toResult (T.toArray vars) tipe)
+      result <-
+        case toNamer variable of
+          Namer k ->
+            k state $ \(State vars _) tipe ->
+              return (toResult (T.toArray vars) tipe)
+      clearNameMarks variable -- @LAMDERA
+      return result
+
+
+{-| @LAMDERA toUniques marks every variable it visits with getVarNamesMark and skips
+marked ones, and nothing cleared the marks. So when two runs reach the same variables,
+as the inferred types of the definitions of a recursive group do (Type.Check.toIValue
+names each of them), the second run left the shared ones out of its registry, and
+getRigid / getFlex then failed their lookup ("Map.!: given key is not an element in the
+map", 0.19.4-beta; Lamdera's Wire3 decoders of mutually recursive types are such a
+group). Clear them once a run is done.
+-}
+clearNameMarks :: Variable -> IO ()
+clearNameMarks var =
+  do  (Descriptor content rank mark copy) <- UF.get var
+      if mark /= getVarNamesMark
+        then return ()
+        else
+        do  UF.set var (Descriptor content rank noMark copy)
+            case content of
+              Error              -> return ()
+              Flex _             -> return ()
+              Rigid _            -> return ()
+              Alias _ _ _ xs _ _ -> A.foldlM (\x () -> clearNameMarks x) () xs
+              Structure flatType ->
+                case flatType of
+                  App1 _ _ _ xs  -> A.foldlM (\x () -> clearNameMarks x) () xs
+                  Fun1 arg body  -> clearNameMarks arg >> clearNameMarks body
+                  Unit1          -> return ()
+                  Pair1   a b    -> clearNameMarks a >> clearNameMarks b
+                  Triple1 a b c  -> clearNameMarks a >> clearNameMarks b >> clearNameMarks c
+                  Empty1         -> return ()
+                  Record1 _ fs   -> NEM.foldrM (\x () -> clearNameMarks x) () fs
+                  ExtRec1 _ fs e -> NEM.foldrM (\x () -> clearNameMarks x) () fs >> clearNameMarks e
 
 
 initState :: Map.Map T.Var Variable -> IO State
 initState seen =
   IO $ \s0 ->
-    case newByteArray# 5#                  s0 of { (# s1, mba #) ->
-    case writeWord64Array# mba 0# 0#Word64 s1 of {    s2         ->
-    case writeWord64Array# mba 1# 0#Word64 s2 of {    s3         ->
-      (# s3, State (T.fromDict seen) mba #)
-  }}}
+    -- @LAMDERA upstream zeroed the 5 counters with two Word64 writes, 16 bytes into a
+    -- 5 byte array, writing past its end. Zero exactly the 5 bytes.
+    case newByteArray# 5#           s0 of { (# s1, mba #) ->
+    case setByteArray# mba 0# 5# 0# s1 of {    s2         ->
+      (# s2, State (T.fromDict seen) mba #)
+  }}
 
 
 io :: IO a -> Namer a
@@ -422,7 +458,11 @@ getFlex variable var@(T.Var name con) mk =
           do  i <- readWord8Array offset counts
               let !(I# j, namedVar, index, newSeen) = T.registerNext gen i seen
               writeWord8Array offset j counts
-              UF.modify variable (\desc -> desc { _content = Flex var })
+              -- @LAMDERA was `Flex var`, the unnamed variable, so the next occurrence of
+              -- the same variable got a name of its own: `ident x = x` was exported as
+              -- `a -> b` (0.19.4-beta). Keep the name it was given, as the comment above
+              -- says it does.
+              UF.modify variable (\desc -> desc { _content = Flex namedVar })
               ok (State newSeen counts) (mk namedVar index)
       else
         Namer $ \state@(State registry _) ok ->
