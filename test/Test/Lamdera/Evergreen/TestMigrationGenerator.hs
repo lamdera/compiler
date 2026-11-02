@@ -15,7 +15,7 @@ import qualified Data.Map as Map
 import qualified System.FilePath as FP
 import qualified Data.Set as Set
 
-import AST.Canonical
+import Lamdera.Compat.Canonical -- @LAMDERA the Elm 0.19.3 shapes, see Lamdera.Compat.Canonical
 import qualified AST.Optimized as Opt
 import qualified Elm.ModuleName as Module
 import Elm.Package (Name(..))
@@ -38,6 +38,7 @@ import qualified Lamdera.Relative
 
 import qualified Ext.Query.Canonical
 import qualified Ext.Query.Optimized
+import qualified Lamdera.Compat.Convert
 import qualified Ext.ElmFormat
 
 import qualified Lamdera.Progress
@@ -184,8 +185,10 @@ testExamples = withTestEnv $ do
       case interfacesE of
         Left err -> io $ Lamdera.Progress.throw $ Reporting.Exit.makeToReport err
         -- "🏗  error, please compile manually:\n\ncd " <> project <> " && lamdera make " <> filename <> "\n\n"
-        Right interfaces -> do
+        Right realInterfaces -> do
           let
+            -- @LAMDERA the Elm 0.19.3 shapes of the interfaces, see Lamdera.Compat.Convert
+            interfaces = Lamdera.Compat.Convert.fromInterfaces realInterfaces
             typeOldM = Helpers.findDef moduleOld typeName interfaces
             typeNewM = Helpers.findDef moduleNew typeName interfaces
 

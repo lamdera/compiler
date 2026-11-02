@@ -4,7 +4,6 @@ module Lamdera.Error where
 import qualified Reporting.Doc as D
 import qualified Reporting.Annotation as R
 import qualified Reporting.Render.Code as Code
-import qualified Reporting.Render.Type.Localizer as L
 import qualified Reporting.Report as Report
 import qualified Root
 import System.IO.Unsafe (unsafePerformIO)

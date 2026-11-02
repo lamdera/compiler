@@ -19,7 +19,8 @@ import EasyTest
 import Lamdera hiding ((&))
 import Test.Helpers
 
-import qualified AST.Canonical as Can
+import qualified Lamdera.Compat.Canonical as Can -- @LAMDERA the Elm 0.19.3 shapes, see Lamdera.Compat.Canonical
+import qualified Lamdera.Compat.Convert as Convert
 import qualified AST.Prim.Name as N
 import qualified AST.Prim.TypeName as TN
 import qualified Elm.Interface as I
@@ -64,7 +65,8 @@ suite = tests
           iface <- maybe (crash "Wrapped.elmi could not be read back") pure ifaceM
 
           let htmlUses name =
-                case Map.lookup (N.fromChars name) (I._values iface) of
+                -- @LAMDERA the annotation in the Elm 0.19.3 shapes (Lamdera.Compat.Convert)
+                case Convert.fromAnnotation Convert.noNames <$> Map.lookup (N.fromChars name) (I._values iface) of
                   Just (Can.Forall _ t) -> htmlAliases t
                   Nothing -> []
 
@@ -120,6 +122,11 @@ htmlAliases tipe =
   case tipe of
     Can.TAlias _ name [(_, arg)] (Can.Filled real@(Can.TType _ node [nodeArg])) | TN.nameToChars name == "Html" && TN.nameToChars node == "Node" ->
       (typeName arg, typeName nodeArg) : htmlAliases real
+
+    -- @LAMDERA since Elm 0.19.4 an alias carries the body it was declared with, so the
+    -- real type of `Html x` is that body with x put in
+    Can.TAlias h name args@[(param, _)] (Can.Holey (Can.TType home node [Can.TVar v])) | TN.nameToChars name == "Html" && TN.nameToChars node == "Node" && v == param ->
+      htmlAliases (Can.TAlias h name args (Can.Filled (Can.TType home node (fmap snd args))))
 
     Can.TAlias _ _ args aliasType ->
       concatMap (htmlAliases . snd) args ++

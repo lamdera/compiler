@@ -29,6 +29,7 @@ module AST.Source
   --
   , getName
   , getImportName
+  , getModuleName -- @LAMDERA
   )
   where
 
@@ -248,3 +249,10 @@ getName header =
 getImportName :: Import -> Module.Name
 getImportName (Import (A.At _ name) _ _) =
   name
+
+
+
+-- @LAMDERA the name of a module (getName takes its header since Elm 0.19.4)
+getModuleName :: Module -> Module.Name
+getModuleName (Module header _ _ _ _) =
+  getName header

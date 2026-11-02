@@ -150,22 +150,27 @@ selectNextDeps (Global module_ _) node =
   case node of
     Define expr globalDeps ->
       globalDeps & onlyAuthorProjectDeps
-    DefineTailFunc names expr globalDeps ->
+    DefineTailFunc name names expr globalDeps ->
       globalDeps & onlyAuthorProjectDeps
-    Ctor index int ->
+    -- @LAMDERA Elm 0.19.4 constructor nodes
+    Variant tag int ->
       Set.empty
     Enum index ->
       Set.empty
+    Vector int ->
+      Set.empty
     Box ->
+      Set.empty
+    Void ->
       Set.empty
     Link global ->
       Set.singleton global & onlyAuthorProjectDeps
-    Cycle names namedExprs defs globalDeps ->
+    Cycle name names namedExprs defs globalDeps ->
       -- Remove all the cycles from the deps, names has multiple values
       -- when there are mutually recursive functions involved
       Set.difference
         (onlyAuthorProjectDeps globalDeps)
-        (names & fmap (\name -> Global module_ name) & Set.fromList)
+        ((name : names) & fmap (\name -> Global module_ name) & Set.fromList)
 
     Manager effectsType ->
       Set.empty
@@ -199,12 +204,12 @@ nodeEnvRefs graph (global, node) =
         & Set.filter isEnvExpression
         & Set.filter (hasEnvString graph)
 
-    DefineTailFunc names expr globalDeps ->
+    DefineTailFunc name names expr globalDeps ->
       globalDeps
         & Set.filter isEnvExpression
         & Set.filter (hasEnvString graph)
 
-    Cycle names namedExprs defs globalDeps ->
+    Cycle name names namedExprs defs globalDeps ->
       globalDeps
         & Set.filter isEnvExpression
         & Set.filter (hasEnvString graph)

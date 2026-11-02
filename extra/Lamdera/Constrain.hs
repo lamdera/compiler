@@ -2,7 +2,15 @@
 
 module Lamdera.Constrain where
 
-import qualified AST.Canonical as Can
+import qualified Lamdera.Compat.Canonical as Can
+import qualified Elm.Interface as I
+import qualified Array
+import qualified AST.Prim.Fields as F
+import qualified AST.Prim.TypeIndex as TI
+import qualified AST.Prim.TypeMask as M
+import qualified AST.Prim.TypeName as TN
+import qualified Reporting.Annotation as A
+import qualified Reporting.Error.Type as E
 import qualified Elm.ModuleName as ModuleName
 import qualified Elm.Package as Pkg
 import qualified AST.Prim.Module as Module
@@ -22,36 +30,57 @@ import Lamdera
 import Lamdera.Project (lamderaCore)
 
 
-constrain pkg modu name annotation@(Can.Forall freevars t) region expected =
+-- @LAMDERA Elm 0.19.4: called for every VarForeign with its home and its annotation, which
+-- is an I.Annotation (type variables are indexes into its array of names)
+constrain :: ModuleName.Canonical -> N.Name -> I.Annotation -> A.Region -> E.Expected Type -> IO Constraint
+constrain home@(ModuleName.Canonical pkg modu) name annotation@(I.Forall freevars t) region expected =
   if pkg == lamderaCore && modu == "Lamdera" then
 
     case name of
       "sendToBackend" -> do
         sourcePkg <- determineTypesLocation "ToBackend"
-        let
-          fn (Can.TVar "toBackend") = Can.TType (ModuleName.Canonical Pkg.dummyName sourcePkg) "ToBackend" []
-          fn x = x
-        pure $ CForeign region name (Can.Forall freevars (mapTvars fn t)) expected
+        pure $ CForeign region name (I.Forall freevars (replaceVar freevars "toBackend" (userType sourcePkg "ToBackend") t)) expected
 
       "sendToFrontend" -> do
         sourcePkg <- determineTypesLocation "ToFrontend"
-        let
-          fn (Can.TVar "toFrontend") = Can.TType (ModuleName.Canonical Pkg.dummyName sourcePkg) "ToFrontend" []
-          fn x = x
-        pure $ CForeign region name (Can.Forall freevars (mapTvars fn t)) expected
+        pure $ CForeign region name (I.Forall freevars (replaceVar freevars "toFrontend" (userType sourcePkg "ToFrontend") t)) expected
 
       "broadcast" -> do
         sourcePkg <- determineTypesLocation "ToFrontend"
-        let
-          fn (Can.TVar "toFrontend") = Can.TType (ModuleName.Canonical Pkg.dummyName sourcePkg) "ToFrontend" []
-          fn x = x
-        pure $ CForeign region name (Can.Forall freevars (mapTvars fn t)) expected
+        pure $ CForeign region name (I.Forall freevars (replaceVar freevars "toFrontend" (userType sourcePkg "ToFrontend") t)) expected
 
       _ ->
         pure $ CForeign region name annotation expected
 
   else
     pure $ CForeign region name annotation expected
+
+
+-- the user's own ToBackend / ToFrontend. A custom type's mask is 0b00 (see M.variants),
+-- and an alias for one is not comparable either, as before Elm 0.19.4 when this was a
+-- TType too.
+userType :: Module.Name -> TN.Name -> I.Type
+userType sourcePkg typeName =
+  I.TType (ModuleName.Canonical Pkg.dummyName sourcePkg) typeName M.enum Array.empty
+
+
+-- @LAMDERA was mapTvars with a function matching `Can.TVar "toBackend"`
+replaceVar :: Array.Array TV.Var -> TV.Var -> I.Type -> I.Type -> I.Type
+replaceVar freevars var replacement tipe =
+  let
+    go = replaceVar freevars var replacement
+  in
+  case tipe of
+    I.TLambda a b cs -> I.TLambda (go a) (go b) (map go cs)
+    I.TVar i -> if TI.get i freevars == var then replacement else tipe
+    I.TType h n m xs -> I.TType h n m (Array.map go xs)
+    I.TAlias h n m xs aliased -> I.TAlias h n m (Array.map go xs) aliased
+    I.TUnit -> tipe
+    I.TPair a b -> I.TPair (go a) (go b)
+    I.TTriple a b c -> I.TTriple (go a) (go b) (go c)
+    I.TEmpty -> tipe
+    I.TRecord fs -> I.TRecord (F.map go fs)
+    I.TExtRec fs ext -> I.TExtRec (F.map go fs) ext
 
 
 determineTypesLocation :: Text -> IO Module.Name

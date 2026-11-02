@@ -11,9 +11,12 @@ import qualified Data.Text.Encoding as T
 import NeatInterpolation
 
 import qualified Data.Utf8
-import AST.Canonical
 import Elm.Package
 import qualified AST.Canonical as Can
+import qualified AST.Typed as Tpd
+import qualified AST.Prim.Fields as F
+import qualified Data.NonEmptyMap as NEM
+import qualified Graph
 import qualified AST.Optimized as Opt
 import qualified Elm.ModuleName as Module
 import qualified Reporting.Annotation
@@ -35,141 +38,121 @@ hasDebug expression original = do
         _                                        -> original
 
 
-hasUselessDebugLogs :: Can.Module -> Either E.Error ()
-hasUselessDebugLogs canonical =
-    case checkDecls (Can._decls canonical) of
+-- @LAMDERA Elm 0.19.4: runs on the type checked module (AST.Typed), whose decls are
+-- the canonical ones
+hasUselessDebugLogs :: Tpd.Module -> Either E.Error ()
+hasUselessDebugLogs typed =
+    case checkDecls (Tpd._decls typed) of
         first : rest -> Left $ E.LamderaBadDebugLog $ NE.List first rest
         [] -> Right ()
 
 
 checkDecls :: Can.Decls -> [A.Region]
-checkDecls decls =
-    case decls of
-        Can.Declare def nextDecl ->
-            checkDefs def ++ checkDecls nextDecl
+checkDecls (Can.Decls (Graph.Sorted decls)) =
+    concatMap
+        (\decl ->
+            case decl of
+                Can.Decl def ->
+                    checkDefs def
 
-        Can.DeclareRec def remainingDefs nextDecl ->
-            checkDefs def ++ checkDecls nextDecl ++ concatMap (checkDefs) remainingDefs
-
-        Can.SaveTheEnvironment ->
-            []
+                Can.DeclRec def remainingDefs ->
+                    checkDefs def ++ concatMap checkDefs remainingDefs
+        )
+        decls
 
 
 checkDefs :: Can.Def -> [A.Region]
 checkDefs def =
     case def of
-        Can.Def name patterns expr ->
-            checkExpr (Reporting.Annotation.toValue name) expr
+        Can.DValue_ name expr -> checkExpr (Reporting.Annotation.toValue name) expr
+        Can.DValue name expr _ _ -> checkExpr (Reporting.Annotation.toValue name) expr
+        Can.DFunc_ name _ _ expr -> checkExpr (Reporting.Annotation.toValue name) expr
+        Can.DFunc name _ _ expr _ _ -> checkExpr (Reporting.Annotation.toValue name) expr
 
-        Can.TypedDef name freeVars patterns expr type_ ->
-            checkExpr (Reporting.Annotation.toValue name) expr
+
+checkValue :: Can.Value -> [A.Region]
+checkValue value =
+    case value of
+        Can.Value_ name expr -> checkExpr (Reporting.Annotation.toValue name) expr
+        Can.Value name expr _ _ -> checkExpr (Reporting.Annotation.toValue name) expr
+
+
+checkFunc :: Can.Func -> [A.Region]
+checkFunc func =
+    case func of
+        Can.Func_ name _ _ expr -> checkExpr (Reporting.Annotation.toValue name) expr
+        Can.Func name _ _ expr _ _ -> checkExpr (Reporting.Annotation.toValue name) expr
 
 
 checkExpr :: Name.Name -> Can.Expr -> [A.Region]
 checkExpr functionName (Reporting.Annotation.At _ expr) =
     case expr of
-        Can.VarLocal name ->
-            []
-
-        Can.VarTopLevel canonical name ->
-            []
-
-        Can.VarKernel name name2 ->
-            []
-
-        Can.VarForeign canonical name annotation ->
-            []
-
-        Can.VarCtor ctorOpts canonical name zeroBased annotation ->
-            []
-
-        Can.VarDebug canonical name annotation ->
-            []
-
-        Can.VarOperator name canonical name2 annotation ->
-            []
-
-        Can.Chr string ->
-            []
-
-        Can.Str string ->
-            []
-
-        Can.Int int ->
-            []
-
-        Can.Float float ->
-            []
-
         Can.List exprs ->
             concatMap (checkExpr functionName) exprs
 
-        Can.Negate expr ->
-            checkExpr functionName expr
+        Can.Negate expr_ ->
+            checkExpr functionName expr_
 
-        Can.Binop name canonical name2 annotation expr expr2 ->
-            checkExpr functionName expr ++ checkExpr functionName expr2
+        Can.Binop _ _ _ _ expr_ expr2 ->
+            checkExpr functionName expr_ ++ checkExpr functionName expr2
 
-        Can.Lambda patterns expr ->
-            checkExpr functionName expr
+        Can.Lambda _ _ expr_ ->
+            checkExpr functionName expr_
 
-        Can.Call expr exprs ->
-            checkExpr functionName expr ++ concatMap (checkExpr functionName) exprs
+        Can.Call expr_ first rest ->
+            checkExpr functionName expr_ ++ concatMap (checkExpr functionName) (first : rest)
 
-        Can.If exprs expr ->
-            checkExpr functionName expr
+        Can.If exprs expr_ ->
+            checkExpr functionName expr_
                 ++ concatMap
                     (\(first, second) ->
                         checkExpr functionName first ++ checkExpr functionName second
                     )
                     exprs
 
-        Can.Let def expr ->
-            checkExpr functionName expr ++ checkDefs def
+        Can.LetValue value expr_ ->
+            checkExpr functionName expr_ ++ checkValue value
 
-        Can.LetRec defs expr ->
-            checkExpr functionName expr ++ concatMap (checkDefs) defs
+        Can.LetFunc func expr_ ->
+            checkExpr functionName expr_ ++ checkFunc func
+
+        Can.LetRec func funcs expr_ ->
+            checkExpr functionName expr_ ++ concatMap checkFunc (func : funcs)
 
         Can.LetDestruct
             (Reporting.Annotation.At (A.Region start _) Can.PAnything)
-            (Reporting.Annotation.At (A.Region _ end) (Can.Call (Reporting.Annotation.At _ (Can.VarDebug _ "log" annotation )) [ firstParam ]))
-            expr ->
-            [ A.Region start end ] ++ checkExpr functionName expr
+            (Reporting.Annotation.At (A.Region _ end) (Can.Call (Reporting.Annotation.At _ (Can.VarDebug _ "log" _)) _ []))
+            expr_ ->
+            [ A.Region start end ] ++ checkExpr functionName expr_
 
-        Can.LetDestruct pattern expr expr2 ->
-            checkExpr functionName expr ++ checkExpr functionName expr2
+        Can.LetDestruct _ expr_ expr2 ->
+            checkExpr functionName expr_ ++ checkExpr functionName expr2
 
-        Can.Case expr caseBranches ->
-            checkExpr functionName expr
+        Can.Case expr_ branch branches ->
+            checkExpr functionName expr_
                 ++ concatMap
-                    (\(Can.CaseBranch _ caseExpr) -> checkExpr functionName caseExpr)
-                    caseBranches
+                    (\(Can.Branch _ caseExpr) -> checkExpr functionName caseExpr)
+                    (branch : branches)
 
-        Can.Accessor name ->
-            []
+        Can.Access expr_ _ ->
+            checkExpr functionName expr_
 
-        Can.Access expr name ->
-            checkExpr functionName expr
-
-        Can.Update name expr fieldUpdates ->
-            checkExpr functionName expr
-                ++ concatMap (\(Can.FieldUpdate _ expr) -> checkExpr functionName expr) (Lexical.elems fieldUpdates)
+        Can.Update _ expr_ fieldUpdates ->
+            checkExpr functionName expr_
+                ++ concatMap (\(Can.Update_ _ e) -> checkExpr functionName e) (Lexical.elems (NEM.toDict (F.toNEM fieldUpdates)))
 
         Can.Record fields ->
-            concatMap (\field -> checkExpr functionName field) (Lexical.elems fields)
+            concatMap (\field -> checkExpr functionName field) (Lexical.elems (NEM.toDict (F.toNEM fields)))
 
-        Can.Unit ->
-            []
-
-        Can.Pair expr expr2 ->
-            checkExpr functionName expr
+        Can.Pair expr_ expr2 ->
+            checkExpr functionName expr_
                 ++ checkExpr functionName expr2
 
-        Can.Triple expr expr2 expr3 ->
-            checkExpr functionName expr
+        Can.Triple expr_ expr2 expr3 ->
+            checkExpr functionName expr_
                 ++ checkExpr functionName expr2
                 ++ checkExpr functionName expr3
 
-
-        Can.Shader shaderSource shaderTypes ->
+        -- the rest have no expressions in them
+        _ ->
             []

@@ -14,6 +14,7 @@ import Lamdera.Compile
 import qualified Lamdera.Types
 import qualified Lamdera.Relative
 import qualified Ext.Query.Interfaces as Interfaces
+import qualified Lamdera.Compat.Convert
 import qualified Lamdera.TypeHash
 import qualified Ext.Common
 import qualified Data.Map as Map
@@ -199,7 +200,7 @@ suite = tests
       scope "lamdera check rejects them, and still takes Bytes" $ do
         let
           errorsFor typeName = do
-            interfaces <- Interfaces.all [ "src/Types.elm" ]
+            interfaces <- Lamdera.Compat.Convert.fromInterfaces <$> Interfaces.all [ "src/Types.elm" ] -- @LAMDERA the Elm 0.19.3 shapes
             case Map.lookup "Types" interfaces of
               Just iface -> pure $ Lamdera.TypeHash.diffableTypeErrors (Lamdera.TypeHash.diffableTypeByName interfaces typeName "Types" iface)
               Nothing -> pure [ "Types not found" ]
@@ -217,7 +218,7 @@ suite = tests
 
       let
         diffable typeName = do
-          interfaces <- Interfaces.all [ "src/Types.elm" ]
+          interfaces <- Lamdera.Compat.Convert.fromInterfaces <$> Interfaces.all [ "src/Types.elm" ] -- @LAMDERA the Elm 0.19.3 shapes
           case Map.lookup "Types" interfaces of
             Just iface -> pure $ Just (Lamdera.TypeHash.diffableTypeByName interfaces typeName "Types" iface)
             Nothing -> pure Nothing

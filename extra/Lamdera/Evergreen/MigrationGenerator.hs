@@ -18,10 +18,10 @@ import qualified AST.Prim.TypeVar as TV
 import qualified Lamdera.Lexical as Lexical
 import NeatInterpolation
 
-import qualified AST.Canonical as Can
+import qualified Lamdera.Compat.Canonical as Can -- @LAMDERA the Elm 0.19.3 shapes, see Lamdera.Compat.Canonical
 import qualified Elm.ModuleName as ModuleName
 import qualified Elm.Package as Pkg
-import qualified Elm.Interface as Interface
+import qualified Lamdera.Compat.Interface as Interface -- @LAMDERA the Elm 0.19.3 interface, see Lamdera.Compat.Interface
 import qualified Data.Utf8 as Utf8
 import qualified Data.NonEmptyList as NE
 
@@ -31,6 +31,7 @@ import Lamdera.Types
 import qualified Lamdera.Compile
 import qualified Ext.ElmFormat
 import qualified Ext.Query.Interfaces
+import qualified Lamdera.Compat.Convert
 import qualified Lamdera.Wire3.Helpers
 -- import StandaloneInstances
 
@@ -46,7 +47,8 @@ betweenVersions destructiveExceptBackend coreTypeDiffs oldVersion newVersion roo
     Lamdera.Compile.makeDev root (NE.toList paths)
 
     res <- Ext.Common.withProjectRoot root $ do
-      interfaces <- Ext.Query.Interfaces.all (NE.toList paths)
+      -- @LAMDERA the Elm 0.19.3 shapes of the interfaces, see Lamdera.Compat.Convert
+      interfaces <- Lamdera.Compat.Convert.fromInterfaces <$> Ext.Query.Interfaces.all (NE.toList paths)
       case Map.lookup (PrimModule.fromChars moduleNameString) interfaces of
         Just interface -> do
           debug $ "starting generatefor"

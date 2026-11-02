@@ -39,6 +39,7 @@ import System.FilePath ((</>))
 import AST.Optimized
 import Elm.ModuleName (Canonical(..))
 import qualified Elm.Package as Pkg
+import qualified Data.NonEmptyMap as NEM
 
 import Lamdera
 import qualified Lamdera.AppConfig
@@ -60,10 +61,10 @@ write = do
 backendSubsUseTimeEvery :: GlobalGraph -> Bool
 backendSubsUseTimeEvery graph =
   case resolveGlobal graph 0 backendApp of
-    Just (Call fn [recordArg]) | isLamderaBackendFn fn ->
+    Just (Call fn recordArg []) | isLamderaBackendFn fn ->
       case reduce graph 0 recordArg of
         Just (Record fields) ->
-          case Map.lookup "subscriptions" fields of
+          case NEM.lookup "subscriptions" fields of
             Just subs -> reachesTimeEvery graph (globalsInExpr subs) Set.empty
             Nothing -> False
 
@@ -114,8 +115,8 @@ nodeDeps :: Maybe Node -> Set.Set Global
 nodeDeps mn =
   case mn of
     Just (Define _ ds) -> ds
-    Just (DefineTailFunc _ _ ds) -> ds
-    Just (Cycle _ _ _ ds) -> ds
+    Just (DefineTailFunc _ _ _ ds) -> ds
+    Just (Cycle _ _ _ _ ds) -> ds
     Just (Kernel _ ds) -> ds
     Just (PortIncoming _ ds) -> ds
     Just (PortOutgoing _ ds) -> ds
@@ -132,16 +133,16 @@ globalsInExpr expr =
     VarEnum g _ -> [g]
     VarBox g -> [g]
     List es -> concatMap globalsInExpr es
-    Function _ e -> globalsInExpr e
-    Call e es -> globalsInExpr e ++ concatMap globalsInExpr es
-    TailCall _ nes -> concatMap (globalsInExpr . snd) nes
+    Function _ _ e -> globalsInExpr e
+    Call e x xs -> globalsInExpr e ++ concatMap globalsInExpr (x : xs)
+    TailCall _ x xs -> concatMap (\(TailAssign _ e) -> globalsInExpr e) (x : xs)
     If pairs def -> concatMap (\(c, e) -> globalsInExpr c ++ globalsInExpr e) pairs ++ globalsInExpr def
     Let def e -> globalsInDef def ++ globalsInExpr e
     Destruct _ e -> globalsInExpr e
     Case _ _ decider branches -> globalsInDecider decider ++ concatMap (globalsInExpr . snd) branches
     Access e _ -> globalsInExpr e
-    Update e m -> globalsInExpr e ++ concatMap globalsInExpr (Map.elems m)
-    Record m -> concatMap globalsInExpr (Map.elems m)
+    Update e m -> globalsInExpr e ++ concatMap (globalsInExpr . snd) (NEM.toList m)
+    Record m -> concatMap (globalsInExpr . snd) (NEM.toList m)
     Pair a b -> globalsInExpr a ++ globalsInExpr b
     Triple a b c -> globalsInExpr a ++ globalsInExpr b ++ globalsInExpr c
     _ -> []
@@ -151,7 +152,7 @@ globalsInDef :: Def -> [Global]
 globalsInDef d =
   case d of
     Def _ e -> globalsInExpr e
-    TailDef _ _ e -> globalsInExpr e
+    TailDef _ _ _ e -> globalsInExpr e
 
 
 globalsInDecider :: Decider Choice -> [Global]
@@ -170,7 +171,7 @@ resolveGlobal graph depth g
   | otherwise =
       case Map.lookup g (_g_nodes graph) of
         Just (Define expr _) -> Just expr
-        Just (DefineTailFunc args expr _) -> Just (Function args expr)
+        Just (DefineTailFunc arg args expr _) -> Just (Function arg args expr)
         Just (Link g2) -> resolveGlobal graph (depth + 1) g2
         _ -> Nothing
 

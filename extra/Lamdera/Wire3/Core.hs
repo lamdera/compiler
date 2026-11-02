@@ -16,11 +16,20 @@ import qualified Data.List as List
 
 import Elm.Package
 import qualified AST.Source as Src
-import qualified Elm.Interface as I
+import qualified Lamdera.Compat.Interface as I -- @LAMDERA the Elm 0.19.3 interface, see Lamdera.Compat.Interface
+import qualified Elm.Interface as RealI -- @LAMDERA the Elm 0.19.4 interface
+import qualified AST.Canonical as New -- @LAMDERA the Elm 0.19.4 canonical AST
+import qualified Lamdera.Compat.Convert as Convert
+import qualified AST.Prim.Fields as F
+import qualified Data.NonEmptyMap as NEM
+import qualified Data.Dups as Dups
+import qualified Data.Graph
+import qualified Data.Maybe as Maybe
+import qualified Graph
 import qualified Elm.ModuleName as Module
 import qualified Elm.Package as Pkg
-import qualified AST.Canonical as Can
-import AST.Canonical
+import qualified Lamdera.Compat.Canonical as Can -- @LAMDERA the Elm 0.19.3 shapes, see Lamdera.Compat.Canonical
+import Lamdera.Compat.Canonical -- @LAMDERA the Elm 0.19.3 shapes, see Lamdera.Compat.Canonical
 import qualified AST.Prim.Module as PrimModule
 import qualified AST.Prim.Name as N
 import qualified AST.Prim.TypeName as TN
@@ -79,7 +88,7 @@ readWireTestFailures =
   readIORef wireTestFailuresRef
 
 
-runTests :: Bool -> String -> Pkg.Name -> Src.Module -> Decls -> N.Name -> Def -> canonicalValue -> wiregen -> ()
+runTests :: Bool -> String -> Pkg.Name -> Src.Module -> UserDecls -> N.Name -> Def -> canonicalValue -> wiregen -> ()
 runTests isTest_ debugName pkg modul decls generatedName generated canonicalValue wiregen =
   if isTest_
     then
@@ -87,10 +96,17 @@ runTests isTest_ debugName pkg modul decls generatedName generated canonicalValu
       let
         testName = N.fromChars $ "expected_" ++ N.toChars generatedName
 
+        -- @LAMDERA Elm 0.19.4: the expectation is a definition of the user's module, so in
+        -- the 0.19.4 AST, and the generated definition is compared as it goes on to be
+        -- compiled, converted to that AST (Lamdera.Compat.Convert)
         withName def n_ =
           case def of
-            Def (A.At r n) p e -> Def (A.At r n_) p e
-            TypedDef (A.At r n) freeVars pts e t -> TypedDef (A.At r n_) freeVars pts e t
+            New.DValue_ (A.At r _) e -> New.DValue_ (A.At r n_) e
+            New.DValue (A.At r _) e t an -> New.DValue (A.At r n_) e t an
+            New.DFunc_ (A.At r _) p ps e -> New.DFunc_ (A.At r n_) p ps e
+            New.DFunc (A.At r _) p ps e t an -> New.DFunc (A.At r n_) p ps e t an
+
+        generatedNew = _udToNew decls generated
 
         -- fullTypeRef =
         --   (T.pack $ Pkg.toChars pkg) <> ":" <> (T.pack $ Data.Name.toChars $ Src.getName modul) <> "." <> (T.pack $ Data.Name.toChars generatedName)
@@ -110,7 +126,7 @@ runTests isTest_ debugName pkg modul decls generatedName generated canonicalValu
         matchesExpectation def expectedDef =
           show def == show expectedDef
 
-      case decls & findDef testName of
+      case _udDecls decls & findUserDef testName of
         Just testDefinition -> do
 
           -- debugHaskellPass ("💚 testDefinition " <> show_ (Src.getName modul)) (testDefinition) (pure ())
@@ -118,7 +134,7 @@ runTests isTest_ debugName pkg modul decls generatedName generated canonicalValu
           -- diff <- icdiff (hindentFormatValue testDefinition) (hindentFormatValue generated)
           -- atomicPutStrLn $ "❌❌❌ failed, attempting pretty-print diff:\n" ++ diff
 
-          if matchesExpectation generated (testDefinition `withName` generatedName)
+          if matchesExpectation generatedNew (testDefinition `withName` generatedName)
             then do
               -- atomicPutStrLn $ "✅ gen " <> debugName <> " matches " <> Data.Name.toChars (Src.getName modul) <> "." <> Data.Name.toChars testName
               -- debugPassText ("🧡 expected implementation pretty-printed " <> show_ (Src.getName modul)) (Source2.generateCodecs Map.empty wiregen) (pure ())
@@ -136,8 +152,10 @@ runTests isTest_ debugName pkg modul decls generatedName generated canonicalValu
               -- debugPassText ("🧡 expected implementation pretty-printed " <> show_ (Src.getName modul)) (Source2.generateCodecs Map.empty wiregen) (pure ())
               -- debugHaskellPass ("🧡 expected implementation AST.Canonical " <> show_ (Src.getName modul)) (testDefinition) (pure ())
 
-              diff <- icdiff (hindentFormatValue testDefinition) (hindentFormatValue generated)
-              diff2 <- icdiff (ToSource.convert (testDefinition `withName` generatedName)) (ToSource.convert generated)
+              diff <- icdiff (hindentFormatValue testDefinition) (hindentFormatValue generatedNew)
+              -- @LAMDERA the expectation is in the 0.19.4 AST, which CanSer does not print, so
+              -- only the generated definition is printed as source
+              diff2 <- icdiff "" (ToSource.convert generated)
               -- diff2 <- do
               --   l <- Ext.ElmFormat.format $ ToSource.convert testDefinition
               --   r <- Ext.ElmFormat.format $ ToSource.convert generated
@@ -149,7 +167,7 @@ runTests isTest_ debugName pkg modul decls generatedName generated canonicalValu
               atomicPutStrLn $ "❌❌❌ failed, attempting pretty-print diff1:\n" ++ diff
               atomicPutStrLn $ "❌❌❌ ASTs do not match, attempting pretty-print diff2:\n" ++ diff2
               recordWireTestFailure $
-                PrimModule.toChars (Src.getName modul) ++ "." ++ N.toChars generatedName
+                PrimModule.toChars (Src.getModuleName modul) ++ "." ++ N.toChars generatedName
                   ++ " (" ++ debugName ++ ") does not match " ++ N.toChars testName
               -- error "exiting!"
               -- atomicPutStrLn $ "❌❌❌ " ++ Data.Name.toChars (Src.getName modul) ++ "." ++ Data.Name.toChars generatedName ++ " gen does not match test definition."
@@ -191,21 +209,121 @@ aliasAsModule cname name alias =
     , Can._effects = NoEffects
     }
 
-addWireGenerations :: Can.Module -> Pkg.Name -> Map.Map PrimModule.Name I.Interface -> Src.Module -> Either E.Error Can.Module
+{-| @LAMDERA Elm 0.19.4: takes the module as canonicalized (0.19.4 AST) and the
+interfaces it imports, and returns the module with the codecs added, along with the
+codecs as generated (0.19.3 AST, see Lamdera.Compat.Canonical), which
+Lamdera.Wire3.Direct lowers. -}
+addWireGenerations :: New.Module -> Pkg.Name -> Map.Map PrimModule.Name RealI.Interface -> Src.Module -> Either E.Error (New.Module, [Def])
 addWireGenerations canonical pkg ifaces modul =
   if Lamdera.Wire3.Helpers.shouldHaveCodecsGenerated pkg then
     case addWireGenerations_ canonical pkg ifaces modul of
-      Right canonical_ -> do
-        Right canonical_
+      Right result -> do
+        Right result
 
       Left err ->
         Left $ E.BadLamdera "WIRE ERROR" err
   else
-    Right canonical
+    Right (canonical, [])
 
 
-addWireGenerations_ :: Can.Module -> Pkg.Name -> Map.Map PrimModule.Name I.Interface -> Src.Module -> Either D.Doc Can.Module
-addWireGenerations_ canonical pkg ifaces modul =
+{-| The user's definitions, as Wire3 looks at them (see addWireGenerations_). -}
+data UserDecls =
+  UserDecls
+    { _udSummary :: Decls -- stand-ins in the 0.19.3 AST, see userSummary
+    , _udDecls :: [New.Decl] -- the definitions themselves
+    , _udToNew :: Def -> New.Def -- a generated definition as it will be compiled
+    }
+
+
+{-| Stand-ins for the user's definitions in the 0.19.3 AST, for the parts of Wire3 that
+look at them by name: each has the definition's name, its annotation (as the type of a
+TypedDef with no arguments) when it has one, and a body that refers to exactly the
+top-level values the definition refers to. -}
+userSummary :: Convert.Names -> Module.Canonical -> [New.Decl] -> Decls
+userSummary names home decls =
+  let
+    summary def =
+      let
+        name = userDefName def
+        body = a (List (fmap (\n -> a (VarTopLevel home n)) (userDefTopLevelRefs def)))
+      in
+      case userDefAnnotation def of
+        Just annotation ->
+          let (Forall freeVars tipe) = Convert.fromAnnotation names annotation in
+          TypedDef (a name) freeVars [] body tipe
+        Nothing ->
+          Def (a name) [] body
+  in
+  decls
+    & concatMap (\decl -> case decl of { New.Decl d -> [d]; New.DeclRec d ds -> d : ds })
+    & foldr (\def rest -> Declare (summary def) rest) SaveTheEnvironment
+
+
+userDefName :: New.Def -> N.Name
+userDefName def =
+  case def of
+    New.DValue_ (A.At _ n) _ -> n
+    New.DValue (A.At _ n) _ _ _ -> n
+    New.DFunc_ (A.At _ n) _ _ _ -> n
+    New.DFunc (A.At _ n) _ _ _ _ _ -> n
+
+
+userDefAnnotation :: New.Def -> Maybe RealI.Annotation
+userDefAnnotation def =
+  case def of
+    New.DValue_ _ _ -> Nothing
+    New.DValue _ _ _ an -> Just an
+    New.DFunc_ _ _ _ _ -> Nothing
+    New.DFunc _ _ _ _ _ an -> Just an
+
+
+findUserDef :: N.Name -> [New.Decl] -> Maybe New.Def
+findUserDef name decls =
+  decls
+    & concatMap (\decl -> case decl of { New.Decl d -> [d]; New.DeclRec d ds -> d : ds })
+    & List.find (\def -> userDefName def == name)
+
+
+{-| Every top-level value of this module a user definition refers to. -}
+userDefTopLevelRefs :: New.Def -> [N.Name]
+userDefTopLevelRefs def =
+  case def of
+    New.DValue_ _ e -> userExprRefs e
+    New.DValue _ e _ _ -> userExprRefs e
+    New.DFunc_ _ _ _ e -> userExprRefs e
+    New.DFunc _ _ _ e _ _ -> userExprRefs e
+
+
+userExprRefs :: New.Expr -> [N.Name]
+userExprRefs (A.At _ expr) =
+  let
+    go = userExprRefs
+    goValue v = case v of { New.Value_ _ e -> go e; New.Value _ e _ _ -> go e }
+    goFunc f = case f of { New.Func_ _ _ _ e -> go e; New.Func _ _ _ e _ _ -> go e }
+  in
+  case expr of
+    New.VarTopLevel _ name -> [name]
+    New.List es -> concatMap go es
+    New.Negate e -> go e
+    New.Binop _ _ _ _ e1 e2 -> go e1 ++ go e2
+    New.Lambda _ _ e -> go e
+    New.Call e x xs -> go e ++ concatMap go (x : xs)
+    New.If branches final -> concatMap (\(c, t) -> go c ++ go t) branches ++ go final
+    New.LetValue v e -> goValue v ++ go e
+    New.LetFunc f e -> goFunc f ++ go e
+    New.LetRec f fs e -> concatMap goFunc (f : fs) ++ go e
+    New.LetDestruct _ e1 e2 -> go e1 ++ go e2
+    New.Case e b bs -> go e ++ concatMap (\(New.Branch _ be) -> go be) (b : bs)
+    New.Access e _ -> go e
+    New.Update _ e fields -> go e ++ concatMap (\(New.Update_ _ ue) -> go ue) (fmap snd (NEM.toList (F.toNEM fields)))
+    New.Record fields -> concatMap go (fmap snd (NEM.toList (F.toNEM fields)))
+    New.Pair e1 e2 -> go e1 ++ go e2
+    New.Triple e1 e2 e3 -> go e1 ++ go e2 ++ go e3
+    _ -> []
+
+
+addWireGenerations_ :: New.Module -> Pkg.Name -> Map.Map PrimModule.Name RealI.Interface -> Src.Module -> Either D.Doc (New.Module, [Def])
+addWireGenerations_ canonical pkg realIfaces modul =
   let
     !isTest_ = unsafePerformIO Lamdera.isTest
 
@@ -233,12 +351,31 @@ addWireGenerations_ canonical pkg ifaces modul =
     --         _ ->
     --           pure ()
 
-    decls_ = Can._decls canonical
+    -- @LAMDERA Elm 0.19.4: the interfaces, this module's types and the user's definitions
+    -- as Wire3 works with them, in the 0.19.3 shapes (see Lamdera.Compat.Convert)
+    names = Convert.namesFromModule cname (New._types canonical) (Convert.namesFromInterfaces realIfaces)
+    ifaces = realIfaces & Map.map (Convert.fromInterface names)
+    moduleUnions = Convert.unionsOf names (New._types canonical)
+    moduleAliases = Convert.aliasesOf names (New._types canonical)
+    env = Convert.envWithModule cname (New._types canonical) (Convert.envFromInterfaces realIfaces)
+
+    userDecls =
+      case New._decls canonical of
+        New.Decls (Graph.Sorted ds) -> ds
+
+    decls_ =
+      UserDecls
+        { _udSummary = userSummary names cname userDecls
+        , _udDecls = userDecls
+        , _udToNew = Convert.toDef env cname
+        }
+
+    summary = _udSummary decls_
 
     -- Lamdera's (pre Elm 0.19.3) name order, so the generated definitions come out in the
     -- same order as before (see Lamdera.Lexical).
     unionDefs =
-      (Can._unions canonical)
+      moduleUnions
         & Lexical.toList
         & concatMap (\(name, union) ->
             let rowCodecs = unionRowCodecs name union & either (const Nothing) id
@@ -248,7 +385,7 @@ addWireGenerations_ canonical pkg ifaces modul =
             , (decoderUnion rowCodecs moduleRowConstraints DecodeUnsafe     isTest_ ifaces pkg modul decls_ name union)
             ]
             & (\defs ->
-                if recursesIrregularly cname (Can._unions canonical) name union
+                if recursesIrregularly cname moduleUnions name union
                   then withPolymorphicRecursion cname decoderComparableParams name union defs
                   else defs
               )
@@ -257,17 +394,17 @@ addWireGenerations_ canonical pkg ifaces modul =
     -- Which decoder type parameters have to be comparable, for the decoder signatures.
     -- Only needed by the decoders withPolymorphicRecursion annotates.
     decoderComparableParams =
-      comparableParams ifaces cname (Can._unions canonical) (Can._aliases canonical)
+      comparableParams ifaces cname moduleUnions moduleAliases
 
     -- The record constraints the codecs of this module's types put on their parameters,
     -- and those of the types they reference (see RowConstraints)
     moduleRowConstraints =
-      rowConstraints ifaces cname (Can._unions canonical) (Can._aliases canonical)
+      rowConstraints ifaces cname moduleUnions moduleAliases
 
     -- The codecs of the types where a parameter is the row tail of more than one record
     -- (see RowSets), and the compile errors for those that can't have them
     moduleRowSets =
-      rowSets ifaces cname (Can._unions canonical) (Can._aliases canonical)
+      rowSets ifaces cname moduleUnions moduleAliases
 
     unionRowCodecs name union =
       rowCodecsFor moduleRowSets cname name (_u_vars union) (_u_alts union & concatMap (\(Ctor _ _ _ types) -> types))
@@ -276,12 +413,12 @@ addWireGenerations_ canonical pkg ifaces modul =
       rowCodecsFor moduleRowSets cname name tvars [tipe]
 
     rowCodecsCheck =
-      ((Can._unions canonical)
+      (moduleUnions
         & Lexical.toList
         & fmap (\(name, union) ->
             case unionRowCodecs name union of
               Left problem -> Left (rowCodecsError name problem)
-              Right (Just _) | recursesIrregularly cname (Can._unions canonical) name union ->
+              Right (Just _) | recursesIrregularly cname moduleUnions name union ->
                 -- withPolymorphicRecursion annotates the decoder with a parameter per type
                 -- parameter
                 Left $ rowCodecsError name $
@@ -290,7 +427,7 @@ addWireGenerations_ canonical pkg ifaces modul =
           )
       )
       ++
-      ((Can._aliases canonical)
+      (moduleAliases
         & Lexical.toList
         & filter (\(_, Alias _ tipe) -> not (isLambdaType tipe))
         & fmap (\(name, alias) ->
@@ -302,7 +439,7 @@ addWireGenerations_ canonical pkg ifaces modul =
       & sequence_
 
     aliasDefs =
-      (Can._aliases canonical)
+      moduleAliases
         & Lexical.toList
         & filter (\(_, Alias _ tipe) -> not (isLambdaType tipe))
         & concatMap (\(name, alias) ->
@@ -319,9 +456,24 @@ addWireGenerations_ canonical pkg ifaces modul =
 
     {- Existing decls, with the injected Wire.Interface placeholders removed -}
     existingDecls =
-      foldl (\def decls -> removeDef decls def ) decls_ newDefs
+      foldl (\def decls -> removeDef decls def ) summary newDefs
 
-    cname = Module.Canonical pkg (Src.getName modul)
+    -- @LAMDERA the same, of the definitions themselves
+    newDefNames = fmap defName newDefs
+    existingUserDecls =
+      userDecls
+        & Maybe.mapMaybe (\decl ->
+            case decl of
+              New.Decl d ->
+                if elem (userDefName d) newDefNames then Nothing else Just decl
+              New.DeclRec d ds ->
+                case filter (\x -> notElem (userDefName x) newDefNames) (d : ds) of
+                  [] -> Nothing
+                  [x] | elem (userDefName d) newDefNames -> Just (New.Decl x)
+                  x : xs -> Just (New.DeclRec x xs)
+          )
+
+    cname = Module.Canonical pkg (Src.getModuleName modul)
 
     {- When a module defines any w3_validate_* functions, the generated wire
     functions must be placed AFTER user definitions so that the generated
@@ -330,18 +482,27 @@ addWireGenerations_ canonical pkg ifaces modul =
     Decls). Otherwise we keep the original behaviour of prepending the generated
     functions, which lets user code reference them. -}
     moduleHasValidators =
-      not (null (allValidatorDefs decls_))
+      not (null (allValidatorDefs summary))
 
     sortedGenerated =
       Lamdera.Wire3.Graph.stronglyConnCompDefs newDefs
 
+    -- @LAMDERA the generated definitions, in the 0.19.4 AST
+    generatedDecls =
+      sortedGenerated
+        & fmap (\scc ->
+            case scc of
+              Data.Graph.AcyclicSCC def -> Convert.Single def
+              Data.Graph.CyclicSCC (def : defs) -> Convert.Recursive def defs
+              Data.Graph.CyclicSCC [] -> error "addWireGenerations_: empty recursive group"
+          )
+        & Convert.declsFromGroups env cname
+
     extendedDecls =
-      if moduleHasValidators
-        then
-          spliceDeclsAtEnd existingDecls
-            (Lamdera.Wire3.Graph.addGraphDefsToDecls SaveTheEnvironment sortedGenerated)
-        else
-          Lamdera.Wire3.Graph.addGraphDefsToDecls existingDecls sortedGenerated
+      New.Decls $ Graph.Sorted $
+        if moduleHasValidators
+          then existingUserDecls ++ generatedDecls
+          else generatedDecls ++ existingUserDecls
 
     {- This implementation sorted all decls, however sorting only by lvar is
     not a valid dependency sort for all functions, only for wire functions!
@@ -355,17 +516,17 @@ addWireGenerations_ canonical pkg ifaces modul =
 
     {- For any modules that don't ExportEverything, we add our newDefs to exports -}
     extendedExports =
-      case Can._exports canonical of
-        ExportEverything region ->
-          ExportEverything region
+      case New._exports canonical of
+        New.ExportEverything region ->
+          New.ExportEverything region
 
-        Export types values binops ->
+        New.Export types values binops ->
           newDefs
             & foldl (\exports_ def ->
                 addExport def exports_
               )
               values
-            & (\newValues -> Export types newValues binops)
+            & (\newValues -> New.Export types newValues binops)
 
     {- When generated wire functions are appended after user code (the
     moduleHasValidators path), the user's own top-level code must not also
@@ -379,7 +540,7 @@ addWireGenerations_ canonical pkg ifaces modul =
         then checkNoUserWireRefs newDefs existingDecls
         else Right ()
   in
-  case checkValidators cname (Can._unions canonical) (Can._aliases canonical) decls_ of
+  case checkValidators cname moduleUnions moduleAliases summary of
     Left err ->
       Left err
 
@@ -394,10 +555,13 @@ addWireGenerations_ canonical pkg ifaces modul =
               Left err
 
             Right () ->
-              Right $ canonical
-                { _decls = extendedDecls
-                , _exports = extendedExports
-                }
+              Right
+                ( canonical
+                    { New._decls = extendedDecls
+                    , New._exports = extendedExports
+                    }
+                , newDefs
+                )
 
 
 {-
@@ -567,22 +731,26 @@ validatorWireRefError userName genName =
     ]
 
 
-addExport :: Def -> Map.Map N.Name A.Region -> Map.Map N.Name A.Region
-addExport def exports =
-  case def of
-    Def (A.At region name_) pvars expr ->
-      Map.insert name_ A.zero exports
-    TypedDef (A.At region name_) freeVars pvars expr tipe ->
-      Map.insert name_ A.zero exports
+-- @LAMDERA Elm 0.19.4 exports are a Dups.Dict, where a second entry for a name is an
+-- error (a duplicate export), so a codec the user already exposes is left as it is, as
+-- Map.insert did
+addExport :: Def -> Dups.Dict N.Name A.Region () -> Dups.Dict N.Name A.Region ()
+addExport def exports@(Dups.Dict dict) =
+  let
+    name_ = defName def
+  in
+  if Map.member name_ dict
+    then exports
+    else Dups.insert name_ A.zero () exports
 
 
-encoderUnion :: Maybe RowCodecs -> RowConstraints -> Bool -> Map.Map PrimModule.Name I.Interface -> Pkg.Name -> Src.Module -> Decls -> TN.Name -> Union -> Def
+encoderUnion :: Maybe RowCodecs -> RowConstraints -> Bool -> Map.Map PrimModule.Name I.Interface -> Pkg.Name -> Src.Module -> UserDecls -> TN.Name -> Union -> Def
 encoderUnion rowCodecs rowConstraints isTest_ ifaces pkg modul decls unionName union =
   let
     !_ = runTests isTest_ "encoderUnion" pkg modul decls generatedName finalGen union (unionAsModule cname unionName union)
 
     generatedName = N.fromChars $ "w3_encode_" ++ TN.nameToChars unionName
-    cname = Module.Canonical pkg (Src.getName modul)
+    cname = Module.Canonical pkg (Src.getModuleName modul)
     tvars = _u_vars union
     -- ptvars = tvars & fmap (\tvar -> pvar $ Data.Name.fromChars $ "w3_x_c_" ++ Data.Name.toChars tvar )
 
@@ -689,13 +857,13 @@ encoderUnion rowCodecs rowConstraints isTest_ ifaces pkg modul decls unionName u
   finalGen
 
 
-decoderUnion :: Maybe RowCodecs -> RowConstraints -> DecodeMode -> Bool -> Map.Map PrimModule.Name I.Interface -> Pkg.Name -> Src.Module -> Decls -> TN.Name -> Union -> Def
+decoderUnion :: Maybe RowCodecs -> RowConstraints -> DecodeMode -> Bool -> Map.Map PrimModule.Name I.Interface -> Pkg.Name -> Src.Module -> UserDecls -> TN.Name -> Union -> Def
 decoderUnion rowCodecs rowConstraints mode isTest_ ifaces pkg modul decls unionName union =
   let
     !_ = runTests isTest_ "decoderUnion" pkg modul decls generatedName generated union (unionAsModule cname unionName union)
 
     generatedName = N.fromChars $ decodePrefix mode ++ TN.nameToChars unionName
-    cname = Module.Canonical pkg (Src.getName modul)
+    cname = Module.Canonical pkg (Src.getModuleName modul)
     tvars = _u_vars union
     tvarsTypesig = tvars & foldl (\acc name -> Map.insert name () acc ) Map.empty
     ptvars =
@@ -750,7 +918,7 @@ decoderUnion rowCodecs rowConstraints mode isTest_ ifaces pkg modul decls unionN
     finalBody =
       case mode of
         DecodeValidating ->
-          case findValidatorDef decls unionName of
+          case findValidatorDef (_udSummary decls) unionName of
             Just _  -> wrapWithValidator ifaces cname unionName baseBody
             Nothing -> baseBody
         DecodeUnsafe ->
@@ -1721,13 +1889,13 @@ rowCodecsError typeName problem =
     ]
 
 
-encoderAlias :: Maybe RowCodecs -> RowConstraints -> Bool -> Map.Map PrimModule.Name I.Interface -> Pkg.Name -> Src.Module -> Decls -> TN.Name -> Alias -> Def
+encoderAlias :: Maybe RowCodecs -> RowConstraints -> Bool -> Map.Map PrimModule.Name I.Interface -> Pkg.Name -> Src.Module -> UserDecls -> TN.Name -> Alias -> Def
 encoderAlias rowCodecs rowConstraints isTest_ ifaces pkg modul decls aliasName alias@(Alias tvars tipe) =
   let
     !_ = runTests isTest_ "encoderAlias" pkg modul decls generatedName finalGen alias (aliasAsModule cname aliasName alias)
 
     generatedName = N.fromChars $ "w3_encode_" ++ TN.nameToChars aliasName
-    cname = Module.Canonical pkg (Src.getName modul)
+    cname = Module.Canonical pkg (Src.getModuleName modul)
     -- ptvars = tvars & fmap (\tvar -> pvar $ Data.Name.fromChars $ "w3_x_c_" ++ Data.Name.toChars tvar )
 
     normalisedTvarsType = normaliseTvarNames Map.empty tipe
@@ -1792,13 +1960,13 @@ encoderAlias rowCodecs rowConstraints isTest_ ifaces pkg modul decls aliasName a
   finalGen
 
 
-decoderAlias :: Maybe RowCodecs -> RowConstraints -> DecodeMode -> Bool -> Map.Map PrimModule.Name I.Interface -> Pkg.Name -> Src.Module -> Decls -> TN.Name -> Alias -> Def
+decoderAlias :: Maybe RowCodecs -> RowConstraints -> DecodeMode -> Bool -> Map.Map PrimModule.Name I.Interface -> Pkg.Name -> Src.Module -> UserDecls -> TN.Name -> Alias -> Def
 decoderAlias rowCodecs rowConstraints mode isTest_ ifaces pkg modul decls aliasName alias@(Alias tvars tipe) =
   let
     !_ = runTests isTest_ "decoderAlias" pkg modul decls generatedName generated alias (aliasAsModule cname aliasName alias)
 
     generatedName = N.fromChars $ decodePrefix mode ++ TN.nameToChars aliasName
-    cname = Module.Canonical pkg (Src.getName modul)
+    cname = Module.Canonical pkg (Src.getModuleName modul)
     ptvars =
       case rowCodecs of
         -- A codec for each record a parameter is the row tail of (see RowSets)

@@ -11,6 +11,7 @@ import qualified Reporting.Task as Task
 import qualified Elm.Details as Details
 
 import qualified Ext.ElmPages
+import qualified Lamdera.Compat.Convert
 import qualified Ext.Query.Interfaces
 import Lamdera
 
@@ -28,6 +29,6 @@ checkElmPagesTypes details artifacts = do
   -- Unfortunately Build.Artifacts only contains project deps, we need the full tree...
   interfaces <- Ext.Query.Interfaces.artifactsToFullInterfaces details artifacts
 
-  case Ext.ElmPages.checkPageDataType interfaces of
+  case Ext.ElmPages.checkPageDataType (Lamdera.Compat.Convert.fromInterfaces interfaces) of -- @LAMDERA the Elm 0.19.3 shapes
     Right _  -> pure $ Right ()
     Left err -> pure $ Left err

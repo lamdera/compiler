@@ -369,6 +369,9 @@ Executable lamdera
         Lamdera.WireSchema
         Lamdera.Checks
         Lamdera.Constrain
+        Lamdera.Compat.Canonical
+        Lamdera.Compat.Interface
+        Lamdera.Compat.Convert
         Lamdera.Evergreen.MigrationDestructive
         Lamdera.Evergreen.MigrationGenerator
         Lamdera.Evergreen.MigrationGeneratorHelpers

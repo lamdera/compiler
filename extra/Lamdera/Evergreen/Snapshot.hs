@@ -10,11 +10,11 @@ module Lamdera.Evergreen.Snapshot where
 
 -}
 
-import qualified AST.Canonical as Can
+import qualified Lamdera.Compat.Canonical as Can -- @LAMDERA the Elm 0.19.3 shapes, see Lamdera.Compat.Canonical
 import qualified AST.Source as Valid
 import qualified Elm.ModuleName as ModuleName
 import qualified Elm.Package as Pkg
-import qualified Elm.Interface as Interface
+import qualified Lamdera.Compat.Interface as Interface -- @LAMDERA the Elm 0.19.3 interface, see Lamdera.Compat.Interface
 import qualified Reporting.Annotation as A
 import qualified Reporting.Result as Result
 import qualified Reporting.Error as Error
@@ -41,6 +41,7 @@ import qualified Data.Utf8 as Utf8
 import Lamdera
 import Lamdera.Types
 import qualified Ext.Query.Interfaces as Interfaces
+import qualified Lamdera.Compat.Convert as Convert
 import qualified Lamdera.Progress as Progress
 import qualified Ext.ElmFormat
 import StandaloneInstances
@@ -50,7 +51,8 @@ import StandaloneInstances
 type snapshots  -}
 run :: Int -> IO ()
 run version = do
-  ifaces <- Interfaces.all [ "src/Types.elm" ]
+  -- @LAMDERA the Elm 0.19.3 shapes of the interfaces, see Lamdera.Compat.Convert
+  ifaces <- Convert.fromInterfaces <$> Interfaces.all [ "src/Types.elm" ]
   snapshotCurrentTypes version ifaces (ifaces ! "Types")
 
 

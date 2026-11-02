@@ -32,7 +32,9 @@ import EasyTest
 import Lamdera hiding ((&))
 import Test.Helpers
 
-import qualified AST.Canonical as Can
+import qualified Lamdera.Compat.Canonical as Can -- @LAMDERA the Elm 0.19.3 shapes, see Lamdera.Compat.Canonical
+import qualified Lamdera.Compat.Interface as CI
+import qualified Lamdera.Compat.Convert as Convert
 import qualified AST.Optimized as Opt
 import qualified AST.Prim.Name as N
 import qualified AST.Prim.TypeName as TN
@@ -111,10 +113,12 @@ suite = tests
           -- File.readBytes is what the build uses for cached modules: Nothing here is
           -- the "Corrupt File" path that failed a large app's deploy.
           ifaceM <- io $ File.readBytes I.dInterface elmi
-          iface <- maybe (crash "Wide.elmi could not be read back") pure ifaceM
+          realIface <- maybe (crash "Wide.elmi could not be read back") pure ifaceM
+          -- @LAMDERA the shapes below are looked at in the Elm 0.19.3 form
+          let iface = Convert.fromInterface Convert.noNames realIface
 
           let annotationVars name =
-                case Map.lookup (N.fromChars name) (I._values iface) of
+                case Map.lookup (N.fromChars name) (CI._values iface) of
                   Just (Can.Forall vars _) -> Just (Map.size vars)
                   Nothing -> Nothing
 
@@ -125,24 +129,24 @@ suite = tests
             expectEqual (Just 0) (annotationVars longName)
 
           scope "union vars and constructor args (list8)" $
-            case [ u | (n, u) <- Map.toList (I._unions iface), TN.nameToChars n == "Many" ] of
+            case [ u | (n, u) <- Map.toList (CI._unions iface), TN.nameToChars n == "Many" ] of
               [u] ->
-                let Can.Union vars ctors _ _ = I.extractUnion u
+                let Can.Union vars ctors _ _ = CI.extractUnion u
                 in expectEqual (wide, [wide]) (length vars, [ length args | Can.Ctor _ _ _ args <- ctors ])
               _ -> crash "union Many missing from Wide.elmi"
 
           scope "record with 300 fields (dict32, u16 field index)" $
-            case [ a | (n, a) <- Map.toList (I._aliases iface), TN.nameToChars n == "WideRecord" ] of
+            case [ a | (n, a) <- Map.toList (CI._aliases iface), TN.nameToChars n == "WideRecord" ] of
               [a] ->
-                case I.extractAlias a of
+                case CI.extractAlias a of
                   Can.Alias _ (Can.TRecord fields _) -> expectEqual wide (Map.size fields)
                   _ -> crash "WideRecord is not a record"
               _ -> crash "alias WideRecord missing from Wide.elmi"
 
           scope "300 constructors, plain and with args (list32, ctor index)" $ do
             let ctorCount name =
-                  [ length ctors | (n, u) <- Map.toList (I._unions iface), TN.nameToChars n == name
-                                 , let Can.Union _ ctors _ _ = I.extractUnion u ]
+                  [ length ctors | (n, u) <- Map.toList (CI._unions iface), TN.nameToChars n == name
+                                 , let Can.Union _ ctors _ _ = CI.extractUnion u ]
             expectEqual [wide] (ctorCount "ManyCtors")
             expectEqual [wide] (ctorCount "ManyCtorsWithArgs")
 
@@ -155,9 +159,9 @@ suite = tests
             expect (isJust graphM)
 
           scope "alias vars (list8)" $
-            case [ a | (n, a) <- Map.toList (I._aliases iface), TN.nameToChars n == "ManyAlias" ] of
+            case [ a | (n, a) <- Map.toList (CI._aliases iface), TN.nameToChars n == "ManyAlias" ] of
               [a] ->
-                let Can.Alias vars _ = I.extractAlias a
+                let Can.Alias vars _ = CI.extractAlias a
                 in expectEqual wide (length vars)
               _ -> crash "alias ManyAlias missing from Wide.elmi"
       in

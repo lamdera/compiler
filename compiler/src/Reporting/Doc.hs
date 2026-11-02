@@ -135,7 +135,7 @@ commaSep conjunction addStyle names =
       map (\name -> addStyle name <> ",") (init names)
       ++
       [ conjunction
-      , addStyle (last_ names (P.text "[empty names list!]"))
+      , last_ (map addStyle names) (P.text "[empty names list!]") -- @LAMDERA was addStyle (last_ names ...), commaSep is polymorphic in 0.19.4
       ]
 
 

@@ -19,6 +19,10 @@ import qualified AST.Optimized as Opt
 import qualified Elm.ModuleName as Module
 import qualified Elm.Package as Pkg
 import qualified Parse.Module as Parse
+import qualified AST.Prim.Mode as Mode
+import qualified AST.Typed as Tpd
+import qualified Elm.Interface as I
+import qualified Graph
 import Reporting.Annotation
 import qualified Reporting.Render.Code as Code
 import qualified Reporting.Annotation as A
@@ -35,15 +39,16 @@ import Ext.Common
 -- Lamdera.Canonical.loadDef "src/Test/Basic.elm" "exampleFunction"
 
 
-loadSingleCanonical :: FilePath -> IO Can.Module
+-- @LAMDERA Elm 0.19.4: the type checked module (AST.Typed), which holds the canonical decls
+loadSingleCanonical :: FilePath -> IO Tpd.Module
 loadSingleCanonical path = do
-  (Compile.Artifacts canonical annotations objects) <- loadSingleArtifacts path
+  (Compile.Artifacts canonical iface objects) <- loadSingleArtifacts path
   pure canonical
 
 
 loadSingleObjects :: FilePath -> IO Opt.LocalGraph
 loadSingleObjects path = do
-  (Compile.Artifacts canonical annotations objects) <- loadSingleArtifacts path
+  (Compile.Artifacts canonical iface objects) <- loadSingleArtifacts path
   pure objects
 
 
@@ -51,10 +56,11 @@ loadSingleArtifacts :: FilePath -> IO Compile.Artifacts
 loadSingleArtifacts path = do
   ifaces <- Ext.Query.Interfaces.all [path]
   source <- File.readUtf8 path
-  result <- Parse.fromByteString Parse.Application source
+  result <- Parse.fromByteString Mode.Application source
   case result of
-    Right modul ->
-      case Compile.compile Nothing Pkg.dummyName ifaces modul of
+    Right modul -> do
+      compiled <- Compile.compile Nothing Mode.Application ifaces modul
+      case compiled of
         Right artifacts ->
           pure artifacts
 
@@ -70,7 +76,7 @@ loadFileSource path = do
 
   Ext.Common.withProjectRoot project $ do
     source <- File.readUtf8 path
-    result <- Parse.fromByteString Parse.Application source
+    result <- Parse.fromByteString Mode.Application source
     case result of
       Right modul -> do
         -- hindentPrintLabelled "module source" modul
@@ -87,9 +93,13 @@ loadFileSourceValue path name = do
   let
     -- imports = modul & Src._imports
 
+    -- @LAMDERA Elm 0.19.4: the values are among the module's Decls
     value =
-      modul
-        & Src._values
+      (case Src._decls modul of
+          Src.NoDecls _ -> []
+          Src.RevDecls d ds -> reverse (d : ds)
+      )
+        & concatMap (\d -> case d of { Src.Value_ _ v -> [v]; _ -> [] })
         & List.find (\(At region (Src.Value (At _ name_) params expr typeM)) ->
           name == name_
         )
@@ -194,7 +204,7 @@ showDefCanonical project file name = do
 
     -- formatHaskellValue "canonical Test.Basic" canonical
     --
-    case canonical & Can._decls & findDef name of
+    case canonical & Tpd._decls & findDef name of
       Just def -> do
         -- formatHaskellValue "suite def" def
         putStrLn $ "suite def" ++ show def
@@ -214,16 +224,13 @@ findDef name decls =
 
 
 declsToList :: Can.Decls -> [Can.Def]
-declsToList d =
-  case d of
-    Can.Declare def decls ->
-      def : (declsToList decls)
-
-    Can.DeclareRec def defs decls ->
-      (def : defs) ++ declsToList decls
-
-    Can.SaveTheEnvironment ->
-      []
+declsToList (Can.Decls (Graph.Sorted decls)) =
+  -- @LAMDERA Elm 0.19.4 Decls are a sorted list of Decl
+  decls & concatMap (\decl ->
+    case decl of
+      Can.Decl def -> [def]
+      Can.DeclRec def defs -> def : defs
+  )
 
 
 defNameIs :: N.Name -> Can.Def -> Bool
@@ -234,20 +241,20 @@ defNameIs name def =
 defName :: Can.Def -> N.Name
 defName def =
   case def of
-    Can.Def (A.At region name_) _ _ ->
-      name_
-    Can.TypedDef (A.At region name_) _ _ _ _ ->
-      name_
+    Can.DValue_ (A.At region name_) _ -> name_
+    Can.DValue (A.At region name_) _ _ _ -> name_
+    Can.DFunc_ (A.At region name_) _ _ _ -> name_
+    Can.DFunc (A.At region name_) _ _ _ _ _ -> name_
 
 
 showDefAnnotation :: FilePath -> FilePath -> N.Name -> IO ()
 showDefAnnotation project file name = do
   Ext.Common.withProjectRoot project $ do
-    (Compile.Artifacts canonical annotations objects) <- loadSingleArtifacts file
+    (Compile.Artifacts canonical iface objects) <- loadSingleArtifacts file
 
     -- , _types :: Map.Map Name.Name Can.Annotation
 
-    annotations
+    I._values iface
       & Map.lookup name
       & show
       & putStrLn

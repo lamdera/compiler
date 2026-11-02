@@ -22,7 +22,7 @@ import qualified Lamdera.Relative
 -- tests
 import qualified Data.List as List
 import qualified Lamdera.Wire3.Core
-import AST.Canonical
+import Lamdera.Compat.Canonical -- @LAMDERA the Elm 0.19.3 shapes, see Lamdera.Compat.Canonical
 
 all = EasyTest.run suite
 

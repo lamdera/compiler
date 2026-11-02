@@ -27,6 +27,7 @@ import qualified Type.Check as Type
 
 import qualified Lamdera.Wire3.Core
 import qualified Lamdera.Wire3.Direct
+import qualified Lamdera.Compat.Convert
 import qualified Lamdera.Wire3.Interfaces
 import Lamdera
 import qualified Lamdera.UiSourceMap
@@ -193,7 +194,7 @@ compile_ maybePath mode ifaces modul =
       objects <- perf "optimize" (optimize modul_ iface tpd3)
       -- @LAMDERA carry the Wire3 codec IR to JS generation (Lamdera.Wire3.Direct). Always,
       -- whatever LAMDERA_WIRE3_DIRECT says, so caches are the same with and without it.
-      let objects_ = Lamdera.Wire3.Direct.addDirectIR pkg (Tpd._name tpd3) generated objects
+      let objects_ = Lamdera.Wire3.Direct.addDirectIR pkg (Tpd._name tpd3) (Lamdera.Compat.Convert.unionsOf Lamdera.Compat.Convert.noNames (Tpd._types tpd3)) generated objects
       return (Artifacts tpd3 iface objects_)
 
 

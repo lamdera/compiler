@@ -6,7 +6,7 @@ import qualified Data.Map as Map
 import qualified Data.Graph as Graph
 
 import qualified AST.Prim.Name as N
-import AST.Canonical
+import Lamdera.Compat.Canonical -- @LAMDERA the Elm 0.19.3 shapes, see Lamdera.Compat.Canonical
 import qualified Reporting.Annotation as A
 
 import Lamdera

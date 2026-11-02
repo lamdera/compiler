@@ -257,7 +257,7 @@ addGlobalHelp mode graph global state =
     node@(Opt.Variant t a) -> addStmtFor EConstant argLookup global node Set.empty state $ var global $ Expr.genVariant mode global t a
     node@(Opt.Enum    t  ) -> addStmtFor EConstant argLookup global node Set.empty state $ var global $ Expr.genEnum    mode global t
     node@(Opt.Vector    a) -> addStmtFor EConstant argLookup global node Set.empty state $ var global $ Expr.genVector  mode global   a
-    node@ Opt.Void         -> addStmtFor EConstant argLookup global node Set.empty state $ var global $ Expr.genVoid    mode global
+    node@Opt.Void          -> addStmtFor EConstant argLookup global node Set.empty state $ var global $ Expr.genVoid    mode global
 
     node@Opt.Box ->
       addStmtFor EConstant argLookup global node (Set.singleton identity) (addGlobal mode graph state identity) $
