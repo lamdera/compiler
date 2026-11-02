@@ -375,11 +375,29 @@ decode dField =
 
 eOrder :: Order# -> NEM.Map k a -> E.Builder
 eOrder o dict
+  -- @LAMDERA an unordered Fields (F.unordered, as F.extend and inference give) has no
+  -- order bytes, but dOrder always reads one per field, so upstream wrote interfaces it
+  -- could not read back ("Corrupt File ... Error when expecting: Type" on i.dat). Write
+  -- the order flattening it gives instead, the key order, so it reads back as that.
+  | isTrue# (sizeofByteArray# o /=# expectedLen) = identityOrder num
   | num <= 0x100   = E.bytes     o
   | num <= 0x10000 = E.words16LE o
   | otherwise      = E.words32LE o
   where
     num = NEM.size dict
+    !(I# n#) = num
+    expectedLen
+      | num <= 0x100   =       n#
+      | num <= 0x10000 = 2# *# n#
+      | otherwise      = 4# *# n#
+
+
+-- @LAMDERA 0, 1, ... in the width eOrder uses for this many fields
+identityOrder :: Int -> E.Builder
+identityOrder num
+  | num <= 0x100   = mconcat [ E.u8  (fromIntegral i) | i <- [0 .. num - 1] ]
+  | num <= 0x10000 = mconcat [ E.u16 (fromIntegral i) | i <- [0 .. num - 1] ]
+  | otherwise      = mconcat [ E.u32 (fromIntegral i) | i <- [0 .. num - 1] ]
 
 
 dOrder :: NEM.Map N.Name a -> D.Decoder (Fields a)
