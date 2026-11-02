@@ -178,7 +178,12 @@ canTypedArgs env name arg args srcType =
     unroll p ps tipe i revs =
       case tipe of
         I.TLambda t x xs               -> gather ps x xs (Index.next i) (canArg i t p) revs
-        I.TAlias _ _ _ _ (I.Aliased t) -> unroll p ps t i revs
+        -- @LAMDERA the alias's body with its arguments filled in. Upstream (0.19.4-beta)
+        -- went on with the body as declared, whose type variables are the alias's own
+        -- parameters, so with `type alias Mappend a = a -> a -> a` the annotation
+        -- `f : Mappend a -> Mappend b -> Mappend ( a, b )` gave f's third argument the
+        -- type `a` rather than `( a, b )` (a TYPE MISMATCH on `f g h ( a1, b1 ) ...`).
+        I.TAlias _ _ _ xs aliased      -> unroll p ps (I.dealias xs aliased) i revs
         I.TVar _                       -> tooShort i
         I.TType _ _ _ _                -> tooShort i
         I.TUnit                        -> tooShort i
