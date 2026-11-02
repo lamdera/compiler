@@ -158,7 +158,7 @@
   [
     "nope + 1",
     [
-      "-- NAMING ERROR ----------------------------------------------------------- REPL\n\nI cannot find a `nope` variable:\n\n9|   nope + 1\n     ^^^^\nThese names seem close though:\n\n    not\n    cos\n    never\n    xor\n\nHint: Read <https://elm-lang.org/0.19.3/imports> to see how `import`\ndeclarations work in Elm.\n\n"
+      "-- NAMING ERROR ----------------------------------------------------------- REPL\n\nI cannot find a `nope` variable:\n\n9|   nope + 1\n     ^^^^\nThese names seem close though:\n\n    not\n    cos\n    never\n    xor\n\nHint: Read <https://elm-lang.org/0.19.4/imports> to see how `import`\ndeclarations work in Elm.\n\n"
     ]
   ]
 ]

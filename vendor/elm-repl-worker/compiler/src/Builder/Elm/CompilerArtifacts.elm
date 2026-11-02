@@ -30,6 +30,23 @@ representation differs:
 
 Only decoding is needed: whatever the worker compiles itself it keeps under its own
 file name, in its own format (see Builder.Elm.Details.verifyDep).
+
+@LAMDERA Since Lamdera 1.6 the compiler is built on Elm 0.19.4, whose interfaces and
+objects changed again, and the decoders below follow them:
+
+  - types are context free: a type variable is an index into the variables of the
+    annotation, custom type or alias it belongs to (getVars), so the type table holds
+    ITypes, made into this worker's Can.Type where that context is known (toCan);
+  - an alias in a type carries the body it was declared with, over its own
+    parameters, whose names it does not carry: it becomes a Holey alias with the
+    parameters named x0, x1, ...;
+  - records keep their fields' source order next to the fields (getFields);
+  - custom types are Variants, Enum, Vector, Box or Void, and become this worker's
+    constructors and CtorOpts;
+  - functions, calls, tail calls, cycles and tail definitions have their first
+    argument (or name) apart from the rest, constructors are Variant / Enum / Vector /
+    Box / Void nodes with tags (the index shifted left by two), and the decision
+    tree tests are IsVariant / IsEnum.
 -}
 
 
@@ -236,38 +253,91 @@ getDependencyInterface =
   tagged "DependencyInterface" <| \tag ->
   case tag of
     0 -> Just <| BG.fmap I.Public getInterface
-    1 -> Just <| BG.bind getTypeTable <| \table -> BG.liftM3 I.Private getPkgName (dict32 getName (getCanUnion table)) (dict32 getName (getCanAlias table))
+    1 -> Just <| BG.bind getTypeTable <| \table -> BG.liftM2 (\pkg decls -> I.Private pkg (unionsOf decls) (aliasesOf decls)) getPkgName (dict32 getName (getPrivateTypeDecl table))
     _ -> Nothing
 
 
 getInterface : Get I.Interface
 getInterface =
   BG.bind getTypeTable <| \table ->
-  BG.liftM5 I.Interface
+  BG.liftM4 (\pkg values decls binops -> I.Interface pkg values (Map.mapMaybe toIUnion decls) (Map.mapMaybe toIAlias decls) binops)
     getPkgName
     (dict32 getName (getAnnotation table))
-    (dict32 getName (getUnion table))
-    (dict32 getName (getAlias table))
+    (dict32 getName (getTypeDecl table))
     (dict32 getName (getBinop table))
 
 
-getUnion : TypeTable -> Get I.Union
-getUnion table =
-  tagged "Union" <| \tag ->
+{-| I.TypeDecl: a custom type (open, closed or private) or an alias (public or private). -}
+type TypeDecl
+  = UnionOpen Can.Union
+  | UnionClosed Can.Union
+  | UnionPrivate Can.Union
+  | AliasPublic Can.Alias
+  | AliasPrivate Can.Alias
+
+
+getTypeDecl : TypeTable -> Get TypeDecl
+getTypeDecl table =
+  tagged "TypeDecl" <| \tag ->
   case tag of
-    0 -> Just <| BG.fmap I.OpenUnion (getCanUnion table)
-    1 -> Just <| BG.fmap I.ClosedUnion (getCanUnion table)
-    2 -> Just <| BG.fmap I.PrivateUnion (getCanUnion table)
+    0 -> Just <| BG.fmap UnionOpen (getCanUnion table)
+    1 -> Just <| BG.fmap UnionClosed (getCanUnion table)
+    2 -> Just <| BG.fmap UnionPrivate (getCanUnion table)
+    3 -> Just <| BG.fmap AliasPublic (getCanAlias table)
+    4 -> Just <| BG.fmap AliasPrivate (getCanAlias table)
     _ -> Nothing
 
 
-getAlias : TypeTable -> Get I.Alias
-getAlias table =
-  tagged "Alias" <| \tag ->
+toIUnion : TypeDecl -> Maybe I.Union
+toIUnion decl =
+  case decl of
+    UnionOpen u -> Just (I.OpenUnion u)
+    UnionClosed u -> Just (I.ClosedUnion u)
+    UnionPrivate u -> Just (I.PrivateUnion u)
+    AliasPublic _ -> Nothing
+    AliasPrivate _ -> Nothing
+
+
+toIAlias : TypeDecl -> Maybe I.Alias
+toIAlias decl =
+  case decl of
+    AliasPublic a -> Just (I.PublicAlias a)
+    AliasPrivate a -> Just (I.PrivateAlias a)
+    UnionOpen _ -> Nothing
+    UnionClosed _ -> Nothing
+    UnionPrivate _ -> Nothing
+
+
+{-| I.PrivateTypeDecl -}
+getPrivateTypeDecl : TypeTable -> Get (Result Can.Union Can.Alias)
+getPrivateTypeDecl table =
+  tagged "PrivateTypeDecl" <| \tag ->
   case tag of
-    0 -> Just <| BG.fmap I.PublicAlias (getCanAlias table)
-    1 -> Just <| BG.fmap I.PrivateAlias (getCanAlias table)
+    0 -> Just <| BG.fmap Err (getCanUnion table)
+    1 -> Just <| BG.fmap Ok (getCanAlias table)
     _ -> Nothing
+
+
+unionsOf : Map.Map Name (Result Can.Union Can.Alias) -> Map.Map Name Can.Union
+unionsOf decls =
+  Map.mapMaybe
+    (\decl ->
+      case decl of
+        Err u -> Just u
+        Ok _ -> Nothing
+    )
+    decls
+
+
+aliasesOf : Map.Map Name (Result Can.Union Can.Alias) -> Map.Map Name Can.Alias
+aliasesOf decls =
+  Map.mapMaybe
+    (\decl ->
+      case decl of
+        Ok a -> Just a
+        Err _ -> Nothing
+    )
+    decls
 
 
 getBinop : TypeTable -> Get I.Binop
@@ -285,34 +355,49 @@ getAssociativity =
     _ -> Nothing
 
 
+{-| T.dVar names, in an array8 (the variables of an annotation, custom type or alias) -}
+getVars : Get (Array Name)
+getVars =
+  BG.fmap Array.fromList (list8 getVar)
+
+
+{-| I.dAlias: mask, variables, body -}
 getCanAlias : TypeTable -> Get Can.Alias
 getCanAlias table =
-  BG.liftM2 Can.Alias (list8 getVar) (getTypeRef table)
+  BG.bind u8 <| \_ ->
+  BG.bind getVars <| \vars ->
+  BG.fmap (\body -> Can.Alias (Array.toList vars) (toCan vars body)) (getTypeRef table)
 
 
+{-| I.dUnion: mask, variables, variants -}
 getCanUnion : TypeTable -> Get Can.Union
 getCanUnion table =
-  BG.liftM4 Can.Union (list8 getVar) (list32 (getCtor table)) int getCtorOpts
+  BG.bind u8 <| \_ ->
+  BG.bind getVars <| \vars ->
+  let
+    union ctors opts =
+      Can.Union (Array.toList vars) ctors (List.length ctors) opts
 
-
-getCtor : TypeTable -> Get Can.Ctor
-getCtor table =
-  BG.liftM4 Can.Ctor getName getIndex int (list8 (getTypeRef table))
-
-
-getCtorOpts : Get Can.CtorOpts
-getCtorOpts =
-  tagged "CtorOpts" <| \tag ->
+    ctor i name types =
+      Can.Ctor name (Index.ZeroBased i) (List.length types) (List.map (toCan vars) types)
+  in
+  tagged "Variants" <| \tag ->
   case tag of
-    0 -> Just <| BG.return Can.Normal
-    1 -> Just <| BG.return Can.Enum
-    2 -> Just <| BG.return Can.Unbox
+    0 -> Just <| BG.fmap (\variants -> union (List.indexedMap (\i (name, types) -> ctor i name types) variants) Can.Normal) (list32 (BG.liftM2 Tuple.pair getName (list8 (getTypeRef table))))
+    1 -> Just <| BG.fmap (\names -> union (List.indexedMap (\i name -> ctor i name []) names) Can.Enum) (list32 getName)
+    2 -> Just <| BG.liftM4 (\name a b cs -> union [ ctor 0 name (a :: b :: cs) ] Can.Normal) getName (getTypeRef table) (getTypeRef table) (list8 (getTypeRef table))
+    3 -> Just <| BG.liftM2 (\name a -> union [ ctor 0 name [ a ] ] Can.Unbox) getName (getTypeRef table)
+    4 -> Just <| BG.fmap (\name -> union [ ctor 0 name [] ] Can.Enum) getName
     _ -> Nothing
 
 
+{-| I.dAnnotation: variables, type -}
 getAnnotation : TypeTable -> Get Can.Annotation
 getAnnotation table =
-  BG.liftM2 Can.Forall (dict8 getVar (BG.return ())) (getTypeRef table)
+  BG.bind getVars <| \vars ->
+  BG.fmap
+    (\tipe -> Can.Forall (Map.fromList (List.map (\v -> (v, ())) (Array.toList vars))) (toCan vars tipe))
+    (getTypeRef table)
 
 
 
@@ -326,7 +411,22 @@ with its child types as refs to earlier entries. A ref is a u16 when the table h
 most 65536 entries and a u32 otherwise.
 -}
 type TypeTable =
-  TypeTable (Get Int) (Array Can.Type)
+  TypeTable (Get Int) (Array IType)
+
+
+{-| I.Type: type variables are indexes into the variables of what the type belongs to,
+and an alias carries its declared body, over its own parameters. -}
+type IType
+  = ILambda IType IType (TList IType)
+  | IVar Int
+  | IType ModuleName.Canonical Name (TList IType)
+  | IAlias ModuleName.Canonical Name (TList IType) IType
+  | IUnit
+  | IPair IType IType
+  | ITriple IType IType IType
+  | IEmpty
+  | IRecord (TList ( Name, Int, IType ))
+  | IExtRec (TList ( Name, Int, IType )) Int
 
 
 getTypeTable : Get TypeTable
@@ -339,7 +439,7 @@ getTypeTable =
 
 {-| Only the entries before this one are in the table yet, so a ref forward is
 rejected as corrupt rather than followed. -}
-getTypeRef : TypeTable -> Get Can.Type
+getTypeRef : TypeTable -> Get IType
 getTypeRef (TypeTable ref types) =
   BG.bind ref <| \i ->
   case Array.get i types of
@@ -347,29 +447,85 @@ getTypeRef (TypeTable ref types) =
     Nothing -> BG.fail ("type ref " ++ String.fromInt i ++ " outside the type table")
 
 
-getTypeEntry : TypeTable -> Get Can.Type
+getTypeEntry : TypeTable -> Get IType
 getTypeEntry table =
   let ref = getTypeRef table in
   tagged "Type" <| \tag ->
   case tag of
-    0 -> Just <| BG.liftM2 Can.TLambda ref ref
-    1 -> Just <| BG.fmap Can.TVar getVar
-    2 -> Just <| BG.liftM2 Can.TRecord (dict32 getName (BG.liftM2 Can.FieldType u16 ref)) (maybe getVar)
-    3 -> Just <| BG.return Can.TUnit
-    4 -> Just <| BG.liftM2 (\a b -> Can.TTuple a b Nothing) ref ref
-    5 -> Just <| BG.liftM3 (\a b c -> Can.TTuple a b (Just c)) ref ref ref
-    6 -> Just <| BG.liftM4 Can.TAlias getCanonical getName (list8 (BG.liftM2 Tuple.pair getVar ref)) (getAliasType ref)
-    7 -> Just <| BG.liftM3 Can.TType getCanonical getName (list8 ref)
+    0 -> Just <| BG.liftM3 ILambda ref ref (list8 ref)
+    1 -> Just <| BG.fmap IVar count8
+    2 -> Just <| BG.liftM3 (\home name args -> IType home name args) getCanonical getName (BG.bind u8 (\_ -> list8 ref))
+    3 -> Just <| BG.liftM4 (\home name args body -> IAlias home name args body) getCanonical getName (BG.bind u8 (\_ -> list8 ref)) ref
+    4 -> Just <| BG.return IUnit
+    5 -> Just <| BG.liftM2 IPair ref ref
+    6 -> Just <| BG.liftM3 ITriple ref ref ref
+    7 -> Just <| BG.return IEmpty
+    8 -> Just <| BG.fmap IRecord (getFields ref)
+    9 -> Just <| BG.liftM2 IExtRec (getFields ref) count8
     _ -> Nothing
 
 
-getAliasType : Get Can.Type -> Get Can.AliasType
-getAliasType ref =
-  tagged "AliasType" <| \tag ->
-  case tag of
-    0 -> Just <| BG.fmap Can.Holey ref
-    1 -> Just <| BG.fmap Can.Filled ref
-    _ -> Nothing
+{-| AST.Prim.Fields.decode: dict32 of the fields, then each one's position in the
+source, as a u8, u16 or u32 by the number of fields. -}
+getFields : Get IType -> Get (TList ( Name, Int, IType ))
+getFields ref =
+  BG.bind (list32 (BG.liftM2 Tuple.pair getName ref)) <| \fields ->
+  let
+    n = List.length fields
+    width = if n <= 0x100 then u8 else if n <= 0x10000 then u16 else u32
+  in
+  BG.fmap
+    (\order -> List.map2 (\( name, tipe ) i -> ( name, i, tipe )) fields order)
+    (BG.getSequence width n)
+
+
+{-| A type as this worker writes it, given the names of the variables it can refer to. -}
+toCan : Array Name -> IType -> Can.Type
+toCan vars tipe =
+  let
+    go = toCan vars
+
+    varName i =
+      Maybe.withDefault ("t" ++ String.fromInt i) (Array.get i vars)
+
+    fields fs =
+      Map.fromList (List.map (\( name, i, t ) -> ( name, Can.FieldType i (go t) )) fs)
+  in
+  case tipe of
+    ILambda a b cs ->
+      case List.reverse (a :: b :: cs) of
+        result :: args -> List.foldl (\arg acc -> Can.TLambda (go arg) acc) (go result) args
+        [] -> Can.TUnit
+
+    IVar i ->
+      Can.TVar (varName i)
+
+    IType home name args ->
+      Can.TType home name (List.map go args)
+
+    IAlias home name args body ->
+      let
+        params = List.indexedMap (\i _ -> "x" ++ String.fromInt i) args
+      in
+      Can.TAlias home name (List.map2 Tuple.pair params (List.map go args)) (Can.Holey (toCan (Array.fromList params) body))
+
+    IUnit ->
+      Can.TUnit
+
+    IPair a b ->
+      Can.TTuple (go a) (go b) Nothing
+
+    ITriple a b c ->
+      Can.TTuple (go a) (go b) (Just (go c))
+
+    IEmpty ->
+      Can.TRecord Map.empty Nothing
+
+    IRecord fs ->
+      Can.TRecord (fields fs) Nothing
+
+    IExtRec fs ext ->
+      Can.TRecord (fields fs) (Just (varName ext))
 
 
 
@@ -393,21 +549,29 @@ getGlobalSet =
   set32 (BG.fmap Opt.toGlobalComparable getGlobal)
 
 
+{-| Tag.dTag: the index shifted left by two, the low bits saying how wide it is. -}
+getTag : Get Index.ZeroBased
+getTag =
+  BG.fmap (\tag -> Index.ZeroBased (tag // 4)) u32
+
+
 getNode : Get Opt.Node
 getNode =
   tagged "Node" <| \tag ->
   case tag of
     0  -> Just <| BG.liftM2 Opt.Define getExpr getGlobalSet
-    1  -> Just <| BG.liftM3 Opt.DefineTailFunc (list32 getName) getExpr getGlobalSet
-    2  -> Just <| BG.liftM2 Opt.Ctor getIndex int
-    3  -> Just <| BG.fmap Opt.Enum getIndex
-    4  -> Just <| BG.return Opt.Box
-    5  -> Just <| BG.fmap Opt.Link getGlobal
-    6  -> Just <| BG.liftM4 Opt.Cycle (list32 getName) (list32 (BG.liftM2 Tuple.pair getName getExpr)) (list32 getDef) getGlobalSet
-    7  -> Just <| BG.fmap Opt.Manager getEffectsType
-    8  -> Just <| BG.liftM2 Opt.Kernel (list32 getChunk) getGlobalSet
-    9  -> Just <| BG.liftM2 Opt.PortIncoming getExpr getGlobalSet
-    10 -> Just <| BG.liftM2 Opt.PortOutgoing getExpr getGlobalSet
+    1  -> Just <| BG.liftM4 (\x xs e deps -> Opt.DefineTailFunc (x :: xs) e deps) getName (list32 getName) getExpr getGlobalSet
+    2  -> Just <| BG.liftM2 Opt.Ctor getTag int
+    3  -> Just <| BG.fmap Opt.Enum getTag
+    4  -> Just <| BG.fmap (Opt.Ctor Index.first) int
+    5  -> Just <| BG.return Opt.Box
+    6  -> Just <| BG.return (Opt.Enum Index.first)
+    7  -> Just <| BG.fmap Opt.Link getGlobal
+    8  -> Just <| BG.liftM5 (\n ns values defs deps -> Opt.Cycle (n :: ns) values defs deps) getName (list32 getName) (list32 (BG.liftM2 Tuple.pair getName getExpr)) (list32 getDef) getGlobalSet
+    9  -> Just <| BG.fmap Opt.Manager getEffectsType
+    10 -> Just <| BG.liftM2 Opt.Kernel (list32 getChunk) getGlobalSet
+    11 -> Just <| BG.liftM2 Opt.PortIncoming getExpr getGlobalSet
+    12 -> Just <| BG.liftM2 Opt.PortOutgoing getExpr getGlobalSet
     _  -> Nothing
 
 
@@ -448,15 +612,15 @@ getExpr offset =
       4  -> Just <| BG.fmap Opt.CFloat string8
       5  -> Just <| BG.fmap Opt.VarLocal getName
       6  -> Just <| BG.fmap Opt.VarGlobal getGlobal
-      7  -> Just <| BG.liftM2 Opt.VarEnum getGlobal getIndex
+      7  -> Just <| BG.liftM2 Opt.VarEnum getGlobal getTag
       8  -> Just <| BG.fmap Opt.VarBox getGlobal
       9  -> Just <| BG.liftM2 Opt.VarCycle getCanonical getName
       10 -> Just <| BG.liftM4 Opt.VarDebug getName getCanonical getRegion (maybe getName)
       11 -> Just <| BG.liftM2 Opt.VarKernel string8 getName
       12 -> Just <| BG.fmap Opt.CList (list32 getExpr)
-      13 -> Just <| BG.liftM2 Opt.Function (list32 getName) getExpr
-      14 -> Just <| BG.liftM2 Opt.Call getExpr (list32 getExpr)
-      15 -> Just <| BG.liftM2 Opt.TailCall getName (list32 (BG.liftM2 Tuple.pair getName getExpr))
+      13 -> Just <| BG.liftM3 (\x xs body -> Opt.Function (x :: xs) body) getName (list32 getName) getExpr
+      14 -> Just <| BG.liftM3 (\f x xs -> Opt.Call f (x :: xs)) getExpr getExpr (list32 getExpr)
+      15 -> Just <| BG.liftM3 (\name x xs -> Opt.TailCall name (x :: xs)) getName getTailAssign (list32 getTailAssign)
       16 -> Just <| BG.liftM2 Opt.If (list32 (BG.liftM2 Tuple.pair getExpr getExpr)) getExpr
       17 -> Just <| BG.liftM2 Opt.Let getDef getExpr
       18 -> Just <| BG.liftM2 Opt.Destruct getDestructor getExpr
@@ -465,12 +629,19 @@ getExpr offset =
       21 -> Just <| BG.liftM2 Opt.Access getExpr getName
       22 -> Just <| BG.liftM2 Opt.Update getExpr (dict32 getName getExpr)
       23 -> Just <| BG.fmap Opt.Record (dict32 getName getExpr)
-      24 -> Just <| BG.return Opt.Unit
-      25 -> Just <| BG.liftM2 (\a b -> Opt.Tuple a b Nothing) getExpr getExpr
-      26 -> Just <| BG.liftM3 (\a b c -> Opt.Tuple a b (Just c)) getExpr getExpr getExpr
-      27 -> Just <| BG.liftM3 Opt.Shader (BG.fmap Shader.Source string64) (set32 getName) (set32 getName)
+      24 -> Just <| BG.return (Opt.Record Map.empty)
+      25 -> Just <| BG.return Opt.Unit
+      26 -> Just <| BG.liftM2 (\a b -> Opt.Tuple a b Nothing) getExpr getExpr
+      27 -> Just <| BG.liftM3 (\a b c -> Opt.Tuple a b (Just c)) getExpr getExpr getExpr
+      28 -> Just <| BG.liftM3 Opt.Shader (BG.fmap Shader.Source string64) (set32 getName) (set32 getName)
       _  -> Nothing
   ) offset
+
+
+{-| Opt.dTailAssign -}
+getTailAssign : Get ( Name, Opt.Expr )
+getTailAssign offset =
+  BG.liftM2 Tuple.pair getName getExpr offset
 
 
 getDef : Get Opt.Def
@@ -478,7 +649,7 @@ getDef offset =
   (tagged "Def" <| \tag ->
     case tag of
       0 -> Just <| BG.liftM2 Opt.Def getName getExpr
-      1 -> Just <| BG.liftM3 Opt.TailDef getName (list32 getName) getExpr
+      1 -> Just <| BG.liftM4 (\name x xs body -> Opt.TailDef name (x :: xs) body) getName getName (list32 getName) getExpr
       _ -> Nothing
   ) offset
 
@@ -520,15 +691,17 @@ getChoice =
     _ -> Nothing
 
 
+-- 0.19.4: AST.Optimized.dTest, a variant or enum test with its tag and number of
+-- alternatives (u32).
 {-| Optimize.DecisionTree.dTest -}
 getTest : Get DT.Test
 getTest =
   tagged "DecisionTree.Test" <| \tag ->
   case tag of
-    0 -> Just <| BG.liftM5 DT.IsCtor getCanonical getName getIndex int getCtorOpts
-    1 -> Just <| BG.return DT.IsCons
-    2 -> Just <| BG.return DT.IsNil
-    3 -> Just <| BG.return DT.IsTuple
+    0 -> Just <| BG.liftM4 (\home name index numAlts -> DT.IsCtor home name index numAlts Can.Normal) getCanonical getName getTag u32
+    1 -> Just <| BG.liftM4 (\home name index numAlts -> DT.IsCtor home name index numAlts Can.Enum) getCanonical getName getTag u32
+    2 -> Just <| BG.return DT.IsCons
+    3 -> Just <| BG.return DT.IsNil
     4 -> Just <| BG.fmap (DT.IsChr << escapeChar) BG.getUtf8Char
     5 -> Just <| BG.fmap DT.IsStr string32
     6 -> Just <| BG.fmap DT.IsInt int
@@ -536,6 +709,7 @@ getTest =
     _ -> Nothing
 
 
+-- 0.19.4: AST.Optimized.dPath_, for Optimize.DecisionTree.Path.
 {-| Optimize.DecisionTree.dPath -}
 getDtPath : Get DT.Path
 getDtPath offset =

@@ -72,9 +72,10 @@ max =
 -- @LAMDERA must be the Elm version the Lamdera compiler itself is built on (its
 -- elm.cabal version): it names the ELM_HOME directory (~/.elm/<version>/packages) the
 -- worker reads the compiler's packages, registry.dat and artifacts from.
+-- Elm 0.19.4 since the 0.19.4 merge (was 0.19.3).
 compiler : Version
 compiler =
-    Version 0 19 3
+    Version 0 19 4
 
 
 

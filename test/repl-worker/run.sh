@@ -5,16 +5,17 @@
 # worker the way the live UI does (harness.js) and compare every answer with
 # expected.json.
 #
-# It also checks what the worker asked the live server for: nothing under a 0.19.2
-# path, registry.dat and every package's compiler artifacts from the 0.19.3 tree,
+# It also checks what the worker asked the live server for: nothing under a 0.19.3
+# or older path, registry.dat and every package's compiler artifacts from the 0.19.4 tree,
 # and no package source at all (the compiler's artifacts were reused, so nothing had
 # to be compiled again in the worker).
 #
 #   LAMDERA=<lamdera binary> test/repl-worker/run.sh
 #
-# ELM_HOME is a fresh scratch directory holding only a 0.19.3 tree, seeded with the
-# package sources (not artifacts or registry) of SEED_ELM_HOME's 0.19.3 tree when it
-# has one (default ~/.elm), so the run works offline once those exist.
+# ELM_HOME is a fresh scratch directory holding only a 0.19.4 tree, seeded with the
+# package sources (not artifacts or registry) of SEED_ELM_HOME's 0.19.4 tree, else its
+# 0.19.3 tree (package sources are the same in both), when it has one (default
+# ~/.elm), so the run works offline once those exist.
 # Exit status 0 = all pass. KEEP=1 keeps the scratch directory.
 set -u
 
@@ -28,11 +29,13 @@ work=$(mktemp -d "${TMPDIR:-/tmp}/lamdera-repl-worker.XXXXXX")
 [ -n "${KEEP:-}" ] || trap 'rm -rf "$work"' EXIT
 
 export ELM_HOME="$work/elm-home"
-mkdir -p "$ELM_HOME/0.19.3/packages"
-if [ -d "$seed/0.19.3/packages" ]; then
-  (cd "$seed/0.19.3/packages" && find . -mindepth 3 -maxdepth 3 -type d) | while read -r p; do
-    mkdir -p "$ELM_HOME/0.19.3/packages/$p"
-    cp -R "$seed/0.19.3/packages/$p/." "$ELM_HOME/0.19.3/packages/$p/"
+mkdir -p "$ELM_HOME/0.19.4/packages"
+seedTree=$seed/0.19.4/packages
+[ -d "$seedTree" ] || seedTree=$seed/0.19.3/packages
+if [ -d "$seedTree" ]; then
+  (cd "$seedTree" && find . -mindepth 3 -maxdepth 3 -type d) | while read -r p; do
+    mkdir -p "$ELM_HOME/0.19.4/packages/$p"
+    cp -R "$seedTree/$p/." "$ELM_HOME/0.19.4/packages/$p/"
   done
   find "$ELM_HOME" -name 'artifacts.*' -delete
 fi
