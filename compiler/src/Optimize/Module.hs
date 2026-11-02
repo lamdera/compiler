@@ -301,8 +301,12 @@ optRecDefs home def defs (Opt.LocalGraph main nodes fieldCounts) =
     cycle = List.foldr1 addValueName Set.empty def defs
     links = List.foldr1 (addLink home (Opt.Link cycleName)) Map.empty n ns
 
+    -- @LAMDERA every definition of the group, `def` too. 0.19.4-beta folded over `defs`
+    -- alone, so the first definition of a recursive group was never optimized: a
+    -- self-recursive top-level function (a group of one) had no code at all, and the
+    -- JS called an undefined $author$project$Main$naiveMapHelper.
     (deps, fields, State values funcs) =
-      Names.run $ foldlM (addRecDef cycle) (State [] []) defs
+      Names.run $ foldlM (addRecDef cycle) (State [] []) (def : defs)
   in
   Opt.LocalGraph
     main
