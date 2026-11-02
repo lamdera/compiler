@@ -1,21 +1,23 @@
 #!/bin/sh
-# Lamdera on Elm 0.19.3 builds applications whose elm.json says 0.19.1, 0.19.2 or
-# 0.19.3, against packages whose own elm-version bound starts at 0.19.0, 0.19.1,
-# 0.19.2 or 0.19.3, or even excludes the compiler (bburdette/toop 1.2.0 declares
-# "0.19.0 <= v < 0.19.2"). See Elm.Details.isCompatibleAppElmVersion (applications)
+# Lamdera on Elm 0.19.4 builds applications whose elm.json says 0.19.1, 0.19.2, 0.19.3
+# or 0.19.4, against packages whose own elm-version bound starts at 0.19.0, 0.19.1,
+# 0.19.2, 0.19.3 or 0.19.4, or even excludes the compiler (bburdette/toop 1.2.0 declares
+# "0.19.0 <= v < 0.19.2"; "0.19.0 <= v < 0.19.4" and "0.19.3 <= v < 0.19.4" are checked
+# too). See Elm.Details.isCompatibleAppElmVersion (applications)
 # and Elm.Constraint.interchangeableElm (packages).
 #
 # This builds a plain Elm app (test/scenario-empty-elm-init) and a Lamdera app
 # (test/scenario-empty-lamdera-init) at each application version, then rewrites the
 # bounds of their packages in a scratch ELM_HOME and builds them all again. Two
-# negative controls make sure the rewrites are really read: an application at 0.19.4
+# negative controls make sure the rewrites are really read: an application at 0.19.5
 # and a package bound that admits none of the interchangeable versions both fail.
 #
 #   LAMDERA=<lamdera binary> test/multi-version/run.sh
 #
 # The scratch ELM_HOME is seeded from SEED_ELM_HOME (default ~/.elm), which is only
-# read: packages in its 0.19.3 tree (else its 0.19.2 tree) are copied in, without
-# their build artifacts, and anything missing is downloaded. Exit status 0 = all pass.
+# read: packages in its 0.19.4 tree (else its 0.19.3, else its 0.19.2 tree) are copied
+# in, without their build artifacts, and anything missing is downloaded. Exit status 0 =
+# all pass.
 set -u
 
 here=$(cd "$(dirname "$0")" && pwd)
@@ -26,7 +28,7 @@ work=$(mktemp -d "${TMPDIR:-/tmp}/lamdera-multi-version.XXXXXX")
 [ -n "${KEEP:-}" ] || trap 'rm -rf "$work"' EXIT
 
 export ELM_HOME="$work/elm-home"
-packages="$ELM_HOME/0.19.3/packages"
+packages="$ELM_HOME/0.19.4/packages"
 mkdir -p "$packages"
 unset LAMDERA_APP_NAME
 
@@ -39,7 +41,7 @@ elm/http/2.0.0 elm/json/1.1.3 elm/time/1.0.0 elm/url/1.0.0 elm/virtual-dom/1.0.3
 lamdera/codecs/1.0.0 lamdera/core/1.0.0"
 
 for p in $deps; do
-  for tree in "$seed/0.19.3/packages" "$seed/0.19.2/packages"; do
+  for tree in "$seed/0.19.4/packages" "$seed/0.19.3/packages" "$seed/0.19.2/packages"; do
     if [ -d "$tree/$p/src" ]; then
       mkdir -p "$packages/$p"
       cp -R "$tree/$p/." "$packages/$p/"
@@ -48,8 +50,13 @@ for p in $deps; do
   done
 done
 find "$packages" -name 'artifacts.*' -delete
-# Only a registry in the 0.19.3 encoding is any use; 0.19.2's would read as corrupt.
-[ -f "$seed/0.19.3/packages/registry.dat" ] && cp "$seed/0.19.3/packages/registry.dat" "$packages/"
+# Only a registry in the 0.19.3 encoding (which 0.19.4 keeps) is any use; 0.19.2's
+# would read as corrupt.
+if [ -f "$seed/0.19.4/packages/registry.dat" ]; then
+  cp "$seed/0.19.4/packages/registry.dat" "$packages/"
+elif [ -f "$seed/0.19.3/packages/registry.dat" ]; then
+  cp "$seed/0.19.3/packages/registry.dat" "$packages/"
+fi
 
 fail=0
 pass=0
@@ -100,7 +107,7 @@ plain="$root/test/scenario-empty-elm-init"
 lamdera="$root/test/scenario-empty-lamdera-init"
 
 all_apps() {
-  for v in 0.19.1 0.19.2 0.19.3; do
+  for v in 0.19.1 0.19.2 0.19.3 0.19.4; do
     expect_ok "$1-plain-$v" "$plain" "$v" src/Main.elm
     expect_ok "$1-lamdera-$v" "$lamdera" "$v" src/Frontend.elm src/Backend.elm
   done
@@ -114,16 +121,21 @@ bound elm/json/1.1.3        "0.19.0 <= v < 0.20.0"
 bound elm/time/1.0.0        "0.19.1 <= v < 0.20.0"
 bound elm/url/1.0.0         "0.19.2 <= v < 0.20.0"
 bound elm/virtual-dom/1.0.3 "0.19.3 <= v < 0.20.0"
+bound elm/browser/1.0.2     "0.19.4 <= v < 0.20.0"
 bound elm/html/1.0.0        "0.19.0 <= v < 0.19.2"
+# Bounds that stop short of 0.19.4 (the compiler) but admit an older 0.19.x.
+bound elm/core/1.0.5        "0.19.0 <= v < 0.19.4"
+bound elm/bytes/1.0.8       "0.19.3 <= v < 0.19.4"
+bound elm/http/2.0.0        "0.19.1 <= v < 0.19.2"
 all_apps bounds
 
 echo "== negative controls"
-expect_error "ELM VERSION MISMATCH" "app-0.19.4" "$plain" 0.19.4 src/Main.elm
+expect_error "ELM VERSION MISMATCH" "app-0.19.5" "$plain" 0.19.5 src/Main.elm
 bound elm/html/1.0.0 "0.19.0 <= v < 0.19.1"
-expect_error "INCOMPATIBLE DEPENDENCIES" "bound-excludes-all" "$plain" 0.19.3 src/Main.elm
+expect_error "INCOMPATIBLE DEPENDENCIES" "bound-excludes-all" "$plain" 0.19.4 src/Main.elm
 # ...and it was that bound: put it back and the same app builds.
 bound elm/html/1.0.0 "0.19.0 <= v < 0.20.0"
-expect_ok "bound-restored" "$plain" 0.19.3 src/Main.elm
+expect_ok "bound-restored" "$plain" 0.19.4 src/Main.elm
 
 echo "$pass passed"
 if [ $fail = 0 ]; then echo "MULTI-VERSION OK"; else echo "MULTI-VERSION FAILED"; fi

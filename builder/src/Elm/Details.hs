@@ -397,6 +397,9 @@ verifyPkg writer env time (Outline.PkgOutline pkg _ _ _ exposed direct testDirec
 --
 -- On elm 0.19.3 the same holds: apps declaring 0.19.1, 0.19.2 or 0.19.3 all build, and the
 -- caches are keyed by 0.19.3 (elm-stuff/lamdera-<ver>-0.19.3/, Root.getStuff).
+--
+-- On elm 0.19.4 likewise: 0.19.1 to 0.19.4 all build (upstream 0.19.4 refuses anything but
+-- 0.19.4), with caches keyed by 0.19.4 (elm-stuff/lamdera-<ver>-0.19.4/, ~/.elm/0.19.4/).
 isCompatibleAppElmVersion :: V.Version -> Bool
 isCompatibleAppElmVersion elmVersion =
   V.fromVersion elmVersion $ \major minor _ ->
