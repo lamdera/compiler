@@ -504,9 +504,11 @@ problemToHint problem =
           Hint1 $ D.toFancyHint ["Looks","like","the",dullyellow f,"field","is","unexpected."]
 
         (_:_:_, []) | length actual < 4 ->
+          -- @LAMDERA the unexpected fields are `actual`: 0.19.4-beta listed `expected`, which
+          -- is empty here, and D.commaSep crashed on it (init []) instead of reporting.
           Hint1 $
             D.toFancyHint $
-              ["Looks","like","fields"] ++ D.commaSep "and" dullyellow expected ++ ["are","unexpected."]
+              ["Looks","like","fields"] ++ D.commaSep "and" dullyellow actual ++ ["are","unexpected."]
 
         (_, _) ->
             case Suggest.best N.toChars actual expected of
