@@ -201,12 +201,20 @@ registerNext toKey i registry@(Registry dict) =
 -- ENCODE/DECODE
 
 
+-- @LAMDERA An index into the type variables of an annotation, alias or union. Those
+-- are written with E.array8, which escapes past 254 (see Bytes.Encode.count8), and an
+-- index must reach as far: Lamdera's generated Wire3 codecs have annotations with more
+-- than 255 type variables (a large app's w3_decode_BackendModel has 510). Upstream
+-- writes a bare u8, which wraps at 256 into an interface that type checks against the
+-- wrong variables. So the same escape: below 255 one byte, else 255 then a u32.
+
+
 eIndex :: Index -> E.Builder
 eIndex (Index i) =
-  E.u8 (fromIntegral i)
+  E.count8 i
 
 
 dIndex :: D.Decoder Index
 dIndex =
-  Index . fromIntegral <$> D.u8
+  Index . fromIntegral <$> D.count8
 
