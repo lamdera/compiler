@@ -14,10 +14,10 @@ import qualified AST.Prim.Name as N
 import qualified AST.Prim.TypeName as TN
 import qualified AST.Prim.TypeVar as TV
 import qualified Lamdera.Lexical as Lexical
-import qualified AST.Canonical as Can
+import qualified Lamdera.Compat.Canonical as Can -- @LAMDERA the Elm 0.19.3 shapes, see Lamdera.Compat.Canonical
 import qualified Elm.ModuleName as ModuleName
 import qualified Elm.Package as Pkg
-import qualified Elm.Interface as Interface
+import qualified Lamdera.Compat.Interface as Interface -- @LAMDERA the Elm 0.19.3 interface, see Lamdera.Compat.Interface
 import qualified Reporting.Doc as D
 import qualified Reporting.Exit
 

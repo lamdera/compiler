@@ -5,7 +5,7 @@ module Lamdera.Evaluate.Canonical where
 
 import qualified Data.Map as Map
 
-import AST.Canonical
+import Lamdera.Compat.Canonical -- @LAMDERA the Elm 0.19.3 shapes, see Lamdera.Compat.Canonical
 import Elm.Package
 import qualified Reporting.Annotation as A
 import qualified Elm.ModuleName as Module

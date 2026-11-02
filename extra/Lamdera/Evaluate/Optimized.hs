@@ -1,6 +1,8 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Lamdera.Evaluate.Optimized where
 
@@ -12,7 +14,11 @@ import Data.Ord
 import Data.STRef
 import Control.Monad.ST
 
-import AST.Optimized
+-- @LAMDERA Elm 0.19.4 changed the shapes of calls, functions, tail calls, cycles and
+-- constructors in AST.Optimized; the pattern synonyms below give this experimental
+-- interpreter the Elm 0.19.3 shapes it was written against
+import AST.Optimized hiding (Call, Function, TailCall, TailDef, Cycle)
+import qualified AST.Optimized as O
 import qualified Elm.ModuleName as Module
 import qualified AST.Prim.Name as N
 import qualified Data.Utf8 as Utf8
@@ -26,6 +32,7 @@ import StandaloneInstances
 
 import Lamdera
 import Data.Set (fromList)
+import qualified Data.Set as Set
 import qualified Data.Map as Map
 import qualified Lamdera.Compile
 import Ext.Common hiding ((&), atomicPutStrLn)
@@ -38,6 +45,88 @@ import qualified Data.Text as T
 import qualified AST.Optimized as Opt
 
 import qualified Elm.Float
+
+
+-- @LAMDERA ELM 0.19.3 SHAPES
+
+
+pattern Call :: Expr -> [Expr] -> Expr
+pattern Call f args <- (viewCall -> Just (f, args))
+  where
+    Call f args =
+      case args of
+        [] -> f
+        x : xs -> O.Call f x xs
+
+
+viewCall :: Expr -> Maybe (Expr, [Expr])
+viewCall expr =
+  case expr of
+    O.Call f x xs -> Just (f, x : xs)
+    _ -> Nothing
+
+
+pattern Function :: [N.Name] -> Expr -> Expr
+pattern Function names body <- (viewFunction -> Just (names, body))
+  where
+    Function names body =
+      case names of
+        [] -> body
+        x : xs -> O.Function x xs body
+
+
+viewFunction :: Expr -> Maybe ([N.Name], Expr)
+viewFunction expr =
+  case expr of
+    O.Function x xs body -> Just (x : xs, body)
+    _ -> Nothing
+
+
+pattern TailCall :: N.Name -> [(N.Name, Expr)] -> Expr
+pattern TailCall name args <- (viewTailCall -> Just (name, args))
+  where
+    TailCall name args =
+      case fmap (\(n, e) -> O.TailAssign n e) args of
+        [] -> error "TailCall with no arguments"
+        x : xs -> O.TailCall name x xs
+
+
+viewTailCall :: Expr -> Maybe (N.Name, [(N.Name, Expr)])
+viewTailCall expr =
+  case expr of
+    O.TailCall name x xs -> Just (name, fmap (\(O.TailAssign n e) -> (n, e)) (x : xs))
+    _ -> Nothing
+
+
+pattern TailDef :: N.Name -> [N.Name] -> Expr -> Def
+pattern TailDef name args body <- (viewTailDef -> Just (name, args, body))
+  where
+    TailDef name args body =
+      case args of
+        [] -> error "TailDef with no arguments"
+        x : xs -> O.TailDef name x xs body
+
+
+{-# COMPLETE Def, TailDef #-}
+
+
+viewTailDef :: Def -> Maybe (N.Name, [N.Name], Expr)
+viewTailDef def =
+  case def of
+    O.TailDef name x xs body -> Just (name, x : xs, body)
+    _ -> Nothing
+
+
+pattern Cycle :: [N.Name] -> [(N.Name, Expr)] -> [Def] -> Set.Set Global -> Node
+pattern Cycle names values defs deps <- (viewCycle -> Just (names, values, defs, deps))
+
+
+viewCycle :: Node -> Maybe ([N.Name], [(N.Name, Expr)], [Def], Set.Set Global)
+viewCycle node =
+  case node of
+    O.Cycle n ns values defs deps -> Just (n : ns, values, defs, deps)
+    _ -> Nothing
+
 
 {-
 
@@ -193,7 +282,8 @@ evalExpr expr locals globals =
             Cycle [name] _unknown [TailDef name_ pnames expr_] _funcDeps ->
               handleCyclePlain node args globals
 
-            Ctor index numParams ->
+            -- @LAMDERA Elm 0.19.4 constructors with arguments are Variant and Vector nodes
+            _ | isCtorWithArgs node ->
               -- We've got a custom type constructor with args, so just apply the args and return
               -- as there's no other way to represent an applied constructor...
               -- @TODO this seems bad.
@@ -515,3 +605,14 @@ debugEval from to =
         <> "➡️\n"
         <> t
     pure to
+
+
+
+-- @LAMDERA Elm 0.19.4 constructors with arguments
+isCtorWithArgs :: Node -> Bool
+isCtorWithArgs node =
+  case node of
+    Variant _ _ -> True
+    Vector _ -> True
+    Box -> True
+    _ -> False

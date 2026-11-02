@@ -11,14 +11,19 @@ import qualified Data.Text.Encoding as T
 import NeatInterpolation
 
 import qualified Data.Utf8
-import AST.Canonical
+-- @LAMDERA the annotation below is written as an Elm 0.19.3 type and converted
+import Lamdera.Compat.Canonical (Annotation(..), Type(..))
+import qualified Lamdera.Compat.Convert as Convert
 import Elm.Package
 import qualified AST.Canonical as Can
+import qualified AST.Prim.Fields as F
+import qualified Elm.Interface as I
+import qualified Data.Maybe as Maybe
+import qualified Graph
 import qualified Elm.ModuleName as Module
 import qualified Reporting.Annotation
 import qualified Data.ByteString.Builder as B
 
-import qualified Lamdera.Wire3.Helpers
 import Lamdera
 import StandaloneInstances
 
@@ -47,132 +52,159 @@ update canonical =
     _ -> canonical
 
 
+-- @LAMDERA Elm 0.19.4 Decls are a sorted list of Decl
 removeUnsafeCoercePlaceholder :: Can.Decls -> Can.Decls
-removeUnsafeCoercePlaceholder decls =
-  Lamdera.Wire3.Helpers.removeDefByName "unsafeCoerce" decls
+removeUnsafeCoercePlaceholder (Can.Decls (Graph.Sorted decls)) =
+  let
+    defName def =
+      case def of
+        Can.DValue_ (Reporting.Annotation.At _ n) _ -> n
+        Can.DValue (Reporting.Annotation.At _ n) _ _ _ -> n
+        Can.DFunc_ (Reporting.Annotation.At _ n) _ _ _ -> n
+        Can.DFunc (Reporting.Annotation.At _ n) _ _ _ _ _ -> n
+
+    keep def =
+      defName def /= "unsafeCoerce"
+  in
+  decls
+    & Maybe.mapMaybe (\decl ->
+        case decl of
+          Can.Decl def ->
+            if keep def then Just decl else Nothing
+
+          Can.DeclRec def defs ->
+            case filter keep (def : defs) of
+              [] -> Nothing
+              [d] | not (keep def) -> Just (Can.Decl d)
+              d : ds -> Just (Can.DeclRec d ds)
+      )
+    & Graph.Sorted
+    & Can.Decls
 
 
 updateDecls :: Module.Canonical -> Can.Decls -> Can.Decls
-updateDecls fileName decls =
-  case decls of
-    Can.Declare def nextDecl ->
-      Can.Declare (updateDefs fileName def) (updateDecls fileName nextDecl)
+updateDecls fileName (Can.Decls (Graph.Sorted decls)) =
+  decls
+    & fmap (\decl ->
+        case decl of
+          Can.Decl def ->
+            Can.Decl (updateDefs fileName def)
 
-    Can.DeclareRec def remainingDefs nextDecl ->
-      Can.DeclareRec
-        (updateDefs fileName def)
-        (map (updateDefs fileName) remainingDefs)
-        (updateDecls fileName nextDecl)
+          Can.DeclRec def remainingDefs ->
+            Can.DeclRec
+              (updateDefs fileName def)
+              (map (updateDefs fileName) remainingDefs)
+      )
+    & Graph.Sorted
+    & Can.Decls
 
-    Can.SaveTheEnvironment ->
-      Can.SaveTheEnvironment
+
+-- @LAMDERA the annotation of Lamdera.Effect.unsafeCoerce, `a -> b`
+unsafeCoerceAnnotation :: I.Annotation
+unsafeCoerceAnnotation =
+  Convert.toAnnotation (Convert.envFromInterfaces Map.empty) $
+    Forall
+      (Map.fromList [("a", ()), ("b", ())])
+      (TLambda (TVar "a") (TVar "b"))
 
 
 updateExpr :: Module.Canonical -> Name.Name -> Can.Expr -> Can.Expr
 updateExpr fileName functionName (Reporting.Annotation.At location_ expr_) =
-    let replaceCall location params =
+    let replaceCall location param params =
           Can.Call
             (Reporting.Annotation.At location
               (Can.VarForeign
                 (Module.Canonical (Name "lamdera" "core") "Lamdera.Effect")
                 "unsafeCoerce"
-                (Forall
-                  (Map.fromList [("a", ()), ("b", ())])
-                  (TLambda (TVar "a") (TVar "b"))
-                )
+                unsafeCoerceAnnotation
               )
-            ) params
+            ) param params
+
+        go = updateExpr fileName functionName
     in
     (case expr_ of
       Can.Call (Reporting.Annotation.At location
           (Can.VarTopLevel (Module.Canonical (Name "author" "project") "LamderaHelpers") "unsafeCoerce")
-        ) params ->
-          replaceCall location params
+        ) param params ->
+          replaceCall location param params
 
       Can.Call (Reporting.Annotation.At location
           (Can.VarTopLevel (Module.Canonical (Name "author" "project") "LamderaCheckBoth") "unsafeCoerce")
-        ) params ->
-          replaceCall location params
+        ) param params ->
+          replaceCall location param params
 
       Can.Call (Reporting.Annotation.At location
           (Can.VarTopLevel (Module.Canonical (Name "author" "project") "LamderaGenerated") "unsafeCoerce")
-        ) params ->
-          replaceCall location params
+        ) param params ->
+          replaceCall location param params
 
       -- The recursive rest. Might be worth looking at revisiting recursion schemes again, esp if error messages have improved
-      Can.VarLocal name -> Can.VarLocal name
-      Can.VarTopLevel canonical name -> Can.VarTopLevel canonical name
-      Can.VarKernel name name2 -> Can.VarKernel name name2
-      Can.VarForeign canonical name annotation -> Can.VarForeign canonical name annotation
-      Can.VarCtor ctorOpts canonical name zeroBased annotation -> Can.VarCtor ctorOpts canonical name zeroBased annotation
-      Can.VarDebug canonical name annotation -> Can.VarDebug canonical name annotation
-      Can.VarOperator name canonical name2 annotation -> Can.VarOperator name canonical name2 annotation
-      Can.Chr string -> Can.Chr string
-      Can.Str string -> Can.Str string
-      Can.Int int -> Can.Int int
-      Can.Float float -> Can.Float float
-      Can.List exprs -> Can.List (fmap (updateExpr fileName functionName) exprs)
-      Can.Negate expr -> Can.Negate ((updateExpr fileName functionName) expr)
-      Can.Binop name canonical name2 annotation expr expr2 -> Can.Binop name canonical name2 annotation ((updateExpr fileName functionName) expr) ((updateExpr fileName functionName) expr2)
-      Can.Lambda patterns expr -> Can.Lambda patterns ((updateExpr fileName functionName) expr)
-      Can.Call expr exprs -> Can.Call ((updateExpr fileName functionName) expr) (fmap (updateExpr fileName functionName) exprs)
+      Can.List exprs -> Can.List (fmap go exprs)
+      Can.Negate expr -> Can.Negate (go expr)
+      Can.Binop name canonical name2 annotation expr expr2 -> Can.Binop name canonical name2 annotation (go expr) (go expr2)
+      Can.Lambda pattern patterns expr -> Can.Lambda pattern patterns (go expr)
+      Can.Call expr param params -> Can.Call (go expr) (go param) (fmap go params)
       Can.If exprs expr ->
         Can.If
           (fmap
             (\(first, second) ->
-              ((updateExpr fileName functionName) first
-              , (updateExpr fileName functionName) second
+              (go first
+              , go second
               )
             )
             exprs
           )
-          ((updateExpr fileName functionName) expr)
-      Can.Let def expr ->
-        Can.Let
-          (updateDefs fileName def)
-          ((updateExpr fileName functionName) expr)
-      Can.LetRec defs expr ->
+          (go expr)
+      Can.LetValue value expr ->
+        Can.LetValue
+          (updateValue fileName value)
+          (go expr)
+      Can.LetFunc func expr ->
+        Can.LetFunc
+          (updateFunc fileName func)
+          (go expr)
+      Can.LetRec func funcs expr ->
         Can.LetRec
-          (fmap (updateDefs fileName) defs)
-          ((updateExpr fileName functionName) expr)
+          (updateFunc fileName func)
+          (fmap (updateFunc fileName) funcs)
+          (go expr)
       Can.LetDestruct pattern expr expr2 ->
         Can.LetDestruct
           pattern
-          ((updateExpr fileName functionName) expr)
-          ((updateExpr fileName functionName) expr2)
-      Can.Case expr caseBranches ->
+          (go expr)
+          (go expr2)
+      Can.Case expr branch branches ->
+        let
+          goBranch (Can.Branch pattern caseExpr) =
+            Can.Branch pattern (go caseExpr)
+        in
         Can.Case
-          ((updateExpr fileName functionName) expr)
-          (fmap
-            (\(Can.CaseBranch pattern caseExpr) ->
-                Can.CaseBranch pattern ((updateExpr fileName functionName) caseExpr)
-            )
-            caseBranches
-          )
-      Can.Accessor name -> Can.Accessor name
-      Can.Access expr name -> Can.Access ((updateExpr fileName functionName) expr) name
+          (go expr)
+          (goBranch branch)
+          (fmap goBranch branches)
+      Can.Access expr name -> Can.Access (go expr) name
       Can.Update name expr fieldUpdates ->
         Can.Update
           name
-          ((updateExpr fileName functionName) expr)
-          (fmap
-            (\(Can.FieldUpdate region expr__) ->
-                Can.FieldUpdate region (updateExpr fileName functionName expr__)
+          (go expr)
+          (F.map
+            (\(Can.Update_ region expr__) ->
+                Can.Update_ region (updateExpr fileName functionName expr__)
             )
             fieldUpdates
           )
-      Can.Record fields -> Can.Record (fmap (\field -> updateExpr fileName functionName field) fields)
-      Can.Unit -> Can.Unit
+      Can.Record fields -> Can.Record (F.map (\field -> updateExpr fileName functionName field) fields)
       Can.Pair expr expr2 ->
         Can.Pair
-          ((updateExpr fileName functionName) expr)
-          ((updateExpr fileName functionName) expr2)
+          (go expr)
+          (go expr2)
       Can.Triple expr expr2 expr3 ->
         Can.Triple
-          ((updateExpr fileName functionName) expr)
-          ((updateExpr fileName functionName) expr2)
-          ((updateExpr fileName functionName) expr3)
-      Can.Shader shaderSource shaderTypes -> Can.Shader shaderSource shaderTypes
+          (go expr)
+          (go expr2)
+          (go expr3)
+      -- the rest have no expressions in them
+      _ -> expr_
   )
   & Reporting.Annotation.At location_
 
@@ -180,16 +212,34 @@ updateExpr fileName functionName (Reporting.Annotation.At location_ expr_) =
 updateDefs :: Module.Canonical -> Can.Def -> Can.Def
 updateDefs fileName def =
     case def of
-      Can.Def name patterns expr ->
-        Can.Def
-          name
-          patterns
-          ((updateExpr fileName (Reporting.Annotation.toValue name)) expr)
+      Can.DValue_ name expr ->
+        Can.DValue_ name (updateExpr fileName (Reporting.Annotation.toValue name) expr)
 
-      Can.TypedDef name freeVars patterns expr type_ ->
-        Can.TypedDef
-          name
-          freeVars
-          patterns
-          ((updateExpr fileName (Reporting.Annotation.toValue name)) expr)
-          type_
+      Can.DValue name expr type_ annotation ->
+        Can.DValue name (updateExpr fileName (Reporting.Annotation.toValue name) expr) type_ annotation
+
+      Can.DFunc_ name pattern patterns expr ->
+        Can.DFunc_ name pattern patterns (updateExpr fileName (Reporting.Annotation.toValue name) expr)
+
+      Can.DFunc name arg args expr type_ annotation ->
+        Can.DFunc name arg args (updateExpr fileName (Reporting.Annotation.toValue name) expr) type_ annotation
+
+
+updateValue :: Module.Canonical -> Can.Value -> Can.Value
+updateValue fileName value =
+    case value of
+      Can.Value_ name expr ->
+        Can.Value_ name (updateExpr fileName (Reporting.Annotation.toValue name) expr)
+
+      Can.Value name expr type_ annotation ->
+        Can.Value name (updateExpr fileName (Reporting.Annotation.toValue name) expr) type_ annotation
+
+
+updateFunc :: Module.Canonical -> Can.Func -> Can.Func
+updateFunc fileName func =
+    case func of
+      Can.Func_ name pattern patterns expr ->
+        Can.Func_ name pattern patterns (updateExpr fileName (Reporting.Annotation.toValue name) expr)
+
+      Can.Func name arg args expr type_ annotation ->
+        Can.Func name arg args (updateExpr fileName (Reporting.Annotation.toValue name) expr) type_ annotation

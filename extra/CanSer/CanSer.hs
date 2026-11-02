@@ -3,7 +3,7 @@ module CanSer.CanSer where
 
 import qualified Data.Text as T
 import Data.Text (Text)
-import qualified AST.Canonical as C
+import qualified Lamdera.Compat.Canonical as C -- @LAMDERA the Elm 0.19.3 shapes, see Lamdera.Compat.Canonical
 import qualified AST.Prim.Module as Module
 import qualified AST.Prim.Name as N
 import qualified AST.Prim.TypeName as TN

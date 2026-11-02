@@ -71,7 +71,7 @@ import System.IO.Unsafe (unsafePerformIO)
 import GHC.Exts (isTrue#, reallyUnsafePtrEquality#)
 import qualified System.Environment as Env
 
-import qualified AST.Canonical as Can
+import qualified Lamdera.Compat.Canonical as Can -- @LAMDERA the Elm 0.19.3 shapes, see Lamdera.Compat.Canonical
 import qualified AST.Optimized as Opt
 import qualified Data.Index as Index
 import qualified AST.Prim.Module as PrimModule
@@ -84,6 +84,8 @@ import qualified Elm.ModuleName as ModuleName
 import qualified Elm.Package as Pkg
 import qualified Data.Utf8 as Utf8
 import qualified Generate.JavaScript.Expression as Expr
+import qualified AST.Prim.Tag as Tag
+import qualified AST.Prim.TypeName as TN
 import qualified Generate.JavaScript.Name as JsName
 import qualified Generate.Mode as Mode
 import qualified Reporting.Annotation as A
@@ -424,15 +426,17 @@ unsafeFam = Fam "w3_unsafe_decode_" "w3du_" "w3duh_" "w3dua_"
 -- LOWERING (compile time)
 
 
-addDirectIR :: Pkg.Name -> Can.Module -> Opt.LocalGraph -> Opt.LocalGraph
-addDirectIR pkg canonical graph@(Opt.LocalGraph main nodes fields) =
+-- @LAMDERA Elm 0.19.4: given the codecs Wire3.Core generated for the module (in the
+-- 0.19.3 AST it generates them in, see Lamdera.Compat.Canonical) rather than reading
+-- them back out of the canonical module, and the module's custom types for kernelIR
+addDirectIR :: Pkg.Name -> ModuleName.Canonical -> Map.Map TN.Name Can.Union -> [Can.Def] -> Opt.LocalGraph -> Opt.LocalGraph
+addDirectIR pkg home unions defs graph@(Opt.LocalGraph main nodes fields) =
   if not (Helpers.shouldHaveCodecsGenerated pkg) then
     graph
   else
     let
-      home = Can._name canonical
       modul = PrimModule.toChars (ModuleName._module home)
-      defs = Helpers.declsToList (Can._decls canonical)
+      canonical = (home, unions)
       byName = Map.fromList [ (Name.toChars (defNameOf d), d) | d <- defs ]
       codecs =
         Maybe.mapMaybe
@@ -491,11 +495,11 @@ addDirectIR pkg canonical graph@(Opt.LocalGraph main nodes fields) =
 -- its own module are written for that value (Wire3.Core.kernelEncoderBody), in shapes
 -- the lowering doesn't need to know, so its IR comes from the type instead, in the same
 -- format. Its parameters, if any, are taken and ignored, as by the Elm codecs.
-kernelIR :: Can.Module -> String -> Maybe Codec
-kernelIR canonical typeName =
+kernelIR :: (ModuleName.Canonical, Map.Map TN.Name Can.Union) -> String -> Maybe Codec
+kernelIR (home, unions) typeName =
   do  let tn = Data.String.fromString typeName
-      kc <- Helpers.kernelCodec (Can._name canonical) tn
-      union <- Map.lookup tn (Can._unions canonical)
+      kc <- Helpers.kernelCodec home tn
+      union <- Map.lookup tn unions
       let params = fmap TV.varToChars (Can._u_vars union)
       Just $ Codec params $ BAlias $
         case kc of
@@ -1312,11 +1316,11 @@ fixReplaceable graph prefix candidates =
     nodeOk cands g@(Opt.Global home _) =
       case Map.lookup g graph of
         Just (Opt.Define _ _) -> True
-        Just (Opt.DefineTailFunc _ _ _) -> True
+        Just (Opt.DefineTailFunc _ _ _ _) -> True
         Just (Opt.Link cycleGlobal) ->
           case Map.lookup cycleGlobal graph of
-            Just (Opt.Cycle names _ _ _) ->
-              case memberKeys names home of
+            Just (Opt.Cycle n ns _ _ _) ->
+              case memberKeys (n : ns) home of
                 Just keys -> all (\k -> Map.member k cands) keys
                 Nothing -> False
             _ -> False
@@ -1757,7 +1761,8 @@ encUnion ctx env opts width alts v =
     mode = _mode ctx
     (home, _) = _key ctx
     writeTag i = if width == 1 then "_W3_u8(" ++ show i ++ ");" else "_W3_u16(" ++ show i ++ ");"
-    prodTag (Alt name index _) = show (Expr.ctorToInt (keyHome home) (Name.fromChars name) (Index.ZeroBased index))
+    -- @LAMDERA Elm 0.19.4 tags: the declaration index, as before (Expr.tagToInt only looks at that)
+    prodTag (Alt name index _) = show (Expr.tagToInt (keyHome home) (Name.fromChars name) (Tag.addSize Tag.Four (fromIntegral index)))
     caseLabel alt@(Alt name _ _) = if isProd mode then prodTag alt else "'" ++ name ++ "'"
   in
   case (opts, alts) of

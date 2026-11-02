@@ -11,11 +11,11 @@ import qualified Data.Graph as Graph
 
 import Elm.Package
 import qualified AST.Source as Src
-import qualified Elm.Interface as I
+import qualified Lamdera.Compat.Interface as I -- @LAMDERA the Elm 0.19.3 interface, see Lamdera.Compat.Interface
 import qualified Elm.ModuleName as Module
 import qualified Elm.Package as Pkg
-import qualified AST.Canonical as Can
-import AST.Canonical
+import qualified Lamdera.Compat.Canonical as Can -- @LAMDERA the Elm 0.19.3 shapes, see Lamdera.Compat.Canonical
+import Lamdera.Compat.Canonical -- @LAMDERA the Elm 0.19.3 shapes, see Lamdera.Compat.Canonical
 import qualified AST.Prim.Module as PrimModule
 import qualified AST.Prim.Name as N
 import qualified AST.Prim.TypeName as TN

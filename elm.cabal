@@ -2,7 +2,7 @@ cabal-version: 3.6
 build-type: Simple
 
 name: elm
-version: 0.19.3
+version: 0.19.4
 
 homepage: https://elm-lang.org
 author: Evan Czaplicki
@@ -252,26 +252,31 @@ Executable lamdera
         Json.String
 
         -- from compiler/
-        AST.Canonical
-        AST.Optimized
         AST.Source
+        AST.Canonical
+        AST.Typed
+        AST.Optimized
+        AST.Prim.Fields
+        AST.Prim.Mode
         AST.Prim.Module
         AST.Prim.Name
         AST.Prim.Operator
+        AST.Prim.Shader
+        AST.Prim.Tag
+        AST.Prim.TypeIndex
+        AST.Prim.TypeMask
         AST.Prim.TypeName
         AST.Prim.TypeVar
         AST.Prim.Variable
-        AST.Utils.Shader
-        AST.Utils.Type
+        Canonicalize.Decl
         Canonicalize.Effects
         Canonicalize.Environment
-        Canonicalize.Environment.Dups
         Canonicalize.Environment.Foreign
-        Canonicalize.Environment.Local
         Canonicalize.Expression
         Canonicalize.Module
         Canonicalize.Pattern
         Canonicalize.Type
+        Canonicalize.TypeDecl
         Compile
         Generate.Html
         Generate.JavaScript
@@ -282,6 +287,7 @@ Executable lamdera
         Generate.Mode
         Nitpick.Debug
         Nitpick.PatternMatches
+        Nitpick.Utils
         Optimize.Case
         Optimize.DecisionTree
         Optimize.Expression
@@ -302,6 +308,7 @@ Executable lamdera
         Parse.Type
         Parse.Variable
         Parse.Primitives
+        Reporting.Ambiguous
         Reporting.Annotation
         Reporting.Doc
         Reporting.Error
@@ -310,26 +317,26 @@ Executable lamdera
         Reporting.Error.Import
         Reporting.Error.Json
         Reporting.Error.Main
+        Reporting.Error.Nitpick
         Reporting.Error.Pattern
         Reporting.Error.Syntax
         Reporting.Error.Type
         Reporting.Render.Code
         Reporting.Render.Type
-        Reporting.Render.Type.Localizer
         Reporting.Report
-        Reporting.Result
         Reporting.Suggest
         Reporting.Warning
+        Type.Check
         Type.Constrain.Expression
         Type.Constrain.Module
         Type.Constrain.Pattern
-        Type.Error
-        Type.Instantiate
         Type.Occurs
+        Type.Pools
         Type.Solve
         Type.Type
         Type.Unify
         Type.UnionFind
+        Type.Variable
         Paths_elm
 
 
@@ -362,6 +369,9 @@ Executable lamdera
         Lamdera.WireSchema
         Lamdera.Checks
         Lamdera.Constrain
+        Lamdera.Compat.Canonical
+        Lamdera.Compat.Interface
+        Lamdera.Compat.Convert
         Lamdera.Evergreen.MigrationDestructive
         Lamdera.Evergreen.MigrationGenerator
         Lamdera.Evergreen.MigrationGeneratorHelpers

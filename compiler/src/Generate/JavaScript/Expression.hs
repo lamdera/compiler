@@ -2,15 +2,19 @@
 {-# LANGUAGE OverloadedStrings, QuasiQuotes, TemplateHaskell #-}
 module Generate.JavaScript.Expression
   ( generate
-  , generateCtor
-  , generateCtorImplementation -- @LAMDERA exposed
-  , ctorToInt -- @LAMDERA exposed for Lamdera.Wire3.Direct
-  , generateField
-  , generateFunctionImplementation -- @LAMDERA exposed
-  , generateCurriedFunctionRef -- @LAMDERA exposed
-  , generateTailDef
-  , generateTailDefImplementation -- @LAMDERA exposed
-  , generateMain
+  , genVariant
+  , genEnum
+  , genVector
+  , genVoid
+  , genField
+  , genTailDef
+  , genMain
+  , tagToInt -- @LAMDERA exposed for Lamdera.Wire3.Direct
+  , genCtorImplementation -- @LAMDERA exposed
+  , genFunctionImplementation -- @LAMDERA exposed
+  , genCurriedFunctionRef -- @LAMDERA exposed
+  , genTailDefImplementation -- @LAMDERA exposed
+  , FnArgLookup -- @LAMDERA
   , Code
   , codeToExpr
   , codeToStmtList
@@ -24,24 +28,27 @@ import qualified Data.ByteString.Builder.Prim as P
 import qualified Data.Char as Char
 import qualified Data.IntMap as IntMap
 import qualified Data.List as List
-import qualified Data.Map as Map
 import qualified Data.Map.Utils as Map
+import qualified Data.NonEmptyMap as NEM
 import qualified Data.Set as Set
 import qualified Data.Utf8 as Utf8
 
+import qualified Array as A
 import qualified Crash
 
-import qualified AST.Canonical as Can
 import qualified AST.Optimized as Opt
 import qualified AST.Prim.Module as Module
 import qualified AST.Prim.Name as N
-import qualified AST.Utils.Shader as Shader
+import qualified AST.Prim.Shader as Shader
+import qualified AST.Prim.Tag as Tag
+import qualified AST.Prim.TypeVar as T
 import qualified Data.Index as Index
 import qualified Elm.Compiler.Type as Type
 import qualified Elm.Compiler.Type.Extract as Extract
-import qualified Elm.Version as V
+import qualified Elm.Interface as I
 import qualified Elm.ModuleName as ModuleName
 import qualified Elm.Package as Pkg
+import qualified Elm.Version as V
 import qualified Generate.JavaScript.Builder as JS
 import qualified Generate.JavaScript.Name as JsName
 import qualified Generate.Mode as Mode
@@ -53,13 +60,15 @@ import qualified Reporting.Annotation as A
 
 import qualified Lamdera
 
-
 -- EXPRESSIONS
 
+
+-- @LAMDERA the arity of a top-level function or constructor, for direct calls
 type FnArgLookup = ModuleName.Canonical -> N.Name -> Maybe Int
 
-generateJsExpr :: Mode.Mode -> FnArgLookup -> Opt.Expr -> JS.Expr
-generateJsExpr mode argLookup expression =
+
+genJsExpr :: Mode.Mode -> FnArgLookup -> Opt.Expr -> JS.Expr
+genJsExpr mode argLookup expression =
   codeToExpr (generate mode argLookup expression)
 
 
@@ -81,19 +90,19 @@ generate mode argLookup expression =
     Opt.VarGlobal (Opt.Global h n) ->
       JsExpr $ JS.Ref (JsName.fromGlobal h n)
 
-    Opt.VarEnum (Opt.Global home name) index ->
+    Opt.VarEnum (Opt.Global h n) t ->
       case mode of
-        Mode.Dev  _ -> JsExpr $ JS.Ref (JsName.fromGlobal home name)
-        Mode.Prod _ -> JsExpr $ JS.Int (Index.toMachine index)
+        Mode.Dev  _ -> JsExpr $ JS.Ref (JsName.fromGlobal h n)
+        Mode.Prod _ -> JsExpr $ JS.Int (fromIntegral (Tag.toWord32 t))
 
-    Opt.VarBox (Opt.Global home name) ->
+    Opt.VarBox (Opt.Global h n) ->
       JsExpr $ JS.Ref $
         case mode of
-          Mode.Dev  _ -> JsName.fromGlobal home name
+          Mode.Dev  _ -> JsName.fromGlobal h n
           Mode.Prod _ -> JsName.fromGlobal ModuleName.basics N.identity
 
     Opt.VarCycle h n     -> JsExpr $ JS.Call (JS.Ref (JsName.fromCycle h n)) []
-    Opt.VarDebug n h r u -> JsExpr $ generateDebug n h r u
+    Opt.VarDebug n h r u -> JsExpr $ genDebug n h r u
     Opt.VarKernel  h n   -> JsExpr $ JS.Ref (JsName.fromKernel h n)
 
     Opt.List entries ->
@@ -105,62 +114,59 @@ generate mode argLookup expression =
           JsExpr $
             JS.Call
               (JS.Ref (JsName.fromKernel Module.kernel_list N.fromArray))
-              [ JS.Array $ map (generateJsExpr mode argLookup) entries
+              [ JS.Array $ map (genJsExpr mode argLookup) entries
               ]
 
-    Opt.Function args body ->
-      generateFunction (map JsName.fromLocal args) (generate mode argLookup body)
+    Opt.Function x xs body ->
+      genFunction (map JsName.fromLocal (x:xs)) (generate mode argLookup body)
 
-    Opt.Call f xs -> JsExpr $ generateCall mode argLookup f xs
-
-    Opt.TailCall name args -> JsBlock $ generateTailCall mode argLookup name args
+    Opt.Call f x xs     -> JsExpr $ genCall mode argLookup f x xs
+    Opt.TailCall n x xs -> JsBlock $ genTailCall mode argLookup n (x:xs)
       Lamdera.& Lamdera.alternativeImplementation (
         let
-          isNewValue :: (N.Name, Opt.Expr) -> Bool
-          isNewValue (argName, arg) =
+          isNewValue :: Opt.TailAssign -> Bool
+          isNewValue (Opt.TailAssign argName arg) =
             case arg of
               Opt.VarLocal name -> name /= argName
               _ -> True
-
-          argsWithNewValues :: [(N.Name, Opt.Expr)]
-          argsWithNewValues =
-            filter isNewValue args
         in
-        generateTailCall mode argLookup name argsWithNewValues)
-
-    Opt.If bs f -> generateIf mode argLookup bs f
+        genTailCall mode argLookup n (filter isNewValue (x:xs)))
+    Opt.If bs f         -> genIf mode argLookup bs f
 
     Opt.Let def body ->
       JsBlock $
-        generateDef mode argLookup def : codeToStmtList (generate mode argLookup body)
+        genDef mode argLookup def : codeToStmtList (generate mode argLookup body)
 
     Opt.Destruct (Opt.Destructor name path) body ->
       let
-        pathDef = JS.Var (JsName.fromLocal name) (generatePath mode path)
+        pathDef = JS.Var (JsName.fromLocal name) (genPath mode path)
       in
       JsBlock $ pathDef : codeToStmtList (generate mode argLookup body)
 
     Opt.Case label root decider jumps ->
-      JsBlock $ generateCase mode argLookup label root decider jumps
+      JsBlock $ genCase mode argLookup label root decider jumps
+
+    Opt.Empty ->
+      JsExpr $ JS.Object []
 
     Opt.Accessor field ->
       JsExpr $ JS.Function Nothing [JsName.dollar]
         [ JS.Return $
-            JS.Access (JS.Ref JsName.dollar) (generateField mode field)
+            JS.Access (JS.Ref JsName.dollar) (genField mode field)
         ]
 
     Opt.Access record field ->
-      JsExpr $ JS.Access (generateJsExpr mode argLookup record) (generateField mode field)
+      JsExpr $ JS.Access (genJsExpr mode argLookup record) (genField mode field)
 
     Opt.Update record fields ->
       JsExpr $
         JS.Call (JS.Ref (JsName.fromKernel Module.kernel_utils N.update))
-          [ generateJsExpr mode argLookup record
-          , generateRecord mode argLookup fields
+          [ genJsExpr mode argLookup record
+          , genRecord mode argLookup fields
           ]
 
     Opt.Record fields ->
-      JsExpr $ generateRecord mode argLookup fields
+      JsExpr $ genRecord mode argLookup fields
 
     Opt.Unit ->
       case mode of
@@ -170,23 +176,23 @@ generate mode argLookup expression =
     Opt.Pair a b ->
       JsExpr $
         JS.Call (JS.Ref (JsName.fromKernel Module.kernel_utils [N.ascii|Tuple2|]))
-          [ generateJsExpr mode argLookup a
-          , generateJsExpr mode argLookup b
+          [ genJsExpr mode argLookup a
+          , genJsExpr mode argLookup b
           ]
 
     Opt.Triple a b c ->
       JsExpr $
         JS.Call (JS.Ref (JsName.fromKernel Module.kernel_utils [N.ascii|Tuple3|]))
-          [ generateJsExpr mode argLookup a
-          , generateJsExpr mode argLookup b
-          , generateJsExpr mode argLookup c
+          [ genJsExpr mode argLookup a
+          , genJsExpr mode argLookup b
+          , genJsExpr mode argLookup c
           ]
 
     Opt.Shader src attributes uniforms ->
       let
         toTranlation field =
           ( JsName.fromLocal field
-          , JS.String (JsName.toBuilder (generateField mode field))
+          , JS.String (JsName.toBuilder (genField mode field))
           )
 
         toTranslationObject fields =
@@ -256,41 +262,80 @@ toChar =
 
 
 
--- CTOR
+-- GENERATE VARIANTS
 
 
-generateCtor :: Mode.Mode -> Opt.Global -> Index.ZeroBased -> Int -> Code
-generateCtor mode (Opt.Global home name) index arity =
+genVariant :: Mode.Mode -> Opt.Global -> Tag.Tag -> Int -> Code
+genVariant mode (Opt.Global h n) tag arity =
   let
     argNames =
       Index.indexedMap (\i _ -> JsName.fromIndex i) [1 .. arity]
 
     ctorTag =
       case mode of
-        Mode.Dev  _ -> JS.String (N.toBuilder name)
-        Mode.Prod _ -> JS.Int (ctorToInt home name index)
+        Mode.Dev  _ -> JS.String (N.toBuilder n)
+        Mode.Prod _ -> JS.Int (tagToInt h n tag)
   in
-  generateFunction argNames $ JsExpr $ JS.Object $
-    (JsName.dollar, ctorTag) : map (\n -> (n, JS.Ref n)) argNames
+  genFunction argNames $ JsExpr $ JS.Object $
+    (JsName.dollar, ctorTag) : map (\x -> (x, JS.Ref x)) argNames
 
 
-ctorToInt :: ModuleName.Canonical -> N.Name -> Index.ZeroBased -> Int
-ctorToInt home name index =
-  if home == ModuleName.dict && (name == rbNode || name == rbEmpty) then
-    0 - Index.toHuman index
-  else
-    Index.toMachine index
+genEnum :: Mode.Mode -> Opt.Global -> Tag.Tag -> Code
+genEnum mode (Opt.Global h n) tag =
+  JsExpr $
+    case mode of
+      Mode.Dev  _ -> JS.Object [(JsName.dollar, JS.String (N.toBuilder n))]
+      Mode.Prod _ -> JS.Int (tagToInt h n tag)
+
+
+genVector :: Mode.Mode -> Opt.Global -> Int -> Code
+genVector mode global arity =
+  genFunction argNames $ JsExpr $ JS.Object $ vectorFields mode global argNames
+  where
+    argNames = Index.indexedMap (\i _ -> JsName.fromIndex i) [1 .. arity]
+
+
+-- @LAMDERA the object a Vector constructor builds, shared with genCtorImplementation
+vectorFields :: Mode.Mode -> Opt.Global -> [JsName.Name] -> [(JsName.Name, JS.Expr)]
+vectorFields mode (Opt.Global h name) argNames =
+    case mode of
+      Mode.Dev  _ -> toTag name : fields
+      Mode.Prod _ ->
+        -- @LAMDERA SeqDict_elm_builtin is the only constructor of SeqDict, so Elm 0.19.4
+        -- leaves out its tag in prod. The equals override in Lamdera's elm/core finds a
+        -- SeqDict by its tag (below -10, see tagToInt), so keep it.
+        if h == ModuleName.seqDict && name == seqDictBuiltin
+          then (JsName.dollar, JS.Int (tagToInt h name Tag.zero)) : fields
+          else fields
+  where
+    toTag n  = (JsName.dollar, JS.String (N.toBuilder n))
+    fields   = map (\x -> (x, JS.Ref x)) argNames
+
+
+genVoid :: Mode.Mode -> Opt.Global -> Code
+genVoid mode (Opt.Global _ n) =
+  JsExpr $
+    case mode of
+      Mode.Dev  _ -> JS.Object [(JsName.dollar, JS.String (N.toBuilder n))]
+      Mode.Prod _ -> JS.Int 0
+
+
+tagToInt :: ModuleName.Canonical -> N.Name -> Tag.Tag -> Int
+tagToInt h n tag =
+  if h == ModuleName.dict && (n == rbNode || n == rbEmpty)
+  then 0 - fromIntegral (Tag.toWord32 tag + 1)
+  else fromIntegral (Tag.toWord32 tag)
 
   -- Elm uses this trick to detect `RBNode_elm_builtin` and `RBEmpty_elm_builtin` within equals
   -- and we're just doing the same trick for SeqDict but 10 integers lower. See equalsOverride
   -- for the other side of this
   Lamdera.& Lamdera.alternativeImplementation (
-    if home == ModuleName.seqDict && name == seqDictBuiltin then
-      -10 - Index.toHuman index
-    else if home == ModuleName.dict && (name == rbNode || name == rbEmpty) then
-      0 - Index.toHuman index
+    if h == ModuleName.seqDict && n == seqDictBuiltin then
+      -10 - fromIntegral (Tag.toWord32 tag + 1)
+    else if h == ModuleName.dict && (n == rbNode || n == rbEmpty) then
+      0 - fromIntegral (Tag.toWord32 tag + 1)
     else
-      Index.toMachine index
+      fromIntegral (Tag.toWord32 tag)
   )
 
 
@@ -306,20 +351,20 @@ ctorToInt home name index =
 -- RECORDS
 
 
-generateRecord :: Mode.Mode -> FnArgLookup -> Map.Map N.Name Opt.Expr -> JS.Expr
-generateRecord mode argLookup fields =
+genRecord :: Mode.Mode -> FnArgLookup -> NEM.Map N.Name Opt.Expr -> JS.Expr
+genRecord mode argLookup fields =
   let
     toPair (field, value) =
-      (generateField mode field, generateJsExpr mode argLookup value)
+      (genField mode field, genJsExpr mode argLookup value)
   in
-  JS.Object (map toPair (Map.toList fields))
+  JS.Object (map toPair (NEM.toList fields))
 
 
-generateField :: Mode.Mode -> N.Name -> JsName.Name
-generateField mode name =
+genField :: Mode.Mode -> N.Name -> JsName.Name
+genField mode name =
   case mode of
     Mode.Dev _       -> JsName.fromLocal name
-    Mode.Prod fields -> $(Map.require 'generateField) name fields N.toChars
+    Mode.Prod fields -> $(Map.require 'genField) name fields N.toChars
 
 
 
@@ -327,8 +372,8 @@ generateField mode name =
 -- DEBUG
 
 
-generateDebug :: N.Name -> ModuleName.Canonical -> A.Region -> Maybe N.Name -> JS.Expr
-generateDebug name (ModuleName.Canonical _ home) region unhandledValueName =
+genDebug :: N.Name -> ModuleName.Canonical -> A.Region -> Maybe N.Name -> JS.Expr
+genDebug name (ModuleName.Canonical _ home) region unhandledValueName =
   if name /= N.todo then
     JS.Ref (JsName.fromGlobal ModuleName.debug name)
   else
@@ -363,8 +408,8 @@ regionToJsExpr (A.Region start end) =
 -- FUNCTION
 
 
-generateFunction :: [JsName.Name] -> Code -> Code
-generateFunction args body =
+genFunction :: [JsName.Name] -> Code -> Code
+genFunction args body =
   case IntMap.lookup (length args) funcHelpers of
     Just helper ->
       JsExpr $
@@ -393,37 +438,37 @@ funcHelpers =
 -- CALLS
 
 
-generateCall :: Mode.Mode -> FnArgLookup -> Opt.Expr -> [Opt.Expr] -> JS.Expr
-generateCall mode argLookup func args =
+genCall :: Mode.Mode -> FnArgLookup -> Opt.Expr -> Opt.Expr -> [Opt.Expr] -> JS.Expr
+genCall mode argLookup func arg args =
   case func of
     Opt.VarGlobal global@(Opt.Global (ModuleName.Canonical pkg _) _) | pkg == Pkg.core ->
-      generateCoreCall mode argLookup global args
+      genCoreCall mode argLookup global (arg:args)
 
     -- @LAMDERA
     Opt.VarGlobal (Opt.Global home name) ->
-      generateGlobalCall home name argLookup (map (generateJsExpr mode argLookup) args)
+      genGlobalCall home name argLookup (map (genJsExpr mode argLookup) (arg:args))
 
     Opt.VarBox _ ->
       case mode of
-        Mode.Dev  _ -> generateCallHelp mode argLookup func args
+        Mode.Dev  _ -> genCallHelp mode argLookup func (arg:args)
         Mode.Prod _ ->
           case args of
-            [arg] -> generateJsExpr mode argLookup arg
-            _     -> generateCallHelp mode argLookup func args
+            [] -> genJsExpr mode argLookup arg
+            _  -> genCallHelp mode argLookup func (arg:args)
 
     _ ->
-      generateCallHelp mode argLookup func args
+      genCallHelp mode argLookup func (arg:args)
 
 
-generateCallHelp :: Mode.Mode -> FnArgLookup -> Opt.Expr -> [Opt.Expr] -> JS.Expr
-generateCallHelp mode argLookup func args =
-  generateNormalCall
-    (generateJsExpr mode argLookup func)
-    (map (generateJsExpr mode argLookup) args)
+genCallHelp :: Mode.Mode -> FnArgLookup -> Opt.Expr -> [Opt.Expr] -> JS.Expr
+genCallHelp mode argLookup func args =
+  genNormalCall
+    (genJsExpr mode argLookup func)
+    (map (genJsExpr mode argLookup) args)
 
 
-generateGlobalCall :: ModuleName.Canonical -> N.Name -> FnArgLookup -> [JS.Expr] -> JS.Expr
-generateGlobalCall home name argLookup args =
+genGlobalCall :: ModuleName.Canonical -> N.Name -> FnArgLookup -> [JS.Expr] -> JS.Expr
+genGlobalCall home name argLookup args =
   -- @LAMDERA
   case argLookup home name of
     Just n
@@ -431,11 +476,11 @@ generateGlobalCall home name argLookup args =
           JS.Call (JS.Ref (JsName.fromGlobalDirectFn home name)) args
     _ ->
       -- Original:
-      generateNormalCall (JS.Ref (JsName.fromGlobal home name)) args
+      genNormalCall (JS.Ref (JsName.fromGlobal home name)) args
 
 
-generateNormalCall :: JS.Expr -> [JS.Expr] -> JS.Expr
-generateNormalCall func args =
+genNormalCall :: JS.Expr -> [JS.Expr] -> JS.Expr
+genNormalCall func args =
   case IntMap.lookup (length args) callHelpers of
     Just helper -> JS.Call helper (func:args)
     Nothing     -> List.foldl' (\f a -> JS.Call f [a]) func args
@@ -452,41 +497,41 @@ callHelpers =
 -- CORE CALLS
 
 
-generateCoreCall :: Mode.Mode -> FnArgLookup -> Opt.Global -> [Opt.Expr] -> JS.Expr
-generateCoreCall mode argLookup (Opt.Global home@(ModuleName.Canonical _ h) name) args
-  | h == Module.basics  = generateBasicsCall mode argLookup home name args
-  | h == Module.bitwise = generateBitwiseCall home name argLookup (map (generateJsExpr mode argLookup) args)
-  | h == Module.tuple   = generateTupleCall   home name argLookup (map (generateJsExpr mode argLookup) args)
-  | h == Module.jsArray = generateJsArrayCall home name argLookup (map (generateJsExpr mode argLookup) args)
-  | otherwise           = generateGlobalCall  home name argLookup (map (generateJsExpr mode argLookup) args)
+genCoreCall :: Mode.Mode -> FnArgLookup -> Opt.Global -> [Opt.Expr] -> JS.Expr
+genCoreCall mode argLookup (Opt.Global home@(ModuleName.Canonical _ h) name) args
+  | h == Module.basics  = genBasicsCall mode argLookup home name args
+  | h == Module.bitwise = genBitwiseCall home name argLookup (map (genJsExpr mode argLookup) args)
+  | h == Module.tuple   = genTupleCall   home name argLookup (map (genJsExpr mode argLookup) args)
+  | h == Module.jsArray = genJsArrayCall home name argLookup (map (genJsExpr mode argLookup) args)
+  | otherwise           = genGlobalCall  home name argLookup (map (genJsExpr mode argLookup) args)
 
 
-generateTupleCall :: ModuleName.Canonical -> N.Name -> FnArgLookup -> [JS.Expr] -> JS.Expr
-generateTupleCall home name argLookup args =
+genTupleCall :: ModuleName.Canonical -> N.Name -> FnArgLookup -> [JS.Expr] -> JS.Expr
+genTupleCall home name argLookup args =
   case args of
     [value]
       | name == N.first  -> JS.Access value (JsName.fromLocal N.a)
       | name == N.second -> JS.Access value (JsName.fromLocal N.b)
-      | otherwise        -> generateGlobalCall home name argLookup args
+      | otherwise        -> genGlobalCall home name argLookup args
 
     _ ->
-      generateGlobalCall home name argLookup args
+      genGlobalCall home name argLookup args
 
 
-generateJsArrayCall :: ModuleName.Canonical -> N.Name -> FnArgLookup -> [JS.Expr] -> JS.Expr
-generateJsArrayCall home name argLookup args =
+genJsArrayCall :: ModuleName.Canonical -> N.Name -> FnArgLookup -> [JS.Expr] -> JS.Expr
+genJsArrayCall home name argLookup args =
   case args of
     [entry]        | name == [N.ascii|singleton|] -> JS.Array [entry]
     [index, array] | name == [N.ascii|unsafeGet|] -> JS.Index array index
-    _                                             -> generateGlobalCall home name argLookup args
+    _                                             -> genGlobalCall home name argLookup args
 
 
-generateBitwiseCall :: ModuleName.Canonical -> N.Name -> FnArgLookup -> [JS.Expr] -> JS.Expr
-generateBitwiseCall h n argLookup args =
+genBitwiseCall :: ModuleName.Canonical -> N.Name -> FnArgLookup -> [JS.Expr] -> JS.Expr
+genBitwiseCall h n argLookup args =
   case args of
     [arg]
       | n == complement -> JS.Prefix JS.PrefixComplement arg
-      | otherwise       -> generateGlobalCall h n argLookup args
+      | otherwise       -> genGlobalCall h n argLookup args
 
     [left,right]
       | n == and            -> JS.Infix JS.OpBitwiseAnd left right
@@ -495,10 +540,10 @@ generateBitwiseCall h n argLookup args =
       | n == shiftLeftBy    -> JS.Infix JS.OpLShift     right left
       | n == shiftRightBy   -> JS.Infix JS.OpSpRShift   right left
       | n == shiftRightZfBy -> JS.Infix JS.OpZfRShift   right left
-      | otherwise           -> generateGlobalCall h n argLookup args
+      | otherwise           -> genGlobalCall h n argLookup args
 
     _ ->
-      generateGlobalCall h n argLookup args
+      genGlobalCall h n argLookup args
 
 
 {-# NOINLINE complement     #-}; complement     :: N.Name; complement     = [N.ascii|complement|]
@@ -507,28 +552,28 @@ generateBitwiseCall h n argLookup args =
 {-# NOINLINE shiftRightZfBy #-}; shiftRightZfBy :: N.Name; shiftRightZfBy = [N.ascii|shiftRightZfBy|]
 
 
-generateBasicsCall :: Mode.Mode -> FnArgLookup -> ModuleName.Canonical -> N.Name -> [Opt.Expr] -> JS.Expr
-generateBasicsCall mode argLookup h n args =
+genBasicsCall :: Mode.Mode -> FnArgLookup -> ModuleName.Canonical -> N.Name -> [Opt.Expr] -> JS.Expr
+genBasicsCall mode argLookup h n args =
   case args of
     [elmArg] ->
-      case generateJsExpr mode argLookup elmArg of
+      case genJsExpr mode argLookup elmArg of
         arg
           | n == not      -> JS.Prefix JS.PrefixNot arg
           | n == negate   -> JS.Prefix JS.PrefixNegate arg
           | n == toFloat  -> arg
           | n == truncate -> JS.Infix JS.OpBitwiseOr arg (JS.Int 0)
-          | otherwise     -> generateGlobalCall h n argLookup [arg]
+          | otherwise     -> genGlobalCall h n argLookup [arg]
 
     [elmLeft, elmRight]
       -- NOTE: removed "composeL" and "composeR" because of this issue:
       -- https://github.com/elm/compiler/issues/1722
       | n == append -> genAppend mode argLookup elmLeft elmRight
-      | n == apL    -> generateJsExpr mode argLookup $ apply elmLeft elmRight
-      | n == apR    -> generateJsExpr mode argLookup $ apply elmRight elmLeft
+      | n == apL    -> genJsExpr mode argLookup $ apply elmLeft elmRight
+      | n == apR    -> genJsExpr mode argLookup $ apply elmRight elmLeft
       | otherwise   ->
           let
-            left  = generateJsExpr mode argLookup elmLeft
-            right = generateJsExpr mode argLookup elmRight
+            left  = genJsExpr mode argLookup elmLeft
+            right = genJsExpr mode argLookup elmRight
           in
           case () of
             ()
@@ -547,10 +592,10 @@ generateBasicsCall mode argLookup h n args =
               | n == and         -> JS.Infix JS.OpAnd left right
               | n == xor         -> JS.Infix JS.OpNe  left right
               | n == remainderBy -> JS.Infix JS.OpMod right left
-              | otherwise        -> generateGlobalCall h n argLookup [left, right]
+              | otherwise        -> genGlobalCall h n argLookup [left, right]
 
     _ ->
-      generateGlobalCall h n argLookup (map (generateJsExpr mode argLookup) args)
+      genGlobalCall h n argLookup (map (genJsExpr mode argLookup) args)
 
 
 {-# NOINLINE not         #-}; not         :: N.Name; not         = [N.ascii|not|]
@@ -624,8 +669,8 @@ apply :: Opt.Expr -> Opt.Expr -> Opt.Expr
 apply func value =
   case func of
     Opt.Accessor field -> Opt.Access value field
-    Opt.Call f args    -> Opt.Call f (args ++ [value])
-    _                  -> Opt.Call func [value]
+    Opt.Call f x xs    -> Opt.Call f x (xs ++ [value])
+    _                  -> Opt.Call func value []
 
 
 genAppend :: Mode.Mode -> FnArgLookup -> Opt.Expr -> Opt.Expr -> JS.Expr
@@ -635,7 +680,7 @@ genAppend mode argLookup left right =
     else foldr1 utils_ap seqs
   where
     seqs =
-      generateJsExpr mode argLookup left : toSeqs mode argLookup right
+      genJsExpr mode argLookup left : toSeqs mode argLookup right
 
     utils_ap a b =
       JS.Call (JS.Ref (JsName.fromKernel Module.kernel_utils ap)) [a, b]
@@ -644,12 +689,12 @@ genAppend mode argLookup left right =
 toSeqs :: Mode.Mode -> FnArgLookup -> Opt.Expr -> [JS.Expr]
 toSeqs mode argLookup expr =
   case expr of
-    Opt.Call (Opt.VarGlobal (Opt.Global h n)) [left, right]
+    Opt.Call (Opt.VarGlobal (Opt.Global h n)) left [right]
       | h == ModuleName.basics && n == append ->
-          generateJsExpr mode argLookup left : toSeqs mode argLookup right
+          genJsExpr mode argLookup left : toSeqs mode argLookup right
 
     _ ->
-      [generateJsExpr mode argLookup expr]
+      [genJsExpr mode argLookup expr]
 
 
 isStringLiteral :: JS.Expr -> Bool
@@ -692,17 +737,18 @@ strictNEq left right =
 
 
 -- TODO check if JS minifiers collapse unnecessary temporary variables
--- @LAMDERA Note: we've removed unnecessary values in tail calls, see the `alternativeImplementation` above
 --
-generateTailCall :: Mode.Mode -> FnArgLookup -> N.Name -> [(N.Name, Opt.Expr)] -> [JS.Stmt]
-generateTailCall mode argLookup name args =
+-- @LAMDERA Note: we've removed unnecessary values in tail calls, see the `alternativeImplementation` above
+-- (so this takes all the assignments as one list, possibly empty)
+--
+genTailCall :: Mode.Mode -> FnArgLookup -> N.Name -> [Opt.TailAssign] -> [JS.Stmt]
+genTailCall mode argLookup name args =
   let
-    toTempVars (argName, arg) =
-      ( JsName.makeTemp argName, generateJsExpr mode argLookup arg )
+    toTempVars (Opt.TailAssign n e) =
+      (JsName.makeTemp n, genJsExpr mode argLookup e)
 
-    toRealVars (argName, _) =
-      JS.ExprStmt $
-        JS.Assign (JS.LRef (JsName.fromLocal argName)) (JS.Ref (JsName.makeTemp argName))
+    toRealVars (Opt.TailAssign n _) =
+      JS.ExprStmt $ JS.Assign (JS.LRef (JsName.fromLocal n)) (JS.Ref (JsName.makeTemp n))
   in
   JS.Vars (map toTempVars args)
   : map toRealVars args
@@ -713,19 +759,16 @@ generateTailCall mode argLookup name args =
 -- DEFINITIONS
 
 
-generateDef :: Mode.Mode -> FnArgLookup -> Opt.Def -> JS.Stmt
-generateDef mode argLookup def =
+genDef :: Mode.Mode -> FnArgLookup -> Opt.Def -> JS.Stmt
+genDef mode argLookup def =
   case def of
-    Opt.Def name body ->
-      JS.Var (JsName.fromLocal name) (generateJsExpr mode argLookup body)
-
-    Opt.TailDef name argNames body ->
-      JS.Var (JsName.fromLocal name) (codeToExpr (generateTailDef mode argLookup name argNames body))
+    Opt.Def     n      b -> JS.Var (JsName.fromLocal n) (genJsExpr mode argLookup b)
+    Opt.TailDef n x xs b -> JS.Var (JsName.fromLocal n) (codeToExpr (genTailDef mode argLookup n x xs b))
 
 
-generateTailDef :: Mode.Mode -> FnArgLookup -> N.Name -> [N.Name] -> Opt.Expr -> Code
-generateTailDef mode argLookup name argNames body =
-  generateFunction (map JsName.fromLocal argNames) $ JsBlock $
+genTailDef :: Mode.Mode -> FnArgLookup -> N.Name -> N.Name -> [N.Name] -> Opt.Expr -> Code
+genTailDef mode argLookup name x xs body =
+  genFunction (map JsName.fromLocal (x:xs)) $ JsBlock $
     [ JS.Labelled (JsName.fromLocal name) $
         JS.While (JS.Bool True) $
           codeToStmt $ generate mode argLookup body
@@ -736,30 +779,30 @@ generateTailDef mode argLookup name argNames body =
 -- PATHS
 
 
-generatePath :: Mode.Mode -> Opt.Path -> JS.Expr
-generatePath mode path =
+genPath :: Mode.Mode -> Opt.Path -> JS.Expr
+genPath mode path =
   case path of
     Opt.Root  n   -> JS.Ref (JsName.fromLocal n)
-    Opt.Index i p -> JS.Access (generatePath mode p) (JsName.fromIndex i)
-    Opt.Field f p -> JS.Access (generatePath mode p) (generateField mode f)
+    Opt.Index i p -> JS.Access (genPath mode p) (JsName.fromIndex i)
+    Opt.Field f p -> JS.Access (genPath mode p) (genField mode f)
     Opt.Unbox p ->
       case mode of
-        Mode.Dev  _ -> JS.Access (generatePath mode p) (JsName.fromIndex Index.first)
-        Mode.Prod _ -> generatePath mode p
+        Mode.Dev  _ -> JS.Access (genPath mode p) (JsName.fromIndex Index.first)
+        Mode.Prod _ -> genPath mode p
 
 
 
 -- GENERATE IFS
 
 
-generateIf :: Mode.Mode -> FnArgLookup -> [(Opt.Expr, Opt.Expr)] -> Opt.Expr -> Code
-generateIf mode argLookup givenBranches givenFinal =
+genIf :: Mode.Mode -> FnArgLookup -> [(Opt.Expr, Opt.Expr)] -> Opt.Expr -> Code
+genIf mode argLookup givenBranches givenFinal =
   let
     (branches, final) =
       crushIfs givenBranches givenFinal
 
     convertBranch (condition, expr) =
-      ( generateJsExpr mode argLookup condition
+      ( genJsExpr mode argLookup condition
       , generate mode argLookup expr
       )
 
@@ -817,9 +860,9 @@ crushIfsHelp visitedBranches unvisitedBranches final =
 -- CASE EXPRESSIONS
 
 
-generateCase :: Mode.Mode -> FnArgLookup -> N.Name -> N.Name -> Opt.Decider Opt.Choice -> [(Int, Opt.Expr)] -> [JS.Stmt]
-generateCase mode argLookup label root decider jumps =
-  foldr (goto mode argLookup label) (generateDecider mode argLookup label root decider) jumps
+genCase :: Mode.Mode -> FnArgLookup -> N.Name -> N.Name -> Opt.Decider Opt.Choice -> [(Int, Opt.Expr)] -> [JS.Stmt]
+genCase mode argLookup label root decider jumps =
+  foldr (goto mode argLookup label) (genDecider mode argLookup label root decider) jumps
 
 
 goto :: Mode.Mode -> FnArgLookup -> N.Name -> (Int, Opt.Expr) -> [JS.Stmt] -> [JS.Stmt]
@@ -833,8 +876,8 @@ goto mode argLookup label (index, branch) stmts =
   labeledDeciderStmt : codeToStmtList (generate mode argLookup branch)
 
 
-generateDecider :: Mode.Mode -> FnArgLookup -> N.Name -> N.Name -> Opt.Decider Opt.Choice -> [JS.Stmt]
-generateDecider mode argLookup label root decisionTree =
+genDecider :: Mode.Mode -> FnArgLookup -> N.Name -> N.Name -> Opt.Decider Opt.Choice -> [JS.Stmt]
+genDecider mode argLookup label root decisionTree =
   case decisionTree of
     Opt.Leaf (Opt.Inline branch) ->
       codeToStmtList (generate mode argLookup branch)
@@ -844,43 +887,38 @@ generateDecider mode argLookup label root decisionTree =
 
     Opt.Chain testChain success failure ->
       [ JS.IfStmt
-          (List.foldl1' (JS.Infix JS.OpAnd) (map (generateIfTest mode root) testChain))
-          (JS.Block $ generateDecider mode argLookup label root success)
-          (JS.Block $ generateDecider mode argLookup label root failure)
+          (List.foldl1' (JS.Infix JS.OpAnd) (map (genIfTest mode root) testChain))
+          (JS.Block $ genDecider mode argLookup label root success)
+          (JS.Block $ genDecider mode argLookup label root failure)
       ]
 
     Opt.FanOut path edges fallback ->
       [ JS.Switch
-          (generateCaseTest mode root path (fst (head edges)))
+          (genCaseTest mode root path (fst (head edges)))
           ( foldr
-              (\edge cases -> generateCaseBranch mode argLookup label root edge : cases)
-              [ JS.Default (generateDecider mode argLookup label root fallback) ]
+              (\edge cases -> genCaseBranch mode argLookup label root edge : cases)
+              [ JS.Default (genDecider mode argLookup label root fallback) ]
               edges
           )
       ]
 
 
-generateIfTest :: Mode.Mode -> N.Name -> (DT.Path, DT.Test) -> JS.Expr
-generateIfTest mode root (path, test) =
+genIfTest :: Mode.Mode -> N.Name -> (DT.Path, DT.Test) -> JS.Expr
+genIfTest mode root (path, test) =
   let
     value = pathToJsExpr mode root path
   in
   case test of
-    DT.IsCtor home name index _ opts ->
-      let
-        tag =
-          case mode of
-            Mode.Dev  _ -> JS.Access value JsName.dollar
-            Mode.Prod _ ->
-              case opts of
-                Can.Normal -> JS.Access value JsName.dollar
-                Can.Enum   -> value
-                Can.Unbox  -> value
-      in
-      strictEq tag $
+    DT.IsVariant h n t _ ->
+      strictEq (JS.Access value JsName.dollar) $
         case mode of
-          Mode.Dev _ -> JS.String (N.toBuilder name)
-          Mode.Prod _ -> JS.Int (ctorToInt home name index)
+          Mode.Dev  _ -> JS.String (N.toBuilder n)
+          Mode.Prod _ -> JS.Int (tagToInt h n t)
+
+    DT.IsEnum h n t _ ->
+      case mode of
+        Mode.Dev  _ -> strictEq (JS.Access value JsName.dollar) (JS.String (N.toBuilder n))
+        Mode.Prod _ -> strictEq value (JS.Int (tagToInt h n t))
 
     DT.IsBool True  -> value
     DT.IsBool False -> JS.Prefix JS.PrefixNot value
@@ -902,49 +940,48 @@ generateIfTest mode root (path, test) =
       JS.Prefix JS.PrefixNot $
         JS.Access value (JsName.fromLocal N.b)
 
-    DT.IsTuple ->
-      $(Crash.crash 'generateIfTest) "COMPILER BUG - there should never be tests on a tuple"
 
-
-
-generateCaseBranch :: Mode.Mode -> FnArgLookup -> N.Name -> N.Name -> (DT.Test, Opt.Decider Opt.Choice) -> JS.Case
-generateCaseBranch mode argLookup label root (test, subTree) =
+genCaseBranch :: Mode.Mode -> FnArgLookup -> N.Name -> N.Name -> (DT.Test, Opt.Decider Opt.Choice) -> JS.Case
+genCaseBranch mode argLookup label root (test, subTree) =
   JS.Case
-    (generateCaseValue mode test)
-    (generateDecider mode argLookup label root subTree)
+    (genCaseValue mode test)
+    (genDecider mode argLookup label root subTree)
 
 
-generateCaseValue :: Mode.Mode -> DT.Test -> JS.Expr
-generateCaseValue mode test =
+genCaseValue :: Mode.Mode -> DT.Test -> JS.Expr
+genCaseValue mode test =
   case test of
-    DT.IsCtor home name index _ _ ->
+    DT.IsVariant h n t _ ->
       case mode of
-        Mode.Dev  _ -> JS.String (N.toBuilder name)
-        Mode.Prod _ -> JS.Int (ctorToInt home name index)
+        Mode.Dev  _ -> JS.String (N.toBuilder n)
+        Mode.Prod _ -> JS.Int (tagToInt h n t)
+
+    DT.IsEnum h n t _ ->
+      case mode of
+        Mode.Dev  _ -> JS.String (N.toBuilder n)
+        Mode.Prod _ -> JS.Int (tagToInt h n t)
 
     DT.IsInt  i -> JS.Int i
     DT.IsChr  c -> JS.String (P.primBounded charUtf8 c)
     DT.IsStr  s -> JS.String (Utf8.toBuilder s)
-    DT.IsBool _ -> $(Crash.crash 'generateCaseValue) "COMPILER BUG - there should never be three tests on a boolean"
-    DT.IsCons   -> $(Crash.crash 'generateCaseValue) "COMPILER BUG - there should never be three tests on a list"
-    DT.IsNil    -> $(Crash.crash 'generateCaseValue) "COMPILER BUG - there should never be three tests on a list"
-    DT.IsTuple  -> $(Crash.crash 'generateCaseValue) "COMPILER BUG - there should never be three tests on a tuple"
+    DT.IsBool _ -> $(Crash.crash 'genCaseValue) "COMPILER BUG - there should never be three tests on a boolean"
+    DT.IsCons   -> $(Crash.crash 'genCaseValue) "COMPILER BUG - there should never be three tests on a list"
+    DT.IsNil    -> $(Crash.crash 'genCaseValue) "COMPILER BUG - there should never be three tests on a list"
 
 
-generateCaseTest :: Mode.Mode -> N.Name -> DT.Path -> DT.Test -> JS.Expr
-generateCaseTest mode root path exampleTest =
+genCaseTest :: Mode.Mode -> N.Name -> DT.Path -> DT.Test -> JS.Expr
+genCaseTest mode root path exampleTest =
   let
     value = pathToJsExpr mode root path
   in
   case exampleTest of
-    DT.IsCtor _ _ _ _ opts ->
+    DT.IsVariant _ _ _ _ ->
+      JS.Access value JsName.dollar
+
+    DT.IsEnum _ _ _ _ ->
       case mode of
         Mode.Dev  _ -> JS.Access value JsName.dollar
-        Mode.Prod _ ->
-          case opts of
-            Can.Normal -> JS.Access value JsName.dollar
-            Can.Enum   -> value
-            Can.Unbox  -> value
+        Mode.Prod _ -> value
 
     DT.IsInt _ -> value
     DT.IsStr _ -> value
@@ -953,10 +990,9 @@ generateCaseTest mode root path exampleTest =
         Mode.Dev  _ -> JS.Call (JS.Access value (JsName.fromLocal valueOf)) []
         Mode.Prod _ -> value
 
-    DT.IsBool _ -> $(Crash.crash 'generateCaseTest) "COMPILER BUG - there should never be three tests on a list"
-    DT.IsCons   -> $(Crash.crash 'generateCaseTest) "COMPILER BUG - there should never be three tests on a list"
-    DT.IsNil    -> $(Crash.crash 'generateCaseTest) "COMPILER BUG - there should never be three tests on a list"
-    DT.IsTuple  -> $(Crash.crash 'generateCaseTest) "COMPILER BUG - there should never be three tests on a list"
+    DT.IsBool _ -> $(Crash.crash 'genCaseTest) "COMPILER BUG - there should never be three tests on a list"
+    DT.IsCons   -> $(Crash.crash 'genCaseTest) "COMPILER BUG - there should never be three tests on a list"
+    DT.IsNil    -> $(Crash.crash 'genCaseTest) "COMPILER BUG - there should never be three tests on a list"
 
 
 
@@ -1014,8 +1050,8 @@ charUtf8 =
 -- GENERATE MAIN
 
 
-generateMain :: Mode.Mode -> FnArgLookup -> ModuleName.Canonical -> Opt.Main -> JS.Expr
-generateMain mode argLookup home main =
+genMain :: Mode.Mode -> FnArgLookup -> ModuleName.Canonical -> Opt.Main -> JS.Expr
+genMain mode argLookup home main =
   case main of
     Opt.Static ->
       JS.Ref (JsName.fromKernel Module.kernel_vdom [N.ascii|init|])
@@ -1023,10 +1059,10 @@ generateMain mode argLookup home main =
         # JS.Int 0
         # JS.Int 0
 
-    Opt.Dynamic msgType decoder ->
+    Opt.Dynamic msgArgs msgType decoder ->
       JS.Ref (JsName.fromGlobal home N.main)
-        # generateJsExpr mode argLookup decoder
-        # toDebugMetadata mode msgType
+        # genJsExpr mode argLookup decoder
+        # toDebugMetadata mode msgArgs msgType
 
 
 (#) :: JS.Expr -> JS.Expr -> JS.Expr
@@ -1034,8 +1070,8 @@ generateMain mode argLookup home main =
   JS.Call func [arg]
 
 
-toDebugMetadata :: Mode.Mode -> Can.Type -> JS.Expr
-toDebugMetadata mode msgType =
+toDebugMetadata :: Mode.Mode -> A.Array T.Var -> I.Type -> JS.Expr
+toDebugMetadata mode msgArgs msgType =
   case mode of
     Mode.Prod _ ->
       JS.Int 0
@@ -1046,7 +1082,7 @@ toDebugMetadata mode msgType =
     Mode.Dev (Just interfaces) ->
       JS.Json $ Encode.object $
         [ "versions" ==> Encode.object [ "elm" ==> V.encode V.compiler ]
-        , "types"    ==> Type.encodeMetadata (Extract.fromMsg interfaces msgType)
+        , "types"    ==> Type.encodeMetadata (Extract.fromMsg interfaces msgArgs msgType)
         ]
 
 
@@ -1054,25 +1090,36 @@ toDebugMetadata mode msgType =
 -- @LAMDERA
 
 
-generateCtorImplementation :: Mode.Mode -> Opt.Global -> Index.ZeroBased -> Int -> Code
-generateCtorImplementation mode (Opt.Global home name) index arity =
+-- A constructor with more than one argument as a plain JS function of all of them,
+-- for direct calls (see Generate.JavaScript.ctor). Builds the same object as
+-- genVariant / genVector.
+genCtorImplementation :: Mode.Mode -> Opt.Global -> Maybe Tag.Tag -> Int -> Code
+genCtorImplementation mode global@(Opt.Global home name) maybeTag arity =
   let
     argNames =
       Index.indexedMap (\i _ -> JsName.fromIndex i) [1 .. arity]
 
-    ctorTag =
-      case mode of
-        Mode.Dev _ -> JS.String (N.toBuilder name)
-        Mode.Prod _ -> JS.Int (ctorToInt home name index)
+    fields =
+      case maybeTag of
+        Just tag ->
+          let
+            ctorTag =
+              case mode of
+                Mode.Dev _ -> JS.String (N.toBuilder name)
+                Mode.Prod _ -> JS.Int (tagToInt home name tag)
+          in
+          (JsName.dollar, ctorTag) : map (\n -> (n, JS.Ref n)) argNames
+
+        Nothing ->
+          vectorFields mode global argNames
   in
   JsExpr $
     JS.Function Nothing argNames $
-      codeToStmtList $ JsExpr $ JS.Object $
-        (JsName.dollar, ctorTag) : map (\n -> (n, JS.Ref n)) argNames
+      codeToStmtList $ JsExpr $ JS.Object fields
 
 
-generateCurriedFunctionRef :: [JsName.Name] -> JsName.Name -> Code
-generateCurriedFunctionRef args ref =
+genCurriedFunctionRef :: [JsName.Name] -> JsName.Name -> Code
+genCurriedFunctionRef args ref =
   case IntMap.lookup (length args) funcHelpers of
     Just helper -> JsExpr $ JS.Call helper [ JS.Ref ref ]
     Nothing ->
@@ -1083,16 +1130,16 @@ generateCurriedFunctionRef args ref =
       foldr addArg (JsExpr $ JS.Call (JS.Ref ref) (map JS.Ref args)) args
 
 
-generateFunctionImplementation :: Mode.Mode -> FnArgLookup -> [N.Name] -> Opt.Expr -> Code
-generateFunctionImplementation mode argLookup argNames body =
+genFunctionImplementation :: Mode.Mode -> FnArgLookup -> [N.Name] -> Opt.Expr -> Code
+genFunctionImplementation mode argLookup argNames body =
   JsExpr $
     JS.Function Nothing (map JsName.fromLocal argNames) $
       codeToStmtList $
         generate mode argLookup body
 
 
-generateTailDefImplementation :: Mode.Mode -> FnArgLookup -> N.Name -> [N.Name] -> Opt.Expr -> Code
-generateTailDefImplementation mode argLookup name argNames body =
+genTailDefImplementation :: Mode.Mode -> FnArgLookup -> N.Name -> [N.Name] -> Opt.Expr -> Code
+genTailDefImplementation mode argLookup name argNames body =
   JsExpr $ JS.Function Nothing (map JsName.fromLocal argNames) $
     codeToStmtList $ JsBlock $
       [ JS.Labelled (JsName.fromLocal name) $

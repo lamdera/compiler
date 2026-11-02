@@ -27,12 +27,24 @@ import Lamdera (NameToText(..))
 
 -- Elm modules
 
-import qualified AST.Canonical
+-- @LAMDERA the Elm 0.19.3 canonical AST Lamdera's code works with, under its old name
+-- here so the instances below stay as they were (see Lamdera.Compat.Canonical)
+import qualified Lamdera.Compat.Canonical as AST.Canonical
+import qualified Lamdera.Compat.Interface
+import qualified AST.Canonical as NewCan -- @LAMDERA the Elm 0.19.4 canonical AST
+import qualified AST.Typed
+import qualified AST.Prim.Fields
+import qualified AST.Prim.Tag
+import qualified AST.Prim.TypeIndex
+import qualified AST.Prim.TypeMask
+import qualified Array
+import qualified Data.NonEmptyMap
+import qualified Nitpick.Utils
 import qualified AST.Optimized
 import qualified Optimize.DecisionTree
 import qualified AST.Source
 import qualified AST.Prim.Operator as AST.Utils.Binop
-import qualified AST.Utils.Shader
+import qualified AST.Prim.Shader as AST.Utils.Shader
 import qualified Data.Index
 import qualified AST.Prim.Name as N
 import qualified AST.Prim.Module
@@ -68,7 +80,8 @@ import qualified Reporting.Error.Canonicalize
 -- import qualified Reporting.Error.Type
 import qualified Reporting.Error.Main
 import qualified Reporting.Error.Docs
-import qualified Reporting.Render.Type.Localizer
+import qualified Reporting.Error.Nitpick
+import qualified Reporting.Render.Type
 import qualified Nitpick.PatternMatches
 import qualified Parse.Symbol
 import qualified Type.Type
@@ -98,6 +111,7 @@ deriving instance Show AST.Optimized.Path
 deriving instance Show AST.Optimized.EffectsType
 deriving instance Show AST.Optimized.LocalGraph
 deriving instance Show AST.Optimized.Main
+deriving instance Show AST.Optimized.TailAssign -- @LAMDERA Elm 0.19.4
 
 deriving instance Show (Optimize.DecisionTree.Path)
 deriving instance Show (Optimize.DecisionTree.Test)
@@ -107,6 +121,7 @@ deriving instance Eq AST.Optimized.Expr
 deriving instance Eq AST.Optimized.Def
 deriving instance Eq AST.Optimized.Destructor
 deriving instance Eq AST.Optimized.Path
+deriving instance Eq AST.Optimized.TailAssign -- @LAMDERA Elm 0.19.4
 
 deriving instance Show AST.Canonical.Type
 deriving instance Show AST.Canonical.FieldType
@@ -154,20 +169,25 @@ deriving instance Eq AST.Canonical.FieldUpdate
 
 
 deriving instance Show AST.Source.Module
+deriving instance Show AST.Source.Header -- @LAMDERA Elm 0.19.4
+deriving instance Show AST.Source.Style -- @LAMDERA Elm 0.19.4
 deriving instance Show AST.Source.Exposing
 deriving instance Show AST.Source.Exposed
 deriving instance Show AST.Source.Privacy
 deriving instance Show AST.Source.Docs
 deriving instance Show AST.Source.Comment
 deriving instance Show AST.Source.Import
+deriving instance Show AST.Source.Decls -- @LAMDERA Elm 0.19.4
+deriving instance Show AST.Source.Decl -- @LAMDERA Elm 0.19.4
 deriving instance Show AST.Source.Value
 deriving instance Show AST.Source.Pattern_
 deriving instance Show AST.Source.Expr_
+deriving instance Show AST.Source.Branch -- @LAMDERA Elm 0.19.4
 deriving instance Show AST.Source.Type_
 deriving instance Show AST.Source.Union
+deriving instance Show AST.Source.Variant -- @LAMDERA Elm 0.19.4
 deriving instance Show AST.Source.Alias
 deriving instance Show AST.Source.Infix
-deriving instance Show AST.Source.Effects
 deriving instance Show AST.Source.Port
 deriving instance Show AST.Source.Manager
 deriving instance Show AST.Source.VarType
@@ -251,40 +271,43 @@ deriving instance Show Reporting.Exit.Make
 deriving instance Show Reporting.Exit.Generate
 
 deriving instance Show Reporting.Error.Module
-deriving instance Show Reporting.Error.Error
+deriving instance Show Reporting.Error.Errors
+
+instance Show Reporting.Error.Nitpick.Error where
+  show _ = "\"<Reporting.Error.Nitpick.Error>\""
 
 deriving instance Show Reporting.Error.Syntax.Error
-deriving instance Show Reporting.Error.Syntax.Module
-deriving instance Show Reporting.Error.Syntax.Space
+deriving instance Show Reporting.Error.Syntax.Header
 deriving instance Show Reporting.Error.Syntax.Exposing
--- deriving instance Show Reporting.Error.Syntax.BadOperator
+deriving instance Show Reporting.Error.Syntax.After
 deriving instance Show Reporting.Error.Syntax.Decl
+deriving instance Show Reporting.Error.Syntax.DeclDef
 deriving instance Show Reporting.Error.Syntax.Port
-deriving instance Show Reporting.Error.Syntax.Type
 deriving instance Show Reporting.Error.Syntax.DeclType
-deriving instance Show Reporting.Error.Syntax.TRecord
 deriving instance Show Reporting.Error.Syntax.TypeAlias
 deriving instance Show Reporting.Error.Syntax.CustomType
-deriving instance Show Reporting.Error.Syntax.TTuple
-deriving instance Show Reporting.Error.Syntax.DeclDef
+deriving instance Show Reporting.Error.Syntax.Expr
+deriving instance Show Reporting.Error.Syntax.Record
+deriving instance Show Reporting.Error.Syntax.Tuple
+deriving instance Show Reporting.Error.Syntax.List
+deriving instance Show Reporting.Error.Syntax.Func
+deriving instance Show Reporting.Error.Syntax.Case
+deriving instance Show Reporting.Error.Syntax.If
+deriving instance Show Reporting.Error.Syntax.Let
+deriving instance Show Reporting.Error.Syntax.Def
+deriving instance Show Reporting.Error.Syntax.Destruct
 deriving instance Show Reporting.Error.Syntax.Pattern
 deriving instance Show Reporting.Error.Syntax.PRecord
 deriving instance Show Reporting.Error.Syntax.PTuple
-deriving instance Show Reporting.Error.Syntax.Char
-deriving instance Show Reporting.Error.Syntax.Escape
 deriving instance Show Reporting.Error.Syntax.PList
-deriving instance Show Reporting.Error.Syntax.Expr
-deriving instance Show Reporting.Error.Syntax.Let
+deriving instance Show Reporting.Error.Syntax.Type
+deriving instance Show Reporting.Error.Syntax.TRecord
+deriving instance Show Reporting.Error.Syntax.TTuple
+deriving instance Show Reporting.Error.Syntax.Char
 deriving instance Show Reporting.Error.Syntax.String
-deriving instance Show Reporting.Error.Syntax.Def
-deriving instance Show Reporting.Error.Syntax.Case
+deriving instance Show Reporting.Error.Syntax.Escape
 deriving instance Show Reporting.Error.Syntax.Number
-deriving instance Show Reporting.Error.Syntax.Destruct
-deriving instance Show Reporting.Error.Syntax.If
-deriving instance Show Reporting.Error.Syntax.List
-deriving instance Show Reporting.Error.Syntax.Record
-deriving instance Show Reporting.Error.Syntax.Tuple
-deriving instance Show Reporting.Error.Syntax.Func
+deriving instance Show Reporting.Error.Syntax.Space
 
 deriving instance Show Reporting.Error.Import.Error
 deriving instance Show Reporting.Error.Import.Problem
@@ -296,8 +319,8 @@ deriving instance Show Parse.Symbol.BadOperator
 instance Show Reporting.Error.Canonicalize.Error where
   show _ = "\"<Reporting.Error.Canonicalize.Error>\""
 
-instance Show Reporting.Render.Type.Localizer.Localizer where
-  show _ = "\"<Reporting.Render.Type.Localizer.Localizer>\""
+instance Show Reporting.Render.Type.Localizer where
+  show _ = "\"<Reporting.Render.Type.Localizer>\""
 
 instance Show Reporting.Error.Type.Error where
   show _ = "\"<Reporting.Error.Type.Error>\""
@@ -369,6 +392,12 @@ instance Show String.String where
   show = quoted . String.toChars
 
 deriving instance Show Elm.Interface.Interface
+deriving instance Show Elm.Interface.TypeDecl -- @LAMDERA Elm 0.19.4
+deriving instance Show Elm.Interface.Annotation -- @LAMDERA Elm 0.19.4
+deriving instance Show Elm.Interface.Type -- @LAMDERA Elm 0.19.4
+deriving instance Show Elm.Interface.Aliased -- @LAMDERA Elm 0.19.4
+deriving instance Show Elm.Interface.Variants -- @LAMDERA Elm 0.19.4
+deriving instance Show Elm.Interface.Variant -- @LAMDERA Elm 0.19.4
 
 instance Show Elm.Interface.Binop where
   show _ = "\"<Elm.Interface.Binop>\""
@@ -394,6 +423,11 @@ instance Show Elm.Kernel.Chunk where
 
 deriving instance Show Elm.Interface.Union
 deriving instance Show Elm.Interface.Alias
+deriving instance Show Lamdera.Compat.Interface.Interface -- @LAMDERA
+deriving instance Show Lamdera.Compat.Interface.Union -- @LAMDERA
+deriving instance Show Lamdera.Compat.Interface.Alias -- @LAMDERA
+instance Show Lamdera.Compat.Interface.Binop where
+  show _ = "\"<Lamdera.Compat.Interface.Binop>\""
 deriving instance Show Elm.Constraint.Error
 deriving instance Show Elm.Outline.Outline
 deriving instance Show Elm.Outline.AppOutline
@@ -423,9 +457,6 @@ instance Show Data.Index.ZeroBased where
   show (Data.Index.ZeroBased 2) = "Index.third"
   show (Data.Index.ZeroBased n) = "(Index.ZeroBased " ++ show n ++ ")"
 
-deriving instance Show Type.Type.Constraint
-deriving instance Show Type.Type.Type
-deriving instance Show Type.Type.Variable
 deriving instance (Show a) => Show (Reporting.Error.Type.Expected a)
 deriving instance (Show a) => Show (Reporting.Error.Type.PExpected a)
 deriving instance Show Reporting.Error.Type.Context
@@ -434,17 +465,6 @@ deriving instance Show Reporting.Error.Type.MaybeName
 deriving instance Show Reporting.Error.Type.SubContext
 deriving instance Show Reporting.Error.Type.Category
 deriving instance Show Reporting.Error.Type.PCategory
-deriving instance Show Type.Type.Descriptor
--- deriving instance (Show a) => Show (Type.UnionFind.Point a)
-deriving instance Show Type.Type.Content
-deriving instance Show Type.Type.Deferred
-instance Show Type.Type.DeferredKey where
-  show _ = "<DeferredKey>"
-instance Show Type.Type.DeferredOrigin where
-  show _ = "<DeferredOrigin>"
-deriving instance Show Type.Type.SuperType
-deriving instance Show Type.Type.FlatType
-deriving instance Show Type.Type.Mark
 
 
 
@@ -531,6 +551,14 @@ instance NFData (Reporting.Annotation.Region) where
 instance NFData (AST.Utils.Shader.Source) where
   rnf _ = ()
 
+-- @LAMDERA Elm 0.19.4
+deriving instance Generic AST.Optimized.TailAssign
+instance NFData AST.Optimized.TailAssign
+instance NFData AST.Prim.Tag.Tag where
+  rnf x = x `seq` ()
+instance (NFData k, NFData a) => NFData (Data.NonEmptyMap.Map k a) where
+  rnf m = rnf (Data.NonEmptyMap.toList m)
+
 -- @TODO probably not good to skip?
 instance NFData (Optimize.DecisionTree.Path) where rnf _ = ()
 instance NFData (Optimize.DecisionTree.Test) where rnf _ = ()
@@ -553,3 +581,76 @@ showMapQualified m =
 
 quoted :: String -> String
 quoted s = "\"" ++ s ++ "\""
+
+
+
+
+-- @LAMDERA Elm 0.19.4 primitives
+
+
+instance (Show a) => Show (AST.Prim.Fields.Fields a) where
+  -- the fields in key order; the source order is left out, like regions
+  show fields = "(Fields " ++ show (Data.NonEmptyMap.toList (AST.Prim.Fields.toNEM fields)) ++ ")"
+
+instance (Show k, Show a) => Show (Data.NonEmptyMap.Map k a) where
+  show m = "(NEM.fromList " ++ show (Data.NonEmptyMap.toList m) ++ ")"
+
+instance (Show a) => Show (Array.Array a) where
+  show a = "(A.fromList " ++ show (Array.toList a) ++ ")"
+
+instance Show AST.Prim.Tag.Tag where
+  show t = "(Tag " ++ show (AST.Prim.Tag.toWord32 t) ++ ")"
+
+instance (Show a) => Show (AST.Prim.Tag.Table a) where
+  show t = "(Tag.table " ++ show (AST.Prim.Tag.unpack t (\_ xs -> xs) (\_ x -> x)) ++ ")"
+
+instance Show AST.Prim.TypeMask.Mask where
+  show m =
+    "(Mask" ++ (if AST.Prim.TypeMask.isComparable m then " comparable" else "")
+      ++ (if AST.Prim.TypeMask.isNumber m then " number" else "") ++ ")"
+
+instance Show AST.Prim.TypeIndex.Index where
+  show (AST.Prim.TypeIndex.Index i) = "(TypeIndex " ++ show i ++ ")"
+
+deriving instance Show Nitpick.Utils.Variants
+deriving instance Show Nitpick.Utils.Variant
+deriving instance Show Nitpick.Utils.NumAlts
+
+instance (Show a) => Show (Graph.Sorted a) where
+  show (Graph.Sorted xs) = "(Graph.Sorted " ++ show xs ++ ")"
+
+
+
+-- @LAMDERA the Elm 0.19.4 canonical AST
+
+
+deriving instance Show NewCan.Decls
+deriving instance Show NewCan.Decl
+deriving instance Show NewCan.Def
+deriving instance Show NewCan.Expr_
+deriving instance Show NewCan.Branch
+deriving instance Show NewCan.Update
+deriving instance Show NewCan.Value
+deriving instance Show NewCan.Func
+deriving instance Show NewCan.Pattern_
+deriving instance Show NewCan.PArg
+deriving instance Show NewCan.PType
+deriving instance Show NewCan.Annotation
+deriving instance Show NewCan.Type_
+deriving instance Show NewCan.TypeDecl
+deriving instance Show NewCan.Binop
+deriving instance Show NewCan.Style
+deriving instance Show NewCan.Port
+deriving instance Show NewCan.Manager
+deriving instance Show (NewCan.EType k)
+
+instance Show NewCan.Exports where
+  show _ = "\"<AST.Canonical.Exports>\""
+
+instance Show NewCan.Module where
+  show m = "(Can.Module " ++ show (NewCan._name m) ++ " " ++ show (NewCan._decls m) ++ ")"
+
+deriving instance Show AST.Typed.Exports
+
+instance Show AST.Typed.Module where
+  show m = "(Tpd.Module " ++ show (AST.Typed._name m) ++ " " ++ show (AST.Typed._decls m) ++ ")"

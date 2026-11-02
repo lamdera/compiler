@@ -170,11 +170,18 @@ intersect (Range lo lop hop hi) (Range lo_ lop_ hop_ hi_) =
 -- to the compiler (precise name types, a new binary cache format) and leave the
 -- language, elm.json and package formats alone. Packages bounded at 0.19.0, 0.19.1,
 -- 0.19.2 and 0.19.3 resolve interchangeably (see test/multi-version).
+--
+-- 0.19.4 was added the same way when Lamdera moved onto it (Lamdera 1.6): a new type
+-- checker, new ASTs and a new binary cache format, with the language, elm.json and
+-- package formats as they were. Upstream calls it a drop-in replacement for any
+-- 0.19.x, but refuses applications that do not say 0.19.4; Lamdera keeps accepting
+-- them (Details.isCompatibleAppElmVersion) and packages bounded at any of these.
 interchangeableElm :: [V.Version]
 interchangeableElm =
   [ V.toVersion 0 19 1
   , V.toVersion 0 19 2
   , V.toVersion 0 19 3
+  , V.toVersion 0 19 4
   ]
 
 

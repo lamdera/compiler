@@ -124,11 +124,13 @@ intersect (Range lo lop hop hi) (Range lo_ lop_ hop_ hi_) =
 -- @LAMDERA as Elm.Constraint.interchangeableElm in the compiler: package bounds written
 -- for 0.19.1, 0.19.2 or 0.19.3 are accepted interchangeably, but only while the
 -- compiler is itself one of them.
+-- Elm 0.19.4 joins them with the 0.19.4 merge, as in the compiler.
 interchangeableElm : TList V.Version
 interchangeableElm =
   [ V.fromComparable (0, 19, 1)
   , V.fromComparable (0, 19, 2)
   , V.fromComparable (0, 19, 3)
+  , V.fromComparable (0, 19, 4)
   ]
 
 

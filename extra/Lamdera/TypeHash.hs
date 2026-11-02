@@ -17,11 +17,11 @@ import qualified AST.Prim.TypeName as TN
 import qualified AST.Prim.TypeVar as TV
 import qualified Data.Set as Set
 
-import AST.Canonical
+import Lamdera.Compat.Canonical -- @LAMDERA the Elm 0.19.3 shapes, see Lamdera.Compat.Canonical
 import qualified AST.Source as Valid
 import qualified Elm.ModuleName as ModuleName
 import qualified Elm.Package as Pkg
-import qualified Elm.Interface as Interface
+import qualified Lamdera.Compat.Interface as Interface -- @LAMDERA the Elm 0.19.3 interface, see Lamdera.Compat.Interface
 import qualified Reporting.Annotation as A
 import qualified Reporting.Result as Result
 import qualified Reporting.Doc as D
@@ -41,6 +41,8 @@ import qualified Lamdera.Lexical as Lexical
 import qualified Lamdera.Types
 
 import qualified Ext.Query.Interfaces as Interfaces
+import qualified Elm.Interface as RealI -- @LAMDERA the Elm 0.19.4 interface
+import qualified Lamdera.Compat.Convert as Convert
 import StandaloneInstances
 
 
@@ -121,7 +123,7 @@ buildCheckHashesFrom details artifacts = do
 
 
 {-# NOINLINE lastHashed #-}
-lastHashed :: IORef (Map.Map PrimModule.Name Interface.Interface)
+lastHashed :: IORef (Map.Map PrimModule.Name RealI.Interface)
 lastHashed =
   unsafePerformIO (newIORef Map.empty)
 
@@ -144,7 +146,7 @@ typesClosure details =
 
 
 -- The interfaces of Types' closure, from a build's artifacts and the Details it wrote.
-typesInterfaces :: Details.Details -> Build.Artifacts -> IO (Map.Map PrimModule.Name Interface.Interface)
+typesInterfaces :: Details.Details -> Build.Artifacts -> IO (Map.Map PrimModule.Name RealI.Interface)
 typesInterfaces details artifacts =
   let
     closure = typesClosure details
@@ -162,10 +164,11 @@ calculateLamderaHashesFrom details artifacts =
   hashesFromInterfaces details =<< typesInterfaces details artifacts
 
 
-hashesFromInterfaces :: Details.Details -> Map.Map PrimModule.Name Interface.Interface -> IO (Either Reporting.Exit.BuildProblem ([Text], [(Text, [Text], DiffableType)]))
+hashesFromInterfaces :: Details.Details -> Map.Map PrimModule.Name RealI.Interface -> IO (Either Reporting.Exit.BuildProblem ([Text], [(Text, [Text], DiffableType)]))
 hashesFromInterfaces details ifacesProject = do
   artifactsDeps <- Interfaces.allDepArtifacts_ details
-  let interfaces = Map.union ifacesProject (Interfaces._ifaces artifactsDeps)
+  -- @LAMDERA the Elm 0.19.3 shapes of the interfaces, see Lamdera.Compat.Convert
+  let interfaces = Convert.fromInterfaces (Map.union ifacesProject (Interfaces._ifaces artifactsDeps))
   inDebug <- Lamdera.isDebug
   case Map.lookup "Types" interfaces of
     Just iface_Types ->
@@ -182,7 +185,7 @@ type RecursionSet =
 
 calculateHashPair :: FilePath -> PrimModule.Name -> TN.Name -> IO (Text, Text)
 calculateHashPair path modulename typename = do
-  interfaces <- Interfaces.all [ path ]
+  interfaces <- Convert.fromInterfaces <$> Interfaces.all [ path ]
   case Map.lookup modulename interfaces of
     Just interfaceModule -> do
       let dt = diffableTypeByName interfaces typename modulename interfaceModule
@@ -194,7 +197,7 @@ calculateHashPair path modulename typename = do
 calculateLamderaHashes :: IO (Either Reporting.Exit.BuildProblem ([Text], [(Text, [Text], DiffableType)]))
 calculateLamderaHashes = do
   debug $ "#️⃣  typehash: full with interface load"
-  interfaces <- Interfaces.all [ "src/Types.elm" ]
+  interfaces <- Convert.fromInterfaces <$> Interfaces.all [ "src/Types.elm" ]
   inDebug <- Lamdera.isDebug
   case Map.lookup "Types" interfaces of
     Just iface_Types ->

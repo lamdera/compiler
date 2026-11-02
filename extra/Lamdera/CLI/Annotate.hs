@@ -12,8 +12,10 @@ import qualified Reporting.Doc as D
 import Terminal (Parser(..))
 
 import qualified AST.Prim.Name as Name
-import qualified AST.Canonical as Can
-import AST.Canonical (Type(..))
+import qualified Lamdera.Compat.Canonical as Can
+import qualified AST.Typed
+import qualified Elm.Interface -- @LAMDERA the Elm 0.19.3 shapes, see Lamdera.Compat.Canonical
+import Lamdera.Compat.Canonical (Type(..))
 import qualified Compile
 
 import Lamdera
@@ -51,8 +53,11 @@ printAnnotations root file expressionName = do
   Ext.Common.withProjectRoot root $ do
     debug_ "Getting artifacts..."
 
-    (Compile.Artifacts canonical annotations objects) <- Ext.Query.Canonical.loadSingleArtifacts file
-    let _decls = Can._decls canonical
+    -- @LAMDERA Elm 0.19.4: the annotations are in the module's interface, the decls in the
+    -- type checked module
+    (Compile.Artifacts canonical iface objects) <- Ext.Query.Canonical.loadSingleArtifacts file
+    let _decls = AST.Typed._decls canonical
+    let annotations = Elm.Interface._values iface
 
     case annotations & Map.lookup expressionName of
       Just annotation -> do

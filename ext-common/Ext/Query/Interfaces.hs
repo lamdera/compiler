@@ -111,7 +111,7 @@ getPublic :: ModuleName.Canonical -> I.DependencyInterface -> Maybe (Module.Name
 getPublic (ModuleName.Canonical _ name) dep =
   case dep of
     I.Public  iface -> Just (name, OneOrMore.one iface)
-    I.Private _ _ _ -> Nothing
+    I.Private _ _   -> Nothing
 
 
 toUnique :: OneOrMore.OneOrMore a -> Maybe a

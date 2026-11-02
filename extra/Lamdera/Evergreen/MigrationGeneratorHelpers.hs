@@ -16,10 +16,10 @@ import qualified AST.Prim.TypeName as TN
 import qualified AST.Prim.TypeVar as TV
 import Data.Map.Strict (unionWithKey)
 
-import qualified AST.Canonical as Can
+import qualified Lamdera.Compat.Canonical as Can -- @LAMDERA the Elm 0.19.3 shapes, see Lamdera.Compat.Canonical
 import qualified Elm.ModuleName as ModuleName
 import qualified Elm.Package as Pkg
-import qualified Elm.Interface as Interface
+import qualified Lamdera.Compat.Interface as Interface -- @LAMDERA the Elm 0.19.3 interface, see Lamdera.Compat.Interface
 
 import Lamdera
 import Lamdera.Types

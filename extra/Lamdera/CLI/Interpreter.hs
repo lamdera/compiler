@@ -12,8 +12,8 @@ import qualified Reporting.Doc as D
 import Terminal (Parser(..))
 
 import qualified AST.Prim.Name as Name
-import qualified AST.Canonical as Can
-import AST.Canonical (Type(..))
+import qualified Lamdera.Compat.Canonical as Can -- @LAMDERA the Elm 0.19.3 shapes, see Lamdera.Compat.Canonical
+import Lamdera.Compat.Canonical (Type(..))
 import qualified Compile
 
 import Lamdera

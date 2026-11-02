@@ -7,7 +7,7 @@ module Lamdera.Hints where
 import qualified Reporting.Doc as D
 import qualified Elm.Package as Pkg
 import Elm.ModuleName (Canonical(..))
-import qualified Type.Error as T
+import qualified Reporting.Render.Type as T -- @LAMDERA was Type.Error before Elm 0.19.4
 
 import Data.Monoid ((<>))
 import qualified Debug.Trace as DT
@@ -16,7 +16,7 @@ import qualified Debug.Trace as DT
 contextHintsWhenTypeMismatch tipe =
   case tipe of
     -- @TODO fix when we move this to core
-    (T.Type (Canonical package "Evergreen.Migrate") "UnimplementedMigration" []) ->
+    (T.Type (Canonical package "Evergreen.Migrate") "UnimplementedMigration" _ []) ->
       if package == Pkg.dummyName
         then
           [ D.toSimpleHint $

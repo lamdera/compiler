@@ -59,54 +59,72 @@ modifyModul pkg ifaces modul =
         --   & mapM showValue
 
         let
+          -- @LAMDERA Elm 0.19.4: a module's values, unions and aliases are all Decls
+          decls = declsToList (Src._decls modul)
+          unions = decls & concatMap (\d -> case d of { Union_ _ u -> [u]; _ -> [] })
+          aliases = decls & concatMap (\d -> case d of { Alias_ _ al -> [al]; _ -> [] })
+
           newModul =
             modul {
-              Src._values =
-                (Src._values modul)
+              Src._decls =
+                (Src._decls modul)
                 -- These stubs are added in so that the functions (which are not yet generated!)
                 -- can be referenced by user-code that is already in the file. This allows us to
                 -- write the `expected_w3_[en|de]code_TYPENAME` style tests, which ensures our
                 -- expected final Elm generation is identical to what would have been ingested
                 -- had the source actually been literally written in the file as text to begin with!
-                ++ (unionStubs (Src._unions modul))
-                ++ (aliasStubs (Src._aliases modul))
+                & addDecls (fmap (Value_ Nothing) (unionStubs unions))
+                & addDecls (fmap (Value_ Nothing) (aliasStubs aliases))
             }
 
         -- debugPassText "💙" (hindentFormatValue $ Src._values modul) (pure ())
         -- atomicPutStrLn $ tShow "💙" $ newModul
         -- debugHaskellPass "💙" newModul (pure newModul)
 
-        if (pkg == (Pkg.Name "author" "project") && (getName modul == "Env"))
+        if (pkg == (Pkg.Name "author" "project") && (getModuleName modul == "Env"))
           then do
             -- We are in the Env.elm module, inject the `type Mode = ...` and
             -- `mode = ...` code if it is not already defined.
             -- NOTE: this should be part of AppConfig but for simplicity it's here so all injections are together.
 
             envMode <- Lamdera.getEnvMode
+            let
+              newDecls = declsToList (Src._decls newModul)
+
+              modeUnion =
+                -- Source for `type Mode = Production | Development`
+                if hasModeDef (newDecls & concatMap (\d -> case d of { Union_ _ u -> [u]; _ -> [] }))
+                  then []
+                  else
+                    [ Union_ Nothing (a (Union (a ("Mode")) []
+                        (Variant (a ("Production")) [])
+                        -- , ((a ("Preview")), [])
+                        [ Variant (a ("Development")) []
+                        ]
+                      ))
+                    ]
+
+              modeValue =
+                -- Source for `mode = Development`
+                a (Value (a ("mode")) [] (a (Var CapVar (N.fromChars $ show envMode))) Nothing)
+
+              withMode =
+                if any (\d -> case d of { Value_ _ v -> isModeValue v; _ -> False }) newDecls
+                  then
+                    newDecls & fmap (\d ->
+                      case d of
+                        Value_ c v | isModeValue v -> Value_ c modeValue
+                        _ -> d
+                    )
+                  else
+                    newDecls ++ [ Value_ Nothing modeValue ]
             pure $
               newModul
-                { Src._unions =
-                    -- Source for `type Mode = Production | Development`
-                    if hasModeDef (Src._unions newModul)
-                      then Src._unions newModul
-                      else Src._unions newModul ++
-                        [ (a (Union (a ("Mode")) []
-                            [ ((a ("Production")), [])
-                            -- , ((a ("Preview")), [])
-                            , ((a ("Development")), [])
-                            ]
-                          ))
-                        ]
-                , Src._values =
-                    -- Source for `mode = Development`
-                    Src._values newModul
-                      & listUpsert
-                          isModeValue
-                          (a (Value (a ("mode")) [] (a (Var CapVar (N.fromChars $ show envMode))) Nothing))
-                , Src._exports =
-                    case Src._exports newModul of
-                      A.At _ Src.Open -> Src._exports newModul
-                      A.At loc (Src.Explicit exposures) ->
+                { Src._decls = declsFromList (Src._decls newModul) (withMode ++ modeUnion)
+                , Src._header =
+                    case Src._header newModul of
+                      YesHeader style name (A.At _ Src.Open) -> Src._header newModul
+                      YesHeader style name (A.At loc (Src.Explicit exposures)) ->
                         exposures
                           & listUpsert
                               (\v ->
@@ -122,12 +140,39 @@ modifyModul pkg ifaces modul =
                                   _ -> False
                               )
                               (Src.Upper (a "Mode") (Src.Public r))
-                          & (\newExposures ->  A.At loc (Src.Explicit newExposures) )
+                          & (\newExposures -> YesHeader style name (A.At loc (Src.Explicit newExposures)))
+                      NoHeader _ -> Src._header newModul
                 }
 
           else pure newModul
 
       else pure modul
+
+
+-- @LAMDERA Elm 0.19.4 keeps the declarations of a module in reverse order
+declsToList :: Decls -> [Decl]
+declsToList decls =
+  case decls of
+    NoDecls _ -> []
+    RevDecls d ds -> reverse (d : ds)
+
+
+-- the declarations, in source order, as Decls (the region of an empty module is kept)
+declsFromList :: Decls -> [Decl] -> Decls
+declsFromList original decls =
+  case reverse decls of
+    [] ->
+      case original of
+        NoDecls region -> NoDecls region
+        RevDecls _ _ -> NoDecls A.zero
+    d : ds ->
+      RevDecls d ds
+
+
+-- the declarations after the existing ones
+addDecls :: [Decl] -> Decls -> Decls
+addDecls new decls =
+  declsFromList decls (declsToList decls ++ new)
 
 
 
@@ -136,7 +181,7 @@ hasModeDef unions =
   unions
     & any (\union ->
       case union of
-        A.At _ (Union (A.At _ name) params constructors) ->
+        A.At _ (Union (A.At _ name) params _ _) ->
           name == "Mode"
     )
 
@@ -150,7 +195,7 @@ isModeValue value =
 unionStubs :: [Located Union] -> [Located Value]
 unionStubs unions =
   unions
-    & concatMap (\(A.At _ (Src.Union (A.At _ name) tvars _)) ->
+    & concatMap (\(A.At _ (Src.Union (A.At _ name) tvars _ _)) ->
       let nParams = length tvars
       in
       [ _Debug_todo_with_params nParams $ N.fromChars $ "w3_encode_" ++ TN.nameToChars name
@@ -165,7 +210,7 @@ aliasStubs aliases =
   aliases
     & filter (\(A.At _ (Src.Alias _ _ (A.At _ tipe))) ->
         case tipe of
-          TLambda _ _ -> False
+          TLambda _ _ _ -> False
           _ -> True
       )
     & concatMap (\(A.At _ (Src.Alias (A.At _ name) tvars _)) ->
@@ -209,5 +254,5 @@ _Debug_todo_with_params nParams functionName =
   a $ Src.Value
         (a functionName)
         params
-        (a (Src.Call (a (Src.VarQual Src.LowVar "Debug" "todo")) [a (Src.Str functionName_)]))
+        (a (Src.Call (a (Src.VarQual Src.LowVar "Debug" "todo")) (a (Src.Str functionName_)) []))
         Nothing

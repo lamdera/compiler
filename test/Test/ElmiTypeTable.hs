@@ -7,7 +7,11 @@ module Test.ElmiTypeTable where
 Inferred annotations hold every alias fully expanded, and interfaces used to write
 that expansion at every use: an app with a large Model wrote its body thousands of
 times per .elmi. Now each distinct Can.Type node is written once, in a table at the
-start of the interface, and referred to by index. Decoding must give back exactly
+start of the interface, and referred to by index.
+
+@LAMDERA Since Elm 0.19.4 the types are I.Type, and an alias in a type carries the body
+it was declared with (TAlias ... Aliased) rather than an expansion, but that body is
+just as big and just as repeated, so the table works the same way. Decoding must give back exactly
 the values the inline encoding did (type checking, JS, Wire3 and type hashes all see
 them), so these tests round trip synthetic and real interfaces, and check that a
 module repeating a big alias writes its body once.
@@ -29,13 +33,18 @@ import EasyTest
 import Lamdera hiding ((&))
 import Test.Helpers
 
-import qualified AST.Canonical as Can
+import qualified Array as A
+import qualified AST.Prim.Fields as F
+import qualified AST.Prim.Tag as Tag
+import qualified AST.Prim.TypeIndex as TI
+import qualified AST.Prim.TypeMask as M
 import qualified AST.Prim.Name as N
 import qualified AST.Prim.TypeName as TN
 import qualified AST.Prim.TypeVar as TV
 import qualified Bytes.Decode as D
 import qualified Bytes.Encode as E
-import qualified Data.Index as Index
+import qualified Data.Maybe as Maybe
+import qualified Data.NonEmptyMap as NEM
 import qualified Elm.Interface as I
 import qualified Elm.ModuleName as ModuleName
 import qualified Elm.Package as Pkg
@@ -130,7 +139,7 @@ suite = tests
             expectEqual bytes (strict (I.eInterface iface))
 
           scope "every update function has the expanded Model" $ do
-            let modelUses = [ () | (n, Can.Forall _ t) <- Map.toList (I._values iface), "update" `List.isPrefixOf` N.toChars n, Can.TLambda _ (Can.TLambda (Can.TAlias _ m _ (Can.Filled (Can.TRecord fs _))) _) <- [t], TN.nameToChars m == "Model", Map.size fs == modelFields + 1 ]
+            let modelUses = [ () | (n, I.Forall _ t) <- Map.toList (I._values iface), "update" `List.isPrefixOf` N.toChars n, I.TLambda _ (I.TAlias _ m _ _ (I.Aliased (I.TRecord fs))) _ <- [t], TN.nameToChars m == "Model", F.size fs == modelFields + 1 ]
             expectEqual uses (length modelUses)
 
           scope "the Model body is written once per distinct record, not per use" $ do
@@ -139,8 +148,8 @@ suite = tests
             -- field order) and what inference gives (Inner Filled, or Inner expanded, with
             -- other field indexes), each in the table once however many of the 200
             -- annotations use it
-            expect (Set.size records <= 3)
-            expectEqual (Set.size records) (occurrences "uniqueMarkerField" bytes)
+            expect (length records <= 3)
+            expectEqual (length records) (occurrences "uniqueMarkerField" bytes)
             -- inline, the 150 field Model was written at every use: about 9MB, now 9KB
             expect (BS.length bytes * 100 < inlineTypeBytes iface)
 
@@ -166,36 +175,50 @@ home =
   ModuleName.Canonical Pkg.dummyName "Big"
 
 
-intType :: Can.Type
+intType :: I.Type
 intType =
-  Can.TType ModuleName.basics "Int" []
+  I.TType ModuleName.basics "Int" M.int A.empty
 
 
-inner :: Can.Type
+inner :: I.Type
 inner =
-  Can.TAlias home "Inner" [] (Can.Filled (Can.TRecord (fields ["a", "b", "c"]) Nothing))
+  I.TAlias home "Inner" M.record A.empty (I.Aliased (I.TRecord (fields ["a", "b", "c"])))
 
 
-fields :: [String] -> Map.Map N.Name Can.FieldType
+-- fields in source order
+ordered :: [(N.Name, I.Type)] -> F.Fields I.Type
+ordered pairs =
+  case pairs of
+    [] -> error "ordered: no fields"
+    p : ps ->
+      Maybe.fromJust $ F.fromOrdered Just $
+        NEM.fromList (toOrdered 0 p) (zipWith toOrdered [1 ..] ps)
+  where
+    toOrdered i (n, t) = (n, F.Ordered i t)
+
+
+fields :: [String] -> F.Fields I.Type
 fields names =
-  Map.fromList [ (N.fromChars n, Can.FieldType i intType) | (n, i) <- zip names [0 ..] ]
+  ordered [ (N.fromChars n, intType) | n <- names ]
 
 
-model :: Can.Type
+model :: I.Type
 model =
-  Can.TAlias home "Model" []
-    (Can.Filled (Can.TRecord
-      (Map.fromList ((N.fromChars "uniqueMarkerField", Can.FieldType 150 intType) : [ (N.fromChars ("field" ++ show i), Can.FieldType (fromIntegral i) inner) | i <- [0 .. 149 :: Int] ]))
-      Nothing))
+  I.TAlias home "Model" M.record A.empty
+    (I.Aliased (I.TRecord (ordered ([ (N.fromChars ("field" ++ show i), inner) | i <- [0 .. 149 :: Int] ] ++ [(N.fromChars "uniqueMarkerField", intType)]))))
 
 
 bigInterface :: Int -> I.Interface
 bigInterface n =
   I.Interface
     { I._home = Pkg.dummyName
-    , I._values = Map.fromList [ (N.fromChars ("update" ++ show i), Can.Forall Map.empty (Can.TLambda model model)) | i <- [1 .. n] ]
-    , I._unions = Map.singleton "Msg" (I.OpenUnion (Can.Union [] [Can.Ctor "Set" (Index.ZeroBased 0) 1 [model], Can.Ctor "Pair" (Index.ZeroBased 1) 1 [Can.TPair model inner]] 2 Can.Normal))
-    , I._aliases = Map.fromList [("Model", I.PublicAlias (Can.Alias [] (case model of Can.TAlias _ _ _ (Can.Filled t) -> t; t -> t))), ("Inner", I.PrivateAlias (Can.Alias ["x"] (Can.TTriple (Can.TVar "x") Can.TUnit inner)))]
+    , I._values = Map.fromList [ (N.fromChars ("update" ++ show i), I.Forall A.empty (I.TLambda model model [])) | i <- [1 .. n] ]
+    , I._types =
+        Map.fromList
+          [ ("Msg", I.UnionOpen (I.Union M.enum A.empty (I.Variants (Tag.table (I.Variant "Set" [model]) (I.Variant "Pair" [I.TPair model inner]) []))))
+          , ("Model", I.AliasPublic (I.Alias M.record A.empty (case model of I.TAlias _ _ _ _ t -> t; t -> I.Aliased t)))
+          , ("Inner", I.AliasPrivate (I.Alias M.record (A.fromList ["x"]) (I.Aliased (I.TTriple (I.TVar (TI.Index 0)) I.TUnit inner))))
+          ]
     , I._binops = Map.empty
     }
 
@@ -204,7 +227,7 @@ bigInterface n =
 wideInterface :: Int -> I.Interface
 wideInterface n =
   (bigInterface 1)
-    { I._values = Map.fromList [ (N.fromChars ("v" ++ show i), Can.Forall Map.empty (Can.TType home "T" [Can.TVar (TV.varFromChars ("a" ++ show i))])) | i <- [1 .. n] ]
+    { I._values = Map.fromList [ (N.fromChars ("v" ++ show i), I.Forall (A.fromList [TV.varFromChars ("a" ++ show i)]) (I.TType home (TN.nameFromChars ("T" ++ show i)) M.enum (A.fromList [I.TVar (TI.Index 0)]))) | i <- [1 .. n] ]
     }
 
 
@@ -212,26 +235,25 @@ wideInterface n =
 unsharedInterface :: Int -> I.Interface
 unsharedInterface n =
   (bigInterface 1)
-    { I._values = Map.fromList [ (N.fromChars ("update" ++ show i), Can.Forall Map.empty (Can.TLambda (freshModel i) (freshModel (i + n)))) | i <- [1 .. n] ]
+    { I._values = Map.fromList [ (N.fromChars ("update" ++ show i), I.Forall A.empty (I.TLambda (freshModel i) (freshModel (i + n)) [])) | i <- [1 .. n] ]
     }
 
 
-freshModel :: Int -> Can.Type
+freshModel :: Int -> I.Type
 freshModel i =
-  Can.TAlias home "Model" []
-    (Can.Filled (Can.TRecord
-      (Map.fromList [ (N.fromChars ("field" ++ show f), Can.FieldType (fromIntegral f) (Can.TType ModuleName.basics (if i < 0 then "Never" else "Int") [])) | f <- [0 .. 49 :: Int] ])
-      Nothing))
+  I.TAlias home "Model" M.record A.empty
+    (I.Aliased (I.TRecord
+      (ordered [ (N.fromChars ("field" ++ show f), I.TType ModuleName.basics (if i < 0 then "Never" else "Int") M.int A.empty) | f <- [0 .. 49 :: Int] ])))
 
 
-modelsOf :: I.Interface -> [Can.Type]
+modelsOf :: I.Interface -> [I.Type]
 modelsOf iface =
-  [ m | Can.Forall _ (Can.TLambda m _) <- Map.elems (I._values iface) ]
+  [ m | I.Forall _ (I.TLambda m _ _) <- Map.elems (I._values iface) ]
 
 
-resultModelsOf :: I.Interface -> [Can.Type]
+resultModelsOf :: I.Interface -> [I.Type]
 resultModelsOf iface =
-  [ m | Can.Forall _ (Can.TLambda _ m) <- Map.elems (I._values iface) ]
+  [ m | I.Forall _ (I.TLambda _ m _) <- Map.elems (I._values iface) ]
 
 
 stableName :: a -> IO (StableName a)
@@ -240,11 +262,11 @@ stableName a =
 
 
 -- DependencyInterface has no Eq
-dependencyKey :: I.DependencyInterface -> Either I.Interface (Pkg.Name, [(TN.Name, Can.Union)], [(TN.Name, Can.Alias)])
+dependencyKey :: I.DependencyInterface -> Either I.Interface (Pkg.Name, [(TN.Name, Either I.Union I.Alias)])
 dependencyKey dep =
   case dep of
     I.Public i -> Left i
-    I.Private p u a -> Right (p, Map.toList u, Map.toList a)
+    I.Private p ts -> Right (p, Map.toList (Map.map (\t -> case t of { I.PrivateUnion u -> Left u; I.PrivateAlias a -> Right a }) ts))
 
 
 
@@ -257,32 +279,40 @@ inlineTypeBytes =
   sum . map (BS.length . strict . I.eType) . interfaceTypes
 
 
-interfaceTypes :: I.Interface -> [Can.Type]
-interfaceTypes (I.Interface _ values unions aliases binops) =
-  [ t | Can.Forall _ t <- Map.elems values ]
-  ++ [ t | u <- Map.elems unions, let Can.Union _ ctors _ _ = I.extractUnion u, Can.Ctor _ _ _ ts <- ctors, t <- ts ]
-  ++ [ t | a <- Map.elems aliases, let Can.Alias _ t = I.extractAlias a ]
-  ++ [ t | I.Binop _ (Can.Forall _ t) _ _ <- Map.elems binops ]
+interfaceTypes :: I.Interface -> [I.Type]
+interfaceTypes (I.Interface _ values types binops) =
+  [ t | I.Forall _ t <- Map.elems values ]
+  ++ concatMap (I.extract unionTypes (\(I.Alias _ _ (I.Aliased t)) -> [t])) (Map.elems types)
+  ++ [ t | I.Binop _ (I.Forall _ t) _ _ <- Map.elems binops ]
+  where
+    unionTypes (I.Union _ _ variants) =
+      case variants of
+        I.Variants table -> concat (Tag.unpack table (\_ ts -> ts) (\_ (I.Variant _ ts) -> ts))
+        I.Enum _ -> []
+        I.Vector _ a b cs -> a : b : cs
+        I.Box _ a -> [a]
+        I.Void _ -> []
 
 
-distinctRecordsWith :: N.Name -> I.Interface -> Set.Set Can.Type
+distinctRecordsWith :: N.Name -> I.Interface -> [I.Type]
 distinctRecordsWith field iface =
-  Set.fromList [ r | t <- interfaceTypes iface, r@(Can.TRecord fs _) <- subtrees t, Map.member field fs ]
+  List.nub [ r | t <- interfaceTypes iface, r@(I.TRecord fs) <- subtrees t, Map.member field (NEM.toDict (F.toNEM fs)) ]
 
 
-subtrees :: Can.Type -> [Can.Type]
+subtrees :: I.Type -> [I.Type]
 subtrees tipe =
   tipe :
     case tipe of
-      Can.TLambda a b -> subtrees a ++ subtrees b
-      Can.TVar _ -> []
-      Can.TRecord fs _ -> concat [ subtrees t | Can.FieldType _ t <- Map.elems fs ]
-      Can.TUnit -> []
-      Can.TPair a b -> subtrees a ++ subtrees b
-      Can.TTriple a b c -> subtrees a ++ subtrees b ++ subtrees c
-      Can.TAlias _ _ xs (Can.Filled t) -> concatMap (subtrees . snd) xs ++ subtrees t
-      Can.TAlias _ _ xs (Can.Holey t) -> concatMap (subtrees . snd) xs ++ subtrees t
-      Can.TType _ _ ts -> concatMap subtrees ts
+      I.TLambda a b cs -> concatMap subtrees (a : b : cs)
+      I.TVar _ -> []
+      I.TRecord fs -> concatMap subtrees (fmap snd (NEM.toList (F.toNEM fs)))
+      I.TExtRec fs _ -> concatMap subtrees (fmap snd (NEM.toList (F.toNEM fs)))
+      I.TEmpty -> []
+      I.TUnit -> []
+      I.TPair a b -> subtrees a ++ subtrees b
+      I.TTriple a b c -> subtrees a ++ subtrees b ++ subtrees c
+      I.TAlias _ _ _ xs (I.Aliased t) -> concatMap subtrees (A.toList xs) ++ subtrees t
+      I.TType _ _ _ ts -> concatMap subtrees (A.toList ts)
 
 
 occurrences :: BS.ByteString -> BS.ByteString -> Int

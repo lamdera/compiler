@@ -16,7 +16,6 @@ import qualified Data.List as List
 import qualified Reporting.Doc as D
 import qualified Elm.Package as Pkg
 import Elm.ModuleName (Canonical(..))
-import qualified Type.Error as T
 import qualified Reporting
 import qualified Reporting.Task as Task
 import qualified Reporting.Exit as Exit

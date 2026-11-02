@@ -2,11 +2,11 @@
 
 module Lamdera.Evergreen.MigrationGeneratorUnion where
 
-import qualified AST.Canonical as Can
+import qualified Lamdera.Compat.Canonical as Can -- @LAMDERA the Elm 0.19.3 shapes, see Lamdera.Compat.Canonical
 import qualified AST.Source as Valid
 import qualified Elm.ModuleName as ModuleName
 import qualified Elm.Package as Pkg
-import qualified Elm.Interface as Interface
+import qualified Lamdera.Compat.Interface as Interface -- @LAMDERA the Elm 0.19.3 interface, see Lamdera.Compat.Interface
 import qualified Reporting.Annotation as A
 import qualified Reporting.Result as Result
 import qualified Reporting.Error as Error

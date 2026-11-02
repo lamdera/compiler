@@ -19,9 +19,11 @@ import EasyTest
 import Lamdera hiding ((&))
 import Test.Helpers
 
-import qualified AST.Canonical as Can
+import qualified Lamdera.Compat.Canonical as Can -- @LAMDERA the Elm 0.19.3 shapes, see Lamdera.Compat.Canonical
+import qualified Lamdera.Compat.Convert as Convert
 import qualified AST.Prim.Name as N
 import qualified AST.Prim.TypeName as TN
+import qualified AST.Prim.TypeVar as TV
 import qualified Elm.Interface as I
 import qualified File
 import qualified Lamdera.Compile
@@ -64,7 +66,8 @@ suite = tests
           iface <- maybe (crash "Wrapped.elmi could not be read back") pure ifaceM
 
           let htmlUses name =
-                case Map.lookup (N.fromChars name) (I._values iface) of
+                -- @LAMDERA the annotation in the Elm 0.19.3 shapes (Lamdera.Compat.Convert)
+                case Convert.fromAnnotation Convert.noNames <$> Map.lookup (N.fromChars name) (I._values iface) of
                   Just (Can.Forall _ t) -> htmlAliases t
                   Nothing -> []
 
@@ -121,11 +124,18 @@ htmlAliases tipe =
     Can.TAlias _ name [(_, arg)] (Can.Filled real@(Can.TType _ node [nodeArg])) | TN.nameToChars name == "Html" && TN.nameToChars node == "Node" ->
       (typeName arg, typeName nodeArg) : htmlAliases real
 
+    -- @LAMDERA since Elm 0.19.4 an alias carries the body it was declared with, so the
+    -- real type of `Html x` is that body with x put in
+    Can.TAlias h name args@[(param, _)] (Can.Holey (Can.TType home node [Can.TVar v])) | TN.nameToChars name == "Html" && TN.nameToChars node == "Node" && v == param ->
+      htmlAliases (Can.TAlias h name args (Can.Filled (Can.TType home node (fmap snd args))))
+
     Can.TAlias _ _ args aliasType ->
       concatMap (htmlAliases . snd) args ++
         case aliasType of
           Can.Filled t -> htmlAliases t
-          Can.Holey t -> htmlAliases t
+          -- @LAMDERA a declared body (Elm 0.19.4) is over the alias's own parameters:
+          -- put this use's arguments in, so `Html a` inside `Wrap Msg1` is `Html Msg1`
+          Can.Holey t -> htmlAliases (substitute (Map.fromList args) t)
 
     Can.TLambda a b -> htmlAliases a ++ htmlAliases b
     Can.TType _ _ args -> concatMap htmlAliases args
@@ -134,6 +144,25 @@ htmlAliases tipe =
     Can.TTriple a b c -> htmlAliases a ++ htmlAliases b ++ htmlAliases c
     Can.TUnit -> []
     Can.TVar _ -> []
+
+
+-- @LAMDERA the variables of a declared alias body replaced by an alias use's arguments.
+-- A nested alias's declared body is over its own parameters, so it is left alone.
+substitute :: Map.Map TV.Var Can.Type -> Can.Type -> Can.Type
+substitute sub tipe =
+  case tipe of
+    Can.TVar v -> Map.findWithDefault tipe v sub
+    Can.TLambda a b -> Can.TLambda (substitute sub a) (substitute sub b)
+    Can.TType h n args -> Can.TType h n (map (substitute sub) args)
+    Can.TRecord fields ext -> Can.TRecord (fmap (\(Can.FieldType i t) -> Can.FieldType i (substitute sub t)) fields) ext
+    Can.TUnit -> Can.TUnit
+    Can.TPair a b -> Can.TPair (substitute sub a) (substitute sub b)
+    Can.TTriple a b c -> Can.TTriple (substitute sub a) (substitute sub b) (substitute sub c)
+    Can.TAlias h n args aliasType ->
+      Can.TAlias h n (fmap (fmap (substitute sub)) args) $
+        case aliasType of
+          Can.Filled t -> Can.Filled (substitute sub t)
+          Can.Holey t -> Can.Holey t
 
 
 typeName :: Can.Type -> String

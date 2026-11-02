@@ -14,9 +14,15 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import NeatInterpolation
 
-import AST.Canonical
+-- @LAMDERA the annotations below are written as Elm 0.19.3 types and converted, see
+-- Lamdera.Compat.Convert
+import Lamdera.Compat.Canonical (Annotation(..), Type(..), AliasType(..))
+import qualified Lamdera.Compat.Convert as Convert
 import Elm.Package
 import qualified AST.Canonical as Can
+import qualified Elm.Interface as I
+import qualified Graph
+import qualified AST.Prim.Fields as F
 import qualified Elm.ModuleName as Module
 import qualified Reporting.Annotation
 import qualified Data.ByteString.Builder as B
@@ -38,18 +44,21 @@ updateDecls fileName moduleName decls =
             decls
 
         Module.Canonical (Name "author" "project") _ ->
+            -- @LAMDERA Elm 0.19.4 Decls are a sorted list of Decl
             case decls of
-                Can.Declare def nextDecl ->
-                    Can.Declare (updateDefs fileName moduleName def) (updateDecls fileName moduleName nextDecl)
+                Can.Decls (Graph.Sorted ds) ->
+                    Can.Decls $ Graph.Sorted $ fmap
+                        (\decl ->
+                            case decl of
+                                Can.Decl def ->
+                                    Can.Decl (updateDefs fileName moduleName def)
 
-                Can.DeclareRec def remainingDefs nextDecl ->
-                    Can.DeclareRec
-                        (updateDefs fileName moduleName def)
-                        (map (updateDefs fileName moduleName) remainingDefs)
-                        (updateDecls fileName moduleName nextDecl)
-
-                Can.SaveTheEnvironment ->
-                    Can.SaveTheEnvironment
+                                Can.DeclRec def remainingDefs ->
+                                    Can.DeclRec
+                                        (updateDefs fileName moduleName def)
+                                        (map (updateDefs fileName moduleName) remainingDefs)
+                        )
+                        ds
 
         _ ->
             decls
@@ -62,17 +71,17 @@ newAttributes :: Bool
                 -> Module.Canonical
                 -> Name.Name
                 -> Reporting.Annotation.Region
-                -> Expr
-                -> Reporting.Annotation.Located Expr_
+                -> Can.Expr
+                -> Reporting.Annotation.Located Can.Expr_
 newAttributes isElmUi fileName moduleName functionName location originalAttributes =
     let
         a = Reporting.Annotation.At location
     in
-    a (Binop
+    a (Can.Binop
         "::"
         (Module.Canonical (Name "elm" "core") "List")
         "cons"
-        (Forall
+        (annotation $ Forall
            (Map.fromList [("a", ())])
            (TLambda
               (TVar "a")
@@ -117,11 +126,11 @@ newProperty isElmUi fileName (Module.Canonical _ moduleName) functionName locati
             Reporting.Annotation.At location
 
         propertyCall =
-            a (Call
-                (a (VarForeign
+            a (Can.Call
+                (a (Can.VarForeign
                       (Module.Canonical (Name "elm" "html") "Html.Attributes")
                       "property"
-                      (Forall
+                      (annotation $ Forall
                          (Map.fromList [("msg", ())])
                          (TLambda
                             (TType (Module.Canonical (Name "elm" "core") "String") "String" [])
@@ -132,25 +141,26 @@ newProperty isElmUi fileName (Module.Canonical _ moduleName) functionName locati
                                   "Attribute"
                                   [("msg", TVar "msg")]
                                   (Filled (TType (Module.Canonical (Name "elm" "virtual-dom") "VirtualDom") "Attribute" [TVar "msg"]))))))))
-                [ a (Str propertyName)
-                , a (Call
-                      (a (VarForeign
+                (a (Can.Str propertyName))
+                [ a (Can.Call
+                      (a (Can.VarForeign
                             (Module.Canonical (Name "elm" "json") "Json.Encode")
                             "string"
-                            (Forall
+                            (annotation $ Forall
                                Map.empty
                                (TLambda
                                   (TType (Module.Canonical (Name "elm" "core") "String") "String" [])
                                   (TType (Module.Canonical (Name "elm" "json") "Json.Encode") "Value" [])))))
-                      [a (Str propertyValue)])
+                      (a (Can.Str propertyValue))
+                      [])
                 ])
     in
     if isElmUi then
-        a (Call
-            (a (VarForeign
+        a (Can.Call
+            (a (Can.VarForeign
                   (Module.Canonical (Name "mdgriffith" "elm-ui") "Element")
                   "htmlAttribute"
-                  (Forall
+                  (annotation $ Forall
                      (Map.fromList [("msg", ())])
                      (TLambda
                         (TAlias
@@ -163,7 +173,8 @@ newProperty isElmUi fileName (Module.Canonical _ moduleName) functionName locati
                            "Attribute"
                            [("msg", TVar "msg")]
                            (Filled (TType (Module.Canonical (Name "mdgriffith" "elm-ui") "Internal.Model") "Attribute" [TUnit, TVar "msg"])))))))
-            [ propertyCall ])
+            propertyCall
+            [])
     else
         propertyCall
 
@@ -268,53 +279,30 @@ htmlNodes =
         , "menu"
         ]
 
+-- @LAMDERA The annotations of the values the source map adds, written as Elm 0.19.3
+-- types. This runs after type checking, so the annotations only need to be well formed.
+annotation :: Annotation -> I.Annotation
+annotation =
+    Convert.toAnnotation (Convert.envFromInterfaces Map.empty)
+
+
 updateExpr :: FilePath -> Module.Canonical -> Name.Name -> Can.Expr -> Can.Expr
 updateExpr fileName moduleName functionName (Reporting.Annotation.At location_ expr_) =
+    let
+        go = updateExpr fileName moduleName functionName
+    in
     (case expr_ of
-        Can.VarLocal name ->
-            Can.VarLocal name
-
-        Can.VarTopLevel canonical name ->
-            Can.VarTopLevel canonical name
-
-        Can.VarKernel name name2 ->
-            Can.VarKernel name name2
-
-        Can.VarForeign canonical name annotation ->
-            Can.VarForeign canonical name annotation
-
-        Can.VarCtor ctorOpts canonical name zeroBased annotation ->
-            Can.VarCtor ctorOpts canonical name zeroBased annotation
-
-        Can.VarDebug canonical name annotation ->
-            Can.VarDebug canonical name annotation
-
-        Can.VarOperator name canonical name2 annotation ->
-            Can.VarOperator name canonical name2 annotation
-
-        Can.Chr string ->
-            Can.Chr string
-
-        Can.Str string ->
-            Can.Str string
-
-        Can.Int int ->
-            Can.Int int
-
-        Can.Float float ->
-            Can.Float float
-
         Can.List exprs ->
-            Can.List (fmap (updateExpr fileName moduleName functionName) exprs)
+            Can.List (fmap go exprs)
 
         Can.Negate expr ->
-            Can.Negate (updateExpr fileName moduleName functionName expr)
+            Can.Negate (go expr)
 
-        Can.Binop name canonical name2 annotation expr expr2 ->
-            Can.Binop name canonical name2 annotation (updateExpr fileName moduleName functionName expr) (updateExpr fileName moduleName functionName expr2)
+        Can.Binop name canonical name2 annotation_ expr expr2 ->
+            Can.Binop name canonical name2 annotation_ (go expr) (go expr2)
 
-        Can.Lambda patterns expr ->
-            Can.Lambda patterns (updateExpr fileName moduleName functionName expr)
+        Can.Lambda pattern patterns expr ->
+            Can.Lambda pattern patterns (go expr)
 
         Can.Call
             (Reporting.Annotation.At
@@ -322,10 +310,11 @@ updateExpr fileName moduleName functionName (Reporting.Annotation.At location_ e
                 (Can.VarForeign
                     (Module.Canonical (Name "elm" "html") htmlModuleName)
                     functionName_
-                    annotation
+                    annotation_
                 )
             )
-            (firstParam : rest) ->
+            firstParam
+            rest ->
             let
                 expr =
                     Reporting.Annotation.At
@@ -333,18 +322,19 @@ updateExpr fileName moduleName functionName (Reporting.Annotation.At location_ e
                         (Can.VarForeign
                             (Module.Canonical (Name "elm" "html") htmlModuleName)
                             functionName_
-                            annotation
+                            annotation_
                         )
             in
             if Set.member functionName_ htmlNodes && htmlModuleName == "Html" then
                 Can.Call
                     expr
-                    (newAttributes False fileName moduleName functionName location firstParam
-                        : fmap (updateExpr fileName moduleName functionName) rest)
+                    (newAttributes False fileName moduleName functionName location firstParam)
+                    (fmap go rest)
             else
                 Can.Call
-                    (updateExpr fileName moduleName functionName expr)
-                    (fmap (updateExpr fileName moduleName functionName) (firstParam : rest))
+                    (go expr)
+                    (go firstParam)
+                    (fmap go rest)
 
         Can.Call
             (Reporting.Annotation.At
@@ -352,10 +342,11 @@ updateExpr fileName moduleName functionName (Reporting.Annotation.At location_ e
                 (Can.VarForeign
                     (Module.Canonical (Name "mdgriffith" "elm-ui") elmUiModuleName)
                     functionName_
-                    annotation
+                    annotation_
                 )
             )
-            (firstParam : rest) ->
+            firstParam
+            rest ->
             let
                 expr =
                     Reporting.Annotation.At
@@ -363,7 +354,7 @@ updateExpr fileName moduleName functionName (Reporting.Annotation.At location_ e
                         (Can.VarForeign
                             (Module.Canonical (Name "mdgriffith" "elm-ui") elmUiModuleName)
                             functionName_
-                            annotation
+                            annotation_
                         )
 
                 isElement =
@@ -410,109 +401,130 @@ updateExpr fileName moduleName functionName (Reporting.Annotation.At location_ e
             if isElement || isKeyed || isInput then
                 Can.Call
                     expr
-                    (newAttributes True fileName moduleName functionName location firstParam
-                        : fmap (updateExpr fileName moduleName functionName) rest)
+                    (newAttributes True fileName moduleName functionName location firstParam)
+                    (fmap go rest)
             else
                 Can.Call
-                    (updateExpr fileName moduleName functionName expr)
-                    (fmap (updateExpr fileName moduleName functionName) (firstParam : rest))
+                    (go expr)
+                    (go firstParam)
+                    (fmap go rest)
 
-        Can.Call expr exprs ->
-            Can.Call (updateExpr fileName moduleName functionName expr) (fmap (updateExpr fileName moduleName functionName) exprs)
+        Can.Call expr firstParam rest ->
+            Can.Call (go expr) (go firstParam) (fmap go rest)
 
         Can.If exprs expr ->
             Can.If
                 (fmap
                     (\(first, second) ->
-                        ( updateExpr fileName moduleName functionName first
-                        , updateExpr fileName moduleName functionName second
+                        ( go first
+                        , go second
                         )
                     )
                     exprs
                 )
-                (updateExpr fileName moduleName functionName expr)
+                (go expr)
 
-        Can.Let def expr ->
-            Can.Let
-                (updateDefs fileName moduleName def)
-                (updateExpr fileName moduleName functionName expr)
+        Can.LetValue value expr ->
+            Can.LetValue
+                (updateValue fileName moduleName value)
+                (go expr)
 
-        Can.LetRec defs expr ->
+        Can.LetFunc func expr ->
+            Can.LetFunc
+                (updateFunc fileName moduleName func)
+                (go expr)
+
+        Can.LetRec func funcs expr ->
             Can.LetRec
-                (fmap (updateDefs fileName moduleName) defs)
-                (updateExpr fileName moduleName functionName expr)
+                (updateFunc fileName moduleName func)
+                (fmap (updateFunc fileName moduleName) funcs)
+                (go expr)
 
         Can.LetDestruct pattern expr expr2 ->
             Can.LetDestruct
                 pattern
-                (updateExpr fileName moduleName functionName expr)
-                (updateExpr fileName moduleName functionName expr2)
+                (go expr)
+                (go expr2)
 
-        Can.Case expr caseBranches ->
+        Can.Case expr branch branches ->
+            let
+                goBranch (Can.Branch pattern caseExpr) =
+                    Can.Branch pattern (go caseExpr)
+            in
             Can.Case
-                (updateExpr fileName moduleName functionName expr)
-                (fmap
-                    (\(Can.CaseBranch pattern caseExpr) ->
-                        Can.CaseBranch pattern (updateExpr fileName moduleName functionName caseExpr)
-                    )
-                    caseBranches
-                )
-
-        Can.Accessor name ->
-            Can.Accessor name
+                (go expr)
+                (goBranch branch)
+                (fmap goBranch branches)
 
         Can.Access expr name ->
-            Can.Access (updateExpr fileName moduleName functionName expr) name
+            Can.Access (go expr) name
 
         Can.Update name expr fieldUpdates ->
             Can.Update
                 name
-                (updateExpr fileName moduleName functionName expr)
-                (fmap
-                    (\(Can.FieldUpdate region expr__) ->
-                        Can.FieldUpdate region (updateExpr fileName moduleName functionName expr__)
+                (go expr)
+                (F.map
+                    (\(Can.Update_ region expr__) ->
+                        Can.Update_ region (go expr__)
                     )
                     fieldUpdates
                 )
 
         Can.Record fields ->
-            Can.Record (fmap (updateExpr fileName moduleName functionName) fields)
-
-        Can.Unit ->
-            Can.Unit
+            Can.Record (F.map go fields)
 
         Can.Pair expr expr2 ->
             Can.Pair
-                (updateExpr fileName moduleName functionName expr)
-                (updateExpr fileName moduleName functionName expr2)
+                (go expr)
+                (go expr2)
 
         Can.Triple expr expr2 expr3 ->
             Can.Triple
-                (updateExpr fileName moduleName functionName expr)
-                (updateExpr fileName moduleName functionName expr2)
-                (updateExpr fileName moduleName functionName expr3)
+                (go expr)
+                (go expr2)
+                (go expr3)
 
-        Can.Shader shaderSource shaderTypes ->
-            Can.Shader shaderSource shaderTypes
+        -- everything else has no expressions in it
+        _ ->
+            expr_
     )
     & Reporting.Annotation.At location_
+
 
 updateDefs :: FilePath -> Module.Canonical -> Can.Def -> Can.Def
 updateDefs fileName moduleName def =
     case def of
-        Can.Def name patterns expr ->
-            Can.Def
-                name
-                patterns
-                (updateExpr fileName moduleName (Reporting.Annotation.toValue name) expr)
+        Can.DValue_ name expr ->
+            Can.DValue_ name (updateExpr fileName moduleName (Reporting.Annotation.toValue name) expr)
 
-        Can.TypedDef name freeVars patterns expr type_ ->
-            Can.TypedDef
-                name
-                freeVars
-                patterns
-                (updateExpr fileName moduleName (Reporting.Annotation.toValue name) expr)
-                type_
+        Can.DValue name expr type_ annotation_ ->
+            Can.DValue name (updateExpr fileName moduleName (Reporting.Annotation.toValue name) expr) type_ annotation_
+
+        Can.DFunc_ name pattern patterns expr ->
+            Can.DFunc_ name pattern patterns (updateExpr fileName moduleName (Reporting.Annotation.toValue name) expr)
+
+        Can.DFunc name arg args expr type_ annotation_ ->
+            Can.DFunc name arg args (updateExpr fileName moduleName (Reporting.Annotation.toValue name) expr) type_ annotation_
+
+
+updateValue :: FilePath -> Module.Canonical -> Can.Value -> Can.Value
+updateValue fileName moduleName value =
+    case value of
+        Can.Value_ name expr ->
+            Can.Value_ name (updateExpr fileName moduleName (Reporting.Annotation.toValue name) expr)
+
+        Can.Value name expr type_ annotation_ ->
+            Can.Value name (updateExpr fileName moduleName (Reporting.Annotation.toValue name) expr) type_ annotation_
+
+
+updateFunc :: FilePath -> Module.Canonical -> Can.Func -> Can.Func
+updateFunc fileName moduleName func =
+    case func of
+        Can.Func_ name pattern patterns expr ->
+            Can.Func_ name pattern patterns (updateExpr fileName moduleName (Reporting.Annotation.toValue name) expr)
+
+        Can.Func name arg args expr type_ annotation_ ->
+            Can.Func name arg args (updateExpr fileName moduleName (Reporting.Annotation.toValue name) expr) type_ annotation_
 
 
 src :: B.Builder
