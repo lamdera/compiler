@@ -64,7 +64,7 @@ check modul@(Can.Module home exports0 docs decls types binops style) =
         Right inferred ->
           run Ok BadNitpick $
             do  exports <- checkExports exports0
-                iface   <- toInterface inferred home exports decls types binops
+                iface   <- toInterface inferred home exports decls types binops style -- @LAMDERA style, for the ports
                 return (iface, Tpd.Module home exports docs decls types binops style)
 
 
@@ -97,9 +97,12 @@ checkExports exports =
 --------------------------------------------------------------------------------
 
 
-toInterface :: InferredTypes -> ModuleName.Canonical -> Tpd.Exports -> Can.Decls -> Map.Map T.Name Can.TypeDecl -> Map.Map Op.Name Can.Binop -> Result I.Interface
-toInterface inferred (ModuleName.Canonical pkg _) exports (Can.Decls (Graph.Sorted decls)) types binops =
-  do  values <- io $ Map.unions <$> traverse (toIValue inferred) decls
+toInterface :: InferredTypes -> ModuleName.Canonical -> Tpd.Exports -> Can.Decls -> Map.Map T.Name Can.TypeDecl -> Map.Map Op.Name Can.Binop -> Can.Style -> Result I.Interface
+toInterface inferred (ModuleName.Canonical pkg _) exports (Can.Decls (Graph.Sorted decls)) types binops style =
+  do  declValues <- io $ Map.unions <$> traverse (toIValue inferred) decls
+      -- @LAMDERA the ports are values too. 0.19.4-beta left them out, so a port module
+      -- could not expose its ports ("UNKNOWN EXPORT ... cannot find its definition").
+      let values = Map.union declValues (portValues style)
       case exports of
         Tpd.ExportEverything _ ->
           do  let ts = Map.map  toITypeDecl      types
@@ -115,6 +118,25 @@ toInterface inferred (ModuleName.Canonical pkg _) exports (Can.Decls (Graph.Sort
 
 
 -- TO INTERFACE CONTENT
+
+
+-- @LAMDERA the annotations of a module's ports, see toInterface
+portValues :: Can.Style -> Map.Map N.Name I.Annotation
+portValues style =
+  case style of
+    Can.Normal ->
+      Map.empty
+
+    Can.Ports ports ->
+      Map.map toPortAnnotation ports
+
+    Can.Effect _ _ _ _ ->
+      Map.empty
+  where
+    toPortAnnotation port_ =
+      case port_ of
+        Can.Incoming freeVars _ func -> I.Forall freeVars func
+        Can.Outgoing freeVars _ func -> I.Forall freeVars func
 
 
 toIValue :: InferredTypes -> Can.Decl -> IO (Map.Map N.Name I.Annotation)
