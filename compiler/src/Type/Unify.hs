@@ -514,11 +514,16 @@ unifyExtExt context partial1 ext1 content partial2 ext2 otherContent =
                   subUnify leftover1 ext2
                   merge context content
             else
+              -- @LAMDERA leftover1 holds the fields only the second record has, so it is
+              -- what the first record's row stands for (and leftover2 the second's).
+              -- 0.19.4-beta unified each row with its own record's fields instead, so
+              -- `if c then f model else { model | b = 1 }` with
+              -- `f : { m | a : Int } -> { m | a : Int }` gave model an INFINITE TYPE.
               do  ext       <- fresh context flexAny
                   leftover1 <- fresh context (diff partial2 partial1 ext)
                   leftover2 <- fresh context (diff partial1 partial2 ext)
-                  subUnify ext1 leftover2
-                  subUnify leftover1 ext2
+                  subUnify ext1 leftover1
+                  subUnify leftover2 ext2
                   merge context (Structure (ExtRec1 order (NEM.union partial1 partial2) ext))
   where
     loop _   Tip = return 0
