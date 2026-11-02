@@ -194,7 +194,7 @@ runWithRoot root (Flags maybePort maybeBind shouldOpenBrowser inMemory serveFlag
 
       onlyWhen shouldOpenBrowser $ systemOpenPath $ stringToText $ "http://localhost:" ++ show port
 
-      -- @LAMDERA lamdera live --serve: share this server at https://<app>-<random>.live.lamdera.app
+      -- @LAMDERA lamdera live --serve: share this server at https://<app>-<random>.lamdera.dev
       -- through the tunnel, which forwards each request to this server (see Lamdera.CLI.LiveServe)
       let withShare io =
             case shareM of

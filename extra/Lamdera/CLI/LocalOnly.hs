@@ -25,7 +25,7 @@ module Lamdera.CLI.LocalOnly
    /elm.json) and directory listings: a request that is not local only gets what the
    app itself needs, as in production (see localOnly, forbidRemoteDotfiles). That is
    what `lamdera live --serve` relies on: its tunnel forwards each request from this
-   computer, but with the Host it was sent to (<app>-<random>.live.lamdera.app), so
+   computer, but with the Host it was sent to (<app>-<random>.lamdera.dev), so
    none of it counts as local.
 -}
 

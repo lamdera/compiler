@@ -1745,7 +1745,7 @@ mapDocument model msg { title, body } =
 
 {-| A page opened by any other name than this computer's (localhost, *.localhost or an
 IP address, which includes a phone through `lamdera live --bind`): a visitor to a
-`lamdera live --serve` preview at <app>-<random>.live.lamdera.app. They get the app
+`lamdera live --serve` preview at <app>-<random>.lamdera.dev. They get the app
 and a small notice instead of the dev bar: its mode switch, backend reset, REPL and
 file tools are the developer's (and refused for remote clients by lamdera live itself).
 -}

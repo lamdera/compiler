@@ -67,12 +67,12 @@ frames = do
 
 relayUrls :: Test ()
 relayUrls = do
-  expectEqual (RelayUrl True "connect.live.lamdera.app" 443 "/tunnel") defaultRelay
-  expectEqual (Right (RelayUrl True "connect.live.lamdera.app" 443 "/tunnel")) (parseRelayUrl "wss://connect.live.lamdera.app/tunnel")
+  expectEqual (RelayUrl True "connect.lamdera.dev" 443 "/tunnel") defaultRelay
+  expectEqual (Right (RelayUrl True "connect.lamdera.dev" 443 "/tunnel")) (parseRelayUrl "wss://connect.lamdera.dev/tunnel")
   expectEqual (Right (RelayUrl False "localhost" 8099 "/tunnel")) (parseRelayUrl "ws://localhost:8099/tunnel")
   expectEqual (Right (RelayUrl False "relay.test" 80 "/")) (parseRelayUrl "ws://relay.test")
   expectEqual (Right (RelayUrl False "::1" 8099 "/t")) (parseRelayUrl "ws://[::1]:8099/t")
-  _ <- expectLeft (parseRelayUrl "https://connect.live.lamdera.app/tunnel")
+  _ <- expectLeft (parseRelayUrl "https://connect.lamdera.dev/tunnel")
   _ <- expectLeft (parseRelayUrl "wss://host:port/x")
   _ <- expectLeft (parseRelayUrl "wss:///x")
   expectEqual [1, 2, 4, 8, 16, 30, 30, 30] (fmap backoffSeconds [0 .. 7])
@@ -90,12 +90,12 @@ controlMessages = do
   expectEqual (Just "my-app") (field "app" helloV)
   expectEqual Nothing (field "resume" helloV)
   expectEqual (Just "machine-secret-1234") (field "machine" helloV)
-  resumed <- expectJust (Aeson.decode (helloJson "tok" "my-app" "machine-secret-1234" (Just ("my-app-abc123.live.lamdera.app", "key"))) :: Maybe Aeson.Value)
-  expectEqual (Just "my-app-abc123.live.lamdera.app") (field "resume" resumed)
+  resumed <- expectJust (Aeson.decode (helloJson "tok" "my-app" "machine-secret-1234" (Just ("my-app-abc123.lamdera.dev", "key"))) :: Maybe Aeson.Value)
+  expectEqual (Just "my-app-abc123.lamdera.dev") (field "resume" resumed)
   expectEqual (Just "key") (field "resumeKey" resumed)
   expectEqual
-    (Ready "https://a-b.live.lamdera.app" "a-b.live.lamdera.app" "k")
-    (parseServerMessage "{\"t\":\"ready\",\"url\":\"https://a-b.live.lamdera.app\",\"host\":\"a-b.live.lamdera.app\",\"resumeKey\":\"k\"}")
+    (Ready "https://a-b.lamdera.dev" "a-b.lamdera.dev" "k")
+    (parseServerMessage "{\"t\":\"ready\",\"url\":\"https://a-b.lamdera.dev\",\"host\":\"a-b.lamdera.dev\",\"resumeKey\":\"k\"}")
   expectEqual (Refused "invalid token") (parseServerMessage "{\"t\":\"error\",\"message\":\"invalid token\"}")
   expectEqual (Notice "hi") (parseServerMessage "{\"t\":\"notice\",\"message\":\"hi\"}")
   expectEqual (Unknown "nope") (parseServerMessage "nope")
@@ -137,7 +137,7 @@ localOrNot = do
   expect (LocalOnly.isLocal "::1" (Just "[::1]:8000"))
   expect (LocalOnly.isLocal "127.0.0.1" Nothing)
   -- through the tunnel: from this computer, but to the preview's name
-  expect (not (LocalOnly.isLocal "127.0.0.1" (Just "my-app-abc123.live.lamdera.app")))
+  expect (not (LocalOnly.isLocal "127.0.0.1" (Just "my-app-abc123.lamdera.dev")))
   -- another device through --bind
   expect (not (LocalOnly.isLocal "192.168.1.20" (Just "192.168.1.5:8000")))
   expect (LocalOnly.hasDotSegment "/.env")
@@ -165,7 +165,7 @@ serving = do
       response <- io $ Snap.Test.runHandler (Snap.Test.get path mempty >> Snap.Test.setHeader "Host" host) liveLike
       body <- io $ Snap.Test.getResponseBody response
       pure (Snap.Core.rspStatus response, body)
-    preview = "my-app-abc123.live.lamdera.app"
+    preview = "my-app-abc123.lamdera.dev"
   -- this computer: everything as before
   local1 <- request "localhost:8000" "/src/Backend.elm"
   expectEqual (200, "project file") local1

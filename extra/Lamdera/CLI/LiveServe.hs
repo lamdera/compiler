@@ -29,9 +29,9 @@ module Lamdera.CLI.LiveServe
   ) where
 
 {- `lamdera live --serve`: share the `lamdera live` session at a public
-https://<app>-<random>.live.lamdera.app, for as long as it runs.
+https://<app>-<random>.lamdera.dev, for as long as it runs.
 
-The CLI keeps one WebSocket to the live relay (wss://connect.live.lamdera.app/tunnel,
+The CLI keeps one WebSocket to the live relay (wss://connect.lamdera.dev/tunnel,
 LAMDERA_LIVE_RELAY overrides it), which answers the preview's address. Every request
 to that address (a page, an RPC, the /_w socket) becomes a stream on that WebSocket:
 the relay opens it, and the CLI connects it to this `lamdera live` server and copies
@@ -165,7 +165,7 @@ prepare appM new = do
       Just name -> pure name
       Nothing ->
         failWith
-          "`lamdera live --serve` shares your app at https://<app>-<random>.live.lamdera.app, so it needs to know which app this is: pass --app NAME, or run it in a Lamdera project with a `lamdera` git remote."
+          "`lamdera live --serve` shares your app at https://<app>-<random>.lamdera.dev, so it needs to know which app this is: pass --app NAME, or run it in a Lamdera project with a `lamdera` git remote."
   tokenR <- Login.checkCliToken (Just appName)
   token <-
     case tokenR of
@@ -247,7 +247,7 @@ data RelayUrl =
 
 defaultRelay :: RelayUrl
 defaultRelay =
-  RelayUrl True "connect.live.lamdera.app" 443 "/tunnel"
+  RelayUrl True "connect.lamdera.dev" 443 "/tunnel"
 
 
 parseRelayUrl :: String -> Either String RelayUrl
