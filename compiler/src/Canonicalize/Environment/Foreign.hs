@@ -48,7 +48,34 @@ newtype Result a =
 
 initialize :: ModuleName.Canonical -> Map.Map Module.Name I.Interface -> [Src.Import] -> Result Env.Env
 initialize home ifaces imports =
-  toEnv home . List.foldr merge empty <$> traverse (init ifaces) (toSafeImports home imports)
+  toEnv home . List.foldl' mergeInOrder empty <$> traverse (init ifaces) (toSafeImports home imports) -- @LAMDERA was List.foldr merge empty
+
+
+
+-- @LAMDERA EXPLICITLY EXPOSED TYPES
+--
+-- In Elm 0.19.1 (and Lamdera up to 1.5) a type exposed by name, `import M exposing (T)`,
+-- replaced whatever an earlier import had exposed under that name (Map.insert in
+-- addExposedValue), rather than becoming ambiguous with it. Packages rely on it:
+-- ianmackenzie/elm-geometry 3.11.0's Spline2d does
+--
+--     import Geometry.Types as Types exposing (QuadraticSpline2d, VectorBoundingBox2d)
+--     import QuadraticSpline2d exposing (QuadraticSpline2d)
+--
+-- where QuadraticSpline2d.QuadraticSpline2d is an alias of the other, and 0.19.4-beta
+-- reports AMBIGUOUS NAME on it, so the package (and every app using it) no longer builds.
+-- So the imports are merged in order, and the types an import exposes by name replace
+-- what is there, as before. Everything else merges exactly as upstream merges it.
+
+
+mergeInOrder :: State -> (Bool, State) -> State
+mergeInOrder acc (isExplicit, state) =
+  let
+    merged = merge acc state
+  in
+  if isExplicit
+    then merged { _types = Map.union (_types state) (_types acc) }
+    else merged
 
 
 
@@ -131,7 +158,7 @@ isNormal (Src.Import (A.At _ name) maybeAlias _) =
 -- INITIALIZE IMPORTS
 
 
-init :: Map.Map Module.Name I.Interface -> Src.Import -> Result State
+init :: Map.Map Module.Name I.Interface -> Src.Import -> Result (Bool, State) -- @LAMDERA whether it exposes names, see mergeInOrder
 init ifaces (Src.Import (A.At _ name) maybeAlias exposing) =
   let
     (I.Interface pkg values types binops) = $(Map.require 'init) name ifaces Module.toChars
@@ -150,11 +177,11 @@ init ifaces (Src.Import (A.At _ name) maybeAlias exposing) =
   in
   case exposing of
     Src.Open ->
-      pure $ State vs ts cs bs qvs qts qcs
+      pure $ (,) False $ State vs ts cs bs qvs qts qcs
 
     Src.Explicit exposeds ->
       do  (Exposing uppers lowers ops) <- checkExposing exposeds
-          (\v (t,c) b -> State v t c b qvs qts qcs)
+          (\v (t,c) b -> (,) True $ State v t c b qvs qts qcs)
             <$> toExposedValues home lowers vs
             <*> toExposedTypes  home uppers nodes
             <*> toExposedBinops home ops bs
