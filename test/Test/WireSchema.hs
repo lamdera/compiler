@@ -8,6 +8,10 @@ and runs check.js, which encodes sample values with the generated codecs and dec
 with the schema the build wrote and the reference decoder, runtime/js/wireSchema.js in the
 platform repo. That decoder is looked for at $LAMDERA_WIRE_SCHEMA_JS, else in
 ~/dev/projects/lamdera/runtime/js/wireSchema.js.
+
+The platform repo is private, so CI and other checkouts of this public repo don't have
+the decoder: without LAMDERA_WIRE_SCHEMA_JS and without the default file, these cases are
+skipped (reported as pending). With LAMDERA_WIRE_SCHEMA_JS set, a missing file fails.
 -}
 
 import qualified Data.Map as Map
@@ -39,13 +43,21 @@ suite =
     ]
 
 
-decoderPath :: IO (Maybe FilePath)
+data Decoder
+  = Found FilePath
+  | NotSet FilePath -- LAMDERA_WIRE_SCHEMA_JS unset, and nothing at the default path
+  | Missing FilePath -- LAMDERA_WIRE_SCHEMA_JS names a file that isn't there
+
+
+decoderPath :: IO Decoder
 decoderPath = do
   envM <- Env.lookupEnv "LAMDERA_WIRE_SCHEMA_JS"
   home <- Dir.getHomeDirectory
   let path = maybe (home </> "dev/projects/lamdera/runtime/js/wireSchema.js") id envM
   exists <- Dir.doesFileExist path
-  pure $ if exists then Just path else Nothing
+  pure $
+    if exists then Found path
+    else maybe (NotSet path) (const (Missing path)) envM
 
 
 runScenario :: Bool -> Maybe String -> Test ()
@@ -53,10 +65,14 @@ runScenario optimize direct = do
   project <- io $ Lamdera.Relative.requireDir "test/scenario-wire-schema"
   decoderM <- io decoderPath
   case decoderM of
-    Nothing ->
-      crash "runtime/js/wireSchema.js not found: set LAMDERA_WIRE_SCHEMA_JS to its path"
+    NotSet path -> do
+      noteScoped $ "SKIPPED (no runtime/js/wireSchema.js at " ++ path ++ "; set LAMDERA_WIRE_SCHEMA_JS to its path)"
+      pending (pure ())
 
-    Just decoder -> do
+    Missing path ->
+      crash $ "LAMDERA_WIRE_SCHEMA_JS is " ++ path ++ ", which doesn't exist"
+
+    Found decoder -> do
       let
         elmStuff = project </> "elm-stuff"
         output = elmStuff </> "app.js"
