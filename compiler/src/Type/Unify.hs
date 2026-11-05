@@ -168,10 +168,11 @@ unifyFlexWithStructure context (T.Var _ con) flatType content =
         T.CompAppend -> if isAppendable h n then recurse flexComparable else mismatch
         T.Number     -> if M.isNumber     m then merge context content  else mismatch
 
+    -- @LAMDERA 0.19.4-beta made () comparable; 0.19.1 to 0.19.3 rejected it
     Unit1 ->
       case con of
         T.Any        -> merge context content
-        T.Comparable -> merge context content
+        T.Comparable -> mismatch
         T.Appendable -> mismatch
         T.CompAppend -> mismatch
         T.Number     -> mismatch

@@ -43,6 +43,8 @@ elm-0.19.x` for the release, once it is on npm, to see where we differ from it),
 | An alias of a function type in an annotation gives the arguments the alias's own variables: wrong TYPE MISMATCH, or a bus error (`canTypedArgs` doesn't fill in the alias's arguments) | a35403ea | Reported by someone else (both symptoms), cause suspected | an alias of a function type in an annotation |
 | Crash in the hint for 2 or 3 unexpected record fields (`problemToHint` lists `expected`, which is empty) | 9ccf2406 | Reported by someone else, unsure of the fix | the hint for two unexpected record fields |
 | Segfault or bus error type checking deeply nested lets (20 is enough) (`nearestSquare` returns the bit length, not the next power of two) | see `Type/Pools.hs` | Reported by someone else, with this fix | deeply nested lets |
+| `_ = ...` let bindings run in reverse source order, so `Debug.log` lines in a let print bottom to top (`toNodes` numbers destructures first to last, and `Graph.toSCC` emits unconnected nodes highest name first). We number them last to first, so destructures (`_`, tuples, records) run in source order among themselves, as `_` ones did up to 0.19.3 | see `Canonicalize/Expression.hs` | Not reported | let destructures run in source order; and elm-test-suite's elm/DebugLogOrderingTest |
+| `()` is comparable (`unifyFlexWithStructure` merges `Unit1` with a comparable flex). We reject it, as 0.19.3 did | see `Type/Unify.hs` | Reported by someone else | () is not comparable |
 | Type variable indexes past 254 wrap in `.elmi` files: `E.array8` escapes the count but the indexes are written as a bare byte. Plain Elm needs over 255 type variables in one annotation to reach it, Lamdera's generated Wire3 codecs reach 510 | 727dcb9a | Not reported | No test. The commit message describes the case |
 
 
@@ -67,14 +69,8 @@ Still present in 1.6.0. We leave these to upstream, unless an app turns out to n
 before then. Reported upstream by someone else, unless the entry says otherwise:
 
 - `elm make --docs` hangs on an extensible alias with an extensible record argument.
-- `()` is comparable.
 - A module's name isn't checked against its file path.
 - Two ports with the same name, or a port and a value with the same name, compile.
 - A record alias with no fields has no constructor (0.19.1 had one).
 - Errors print `List.List Int` instead of `List Int`.
 - BAD TYPE ANNOTATION counts one too many arguments ("3 arguments" for `f x y`).
-- `_ = ...` let bindings run in reverse source order, ahead of the named ones, so `Debug.log`
-  lines in a let print backwards (0.19.3 kept source order). `Canonicalize.Expression.sort`
-  names each destructure `$0`, `$1`, ... in source order, and `Graph.toSCC` sorts by name and
-  emits unconnected nodes last first. Not reported upstream yet. Two tests of
-  `test/elm-test-suite.sh` show it.

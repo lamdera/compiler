@@ -13,6 +13,7 @@ import Lamdera
 import EasyTest
 import Test.Helpers
 
+import qualified Data.List
 import qualified Data.Text as T
 import qualified System.Directory as Dir
 import System.FilePath ((</>), takeDirectory)
@@ -267,6 +268,45 @@ suite =
       scope "deeply nested lets" $
         compiles "nested-lets"
           [ ("src/Main.elm", nestedLets 20) ]
+
+    , -- 11, not reported upstream yet
+      scope "let destructures run in source order" $
+        withProject "let-order"
+          [ ("src/Main.elm", [text|
+              module Main exposing (main)
+
+              import Html exposing (text)
+
+              main =
+                  let
+                      _ =
+                          Debug.log "first" ()
+
+                      ( p, q ) =
+                          Debug.log "second" ( 1, 2 )
+
+                      _ =
+                          Debug.log "third" ()
+                  in
+                  text (String.fromInt (p + q))
+            |])
+          ] $ \project -> do
+            js <- io $ buildJs project "src/Main.elm"
+            let logged = [ "'first'", "'second'", "'third'" ]
+                at s = T.length (fst (T.breakOn s js))
+            expectTextContainsAll js logged
+            expectEqual (map at logged) (Data.List.sort (map at logged))
+
+    , -- reported upstream by someone else
+      scope "() is not comparable" $
+        fails "unit-comparable" "TYPE MISMATCH"
+          [ ("src/Main.elm", [text|
+              module Main exposing (x)
+
+              x =
+                  () >= ()
+            |])
+          ]
 
     -- 10 (initState writing past its 5 bytes) shows no difference an Elm build can
     -- check; see its entry in extra/docs/upstream-divergence.md.

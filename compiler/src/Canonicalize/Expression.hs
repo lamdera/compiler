@@ -684,9 +684,15 @@ data NInfo
   | NDestructVar A.Region N.Name
 
 
+{- @LAMDERA Destructures are numbered last first, so the first is the highest. Graph.toSCC
+orders nodes by name and emits nodes with no edges between them highest first, so with
+0.19.4-beta's numbering (first is $0) `_ = Debug.log ...` lines in a let ran bottom to top.
+0.19.1 to 0.19.3 ran them top to bottom. Now destructures run in source order among
+themselves; where they fall among named definitions still depends on the names.
+-}
 toNodes :: [Def] -> [Graph.Node N.Name NInfo]
 toNodes defs0 =
-    loop 0 defs0 []
+    loop (length [ () | DDestruct _ _ _ _ <- defs0 ] - 1) defs0 []
   where
     loop i defs nodes =
       case defs of
@@ -705,7 +711,7 @@ toNodes defs0 =
               let
                 destruct = tempName i
               in
-              loop (i + 1) ds $
+              loop (i - 1) ds $
                 Graph.Node destruct (NDestruct p e) (Map.keys locals)
                 : consWith (\n r -> Graph.Node n (NDestructVar r n) [destruct]) bindings nodes
 
