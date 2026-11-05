@@ -474,6 +474,7 @@ Executable lamdera
         Test.LiveServe
         Test.MultiVersion
         Test.JsOutput
+        Test.Upstream0194
         Test.MsgLogContext
         Test.WebGL
         Test.BackwardsCompat
