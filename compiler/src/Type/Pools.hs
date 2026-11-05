@@ -100,9 +100,14 @@ growIfNeeded (Rank (I# i)) pools@(Pools ma) =
     !len = sizeofMutableArray# ma
 
 
+{-| @LAMDERA 0.19.4-beta returned the bit length of i (4 for 8) rather than the next
+power of two (16), so growIfNeeded copied len elements into a smaller array and type
+checking deeply nested lets (20 of them) crashed (segfault or bus error). Reported upstream
+by someone else, with this fix.
+-}
 nearestSquare :: Int# -> Int#
 nearestSquare i =
-    size -# word2Int# (clz# (int2Word# i))
+    uncheckedIShiftL# 1# (size -# word2Int# (clz# (int2Word# i)))
   where
     !(I# size) = 8 * sizeOf (0 :: Word)
 
