@@ -1931,9 +1931,27 @@ encoderAlias rowCodecs rowConstraints isTest_ ifaces pkg modul decls aliasName a
 
     freeVars = tvars & fmap (\tvar -> (tvar, ())) & Map.fromList
 
+    -- An alias that is just one of its parameters (`type alias Id record = record`, as in
+    -- lue-bird/elm-no-record-type-alias-constructor-function) is annotated as that
+    -- parameter. Elm's unifier (all versions) treats a rigid variable against an alias as a
+    -- mismatch, even an alias of that same variable, so `w3_x_c_record` didn't check against
+    -- `Id record -> Encoder`, and neither did anything depending on such a package.
+    annotatedType =
+      case bareTvar tipe of
+        Just tvar -> TVar tvar
+        Nothing -> aliasType
+
     -- | TypedDef (A.Located Name) FreeVars [(Pattern, Type)] Expr Type
     generatedTyped = TypedDef (a (generatedName)) freeVars (ptvarsTyped) generatedBody $
-      (TLambda
+      (TLambda annotatedType
+        -- tipe
+        (TAlias
+            (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire3")
+            "Encoder"
+            []
+            (Holey (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Encode") "Encoder" []))))
+
+    aliasType =
         (TAlias
             -- (Module.Canonical (Name "author" "project") "Test.Wire_Alias_1_Basic")
             cname
@@ -1948,16 +1966,23 @@ encoderAlias rowCodecs rowConstraints isTest_ ifaces pkg modul decls aliasName a
               tipe
               )
         )
-        -- tipe
-        (TAlias
-            (Module.Canonical (Name "lamdera" "codecs") "Lamdera.Wire3")
-            "Encoder"
-            []
-            (Holey (TType (Module.Canonical (Name "elm" "bytes") "Bytes.Encode") "Encoder" []))))
 
     finalGen = generatedTyped
   in
   finalGen
+
+
+{-| The type variable a type is, through any aliases: `record` for `Id record` with
+`type alias Id record = record`, and for an alias of that. A Holey alias's body is written
+in its own parameters, so the variable found there is looked up in its arguments.
+-}
+bareTvar :: Type -> Maybe TV.Var
+bareTvar tipe =
+  case tipe of
+    TVar tvar -> Just tvar
+    TAlias _ _ _ (Filled body) -> bareTvar body
+    TAlias _ _ args (Holey body) -> bareTvar body >>= \tvar -> List.lookup tvar args >>= bareTvar
+    _ -> Nothing
 
 
 decoderAlias :: Maybe RowCodecs -> RowConstraints -> DecodeMode -> Bool -> Map.Map PrimModule.Name I.Interface -> Pkg.Name -> Src.Module -> UserDecls -> TN.Name -> Alias -> Def
