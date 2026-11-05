@@ -35,3 +35,6 @@ dist-newstyle/
 # the Windows workflow's stack.yaml without -lstdc++ (see build-windows-x86_64.yml)
 /stack-windows.yaml
 /stack-windows.yaml.lock
+
+# @LAMDERA test/elm-test-suite.sh clones the community Elm test suite here
+/test/elm-test-suite/

@@ -23,6 +23,10 @@ For each entry below:
 
 Entries marked "no test" need checking by hand, as described in the entry.
 
+Then run the community Elm test suite with `test/elm-test-suite.sh` (add `--compare
+elm-0.19.x` for the release, once it is on npm, to see where we differ from it), and update
+`test/elm-test-suite.expected`.
+
 
 ## Elm 0.19.4-beta bugs we fix
 
@@ -59,8 +63,8 @@ Entries marked "no test" need checking by hand, as described in the entry.
 
 ## Not yet fixed by us
 
-Reported upstream by someone else, still present in 1.6.0. We leave these to upstream,
-unless an app turns out to need one before then:
+Still present in 1.6.0. We leave these to upstream, unless an app turns out to need one
+before then. Reported upstream by someone else, unless the entry says otherwise:
 
 - `elm make --docs` hangs on an extensible alias with an extensible record argument.
 - `()` is comparable.
@@ -69,3 +73,8 @@ unless an app turns out to need one before then:
 - A record alias with no fields has no constructor (0.19.1 had one).
 - Errors print `List.List Int` instead of `List Int`.
 - BAD TYPE ANNOTATION counts one too many arguments ("3 arguments" for `f x y`).
+- `_ = ...` let bindings run in reverse source order, ahead of the named ones, so `Debug.log`
+  lines in a let print backwards (0.19.3 kept source order). `Canonicalize.Expression.sort`
+  names each destructure `$0`, `$1`, ... in source order, and `Graph.toSCC` sorts by name and
+  emits unconnected nodes last first. Not reported upstream yet. Two tests of
+  `test/elm-test-suite.sh` show it.

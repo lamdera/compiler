@@ -1,0 +1,13 @@
+# Tests of the community Elm test suite (test/elm-test-suite.sh) that lamdera is expected to fail,
+# one per line as <project>/<TestName>, with the reason after a #.
+
+# Elm 0.19.4-beta runs `_ = ...` let bindings in reverse source order (0.19.3 kept source
+# order), so Debug.log lines in a let print backwards. Canonicalize.Expression.sort names each
+# destructure $0, $1, ... in source order, Graph.toSCC sorts by name and emits unconnected nodes
+# last first. Not reported upstream yet.
+elm/DebugLogOrderingTest  # 0.19.4-beta: `_ =` let bindings run in reverse order
+elm/ListMapTemplateCtorTest  # 0.19.4-beta: `_ =` let bindings run in reverse order
+
+elm-compile-errors/TypeMismatchUnitLeftOfAtLeastTest  # 0.19.4-beta: () is comparable (reported upstream by someone else)
+elm-conformance/DebugToStringTest  # Debug.toString record field order changed in 0.19.3 (the suite calls this a quirk)
+elm-conformance/CharCaseFullRangeTest  # only with node whose Unicode is older than 17.0 (node 24.8 has 16.0)
