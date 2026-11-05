@@ -313,7 +313,13 @@ confirmation = do
 environment: its stdout and exit code. -}
 runIn :: (FilePath, String) -> IO () -> IO (T.Text, ExitCode)
 runIn (elmHome, url) action = do
+  -- Other suites in the same process set LDEBUG and leave it set (Test.Caching, the
+  -- withTestEnv of a test that failed, ...), and with it the HTTP code writes DEBUG lines
+  -- to stdout ahead of the JSON these tests check. A user runs the CLI without it.
+  ldebug <- lookupEnv "LDEBUG"
+  unsetEnv "LDEBUG"
   result <- withEnvVars [ ("ELM_HOME", elmHome), ("LAMDERA_DASHBOARD_URL", url) ] (Test.Main.captureProcessResult action)
+  forceEnv "LDEBUG" ldebug
   pure (T.decodeUtf8 (Test.Main.prStdout result), Test.Main.prExitCode result)
 
 
