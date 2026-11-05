@@ -14,6 +14,9 @@ import EasyTest
 import Test.Helpers
 
 import qualified Data.List
+import qualified System.Process as Process
+import qualified System.Timeout as Timeout
+import System.Exit (ExitCode(ExitSuccess))
 import qualified Data.Text as T
 import qualified System.Directory as Dir
 import System.FilePath ((</>), takeDirectory)
@@ -308,6 +311,47 @@ suite =
             |])
           ]
 
+    , -- reported upstream by someone else as a --docs hang; any build that depends on such
+      -- a package runs away too (canceraiddev/elm-form-builder took 73GB)
+      scope "docs for an extensible alias given an extensible record" $
+        requireBinaryOnPath "lamdera" $
+        withPackage "ext-alias-docs"
+          [ ("src/A.elm", [text|
+              module A exposing (FieldProperties, StringFieldProperties)
+
+              {-| Field properties.
+
+              @docs FieldProperties, StringFieldProperties
+
+              -}
+
+
+              {-| -}
+              type alias FieldProperties a =
+                  { a | label : String, required : Bool }
+
+
+              {-| -}
+              type alias StringFieldProperties a =
+                  FieldProperties { a | value : String }
+            |])
+          ] $ \project -> do
+            -- A child process with a capped heap and a time limit, so a regression fails
+            -- rather than taking all the machine's memory
+            let child = (Process.proc "lamdera" ["make", "--docs=docs.json", "+RTS", "-M3g", "-N2", "-A16m", "-RTS"])
+                  { Process.cwd = Just project }
+            result <- io $ Timeout.timeout (60 * 1000000) $ Process.readCreateProcessWithExitCode child ""
+            case result of
+              Nothing ->
+                crash "lamdera make --docs ran for over a minute"
+
+              Just (ExitSuccess, _, _) -> do
+                docs <- io $ readUtf8Text (project </> "docs.json")
+                expectTextContains (maybe "" id docs) "A.FieldProperties { a | value : String.String }"
+
+              Just (_, out, err) ->
+                crash ("lamdera make --docs failed:\n" ++ out ++ err)
+
     -- 10 (initState writing past its 5 bytes) shows no difference an Elm build can
     -- check; see its entry in extra/docs/upstream-divergence.md.
     ]
@@ -364,7 +408,17 @@ buildJs project file = do
 
 
 withProject :: String -> [(FilePath, Text)] -> (FilePath -> Test a) -> Test a
-withProject label files test =
+withProject =
+  withOutline elmJson
+
+
+withPackage :: String -> [(FilePath, Text)] -> (FilePath -> Test a) -> Test a
+withPackage =
+  withOutline packageElmJson
+
+
+withOutline :: Text -> String -> [(FilePath, Text)] -> (FilePath -> Test a) -> Test a
+withOutline outline label files test =
   let
     project = "./test/scenario-upstream-0194-" ++ label
 
@@ -374,7 +428,7 @@ withProject label files test =
       Lamdera.unsetEnv "LTEST"
       Lamdera.unsetEnv "LDEBUG"
       Dir.createDirectoryIfMissing True (project </> "src")
-      writeUtf8 (project </> "elm.json") elmJson
+      writeUtf8 (project </> "elm.json") outline
       mapM_ (\(path, source) -> do
           Dir.createDirectoryIfMissing True (takeDirectory (project </> path))
           writeUtf8 (project </> path) source
@@ -406,5 +460,26 @@ elmJson =
             "direct": {},
             "indirect": {}
         }
+    }
+  |]
+
+
+packageElmJson :: Text
+packageElmJson =
+  [text|
+    {
+        "type": "package",
+        "name": "lamdera/upstream-test",
+        "summary": "A package for Test.Upstream0194",
+        "license": "BSD-3-Clause",
+        "version": "1.0.0",
+        "exposed-modules": [
+            "A"
+        ],
+        "elm-version": "0.19.0 <= v < 0.20.0",
+        "dependencies": {
+            "elm/core": "1.0.0 <= v < 2.0.0"
+        },
+        "test-dependencies": {}
     }
   |]

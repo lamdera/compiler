@@ -45,6 +45,7 @@ elm-0.19.x` for the release, once it is on npm, to see where we differ from it),
 | Segfault or bus error type checking deeply nested lets (20 is enough) (`nearestSquare` returns the bit length, not the next power of two) | see `Type/Pools.hs` | Reported by someone else, with this fix | deeply nested lets |
 | `_ = ...` let bindings run in reverse source order, so `Debug.log` lines in a let print bottom to top (`toNodes` numbers destructures first to last, and `Graph.toSCC` emits unconnected nodes highest name first). We number them last to first, so destructures (`_`, tuples, records) run in source order among themselves, as `_` ones did up to 0.19.3 | see `Canonicalize/Expression.hs` | Not reported | let destructures run in source order; and elm-test-suite's elm/DebugLogOrderingTest |
 | `()` is comparable (`unifyFlexWithStructure` merges `Unit1` with a comparable flex). We reject it, as 0.19.3 did | see `Type/Unify.hs` | Reported by someone else | () is not comparable |
+| Docs for an extensible alias given an extensible record (`type alias B a = A { a \| x : Int }`, `A` itself `{ a \| ... }`) never finish and use memory until the machine runs out. Docs are built for every dependency, so any app depending on such a package does too (canceraiddev/elm-form-builder: 73GB). `extend` in `I.dealias` looked an already substituted record's variable up again. We do what `Type.Type`'s `goExtRec` does | see `Elm/Interface.hs` | Reported by someone else (as a `--docs` hang) | docs for an extensible alias given an extensible record |
 | Type variable indexes past 254 wrap in `.elmi` files: `E.array8` escapes the count but the indexes are written as a bare byte. Plain Elm needs over 255 type variables in one annotation to reach it, Lamdera's generated Wire3 codecs reach 510 | 727dcb9a | Not reported | No test. The commit message describes the case |
 
 
@@ -68,7 +69,6 @@ elm-0.19.x` for the release, once it is on npm, to see where we differ from it),
 Still present in 1.6.0. We leave these to upstream, unless an app turns out to need one
 before then. Reported upstream by someone else, unless the entry says otherwise:
 
-- `elm make --docs` hangs on an extensible alias with an extensible record argument.
 - A module's name isn't checked against its file path.
 - Two ports with the same name, or a port and a value with the same name, compile.
 - A record alias with no fields has no constructor (0.19.1 had one).

@@ -178,13 +178,19 @@ dealias args (Aliased aliased) =
         TRecord fs        -> TRecord (F.map go fs)
         TExtRec fs ext    -> extend (F.map go fs) (T.get ext args)
 
+    -- @LAMDERA `tipe` is an argument already substituted (T.get ext args), so its own type
+    -- variables are the caller's, not this alias's. 0.19.4-beta looked them up in args again:
+    -- for `FieldProperties { a | value : String }` (FieldProperties being `{ a | ... }`) the
+    -- TExtRec case found the same record every time and never stopped, so building docs (and
+    -- every package depending on such a package) used memory until the machine ran out.
+    -- Type.Type.termToType's goExtRec does the same thing correctly.
     extend fields tipe =
       case tipe of
         TEmpty            -> TRecord fields
         TRecord fs        -> TRecord (F.extend fields fs)
-        TExtRec fs ext    -> extend  (F.extend fields fs) (T.get ext args)
+        TExtRec fs ext    -> TExtRec (F.extend fields fs) ext
         TVar i            -> TExtRec fields i
-        TAlias _ _ _ xs t -> extend fields (dealias (A.map go xs) t)
+        TAlias _ _ _ xs t -> extend fields (dealias xs t)
         TType  _ _ _ _    -> $(Crash.crash 'dealias) "ran into invalid record extension (Union)"
         TLambda _ _ _     -> $(Crash.crash 'dealias) "ran into invalid record extension (Lambda)"
         TUnit             -> $(Crash.crash 'dealias) "ran into invalid record extension (Unit)"
