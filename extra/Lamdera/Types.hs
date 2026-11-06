@@ -42,6 +42,9 @@ data DiffableType
   -- Lamdera lib types special cased with support for efficiency
   | DLamderaSeqDict DiffableType DiffableType
   | DLamderaSeqSet DiffableType
+  | DLamderaBiSeqDict DiffableType DiffableType
+  | DLamderaMultiSeqDict DiffableType DiffableType
+  | DLamderaMultiBiSeqDict DiffableType DiffableType
 
   deriving (Show)
 
