@@ -443,6 +443,57 @@ allowedFromClient remote isLeader text
   | otherwise = True
 
 
+{-| Answers 405, with an Allow header, for a dev tool asked with a method it doesn't
+take, rather than running it: the ones that change something only for POST (no <img>
+or link can send one, and a page on another site would need a CORS preflight, see
+Lamdera.CLI.LocalOnly.forbidCrossSite), the rest only for GET and HEAD. A CORS
+preflight's OPTIONS used to run the handler too: for /_x/write, writing an empty file.
+Passes everything else on.
+-}
+requireMethods :: Snap ()
+requireMethods = do
+  request <- getRequest
+  case devToolMethods (LocalOnly.pathSegments request) of
+    Just allowed | rqMethod request `notElem` allowed -> do
+      modifyResponse $ setResponseStatus 405 "Method Not Allowed"
+      modifyResponse $ setHeader "Allow" (Data.ByteString.Char8.intercalate ", " (fmap methodName allowed))
+      modifyResponse $ setContentType "text/plain; charset=utf-8"
+      writeBS "Method not allowed\n"
+      getResponse >>= finishWith
+    _ ->
+      pass
+
+
+{-| The methods a dev tool's path takes, by its segments (see requireMethods). -}
+devToolMethods :: [BS.ByteString] -> Maybe [Method]
+devToolMethods segments =
+  case segments of
+    "_x" : tool : _
+      -- (serveExperimental takes any path that starts with _x/write)
+      | "write" `BS.isPrefixOf` tool -> Just [POST]
+      | tool == "editor" -> Just [POST]
+    "_x" : _ -> Just [GET, HEAD]
+    "_c" : _ -> Just [GET, HEAD]
+    "_patch" : _ -> Just [GET, HEAD]
+    "_w" : _ -> Just [GET]
+    _ -> Nothing
+
+
+methodName :: Method -> BS.ByteString
+methodName m =
+  case m of
+    GET -> "GET"
+    HEAD -> "HEAD"
+    POST -> "POST"
+    PUT -> "PUT"
+    DELETE -> "DELETE"
+    TRACE -> "TRACE"
+    OPTIONS -> "OPTIONS"
+    CONNECT -> "CONNECT"
+    PATCH -> "PATCH"
+    Method other -> other
+
+
 openEditorHandler :: FilePath -> Snap ()
 openEditorHandler root = do
   fullpath <- getSafePath

@@ -622,7 +622,7 @@ let url = new URL("/_x/editor/", window.top.location);
 url.pathname += node.fileName;
 url.searchParams.append("row", node.row);
 url.searchParams.append("column", node.column);
-fetch(url)
+fetch(url, { method: "POST" })
     .then(response => response.ok ? undefined : response.text().then(message => alert(message)))
     .catch(error => alert(error.message));
   |]

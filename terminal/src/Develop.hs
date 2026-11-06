@@ -19,6 +19,7 @@ import qualified Data.ByteString.Lazy as BSL
 import qualified Data.ByteString.Char8 as BS8 -- @LAMDERA
 import qualified Data.HashMap.Strict as HashMap
 import Data.Monoid ((<>))
+import Data.Maybe (isJust) -- @LAMDERA
 import qualified Data.NonEmptyList as NE
 import qualified System.Directory as Dir
 import System.FilePath as FP
@@ -205,8 +206,13 @@ runWithRoot root (Flags maybePort maybeBind shouldOpenBrowser inMemory serveFlag
        Live.withEnd liveState $
        withShare $
        httpServe (config bind port) $ gcatchlog "general" $
+        -- @LAMDERA /_c, /_x/* and /_w not for a page on another site, and /_w only by a local
+        -- name unless the app is shared, see Lamdera.CLI.LocalOnly
+        LocalOnly.forbidCrossSite (isJust shareM || isJust maybeBind)
         -- @LAMDERA /_c and /_x/* only for this computer, see Lamdera.CLI.LocalOnly
-        LocalOnly.forbidRemoteDevTools
+        <|> LocalOnly.forbidRemoteDevTools
+        -- @LAMDERA the dev tools only for the methods they take, see Live.requireMethods
+        <|> Live.requireMethods
         -- @LAMDERA and no dotfiles for anyone else (a --serve visitor, a device through --bind)
         <|> LocalOnly.forbidRemoteDotfiles
         <|>
