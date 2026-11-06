@@ -457,7 +457,7 @@ addAlias home mask (Alias (A.At region name) vars _ localType) (State ctors decl
     TUnit             -> goNormal $ I.TUnit
     TPair   a b       -> goNormal $ I.TPair   (go a) (go b)
     TTriple a b c     -> goNormal $ I.TTriple (go a) (go b) (go c)
-    TEmpty            -> goNormal $ I.TEmpty
+    TEmpty            -> goEmpty
     TRecord fs        -> goRecord fs
     TExtRec fs e      -> goNormal $ I.TExtRec (F.map go fs) e
   where
@@ -476,6 +476,21 @@ addAlias home mask (Alias (A.At region name) vars _ localType) (State ctors decl
         newLocals = Map.insert name (Alias3 info) locals
       in
       State ctors newDecls newLocals
+
+    {- @LAMDERA An alias of the empty record has a constructor too, the value {}, as
+    in 0.19.1 (`type alias Empty = {}` then `Decode.succeed Empty`). 0.19.4 gives it
+    none, as it does any alias that is not of a record with fields, so published
+    packages that use one (eriktim/elm-protocol-buffers) stopped compiling.
+    -}
+    goEmpty =
+      let
+        aliased   = I.Aliased I.TEmpty
+        info      = Env.AliasInfo mask (Env.Arity (A.size vars)) aliased
+        newCtors  = Dups.insert (T.nameToName name) region (Env.Alias home Env.EmptyRecord) ctors
+        newDecls  = Map.insert name (Can.Alias (I.Alias mask vars aliased)) decls
+        newLocals = Map.insert name (Alias3 info) locals
+      in
+      State newCtors newDecls newLocals
 
     goRecord fields =
       let

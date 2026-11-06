@@ -106,8 +106,9 @@ data UnionCtor
   | Void    I.Annotation Can.PType
 
 
-data AliasCtor =
-  Record I.Annotation N.Name [N.Name]
+data AliasCtor
+  = Record I.Annotation N.Name [N.Name]
+  | EmptyRecord -- @LAMDERA `type alias Empty = {}`: its constructor is the value {}, as in 0.19.1
 
 
 

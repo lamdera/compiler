@@ -224,6 +224,8 @@ toUnionCtor name home ctor =
 toAliasCtor :: N.Name -> ModuleName.Canonical -> Env.AliasCtor -> Result Can.Expr_
 toAliasCtor name home (Env.Record anno f fs) =
   pure $ Can.CRecord home name anno f fs
+toAliasCtor _ _ Env.EmptyRecord =
+  pure Can.Empty -- @LAMDERA see TypeDecl.addAlias
 
 
 

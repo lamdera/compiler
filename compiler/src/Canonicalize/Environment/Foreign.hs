@@ -346,7 +346,7 @@ toAliasAndCtors home name (I.Alias mask vars aliased@(I.Aliased tipe)) =
       I.TUnit            -> Nothing
       I.TPair _ _        -> Nothing
       I.TTriple _ _ _    -> Nothing
-      I.TEmpty           -> Nothing
+      I.TEmpty           -> Just (T.nameToName name, Env.Alias home Env.EmptyRecord) -- @LAMDERA see TypeDecl.addAlias
       I.TRecord fs       -> Just (toCtor fs)
       I.TExtRec _ _      -> Nothing
   where

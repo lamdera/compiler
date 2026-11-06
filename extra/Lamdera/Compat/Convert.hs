@@ -880,6 +880,10 @@ recordCtor h n typeName (I.Alias mask vars aliased@(I.Aliased tipe)) =
       in
       New.CRecord h n anno f fs
 
+    I.TEmpty ->
+      -- an alias of {}: its constructor is the value {} (Canonicalize.TypeDecl.addAlias)
+      New.Empty
+
     _ ->
       error $ "Lamdera.Compat.Convert.recordCtor: not a record alias " ++ N.toChars n
 

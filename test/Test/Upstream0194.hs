@@ -311,6 +311,38 @@ suite =
             |])
           ]
 
+    , -- reported upstream by someone else; eriktim/elm-protocol-buffers 1.2.0 uses it
+      scope "an alias of the empty record has a constructor, in its module and imported" $
+        compiles "empty-record-ctor"
+          [ ("src/A.elm", [text|
+              module A exposing (Empty, empty, wrap)
+
+              type alias Empty =
+                  {}
+
+              empty : Empty
+              empty =
+                  Empty
+
+              wrap : (Empty -> a) -> a
+              wrap f =
+                  f Empty
+            |])
+          , ("src/Main.elm", [text|
+              module Main exposing (x, y)
+
+              import A exposing (Empty)
+
+              x : A.Empty
+              x =
+                  A.Empty
+
+              y : List Empty
+              y =
+                  [ Empty, A.empty, A.wrap identity, {} ]
+            |])
+          ]
+
     , -- reported upstream by someone else as a --docs hang; any build that depends on such
       -- a package runs away too (canceraiddev/elm-form-builder took 73GB)
       scope "docs for an extensible alias given an extensible record" $
