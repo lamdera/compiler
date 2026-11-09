@@ -671,10 +671,36 @@ fetchProductionInfo appName useLocal = do
               "https://" <> T.unpack appName <> ".lamdera.app/_i"
 
     decoder =
-      D.succeed (,)
+      D.succeed (,,)
         & D.required "v" D.int
         & D.required "h" (D.list D.text)
-  Lamdera.Http.normalJsonVia appSocket "lamdera-info" endpoint decoder
+        -- The hash scheme the app's hashes were computed with, from runtimes that know it
+        & D.optional "hs" (fmap Just D.int) Nothing
+  res <- Lamdera.Http.normalJsonVia appSocket "lamdera-info" endpoint decoder
+  case res of
+    -- Only an OLDER scheme than the app's: the servers have moved on. A newer one is fine,
+    -- stored schemes lag behind for apps whose hashes the change didn't touch.
+    Right (_, _, Just appScheme) | appScheme > Lamdera.Version.hashScheme ->
+      Progress.throw $
+        Help.report "LAMDERA UPDATE NEEDED" Nothing
+          ("This lamdera (" <> Lamdera.Version.short <> ") hashes types differently from the compiler that built " <> T.unpack appName <> ", so it can't tell whether your types changed.")
+          [ D.reflow $ "This compiler uses hash scheme " <> show Lamdera.Version.hashScheme <> ", the app's types were hashed with scheme " <> show appScheme <> "."
+          , D.reflow $ "Run `lamdera update`, or download the latest version here: <https://dashboard.lamdera.app/docs/download>"
+          ]
+
+    Right (v, h, _) ->
+      pure $ Right (v, h)
+
+    Left err ->
+      case Lamdera.Http.refusalMessage err of
+        Just message ->
+          Progress.throw $
+            Help.report "LAMDERA UPDATE NEEDED" Nothing
+              ("The server refused this lamdera (" <> Lamdera.Version.short <> "):")
+              [ D.reflow message ]
+
+        Nothing ->
+          pure $ Left err
 
 
 checkUserProjectCompiles :: FilePath -> Bool -> IO ()
