@@ -16,6 +16,7 @@ import qualified Lamdera.Relative
 import qualified Ext.Query.Interfaces as Interfaces
 import qualified Lamdera.Compat.Convert
 import qualified Lamdera.TypeHash
+import qualified Lamdera.Version
 import qualified Ext.Common
 import qualified Data.Map as Map
 import qualified Data.Text as T
@@ -50,6 +51,48 @@ suite = tests
 
       expectEqualTextTrimmed expected (actual & withDefault "<failed to read file>")
 
+
+  , scope "hash scheme" $ do
+      -- Lamdera.Version.hashScheme tells a server how a compiler hashes types, so the
+      -- two never disagree about whether types changed (1.5.0 against servers on 1.5.1
+      -- did, 2026-11-08). These are the core type hashes of two projects that cover the
+      -- special cases (scenario-hash-scheme holds the kernel-backed ones), per scheme:
+      -- change how any of them hash and this fails until hashScheme is bumped and the
+      -- new hashes are added under it. Never edit an existing entry.
+      let
+        expectedFor scheme =
+          case scheme of
+            20261028 ->
+              Just
+                ( "[\"64db237c2087232331047b907cade9a262601159\",\"728c05b17597cebaad4eee0d43febe29298b0f0c\",\"fa92f6879a3929d7992e184cf89bd93fea3e094b\",\"b1675b2dec2ee3f023cd958159060fd7d5c5c21c\",\"b1675b2dec2ee3f023cd958159060fd7d5c5c21c\",\"b1675b2dec2ee3f023cd958159060fd7d5c5c21c\"]"
+                , "[\"86df58db28249e67a9224f9571e86508f357416b\",\"60b87a64ee2715cba93fa946b6eb29e96e083e1a\",\"49f109a0a5cd96f8ff41e2f5dac4774e9a6ce967\",\"aac0646e90b38ecb94642086de3d24e8646474f7\",\"aac0646e90b38ecb94642086de3d24e8646474f7\",\"aac0646e90b38ecb94642086de3d24e8646474f7\"]"
+                )
+
+            _ ->
+              Nothing
+
+      allTypes <- io $ Lamdera.Relative.requireDir "test/scenario-alltypes"
+      hashScheme <- io $ Lamdera.Relative.requireDir "test/scenario-hash-scheme"
+
+      ioSilenced $ Lamdera.Compile.makeDev_ (allTypes </> "src/Types.elm")
+      ioSilenced $ Lamdera.Compile.makeDev_ (hashScheme </> "src/Types.elm")
+
+      _ <- ioSilenced $ Ext.Common.withProjectRoot allTypes $ Lamdera.TypeHash.calculateAndWrite
+      _ <- ioSilenced $ Ext.Common.withProjectRoot hashScheme $ Lamdera.TypeHash.calculateAndWrite
+
+      actualAllTypes <- io $ readUtf8Text $ lamderaHashesPath allTypes
+      actualScheme <- io $ readUtf8Text $ lamderaHashesPath hashScheme
+      writtenScheme <- io $ readUtf8Text $ lamderaHashSchemePath hashScheme
+
+      expectEqualTextTrimmed (show_ Lamdera.Version.hashScheme) (writtenScheme & withDefault "<failed to read file>")
+
+      case expectedFor Lamdera.Version.hashScheme of
+        Just (expectedAllTypes, expectedScheme) -> do
+          expectEqualTextTrimmed expectedAllTypes (actualAllTypes & withDefault "<failed to read file>")
+          expectEqualTextTrimmed expectedScheme (actualScheme & withDefault "<failed to read file>")
+
+        Nothing ->
+          crash $ "No hashes recorded for hash scheme " <> show Lamdera.Version.hashScheme <> ": add them to Test.TypeHashes"
 
   , scope "all types" $ do
       project <- io $ Lamdera.Relative.requireDir "test/scenario-alltypes"

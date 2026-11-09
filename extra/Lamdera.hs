@@ -91,6 +91,7 @@ module Lamdera
   , lamderaCache
   , lamderaCache_
   , lamderaHashesPath
+  , lamderaHashSchemePath
   , lamderaEnvModePath
   , lamderaExternalWarningsPath
   , lamderaBackendDevSnapshotPath
@@ -816,6 +817,13 @@ lamderaCache_ =
 lamderaHashesPath :: FilePath -> FilePath
 lamderaHashesPath root =
   lamderaCache root </> ".lamdera-hashes"
+
+
+{-| Written beside .lamdera-hashes: the Lamdera.Version.hashScheme those hashes were
+computed with. An app's /_i reads it back to the deploying compiler. -}
+lamderaHashSchemePath :: FilePath -> FilePath
+lamderaHashSchemePath root =
+  lamderaCache root </> ".lamdera-hash-scheme"
 
 
 lamderaEnvModePath :: FilePath -> FilePath

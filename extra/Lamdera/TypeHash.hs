@@ -39,6 +39,7 @@ import Lamdera.Progress
 import Lamdera.Wire3.Helpers
 import qualified Lamdera.Lexical as Lexical
 import qualified Lamdera.Types
+import qualified Lamdera.Version
 
 import qualified Ext.Query.Interfaces as Interfaces
 import qualified Elm.Interface as RealI -- @LAMDERA the Elm 0.19.4 interface
@@ -55,6 +56,7 @@ calculateAndWrite = do
     Right (hashes, warnings) -> do
       root <- getProjectRoot "calculateAndWrite"
       writeUtf8 (lamderaHashesPath root) $ show_ hashes
+      writeUtf8 (lamderaHashSchemePath root) $ show_ Lamdera.Version.hashScheme
       pure res
     Left err ->
       pure res

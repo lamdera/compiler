@@ -391,15 +391,34 @@ injections outputType mode =
         var start = mtime();
 
         var pair;
-        if (mid === null) {
-          pair = A2(update, msg, model);
-        } else {
-          _Lamdera_G.lamderaCtx = mid;
-          try {
+        try {
+          if (mid === null) {
             pair = A2(update, msg, model);
-          } finally {
-            _Lamdera_G.lamderaCtx = prevCtx;
+          } else {
+            _Lamdera_G.lamderaCtx = mid;
+            try {
+              pair = A2(update, msg, model);
+            } finally {
+              _Lamdera_G.lamderaCtx = prevCtx;
+            }
           }
+        } catch (err) {
+          // The update threw (a kernel crash like modBy 0, a stack overflow, ...). The model
+          // stays as it was, and nothing below logs this msg, so hand it to the runtime to
+          // record before the error carries on as before. Logged whether or not logging is
+          // on: it is rare, and the one msg you most need to see. Without the runtime hook
+          // (older runtimes, lamdera live) the error just carries on.
+          if (isLamderaRuntime && typeof lamderaUpdateCrashed === 'function') {
+            var crashDuration = mtime() - start;
+            try {
+              var c = null;
+              try { c = $$author$$project$$LBR$$serialize(msg); } catch (e) { /* recorded without its payload */ }
+              lamderaUpdateCrashed(global.config.version, c ? c.a : null, crashDuration, c ? A2($$elm$$core$$Maybe$$withDefault, null, c.b) : null, mid, err);
+            } catch (e) {
+              // Recording the crash must never replace the error that caused it.
+            }
+          }
+          throw err;
         }
         // The Cmds of this update are dispatched next (sendToApp calls _Platform_enqueueEffects)
         _Lamdera_pendingMid = mid;
