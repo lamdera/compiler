@@ -9,6 +9,7 @@ import qualified Data.ByteString.Char8 as BS
 import qualified Data.Text as T
 import qualified Network.HTTP.Client as HTTP
 import qualified Network.HTTP.Types.Header as Http
+import qualified Network.HTTP.Types.Status as HttpStatus
 import qualified Network.Socket as NS
 import qualified Network.Socket.ByteString as NSB
 import qualified System.Directory as Dir
@@ -40,10 +41,23 @@ defaultHeaders =
 
 jsonHeaders :: [Http.Header]
 jsonHeaders =
-  defaultHeaders ++
+  defaultHeaders ++ compilerHeaders ++
     [ ( Http.hContentType, "application/json" )
     , ( Http.hAccept, "application/json" )
     ]
+
+
+{-| Which compiler is asking, exactly. The User-Agent can't say: the builder's Http
+replaces ours with `elm/<version>`, which is all compilers up to 1.5.0 ever sent. An
+app's /_i uses these to spot a compiler that hashes types differently from the one that
+built the app (and, once the platform requires it, to turn away compilers too old to
+send them at all, with a message saying to update). -}
+compilerHeaders :: [Http.Header]
+compilerHeaders =
+  [ ( "X-Lamdera-Compiler", BS.pack Lamdera.Version.short )
+  , ( "X-Lamdera-Compiler-Sha", BS.pack Lamdera.Version.shaShort )
+  , ( "X-Lamdera-Hash-Scheme", BS.pack $ show Lamdera.Version.hashScheme )
+  ]
 
 
 {-| The directory holding unix sockets: /run/lamdera-sockets if present, else
@@ -171,6 +185,22 @@ printHttpError error reason =
 
     HttpError httpError ->
       throw $ toHttpErrorReport "HTTP PROBLEM" httpError reason
+
+
+{-| The message of a server that answered with a deliberate refusal for the user to act
+on, rather than a fault: 409 (this compiler hashes types differently from the one that
+built the app) or 426 (this compiler is too old). The body is plain text meant for the
+user, so it is shown as it is, not as an "HTTP PROBLEM" to report. -}
+refusalMessage :: Error -> Maybe String
+refusalMessage error =
+  case error of
+    HttpError (Http.BadHttp _ (HTTP.StatusCodeException response body)) ->
+      if HttpStatus.statusCode (HTTP.responseStatus response) `elem` [409, 426]
+        then Just (BS.unpack body)
+        else Nothing
+
+    _ ->
+      Nothing
 
 
 -- Going based off the error outlines in `toHttpErrorReport`,
