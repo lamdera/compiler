@@ -260,6 +260,28 @@ suite =
       -- password that Browser.Navigation's functions never look into.
       io $ wire3RoundTrip "lamdera-wire-key" navigationKeyElmJson navigationKeyMain "{ $: 0 }"
       ok
+    , scope "Browser.Navigation works after hot reloads, with a Wire3 decoded Key too" $ requireBinaryOnPath "node" $ do
+      -- Lamdera's elm/browser used to keep the URL change function in a kernel variable
+      -- that evaluating `main` set. A hot patch evaluates `main` again in the page's
+      -- scope, and a full hot reload runs a new scope whose variable was never set up,
+      -- so pushUrl and friends crashed on "reading 'onUrlChange'" after either.
+      io $ Temp.withSystemTempDirectory "lamdera-navigation" $ \dir -> do
+        writeUtf8 (dir </> "elm.json") navigationElmJson
+        writeUtf8 (dir </> "check.js") navigationCheck
+        forM_ [("dev", []), ("optimize", ["--optimize"])] $ \(mode, flags) -> do
+          forM_ ["v1", "v2"] $ \version -> do
+            writeUtf8 (dir </> "src/Main.elm") (T.replace "VERSION" (T.pack version) navigationMain)
+            elmHomeMake dir (flags ++ ["--output=" ++ version ++ ".js"])
+            -- What a hot patch does: work out `main` again, in the scope of the script
+            Just javascript <- readUtf8Text (dir </> version ++ ".js")
+            let (before, after) = T.breakOnEnd "}(this));" javascript
+            writeUtf8 (dir </> version ++ ".js") $
+              T.dropEnd 9 before
+                <> "\nscope.patchMain = function () { $elm$browser$Browser$application($author$project$Main$program); };\n}(this));"
+                <> after
+          forM_ ["fresh", "restored"] $ \key ->
+            esmCommand dir "node" ["check.js", mode, key]
+      ok
     , scope "Wire3: a record holding kernel-backed single-variant values round trips" $ requireBinaryOnPath "node" $ do
       -- Math.Vector3.Vec3 (`type Vec3 = Vec3`, a Float64Array at runtime) and Regex.Regex
       -- (`type Regex = Regex`, a RegExp) hit the same 1.5.0 bug as the Key. lamdera check
@@ -302,21 +324,28 @@ wire3RoundTrip name elmJson main argument =
   Temp.withSystemTempDirectory name $ \dir -> do
     writeUtf8 (dir </> "elm.json") elmJson
     writeUtf8 (dir </> "src/Main.elm") main
-    environment <- Env.getEnvironment
     forM_ [[], ["--optimize"]] $ \mode -> do
-      -- Its own ELM_HOME, so the packages' codecs are built by this compiler
-      let child = (Process.proc "lamdera" (["make", "src/Main.elm", "--output=elm.js"] ++ mode))
-            { Process.cwd = Just dir
-            , Process.env = Just (("ELM_HOME", dir </> "elm-home") : filter (\(key, _) -> key /= "ELM_HOME" && key /= "LDEBUG") environment)
-            }
-      (exit, out, err) <- Process.readCreateProcessWithExitCode child ""
-      when (exit /= ExitSuccess) $ ioError $ userError $ "lamdera make failed:\n" ++ out ++ err
+      elmHomeMake dir (["--output=elm.js"] ++ mode)
       Just javascript <- readUtf8Text (dir </> "elm.js")
       let (before, after) = T.breakOnEnd "}(this));" javascript
       writeUtf8 (dir </> "elm.js") $
         T.dropEnd 9 before <> "\nscope.roundTrip = $author$project$Main$roundTrip;\n}(this));" <> after
       esmCommand dir "node"
         ["-e", "const r = require('./elm.js').roundTrip(" ++ argument ++ "); if (!(r.a === 5)) { console.error(r); process.exit(1); }"]
+
+
+{-| `lamdera make src/Main.elm` with the project's own ELM_HOME, so the packages (and
+the package replacements) are built by this compiler.
+-}
+elmHomeMake :: FilePath -> [String] -> IO ()
+elmHomeMake dir flags = do
+  environment <- Env.getEnvironment
+  let child = (Process.proc "lamdera" (["make", "src/Main.elm"] ++ flags))
+        { Process.cwd = Just dir
+        , Process.env = Just (("ELM_HOME", dir </> "elm-home") : filter (\(key, _) -> key /= "ELM_HOME" && key /= "LDEBUG") environment)
+        }
+  (exit, out, err) <- Process.readCreateProcessWithExitCode child ""
+  when (exit /= ExitSuccess) $ ioError $ userError $ "lamdera make failed:\n" ++ out ++ err
 
 
 esmProject :: (FilePath -> IO ()) -> Test ()
@@ -425,6 +454,155 @@ main =
         , update = \_ m -> ( m, Cmd.none )
         , subscriptions = \_ -> Sub.none
         }
+|]
+
+
+navigationElmJson :: T.Text
+navigationElmJson = [text|
+{
+    "type": "application",
+    "source-directories": ["src"],
+    "elm-version": "0.19.1",
+    "dependencies": {
+        "direct": {
+            "elm/browser": "1.0.2",
+            "elm/bytes": "1.0.8",
+            "elm/core": "1.0.5",
+            "elm/url": "1.0.0",
+            "lamdera/codecs": "1.0.0"
+        },
+        "indirect": {
+            "elm/html": "1.0.0",
+            "elm/json": "1.1.3",
+            "elm/time": "1.0.0",
+            "elm/virtual-dom": "1.0.3"
+        }
+    },
+    "test-dependencies": { "direct": {}, "indirect": {} }
+}
+|]
+
+
+{-| `VERSION` is replaced with v1 and v2. With the flag `True`, the model's Key is one
+that has gone through Wire3, like in a FrontendModel restored by `lamdera live` freeze
+mode.
+-}
+navigationMain :: T.Text
+navigationMain = [text|
+port module Main exposing (..)
+
+import Browser
+import Browser.Navigation
+import Lamdera.Wire3 as W
+import Url exposing (Url)
+
+
+port navigate : (String -> msg) -> Sub msg
+
+
+port urlChanged : String -> Cmd msg
+
+
+type alias Model =
+    { key : Browser.Navigation.Key, problem : String }
+
+
+type Msg
+    = Navigate String
+    | UrlChanged Url
+    | UrlRequested Browser.UrlRequest
+
+
+program =
+    { init = init
+    , view = \_ -> { title = "", body = [] }
+    , update = update
+    , subscriptions = \_ -> navigate Navigate
+    , onUrlChange = UrlChanged
+    , onUrlRequest = UrlRequested
+    }
+
+
+main : Program Bool Model Msg
+main =
+    Browser.application program
+
+
+init : Bool -> Url -> Browser.Navigation.Key -> ( Model, Cmd Msg )
+init restore _ key =
+    if restore then
+        case W.bytesDecode w3_decode_Model (W.bytesEncode (w3_encode_Model { key = key, problem = "" })) of
+            Just model ->
+                ( model, Cmd.none )
+
+            Nothing ->
+                ( { key = key, problem = " (the model did not decode)" }, Cmd.none )
+
+    else
+        ( { key = key, problem = "" }, Cmd.none )
+
+
+update : Msg -> Model -> ( Model, Cmd Msg )
+update msg model =
+    case msg of
+        Navigate path ->
+            ( model, Browser.Navigation.pushUrl model.key path )
+
+        UrlChanged url ->
+            ( model, urlChanged ("VERSION " ++ url.path ++ model.problem) )
+
+        UrlRequested _ ->
+            ( model, Cmd.none )
+|]
+
+
+{-| `node check.js <dev|optimize> <fresh|restored>`, next to v1.js and v2.js. -}
+navigationCheck :: T.Text
+navigationCheck = [text|
+const fs = require('node:fs');
+const assert = require('node:assert/strict');
+const [mode, key] = process.argv.slice(2);
+
+// Just enough of a browser for a Browser.application whose view has an empty body
+const document = {
+  title: '',
+  location: { href: 'http://localhost/' },
+  body: { nodeType: 1, localName: 'body', namespaceURI: 'http://www.w3.org/1999/xhtml', attributes: [], childNodes: [] },
+};
+const history = {
+  pushState: (_state, _title, url) => { document.location.href = new URL(url, document.location.href).href; },
+};
+const window = Object.assign(new EventTarget(), { document, history, navigator: { userAgent: 'node' } });
+Object.assign(globalThis, { window, document, history });
+
+const load = (file) => { const scope = {}; new Function(fs.readFileSync(file, 'utf8')).call(scope); return scope; };
+const tick = () => new Promise((resolve) => setTimeout(resolve, 20));
+
+const v1 = load('v1.js');
+const app = v1.Elm.Main.init({ flags: key === 'restored' });
+const changes = [];
+app.ports.urlChanged.subscribe((change) => changes.push(change));
+
+async function expectNavigation(path, expected) {
+  app.ports.navigate.send(path);
+  await tick();
+  assert.equal(new URL(document.location.href).pathname, path);
+  assert.deepEqual(changes.splice(0), [expected]);
+}
+
+(async () => {
+  await expectNavigation('/one', 'v1 /one');
+  v1.patchMain();
+  await expectNavigation('/two', 'v1 /two');
+  if (mode === 'dev') {
+    const v2 = load('v2.js');
+    v1.Elm.hot.reload(v2);
+    await expectNavigation('/three', 'v2 /three');
+    // After a full hot reload, `lamdera live` runs the patches in the new scope
+    v2.patchMain();
+    await expectNavigation('/four', 'v2 /four');
+  }
+})().catch((error) => { console.error(mode, key, error); process.exit(1); });
 |]
 
 
