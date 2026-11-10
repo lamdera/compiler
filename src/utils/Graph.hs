@@ -212,10 +212,9 @@ withMinimalCycle (RootSelector selector) (Component node nodes) extract cont =
       case readWord32Array# backEdges i s0 of
         (# s1, w #) ->
           case word2Int# (word32ToWord# w) of
-            j ->
-              if isTrue# (j ==# root#)
-              then (# s1, (root, I# i : path) #)
-              else toPath backEdges j (I# i : path) s1
+            j | isTrue# (eqWord32# w 0xFFFFFFFF#Word32) -> (# s1, (root, path) #)
+              | isTrue# (j ==# root#)                   -> (# s1, (root, I# i : path) #)
+              | otherwise                               -> toPath backEdges j (I# i : path) s1
 
 
 data Queue =
@@ -259,16 +258,15 @@ dequeue (Queue front back) =
 
 find :: (Eq k) => k -> Array.Array Int (Node k v) -> Int
 find key vertices =
-    loop zero
+    loop lo
   where
-    (zero, len) = Array.bounds vertices
+    (lo, hi) = Array.bounds vertices
 
     loop i =
-      if i < len
+      if i <= hi
       then
         if _key (vertices ! i) == key
         then i
         else loop (i + 1)
       else
         $(Crash.crash 'withMinimalCycle) "bug in RootSelector when calculating minimal cycle"
-

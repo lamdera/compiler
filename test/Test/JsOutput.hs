@@ -260,6 +260,14 @@ suite =
       -- password that Browser.Navigation's functions never look into.
       io $ wire3RoundTrip "lamdera-wire-key" navigationKeyElmJson navigationKeyMain "{ $: 0 }"
       ok
+    , scope "Wire3: extensible aliases given generic records, and aliases of a parameter, round trip" $ requireBinaryOnPath "node" $ do
+      -- `Basic (Base (BasicItem item))` with `type alias Base r = { r | ... }`: the
+      -- constructor's encoder called `w3_x_c_r`, which isn't in scope (internal error, as
+      -- in Confidenceman02/elm-select). `type alias Id record = record`: its encoder's
+      -- annotation didn't typecheck (lue-bird/elm-no-record-type-alias-constructor-function,
+      -- and everything depending on it).
+      io $ wire3RoundTrip "lamdera-wire-aliases" wireAliasesElmJson wireAliasesMain "5"
+      ok
     , scope "Wire3: a record holding kernel-backed single-variant values round trips" $ requireBinaryOnPath "node" $ do
       -- Math.Vector3.Vec3 (`type Vec3 = Vec3`, a Float64Array at runtime) and Regex.Regex
       -- (`type Regex = Regex`, a RegExp) hit the same 1.5.0 bug as the Key. lamdera check
@@ -419,6 +427,97 @@ roundTrip key =
 
 
 main : Program () (Browser.Navigation.Key -> Maybe Int) ()
+main =
+    Platform.worker
+        { init = \_ -> ( roundTrip, Cmd.none )
+        , update = \_ m -> ( m, Cmd.none )
+        , subscriptions = \_ -> Sub.none
+        }
+|]
+
+
+wireAliasesElmJson :: T.Text
+wireAliasesElmJson = [text|
+{
+    "type": "application",
+    "source-directories": ["src"],
+    "elm-version": "0.19.1",
+    "dependencies": {
+        "direct": {
+            "elm/bytes": "1.0.8",
+            "elm/core": "1.0.5",
+            "elm/json": "1.1.3",
+            "lamdera/codecs": "1.0.0"
+        },
+        "indirect": {}
+    },
+    "test-dependencies": { "direct": {}, "indirect": {} }
+}
+|]
+
+
+wireAliasesMain :: T.Text
+wireAliasesMain = [text|
+module Main exposing (..)
+
+import Lamdera.Wire3 as W
+import Platform
+
+
+type alias Base r =
+    { r | filterable : Bool }
+
+
+type alias BasicItem item =
+    { item : item, label : String }
+
+
+type alias Id record =
+    record
+
+
+type alias Id2 r =
+    Id r
+
+
+type Item item
+    = Basic (Base (BasicItem item))
+    | Inline (Base { item : item, label : String })
+    | Other (Id2 { x : item })
+
+
+type alias Holder =
+    { a : Item Int, b : Item Int, c : Item Int, d : Id Int }
+
+
+roundTrip : Int -> Maybe Int
+roundTrip n =
+    let
+        holder =
+            { a = Basic { filterable = True, item = n, label = "a" }
+            , b = Inline { filterable = False, item = n, label = "b" }
+            , c = Other { x = n }
+            , d = n
+            }
+
+        items h =
+            case ( h.a, h.b, h.c ) of
+                ( Basic a, Inline b, Other c ) ->
+                    if a.item == n && a.label == "a" && a.filterable && b.item == n && b.label == "b" && c.x == n && h.d == n then
+                        Just n
+
+                    else
+                        Nothing
+
+                _ ->
+                    Nothing
+    in
+    W.bytesEncode (w3_encode_Holder holder)
+        |> W.bytesDecode w3_decode_Holder
+        |> Maybe.andThen items
+
+
+main : Program () (Int -> Maybe Int) ()
 main =
     Platform.worker
         { init = \_ -> ( roundTrip, Cmd.none )

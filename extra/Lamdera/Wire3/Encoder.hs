@@ -463,7 +463,14 @@ encodeTypeValue depth ifaces cname tipe value =
                 TRecord fieldMap extensibleName ->
                   case resolvedRecordFieldMapM fieldMap extensibleName tvars of
                     Just resolved ->
-                        let extendedRecord = TRecord resolved extensibleName & resolveTvar tvars
+                        -- `resolved` already holds the extension's fields, so the record is
+                        -- closed, as in inlineIfRecordOrCall and the decoders. Keeping
+                        -- extensibleName left the row variable in place whenever the argument
+                        -- was generic (resolveTvar doesn't substitute those), so the encoder
+                        -- called a `w3_x_c_<row>` codec that isn't in scope, e.g. a constructor
+                        -- `Basic (Base (Item item))` with `type alias Base r = { r | ... }`
+                        -- (Confidenceman02/elm-select)
+                        let extendedRecord = TRecord resolved Nothing & resolveTvar tvars
                         in
                         call (encoderForType depth ifaces cname extendedRecord) [ value ]
                     Nothing -> normalEncoder
