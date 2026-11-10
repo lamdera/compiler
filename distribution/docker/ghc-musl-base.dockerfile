@@ -20,10 +20,10 @@
 # shared objects, and musl's dynamic linker still resolves the LFS64 names.
 #
 # Pinned by digest because the 9.8.4 tag is rebuilt in place. This digest is the
-# multi-arch index of the 2026-10-23 build (alpine 3.24.3, cabal 3.10.3.0); docker picks
+# multi-arch index of the 2026-11-08 build (cabal 3.10.3.0; the 2026-10-23 one is gone from the registry); docker picks
 # the arm64 or amd64 image from it. To move to a newer build:
 #   docker buildx imagetools inspect glcr.b-data.ch/ghc/ghc-musl:9.8.4   (the top Digest)
-FROM glcr.b-data.ch/ghc/ghc-musl:9.8.4@sha256:ffdc665c9d82bc886bb4e0a2693c7044a8e00000e6f2d39425a4a1ee2ce52279
+FROM glcr.b-data.ch/ghc/ghc-musl:9.8.4@sha256:28a14bb9fb23912b8e35a2d2d38c1163a8bcb1d07dae021e667ebe577580862d
 
 # The compiler build runs Template Haskell that compiles the reactor frontend and the
 # elm-repl-worker at build time (extra/Lamdera/Repl.hs, terminal/src/Develop/StaticFiles.hs),
