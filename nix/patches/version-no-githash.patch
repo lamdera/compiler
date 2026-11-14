@@ -1,5 +1,5 @@
---- a/extra/Lamdera/Version.hs	2026-08-16 00:39:02
-+++ b/extra/Lamdera/Version.hs	2026-08-16 00:39:08
+--- a/extra/Lamdera/Version.hs
++++ b/extra/Lamdera/Version.hs
 @@ -27,17 +27,13 @@
  medium = "lamdera-" <> short <> "-" <> elm
  
@@ -22,3 +22,12 @@
      ]
  
  
+@@ -46,7 +42,7 @@
+ `hashScheme`, so the server can tell exactly which compiler is asking. -}
+ shaShort :: String
+ shaShort =
+-  take 8 $ giHash $$tGitInfoCwd
++  take 8 "@gitRev@"
+ 
+ 
+ {-| How this compiler hashes types (Lamdera.TypeHash), as a number that changes whenever
