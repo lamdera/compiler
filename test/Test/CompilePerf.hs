@@ -114,6 +114,58 @@ suite = tests
           expectTextContains actual "Success! Compiled 2 modules."
       in
       using setup cleanup test
+
+  , scope "closed parts of an alias argument hold no variables of the enclosing alias" $
+      -- 1.5.0 crashed on Annotated with "b [rank = 1]" in Type.Solve.isGeneric (1.4.0
+      -- compiles all of these). In `Panel {} b`, Panel's body is built with b in its
+      -- argument dict, and `Slot (Maybe a)` in it has closed arguments (`Maybe {}`).
+      -- Their `{}` part was left Deferred with Panel's argument dict, b included, and
+      -- the deferred `{}` has the outermost rank. Unifying `Slot (Maybe {})` with
+      -- `fill`'s `Slot (Maybe a)` put it in the current pool, and rank adjustment
+      -- through it lowered b to the outermost rank, so b was never generalized. A rigid
+      -- b crashed isGeneric; a flexible one stayed monomorphic, so Pattern's `label`
+      -- could not be used at two types.
+      let
+        project = "./test/scenario-compile-perf-closed-args"
+
+        setup = do
+          rmdir project
+          Dir.createDirectoryIfMissing True (project </> "src")
+          Dir.copyFile "./test/scenario-empty-elm-init/elm.json" (project </> "elm.json")
+          mapM_ (\(name, source) -> writeUtf8 (project </> "src" </> name) source) closedArgsModules
+
+        cleanup _ =
+          rmdir project
+
+        make file = do
+          io $ do
+            Lamdera.unsetEnv "LOVR"
+            Lamdera.unsetEnv "LTEST"
+            Lamdera.unsetEnv "LDEBUG"
+          catchOutput $ Lamdera.Compile.makeDev project ["src" </> file]
+
+        test _ = do
+          scope "the variants compile" $ do
+            actual <- make "Main.elm"
+            expectTextDoesNotContain actual "compiler bug"
+            expectTextContains actual "Success! Compiled 7 modules."
+
+          scope "a mismatch is reported as a type error" $ do
+            actual <- make "Mismatch.elm"
+            expectTextDoesNotContain actual "compiler bug"
+            expectTextContains actual "TYPE MISMATCH"
+            expectTextContains actual "This `fill` call produces:"
+
+          scope "unannotated uses get the types 1.4.0 infers" $ do
+            actual <- make "Inferred.elm"
+            expectTextDoesNotContain actual "compiler bug"
+            -- 1.4.0 and 1.5 show `Wrap b -> Panel {} b`; Elm 0.19.4's type checker
+            -- shows the constructor's argument with Panel expanded. Same type, and b
+            -- is generalized either way.
+            expectTextContains actual "( Wrap b -> { label : b, slot : Slot (Maybe {}) }"
+            expectTextContains actual ", { r | slot : Slot (Maybe a) } -> ()"
+      in
+      using setup cleanup test
   ]
 
 
@@ -243,3 +295,164 @@ rankMainModule =
     , "main ="
     , "    Html.text (String.fromInt (run { toRoute = String.length, other = identity }))"
     ]
+
+
+closedArgsModules :: [(FilePath, T.Text)]
+closedArgsModules =
+  [ ( "Panel.elm"
+    , T.unlines
+        [ "module Panel exposing (..)"
+        , ""
+        , "type alias Slot a ="
+        , "    { item : a }"
+        , ""
+        , "type alias Panel a b ="
+        , "    { label : b"
+        , "    , slot : Slot (Maybe a)"
+        , "    }"
+        , ""
+        , "type alias Inner a ="
+        , "    Slot (Maybe a)"
+        , ""
+        , "type alias Panel2 a b ="
+        , "    { label : b"
+        , "    , inner : Inner a"
+        , "    }"
+        , ""
+        , "type Wrap b"
+        , "    = Wrap (Panel {} b)"
+        , ""
+        , "fill : { r | slot : Slot (Maybe a) } -> ()"
+        , "fill _ ="
+        , "    ()"
+        , ""
+        , "fillInner : { r | inner : Inner a } -> ()"
+        , "fillInner _ ="
+        , "    ()"
+        ]
+    )
+  , ( "Annotated.elm"
+    , T.unlines
+        [ "module Annotated exposing (view)"
+        , ""
+        , "import Panel exposing (..)"
+        , ""
+        , "view : Panel {} b -> ()"
+        , "view panel ="
+        , "    fill panel"
+        ]
+    )
+  , ( "LetAnnotated.elm"
+    , T.unlines
+        [ "module LetAnnotated exposing (both)"
+        , ""
+        , "import Panel exposing (..)"
+        , ""
+        , "both : ( (), () )"
+        , "both ="
+        , "    let"
+        , "        view : Panel {} b -> ()"
+        , "        view panel ="
+        , "            fill panel"
+        , "    in"
+        , "    ( view { label = 1, slot = { item = Nothing } }, view { label = \"one\", slot = { item = Nothing } } )"
+        ]
+    )
+  , ( "Nested.elm"
+    , T.unlines
+        [ "module Nested exposing (view)"
+        , ""
+        , "import Panel exposing (..)"
+        , ""
+        , "view : Panel2 {} b -> ()"
+        , "view panel ="
+        , "    fillInner panel"
+        ]
+    )
+  , ( "RecordArg.elm"
+    , T.unlines
+        [ "module RecordArg exposing (label)"
+        , ""
+        , "import Panel exposing (..)"
+        , ""
+        , "label : Panel { n : Int } b -> b"
+        , "label panel ="
+        , "    let"
+        , "        _ ="
+        , "            fill panel"
+        , "    in"
+        , "    panel.label"
+        ]
+    )
+  , ( "Pattern.elm"
+    , T.unlines
+        [ "module Pattern exposing (labels)"
+        , ""
+        , "import Panel exposing (..)"
+        , ""
+        , "labels : ( Int, String )"
+        , "labels ="
+        , "    let"
+        , "        label w ="
+        , "            case w of"
+        , "                Wrap panel ->"
+        , "                    let"
+        , "                        _ ="
+        , "                            fill panel"
+        , "                    in"
+        , "                    panel.label"
+        , "    in"
+        , "    ( label (Wrap { label = 1, slot = { item = Nothing } })"
+        , "    , label (Wrap { label = \"one\", slot = { item = Nothing } })"
+        , "    )"
+        ]
+    )
+  , ( "Main.elm"
+    , T.unlines
+        [ "module Main exposing (all)"
+        , ""
+        , "import Annotated"
+        , "import LetAnnotated"
+        , "import Nested"
+        , "import Pattern"
+        , "import RecordArg"
+        , ""
+        , "all ="
+        , "    ( Annotated.view, LetAnnotated.both, ( Nested.view, Pattern.labels, RecordArg.label ) )"
+        ]
+    )
+  , ( "Mismatch.elm"
+    , T.unlines
+        [ "module Mismatch exposing (view)"
+        , ""
+        , "import Panel exposing (..)"
+        , ""
+        , "view : Panel {} b -> Int"
+        , "view panel ="
+        , "    fill panel"
+        ]
+    )
+  , ( "Inferred.elm"
+    , T.unlines
+        [ "module Inferred exposing (reveal)"
+        , ""
+        , "import Panel exposing (..)"
+        , ""
+        , "unwrap w ="
+        , "    case w of"
+        , "        Wrap panel ->"
+        , "            let"
+        , "                _ ="
+        , "                    fill panel"
+        , "            in"
+        , "            panel"
+        , ""
+        , "view panel ="
+        , "    fill panel"
+        , ""
+        , "reveal : ()"
+        , "reveal ="
+        , "    ( unwrap, view )"
+        ]
+    )
+  ]
