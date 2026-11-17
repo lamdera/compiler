@@ -315,7 +315,18 @@ typeToVarHelp closed register aliasDict tipe =
 
     AliasN home name args aliasType source ->
       if closed || all (isClosedType . snd) args then
-        do  argVars <- traverse (traverse (typeToVarHelp True register aliasDict)) args
+        do  -- Closed arguments look nothing up in aliasDict, but the parts of them left
+            -- Deferred keep the dict they were built with (deferredVariables), which
+            -- generalize, makeCopy and restore all walk. Outside a closed type,
+            -- aliasDict is the enclosing alias's arguments, which may hold variables:
+            -- `box : Box (Maybe a)` in `type alias Outer a b = { other : b, box : ... }`,
+            -- used as `Outer {} b`, deferred `{}` with `b` in its dict, so rank
+            -- adjustment through that closed, outermost-rank `{}` lowered `b` to the
+            -- outermost rank: `b` was never generalized, and isGeneric crashed on a
+            -- rigid `b`, or a flexible one stayed monomorphic. Every variable reachable
+            -- from a closed type must be closed too.
+            let closedDict = if closed then aliasDict else Map.empty
+            argVars <- traverse (traverse (typeToVarHelp True register closedDict)) args
             let argDict = Map.fromList argVars
             key <- traverse makeSourceKey source
             body <- maybe (return aliasType) (\k -> shareBody k aliasType) key
