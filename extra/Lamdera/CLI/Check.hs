@@ -7,7 +7,10 @@ module Lamdera.CLI.Check where
 
 import Control.Monad.Except (catchError, throwError)
 import Control.Monad (forM_, when)
+import qualified Control.Exception
+import qualified Data.Char
 import Data.Maybe (fromMaybe)
+import qualified Data.Maybe
 import NeatInterpolation
 import qualified Data.List as List
 import qualified Data.Text.Encoding as T
@@ -736,63 +739,197 @@ migrationCheck root nextVersion changedTypes = do
 
   debug "Type-checking Evergreen migrations..."
 
+  recoverInterruptedCheck migrationPath migrationPathBk version
+  ensureSnapshotTypeReferences root
+
   migrationExists <- Dir.doesFileExist migrationPath
 
-  onlyWith migrationPath $ (\migration -> do
-      ensureNoFalseClaims migrationPath migration changedTypes
-      copyFile migrationPath migrationPathBk
-      replaceSnapshotTypeReferences migrationPath version
-    )
-
-  let cache = lamderaCache root
-  let lamderaCheckBothPath = cache </> "LamderaCheckBoth.elm"
-  mkdir cache
-
-  harness <- Lamdera.Evergreen.MigrationHarness.generate root nextVersion
-  writeUtf8 lamderaCheckBothPath harness
-
   let
-    cleanup = do
-      debug "make_cleanup: Cleaning up build scaffold"
-      -- When in debug mode, backup the check file for debugging inspection
-      onlyWhen_ Lamdera.isDebug $ copyFile lamderaCheckBothPath (cache </> "LamderaCheckBoth.elm.bk")
-      -- Remove our temporary check harness file
-      remove lamderaCheckBothPath
-
-      -- Restore backed up unaltered migration file
-      onlyWhen migrationExists $ do
+    -- Puts the user's migration file back. Safe to call more than once.
+    restoreMigration = do
+      bkExists <- Dir.doesFileExist migrationPathBk
+      onlyWhen (migrationExists && bkExists) $ do
         copyFile migrationPathBk migrationPath
         remove migrationPathBk
 
-      pure ()
+  -- The check rewrites the user's migration file in place: restore it however we leave,
+  -- Ctrl-C and exceptions included, or the file is left without its type prefixes.
+  flip Control.Exception.onException restoreMigration $ do
+    onlyWith migrationPath $ (\migration -> do
+        ensureNoFalseClaims migrationPath migration changedTypes
+        copyFile migrationPath migrationPathBk
+        replaceSnapshotTypeReferences migrationPath version
+      )
 
-  Dir.withCurrentDirectory root $
-    Make.run_cleanup cleanup [ lamderaCheckBothPath ] $
-        Make.Flags
-          { _debug = False
-          , _optimize = False
-          , _output = Just (Make.DevNull)
-          , _report = Nothing
-          , _docs = Nothing
-          , _noWire = False
-          , _optimizeLegible = False
-          , _esm = False
-          }
+    let cache = lamderaCache root
+    let lamderaCheckBothPath = cache </> "LamderaCheckBoth.elm"
+    mkdir cache
 
-  -- @TODO this is because the migrationCheck does weird terminal stuff that mangles the display... how to fix this?
-  sleep 50 -- 50 milliseconds
+    harness <- Lamdera.Evergreen.MigrationHarness.generate root nextVersion
+    writeUtf8 lamderaCheckBothPath harness
 
-  debug "Cleaning up build scaffold"
+    let
+      cleanup = do
+        debug "make_cleanup: Cleaning up build scaffold"
+        -- When in debug mode, backup the check file for debugging inspection
+        onlyWhen_ Lamdera.isDebug $ copyFile lamderaCheckBothPath (cache </> "LamderaCheckBoth.elm.bk")
+        -- Remove our temporary check harness file
+        remove lamderaCheckBothPath
 
-  -- When in debug mode, backup the check file for debugging inspection
-  onlyWhen_ Lamdera.isDebug $ copyFile lamderaCheckBothPath (cache </> "LamderaCheckBoth.elm.bk")
-  -- Remove our temporary check harness file
-  remove $ root </> lamderaCheckBothPath
+        -- Restore backed up unaltered migration file
+        restoreMigration
 
-  -- Restore backed up unaltered migration file
-  onlyWhen migrationExists $ do
-    copyFile migrationPathBk migrationPath
-    remove migrationPathBk
+        pure ()
+
+    Dir.withCurrentDirectory root $
+      Make.run_cleanup cleanup [ lamderaCheckBothPath ] $
+          Make.Flags
+            { _debug = False
+            , _optimize = False
+            , _output = Just (Make.DevNull)
+            , _report = Nothing
+            , _docs = Nothing
+            , _noWire = False
+            , _optimizeLegible = False
+            , _esm = False
+            }
+
+    -- @TODO this is because the migrationCheck does weird terminal stuff that mangles the display... how to fix this?
+    sleep 50 -- 50 milliseconds
+
+    debug "Cleaning up build scaffold"
+
+    -- When in debug mode, backup the check file for debugging inspection
+    onlyWhen_ Lamdera.isDebug $ copyFile lamderaCheckBothPath (cache </> "LamderaCheckBoth.elm.bk")
+    -- Remove our temporary check harness file
+    remove $ root </> lamderaCheckBothPath
+
+    -- Restore backed up unaltered migration file
+    restoreMigration
+
+
+{-| A check killed before it restored the migration file (an older lamdera, or SIGKILL)
+leaves the backup behind. Put it back when the file is still exactly the check's rewrite
+of it, otherwise the user edited it since: don't guess which one is right.
+-}
+recoverInterruptedCheck :: FilePath -> FilePath -> Int -> IO ()
+recoverInterruptedCheck migrationPath migrationPathBk version = do
+  bkM <- readUtf8Text migrationPathBk
+  onlyWhen (bkM /= Nothing) $ do
+    currentM <- readUtf8Text migrationPath
+    case (bkM, currentM) of
+      (Just bk, Just current) | current == bk ->
+        remove migrationPathBk
+
+      (Just bk, Just current) | current == T.replace ("Evergreen.V" <> show_ version <> ".") "" bk -> do
+        debug $ "Restoring " <> migrationPath <> " from an interrupted check"
+        copyFile migrationPathBk migrationPath
+        remove migrationPathBk
+
+      _ ->
+        Progress.throw $
+          Help.report "INTERRUPTED CHECK" (Just migrationPath)
+            ("An earlier `lamdera check` was interrupted while it had this migration file rewritten, and left the original at " <> migrationPathBk <> ".")
+            [ D.reflow "The file has been changed since, so I can't tell which one you want. Compare them, keep the one you want in the migration file, and delete the backup."
+            ]
+
+
+{-| Every type a migration names for its version must be the snapshot's: `Evergreen.V12.Types.BackendModel`,
+never the current `Types.BackendModel`. Those are the same types only while that version is the
+newest, so the mistake compiles until the next version's chain fails with a confusing type mismatch.
+`lamdera check` strips these prefixes while it type-checks, so an editor that saves the file during
+a check leaves it this way.
+-}
+ensureSnapshotTypeReferences :: FilePath -> IO ()
+ensureSnapshotTypeReferences root = do
+  migrationFiles <- Lamdera.Evergreen.MigrationHarness.findMigrationFilePaths root
+  reports <- migrationFiles & mapM (\file -> do
+      let
+        versionM = file & T.pack & T.stripPrefix "V" >>= T.stripSuffix ".elm" & fmap T.unpack >>= Text.Read.readMaybe
+        path = root </> "src/Evergreen/Migrate" </> file
+      case versionM of
+        Just version -> do
+          contentM <- readUtf8Text path
+          case contentM of
+            Just content -> do
+              offending <- currentTypeImports root version content
+              pure $ snapshotTypeReferencesReport ("src/Evergreen/Migrate" </> file) version offending
+            Nothing -> pure Nothing
+        Nothing -> pure Nothing
+    )
+  Progress.throwMultiple $ Data.Maybe.catMaybes reports
+
+
+-- The imports of snapshotted modules whose types the migration names without the snapshot prefix,
+-- with the references found.
+currentTypeImports :: FilePath -> Int -> Text -> IO [(Text, [Text])]
+currentTypeImports root version content = do
+  let
+    -- An import may run over several lines (`exposing` on the next one).
+    importDecls =
+      content
+        & T.lines
+        & foldl (\acc line ->
+            if "import " `T.isPrefixOf` line then acc ++ [line]
+            else if (" " `T.isPrefixOf` line || "\t" `T.isPrefixOf` line) && acc /= [] && "import " `T.isPrefixOf` last acc
+              then init acc ++ [last acc <> " " <> line]
+            else acc ++ [""]
+          ) []
+        & filter (T.isPrefixOf "import ")
+
+    parse decl =
+      case T.words decl of
+        "import" : moduleName : rest ->
+          let
+            alias = case rest of
+              "as" : a : _ -> a
+              _ -> moduleName
+          in
+          Just (moduleName, alias, "exposing" `elem` rest)
+        _ -> Nothing
+
+    isRefChar c = Data.Char.isAlphaNum c || c == '_' || c == '.'
+
+    references qualifier =
+      T.breakOnAll (qualifier <> ".") content
+        & filterMap (\(before, after) ->
+            let rest = T.drop (T.length qualifier + 1) after
+            in
+            if (T.null before || not (isRefChar (T.last before))) && not (T.null rest) && Data.Char.isUpper (T.head rest)
+              then Just $ qualifier <> "." <> T.takeWhile (\c -> Data.Char.isAlphaNum c || c == '_') rest
+              else Nothing
+          )
+        & List.nub
+
+  importDecls & filterMap parse & filter (\(m, _, _) -> not ("Evergreen." `T.isPrefixOf` m))
+    & mapM (\(moduleName, alias, exposing) -> do
+        let snapshotPath = root </> "src/Evergreen" </> ("V" <> show version) </> (T.unpack (T.replace "." "/" moduleName) <> ".elm")
+        snapshotted <- Dir.doesFileExist snapshotPath
+        let refs = references alias
+        pure $
+          if snapshotted && (refs /= [] || exposing)
+            then Just (moduleName, if refs == [] then ["import " <> moduleName <> " exposing (...)"] else refs)
+            else Nothing
+      )
+    & fmap Data.Maybe.catMaybes
+
+
+snapshotTypeReferencesReport :: FilePath -> Int -> [(Text, [Text])] -> Maybe Help.Report
+snapshotTypeReferencesReport path version offending =
+  case offending of
+    [] -> Nothing
+    (firstModule, _) : _ ->
+      let
+        v = show version
+        snapshot m = "Evergreen.V" <> v <> "." <> T.unpack m
+        examples = offending & concatMap snd & take 5 & map (\r -> "    " <> T.unpack r) & List.intercalate "\n"
+      in
+      Just $ Help.report "MIGRATION USES CURRENT TYPES" (Just path)
+        ("This v" <> v <> " migration refers to the current " <> (offending & map (\(m, _) -> "`" <> T.unpack m <> "`") & List.intercalate ", ") <> " instead of the v" <> v <> " snapshot:")
+        [ D.vcat [ D.fromChars examples ]
+        , D.reflow $ "A migration must name the types snapshotted for v" <> v <> ", e.g. `" <> snapshot firstModule <> ".BackendModel`. The current types only match them while v" <> v <> " is the newest version, so this breaks the next deploy after it."
+        , D.reflow $ "Import " <> snapshot firstModule <> " and prefix each of these with `Evergreen.V" <> v <> ".`. If you didn't write them: `lamdera check` drops these prefixes while it runs, so an editor that saved this file during a check can leave it like this."
+        ]
 
 ensureNoFalseClaims :: FilePath -> Text -> [(AST.Prim.TypeName.Name, String, String)] -> IO ()
 ensureNoFalseClaims migrationPath migration changedTypes = do
