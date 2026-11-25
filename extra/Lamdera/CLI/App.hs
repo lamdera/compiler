@@ -106,7 +106,11 @@ withGit ctx appName args payload = do
   let message = readyMessage remote (Git.outcomeMessage url appName outcome details) appName outcome
   if jsonOut
     then output ctx (withGitFields url remote outcome message payload) ""
-    else Progress.report (saidText (outcomeDoc outcome) message)
+    else
+      if outcome == Git.AuthRefused
+        -- On one line, unwrapped: this exact sentence is what people (and agents) look for.
+        then Progress.report (D.dullyellow (D.fromChars (T.unpack ("───> " <> message))))
+        else Progress.report (saidText (outcomeDoc outcome) message)
 
 
 {-| Ready, but without the `lamdera` remote `git push lamdera` needs. -}
@@ -229,7 +233,8 @@ renderInfo web a =
     ++
     (if null deploys then [] else
       [ ""
-      , lines_ $ table [ "DEPLOY", "SHA", "AT" ] (fmap (\d -> [ version d, T.take 8 (textAt "sha" d), timeAt "at" d ]) deploys)
+      -- STATUS: a failed deploy is listed too, and looked like a deployed one without it.
+      , lines_ $ table [ "DEPLOY", "SHA", "STATUS", "AT" ] (fmap (\d -> [ version d, T.take 8 (textAt "sha" d), textAt "status" d, timeAt "at" d ]) deploys)
       ])
     ++
     [ ""

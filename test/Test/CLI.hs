@@ -561,7 +561,7 @@ endToEnd = do
 
     , scope "app info: polls a pending answer until it is ok" $ do
         expectEqual ExitSuccess infoExit
-        expectTextContainsAll infoOut [ "App      demo", "Version  v3", "DEPLOY  SHA       AT", "/app/demo" ]
+        expectTextContainsAll infoOut [ "App      demo", "Version  v3", "DEPLOY  SHA       STATUS    AT", "/app/demo" ]
         expectEqual 2 (length (filter (T.isInfixOf "\"ticket\":\"info1\"") sentLines))
 
     , scope "app delete without --yes is refused, and sends nothing" $ do

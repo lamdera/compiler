@@ -15,7 +15,7 @@ const event = { id: 42, version: 3, tipe: 1, kind: 'ToBackend', name: 'AddTodo',
 
 // Each pending ticket answers pending once more, then this.
 const tickets = {
-  info1: { ok: { appId: 'demo', plan: 'hobby', owner: 'mario', version: 3, created: 1700000000000, url: 'https://demo.lamdera.app', deploys: [{ version: 3, sha: 'abcdef1234567', at: 1700000000000 }], domains: [], logging: true } },
+  info1: { ok: { appId: 'demo', plan: 'hobby', owner: 'mario', version: 3, created: 1700000000000, url: 'https://demo.lamdera.app', deploys: [{ version: 3, sha: 'abcdef1234567', status: 'deployed', at: 1700000000000 }], domains: [], logging: true } },
   event1: { ok: { event, payload: { $: 'AddTodo', args: ['milk'] }, logs: ['[2026-10-30 10:00:00.000] #42 Debug: added'] } },
   // apps.lamdera.invalid never resolves, so the connectivity check after it is quick and
   // contacts nothing
