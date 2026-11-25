@@ -3,7 +3,7 @@
 
 module Lamdera.CLI.Dashboard where
 
-{- What the app management commands (`lamdera app`, `env`, `domains`, `logs`, `events`)
+{- What the app management commands (`lamdera app`, `status`, `keys`, `env`, `domain`, `logs`, `events`, `metrics`)
 share: the common flags, talking to the dashboard, confirmations, and output.
 
 Every command is one or more POSTs to the dashboard's `/_r/cli_<op>` with a JSON body
@@ -138,6 +138,7 @@ data Field
   = FString Text
   | FInt Int
   | FBool Bool
+  | FNull
   deriving (Show, Eq)
 
 
@@ -182,6 +183,7 @@ bodyJson token fields =
         FString t -> E.chars (T.unpack t)
         FInt n -> E.int n
         FBool b -> E.bool b
+        FNull -> E.null
 
     fromChars_ = Data.String.fromString
 

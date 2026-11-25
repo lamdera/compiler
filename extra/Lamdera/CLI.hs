@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Lamdera.CLI (live, login, check, deploy, reset, update, annotate, eval, backend, format, app, env, domains, logs, events, appArgs, appFlags, envArgs, envFlags, domainsArgs, domainsFlags, logsFlags, eventsArgs, eventsFlags) where
+module Lamdera.CLI (live, login, check, deploy, reset, update, annotate, eval, backend, format, app, status, keys, env, domain, domains, logs, events, metrics, appArgs, appFlags, statusFlags, keysArgs, keysFlags, envArgs, envFlags, domainsArgs, domainsFlags, logsFlags, eventsArgs, eventsFlags, metricsFlags) where
 
 import Text.Read (readMaybe)
 import qualified Text.PrettyPrint.ANSI.Leijen as P
@@ -22,6 +22,7 @@ import qualified Lamdera.CLI.Env
 import qualified Lamdera.CLI.Domains
 import qualified Lamdera.CLI.Logs
 import qualified Lamdera.CLI.Events
+import qualified Lamdera.CLI.Keys
 import Lamdera.CLI.Dashboard (appName_, int_, text_, verb, choice)
 
 
@@ -121,17 +122,26 @@ deploy :: Terminal.Command
 deploy =
   let
     summary =
-      "Deploy Lamdera app after a successful `lamdera check`"
+      "Deploy the app: `lamdera check`, then push to Lamdera. The way to deploy."
 
     details =
-      "The `deploy` command is equivalent to `lamdera check && git push lamdera main`"
+      "The `deploy` command deploys the app of the project you are in:"
 
     example =
-      reflow
-        "It will query the production environment and supply\
-        \ information about the next version and required migrations, \
-        \ and then attempt to deploy. Deploying from non-main/master \
-        \ branches will create/replace a preview app named after the branch."
+      stack
+        [ reflow
+            "On the main or master branch it runs `lamdera check` (the next version and the\
+            \ migrations it needs, against the deployed app) and, if that passes, pushes to\
+            \ the `lamdera` git remote, which builds and deploys it. It is the same as\
+            \ `lamdera check && git push lamdera main`."
+        , reflow
+            "On any other branch it creates or replaces a preview app named after the branch,\
+            \ after asking."
+        , reflow
+            "New app? `lamdera app create <name>` creates it and sets up the remote; for an\
+            \ existing app in a fresh clone, `lamdera app link <name>`. Pushing needs an SSH\
+            \ key registered with Lamdera: `lamdera keys add`."
+        ]
   in
   Terminal.Command "deploy" (Common summary) details example noArgs noFlags Lamdera.CLI.Deploy.run
 
@@ -308,8 +318,8 @@ yesFlagHelp = "Do it without asking. Needed for destructive operations when ther
 commonNote :: P.Doc
 commonNote =
   reflow
-    "Every app management command (app, env, domains, logs, events) takes --app NAME \
-    \ (default: the app of the project you are in) and --json (machine readable output). \
+    "The commands about an app (app, status, env, domain, logs, events, metrics) take --app NAME \
+    \ (default: the app of the project you are in), and they all take --json (machine readable output). \
     \ They need a CLI session: run `lamdera login` first."
 
 
@@ -322,7 +332,7 @@ app :: Terminal.Command
 app =
   let
     summary =
-      "Manage your Lamdera apps: show, list, create, delete, change plan."
+      "Create, link, list, move and delete your Lamdera apps, and change their plan."
 
     details =
       "The `app` command manages your Lamdera apps, like the dashboard does:"
@@ -330,12 +340,15 @@ app =
     example =
       stack
         [ examples
-            [ "lamdera app                       # this app: plan, version, deploys, domains"
-            , "lamdera app list                  # all your apps"
+            [ "lamdera app list                  # all your apps"
             , "lamdera app create my-app --plan hobby"
+            , "lamdera app link my-app           # an existing app, in a fresh clone"
             , "lamdera app plan professional     # change this app's plan"
+            , "lamdera app move my-team          # to a team (or `personal`)"
             , "lamdera app delete --app my-app --yes"
+            , "lamdera app                       # this app, the same as `lamdera status`"
             ]
+        , reflow "`create` and `link` add the `lamdera` git remote to the git repository you are in (not one that is already there for another app), and check that this machine can push to it: then `lamdera deploy` deploys. Pushing needs an SSH key registered with Lamdera, see `lamdera keys`."
         , reflow "`app delete` deletes the app and all its data for good: it asks you to type the app's name, or needs --yes."
         , commonNote
         ]
@@ -350,6 +363,8 @@ appArgs =
     , require1 (const Lamdera.CLI.App.Info) (verb "info")
     , require1 (const Lamdera.CLI.App.List) (verb "list")
     , require2 (\_ name -> Lamdera.CLI.App.Create name) (verb "create") appName_
+    , require2 (\_ name -> Lamdera.CLI.App.Link name) (verb "link") appName_
+    , require2 (\_ team -> Lamdera.CLI.App.Move team) (verb "move") (text_ "team id" ["my-team", "personal"])
     , require1 (const Lamdera.CLI.App.Delete) (verb "delete")
     , require2 (\_ plan -> Lamdera.CLI.App.Plan plan) (verb "plan") (choice "plan" Lamdera.CLI.App.plans)
     ]
@@ -363,6 +378,77 @@ appFlags =
     |-- onOff "yes" yesFlagHelp
     |-- flag "team" (text_ "team id" ["my-team"]) "`app create`: create the app in this team instead of your own account."
     |-- flag "plan" (choice "plan" Lamdera.CLI.App.plans) "`app create`: the plan to start on (default: free)."
+
+
+status :: Terminal.Command
+status =
+  let
+    summary =
+      "Show the app: its plan, version, deploys, domains and git remote."
+
+    details =
+      "The `status` command shows a Lamdera app, the one of the project you are in by default:"
+
+    example =
+      stack
+        [ examples
+            [ "lamdera status                     # the app of the project you are in"
+            , "lamdera status --app my-app --json"
+            ]
+        , commonNote
+        ]
+  in
+  Terminal.Command "status" (Common summary) details example noArgs statusFlags (\() appFlags_ -> Lamdera.CLI.App.run Lamdera.CLI.App.Info appFlags_)
+
+
+statusFlags :: Flags Lamdera.CLI.App.Flags
+statusFlags =
+  flags (\app_ json -> Lamdera.CLI.App.Flags app_ json False Nothing Nothing)
+    |-- flag "app" appName_ appFlagHelp
+    |-- onOff "json" jsonFlagHelp
+
+
+keys :: Terminal.Command
+keys =
+  let
+    summary =
+      "Manage the SSH keys `git push` (and so `lamdera deploy`) authenticates with."
+
+    details =
+      "The `keys` command manages the SSH public keys of your Lamdera account, like the dashboard's Account page:"
+
+    example =
+      stack
+        [ examples
+            [ "lamdera keys                             # list them"
+            , "lamdera keys add                         # this machine's key, ~/.ssh/id_ed25519.pub or the like"
+            , "lamdera keys add ~/.ssh/work.pub --name work-laptop"
+            , "lamdera keys remove work-laptop --yes"
+            ]
+        , reflow "`keys add` without a file adds the one default public key there is (~/.ssh/id_ed25519.pub, id_ecdsa.pub or id_rsa.pub); with several it asks which. Only public keys (.pub) are sent: a private key is refused. A key is named after its comment unless you pass --name. `keys remove` takes the name `lamdera keys` shows (or the key's fingerprint)."
+        , reflow "They need a CLI session: run `lamdera login` first. --json prints the result as JSON."
+        ]
+  in
+  Terminal.Command "keys" (Common summary) details example keysArgs keysFlags Lamdera.CLI.Keys.run
+
+
+keysArgs :: Args Lamdera.CLI.Keys.Args
+keysArgs =
+  oneOf
+    [ require0 Lamdera.CLI.Keys.List
+    , require1 (const Lamdera.CLI.Keys.List) (verb "list")
+    , require1 (const (Lamdera.CLI.Keys.Add Nothing)) (verb "add")
+    , require2 (\_ file -> Lamdera.CLI.Keys.Add (Just file)) (verb "add") (text_ "public key file" ["~/.ssh/id_ed25519.pub"])
+    , require2 (\_ name -> Lamdera.CLI.Keys.Remove name) (verb "remove") (text_ "key name" ["work-laptop"])
+    ]
+
+
+keysFlags :: Flags Lamdera.CLI.Keys.Flags
+keysFlags =
+  flags Lamdera.CLI.Keys.Flags
+    |-- onOff "json" jsonFlagHelp
+    |-- onOff "yes" yesFlagHelp
+    |-- flag "name" (text_ "key name" ["work-laptop"]) "`keys add`: the name to give the key (default: its comment, like you@computer)."
 
 
 env :: Terminal.Command
@@ -409,27 +495,38 @@ envFlags =
     |-- onOff "redeploy" "`env set`: deploy the app with the new value now, if the app uses it."
 
 
+domain :: Terminal.Command
+domain =
+  domainNamed "domain"
+
+
+{-| The old name of `domain`, still understood. -}
 domains :: Terminal.Command
 domains =
+  domainNamed "domains"
+
+
+domainNamed :: String -> Terminal.Command
+domainNamed name =
   let
     summary =
       "Manage the app's custom domains."
 
     details =
-      "The `domains` command manages the custom domains of a Lamdera app:"
+      "The `domain` command manages the custom domains of a Lamdera app:"
 
     example =
       stack
         [ examples
-            [ "lamdera domains                    # list them, with their status"
-            , "lamdera domains add example.com    # then point example.com at the app as shown"
-            , "lamdera domains remove example.com --yes"
+            [ "lamdera domain                     # list them, with their status"
+            , "lamdera domain add example.com     # then point example.com at the app as shown"
+            , "lamdera domain remove example.com --yes"
             ]
-        , reflow "A domain is active once its DNS points at the app and its certificate is issued: `add` tells you which DNS record to create, and `domains` shows how far along it is. Custom domains are part of the Professional plan."
+        , reflow "A domain is active once its DNS points at the app and its certificate is issued: `add` tells you which DNS record to create, and `domain` shows how far along it is. Custom domains are part of the Professional plan."
         , commonNote
         ]
   in
-  Terminal.Command "domains" (Common summary) details example domainsArgs domainsFlags Lamdera.CLI.Domains.run
+  Terminal.Command name (Common summary) details example domainsArgs domainsFlags Lamdera.CLI.Domains.run
 
 
 domainsArgs :: Args Lamdera.CLI.Domains.Args
@@ -437,8 +534,8 @@ domainsArgs =
   oneOf
     [ require0 Lamdera.CLI.Domains.List
     , require1 (const Lamdera.CLI.Domains.List) (verb "list")
-    , require2 (\_ domain -> Lamdera.CLI.Domains.Add domain) (verb "add") (text_ "domain" ["example.com"])
-    , require2 (\_ domain -> Lamdera.CLI.Domains.Remove domain) (verb "remove") (text_ "domain" ["example.com"])
+    , require2 (\_ name -> Lamdera.CLI.Domains.Add name) (verb "add") (text_ "domain" ["example.com"])
+    , require2 (\_ name -> Lamdera.CLI.Domains.Remove name) (verb "remove") (text_ "domain" ["example.com"])
     ]
 
 
@@ -502,9 +599,9 @@ events =
             , "lamdera events --kind ToBackend --name AddTodo"
             , "lamdera events --min-duration 100       # slower than 100ms"
             , "lamdera events show 48213               # its decoded value and log lines"
-            , "lamdera events metrics --window 24h     # counts, timings and failures by msg"
             ]
         , reflow "Kinds: ToBackend, BackendMsg, ToFrontend, Connect, Disconnect, RPC, Upgrade, Restore, Snapshot, CodecFailure, Failure. Msg names and values are shown for versions deployed with a compiler that writes a wire schema (1.5.1 and later)."
+        , reflow "Counts, timings and failures by msg: `lamdera metrics`."
         , commonNote
         ]
   in
@@ -517,13 +614,13 @@ eventsArgs =
     [ require0 Lamdera.CLI.Events.List
     , require1 (const Lamdera.CLI.Events.List) (verb "list")
     , require2 (\_ n -> Lamdera.CLI.Events.Show n) (verb "show") (int_ "event id" ["48213"])
-    , require1 (const Lamdera.CLI.Events.Metrics) (verb "metrics")
     ]
 
 
 eventsFlags :: Flags Lamdera.CLI.Events.Flags
 eventsFlags =
-  flags Lamdera.CLI.Events.Flags
+  -- no --window: that is `lamdera metrics`
+  flags (\app_ json limit before kind name minDuration -> Lamdera.CLI.Events.Flags app_ json limit before kind name minDuration Nothing)
     |-- flag "app" appName_ appFlagHelp
     |-- onOff "json" jsonFlagHelp
     |-- flag "limit" (int_ "number" ["50", "200"]) "How many events to list (default: 50, at most 200)."
@@ -531,7 +628,36 @@ eventsFlags =
     |-- flag "kind" (text_ "kind" ["ToBackend", "BackendMsg"]) "Only events of this kind."
     |-- flag "name" (text_ "msg name" ["AddTodo"]) "Only msgs with this constructor name."
     |-- flag "min-duration" (int_ "milliseconds" ["100"]) "Only events that took at least this long."
-    |-- flag "window" (choice "window" Lamdera.CLI.Events.windows) "`events metrics`: the time window, 1h, 24h or 7d (default: 1h)."
+
+
+metrics :: Terminal.Command
+metrics =
+  let
+    summary =
+      "Show the app's msg metrics: counts, timings and failures by msg."
+
+    details =
+      "The `metrics` command shows what a deployed Lamdera app has been doing:"
+
+    example =
+      stack
+        [ examples
+            [ "lamdera metrics                  # the last hour"
+            , "lamdera metrics --window 24h     # or 7d"
+            ]
+        , reflow "Connections, events per minute, and for each msg its count, average, p95 and slowest duration and errors, then the recent failures. The events themselves: `lamdera events`."
+        , commonNote
+        ]
+  in
+  Terminal.Command "metrics" (Common summary) details example noArgs metricsFlags (\() metricsFlags_ -> Lamdera.CLI.Events.run Lamdera.CLI.Events.Metrics metricsFlags_)
+
+
+metricsFlags :: Flags Lamdera.CLI.Events.Flags
+metricsFlags =
+  flags (\app_ json window -> Lamdera.CLI.Events.Flags app_ json Nothing Nothing Nothing Nothing Nothing window)
+    |-- flag "app" appName_ appFlagHelp
+    |-- onOff "json" jsonFlagHelp
+    |-- flag "window" (choice "window" Lamdera.CLI.Events.windows) "The time window, 1h, 24h or 7d (default: 1h)."
 
 
 -- HELPERS

@@ -2,7 +2,7 @@
 
 module Lamdera.CLI.Events where
 
-{- `lamdera events [list | show <N> | metrics]`: the app's msg event log. Every backend
+{- `lamdera events [list | show <N>]` and `lamdera metrics` (Metrics): the app's msg event log. Every backend
 update (a ToBackend, a BackendMsg, a connect...) is an event with an id; the log lines it
 wrote carry the same id as `#N` (see `lamdera logs --msg N`). Names and payloads are
 decoded on the platform with the wire schema of the version that recorded the event. -}

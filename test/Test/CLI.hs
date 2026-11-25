@@ -35,6 +35,8 @@ import qualified Lamdera.CLI.Dashboard as Dash
 import qualified Lamdera.CLI.Domains as Domains
 import qualified Lamdera.CLI.Env as Env
 import qualified Lamdera.CLI.Events as Events
+import qualified Lamdera.CLI.Git as Git
+import qualified Lamdera.CLI.Keys as Keys
 import qualified Lamdera.CLI.Logs as Logs
 import qualified Lamdera.Relative
 
@@ -48,6 +50,9 @@ suite =
     , scope "rendering" rendering
     , scope "logs --follow" following
     , scope "confirmation" confirmation
+    , scope "keys" keyFiles
+    , scope "git remote" gitRemote
+    , scope "connectivity" connectivity
     , scope "against a stub dashboard" $ requireBinaryOnPath "node" endToEnd
     ]
 
@@ -75,6 +80,10 @@ eventsF :: Events.Flags
 eventsF = Events.Flags Nothing False Nothing Nothing Nothing Nothing Nothing Nothing
 
 
+keysF :: Keys.Flags
+keysF = Keys.Flags False False Nothing
+
+
 logsF :: Logs.Flags
 logsF = Logs.Flags Nothing False Nothing False Nothing Nothing False
 
@@ -95,6 +104,28 @@ parsing =
         expectEqual Nothing (parse Lamdera.CLI.appArgs Lamdera.CLI.appFlags ["create"])
         expectEqual Nothing (parse Lamdera.CLI.appArgs Lamdera.CLI.appFlags ["bogus"])
         expectEqual Nothing (parse Lamdera.CLI.appArgs Lamdera.CLI.appFlags ["list", "--colour"])
+        expectEqual (Just (App.Link "my-app", appF)) (parse Lamdera.CLI.appArgs Lamdera.CLI.appFlags ["link", "my-app"])
+        expectEqual Nothing (parse Lamdera.CLI.appArgs Lamdera.CLI.appFlags ["link"])
+        expectEqual (Just (App.Move "personal", appF { App._app = Just "demo" })) (parse Lamdera.CLI.appArgs Lamdera.CLI.appFlags ["move", "personal", "--app", "demo"])
+
+    , scope "status" $ do
+        expectEqual (Just ((), appF)) (parse Terminal.noArgs Lamdera.CLI.statusFlags [])
+        expectEqual (Just ((), appF { App._app = Just "demo", App._json = True })) (parse Terminal.noArgs Lamdera.CLI.statusFlags ["--app", "demo", "--json"])
+        expectEqual Nothing (parse Terminal.noArgs Lamdera.CLI.statusFlags ["--plan", "hobby"])
+
+    , scope "keys" $ do
+        expectEqual (Just (Keys.List, keysF)) (parse Lamdera.CLI.keysArgs Lamdera.CLI.keysFlags [])
+        expectEqual (Just (Keys.List, keysF { Keys._json = True })) (parse Lamdera.CLI.keysArgs Lamdera.CLI.keysFlags ["list", "--json"])
+        expectEqual (Just (Keys.Add Nothing, keysF)) (parse Lamdera.CLI.keysArgs Lamdera.CLI.keysFlags ["add"])
+        expectEqual (Just (Keys.Add (Just "k.pub"), keysF { Keys._name = Just "work" })) (parse Lamdera.CLI.keysArgs Lamdera.CLI.keysFlags ["add", "k.pub", "--name", "work"])
+        expectEqual (Just (Keys.Remove "work", keysF { Keys._yes = True })) (parse Lamdera.CLI.keysArgs Lamdera.CLI.keysFlags ["remove", "work", "--yes"])
+        expectEqual Nothing (parse Lamdera.CLI.keysArgs Lamdera.CLI.keysFlags ["remove"])
+        expectEqual Nothing (parse Lamdera.CLI.keysArgs Lamdera.CLI.keysFlags ["list", "--app", "demo"])
+
+    , scope "metrics" $ do
+        expectEqual (Just ((), eventsF { Events._window = Just "24h", Events._app = Just "demo" }))
+          (parse Terminal.noArgs Lamdera.CLI.metricsFlags ["--window", "24h", "--app=demo"])
+        expectEqual Nothing (parse Terminal.noArgs Lamdera.CLI.metricsFlags ["--window", "2d"])
 
     , scope "env" $ do
         expectEqual (Just (Env.List, envF)) (parse Lamdera.CLI.envArgs Lamdera.CLI.envFlags [])
@@ -118,9 +149,9 @@ parsing =
         expectEqual (Just (Events.List, eventsF { Events._kind = Just "ToBackend", Events._minDuration = Just 100, Events._limit = Just 10 }))
           (parse Lamdera.CLI.eventsArgs Lamdera.CLI.eventsFlags ["--kind", "ToBackend", "--min-duration", "100", "--limit", "10"])
         expectEqual (Just (Events.Show 42, eventsF)) (parse Lamdera.CLI.eventsArgs Lamdera.CLI.eventsFlags ["show", "42"])
-        expectEqual (Just (Events.Metrics, eventsF { Events._window = Just "24h" }))
-          (parse Lamdera.CLI.eventsArgs Lamdera.CLI.eventsFlags ["metrics", "--window", "24h"])
-        expectEqual Nothing (parse Lamdera.CLI.eventsArgs Lamdera.CLI.eventsFlags ["metrics", "--window", "2d"])
+        -- moved to `lamdera metrics`
+        expectEqual Nothing (parse Lamdera.CLI.eventsArgs Lamdera.CLI.eventsFlags ["metrics"])
+        expectEqual Nothing (parse Lamdera.CLI.eventsArgs Lamdera.CLI.eventsFlags ["--window", "24h"])
         expectEqual Nothing (parse Lamdera.CLI.eventsArgs Lamdera.CLI.eventsFlags ["show", "x"])
     ]
 
@@ -147,6 +178,15 @@ requests =
         expectEqual "{\"key\":\"tok\",\"appId\":\"demo\",\"plan\":\"professional\"}" (body (App.toRequest "demo" (App.Plan "professional") appF))
         expectEqual "appUpdate" (Dash._op (App.toRequest "demo" (App.Plan "professional") appF))
         expectEqual "/_r/cli_appList" (Dash.endpointPath "appList")
+        expectEqual ("appInfo", "{\"key\":\"tok\",\"appId\":\"other\"}") (Dash._op (App.toRequest "" (App.Link "other") appF), body (App.toRequest "" (App.Link "other") appF))
+        expectEqual ("appUpdate", "{\"key\":\"tok\",\"appId\":\"demo\",\"team\":\"my-team\"}") (Dash._op (App.toRequest "demo" (App.Move "my-team") appF), body (App.toRequest "demo" (App.Move "my-team") appF))
+
+    , scope "keys" $ do
+        expectEqual ("keyList", "{\"key\":\"tok\"}") (Dash._op (Keys.toRequest Keys.List Nothing keysF), body (Keys.toRequest Keys.List Nothing keysF))
+        let added = Keys.toRequest (Keys.Add Nothing) (Just "ssh-ed25519 AAAA me@laptop") keysF
+        expectEqual ("keyAdd", "{\"key\":\"tok\",\"sshKey\":\"ssh-ed25519 AAAA me@laptop\",\"name\":null}") (Dash._op added, body added)
+        expectEqual "{\"key\":\"tok\",\"sshKey\":\"ssh-ed25519 AAAA\",\"name\":\"work\"}" (body (Keys.toRequest (Keys.Add (Just "f")) (Just "ssh-ed25519 AAAA") keysF { Keys._name = Just "work" }))
+        expectEqual ("keyRemove", "{\"key\":\"tok\",\"name\":\"work\"}") (Dash._op (Keys.toRequest (Keys.Remove "work") Nothing keysF), body (Keys.toRequest (Keys.Remove "work") Nothing keysF))
 
     , scope "env" $ do
         let r = Env.toRequest "demo" (Env.Set "greeting" "Hi \"you\"" ) envF { Env._redeploy = True }
@@ -221,6 +261,40 @@ rendering =
     , scope "app info" $ do
         let out = shown (App.render "https://dashboard.lamdera.app" App.Info (json "{\"appId\":\"demo\",\"plan\":\"professional\",\"version\":0,\"deploys\":[],\"domains\":[{\"domain\":\"example.com\"}],\"logging\":false}"))
         expectTextContainsAll out [ "App      demo", "Plan     professional", "Version  -", "Logging  off", "Domains  example.com", "https://dashboard.lamdera.app/app/demo" ]
+
+    , scope "status: git remote and SSH keys" $ do
+        let out = shown (App.render "w" App.Info (json "{\"appId\":\"demo\",\"version\":0,\"gitRemote\":\"git@apps.lamdera.com:demo.git\",\"sshKeys\":0}"))
+        expectTextContainsAll out [ "Git remote  git@apps.lamdera.com:demo.git", "SSH keys    0 (add this machine's with `lamdera keys add`)" ]
+        expectTextContains (shown (App.render "w" App.Info (json "{\"appId\":\"demo\",\"sshKeys\":2}"))) "SSH keys  2\n"
+
+    , scope "app move" $ do
+        expectTextContains (shown (App.render "w" (App.Move "t") (json "{\"appId\":\"demo\",\"owner\":\"my-team\"}"))) "Moved demo, its owner is now my-team"
+
+    , scope "app create --json: the git fields" $ do
+        let v = App.withGitFields "git@apps.lamdera.com:new.git" Git.NotARepo Git.AuthRefused Git.refusedMessage (json "{\"appId\":\"new\"}")
+        expectEqual (Just (Aeson.String "missing")) (Dash.at "sshKey" v)
+        expectEqual (Just (Aeson.String "authRefused")) (Dash.at "connectivity" v)
+        expectEqual (Just (Aeson.String "notGitRepo")) (Dash.at "remote" v)
+        expectEqual (Just (Aeson.String "git remote add lamdera git@apps.lamdera.com:new.git")) (Dash.at "remoteCommand" v)
+        expectEqual (Just (Aeson.String "new")) (Dash.at "appId" v)
+        let ready = App.withGitFields "u" Git.RemoteAdded Git.Reachable "m" (json "{}")
+        expectEqual (Just (Aeson.String "ok"), Nothing) (Dash.at "sshKey" ready, Dash.at "remoteCommand" ready)
+
+    , scope "ready without the remote" $ do
+        expectTextContains (App.readyMessage Git.NotARepo "m" "demo" Git.Reachable) "Set up the `lamdera` git remote as above"
+        expectEqual "m" (App.readyMessage Git.RemoteAdded "m" "demo" Git.Reachable)
+        expectEqual "m" (App.readyMessage Git.NotARepo "m" "demo" Git.AuthRefused)
+
+    , scope "keys list" $ do
+        let out = shown (Keys.render Keys.List (json "[{\"name\":\"laptop\",\"key\":\"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKoIHpHg me@laptop\",\"created\":1700000000000,\"used\":null},{\"name\":\"ci\",\"key\":\"ssh-rsa AAAA\",\"fingerprint\":\"SHA256:abc\",\"created\":1700000000000,\"used\":1700000000000}]"))
+        expectEqual
+          "NAME    KEY                              ADDED                LAST USED\n\
+          \laptop  ssh-ed25519 AAAAC3Nz...IKoIHpHg  2023-11-14 22:13:20  -\n\
+          \ci      SHA256:abc                       2023-11-14 22:13:20  2023-11-14 22:13:20"
+          out
+        expectTextContains (shown (Keys.render Keys.List (json "[]"))) "no SSH keys registered"
+        expectTextContains (shown (Keys.render (Keys.Add Nothing) (json "{\"name\":\"me@laptop\"}"))) "Added the SSH key me@laptop"
+        expectTextContains (shown (Keys.render (Keys.Remove "x") (json "{\"removed\":\"x\"}"))) "Removed the SSH key x"
 
     , scope "env set" $ do
         expectTextContains (shown (Env.render "w" "demo" (Env.Set "greeting" "x") (json "{\"name\":\"greeting\",\"used\":true,\"redeployed\":false}"))) "applies from the next deploy"
@@ -306,6 +380,115 @@ confirmation = do
 
 
 
+-- KEYS
+
+
+keyFiles :: Test ()
+keyFiles =
+  tests
+    [ scope "public, private or not a key" $ do
+        expectEqual (Keys.PublicKey "ssh-ed25519 AAAAC3Nz me@laptop") (Keys.keyFile "ssh-ed25519 AAAAC3Nz me@laptop\n")
+        expectEqual (Keys.PublicKey "ecdsa-sha2-nistp256 AAAAE2") (Keys.keyFile "\n  ecdsa-sha2-nistp256 AAAAE2  \n")
+        expectEqual (Keys.PublicKey "sk-ssh-ed25519@openssh.com AAAA x") (Keys.keyFile "sk-ssh-ed25519@openssh.com AAAA x")
+        expectEqual Keys.PrivateKey (Keys.keyFile "-----BEGIN OPENSSH PRIVATE KEY-----\nb3Blbn\n-----END OPENSSH PRIVATE KEY-----\n")
+        expectEqual Keys.PrivateKey (Keys.keyFile "-----BEGIN RSA PRIVATE KEY-----\nMIIE\n")
+        expectEqual Keys.PrivateKey (Keys.keyFile "PuTTY-User-Key-File-3: ssh-ed25519\n")
+        expectEqual Keys.NotAKey (Keys.keyFile "ssh-ed25519")
+        expectEqual Keys.NotAKey (Keys.keyFile "hello world")
+        expectEqual Keys.NotAKey (Keys.keyFile "")
+
+    , scope "the default key" $ do
+        expectEqual [ "/h/.ssh/id_ed25519.pub", "/h/.ssh/id_ecdsa.pub", "/h/.ssh/id_rsa.pub" ] (Keys.defaultKeys "/h")
+        expectEqual Keys.NoKey (Keys.choose [])
+        expectEqual (Keys.OneKey "a") (Keys.choose [ "a" ])
+        expectEqual (Keys.SeveralKeys [ "a", "b" ]) (Keys.choose [ "a", "b" ])
+        expectEqual "~/.ssh/id_rsa.pub" (Keys.tilde "/h" "/h/.ssh/id_rsa.pub")
+        expectEqual "/o/k.pub" (Keys.tilde "/h" "/o/k.pub")
+    ]
+
+
+
+-- GIT REMOTE
+
+
+gitRemote :: Test ()
+gitRemote =
+  tests
+    [ scope "the app's remote" $ do
+        expectEqual "git@apps.lamdera.com:demo.git" (Git.gitRemoteFor "demo" Nothing)
+        expectEqual "git@apps.lamdera.com:demo.git" (Git.gitRemoteFor "demo" (Just ""))
+        expectEqual "git@ent1-enterprise.lamdera.com:demo.git" (Git.gitRemoteFor "demo" (Just "git@ent1-enterprise.lamdera.com:demo.git"))
+
+    , scope "host" $ do
+        expectEqual "apps.lamdera.com" (Git.remoteHost "git@apps.lamdera.com:demo.git")
+        expectEqual "apps.lamdera.com" (Git.remoteHost "ssh://git@apps.lamdera.com:22/demo.git")
+        expectEqual "apps.lamdera.com" (Git.remoteHost "apps.lamdera.com:demo.git")
+        expectEqual "github.com" (Git.remoteHost "https://github.com/me/demo.git")
+
+    , scope "same remote" $ do
+        expect (Git.sameRemote "git@apps.lamdera.com:demo.git" "git@apps.lamdera.com:demo")
+        expect (Git.sameRemote "ssh://git@apps.lamdera.com/demo.git" "git@apps.lamdera.com:demo.git")
+        expect (Git.sameRemote " git@Apps.lamdera.com:demo.git\n" "git@apps.lamdera.com:demo.git")
+        expect (not (Git.sameRemote "git@apps.lamdera.com:other.git" "git@apps.lamdera.com:demo.git"))
+
+    , scope "messages" $ do
+        expectTextContains (Git.remoteMessage "u" (Git.RemoteConflict "git@apps.lamdera.com:other.git")) "already has a `lamdera` remote, for git@apps.lamdera.com:other.git, so I left it alone"
+        expectTextContains (Git.remoteMessage "u" Git.NotARepo) "`git remote add lamdera u`"
+    ]
+
+
+
+-- CONNECTIVITY
+
+
+{-| What git ls-remote wrote on stderr, as observed against apps.lamdera.com. -}
+gitAdvice :: T.Text
+gitAdvice =
+  "fatal: Could not read from remote repository.\n\nPlease make sure you have the correct access rights\nand the repository exists.\n"
+
+
+connectivity :: Test ()
+connectivity =
+  tests
+    [ scope "classify" $ do
+        let failed = Git.classify (ExitFailure 128)
+        expectEqual Git.Reachable (Git.classify ExitSuccess "runId: 2026-11-25T20-53-00-199Z\n")
+        expectEqual Git.AuthRefused (failed ("Load key \"/dev/null\": invalid format\ngit@apps.lamdera.com: Permission denied (publickey).\n" <> gitAdvice))
+        expectEqual Git.NotAuthorised (failed ("runId: x\n\ESC[31mError: Key not authorized for this app! Please check the app name in your git remote.\ESC[0m\n" <> gitAdvice))
+        expectEqual Git.HostKey (failed ("No ED25519 host key is known for apps.lamdera.com and you have requested strict checking.\nHost key verification failed.\n" <> gitAdvice))
+        expectEqual Git.HostKey (failed ("@@@@\n@    WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!     @\n" <> gitAdvice))
+        expectEqual Git.TimedOut (failed ("ssh: connect to host apps.lamdera.com port 22: Operation timed out\n" <> gitAdvice))
+        expectEqual Git.TimedOut (failed ("ssh: connect to host apps.lamdera.com port 22: Connection timed out\n" <> gitAdvice))
+        expectEqual Git.Unreachable (failed ("ssh: Could not resolve hostname apps.lamdera.com: nodename nor servname provided, or not known\n" <> gitAdvice))
+        expectEqual Git.Unreachable (failed ("ssh: connect to host apps.lamdera.com port 22: Connection refused\n" <> gitAdvice))
+        expectEqual Git.Unreachable (failed ("kex_exchange_identification: Connection closed by remote host\n" <> gitAdvice))
+        expectEqual Git.Failed (failed ("\ESC[31mError: This app isn't currently running, so it can't accept a deploy.\ESC[0m\n" <> gitAdvice))
+
+    , scope "detail" $ do
+        expectEqual "git@apps.lamdera.com: Permission denied (publickey)." (Git.detail ("Load key \"/dev/null\": invalid format\ngit@apps.lamdera.com: Permission denied (publickey).\n" <> gitAdvice))
+        expectEqual "Error: Key not authorized for this app!" (Git.detail "runId: x\n\ESC[31mError: Key not authorized for this app!\ESC[0m\n")
+
+    , scope "messages" $ do
+        let url = "git@apps.lamdera.com:demo.git"
+        expectEqual "Looks like this machine does not have a registered SSH key with Lamdera, run `lamdera keys add [filepath]`"
+          (Git.outcomeMessage url "demo" Git.AuthRefused "git@apps.lamdera.com: Permission denied (publickey).")
+        expectTextContainsAll (Git.outcomeMessage url "demo" Git.Reachable "") [ "Ready", "`lamdera deploy`", "`git push lamdera main`" ]
+        expectTextContainsAll (Git.outcomeMessage url "demo" Git.NotAuthorised "") [ "registered with Lamdera, but for an account without access to demo" ]
+        expectTextContainsAll (Git.outcomeMessage url "demo" Git.HostKey "Host key verification failed.") [ "host key of apps.lamdera.com", "ssh-keygen -R apps.lamdera.com" ]
+        expectTextContainsAll (Git.outcomeMessage url "demo" Git.Unreachable "ssh: Could not resolve hostname") [ "could not reach the Lamdera git host apps.lamdera.com", "Could not resolve hostname", "git ls-remote git@apps.lamdera.com:demo.git" ]
+        expectTextContains (Git.outcomeMessage url "demo" Git.TimedOut "") "timed out"
+        expectEqual [ "ok", "missing", "otherAccount", "unknown" ] (fmap Git.sshKeyStatus [ Git.Reachable, Git.AuthRefused, Git.NotAuthorised, Git.Unreachable ])
+
+    , scope "ssh command" $ do
+        let opts = " -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new"
+        expectEqual (Just ("ssh" <> opts)) (Git.sshCommandFor Nothing Nothing Nothing)
+        expectEqual (Just ("ssh -i ~/.ssh/work" <> opts)) (Git.sshCommandFor (Just "ssh -i ~/.ssh/work") (Just "ssh -i other") Nothing)
+        expectEqual (Just ("ssh -i other" <> opts)) (Git.sshCommandFor (Just "  ") (Just "ssh -i other\n") (Just "plink"))
+        expectEqual Nothing (Git.sshCommandFor Nothing (Just "") (Just "plink"))
+    ]
+
+
+
 -- END TO END
 
 
@@ -343,6 +526,30 @@ endToEnd = do
   (eventOut, eventExit) <- run (Events.Show 42) eventsF { Events._app = Just "demo", Events._json = True } Events.run
   (noAuthOut, noAuthExit) <- io $ runIn (dir </> "nobody", snd env) (App.run App.List appF { App._json = True })
 
+  -- app create in a fresh git repository, and in one with a `lamdera` remote for another app
+  let
+    repo = dir </> "repo"
+    otherRepo = dir </> "other-repo"
+    keyDir = dir </> "keys"
+    inDir d action = Dir.withCurrentDirectory d action
+  io $ do
+    Dir.createDirectoryIfMissing True repo
+    Dir.createDirectoryIfMissing True otherRepo
+    Dir.createDirectoryIfMissing True keyDir
+    _ <- Process.readCreateProcessWithExitCode ((Process.proc "git" ["init", "-q"]) { Process.cwd = Just repo }) ""
+    _ <- Process.readCreateProcessWithExitCode ((Process.proc "git" ["init", "-q"]) { Process.cwd = Just otherRepo }) ""
+    _ <- Process.readCreateProcessWithExitCode ((Process.proc "git" ["remote", "add", "lamdera", "git@apps.lamdera.com:other.git"]) { Process.cwd = Just otherRepo }) ""
+    writeUtf8 (keyDir </> "id_test.pub") "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKoIHpHgO5sxJmhfQsHdXbFCowq37pop3ZMnKzeYlbdk me@laptop\n"
+    writeUtf8 (keyDir </> "id_test") "-----BEGIN OPENSSH PRIVATE KEY-----\nb3Blbn\n-----END OPENSSH PRIVATE KEY-----\n"
+  (createOut, createExit) <- io $ inDir repo $ runIn env (App.run (App.Create "fresh") appF { App._json = True })
+  remoteAfter <- io $ Process.readCreateProcessWithExitCode ((Process.proc "git" ["remote", "get-url", "lamdera"]) { Process.cwd = Just repo }) ""
+  (conflictOut, _) <- io $ inDir otherRepo $ runIn env (App.run (App.Create "fresh") appF { App._json = True })
+  otherAfter <- io $ Process.readCreateProcessWithExitCode ((Process.proc "git" ["remote", "get-url", "lamdera"]) { Process.cwd = Just otherRepo }) ""
+  (keyListOut, keyListExit) <- run Keys.List keysF Keys.run
+  (keyAddOut, keyAddExit) <- run (Keys.Add (Just (keyDir </> "id_test.pub"))) keysF { Keys._json = True } Keys.run
+  (privateOut, privateExit) <- run (Keys.Add (Just (keyDir </> "id_test"))) keysF { Keys._json = True } Keys.run
+  (keyRemoveOut, keyRemoveExit) <- run (Keys.Remove "laptop") keysF { Keys._json = True, Keys._yes = True } Keys.run
+
   io $ Process.terminateProcess handle
   sent <- io $ readUtf8Text requestLog
   let sentLines = maybe [] T.lines sent
@@ -378,6 +585,33 @@ endToEnd = do
     , scope "no CLI token: an error, before any request" $ do
         expectEqual (ExitFailure 1) noAuthExit
         expectEqual "{\"error\":\"No CLI auth, please run `lamdera login`\"}\n" noAuthOut
+
+    , scope "app create in a git repository: adds the remote, then checks it" $ do
+        expectEqual ExitSuccess createExit
+        let v = maybe Aeson.Null id (Aeson.decodeStrict (T.encodeUtf8 createOut))
+        expectEqual (Just (Aeson.String "fresh")) (Dash.at "appId" v)
+        expectEqual (Just (Aeson.String "added")) (Dash.at "remote" v)
+        expectEqual (Just (Aeson.String "git@apps.lamdera.invalid:fresh.git")) (Dash.at "gitRemote" v)
+        expectEqual (Just (Aeson.String "unreachable")) (Dash.at "connectivity" v)
+        expectEqual (Just (Aeson.String "unknown")) (Dash.at "sshKey" v)
+        let (_, url, _) = remoteAfter
+        expectEqual "git@apps.lamdera.invalid:fresh.git" (T.strip (T.pack url))
+
+    , scope "app create next to another app's `lamdera` remote: left alone" $ do
+        expectTextContains conflictOut "\"remote\":\"conflict\""
+        let (_, url, _) = otherAfter
+        expectEqual "git@apps.lamdera.com:other.git" (T.strip (T.pack url))
+
+    , scope "keys" $ do
+        expectEqual ExitSuccess keyListExit
+        expectTextContains keyListOut "laptop  ssh-ed25519 AAAAC3Nz...KzeYlbdk"
+        expectEqual ExitSuccess keyAddExit
+        expectTextContains keyAddOut "\"name\":\"me@laptop\""
+        expectEqual 1 (length (filter (T.isInfixOf "{\"path\":\"/_r/cli_keyAdd\",\"body\":{\"key\":\"test-token\",\"sshKey\":\"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKoIHpHgO5sxJmhfQsHdXbFCowq37pop3ZMnKzeYlbdk me@laptop\",\"name\":null}}") sentLines))
+        expectEqual (ExitFailure 1) privateExit
+        expectTextContains privateOut "is a private key"
+        expectEqual ExitSuccess keyRemoveExit
+        expectEqual "{\"removed\":\"laptop\"}\n" keyRemoveOut
 
     , scope "the token is validated, then sent as `key`" $ do
         expect (any (T.isInfixOf "{\"path\":\"/_r/apiSessionJson\",\"body\":{\"token\":\"test-token\"}}") sentLines)
