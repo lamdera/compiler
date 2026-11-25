@@ -15,8 +15,11 @@ const event = { id: 42, version: 3, tipe: 1, kind: 'ToBackend', name: 'AddTodo',
 
 // Each pending ticket answers pending once more, then this.
 const tickets = {
-  info1: { ok: { appId: 'demo', plan: 'hobby', owner: 'mario', version: 3, created: 1700000000000, url: 'https://demo.lamdera.app', deploys: [{ version: 3, sha: 'abcdef1234567', at: 1700000000000 }], domains: [], logging: true } },
+  info1: { ok: { appId: 'demo', plan: 'hobby', owner: 'mario', version: 3, created: 1700000000000, url: 'https://demo.lamdera.app', deploys: [{ version: 3, sha: 'abcdef1234567', status: 'deployed', at: 1700000000000 }], domains: [], logging: true } },
   event1: { ok: { event, payload: { $: 'AddTodo', args: ['milk'] }, logs: ['[2026-10-30 10:00:00.000] #42 Debug: added'] } },
+  // apps.lamdera.invalid never resolves, so the connectivity check after it is quick and
+  // contacts nothing
+  create1: { ok: { appId: 'fresh', plan: 'free', owner: 'mario', version: 0, created: 1700000000000, url: 'https://fresh.lamdera.app', deploys: [], domains: [], logging: null, gitRemote: 'git@apps.lamdera.invalid:fresh.git' } },
 }
 const polled = {}
 
@@ -29,6 +32,14 @@ function answer(op, body) {
     case 'liveShare':
       // what the live relay asks (lamdera live --serve)
       return body.key === 'test-token' ? { ok: { appId: body.appId, username: 'mario' } } : { error: 'invalid token, please run `lamdera login` again' }
+    case 'appCreate':
+      return { pending: 'create1' }
+    case 'keyList':
+      return { ok: [{ name: 'laptop', key: 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKoIHpHgO5sxJmhfQsHdXbFCowq37pop3ZMnKzeYlbdk me@laptop', created: 1700000000000, used: null }] }
+    case 'keyAdd':
+      return body.sshKey && body.sshKey.startsWith('ssh-') ? { ok: { name: body.name || 'me@laptop', key: body.sshKey, created: 1700000000000 } } : { error: 'That is not an SSH public key' }
+    case 'keyRemove':
+      return body.name === 'laptop' ? { ok: { removed: 'laptop' } } : { error: 'You have no SSH key named ' + body.name }
     case 'appDelete':
       return body.confirm === body.appId ? { ok: { deleted: body.appId } } : { error: 'confirm must be the app name' }
     case 'envSet':

@@ -1,6 +1,7 @@
 {-# OPTIONS_GHC -Wno-x-partial #-}
 module Terminal
   ( app
+  , appGroups
   , Command(..)
   , Summary(..)
   , Flags, noFlags, flags, (|--)
@@ -71,14 +72,26 @@ _command details example args_ flags_ callback =
 
 app :: P.Doc -> P.Doc -> [Command] -> IO ()
 app intro outro commands =
+  appWith (Error.exitWithOverview intro outro commands) commands
+
+
+{-| @LAMDERA `app` with the overview (`lamdera --help`) in named groups, like "Develop".
+The `hidden` commands work but are not in the overview (old names kept as aliases). -}
+appGroups :: P.Doc -> P.Doc -> [(String, [Command])] -> [Command] -> IO ()
+appGroups intro outro groups hidden =
+  appWith (Error.exitWithGroupedOverview intro outro groups) (concatMap snd groups ++ hidden)
+
+
+appWith :: IO () -> [Command] -> IO ()
+appWith overview commands =
   do  setLocaleEncoding utf8
       argStrings <- Env.getArgs
       case argStrings of
         [] ->
-          Error.exitWithOverview intro outro commands
+          overview
 
         ["--help"] ->
-          Error.exitWithOverview intro outro commands
+          overview
 
         ["--version"] ->
           do  hPutStrLn stdout (V.toChars V.compiler)

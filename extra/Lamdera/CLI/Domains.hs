@@ -2,7 +2,8 @@
 
 module Lamdera.CLI.Domains where
 
-{- `lamdera domains [list | add <domain> | remove <domain>]`: the app's custom domains. -}
+{- `lamdera domain [list | add <domain> | remove <domain>]` (or `domains`, its old name): the
+app's custom domains. -}
 
 import qualified Data.Aeson as Aeson
 import qualified Data.Text as T
@@ -64,7 +65,7 @@ render web appName args payload =
         [] ->
           D.vcat
             [ said ("No custom domains on" <+> D.fromChars (T.unpack appName) <> ".")
-            , "Add one with `lamdera domains add <domain>`."
+            , "Add one with `lamdera domain add <domain>`."
             ]
         domains ->
           D.vcat

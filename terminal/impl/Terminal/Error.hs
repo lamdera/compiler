@@ -9,6 +9,7 @@ module Terminal.Error
   , exitWithError
   , exitWithUnknown
   , exitWithOverview
+  , exitWithGroupedOverview
   )
   where
 
@@ -203,6 +204,35 @@ exitWithOverview intro outro commands =
         , "Adding the --help flag gives a bunch of additional details about each one."
         , outro
         ]
+
+
+{-| @LAMDERA the overview with the commands in named groups: the summaries of each group's
+common commands, then the uncommon ones by name. -}
+exitWithGroupedOverview :: P.Doc -> P.Doc -> [(String, [Command])] -> IO a
+exitWithGroupedOverview intro outro groups =
+  do  exeName <- getExeName
+      let
+        uncommon = [ toName cmd | (_, cmds) <- groups, cmd <- cmds, isUncommon cmd ]
+        group (title, cmds) =
+          [ P.bold (P.text title)
+          , P.indent 4 $ stack $ Maybe.mapMaybe (toSummary exeName) cmds
+          ]
+      exitSuccess $
+        [ intro ]
+        ++ concatMap group groups
+        ++
+        [ reflow $
+            (if null uncommon then "" else "Also: " ++ List.intercalate ", " (map (\n -> exeName ++ " " ++ n) uncommon) ++ ". ")
+              ++ "Adding the --help flag gives a bunch of additional details about each one, like `" ++ exeName ++ " app --help`."
+        , outro
+        ]
+
+
+isUncommon :: Command -> Bool
+isUncommon (Command _ summary _ _ _ _ _) =
+  case summary of
+    Uncommon -> True
+    Common _ -> False
 
 
 toSummary :: String -> Command -> Maybe P.Doc

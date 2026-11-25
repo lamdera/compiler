@@ -35,32 +35,48 @@ import Lamdera.Cores (withCores) -- @LAMDERA --cores, see Lamdera.Cores
 
 main :: IO ()
 main =
-  Terminal.app intro outro
+  -- @LAMDERA the overview (`lamdera --help`) in groups: Terminal.appGroups
+  Terminal.appGroups intro outro
     -- @LAMDERA additions + removals
     -- @LAMDERA withCores: the commands that compile take --cores N (see Lamdera.Cores)
-    [ withCores Lamdera.CLI.live
-    , Lamdera.CLI.login
-    , withCores Lamdera.CLI.check
-    , withCores Lamdera.CLI.deploy
-    , init
-    , withCores install
-    , withCores make
-    , withCores repl
-    , Lamdera.CLI.reset
-    , Lamdera.CLI.update
-    , withCores Lamdera.CLI.annotate
-    , withCores Lamdera.CLI.eval
-    , Lamdera.CLI.backend
-    , Lamdera.CLI.format
-    , Lamdera.CLI.app
-    , Lamdera.CLI.env
-    , Lamdera.CLI.domains
-    , Lamdera.CLI.logs
-    , Lamdera.CLI.events
+    [ ( "Develop:"
+      , [ init
+        , withCores Lamdera.CLI.live
+        , withCores Lamdera.CLI.check
+        , withCores repl
+        , Lamdera.CLI.backend
+        , withCores Lamdera.CLI.eval
+        , withCores Lamdera.CLI.annotate
+        , Lamdera.CLI.format
+        , Lamdera.CLI.reset
+        , Lamdera.CLI.update
+        , withCores install
+        , withCores make
+        ]
+      )
+    , ( "Deploy:"
+      , [ Lamdera.CLI.login
+        , Lamdera.CLI.app
+        , Lamdera.CLI.keys
+        , withCores Lamdera.CLI.deploy
+        , Lamdera.CLI.status
+        ]
+      )
+    , ( "Manage:"
+      , [ Lamdera.CLI.env
+        , Lamdera.CLI.domain
+        , Lamdera.CLI.logs
+        , Lamdera.CLI.events
+        , Lamdera.CLI.metrics
+        ]
+      )
     -- , reactor
     -- , bump
     -- , diff
     -- , publish
+    ]
+    -- @LAMDERA old names, still understood
+    [ Lamdera.CLI.domains
     ]
 
 

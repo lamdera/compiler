@@ -364,6 +364,8 @@ Executable lamdera
         Lamdera.CLI.Logs
         Lamdera.CLI.LiveServe
         Lamdera.CLI.Events
+        Lamdera.CLI.Keys
+        Lamdera.CLI.Git
 
         Lamdera.AppConfig
         Lamdera.WireSchema
